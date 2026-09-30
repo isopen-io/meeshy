@@ -2,6 +2,8 @@ import type { StoryFilterId } from '@/lib/canvas/media-filter';
 import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { SceneTransition } from '@/lib/canvas/scene-transition';
 
+import type { StudioBackgroundSection, StudioBackgroundToolAction } from './studio-background-tools';
+
 /**
  * **LA GÉOGRAPHIE DES RAILS DE LA SCÈNE** (#8715, jumelle web de
  * `ComposerSceneColumns` iOS, #8712–#8714 et #8792 — directives porteur des
@@ -105,25 +107,41 @@ export type StudioObjectActionId = 'edit' | 'raise' | 'lower' | 'duplicate' | 's
 export type StudioTrailingFocus =
   | { readonly kind: 'scene'; readonly effects: readonly StudioSceneEffect[]; readonly open: StudioSceneEffect | null }
   | { readonly kind: 'tool' }
-  | { readonly kind: 'object'; readonly id: string; readonly actions: readonly StudioObjectActionId[] };
+  | { readonly kind: 'object'; readonly id: string; readonly actions: readonly StudioObjectActionId[] }
+  | ({ readonly kind: 'background' } & StudioBackgroundColumn);
+
+/** Ce que l'édition du FOND porte au rail droit (#8849) — ses outils, celui
+ * dont les contrôles sont ouverts sous la scène, ses gestes. */
+export type StudioBackgroundColumn = {
+  readonly sections: readonly StudioBackgroundSection[];
+  readonly open: StudioBackgroundSection | null;
+  readonly actions: readonly StudioBackgroundToolAction[];
+};
 
 export type StudioTrailingEntry =
   | { readonly kind: 'effect'; readonly effect: StudioSceneEffect; readonly open: boolean }
   | { readonly kind: 'object-action'; readonly action: StudioObjectActionId }
-  | { readonly kind: 'exit-object' };
+  | { readonly kind: 'exit-object' }
+  | { readonly kind: 'background-section'; readonly section: StudioBackgroundSection; readonly open: boolean }
+  | { readonly kind: 'background-action'; readonly action: StudioBackgroundToolAction }
+  | { readonly kind: 'exit-tool' };
 
 export function studioTrailingFocus({
   toolOpen,
   object,
   effects,
   openEffect,
+  background = null,
 }: {
   readonly toolOpen: boolean;
   readonly object: { readonly id: string; readonly actions: readonly StudioObjectActionId[] } | null;
   readonly effects: readonly StudioSceneEffect[];
   readonly openEffect: StudioSceneEffect | null;
+  /** L'édition du fond en cours (#8849) — elle l'emporte sur la sélection. */
+  readonly background?: StudioBackgroundColumn | null;
 }): StudioTrailingFocus {
   if (toolOpen) return { kind: 'tool' };
+  if (background !== null) return { kind: 'background', ...background };
   if (object !== null) return { kind: 'object', id: object.id, actions: object.actions };
   return { kind: 'scene', effects, open: openEffect !== null && effects.includes(openEffect) ? openEffect : null };
 }
@@ -136,6 +154,13 @@ export function studioTrailingFocus({
  */
 export function studioTrailingOptions(focus: StudioTrailingFocus): readonly StudioTrailingEntry[] {
   if (focus.kind === 'tool') return [];
+  if (focus.kind === 'background') {
+    return [
+      ...focus.sections.map((section): StudioTrailingEntry => ({ kind: 'background-section', section, open: section === focus.open })),
+      ...focus.actions.map((action): StudioTrailingEntry => ({ kind: 'background-action', action })),
+      { kind: 'exit-tool' },
+    ];
+  }
   if (focus.kind === 'scene') return focus.effects.map((effect) => ({ kind: 'effect', effect, open: effect === focus.open }));
   const edit: readonly StudioTrailingEntry[] = focus.actions.includes('edit') ? [{ kind: 'object-action', action: 'edit' }] : [];
   const rest = focus.actions.filter((action) => action !== 'edit').map((action): StudioTrailingEntry => ({ kind: 'object-action', action }));
@@ -147,6 +172,6 @@ export type StudioTrailingFoot = 'time' | 'undo' | 'redo';
 /** Le bas de la colonne — TOUJOURS l'historique, sous « Temps » quand la
  * scène est animée ; un outil ouvert garde l'historique, pas « Temps ». */
 export function studioTrailingFoot(focus: StudioTrailingFocus, timeServed: boolean): readonly StudioTrailingFoot[] {
-  if (focus.kind === 'tool' || !timeServed) return ['undo', 'redo'];
+  if (focus.kind === 'tool' || focus.kind === 'background' || !timeServed) return ['undo', 'redo'];
   return ['time', 'undo', 'redo'];
 }

@@ -116,6 +116,9 @@ const ptStudioChrome = {
   'story.studio.background.menu.retake': 'Tirar outra foto',
   'story.studio.background.menu.forward': 'Trazer para a frente',
   'story.studio.background.menu.remove': 'Remover o fundo',
+  'story.studio.background.tools': 'Ferramentas do fundo',
+  'story.studio.background.tools.describe': 'Descrever',
+  'story.studio.background.tools.leave': 'Voltar à cena',
   'story.studio.reelSwitch.announcement': 'Mudou para reel',
 } satisfies StudioChromeCatalogSlice;
 

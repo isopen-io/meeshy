@@ -41,7 +41,6 @@ import {
   withAnimated,
   withStatic,
   withAudience,
-  withBackgroundFrame,
   withPlacedWhileAnimated,
   withPostText,
   withText,
@@ -97,6 +96,8 @@ import { ALL_DOORS, uploadKey, useStudioUploads } from '@/routes/use-studio-uplo
 import { useStudioTimeline } from '@/routes/use-studio-timeline';
 import { useStudioQuickCapture } from '@/routes/use-studio-quick-capture';
 import { studioChrome, studioOpenTool } from '@/lib/stories/studio-focus';
+import type { StudioBackgroundEdit } from '@/lib/stories/studio-background-tools';
+import { useStudioBackgroundTools } from '@/routes/use-studio-background-tools';
 import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
 
 /**
@@ -159,12 +160,8 @@ const StudioPostTextFrame = lazy(() => import('@/routes/story-compose-overlays')
  * l'auteur ouvre Animé. */
 const StudioTimelinePanel = lazy(() => import('@/routes/story-compose-timeline').then((m) => ({ default: m.StudioTimelinePanel })));
 
-/** LE PANNEAU CADRE (#8414), CHARGÉ À LA DEMANDE — il ne pèse que si
- * l'auteur touche la tuile Cadre. */
 /** LE SOL (#8413), CHARGÉ À LA DEMANDE (#8534) — il n'existe qu'avec un média. */
 const StudioFloorLayer = lazy(() => import('@/routes/story-compose-floor').then((m) => ({ default: m.StudioFloorLayer })));
-
-const StudioFramePanel = lazy(() => import('@/routes/story-compose-frame').then((m) => ({ default: m.StudioFramePanel })));
 
 /** Le Cadre d'un fond qu'on n'a pas encore réglé — le contrat (#8414). */
 const DEFAULT_FRAME: StoryFrame = { fitMode: 'fit', backdrop: 'blur' };
@@ -292,9 +289,9 @@ function StoryStudio({
   const [placeRefusal, setPlaceRefusal] = useState<StudioPlaceRefusalNotice | null>(null);
   /** Les contrôleurs de l'outil ouvert (zone BASSE d'iOS) — FERMÉS par défaut :
    * la scène garde toute sa hauteur tant que l'auteur ne règle rien. */
-  /** Le panneau Cadre (#8414), l'aperçu et le texte du post (#8413) — fermés
-   * par défaut, comme les contrôleurs. */
-  const [frameOpen, setFrameOpen] = useState(false);
+  /** Les OUTILS DU FOND (#8849), l'aperçu et le texte du post (#8413) —
+   * fermés par défaut, comme les contrôleurs. */
+  const [backgroundEdit, setBackgroundEdit] = useState<StudioBackgroundEdit | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [postTextOpen, setPostTextOpen] = useState(false);
   const { finishing, retouchFailed, finishRetouch } = useStudioRetouchFinish(retouch, () => currentStudioPage(latestDraft.current));
@@ -627,7 +624,7 @@ function StoryStudio({
       ALL_DOORS.filter((door) => door !== 'sound').forEach((door) => forgetUpload(page.id, door));
       edit(withOverlayAsBackground);
     },
-    closeFrame: () => setFrameOpen(false),
+    closeFrame: () => setBackgroundEdit(null),
   });
 
   /** LE SOL (#8413) — le hash du COMPOSITE (#8425), sinon celui du fond ;
@@ -645,7 +642,7 @@ function StoryStudio({
     animate: () => edit(withAnimated),
     makeStatic: () => edit(withStatic),
     closePanels: () => {
-      setFrameOpen(false);
+      setBackgroundEdit(null);
       setEditingId(null);
     },
   });
@@ -667,7 +664,19 @@ function StoryStudio({
    * jumelle de #8652) — en-tête, rails et leurs (+), socle cèdent en fondu ;
    * restent ses réglages et son (X). La capture rapide, elle, n'existe que sur
    * une scène vide, rien d'ouvert (#8654, jumelle de #8653). */
-  const tool = studioOpenTool({ editing, frameOpen, hasBackground: page.background !== null, timelineOpen });
+  const backgroundTools = useStudioBackgroundTools({
+    state: { edit: backgroundEdit, setEdit: setBackgroundEdit },
+    lang,
+    page,
+    kind,
+    frame,
+    retouching,
+    timelineOpen,
+    locked: publishing,
+    edit,
+    editPage,
+  });
+  const tool = studioOpenTool({ editing, editsBackground: backgroundTools.active });
   const chrome = studioChrome({ tool, timelineOpen });
   const quick = useStudioQuickCapture({
     lang,
@@ -677,9 +686,10 @@ function StoryStudio({
     ...(deps.camera !== undefined ? { engine: deps.camera } : {}),
   });
   const animatedToggle = <StudioAnimatedToggle lang={lang} active={animated} onToggle={toggleAnimated} disabled={publishing} />;
-  const toggleFrame = () => {
+  /** La tuile Cadre : les outils du fond, le Cadre déjà déplié (#8849). */
+  const openFrame = () => {
     setEditingId(null);
-    setFrameOpen((open) => !open);
+    backgroundTools.enter('frame');
   };
   /** LES COLONNES DE LA SCÈNE (#8715, #8794) — options de l'objet touché ou
    * effets du fond à droite, l'historique en bas ; le carrousel d'effets à la
@@ -702,7 +712,10 @@ function StoryStudio({
     edit,
     stageRef,
     background: {
-      onEdit: toggleFrame,
+      onEdit: () => {
+        setEditingId(null);
+        backgroundTools.enter(null);
+      },
       onRetake: quick.retake,
       onForward: () => {
         forgetUpload(page.id, 'visual');
@@ -710,6 +723,7 @@ function StoryStudio({
       },
       onRemove: () => remove('visual'),
     },
+    backgroundTools: { column: backgroundTools.column, onSection: backgroundTools.onSection, onExit: backgroundTools.leave },
     hidden: !chrome.trailingRail,
   });
   /** « Entre ici » / « Sort ici » — la fenêtre de l'objet SÉLECTIONNÉ, à la tête. */
@@ -785,7 +799,7 @@ function StoryStudio({
             {/* L'ÉCLAIR puis le CADRE, après les portes (#8713). */}
             {retouching ? null : animatedToggle}
             {page.background !== null ? (
-              <StudioTile label={translate(lang, 'story.studio.tile.frame')} probe="frame" pressed={frameOpen} onPress={toggleFrame} disabled={publishing}>
+              <StudioTile label={translate(lang, 'story.studio.tile.frame')} probe="frame" pressed={backgroundTools.active} onPress={openFrame} disabled={publishing}>
                 <FrameMark size={20} />
               </StudioTile>
             ) : null}
@@ -804,7 +818,7 @@ function StoryStudio({
           sound={{ src: soundSrc, muted: soundMuted, audioRef: soundAudioRef, onToggle: () => setSoundMuted((current) => !current) }}
           timeline={{ open: timelineOpen, playing: timelinePlaying, onEnded: () => clock?.seek(0) }}
           writing={
-            inviteShown
+            inviteShown && tool !== 'background'
               ? {
                   lang,
                   targetId: inviteLayer?.id ?? null,
@@ -826,6 +840,7 @@ function StoryStudio({
             nameOf: objectName,
             onSelect: (id) => {
               if (id !== editing) setEditingId(null);
+              if (id !== null) backgroundTools.leave();
               columns.onSelectObject(id);
               setDraft((current) => withSelected(current, id));
             },
@@ -904,28 +919,7 @@ function StoryStudio({
             </StudioEditPlaque>
           </Suspense>
         ) : null}
-        {frameOpen && page.background !== null && editing === null && !timelineOpen ? (
-          <div inert={publishing}>
-            <Suspense fallback={null}>
-              <StudioFramePanel
-                lang={lang}
-                frame={frame}
-                onChange={(next) => edit((current) => withBackgroundFrame(current, next))}
-                onClose={() => setFrameOpen(false)}
-                {...(retouching
-                  ? {}
-                  : {
-                      caption: { value: page.background.caption, onChange: (value: string) => edit((current) => withVisualCaption(current, 'visual', value), 'caption:visual') },
-                      media: { alt: page.background.alt ?? '', filter: page.background.filter ?? null, onPage: editPage },
-                    })}
-                onRemove={() => {
-                  setFrameOpen(false);
-                  remove('visual');
-                }}
-              />
-            </Suspense>
-          </div>
-        ) : null}
+        {backgroundTools.panel}
         {/* La carte se MONTRE quand elle a une ligne visible ; sinon elle reste
             pour le lecteur d'écran et le clavier (l'état « Prêt », « Retirer »). */}
         {!retouching ? (

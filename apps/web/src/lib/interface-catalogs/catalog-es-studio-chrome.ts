@@ -116,6 +116,9 @@ const esStudioChrome = {
   'story.studio.background.menu.retake': 'Volver a hacer una foto',
   'story.studio.background.menu.forward': 'Pasar a primer plano',
   'story.studio.background.menu.remove': 'Quitar el fondo',
+  'story.studio.background.tools': 'Herramientas del fondo',
+  'story.studio.background.tools.describe': 'Describir',
+  'story.studio.background.tools.leave': 'Volver a la escena',
   'story.studio.reelSwitch.announcement': 'Cambiado a reel',
 } satisfies StudioChromeCatalogSlice;
 

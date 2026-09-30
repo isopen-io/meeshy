@@ -116,6 +116,9 @@ const arStudioChrome = {
   'story.studio.background.menu.retake': 'إعادة التقاط صورة',
   'story.studio.background.menu.forward': 'نقل إلى الواجهة',
   'story.studio.background.menu.remove': 'إزالة الخلفية',
+  'story.studio.background.tools': 'أدوات الخلفية',
+  'story.studio.background.tools.describe': 'وصف',
+  'story.studio.background.tools.leave': 'العودة إلى المشهد',
   'story.studio.reelSwitch.announcement': 'تم التحويل إلى ريل',
 } satisfies StudioChromeCatalogSlice;
 

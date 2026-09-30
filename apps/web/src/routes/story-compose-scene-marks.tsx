@@ -56,6 +56,18 @@ export function BackgroundMark({ size = 20 }: MarkProps) {
   );
 }
 
+/** « Décrire » (#8849) — une image et les lignes qui la disent : sa légende et
+ * son texte alternatif. */
+export function DescribeMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <rect x="3" y="3" width="18" height="11" rx="2.5" />
+      <path d="M3 11l4-3.5 4 3.5 3-2.5 4 3.5" />
+      <path d="M4 18h16M4 21h10" />
+    </svg>
+  );
+}
+
 /** « Modifier » — le crayon. */
 export function EditMark({ size = 20 }: MarkProps) {
   return (

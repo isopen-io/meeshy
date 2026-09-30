@@ -116,6 +116,9 @@ const enStudioChrome = {
   'story.studio.background.menu.retake': 'Retake a photo',
   'story.studio.background.menu.forward': 'Bring to foreground',
   'story.studio.background.menu.remove': 'Remove background',
+  'story.studio.background.tools': 'Background tools',
+  'story.studio.background.tools.describe': 'Describe',
+  'story.studio.background.tools.leave': 'Back to the scene',
   'story.studio.reelSwitch.announcement': 'Switched to a reel',
 } satisfies StudioChromeCatalogSlice;
 

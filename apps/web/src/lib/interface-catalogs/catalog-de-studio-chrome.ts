@@ -116,6 +116,9 @@ const deStudioChrome = {
   'story.studio.background.menu.retake': 'Neues Foto aufnehmen',
   'story.studio.background.menu.forward': 'In den Vordergrund',
   'story.studio.background.menu.remove': 'Hintergrund entfernen',
+  'story.studio.background.tools': 'Hintergrund-Werkzeuge',
+  'story.studio.background.tools.describe': 'Beschreiben',
+  'story.studio.background.tools.leave': 'Zurück zur Szene',
   'story.studio.reelSwitch.announcement': 'Zu einem Reel gewechselt',
 } satisfies StudioChromeCatalogSlice;
 
