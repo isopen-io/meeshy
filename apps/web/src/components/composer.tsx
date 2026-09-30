@@ -46,6 +46,7 @@ import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { locationSupported, useLocationRequest } from '@/lib/view/use-location-request';
 import { recordingSupported, useRecorder } from '@/lib/view/use-recorder';
+import { appSettingsOpener } from '@/lib/view/settings-recovery';
 import { toggleEmphasis } from '@meeshy/shared/utils/text-format';
 import type { EmphasisStyle } from '@meeshy/shared/utils/text-segments';
 import { ComposerFormatBar, emphasisShortcutOf } from './composer-format-bar';
@@ -394,11 +395,16 @@ export const Composer = memo(function Composer({
      entre deux taps, et promettre un rejeu impossible est la forme que
      `NoticeBanner` interdit explicitement (loi 4). `locating` n'a pas de
      sortie non plus — elle DIT l'attente, et elle se résout seule. */
+  /* UN REFUS DÉFINITIF MÈNE AUX RÉGLAGES DE L'APP (#8882) — dans la coque
+     Android, la permission refusée deux fois ne se redemande plus. */
+  const openAppSettings = appSettingsOpener();
+  const refusalExit = (retry: () => void): Pick<ComposerNotice, 'onRetry' | 'retryLabel'> =>
+    openAppSettings === null ? { onRetry: retry } : { onRetry: openAppSettings, retryLabel: translate(uiLanguage, 'composer.openSettings') };
   const locationNotice: ComposerNotice | null =
     locator.state.status === 'locating'
       ? { message: translate(uiLanguage, 'composer.location.locating'), onDismiss: locator.dismiss }
       : locator.state.status === 'denied'
-        ? { message: translate(uiLanguage, 'composer.location.denied'), onRetry: locator.request, onDismiss: locator.dismiss }
+        ? { message: translate(uiLanguage, 'composer.location.denied'), ...refusalExit(locator.request), onDismiss: locator.dismiss }
         : locator.state.status === 'failed'
           ? { message: translate(uiLanguage, 'composer.location.failed'), onRetry: locator.request, onDismiss: locator.dismiss }
           : locator.state.status === 'unsupported'
@@ -417,7 +423,7 @@ export const Composer = memo(function Composer({
                navigateur » envoyait le lecteur au mauvais endroit sur deux
                des trois plateformes). */
             message: 'Micro refusé — autorisez-le dans les réglages',
-            onRetry: () => recorder.start(),
+            ...refusalExit(() => recorder.start()),
             onDismiss: recorder.reset,
           }
         : recorder.state.status === 'unsupported'

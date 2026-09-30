@@ -482,8 +482,17 @@ private struct ConversationHeaderAvatarView: View {
 
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
+    /// Signal débouncé de `PresenceManager` (jamais le manager lui-même) :
+    /// l'arrivée ou le départ d'un pair (#8892) repeint les points de l'en-tête.
+    @ObservedObject private var presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal
 
     private var isDirect: Bool { conversation?.type == .direct }
+
+    /// Le pair a l'écran de CETTE conversation ouvert (#8892).
+    private func isHere(_ userId: String?) -> Bool {
+        guard let userId, let conversationId = conversation?.id else { return false }
+        return PresenceManager.shared.isHere(userId: userId, conversationId: conversationId)
+    }
 
     private func memberStoryState(for userId: String) -> StoryRingState {
         storyViewModel.storyRingState(forUserId: userId)
@@ -589,6 +598,7 @@ private struct ConversationHeaderAvatarView: View {
                     storyState: memberStoryState(for: userId),
                     moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
                     presenceState: PresenceManager.shared.presenceState(for: userId),
+                    isHere: isHere(userId),
                     onTap: {
                         HapticFeedback.light()
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -617,6 +627,7 @@ private struct ConversationHeaderAvatarView: View {
                                     storyState: storyState,
                                     moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
                                     presenceState: PresenceManager.shared.presenceState(for: member.id),
+                                    isHere: isHere(member.id),
                                     onTap: { openMember(member, storyState: storyState) },
                                     onMoodTap: statusViewModel.moodTapHandler(for: member.id),
                                     contextMenuItems: memberContextMenu(for: member, storyState: storyState)
@@ -652,6 +663,7 @@ private struct ConversationHeaderAvatarView: View {
                 storyState: collapsedStoryState,
                 moodEmoji: headerMoodEmoji,
                 presenceState: headerPresenceState,
+                isHere: isDirect && isHere(conversation?.participantUserId),
                 onTap: {
                     HapticFeedback.light()
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {

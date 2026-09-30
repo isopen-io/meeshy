@@ -13,7 +13,8 @@ import type { SocketClient } from '@/lib/net/socket';
  * Le signal part À L'AUTHENTIFICATION (la passerelle ignore tout ce qui
  * précède : `getUserId(socket.id)` est vide), à chaque changement de
  * visibilité RÉEL — jamais deux fois le même état sur une même connexion —,
- * et tout de suite si le socket est déjà là au branchement.
+ * et tout de suite si le socket est déjà là au branchement. La page qui
+ * redevient visible avec un socket coupé relance aussi la connexion (#8839).
  */
 
 export type VisibilitySource = {
@@ -54,7 +55,14 @@ export function bindAppStatePresence(params: { readonly socket: SocketClient; re
 
   socket.on(SERVER_EVENTS.AUTHENTICATED, onAuthenticated);
   socket.on('disconnect', onDisconnect);
-  const unwatch = visibility.onChange(() => send(false));
+  /* LE RETOUR AU PREMIER PLAN REBRANCHE (#8839) — miroir `scenePhase == .active`
+     iOS (`MeeshyApp.swift`) : la coque Android perd son socket en arrière-plan,
+     et le backoff pouvait tenir le direct coupé 16 s après le retour. */
+  const onVisibility = (): void => {
+    if (visibility.visibilityState() === 'visible' && !socket.connected) socket.connect();
+    send(false);
+  };
+  const unwatch = visibility.onChange(onVisibility);
   send(true);
 
   return () => {

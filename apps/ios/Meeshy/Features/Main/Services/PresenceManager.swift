@@ -44,6 +44,19 @@ final class PresenceManager: ObservableObject {
         }
     }
 
+    /// « Est dans la conversation » (#8892) : qui a l'écran de quelle
+    /// conversation ouvert, alimenté par `viewing:start` / `viewing:stop` /
+    /// `viewing:snapshot`. Hors de `presenceMap` : ce n'est pas une présence
+    /// globale mais un signal d'activité scopé à une room — il n'est ni
+    /// persisté, ni gardé à travers une coupure du socket (le serveur oublie
+    /// tout à la déconnexion). Chaque changement relance `refreshSignal`.
+    private(set) var conversationViewers = ConversationViewers() {
+        didSet {
+            guard conversationViewers != oldValue else { return }
+            scheduleVersionBump()
+        }
+    }
+
     /// Debounced companion signal — see `PresenceRefreshSignal`. Bumped
     /// `Self.versionBumpDebounce` seconds after the LAST `presenceMap`
     /// mutation settles, coalescing a burst of `user:status` events (e.g.
@@ -96,6 +109,28 @@ final class PresenceManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 self?.noteActivity(userId: event.userId)
+            }
+            .store(in: &cancellables)
+
+        // Un pair qui arrive dans une conversation est actif LÀ, MAINTENANT —
+        // même statut que la frappe. Voir `applyViewing(_:)`.
+        MessageSocketManager.shared.conversationViewing
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.applyViewing(event)
+            }
+            .store(in: &cancellables)
+
+        // Contrairement à `presenceMap` (ci-dessous), l'ensemble des présents
+        // NE survit PAS à une coupure : le serveur retire la présence à l'écran
+        // de chaque socket déconnecté, et ne la ré-annonce qu'aux nouveaux
+        // `viewing:start`. La garder ferait briller un point primaire périmé.
+        MessageSocketManager.shared.$isConnected
+            .removeDuplicates()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.clearConversationViewers()
             }
             .store(in: &cancellables)
 
@@ -169,6 +204,32 @@ final class PresenceManager: ObservableObject {
     func noteActivity(userId: String) {
         guard !userId.isEmpty else { return }
         presenceMap[userId] = UserPresence(isOnline: true, lastActiveAt: Date())
+    }
+
+    // MARK: - « Est dans la conversation » (#8892)
+
+    /// `userId` a l'écran de `conversationId` ouvert, au premier plan.
+    func isHere(userId: String, conversationId: String) -> Bool {
+        conversationViewers.isHere(userId: userId, conversationId: conversationId)
+    }
+
+    /// Applique un événement `viewing:*`. Un pair annoncé présent (arrivée ou
+    /// snapshot) compte aussi comme activité : le serveur n'annonce que les
+    /// utilisateurs qui montrent leur statut en ligne.
+    func applyViewing(_ event: ConversationViewingEvent) {
+        conversationViewers = conversationViewers.applying(event)
+        switch event {
+        case .arrived(let change):
+            noteActivity(userId: change.userId)
+        case .snapshot(let snapshot):
+            snapshot.userIds.forEach { noteActivity(userId: $0) }
+        case .left:
+            break
+        }
+    }
+
+    func clearConversationViewers() {
+        conversationViewers = ConversationViewers()
     }
 
     /// Présence temps réel si l'utilisateur est suivi par le manager, `nil`

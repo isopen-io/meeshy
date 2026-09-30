@@ -76,6 +76,9 @@ export type ComposerTrayProps =
 export type ComposerNotice = {
   readonly message: string;
   readonly onRetry?: () => void;
+  /** Le libellé du geste de reprise — « Réessayer » par défaut ; « Réglages »
+   * quand seule la fiche de l'app rend la permission (#8882). */
+  readonly retryLabel?: string;
   readonly onDismiss: () => void;
 };
 
@@ -418,7 +421,7 @@ function NoticeBanner({ notice }: { readonly notice: ComposerNotice }) {
           className="tap-target-32 h-8 shrink-0 rounded-chip px-2 text-title font-semibold"
           style={{ color: 'var(--accent)' }}
         >
-          Réessayer
+          {notice.retryLabel ?? 'Réessayer'}
         </button>
       ) : null}
       <button

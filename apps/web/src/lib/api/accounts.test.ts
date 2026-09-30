@@ -258,3 +258,39 @@ describe('les données locales d’un compte déconnecté', () => {
     expect([...storage.raw.keys()]).toEqual(['meeshy.anonymous-sessions.u_b2']);
   });
 });
+
+describe('la liste des comptes montre MA photo du moment (#8886)', () => {
+  test('une photo confirmée réécrit ma ligne, sans me faire remonter ni toucher aux autres', () => {
+    const device = makeDevice();
+    device.signIn(alice, 't-alice');
+    device.clock.now = NOW + 1000;
+    device.signIn(bob, 't-bob');
+    device.clock.now = NOW + 2000;
+
+    device.vault.refreshUser({ ...bob, avatar: '2026/09/b2/avatar_2.webp' });
+
+    const listed = device.vault.list();
+    expect(listed.map((account) => account.user.id)).toEqual(['b2', 'a1']);
+    expect(listed[0]?.user.avatar).toBe('2026/09/b2/avatar_2.webp');
+    expect(listed[0]?.lastActiveAt).toBe(NOW + 1000);
+    expect(listed[1]?.user.avatar).toBe('https://cdn/a.png');
+  });
+
+  test('un compte que l’appareil ne connaît pas n’est pas ajouté par une photo', () => {
+    const device = makeDevice();
+    device.signIn(alice, 't-alice');
+    device.vault.refreshUser({ ...bob, avatar: 'x.webp' });
+    expect(device.vault.list().map((account) => account.user.id)).toEqual(['a1']);
+  });
+
+  test('quitter un compte range son identité du MOMENT, pas celle de sa première connexion', () => {
+    const device = makeDevice();
+    device.signIn(alice, 't-alice');
+    device.store.getState().updateUser({ avatar: '2026/09/a1/avatar_2.webp' });
+
+    device.switcher.suspend();
+
+    expect(device.vault.list()[0]?.user.avatar).toBe('2026/09/a1/avatar_2.webp');
+    expect(device.vault.hasPreservedSession('a1')).toBe(true);
+  });
+});
