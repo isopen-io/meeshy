@@ -237,7 +237,7 @@ function LensRowImpl({
       */}
       <div
         /*
-         * `pr-12` (48px) et non `px-3` des deux côtés : `RowActions`
+         * `pe-12` (48px) et non `px-3` des deux côtés : `RowActions`
          * (frère ci-dessous, `position: absolute`, ancré `right-2` sur le
          * `<li>`) couvrait sinon l'heure/le badge de non-lus — mesuré à la
          * capture (#5559 revue). La cote se DÉDUIT du bouton : 8 (droite)
@@ -249,7 +249,7 @@ function LensRowImpl({
          * réserve qui apparaîtrait/disparaîtrait décalerait le texte sous le
          * pointeur — un mouvement que rien ne justifie ici.
          */
-        className="lens-row absolute inset-x-0 flex items-center gap-3 pl-3 pr-12"
+        className="lens-row absolute inset-x-0 flex items-center gap-3 ps-3 pe-12"
         style={withAccent(accent, {
           top: -OVERHANG,
           height: VISUAL_HEIGHT,

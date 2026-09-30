@@ -52,7 +52,7 @@ export const BRAND_BUTTON_STYLE = {
 } as const;
 
 export function LinksGlyph({ name, size }: { readonly name: LinksGlyphName; readonly size: number }) {
-  return <GlyphSvg glyph={LINKS_GLYPHS[name]} size={size} />;
+  return <GlyphSvg glyph={LINKS_GLYPHS[name]} size={size} {...(name === 'caretRight' ? { className: 'rtl:-scale-x-100' } : {})} />;
 }
 
 const tinted = (tint: string, percent: number) => `color-mix(in srgb, ${tint} ${percent}%, transparent)`;
@@ -96,7 +96,7 @@ export function LinksHeader({
         style={{ color: BRAND, outlineColor: BRAND }}
       >
         <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} />
+          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
         </ChromeActionDisc>
       </Link>
       <h1 className="min-w-0 flex-1 truncate text-center text-body font-semibold" style={{ color: INK }}>

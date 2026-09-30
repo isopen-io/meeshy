@@ -89,7 +89,7 @@ export function CallRecordingPanel({
     return (
       <div
         role="status"
-        className="fixed inset-x-0 z-[215] mx-auto flex w-fit items-center gap-2 rounded-full py-1 pl-4 pr-1 text-body shadow-lg"
+        className="fixed inset-x-0 z-[215] mx-auto flex w-fit items-center gap-2 rounded-full py-1 ps-4 pe-1 text-body shadow-lg"
         style={{ background: PILL_BG, color: '#fff', top: TOP }}
         data-call-recording-indicator={recording ? 'recording' : 'waiting'}
       >
@@ -113,7 +113,7 @@ export function CallRecordingPanel({
   return (
     <div
       role="status"
-      className="fixed inset-x-0 z-[215] mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full py-1 pl-4 pr-1 text-body shadow-lg"
+      className="fixed inset-x-0 z-[215] mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full py-1 ps-4 pe-1 text-body shadow-lg"
       style={{ background: PILL_BG, color: '#fff', top: TOP }}
       data-call-recording-notice={notice.kind}
     >

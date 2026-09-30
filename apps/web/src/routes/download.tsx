@@ -200,11 +200,7 @@ export function DownloadPage({ language }: { readonly language: InterfaceLanguag
   const t = (key: InterfaceCatalogKey) => translate(language, key);
   const shots = downloadShots(language);
   return (
-    <div
-      lang={language}
-      dir={language === 'ar' ? 'rtl' : 'ltr'}
-      className="relative flex h-dvh flex-col items-center overflow-y-auto pt-safe pb-safe"
-    >
+    <div className="relative flex h-dvh flex-col items-center overflow-y-auto pt-safe pb-safe">
       <AuthAmbient />
       <main className="relative grid w-full max-w-5xl gap-8 px-4 py-10 sm:px-8">
         <header className="grid justify-items-center gap-3 text-center">

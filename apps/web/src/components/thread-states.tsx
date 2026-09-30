@@ -36,7 +36,7 @@ function MinimalHeader() {
           style={{ color: 'var(--color-ios-ink)' }}
           aria-label="Retour"
         >
-          <Glyph name="caretLeft" size={22} />
+          <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
         </Link>
       </div>
     </header>

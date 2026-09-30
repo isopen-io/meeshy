@@ -457,7 +457,7 @@ export default function SignupScreen({
                 <button
                   type="button"
                   onClick={() => setShowingLanguageSheet(true)}
-                  className="flex items-center gap-2 rounded-[14px] px-4 text-left"
+                  className="flex items-center gap-2 rounded-[14px] px-4 text-start"
                   style={{ minHeight: 48, backgroundColor: 'var(--color-ios-card)' }}
                 >
                   <span aria-hidden="true">{language.flag}</span>

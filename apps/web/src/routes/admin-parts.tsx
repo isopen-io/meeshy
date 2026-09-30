@@ -145,7 +145,7 @@ export function AdminLine({ label, valeur }: { readonly label: string; readonly 
       <dt className="shrink-0 text-caption" style={{ color: INK2 }}>
         {label}
       </dt>
-      <dd className="min-w-0 flex-1 truncate text-right text-body" style={{ color: INK }}>
+      <dd className="min-w-0 flex-1 truncate text-end text-body" style={{ color: INK }}>
         {valeur}
       </dd>
     </div>

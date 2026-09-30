@@ -121,7 +121,7 @@ export function ReelsBackButton({
       className="absolute start-3 z-10 grid size-11 place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
       style={{ top: 'calc(env(safe-area-inset-top, 0px) + 10px)', backgroundColor: 'rgba(0,0,0,0.42)', outlineColor: 'white', ...chrome.style }}
     >
-      <Glyph name="caretLeft" size={20} />
+      <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
     </button>
   );
 }

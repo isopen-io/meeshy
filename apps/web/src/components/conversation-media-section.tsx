@@ -81,7 +81,7 @@ export function ConversationMediaSection({
         type="button"
         onClick={() => setHubOpen(true)}
         data-conversation-details-media-open
-        className="mt-2 flex w-full items-center gap-3 px-4 text-left"
+        className="mt-2 flex w-full items-center gap-3 px-4 text-start"
         style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
       >
         <Glyph name="image" size={20} style={{ color: 'var(--accent)' }} />

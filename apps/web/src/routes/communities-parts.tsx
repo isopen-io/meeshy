@@ -55,7 +55,7 @@ export const bannerBackground = (accent: string): string =>
   `linear-gradient(135deg, color-mix(in srgb, ${accent} 80%, black), color-mix(in srgb, ${accent} 40%, black))`;
 
 export function ScreenGlyph({ name, size }: { readonly name: CommunitiesGlyphName; readonly size: number }) {
-  return <GlyphSvg glyph={COMMUNITIES_GLYPHS[name]} size={size} />;
+  return <GlyphSvg glyph={COMMUNITIES_GLYPHS[name]} size={size} {...(name === 'caretRight' ? { className: 'rtl:-scale-x-100' } : {})} />;
 }
 
 const membersLabel = (language: InterfaceLanguage, count: number): string =>
@@ -92,11 +92,11 @@ export function BackLink({
           className="grid place-items-center rounded-chip"
           style={{ width: 'var(--size-header-circle)', height: 'var(--size-header-circle)', backgroundColor: 'rgb(0 0 0 / 0.45)' }}
         >
-          <Glyph name="caretLeft" size={16} />
+          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
         </span>
       ) : (
         <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} />
+          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
         </ChromeActionDisc>
       )}
     </Link>

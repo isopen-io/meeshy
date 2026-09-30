@@ -43,7 +43,7 @@ export function KeypadHeader({ language }: { readonly language: InterfaceLanguag
         style={{ color: BRAND, outlineColor: BRAND }}
       >
         <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} />
+          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
         </ChromeActionDisc>
       </Link>
       <h1 className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: INK }}>
@@ -191,7 +191,7 @@ export const KeypadResult = memo(function KeypadResult({
         params={{ username: person.username }}
         data-keypad-profile
         aria-label={`${name}, @${person.username}`}
-        className="flex min-h-14 min-w-0 flex-1 items-center gap-3 py-2 pl-4 pr-2 focus-visible:outline-2 focus-visible:-outline-offset-2"
+        className="flex min-h-14 min-w-0 flex-1 items-center gap-3 py-2 ps-4 pe-2 focus-visible:outline-2 focus-visible:-outline-offset-2"
         style={{ outlineColor: BRAND }}
       >
         <Avatar initials={initialsOf(name)} color={colorForName(name)} size={40} {...(person.avatar === null ? {} : { src: person.avatar })} />
@@ -211,7 +211,7 @@ export const KeypadResult = memo(function KeypadResult({
           data-keypad-call={media}
           aria-label={translate(language, media === 'video' ? 'keypad.call.video.named' : 'keypad.call.audio.named', { name })}
           onClick={() => onCall(person, media)}
-          className="grid size-11 shrink-0 place-items-center rounded-full last:mr-3 focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="grid size-11 shrink-0 place-items-center rounded-full last:me-3 focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ color: BRAND, outlineColor: BRAND }}
         >
           {media === 'video' ? <GlyphSvg glyph={CALLS_GLYPHS.videoCamera} size={20} /> : <Glyph name="phone" size={20} />}

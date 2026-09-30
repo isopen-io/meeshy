@@ -145,7 +145,7 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
                       closeAndFocusButton();
                       item.run();
                     }}
-                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-title font-medium"
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-start text-title font-medium"
                     style={{
                       color: destructive ? 'var(--color-error)' : 'var(--color-ios-ink)',
                       minHeight: MENU_ITEM_HEIGHT,

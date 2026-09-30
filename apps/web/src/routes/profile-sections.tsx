@@ -147,7 +147,7 @@ export function ProfileHeaderBar({
           style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
         >
           <ChromeActionDisc>
-            <Glyph name="caretLeft" size={16} />
+            <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
           </ChromeActionDisc>
         </Link>
       )}
@@ -555,7 +555,7 @@ export function LanguagesSection({
                   </span>
                 )}
                 <span aria-hidden="true" style={{ color: INK_2 }}>
-                  <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} />
+                  <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
                 </span>
               </button>
               {clear !== null && code !== null && !disabled ? (
@@ -635,7 +635,7 @@ export function ProgressionEntry({ language }: { readonly language: InterfaceLan
         </span>
       </span>
       <span aria-hidden="true" style={{ color: INK_2 }}>
-        <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} />
+        <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
       </span>
     </Link>
   );
@@ -665,7 +665,7 @@ export function RequestsSection({ language, pending }: { readonly language: Inte
           </span>
         )}
         <span aria-hidden="true" style={{ color: INK_2 }}>
-          <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} />
+          <GlyphSvg glyph={PROFILE_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
         </span>
       </Link>
     </Section>

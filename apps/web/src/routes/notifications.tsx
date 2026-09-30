@@ -107,7 +107,7 @@ export function NotificationsHeader({
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
         <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} />
+          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
         </ChromeActionDisc>
       </Link>
       <div className="flex min-w-0 flex-1 flex-col">

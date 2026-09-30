@@ -162,7 +162,7 @@ export function LocationCard({
       target="_blank"
       rel="noopener noreferrer"
       aria-label={translate(language, 'message.location.a11y', { place: label })}
-      className="mb-1.5 flex w-full max-w-[260px] items-center gap-2 text-left"
+      className="mb-1.5 flex w-full max-w-[260px] items-center gap-2 text-start"
       style={{
         borderRadius: 'var(--ios-radius-md)',
         border: '1px solid var(--color-edge)',
@@ -350,7 +350,7 @@ export function StoryCitationCard({
         data-story-citation
         onClick={() => onOpen(citation.id)}
         aria-label={label}
-        className="mb-1.5 flex flex-col text-left"
+        className="mb-1.5 flex flex-col text-start"
       >
         {card}
       </button>
@@ -390,11 +390,11 @@ export function MoodQuote({
       data-mood-citation
       role="group"
       aria-label={`${title}, ${body}`}
-      className="mb-1.5 flex w-full rounded-quote text-left"
+      className="mb-1.5 flex w-full rounded-quote text-start"
       style={{ backgroundColor: isMine ? 'var(--color-quote-mine)' : 'var(--color-quote)' }}
     >
       <QuoteRail isMine={isMine} />
-      <span className="min-w-0 py-2 pr-2.5 pl-2 text-title" aria-hidden>
+      <span className="min-w-0 py-2 pe-2.5 ps-2 text-title" aria-hidden>
         <span className="flex items-baseline gap-1.5">
           <span className="truncate font-semibold" style={{ color: isMine ? 'white' : 'var(--accent)' }}>
             {title}

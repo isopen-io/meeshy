@@ -88,7 +88,7 @@ export function CallRecordChoice({ request = (kind) => void callRecording.reques
                 request(choice.kind);
                 base.onClose();
               }}
-              className="flex min-h-14 items-center gap-3 rounded-[20px] px-3 text-left transition-colors hover:bg-white/10 focus-visible:bg-white/15 disabled:opacity-40 motion-reduce:transition-none"
+              className="flex min-h-14 items-center gap-3 rounded-[20px] px-3 text-start transition-colors hover:bg-white/10 focus-visible:bg-white/15 disabled:opacity-40 motion-reduce:transition-none"
               style={{ boxShadow: 'inset 0 0 0 1px rgb(255 255 255 / 0.2)' }}
               data-call-record-kind={choice.kind}
               data-row-item=""

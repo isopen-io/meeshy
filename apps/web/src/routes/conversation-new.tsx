@@ -238,7 +238,7 @@ export default function ConversationNewScreen() {
           className="grid size-11 shrink-0 place-items-center rounded-chip"
           style={{ color: 'var(--color-ios-ink)' }}
         >
-          <Glyph name="caretLeft" size={20} />
+          <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
         </Link>
         <h1 className="flex-1 truncate text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
           {mode === 'direct' ? 'Nouvelle conversation' : 'Nouveau groupe'}
@@ -515,7 +515,7 @@ function PersonRow(props: {
         data-person={props.person.id}
         {...(choosing ? { 'aria-pressed': props.selected } : {})}
         onClick={() => props.onPick(props.person.id)}
-        className="flex w-full items-center gap-3 px-4 py-3 text-left disabled:opacity-50"
+        className="flex w-full items-center gap-3 px-4 py-3 text-start disabled:opacity-50"
         style={{ minHeight: 44 }}
       >
         <Avatar

@@ -227,18 +227,18 @@ function blockNode(
     case 'list': {
       const items = block.items.map((item, itemIndex) => <li key={`${key}-${itemIndex}`}>{render(item)}</li>);
       return block.ordered ? (
-        <ol key={key} start={block.start} className="list-decimal pl-6">
+        <ol key={key} start={block.start} className="list-decimal ps-6">
           {items}
         </ol>
       ) : (
-        <ul key={key} className="list-disc pl-6">
+        <ul key={key} className="list-disc ps-6">
           {items}
         </ul>
       );
     }
     case 'quote':
       return (
-        <blockquote key={key} className="border-l-[3px] pl-2 opacity-80" style={{ borderColor: 'currentColor' }}>
+        <blockquote key={key} className="border-s-[3px] ps-2 opacity-80" style={{ borderColor: 'currentColor' }}>
           {render(block.text)}
         </blockquote>
       );

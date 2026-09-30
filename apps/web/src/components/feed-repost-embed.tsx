@@ -76,7 +76,7 @@ export function FeedRepostEmbed({ repost }: { readonly repost: FeedCardRepostEmb
         {chipLabel !== undefined ? (
           <span
             data-feed-repost-embed-chip
-            className="ml-auto shrink-0 rounded-chip px-1.5 py-0.5 text-check font-semibold"
+            className="ms-auto shrink-0 rounded-chip px-1.5 py-0.5 text-check font-semibold"
             style={{ backgroundColor: 'var(--color-ios-surface)', color: 'var(--color-ios-ink-2)' }}
           >
             {chipLabel}

@@ -12,6 +12,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { href, navigate } from '@/routes/route-table';
 
 import { withCommentsAnchor } from './comments-anchor';
+import { copyPlainText } from './copy-text';
 import { sharePublicationLink } from './publication-share';
 import { useLiveAnnouncer } from './use-live-announcer';
 
@@ -172,15 +173,7 @@ export function usePostGesture(options?: {
     return {
       viewerId,
       onCopyText: (text: string) => {
-        const clipboard = typeof navigator === 'undefined' ? undefined : navigator.clipboard;
-        if (clipboard === undefined) {
-          say('feed.post.copy_failed');
-          return;
-        }
-        void clipboard.writeText(text).then(
-          () => say('feed.post.copied'),
-          () => say('feed.post.copy_failed'),
-        );
+        void copyPlainText(text).then((outcome) => say(outcome === 'copied' ? 'feed.post.copied' : 'feed.post.copy_failed'));
       },
       onPin: (postId: string) => {
         void pinPostAction(postId).then((outcome) => say(outcome === 'done' ? 'feed.post.pinned' : 'feed.post.pin_failed'));

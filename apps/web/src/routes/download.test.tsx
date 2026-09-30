@@ -109,11 +109,8 @@ describe('/download — ce que voit quelqu’un qui ne connaît pas Meeshy (#729
     expect(html).not.toContain('navigateur');
   });
 
-  test('ar : la page parle arabe, et se lit de droite à gauche', () => {
+  test('ar : la page parle arabe — son sens de lecture vient du document (#8803)', () => {
     const html = renderToStaticMarkup(<DownloadPage language="ar" />);
-    expect(html).toContain('dir="rtl"');
-    expect(html).toContain('lang="ar"');
-    expect(renderToStaticMarkup(<DownloadPage language="fr" />)).toContain('dir="ltr"');
     expect(html).toContain('Meeshy');
     expect(html).toContain('المتصفح');
     expect(html).toContain('قريبًا');
