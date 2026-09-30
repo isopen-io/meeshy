@@ -402,7 +402,7 @@ export function ProgressionError({ message, online, onRetry }: { message: string
       <button
         type="button"
         onClick={onRetry}
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: BRAND, minHeight: 44 }}
       >
         Réessayer
