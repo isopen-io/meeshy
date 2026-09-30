@@ -138,6 +138,60 @@ describe('les médias qu’une carte peut montrer (#8693)', () => {
     expect(subject?.media.map((item) => item.id)).toEqual(['a-open']);
     expect(subjectOf(standalone({ content: '', attachments: [piece({ isBlurred: true })] }))).toBeNull();
   });
+
+  test('une pièce CHIFFRÉE n’est jamais peinte : son fichier n’est pas lisible hors de la bulle', () => {
+    const subject = subjectOf(standalone({ attachments: [piece({ id: 'a-open' }), piece({ id: 'a-e2ee', isEncrypted: true })] }));
+    expect(subject?.media.map((item) => item.id)).toEqual(['a-open']);
+  });
+});
+
+describe('le message CITÉ apporte son média (#8901)', () => {
+  const piece = (overrides: Partial<Attachment>): Attachment => ({
+    ...attachmentDefaults,
+    id: 'q-1',
+    messageId: 'm-quoted',
+    fileName: 'photo.jpg',
+    originalName: 'photo.jpg',
+    mimeType: 'image/jpeg',
+    fileSize: 1000,
+    fileUrl: '/api/v1/attachments/file/2026%2F09%2Fq%2Fphoto.jpg',
+    uploadedBy: 'u-amina',
+    createdAt: '2026-09-28T11:00:00.000Z',
+    width: 1200,
+    height: 900,
+    ...overrides,
+  });
+
+  test('répondre à une photo par du texte : la carte peint la photo citée', () => {
+    const subject = subjectOf(reply({ replyTo: quoted({ attachments: [piece({})] }) }));
+    expect(subject?.media.map((item) => item.id)).toEqual(['q-1']);
+    expect(subject?.media[0]?.url).toBe('/api/v1/attachments/file/2026%2F09%2Fq%2Fphoto.jpg');
+  });
+
+  test('les médias de la réponse passent d’abord, ceux de la citation ensuite', () => {
+    const own = piece({ id: 'r-1', messageId: 'm-reply' });
+    const subject = subjectOf(reply({ attachments: [own], replyTo: quoted({ attachments: [piece({ id: 'q-vid', mimeType: 'video/mp4', thumbnailUrl: '/q-poster.jpg' })] }) }));
+    expect(subject?.media.map((item) => item.id)).toEqual(['r-1', 'q-vid']);
+  });
+
+  test('une citation PROTÉGÉE n’apporte aucun média — vue unique, floutée, chiffrée, supprimée', () => {
+    const cases: readonly Partial<Message>[] = [{ isViewOnce: true, content: '👁️' }, { isBlurred: true }, { isEncrypted: true }, { deletedAt: new Date('2026-09-28T11:30:00.000Z') }];
+    for (const protection of cases) {
+      expect(subjectOf(reply({ replyTo: quoted({ attachments: [piece({})], ...protection }) }))?.media).toEqual([]);
+    }
+  });
+
+  test('une pièce citée protégée à SON niveau n’est pas peinte, ses voisines le sont', () => {
+    const subject = subjectOf(
+      reply({ replyTo: quoted({ attachments: [piece({ id: 'q-once', isViewOnce: true }), piece({ id: 'q-blur', isBlurred: true }), piece({ id: 'q-e2ee', isEncrypted: true }), piece({ id: 'q-open' })] }) }),
+    );
+    expect(subject?.media.map((item) => item.id)).toEqual(['q-open']);
+  });
+
+  test('une citation ÉCHUE n’apporte plus son média', () => {
+    const subject = subjectOf(reply({ replyTo: quoted({ attachments: [piece({})], expiresAt: new Date(NOW - 1000) }) }));
+    expect(subject?.media).toEqual([]);
+  });
 });
 
 describe('cardAuthorOf — qui signe chaque bloc', () => {
