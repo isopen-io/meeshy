@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
 import { Avatar } from '@/components/avatar';
+import { personInitials, personLabel } from '@/lib/admin/interpret/labels';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminUserDetailQueryKey, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
@@ -9,7 +10,6 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import type { ProfileImageKind } from '@/lib/api/profile';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { initialsOf } from '@/lib/view/conversation';
 
 import { MemberSection, SectionButton, type SectionState } from './admin-member-parts';
 import { AdminUserImageSheet } from './admin-user-image-sheet';
@@ -72,7 +72,7 @@ export function AdminMemberImagesSection({
         <Banniere url={banniere ?? ''} language={language} />
         <div className="absolute bottom-0 translate-y-1/2 rounded-full p-1" style={{ insetInlineStart: 16, backgroundColor: 'var(--color-ios-surface)' }}>
           <Avatar
-            initials={initialsOf(membre.displayName)}
+            initials={personInitials(personLabel(membre, language))}
             color="var(--color-ios-brand)"
             size={88}
             name={translateAdmin(language, 'admin.gallery.avatar')}

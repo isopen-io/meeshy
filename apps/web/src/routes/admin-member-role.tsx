@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { interpretRole } from '@/lib/admin/interpret/enums';
 import { ADMIN_ROLES } from '@/lib/admin/user-list';
 import { roleDraftOf, roleEditOf, sectionIsDirty, type RoleDraft } from '@/lib/admin/member-sections';
 import { sensitiveChangesOf } from '@/lib/admin/user-edit-guard';
@@ -84,7 +85,7 @@ export function AdminMemberRoleSection({
           id="admin-member-role"
           label={translateAdmin(language, 'admin.user.role')}
           valeur={draft.role}
-          options={ADMIN_ROLES.map((role) => ({ value: role, label: role }))}
+          options={ADMIN_ROLES.map((role) => ({ value: role, label: interpretRole(role, language).label }))}
           onValeur={(role) => poser({ role })}
         />
         <div className="self-end">

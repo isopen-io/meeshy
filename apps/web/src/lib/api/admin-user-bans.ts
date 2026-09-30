@@ -23,6 +23,18 @@ import type { ApiResult } from './http';
  * divergerait au premier ajustement — sur les fuseaux, sur l'inclusivité de la
  * borne, sur le traitement d'un ban levé avant son échéance.
  */
+/**
+ * QUI A BANNI, QUI A LEVÉ (#8876) — la passerelle les NOMME (`loadAdminPeople`, une
+ * seule lecture de comptes pour toute la page) : un administrateur se reconnaît à
+ * son nom affiché, jamais à un identifiant. Une levée sans administrateur est celle
+ * du SYSTÈME (`liftedBySystem`) — l'échéance, pas un geste humain.
+ */
+export type AdminBanActor = {
+  readonly id: string;
+  readonly username: string;
+  readonly displayName: string;
+};
+
 export type AdminBan = {
   readonly id: string;
   readonly reason: string;
@@ -34,6 +46,17 @@ export type AdminBan = {
   readonly liftReason: string | null;
   /** Servi par la passerelle, jamais recalculé ici. */
   readonly active: boolean;
+  /** Qui a prononcé le bannissement — `null` quand le compte de l'administrateur n'existe plus. */
+  readonly bannedBy: AdminBanActor | null;
+  /** Qui l'a levé — `null` tant qu'il n'est pas levé, ou quand la levée est celle du système. */
+  readonly liftedBy: AdminBanActor | null;
+  readonly liftedBySystem: boolean;
+};
+
+const decodeActor = (raw: unknown): AdminBanActor | null => {
+  const acteur = asRecord(raw);
+  if (acteur === null || typeof acteur.id !== 'string' || acteur.id === '') return null;
+  return { id: acteur.id, username: asText(acteur.username), displayName: asText(acteur.displayName).trim() };
 };
 
 const asDateOrNull = (value: unknown): string | null =>
@@ -57,12 +80,31 @@ export function decodeAdminBans(raw: unknown): readonly AdminBan[] {
         // Fail-closed : un ban dont la charge ne DIT pas qu'il est en vigueur
         // ne doit pas se présenter comme tel.
         active: ligne.active === true,
+        bannedBy: decodeActor(ligne.bannedBy),
+        liftedBy: decodeActor(ligne.liftedBy),
+        liftedBySystem: ligne.liftedBySystem === true,
       };
     })
     .filter((ban): ban is AdminBan => ban !== null);
 }
 
 export const adminUserBansQueryKey = (userId: string) => ['admin', 'user', userId, 'bans'] as const;
+
+/**
+ * L'HISTORIQUE, COMME REQUÊTE — la fiche (pour dire « Banni » dans son en-tête) et la
+ * feuille des bannissements lisent la MÊME clé : une seule lecture pour les deux.
+ */
+export function adminUserBansQueryOptions(deps: AdminDeps, userId: string) {
+  return {
+    queryKey: adminUserBansQueryKey(userId),
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }): Promise<readonly AdminBan[]> => {
+      const resultat = await loadAdminUserBans({ ...deps, userId, ...(signal === undefined ? {} : { signal }) });
+      if (!resultat.ok) throw new Error(resultat.error);
+      return resultat.data;
+    },
+    retry: false,
+  };
+}
 
 /**
  * L'HISTORIQUE, sous `canViewUsers` — une lecture plus largement ouverte que

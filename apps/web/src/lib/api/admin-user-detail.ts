@@ -1,42 +1,39 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 import { type AdminDeps, asCount, asRecord, asText } from './admin';
+import { unwrap } from './client';
 import type { ApiResult } from './http';
 
 /**
- * **LE DÉTAIL D'UN MEMBRE** (#6819) — `GET admin.usersByUserId`,
+ * **LE DÉTAIL D'UN MEMBRE** (#6819, #8005) — `GET admin.usersByUserId`,
  * gardé par `canViewUserDetails` (BIGBOSS, ADMIN, MODERATOR, AUDIT).
  *
  * La charge est servie **NUE** : `sendSuccess(reply, sanitizedUser)`
- * (`routes/admin/users.ts:219`), sans enveloppe — à la différence de la LISTE,
+ * (`routes/admin/users.ts`), sans enveloppe — à la différence de la LISTE,
  * dont la `pagination` voyage DANS `data`. Lire ici un `charge.user` rendrait
  * `null` sur une charge parfaitement valide.
  *
  * ## Ce que ce décodeur REFUSE de garder, et pourquoi
  *
  * Sous `canViewSensitiveData`, `sanitizeUser` ajoute à la forme publique :
- * `twoFactorBackupCodes`, `lastLoginIp`, `lastLoginLocation`,
- * `lastLoginDevice`, `registrationIp`, `registrationLocation`,
- * `registrationDevice`, `registrationCountry`.
+ * `twoFactorBackupCodesRemaining` (le NOMBRE de codes de secours, jamais leurs
+ * empreintes), `lastLoginIp`, `lastLoginLocation`, `lastLoginDevice`,
+ * `registrationIp`, `registrationLocation`, `registrationDevice`,
+ * `registrationCountry` — et, sur la fiche, le bloc `adminMetadata` (#8005).
  *
- * **Le cache des requêtes est PERSISTÉ dans `localStorage`**
- * (`query-client.ts` déshydrate tout succès) et **aucun mécanisme d'exemption
- * n'existe**. Ce qu'on décode ici finit donc écrit sur le disque du
- * navigateur — celui d'un administrateur, qui consulte des comptes qui ne sont
- * pas les siens, et dont le stockage survit à la déconnexion. Des codes de
- * secours de second facteur et des empreintes de connexion y seraient une
- * fuite durable, sans rapport avec le service rendu par l'écran.
+ * **Ce qu'on GARDE** (#8876, la fiche dit enfin d'où et d'où l'on se connecte) :
+ * le lieu, l'appareil et le pays d'inscription, le nombre de codes de secours
+ * restants, et le bloc `adminMetadata` champ par champ. Les données
+ * d'administration ne sont plus déshydratées sur le disque (`estClefNonPersistable`,
+ * #8876) : le risque qui les faisait jeter n'existe plus.
  *
- * DEUX GARDES POUR UNE RÈGLE (même dispositif que le port de la sécurité du
- * compte, #6720) : le type ne les DÉCLARE pas, **et** l'objet se construit
- * champ par champ. Le second point n'est pas décoratif — un `...spread` de la
- * charge satisferait le type tout en recopiant chaque champ que la passerelle
- * ajoutera demain, en silence.
- *
- * Ce qui reste est ce qu'un administrateur doit voir pour agir : l'identité,
- * le rôle, l'état du compte, ses vérifications, ses langues. Le numéro de
- * téléphone en fait partie — c'est une donnée d'IDENTITÉ, que `sanitizeUser`
- * masque déjà pour qui n'y a pas droit, et non une empreinte de traçage.
+ * **Ce qu'on REFUSE toujours** : les adresses IP (`lastLoginIp`,
+ * `registrationIp`) — la fiche n'a aucune phrase à leur consacrer, et une donnée
+ * qu'aucun écran ne lit n'a pas à traverser le navigateur —, les empreintes
+ * `twoFactorBackupCodes` et tout jeton. DEUX GARDES POUR UNE RÈGLE : le type ne
+ * les DÉCLARE pas, **et** l'objet se construit champ par champ. Le second point
+ * n'est pas décoratif — un `...spread` de la charge satisferait le type tout en
+ * recopiant chaque champ que la passerelle ajoutera demain, en silence.
  *
  * ## L'état d'un compte se lit en TROIS champs, jamais en un statut calculé
  *
@@ -46,7 +43,7 @@ import type { ApiResult } from './http';
  * `deactivatedAt`. Un compte supprimé arrive donc avec `deletedAt: null`, et
  * rien ne le distingue d'une suspension. Calculer ici un statut unique
  * inventerait une certitude que la charge ne porte pas ; l'écran DIT ce qu'il
- * sait, et pas davantage.
+ * sait (`accountStateOf`), et pas davantage.
  */
 export type AdminUserDetail = {
   readonly id: string;
@@ -100,6 +97,61 @@ export type AdminUserDetail = {
   readonly lastActiveAt: string | null;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
+
+  /** Les lieux et appareils de connexion et d'inscription — sous `canViewSensitiveData` (chaîne vide sinon). */
+  readonly registrationCountry: string;
+  readonly lastLoginLocation: string;
+  readonly lastLoginDevice: string;
+  readonly registrationLocation: string;
+  readonly registrationDevice: string;
+  /**
+   * Le NOMBRE de codes de secours du second facteur — `null` quand la passerelle
+   * ne le sert pas (rôle sans donnée sensible) : ce n'est pas zéro, c'est un
+   * chiffre qu'on ne nous remet pas.
+   */
+  readonly twoFactorBackupCodesRemaining: number | null;
+  /** Le bloc de métadonnées de compte (#8005) — `null` quand il n'est pas servi : l'écran ne le dessine alors pas. */
+  readonly adminMetadata: AdminMemberMetadata | null;
+  /** Les compteurs de liens de la ligne (`_count`) — `null` quand ils ne sont pas servis. */
+  readonly counts: AdminMemberCounts | null;
+};
+
+/**
+ * LE BLOC `adminMetadata` (#8005) — ce qui aide à COMPRENDRE un compte sans ouvrir
+ * la base. Jamais la VALEUR d'un changement d'e-mail ou de téléphone en attente
+ * (`hasPending*` dit qu'il existe), jamais la liste des comptes bloqués
+ * (`blockedCount` en dit la taille).
+ */
+export type AdminMemberMetadata = {
+  readonly deviceLocale: string | null;
+  readonly deviceCountry: string | null;
+  readonly birthDate: string | null;
+  readonly ageVerifiedAt: string | null;
+  readonly voiceProfileConsentAt: string | null;
+  readonly voiceDataConsentAt: string | null;
+  readonly dataProcessingConsentAt: string | null;
+  readonly analyticsConsentAt: string | null;
+  readonly voiceCloningEnabledAt: string | null;
+  readonly termsAcceptedAt: string | null;
+  readonly termsVersion: string | null;
+  readonly onboardingCompletedAt: string | null;
+  readonly currentStreakDays: number;
+  readonly longestStreakDays: number;
+  readonly engagementScore: number;
+  readonly meeshBalance: number;
+  readonly blockedCount: number;
+  readonly hasPendingEmail: boolean;
+  readonly hasPendingPhone: boolean;
+};
+
+export type AdminMemberCounts = {
+  readonly shareLinks: number;
+  readonly trackingLinks: number;
+  readonly affiliateTokens: number;
+  readonly affiliateRelations: number;
+  readonly referredRelations: number;
+  readonly sentFriendRequests: number;
+  readonly receivedFriendRequests: number;
 };
 
 /** Une chaîne SERVIE ou rien — jamais la chaîne vide, qui ressortirait comme
@@ -118,6 +170,48 @@ const asTextOrNull = (value: unknown): string | null => (typeof value === 'strin
  */
 const asDate = asTextOrNull;
 
+const asNumber = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+
+function decodeMetadata(raw: unknown): AdminMemberMetadata | null {
+  const bloc = asRecord(raw);
+  if (bloc === null) return null;
+  return {
+    deviceLocale: asTextOrNull(bloc.deviceLocale),
+    deviceCountry: asTextOrNull(bloc.deviceCountry),
+    birthDate: asDate(bloc.birthDate),
+    ageVerifiedAt: asDate(bloc.ageVerifiedAt),
+    voiceProfileConsentAt: asDate(bloc.voiceProfileConsentAt),
+    voiceDataConsentAt: asDate(bloc.voiceDataConsentAt),
+    dataProcessingConsentAt: asDate(bloc.dataProcessingConsentAt),
+    analyticsConsentAt: asDate(bloc.analyticsConsentAt),
+    voiceCloningEnabledAt: asDate(bloc.voiceCloningEnabledAt),
+    termsAcceptedAt: asDate(bloc.termsAcceptedAt),
+    termsVersion: asTextOrNull(bloc.termsVersion),
+    onboardingCompletedAt: asDate(bloc.onboardingCompletedAt),
+    currentStreakDays: asCount(bloc.currentStreakDays),
+    longestStreakDays: asCount(bloc.longestStreakDays),
+    engagementScore: asNumber(bloc.engagementScore),
+    meeshBalance: asNumber(bloc.meeshBalance),
+    blockedCount: asCount(bloc.blockedCount),
+    hasPendingEmail: bloc.hasPendingEmail === true,
+    hasPendingPhone: bloc.hasPendingPhone === true,
+  };
+}
+
+function decodeCounts(raw: unknown): AdminMemberCounts | null {
+  const compte = asRecord(raw);
+  if (compte === null) return null;
+  return {
+    shareLinks: asCount(compte.createdShareLinks),
+    trackingLinks: asCount(compte.createdTrackingLinks),
+    affiliateTokens: asCount(compte.createdAffiliateTokens),
+    affiliateRelations: asCount(compte.affiliateRelations),
+    referredRelations: asCount(compte.referredRelations),
+    sentFriendRequests: asCount(compte.sentFriendRequests),
+    receivedFriendRequests: asCount(compte.receivedFriendRequests),
+  };
+}
+
 export function decodeAdminUserDetail(raw: unknown): AdminUserDetail | null {
   const charge = asRecord(raw);
   if (charge === null || typeof charge.id !== 'string' || charge.id === '') return null;
@@ -128,9 +222,10 @@ export function decodeAdminUserDetail(raw: unknown): AdminUserDetail | null {
   return {
     id: charge.id,
     username,
-    // Le nom affiché retombe sur le pseudo — jamais un détail sans nom dans un
-    // écran dont le métier est de dire DE QUI l'on parle.
-    displayName: asText(charge.displayName) || username,
+    // Le nom affiché TEL QUE SERVI, vide s'il manque : le décodeur ne fabrique aucun
+    // libellé. `personLabel` compose le nom lisible (nom affiché, puis « Prénom
+    // Nom », puis `@pseudo`) — c'est lui seul qui décide du repli.
+    displayName: asText(charge.displayName).trim(),
     firstName: asText(charge.firstName),
     lastName: asText(charge.lastName),
     bio: asText(charge.bio),
@@ -171,7 +266,29 @@ export function decodeAdminUserDetail(raw: unknown): AdminUserDetail | null {
     lastActiveAt: asDate(charge.lastActiveAt),
     createdAt: asDate(charge.createdAt),
     updatedAt: asDate(charge.updatedAt),
+
+    registrationCountry: asText(charge.registrationCountry),
+    lastLoginLocation: asText(charge.lastLoginLocation),
+    lastLoginDevice: asText(charge.lastLoginDevice),
+    registrationLocation: asText(charge.registrationLocation),
+    registrationDevice: asText(charge.registrationDevice),
+    twoFactorBackupCodesRemaining:
+      typeof charge.twoFactorBackupCodesRemaining === 'number' ? asCount(charge.twoFactorBackupCodesRemaining) : null,
+    adminMetadata: decodeMetadata(charge.adminMetadata),
+    counts: decodeCounts(charge._count),
   };
+}
+
+/**
+ * LA RÉPONSE D'UNE ÉCRITURE, LUE COMME UNE FICHE — chaque écriture du compte rend
+ * le membre à jour, sanitisé, sous la MÊME forme que `GET` : on la décode donc
+ * par le même décodeur, qui lui fait hériter des mêmes refus (aucune IP, aucune
+ * empreinte, aucun jeton).
+ */
+export function memberFromResult(result: ApiResult<unknown>): ApiResult<AdminUserDetail> {
+  if (!result.ok) return result;
+  const membre = decodeAdminUserDetail(result.data);
+  return membre === null ? { ok: false, status: 0, error: 'Membre illisible' } : { ok: true, data: membre };
 }
 
 export const adminUserDetailQueryKey = (userId: string) => ['admin', 'user', userId] as const;
@@ -220,11 +337,10 @@ export async function loadAdminUserDetail(
 export function adminUserDetailQueryOptions(deps: AdminDeps, userId: string) {
   return {
     queryKey: adminUserDetailQueryKey(userId),
-    queryFn: async ({ signal }: { readonly signal?: AbortSignal }): Promise<AdminUserDetail> => {
-      const resultat = await loadAdminUserDetail({ ...deps, userId, ...(signal === undefined ? {} : { signal }) });
-      if (!resultat.ok) throw new Error(resultat.error);
-      return resultat.data;
-    },
+    /* `unwrap` garde le STATUT du refus (`ApiError`) : un 403 se dit comme un refus, un 404 comme
+       un membre introuvable — jamais les deux comme « une panne ». */
+    queryFn: async ({ signal }: { readonly signal?: AbortSignal }): Promise<AdminUserDetail> =>
+      unwrap(await loadAdminUserDetail({ ...deps, userId, ...(signal === undefined ? {} : { signal }) })),
     staleTime: 5 * 1000,
     retry: false,
   };
