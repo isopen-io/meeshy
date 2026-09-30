@@ -37,7 +37,6 @@ import {
   type SocialEventsDeps,
 } from '../social/events';
 import { registerShareRoutes } from './share';
-import { sliceCodePointsOrUndefined } from '@meeshy/shared/utils/text-truncate';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -231,7 +230,6 @@ export function registerInteractionRoutes(
           postAuthorId: post.authorId,
           emoji,
           postType: post.type,
-          postPreview: sliceCodePointsOrUndefined((post as { content?: string | null }).content, 80),
           postCreatedAt: (post as { createdAt?: Date | string | null }).createdAt ?? undefined,
           postExpiresAt: (post as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
         }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/like]: notify post like failed', { err }));
@@ -960,7 +958,6 @@ export function registerInteractionRoutes(
             postAuthorId: original.authorId,
             repostId: repost.id,
             postType: (original as { type?: 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' }).type,
-            postPreview: sliceCodePointsOrUndefined((original as { content?: string | null }).content, 80),
             postCreatedAt: (original as { createdAt?: Date | string | null }).createdAt ?? undefined,
             postExpiresAt: (original as { expiresAt?: Date | string | null }).expiresAt ?? undefined,
           });

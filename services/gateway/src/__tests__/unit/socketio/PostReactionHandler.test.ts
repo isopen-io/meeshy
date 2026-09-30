@@ -626,7 +626,6 @@ describe('PostReactionHandler', () => {
       expect(mockNotificationService.createPostLikeNotification).toHaveBeenCalledWith(
         expect.objectContaining({
           postType: 'STORY',
-          postPreview: 'my ephemeral story caption',
           postCreatedAt: storyCreatedAt,
           postExpiresAt: storyExpiresAt,
         })

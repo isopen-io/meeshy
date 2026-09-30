@@ -101,6 +101,32 @@ describe('reproduceEditedSubjectNotifications', () => {
     });
 
     /**
+     * #8731 — l'extrait persisté est celui SERVI au destinataire, donc souvent
+     * une TRADUCTION — de l'ANCIEN texte. Au moment de l'édition, aucune
+     * traduction du nouveau n'existe encore : le seul texte juste est l'original
+     * édité, et c'est ce que la substitution pose. La clé de réécriture reste la
+     * chaîne SERTIE, quelle que soit sa langue.
+     */
+    it('remplace un extrait TRADUIT par le texte édité, là où il était serti', async () => {
+      seed([
+        {
+          id: '607f1f77bcf86cd799439009',
+          content: '📷 Photo · Jour de lancement',
+          metadata: { action: 'view_post', postPreview: 'Jour de lancement' },
+        },
+      ]);
+
+      await reproduceEditedSubjectNotifications(
+        prisma,
+        { subject: { kind: 'post', id: POST_ID }, content: 'Launch day, take two' },
+        announcer
+      );
+
+      expect(updatedData().content).toBe('📷 Photo · Launch day, take two');
+      expect(updatedData().metadata).toMatchObject({ postPreview: 'Launch day, take two' });
+    });
+
+    /**
      * `post_comment` fait de l'extrait du commentaire son CORPS ; les deux
      * champs doivent donc suivre, pas seulement le sous-titre.
      */

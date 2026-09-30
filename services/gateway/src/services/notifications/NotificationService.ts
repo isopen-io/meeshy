@@ -751,6 +751,7 @@ export class NotificationService {
       prisma: this.prisma,
       createNotification: (params) => this.createNotification(params),
       resolveRecipientLang: (userId) => this.resolveRecipientLang(userId),
+      resolveRecipientPrism: (userId) => this.resolveRecipientPrism(userId),
       canNotifyAboutPost: (postId, recipientId) => this.canNotifyAboutPost(postId, recipientId),
       shouldCreateReactionNotification: (s, r) => this.shouldCreateReactionNotification(s, r),
       isConversationMutedFor: (u, c, t) => this.isConversationMutedFor(u, c, t),

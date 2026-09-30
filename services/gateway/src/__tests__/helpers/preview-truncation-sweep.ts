@@ -44,7 +44,10 @@ export const MOTIF_INTERDIT = new RegExp(
 );
 
 /**
- * LES NEUF PORTEURS — tous les fichiers de production qui coupent un aperçu.
+ * LES PORTEURS — tous les fichiers de production qui coupent un aperçu.
+ * Depuis #8731, l'extrait du post d'une notification sociale se coupe en UN
+ * site (`served-post-excerpt.ts`) : `PostReactionHandler` et
+ * `routes/posts/interactions.ts` ne coupent plus rien et ont quitté la liste.
  * La liste est venue du balayage, pas d'une lecture : l'issue #8754 en nommait
  * sept, tous dans les fichiers qu'une branche de juillet avait touchés. Le
  * balayage de l'arbre entier en a trouvé onze de plus. *Un grep ciblé n'est pas
@@ -56,10 +59,9 @@ export const PORTEURS = [
   'services/posts/postReplySnapshot.ts',
   'services/posts/postMentions.ts',
   'services/notifications/NotificationService.ts',
+  'services/notifications/served-post-excerpt.ts',
   'socketio/handlers/CommentReactionHandler.ts',
-  'socketio/handlers/PostReactionHandler.ts',
   'routes/posts/comments.ts',
-  'routes/posts/interactions.ts',
 ] as const;
 
 export const IMPORT_ATTENDU = "from '@meeshy/shared/utils/text-truncate'";

@@ -295,7 +295,7 @@ export function registerCommentRoutes(
       const socialEvents = fastify.socialEvents;
       const post = await fastify.prisma?.post?.findUnique({
         where: { id: targetPostId },
-        select: { authorId: true, commentCount: true, type: true, content: true, createdAt: true, expiresAt: true, visibility: true, visibilityUserIds: true },
+        select: { authorId: true, commentCount: true, type: true, createdAt: true, expiresAt: true, visibility: true, visibilityUserIds: true },
       });
       if (socialEvents && post) {
         socialEvents.broadcastCommentAdded({
@@ -371,7 +371,6 @@ export function registerCommentRoutes(
               parentCommentId: parsed.data.parentId,
               replyPreview: parsed.data.content,
               parentCommentPreview: sliceCodePointsOrUndefined(parentComment.content, 80),
-              postPreview: sliceCodePointsOrUndefined(post?.content, 80),
               // Précise « sur votre story/réel/… » + date côté client (du JJ/MM/AAAA HH:MM).
               postType: post?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
               postCreatedAt: post?.createdAt ?? undefined,
@@ -391,7 +390,6 @@ export function registerCommentRoutes(
             commentId: comment.id,
             commentPreview: parsed.data.content,
             postType: post.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL',
-            postPreview: sliceCodePointsOrUndefined(post.content, 80),
             postCreatedAt: post.createdAt ?? undefined,
             postExpiresAt: post.expiresAt ?? undefined,
           }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments]: notify post comment failed', { err }));
@@ -744,7 +742,7 @@ export function registerCommentRoutes(
           }),
           fastify.prisma?.post?.findUnique({
             where: { id: commentPostId },
-            select: { type: true, content: true },
+            select: { type: true },
           }),
         ]);
         notifService.createCommentLikeNotification({
@@ -754,7 +752,6 @@ export function registerCommentRoutes(
           commentAuthorId: result.authorId,
           emoji,
           commentPreview: sliceCodePointsOrUndefined(likedComment?.content, 80),
-          postPreview: sliceCodePointsOrUndefined(likedPost?.content, 80),
           postType: likedPost?.type as 'POST' | 'STORY' | 'MOOD' | 'STATUS' | 'REEL' | undefined,
         }).catch((err) => enhancedLogger.warn('[POST /posts/:postId/comments/:commentId/like]: notify comment like failed', { err }));
       }
