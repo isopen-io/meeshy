@@ -11,7 +11,7 @@ import type { AdminRoute } from './sections';
  */
 export type AdminSpace = 'adm' | 'admin';
 
-export type AdmRoute = 'adm' | 'admUsers' | 'admConversations' | 'admAgent' | 'admAnonymous';
+export type AdmRoute = 'adm' | 'admUsers' | 'admConversations' | 'admAgent' | 'admAnonymous' | 'admEngagementScale';
 
 const EN_ADM: Readonly<Record<AdminRoute, AdmRoute>> = {
   admin: 'adm',
@@ -19,6 +19,7 @@ const EN_ADM: Readonly<Record<AdminRoute, AdmRoute>> = {
   adminConversations: 'admConversations',
   adminAgent: 'admAgent',
   adminAnonymous: 'admAnonymous',
+  adminEngagementScale: 'admEngagementScale',
 };
 
 export function adminSpaceOf(routeKey: string | null): AdminSpace {
@@ -40,6 +41,7 @@ const SECTION_PAR_SUFFIXE: readonly (readonly [RegExp, string])[] = [
   [/^adm(in)?Conversations?$/, 'conversations'],
   [/^adm(in)?Agent$/, 'agent'],
   [/^adm(in)?Anonymous(One)?$/, 'anonymous'],
+  [/^adm(in)?EngagementScale$/, 'engagementScale'],
 ];
 
 export function activeAdminSectionId(routeKey: string | null): string | null {

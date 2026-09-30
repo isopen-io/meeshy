@@ -20,6 +20,8 @@ import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
 import { useTypistNames } from '@/lib/api/use-typists';
 import { peerHereIn, useHerePeers } from '@/lib/view/use-conversation-viewing';
+import { effectiveEngagementOf } from '@/lib/api/conversation-engagement';
+import { useLiveEngagements } from '@/lib/view/use-conversation-engagement';
 import { resolveViewer } from '@/lib/api/viewer';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
@@ -350,6 +352,7 @@ export default function ConversationsScreen() {
   const typists = useTypistNames(viewer.id ?? '');
   /** Les pairs qui ont leur conversation OUVERTE (#8892) — même distribution que `typists`. */
   const herePeers = useHerePeers(viewer.id ?? '');
+  const liveEngagements = useLiveEngagements();
   /**
    * LE CORPUS DU RAIL — une seule prop, partagée par les DEUX géographies
    * (grande et épinglée) pour qu'elles ne puissent PAS diverger.
@@ -600,6 +603,7 @@ export default function ConversationsScreen() {
                 onRowAction={rowAction}
                 typists={typists[c.id]}
                 peerHere={peerHereIn(herePeers, c, viewer.id ?? '')}
+                engagement={effectiveEngagementOf({ byConversation: liveEngagements }, c)}
                 status={{
                   /**
                    * L'APLATISSEMENT AU REPOS (#5694, écart 2) —

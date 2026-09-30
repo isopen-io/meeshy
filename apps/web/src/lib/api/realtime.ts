@@ -9,6 +9,7 @@ import { endRevokedSession } from './account-caches';
 import { bindAppStatePresence, documentVisibility } from './app-state-presence';
 import { apiConfig } from './config';
 import { bindConversationViewing, viewingStore } from './conversation-viewing';
+import { bindConversationEngagement, engagementStore } from './conversation-engagement';
 import { apiDeps } from './deps';
 import { appQueryClient } from './query-client';
 import { setAttachmentReactionEmitter } from './attachment-reaction-emit';
@@ -66,12 +67,15 @@ function bridgeCalls(next: RealtimeConnection | null): void {
   const unwatch = typeof document === 'undefined' ? () => undefined : bindAppStatePresence({ socket: next.socket, visibility: documentVisibility(document) });
   /* « est dans la conversation » (#8892) : l'écran de fil s'annonce, les pairs annoncés portent le point primaire. */
   const unview = typeof document === 'undefined' ? () => undefined : bindConversationViewing({ socket: next.socket, visibility: documentVisibility(document), store: viewingStore, viewerId: currentViewerId });
+  /* « N (M) 🔥 » (#8906) : la passerelle pousse l'état d'engagement au seul lecteur crédité. */
+  const unengage = bindConversationEngagement({ socket: next.socket, store: engagementStore });
   /* `notification:deleted` ferme aussi la bannière du service worker (#8752), comme la coque et iOS. */
   const unrevoke = bridgeBannerRevocations(next.socket);
   unbridgeCalls = () => {
     unbridge();
     unwatch();
     unview();
+    unengage();
     unrevoke();
   };
 }
@@ -144,7 +148,7 @@ function syncConnection(): void {
 
 /* Les magasins en mémoire d'une identité (outbox, overrides de rangée,
    frappe) se vident dès qu'elle change (#8674, `identity-scoped-stores.ts`). */
-watchIdentityScopedStores({ session: sessionStore, outbox: outboxStore, conversations: conversationStore, typing: typingStore });
+watchIdentityScopedStores({ session: sessionStore, outbox: outboxStore, conversations: conversationStore, typing: typingStore, engagement: engagementStore });
 sessionStore.subscribe(syncConnection);
 // La session peut déjà être authentifiée au moment où ce module se charge
 // (restauration `localStorage`, `main.tsx` § « LA SESSION EST TENUE » —

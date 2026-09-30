@@ -5,6 +5,7 @@ import { apiConfig } from '@/lib/api/config';
 import type { ListConversation } from '@/lib/api/list-preview';
 import { sessionStore } from '@/lib/api/session';
 import type { Conversation } from '@/lib/api/types';
+import type { ConversationEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
 import { callActions } from '@/lib/calls/call-actions';
 import { translate } from '@/lib/i18n-catalog';
 import type { ConversationFlags } from '@/lib/api/preferences';
@@ -21,6 +22,7 @@ import { Glyph } from './glyph';
 import { LensJoinCallButton, LensPreviewLine } from './lens-preview-line';
 import { LensTime } from './lens-time';
 import { UnreadBadge } from './unread-badge';
+import { EngagementPill } from './engagement-pill';
 import { RowActions } from './row-actions';
 
 /**
@@ -115,6 +117,12 @@ export type LensRowProps = {
    * à la couleur primaire Meeshy.
    */
   peerHere?: boolean | undefined;
+  /**
+   * « N (M) 🔥 » (#8906) — l'état d'engagement EFFECTIF de la conversation pour
+   * le lecteur (servi + direct, `effectiveEngagementOf`), distribué par
+   * l'écran. Rendu dans le supplément de la rangée ÉLUE seulement.
+   */
+  engagement?: ConversationEngagementSnapshot | undefined;
   /** Langue de CADRAGE des libellés — l'interface par défaut ; injectable pour les témoins. */
   interfaceLanguage?: string | undefined;
   /** Horloge injectable — jamais `Date.now()` lu dans un témoin. */
@@ -131,6 +139,7 @@ function LensRowImpl({
   onRowAction,
   typists,
   peerHere = false,
+  engagement,
   interfaceLanguage,
   now,
 }: LensRowProps) {
@@ -354,6 +363,7 @@ function LensRowImpl({
             {flags.isArchived ? (
               <Glyph name="archive" size={12} title="Archivée" style={{ color: 'var(--color-ios-ink-3)' }} />
             ) : null}
+            {status.magnified ? <EngagementPill snapshot={engagement} {...(now === undefined ? {} : { now })} /> : null}
           </span>
 
           {/* `items-center`, PLUS `items-baseline` (#6080) : la ligne porte
@@ -573,6 +583,9 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
      doc-comment de `useTypistNames` promet de borner. */
   if ((prev.typists ?? []).join('\u0001') !== (next.typists ?? []).join('\u0001')) return false;
   if ((prev.peerHere ?? false) !== (next.peerHere ?? false)) return false;
+  /* L'instantané d'engagement (#8906) — comparé par RÉFÉRENCE : il vient du
+     magasin ou de la charge, stables tant qu'aucun geste n'est crédité. */
+  if (prev.engagement !== next.engagement) return false;
   if (prev.interfaceLanguage !== next.interfaceLanguage || prev.now !== next.now) return false;
 
   const s1 = prev.status ?? AT_REST;

@@ -61,6 +61,8 @@ const adminAnonymousOneScreen = () =>
   Promise.all([import('@/routes/admin-anonymous-one'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const adminAgentScreen = () =>
   Promise.all([import('@/routes/admin-agent'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const adminEngagementScaleScreen = () =>
+  Promise.all([import('@/routes/admin-engagement-scale'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 /* L'ACCUEIL POST-INSCRIPTION (#7729) — son chunk ET son catalogue
    (`onboarding.*`), en parallèle, comme l'administration : un compte ne voit
    ce parcours qu'une fois, aucun autre lecteur n'en paie les octets, et
@@ -409,6 +411,10 @@ export const ROUTES = {
   admAnonymous: { pattern: '/adm/anonymous', screen: adminAnonymousScreen },
   adminAnonymousOne: { pattern: '/admin/anonymous/$participant', screen: adminAnonymousOneScreen },
   admAnonymousOne: { pattern: '/adm/anonymous/$participant', screen: adminAnonymousOneScreen },
+  /* LE BARÈME DE POINTS (#8906) — littéral à deux segments, comme l'agent.
+     Déclaré AUSSI dans `session-guard.ts`. */
+  adminEngagementScale: { pattern: '/admin/engagement-scale', screen: adminEngagementScaleScreen },
+  admEngagementScale: { pattern: '/adm/engagement-scale', screen: adminEngagementScaleScreen },
 } as const;
 
 /**

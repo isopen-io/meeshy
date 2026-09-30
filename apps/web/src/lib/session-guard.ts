@@ -184,6 +184,9 @@ export type RouteKey =
   | 'admAnonymous'
   | 'adminAnonymousOne'
   | 'admAnonymousOne'
+  /** LE BARÈME DE POINTS (#8906) — il ÉCRIT ce que chaque geste rapporte. */
+  | 'adminEngagementScale'
+  | 'admEngagementScale'
   | 'login'
   | 'signup'
   | 'welcome'
@@ -316,6 +319,8 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'admAnonymous',
   'adminAnonymousOne',
   'admAnonymousOne',
+  'adminEngagementScale',
+  'admEngagementScale',
 ]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 
