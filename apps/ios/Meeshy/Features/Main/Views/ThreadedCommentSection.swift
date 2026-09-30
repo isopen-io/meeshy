@@ -145,7 +145,7 @@ struct ThreadedCommentSection: View {
                         Spacer()
                     }
                     .padding(.leading, 36)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, MeeshySpacing.sm)
                 }
 
                 ForEach(replies) { reply in
@@ -171,7 +171,7 @@ struct ThreadedCommentSection: View {
                     // Même style que le tint de section (les deux appelants) —
                     // au niveau de la rangée pour cibler UNE réponse précise.
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .fill(Color(hex: accentColor).opacity(highlightedCommentId == reply.id ? 0.12 : 0))
                     )
                     .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
@@ -186,11 +186,11 @@ struct ThreadedCommentSection: View {
                         HapticFeedback.light()
                         Task { await onLoadMoreReplies() }
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: "chevron.down")
-                                .font(MeeshyFont.relative(10, weight: .bold))
+                                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
                             Text(String(localized: "feed.comments.load_more_replies", defaultValue: "Voir plus de réponses", bundle: .main))
-                                .font(MeeshyFont.relative(12, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                         }
                         .foregroundColor(Color(hex: accentColor))
                     }

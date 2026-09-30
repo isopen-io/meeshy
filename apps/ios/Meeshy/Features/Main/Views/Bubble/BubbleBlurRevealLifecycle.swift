@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import MeeshyUI
 
 /// Logique pure de cycle de vie pour la revelation d'un message floute.
 /// Was: ThemedMessageBubble.scheduleBlurReveal() + revealBlurredContent().
@@ -144,7 +145,7 @@ struct BlurRevealModifier: ViewModifier {
             content
                 .blur(radius: shouldBlur ? 20 : 0)
                 .mask(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
                         .blur(radius: shouldBlur ? 5 : 0)
                 )
         } else {

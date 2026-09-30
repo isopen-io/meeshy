@@ -69,11 +69,90 @@ struct ConversationExpandedHeaderBand: View {
             .padding(.leading, layout.showsBackButton ? 0 : MeeshySpacing.xs)
             .padding(.trailing, MeeshySpacing.sm)
         }
-        .padding(.horizontal, layout.isGlassBlock ? MeeshySpacing.sm + 2 : 0)
-        .padding(.vertical, layout.isGlassBlock ? MeeshySpacing.sm - 2 : 0)
+        .padding(layout.glassShape.innerInsets)
         .background(background())
-        .padding(.horizontal, layout.isGlassBlock ? MeeshySpacing.sm : MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.sm)
+        .padding(layout.glassShape.outerInsets)
+    }
+}
+
+/// **La forme du verre de l'en-tête** (#8822, #8898).
+///
+/// - `none` : le fil replié, sans verre.
+/// - `floatingBlock` : le fil déplié — un bloc arrondi qui flotte, avec marges.
+/// - `edgeToEdgeBand` : l'aperçu tiré de la bannière. Directive porteur
+///   2026-09-30 : « tout le bloc épouse l'entête arrondi puis ligne droite sur
+///   la bordure basse… le tout en liquid glass ». Le verre va d'un bord à
+///   l'autre, collé en haut de la feuille — l'arrondi du haut est celui de la
+///   feuille, qui le découpe — et finit par une arête DROITE. C'est la bande du
+///   web (`thread-header.tsx`, `inset-x-0 top-0`). Le haut réserve la place de
+///   la poignée de la feuille.
+enum HeaderGlassShape: Equatable {
+    case none
+    case floatingBlock
+    case edgeToEdgeBand
+
+    var innerInsets: EdgeInsets {
+        switch self {
+        case .none: return EdgeInsets()
+        case .floatingBlock:
+            return EdgeInsets(top: MeeshySpacing.sm - 2, leading: MeeshySpacing.sm + 2,
+                              bottom: MeeshySpacing.sm - 2, trailing: MeeshySpacing.sm + 2)
+        case .edgeToEdgeBand:
+            return EdgeInsets(top: MeeshySpacing.lg + 2, leading: MeeshySpacing.md,
+                              bottom: MeeshySpacing.sm + 2, trailing: MeeshySpacing.sm)
+        }
+    }
+
+    var outerInsets: EdgeInsets {
+        switch self {
+        case .none:
+            return EdgeInsets(top: MeeshySpacing.sm, leading: MeeshySpacing.lg, bottom: 0, trailing: MeeshySpacing.lg)
+        case .floatingBlock:
+            return EdgeInsets(top: MeeshySpacing.sm, leading: MeeshySpacing.sm, bottom: 0, trailing: MeeshySpacing.sm)
+        case .edgeToEdgeBand:
+            return EdgeInsets()
+        }
+    }
+}
+
+/// **Le verre de l'en-tête, en type NOMINAL** — sorti de `ConversationView`
+/// (hors budget) pour porter les deux formes (#8898). Le repli iOS 16-25 est
+/// celui d'`adaptiveGlass`, identique au reste de l'app.
+struct ConversationHeaderGlass: View {
+    let shape: HeaderGlassShape
+    let accentColor: String
+    let secondaryColor: String
+
+    private static let blockRadius = MeeshyRadius.xxl - 2
+
+    var body: some View {
+        switch shape {
+        case .none:
+            Color.clear
+        case .floatingBlock:
+            Color.clear.adaptiveGlass(in: RoundedRectangle(cornerRadius: Self.blockRadius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Self.blockRadius)
+                        .stroke(rim(startPoint: .leading, endPoint: .trailing), lineWidth: 1)
+                )
+                .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 8, y: 2)
+                .transition(.scale(scale: 0.1, anchor: .trailing).combined(with: .opacity))
+        case .edgeToEdgeBand:
+            // Le verre monte sous la poignée et jusqu'au bord de la feuille ;
+            // l'arête basse est une ligne droite teintée de l'accent.
+            Color.clear.adaptiveGlass(in: Rectangle())
+                .overlay(alignment: .bottom) {
+                    rim(startPoint: .leading, endPoint: .trailing)
+                        .frame(height: 1)
+                }
+                .shadow(color: Color(hex: accentColor).opacity(0.14), radius: 8, y: 3)
+                .ignoresSafeArea(edges: .top)
+        }
+    }
+
+    private func rim(startPoint: UnitPoint, endPoint: UnitPoint) -> LinearGradient {
+        LinearGradient(colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)],
+                       startPoint: startPoint, endPoint: endPoint)
     }
 }
 
@@ -90,8 +169,10 @@ struct ConversationHeaderLayout: Equatable {
     let showsBackButton: Bool
     let showsTitle: Bool
     let showsActions: Bool
-    /// L'en-tête est-il posé dans son bloc de verre (`adaptiveGlass`) ?
-    let isGlassBlock: Bool
+    /// La forme du verre sous l'en-tête (#8898).
+    let glassShape: HeaderGlassShape
+    /// L'en-tête est-il posé dans du verre (`adaptiveGlass`) ?
+    var isGlassBlock: Bool { glassShape != .none }
     /// L'aperçu seul : la porte vers la conversation complète, qui remplace le
     /// calque transparent qui volait le défilement.
     let showsOpenFullConversation: Bool
@@ -105,12 +186,13 @@ struct ConversationHeaderLayout: Equatable {
     static func resolve(previewMode: Bool, showOptions: Bool) -> ConversationHeaderLayout {
         if previewMode {
             return ConversationHeaderLayout(
-                showsBackButton: false, showsTitle: true, showsActions: true, isGlassBlock: true,
+                showsBackButton: false, showsTitle: true, showsActions: true, glassShape: .edgeToEdgeBand,
                 showsOpenFullConversation: true, yieldsToTypingBar: false, measuresBandHeight: true
             )
         }
         return ConversationHeaderLayout(
-            showsBackButton: true, showsTitle: showOptions, showsActions: !showOptions, isGlassBlock: showOptions,
+            showsBackButton: true, showsTitle: showOptions, showsActions: !showOptions,
+            glassShape: showOptions ? .floatingBlock : .none,
             showsOpenFullConversation: false, yieldsToTypingBar: true, measuresBandHeight: !showOptions
         )
     }

@@ -19,8 +19,8 @@ struct ShareLinkArrivalsSection: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 tile(stats?.visits, label: ShareLinkDetailCopy.visits)
                 tile(stats?.arrivals, label: ShareLinkDetailCopy.arrivals)
                 tile(stats?.anonymousArrivals, label: ShareLinkDetailCopy.withoutAccount)
@@ -42,7 +42,7 @@ struct ShareLinkArrivalsSection: View {
                     sectionTitle(ShareLinkDetailCopy.recentArrivals)
                     if stats.recentArrivals.isEmpty {
                         Text(ShareLinkDetailCopy.noArrivals)
-                            .font(MeeshyFont.relative(14))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize))
                             .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
                     } else {
                         ForEach(stats.recentArrivals.prefix(8)) { arrival in
@@ -56,7 +56,7 @@ struct ShareLinkArrivalsSection: View {
     }
 
     private func tile(_ value: Int?, label: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(verbatim: value.map { $0.formatted() } ?? "—")
                 .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .heavy, design: .rounded))
                 .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
@@ -70,7 +70,7 @@ struct ShareLinkArrivalsSection: View {
                 .minimumScaleFactor(0.85)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .inviteCardSurface(isDark: isDark, cornerRadius: MeeshyRadius.lg)
         .accessibilityElement(children: .combine)
     }
@@ -99,7 +99,7 @@ struct ShareLinkArrivalRow: View, Equatable {
     let isDark: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             MeeshyAvatar(
                 name: arrival.displayName,
                 context: .custom(36),
@@ -120,8 +120,8 @@ struct ShareLinkArrivalRow: View, Equatable {
                 Text(ShareLinkDetailCopy.noAccountBadge)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
                     .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.indigo700)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(isDark ? MeeshyColors.indigo900 : MeeshyColors.indigo50))
             }
             Spacer(minLength: 0)

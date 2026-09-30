@@ -119,11 +119,11 @@ struct VideoEditorTimeline: View {
                 }
             }
             .frame(width: width, height: trackHeight)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous)
                     .strokeBorder(
-                        isSelected ? accent : Color.white.opacity(0.08),
+                        isSelected ? accent : Color.white.opacity(MeeshyOpacity.subtle),
                         lineWidth: isSelected ? 2 : 0.5
                     )
             )
@@ -166,12 +166,12 @@ struct VideoEditorTimeline: View {
 
     private func speedBadge(_ speed: Double) -> some View {
         Text(speedLabel(speed))
-            .font(.system(size: 9, weight: .bold, design: .rounded))
+            .font(.system(size: MeeshyFont.microSize, weight: .bold, design: .rounded))
             .foregroundStyle(.white)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 2)
+            .padding(.horizontal, MeeshySpacing.xs)
+            .padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(accent))
-            .padding(4)
+            .padding(MeeshySpacing.xs)
     }
 
     // MARK: - Ruler
@@ -183,12 +183,12 @@ struct VideoEditorTimeline: View {
             ForEach(0..<tickCount, id: \.self) { i in
                 let time = Double(i) * step
                 let x = leadingX + CGFloat(time) * pixelsPerSecond
-                VStack(spacing: 2) {
+                VStack(spacing: MeeshySpacing.xxs) {
                     Rectangle()
                         .fill(theme.textMuted.opacity(0.6))
                         .frame(width: 1, height: 6)
                     Text(formatTime(time))
-                        .font(.system(size: 8, weight: .medium, design: .monospaced))
+                        .font(.system(size: MeeshyFont.microSize, weight: .medium, design: .monospaced))
                         .foregroundStyle(theme.textMuted)
                 }
                 .offset(x: x - 12, y: 4)
@@ -220,7 +220,7 @@ struct VideoEditorTimeline: View {
                 Circle()
                     .fill(accent)
                     .frame(width: 12, height: 12)
-                    .overlay(Circle().stroke(.white.opacity(0.85), lineWidth: 1.5))
+                    .overlay(Circle().stroke(.white.opacity(MeeshyOpacity.intense), lineWidth: MeeshyBorder.emphasis))
                 if accentTint {
                     Image(systemName: "scissors")
                         .font(.system(size: 7, weight: .black))
@@ -259,8 +259,8 @@ struct VideoEditorTimeline: View {
 
         ZStack(alignment: .topLeading) {
             // Selected window outline.
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(accent, lineWidth: 2)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous)
+                .stroke(accent, lineWidth: MeeshyBorder.strong)
                 .frame(width: max(0, rightX - leftX), height: trackHeight)
                 .offset(x: leftX)
                 .allowsHitTesting(false)
@@ -278,15 +278,15 @@ struct VideoEditorTimeline: View {
     }
 
     private func trimBracket(systemImage: String) -> some View {
-        RoundedRectangle(cornerRadius: 5, style: .continuous)
+        RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous)
             .fill(accent)
             .frame(width: bracketWidth, height: trackHeight + 8)
             .overlay(
                 Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xs, weight: .bold))
                     .foregroundStyle(.white)
             )
-            .shadow(color: .black.opacity(0.35), radius: 3)
+            .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 3)
     }
 
     /// Drag gesture for an in/out bracket. The pixel delta is converted to
@@ -396,7 +396,7 @@ struct VideoEditorTimeline: View {
             )
             context.fill(
                 Path(roundedRect: rect, cornerRadius: barWidth / 2),
-                with: .color(accentUIColor.opacity(0.55))
+                with: .color(accentUIColor.opacity(MeeshyOpacity.strong))
             )
         }
     }
@@ -447,9 +447,9 @@ struct VideoEditorTimeline: View {
                 .foregroundStyle(theme.textMuted)
         }
         .font(.system(size: 10, weight: .semibold, design: .monospaced))
-        .padding(.horizontal, 8)
-        .padding(.vertical, 3)
-        .background(Capsule().fill(theme.backgroundPrimary.opacity(0.8)))
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xxs)
+        .background(Capsule().fill(theme.backgroundPrimary.opacity(MeeshyOpacity.intense)))
         .position(x: centerX, y: timeReadoutY)
         .allowsHitTesting(false)
     }

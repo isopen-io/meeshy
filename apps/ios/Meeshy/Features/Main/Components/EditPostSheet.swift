@@ -247,23 +247,23 @@ struct EditPostSheet: View {
             ZStack {
                 theme.backgroundPrimary.ignoresSafeArea()
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     TextEditor(text: $draftContent)
                         .focused($isFocused)
-                        .font(MeeshyFont.relative(17))
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize))
                         .foregroundColor(theme.textPrimary)
                         .accessibilityLabel(String(localized: "feed.post.edit.body.a11y", defaultValue: "Contenu de la publication", bundle: .main))
                         .scrollContentBackground(.hidden)
-                        .padding(12)
+                        .padding(MeeshySpacing.md)
                         .background(
-                            RoundedRectangle(cornerRadius: 14)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                                 .fill(theme.inputBackground)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 14)
+                                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                                         .stroke(theme.inputBorder, lineWidth: 1)
                                 )
                         )
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, MeeshySpacing.lg)
                         .frame(maxHeight: .infinity)
 
                     mediaSection
@@ -277,12 +277,12 @@ struct EditPostSheet: View {
                     HStack {
                         Spacer()
                         Text("\(remainingChars)")
-                            .font(MeeshyFont.relative(12, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                             .foregroundColor(remainingChars < 100 ? MeeshyColors.warning : theme.textMuted)
                             .accessibilityLabel(String(format: String(localized: "feed.post.edit.remaining.a11y", defaultValue: "%d caractères restants", bundle: .main), remainingChars))
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 12)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.bottom, MeeshySpacing.md)
                 }
             }
             .navigationTitle(String(localized: "feed.post.edit.title", defaultValue: "Modifier le post", bundle: .main))
@@ -304,7 +304,7 @@ struct EditPostSheet: View {
                                 .scaleEffect(0.85)
                         } else {
                             Text(String(localized: "feed.post.edit.publish", defaultValue: "Publier", bundle: .main))
-                                .font(MeeshyFont.relative(16, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                         }
                     }
                     .disabled(!isValid || !hasChanges || isSaving)
@@ -359,7 +359,7 @@ struct EditPostSheet: View {
     /// composer story ; tant qu'il reste vide, `isValid` bloque « Publier ».
     @ViewBuilder
     private var audienceSection: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Menu {
                 ForEach(PostVisibility.allCases) { mode in
                     Button {
@@ -376,25 +376,25 @@ struct EditPostSheet: View {
                     }
                 }
             } label: {
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     Image(systemName: selectedVisibility.icon)
                         .foregroundColor(theme.textSecondary)
                         .accessibilityHidden(true)
                     Text(String(localized: "feed.post.edit.audience", defaultValue: "Audience", bundle: .main))
-                        .font(MeeshyFont.relative(15))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize))
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     Text(selectedVisibility.label)
-                        .font(MeeshyFont.relative(15, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .accessibilityHidden(true)
                 }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 14)
-                .background(RoundedRectangle(cornerRadius: 12).fill(theme.inputBackground))
+                .padding(.vertical, MeeshySpacing.smPlus)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(theme.inputBackground))
             }
             .disabled(isSaving)
 
@@ -403,7 +403,7 @@ struct EditPostSheet: View {
                     isFocused = false
                     audiencePickerMode = selectedVisibility
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "person.2.badge.gearshape")
                             .accessibilityHidden(true)
                         Text(
@@ -414,7 +414,7 @@ struct EditPostSheet: View {
                                     selectedAudience.count
                                 )
                         )
-                        .font(MeeshyFont.relative(13))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         Spacer()
                     }
                     .foregroundColor(selectedAudience.isEmpty ? MeeshyColors.warning : theme.textSecondary)
@@ -423,44 +423,44 @@ struct EditPostSheet: View {
                 .disabled(isSaving)
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     // MARK: - Language + type controls
 
     @ViewBuilder
     private var metadataSection: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             Button {
                 isFocused = false
                 showLanguagePicker = true
             } label: {
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     Image(systemName: "globe")
                         .foregroundColor(theme.textSecondary)
                         .accessibilityHidden(true)
                     Text(String(localized: "feed.post.edit.language", defaultValue: "Langue du contenu", bundle: .main))
-                        .font(MeeshyFont.relative(15))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize))
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     if let info = selectedLanguageInfo {
                         Text("\(info.flag) \(info.name)")
-                            .font(MeeshyFont.relative(15, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     } else {
                         Text(String(localized: "feed.post.edit.language.auto", defaultValue: "Auto", bundle: .main))
-                            .font(MeeshyFont.relative(15))
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize))
                             .foregroundColor(theme.textMuted)
                     }
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .accessibilityHidden(true)
                 }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 14)
+                .padding(.vertical, MeeshySpacing.smPlus)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 12).fill(theme.inputBackground)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(theme.inputBackground)
                 )
             }
             .buttonStyle(.plain)
@@ -481,7 +481,7 @@ struct EditPostSheet: View {
                 .disabled(isSaving)
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     // MARK: - Position
@@ -491,7 +491,7 @@ struct EditPostSheet: View {
     /// édition, « ouvrir la carte » serait un détour — on est là pour changer).
     @ViewBuilder
     private var locationSection: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             if let place = displayedLocation {
                 FeedPostLocationSticker(place: place) {
                     showEditLocationPicker = true
@@ -513,7 +513,7 @@ struct EditPostSheet: View {
                     HapticFeedback.light()
                     showEditLocationPicker = true
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "mappin.and.ellipse")
                             .font(.footnote.weight(.semibold))
                         Text(String(localized: "feed.post.edit.location.add", defaultValue: "Ajouter une position", bundle: .main))
@@ -525,7 +525,7 @@ struct EditPostSheet: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .sheet(isPresented: $showEditLocationPicker) {
             LocationPickerView(accentColor: MeeshyColors.brandPrimaryHex) { place in
                 locationEdit = .set(place)
@@ -540,13 +540,13 @@ struct EditPostSheet: View {
     private var mediaSection: some View {
         if !media.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     ForEach(media) { item in
                         mediaThumbnail(item)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 2)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.xxs)
             }
         }
     }
@@ -569,8 +569,8 @@ struct EditPostSheet: View {
                 }
             }
             .frame(width: 64, height: 64)
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(theme.inputBorder, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.sm).stroke(theme.inputBorder, lineWidth: 1))
             .opacity(removed ? 0.35 : 1)
             // Sans label, la bande de vignettes se lit comme une série de boutons
             // « Retirer le média » identiques : VoiceOver n'annonce ni le TYPE du
@@ -591,7 +591,7 @@ struct EditPostSheet: View {
                 // crève sa frame s'il scale), mais doté d'un label VoiceOver
                 // (auparavant absent) pour l'action retirer / restaurer.
                 Image(systemName: removed ? "arrow.uturn.backward.circle.fill" : "xmark.circle.fill")
-                    .font(.system(size: 18))
+                    .font(.system(size: MeeshyIconSize.lg))
                     .foregroundColor(removed ? MeeshyColors.indigo300 : .white)
                     .shadow(radius: 1)
             }
@@ -609,7 +609,7 @@ struct EditPostSheet: View {
         ZStack {
             theme.inputBackground
             Image(systemName: mediaSymbol(kind))
-                .font(.system(size: 22))
+                .font(.system(size: MeeshyIconSize.xxl))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
         }

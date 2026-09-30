@@ -196,9 +196,9 @@ extension BubbleStandardLayout {
 
     @ViewBuilder
     private func mediaWithReplyContainerBody(reply: BubbleContent.Reply) -> some View {
-        let neutralBg = isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)
-        let strokeColor = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)
-        let dividerColor = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
+        let neutralBg = MeeshyColors.surfaceFill(isDark: isDark)
+        let strokeColor = MeeshyColors.hairline(isDark: isDark)
+        let dividerColor = MeeshyColors.hairline(isDark: isDark)
 
         VStack(spacing: 0) {
             BubbleQuotedReply(
@@ -243,7 +243,7 @@ extension BubbleStandardLayout {
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                .stroke(strokeColor, lineWidth: 0.5)
+                .stroke(strokeColor, lineWidth: MeeshyBorder.hairline)
         )
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
     }
@@ -410,7 +410,7 @@ fileprivate struct BubbleGridCell: View {
             summary: attachment.reactionSummary,
             currentUserReactions: attachment.currentUserReactions) {
             AttachmentReactionBadge(model: modèle, accent: Color(hex: contactColor))
-                .padding(5)
+                .padding(MeeshySpacing.xs)
         }
     }
 
@@ -509,9 +509,9 @@ fileprivate struct BubbleGridCell: View {
     @ViewBuilder
     private var overflowOverlay: some View {
         if overflowCount > 0 {
-            Color.black.opacity(0.5)
+            MeeshyColors.mediaScrim
             Text("+\(overflowCount)")
-                .font(MeeshyFont.relative(24, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
                 .foregroundColor(.white)
         }
     }
@@ -535,15 +535,15 @@ fileprivate struct BubbleGridCell: View {
                     Spacer()
                     Text("\(attachment.viewOnceCount)")
                         // Doctrine 86i : compteur dans une pastille circulaire fixe 18×18 → figé.
-                        .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
                         .frame(width: 18, height: 18)
                         .background(
                             Circle()
-                                .fill(MeeshyColors.error.opacity(0.85))
+                                .fill(MeeshyColors.error.opacity(MeeshyOpacity.intense))
                         )
                 }
-                .padding(6)
+                .padding(MeeshySpacing.xsPlus)
                 Spacer()
             }
             .accessibilityLabel(Text(String(localized: "bubble.media.a11y.viewCount", defaultValue: "\(attachment.viewOnceCount) vues", bundle: .main)))
@@ -660,7 +660,7 @@ fileprivate struct BubbleGridImageView: View {
             .clipped()
         } else {
             Color(hex: attachment.thumbnailColor)
-                .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(0.5)))
+                .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(MeeshyOpacity.strong)))
         }
     }
 }
@@ -674,21 +674,21 @@ private struct AttachmentBlurOverlayView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.5)
+            MeeshyColors.mediaScrim
                 .background(.ultraThinMaterial)
 
-            VStack(spacing: 5) {
+            VStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "eye.slash.fill")
-                    .font(MeeshyFont.relative(16, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                     .foregroundStyle(.white)
 
                 Text(isViewOnce ? String(localized: "bubble.media.viewOnce", defaultValue: "Voir une fois", bundle: .main) : String(localized: "bubble.media.masked", defaultValue: "Contenu masqué", bundle: .main))
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                     .foregroundStyle(.white)
 
                 Text(String(localized: "bubble.media.tapToView", defaultValue: "Toucher pour voir", bundle: .main))
-                    .font(MeeshyFont.relative(9))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(MeeshyFont.relative(MeeshyFont.microSize))
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             }
         }
         .contentShape(Rectangle())
@@ -793,11 +793,11 @@ struct BubbleCarouselView: View {
             } label: {
                 Image(systemName: "xmark")
                     // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 26×26 → figé.
-                    .font(MeeshyFont.relative(10, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
                     .foregroundColor(.white)
                     .frame(width: 26, height: 26)
-                    .background(Circle().fill(.ultraThinMaterial.opacity(0.8)))
-                    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
+                    .background(Circle().fill(.ultraThinMaterial.opacity(MeeshyOpacity.intense)))
+                    .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
 
@@ -807,8 +807,8 @@ struct BubbleCarouselView: View {
                 pageIndicator
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.top, 10)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.top, MeeshySpacing.smPlus)
     }
 
     // MARK: - Page Indicator
@@ -818,10 +818,10 @@ struct BubbleCarouselView: View {
         let accent = Color(hex: contactColor)
 
         if items.count <= 7 {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 ForEach(0..<items.count, id: \.self) { i in
                     Circle()
-                        .fill(i == carouselIndex ? accent : Color.white.opacity(0.45))
+                        .fill(i == carouselIndex ? accent : Color.white.opacity(MeeshyOpacity.strong))
                         .frame(
                             width: i == carouselIndex ? 7 : 5,
                             height: i == carouselIndex ? 7 : 5
@@ -833,23 +833,23 @@ struct BubbleCarouselView: View {
                         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
                 }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
-                    .fill(.ultraThinMaterial.opacity(0.7))
-                    .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+                    .fill(.ultraThinMaterial.opacity(MeeshyOpacity.heavy))
+                    .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
             )
         } else {
             Text("\(carouselIndex + 1) / \(items.count)")
-                .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
                 .foregroundColor(.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                .padding(.horizontal, MeeshySpacing.smPlus)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule()
-                        .fill(.ultraThinMaterial.opacity(0.7))
-                        .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+                        .fill(.ultraThinMaterial.opacity(MeeshyOpacity.heavy))
+                        .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
                 )
                 .contentTransition(.numericText())
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
@@ -886,7 +886,7 @@ struct BubbleCarouselView: View {
                 messageDeliveryStatus: messageDeliveryStatus,
                 onShareFile: { _ in }
             )
-            .padding(.bottom, 8)
+            .padding(.bottom, MeeshySpacing.sm)
         }
     }
 
@@ -910,7 +910,7 @@ struct BubbleCarouselView: View {
             Color(hex: attachment.thumbnailColor)
                 .overlay(
                     Image(systemName: "photo")
-                        .font(MeeshyFont.relative(28))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xxxl))
                         .foregroundColor(.white.opacity(0.4))
                         .accessibilityHidden(true)
                 )

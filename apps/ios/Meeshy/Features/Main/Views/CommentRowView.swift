@@ -127,7 +127,7 @@ struct CommentRowView: View, Equatable {
             .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: isReply ? 4 : 6) {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(comment.author)
                         .font(MeeshyFont.relative(authorFont, weight: .semibold))
                         .foregroundColor(Color(hex: comment.authorColor))
@@ -140,7 +140,7 @@ struct CommentRowView: View, Equatable {
                         .accessibilityHint(String(localized: "a11y.comment.author_profile.hint", defaultValue: "Ouvre le profil de l'auteur", bundle: .main))
 
                     if hasTranslation {
-                        MetaSeparator().font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
+                        MetaSeparator().font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(theme.textMuted)
 
                         LanguageFlagChip(code: comment.originalLanguage ?? "", isActive: showOriginal) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -172,17 +172,17 @@ struct CommentRowView: View, Equatable {
                             HapticFeedback.light()
                         } label: {
                             Image(systemName: translationRequested ? "hourglass" : "translate")
-                                .font(MeeshyFont.relative(10, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .medium))
                                 .foregroundColor(MeeshyColors.indigo400.opacity(translationRequested ? 0.5 : 1))
                         }
                         .accessibilityLabel(String(localized: "feed.comments.translate", defaultValue: "Traduire", bundle: .main))
-                        .meeshyTapTarget(44)
+                        .meeshyTapTarget(MeeshyControlSize.tapTarget)
                     }
 
-                    MetaSeparator().font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
+                    MetaSeparator().font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(theme.textMuted)
 
                     Text(RelativeTimeFormatter.shortString(for: comment.timestamp))
-                        .font(MeeshyFont.relative(12))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundColor(theme.textMuted)
                         .accessibilityHidden(true)
                 }
@@ -219,7 +219,7 @@ struct CommentRowView: View, Equatable {
                     // la suite. L'inverse ferait lire la réponse avant la question.
                     if let citation = comment.quotedMedia {
                         CommentQuotedMediaBanner(citation: citation, accentColor: accentColor)
-                            .padding(.bottom, 6)
+                            .padding(.bottom, MeeshySpacing.xsPlus)
                     }
 
                     if let media = comment.media.first {
@@ -234,7 +234,7 @@ struct CommentRowView: View, Equatable {
                             authorColor: comment.authorColor,
                             sentAt: comment.timestamp
                         )
-                        .padding(.top, 2)
+                        .padding(.top, MeeshySpacing.xxs)
                     }
                 }
                 .commentBody(effects: comment.effects)
@@ -246,17 +246,17 @@ struct CommentRowView: View, Equatable {
                     FeedPostLocationSticker(place: place) {
                         rowFullscreenPlace = BubbleFullscreenPlace(place: place)
                     }
-                    .padding(.top, 2)
+                    .padding(.top, MeeshySpacing.xxs)
                 }
 
-                HStack(spacing: 20) {
+                HStack(spacing: MeeshySpacing.xl) {
                     Button {
                         withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
                             onLikeComment?()
                         }
                         HapticFeedback.light()
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             let heartColor: Color = isLiked ? MeeshyColors.error : (likeCount > 0 ? Color(hex: accentColor) : theme.textMuted)
                             // Le contour d'accent — « c'est MOI qui ai liké » —
                             // manquait ici alors que le fil des posts le porte
@@ -279,7 +279,7 @@ struct CommentRowView: View, Equatable {
                             .scaleEffect(isLiked ? 1.1 : 1.0)
 
                             Text("\(likeCount)")
-                                .font(MeeshyFont.relative(12, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                                 .foregroundColor(heartColor)
                         }
                     }
@@ -298,20 +298,20 @@ struct CommentRowView: View, Equatable {
                     // au niveau 2 (rattachée au même parent racine, cf. submitComment).
                     // Répondre à une réponse @mentionne son auteur → il est notifié.
                     // Le compteur `↰ N` et « Voir » ne concernent que la racine.
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                             Button {
                                 onReply()
                                 HapticFeedback.light()
                             } label: {
-                                HStack(spacing: 4) {
+                                HStack(spacing: MeeshySpacing.xs) {
                                     Image(systemName: "arrowshape.turn.up.left")
-                                        .font(MeeshyFont.relative(13))
+                                        .font(MeeshyFont.relative(MeeshyIconSize.xs))
                                     if !isReply && comment.replies > 0 {
                                         Text("\(comment.replies)")
-                                            .font(MeeshyFont.relative(12, weight: .semibold))
+                                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                                     }
                                     Text(String(localized: "feed.comments.reply", defaultValue: "Répondre", bundle: .main))
-                                        .font(MeeshyFont.relative(12, weight: .medium))
+                                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                                 }
                                 .foregroundColor(theme.textMuted)
                             }
@@ -322,7 +322,7 @@ struct CommentRowView: View, Equatable {
 
                             if showSeeReplies {
                                 MetaSeparator()
-                                    .font(MeeshyFont.relative(12))
+                                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
                                     .foregroundColor(theme.textMuted)
 
                                 Button {
@@ -330,7 +330,7 @@ struct CommentRowView: View, Equatable {
                                     HapticFeedback.light()
                                 } label: {
                                     Text(String(localized: "feed.comments.see_replies", defaultValue: "Voir", bundle: .main))
-                                        .font(MeeshyFont.relative(12, weight: .semibold))
+                                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                                         .foregroundColor(Color(hex: accentColor))
                                 }
                                 .frame(minHeight: 44)
@@ -372,7 +372,7 @@ struct CommentRowView: View, Equatable {
             Group {
                 if !isReply {
                     Rectangle()
-                        .fill(theme.inputBorder.opacity(0.3))
+                        .fill(theme.inputBorder.opacity(MeeshyOpacity.medium))
                         .frame(height: 1)
                 }
             },

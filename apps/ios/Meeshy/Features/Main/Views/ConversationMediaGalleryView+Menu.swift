@@ -9,14 +9,11 @@ import MeeshyUI
 // ajoutaient pas sans consommer la marge que #6141 venait déjà d'entamer. La
 // découpe suit la règle des frères précédents — une responsabilité par fichier.
 //
-// Deux gardes ancrées sur le FICHIER racine suivent ce code dans le même
-// commit, parce qu'une découpe éteint en silence ce qui s'ancre sur un chemin
-// (leçon 578) :
-//   • `FixedFontSizeGuardTests.bearingFiles` — le glyphe figé du couloir
-//     déménage, la POPULATION ne bouge pas (relocalisation pure, plafonds
-//     inchangés) ;
-//   • `LocalizationConsistencyTests.fullyLocalizedScreens` — les clés neuves du
-//     menu doivent rester tenues par le cliquet qui épingle l'écran.
+// Une garde ancrée sur le FICHIER racine suit ce code dans le même commit,
+// parce qu'une découpe éteint en silence ce qui s'ancre sur un chemin
+// (leçon 578) : `LocalizationConsistencyTests.fullyLocalizedScreens` — les clés
+// neuves du menu doivent rester tenues par le cliquet qui épingle l'écran.
+// Le disque du ⋯ est celui du chrome plein écran (`FullscreenMoreMenu`, #8878).
 
 // MARK: - Ce que cette page-ci sait enregistrer
 
@@ -110,7 +107,7 @@ extension ConversationMediaGalleryView {
     @ViewBuilder
     var overflowMenu: some View {
         if let subject = currentSaveSubject {
-            Menu {
+            FullscreenMoreMenu(isBusy: saveCoordinator.isProcessing) {
                 Button {
                     requestSaveCurrent()
                 } label: {
@@ -132,8 +129,6 @@ extension ConversationMediaGalleryView {
                     }
                     .accessibilityLabel(shareVerb)
                 }
-            } label: {
-                overflowGlyph
             }
             .disabled(saveCoordinator.isProcessing)
             .accessibilityLabel(
@@ -143,41 +138,8 @@ extension ConversationMediaGalleryView {
             // sous un `fullScreenCover` ne se présente pas (SwiftUI iOS 16).
             .mediaSaveFlow(saveCoordinator)
         } else {
-            Color.clear.frame(width: 44, height: 44)
+            Color.clear.frame(width: FullscreenChromeMetrics.tapTarget, height: FullscreenChromeMetrics.tapTarget)
         }
-    }
-
-    /// **L'ellipse VERTICALE, dans le même cercle glass 40 pt que la croix.**
-    ///
-    /// SF Symbols ne porte aucun glyphe d'ellipse verticale — `ellipsis` est
-    /// horizontal, et `ellipsis.vertical` n'existe pas. On tourne donc celui
-    /// qu'on a d'un quart de tour, plutôt que de dessiner trois points à la
-    /// main : la rotation garde le poids, l'échelle optique et le rendu du
-    /// symbole système.
-    ///
-    /// Le verre reste à 40 pt pour que le couloir n'ait pas deux grammaires ;
-    /// la CIBLE, elle, vaut 44 pt — un cadre plus large posé autour, et un
-    /// `contentShape` pour que la zone entière réponde. Sans lui, seuls les
-    /// pixels dessinés seraient touchables et les 4 pt gagnés ne serviraient
-    /// à rien.
-    ///
-    /// Chrome : glyphe figé dans un cadre fixe (doctrine 82i) — ne pas scaler.
-    /// Une police relative ferait grossir le glyphe sans que le cercle suive.
-    private var overflowGlyph: some View {
-        Group {
-            if saveCoordinator.isProcessing {
-                ProgressView().tint(.white)
-            } else {
-                Image(systemName: "ellipsis")
-                    .rotationEffect(.degrees(90))
-            }
-        }
-        .font(.system(size: 18, weight: .semibold))
-        .foregroundColor(.white.opacity(0.9))
-        .frame(width: 40, height: 40)
-        .adaptiveGlass(in: Circle(), interactive: true)
-        .frame(width: 44, height: 44)
-        .contentShape(Rectangle())
     }
 
     // MARK: - Les deux transports

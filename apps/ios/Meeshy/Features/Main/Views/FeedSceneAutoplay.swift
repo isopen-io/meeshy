@@ -169,7 +169,7 @@ struct PostSceneCard: View {
         }
         .frame(maxWidth: Self.maxWidth)
         .frame(maxWidth: .infinity, alignment: .center)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
         // **Le son est COUPÉ, et il faut le dire** (constat porteur 2026-09-06 :
         // « les scènes cinématiques jouent avec signe audio barré »).
         //
@@ -190,7 +190,7 @@ struct PostSceneCard: View {
                     .foregroundColor(.white)
                     .frame(width: UIFontMetrics.default.scaledValue(for: 26), height: UIFontMetrics.default.scaledValue(for: 26))
                     .background(Circle().fill(.black.opacity(0.45)))
-                    .padding(10)
+                    .padding(MeeshySpacing.smPlus)
                     .allowsHitTesting(false)
                     .accessibilityLabel(Text(String(
                         localized: "feed.scene.sound.muted",

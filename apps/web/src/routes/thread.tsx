@@ -781,6 +781,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
             selection={messageMenu.selection}
             onRowTap={messageMenu.onRowTap}
             longPress={messageMenu.longPress}
+            swipeActionsOf={messageMenu.swipeActionsOf}
+            onSwipeAction={messageMenu.onMenuAction}
             onPickLanguage={messageMenu.onPickLanguage}
             onReact={messageMenu.onMenuReact}
             onOpenDetail={messageMenu.setDetailFor}

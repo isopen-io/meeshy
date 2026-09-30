@@ -113,7 +113,7 @@ struct BookmarksView: View {
 
     private var bookmarkList: some View {
         ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 12) {
+            LazyVStack(spacing: MeeshySpacing.md) {
                 // Le sélecteur ne s'affiche que si la liste contient bien les
                 // deux natures : proposer « Réels » sur une liste sans réel
                 // n'offre qu'un moyen de vider l'écran.
@@ -171,8 +171,8 @@ struct BookmarksView: View {
                     }
                 }
             }
-            .padding(.top, 8)
-            .padding(.bottom, 20)
+            .padding(.top, MeeshySpacing.sm)
+            .padding(.bottom, MeeshySpacing.xl)
         }
         .refreshable { await viewModel.refresh() }
     }
@@ -184,7 +184,7 @@ struct BookmarksView: View {
             }
         }
         .pickerStyle(.segmented)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityLabel(String(localized: "bookmarks.filter.a11y", defaultValue: "Filtrer les favoris", bundle: .main))
     }
 
@@ -227,16 +227,16 @@ struct BookmarksView: View {
     private var emptyState: some View {
         VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: "bookmark")
-                .font(MeeshyFont.relative(52, weight: .light))
+                .font(MeeshyFont.relative(MeeshyIconSize.hero, weight: .light))
                 .foregroundColor(Color(hex: MeeshyColors.brandPrimaryHex).opacity(0.4))
                 .accessibilityHidden(true)
 
             Text(bookmarksEmptyTitle)
-                .font(MeeshyFont.relative(18, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
             Text(bookmarksEmptySubtitle)
-                .font(MeeshyFont.relative(14))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, MeeshySpacing.xxxl)

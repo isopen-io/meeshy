@@ -81,10 +81,10 @@ public struct MeeshyPullIndicator: View {
     /// couleur, transition organique.
     private var logoColor: Color {
         switch phase {
-        case .idle: return MeeshyColors.indigo300.opacity(0.5)
+        case .idle: return MeeshyColors.indigo300.opacity(MeeshyOpacity.strong)
         case .pulling(let p):
             let t = min(1, max(0, p))
-            return MeeshyColors.indigo300.opacity(0.5).interpolated(to: MeeshyColors.indigo500, t: t)
+            return MeeshyColors.indigo300.opacity(MeeshyOpacity.strong).interpolated(to: MeeshyColors.indigo500, t: t)
         case .armed, .refreshing, .completing: return MeeshyColors.indigo500
         }
     }
@@ -105,12 +105,12 @@ public struct MeeshyPullIndicator: View {
                             gradient: Gradient(colors: [
                                 MeeshyColors.indigo500,
                                 MeeshyColors.indigo700,
-                                MeeshyColors.indigo500.opacity(0.3),
+                                MeeshyColors.indigo500.opacity(MeeshyOpacity.medium),
                                 MeeshyColors.indigo500
                             ]),
                             center: .center
                         ),
-                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                        style: StrokeStyle(lineWidth: MeeshyBorder.strong, lineCap: .round)
                     )
                     .frame(width: Self.ringSize, height: Self.ringSize)
                     .rotationEffect(.degrees(ringRotation))

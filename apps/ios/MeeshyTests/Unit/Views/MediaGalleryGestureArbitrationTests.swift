@@ -201,7 +201,7 @@ final class MediaGalleryGestureArbitrationTests: XCTestCase {
     /// 2026-09-18), et ce témoin le SUIT.** La directive — « l'ombre dégradé […]
     /// doit être mis sur tous l'écran à partir du bas de l'écran » — retire le
     /// dégradé du bloc du cadre : le voile est désormais celui de la story
-    /// (`StoryReaderScrims`, monté par `stageScrimsLayer`), une couche de
+    /// (`FullscreenScrims` du SDK, monté par `stageScrimsLayer`), une couche de
     /// l'écran. Exiger encore un `LinearGradient` DANS `cadreOverlay`
     /// interdirait précisément ce que la directive demande — un témoin qui
     /// verrouille un comportement retiré par directive se réécrit, il ne se
@@ -233,13 +233,16 @@ final class MediaGalleryGestureArbitrationTests: XCTestCase {
     }
 
     /// Le composant de voile partagé — celui du lecteur de stories, que la
-    /// galerie et le réel montent depuis #6904 tour 5.
+    /// galerie et le réel montent depuis #6904 tour 5, remonté au SDK par #8878
+    /// (`FullscreenScrims`, que `StoryReaderScrims` monte tel quel).
     private static var voileSource: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // Views
             .deletingLastPathComponent()   // Unit
             .deletingLastPathComponent()   // MeeshyTests
             .deletingLastPathComponent()   // ios
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+CanvasScrims.swift")
+            .deletingLastPathComponent()   // apps
+            .deletingLastPathComponent()   // racine du dépôt
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Fullscreen/FullscreenScrims.swift")
     }
 }

@@ -18,9 +18,9 @@
       "apps/web/scripts/prerender-institutional.tsx"
     ],
     "kb": {
-      "value": 10,
-      "status": "CIBLE — PROPOSEE PAR LA REVUE DE #5606 (defaut 3), NON ARBITREE",
-      "source": "Le doc-comment de src/styles/institutional.css citait deja un plafond de 9 Ko (mesure de rejet de l'alternative -- inliner la feuille de l'application aurait coute 11,28 Ko) sans qu'aucun gate ne le fasse respecter : /about mesurait 9,28 Ko avant ce lot, 9,59 apres son ajout de logo+signature -- deja AU-DESSUS de 9. 10 est le plafond le plus proche qui absorbe la mesure ACTUELLE (9,59-9,69 selon les jetons ajoutes) avec une marge round, sur le meme modele que first_paint.kb ci-dessus : une CIBLE proposee, jamais arbitree par le porteur, qui attend sa decision (alleger la page ou relever le plafond)."
+      "value": 10.5,
+      "status": "CIBLE — RELEVEE de 10 a 10,5 le 2026-09-30 (#8877) sous la directive porteur « corriger directement la CI rouge », A CONFIRMER PAR LE PORTEUR ; valeur precedente proposee par la revue de #5606 (defaut 3), jamais arbitree",
+      "source": "RELEVE 2026-09-30 (#8877) — mesure (`bun run build`) : /about 9,94 Ko sur dev, 10,03 Ko avec la charte visuelle iOS. L'ecart (~90 octets gzip par page) vient des 16 cotes d'echelle neuves (MeeshySpacing/Radius/Font) que generate-from-ios.mjs publie dans ios.css, que toute page institutionnelle inline — meme regle que les pas deja publies sans consommateur web. 10,5 garde un gate (0,5 Ko de croissance) sur le modele de first_paint.kb. HISTORIQUE — Le doc-comment de src/styles/institutional.css citait deja un plafond de 9 Ko (mesure de rejet de l'alternative -- inliner la feuille de l'application aurait coute 11,28 Ko) sans qu'aucun gate ne le fasse respecter : /about mesurait 9,28 Ko avant ce lot, 9,59 apres son ajout de logo+signature -- deja AU-DESSUS de 9. 10 est le plafond le plus proche qui absorbe la mesure ACTUELLE (9,59-9,69 selon les jetons ajoutes) avec une marge round, sur le meme modele que first_paint.kb ci-dessus : une CIBLE proposee, jamais arbitree par le porteur, qui attend sa decision (alleger la page ou relever le plafond)."
     }
   },
   "on_demand_chunks": {

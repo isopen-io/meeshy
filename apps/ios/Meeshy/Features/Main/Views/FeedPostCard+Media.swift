@@ -48,7 +48,7 @@ extension FeedPostCard {
                 singleMediaView(media)
                 singleMediaCaption(media)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             // Le texte alternatif du média est LU par VoiceOver (#6738).
             .postMediaAccessibility(media)
         } else if mediaList.count > 1 {
@@ -81,16 +81,16 @@ extension FeedPostCard {
             galleryImageView(model.primary)
                 .frame(maxWidth: .infinity)
                 .frame(height: 160)
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
 
             if model.count > 1 {
                 Text("+\(model.count - 1)")
                     .font(.caption2.weight(.bold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
+                    .padding(.horizontal, MeeshySpacing.xsPlus)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(Color.black.opacity(0.6)))
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
             }
         }
         .accessibilityHidden(true)
@@ -186,7 +186,7 @@ extension FeedPostCard {
         .aspectRatio(contentMode: .fill)
         .fittedMediaHeight(mediaWidth: media.width, mediaHeight: media.height)
         .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         .onTapGesture { openFullscreen(media) }
     }
 
@@ -251,15 +251,15 @@ extension FeedPostCard {
                 )
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
     }
 
     func documentMediaView(_ media: FeedMedia) -> some View {
         let theme = ThemeManager.shared
-        return HStack(spacing: 14) {
+        return HStack(spacing: MeeshySpacing.mdPlus) {
             // Document icon
             ZStack {
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                     .fill(Color(hex: media.thumbnailColor).opacity(0.2))
                     .frame(width: 48, height: 56)
 
@@ -271,16 +271,16 @@ extension FeedPostCard {
             }
 
             // Document info
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main))
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     if let size = media.fileSize {
                         Text(size)
-                            .font(MeeshyFont.relative(12))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
                             .foregroundColor(theme.textMuted)
                     }
 
@@ -288,7 +288,7 @@ extension FeedPostCard {
                         Text("\u{2022}")
                             .foregroundColor(theme.textMuted)
                         Text("\(pages) \(String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main))")
-                            .font(MeeshyFont.relative(12))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -296,12 +296,12 @@ extension FeedPostCard {
 
             Spacer()
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .stroke(Color(hex: media.thumbnailColor).opacity(0.3), lineWidth: 1)
                 )
         )
@@ -348,7 +348,7 @@ private struct FeedVideoMediaCell: View {
             )
         }
         .fittedMediaHeight(mediaWidth: media.width, mediaHeight: media.height)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
     }
 }
 
