@@ -60,13 +60,15 @@ final class StoryCanvasTransitionRehearsalRun {
     nonisolated deinit {}
     let plan: StoryTransitionRehearsal
     let link: CADisplayLink
-    let startedAt: CFTimeInterval
     let maskBefore: CALayer?
+    /// Posé au PREMIER tick, jamais à l'appel : un choix qui recuit le fond
+    /// occupe le fil principal le temps d'une image, et une horloge partie
+    /// avant aurait déjà consommé l'ouverture quand l'écran la montre.
+    var startedAt: CFTimeInterval?
 
-    init(plan: StoryTransitionRehearsal, link: CADisplayLink, startedAt: CFTimeInterval, maskBefore: CALayer?) {
+    init(plan: StoryTransitionRehearsal, link: CADisplayLink, maskBefore: CALayer?) {
         self.plan = plan
         self.link = link
-        self.startedAt = startedAt
         self.maskBefore = maskBefore
     }
 }
@@ -90,7 +92,6 @@ extension StoryCanvasUIView {
             self?.advanceTransitionRehearsal(at: link.targetTimestamp)
         }
         transitionRehearsal = StoryCanvasTransitionRehearsalRun(plan: plan, link: link,
-                                                               startedAt: CACurrentMediaTime(),
                                                                maskBefore: maskBefore)
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
         link.add(to: .main, forMode: .common)
@@ -111,7 +112,9 @@ extension StoryCanvasUIView {
 
     private func advanceTransitionRehearsal(at timestamp: CFTimeInterval) {
         guard let run = transitionRehearsal else { return }
-        switch run.plan.phase(at: timestamp - run.startedAt) {
+        let depart = run.startedAt ?? timestamp
+        run.startedAt = depart
+        switch run.plan.phase(at: timestamp - depart) {
         case .opening, .hold:
             break
         case .closing(let progress):

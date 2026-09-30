@@ -163,7 +163,14 @@ extension MeeshyComposerHost {
             viewModel.setSlideTransitions(opening: apres.opening, closing: apres.closing)
         }
         guard let plan = ComposerSceneEffects.rehearsal(after: choix, from: avant) else { return }
-        viewModel.canvasTimelineBridge.rehearseTransitions(opening: plan.opening, closing: plan.closing)
+        // Un tour de boucle APRÈS le choix : le premier effet visuel fait
+        // paraître le curseur d'intensité, la scène se recadre et SwiftUI peut
+        // remonter son canvas — une répétition lancée avant jouerait sur
+        // l'ancien, hors de l'écran (mesuré au simulateur).
+        let pont = viewModel.canvasTimelineBridge
+        DispatchQueue.main.async {
+            pont.rehearseTransitions(opening: plan.opening, closing: plan.closing)
+        }
     }
 
     /// **Chaque entrée retombe sur la primitive qui existait déjà.**
