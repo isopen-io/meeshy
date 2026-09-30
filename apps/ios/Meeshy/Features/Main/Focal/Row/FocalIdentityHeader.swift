@@ -34,6 +34,8 @@ struct FocalIdentityHeader: View, Equatable {
     let senderThumbHash: String?
     let senderColorHex: String
     let senderPresence: PresenceState
+    /// L'auteur a l'écran de CETTE conversation ouvert (#8892).
+    var senderIsHere: Bool = false
     let senderStoryRing: StoryRingState
     let senderMoodEmoji: String?
     /// L'auteur n'a PAS de compte (`Participant.type == "anonymous"`).
@@ -75,6 +77,7 @@ struct FocalIdentityHeader: View, Equatable {
             && lhs.senderThumbHash == rhs.senderThumbHash
             && lhs.senderColorHex == rhs.senderColorHex
             && lhs.senderPresence == rhs.senderPresence
+            && lhs.senderIsHere == rhs.senderIsHere
             && lhs.senderStoryRing == rhs.senderStoryRing
             && lhs.senderMoodEmoji == rhs.senderMoodEmoji
             && lhs.senderIsAnonymous == rhs.senderIsAnonymous
@@ -117,6 +120,7 @@ struct FocalIdentityHeader: View, Equatable {
                     storyState: senderStoryRing,
                     moodEmoji: senderMoodEmoji,
                     presenceState: senderPresence,
+                    isHere: senderIsHere,
                     enablePulse: false,
                     isDark: isDark
                 )

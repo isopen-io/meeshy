@@ -32,11 +32,15 @@ final class ConversationViewingReporter: ConversationViewingReporting {
     private var openings: [String: Int] = [:]
 
     /// `connection` : l'état de connexion du socket ; chaque passage à `true`
-    /// ré-annonce la conversation affichée. `isForeground` vaut `true` par
+    /// ré-annonce la conversation affichée. `reconnections` : chaque nouvelle
+    /// session après une première — une reconnexion automatique de Socket.IO
+    /// peut laisser `isConnected` à `true` de bout en bout, sans passage à
+    /// `false` que `connection` verrait. `isForeground` vaut `true` par
     /// défaut : le socket ne se connecte qu'au premier plan.
     init(
         emitter: ConversationViewingEmitting = MessageSocketManager.shared,
         connection: AnyPublisher<Bool, Never> = MessageSocketManager.shared.$isConnected.eraseToAnyPublisher(),
+        reconnections: AnyPublisher<Void, Never> = MessageSocketManager.shared.didReconnect.eraseToAnyPublisher(),
         isForeground: Bool = true
     ) {
         self.emitter = emitter
@@ -44,6 +48,8 @@ final class ConversationViewingReporter: ConversationViewingReporting {
         connection
             .removeDuplicates()
             .filter { $0 }
+            .map { _ in () }
+            .merge(with: reconnections)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.announceCurrent()
