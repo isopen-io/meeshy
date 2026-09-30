@@ -84,7 +84,7 @@ const arStudioChrome = {
   'story.studio.camera.shutter.photo': 'التقاط صورة',
   'story.studio.camera.shutter.start': 'بدء التسجيل',
   'story.studio.camera.shutter.stop': 'إيقاف التسجيل',
-  'story.studio.camera.hint.photo': 'المس الشاشة: صورة · اضغط مطولًا على الزر: فيديو',
+  'story.studio.camera.hint.photo': 'المس الشاشة: صورة · اضغط عليها مطولًا: فيديو',
   'story.studio.camera.hint.video': 'المس للتصوير · المس مجددًا للوضع',
   'story.studio.camera.unavailable': 'الكاميرا غير متاحة. اسمح بها في إعدادات المتصفح.',
   'story.studio.camera.recording': 'جارٍ التسجيل',

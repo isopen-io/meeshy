@@ -84,7 +84,7 @@ const enStudioChrome = {
   'story.studio.camera.shutter.photo': 'Take a photo',
   'story.studio.camera.shutter.start': 'Start recording',
   'story.studio.camera.shutter.stop': 'Stop recording',
-  'story.studio.camera.hint.photo': 'Tap the screen: photo · hold the shutter: video',
+  'story.studio.camera.hint.photo': 'Tap the screen: photo · hold it: video',
   'story.studio.camera.hint.video': 'Tap to film · tap again to place',
   'story.studio.camera.unavailable': 'The camera isn’t available. Allow it in your browser settings.',
   'story.studio.camera.recording': 'Recording',

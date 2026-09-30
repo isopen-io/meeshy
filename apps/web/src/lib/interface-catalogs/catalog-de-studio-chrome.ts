@@ -84,7 +84,7 @@ const deStudioChrome = {
   'story.studio.camera.shutter.photo': 'Foto aufnehmen',
   'story.studio.camera.shutter.start': 'Aufnahme starten',
   'story.studio.camera.shutter.stop': 'Aufnahme beenden',
-  'story.studio.camera.hint.photo': 'Bildschirm tippen: Foto · Auslöser halten: Video',
+  'story.studio.camera.hint.photo': 'Bildschirm tippen: Foto · gedrückt halten: Video',
   'story.studio.camera.hint.video': 'Zum Filmen tippen · erneut tippen zum Platzieren',
   'story.studio.camera.unavailable': 'Die Kamera ist nicht verfügbar. Erlaube sie in den Browsereinstellungen.',
   'story.studio.camera.recording': 'Aufnahme läuft',

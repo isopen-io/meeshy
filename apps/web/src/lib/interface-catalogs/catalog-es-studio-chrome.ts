@@ -84,7 +84,7 @@ const esStudioChrome = {
   'story.studio.camera.shutter.photo': 'Hacer una foto',
   'story.studio.camera.shutter.start': 'Empezar a grabar',
   'story.studio.camera.shutter.stop': 'Detener la grabación',
-  'story.studio.camera.hint.photo': 'Tocar la pantalla: foto · mantener el disparador: vídeo',
+  'story.studio.camera.hint.photo': 'Tocar la pantalla: foto · mantenerla pulsada: vídeo',
   'story.studio.camera.hint.video': 'Toca para grabar · toca de nuevo para colocar',
   'story.studio.camera.unavailable': 'La cámara no está disponible. Permítela en los ajustes del navegador.',
   'story.studio.camera.recording': 'Grabando',

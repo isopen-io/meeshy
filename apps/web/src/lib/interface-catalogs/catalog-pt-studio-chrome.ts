@@ -84,7 +84,7 @@ const ptStudioChrome = {
   'story.studio.camera.shutter.photo': 'Tirar uma foto',
   'story.studio.camera.shutter.start': 'Iniciar a gravação',
   'story.studio.camera.shutter.stop': 'Parar a gravação',
-  'story.studio.camera.hint.photo': 'Tocar a tela: foto · manter o disparador: vídeo',
+  'story.studio.camera.hint.photo': 'Tocar a tela: foto · mantê-la pressionada: vídeo',
   'story.studio.camera.hint.video': 'Toque para filmar · toque de novo para colocar',
   'story.studio.camera.unavailable': 'A câmera não está disponível. Permita-a nas configurações do navegador.',
   'story.studio.camera.recording': 'Gravando',

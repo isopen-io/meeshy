@@ -84,7 +84,7 @@ const itStudioChrome = {
   'story.studio.camera.shutter.photo': 'Scatta una foto',
   'story.studio.camera.shutter.start': 'Avvia la registrazione',
   'story.studio.camera.shutter.stop': 'Interrompi la registrazione',
-  'story.studio.camera.hint.photo': 'Tocca lo schermo: foto · tieni premuto il pulsante: video',
+  'story.studio.camera.hint.photo': 'Tocca lo schermo: foto · tienilo premuto: video',
   'story.studio.camera.hint.video': 'Tocca per filmare · tocca di nuovo per posare',
   'story.studio.camera.unavailable': 'La fotocamera non è disponibile. Consentila nelle impostazioni del browser.',
   'story.studio.camera.recording': 'Registrazione in corso',
