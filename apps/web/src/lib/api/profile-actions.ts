@@ -14,6 +14,7 @@ import {
   type ProfileImageKind,
   type ProfilePatch,
 } from './profile';
+import { publicProfileQueryKey, type PublicProfileView } from './public-profile';
 import type { SessionProfileFields, SessionStoreApi, SessionUser } from './session';
 
 /**
@@ -103,6 +104,37 @@ function sessionFieldsOfUser(user: SessionUser): SessionProfileFields {
   };
 }
 
+/**
+ * **MA FICHE PUBLIQUE SUIT MON PROFIL** (#8881) — `/u/<moi>` lit une AUTRE
+ * clé (`publicProfileQueryKey`), persistée et servie par la passerelle sous
+ * `Cache-Control: max-age=60` : sans cette projection, la photo et la bannière
+ * qu'on vient de poser y restaient les anciennes jusqu'à la revalidation. Seul
+ * ce que le porteur écrit est recopié — la relation et les compteurs restent
+ * ceux que le serveur a servis.
+ */
+function confirmOntoPublicProfile(queryClient: QueryClient, profile: MyProfile): void {
+  queryClient.setQueryData<PublicProfileView>(publicProfileQueryKey(profile.username), (view) =>
+    view === undefined
+      ? view
+      : {
+          ...view,
+          profile: {
+            ...view.profile,
+            displayName: profile.displayName,
+            avatar: profile.avatar,
+            banner: profile.banner,
+            bio: profile.bio === '' ? null : profile.bio,
+          },
+        },
+  );
+}
+
+function confirm(deps: ProfileActionDeps, profile: MyProfile): void {
+  deps.queryClient.setQueryData(MY_PROFILE_QUERY_KEY, profile);
+  deps.session.getState().updateUser(sessionFieldsOfProfile(profile));
+  confirmOntoPublicProfile(deps.queryClient, profile);
+}
+
 const heldUser = (session: SessionStoreApi): SessionUser | undefined => {
   const state = session.getState().session;
   return state.status === 'authenticated' ? state.user : undefined;
@@ -137,8 +169,7 @@ export async function performProfileEdit(params: {
     return { status: 'refused', error: result.error, ...(result.field === undefined ? {} : { field: result.field }) };
   }
 
-  deps.queryClient.setQueryData(MY_PROFILE_QUERY_KEY, result.data);
-  deps.session.getState().updateUser(sessionFieldsOfProfile(result.data));
+  confirm(deps, result.data);
   if (touchesPrism(patch)) void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
   return { status: 'saved' };
 }
@@ -179,7 +210,6 @@ export async function performImageUpdate(params: {
   const result = await patchMyImage(deps, kind, url);
   if (!result.ok) return { status: 'refused', error: result.error };
 
-  deps.queryClient.setQueryData(MY_PROFILE_QUERY_KEY, result.data);
-  deps.session.getState().updateUser(sessionFieldsOfProfile(result.data));
+  confirm(deps, result.data);
   return { status: 'saved', url, bytesSent };
 }
