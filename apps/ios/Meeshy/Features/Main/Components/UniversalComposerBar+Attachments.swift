@@ -104,8 +104,8 @@ extension UniversalComposerBar {
 
             // Inline recent photos/videos — selectable straight into the
             // attachment tray, with a leading "+" to open the full library. The
-            // strip fills the remaining panel height (iPad shows a roomy
-            // scrollable grid); only hosts WITHOUT it need the trailing spacer.
+            // scrollable grid fills the remaining panel height on every idiom;
+            // only hosts WITHOUT it need the trailing spacer.
             if let onRecentMediaSelected {
                 Divider().opacity(0.4).padding(.horizontal, 14)
                 RecentMediaStrip(
@@ -119,7 +119,9 @@ extension UniversalComposerBar {
                 Spacer(minLength: 0)
             }
         }
-        .frame(maxWidth: .infinity)
+        // Top-aligned and filling the height its host gives it: centred, the
+        // content floated mid-panel with a void above and below (#8869).
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(
             (style == .dark ? Color.black.opacity(0.18) : theme.inputBackground.opacity(0.6))
         )
@@ -135,7 +137,7 @@ extension UniversalComposerBar {
     /// Albums en haut, exactement le picker que le composer de story ouvre.
     ///
     /// Le geste est directionnel et reprend la grammaire de la feuille système :
-    /// tirer vers le HAUT agrandit (on passe de l'échantillon de 19 vignettes à
+    /// tirer vers le HAUT agrandit (on passe de l'échantillon de 40 médias récents à
     /// toute la photothèque), tirer vers le BAS referme le panneau. Sans la branche
     /// « bas », la poignée avalerait le drag et casserait le swipe-to-dismiss
     /// que le geste global de `expandedComposer` assure partout ailleurs.

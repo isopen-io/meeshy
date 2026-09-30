@@ -221,11 +221,17 @@ class KeyboardObserver: ObservableObject {
                 // Use the keyboard-hosting window's height (not the full
                 // display) so split-screen on iPad produces the correct
                 // visible keyboard portion.
-                let screenHeight = DeviceLayout.windowSize.height
-                let newHeight = max(screenHeight - endFrame.origin.y, 0)
+                // A degenerate or floating end frame is not a measurement
+                // (#8869): it docks nothing, and it must never become the
+                // height the attachment panel reopens at.
+                let measured = ComposerPanelHeightLaw.keyboardHeight(
+                    endFrame: endFrame,
+                    windowHeight: DeviceLayout.windowSize.height
+                )
+                let newHeight = measured ?? 0
 
-                if newHeight > 0 {
-                    self.lastKnownHeight = newHeight
+                if let measured, measured > 0 {
+                    self.lastKnownHeight = measured
                 }
 
                 withAnimation(.easeInOut(duration: max(duration, 0.15))) {
