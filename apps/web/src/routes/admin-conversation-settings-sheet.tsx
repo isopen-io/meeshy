@@ -181,7 +181,7 @@ function Interrupteur({
         className="relative h-6 w-10 shrink-0 rounded-full"
         style={{ backgroundColor: actif ? BRAND : 'color-mix(in srgb, var(--color-ios-ink-3) 35%, transparent)' }}
       >
-        <span className="absolute top-0.5 size-5 rounded-full bg-white" style={{ insetInlineStart: actif ? 18 : 2 }} />
+        <span className="absolute top-0.5 size-5 rounded-full bg-ios-on-brand" style={{ insetInlineStart: actif ? 18 : 2 }} />
       </span>
     </button>
   );

@@ -133,7 +133,7 @@ function ListError({ online, onRetry }: { readonly online: boolean; readonly onR
       <button
         type="button"
         onClick={onRetry}
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
         Réessayer
@@ -540,7 +540,7 @@ export default function ConversationsScreen() {
                       className="rounded-chip px-3 py-1.5 text-title font-medium whitespace-nowrap transition-colors"
                       style={
                         active
-                          ? { backgroundColor: 'var(--color-ios-brand)', color: 'white' }
+                          ? { backgroundColor: 'var(--color-ios-brand)', color: 'var(--color-ios-on-brand)' }
                           : {
                               backgroundColor: 'var(--color-ios-card)',
                               color: 'var(--color-ios-ink-2)',
@@ -701,7 +701,7 @@ export default function ConversationsScreen() {
                 setSearch('');
                 setFilter('all');
               }}
-              className="rounded-chip px-5 text-body font-semibold text-white"
+              className="rounded-chip px-5 text-body font-semibold text-ios-on-brand"
               style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
             >
               Tout afficher
