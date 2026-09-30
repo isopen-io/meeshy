@@ -122,14 +122,14 @@ export function Sheet({
       onClose={onClose}
       aria-labelledby={titleId}
       data-sheet-presentation={presentation}
-      className={centree ? 'm-auto w-[min(36rem,calc(100%-2rem))] max-h-[min(90dvh,calc(100%-2rem))] overflow-hidden rounded-card p-0 backdrop:bg-black/40' : undefined}
+      className={centree ? 'm-auto w-[min(36rem,calc(100%-2rem))] max-h-[min(90dvh,calc(100%-2rem))] overflow-hidden rounded-card p-0 backdrop:bg-veil' : undefined}
       style={
         centree
           ? {
               border: 0,
               backgroundColor: 'var(--color-ios-surface)',
               color: 'var(--color-ios-ink)',
-              boxShadow: '0 24px 64px color-mix(in srgb, black 28%, transparent)',
+              boxShadow: '0 24px 64px color-mix(in srgb, var(--color-media-backdrop) 28%, transparent)',
             }
           : {
               margin: 0,

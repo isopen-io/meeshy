@@ -132,13 +132,13 @@ export function ImageTile({
  * un re-rendu, l'état « visionneuse ouverte » restant chez `Attachments`.
  */
 const FRAME_CLASS: Readonly<Record<MediaGridFrame, string>> = {
-  box: 'relative overflow-hidden rounded-media bg-black',
+  box: 'relative overflow-hidden rounded-media bg-media-backdrop',
   tiles: 'relative',
 };
 
 const CELL_CLASS: Readonly<Record<MediaGridFrame, string>> = {
   box: 'relative size-full overflow-hidden',
-  tiles: 'relative size-full overflow-hidden rounded-media bg-black',
+  tiles: 'relative size-full overflow-hidden rounded-media bg-media-backdrop',
 };
 
 export const MediaGrid = memo(function MediaGrid({
@@ -323,8 +323,8 @@ function OverflowVeil({
       data-overflow={count}
       onClick={() => onOpen(index)}
       aria-label={`Ouvrir le média ${index + 1} sur ${total}, ${count} de plus`}
-      className="absolute inset-0 grid cursor-pointer appearance-none place-items-center border-0 font-bold text-white"
-      style={{ backgroundColor: `rgba(0,0,0,${OVERFLOW_VEIL_OPACITY})`, fontSize: OVERFLOW_LABEL_SIZE }}
+      className="absolute inset-0 grid cursor-pointer appearance-none place-items-center border-0 font-bold text-on-media"
+      style={{ backgroundColor: `color-mix(in srgb, var(--color-media-backdrop) ${OVERFLOW_VEIL_OPACITY * 100}%, transparent)`, fontSize: OVERFLOW_LABEL_SIZE }}
     >
       +{count}
     </button>

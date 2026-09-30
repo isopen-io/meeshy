@@ -430,7 +430,7 @@ export function NotFound() {
         <p className="text-screen font-bold">{translate(langue, 'notFound.title')}</p>
         <a
           href="/"
-          className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+          className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
           style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
         >
           {translate(langue, 'pending.back')}
