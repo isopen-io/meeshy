@@ -82,6 +82,21 @@ final class NotificationDetailTests: XCTestCase {
             userInfo: locationPayload(["notificationLocKey": "notification.hidden_message"])), "MEESHY_MESSAGE")
     }
 
+    /// La passerelle ne pose AUCUNE clé pour une carte de visite sans nom
+    /// (#8857) : la catégorie qu'elle déclare en `aps.category` est gardée.
+    func test_refinedCategory_namelessContact_keepsTheDeclaredCategory() {
+        let bare: [AnyHashable: Any] = ["type": "new_message", "conversationId": "c1"]
+        XCTAssertEqual(NotificationDetailPolicy.refinedCategory("MEESHY_MESSAGE", type: "new_message",
+                                                                userInfo: bare, declared: "MEESHY_CONTACT"), "MEESHY_CONTACT")
+        XCTAssertEqual(NotificationDetailPolicy.refinedCategory("MEESHY_MESSAGE", type: "new_message",
+                                                                userInfo: bare, declared: "MEESHY_SOCIAL"), "MEESHY_MESSAGE")
+        XCTAssertEqual(NotificationDetailPolicy.refinedCategory("MEESHY_MESSAGE", type: "message_reaction",
+                                                                userInfo: bare, declared: "MEESHY_CONTACT"), "MEESHY_MESSAGE")
+        XCTAssertEqual(NotificationDetailPolicy.refinedCategory(
+            "MEESHY_MESSAGE", type: "new_message",
+            userInfo: bare.merging(["effectFlags": "4"]) { _, new in new }, declared: "MEESHY_CONTACT"), "MEESHY_MESSAGE")
+    }
+
     // MARK: - Politique : vignette vidéo
 
     func test_videoThumbnailURL_onlyForAVideo_neverWhenProtected() {
