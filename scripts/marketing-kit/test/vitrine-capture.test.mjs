@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { LEGENDES } from '../textes/legendes.mjs'
 import { VITRINE } from '../templates/vitrine/plan.mjs'
-import { HOTE_INJOIGNABLE, TAILLES_NATIVES, argumentsDeLancement, attendreLeSignal, cheminBrut, fixturesMesurees, montreUnFil, sourceDuMedia, veilleMontree } from '../vitrine/capturer.mjs'
+import { DUREE_MIN_VOCAL_MS, HOTE_INJOIGNABLE, TAILLES_NATIVES, argumentsDeLancement, attendreLeSignal, cheminBrut, fixturesMesurees, montreUnFil, sourceDuMedia, veilleMontree, vocalTropCourt } from '../vitrine/capturer.mjs'
 import { exporterVitrine } from '../vitrine/fixtures.mjs'
 
 describe('capture des vrais écrans (#8855)', () => {
@@ -32,6 +32,14 @@ describe('capture des vrais écrans (#8855)', () => {
     expect(veille?.getDate()).toBe(30)
     const journee = new Date(2026, 9, 1, 15, 0)
     expect(veilleMontree(exporterVitrine({ lang: 'fr', maintenant: journee }), journee)).toBeNull()
+  })
+
+  test('une piste jouée trop courte pour tenir jusqu’à la photo est refusée en nommant sa langue', () => {
+    const maintenant = new Date('2026-09-30T12:00:00.000Z')
+    const court = fixturesMesurees({ lang: 'es', maintenant, mesurer: () => ({ dureeMs: 3350, taille: 1 }) })
+    expect(vocalTropCourt(court, 'es')).toEqual({ lang: 'es', dureeMs: 3350 })
+    const long = fixturesMesurees({ lang: 'es', maintenant, mesurer: () => ({ dureeMs: DUREE_MIN_VOCAL_MS, taille: 1 }) })
+    expect(vocalTropCourt(long, 'es')).toBeNull()
   })
 
   test('seules les scènes de conversation montrent un fil daté', () => {

@@ -76,16 +76,21 @@ export const dureeDepuisAfinfo = (sortie) => {
   return Math.round(Number(m[1]) * 1000)
 }
 
-// Un vocal synthétisé une fois pour toutes : le cache se nomme par la langue et le texte.
-export const fichierVoix = ({ texte, lang }) =>
-  resolve(CACHE_VOIX, `${createHash('sha1').update(`${lang}\n${texte}`).digest('hex').slice(0, 16)}.m4a`)
+// Les réglages d'une synthèse (`debit` : mots par minute, `null` = celui de la voix). Ils nomment le
+// fichier : une autre voix ou un autre débit resynthétise au lieu de resservir l'ancienne piste.
+export const reglagesVoix = (lang) => ({ voix: VOIX_PREFEREES[lang] ?? null, debit: null })
+
+// Un vocal synthétisé une fois pour toutes : le cache se nomme par la langue, le texte et les réglages.
+export const fichierVoix = ({ texte, lang }, reglages = reglagesVoix(lang)) =>
+  resolve(CACHE_VOIX, `${createHash('sha1').update(JSON.stringify({ lang, texte, ...reglages })).digest('hex').slice(0, 16)}.m4a`)
 
 export const synthetiser = (media, voix) => {
   const sortie = fichierVoix(media)
   if (!existsSync(sortie)) {
     mkdirSync(dirname(sortie), { recursive: true })
     const aiff = `${sortie}.aiff`
-    execFileSync('say', ['-v', choisirVoix(media.lang, voix), '-o', aiff, media.texte])
+    const { debit } = reglagesVoix(media.lang)
+    execFileSync('say', ['-v', choisirVoix(media.lang, voix), ...(debit ? ['-r', String(debit)] : []), '-o', aiff, media.texte])
     execFileSync('afconvert', ['-f', 'm4af', '-d', 'aac', aiff, sortie])
     rmSync(aiff)
   }

@@ -61,6 +61,18 @@ export const veilleMontree = (f, maintenant) => {
 
 const heure = (instant) => instant.toTimeString().slice(0, 5)
 
+// La scène « amour » annonce « prêt » après 1 s de lecture, et la photo tombe environ 3 s plus tard :
+// une piste plus courte serait déjà finie, karaoké éteint.
+export const DUREE_MIN_VOCAL_MS = 7000
+
+// La piste que le Prisme joue au lecteur, si elle est trop courte pour tenir jusqu'à la photo.
+export const vocalTropCourt = (f, lang) => {
+  const { conversationId, messageId, attachmentId } = f.scenes.amour
+  const piece = f.messages[conversationId].find((m) => m.id === messageId).attachments.find((a) => a.id === attachmentId)
+  const dureeMs = piece.translations[lang]?.durationMs ?? piece.duration
+  return dureeMs < DUREE_MIN_VOCAL_MS ? { lang, dureeMs } : null
+}
+
 // La source d'un média sur le Mac : la photo du kit, ou le vocal synthétisé.
 export const sourceDuMedia = (media) => (media.genre === 'image' ? resolve(DOSSIER_PHOTOS, CREDITS[media.photo].fichier) : fichierVoix(media))
 
@@ -118,6 +130,8 @@ const capturer = async ({ udid, appareil, lang, capture, voix }) => {
     const des = new Date(minuit.getTime() + (maintenant - veille) + 60_000)
     throw new Error(`${etiquette} : le fil traverserait minuit (un message de la veille à ${heure(veille)}) et se couperait en « Hier » et « Aujourd’hui » — capturer après ${heure(des)}`)
   }
+  const court = scene === 'amour' ? vocalTropCourt(fixtures, lang) : null
+  if (court) throw new Error(`${etiquette} : la piste ${court.lang} dure ${court.dureeMs} ms — elle serait finie avant la photo (minimum ${DUREE_MIN_VOCAL_MS} ms)`)
   deposer(fixtures, dossier)
   simctl('launch', udid, BUNDLE, ...argumentsDeLancement({ scene, lang }))
   await attendreLeSignal({ existe: () => existsSync(resolve(dossier, 'pret.txt')), etiquette })

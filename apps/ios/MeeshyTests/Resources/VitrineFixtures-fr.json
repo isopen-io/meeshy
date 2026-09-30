@@ -1473,7 +1473,7 @@
       "createdAt": "2026-09-30T11:58:00.000Z",
       "duration": 9000,
       "transcription": {
-       "text": "하루 종일 네 목소리가 듣고 싶었어. 12일 뒤에 공항에서 기다릴게.",
+       "text": "하루 종일 네 목소리가 듣고 싶었어. 오늘 밤 창밖으로 도시의 불빛을 보면서 네 생각만 했어, 우리가 함께 할 모든 것들도. 12일 뒤에 공항에서 기다릴게.",
        "language": "ko",
        "confidence": 0.97,
        "durationMs": 9000,
@@ -1481,51 +1481,121 @@
         {
          "text": "하루",
          "startMs": 0,
-         "endMs": 621
+         "endMs": 281
         },
         {
          "text": "종일",
-         "startMs": 621,
-         "endMs": 1241
+         "startMs": 281,
+         "endMs": 563
         },
         {
          "text": "네",
-         "startMs": 1241,
-         "endMs": 1552
+         "startMs": 563,
+         "endMs": 703
         },
         {
          "text": "목소리가",
-         "startMs": 1552,
-         "endMs": 2793
+         "startMs": 703,
+         "endMs": 1266
         },
         {
          "text": "듣고",
-         "startMs": 2793,
-         "endMs": 3414
+         "startMs": 1266,
+         "endMs": 1547
         },
         {
          "text": "싶었어.",
-         "startMs": 3414,
-         "endMs": 4655
+         "startMs": 1547,
+         "endMs": 2109
+        },
+        {
+         "text": "오늘",
+         "startMs": 2109,
+         "endMs": 2391
+        },
+        {
+         "text": "밤",
+         "startMs": 2391,
+         "endMs": 2531
+        },
+        {
+         "text": "창밖으로",
+         "startMs": 2531,
+         "endMs": 3094
+        },
+        {
+         "text": "도시의",
+         "startMs": 3094,
+         "endMs": 3516
+        },
+        {
+         "text": "불빛을",
+         "startMs": 3516,
+         "endMs": 3938
+        },
+        {
+         "text": "보면서",
+         "startMs": 3938,
+         "endMs": 4359
+        },
+        {
+         "text": "네",
+         "startMs": 4359,
+         "endMs": 4500
+        },
+        {
+         "text": "생각만",
+         "startMs": 4500,
+         "endMs": 4922
+        },
+        {
+         "text": "했어,",
+         "startMs": 4922,
+         "endMs": 5344
+        },
+        {
+         "text": "우리가",
+         "startMs": 5344,
+         "endMs": 5766
+        },
+        {
+         "text": "함께",
+         "startMs": 5766,
+         "endMs": 6047
+        },
+        {
+         "text": "할",
+         "startMs": 6047,
+         "endMs": 6188
+        },
+        {
+         "text": "모든",
+         "startMs": 6188,
+         "endMs": 6469
+        },
+        {
+         "text": "것들도.",
+         "startMs": 6469,
+         "endMs": 7031
         },
         {
          "text": "12일",
-         "startMs": 4655,
-         "endMs": 5586
+         "startMs": 7031,
+         "endMs": 7453
         },
         {
          "text": "뒤에",
-         "startMs": 5586,
-         "endMs": 6207
+         "startMs": 7453,
+         "endMs": 7734
         },
         {
          "text": "공항에서",
-         "startMs": 6207,
-         "endMs": 7448
+         "startMs": 7734,
+         "endMs": 8297
         },
         {
          "text": "기다릴게.",
-         "startMs": 7448,
+         "startMs": 8297,
          "endMs": 9000
         }
        ]
@@ -1534,7 +1604,7 @@
        "fr": {
         "type": "audio",
         "url": "/api/v1/attachments/file/vitrine/vocal-minjun.p-fr.m4a",
-        "transcription": "Toute la journée, j’avais envie d’entendre ta voix. Dans 12 jours, je t’attends à l’aéroport.",
+        "transcription": "Toute la journée, j’avais envie d’entendre ta voix. Ce soir, en regardant les lumières de la ville depuis ma fenêtre, je n’ai pensé qu’à toi et à tout ce qu’on va faire ensemble. Dans 12 jours, je t’attends à l’aéroport.",
         "durationMs": 9000,
         "format": "m4a",
         "cloned": true,
@@ -1544,76 +1614,201 @@
          {
           "text": "Toute",
           "startMs": 0,
-          "endMs": 570
+          "endMs": 249
          },
          {
           "text": "la",
-          "startMs": 570,
-          "endMs": 797
+          "startMs": 249,
+          "endMs": 348
          },
          {
           "text": "journée,",
-          "startMs": 797,
-          "endMs": 1709
+          "startMs": 348,
+          "endMs": 746
          },
          {
           "text": "j’avais",
-          "startMs": 1709,
-          "endMs": 2506
+          "startMs": 746,
+          "endMs": 1094
          },
          {
           "text": "envie",
-          "startMs": 2506,
-          "endMs": 3076
+          "startMs": 1094,
+          "endMs": 1343
          },
          {
           "text": "d’entendre",
-          "startMs": 3076,
-          "endMs": 4215
+          "startMs": 1343,
+          "endMs": 1840
          },
          {
           "text": "ta",
-          "startMs": 4215,
-          "endMs": 4443
+          "startMs": 1840,
+          "endMs": 1939
          },
          {
           "text": "voix.",
-          "startMs": 4443,
-          "endMs": 5013
+          "startMs": 1939,
+          "endMs": 2188
          },
          {
-          "text": "Dans",
-          "startMs": 5013,
-          "endMs": 5468
+          "text": "Ce",
+          "startMs": 2188,
+          "endMs": 2287
          },
          {
-          "text": "12",
-          "startMs": 5468,
-          "endMs": 5696
+          "text": "soir,",
+          "startMs": 2287,
+          "endMs": 2536
          },
          {
-          "text": "jours,",
-          "startMs": 5696,
-          "endMs": 6380
+          "text": "en",
+          "startMs": 2536,
+          "endMs": 2635
+         },
+         {
+          "text": "regardant",
+          "startMs": 2635,
+          "endMs": 3083
+         },
+         {
+          "text": "les",
+          "startMs": 3083,
+          "endMs": 3232
+         },
+         {
+          "text": "lumières",
+          "startMs": 3232,
+          "endMs": 3630
+         },
+         {
+          "text": "de",
+          "startMs": 3630,
+          "endMs": 3729
+         },
+         {
+          "text": "la",
+          "startMs": 3729,
+          "endMs": 3829
+         },
+         {
+          "text": "ville",
+          "startMs": 3829,
+          "endMs": 4077
+         },
+         {
+          "text": "depuis",
+          "startMs": 4077,
+          "endMs": 4376
+         },
+         {
+          "text": "ma",
+          "startMs": 4376,
+          "endMs": 4475
+         },
+         {
+          "text": "fenêtre,",
+          "startMs": 4475,
+          "endMs": 4873
          },
          {
           "text": "je",
-          "startMs": 6380,
-          "endMs": 6608
+          "startMs": 4873,
+          "endMs": 4972
          },
          {
-          "text": "t’attends",
-          "startMs": 6608,
-          "endMs": 7633
+          "text": "n’ai",
+          "startMs": 4972,
+          "endMs": 5171
+         },
+         {
+          "text": "pensé",
+          "startMs": 5171,
+          "endMs": 5420
+         },
+         {
+          "text": "qu’à",
+          "startMs": 5420,
+          "endMs": 5619
+         },
+         {
+          "text": "toi",
+          "startMs": 5619,
+          "endMs": 5768
+         },
+         {
+          "text": "et",
+          "startMs": 5768,
+          "endMs": 5867
          },
          {
           "text": "à",
-          "startMs": 7633,
-          "endMs": 7747
+          "startMs": 5867,
+          "endMs": 5917
+         },
+         {
+          "text": "tout",
+          "startMs": 5917,
+          "endMs": 6116
+         },
+         {
+          "text": "ce",
+          "startMs": 6116,
+          "endMs": 6215
+         },
+         {
+          "text": "qu’on",
+          "startMs": 6215,
+          "endMs": 6464
+         },
+         {
+          "text": "va",
+          "startMs": 6464,
+          "endMs": 6564
+         },
+         {
+          "text": "faire",
+          "startMs": 6564,
+          "endMs": 6812
+         },
+         {
+          "text": "ensemble.",
+          "startMs": 6812,
+          "endMs": 7260
+         },
+         {
+          "text": "Dans",
+          "startMs": 7260,
+          "endMs": 7459
+         },
+         {
+          "text": "12",
+          "startMs": 7459,
+          "endMs": 7558
+         },
+         {
+          "text": "jours,",
+          "startMs": 7558,
+          "endMs": 7856
+         },
+         {
+          "text": "je",
+          "startMs": 7856,
+          "endMs": 7956
+         },
+         {
+          "text": "t’attends",
+          "startMs": 7956,
+          "endMs": 8403
+         },
+         {
+          "text": "à",
+          "startMs": 8403,
+          "endMs": 8453
          },
          {
           "text": "l’aéroport.",
-          "startMs": 7747,
+          "startMs": 8453,
           "endMs": 9000
          }
         ]
@@ -1621,7 +1816,7 @@
        "en": {
         "type": "audio",
         "url": "/api/v1/attachments/file/vitrine/vocal-minjun.p-en.m4a",
-        "transcription": "All day long, I wanted to hear your voice. In 12 days, I’ll be waiting for you at the airport.",
+        "transcription": "All day long, I wanted to hear your voice. Tonight, watching the city lights from my window, I could only think of you and everything we’ll do together. In 12 days, I’ll be waiting for you at the airport.",
         "durationMs": 9000,
         "format": "m4a",
         "cloned": true,
@@ -1631,101 +1826,196 @@
          {
           "text": "All",
           "startMs": 0,
-          "endMs": 360
+          "endMs": 163
          },
          {
           "text": "day",
-          "startMs": 360,
-          "endMs": 720
+          "startMs": 163,
+          "endMs": 325
          },
          {
           "text": "long,",
-          "startMs": 720,
-          "endMs": 1320
+          "startMs": 325,
+          "endMs": 596
          },
          {
           "text": "I",
-          "startMs": 1320,
-          "endMs": 1440
+          "startMs": 596,
+          "endMs": 651
          },
          {
           "text": "wanted",
-          "startMs": 1440,
-          "endMs": 2160
+          "startMs": 651,
+          "endMs": 976
          },
          {
           "text": "to",
-          "startMs": 2160,
-          "endMs": 2400
+          "startMs": 976,
+          "endMs": 1084
          },
          {
           "text": "hear",
-          "startMs": 2400,
-          "endMs": 2880
+          "startMs": 1084,
+          "endMs": 1301
          },
          {
           "text": "your",
-          "startMs": 2880,
-          "endMs": 3360
+          "startMs": 1301,
+          "endMs": 1518
          },
          {
           "text": "voice.",
-          "startMs": 3360,
-          "endMs": 4080
+          "startMs": 1518,
+          "endMs": 1843
          },
          {
-          "text": "In",
-          "startMs": 4080,
-          "endMs": 4320
+          "text": "Tonight,",
+          "startMs": 1843,
+          "endMs": 2277
          },
          {
-          "text": "12",
-          "startMs": 4320,
-          "endMs": 4560
-         },
-         {
-          "text": "days,",
-          "startMs": 4560,
-          "endMs": 5160
-         },
-         {
-          "text": "I’ll",
-          "startMs": 5160,
-          "endMs": 5640
-         },
-         {
-          "text": "be",
-          "startMs": 5640,
-          "endMs": 5880
-         },
-         {
-          "text": "waiting",
-          "startMs": 5880,
-          "endMs": 6720
-         },
-         {
-          "text": "for",
-          "startMs": 6720,
-          "endMs": 7080
-         },
-         {
-          "text": "you",
-          "startMs": 7080,
-          "endMs": 7440
-         },
-         {
-          "text": "at",
-          "startMs": 7440,
-          "endMs": 7680
+          "text": "watching",
+          "startMs": 2277,
+          "endMs": 2711
          },
          {
           "text": "the",
-          "startMs": 7680,
-          "endMs": 8040
+          "startMs": 2711,
+          "endMs": 2873
+         },
+         {
+          "text": "city",
+          "startMs": 2873,
+          "endMs": 3090
+         },
+         {
+          "text": "lights",
+          "startMs": 3090,
+          "endMs": 3416
+         },
+         {
+          "text": "from",
+          "startMs": 3416,
+          "endMs": 3633
+         },
+         {
+          "text": "my",
+          "startMs": 3633,
+          "endMs": 3741
+         },
+         {
+          "text": "window,",
+          "startMs": 3741,
+          "endMs": 4120
+         },
+         {
+          "text": "I",
+          "startMs": 4120,
+          "endMs": 4175
+         },
+         {
+          "text": "could",
+          "startMs": 4175,
+          "endMs": 4446
+         },
+         {
+          "text": "only",
+          "startMs": 4446,
+          "endMs": 4663
+         },
+         {
+          "text": "think",
+          "startMs": 4663,
+          "endMs": 4934
+         },
+         {
+          "text": "of",
+          "startMs": 4934,
+          "endMs": 5042
+         },
+         {
+          "text": "you",
+          "startMs": 5042,
+          "endMs": 5205
+         },
+         {
+          "text": "and",
+          "startMs": 5205,
+          "endMs": 5367
+         },
+         {
+          "text": "everything",
+          "startMs": 5367,
+          "endMs": 5910
+         },
+         {
+          "text": "we’ll",
+          "startMs": 5910,
+          "endMs": 6181
+         },
+         {
+          "text": "do",
+          "startMs": 6181,
+          "endMs": 6289
+         },
+         {
+          "text": "together.",
+          "startMs": 6289,
+          "endMs": 6777
+         },
+         {
+          "text": "In",
+          "startMs": 6777,
+          "endMs": 6886
+         },
+         {
+          "text": "12",
+          "startMs": 6886,
+          "endMs": 6994
+         },
+         {
+          "text": "days,",
+          "startMs": 6994,
+          "endMs": 7265
+         },
+         {
+          "text": "I’ll",
+          "startMs": 7265,
+          "endMs": 7482
+         },
+         {
+          "text": "be",
+          "startMs": 7482,
+          "endMs": 7590
+         },
+         {
+          "text": "waiting",
+          "startMs": 7590,
+          "endMs": 7970
+         },
+         {
+          "text": "for",
+          "startMs": 7970,
+          "endMs": 8133
+         },
+         {
+          "text": "you",
+          "startMs": 8133,
+          "endMs": 8295
+         },
+         {
+          "text": "at",
+          "startMs": 8295,
+          "endMs": 8404
+         },
+         {
+          "text": "the",
+          "startMs": 8404,
+          "endMs": 8566
          },
          {
           "text": "airport.",
-          "startMs": 8040,
+          "startMs": 8566,
           "endMs": 9000
          }
         ]
@@ -2435,21 +2725,21 @@
    "url": "/api/v1/attachments/file/vitrine/vocal-minjun.p-ko.m4a",
    "fichier": "vocal-minjun.p-ko.m4a",
    "genre": "audio",
-   "texte": "하루 종일 네 목소리가 듣고 싶었어. 12일 뒤에 공항에서 기다릴게.",
+   "texte": "하루 종일 네 목소리가 듣고 싶었어. 오늘 밤 창밖으로 도시의 불빛을 보면서 네 생각만 했어, 우리가 함께 할 모든 것들도. 12일 뒤에 공항에서 기다릴게.",
    "lang": "ko"
   },
   {
    "url": "/api/v1/attachments/file/vitrine/vocal-minjun.p-fr.m4a",
    "fichier": "vocal-minjun.p-fr.m4a",
    "genre": "audio",
-   "texte": "Toute la journée, j’avais envie d’entendre ta voix. Dans 12 jours, je t’attends à l’aéroport.",
+   "texte": "Toute la journée, j’avais envie d’entendre ta voix. Ce soir, en regardant les lumières de la ville depuis ma fenêtre, je n’ai pensé qu’à toi et à tout ce qu’on va faire ensemble. Dans 12 jours, je t’attends à l’aéroport.",
    "lang": "fr"
   },
   {
    "url": "/api/v1/attachments/file/vitrine/vocal-minjun.p-en.m4a",
    "fichier": "vocal-minjun.p-en.m4a",
    "genre": "audio",
-   "texte": "All day long, I wanted to hear your voice. In 12 days, I’ll be waiting for you at the airport.",
+   "texte": "All day long, I wanted to hear your voice. Tonight, watching the city lights from my window, I could only think of you and everything we’ll do together. In 12 days, I’ll be waiting for you at the airport.",
    "lang": "en"
   }
  ],

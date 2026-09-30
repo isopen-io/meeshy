@@ -54,6 +54,12 @@ describe('médias de la vitrine (#8855)', () => {
     expect(() => dureeDepuisAfinfo('rien')).toThrow('afinfo ne donne aucune durée')
   })
 
+  test('changer la voix ou le débit resynthétise : le nom du fichier suit aussi les réglages', () => {
+    const m = { texte: 'Bonjour', lang: 'fr' }
+    expect(fichierVoix(m, { voix: 'Thomas', debit: null })).not.toBe(fichierVoix(m, { voix: 'Amélie', debit: null }))
+    expect(fichierVoix(m, { voix: 'Thomas', debit: null })).not.toBe(fichierVoix(m, { voix: 'Thomas', debit: 120 }))
+  })
+
   test('un vocal se synthétise une fois : son fichier se nomme par sa langue et son texte', () => {
     const a = fichierVoix({ texte: 'Bonjour', lang: 'fr' })
     expect(a).toMatch(/out\/vitrine\/voix\/[0-9a-f]{16}\.m4a$/)
