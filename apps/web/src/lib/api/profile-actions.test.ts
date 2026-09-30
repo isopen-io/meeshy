@@ -6,6 +6,7 @@ import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { createHttpTransport } from './http';
 import { MY_PROFILE_QUERY_KEY, type MyProfile } from './profile';
 import { performImageUpdate, performProfileEdit, type ProfileActionDeps } from './profile-actions';
+import { publicProfileQueryKey, type PublicProfileView } from './public-profile';
 import { served } from './prism';
 import { createSessionStore, type SessionStorage, type SessionUser } from './session';
 
@@ -77,6 +78,24 @@ const wireUser = (overrides: Readonly<Record<string, unknown>> = {}) => ({
   emailVerifiedAt: '2026-01-02T00:00:00.000Z',
   createdAt: '2025-03-14T09:00:00.000Z',
   ...overrides,
+});
+
+/** Ma fiche publique telle que `/u/ada` l'a mise en cache (#8881). */
+const myPublicView = (): PublicProfileView => ({
+  profile: {
+    id: 'u-ada',
+    username: 'ada',
+    displayName: 'Ada L.',
+    avatar: '2026/08/u-ada/ancien.webp',
+    banner: '2026/08/u-ada/ancienne.webp',
+    bio: null,
+    createdAt: null,
+  },
+  stats: null,
+  relation: 'self',
+  isSelf: true,
+  blockedByViewer: false,
+  relationRequestId: null,
 });
 
 type Reply = { readonly status: number; readonly body: unknown };
@@ -180,6 +199,28 @@ describe('modifier son nom — optimiste, puis confirmé ou défait', () => {
     reloaded.getState().restoreSession();
     const restored = reloaded.getState().session;
     expect(restored.status === 'authenticated' ? restored.user.displayName : undefined).toBe('Ada Lovelace');
+  });
+
+  test('confirmé, ma fiche PUBLIQUE en cache porte le nom et la bio servis', async () => {
+    const gateway = heldGateway();
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(publicProfileQueryKey('ada'), myPublicView());
+
+    const outcome = performProfileEdit({
+      patch: { displayName: 'Ada Lovelace', bio: 'Pionnière' },
+      deps: depsOf({ transport: gateway.transport, session: signedIn(), queryClient }),
+    });
+    await gateway.arrival();
+    gateway.release({
+      status: 200,
+      body: { success: true, data: { user: wireUser({ displayName: 'Ada Lovelace', bio: 'Pionnière', avatar: '2026/08/u-ada/ancien.webp' }) } },
+    });
+
+    expect(await outcome).toEqual({ status: 'saved' });
+    const cached = queryClient.getQueryData<PublicProfileView>(publicProfileQueryKey('ada'))?.profile;
+    expect(cached?.displayName).toBe('Ada Lovelace');
+    expect(cached?.bio).toBe('Pionnière');
+    expect(cached?.avatar).toBe('2026/08/u-ada/ancien.webp');
   });
 
   test('HORS LIGNE, l’édition est refusée sans toucher à rien ni appeler personne', async () => {
@@ -370,6 +411,80 @@ describe('changer sa photo — recompressée avant de partir', () => {
     expect(kinds).toEqual(['avatar']);
     expect(sessionUser(session)?.avatar).toBe('https://static.test/a1.webp');
     expect(queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.avatar).toBe('https://static.test/a1.webp');
+  });
+
+  /**
+   * #8881 — CE QUE LA PASSERELLE REND VRAIMENT. `POST /attachments/upload`
+   * sert la CLÉ de stockage relative (`UploadProcessor.getAttachmentPath` est
+   * l'identité sur le chemin disque), jamais une adresse `https://`. Le témoin
+   * ci-dessus nourrit une adresse absolue que la passerelle ne sert plus : il
+   * restait vert pendant que chaque photo du web était refusée AVANT de
+   * partir, par une règle locale plus étroite que celle du serveur.
+   */
+  test('la CLÉ de stockage rendue par le téléversement est posée, et le profil comme la session la montrent', async () => {
+    const key = '2026/09/u-ada/avatar_1727690000.webp';
+    const gateway = heldGateway();
+    const session = signedIn({ user: { avatar: '2026/08/u-ada/ancien.webp' } });
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(MY_PROFILE_QUERY_KEY, profileOf({ avatar: '2026/08/u-ada/ancien.webp' }));
+    const outcome = performImageUpdate({
+      kind: 'avatar',
+      file: heavyPhoto(),
+      deps: { ...depsOf({ transport: gateway.transport, session, queryClient }), recompress: async () => recompressed },
+    });
+    await gateway.arrival();
+    gateway.release(uploaded(key));
+    await gateway.arrival();
+    expect(gateway.seen[1]).toEqual({ url: 'https://gate.test/api/v1/users/me/avatar', method: 'PATCH', body: { avatar: key } });
+    gateway.release({ status: 200, body: { success: true, data: { user: wireUser({ avatar: key }) } } });
+
+    expect(await outcome).toEqual({ status: 'saved', url: key, bytesSent: 48_000 });
+    expect(queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.avatar).toBe(key);
+    expect(sessionUser(session)?.avatar).toBe(key);
+  });
+
+  test('la bannière posée par sa clé de stockage remplace l’ancienne dans le profil', async () => {
+    const key = '2026/09/u-ada/banner_1727690000.webp';
+    const gateway = heldGateway();
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(MY_PROFILE_QUERY_KEY, profileOf({ banner: '2026/08/u-ada/ancienne.webp' }));
+    const outcome = performImageUpdate({
+      kind: 'banner',
+      file: heavyPhoto(),
+      deps: { ...depsOf({ transport: gateway.transport, session: signedIn(), queryClient }), recompress: async () => recompressed },
+    });
+    await gateway.arrival();
+    gateway.release(uploaded(key));
+    await gateway.arrival();
+    expect(gateway.seen[1]?.body).toEqual({ banner: key });
+    gateway.release({ status: 200, body: { success: true, data: { user: wireUser({ banner: key }) } } });
+
+    expect((await outcome).status).toBe('saved');
+    expect(queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.banner).toBe(key);
+  });
+
+  test('ma fiche PUBLIQUE en cache (`/u/ada`) montre aussitôt la photo et la bannière servies', async () => {
+    const gateway = heldGateway();
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(publicProfileQueryKey('ada'), myPublicView());
+    const outcome = performImageUpdate({
+      kind: 'banner',
+      file: heavyPhoto(),
+      deps: { ...depsOf({ transport: gateway.transport, session: signedIn(), queryClient }), recompress: async () => recompressed },
+    });
+    await gateway.arrival();
+    gateway.release(uploaded('https://static.test/banner_2.webp'));
+    await gateway.arrival();
+    gateway.release({
+      status: 200,
+      body: { success: true, data: { user: wireUser({ avatar: '2026/08/u-ada/ancien.webp', banner: 'https://static.test/banner_2.webp' }) } },
+    });
+
+    expect((await outcome).status).toBe('saved');
+    const cached = queryClient.getQueryData<PublicProfileView>(publicProfileQueryKey('ada'));
+    expect(cached?.profile.banner).toBe('https://static.test/banner_2.webp');
+    expect(cached?.profile.avatar).toBe('2026/08/u-ada/ancien.webp');
+    expect(cached?.relation).toBe('self');
   });
 
   test('la bannière a SA route', async () => {
