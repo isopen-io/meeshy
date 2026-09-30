@@ -156,7 +156,7 @@ const f = {
   'admin.enum.reportedEntity.conversation': 'Conversa',
   'admin.enum.reportedEntity.community': 'Comunidade',
   'admin.enum.reportedEntity.post': 'Publicação',
-  'admin.enum.reportedEntity.story': 'Story',
+  'admin.enum.reportedEntity.story': 'História',
   'admin.enum.reportedEntity.comment': 'Comentário',
   'admin.enum.reportedEntity.sound': 'Som',
 
@@ -177,9 +177,9 @@ const f = {
   'admin.enum.broadcastStatus.FAILED': 'Falha',
 
   'admin.enum.postType.POST': 'Publicação',
-  'admin.enum.postType.REEL': 'Reel',
-  'admin.enum.postType.STORY': 'Story',
-  'admin.enum.postType.STATUS': 'Status',
+  'admin.enum.postType.REEL': 'Bobina',
+  'admin.enum.postType.STORY': 'História',
+  'admin.enum.postType.STATUS': 'Estado',
 
   'admin.enum.postVisibility.PUBLIC': 'Pública',
   'admin.enum.postVisibility.FRIENDS': 'Amigos',
@@ -215,9 +215,9 @@ const f = {
   'admin.enum.trackingLinkState.expired': 'Expirado',
 
   'admin.enum.trackingTarget.POST': 'Publicação',
-  'admin.enum.trackingTarget.REEL': 'Reel',
-  'admin.enum.trackingTarget.STORY': 'Story',
-  'admin.enum.trackingTarget.STATUS': 'Status',
+  'admin.enum.trackingTarget.REEL': 'Bobina',
+  'admin.enum.trackingTarget.STORY': 'História',
+  'admin.enum.trackingTarget.STATUS': 'Estado',
   'admin.enum.trackingTarget.CONVERSATION': 'Conversa',
   'admin.enum.trackingTarget.PROFILE': 'Perfil',
   'admin.enum.trackingTarget.EXTERNAL': 'Site externo',
@@ -263,7 +263,7 @@ const f = {
   'admin.enum.friendStatus.rejected': 'Recusada',
   'admin.enum.friendStatus.blocked': 'Bloqueado',
 
-  'admin.enum.presence.online': 'Online',
+  'admin.enum.presence.online': 'Em linha',
   'admin.enum.presence.away': 'Ausente',
   'admin.enum.presence.idle': 'Inativo',
   'admin.enum.presence.offline': 'Offline',
