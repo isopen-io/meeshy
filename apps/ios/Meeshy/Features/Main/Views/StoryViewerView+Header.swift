@@ -411,6 +411,21 @@ struct StoryHeaderView: View {
                         Divider()
                     }
 
+                    // **« Enregistrer » — pour TOUT lecteur** (#8823, demande
+                    // porteur 2026-09-30). La sauvegarde EXISTANTE, celle du
+                    // rail auteur et de « Mes stories » : même bake, même
+                    // filigrane, même anneau. `save(story:)` est idempotent —
+                    // un second tap pendant l'export est ignoré — et dit
+                    // lui-même son issue (succès, refus Photos, échec).
+                    Button {
+                        HapticFeedback.light()
+                        StoryPhotoSaveService.shared.save(story: story)
+                    } label: {
+                        Label(String(localized: "story.viewer.action.save", defaultValue: "Enregistrer", bundle: .main),
+                              systemImage: "square.and.arrow.down")
+                    }
+                    Divider()
+
                     if isOwnStory {
                         // External share via system share sheet (Messages,
                         // Mail, other apps). Only for public stories.
