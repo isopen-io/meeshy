@@ -134,9 +134,26 @@ describe('phase 1 — le téléphone d’abord, en verre liquide', () => {
     expect(phase(el)).toBe('phone');
     expect(has(el, '[data-signup-phone-glass] #signup-phone')).toBe(true);
     expect(has(el, '[data-signup-country]')).toBe(true);
-    expect(el.querySelector('[data-signup-skip-phone]')?.textContent).toBe('Continuer avec l’e-mail seulement');
+    expect(el.querySelector('[data-signup-skip-phone]')?.textContent).toBe('Plus tard');
     expect(has(el, '#signup-email')).toBe(false);
     expect(has(el, '[data-signup-card]')).toBe(false);
+  });
+
+  test('« Plus tard → » vit sur la ligne du libellé « Téléphone », et se dit à un lecteur d’écran (#8842)', () => {
+    const { el } = mount();
+    const row = el.querySelector('[data-signup-phone-label-row]');
+    expect(row?.querySelector('label[for="signup-phone"]')?.textContent).toBe('Téléphone');
+    const later = row?.querySelector<HTMLButtonElement>('[data-signup-skip-phone]');
+    expect(later?.getAttribute('aria-label')).toBe('Plus tard, continuer sans numéro');
+    expect(later?.querySelector('svg')).not.toBeNull();
+  });
+
+  test('ce que le numéro ouvre se lit d’emblée, sans (i) à ouvrir (#8842)', () => {
+    const { el } = mount();
+    const benefit = el.querySelector('#signup-phone-hint');
+    expect(benefit?.textContent).toBe('Il vous permettra de vous connecter, et à vos proches de vous retrouver.');
+    expect(benefit?.classList.contains('sr-only')).toBe(false);
+    expect(has(el, '[data-signup-phone-glass] [aria-controls="signup-phone-hint"]')).toBe(false);
   });
 
   test('« S’inscrire » est déjà là, inactif', () => {
@@ -172,7 +189,7 @@ describe('phase 2 — l’adresse paraît', () => {
     expect(has(el, '#signup-email')).toBe(true);
   });
 
-  test('ou par « Continuer avec l’e-mail seulement »', async () => {
+  test('ou par « Plus tard → »', async () => {
     const { el } = mount();
     await click(el, '[data-signup-skip-phone]');
     expect(has(el, '#signup-email')).toBe(true);
@@ -346,7 +363,7 @@ describe('« S’inscrire » depuis la carte', () => {
     expect(location()).toBe('/onboarding');
   });
 
-  test('« Continuer avec l’e-mail seulement » était la question : aucune alerte « sans numéro » ne la repose', async () => {
+  test('« Plus tard → » était la question : aucune alerte « sans numéro » ne la repose', async () => {
     const { el, sent } = mount();
     await click(el, '[data-signup-skip-phone]');
     type(el, '#signup-email', EMAIL);

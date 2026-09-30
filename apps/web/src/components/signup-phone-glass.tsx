@@ -1,7 +1,6 @@
 import { useRef, type Ref } from 'react';
 
 import { Glyph } from '@/components/glyph';
-import { InfoHintButton, InfoHintText, type InfoHint, type InfoHintState } from '@/components/info-hint';
 import { countryName, type Country } from '@/lib/countries';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -32,8 +31,7 @@ export function SignupPhoneGlass({
   onFocus,
   onBlur,
   error,
-  hint,
-  hintState,
+  benefit,
   inputRef,
 }: {
   readonly language: InterfaceLanguage;
@@ -48,16 +46,35 @@ export function SignupPhoneGlass({
   readonly onFocus: () => void;
   readonly onBlur: () => void;
   readonly error: string | undefined;
-  readonly hint: InfoHint;
-  readonly hintState: InfoHintState;
+  /** Ce que le numéro ouvre — lu d'emblée sous le champ, plus derrière un (i) (#8842). */
+  readonly benefit: string;
   readonly inputRef: Ref<HTMLInputElement>;
 }) {
   const glass = useRef<HTMLDivElement>(null);
   return (
     <div className="grid gap-2">
-      <label htmlFor="signup-phone" className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
-        Téléphone
-      </label>
+      {/* « PLUS TARD → » SUR LA LIGNE DU LIBELLÉ (#8842) — le refus reste un
+          vrai bouton, lisible, 44 px, nommé pour un lecteur d'écran. */}
+      <div data-signup-phone-label-row className="flex items-center justify-between gap-3">
+        <label htmlFor="signup-phone" className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
+          Téléphone
+        </label>
+        {showsSkip ? (
+          <button
+            type="button"
+            data-signup-skip-phone
+            onClick={onSkip}
+            aria-label={translate(language, 'signup.phone.later.a11y')}
+            className="inline-flex items-center gap-1 rounded-chip px-2 text-caption font-semibold focus-visible:outline-2"
+            style={{ minHeight: 44, color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+          >
+            {translate(language, 'signup.phone.later')}
+            <svg aria-hidden="true" viewBox="0 0 256 256" width="14" height="14" fill="currentColor" className="rtl:-scale-x-100">
+              <path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z" />
+            </svg>
+          </button>
+        ) : null}
+      </div>
       <div
         ref={glass}
         data-signup-phone-glass
@@ -107,25 +124,15 @@ export function SignupPhoneGlass({
           aria-describedby="signup-phone-hint"
           aria-invalid={error !== undefined}
         />
-        <InfoHintButton hint={hint} state={hintState} style={{ marginRight: -10 }} />
       </div>
       {error !== undefined ? (
         <p role="alert" className="text-caption" style={{ color: 'var(--ios-error)' }}>
           {error}
         </p>
       ) : null}
-      <InfoHintText hint={hint} state={hintState} />
-      {showsSkip ? (
-        <button
-          type="button"
-          data-signup-skip-phone
-          onClick={onSkip}
-          className="justify-self-center text-caption font-medium underline-offset-4 hover:underline"
-          style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
-        >
-          {translate(language, 'signup.phone.skip')}
-        </button>
-      ) : null}
+      <p id="signup-phone-hint" className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+        {benefit}
+      </p>
     </div>
   );
 }

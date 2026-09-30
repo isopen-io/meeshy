@@ -9,7 +9,7 @@ import { EmailTakenActions } from '@/components/email-taken-actions';
 import { Field } from '@/components/field';
 import { Glyph } from '@/components/glyph';
 import { AUTH_GLYPHS } from '@/components/glyphs-auth';
-import { useInfoHint, type InfoHint } from '@/components/info-hint';
+import type { InfoHint } from '@/components/info-hint';
 import { LanguageSheet } from '@/components/language-sheet';
 import { MagicLinkPanel, type MagicLinkPanelDeps } from '@/components/magic-link-panel';
 import { RungReveal } from '@/components/rung-reveal';
@@ -92,12 +92,8 @@ const EMAIL_VERIFICATION: InfoHint = {
   glyph: AUTH_GLYPHS.info,
 };
 
-/** CE QUE LE NUMÉRO OUVRE — derrière le (i) (#6441). */
-const PHONE_BENEFIT: InfoHint = {
-  label: 'À quoi sert le numéro',
-  text: 'Il vous permettra de vous connecter, et à vos proches de vous retrouver.',
-  glyph: AUTH_GLYPHS.info,
-};
+/** CE QUE LE NUMÉRO OUVRE (#6441) — lu d'emblée sous le champ depuis #8842. */
+const PHONE_BENEFIT = 'Il vous permettra de vous connecter, et à vos proches de vous retrouver.';
 
 const EMPTY_FEEDBACK: SignupFeedback = {
   fieldErrors: {},
@@ -178,7 +174,6 @@ export default function SignupScreen({
   const [isValidating, setValidating] = useState(false);
   const [isShowingCountrySheet, setShowingCountrySheet] = useState(false);
   const [isShowingLanguageSheet, setShowingLanguageSheet] = useState(false);
-  const phoneHint = useInfoHint('signup-phone-hint');
   const referral = useSignupReferral(referralDeps);
 
   /** L'ALERTE D'UNE INSCRIPTION SANS NUMÉRO (#8040) — le drapeau MIROIR
@@ -360,8 +355,7 @@ export default function SignupScreen({
               onFocus={() => setFocused('phoneNumber')}
               onBlur={() => setFocused(null)}
               error={feedback.fieldErrors.phoneNumber}
-              hint={PHONE_BENEFIT}
-              hintState={phoneHint}
+              benefit={PHONE_BENEFIT}
               inputRef={phoneInput}
             />
 

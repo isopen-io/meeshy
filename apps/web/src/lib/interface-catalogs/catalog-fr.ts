@@ -45,6 +45,7 @@ import frQuote from './catalog-fr-quote';
 import frCommentRow from './catalog-fr-comment-row';
 import frContactDiscovery from './catalog-fr-contact-discovery';
 import frDownload from './catalog-fr-download';
+import frPhonePrompt from './catalog-fr-phone-prompt';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -1119,6 +1120,7 @@ const fr = {
      que meeshy.me sert aujourd'hui. Aucune mention du Play Store tant que la
      coque Android n'est pas publiée. */
   ...frDownload,
+  ...frPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — le panneau de pièces jointes du fil.
      Les libellés et les gestes annoncés reprennent le catalogue d'iOS

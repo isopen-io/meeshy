@@ -34,6 +34,7 @@ import ptQuote from './catalog-pt-quote';
 import ptCommentRow from './catalog-pt-comment-row';
 import ptContactDiscovery from './catalog-pt-contact-discovery';
 import ptDownload from './catalog-pt-download';
+import ptPhonePrompt from './catalog-pt-phone-prompt';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -1077,6 +1078,7 @@ const pt = {
   'message-detail.retry': 'Tentar novamente',
 
   ...ptDownload,
+  ...ptPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...ptComposerAttach,

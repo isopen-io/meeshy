@@ -34,6 +34,7 @@ import deQuote from './catalog-de-quote';
 import deCommentRow from './catalog-de-comment-row';
 import deContactDiscovery from './catalog-de-contact-discovery';
 import deDownload from './catalog-de-download';
+import dePhonePrompt from './catalog-de-phone-prompt';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -1073,6 +1074,7 @@ const de = {
   'message-detail.retry': 'Erneut versuchen',
 
   ...deDownload,
+  ...dePhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...deComposerAttach,
