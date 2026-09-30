@@ -4,7 +4,7 @@
  * Seul écrivain de `ConversationEngagement`, appelé par `EngagementService`
  * quand un geste crédité porte une conversation. Deux rôles :
  *
- * - le PLAFOND journalier par conversation (`dailyCapPerConversation`) — lu sur
+ * - le PLAFOND journalier par conversation (la règle `cap` d'une opération de portée `conversation-day`) — lu sur
  *   `dayCounts` AVANT tout crédit : plafond atteint ⇒ le geste ne crédite rien ;
  * - l'ÉTAT après crédit — total, points du jour, série de jours — puis son
  *   émission `engagement:conversation-updated` vers la seule room personnelle
@@ -18,7 +18,7 @@
  */
 
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
-import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import {
   conversationEngagementForDay,
   type ConversationEngagementSnapshot,
@@ -76,7 +76,7 @@ export function dayCountsFor(row: ConversationEngagementRow | null, today: Date)
 export function isDailyCapReached(
   row: ConversationEngagementRow | null,
   today: Date,
-  axisKey: EngagementAxisKey,
+  axisKey: EngagementOperationKey,
   cap: number | null,
 ): boolean {
   if (cap === null) return false;
@@ -89,7 +89,7 @@ export function isDailyCapReached(
  */
 export function nextConversationEngagement(
   row: ConversationEngagementRow | null,
-  gesture: { readonly today: Date; readonly axisKey: EngagementAxisKey; readonly points: number },
+  gesture: { readonly today: Date; readonly axisKey: EngagementOperationKey; readonly points: number },
 ): ConversationEngagementState {
   const { today, axisKey, points } = gesture;
   const lastDay = row?.day ? startOfUtcDay(row.day) : null;
@@ -153,7 +153,7 @@ export class ConversationEngagementRecorder {
   async record(params: {
     readonly userId: string;
     readonly conversationId: string;
-    readonly axisKey: EngagementAxisKey;
+    readonly axisKey: EngagementOperationKey;
     readonly points: number;
     readonly today: Date;
     readonly previous: ConversationEngagementRow | null;

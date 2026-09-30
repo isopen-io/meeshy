@@ -106,6 +106,7 @@ export * from './mention.js';
 export * from './engagement.js';
 // Barème réglable et état par conversation « N (M) 🔥 » (#8906)
 export * from './engagement-scale.js';
+export * from './engagement-operations.js';
 
 // Export des types références de post (Prisme des références — parité Swift)
 export type {
