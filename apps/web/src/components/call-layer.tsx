@@ -1,4 +1,5 @@
 import { lazy, Suspense, useRef, type CSSProperties, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useStore } from 'zustand/react';
 
 import { callBackPromptStore } from '@/lib/calls/call-back-prompt';
@@ -82,14 +83,18 @@ const LAYER_STYLE: CSSProperties = {
   zIndex: CALL_LAYER_Z,
 };
 
+/* HORS de `#root`, par un portail : la visionneuse de médias et le menu de
+   message rendent `#root` INERTE le temps de leur ouverture — un appel monté
+   dedans s'y peignait par-dessus, et aucun de ses boutons ne répondait. */
 function CallStage({ children }: { readonly children: ReactNode }) {
   const layer = useRef<HTMLDialogElement | null>(null);
   useCallPresentation(layer);
-  return (
+  const stage = (
     <dialog ref={layer} open data-call-stage="" className="backdrop:bg-transparent" style={LAYER_STYLE}>
       {children}
     </dialog>
   );
+  return typeof document === 'undefined' ? stage : createPortal(stage, document.body);
 }
 
 export function CallLayer() {

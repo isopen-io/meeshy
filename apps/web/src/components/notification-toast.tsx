@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useStore } from 'zustand/react';
 
 import { attachmentSrc } from '@/lib/api/media-url';
@@ -262,5 +263,9 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
 export function NotificationToastHost() {
   const current = useStore(inAppBannerStore, (state) => state.current);
   const dismiss = useStore(inAppBannerStore, (state) => state.dismiss);
-  return current === null ? null : <NotificationBanner key={current.id} notification={current} onDismiss={dismiss} />;
+  if (current === null) return null;
+  const banner = <NotificationBanner key={current.id} notification={current} onDismiss={dismiss} />;
+  /* Hors de `#root` : une visionneuse ouverte le rend inerte, et la bannière
+     doit rester touchable au-dessus d'elle (comme l'appel, `call-layer.tsx`). */
+  return typeof document === 'undefined' ? banner : createPortal(banner, document.body);
 }

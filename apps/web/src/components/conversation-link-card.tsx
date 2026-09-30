@@ -598,7 +598,7 @@ function Actions({
             params={{ link: identifier }}
             aria-label={translate(language, 'conversation.card.joinAnonymously')}
             className={BUTTON}
-            style={secondaryStyle(accent)}
+            style={secondaryStyle(INK)}
           >
             {translate(language, 'conversation.card.joinChoice.anonymous')}
           </Link>
