@@ -49,6 +49,7 @@ const f = {
   'admin.conversation.stat.agent': 'Agent',
   'admin.conversation.stat.agent.on': 'Actif',
   'admin.conversation.stat.agent.off': 'Inactif',
+  'admin.conversation.badge.agent': 'Agent actif',
 
   'admin.conversation.meta.type': 'Type',
   'admin.conversation.meta.identifier': 'Identifiant public',

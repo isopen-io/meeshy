@@ -14,7 +14,7 @@ import {
   interpretAgentOutcome,
   interpretAgentTrigger,
 } from '@/lib/admin/agent-model';
-import { useLocalAdminList } from '@/lib/admin/conversation-paged-list';
+import { NARROW_LIST_FRAME, useLocalAdminList } from '@/lib/admin/conversation-paged-list';
 import { formatCount, formatMoney } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf, formatDuration } from '@/lib/admin/interpret/time';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -146,26 +146,28 @@ export function AgentTrackedList({
   const total = list.query.data?.total;
 
   return (
-    <AdminEntityList
-      language={language}
-      section="agent"
-      list={list}
-      columns={columns}
-      rowKey={(row) => row.conversationId}
-      rowTarget={(row) => ({ kind: 'entity', entity: 'conversation', id: row.conversationId })}
-      caption={translateAdmin(language, 'admin.agentPanel.tracked.caption')}
-      toolbar={
-        <AdminListToolbar
-          language={language}
-          search={{ label: translateAdmin(language, 'admin.agentPanel.tracked.search'), value: list.draft, onChange: list.setDraft }}
-          onReset={list.reset}
-          {...(total === undefined ? {} : { trailing: translateAdmin(language, 'admin.agentPanel.tracked.count', { count: formatCount(total, language) }) })}
-        />
-      }
-      empty={{ title: translateAdmin(language, 'admin.agentPanel.tracked.empty'), hint: translateAdmin(language, 'admin.agentPanel.tracked.emptyHint') }}
-      filteredEmpty={{ title: translateAdmin(language, 'admin.agentPanel.tracked.filteredEmpty') }}
-      pageSizes={ADMIN_AGENT_PAGE_SIZES}
-    />
+    <div className={NARROW_LIST_FRAME}>
+      <AdminEntityList
+        language={language}
+        section="agent"
+        list={list}
+        columns={columns}
+        rowKey={(row) => row.conversationId}
+        rowTarget={(row) => ({ kind: 'entity', entity: 'conversation', id: row.conversationId })}
+        caption={translateAdmin(language, 'admin.agentPanel.tracked.caption')}
+        toolbar={
+          <AdminListToolbar
+            language={language}
+            search={{ label: translateAdmin(language, 'admin.agentPanel.tracked.search'), value: list.draft, onChange: list.setDraft }}
+            onReset={list.reset}
+            {...(total === undefined ? {} : { trailing: translateAdmin(language, 'admin.agentPanel.tracked.count', { count: formatCount(total, language) }) })}
+          />
+        }
+        empty={{ title: translateAdmin(language, 'admin.agentPanel.tracked.empty'), hint: translateAdmin(language, 'admin.agentPanel.tracked.emptyHint') }}
+        filteredEmpty={{ title: translateAdmin(language, 'admin.agentPanel.tracked.filteredEmpty') }}
+        pageSizes={ADMIN_AGENT_PAGE_SIZES}
+      />
+    </div>
   );
 }
 
@@ -243,6 +245,15 @@ export function AgentLogList({
       cell: (row) => <LogOpenCell language={language} row={row} onOpen={() => onOpen(row.id)} />,
     },
     {
+      id: 'started',
+      header: translateAdmin(language, 'admin.agentPanel.logs.col.started'),
+      cell: (row) => (
+        <span className="whitespace-nowrap">
+          <AdminMomentText moment={adminMomentOf(row.startedAt, now(), language)} />
+        </span>
+      ),
+    },
+    {
       id: 'trigger',
       header: translateAdmin(language, 'admin.agentPanel.logs.col.trigger'),
       cell: (row) => <AdminInterpretedBadge value={interpretAgentTrigger(row.trigger, language)} />,
@@ -265,36 +276,33 @@ export function AgentLogList({
       priority: 3,
       cell: (row) => formatDuration(row.durationMs, 'ms', language),
     },
-    {
-      id: 'started',
-      header: translateAdmin(language, 'admin.agentPanel.logs.col.started'),
-      cell: (row) => <AdminMomentText moment={adminMomentOf(row.startedAt, now(), language)} />,
-    },
   ];
 
   const total = list.query.data?.total;
 
   return (
-    <AdminEntityList
-      language={language}
-      section="agent"
-      list={list}
-      columns={columns}
-      rowKey={(row) => row.id}
-      rowTarget={() => null}
-      caption={translateAdmin(language, 'admin.agentPanel.logs.caption')}
-      toolbar={
-        <AdminListToolbar
-          language={language}
-          filters={filters}
-          onReset={list.reset}
-          {...(total === undefined ? {} : { trailing: translateAdmin(language, 'admin.agentPanel.logs.count', { count: formatCount(total, language) }) })}
-        />
-      }
-      empty={{ title: translateAdmin(language, 'admin.agentPanel.logs.empty'), hint: translateAdmin(language, 'admin.agentPanel.logs.emptyHint') }}
-      filteredEmpty={{ title: translateAdmin(language, 'admin.agentPanel.logs.filteredEmpty') }}
-      pageSizes={ADMIN_AGENT_PAGE_SIZES}
-    />
+    <div className={NARROW_LIST_FRAME}>
+      <AdminEntityList
+        language={language}
+        section="agent"
+        list={list}
+        columns={columns}
+        rowKey={(row) => row.id}
+        rowTarget={() => null}
+        caption={translateAdmin(language, 'admin.agentPanel.logs.caption')}
+        toolbar={
+          <AdminListToolbar
+            language={language}
+            filters={filters}
+            onReset={list.reset}
+            {...(total === undefined ? {} : { trailing: translateAdmin(language, 'admin.agentPanel.logs.count', { count: formatCount(total, language) }) })}
+          />
+        }
+        empty={{ title: translateAdmin(language, 'admin.agentPanel.logs.empty'), hint: translateAdmin(language, 'admin.agentPanel.logs.emptyHint') }}
+        filteredEmpty={{ title: translateAdmin(language, 'admin.agentPanel.logs.filteredEmpty') }}
+        pageSizes={ADMIN_AGENT_PAGE_SIZES}
+      />
+    </div>
   );
 }
 

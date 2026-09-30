@@ -124,6 +124,29 @@ describe('l’identité et les chiffres', () => {
   });
 });
 
+describe('la mise en page de la fiche', () => {
+  test('les membres portent leurs gestes sur TOUTE la largeur ; les métadonnées restent dans la colonne latérale', async () => {
+    const { deps } = setup(fiche(), members(MEMBERS));
+    const host = await open(deps);
+
+    const aside = host.querySelector('[data-admin-fiche-aside]');
+    expect(aside).not.toBeNull();
+    expect(aside?.querySelector('[data-admin-meta]')).not.toBeNull();
+    expect(aside?.querySelector('[data-admin-fiche-section="members"]')).toBeNull();
+    expect(host.querySelector('[data-admin-fiche-section="members"]')).not.toBeNull();
+    expect(host.querySelector('[data-admin-fiche-section="reading"]')?.closest('[data-admin-fiche-aside]')).toBeNull();
+  });
+
+  test('l’agent actif se dit « Agent actif » dans l’en-tête, sans se confondre avec l’état de la conversation', async () => {
+    const { deps } = setup(fiche({ agentEnabled: true }), members(MEMBERS));
+    const host = await open(deps);
+
+    const identity = host.querySelector('[data-admin-identity]')?.textContent ?? '';
+    expect(identity).toContain('Agent actif');
+    expect(identity).toContain('Active');
+  });
+});
+
 describe('les métadonnées, interprétées', () => {
   test('rang d’écriture nommé, canal d’annonces et mode lent dits en phrases', async () => {
     const { deps } = setup(

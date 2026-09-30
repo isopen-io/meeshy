@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { Avatar } from '@/components/avatar';
 import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-list';
 import { AdminEntityChip, AdminEntityIdentity } from '@/components/admin/entity-chip';
@@ -68,6 +70,9 @@ const option = (value: string, label: string): AdminOption => ({ value, label })
 
 const STACK_SIZE = 6;
 
+/** Un badge ou un instant se lit d'un trait : la largeur se prend sur les colonnes qui peuvent céder, pas en coupant « Fermée à l'écriture » sur trois lignes. */
+const Unbroken = ({ children }: { readonly children: ReactNode }) => <span className="whitespace-nowrap">{children}</span>;
+
 /** La pile des premiers membres : décorative, le nombre exact se lit dans la colonne « Membres ». */
 function MemberStack({ language, participants }: { readonly language: InterfaceLanguage; readonly participants: readonly AdminInstanceParticipant[] }) {
   if (participants.length === 0) return null;
@@ -131,7 +136,11 @@ export function AdminConversationsPanel({ language, deps = apiDeps, now = defaul
     ]),
   ];
 
-  const moment = (iso: string | null) => <AdminMomentText moment={adminMomentOf(iso, now(), language)} />;
+  const moment = (iso: string | null) => (
+    <Unbroken>
+      <AdminMomentText moment={adminMomentOf(iso, now(), language)} />
+    </Unbroken>
+  );
 
   const columns: readonly AdminColumn<AdminInstanceConversation>[] = [
     {
@@ -148,7 +157,11 @@ export function AdminConversationsPanel({ language, deps = apiDeps, now = defaul
     {
       id: 'type',
       header: translateAdmin(language, 'admin.conversation.col.type'),
-      cell: (row) => <AdminInterpretedBadge value={interpretConversationType(row.type, language)} />,
+      cell: (row) => (
+        <Unbroken>
+          <AdminInterpretedBadge value={interpretConversationType(row.type, language)} />
+        </Unbroken>
+      ),
     },
     {
       id: 'community',
@@ -169,7 +182,11 @@ export function AdminConversationsPanel({ language, deps = apiDeps, now = defaul
     {
       id: 'state',
       header: translateAdmin(language, 'admin.conversation.col.state'),
-      cell: (row) => <AdminInterpretedBadge value={conversationStateOf(row, language)} />,
+      cell: (row) => (
+        <Unbroken>
+          <AdminInterpretedBadge value={conversationStateOf(row, language)} />
+        </Unbroken>
+      ),
     },
     {
       id: 'created',

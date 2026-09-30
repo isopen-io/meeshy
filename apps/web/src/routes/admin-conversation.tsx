@@ -214,7 +214,7 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
               <>
                 <AdminInterpretedBadge value={state} />
                 <AdminInterpretedBadge value={encryption} />
-                {fiche.agentEnabled ? <AdminBadge tone="info" glyph="robot">{translateAdmin(language, 'admin.conversation.stat.agent.on')}</AdminBadge> : null}
+                {fiche.agentEnabled ? <AdminBadge tone="info" glyph="robot">{translateAdmin(language, 'admin.conversation.badge.agent')}</AdminBadge> : null}
               </>
             }
             actions={
@@ -232,8 +232,8 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
           />
         }
         stats={<AdminStatStrip items={stats} />}
-        aside={<ConversationMeta language={language} fiche={fiche} now={clock} onAnnounce={announcer.announce} />}
       >
+        {/* Les membres occupent TOUTE la largeur : leur tableau porte les gestes (rôle, retrait), et dans la colonne principale d'une fiche à deux colonnes il n'aurait laissé que 370 px dès 1024 px — les gestes hors de vue, derrière un défilement horizontal. */}
         <AdminFicheSection id="members" title={translateAdmin(language, 'admin.conversation.members.title')}>
           <ConversationMembers
             language={language}
@@ -245,8 +245,16 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
             announce={announcer.announce}
           />
         </AdminFicheSection>
-        {reading}
-        {agentControl ? <AgentConversationControl conversationId={conversationId} language={language} deps={deps} onAnnounce={announcer.announce} now={now} /> : null}
+        {/* La proportion de la fiche du kit (colonne principale + 20 rem de métadonnées), reprise ici pour ce qui suit les membres. */}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="grid min-w-0 content-start gap-6">
+            {reading}
+            {agentControl ? <AgentConversationControl conversationId={conversationId} language={language} deps={deps} onAnnounce={announcer.announce} now={now} /> : null}
+          </div>
+          <aside data-admin-fiche-aside className="grid min-w-0 content-start gap-6">
+            <ConversationMeta language={language} fiche={fiche} now={clock} onAnnounce={announcer.announce} />
+          </aside>
+        </div>
       </AdminFiche>
       {configuring ? (
         <AdminConversationSettingsSheet

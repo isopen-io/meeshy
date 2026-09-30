@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
@@ -7,7 +7,7 @@ import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-lis
 import { AdminListToolbar } from '@/components/admin/list-toolbar';
 import { AdminMomentText } from '@/components/admin/meta';
 import type { AdminTarget } from '@/lib/admin/admin-routes';
-import { useLocalAdminList, type LocalListState } from '@/lib/admin/conversation-paged-list';
+import { NARROW_LIST_FRAME, useLocalAdminList, type LocalListState } from '@/lib/admin/conversation-paged-list';
 import { memberGestures, memberRefOf, participantName, type MemberGestures } from '@/lib/admin/conversation-model';
 import { interpretParticipantRole, interpretPresence } from '@/lib/admin/interpret/enums';
 import { formatCount } from '@/lib/admin/interpret/numbers';
@@ -68,6 +68,9 @@ type Pending =
 const ROLES: readonly AdminParticipantRole[] = ['admin', 'moderator', 'member'];
 
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
+
+/** Un badge ou un instant se lit d'un trait : la largeur se prend sur les colonnes qui peuvent céder. */
+const Unbroken = ({ children }: { readonly children: ReactNode }) => <span className="whitespace-nowrap">{children}</span>;
 const CONTROL = {
   minHeight: 44,
   backgroundColor: 'var(--color-ios-surface)',
@@ -236,7 +239,11 @@ export function ConversationMembers({
     setPending(next);
   };
 
-  const moment = (iso: string | null) => <AdminMomentText moment={adminMomentOf(iso, now, language)} />;
+  const moment = (iso: string | null) => (
+    <Unbroken>
+      <AdminMomentText moment={adminMomentOf(iso, now, language)} />
+    </Unbroken>
+  );
   const error = action.state.phase === 'error' ? action.state.message : null;
 
   const columns: readonly AdminColumn<AdminConversationMember>[] = [
@@ -249,22 +256,34 @@ export function ConversationMembers({
     {
       id: 'role',
       header: translateAdmin(language, 'admin.conversation.members.col.role'),
-      cell: (row) => <AdminInterpretedBadge value={interpretParticipantRole(row.role, language)} />,
+      cell: (row) => (
+        <Unbroken>
+          <AdminInterpretedBadge value={interpretParticipantRole(row.role, language)} />
+        </Unbroken>
+      ),
     },
     {
       id: 'presence',
       header: translateAdmin(language, 'admin.conversation.members.col.presence'),
       priority: 3,
       cell: (row) =>
-        row.isActive ? <AdminInterpretedBadge value={interpretPresence(row.isOnline ? 'online' : 'offline', language)} /> : <span aria-label="—">—</span>,
+        row.isActive ? (
+          <Unbroken>
+            <AdminInterpretedBadge value={interpretPresence(row.isOnline ? 'online' : 'offline', language)} />
+          </Unbroken>
+        ) : (
+          <span aria-label="—">—</span>
+        ),
     },
     {
       id: 'state',
       header: translateAdmin(language, 'admin.conversation.members.col.state'),
       cell: (row) => (
-        <AdminBadge tone={row.isActive ? 'success' : 'neutral'} glyph={row.isActive ? 'checkCircle' : 'userMinus'}>
-          {translateAdmin(language, row.isActive ? 'admin.conversation.members.state.active' : 'admin.conversation.members.state.left')}
-        </AdminBadge>
+        <Unbroken>
+          <AdminBadge tone={row.isActive ? 'success' : 'neutral'} glyph={row.isActive ? 'checkCircle' : 'userMinus'}>
+            {translateAdmin(language, row.isActive ? 'admin.conversation.members.state.active' : 'admin.conversation.members.state.left')}
+          </AdminBadge>
+        </Unbroken>
       ),
     },
     { id: 'joined', header: translateAdmin(language, 'admin.conversation.members.col.joined'), priority: 3, cell: (row) => moment(row.joinedAt) },
@@ -329,23 +348,25 @@ export function ConversationMembers({
 
   return (
     <>
-      <AdminEntityList
-        language={language}
-        section="conversations"
-        list={list}
-        columns={columns}
-        rowKey={(row) => row.id}
-        rowTarget={memberTarget}
-        caption={translateAdmin(language, 'admin.conversation.members.caption')}
-        toolbar={
-          total === undefined ? undefined : (
-            <AdminListToolbar language={language} trailing={translateAdmin(language, 'admin.conversation.members.count', { count: formatCount(total, language) })} />
-          )
-        }
-        empty={{ title: translateAdmin(language, 'admin.conversation.members.empty') }}
-        filteredEmpty={{ title: translateAdmin(language, 'admin.conversation.members.empty') }}
-        pageSizes={ADMIN_CONVERSATION_MEMBERS_PAGE_SIZES}
-      />
+      <div className={NARROW_LIST_FRAME}>
+        <AdminEntityList
+          language={language}
+          section="conversations"
+          list={list}
+          columns={columns}
+          rowKey={(row) => row.id}
+          rowTarget={memberTarget}
+          caption={translateAdmin(language, 'admin.conversation.members.caption')}
+          toolbar={
+            total === undefined ? undefined : (
+              <AdminListToolbar language={language} trailing={translateAdmin(language, 'admin.conversation.members.count', { count: formatCount(total, language) })} />
+            )
+          }
+          empty={{ title: translateAdmin(language, 'admin.conversation.members.empty') }}
+          filteredEmpty={{ title: translateAdmin(language, 'admin.conversation.members.empty') }}
+          pageSizes={ADMIN_CONVERSATION_MEMBERS_PAGE_SIZES}
+        />
+      </div>
       {sheet()}
     </>
   );

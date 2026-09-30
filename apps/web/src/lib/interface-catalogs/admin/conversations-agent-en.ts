@@ -4,8 +4,8 @@ import type fr from './conversations-agent-fr';
 /**
  * THE “conversations-agent” FRAGMENT OF THE ADMINISTRATION CATALOG (#8876) — the
  * conversation list and sheet, the sovereign reading, and the agent control.
- * Same keys as the French source; the other languages start from this text until
- * their translation pass.
+ * Same keys as the French source, which stays the reference for meaning; the
+ * `admin.enum.*` labels it relies on live in the kit.
  */
 const f = {
   'admin.conversation.subtitle':
@@ -47,6 +47,7 @@ const f = {
   'admin.conversation.stat.agent': 'Agent',
   'admin.conversation.stat.agent.on': 'On',
   'admin.conversation.stat.agent.off': 'Off',
+  'admin.conversation.badge.agent': 'Agent active',
 
   'admin.conversation.meta.type': 'Type',
   'admin.conversation.meta.identifier': 'Public identifier',
