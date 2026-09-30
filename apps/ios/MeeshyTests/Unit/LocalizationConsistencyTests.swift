@@ -345,6 +345,12 @@ final class LocalizationConsistencyTests: XCTestCase {
         // aucune réconciliation ne peut la satisfaire (suivi ouvert).
         "apps/ios/Meeshy/Features/Main/Views/MyStoriesView.swift",  // 60
         "apps/ios/Meeshy/Features/Main/Views/SecurityView.swift",  // 58
+        // #8843 — le flux SMS du numéro a quitté l'écran ci-dessus pour être
+        // partagé avec la proposition faite avant la recherche de contacts :
+        // le cliquet suit les CLÉS jusqu'à leur nouveau fichier (leçon 578),
+        // et la proposition naît certifiée.
+        "apps/ios/Meeshy/Features/Main/ViewModels/PhoneChangeFlowModel.swift",  // 2
+        "apps/ios/Meeshy/Features/Contacts/PhonePromptSheet.swift",  // 11
         "apps/ios/Meeshy/Features/Main/Views/NotificationSettingsView.swift",  // 56
         "apps/ios/Meeshy/Features/Main/Views/ConversationView.swift",  // 49
         "apps/ios/Meeshy/Features/Main/Views/TwoFactorSetupView.swift",  // 41

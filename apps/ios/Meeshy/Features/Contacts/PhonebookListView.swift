@@ -18,6 +18,7 @@ struct PhonebookListView: View {
     @EnvironmentObject private var router: Router
 
     @State private var invitationTarget: PhonebookInvitation?
+    @State private var isOfferingPhone = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -33,6 +34,7 @@ struct PhonebookListView: View {
             // (DiscoverTab.swift) — pas de second composeur à maintenir.
             SMSComposerView(recipients: [invitation.phoneNumber], body: invitation.message)
         }
+        .phonePromptBeforeContactSearch(isPresented: $isOfferingPhone, onContinue: synchronize)
     }
 
     // MARK: - Header (sync + filters)
@@ -63,7 +65,7 @@ struct PhonebookListView: View {
     /// Synchronisation explicite : relit le carnet de l'appareil et le renvoie.
     private var syncButton: some View {
         Button {
-            Task { await viewModel.synchronize() }
+            offerPhoneThenSearch()
         } label: {
             Group {
                 if viewModel.isSyncing {
@@ -192,6 +194,20 @@ struct PhonebookListView: View {
     }
 
     // MARK: - Actions
+
+    /// Synchroniser, c'est chercher ses contacts : un compte sans numéro se voit
+    /// d'abord proposer d'en ajouter un (#8843), puis la synchronisation part.
+    private func offerPhoneThenSearch() {
+        guard PhonePromptPolicy.shouldOffer(user: AuthManager.shared.currentUser) else {
+            synchronize()
+            return
+        }
+        isOfferingPhone = true
+    }
+
+    private func synchronize() {
+        Task { await viewModel.synchronize() }
+    }
 
     private func open(_ contact: DirectoryContact) {
         Task {

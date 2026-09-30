@@ -34,14 +34,9 @@ struct SecurityView: View {
     @State private var resendCooldown = 0
     @State private var resendTimer: Timer?
 
-    // Phone change
-    @State private var isEditingPhone = false
-    @State private var newPhone = ""
-    @State private var phoneLoading = false
-    @State private var phoneSent = false
-    @State private var phoneCode = ""
-    @State private var phoneVerifying = false
-    @State private var phoneError: String?
+    // Phone change — le flux est partagé avec la proposition faite avant la
+    // recherche de contacts (#8843).
+    @StateObject private var phoneFlow = PhoneChangeFlowModel()
 
     private let accentColor = "6366F1"
 
@@ -406,17 +401,15 @@ struct SecurityView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
 
-                if phoneSent {
+                if phoneFlow.step == .codeSent {
                     phoneCodeContent
-                } else if isEditingPhone {
+                } else if phoneFlow.step == .editing {
                     phoneEditContent
                 } else {
                     HStack(spacing: 0) {
                         Button {
                             HapticFeedback.light()
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                isEditingPhone = true
-                            }
+                            phoneFlow.beginEditing()
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "pencil")
@@ -432,8 +425,7 @@ struct SecurityView: View {
                         if let phone = user?.phoneNumber, !phone.isEmpty, user?.phoneVerifiedAt == nil {
                             Button {
                                 HapticFeedback.light()
-                                newPhone = phone
-                                submitPhoneChange()
+                                Task { await phoneFlow.requestCode(for: phone) }
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: "checkmark.seal.fill")
@@ -453,7 +445,7 @@ struct SecurityView: View {
                     .padding(.bottom, 10)
                 }
 
-                if let phoneError {
+                if let phoneError = phoneFlow.error {
                     Text(phoneError)
                         .font(.caption.weight(.medium))
                         .foregroundColor(MeeshyColors.error)
@@ -470,7 +462,7 @@ struct SecurityView: View {
             HStack(spacing: 12) {
                 fieldIcon("phone.badge.plus", color: "818CF8")
 
-                TextField("+33 6 12 34 56 78", text: $newPhone)
+                TextField("+33 6 12 34 56 78", text: $phoneFlow.newPhone)
                     .font(.subheadline.weight(.medium))
                     .foregroundColor(theme.textPrimary)
                     .textContentType(.telephoneNumber)
@@ -482,7 +474,7 @@ struct SecurityView: View {
             HStack(spacing: 10) {
                 Button {
                     HapticFeedback.light()
-                    withAnimation { isEditingPhone = false; newPhone = ""; phoneError = nil }
+                    phoneFlow.cancel()
                 } label: {
                     Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                         .font(.footnote.weight(.semibold))
@@ -494,10 +486,10 @@ struct SecurityView: View {
 
                 Button {
                     HapticFeedback.medium()
-                    submitPhoneChange()
+                    Task { await phoneFlow.sendCode() }
                 } label: {
                     HStack(spacing: 6) {
-                        if phoneLoading {
+                        if phoneFlow.isSending {
                             ProgressView().scaleEffect(0.7).tint(.white)
                         }
                         Text(String(localized: "settings.security.phone.send_code", defaultValue: "Envoyer le code", bundle: .main))
@@ -508,13 +500,13 @@ struct SecurityView: View {
                     .padding(.vertical, 8)
                     .background(
                         Capsule().fill(
-                            newPhone.count >= 6 && !phoneLoading
+                            phoneFlow.canSend
                                 ? MeeshyColors.indigo400
                                 : MeeshyColors.indigo400.opacity(0.4)
                         )
                     )
                 }
-                .disabled(newPhone.count < 6 || phoneLoading)
+                .disabled(!phoneFlow.canSend)
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 10)
@@ -536,13 +528,10 @@ struct SecurityView: View {
             HStack(spacing: 12) {
                 fieldIcon("number", color: "818CF8")
 
-                TextField(String(localized: "settings.security.phone.code_placeholder", defaultValue: "Code à 6 chiffres", bundle: .main), text: $phoneCode)
+                TextField(String(localized: "settings.security.phone.code_placeholder", defaultValue: "Code à 6 chiffres", bundle: .main), text: $phoneFlow.code)
                     .font(.system(.callout, design: .monospaced).weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .keyboardType(.numberPad)
-                    .adaptiveOnChange(of: phoneCode) { _, newValue in
-                        phoneCode = String(newValue.prefix(6).filter(\.isNumber))
-                    }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -550,7 +539,7 @@ struct SecurityView: View {
             HStack(spacing: 10) {
                 Button {
                     HapticFeedback.light()
-                    withAnimation { phoneSent = false; isEditingPhone = false; phoneCode = ""; newPhone = ""; phoneError = nil }
+                    phoneFlow.cancel()
                 } label: {
                     Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                         .font(.footnote.weight(.semibold))
@@ -562,10 +551,10 @@ struct SecurityView: View {
 
                 Button {
                     HapticFeedback.medium()
-                    verifyPhoneCode()
+                    Task { await phoneFlow.verifyCode() }
                 } label: {
                     HStack(spacing: 6) {
-                        if phoneVerifying {
+                        if phoneFlow.isVerifying {
                             ProgressView().scaleEffect(0.7).tint(.white)
                         }
                         Text(String(localized: "common.verify", defaultValue: "Vérifier", bundle: .main))
@@ -576,13 +565,13 @@ struct SecurityView: View {
                     .padding(.vertical, 8)
                     .background(
                         Capsule().fill(
-                            phoneCode.count == 6 && !phoneVerifying
+                            phoneFlow.canVerify
                                 ? MeeshyColors.indigo400
                                 : MeeshyColors.indigo400.opacity(0.4)
                         )
                     )
                 }
-                .disabled(phoneCode.count != 6 || phoneVerifying)
+                .disabled(!phoneFlow.canVerify)
             }
             .padding(.horizontal, 14)
             .padding(.bottom, 10)
@@ -966,61 +955,4 @@ struct SecurityView: View {
             }
         }
     }
-
-    private func submitPhoneChange() {
-        phoneLoading = true
-        phoneError = nil
-
-        Task {
-            do {
-                _ = try await UserService.shared.changePhone(ChangePhoneRequest(newPhoneNumber: newPhone))
-                HapticFeedback.success()
-                withAnimation { phoneSent = true }
-            } catch let error as MeeshyError {
-                HapticFeedback.error()
-                phoneError = error.errorDescription
-            } catch {
-                HapticFeedback.error()
-                phoneError = String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
-            }
-            phoneLoading = false
-        }
-    }
-
-    private func verifyPhoneCode() {
-        phoneVerifying = true
-        phoneError = nil
-
-        Task {
-            do {
-                _ = try await UserService.shared.verifyPhoneChange(VerifyPhoneChangeRequest(code: phoneCode))
-                HapticFeedback.success()
-                await authManager.checkExistingSession()
-                withAnimation {
-                    phoneSent = false
-                    isEditingPhone = false
-                    phoneCode = ""
-                    newPhone = ""
-                }
-            } catch let error as MeeshyError {
-                // P1 — `APIClient` only ever throws `MeeshyError` (never the
-                // legacy `APIError`); this catch used to be dead code, so the
-                // 400/"code incorrect" branch never fired and every phone
-                // verification error (including a genuinely wrong code)
-                // showed the generic "Une erreur est survenue".
-                HapticFeedback.error()
-                switch error {
-                case .server(400, _):
-                    phoneError = String(localized: "settings.security.phone.code_invalid", defaultValue: "Code incorrect ou expiré", bundle: .main)
-                default:
-                    phoneError = error.errorDescription
-                }
-            } catch {
-                HapticFeedback.error()
-                phoneError = String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
-            }
-            phoneVerifying = false
-        }
-    }
 }
-
