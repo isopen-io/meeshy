@@ -195,17 +195,14 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
     >
       <div
         ref={card}
-        className="pointer-events-auto relative w-full"
+        className="glass-prominent pointer-events-auto relative w-full"
         style={{
           maxWidth: 440,
           borderRadius: CARD_RADIUS,
           touchAction: 'none',
           transform: dragY === 0 ? undefined : `translateY(${dragY}px)`,
           opacity: dragY === 0 ? 1 : Math.max(0.35, 1 + dragY / 120),
-          backgroundColor: 'color-mix(in srgb, var(--color-ios-surface) 82%, transparent)',
           backgroundImage: `linear-gradient(180deg, color-mix(in srgb, ${accent} 10%, transparent), transparent 70%)`,
-          backdropFilter: 'blur(22px) saturate(1.6)',
-          WebkitBackdropFilter: 'blur(22px) saturate(1.6)',
           boxShadow: `0 16px 36px -10px rgb(0 0 0 / 0.38), 0 2px 6px color-mix(in srgb, ${accent} 26%, transparent)`,
         }}
         onPointerDown={onPointerDown}
