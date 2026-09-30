@@ -75,6 +75,18 @@ const appel = replique('amour.appel', { ko: '빗소리 들려? 빨리 네가 여
   ar: 'هل تسمع صوت المطر؟ لا أطيق الانتظار حتى تكون هنا ❤️',
 })
 
+// Le vocal que le partenaire envoie au lecteur (vitrine #8855, scène 1) : joué dans la langue du
+// lecteur, sa transcription défile. Sans marque de genre, comme les autres répliques.
+const vocalRecu = replique('amour.vocal.recu', { ko: '하루 종일 네 목소리가 듣고 싶었어. 12일 뒤에 공항에서 기다릴게.', ja: '一日中、君の声が聞きたかった。12日後、空港で待ってるね。' }, {
+  fr: 'Toute la journée, j’avais envie d’entendre ta voix. Dans 12 jours, je t’attends à l’aéroport.',
+  en: 'All day long, I wanted to hear your voice. In 12 days, I’ll be waiting for you at the airport.',
+  es: 'Todo el día quise oír tu voz. En 12 días te espero en el aeropuerto.',
+  de: 'Den ganzen Tag wollte ich deine Stimme hören. In 12 Tagen warte ich am Flughafen auf dich.',
+  it: 'Tutto il giorno ho voluto sentire la tua voce. Tra 12 giorni ti aspetto all’aeroporto.',
+  pt: 'O dia todo eu quis ouvir a sua voz. Daqui a 12 dias te espero no aeroporto.',
+  ar: 'طوال اليوم أردت أن أسمع صوتك. بعد 12 يومًا سأنتظرك في المطار.',
+})
+
 // Messages écrits PAR le lecteur, accordés : une lectrice écrit à Min-jun, un lecteur à Aiko.
 const miens = {
   vueDemandee: {
@@ -105,7 +117,7 @@ const miens = {
 }
 
 export const AMOUR = {
-  repliques: [pense, vue, jours, vocalReaction, grandJour, minutes, table, appel],
+  repliques: [pense, vue, jours, vocalReaction, grandJour, minutes, table, appel, vocalRecu],
   pense,
   vue,
   jours,
@@ -114,6 +126,7 @@ export const AMOUR = {
   minutes,
   table,
   appel,
+  vocalRecu,
   miens,
   // Le vocal du LECTEUR, joué dans la langue du partenaire : la piste active et sa transcription.
   vocal: { duree: '0:09', ecoule: '0:04', progression: 0.45, transcription: { ko: '사랑해. 빨리 보고 싶어.', ja: '愛してる。早く会いたい。' } },
