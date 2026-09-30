@@ -37,10 +37,11 @@
  * @jest-environment node
  */
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
 import Fastify, { FastifyInstance } from 'fastify';
 import { AuthMiddleware, createUnifiedAuthMiddleware } from '../../../middleware/auth';
+import { LEGACY_SID_WINDOW_CLOSES_AT } from '../../../services/auth/session-jwt';
 
 // Même fabrique en mémoire que middleware/auth.test.ts et auth-extended.test.ts
 // — ne pas dépendre de Redis, ne pas polluer entre tests.
@@ -229,12 +230,19 @@ describe('AuthMiddleware — #4264 critère 4 : session nommée (sid) vivante', 
   });
 });
 
+const INSIDE_LEGACY_WINDOW = new Date(LEGACY_SID_WINDOW_CLOSES_AT.getTime() - 24 * 60 * 60 * 1000);
+
 describe('AuthMiddleware — #4264 critère 4 : fenêtre de transition (jeton sans sid)', () => {
   beforeEach(() => {
     process.env.JWT_SECRET = JWT_SECRET;
     const { __mockStoreMap } = require('../../../services/CacheStore');
     __mockStoreMap.clear();
     jest.clearAllMocks();
+    jest.useFakeTimers({ now: INSIDE_LEGACY_WINDOW, advanceTimers: true });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('admet un jeton sans sid dans la fenêtre de transition — et ne consulte JAMAIS userSession pour ce régime (aucun coût nouveau)', async () => {
@@ -280,6 +288,38 @@ describe('AuthMiddleware — #4264 critère 4 : fenêtre de transition (jeton sa
 });
 
 // ─── Preuve au niveau REST — jamais un double du handler ────────────────────
+describe('AuthMiddleware — #4264 critère 4 : fenêtre de transition FERMÉE', () => {
+  beforeEach(() => {
+    process.env.JWT_SECRET = JWT_SECRET;
+    const { __mockStoreMap } = require('../../../services/CacheStore');
+    __mockStoreMap.clear();
+    jest.clearAllMocks();
+    jest.useFakeTimers({ now: LEGACY_SID_WINDOW_CLOSES_AT, advanceTimers: true });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('refuse un jeton sans sid tout juste émis dès la fermeture de la fenêtre', async () => {
+    const middleware = new AuthMiddleware(createMockPrisma() as never);
+    const token = signJwt({});
+
+    await expect(
+      middleware.createAuthContext(`Bearer ${token}`)
+    ).rejects.toThrow('Invalid JWT token');
+  });
+
+  it('admet toujours un jeton porteur de sid après la fermeture', async () => {
+    const middleware = new AuthMiddleware(createMockPrisma() as never);
+    const token = signJwt({ sid: LIVE_SESSION_ID });
+
+    const ctx = await middleware.createAuthContext(`Bearer ${token}`);
+
+    expect(ctx.isAuthenticated).toBe(true);
+  });
+});
+
 describe('createUnifiedAuthMiddleware — #4264 critère 4 sur une VRAIE requête REST (app.inject, VRAI middleware)', () => {
   beforeEach(() => {
     process.env.JWT_SECRET = JWT_SECRET;
