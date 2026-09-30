@@ -21,6 +21,7 @@ import {
 } from './message-actions';
 import { admitForward } from './forward';
 import { useLongPress, type LongPressAnchor } from './long-press';
+import { copyPlainText } from './copy-text';
 import { isMineOf } from './message';
 import { SELECTION_CAP, copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
 import { useMessageStar, type MessageStarEntry } from './use-message-star';
@@ -195,8 +196,9 @@ export function useMessageMenu(params: {
           announce(translate(currentInterfaceLanguage(), 'announce.messageProtected'));
           return;
         }
-        if (typeof navigator === 'object' && navigator.clipboard) void navigator.clipboard.writeText(text);
-        announce(translate(currentInterfaceLanguage(), 'announce.messageCopied'));
+        void copyPlainText(text).then((outcome) =>
+          announce(translate(currentInterfaceLanguage(), outcome === 'copied' ? 'announce.messageCopied' : 'feed.post.copy_failed')),
+        );
         return;
       }
       if (id === 'reply') {
@@ -334,9 +336,11 @@ export function useMessageMenu(params: {
         announce(translate(currentInterfaceLanguage(), 'announce.nothingToCopy'));
         return;
       }
-      if (typeof navigator === 'object' && navigator.clipboard) void navigator.clipboard.writeText(text);
-      const lang = currentInterfaceLanguage();
-      announce(text.includes('\n') ? translate(lang, 'announce.messagesCopied') : translate(lang, 'announce.messageCopied'));
+      void copyPlainText(text).then((outcome) => {
+        const lang = currentInterfaceLanguage();
+        if (outcome === 'failed') announce(translate(lang, 'feed.post.copy_failed'));
+        else announce(text.includes('\n') ? translate(lang, 'announce.messagesCopied') : translate(lang, 'announce.messageCopied'));
+      });
     },
     [selection, copyableTextOf, announce],
   );
