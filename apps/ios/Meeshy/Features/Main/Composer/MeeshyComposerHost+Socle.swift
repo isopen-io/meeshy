@@ -462,7 +462,7 @@ extension MeeshyComposerHost {
             format.postType
         )
         isPublishingDocument = false
-        if accepted { onDismiss() }
+        if accepted { discardAutosavedDraft(); onDismiss() }
     }
 
     /// **Le refus d'un format qu'aucun canal ne sait porter** (#4869).
@@ -918,7 +918,7 @@ extension MeeshyComposerHost {
         Task {
             let accepted = await onPublishDocument(draft)
             isPublishingDocument = false
-            if accepted { onDismiss() }
+            if accepted { discardAutosavedDraft(); onDismiss() }
         }
     }
 }
