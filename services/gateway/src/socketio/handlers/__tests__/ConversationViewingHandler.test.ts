@@ -73,12 +73,16 @@ function makeWorld({
     userSockets,
   });
 
-  const connect = (userId: string, socketId: string) => {
+  const connect = (userId: string, socketId: string, rooms: readonly string[] = []) => {
     connectedUsers.set(userId, { id: userId, socketId, isAnonymous: false, language: 'fr' });
     socketToUser.set(socketId, userId);
     userSockets.set(userId, new Set([...(userSockets.get(userId) ?? []), socketId]));
     const direct: Array<{ event: string; data: unknown }> = [];
-    const socket = { id: socketId, emit: (event: string, data: unknown) => direct.push({ event, data }) };
+    const socket = {
+      id: socketId,
+      rooms: new Set([socketId, ...rooms.map(id => `conversation:${id}`)]),
+      emit: (event: string, data: unknown) => direct.push({ event, data }),
+    };
     return { socket: socket as any, direct };
   };
 
@@ -267,5 +271,45 @@ describe('ConversationViewingHandler — quitter la conversation', () => {
       event: SERVER_EVENTS.VIEWING_SNAPSHOT,
       data: { conversationId: CONV, userIds: [] },
     });
+  });
+});
+
+describe('ConversationViewingHandler — se (re)connecter', () => {
+  const snapshots = (direct: ReadonlyArray<{ event: string; data: unknown }>) =>
+    direct.filter(d => d.event === SERVER_EVENTS.VIEWING_SNAPSHOT).map(d => d.data);
+
+  it('dit à l’arrivant qui est déjà dans chacune de ses conversations', async () => {
+    const { handler, connect } = makeWorld();
+    const bob = connect(BOB, 's-bob');
+    await handler.handleStart(bob.socket, { conversationId: CONV });
+    const alice = connect(ALICE, 's-alice', [CONV, OTHER_CONV]);
+
+    await handler.emitRoomSnapshots(alice.socket);
+
+    expect(snapshots(alice.direct)).toEqual([{ conversationId: CONV, userIds: [BOB] }]);
+  });
+
+  it('ne dit rien d’une conversation dont l’arrivant n’est pas membre', async () => {
+    const { handler, connect } = makeWorld();
+    const bob = connect(BOB, 's-bob');
+    await handler.handleStart(bob.socket, { conversationId: CONV });
+    const alice = connect(ALICE, 's-alice', [OTHER_CONV]);
+
+    await handler.emitRoomSnapshots(alice.socket);
+
+    expect(snapshots(alice.direct)).toEqual([]);
+  });
+
+  it('ne compte ni l’arrivant lui-même ni un pair bloqué', async () => {
+    const { handler, connect } = makeWorld({ blocks: { [BOB]: [ALICE] } });
+    const bob = connect(BOB, 's-bob');
+    const phone = connect(ALICE, 's-phone');
+    await handler.handleStart(bob.socket, { conversationId: CONV });
+    await handler.handleStart(phone.socket, { conversationId: CONV });
+    const laptop = connect(ALICE, 's-laptop', [CONV]);
+
+    await handler.emitRoomSnapshots(laptop.socket);
+
+    expect(snapshots(laptop.direct)).toEqual([]);
   });
 });
