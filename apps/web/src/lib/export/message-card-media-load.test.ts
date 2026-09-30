@@ -48,6 +48,41 @@ describe('loadCardSources — les pixels de chaque média, en blob', () => {
     expect(loaded.sources[1]).not.toBeNull();
   });
 
+  test('une pièce qui ne se charge pas est NOMMÉE comme échouée — jamais un cadre vide muet (#8901)', async () => {
+    const loaded = await loadCardSources(
+      [
+        item({ id: 'missing', url: '/missing' }),
+        item({ id: 'thrown', url: '/thrown' }),
+        item({ id: 'undecodable', url: '/garbage' }),
+        item({ id: 'ok', url: '/ok' }),
+        item({ id: 'voice', url: '/a.m4a', card: { kind: 'audio', durationMs: 1, name: 'a', peaks: [] } }),
+      ],
+      {
+        fetchBlob: async (url) => {
+          if (url === '/thrown') throw new Error('offline');
+          return url === '/missing' ? null : new Blob([url]);
+        },
+        doc: stubDocument,
+        createObjectURL: () => 'blob:x',
+        revokeObjectURL: () => undefined,
+        decodeImage: async (blob) => ((await blob.text()) === '/garbage' ? null : bitmap('ok')),
+      },
+    );
+    expect(loaded.failed).toEqual(['missing', 'thrown', 'undecodable']);
+  });
+
+  test('une vidéo sans image d’attente ni première image décodable est en échec', async () => {
+    const loaded = await loadCardSources([item({ id: 'v', url: '/v.mp4', card: { kind: 'video', width: 16, height: 9 }, posterUrl: '/gone.jpg' })], {
+      fetchBlob: async (url) => (url === '/gone.jpg' ? null : new Blob([url])),
+      doc: stubDocument,
+      createObjectURL: () => 'blob:x',
+      revokeObjectURL: () => undefined,
+      decodeImage: async () => bitmap('poster'),
+      timeoutMs: 5,
+    });
+    expect(loaded.failed).toEqual(['v']);
+  });
+
   test('chaque URL d’objet créée est rendue à la fermeture', async () => {
     const revoked: string[] = [];
     let n = 0;

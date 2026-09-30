@@ -65,6 +65,7 @@ struct MessageCardExportSheet: View {
     @State var thumbnails = MessageCardThumbnailStore()
     @State var loadedMedia: MessageCardLoadedMedia = .empty
     @State var mediaVersion = 0
+    @State var mediaAttempt = 0
     @State var output: MessageCardOutput = .image
     @State var motionTask: Task<Void, Never>?
     @StateObject var motion = MessageCardMotionProgress()
@@ -134,7 +135,7 @@ struct MessageCardExportSheet: View {
         .tint(accent)
         .onAppear(perform: load)
         .onDisappear { motionTask?.cancel() }
-        .task(id: loaded) { await loadMedia() }
+        .task(id: "\(loaded)|\(mediaAttempt)") { await loadMedia() }
         .task(id: "\(loaded)|\(renderKey)") { await render() }
         .sheet(isPresented: $galleryOpen) {
             MessageCardExportGallery(
@@ -306,6 +307,8 @@ struct MessageCardExportSheet: View {
             Text(notice)
                 .font(.footnote)
                 .foregroundStyle(MeeshyColors.error)
+        } else if let failure = MessageCardExportText.mediaFailure(count: loadedMedia.failed.count) {
+            mediaFailure(failure)
         } else if ready, rendered?.truncated == true {
             Text(MessageCardExportText.text("export.card.truncated", "Message long : la fin est coupée sur l’image."))
                 .font(.footnote)
@@ -404,11 +407,28 @@ struct MessageCardExportSheet: View {
         popular = MessageCardUsage.popular(usage, count: Self.popularCount)
     }
 
+    /// « Un média n'a pas pu se charger » + « Réessayer » (#8901) — jamais un cadre muet.
+    private func mediaFailure(_ message: String) -> some View {
+        HStack(spacing: 12) {
+            Label(message, systemImage: "exclamationmark.triangle")
+                .font(.footnote)
+                .foregroundStyle(MeeshyColors.error)
+            Button(MessageCardExportText.text("export.card.media.retry", "Réessayer")) {
+                HapticFeedback.light()
+                mediaAttempt += 1
+            }
+            .font(.footnote.weight(.semibold))
+            .frame(minHeight: 44)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
     /// Les pixels et l'onde réelle des médias, chargés HORS du MainActor —
-    /// la carte est déjà peinte avec leurs couleurs d'attente.
+    /// la carte est déjà peinte avec leurs couleurs d'attente. Rejoué par
+    /// « Réessayer » (`mediaAttempt`).
     private func loadMedia() async {
         let items = request.subject.media
-        guard loaded, mediaVersion == 0, !items.isEmpty else { return }
+        guard loaded, !items.isEmpty else { return }
         let result = await Task.detached(priority: .userInitiated) {
             await MessageCardMediaLoader.load(items)
         }.value
@@ -439,7 +459,8 @@ struct MessageCardExportSheet: View {
         )
         // L'export rapide attend les pixels des médias : il ne part jamais
         // avec leurs couleurs d'attente.
-        if request.quick && !quickSent && (request.subject.media.isEmpty || mediaVersion > 0) {
+        // Un média en échec retient l'export rapide : l'atelier le dit et attend « Réessayer ».
+        if request.quick && !quickSent && (request.subject.media.isEmpty || (mediaVersion > 0 && loadedMedia.failed.isEmpty)) {
             quickSent = true
             save()
         }
