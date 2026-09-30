@@ -87,7 +87,7 @@ const STEP = 'grid size-11 place-items-center rounded-full transition-transform 
 function ZoomCapsule({ zoom, language, glyphs }: { readonly zoom: CameraZoom; readonly language: InterfaceLanguage; readonly glyphs: Glyphs }) {
   const step = (direction: 1 | -1) => () => zoom.set(zoomNudge(zoom.range, zoom.value, direction));
   return (
-    <div role="group" aria-label={translate(language, 'call.zoom')} className="glass-call flex flex-col items-center rounded-full p-0.5 text-white" data-call-zoom={zoom.mode}>
+    <div role="group" aria-label={translate(language, 'call.zoom')} className="glass-call flex flex-col items-center rounded-full p-0.5 text-on-media" data-call-zoom={zoom.mode}>
       <button type="button" aria-label={translate(language, 'call.zoom.in')} title={translate(language, 'call.zoom.in')} onClick={step(1)} disabled={zoom.value >= zoom.range.max} className={STEP} data-call-zoom-in="">
         {glyphs.plus}
       </button>

@@ -13,12 +13,11 @@
  * aucun témoin de l'autre. Le gate `bun run check` de design-tokens l'interdit
  * désormais : il régénère et refuse toute différence.
  *
- * CE QUI RESTE OUVERT (#5445) : `tokens.css` (la table de la v3) et cette
- * palette-ci assignent les mêmes couleurs à des RÔLES différents — la v3 fait
- * de indigo400 sa primaire, iOS de indigo500 ; les neutres de la v3 sont
- * violacés, ceux d'iOS des gris vrais. Unifier ces rôles changerait le rendu
- * d'une application en service : c'est une décision du porteur, pas un
- * refactor.
+ * LES RÔLES DU SDK GAGNENT (#8879, D-157) : `tokens.css` (la table héritée)
+ * pointe désormais vers ces variables là où elle donnait à un rôle une autre
+ * valeur. La table des motifs et des jetons que chaque écran applique vit dans
+ * `docs/product/charte-visuelle-web.md` ; `scripts/check-design-harmony.mjs`
+ * refuse une couleur écrite en dur hors des exemptions qu'il déclare.
  */
 @import '@meeshy/design-tokens/ios.css';
 
@@ -50,6 +49,30 @@
      `FocalIdentityHeader.swift:90-92`, `--ios-indigo-500` servi tel quel y
      mesure sous AA (4,47:1 / 4,45:1). Voir `focal-row.tsx`. */
   --color-self-name-ink: var(--ios-self-name-ink);
+
+  /* L'ENCRE D'UN APLAT (#8879) — le blanc d'un bouton plein de marque ou
+     d'accent (`MeeshyColors.onBrand`). À ne pas confondre avec
+     `--color-on-brand` (app.css), l'encre SOMBRE de la primaire héritée. */
+  --color-ios-on-brand: var(--ios-on-brand);
+
+  /* LES TRAITS ET REMPLISSAGES DE L'INTERFACE (#8879) — trois dosages de
+     l'encre discrète, relevés sur les primitives qui les portaient déjà :
+     la carte groupée (22 %), le champ (30 %), la puce neutre (12 %). */
+  --color-ios-hairline: color-mix(in srgb, var(--ios-ink-3) 22%, transparent);
+  --color-ios-outline: color-mix(in srgb, var(--ios-ink-3) 30%, transparent);
+  --color-ios-fill: color-mix(in srgb, var(--ios-ink-3) 12%, transparent);
+
+  /* LE CHROME POSÉ SUR UN MÉDIA (#8879) — `MeeshyColors.onMedia…`, `scrim…` :
+     une visionneuse plein écran est sombre dans les DEUX schémas. */
+  --color-on-media: var(--ios-on-media);
+  --color-on-media-2: var(--ios-on-media-2);
+  --color-on-media-3: var(--ios-on-media-3);
+  --color-media-fill: var(--ios-media-fill);
+  --color-media-hairline: var(--ios-media-hairline);
+  --color-media-backdrop: var(--ios-media-backdrop);
+  --color-scrim-soft: var(--ios-scrim-soft);
+  --color-scrim: var(--ios-scrim);
+  --color-scrim-strong: var(--ios-scrim-strong);
 
   /* Les géométries : celles que Swift DÉCLARE, et celles qu'il porte en
      littéral — le générateur distingue les deux et cite le site de chacune. */

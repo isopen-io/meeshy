@@ -19,7 +19,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 
 const CallQualityDetail = lazy(() => import('./call-quality-detail').then((module) => ({ default: module.CallQualityDetail })));
 
-const TONE: Readonly<Record<ConnectionQualityLevel, string>> = { excellent: '#34d399', good: '#34d399', fair: '#fbbf24', poor: '#f87171' };
+const TONE: Readonly<Record<ConnectionQualityLevel, string>> = { excellent: 'var(--ios-success)', good: 'var(--ios-success)', fair: 'var(--ios-warning)', poor: 'var(--ios-error)' };
 const LIT: Readonly<Record<ConnectionQualityLevel, number>> = { excellent: 4, good: 3, fair: 2, poor: 1 };
 const LEVEL_KEY = {
   excellent: 'call.quality.level.excellent',
@@ -34,7 +34,7 @@ function SignalBars({ level }: { readonly level: ConnectionQualityLevel }) {
       {[0, 1, 2, 3].map((index) => {
         const lit = index < LIT[level];
         const height = 5 + index * 4;
-        return <rect key={index} x={index * 6} y={18 - height} width="4" height={height} rx="1" fill={lit ? TONE[level] : 'rgba(255,255,255,0.28)'} data-bar={lit ? 'on' : 'off'} />;
+        return <rect key={index} x={index * 6} y={18 - height} width="4" height={height} rx="1" fill={lit ? TONE[level] : 'var(--color-media-hairline)'} data-bar={lit ? 'on' : 'off'} />;
       })}
     </svg>
   );
@@ -95,7 +95,7 @@ export function CallPeerAlerts({ members, language }: { readonly members: Readon
       {peers
         .filter((member) => member.capturing)
         .map((member) => (
-          <span key={`capture-${member.userId}`} role="alert" className="rounded-full px-3 py-1 text-mini font-semibold" style={{ background: 'rgba(239,68,68,0.85)', color: '#fff' }} data-call-alert="capturing">
+          <span key={`capture-${member.userId}`} role="alert" className="rounded-full px-3 py-1 text-mini font-semibold" style={{ background: 'color-mix(in srgb, var(--ios-error-strong) 85%, transparent)', color: 'var(--color-ios-on-brand)' }} data-call-alert="capturing">
             {translate(language, 'call.alert.capturing', { name: member.name })}
           </span>
         ))}

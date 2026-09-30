@@ -1,15 +1,13 @@
 import {
-  ENGAGEMENT_AXIS_WEIGHTS,
   engagementAxisFamily,
   isEngagementAxisKey,
   type EngagementAxisKey,
 } from '@meeshy/shared/types/engagement';
 import {
-  computeEngagementElan,
-  creditedPoints,
-  elanInputsFromRows,
-  type EngagementElanInput,
-} from '@meeshy/shared/utils/engagement-elan';
+  elanUnderScaleFromRows,
+  pointsForOperation,
+  type EngagementScale,
+} from '@meeshy/shared/types/engagement-scale';
 import type { OnboardingStepRewards } from '@meeshy/shared/types/onboarding';
 
 /**
@@ -25,9 +23,10 @@ import type { OnboardingStepRewards } from '@meeshy/shared/types/onboarding';
  *   son propre élan (`friend-requests-core.ts`) : la part servie est celle du
  *   lecteur.
  *
- * Chaque axe crédite `poids × élan(familles récentes ∪ sa famille)` — la même
- * loi qu'`EngagementService.elanFor`, donc le chiffre annoncé est celui qui
- * sera appliqué (au cache d'une minute de l'élan près).
+ * Chaque axe crédite `pointsForOperation(barème, axe, élan(familles récentes
+ * ∪ sa famille))` — la même loi qu'`EngagementService`, sous le MÊME barème de
+ * l'administration (#8906), donc le chiffre annoncé est celui qui sera
+ * appliqué (au cache d'une minute de l'élan près).
  */
 const STEP_AXES = {
   global: ['content.text_message', 'conversation.public'],
@@ -35,14 +34,32 @@ const STEP_AXES = {
   friendship: ['social.friendship'],
 } as const satisfies Record<keyof OnboardingStepRewards, readonly EngagementAxisKey[]>;
 
-export function onboardingStepRewards(input: EngagementElanInput): OnboardingStepRewards {
+export type OnboardingRewardRows = {
+  readonly scale: EngagementScale;
+  readonly counters: readonly { readonly axisKey: string; readonly updatedAt: Date }[];
+  readonly milestones: readonly { readonly milestoneType: string; readonly milestoneKey: string }[];
+  readonly engagementScore: number;
+  readonly now: Date;
+};
+
+export function onboardingStepRewards(rows: OnboardingRewardRows): OnboardingStepRewards {
+  const familyOf = (axisKey: string) => (isEngagementAxisKey(axisKey) ? engagementAxisFamily(axisKey) : null);
   const credit = (axes: readonly EngagementAxisKey[]): number =>
     axes.reduce(
       (sum, axis) =>
         sum +
-        creditedPoints(
-          ENGAGEMENT_AXIS_WEIGHTS[axis],
-          computeEngagementElan({ ...input, activeFamilies: [...input.activeFamilies, engagementAxisFamily(axis)] }),
+        pointsForOperation(
+          rows.scale,
+          axis,
+          elanUnderScaleFromRows({
+            rules: rows.scale.multiplier,
+            counters: rows.counters,
+            milestones: rows.milestones,
+            familyOf,
+            engagementScore: rows.engagementScore,
+            extraFamily: engagementAxisFamily(axis),
+            now: rows.now,
+          }).factor,
         ),
       0,
     );
@@ -51,18 +68,4 @@ export function onboardingStepRewards(input: EngagementElanInput): OnboardingSte
     story: credit(STEP_AXES.story),
     friendship: credit(STEP_AXES.friendship),
   };
-}
-
-/** Les entrées de l'élan, depuis les lignes que `OnboardingService` lit. */
-export function elanInputOf(params: {
-  readonly counters: readonly { readonly axisKey: string; readonly updatedAt: Date }[];
-  readonly milestones: readonly { readonly milestoneType: string; readonly milestoneKey: string }[];
-  readonly now: Date;
-}): EngagementElanInput {
-  return elanInputsFromRows({
-    counters: params.counters,
-    milestones: params.milestones,
-    now: params.now,
-    familyOf: (axisKey) => (isEngagementAxisKey(axisKey) ? engagementAxisFamily(axisKey) : null),
-  });
 }

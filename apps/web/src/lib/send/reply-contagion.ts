@@ -49,7 +49,6 @@ export function contaminatedComposeProtection(
 export function contaminatedProtectionFieldsOf(
   fields: ProtectionFields,
   quoted: ProtectionColumns | null | undefined,
-  now: number,
 ): ProtectionFields {
   const imposed = imposedReplyProtection(quoted);
   if (!imposed.blurred && imposed.ephemeral === null) return fields;
@@ -57,16 +56,12 @@ export function contaminatedProtectionFieldsOf(
     requested: { effectFlags: fields.effectFlags, isBlurred: fields.isBlurred },
     quoted,
   });
-  const expiresAt =
-    imposed.ephemeral === null
-      ? fields.expiresAt
-      : contaminated.ephemeralDuration === null
-        ? undefined
-        : new Date(now + contaminated.ephemeralDuration * 1000);
+  const ephemeralDuration =
+    imposed.ephemeral === null ? fields.ephemeralDuration : (contaminated.ephemeralDuration ?? undefined);
   return {
     isBlurred: contaminated.isBlurred,
     isViewOnce: fields.isViewOnce,
     effectFlags: contaminated.effectFlags,
-    ...(expiresAt === undefined ? {} : { expiresAt }),
+    ...(ephemeralDuration === undefined ? {} : { ephemeralDuration }),
   };
 }

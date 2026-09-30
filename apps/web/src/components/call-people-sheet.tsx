@@ -53,7 +53,7 @@ const initials = (name: string): string =>
 
 function Face({ name, avatar, ringing = false }: { readonly name: string; readonly avatar: string | null; readonly ringing?: boolean }) {
   return (
-    <span aria-hidden className={`relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-full text-mini font-semibold ${ringing ? 'animate-pulse motion-reduce:animate-none' : ''}`} style={{ background: 'rgb(255 255 255 / 0.16)' }}>
+    <span aria-hidden className={`relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-full text-mini font-semibold ${ringing ? 'animate-pulse motion-reduce:animate-none' : ''}`} style={{ background: 'var(--color-media-fill)' }}>
       {avatar === null ? initials(name) : <img src={avatar} alt="" className="size-full object-cover" />}
     </span>
   );
@@ -82,7 +82,7 @@ export function CallPeopleSheet({ id, closeGlyph, language, members, onClose, re
     <CallPanelFrame id={id} title={t(language, 'callControls.people.title')} closeLabel={t(language, 'callControls.close')} closeGlyph={closeGlyph} onClose={onClose} back={back} data={{ 'data-call-people-sheet': '' }}>
       <div ref={panel} className="flex max-h-[min(45vh,24rem)] min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain">
         <section aria-labelledby={`${id}-in`} className="flex flex-col">
-          <h3 id={`${id}-in`} className="px-2 text-mini font-semibold" style={{ color: 'rgba(255,255,255,0.72)' }}>
+          <h3 id={`${id}-in`} className="px-2 text-mini font-semibold" style={{ color: 'var(--color-on-media-3)' }}>
             {t(language, 'callControls.people.inCall')}
           </h3>
           <ul className="flex flex-col" data-call-people-in="">
@@ -97,7 +97,7 @@ export function CallPeopleSheet({ id, closeGlyph, language, members, onClose, re
                   <Face name={member.name} avatar={member.avatar} ringing={ringing} />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-body font-semibold">{member.name}</span>
-                    {ringing ? <span className="text-mini" style={{ color: 'rgba(255,255,255,0.72)' }}>{t(language, 'callControls.ringing')}</span> : null}
+                    {ringing ? <span className="text-mini" style={{ color: 'var(--color-on-media-3)' }}>{t(language, 'callControls.ringing')}</span> : null}
                   </span>
                   {renderModeration(member)}
                 </li>
@@ -106,7 +106,7 @@ export function CallPeopleSheet({ id, closeGlyph, language, members, onClose, re
           </ul>
         </section>
         <section aria-labelledby={`${id}-add`} className="flex flex-col gap-1">
-          <h3 id={`${id}-add`} className="px-2 text-mini font-semibold" style={{ color: 'rgba(255,255,255,0.72)' }}>
+          <h3 id={`${id}-add`} className="px-2 text-mini font-semibold" style={{ color: 'var(--color-on-media-3)' }}>
             {t(language, 'callControls.people.add')}
           </h3>
           <input
@@ -116,12 +116,12 @@ export function CallPeopleSheet({ id, closeGlyph, language, members, onClose, re
             onChange={() => undefined}
             aria-label={t(language, 'callControls.people.search')}
             placeholder={t(language, 'callControls.people.search')}
-            className="mx-1 min-h-11 rounded-full border-0 px-4 text-body text-white placeholder:text-white/60 focus-visible:outline-2 focus-visible:outline-white"
-            style={{ background: 'rgb(255 255 255 / 0.12)' }}
+            className="mx-1 min-h-11 rounded-full border-0 px-4 text-body text-on-media placeholder:text-on-media-3 focus-visible:outline-2 focus-visible:outline-on-media"
+            style={{ background: 'var(--color-media-fill)' }}
             data-call-people-search=""
           />
           {shown.length === 0 ? (
-            <p className="px-2 py-3 text-mini" role="status" style={{ color: 'rgba(255,255,255,0.72)' }} data-call-people-empty="">
+            <p className="px-2 py-3 text-mini" role="status" style={{ color: 'var(--color-on-media-3)' }} data-call-people-empty="">
               {empty}
             </p>
           ) : (
@@ -140,7 +140,7 @@ export function CallPeopleSheet({ id, closeGlyph, language, members, onClose, re
                         panel.current?.querySelector<HTMLElement>('[data-call-people-search]')?.focus();
                       }}
                       className="min-h-11 shrink-0 rounded-full px-4 text-mini font-semibold transition-transform active:scale-95 motion-reduce:transition-none"
-                      style={{ background: 'white', color: 'var(--ios-indigo-950)' }}
+                      style={{ background: 'var(--color-on-media)', color: 'var(--ios-indigo-950)' }}
                       data-call-invite={friend.id}
                     >
                       {t(language, 'callControls.people.invite')}

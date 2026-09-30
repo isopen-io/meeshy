@@ -125,13 +125,17 @@ describe('MediaViewer — la page se suit par son identité', () => {
 describe('MediaViewer — les actions de la page (#6303)', () => {
   const ALL: MediaPageOffers = { save: true, react: true, reply: true, compose: true };
 
-  test('une page qui offre tout : Enregistrer en haut, Réagir · Répondre · Créer en colonne', async () => {
+  test('une page qui offre tout : Enregistrer dans « … » en haut, Réagir · Créer en rail, Répondre en capsule', async () => {
     const items = photos(['a']);
     mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, ALL, () => {}) });
     await settle();
     const actions = Array.from(dialog().querySelectorAll('[data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'));
-    expect(actions).toEqual(['save', 'react', 'reply', 'compose']);
-    expect(dialog().querySelector('[data-viewer-action="save"]')?.getAttribute('aria-label')).toBe('Enregistrer');
+    expect(actions).toEqual(['react', 'compose']);
+    act(() => {
+      dialog().querySelector<HTMLButtonElement>('[data-viewer-menu-button]')!.click();
+    });
+    expect(dialog().querySelector('[data-viewer-menu-item="save"]')?.textContent).toContain('Enregistrer');
+    expect(dialog().querySelector('[data-viewer-reply]')?.textContent).toContain('Répondre');
     expect(dialog().querySelector('[data-viewer-action="compose"]')?.getAttribute('aria-label')).toBe('Créer avec ce média');
   });
 
@@ -140,7 +144,7 @@ describe('MediaViewer — les actions de la page (#6303)', () => {
     mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, NO_MEDIA_OFFERS) });
     await settle();
     expect(dialog().querySelectorAll('[data-viewer-action]')).toHaveLength(0);
-    expect(dialog().querySelector('[data-viewer-actions]')).toBeNull();
+    expect(dialog().querySelector('[data-viewer-rail]') === null).toBe(true);
   });
 
   test('sans hôte d’actions, la visionneuse reste nue', async () => {
@@ -161,7 +165,7 @@ describe('MediaViewer — les actions de la page (#6303)', () => {
     expect(dialog().querySelectorAll('[data-viewer-reactions] button').length).toBeGreaterThan(0);
     expect(dialog().querySelector('[data-viewer-action="react"]')?.getAttribute('aria-pressed')).toBe('true');
     act(() => {
-      dialog().querySelector<HTMLButtonElement>('[data-viewer-action="reply"]')!.click();
+      dialog().querySelector<HTMLButtonElement>('[data-viewer-reply]')!.click();
     });
     expect(replied).toEqual([1]);
   });
@@ -189,6 +193,7 @@ describe('MediaViewer — les actions de la page (#6303)', () => {
     act(() => {
       dialog().querySelector<HTMLButtonElement>('[data-viewer-action="react"]')!.click();
     });
-    expect(dialog().querySelector<HTMLElement>('.media-viewer-chrome')?.style.opacity).toBe('1');
+    expect(dialog().querySelector('[data-viewer-bottom-bar]')?.getAttribute('data-chrome-yields')).toBe('shown');
+    expect(dialog().querySelector('[data-viewer-top-bar]')?.getAttribute('data-chrome-yields')).toBe('shown');
   });
 });

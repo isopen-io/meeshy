@@ -58,7 +58,7 @@ export function MoodChips({ label, chips, selected, onPick, onWheel }: Props) {
             aria-pressed={pressed}
             tabIndex={pressed ? 0 : -1}
             onClick={() => onPick(chip.id)}
-            className={pressed ? `bg-white text-[var(--ios-indigo-950)] ${CHIP}` : `glass-call text-white ${CHIP}`}
+            className={pressed ? `bg-on-media text-[var(--ios-indigo-950)] ${CHIP}` : `glass-call text-on-media ${CHIP}`}
             data-call-frame-mood={chip.id}
           >
             {chip.label}

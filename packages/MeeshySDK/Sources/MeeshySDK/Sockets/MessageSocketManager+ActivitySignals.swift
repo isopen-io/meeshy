@@ -20,8 +20,10 @@ public struct ConversationViewingChange: Decodable, Sendable, Equatable {
     }
 }
 
-/// `viewing:snapshot` — adressé au seul émetteur d'un `viewing:start` : la
-/// liste COMPLÈTE des pairs déjà là (`ViewingSnapshotEvent`).
+/// `viewing:snapshot` — la liste COMPLÈTE des pairs déjà là
+/// (`ViewingSnapshotEvent`), adressée à un seul socket : à l'émetteur d'un
+/// `viewing:start`, et juste après `authenticated`, une par conversation où
+/// des pairs ont déjà l'écran ouvert (jamais une vide).
 public struct ConversationViewingSnapshot: Decodable, Sendable, Equatable {
     public let conversationId: String
     public let userIds: [String]
@@ -35,10 +37,17 @@ public struct ConversationViewingSnapshot: Decodable, Sendable, Equatable {
 /// Les trois événements serveur de « est dans la conversation », sur UN canal :
 /// leur ordre relatif compte (un `snapshot` remplace ce qu'un `arrived`
 /// antérieur avait posé), deux sujets séparés ne le garantiraient pas.
+///
+/// `sessionStarted` : une nouvelle session socket vient de s'établir. Le
+/// serveur a oublié l'ancienne et ré-annonce, juste après `authenticated`, un
+/// `viewing:snapshot` par conversation NON VIDE — une conversation vidée entre
+/// les deux sessions n'en reçoit aucun. Tout l'état se jette donc ici, sur le
+/// même canal, pour précéder à coup sûr les snapshots qui le reconstruisent.
 public enum ConversationViewingEvent: Sendable, Equatable {
     case arrived(ConversationViewingChange)
     case left(ConversationViewingChange)
     case snapshot(ConversationViewingSnapshot)
+    case sessionStarted
 }
 
 /// Émission de `viewing:start` / `viewing:stop`. L'orchestration — QUAND
@@ -60,12 +69,23 @@ extension MessageSocketManager: ConversationViewingEmitting {
         emitActivitySignal("viewing:stop", conversationId: conversationId)
     }
 
+    /// Publiée depuis le `.connect` du socket — y compris celui d'une
+    /// reconnexion automatique de Socket.IO, qui ne passe pas toujours par
+    /// `.disconnect` et laisse alors `isConnected` à `true` de bout en bout.
+    func handleViewingSessionStarted() {
+        conversationViewing.send(.sessionStarted)
+    }
+
     private func emitActivitySignal(_ event: String, conversationId: String) {
         guard socket?.status == .connected else { return }
         socket?.emit(event, ["conversationId": conversationId])
     }
 
     func registerActivitySignalHandlers(on socket: SocketIOClient) {
+        socket.on(clientEvent: .connect) { [weak self] _, _ in
+            self?.handleViewingSessionStarted()
+        }
+
         socket.on("typing:start") { [weak self] data, _ in
             guard let self else { return }
             self.decode(TypingEvent.self, from: data) { [weak self] event in

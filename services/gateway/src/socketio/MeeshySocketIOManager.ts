@@ -458,6 +458,7 @@ export class MeeshySocketIOManager {
       userSockets: this.userSockets,
       emitPresenceSnapshot: (socket, userId, isAnonymous) =>
         this._emitPresenceSnapshot(socket, userId, isAnonymous),
+      emitViewingSnapshots: (socket) => this.conversationViewingHandler.emitRoomSnapshots(socket),
       // CALL-RESILIENCE (Vague 44) — lets AuthHandler's anonymous-guest
       // disconnect leave reuse CallEventsHandler's PARTICIPANT_LEFT/
       // call:ended fanout instead of leaving the other party's UI "in call".

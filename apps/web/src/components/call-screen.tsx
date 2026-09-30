@@ -65,11 +65,11 @@ import type { EffectsCompanion } from './call-effects-companions';
  * changent pas.
  */
 
-const INK = '#ffffff';
-const INK_2 = 'rgba(255,255,255,0.72)';
-const BACKDROP = 'linear-gradient(180deg, #16131f 0%, #07060b 100%)';
-const HANGUP = '#ef4444';
-const ANSWER = '#22c55e';
+const INK = 'var(--color-on-media)';
+const INK_2 = 'var(--color-on-media-3)';
+const BACKDROP = 'linear-gradient(180deg, var(--ios-indigo-950) 0%, var(--color-media-backdrop) 100%)';
+const HANGUP = 'var(--ios-error-strong)';
+const ANSWER = 'var(--ios-success)';
 
 /* Refuser et Accepter gardent leur couleur de signal ; le neutre prend le verre d'appel. */
 const SIGNAL_TONE = { danger: { background: HANGUP, color: INK }, accept: { background: ANSWER, color: INK } } as const;
@@ -211,11 +211,11 @@ export function CallModePending({ label, glyph, onExit }: { readonly label: stri
     <div className="flex w-full flex-col items-center gap-3" data-call-mode-pending="">
       <div aria-hidden className="flex h-24 items-center gap-2">
         {[0.82, 1.1, 0.82].map((scale, index) => (
-          <span key={index} className="size-16 rounded-full bg-white/15" style={{ scale: String(scale) }} />
+          <span key={index} className="size-16 rounded-full bg-media-fill" style={{ scale: String(scale) }} />
         ))}
       </div>
       <div className="flex w-full justify-start px-6">
-        <button type="button" aria-label={label} title={label} onClick={onExit} className="glass-call grid size-12 place-items-center rounded-full text-white">
+        <button type="button" aria-label={label} title={label} onClick={onExit} className="glass-call grid size-12 place-items-center rounded-full text-on-media">
           {glyph}
         </button>
       </div>

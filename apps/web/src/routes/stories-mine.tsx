@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 
+import { CHROME_ACTION_HIT_CLASS } from '@/components/chrome-action';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { STORIES_MINE_GLYPHS } from '@/components/glyphs-stories-mine';
 import { LiveAnnouncement } from '@/components/live-announcement';
 import { PublicationViewersSheetPortal } from '@/components/publication-viewers-sheet-lazy';
+import { BUTTON, GLYPH_SIZE } from '@/components/ui-chrome';
 import { apiDeps } from '@/lib/api/deps';
 import type { PostActionOutcome } from '@/lib/api/publication-actions';
 import { deletePostAction, useStoryTray } from '@/lib/api/query';
@@ -65,7 +67,7 @@ function ThumbnailImage({ thumbnail }: { readonly thumbnail: MyStoryThumbnail })
         className="grid h-full w-full place-items-center"
         style={{ background: 'color-mix(in srgb, var(--color-ios-brand) 20%, transparent)' }}
       >
-        <Glyph name="image" size={28} style={{ color: 'var(--color-ios-brand)' }} />
+        <Glyph name="image" size={GLYPH_SIZE.xl} style={{ color: 'var(--color-ios-brand)' }} />
       </span>
     );
   }
@@ -154,7 +156,7 @@ export function MyStoryCard({
           className="grid place-items-center rounded-chip focus-visible:outline-2"
           style={{ minWidth: 44, minHeight: 44, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
         >
-          <Glyph name="fillPlay" size={20} />
+          <Glyph name="fillPlay" size={GLYPH_SIZE.lg} />
         </Link>
 
         <button
@@ -165,7 +167,7 @@ export function MyStoryCard({
           className="flex items-center justify-center gap-1 rounded-chip focus-visible:outline-2"
           style={{ minWidth: 44, minHeight: 44, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
         >
-          <Glyph name="eye" size={20} />
+          <Glyph name="eye" size={GLYPH_SIZE.lg} />
           {viewCount > 0 ? <span className="text-check">{viewCount}</span> : null}
         </button>
 
@@ -178,7 +180,7 @@ export function MyStoryCard({
           className="grid place-items-center rounded-chip focus-visible:outline-2 disabled:opacity-40"
           style={{ minWidth: 44, minHeight: 44, color: 'var(--color-error)', outlineColor: 'var(--color-error)' }}
         >
-          <GlyphSvg glyph={STORIES_MINE_GLYPHS.trash} size={20} />
+          <GlyphSvg glyph={STORIES_MINE_GLYPHS.trash} size={GLYPH_SIZE.lg} />
         </button>
       </div>
 
@@ -200,8 +202,7 @@ export function MyStoriesEmpty({ language }: { readonly language: InterfaceLangu
       </p>
       <Link
         to="storyCompose"
-        className="grid place-items-center rounded-chip px-5 py-2 text-body font-semibold text-white"
-        style={{ background: 'var(--color-ios-brand)' }}
+        className={BUTTON.primary}
       >
         {translate(language, 'stories.create')}
       </Link>
@@ -310,15 +311,14 @@ export function StoriesMineView({ remove = deletePostAction }: { readonly remove
             to="storyCompose"
             aria-label={translate(language, 'stories.create')}
             data-my-stories-create
-            className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{ outlineColor: 'var(--color-ios-brand)' }}
+            className={CHROME_ACTION_HIT_CLASS}
           >
             <span
               aria-hidden="true"
-              className="grid size-8 place-items-center rounded-full text-white"
+              className="grid size-8 place-items-center rounded-full text-ios-on-brand"
               style={{ background: 'var(--color-ios-brand)' }}
             >
-              <Glyph name="plus" size={16} />
+              <Glyph name="plus" size={GLYPH_SIZE.md} />
             </span>
           </Link>
         }

@@ -147,17 +147,17 @@ describe('le rail rend la loi, et rien qu’elle', () => {
     expect(host.querySelector('[data-story-action-rail]')).toBeNull();
   });
 
-  test('badges={{ translations: "FR" }} => une capsule data-story-action-badge, texte "FR", aria-hidden', async () => {
+  test('badges={{ translations: "FR" }} => une capsule data-viewer-badge, texte "FR", aria-hidden', async () => {
     const host = await monter({
       plan: resolveStoryActionRailPlan(inputs()),
       language: 'fr',
       handlers: TOUS,
       badges: { translations: 'FR' },
     });
-    const badge = host.querySelector('[data-story-action="translations"] [data-story-action-badge]');
+    const badge = host.querySelector('[data-story-action="translations"] [data-viewer-badge]');
     expect(badge?.textContent).toBe('FR');
     expect(badge?.getAttribute('aria-hidden')).toBe('true');
-    expect(host.querySelector('[data-story-action="react"] [data-story-action-badge]')).toBeNull();
+    expect(host.querySelector('[data-story-action="react"] [data-viewer-badge]')).toBeNull();
   });
 
   test('sans badge, rien ; un badge sur un bouton ABSENT du rail ne rend rien', async () => {
@@ -169,7 +169,7 @@ describe('le rail rend la loi, et rien qu’elle', () => {
     });
     /* `react` n'est PAS dans le rail de MA story (la loi le retire) — le
        badge ne rend rien, quoi qu'il porte. */
-    expect(host.querySelector('[data-story-action-badge]')).toBeNull();
+    expect(host.querySelector('[data-viewer-badge]')).toBeNull();
   });
 
   test('anchored={{ action: "translations", node }} => node est rendu dans l’enveloppe du bouton', async () => {
@@ -179,7 +179,7 @@ describe('le rail rend la loi, et rien qu’elle', () => {
       handlers: TOUS,
       anchored: { action: 'translations', node: <div data-la-barre>barre</div> },
     });
-    const anchor = host.querySelector('[data-story-action-anchor="translations"]');
+    const anchor = host.querySelector('[data-viewer-anchor="translations"]');
     expect(anchor).not.toBeNull();
     expect(anchor?.querySelector('[data-la-barre]')).not.toBeNull();
     expect(anchor?.querySelector('[data-story-action="translations"]')).not.toBeNull();
@@ -210,12 +210,11 @@ describe('ce que chaque bouton ANNONCE et FAIT', () => {
     const host = await monter({ plan: resolveStoryActionRailPlan(inputs()), language: 'fr', handlers: TOUS });
     for (const bouton of host.querySelectorAll('[data-story-action]')) {
       expect(bouton.getAttribute('aria-label')?.length ?? 0).toBeGreaterThan(0);
-      /* 44×44 EN STYLE, pas en classe : happy-dom ne calcule aucune mise en
-         page ni aucune feuille utilitaire, donc une classe `size-11` y serait
-         VERTE PAR OMISSION. Le gate navigateur mesure les pixels rendus. */
-      const disque = bouton.querySelector('span') as HTMLSpanElement | null;
-      expect(disque?.style.width).toBe('44px');
-      expect(disque?.style.height).toBe('44px');
+      /* LA CIBLE EST CELLE DES PRIMITIVES COMMUNES (#8879) : 44 de cible
+         (`size-11`) autour d'un disque de verre de 40 (`viewer-disc`).
+         happy-dom ne calcule aucune feuille : le test prouve la STRUCTURE, le
+         gate navigateur (`check-story-scene.mjs`) mesure les pixels rendus. */
+      expect(bouton.querySelector('.size-11 > .viewer-disc')).not.toBeNull();
     }
   });
 
@@ -260,6 +259,12 @@ describe('ce que chaque bouton ANNONCE et FAIT', () => {
     const apres = muet.querySelector('[data-story-action="sound"]');
     expect(apres?.getAttribute('aria-pressed')).toBe('false');
     expect(apres?.getAttribute('aria-label')).toBe(libelleMuet ?? '');
+  });
+
+  test('le cœur POSÉ prend le rouge HORS SCHÉMA du SDK : la scène est sombre dans les deux schémas', async () => {
+    const host = await monter({ plan: resolveStoryActionRailPlan(inputs()), language: 'fr', handlers: TOUS, pressed: { react: true } });
+    const disque = host.querySelector<HTMLElement>('[data-story-action="react"] [data-viewer-disc]');
+    expect(disque?.style.color).toBe('var(--ios-error)');
   });
 
   test('le rail masqué avec le chrome reste MONTÉ — il ne refait pas sa mise en page au relâchement', async () => {

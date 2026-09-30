@@ -223,6 +223,9 @@ const PROGRESSION = [
   'share-network',
   'user-plus',
   'handshake',
+  // Les gestes COMPTÉS du barème (#8906) : une réaction, une pièce jointe.
+  'heart',
+  'paperclip',
 ];
 
 function extract(ids) {

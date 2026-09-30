@@ -204,7 +204,7 @@ export function ActionButton({
            et `--color-ios-surface` suit le schéma — en sombre il tombait à
            4,45 contre l'indigo de marque (mesuré). Même choix que la pastille
            de « Découvrir » (`discover-parts.tsx`, `text-white`). */
-        ...(filled ? { color: '#fff' } : brandInk ? {} : { color: tone }),
+        ...(filled ? { color: 'var(--color-ios-on-brand)' } : brandInk ? {} : { color: tone }),
         backgroundColor: filled ? (ACTIONS[kind].tone === 'brand' ? BRAND_FILL : tone) : `color-mix(in srgb, ${tone} 12%, transparent)`,
       }}
     >

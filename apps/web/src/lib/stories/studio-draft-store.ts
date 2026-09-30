@@ -3,6 +3,7 @@ import type { PostVisibility } from '@meeshy/shared/types/post';
 import type { StorageLike } from '@/lib/send/draft-store';
 
 import { isRememberableAudience, STUDIO_AUDIENCES, type ChoosableAudience } from './publication-audience';
+import { PUBLICATION_KINDS, type PublicationKind } from './publication-kind';
 import type { StudioMediaKind } from './story-document';
 
 /**
@@ -84,6 +85,10 @@ export type StudioDraftSnapshot = {
    * Champ AJOUTÉ, optionnel : un client plus ancien l'ignore sans rien
    * perdre d'autre, d'où l'absence de bump de `schema`. */
   readonly postText?: string;
+  /** LE FORMAT de la création (#8849, jumelle de #8848 : l'instantané iOS
+   * porte le format) — rouverte, elle reprend story, post ou réel, quelle que
+   * soit l'entrée qui la rouvre. Champ AJOUTÉ, optionnel : pas de bump. */
+  readonly kind?: PublicationKind;
 };
 
 /** LA FORME PRÉCÉDENTE (#6900-#7683, sans `schema`) — UNE page implicite,
@@ -193,11 +198,18 @@ function migrateLegacySnapshot(legacy: LegacyStudioDraftSnapshot): StudioDraftSn
   };
 }
 
+/** Un format INCONNU (écrit par un client plus récent, donnée altérée) ne
+ * coûte pas la création : elle est relue sans format, l'entrée décide. */
+function withKnownKind(snapshot: StudioDraftSnapshot): StudioDraftSnapshot {
+  const { kind, ...rest } = snapshot;
+  return kind === undefined || PUBLICATION_KINDS.includes(kind) ? snapshot : rest;
+}
+
 /** LE SEUL SITE qui accepte du JSON quelconque — les deux formes en entrée,
  * UNE seule en sortie (`schema: 2`). Un `schema` futur (≥ 3) ⇒ `null` : un
  * client ancien ne relit pas ce qu'il ne comprend pas. */
 function parseSnapshot(value: unknown): StudioDraftSnapshot | null {
-  if (isPagesSnapshot(value)) return value;
+  if (isPagesSnapshot(value)) return withKnownKind(value);
   if (isLegacySnapshot(value)) return migrateLegacySnapshot(value);
   return null;
 }

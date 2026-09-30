@@ -40,6 +40,7 @@ import { announceConversationClosed } from '../../socketio/announceConversationC
 import { deactivateShareLinksOnClose } from '../../services/conversations/shareLinkClosure';
 import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
+import { EngagementService } from '../../services/engagement/EngagementService';
 import { FOUNDING_MEMBER_PERMISSIONS } from '../../services/participantRights';
 import { postConversationNotice, noticeActor, noticeBroadcast } from '../../services/conversations/conversationNotice';
 import {
@@ -318,6 +319,10 @@ export function registerCreateConversationRoute(
       // aussi le rejoindre : les deux familles (`create.count`, `join.*`) sont
       // évaluées par les deux événements, chacun ne mesurant que la sienne.
       void new CerclesAchievements(prisma).recordEvent({ kind: 'conversation.create', userId }).catch(() => undefined);
+      // Créer un groupe rapporte, une fois par ENSEMBLE de membres (#8906).
+      if (type === 'group') {
+        void new EngagementService(prisma).recordGroupCreation(userId, conversation.id, uniqueParticipantIds).catch(() => undefined);
+      }
       void new CerclesAchievements(prisma).recordEvent({
         kind: 'conversation.join',
         userId,

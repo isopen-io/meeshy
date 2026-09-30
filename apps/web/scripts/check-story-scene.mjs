@@ -855,7 +855,7 @@ async function runAuthorRail(colorScheme) {
     JSON.stringify(rail) === JSON.stringify(['views', 'share', 'save', 'comments']),
     `${tag} : le rail de MA story doit porter EXACTEMENT Vues, Partager, Enregistrer, Commentaires — reçu ${JSON.stringify(rail)}`,
   );
-  const vuesCompte = await page.$eval('[data-story-action="views"]', (el) => el.textContent?.trim() ?? '');
+  const vuesCompte = await page.$eval('[data-story-action="views"] [data-viewer-count]', (el) => el.textContent?.trim() ?? '').catch(() => '');
   check(vuesCompte === '8', `${tag} : « Vues » doit porter le compte SERVI (8) — reçu « ${vuesCompte} »`);
   const cibles = await page.$$eval('[data-story-action-rail] [data-story-action]', (els) =>
     els.map((e) => {

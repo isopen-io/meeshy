@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import MeeshySDK
 
 /// #8892 — « est dans la conversation » : décodage des charges serveur
@@ -66,4 +67,59 @@ final class ConversationViewingTests: XCTestCase {
         XCTAssertFalse(viewers.isHere(userId: "u1", conversationId: "c1"))
         XCTAssertEqual(viewers, ConversationViewers())
     }
+
+    // MARK: - Nouvelle session (snapshots à la (re)connexion)
+
+    func test_applying_sessionStarted_forgetsEveryConversation() {
+        let viewers = ConversationViewers()
+            .applying(.arrived(change("u1", "c1")))
+            .applying(.arrived(change("u2", "c2")))
+            .applying(.sessionStarted)
+        XCTAssertEqual(viewers, ConversationViewers())
+    }
+
+    func test_applying_snapshotsAfterSessionStarted_keepOnlyWhatTheServerReannounced() {
+        let viewers = ConversationViewers()
+            .applying(.arrived(change("left-meanwhile", "c1")))
+            .applying(.arrived(change("u2", "c2")))
+            .applying(.sessionStarted)
+            .applying(.snapshot(ConversationViewingSnapshot(conversationId: "c2", userIds: ["u2", "u3"])))
+        XCTAssertFalse(viewers.isHere(userId: "left-meanwhile", conversationId: "c1"))
+        XCTAssertEqual(viewers.users(in: "c2"), ["u2", "u3"])
+    }
+
+    func test_handleViewingSessionStarted_publishesSessionStartedOnTheViewingChannel() {
+        var received: [ConversationViewingEvent] = []
+        let cancellable = MessageSocketManager.shared.conversationViewing
+            .sink { received.append($0) }
+
+        MessageSocketManager.shared.handleViewingSessionStarted()
+
+        cancellable.cancel()
+        XCTAssertEqual(received, [.sessionStarted])
+    }
+
+    // MARK: - Clé d'un auteur de message
+
+    func test_viewingKey_registeredSender_isTheAccountId() {
+        let message = MeeshyMessage(
+            conversationId: "c1", senderId: "participant-1", content: "salut",
+            senderUserId: "user-1"
+        )
+        XCTAssertEqual(message.viewingKey, "user-1")
+    }
+
+    func test_viewingKey_anonymousSender_isTheParticipantId() {
+        let message = MeeshyMessage(
+            conversationId: "c1", senderId: "participant-1", content: "salut",
+            senderUserId: "user-ghost", senderIsAnonymous: true
+        )
+        XCTAssertEqual(message.viewingKey, "participant-1")
+    }
+
+    func test_viewingKey_registeredSenderWithoutAccountId_fallsBackToSenderId() {
+        let message = MeeshyMessage(conversationId: "c1", senderId: "participant-1", content: "salut")
+        XCTAssertEqual(message.viewingKey, "participant-1")
+    }
 }
+

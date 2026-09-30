@@ -1,7 +1,7 @@
-import { useEffect, useMemo } from 'react';
+import { createContext, useContext, useEffect, useMemo } from 'react';
 import { useStore } from 'zustand/react';
 
-import { acquireConversationViewing, herePeersOf, isHereIn, viewingStore } from '@/lib/api/conversation-viewing';
+import { acquireConversationViewing, herePeersOf, isHereIn, viewingStore, type ViewingState } from '@/lib/api/conversation-viewing';
 import { peerOf } from '@/lib/view/conversation';
 
 /**
@@ -39,4 +39,38 @@ export function peerHereIn(
   const peer = peerOf(conversation, viewerId);
   const peerId = peer?.userId ?? peer?.user?.id;
   return peerId !== undefined && peerId !== null && (herePeers[conversation.id]?.includes(peerId) ?? false);
+}
+
+const NOBODY_HERE: readonly string[] = [];
+
+/** Les pairs présents dans UNE conversation — la même liste vide quand il n'y
+ * en a aucun, pour que l'abonné ne se re-rende pas à chaque autre changement. */
+export function herePeersIn(state: Pick<ViewingState, 'byConversation'>, conversationId: string): readonly string[] {
+  return state.byConversation[conversationId] ?? NOBODY_HERE;
+}
+
+export function useHereIn(conversationId: string): readonly string[] {
+  return useStore(viewingStore, (s) => herePeersIn(s, conversationId));
+}
+
+/** Les pairs présents dans la conversation du fil que l'on lit — posé par
+ * l'écran de fil, lu par chaque avatar d'auteur (bulles, frappe, en-tête).
+ * Hors d'un fil : personne. */
+export const HerePeersContext = createContext<readonly string[]>(NOBODY_HERE);
+
+export function useAuthorHere(authorKey: string | undefined): boolean {
+  const herePeers = useContext(HerePeersContext);
+  return authorKey !== undefined && herePeers.includes(authorKey);
+}
+
+type HereKeyBearer = {
+  readonly id?: string | null | undefined;
+  readonly userId?: string | null | undefined;
+  readonly user?: { readonly id?: string | null | undefined } | null | undefined;
+};
+
+/** La clé sous laquelle la passerelle annonce une personne : son compte, ou,
+ * pour un invité sans compte, sa ligne de participant. */
+export function hereKeyOf(bearer: HereKeyBearer | null | undefined): string | undefined {
+  return bearer?.userId ?? bearer?.user?.id ?? bearer?.id ?? undefined;
 }

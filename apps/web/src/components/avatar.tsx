@@ -204,7 +204,7 @@ export function Avatar({
       <span
         className="grid size-full place-items-center rounded-chip font-semibold text-ios-surface"
         style={{
-          background: `linear-gradient(135deg, ${color}, color-mix(in oklch, ${color} 68%, white))`,
+          background: `linear-gradient(135deg, ${color}, color-mix(in oklch, ${color} 68%, var(--color-ios-on-brand)))`,
           fontSize: size * 0.38,
         }}
         aria-hidden={name === undefined || showsImage}

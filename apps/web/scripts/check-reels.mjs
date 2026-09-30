@@ -73,6 +73,13 @@ const check = (ok, what) => {
 };
 
 const TAP_FLOOR = 44;
+
+/* Un compteur NUL ne s'affiche pas (rail commun des plein écrans, #8879) :
+   l'absence du nœud vaut 0, jamais une attente de dix secondes. */
+const countOf = async (page, selector) => {
+  const node = await page.$(`${selector} .tabular-nums`);
+  return node === null ? 0 : Number(await node.textContent());
+};
 const WCAG_AA = 4.5;
 const SEED = 'reel-portrait';
 const DEEP_SEED = 'reel-sunset-en';
@@ -442,12 +449,12 @@ try {
 
       // ------------------------------------------------ 6. j'aime, partagé avec le Flux
       const likeSel = '[data-reel-index="0"] [data-reel-gesture="like"]';
-      const before = Number(await page.textContent(`${likeSel} .tabular-nums`));
+      const before = (await countOf(page, likeSel));
       await page.click(likeSel);
       const liked = await page
         .waitForFunction((sel) => document.querySelector(sel)?.getAttribute('aria-pressed') === 'true', likeSel, { timeout: 500 })
         .then(() => true, () => false);
-      check(liked && Number(await page.textContent(`${likeSel} .tabular-nums`)) === before + 1, `${label} : « J'aime » bascule au geste, compte +1`);
+      check(liked && (await countOf(page, likeSel)) === before + 1, `${label} : « J'aime » bascule au geste, compte +1`);
 
       // ------------------------------------------------ 15. commenter et repartager (#6484)
       const commentSel = '[data-reel-index="0"] [data-reel-gesture="comment"]';
@@ -480,7 +487,7 @@ try {
         await page.click(repostConfirmSel);
       };
 
-      const beforeAnyTap = Number(await page.textContent(`${repostSel} .tabular-nums`));
+      const beforeAnyTap = (await countOf(page, repostSel));
       await page.click(repostSel);
       const dialogOpened = await page.waitForSelector(repostConfirmSel, { timeout: 1500 }).then(() => true, () => false);
       const pressedBeforeConfirm = await page.evaluate((sel) => document.querySelector(sel)?.getAttribute('aria-pressed'), repostSel);
@@ -488,7 +495,7 @@ try {
       const dialogClosedAfterCancel = await page
         .waitForSelector(repostConfirmSel, { state: 'detached', timeout: 1500 })
         .then(() => true, () => false);
-      const countAfterCancel = Number(await page.textContent(`${repostSel} .tabular-nums`));
+      const countAfterCancel = (await countOf(page, repostSel));
       check(
         dialogOpened && pressedBeforeConfirm === 'false' && dialogClosedAfterCancel && countAfterCancel === beforeAnyTap,
         `${label} : « Repartager » ouvre une confirmation avant d'envoyer — « Annuler » ne laisse aucun effet (ouverte ${dialogOpened}, pressé ${pressedBeforeConfirm}, fermée ${dialogClosedAfterCancel}, compte ${beforeAnyTap}→${countAfterCancel})`,
@@ -527,10 +534,10 @@ try {
       // #8601 — FEUILLE OUVERTE, LE CHROME DU RÉEL CÈDE : « Retour »,
       // identité, légende et rail s'effacent, inertes (`chromeYields`).
       await page
-        .waitForFunction(() => getComputedStyle(document.querySelector('[data-reels-back]')).opacity === '0', null, { timeout: 1500 })
+        .waitForFunction(() => getComputedStyle(document.querySelector('[data-viewer-top-bar]')).opacity === '0', null, { timeout: 1500 })
         .catch(() => undefined);
       const chromeCede = await page.evaluate(() => {
-        const back = document.querySelector('[data-reels-back]');
+        const back = document.querySelector('[data-viewer-top-bar]');
         const chrome = document.querySelector('[data-reel-index="0"] [data-reel-chrome]');
         return {
           retour: back === null ? null : { opacite: getComputedStyle(back).opacity, inerte: back.inert },
@@ -659,12 +666,12 @@ try {
 
       // LE COMPTEUR DU RAIL SUIT L'ENVOI EN OPTIMISTE (#6484, C2) — lu sur le
       // rail lui-même, la caisse que le lecteur peint, pas sur un cache voisin.
-      const commentBefore = Number(await page.textContent(`${commentSel} .tabular-nums`));
+      const commentBefore = (await countOf(page, commentSel));
       await page.fill('[data-story-comments-sheet] textarea', 'Bien vu');
       await page.click('[data-story-comments-sheet] [data-comment-send]');
       const countFollowed = await page
         .waitForFunction(
-          ([sel, expected]) => Number(document.querySelector(`${sel} .tabular-nums`)?.textContent) === expected,
+          ([sel, expected]) => Number(document.querySelector(`${sel} .tabular-nums`)?.textContent ?? 0) === expected,
           [commentSel, commentBefore + 1],
           { timeout: 1500 },
         )
@@ -686,7 +693,7 @@ try {
         sheet: document.querySelector('[data-story-comments-sheet]') !== null,
         inert: document.querySelector('[data-reels-pager]')?.inert === true,
         focus: document.activeElement?.getAttribute('data-reel-gesture') ?? null,
-        chromeRendu: document.querySelector('[data-reels-back]')?.inert === false && document.querySelector('[data-reel-index="0"] [data-reel-chrome]')?.inert === false,
+        chromeRendu: document.querySelector('[data-viewer-top-bar]')?.inert === false && document.querySelector('[data-reel-index="0"] [data-reel-chrome]')?.inert === false,
       }));
       check(afterEscape.chromeRendu, `${label} : feuille fermée, « Retour » et le chrome du réel reviennent atteignables (#8601)`);
       const urlAfter = new URL(page.url());
@@ -698,17 +705,17 @@ try {
       // REPARTAGER — optimiste, compte +1, teinte posée, jamais défait par un
       // second tap (append-only, miroir `ReelsViewModel.repost`) — CONFIRMÉ,
       // comme chaque tap depuis le défaut majeur 1 (#6278).
-      const repostBefore = Number(await page.textContent(`${repostSel} .tabular-nums`));
+      const repostBefore = (await countOf(page, repostSel));
       await tapRepost();
       const reposted = await page
         .waitForFunction((sel) => document.querySelector(sel)?.getAttribute('aria-pressed') === 'true', repostSel, { timeout: 1500 })
         .then(() => true, () => false);
-      const repostColor = await page.evaluate((sel) => document.querySelector(sel)?.getAttribute('style') ?? '', repostSel);
+      const repostColor = await page.evaluate((sel) => document.querySelector(`${sel} [data-viewer-disc]`)?.getAttribute('style') ?? '', repostSel);
       const announcedSuccess = await page
         .waitForFunction(() => document.querySelector('[role="status"].sr-only')?.textContent === 'Repartage', undefined, { timeout: 1500 })
         .then(() => true, () => false);
       check(
-        reposted && announcedSuccess && Number(await page.textContent(`${repostSel} .tabular-nums`)) === repostBefore + 1 && repostColor.includes('--color-ok'),
+        reposted && announcedSuccess && (await countOf(page, repostSel)) === repostBefore + 1 && repostColor.includes('--color-ok'),
         `${label} : « Repartager » bascule au geste, compte +1, teinte posée, succès annoncé (${repostColor})`,
       );
       await capture(page, `reels-repartage-${slug}`);
@@ -721,7 +728,7 @@ try {
         .waitForFunction(() => document.querySelector('[role="status"].sr-only')?.textContent === 'Déjà repartagé', undefined, { timeout: 1500 })
         .then(() => true, () => false);
       check(
-        announcedAlready && Number(await page.textContent(`${repostSel} .tabular-nums`)) === repostBefore + 1,
+        announcedAlready && (await countOf(page, repostSel)) === repostBefore + 1,
         `${label} : un second tap ne compte pas deux fois — append-only (#6484)`,
       );
 
@@ -863,7 +870,13 @@ try {
       await scenePage.goto(`${BASE}/reels?seed=${SCENE_SEED}`, { waitUntil: 'load' });
       await scenePage.waitForSelector(`[data-reel-index="0"][data-reel="${SCENE_SEED}"] [data-reel-scene]`);
 
-      const scenePlayerPresent = (await scenePage.$('[data-reel-index="0"] [data-scene-player]')) !== null;
+      /* Le moteur de scène est un chunk À LA DEMANDE (#6903) : à cache froid
+         il arrive APRÈS `[data-reel-scene]`. On attend qu'il monte (borné) au
+         lieu de parier sur la course — mesuré : rouge une fois sur la première
+         passe du gate complet, vert seul. */
+      const scenePlayerPresent = await scenePage
+        .waitForSelector('[data-reel-index="0"] [data-scene-player]', { timeout: 5_000 })
+        .then(() => true, () => false);
       const rawVideoAbsent = (await scenePage.$('[data-reel-index="0"] [data-reel-media="video"]')) === null;
       check(scenePlayerPresent && rawVideoAbsent, `${label} : un réel composé monte [data-scene-player], jamais un <video data-reel-media> brut`);
 

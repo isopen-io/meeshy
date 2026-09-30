@@ -77,8 +77,8 @@ function FeedMediaCarousel({ media, accent }: { readonly media: readonly FeedCar
                la légende propre du média, `post` pour le contenu du post servi
                en l'absence de légende propre sur un média UNIQUE. */
             data-feed-carousel-caption={current.captionOrigin ?? 'media'}
-            className="absolute inset-x-0 bottom-0 px-3 py-2 text-check text-white"
-            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}
+            className="absolute inset-x-0 bottom-0 px-3 py-2 text-check text-on-media"
+            style={{ background: 'linear-gradient(to top, var(--color-scrim-strong), transparent)' }}
             /* La langue SERVIE (#6280, `resolveMediaCaption`), jamais la
                langue d'interface : un lecteur d'écran qui prononce une
                traduction française avec une voix anglaise est le défaut du
@@ -342,11 +342,11 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
         draggable={false}
         data-feed-reel-open
         className="absolute inset-0 focus-visible:outline-2 focus-visible:-outline-offset-4"
-        style={{ borderRadius: 18, outlineColor: 'white' }}
+        style={{ borderRadius: 18, outlineColor: 'var(--color-on-media)' }}
       >
         {null}
       </Link>
-      <div className="pointer-events-none absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent 55%)' }} aria-hidden="true" />
+      <div className="pointer-events-none absolute inset-0" style={{ background: 'linear-gradient(to top, var(--color-scrim-strong), transparent 55%)' }} aria-hidden="true" />
       {/* LA PUCE « RÉEL » (§ 1.5 de la spécification, manquante à la première
           forme) — la carte est rendue en AFFICHE IMMOBILE, et un réel dont la
           pièce de tête est une IMAGE (la moitié du corpus de recette de
@@ -355,8 +355,8 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
           tranche (D-42). */}
       <span
         data-feed-reel-chip
-        className="pointer-events-none absolute top-3 left-3 rounded-chip px-2 py-0.5 text-check font-semibold text-white"
-        style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+        className="pointer-events-none absolute top-3 left-3 rounded-chip px-2 py-0.5 text-check font-semibold text-on-media"
+        style={{ backgroundColor: 'var(--color-scrim)' }}
       >
         {translate(language, 'feed.post.reel.chip')}
       </span>
@@ -368,11 +368,11 @@ function FeedReelCard({ model, ...hosts }: { readonly model: FeedCardModel } & C
       <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-2 p-3">
         <div className="flex items-center gap-2">
           <Avatar initials={model.author.initials} color={model.author.accentColor} size={34} {...(model.author.avatarSrc !== undefined ? { src: model.author.avatarSrc } : {})} />
-          <span className="text-body font-semibold text-white">{model.author.name}</span>
+          <span className="text-body font-semibold text-on-media">{model.author.name}</span>
         </div>
         {model.text !== undefined ? (
           <p
-            className="text-check text-white/90"
+            className="text-check text-on-media-2"
             {...(model.text.language !== '' ? { lang: model.text.language } : {})}
             style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
           >

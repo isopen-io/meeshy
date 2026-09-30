@@ -44,7 +44,7 @@ function adoptStyles(target: Document): void {
   for (const node of document.head.querySelectorAll('style, link[rel="stylesheet"]')) target.head.appendChild(node.cloneNode(true));
   target.documentElement.className = document.documentElement.className;
   target.body.style.margin = '0';
-  target.body.style.background = '#000';
+  target.body.style.background = 'var(--color-media-backdrop)';
 }
 
 async function openDocumentPip(api: DocumentPip): Promise<boolean> {
@@ -97,26 +97,26 @@ function CallPipView({ call }: { readonly call: ActiveCall }) {
     callActions.expand();
   };
   return (
-    <div className="relative flex h-screen flex-col" style={{ background: '#000', color: '#fff' }} data-call-pip-window="">
+    <div className="relative flex h-screen flex-col" style={{ background: 'var(--color-media-backdrop)', color: 'var(--color-on-media)' }} data-call-pip-window="">
       <div className="relative grid min-h-0 flex-1 place-items-center">
         {source === null ? (
           <Avatar initials={initialsOf(call.title)} color={colorForName(call.title)} size={72} {...(call.avatar === null ? {} : { src: call.avatar })} />
         ) : (
           <StreamVideo stream={source.stream} mirrored={source.mirrored} className="absolute inset-0 size-full" label={call.title} />
         )}
-        <span className="absolute left-2 top-2 flex items-center gap-2 rounded-full px-2 py-0.5 text-mini" style={{ background: 'rgba(0,0,0,0.55)' }}>
+        <span className="absolute left-2 top-2 flex items-center gap-2 rounded-full px-2 py-0.5 text-mini" style={{ background: 'var(--color-scrim)' }}>
           <span className="max-w-[10rem] truncate font-semibold">{call.title}</span>
           <PipClock call={call} />
         </span>
       </div>
-      <div className="flex items-center justify-center gap-3 py-1" style={{ background: 'rgba(17,16,24,0.92)' }}>
+      <div className="flex items-center justify-center gap-3 py-1" style={{ background: 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent)' }}>
         <button type="button" onClick={callActions.toggleMic} aria-pressed={call.micMuted} aria-label={translate(language, call.micMuted ? 'call.mic.unmute' : 'call.mic.mute')} className="grid size-11 place-items-center rounded-full">
           {call.micMuted ? <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={20} /> : <Glyph name="microphone" size={20} />}
         </button>
         <button type="button" onClick={back} aria-label={translate(language, 'call.expand')} className="min-h-11 rounded-full px-3 text-body font-semibold">
           {translate(language, 'call.expand')}
         </button>
-        <button type="button" onClick={callActions.hangup} aria-label={translate(language, 'call.hangup')} className="grid size-11 place-items-center rounded-full" style={{ background: '#ef4444' }}>
+        <button type="button" onClick={callActions.hangup} aria-label={translate(language, 'call.hangup')} className="grid size-11 place-items-center rounded-full" style={{ background: 'var(--ios-error-strong)' }}>
           <GlyphSvg glyph={CALL_SCREEN_GLYPHS.phoneDisconnect} size={20} />
         </button>
       </div>

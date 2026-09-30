@@ -170,7 +170,7 @@ export function VideoTile({
   const headControlStyle = {
     width: HEAD_CONTROL_PX,
     height: HEAD_CONTROL_PX,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'var(--color-scrim)',
   };
 
   return (
@@ -184,8 +184,8 @@ export function VideoTile({
       {...{ [PIECE_RATIO_ATTRIBUTE]: pieceAspectRatio(attachment) }}
       className={
         slot === undefined
-          ? 'relative size-full overflow-hidden bg-black'
-          : 'relative overflow-hidden rounded-media bg-black'
+          ? 'relative size-full overflow-hidden bg-media-backdrop'
+          : 'relative overflow-hidden rounded-media bg-media-backdrop'
       }
       {...(slot !== undefined
         ? { style: { width: slot.width, maxWidth: '100%', aspectRatio: `${slot.width} / ${slot.height}` } }
@@ -228,9 +228,9 @@ export function VideoTile({
         }}
       >
         {isPlaying ? (
-          <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={diameter * 0.32} className="text-white" />
+          <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={diameter * 0.32} className="text-on-media" />
         ) : (
-          <Glyph name="fillPlay" size={diameter * 0.34} className="text-white" />
+          <Glyph name="fillPlay" size={diameter * 0.34} className="text-on-media" />
         )}
       </button>
 
@@ -241,7 +241,7 @@ export function VideoTile({
             data-video-control="expand"
             onClick={expand}
             aria-label={translate(language, 'media.viewer.open_fullscreen')}
-            className="tap-target-34 grid place-items-center rounded-full text-white"
+            className="tap-target-34 grid place-items-center rounded-full text-on-media"
             style={headControlStyle}
           >
             <GlyphSvg glyph={MEDIA_GLYPHS.arrowsOutSimple} size={13} />
@@ -251,7 +251,7 @@ export function VideoTile({
             data-video-control="mute"
             onClick={() => setMuted(!muted)}
             aria-label={translate(language, muted ? 'media.video.unmute' : 'media.video.mute')}
-            className="tap-target-34 grid place-items-center rounded-full text-white"
+            className="tap-target-34 grid place-items-center rounded-full text-on-media"
             style={headControlStyle}
           >
             <GlyphSvg glyph={muted ? MEDIA_TRANSPORT_GLYPHS.speakerSlash : MEDIA_TRANSPORT_GLYPHS.speakerHigh} size={13} />
@@ -260,8 +260,8 @@ export function VideoTile({
       ) : durationLabel !== undefined ? (
         <span
           aria-hidden
-          className="pointer-events-none absolute bottom-1.5 right-1.5 rounded-full px-1.5 py-0.5 text-mini font-medium text-white tabular-nums"
-          style={{ backgroundColor: `rgba(0,0,0,${DURATION_BADGE_OPACITY})` }}
+          className="pointer-events-none absolute bottom-1.5 right-1.5 rounded-full px-1.5 py-0.5 text-mini font-medium text-on-media tabular-nums"
+          style={{ backgroundColor: `color-mix(in srgb, var(--color-media-backdrop) ${Math.round(DURATION_BADGE_OPACITY * 100)}%, transparent)` }}
         >
           {durationLabel}
         </span>
@@ -272,12 +272,12 @@ export function VideoTile({
       {isError ? (
         <div
           data-video-error-band
-          className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-black/60 py-1"
+          className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-scrim-strong py-1"
         >
           <button
             type="button"
             onClick={toggle}
-            className="text-mini text-white underline"
+            className="text-mini text-on-media underline"
             style={{ minHeight: 44 }}
           >
             Lecture impossible — Réessayer

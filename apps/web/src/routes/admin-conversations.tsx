@@ -134,7 +134,7 @@ function ConversationRow({
       </Td>
       <Td className="text-caption">
         {conversation.isActive ? (
-          <span style={{ color: 'var(--color-success, #34D399)' }}>{translateAdmin(language, 'admin.filter.active')}</span>
+          <span style={{ color: 'var(--color-success)' }}>{translateAdmin(language, 'admin.filter.active')}</span>
         ) : (
           <span style={{ color: 'var(--color-danger)' }}>{translateAdmin(language, 'admin.users.inactive')}</span>
         )}

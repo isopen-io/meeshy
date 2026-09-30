@@ -351,7 +351,7 @@ extension ConversationViewModel {
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
                 replyToJson: nil, forwardedFromJson: nil,
-                expiresAt: intent.expiresAt(), effectFlags: optimisticEffectFlags(intent).rawValue,
+                expiresAt: nil, effectFlags: optimisticEffectFlags(intent).rawValue,
                 maxViewOnceCount: intent.maxViewOnceCount, viewOnceCount: 0,
                 isEdited: false, editedAt: nil, deletedAt: nil,
                 pinnedAt: nil, pinnedBy: nil,
@@ -371,7 +371,8 @@ extension ConversationViewModel {
                 layoutVersion: 0, layoutMaxWidth: nil,
                 changeVersion: 0,
                 locationJson: offlineLocationJson,
-                stickerJson: Self.stickerJson(sticker, id: offlineClientMessageId)
+                stickerJson: Self.stickerJson(sticker, id: offlineClientMessageId),
+                ephemeralDuration: intent.ephemeralDurationSeconds
             )
 
             // `insertOptimistic` is a synchronous actor-isolated throw (no
@@ -438,7 +439,9 @@ extension ConversationViewModel {
         // eux (rejeu d'outbox, envoi programmatique) : ils lisent ce qui est
         // armé, comme avant. Un chemin ne peut donc pas partir SANS protection
         // par oubli ; il faudrait passer `.none` délibérément.
-        let resolvedExpiresAt = intent.expiresAt()
+        // #8905 — la DURÉE, jamais une échéance : l'envoi n'est pas une
+        // réception. La bulle lit « en attente de réception » jusqu'à ce que la
+        // passerelle serve `max D(u)` (`message:countdown-started`).
         let resolvedEphemeralDuration = intent.ephemeralDurationSeconds
         let resolvedIsViewOnce = intent.isViewOnce
         let resolvedMaxViewOnceCount = intent.maxViewOnceCount
@@ -504,7 +507,7 @@ extension ConversationViewModel {
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
                 replyToJson: replyRef.flatMap { try? JSONEncoder().encode($0) }, forwardedFromJson: nil,
-                expiresAt: resolvedExpiresAt, effectFlags: optimisticEffectFlags(intent).rawValue,
+                expiresAt: nil, effectFlags: optimisticEffectFlags(intent).rawValue,
                 maxViewOnceCount: resolvedMaxViewOnceCount, viewOnceCount: 0,
                 isEdited: false, editedAt: nil, deletedAt: nil,
                 pinnedAt: nil, pinnedBy: nil,
@@ -524,7 +527,8 @@ extension ConversationViewModel {
                 layoutVersion: 0, layoutMaxWidth: nil,
                 changeVersion: 0,
                 locationJson: optimisticLocationJson,
-                stickerJson: Self.stickerJson(sticker, id: tempId)
+                stickerJson: Self.stickerJson(sticker, id: tempId),
+                ephemeralDuration: resolvedEphemeralDuration
             )
             Logger.messages.info("SendFlow insertOptimistic START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public)")
             do {
@@ -545,7 +549,7 @@ extension ConversationViewModel {
                         attachments: resolvedAttachments,
                         isBlurred: resolvedBlur ?? false,
                         isViewOnce: resolvedIsViewOnce,
-                        expiresAt: resolvedExpiresAt,
+                        ephemeralDuration: resolvedEphemeralDuration,
                         originalLanguage: optimisticRecord.originalLanguage,
                         location: location
                     ),
@@ -599,7 +603,6 @@ extension ConversationViewModel {
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
                 attachmentIds: attachmentIds,
-                expiresAt: resolvedExpiresAt,
                 ephemeralDuration: resolvedEphemeralDuration,
                 isViewOnce: resolvedIsViewOnce ? true : nil,
                 maxViewOnceCount: resolvedMaxViewOnceCount,
@@ -626,7 +629,7 @@ extension ConversationViewModel {
             let socketFirstEligible = messageSocket.isConnected
                 && !isEncrypted
                 && (attachmentIds?.isEmpty ?? true)
-                && resolvedExpiresAt == nil
+                && resolvedEphemeralDuration == nil
                 && !intent.ephemeralAfterRead
                 && !resolvedIsViewOnce
                 && resolvedBlur != true
@@ -729,7 +732,7 @@ extension ConversationViewModel {
             // propriétés sensibles (éphémère, vue unique, flou, effets) que le
             // canal socket ne transporte pas intégralement : ceux-là restent sur
             // le retry REST de l'outbox qui, lui, les préserve.
-            let hasSpecialProps = resolvedExpiresAt != nil
+            let hasSpecialProps = resolvedEphemeralDuration != nil
                 || intent.ephemeralAfterRead
                 || resolvedIsViewOnce
                 || resolvedBlur == true
@@ -994,7 +997,9 @@ extension ConversationViewModel {
             // décompte, ni voile — jusqu'à la réconciliation serveur. Le
             // défaut se lisait comme « la protection n'a pas été appliquée »,
             // ce qui était vrai à l'écran et faux sur le fil.
-            expiresAt: protection.expiresAt(from: now),
+            // #8905 — la DURÉE, jamais une échéance : l'envoi n'est pas une
+            // réception, la flamme lit « en attente de réception ».
+            expiresAt: nil,
             effectFlags: protection.lifecycleFlags.rawValue,
             maxViewOnceCount: protection.maxViewOnceCount, viewOnceCount: 0,
             isEdited: false, editedAt: nil, deletedAt: nil,
@@ -1014,7 +1019,8 @@ extension ConversationViewModel {
             cachedTimestampInline: nil,
             layoutVersion: 0, layoutMaxWidth: nil,
             changeVersion: 0,
-            stickerJson: Self.stickerJson(sticker, id: tempId)
+            stickerJson: Self.stickerJson(sticker, id: tempId),
+            ephemeralDuration: protection.ephemeralDurationSeconds
         )
         let persistence = messagePersistence
         let recordConversationId = record.conversationId
@@ -1026,6 +1032,7 @@ extension ConversationViewModel {
             text: content,
             at: now,
             attachments: attachments,
+            ephemeralDuration: protection.ephemeralDurationSeconds,
             originalLanguage: resolvedOriginalLanguage
         )
         Task.detached(priority: .userInitiated) {

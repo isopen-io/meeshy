@@ -58,6 +58,8 @@ export type ReceptionStorage = {
 
 const receptions = new Map<string, number>();
 const servedDeadlines = new Map<string, number>();
+/** La plus TARDIVE des échéances servies — celle de l'EXPÉDITEUR (#8905). */
+const latestServedDeadlines = new Map<string, number>();
 
 function browserReceptionStorage(): ReceptionStorage | null {
   try {
@@ -140,19 +142,23 @@ export function noteEphemeralReception(messageId: string, atMs: number): void {
 }
 
 /**
- * L'ÉCHÉANCE SERVIE par `message:countdown-started` (#7451, point 5). Elle
- * n'écrase JAMAIS une échéance servie plus PROCHE : deux appareils d'un même
- * lecteur peuvent recevoir l'événement dans un ordre quelconque, et la règle
- * partagée retient la plus proche — ce registre applique la même discipline à
- * sa propre source, faute de quoi un événement en retard rallongerait la vie
- * d'un message.
+ * L'ÉCHÉANCE SERVIE par `message:countdown-started` (#7451, point 5), tenue
+ * sous ses DEUX lectures — l'événement ne dit pas à qui il s'adresse :
+ *
+ * - pour un DESTINATAIRE, `D(u)` : la plus PROCHE gagne. Deux appareils d'un
+ *   même lecteur peuvent recevoir l'événement dans un ordre quelconque, et un
+ *   événement en retard ne doit pas rallonger la vie d'un message ;
+ * - pour l'EXPÉDITEUR, `max D(u)` (#8905) : la plus TARDIVE gagne. Elle recule
+ *   à chaque destinataire qui reçoit après les autres, et c'est elle, seule,
+ *   qui fait décompter un envoi.
  */
 export function noteServedDeadline(messageId: string, expiresAt: string | Date): void {
   const ms = expiresAt instanceof Date ? expiresAt.getTime() : new Date(expiresAt).getTime();
   if (!Number.isFinite(ms)) return;
-  const held = servedDeadlines.get(messageId);
-  if (held !== undefined && held <= ms) return;
-  remember(servedDeadlines, messageId, ms);
+  const closest = servedDeadlines.get(messageId);
+  if (closest === undefined || ms < closest) remember(servedDeadlines, messageId, ms);
+  const latest = latestServedDeadlines.get(messageId);
+  if (latest === undefined || ms > latest) remember(latestServedDeadlines, messageId, ms);
 }
 
 /** Une échéance servie en millisecondes ; `NaN` quand il n'y en a pas — aucune comparaison ne la tient pour passée. */
@@ -168,9 +174,23 @@ export function receptionOf(messageId: string): number | null {
   return receptions.get(messageId) ?? null;
 }
 
-/** L'échéance servie par `message:countdown-started`, ou `null` (#7547). */
-export function servedDeadlineOf(messageId: string): number | null {
-  return servedDeadlines.get(messageId) ?? null;
+/**
+ * L'ÉCHÉANCE SERVIE à CE lecteur pour ce message, ou `null` — l'événement
+ * `message:countdown-started` et l'`expiresAt` servi par REST, réunis selon le
+ * côté (#7547, #8905). L'EXPÉDITEUR retient la plus TARDIVE des deux (`max
+ * D(u)` ne fait que reculer, et c'est sa seule horloge) ; un DESTINATAIRE
+ * garde l'événement quand il en a un, la valeur REST sinon.
+ */
+export function servedDeadlineFor(
+  message: Pick<Message, 'id'> & { readonly expiresAt?: Message['expiresAt'] | string | null },
+  isMine: boolean,
+): number | null {
+  const rest = timeOfServed(message.expiresAt);
+  const restMs = Number.isFinite(rest) ? rest : null;
+  if (!isMine) return servedDeadlines.get(message.id) ?? restMs;
+  const latest = latestServedDeadlines.get(message.id) ?? null;
+  if (latest === null) return restMs;
+  return restMs === null ? latest : Math.max(latest, restMs);
 }
 
 /** Le message n'existe plus — ni son horodatage de réception, ni son échéance. */
@@ -178,6 +198,7 @@ export function forgetEphemeral(messageId: string): void {
   ensureLoaded();
   const held = receptions.delete(messageId);
   servedDeadlines.delete(messageId);
+  latestServedDeadlines.delete(messageId);
   if (held) writeReceptions();
 }
 
@@ -186,6 +207,7 @@ export function resetEphemeralReception(): void {
   ensureLoaded();
   receptions.clear();
   servedDeadlines.clear();
+  latestServedDeadlines.clear();
   writeReceptions();
 }
 
@@ -265,7 +287,7 @@ export function peekEphemeralDeadline(input: {
 
   return ephemeralDeadline({
     ...(duration === undefined ? {} : { ephemeralDuration: duration }),
-    servedExpiresAt: servedDeadlines.get(message.id) ?? message.expiresAt ?? null,
+    servedExpiresAt: servedDeadlineFor(message, isMine),
     receivedAtMs: receptionOf(message.id),
     isMine,
   });

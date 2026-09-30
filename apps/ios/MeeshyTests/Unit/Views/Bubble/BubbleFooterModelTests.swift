@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 @MainActor
@@ -36,6 +37,28 @@ final class BubbleFooterModelTests: XCTestCase {
 
     func test_senderHandle_prefixesUsername() {
         XCTAssertEqual(SenderIdentity.handle(fromUsername: "atabeth"), "@atabeth")
+    }
+
+    // MARK: - SenderIdentity.isHere — « est dans la conversation » (#8892)
+
+    private func makeSender(isHere: Bool) -> SenderIdentity {
+        SenderIdentity(
+            name: "Awa", username: "@awa", role: nil, avatarURL: nil,
+            accentColor: "#6366F1", moodEmoji: nil, presence: .online,
+            storyRing: .none, isHere: isHere
+        )
+    }
+
+    func test_senderIdentity_isHereChange_invalidatesTheFooter() {
+        XCTAssertNotEqual(makeSender(isHere: false), makeSender(isHere: true))
+    }
+
+    func test_senderIdentity_isHereOmitted_defaultsToAbsent() {
+        let sender = SenderIdentity(
+            name: "Awa", username: nil, role: nil, avatarURL: nil,
+            accentColor: "#6366F1", moodEmoji: nil, presence: nil, storyRing: .none
+        )
+        XCTAssertFalse(sender.isHere)
     }
 
     func test_make_directNonLastSent_showsTimestamp() {

@@ -157,7 +157,7 @@ export function ConversationDetailsSheet({
               onClick={() => void onShare()}
               data-conversation-details-share
               className="flex items-center gap-2 rounded-chip px-4 font-semibold disabled:opacity-50"
-              style={{ minHeight: 44, color: 'white', backgroundColor: 'var(--accent)' }}
+              style={{ minHeight: 44, color: 'var(--color-ios-on-brand)', backgroundColor: 'var(--accent)' }}
             >
               <Glyph name="linkSimple" size={18} />
               {share.busy ? translate(language, 'conversation.details.share.busy') : translate(language, 'conversation.details.share')}

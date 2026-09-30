@@ -60,6 +60,9 @@ export const byIdCard = (id: string): string => `/api/v1/conversations/${encodeU
 /** DELETE /api/v1/conversations/:id/delete-for-me */
 export const byIdDeleteForMe = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/delete-for-me`;
 
+/** GET /api/v1/conversations/:id/engagement */
+export const byIdEngagement = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/engagement`;
+
 /** POST /api/v1/conversations/:id/invite */
 export const byIdInvite = (id: string): string => `/api/v1/conversations/${encodeURIComponent(id)}/invite`;
 

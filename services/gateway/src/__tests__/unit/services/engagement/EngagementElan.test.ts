@@ -36,6 +36,8 @@ function makePrisma(recentAxes: string[], milestones: Array<{ milestoneType: str
       findMany: jest.fn().mockResolvedValue(milestones),
     },
     engagementConversationCredit: { create: jest.fn().mockResolvedValue({}) },
+    engagementScaleConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+    conversationEngagement: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
     user: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn().mockResolvedValue({}) },
     $runCommandRaw: runCommandRaw,
   } as unknown as PrismaClient;

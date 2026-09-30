@@ -31,9 +31,9 @@ import { initialsOf } from '@/lib/view/conversation';
  * bulle ne couvrent l'application : on navigue et on écrit dessous.
  */
 
-const PILL_BG = 'rgba(17,16,24,0.92)';
-const HANGUP = '#ef4444';
-const ANSWER = '#22c55e';
+const PILL_BG = 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent)';
+const HANGUP = 'var(--ios-error-strong)';
+const ANSWER = 'var(--ios-success)';
 
 function CallPill({ call }: { readonly call: ActiveCall }) {
   const language = currentInterfaceLanguage();
@@ -67,7 +67,7 @@ function CallPill({ call }: { readonly call: ActiveCall }) {
   return (
     <div
       className="fixed left-1/2 z-[190] flex -translate-x-1/2 items-center gap-1 rounded-full py-1 ps-1 pe-1 shadow-lg"
-      style={{ background: PILL_BG, color: '#fff', top: 'calc(env(safe-area-inset-top) + 0.5rem)', touchAction: 'pan-y' }}
+      style={{ background: PILL_BG, color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 0.5rem)', touchAction: 'pan-y' }}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
       onPointerCancel={() => void (swipeFrom.current = null)}
@@ -76,7 +76,7 @@ function CallPill({ call }: { readonly call: ActiveCall }) {
       <button type="button" onClick={expand} aria-label={translate(language, 'call.expand')} className="flex min-h-11 items-center gap-2 rounded-full px-2">
         <span aria-hidden className="size-2 rounded-full" style={{ background: ANSWER }} />
         <span className="max-w-[9rem] truncate text-body font-semibold">{call.title}</span>
-        <span className="text-mini tabular-nums" style={{ color: 'rgba(255,255,255,0.72)' }}>
+        <span className="text-mini tabular-nums" style={{ color: 'var(--color-on-media-3)' }}>
           {label}
         </span>
       </button>
@@ -106,13 +106,13 @@ function WaitingBanner({ waiting }: { readonly waiting: WaitingCall }) {
       role="alertdialog"
       aria-label={translate(language, 'call.waiting.from', { caller: waiting.callerName })}
       className="fixed inset-x-3 z-[210] mx-auto flex max-w-md items-center gap-3 rounded-card p-3 shadow-lg"
-      style={{ background: PILL_BG, color: '#fff', top: 'calc(env(safe-area-inset-top) + 3.75rem)' }}
+      style={{ background: PILL_BG, color: 'var(--color-on-media)', top: 'calc(env(safe-area-inset-top) + 3.75rem)' }}
       data-call-waiting=""
     >
       <Avatar initials={initialsOf(waiting.callerName)} color={colorForName(waiting.callerName)} size={40} {...(waiting.callerAvatar === null ? {} : { src: waiting.callerAvatar })} />
       <div className="min-w-0 flex-1">
         <p className="truncate text-body font-semibold">{waiting.title}</p>
-        <p className="truncate text-mini" style={{ color: 'rgba(255,255,255,0.72)' }}>
+        <p className="truncate text-mini" style={{ color: 'var(--color-on-media-3)' }}>
           {translate(language, 'call.waiting.from', { caller: waiting.callerName })}
         </p>
       </div>
@@ -133,7 +133,7 @@ function Notice() {
     return () => clearTimeout(handle);
   }, []);
   return (
-    <div role="status" className="fixed inset-x-0 z-[210] mx-auto w-fit rounded-full px-4 py-2 text-body shadow-lg" style={{ background: PILL_BG, color: '#fff', bottom: 'calc(env(safe-area-inset-bottom) + 6rem)' }}>
+    <div role="status" className="fixed inset-x-0 z-[210] mx-auto w-fit rounded-full px-4 py-2 text-body shadow-lg" style={{ background: PILL_BG, color: 'var(--color-on-media)', bottom: 'calc(env(safe-area-inset-bottom) + 6rem)' }}>
       {translate(language, 'call.notice.alreadyInCall')}
     </div>
   );

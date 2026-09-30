@@ -115,7 +115,7 @@ export default function ForgotPasswordScreen({
           <Link
             to="login"
             replace
-            className="grid w-full place-items-center rounded-[14px] px-6 font-semibold"
+            className="grid w-full place-items-center rounded-field px-6 font-semibold"
             style={{
               minHeight: 52,
               border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)',
