@@ -405,8 +405,8 @@ export function Bubble({
           className="text-bubble leading-[1.35] whitespace-pre-wrap"
           mentions={message.validatedMentions}
           trackingLinks={message.trackingLinks}
-          linkColor={isMine ? 'white' : 'var(--color-ios-brand)'}
-          toggleColor={isMine ? 'white' : 'var(--color-ios-ink)'}
+          linkColor={isMine ? 'var(--color-ios-on-brand)' : 'var(--color-ios-brand)'}
+          toggleColor={isMine ? 'var(--color-ios-on-brand)' : 'var(--color-ios-ink)'}
           plainTextHidden
         />
       ) : null}
@@ -489,7 +489,7 @@ export function Bubble({
                 height: 20,
                 border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--color-ios-ink-3)'}`,
                 backgroundColor: selected ? 'var(--accent)' : 'transparent',
-                color: 'white',
+                color: 'var(--color-ios-on-brand)',
                 fontSize: 11,
               }}
             >
@@ -584,7 +584,7 @@ export function Bubble({
             className="rounded-bubble px-3.5 py-2.5 transition-shadow duration-500"
             style={{
               ...(isMine
-                ? { backgroundColor: 'var(--color-bubble-mine)', color: 'white', '--color-karaoke-ink': 'white' }
+                ? { backgroundColor: 'var(--color-bubble-mine)', color: 'var(--color-ios-on-brand)', '--color-karaoke-ink': 'var(--color-ios-on-brand)' }
                 : { backgroundColor: receivedBg, border: `1px solid ${receivedHairline}`, color: 'var(--color-ios-ink)' }),
               /* Mise en évidence temporaire après un saut de citation — un
                  anneau plutôt qu'un fond, pour ne jamais menacer le contraste
@@ -602,7 +602,7 @@ export function Bubble({
               <FailedSendBand
                 {...(sendFailureReason === undefined ? {} : { reason: sendFailureReason })}
                 {...(onRetry === undefined ? {} : { onRetry })}
-                textColor={isMine ? 'white' : 'var(--color-error)'}
+                textColor={isMine ? 'var(--color-ios-on-brand)' : 'var(--color-error)'}
               />
             ) : null}
 

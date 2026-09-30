@@ -396,7 +396,7 @@ export function MoodQuote({
       <QuoteRail isMine={isMine} />
       <span className="min-w-0 py-2 pe-2.5 ps-2 text-title" aria-hidden>
         <span className="flex items-baseline gap-1.5">
-          <span className="truncate font-semibold" style={{ color: isMine ? 'white' : 'var(--accent)' }}>
+          <span className="truncate font-semibold" style={{ color: isMine ? 'var(--color-ios-on-brand)' : 'var(--accent)' }}>
             {title}
           </span>
           {relativeDate !== '' ? (
