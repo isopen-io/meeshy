@@ -90,7 +90,7 @@ const mountSheet = async (
   const host = await mounter.mount(
     <MessageExportSheet
       subject={options.subject ?? subject}
-      loadSources={options.loadSources ?? (async () => ({ sources: [], dispose: () => undefined }))}
+      loadSources={options.loadSources ?? (async () => ({ sources: [], failed: [], dispose: () => undefined }))}
       {...(options.recordMotion === undefined ? {} : { recordMotion: options.recordMotion })}
       handle="jacques"
       {...(options.languages === true ? { exportLanguages } : {})}
@@ -500,7 +500,7 @@ describe('« Imagine » — l’atelier d’« Imager » (#8693)', () => {
       subject: withVideo,
       loadSources: async (items) => {
         loaded.push(items.map((item) => item.id));
-        return { sources: [bitmap, null], dispose: () => undefined };
+        return { sources: [bitmap, null], failed: [], dispose: () => undefined };
       },
     });
     await mounter.settle();
@@ -519,7 +519,7 @@ describe('« Imagine » — l’atelier d’« Imager » (#8693)', () => {
       quick: true,
       loadSources: async () => {
         await gate;
-        return { sources: [null, null], dispose: () => undefined };
+        return { sources: [null, null], failed: [], dispose: () => undefined };
       },
     });
     await mounter.settle();
@@ -528,6 +528,44 @@ describe('« Imagine » — l’atelier d’« Imager » (#8693)', () => {
     await mounter.settle();
     await mounter.settle();
     expect(harness.delivered).toHaveLength(1);
+  });
+
+  test('un média qui ne se charge pas le DIT, et « Réessayer » le recharge (#8901)', async () => {
+    const bitmap = { width: 10, height: 10 } as unknown as CanvasImageSource;
+    let attempts = 0;
+    const { host, harness } = await mountSheet({
+      subject: withVideo,
+      loadSources: async () => {
+        attempts += 1;
+        return attempts === 1 ? { sources: [null, bitmap], failed: ['v'], dispose: () => undefined } : { sources: [bitmap, bitmap], failed: [], dispose: () => undefined };
+      },
+    });
+    await mounter.settle();
+    const alert = host.querySelector('[data-export-media-failed]');
+    expect(alert?.getAttribute('role')).toBe('alert');
+    expect(alert?.textContent).toContain('Un média n’a pas pu se charger');
+    const painted = harness.painted.length;
+    await mounter.click(host.querySelector('[data-export-media-retry]'));
+    await mounter.settle();
+    await mounter.settle();
+    expect(attempts).toBe(2);
+    expect(host.querySelector('[data-export-media-failed]')).toBeNull();
+    expect(harness.painted.length).toBeGreaterThan(painted);
+  });
+
+  test('un chargeur qui échoue en bloc dit l’échec de chaque média visuel, jamais un cadre vide muet', async () => {
+    const { host } = await mountSheet({ subject: withVideo, loadSources: async () => Promise.reject(new Error('offline')) });
+    await mounter.settle();
+    await mounter.settle();
+    expect(host.querySelector('[data-export-media-failed]')?.textContent).toContain('2 médias n’ont pas pu se charger');
+  });
+
+  test('« Imager rapide » ne part pas avec un média en échec : il attend « Réessayer »', async () => {
+    const { host, harness } = await mountSheet({ subject: withVideo, quick: true, loadSources: async () => ({ sources: [null, null], failed: ['v', 'i'], dispose: () => undefined }) });
+    await mounter.settle();
+    await mounter.settle();
+    expect(harness.delivered).toEqual([]);
+    expect(host.querySelector('[data-export-media-retry]')).not.toBeNull();
   });
 
   test('Médias : disposition des images et représentation de l’audio', async () => {
