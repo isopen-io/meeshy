@@ -99,6 +99,30 @@ final class ImagerAccessTests: XCTestCase {
         MessageCardSubject.Viewer(id: "u-me", displayName: "Moi", username: "moi")
     }
 
+    func test_message_imagesTheTextThePrismServes_andOffersItsOriginal() throws {
+        let message = MeeshyMessage(id: "m1", conversationId: "c1", senderId: "u-giulia", content: "Ciao a tutti", originalLanguage: "it", senderName: "Giulia", senderUsername: "giulia.r")
+        let francais = MessageTranslation(id: "t1", messageId: "m1", sourceLanguage: "it", targetLanguage: "FR", translatedContent: "Salut tout le monde", translationModel: nil, confidenceScore: nil)
+        let request = try XCTUnwrap(MessageCardExportMenu.request(
+            message: message, translations: [francais], servedText: "Salut tout le monde", viewer: viewer(), handle: "moi",
+            quotedMessage: nil, conversationTitle: "Pizza Night 🍕", accentColor: "#6366F1", quick: false
+        ))
+        XCTAssertEqual(request.subject.reply.text, "Salut tout le monde")
+        XCTAssertEqual(request.languages.first, "it")
+        XCTAssertTrue(request.languages.contains("fr"), "La traduction se range sous son code en minuscules.")
+        XCTAssertEqual(request.subjectIn("it")?.reply.text, "Ciao a tutti")
+        XCTAssertEqual(request.conversationTitle, "Pizza Night 🍕")
+        XCTAssertEqual(request.handle, "moi")
+        XCTAssertFalse(request.quick)
+    }
+
+    func test_message_withNothingToPaint_isNeverImaged() {
+        let vide = MeeshyMessage(id: "m2", conversationId: "c1", senderId: "u-x", content: "", originalLanguage: "fr")
+        XCTAssertNil(MessageCardExportMenu.request(
+            message: vide, translations: [], servedText: nil, viewer: viewer(), handle: nil,
+            quotedMessage: nil, conversationTitle: nil, accentColor: "#6366F1", quick: false
+        ))
+    }
+
     func test_comment_imagesTheServedText() {
         let comment = FeedComment(author: "Awa", authorId: "u-awa", authorUsername: "awa", content: "Bonjour", originalLanguage: "fr", translatedContent: "Hello")
         let request = MessageCardExportMenu.request(comment: comment, showOriginal: false, accentColor: "#6366F1", viewer: viewer(), handle: "moi")
