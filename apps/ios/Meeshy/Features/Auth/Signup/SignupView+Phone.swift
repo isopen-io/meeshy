@@ -116,7 +116,7 @@ extension SignupView {
 
     /// « Plus tard → » — sur la ligne du libellé, aligné en fin (#8842), et il
     /// disparaît une fois l'adresse parue : il n'y a plus rien à passer
-    /// (décision porteur 2026-09-27). `arrow.right` se retourne seul en RTL.
+    /// (décision porteur 2026-09-27). `arrow.forward` se retourne seul en RTL (garde `RightToLeftLayoutGuardTests`).
     private var laterButton: some View {
         Button {
             HapticFeedback.light()
@@ -125,7 +125,7 @@ extension SignupView {
         } label: {
             HStack(spacing: MeeshySpacing.xs) {
                 Text(String(localized: "auth.signup.phone.later", defaultValue: "Plus tard", bundle: .main))
-                Image(systemName: "arrow.right")
+                Image(systemName: "arrow.forward")
                     .accessibilityHidden(true)
             }
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
