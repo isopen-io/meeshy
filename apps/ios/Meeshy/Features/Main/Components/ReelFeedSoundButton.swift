@@ -2,11 +2,11 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Feed video sound toggle (exigence produit 2026-08-22, S2) — chrome mirrors
-/// `ReelFeedCard.reelGlyph` / `ReelRepostEmbedCell.reelBadge` (`.ultraThinMaterial`
-/// circle, white 0.25 stroke, drop shadow), reused VERBATIM by both surfaces
-/// so there is exactly ONE place that renders it (D2's "un seul geste à
-/// apprendre" already implies one implementation, not two hand-copied ones).
+/// Feed video sound toggle (exigence produit 2026-08-22, S2) — chrome is the shared
+/// fullscreen disc (`FullscreenChromeButton`, #8878), reused VERBATIM by both
+/// surfaces (`ReelFeedCard`, `ReelRepostEmbedCell`) so there is exactly ONE place
+/// that renders it (D2's "un seul geste à apprendre" already implies one
+/// implementation, not two hand-copied ones).
 ///
 /// Icon: `BackgroundSoundBadge.muteIconName(isMuted:)` — the SAME resolver
 /// used product-wide, never a second one. Label: describes the ACTION the tap
@@ -25,24 +25,12 @@ struct ReelFeedSoundButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: !isSoundAudible))
-                .font(MeeshyFont.relative(13, weight: .bold))
-                .foregroundColor(.white)
-                .padding(MeeshySpacing.sm)
-                .background(Circle().fill(.ultraThinMaterial))
-                .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
-                .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
-                .contentShape(Circle())
-        }
-        // Cible tactile 44×44 (HIG) — même correctif que `ReelFeedCard.likeButton` :
-        // sans elle, un tap approximatif tombe dans le geste parent (tap-média,
-        // ou le Button englobant du repost).
-        .frame(minWidth: 44, minHeight: 44)
-        .contentShape(Rectangle())
-        .buttonStyle(.plain)
-        .accessibilityLabel(isSoundAudible
-            ? String(localized: "a11y.feed.video.sound.mute", defaultValue: "Couper le son de la vidéo", bundle: .main)
-            : String(localized: "a11y.feed.video.sound.unmute", defaultValue: "Activer le son de la vidéo", bundle: .main))
+        FullscreenChromeButton(
+            systemImage: BackgroundSoundBadge.muteIconName(isMuted: !isSoundAudible),
+            label: isSoundAudible
+                ? String(localized: "a11y.feed.video.sound.mute", defaultValue: "Couper le son de la vidéo", bundle: .main)
+                : String(localized: "a11y.feed.video.sound.unmute", defaultValue: "Activer le son de la vidéo", bundle: .main),
+            action: action
+        )
     }
 }

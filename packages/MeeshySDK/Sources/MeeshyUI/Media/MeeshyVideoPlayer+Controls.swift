@@ -329,11 +329,11 @@ internal struct _FullscreenOverlayControls: View {
 
     var body: some View {
         ZStack {
-            scrimGradients
+            FullscreenScrims(topInset: WindowMetrics.safeAreaInsets.top, chromeVisible: true)
             VStack(spacing: 0) {
                 topBar
-                    .padding(.top, MeeshySpacing.sm)
-                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, FullscreenChromeMetrics.topInset)
+                    .padding(.horizontal, FullscreenTopBarLayout.horizontalPadding)
                 // Transport délégué au composant partagé `VideoTransportControls`
                 // (source unique, idem galerie média) — dédup des ~240 lignes qui
                 // dupliquaient center/seek/speed/mini-toolbar. La top bar fichier
@@ -345,74 +345,59 @@ internal struct _FullscreenOverlayControls: View {
         .buttonStyle(BouncyControlButtonStyle())
     }
 
-    private var scrimGradients: some View {
-        VStack(spacing: 0) {
-            LinearGradient(colors: [Color.black.opacity(0.7), Color.clear], startPoint: .top, endPoint: .bottom)
-                .frame(height: 80)
-            Spacer()
-            LinearGradient(colors: [Color.clear, Color.black.opacity(0.7)], startPoint: .top, endPoint: .bottom)
-                .frame(height: 180)
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-    }
-
     private var topBar: some View {
-        HStack(spacing: MeeshySpacing.md) {
+        HStack(spacing: FullscreenChromeMetrics.barSpacing) {
             if controls.contains(.close) {
-                Button {
-                    onClose?()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: MeeshyIconSize.md, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 36, height: 36)
-                        .adaptiveGlass(in: Circle(), interactive: true)
-                }
+                FullscreenCloseButton { onClose?() }
             }
             if let fileName, !fileName.isEmpty {
                 Text(fileName)
                     .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
             Spacer()
             if controls.contains(.share), onShare != nil {
-                Button {
+                FullscreenChromeButton(
+                    systemImage: FullscreenChromeSymbol.share,
+                    label: String(localized: "story.timeline.export.preview.share",
+                                  defaultValue: "Partager la vidéo", bundle: .module)
+                ) {
                     onShare?()
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: MeeshyIconSize.md, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
-                        .frame(width: 36, height: 36)
-                        .adaptiveGlass(in: Circle(), interactive: true)
                 }
             }
             if controls.contains(.save) {
-                Button {
-                    onSave?()
-                } label: {
-                    Group {
-                        switch saveState {
-                        case .idle:   Image(systemName: "arrow.down.to.line")
-                        case .saving: ProgressView().tint(.white)
-                        case .saved:  Image(systemName: "checkmark")
-                        case .failed: Image(systemName: "xmark")
-                        }
-                    }
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
-                    .frame(width: 36, height: 36)
-                    .adaptiveGlass(in: Circle(), interactive: true)
-                }
-                .disabled(saveState == .saving || saveState == .saved)
+                saveButton
             }
         }
     }
 
+    @ViewBuilder
+    private var saveButton: some View {
+        if saveState == .saving {
+            ProgressView()
+                .tint(MeeshyColors.mediaChromeForeground)
+                .frame(width: FullscreenChromeMetrics.tapTarget,
+                       height: FullscreenChromeMetrics.tapTarget)
+        } else {
+            FullscreenChromeButton(
+                systemImage: saveGlyph,
+                label: String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
+            ) {
+                onSave?()
+            }
+            .disabled(saveState == .saved)
+        }
+    }
+
+    private var saveGlyph: String {
+        switch saveState {
+        case .idle, .saving: return FullscreenChromeSymbol.save
+        case .saved: return FullscreenChromeSymbol.saved
+        case .failed: return FullscreenChromeSymbol.close
+        }
+    }
 }
 
 // MARK: - Bouncy press feedback (legacy parity)

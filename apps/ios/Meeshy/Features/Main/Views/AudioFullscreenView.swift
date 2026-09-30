@@ -580,22 +580,7 @@ private struct AudioFullscreenPage: View {
 
     private var topBar: some View {
         HStack(spacing: MeeshySpacing.md) {
-            Button {
-                onDismiss()
-                HapticFeedback.light()
-            } label: {
-                // Glyphe chrome figé à 36×36 (doctrine 82i) ; le libellé porte le sens.
-                // Le second cadre est la CIBLE : la pastille reste 36, la zone tapable
-                // atteint le plancher HIG de 44 — seule façon de sortir du plein écran.
-                Image(systemName: "xmark")
-                    .font(.system(size: MeeshyIconSize.md, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.2)))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Circle())
-            }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+            FullscreenCloseButton { onDismiss() }
 
             Spacer()
 
@@ -617,9 +602,9 @@ private struct AudioFullscreenPage: View {
                 if let codec = attachment.codec {
                     Text(codec.uppercased())
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold, design: .monospaced))
-                        .padding(.horizontal, 5)
+                        .padding(.horizontal, MeeshySpacing.xs)
                         .padding(.vertical, MeeshySpacing.xxs)
-                        .background(Capsule().fill(Color.white.opacity(0.1)))
+                        .background(Capsule().fill(Color.white.opacity(MeeshyOpacity.subtle)))
                 }
             }
             .foregroundColor(.white.opacity(0.5))
@@ -684,22 +669,16 @@ private struct AudioFullscreenPage: View {
 
     private var downloadButton: some View {
         Button { requestSave() } label: {
-            Group {
-                if saveCoordinator.isProcessing {
-                    ProgressView().tint(.white)
-                } else {
-                    Image(systemName: "arrow.down.to.line")
-                }
+            if saveCoordinator.isProcessing {
+                ProgressView()
+                    .tint(MeeshyColors.mediaChromeForeground)
+                    .frame(width: FullscreenChromeMetrics.tapTarget,
+                           height: FullscreenChromeMetrics.tapTarget)
+            } else {
+                FullscreenChromeDisc(systemImage: FullscreenChromeSymbol.save)
             }
-            // Glyphe chrome figé à 36×36 (doctrine 82i) ; le libellé porte le sens.
-            // Second cadre = cible tapable au plancher HIG, pastille inchangée.
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundColor(.white.opacity(0.9))
-            .frame(width: 36, height: 36)
-            .background(Circle().fill(Color.white.opacity(0.2)))
-            .frame(width: 44, height: 44)
-            .contentShape(Circle())
         }
+        .buttonStyle(.plain)
         .disabled(saveCoordinator.isProcessing)
         .accessibilityLabel(String(localized: "media.download", defaultValue: "Télécharger", bundle: .main))
         // Composant UNIFIÉ « Enregistrer » : même sheet de destinations que
@@ -804,7 +783,7 @@ private struct AudioFullscreenPage: View {
 
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.white.opacity(0.3))
+                    .fill(Color.white.opacity(MeeshyOpacity.medium))
                     .frame(height: trackHeight)
 
                 Capsule()
@@ -814,7 +793,7 @@ private struct AudioFullscreenPage: View {
                 Circle()
                     .fill(Color.white)
                     .frame(width: thumbSize, height: thumbSize)
-                    .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                    .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 2, y: 1)
                     .offset(x: max(0, min(filledWidth - thumbSize / 2, geo.size.width - thumbSize)))
             }
             .frame(height: max(trackHeight, thumbSize))
@@ -842,13 +821,13 @@ private struct AudioFullscreenPage: View {
         HStack {
             Text(formatMediaDuration(isSeeking ? seekValue * estimatedDuration : player.currentTime))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
 
             Spacer()
 
             Text(formatMediaDuration(estimatedDuration))
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
         }
     }
 
@@ -869,7 +848,7 @@ private struct AudioFullscreenPage: View {
                             Capsule().fill(
                                 player.speed == speed
                                     ? accent
-                                    : Color.white.opacity(0.15)
+                                    : Color.white.opacity(MeeshyOpacity.light)
                             )
                         )
                 }
@@ -924,13 +903,13 @@ private struct AudioFullscreenPage: View {
                             .scaleEffect(0.7)
                     } else {
                         Image(systemName: "waveform.and.mic")
-                            .font(MeeshyFont.relative(13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     }
                     Text(String(localized: "audio.fullscreen.transcription.action", defaultValue: "Transcrire", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, 18)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.vertical, MeeshySpacing.smPlus)
                 .background(Capsule().fill(accent.opacity(0.7)))
             }
@@ -1098,7 +1077,7 @@ private struct AudioFullscreenPage: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.5))
                     .frame(width: 26, height: 26)
-                    .background(Circle().fill(Color.white.opacity(0.08)))
+                    .background(Circle().fill(Color.white.opacity(MeeshyOpacity.subtle)))
                     .frame(width: 44, height: 44)
                     .contentShape(Circle())
             }
@@ -1115,7 +1094,7 @@ private struct AudioFullscreenPage: View {
         return Button {
             selectLanguage(code)
         } label: {
-            HStack(spacing: 3) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 Text(flag).font(MeeshyFont.relative(MeeshyFont.smallSize))
                 Text(label)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: isSelected ? .bold : .medium))
@@ -1124,8 +1103,8 @@ private struct AudioFullscreenPage: View {
             }
             .foregroundColor(isSelected ? .white : .white.opacity(0.55))
             .padding(.horizontal, MeeshySpacing.sm)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(isSelected ? langColor.opacity(0.6) : Color.white.opacity(0.07)))
+            .padding(.vertical, MeeshySpacing.xs)
+            .background(Capsule().fill(isSelected ? langColor.opacity(0.6) : Color.white.opacity(MeeshyOpacity.subtle)))
         }
         // The active listening language is signaled only by fill/weight — expose
         // it as a VoiceOver trait so the selected language pill is distinguishable.

@@ -492,7 +492,7 @@ internal struct _InlineRenderer: View {
     private func scheduleControlsHide() {
         guard Self.autoHidesControls(surfaceTapAction: surfaceTapAction) else { return }
         controlsTimer?.invalidate()
-        controlsTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
+        controlsTimer = Timer.scheduledTimer(withTimeInterval: FullscreenChromeMetrics.autoHideDelay, repeats: false) { _ in
             Task { @MainActor in
                 withAnimation { showControls = false }
             }
@@ -1046,7 +1046,7 @@ internal struct _FullscreenRenderer: View {
 
     private func scheduleControlsHide() {
         controlsTimer?.invalidate()
-        controlsTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { _ in
+        controlsTimer = Timer.scheduledTimer(withTimeInterval: FullscreenChromeMetrics.autoHideDelay, repeats: false) { _ in
             Task { @MainActor in
                 withAnimation { showControls = false }
             }

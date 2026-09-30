@@ -154,171 +154,116 @@ struct StoryHeaderView: View {
     }
 
     var body: some View {
-        HStack(spacing: MeeshySpacing.smPlus) {
+        HStack(spacing: FullscreenChromeMetrics.barSpacing) {
+            FullscreenCloseButton(
+                hint: String(localized: "story.viewer.a11y.close.hint", defaultValue: "Ferme le lecteur de stories", bundle: .main)
+            ) {
+                dismissViewer()
+            }
+
             if let group = currentGroup {
                 Button {
                     HapticFeedback.light()
                     selectedProfileUser = .from(storyGroup: group)
                 } label: {
-                    HStack(spacing: MeeshySpacing.smPlus) {
-                        ZStack {
-                            // Glow radial au long press
-                            if avatarLongPressGlow {
-                                Circle()
-                                    .fill(
-                                        RadialGradient(
-                                            colors: [
-                                                Color(hex: group.avatarColor).opacity(0.4),
-                                                MeeshyColors.indigo500.opacity(0.2),
-                                                .clear
-                                            ],
-                                            center: .center,
-                                            startRadius: 15,
-                                            endRadius: 35
+                    // Vue `2f` — l'heure appartient à la ligne du NOM : elle qualifie
+                    // l'AUTEUR, le crédit du son (sa propre ligne, dessous) qualifie le
+                    // CONTENU. Nom borné à 16 caractères comme dans les bulles de
+                    // conversation (directive user 2026-07-30). Republication : icône +
+                    // "@handle", sans « via » (directive user 2026-07-13).
+                    FullscreenIdentityRow(
+                        name: DisplayName.truncated(group.username),
+                        subtitle: currentStory?.timeAgo,
+                        avatar: {
+                            ZStack {
+                                // Glow radial au long press
+                                if avatarLongPressGlow {
+                                    Circle()
+                                        .fill(
+                                            RadialGradient(
+                                                colors: [
+                                                    Color(hex: group.avatarColor).opacity(0.4),
+                                                    MeeshyColors.indigo500.opacity(0.2),
+                                                    .clear
+                                                ],
+                                                center: .center,
+                                                startRadius: 15,
+                                                endRadius: 35
+                                            )
                                         )
-                                    )
-                                    .frame(width: 70, height: 70)
-                                    .blur(radius: 8)
-                                    .transition(.scale(scale: 0.8).combined(with: .opacity))
-                                    .allowsHitTesting(false)
-                            }
-
-                            // Pas de bordure gradient autour de l'avatar dans la
-                            // slide : on est déjà dans la story de l'utilisateur,
-                            // l'anneau « story dispo » serait redondant (cf. user
-                            // request 2026-05-27). Le contexte `.storyViewer` suffit
-                            // déjà à masquer l'anneau via `showsStoryRing == false`.
-                            MeeshyAvatar(
-                                name: group.username,
-                                context: .storyViewer,
-                                accentColor: group.avatarColor,
-                                avatarURL: group.avatarURL,
-                                onViewProfile: { selectedProfileUser = .from(storyGroup: group) },
-                                contextMenuItems: [
-                                    AvatarContextMenuItem(
-                                        label: String(localized: "story.viewer.viewProfile", defaultValue: "Voir le profil", bundle: .main),
-                                        icon: "person.fill"
-                                    ) {
-                                        selectedProfileUser = .from(storyGroup: group)
-                                    }
-                                ]
-                            )
-                            .scaleEffect(avatarLongPressGlow ? 1.05 : 1.0)
-                        }
-                        .onLongPressGesture(minimumDuration: 0.4) {
-                            HapticFeedback.medium()
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                                avatarLongPressGlow = false
-                            }
-                            selectedProfileUser = .from(storyGroup: group)
-                        } onPressingChanged: { pressing in
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                avatarLongPressGlow = pressing
-                            }
-                        }
-
-                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                            HStack(spacing: 5) {
-                                // Nom borné à 16 caractères comme dans les bulles de
-                                // conversation (directive user 2026-07-30) : au-delà,
-                                // un pseudo long poussait l'attribution de repost et
-                                // la méta hors du header. `lineLimit(1)` reste, mais
-                                // en dernier recours seulement — la borne est posée
-                                // à la source.
-                                Text(DisplayName.truncated(group.username))
-                                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
-
-                                // Vue `2f` — l'heure appartient à la ligne du NOM.
-                                // Elle qualifie l'AUTEUR (« Camille Roux, il y a
-                                // 2 h ») ; le crédit du son, juste dessous, qualifie
-                                // le CONTENU. Les laisser sur une même ligne les
-                                // faisait lire comme une seule énumération, où la
-                                // donnée la plus consultée — quand — se noyait dans
-                                // la moins consultée.
-                                //
-                                // L'icône horloge qui l'accompagnait est retirée :
-                                // collée à l'auteur, « 2 h » se lit sans ambiguïté
-                                // comme une date de publication, et `FeedPostCard`
-                                // (vue `1h`) n'en a jamais porté — la garder ferait
-                                // dire la même chose de deux façons sur deux
-                                // surfaces voisines. Elle ne perd rien : elle était
-                                // déjà `accessibilityHidden(true)`. La directive du
-                                // 2026-07-30 qui l'avait introduite portait sur le
-                                // RETRAIT du compte à rebours « Expire dans Xh » ;
-                                // l'horloge y avait été re-affectée, jamais demandée
-                                // pour elle-même.
-                                if let story = currentStory {
-                                    Text(story.timeAgo)
-                                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.75))
+                                        .frame(width: 70, height: 70)
+                                        .blur(radius: 8)
+                                        .transition(.scale(scale: 0.8).combined(with: .opacity))
+                                        .allowsHitTesting(false)
                                 }
 
-                                // Republication : icône repost + "@handle" à la
-                                // SUITE du nom, en graisse normale, SANS « via »
-                                // (l'icône dit déjà la republication — directive
-                                // user 2026-07-13, IMG_1154).
-                                if let story = currentStory, story.repostOfId != nil {
-                                    Image(systemName: "arrow.2.squarepath")
+                                // Pas de bordure gradient autour de l'avatar dans la
+                                // slide : on est déjà dans la story de l'utilisateur,
+                                // l'anneau « story dispo » serait redondant (cf. user
+                                // request 2026-05-27). Le contexte `.storyViewer` suffit
+                                // déjà à masquer l'anneau via `showsStoryRing == false`.
+                                MeeshyAvatar(
+                                    name: group.username,
+                                    context: .storyViewer,
+                                    accentColor: group.avatarColor,
+                                    avatarURL: group.avatarURL,
+                                    onViewProfile: { selectedProfileUser = .from(storyGroup: group) },
+                                    contextMenuItems: [
+                                        AvatarContextMenuItem(
+                                            label: String(localized: "story.viewer.viewProfile", defaultValue: "Voir le profil", bundle: .main),
+                                            icon: "person.fill"
+                                        ) {
+                                            selectedProfileUser = .from(storyGroup: group)
+                                        }
+                                    ]
+                                )
+                                .scaleEffect(avatarLongPressGlow ? 1.05 : 1.0)
+                            }
+                            .onLongPressGesture(minimumDuration: 0.4) {
+                                HapticFeedback.medium()
+                                withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
+                                    avatarLongPressGlow = false
+                                }
+                                selectedProfileUser = .from(storyGroup: group)
+                            } onPressingChanged: { pressing in
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                    avatarLongPressGlow = pressing
+                                }
+                            }
+                        },
+                        accessory: {
+                            if let story = currentStory, story.repostOfId != nil {
+                                HStack(spacing: MeeshySpacing.xsPlus) {
+                                    Image(systemName: FullscreenChromeSymbol.repost)
                                         .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.6))
                                         .accessibilityHidden(true)
                                     if let handle = story.repostAuthorUsername ?? story.repostAuthorName {
                                         Text("@\(handle)")
                                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
-                                            .foregroundColor(.white.opacity(0.65))
                                             .lineLimit(1)
                                     }
                                 }
+                                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                             }
 
-                            // Vue `2f` — le crédit du son occupe sa PROPRE ligne,
-                            // sous la ligne du nom.
-                            //
-                            // Il partageait la largeur avec l'heure et, dès qu'une
-                            // attribution de republication s'y ajoutait, avec elle
-                            // aussi : sur un écran étroit, le titre du son et le
-                            // handle d'origine se tronquaient l'un l'autre alors que
-                            // ce sont deux attributions DISTINCTES — qui a republié,
-                            // et à qui appartient la musique. Une ligne chacun retire
-                            // la concurrence au lieu d'arbitrer entre deux
-                            // troncatures. Même arbitrage que la vue `1h` sur
-                            // `FeedPostCard+Header.swift` : la dimension 6 demande
-                            // que la même information vive à la même place sur les
-                            // deux surfaces.
-                            //
-                            // Annonce du fond (B3.3-5) : résolveur unique —
-                            // `BackgroundSoundBadge` rend `EmptyView` sans piste
-                            // (B3.5), donc cette ligne DISPARAÎT entièrement quand il
-                            // n'y a pas de son, et le `if let story` qui l'enveloppait
-                            // devient inutile (`backgroundSoundAnnouncement` se
-                            // résout à `.none` sans story courante). Sinon note PUIS
-                            // onde (piste ORIGINALE, directive user 2026-07-30) ou
-                            // marquee crédit (bibliothèque, directive user
-                            // 2026-08-02). Même vue que la carte de post et le plein
-                            // écran réel (E1, « un résolveur, trois surfaces »).
-                            //
-                            // L'annonce ne dépend JAMAIS du muet : elle se résout sur
-                            // `currentStory?.storyEffects` seul (B3.5 — c'est
-                            // l'EXISTENCE d'une piste qui la gouverne, pas son
-                            // audibilité), donc couper le son au rail ne la fait pas
-                            // disparaître. C'est la 2e clause de la vue `2f`.
-                            //
-                            // Accent FIXE (pas `group.avatarColor`) : le header se
-                            // pose sur un média arbitraire (photo/vidéo), comme
-                            // l'heure voisine — non-régression du blanc pré-E1.
+                            // Vue `2f` — le crédit du son occupe sa PROPRE ligne, sous la
+                            // ligne du nom : qui a republié et à qui appartient la musique
+                            // sont deux attributions distinctes, une ligne chacune retire la
+                            // concurrence au lieu d'arbitrer entre deux troncatures.
+                            // `BackgroundSoundBadge` rend `EmptyView` sans piste (B3.5) ; elle
+                            // ne dépend JAMAIS du muet. Accent FIXE (pas `group.avatarColor`) :
+                            // l'en-tête se pose sur un média arbitraire.
                             BackgroundSoundBadge(
                                 announcement: backgroundSoundAnnouncement,
                                 accentHex: BackgroundSoundBadge.overMediaAccentHex
                             )
                             .equatable()
                         }
-                    }
+                    )
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .frame(minHeight: 44)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
                 // Le bouton porte un SEUL accessibilityLabel qui remplace tout
                 // le contenu de son label closure (icône repost + @handle
                 // inclus) — VoiceOver ne lirait jamais la republication sans
@@ -331,10 +276,10 @@ struct StoryHeaderView: View {
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
 
             // Options menu (three dots)
-            Menu {
+            FullscreenMoreMenu {
                 // Toggle mode plein écran (session-scoped) — pertinent quelle
                 // que soit la propriété de la story. Placé en tête du menu
                 // pour être accessible immédiatement, avec un `Divider`
@@ -576,45 +521,10 @@ struct StoryHeaderView: View {
                         }
                     }
                 }
-            } label: {
-                // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le bouton porte le libellé
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white.opacity(0.9))
-                    .frame(width: 36, height: 36)
-                    .background(
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .overlay(Circle().fill(Color.black.opacity(0.15)))
-                            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: MeeshyBorder.hairline))
-                    )
-                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
             }
-            .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
             .accessibilityLabel(String(localized: "story.viewer.a11y.options", defaultValue: "Options de la story", bundle: .main))
-
-            // Close button
-            Button {
-                HapticFeedback.light()
-                dismissViewer()
-            } label: {
-                // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le bouton porte le libellé
-                Image(systemName: "xmark")
-                    .font(.system(size: MeeshyIconSize.sm, weight: .bold))
-                    .foregroundColor(.white.opacity(0.9))
-                    .frame(width: 36, height: 36)
-                    .background(
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .overlay(Circle().fill(Color.black.opacity(0.2)))
-                            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: MeeshyBorder.hairline))
-                    )
-                    .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
-            }
-            .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-            .accessibilityHint(String(localized: "story.viewer.a11y.close.hint", defaultValue: "Ferme le lecteur de stories", bundle: .main))
         }
+        .padding(.horizontal, FullscreenTopBarLayout.horizontalPadding)
         .adaptiveOnChange(of: currentStory?.id, initial: true) { _, _ in
             savableStickers = currentStory.map { StoryStickerLibrary.savable(in: $0) } ?? []
             composableSlide = resolveComposableSlide()

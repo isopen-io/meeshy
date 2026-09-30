@@ -137,7 +137,57 @@ fait 44 pt même quand le glyphe en fait 14 (`meeshyTapTarget()`).
 
 ## 6. Plein écran — répondre, réagir, piloter
 
-_À compléter par le lot #8878._
+Surfaces : galerie de pièces jointes (conversation, post, commentaire), plein écran audio, story, réel, visionneuses
+`MeeshyUI` (vidéo, image, photo de profil, lieu). Briques : `packages/MeeshySDK/Sources/MeeshyUI/Fullscreen/`
+(cotes `FullscreenChromeMetrics`, glyphes `FullscreenChromeSymbol`, loi d'affichage `FullscreenChromeState`).
+
+### 6.1 Relevé du 2026-09-30
+
+| Élément | Galerie | Audio | Story | Réel | Visionneuses SDK |
+|---|---|---|---|---|---|
+| Fermer | haut-gauche, `xmark` 16 gras, verre 40 | haut-gauche, `xmark` 16, disque blanc 20 % 36, cible 44 | haut-DROITE après ⋯, `xmark` 14, matière + noir 20 % + filet + ombre 36 | haut-gauche, `chevron.backward` 18, verre teinté noir 35 % 40, `padding(.top, max(safe, 50) + 28)` | vidéo : gauche, verre 36 · image : gauche, `xmark.circle.fill` 28 · profil : DROITE, `xmark.circle.fill` 28, `padding(.top, 50)` · lieu : gauche, disque noir 50 % 36 |
+| Menu ⋯ | haut-droite, `ellipsis` VERTICAL 18, verre 40, cible 44 | — | haut-droite, `ellipsis` 15, matière 36 | bas du rail, `ellipsis` 26 nu | vidéo : partager + enregistrer en disques 36 · image : enregistrer, disque blanc 20 % 40 |
+| Auteur | bas, sur la légende : avatar 32, nom 14, date dessous | pochette | haut-gauche : avatar 44, nom 15 gras, heure sur la ligne du nom | bas-gauche : avatar 44, nom `.subheadline` | nom du fichier (vidéo) |
+| Réagir | colonne droite, `face.smiling` + « + », verre 40 → rangée en bas, pleine largeur | — | rail droit, `heart.fill` nu 20 + libellé → rangée à gauche du cœur | `heart` nu 26 + compteur : tap = J'aime, appui long = palette (capsule) | — |
+| Répondre | colonne droite, `arrowshape.turn.up.left.fill` → barre de saisie en place | — | rail, même glyphe + libellé → `UniversalComposerBar` | `bubble.right.fill` + compteur → feuille des commentaires | — |
+| Lecture | bande de transport au couloir bas | ±10 s, lecture, forme d'onde | barres segmentées, tap gauche/droite, appui long = pause | `ReelScrubBar` sans chiffres, tap = pause | `VideoTransportControls`, effacement 3 s (lecteur 1) / 4 s (lecteur 2) |
+| Fermer au geste | bas ≥ 150 (`MediaStageGestures`) | bas > 120 ou prédiction > 300 | bas (fenêtre) | bord gauche > 70 | vidéo bas > 150 · image \|h\| > 200 · profil : revient toujours |
+| Voile | `StoryReaderScrims` | — | `StoryReaderScrims` | idem (scène) | vidéo : noir 70 % sur 80 / 180 pt |
+
+### 6.2 Ce qui CONVERGE
+
+| Élément | Règle unique | Brique |
+|---|---|---|
+| Fermer | `xmark`, bord de DÉBUT de la barre haute (gauche ; droite en RTL), disque `MeeshyControlSize.regular`, cible 44, glyphe `MeeshyIconSize.lg` semibold, libellé `common.close` | `FullscreenCloseButton`, `FullscreenTopBar` |
+| Barre haute | `[✕] [identité si la surface la place en haut] ··· [⋯]`, dans la zone sûre, marge latérale telle que le disque tombe sur `MeeshySpacing.lg` | `FullscreenTopBar` |
+| Menu | `ellipsis` HORIZONTAL (vocabulaire du fil, du réel et de la story), bord de FIN de la barre haute, même disque que la croix ; le contenu reste à l'hôte | `FullscreenMoreMenu` |
+| Disque | verre teinté `mediaChromeFill`, glyphe `mediaChromeForeground` (`.onMedia`) ; `.adaptive` (verre nu + `glassControlForeground()`) SEULEMENT sous un schéma mesuré sur le média (`mediaChromeTinted()`, #6693) | `FullscreenChromeDisc` |
+| Identité | avatar fourni par l'hôte (`MeeshyAvatar`), nom `bodySize` semibold `mediaChromeForeground`, date SUR la ligne du nom en `smallSize` `mediaChromeTertiary` (vue `2f`), ombre `legibleOverCanvas` | `FullscreenIdentityRow` |
+| Rail d'actions | bord de FIN, ancré en bas ; ordre : Réagir (ou J'aime), Répondre (ou Commentaires), puis la surface ; intervalle `MeeshySpacing.sm` | `FullscreenActionRail`, `FullscreenActionButton` |
+| Réagir | `face.smiling` + badge `plus` ; le tap OUVRE la rangée, jamais un émoji à l'aveugle ; ouvert, teinte `indigo400` | `FullscreenActionButton.react` |
+| Rangée d'émojis | `EmojiReactionPicker` à l'échelle par défaut, `MeeshyQuickReactions.standard`, défilante, `chrome: .none` ; « + » → sélecteur complet | `FullscreenReactionStrip` |
+| Répondre | `arrowshape.turn.up.left.fill` ; ouvre une barre de saisie au bas de l'écran qui CITE le média, sans quitter le visualiseur ; la scène ignore le clavier (`ignoresSafeArea(.keyboard)`), la barre le suit | `FullscreenActionButton.reply` + composeur de l'app |
+| Commentaires | `bubble.right.fill` + compteur (`CompactCountLabel`) | `FullscreenActionButton` |
+| Affichage | tap sur le média : ferme l'ouverture, sinon bascule l'immersion ; une ouverture (réagir, répondre, panneau) VOILE le reste du chrome et son voile ; changer de page ferme l'ouverture ; une vidéo en lecture s'efface après 3 s ; un chrome qui s'efface ne se touche plus | `FullscreenChromeState`, `.fullscreenChromeVisibility(_:)` |
+| Voile | dégradés du lecteur de story (haut noir 70 → 0 % sur zone sûre + 110 pt, bas 0 → 92 % sur 240 pt), pleine largeur, suit le chrome | `FullscreenScrims` |
+| Fermer au geste | glisser vers le bas ≥ 150 pt quand l'axe vertical est libre ; vers le haut = plein cadre (`MediaStageGestures.resolveDrag`) | `FullscreenChromeMetrics.dismissDragThreshold` |
+| Légende | `MediaCaptionOverlay` (règle 30 / 15 mots), rendu du texte à l'hôte (`MessageTextRenderer`), Prisme descendu par l'hôte | existant |
+| Son | `BackgroundSoundBadge.muteIconName(isMuted:)` | existant |
+
+### 6.3 Ce qui DIVERGE, et pourquoi
+
+| Surface | Divergence | Raison |
+|---|---|---|
+| Galerie | actions en DISQUES (`.disc`), sans libellé ni compteur ; rangée d'émojis ancrée EN BAS, pleine largeur | colonne courte (≤ 3) posée à côté d'un média CADRÉ ; la rangée (~340 pt à l'échelle 1,5) déborderait à droite d'un cadre de 366 pt |
+| Story, réel | actions FLOTTANTES (`.floating`) : glyphe nu + halo, libellé (story) ou compteur (réel) ; rangée jaillit à GAUCHE du bouton (`reactionStripLeadingOffset`) | rail social long (4 à 9 actions) sur un média plein cadre : une pile de disques pèserait sur l'image |
+| Story | identité en HAUT sous les barres segmentées ; tap gauche/droite = précédente/suivante, appui long = pause et chrome effacé ; glisser horizontal = auteur suivant | lecture MINUTÉE en séquence ; son bas appartient au composeur |
+| Réel | cœur = J'AIME (bascule comptée), appui long = rangée ; l'axe vertical PAGINE (fermeture par la croix et le bord de début) ; identité + légende en bas-gauche ; `ReelScrubBar` sans chiffres | un réel est un POST (compteur de J'aime, fil vertical) — décision produit du lecteur |
+| Audio | pas de rail : ±10 s, lecture, forme d'onde, transcription | rien à regarder : le contrôle EST le contenu (réagir / répondre depuis ce plein écran = issue à ouvrir) |
+| Lieu | pas de fermeture au geste | la carte prend le glisser |
+| Photo de profil, image, vidéo | pas de rail d'actions | visionneuses d'un OBJET, pas d'un message : fermer, enregistrer, partager (dans le ⋯) suffisent |
+
+Règles : une nouvelle surface plein écran monte `FullscreenTopBar` + `FullscreenScrims` + `FullscreenChromeState`
+avant d'écrire un contrôle ; toute divergence nouvelle s'ajoute au § 6.3 avec sa raison, sinon elle converge.
 
 ## 7. Cliquet
 

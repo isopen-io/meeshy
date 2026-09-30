@@ -53,38 +53,21 @@ public struct LocationFullscreenView: View {
     }
 
     private var headerBar: some View {
-        HStack {
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: MeeshyIconSize.sm, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.black.opacity(0.5)))
-            }
-
-            Spacer()
-
+        FullscreenTopBar(onClose: { dismiss() }) {
             // `.mapStyle` (hybrid/standard) is iOS 17+, so the toggle is only
             // surfaced where it actually does something. On iOS 16 the map is
             // standard-only — showing a dead control would mislead the user.
             if Platform.isIOS17OrLater {
-                Button {
+                FullscreenChromeButton(
+                    systemImage: isHybridMap ? "map" : "map.fill",
+                    label: String(localized: "location.fullscreen.mapStyle", defaultValue: "Style de carte", bundle: .module)
+                ) {
                     withAnimation {
                         isHybridMap.toggle()
                     }
-                } label: {
-                    Image(systemName: isHybridMap ? "map" : "map.fill")
-                        .font(.system(size: MeeshyIconSize.sm, weight: .bold))
-                        .foregroundColor(.white)
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color.black.opacity(0.5)))
                 }
             }
         }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.sm)
     }
 
     private var bottomCard: some View {
@@ -92,7 +75,7 @@ public struct LocationFullscreenView: View {
             if let name = senderName {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "person.fill")
-                        .font(.system(size: 11))
+                        .font(.system(size: MeeshyIconSize.xs))
                         .foregroundColor(Color(hex: accentColor))
                     Text(name)
                         .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
@@ -129,7 +112,7 @@ public struct LocationFullscreenView: View {
                 } label: {
                     HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "map.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                         Text(String(localized: "location.fullscreen.openInMaps", defaultValue: "Ouvrir dans Plans", bundle: .module))
                             .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                     }
@@ -147,7 +130,7 @@ public struct LocationFullscreenView: View {
                 } label: {
                     HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                         Text(String(localized: "location.fullscreen.directions", defaultValue: "Itineraire", bundle: .module))
                             .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                     }

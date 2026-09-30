@@ -137,7 +137,7 @@ public struct ImageViewerView: View {
                 Spacer()
                 HStack {
                     Button { onEdit(); HapticFeedback.light() } label: {
-                        HStack(spacing: 3) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             Image(systemName: "pencil")
                                 .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                             Text(String(localized: "media.image.edit", defaultValue: "\u{00C9}diter", bundle: .module))
@@ -146,7 +146,7 @@ public struct ImageViewerView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, MeeshySpacing.sm)
                         .padding(.vertical, MeeshySpacing.xs)
-                        .background(Capsule().fill(.black.opacity(0.5)))
+                        .background(Capsule().fill(MeeshyColors.mediaScrim))
                     }
                     .padding(MeeshySpacing.xsPlus)
                     Spacer()
@@ -162,9 +162,9 @@ public struct ImageViewerView: View {
                     Text(attachment.fileSizeFormatted)
                         .font(.system(size: MeeshyFont.microSize, weight: .semibold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 5)
+                        .padding(.horizontal, MeeshySpacing.xs)
                         .padding(.vertical, MeeshySpacing.xxs)
-                        .background(Capsule().fill(.black.opacity(0.5)))
+                        .background(Capsule().fill(MeeshyColors.mediaScrim))
                         .padding(MeeshySpacing.xsPlus)
                 }
             }
@@ -174,7 +174,7 @@ public struct ImageViewerView: View {
     // MARK: - Placeholder
     private func placeholder(icon: String) -> some View {
         Rectangle()
-            .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
+            .fill(MeeshyColors.surfaceFill(isDark: isDark))
             .overlay(
                 Image(systemName: icon)
                     .font(.system(size: context.isCompact ? 22 : 28))
@@ -277,42 +277,8 @@ public struct ImageFullscreen: View {
 
             if showControls {
                 VStack {
-                    HStack {
-                        Button { dismiss() } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: MeeshyIconSize.xxxl))
-                                .foregroundColor(.white.opacity(0.8))
-                                .padding()
-                        }
-                        Spacer()
-
-                        Button {
-                            if let onSaveRequested {
-                                onSaveRequested()
-                            } else {
-                                saveToPhotos()
-                            }
-                        } label: {
-                            Group {
-                                switch saveState {
-                                case .idle:
-                                    Image(systemName: "arrow.down.to.line")
-                                case .saving:
-                                    ProgressView().tint(.white)
-                                case .saved:
-                                    Image(systemName: "checkmark")
-                                case .failed:
-                                    Image(systemName: "xmark")
-                                }
-                            }
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.9))
-                            .frame(width: 40, height: 40)
-                            .background(Circle().fill(Color.white.opacity(0.2)))
-                            .padding(.trailing, MeeshySpacing.md)
-                            .padding(.top, MeeshySpacing.sm)
-                        }
-                        .disabled(saveState == .saving || saveState == .saved)
+                    FullscreenTopBar(onClose: { dismiss() }) {
+                        saveButton
                     }
                     Spacer()
 
@@ -341,6 +307,36 @@ public struct ImageFullscreen: View {
         .statusBar(hidden: true)
         .onAppear { viewStartTime = Date() }
         .onDisappear { reportImageViewed() }
+    }
+
+    @ViewBuilder
+    private var saveButton: some View {
+        if saveState == .saving {
+            ProgressView()
+                .tint(MeeshyColors.mediaChromeForeground)
+                .frame(width: FullscreenChromeMetrics.tapTarget,
+                       height: FullscreenChromeMetrics.tapTarget)
+        } else {
+            FullscreenChromeButton(
+                systemImage: saveGlyph,
+                label: String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
+            ) {
+                if let onSaveRequested {
+                    onSaveRequested()
+                } else {
+                    saveToPhotos()
+                }
+            }
+            .disabled(saveState == .saved)
+        }
+    }
+
+    private var saveGlyph: String {
+        switch saveState {
+        case .idle, .saving: return FullscreenChromeSymbol.save
+        case .saved: return FullscreenChromeSymbol.saved
+        case .failed: return FullscreenChromeSymbol.close
+        }
     }
 
     private func reportImageViewed() {
