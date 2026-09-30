@@ -32,6 +32,8 @@ export const NOTIFICATION_STRING_KEYS = [
   'group.added', 'group.newContact',
   'attachment.photo', 'attachment.video', 'attachment.audio', 'attachment.document', 'attachment.files',
   'attachment.contact',
+  'content.location', 'content.sticker', 'content.invitation',
+  'content.storyReply.yours', 'content.storyReply.other',
   'login.newDevice.title',
   'push.private',
   'engagement.badgeEarned', 'engagement.streakMilestone', 'engagement.levelUp',
