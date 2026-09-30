@@ -171,9 +171,9 @@ describe('Quote — l’aperçu média d’une citation s’ouvre, le reste saut
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[data-quote-open="video"]')?.click();
     });
-    await waitFor(() => document.querySelector('[role="dialog"] [data-viewer-action="reply"]') !== null);
+    await waitFor(() => document.querySelector('[role="dialog"] [data-viewer-reply]') !== null);
     expect(document.querySelector('[role="dialog"] video')?.getAttribute('src')).toContain('sortie.mp4');
-    expect(document.querySelector('[role="dialog"] [data-viewer-action="reply"]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"] [data-viewer-reply]')).not.toBeNull();
   });
 
   test('toucher le RESTE de la citation saute au message, sans rien ouvrir', async () => {
