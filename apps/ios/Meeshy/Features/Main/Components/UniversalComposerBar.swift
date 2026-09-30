@@ -318,6 +318,9 @@ struct UniversalComposerBar: View {
     /// La sélection du champ (`TextSelection`, iOS 18+), rangée en `Any?`
     /// parce qu'une propriété stockée ne peut pas être `@available` (#7849).
     @State var formatSelectionStorage: Any? = nil
+    /// Le texte pour lequel cette sélection a été posée — par la frappe, ou
+    /// par la mise en forme qui la replace elle-même (#8791).
+    @State var selectionText = ""
     /// La feuille des dix cadres à mots, ouverte par un appui long sur le
     /// bouton d'envoi (#5326, directive porteur 2026-09-25).
     @State var showTextStickerSheet = false

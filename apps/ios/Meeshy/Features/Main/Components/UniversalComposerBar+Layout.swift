@@ -356,6 +356,7 @@ extension UniversalComposerBar {
             applyDetectedLanguage(force: true)
         }
         .adaptiveOnChange(of: text) { _, newValue in
+            caretFollowsWrite(newValue)
             onAnyInteraction?()
             notifyContentChange()
             textAnalyzer.analyze(text: newValue)
