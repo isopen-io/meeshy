@@ -88,6 +88,27 @@ final class ImagineWorkshopTests: XCTestCase {
         return unit?["value"] as? String
     }
 
+    // MARK: - Un média qui ne se charge pas le DIT (#8901)
+
+    private static func item(_ id: String, _ kind: MessageCardMediaKind) -> MessageCardSubjectMedia {
+        MessageCardSubjectMedia(media: MessageCardMedia(id: id, kind: kind), fileURL: "https://x/\(id)")
+    }
+
+    func test_media_aVisualWithoutPixelsIsNamedFailed_aSoundNever() {
+        let items = [Self.item("photo", .image), Self.item("clip", .video), Self.item("voice", .audio), Self.item("ok", .image)]
+        XCTAssertEqual(MessageCardLoadedMedia.failures(of: items, painted: ["ok"]), ["photo", "clip"])
+        XCTAssertEqual(MessageCardLoadedMedia.failures(of: items, painted: ["photo", "clip", "ok"]), [])
+    }
+
+    func test_media_theFailureSaysHowManyPiecesAreMissing() {
+        XCTAssertNil(MessageCardExportText.mediaFailure(count: 0))
+        let one = MessageCardExportText.mediaFailure(count: 1)
+        let three = MessageCardExportText.mediaFailure(count: 3)
+        XCTAssertFalse((one ?? "").isEmpty)
+        XCTAssertTrue(three?.contains("3") == true, three ?? "nil")
+        XCTAssertNotEqual(one, three)
+    }
+
     func test_catalog_theActionIsImager_theWorkshopIsImagine() throws {
         let strings = try Self.catalog()
         XCTAssertEqual(Self.value(strings["message.menu.export"], "fr"), "Imager")
@@ -101,7 +122,8 @@ final class ImagineWorkshopTests: XCTestCase {
                     "export.card.tab.format", "export.card.tab.frame", "export.card.tab.media", "export.card.part.media",
                     "export.card.option.times", "export.card.option.handles", "export.card.output.label",
                     "export.card.motion.running", "export.announce.galleryMotion", "export.announce.sharedMotion",
-                    "export.announce.motionFailed", "export.card.names.above", "export.card.names.after"]
+                    "export.announce.motionFailed", "export.card.names.above", "export.card.names.after",
+                    "export.card.media.failed.one", "export.card.media.failed.other", "export.card.media.retry"]
         keys += MessageCardAspect.allCases.map { "export.card.aspect.\($0.rawValue)" }
         keys += MessageCardHeaderOrientation.allCases.map { "export.card.header.\($0.rawValue)" }
         keys += MessageCardTilt.allCases.map { "export.card.tilt.\($0.rawValue)" }

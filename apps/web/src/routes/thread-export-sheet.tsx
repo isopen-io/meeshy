@@ -25,7 +25,7 @@ import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 
 import type { FrameChoice } from './thread-export-frame';
 import { ExportGallery } from './thread-export-gallery';
-import { OutputPicker, defaultMotionRecorder, defaultSourcesLoader, temporalItemOf, useCardSources, useMotionCache, type MotionRecorder, type SourcesLoader } from './thread-export-output';
+import { MediaFailure, OutputPicker, defaultMotionRecorder, defaultSourcesLoader, temporalItemOf, useCardSources, useMotionCache, type MotionRecorder, type SourcesLoader } from './thread-export-output';
 import type { ThumbSource } from './thread-export-thumb';
 import { ExportTray, TAB_OF_PART, type ExportTab } from './thread-export-tray';
 
@@ -299,6 +299,8 @@ export function MessageExportSheet({
 
   /* Une carte à médias n'est PRÊTE qu'avec leurs pixels : « Imager rapide » ne part jamais avec des cadres vides. */
   const ready = rendered !== null && rendered.key === key && !media.loading;
+  /* Un média en échec retient « Imager rapide » : l'atelier le dit, et le geste attend « Réessayer » ou un choix explicite. */
+  const quickReady = ready && media.failed.length === 0;
 
   /** Le fichier à livrer : l'image peinte, ou le GIF / la vidéo fabriqués à la demande (et gardés pour un second geste). */
   const fileFor = async (card: Rendered): Promise<Blob | null> => {
@@ -334,11 +336,11 @@ export function MessageExportSheet({
   };
 
   useEffect(() => {
-    if (!quick || !ready || quickSent.current) return;
+    if (!quick || !quickReady || quickSent.current) return;
     quickSent.current = true;
     void send('save');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quick, ready]);
+  }, [quick, quickReady]);
 
   const toggle = (option: MessageCardToggle) => setFormat((current) => ({ ...current, [option]: !current[option] }));
   const choose = (choice: FrameChoice) => setFormat((current) => ({ ...current, ...choice }));
@@ -491,6 +493,8 @@ export function MessageExportSheet({
             </p>
           )}
         </div>
+
+        {media.loading ? null : <MediaFailure language={language} count={media.failed.length} onRetry={media.retry} />}
 
         {ready && rendered.truncated ? (
           <p className="relative px-6 pb-1 text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>

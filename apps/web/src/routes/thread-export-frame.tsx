@@ -23,7 +23,7 @@ import { Group, Pill } from './thread-export-controls';
  */
 
 /** Les libellés sans paramètre — tous ceux de ce panneau. */
-type PlainKey = Exclude<ExportCardCatalogKey, 'export.card.gallery.count'>;
+type PlainKey = Exclude<ExportCardCatalogKey, 'export.card.gallery.count' | 'export.card.media.failed.other'>;
 
 export type FrameChoice =
   | { readonly aspect: CardAspect }

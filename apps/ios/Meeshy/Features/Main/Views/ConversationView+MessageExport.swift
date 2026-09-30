@@ -7,7 +7,8 @@ import MeeshyUI
 extension ConversationView {
 
     /// Ouvre l'atelier « Imagine » sur le message tel que le lecteur le lit —
-    /// la traduction servie par le Prisme, ou l'original, et ses médias.
+    /// la traduction servie par le Prisme, ou l'original, et ses médias — plus
+    /// ceux du message cité quand il est en mémoire (#8901).
     /// `quick` applique le format par défaut et enregistre dès que la carte
     /// est peinte.
     func beginMessageExport(_ message: Message, quick: Bool) {
@@ -18,9 +19,11 @@ extension ConversationView {
         let served = viewModel.preferredTranslation(for: message.id)?.translatedContent
         let user = AuthManager.shared.currentUser
         let viewer = MessageCardSubject.Viewer(id: user?.id ?? "", displayName: user?.displayName, username: user?.username)
-        let quotedAt = message.replyTo.flatMap { reference in viewModel.messages.first { $0.id == reference.messageId }?.createdAt }
+        let quotedMessage = message.replyTo.flatMap { reference in viewModel.messages.first { $0.id == reference.messageId } }
+        let quotedAt = quotedMessage?.createdAt
         guard let subject = MessageCardSubject.of(
-            message: message, servedText: served, translations: translations, viewer: viewer, quotedAt: quotedAt, now: Date()
+            message: message, servedText: served, translations: translations, viewer: viewer,
+            quotedAt: quotedAt, quotedMessage: quotedMessage, now: Date()
         ) else {
             FeedbackToastManager.shared.showError(
                 String(localized: "export.announce.failed", defaultValue: "Impossible de créer l’image", bundle: .main)
@@ -33,7 +36,7 @@ extension ConversationView {
             subjectIn: { language in
                 MessageCardSubject.of(
                     message: message, servedText: served, translations: translations,
-                    viewer: viewer, language: language, quotedAt: quotedAt, now: Date()
+                    viewer: viewer, language: language, quotedAt: quotedAt, quotedMessage: quotedMessage, now: Date()
                 )
             },
             handle: user?.username,

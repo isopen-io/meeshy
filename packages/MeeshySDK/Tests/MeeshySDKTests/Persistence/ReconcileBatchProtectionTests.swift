@@ -20,6 +20,7 @@ final class ReconcileBatchProtectionTests: XCTestCase {
         dbQueue = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: dbQueue)
         actor = MessagePersistenceActor(dbWriter: dbQueue)
+        await actor.start()
     }
 
     override func tearDown() async throws {
