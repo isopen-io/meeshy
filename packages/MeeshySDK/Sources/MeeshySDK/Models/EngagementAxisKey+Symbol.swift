@@ -23,6 +23,8 @@ public extension EngagementAxisKey {
         case .inviteJoined: return "person.badge.plus.fill"
         case .friendship: return "person.2.fill"
         case .directPublish: return "paperplane.fill"
+        case .reaction: return "heart.fill"
+        case .attachment: return "paperclip"
         }
     }
 }

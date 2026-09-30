@@ -50,6 +50,10 @@ enum ProgressionCopy {
             return String(localized: "progression.axis.social.friendship", defaultValue: "Amitiés nouées", bundle: .main)
         case .directPublish:
             return String(localized: "progression.axis.tool.direct_publish", defaultValue: "Publications directes", bundle: .main)
+        case .reaction:
+            return String(localized: "progression.axis.tool.reaction", defaultValue: "Réactions", bundle: .main)
+        case .attachment:
+            return String(localized: "progression.axis.tool.attachment", defaultValue: "Pièces jointes", bundle: .main)
         }
     }
 
