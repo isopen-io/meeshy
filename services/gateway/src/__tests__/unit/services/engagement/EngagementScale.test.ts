@@ -42,6 +42,7 @@ function scaleWith(overrides: {
   multiplier?: Partial<EngagementScale['multiplier']>;
 }): EngagementScale {
   return {
+    ...DEFAULT_ENGAGEMENT_SCALE,
     operations: { ...DEFAULT_ENGAGEMENT_SCALE.operations, ...overrides.operations },
     multiplier: { ...DEFAULT_ENGAGEMENT_SCALE.multiplier, ...overrides.multiplier },
   };
@@ -79,6 +80,7 @@ function makeCreditPrisma(options: {
       findMany: jest.fn().mockResolvedValue([]),
     },
     engagementConversationCredit: { create: jest.fn().mockResolvedValue({}) },
+    engagementQuota: { upsert: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn().mockResolvedValue({ count: 1 }), updateMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue(null) },
     conversationEngagement: {
       findUnique: jest.fn().mockResolvedValue(options.conversationRow ?? null),
       upsert: conversationUpsert,
@@ -189,7 +191,7 @@ describe('EngagementScaleService — le barème effectif', () => {
 describe('le crédit applique le barème', () => {
   it('une opération NON multipliée crédite ses points tels quels, quel que soit l\'élan', async () => {
     const scale = scaleWith({
-      operations: { 'tool.sticker': { points: 7, multiplied: false, dailyCapPerConversation: null } },
+      operations: { 'tool.sticker': { points: 7, multiplied: false, cap: null, variantPoints: {} } },
     });
     const { prisma, counterUpsert, runCommandRaw } = makeCreditPrisma({
       recentAxes: ['content.post', 'comment.text', 'conversation.private'],
@@ -204,7 +206,7 @@ describe('le crédit applique le barème', () => {
 
   it('le plafond de facteur du NIVEAU borne l\'élan', async () => {
     const scale = scaleWith({
-      operations: { 'tool.sticker': { points: 10, multiplied: true, dailyCapPerConversation: null } },
+      operations: { 'tool.sticker': { points: 10, multiplied: true, cap: null, variantPoints: {} } },
       multiplier: { levelCaps: [{ minLevel: 0, maxFactor: 2 }] },
     });
     const { prisma, counterUpsert } = makeCreditPrisma({
@@ -232,7 +234,7 @@ describe('le crédit applique le barème', () => {
 
 describe('le plafond journalier par conversation', () => {
   const capped = scaleWith({
-    operations: { 'tool.reaction': { points: 1, multiplied: false, dailyCapPerConversation: 2 } },
+    operations: { 'tool.reaction': { points: 1, multiplied: false, cap: 2, variantPoints: {} } },
   });
 
   it('plafond atteint aujourd\'hui ⇒ le geste ne crédite RIEN', async () => {
@@ -355,7 +357,7 @@ describe('l\'annonce de l\'état au crédité', () => {
   it('émet engagement:conversation-updated vers la SEULE room personnelle du crédité', async () => {
     const { io, emitted } = fakeIO();
     const scale = scaleWith({
-      operations: { 'tool.reaction': { points: 3, multiplied: false, dailyCapPerConversation: 30 } },
+      operations: { 'tool.reaction': { points: 3, multiplied: false, cap: 30, variantPoints: {} } },
     });
     const { prisma } = makeCreditPrisma();
 
@@ -416,7 +418,7 @@ describe('le barème écrit par l\'administration gouverne le crédit suivant', 
     expect(creditedPoints(counterUpsert)).toBe(DEFAULT_ENGAGEMENT_SCALE.operations['content.text_message'].points);
 
     await engagementScaleServiceFor(withStore).write(
-      scaleWith({ operations: { 'content.text_message': { points: 42, multiplied: false, dailyCapPerConversation: null } } }),
+      scaleWith({ operations: { 'content.text_message': { points: 42, multiplied: false, cap: null, variantPoints: {} } } }),
       'admin-1',
     );
     counterUpsert.mockClear();

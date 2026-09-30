@@ -4975,6 +4975,27 @@ model EngagementSignatureCredit {
   @@index([userId, axisKey])
 }
 
+/// Les QUOTAS d'une opération d'engagement (#8959) : combien d'actions ont été
+/// créditées dans un SEAU — un jour (`day:2026-09-30`), une cible
+/// (`target:<id>`), le compte (`account`), les visites d'un lien
+/// (`link:<clé>`) ou un visiteur sur un lien (`visit:<clé>:<visiteur>`).
+/// L'incrément atomique de `count` tranche le plafond, jamais une relecture.
+/// `points` garde ce qu'un contenu lourd a rapporté, pour le reprendre s'il
+/// est supprimé peu après sa publication.
+model EngagementQuota {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @db.ObjectId
+  operationKey String
+  bucket       String
+  count        Int      @default(0)
+  points       Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, operationKey, bucket])
+  @@index([userId, createdAt])
+}
+
 /// LE BARÈME d'engagement réglé par l'administration (#8906) — une ligne
 /// singleton (`key = "default"`). `config` porte un `EngagementScale`
 /// (`@meeshy/shared/types/engagement-scale`), relu par `parseEngagementScale`

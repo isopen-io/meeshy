@@ -14,7 +14,7 @@
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
+import { ENGAGEMENT_OPERATIONS } from '@meeshy/shared/types/engagement-operations';
 import { parseEngagementScale } from '@meeshy/shared/types/engagement-scale';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { requireAdminRank, withAudit } from '../../middleware/authorize';
@@ -33,7 +33,8 @@ const operationRuleSchema = {
   properties: {
     points: { type: 'integer' },
     multiplied: { type: 'boolean' },
-    dailyCapPerConversation: { type: 'integer', nullable: true },
+    cap: { type: 'integer', nullable: true },
+    variantPoints: { type: 'object', additionalProperties: { type: 'integer' } },
   },
 } as const;
 
@@ -42,7 +43,7 @@ const engagementScaleSchema = {
   properties: {
     operations: {
       type: 'object',
-      properties: Object.fromEntries(ENGAGEMENT_AXES.map((axisKey) => [axisKey, operationRuleSchema])),
+      properties: Object.fromEntries(ENGAGEMENT_OPERATIONS.map((key) => [key, operationRuleSchema])),
     },
     multiplier: {
       type: 'object',
@@ -61,6 +62,29 @@ const engagementScaleSchema = {
             properties: { minLevel: { type: 'integer' }, maxFactor: { type: 'number' } },
           },
         },
+      },
+    },
+    linkVisits: {
+      type: 'object',
+      properties: {
+        basePoints: { type: 'integer' },
+        firstTier: { type: 'integer' },
+        stepPerDoubling: { type: 'integer' },
+        maxPoints: { type: 'integer' },
+        dedupHours: { type: 'integer' },
+        dailyCapPerCreator: { type: 'integer', nullable: true },
+      },
+    },
+    streakBonuses: {
+      type: 'array',
+      items: { type: 'object', properties: { days: { type: 'integer' }, points: { type: 'integer' } } },
+    },
+    abuse: {
+      type: 'object',
+      properties: {
+        heavyPoints: { type: 'integer' },
+        clawbackHours: { type: 'integer' },
+        unverifiedMaxPoints: { type: 'integer' },
       },
     },
   },

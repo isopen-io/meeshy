@@ -31,16 +31,19 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { unsetOrNull } from '../../utils/prisma-unset';
 import { getCacheStore, type CacheStore } from '../CacheStore';
 import { authUserCacheKey } from '../../middleware/auth';
-import { markEmailVerificationWatchesProven, type EmailVerificationWatchStore } from './email-verification-watch';
+import { markEmailVerificationWatchesProven } from './email-verification-watch';
+import { creditContactProof, type ContactProofRecorder } from './contact-proof-engagement';
 
 const logger = enhancedLogger.child({ module: 'EmailAddressProof' });
 
 export type EmailAddressProofDeps = {
-  readonly prisma: Pick<PrismaClient, 'user'> & EmailVerificationWatchStore;
+  readonly prisma: PrismaClient;
   /** Le cache d'auth du middleware, vidé pour que `done` se lise tout de suite. Absent ⇒ `getCacheStore()`. */
   readonly cache?: Pick<CacheStore, 'del'>;
   /** « X a rejoint Meeshy » (#8105), appelé pour une adresse NEUVEMENT prouvée. */
   readonly announce?: (userId: string) => void;
+  /** Le moteur d'engagement — un double en test ; absent ⇒ celui de `prisma`. */
+  readonly engagement?: ContactProofRecorder;
 };
 
 /** Le fragment d'écriture — la seule règle qui date une adresse prouvée par e-mail. */
@@ -51,7 +54,12 @@ export function emailProofFields(
   return row.emailVerifiedAt ? {} : { emailVerifiedAt: now };
 }
 
-/** Ce qui suit une preuve écrite : attentes « prouvées », cache d'auth vidé, arrivée annoncée. */
+/**
+ * Ce qui suit une preuve écrite : attentes « prouvées », cache d'auth vidé,
+ * arrivée annoncée — et, pour une adresse NEUVEMENT prouvée,
+ * `profile.email_verified` (#8959), une fois par compte. Toutes les portes du
+ * geste de l'utilisateur passent ici ; celles de l'administration, jamais.
+ */
 export async function settleEmailAddressProof(
   deps: EmailAddressProofDeps,
   input: { readonly userId: string; readonly now: Date; readonly newlyProven: boolean },
@@ -62,7 +70,9 @@ export async function settleEmailAddressProof(
   } catch (error) {
     logger.warn("cache d'auth non vidé — la phase se relira à son expiration", { error });
   }
-  if (input.newlyProven) deps.announce?.(input.userId);
+  if (!input.newlyProven) return;
+  deps.announce?.(input.userId);
+  creditContactProof(deps, input.userId, 'profile.email_verified');
 }
 
 /**

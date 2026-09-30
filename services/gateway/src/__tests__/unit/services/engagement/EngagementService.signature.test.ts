@@ -33,6 +33,7 @@ function makePrisma(overrides: Partial<{
       create: overrides.signatureCreditCreate ?? jest.fn().mockResolvedValue({}),
     },
     engagementScaleConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+    engagementQuota: { upsert: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn().mockResolvedValue({ count: 1 }), updateMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue(null) },
     conversationEngagement: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
     user: {
       findUnique: jest.fn().mockResolvedValue({ systemLanguage: 'fr' }),

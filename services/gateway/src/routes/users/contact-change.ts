@@ -16,6 +16,7 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { depreciee, type AdresseDepreciee } from '../../utils/deprecation';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { revokePasswordResetTokensForEmailChange } from '../../utils/password-reset-revocation';
+import { creditContactProof } from '../../services/auth/contact-proof-engagement';
 
 const logger = enhancedLogger.child({ module: 'contact-change' });
 
@@ -493,6 +494,7 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
       logger.info(`[EMAIL_CHANGE] Email changed successfully for user ${userId} to ${user.pendingEmail}`);
       // « X a rejoint Meeshy » (#8105) : un identifiant NEUVEMENT vérifié.
       scheduleContactJoinedAnnouncement(fastify.prisma, userId);
+      creditContactProof({ prisma: fastify.prisma }, userId, 'profile.email_verified');
 
       return sendSuccess(reply, {
         message: 'Email changed successfully',
@@ -918,6 +920,7 @@ export async function verifyPhoneChange(fastify: FastifyInstance) {
       logger.info(`[PHONE_CHANGE] Phone changed successfully for user ${userId} to ${user.pendingPhoneNumber}`);
       // « X a rejoint Meeshy » (#8105) : un identifiant NEUVEMENT vérifié.
       scheduleContactJoinedAnnouncement(fastify.prisma, userId);
+      creditContactProof({ prisma: fastify.prisma }, userId, 'profile.phone_verified');
 
       return sendSuccess(reply, {
         message: 'Phone number changed successfully',

@@ -24,10 +24,16 @@ import { CommunityRole } from './types';
 import { gateCoMemberPresence } from './member-presence';
 import { viewerFromRequest } from '../users/presence-gate';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
+import { EngagementService } from '../../services/engagement/EngagementService';
+import type { CommunityEngagementOptions } from './types';
 
 const logger = enhancedLogger.child({ module: 'CommunityMembershipRoutes' });
 
-export async function registerMembershipRoutes(fastify: FastifyInstance) {
+export async function registerMembershipRoutes(
+  fastify: FastifyInstance,
+  options: CommunityEngagementOptions = {}
+) {
+  const engagement = options.engagement ?? new EngagementService(fastify.prisma);
   // Route pour obtenir les communautes de l'utilisateur courant
   fastify.get('/communities/mine', {
     onRequest: [fastify.authenticate],
@@ -175,7 +181,7 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
 
       const community = await fastify.prisma.community.findFirst({
         where: { id },
-        select: { id: true, isPrivate: true }
+        select: { id: true, isPrivate: true, createdBy: true }
       });
 
       if (!community) {
@@ -243,6 +249,12 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
         userId,
         communityId: id,
       }).catch(() => undefined);
+
+      // `social.community_joined` (#8959) — une fois par communauté ; le
+      // créateur qui revient dans la sienne ne se paie pas (`targetOwnerId`).
+      engagement
+        .recordActivity(userId, 'social.community_joined', { targetId: id, targetOwnerId: community.createdBy })
+        .catch((err: unknown) => logger.warn('engagement social.community_joined failed', { err }));
 
       // Pas de gate ici : le membre rendu est l'APPELANT lui-même, et une
       // préférence de visibilité ne se cache pas à celui qui l'a posée.
