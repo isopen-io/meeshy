@@ -69,6 +69,22 @@ describe('UserManagementService.getUsers', () => {
     ]));
   });
 
+  // #8876 — le nom AFFICHÉ est ce que la console montre d'un compte : la recherche
+  // doit le couvrir, sinon « Awa Diop » ne trouve pas Awa.
+  it('searches the display name too, case-insensitively', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const count = jest.fn().mockResolvedValue(0);
+    const svc = makeService(makePrisma({ findMany, count }));
+
+    await svc.getUsers({ search: 'Awa Diop' }, { offset: 0, limit: 10 });
+
+    const callWhere = (findMany.mock.calls[0] as any[])[0].where;
+    expect(callWhere.OR).toEqual(expect.arrayContaining([
+      { displayName: { contains: 'Awa Diop', mode: 'insensitive' } },
+    ]));
+    expect((count.mock.calls[0] as any[])[0].where).toEqual(callWhere);
+  });
+
   it('filters by role when provided', async () => {
     const findMany = jest.fn().mockResolvedValue([]);
     const count = jest.fn().mockResolvedValue(0);

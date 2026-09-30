@@ -77,6 +77,8 @@ export const BroadcastsListQuerySchema = z.object({
   offset: paginationOffset(),
   limit: paginationLimit(20),
   status: z.string().optional(),
+  // #8876 — recherche sur le NOM et l'OBJET de la diffusion, jamais sur son corps.
+  search: z.string().trim().max(100).optional(),
 });
 
 export type BroadcastsListQuery = z.infer<typeof BroadcastsListQuerySchema>;
