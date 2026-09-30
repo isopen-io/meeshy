@@ -181,6 +181,12 @@ export function endRevokedSession(
   deps: { readonly storage?: SafeStorage; readonly cacheStorage?: CacheStorageLike } = {},
 ): void {
   const current = store.getState().session;
+  /* Sous une identité anonyme TENUE par un compte (#8816), le 401 a refusé
+     le jeton de l'INVITÉ : c'est lui qui finit, le compte reste. */
+  if (current.status === 'guest' && current.account !== undefined) {
+    store.getState().dropAnonymous(current.guest.conversationId);
+    return;
+  }
   const userId = current.status === 'authenticated' ? current.user.id : null;
   store.getState().clearSession();
   if (userId !== null) forgetAccountCaches({ userId, ...deps });

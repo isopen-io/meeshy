@@ -13,6 +13,7 @@ import { currentInterfaceLanguage, subscribeInterfaceLanguage } from '@/lib/inte
 import { useRoute } from '@/lib/router';
 import { followSystem } from '@/lib/scheme';
 import { landingAfterSession, resolveRouteAccess } from '@/lib/session-guard';
+import { useAnonymousScope } from '@/lib/view/use-anonymous-scope';
 import { Router, href, navigate } from '@/routes/route-table';
 
 /**
@@ -64,6 +65,14 @@ if (import.meta.env.DEV) void import('@/lib/api/dev-harness');
  * est déjà là, pas à ajouter.
  */
 function SessionGate({ children }: { children: ReactNode }) {
+  const route = useRoute();
+  /* L'IDENTITÉ SUIT LA CONVERSATION LUE (#8816) — posée AVANT la décision
+     d'accès : sous l'identité anonyme d'un compte, la liste redirigerait
+     sinon vers la connexion au lieu de rendre le compte. */
+  return useAnonymousScope(route) ? <RouteAccessGate>{children}</RouteAccessGate> : <Skeleton />;
+}
+
+function RouteAccessGate({ children }: { children: ReactNode }) {
   const { key, search } = useRoute();
   const status = useStore(sessionStore, (s) => s.session.status);
   const decision = resolveRouteAccess({ sessionStatus: status, source: apiDeps.source, routeKey: key });

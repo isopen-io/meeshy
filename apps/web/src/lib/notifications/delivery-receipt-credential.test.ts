@@ -48,6 +48,17 @@ describe('deliveryReceiptCredentialOf — la projection PURE (#7368, W4)', () =>
     expect(deliveryReceiptCredentialOf(guest).credential).toEqual({ kind: 'anonymous', sessionToken: 'anon_xyz' });
   });
 
+  test('une identité anonyme TENUE par le compte (#8816) : le worker accuse sous le COMPTE, jamais sous l’invité', () => {
+    const held: SessionState = {
+      status: 'guest',
+      sessionToken: 'anon_xyz',
+      guest: { participantId: 'p1', nickname: 'Masque', conversationId: 'c1', link: 'mshy_abc', mayWrite: true },
+      expiresAt: Date.now() + 3_600_000,
+      account: { status: 'authenticated', user: { id: 'u1', username: 'awa' }, token: 'jwt-abc', sessionToken: 's', expiresAt: Date.now() + 3_600_000 },
+    };
+    expect(deliveryReceiptCredentialOf(held).credential).toEqual({ kind: 'registered', token: 'jwt-abc' });
+  });
+
   test('aucune session ⇒ aucun crédential — le worker n’a rien à présenter', () => {
     expect(deliveryReceiptCredentialOf(anonymous).credential).toBeNull();
   });

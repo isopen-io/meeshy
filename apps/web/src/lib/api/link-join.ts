@@ -488,6 +488,10 @@ const MEMBER_NOT_GUEST = 'MEMBER_NOT_GUEST';
  * optionnelle, donc un Bearer encore valide dans le transport ferait entrer le
  * COMPTE sous son nom pendant que l'écran croit créer un invité. Le port refuse
  * de s'en accommoder plutôt que de rendre une session d'invité qui n'existe pas.
+ *
+ * **Elle part NUE** (`credential: null`, #8816) : un compte connecté qui choisit
+ * « Anonyme » ne présente ni son Bearer ni le jeton d'une autre identité
+ * anonyme — la passerelle ne reçoit rien qui relie l'invité au compte.
  */
 export async function joinLinkAsGuest(
   deps: LinkJoinDeps,
@@ -501,6 +505,7 @@ export async function joinLinkAsGuest(
     method: 'POST',
     path: linksEndpoints.byKeyMembers(params.link),
     body: params.body,
+    credential: null,
   });
   if (!result.ok) return result;
   const parsed = WireGuestJoined.safeParse(result.data);

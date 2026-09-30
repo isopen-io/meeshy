@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { endRevokedSession } from './account-caches';
 import { createSessionStore, heldAccountOf, sessionIdentityKey, type GuestIdentity, type SessionStorage } from './session';
 
 /**
@@ -223,6 +224,19 @@ describe('dropAnonymous — l’identité anonyme refusée ou abandonnée', () =
 
     expect(store.getState().session).toEqual(account);
     expect(store.getState().anonymousScopeFor('c-1')).toBeNull();
+  });
+
+  test('un 401 sous l’identité anonyme (endRevokedSession) oublie l’INVITÉ, jamais le compte', () => {
+    const { store, storage } = signedInStore();
+    const account = store.getState().session;
+    store.getState().adoptAnonymous({ sessionToken: 'anon_1', guest: guestOf('c-1') });
+    const cacheStorage = { keys: async () => [] as readonly string[], delete: async () => true };
+
+    endRevokedSession(store, { storage, cacheStorage });
+
+    expect(store.getState().session).toEqual(account);
+    expect(store.getState().anonymousScopeFor('c-1')).toBeNull();
+    expect(storage.raw.get('meeshy.session')).toContain('jwt-ada');
   });
 
   test('clearSession (déconnexion) ferme le compte même sous une identité anonyme', () => {

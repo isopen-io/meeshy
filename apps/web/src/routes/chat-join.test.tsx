@@ -156,13 +156,13 @@ const settle = () =>
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-async function mount(deps: ChatJoinDeps, link = LINK): Promise<HTMLDivElement> {
+async function mount(deps: ChatJoinDeps, link = LINK, anonymousRequested = false): Promise<HTMLDivElement> {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
   mounted = { container, root };
   await act(async () => {
-    root.render(<ChatJoin link={link} deps={deps} />);
+    root.render(<ChatJoin link={link} deps={deps} anonymousRequested={anonymousRequested} />);
   });
   await settle();
   return container;
@@ -772,5 +772,57 @@ describe('hors ligne', () => {
     expect(el.querySelector('h1')?.textContent).toBe('Équipe déploiement');
     expect(joinButton(el)?.disabled).toBe(true);
     expect(text(el)).toContain('Hors ligne');
+  });
+});
+
+/* ========================================================================= *
+ *  UN COMPTE CONNECTÉ REJOINT EN ANONYME (#8816, jumelle de #8726)
+ * ========================================================================= */
+
+const modeOf = (anchor: HTMLAnchorElement | null) => new URL(anchor?.getAttribute('href') ?? '', 'http://localhost').searchParams.get('mode');
+
+describe('un compte CONNECTÉ peut rejoindre en « Anonyme » sans perdre sa session', () => {
+  test('son compte reste l’action primaire, et « Continuer en anonyme » est offert à côté', async () => {
+    signIn();
+    const el = await mount(depsWith().deps);
+    expect(joinButton(el)).not.toBeNull();
+    expect(guestForm(el)).toBeNull();
+    const anonymous = el.querySelector<HTMLAnchorElement>('[data-invite-anonymous-offer]');
+    expect(text(anonymous)).toBe('Continuer en anonyme');
+    expect(new URL(anonymous?.getAttribute('href') ?? '', 'http://localhost').pathname).toBe('/chat/mshy_equipe_7f3a');
+    expect(modeOf(anonymous)).toBe('anonymous');
+  });
+
+  test('un lien réservé aux comptes n’offre rien d’anonyme, même demandé', async () => {
+    signIn();
+    const el = await mount(depsWith(withTerms({ allowed: false })).deps, LINK, true);
+    expect(el.querySelector('[data-invite-anonymous-offer]')).toBeNull();
+    expect(guestForm(el)).toBeNull();
+    expect(joinButton(el)).not.toBeNull();
+  });
+
+  test('« Anonyme » choisi : le formulaire d’invité, VIDE de tout ce que le compte porte', async () => {
+    signIn();
+    const el = await mount(depsWith().deps, LINK, true);
+    expect(guestForm(el)).not.toBeNull();
+    expect(nicknameField(el)?.value).toBe('');
+    expect(joinButton(el)).toBeNull();
+    const back = el.querySelector<HTMLAnchorElement>('[data-invite-account-offer]');
+    expect(text(back)).toBe('Rejoindre avec mon compte');
+    expect(modeOf(back)).toBeNull();
+  });
+
+  test('la jonction anonyme ouvre l’identité à côté du compte, puis le fil — le compte reste connecté', async () => {
+    signIn();
+    const { deps, recorded } = depsWith();
+    const el = await mount(deps, LINK, true);
+    await fillAndSubmit(el, 'Masque');
+    expect(recorded.guestJoins).toEqual([[LINK, { language: 'fr', nickname: 'Masque' }]]);
+    expect(recorded.joins).toEqual([]);
+    expect(recorded.adopted.map(([token, guest]) => [token, guest.conversationId, guest.nickname])).toEqual([
+      ['anon_du_temoin', 'c-deploiement', 'Masque'],
+    ]);
+    expect(recorded.order).toEqual(['adopt', 'go /c/c-deploiement replace', 'joined']);
+    expect(sessionStore.getState().session.status).toBe('authenticated');
   });
 });
