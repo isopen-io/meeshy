@@ -8,6 +8,7 @@ import { outboxStore } from '@/lib/send/outbox-store';
 import { endRevokedSession } from './account-caches';
 import { bindAppStatePresence, documentVisibility } from './app-state-presence';
 import { apiConfig } from './config';
+import { bindConversationViewing, viewingStore } from './conversation-viewing';
 import { apiDeps } from './deps';
 import { appQueryClient } from './query-client';
 import { setAttachmentReactionEmitter } from './attachment-reaction-emit';
@@ -63,11 +64,14 @@ function bridgeCalls(next: RealtimeConnection | null): void {
   const unbridge = bridgeCallEvents(next.socket);
   /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible. */
   const unwatch = typeof document === 'undefined' ? () => undefined : bindAppStatePresence({ socket: next.socket, visibility: documentVisibility(document) });
+  /* « est dans la conversation » (#8892) : l'écran de fil s'annonce, les pairs annoncés portent le point primaire. */
+  const unview = typeof document === 'undefined' ? () => undefined : bindConversationViewing({ socket: next.socket, visibility: documentVisibility(document), store: viewingStore, viewerId: currentViewerId });
   /* `notification:deleted` ferme aussi la bannière du service worker (#8752), comme la coque et iOS. */
   const unrevoke = bridgeBannerRevocations(next.socket);
   unbridgeCalls = () => {
     unbridge();
     unwatch();
+    unview();
     unrevoke();
   };
 }

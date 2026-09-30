@@ -20,7 +20,7 @@ struct ComposerMentionStrip: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 14) {
+            HStack(spacing: MeeshySpacing.mdPlus) {
                 // **Une bande vide DIT « personne », elle ne disparaît pas.**
                 //
                 // Le montage était gaté sur `!suggestions.isEmpty` — donc un
@@ -39,9 +39,9 @@ struct ComposerMentionStrip: View {
                 // surface mood du même composer.
                 if controller.suggestions.isEmpty {
                     Text(ComposerDocumentCopy.mentionEmpty)
-                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(MeeshyColors.textSecondary(isDark: true))
-                        .frame(minHeight: 44, alignment: .leading)
+                        .frame(minHeight: MeeshyControlSize.tapTarget, alignment: .leading)
                 }
                 ForEach(controller.suggestions) { candidate in
                     Button {
@@ -50,7 +50,7 @@ struct ComposerMentionStrip: View {
                     } label: {
                         // Chaque entrée : avatar + nom d'affichage (au-dessus)
                         // + @pseudo (en dessous) — retour porteur 2026-08-27.
-                        HStack(spacing: 8) {
+                        HStack(spacing: MeeshySpacing.sm) {
                             MeeshyAvatar(
                                 name: candidate.displayName,
                                 context: .userListItem,
@@ -76,20 +76,20 @@ struct ComposerMentionStrip: View {
                             // Verrouillé par `ComposerMentionStripContrastTests`.
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(candidate.displayName)
-                                    .font(MeeshyFont.relative(13, weight: .semibold))
+                                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                                     .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                                     .lineLimit(1)
                                 Text("@\(candidate.username)")
-                                    .font(MeeshyFont.relative(11, weight: .medium))
+                                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                                     .foregroundColor(MeeshyColors.textSecondary(isDark: true))
                                     .lineLimit(1)
                             }
                             .frame(maxWidth: 140, alignment: .leading)
                         }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 10)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
                         .background(
-                            Capsule().fill(MeeshyColors.textPrimary(isDark: true).opacity(0.06))
+                            Capsule().fill(MeeshyColors.textPrimary(isDark: true).opacity(MeeshyOpacity.subtle))
                         )
                     }
                     .accessibilityLabel(
@@ -97,8 +97,8 @@ struct ComposerMentionStrip: View {
                     )
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.smPlus)
         }
         .frame(maxWidth: .infinity)
         // **Fond TRANSPARENT** (directive porteur 2026-09-05).

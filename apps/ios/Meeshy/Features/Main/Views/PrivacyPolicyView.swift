@@ -82,7 +82,7 @@ struct PrivacyPolicyView: View {
     // MARK: - Content
 
     private var pageContent: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             languagePicker
 
             lastUpdated
@@ -95,8 +95,8 @@ struct PrivacyPolicyView: View {
 
             Spacer().frame(height: 40)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     // MARK: - Language Picker
@@ -114,39 +114,39 @@ struct PrivacyPolicyView: View {
 
     private var lastUpdated: some View {
         Text(selectedLanguage == "fr" ? String(localized: "legal.privacy.lastUpdated.fr", defaultValue: "Dernière mise à jour : 24 février 2026", bundle: .main) : String(localized: "legal.privacy.lastUpdated.en", defaultValue: "Dernière mise à jour : 24 février 2026", bundle: .main))
-            .font(MeeshyFont.relative(12, weight: .medium))
+            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
             .foregroundColor(theme.textMuted)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.leading, 4)
+            .padding(.leading, MeeshySpacing.xs)
     }
 
     // MARK: - Policy Section
 
     private func policySection(number: Int, title: String, content: String) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "\(number).circle.fill")
-                    .font(MeeshyFont.relative(18, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
 
                 Text(title)
-                    .font(MeeshyFont.relative(15, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                     .foregroundColor(theme.textPrimary)
             }
 
             Text(content)
-                .font(MeeshyFont.relative(14, weight: .regular))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .regular))
                 .foregroundColor(theme.textSecondary)
                 .lineSpacing(4)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )

@@ -398,9 +398,9 @@ struct ComposerLeadingRail: View {
     private func badgeBubble(_ count: Int?) -> some View {
         if let count {
             Text(LocalizedNumber.exact(count))
-                .font(MeeshyFont.relative(10, weight: .bold).monospacedDigit())
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold).monospacedDigit())
                 .foregroundStyle(.white)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, MeeshySpacing.xs)
                 .frame(minWidth: 16, minHeight: 16)
                 .background(Capsule().fill(MeeshyColors.brandPrimary))
                 // Un liseré de la teinte du plateau détache la pastille du

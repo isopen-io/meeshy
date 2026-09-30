@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 struct ConversationLockSheet: View {
     enum Mode {
@@ -67,7 +68,7 @@ struct ConversationLockSheet: View {
     // MARK: - Header
 
     private var headerSection: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Image(systemName: iconName)
                 // doctrine 84i — glyphe hero décoratif ≥40pt (le titre porte le sens)
                 .font(.system(size: 44))
@@ -78,7 +79,7 @@ struct ConversationLockSheet: View {
                         endPoint: .bottomTrailing
                     )
                 )
-                .padding(.top, 24)
+                .padding(.top, MeeshySpacing.xxl)
                 .accessibilityHidden(true)
 
             Text(titleText)
@@ -90,14 +91,14 @@ struct ConversationLockSheet: View {
                 .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, MeeshySpacing.xxxl)
         }
     }
 
     // MARK: - Dots
 
     private var dotsRow: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: MeeshySpacing.xl) {
             ForEach(0..<pinLength, id: \.self) { index in
                 Circle()
                     .fill(
@@ -107,7 +108,7 @@ struct ConversationLockSheet: View {
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             ))
-                            : AnyShapeStyle(theme.textMuted.opacity(0.25))
+                            : AnyShapeStyle(theme.textMuted.opacity(MeeshyOpacity.medium))
                     )
                     .frame(width: 18, height: 18)
                     .scaleEffect(index < currentPin.count ? 1.15 : 1.0)
@@ -115,7 +116,7 @@ struct ConversationLockSheet: View {
             }
         }
         .offset(x: shakeOffset)
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
         // Les points de progression ne sont que visuels : VoiceOver n'a aucun
         // moyen de percevoir combien de chiffres ont été saisis (parité clavier
         // code natif iOS). On regroupe la rangée en un seul élément portant la
@@ -134,15 +135,15 @@ struct ConversationLockSheet: View {
     // MARK: - Numpad
 
     private var numpad: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.mdPlus) {
             ForEach([[1, 2, 3], [4, 5, 6], [7, 8, 9]], id: \.self) { row in
-                HStack(spacing: 20) {
+                HStack(spacing: MeeshySpacing.xl) {
                     ForEach(row, id: \.self) { digit in
                         numpadKey(digit: digit)
                     }
                 }
             }
-            HStack(spacing: 20) {
+            HStack(spacing: MeeshySpacing.xl) {
                 Color.clear.frame(width: 76, height: 76)
                 numpadKey(digit: 0)
                 Button {
@@ -177,7 +178,7 @@ struct ConversationLockSheet: View {
                     Circle()
                         .fill(theme.mode.isDark
                               ? Color.white.opacity(0.09)
-                              : Color.black.opacity(0.06))
+                              : Color.black.opacity(MeeshyOpacity.subtle))
                 )
         }
         .disabled(currentPin.count >= pinLength)

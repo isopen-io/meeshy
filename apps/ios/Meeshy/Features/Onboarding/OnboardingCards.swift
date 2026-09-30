@@ -86,10 +86,10 @@ struct OnboardingCardView: View {
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
                 .frame(minHeight: 54)
-                .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(isDark ? Color.white.opacity(0.07) : Color.white))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(MeeshyColors.indigo300.opacity(0.6), lineWidth: 1.5))
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
+                    .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.white))
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
+                    .stroke(MeeshyColors.indigo300.opacity(0.6), lineWidth: MeeshyBorder.emphasis))
             }
             .accessibilityIdentifier("onboarding.languages.primary")
             .accessibilityLabel(String.localizedStringWithFormat(
@@ -111,7 +111,7 @@ struct OnboardingCardView: View {
                         ) { model.toggleSecondaryLanguage(code) }
                     }
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, MeeshySpacing.xxs)
             }
         }
     }
@@ -224,10 +224,10 @@ struct OnboardingCardView: View {
                 .font(MeeshyFont.relative(MeeshyFont.bodySize + 1))
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                 .padding(MeeshySpacing.md)
-                .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(isDark ? Color.white.opacity(0.07) : Color.white))
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(MeeshyColors.indigo300.opacity(0.6), lineWidth: 1.5))
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
+                    .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.white))
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
+                    .stroke(MeeshyColors.indigo300.opacity(0.6), lineWidth: MeeshyBorder.emphasis))
                 .accessibilityLabel(String(localized: "onboarding.global.editor.a11y", bundle: .main))
                 .accessibilityIdentifier("onboarding.global.editor")
             Label(String(localized: "onboarding.global.hint", bundle: .main), systemImage: "pencil")
@@ -420,7 +420,7 @@ struct OnboardingCardView: View {
                                              @ViewBuilder leading: () -> Leading) -> some View {
         HStack(spacing: MeeshySpacing.md) {
             leading()
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(text)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
@@ -434,7 +434,7 @@ struct OnboardingCardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(MeeshySpacing.md)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(tint.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous).fill(tint.opacity(MeeshyOpacity.light)))
         .accessibilityElement(children: .combine)
     }
 
@@ -445,7 +445,7 @@ struct OnboardingCardView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(MeeshyFont.relative(MeeshyFont.titleSize))
                 .foregroundStyle(MeeshyColors.success)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(text)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
@@ -460,7 +460,7 @@ struct OnboardingCardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(MeeshySpacing.md)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(MeeshyColors.success.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous).fill(MeeshyColors.success.opacity(MeeshyOpacity.light)))
         .accessibilityElement(children: .combine)
     }
 }
@@ -479,12 +479,12 @@ struct OnboardingSuggestionRow: View {
             MeeshyAvatar(name: suggestion.displayName, context: .postAuthor, avatarURL: suggestion.avatarUrl, isDark: isDark)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(suggestion.displayName)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                     .lineLimit(1)
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(verbatim: "@\(suggestion.username)")
                     Text(verbatim: suggestion.languages.map(LanguageFlagChip.flag(for:)).joined(separator: " "))
                 }
@@ -527,8 +527,8 @@ struct OnboardingSuggestionRow: View {
             .accessibilityIdentifier("onboarding.friends.add.\(suggestion.id)")
         }
         .padding(MeeshySpacing.sm)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .fill(isDark ? Color.white.opacity(0.05) : Color.white.opacity(0.8)))
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
+            .fill(isDark ? Color.white.opacity(MeeshyOpacity.faint) : Color.white.opacity(MeeshyOpacity.intense)))
     }
 
     private var accessibilitySummary: String {
@@ -569,7 +569,7 @@ struct OnboardingRecapStats: View {
 
         return LazyVGrid(columns: [GridItem(.adaptive(minimum: 120), spacing: MeeshySpacing.sm)], spacing: MeeshySpacing.sm) {
             ForEach(Array(tiles.enumerated()), id: \.offset) { _, tile in
-                VStack(spacing: 4) {
+                VStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: tile.icon)
                         .foregroundStyle(tile.icon == "flame.fill" ? AnyShapeStyle(MeeshyColors.warning) : AnyShapeStyle(MeeshyColors.brandGradient))
                         .font(MeeshyFont.relative(MeeshyFont.titleSize))
@@ -584,8 +584,8 @@ struct OnboardingRecapStats: View {
                 }
                 .frame(maxWidth: .infinity, minHeight: 96)
                 .padding(.vertical, MeeshySpacing.sm)
-                .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(isDark ? Color.white.opacity(0.06) : MeeshyColors.indigo50))
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
+                    .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : MeeshyColors.indigo50))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text(verbatim: "\(tile.label) \(tile.value)"))
             }

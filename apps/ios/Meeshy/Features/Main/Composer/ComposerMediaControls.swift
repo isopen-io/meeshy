@@ -63,7 +63,7 @@ struct ComposerMediaActionRow: View {
     let media: StoryMediaObject
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             if media.kind == .video {
                 action(symbol: media.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
                        title: ComposerObjectEditorCopy.mute,
@@ -88,12 +88,12 @@ struct ComposerMediaActionRow: View {
         } label: {
             // **Tailles RELATIVES** (`FixedFontSizeGuardTests`) : la capsule
             // s'étire avec son contenu quand le corps de texte grandit.
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: symbol).font(MeeshyFont.relative(13, weight: .semibold))
-                Text(title).font(MeeshyFont.relative(12, weight: .semibold))
+                Text(title).font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             }
             .foregroundStyle(isOn ? Color.white : Color.white.opacity(0.85))
-            .padding(.horizontal, 14)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
             .frame(height: 40)
             .background {
                 if isOn {

@@ -41,7 +41,7 @@ extension MeeshyComposerHost {
     }
 
     var socle: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             if returnsImageToConversation { Spacer(); returnImageButton } else {
                 if paintedSocleZones.contains(.audience) { audienceChip }
                 Spacer()
@@ -53,8 +53,8 @@ extension MeeshyComposerHost {
         .padding(.horizontal, horizontalSizeClass == .regular ? ComposerRailGeometry.roomyMargin : 14)
         // **Plus bas, sous la scène** (directive porteur 2026-09-27) : il
         // frôle la zone du geste d'accueil au lieu de mordre sur le dessin.
-        .padding(.top, 4)
-        .padding(.bottom, 2)
+        .padding(.top, MeeshySpacing.xs)
+        .padding(.bottom, MeeshySpacing.xxs)
     }
 
     /// **Le texte du post, là où était l'œil** (#8370, directive porteur
@@ -223,7 +223,7 @@ extension MeeshyComposerHost {
             HapticFeedback.light()
             presentedPortal = .audience
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: composerVisibility.icon)
                     .accessibilityHidden(true)
                 // #4057 — le mot s'efface aux paliers d'accessibilité ; le nom
@@ -242,7 +242,7 @@ extension MeeshyComposerHost {
             // d'iOS 26 a viré au clair sous le libellé blanc (simulateur,
             // 2026-09-27).
             .padding(.horizontal, socleShowsLabels ? 14 : 0)
-            .frame(minWidth: 44, minHeight: 44)
+            .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
             .contentShape(Capsule())
             .adaptiveGlass(in: Capsule(), tint: tint.color.opacity(0.55))
         }
@@ -493,7 +493,7 @@ extension MeeshyComposerHost {
     /// casse en syllabes empilées — l'action TERMINALE du composer devenue une
     /// colonne de fragments.
     var publishCapsuleLabel: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "arrow.up")
                 .accessibilityHidden(true)
             if socleShowsLabels {
@@ -510,12 +510,12 @@ extension MeeshyComposerHost {
         }
         .font(.footnote.weight(.bold))
         .foregroundColor(.white)
-        .padding(.horizontal, 14)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
         // Plancher HIG de 44 pt, comme sa jumelle — pas
         // `ComposerControlMetrics.visualDiameter` (36 pt), qui dimensionne le
         // CERCLE de la croix et dont le complément de contact est `internal` à
         // `MeeshyUI`.
-        .frame(minWidth: 44, minHeight: 44)
+        .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
     }
 
     /// **La capsule PROÉMINENTE — l'habillage commun des deux flèches** (#4995,
@@ -543,7 +543,7 @@ extension MeeshyComposerHost {
         // `.overlay` ne le consulte pas. La pile, elle, n'a rien à supposer :
         // elle place l'un au-dessus de l'autre quelle que soit la hauteur du
         // texte — deux lignes en français, trois en allemand.
-        VStack(alignment: .trailing, spacing: 6) {
+        VStack(alignment: .trailing, spacing: MeeshySpacing.xsPlus) {
             publishBlockedNotice
             contenu
                 .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
@@ -596,7 +596,7 @@ extension MeeshyComposerHost {
     var publishBlockedNotice: some View {
         if !publishBlockedHint.isEmpty {
             Text(publishBlockedHint)
-                .font(MeeshyFont.relative(11, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundStyle(MeeshyColors.textSecondary(isDark: true))
                 // TROIS lignes, pas deux : à 190 pt la phrase française se
                 // coupait sur « une photo ou u… », mesuré au simulateur. Le
@@ -665,7 +665,7 @@ extension MeeshyComposerHost {
         Image(systemName: "chevron.down")
             .font(.footnote.weight(.bold))
             .foregroundColor(.white)
-            .frame(minWidth: 44, minHeight: 44)
+            .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
             .contentShape(Rectangle())
     }
 

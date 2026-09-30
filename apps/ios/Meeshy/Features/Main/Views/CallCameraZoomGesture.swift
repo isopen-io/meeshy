@@ -34,7 +34,7 @@ private struct CallCameraZoomModifier: ViewModifier {
         content
             .overlay(alignment: .bottom) {
                 CallZoomIndicator(label: CameraZoomPolicy.label(forDisplay: zoom.displayFactor, locale: locale))
-                    .padding(.bottom, 8)
+                    .padding(.bottom, MeeshySpacing.sm)
                     .opacity(isIndicatorVisible && isZoomable ? 1 : 0)
                     .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: isIndicatorVisible)
             }

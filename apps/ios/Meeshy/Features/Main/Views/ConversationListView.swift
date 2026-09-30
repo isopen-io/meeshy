@@ -623,8 +623,8 @@ struct ConversationListView: View {
             ) {
                 toggleSection(group.section.id)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
         }
     }
 
@@ -703,7 +703,7 @@ struct ConversationListView: View {
         // puisque c'est ici que le rang se construit. Sous OFF, `false` fait rendre le
         // rang NU : aucun modificateur de Lentille monté (contrat LWS-8/I-069).
         let perspectiveEnabled = LentilleFeatureFlag.isLentilleListEnabled
-        LazyVStack(spacing: 6) {
+        LazyVStack(spacing: MeeshySpacing.xsPlus) {
             ForEach(conversations, id: \.id) { conversation in
                 conversationRow(for: conversation, rowWidth: rowWidth, passContext: passContext)
                     // Passe de compositor (§4.1) : opacité et échelle SEULES, sur la
@@ -733,16 +733,6 @@ struct ConversationListView: View {
         }
     }
 
-    func storyRingState(for conversation: Conversation) -> StoryRingState {
-        guard conversation.type == .direct, let userId = conversation.participantUserId else { return .none }
-        return storyViewModel.storyRingState(forUserId: userId)
-    }
-
-    func conversationMoodStatus(for conversation: Conversation) -> StatusEntry? {
-        guard conversation.type == .direct, let userId = conversation.participantUserId else { return nil }
-        return statusViewModel.statusForUser(userId: userId)
-    }
-
     // Builds one conversation row. The heavy subtree (swipe actions +
     // context menu + preview) lives in the nominal `ConversationRowItem`
     // struct (ConversationListView+Rows.swift) so it no longer bloats the
@@ -763,6 +753,7 @@ struct ConversationListView: View {
             rowWidth: rowWidth,
             isDragging: draggingConversationId == conversation.id,
             presenceState: presenceManager.presenceState(for: conversation.participantUserId ?? ""),
+            isPeerHere: peerIsHere(in: conversation),
             isDark: theme.mode.isDark,
             storyRingState: storyRingState(for: conversation),
             moodStatus: conversationMoodStatus(for: conversation),
@@ -1255,8 +1246,8 @@ struct ConversationListView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.xsPlus)
         }
         .accessibilityLabel(String(localized: "conversation.filter.row",
                                    defaultValue: "Filtres de conversations", bundle: .main))
@@ -1821,7 +1812,7 @@ struct ConversationListView: View {
                             }
                         }
                 }
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
                 .padding(.bottom, 80)
             }
             // LIGNE D'ÉPINGLAGE (LWS-6/I-063bis). Un `LazyVStack(pinnedViews:)`
@@ -1868,7 +1859,7 @@ struct ConversationListView: View {
                 showGlobalSearch: $showGlobalSearch,
                 userCommunities: userCommunities
             )
-            .padding(.bottom, 8)
+            .padding(.bottom, MeeshySpacing.sm)
             // Hide on scroll down
             .offset(y: isScrollingDown ? 150 : 0)
             .opacity(isScrollingDown ? 0 : 1)
@@ -2069,12 +2060,12 @@ struct ShareLinkPickerSheet: View {
         NavigationStack {
             Group {
                 if conversations.isEmpty {
-                    VStack(spacing: 16) {
+                    VStack(spacing: MeeshySpacing.lg) {
                         Image(systemName: "link.badge.plus")
-                            .font(MeeshyFont.relative(48))
+                            .font(MeeshyFont.relative(MeeshyIconSize.hero))
                             .foregroundStyle(MeeshyColors.indigo300)
                         Text(String(localized: "conversation.list.no_eligible_conversation", bundle: .main))
-                            .font(MeeshyFont.relative(16, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -2083,32 +2074,32 @@ struct ShareLinkPickerSheet: View {
                         Button {
                             onSelect(conversation)
                         } label: {
-                            HStack(spacing: 12) {
+                            HStack(spacing: MeeshySpacing.md) {
                                 Image(systemName: conversation.type == .group ? "person.3.fill" : "globe")
-                                    .font(MeeshyFont.relative(16))
+                                    .font(MeeshyFont.relative(MeeshyIconSize.md))
                                     .foregroundColor(MeeshyColors.indigo500)
-                                    .frame(width: 32, height: 32)
+                                    .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                                     .accessibilityHidden(true)
 
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                                     Text(conversation.name)
-                                        .font(MeeshyFont.relative(16, weight: .medium))
+                                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .medium))
                                         .foregroundColor(theme.textPrimary)
                                         .lineLimit(1)
 
                                     Text(conversation.type.rawValue.capitalized)
-                                        .font(MeeshyFont.relative(13))
+                                        .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                                         .foregroundColor(theme.textSecondary)
                                 }
 
                                 Spacer()
 
                                 Image(systemName: "link")
-                                    .font(MeeshyFont.relative(14))
+                                    .font(MeeshyFont.relative(MeeshyIconSize.sm))
                                     .foregroundColor(MeeshyColors.indigo400)
                                     .accessibilityHidden(true)
                             }
-                            .padding(.vertical, 4)
+                            .padding(.vertical, MeeshySpacing.xs)
                         }
                     }
                     .listStyle(.plain)

@@ -80,7 +80,7 @@ struct RiverQuotedMediaFace: View, Equatable {
     private var playBadge: some View {
         if BubbleQuotedReply.resolveAttachmentKind(reference.attachmentType)?.hasTimebasedTrack == true {
             Image(systemName: "play.circle.fill")
-                .font(MeeshyFont.relative(16, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .bold))
                 .foregroundStyle(.white)
                 .shadow(radius: 2)
                 .accessibilityHidden(true)

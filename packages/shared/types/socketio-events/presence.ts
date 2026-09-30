@@ -26,6 +26,30 @@ export interface TypingEvent {
   readonly isTyping?: boolean; // Ajouté côté service pour distinguer start/stop
 }
 
+/**
+ * « Est dans la conversation » (#8892) — l'écran de la conversation est ouvert
+ * et au premier plan sur au moins un appareil de l'utilisateur.
+ *
+ * Signal d'ACTIVITÉ, au même titre que `typing:start` : il voyage dans la room
+ * de la conversation, jamais par `user:status`, et n'expose ni `isOnline` ni
+ * `lastActiveAt`. Le gateway le retire au `viewing:stop`, au
+ * `conversation:leave`, au passage en arrière-plan et à la déconnexion.
+ */
+export interface ViewingActionData {
+  readonly conversationId: string;
+}
+
+export interface ViewingEvent {
+  readonly userId: string;
+  readonly conversationId: string;
+}
+
+/** Réponse à `viewing:start`, adressée au seul émetteur : qui est déjà là. */
+export interface ViewingSnapshotEvent {
+  readonly conversationId: string;
+  readonly userIds: readonly string[];
+}
+
 export interface UserStatusEvent {
   readonly userId: string;
   readonly username: string;

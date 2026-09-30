@@ -28,7 +28,7 @@ struct StatsTimelineChart: View {
                 )
                 .foregroundStyle(
                     LinearGradient(
-                        colors: [Color(hex: color).opacity(0.3), Color(hex: color).opacity(0.0)],
+                        colors: [Color(hex: color).opacity(MeeshyOpacity.medium), Color(hex: color).opacity(0.0)],
                         startPoint: .top,
                         endPoint: .bottom
                     )
@@ -50,7 +50,7 @@ struct StatsTimelineChart: View {
                     .font(MeeshyFont.relative(9))
                     .foregroundStyle(theme.textMuted)
                 AxisGridLine()
-                    .foregroundStyle(theme.textMuted.opacity(0.15))
+                    .foregroundStyle(theme.textMuted.opacity(MeeshyOpacity.light))
             }
         }
         .accessibilityElement(children: .ignore)

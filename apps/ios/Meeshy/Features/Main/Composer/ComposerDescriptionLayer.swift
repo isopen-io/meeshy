@@ -177,8 +177,8 @@ struct ComposerDescriptionLayer: View {
         .frame(maxWidth: .infinity,
                maxHeight: fillsAvailableHeight ? .infinity : nil,
                alignment: .topLeading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .onAppear { if opensEditingOnAppear { isEditing = true } }
         // **Un seul site annonce l'ouverture et la fermeture.** Le poser sur
         // `isEditing` plutôt que dans chacun des deux gestes garantit que
@@ -253,7 +253,7 @@ struct ComposerDescriptionLayer: View {
     private var readerText: some View {
         if text.isEmpty {
             Text(ComposerDescriptionCopy.amorce)
-                .font(MeeshyFont.relative(15))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
         } else {
             MessageTextRenderer.render(
@@ -278,7 +278,7 @@ struct ComposerDescriptionLayer: View {
     /// perdre le focus ailleurs : une sortie qu'aucun libellé n'annonce, et que
     /// VoiceOver ne peut pas atteindre.
     private var editor: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             // La bande des mentions passe EN TÊTE quand la couche remplit
             // l'écran : le curseur y démarre en haut, pas au ras du clavier.
 
@@ -339,7 +339,7 @@ struct ComposerDescriptionLayer: View {
             isFocused = false
         } label: {
             Image(systemName: "checkmark")
-                .font(MeeshyFont.relative(14).weight(.semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm).weight(.semibold))
                 // Adaptatif : le calque vit sur le plateau SOMBRE de la surface
                 // de scène ET sur la couche floutée de l'atelier, qui prend la
                 // teinte du fond composé. Une couleur figée « claire »
@@ -351,10 +351,10 @@ struct ComposerDescriptionLayer: View {
     }
 
     private var field: some View {
-        HStack(alignment: .bottom, spacing: 10) {
+        HStack(alignment: .bottom, spacing: MeeshySpacing.smPlus) {
             TextField(placeholder, text: $text, axis: .vertical)
                 .lineLimit(fillsAvailableHeight ? 1...24 : 1...5)
-                .font(MeeshyFont.relative(15))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 // Adaptatif, pour la même raison que la coche : le calque sert
                 // deux fonds, un plateau sombre et une couche floutée qui prend
                 // la teinte de la scène.

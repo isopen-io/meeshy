@@ -64,8 +64,8 @@ extension MeeshyComposerHost {
                     offersDiscoverability: documentOffersNearbyDiscoverability,
                     onRemovePlace: { documentLocation = nil }
                 )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.bottom, MeeshySpacing.smPlus)
             }
         }
         // **L'historique se remplit AU-DESSUS de l'aiguillage** (#4402), pas

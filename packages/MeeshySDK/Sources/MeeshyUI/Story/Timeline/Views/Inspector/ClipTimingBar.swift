@@ -210,7 +210,7 @@ public struct ClipTimingBar: View {
     private func readout(title: String, value: String, alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 1) {
             Text(title.uppercased())
-                .font(.system(size: 9, weight: .semibold))
+                .font(.system(size: MeeshyFont.microSize, weight: .semibold))
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.system(.callout, design: .monospaced))

@@ -50,12 +50,7 @@ enum NotificationContactPresenter {
     }
 
     private static func topViewController() -> UIViewController? {
-        let root = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first(where: \.isKeyWindow)?
-            .rootViewController
-        guard let root else { return nil }
+        guard let root = DeviceLayout.activeWindow?.rootViewController else { return nil }
         return sequence(first: root, next: \.presentedViewController).reduce(root) { _, next in next }
     }
 }
