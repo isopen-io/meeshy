@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { closeConversationPreview, conversationPreviewStore, openConversationPreview } from './conversation-preview';
 import { inAppBannerStore, offerInAppBanner, shouldShowBanner } from './in-app-banner';
 import { bannerPresentation, bannerSwipeOutcome } from './in-app-banner-view';
 import type { NotificationRecord } from './record';
@@ -77,7 +78,13 @@ describe('le geste', () => {
   test('vers le HAUT ferme ; en deçà, rien', () => {
     expect(bannerSwipeOutcome(-40)).toBe('dismiss');
     expect(bannerSwipeOutcome(-10)).toBe('none');
-    expect(bannerSwipeOutcome(60)).toBe('none');
+    expect(bannerSwipeOutcome(20)).toBe('none');
+  });
+
+  test('vers le BAS, au-delà de 36 px (seuil d’iOS `NotificationBannerSwipe`), ouvre l’aperçu (#8821)', () => {
+    expect(bannerSwipeOutcome(36)).toBe('none');
+    expect(bannerSwipeOutcome(37)).toBe('preview');
+    expect(bannerSwipeOutcome(120)).toBe('preview');
   });
 });
 
@@ -90,5 +97,22 @@ describe('le magasin', () => {
     expect(inAppBannerStore.getState().current?.id).toBe('b');
     inAppBannerStore.getState().dismiss();
     expect(inAppBannerStore.getState().current).toBeNull();
+  });
+});
+
+describe('l’aperçu de conversation (#8821)', () => {
+  test('ouvrir puis fermer l’aperçu pose puis retire SA conversation', () => {
+    openConversationPreview('c1');
+    expect(conversationPreviewStore.getState().conversationId).toBe('c1');
+    closeConversationPreview();
+    expect(conversationPreviewStore.getState().conversationId).toBeNull();
+  });
+
+  test('la bannière se tait sur la conversation OUVERTE EN APERÇU, comme sur son fil', () => {
+    openConversationPreview('c1');
+    expect(shouldShowBanner(record({}), { pathname: '/c' })).toBe(false);
+    expect(shouldShowBanner(record({ context: { conversationId: 'c2' } }), { pathname: '/c' })).toBe(true);
+    closeConversationPreview();
+    expect(shouldShowBanner(record({}), { pathname: '/c' })).toBe(true);
   });
 });
