@@ -131,7 +131,7 @@ function createTestUser(overrides: Record<string, unknown> = {}) {
 }
 
 function signJwt(userId: string): string {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1h' });
+  return jwt.sign({ userId, sid: 'test-session' }, JWT_SECRET, { expiresIn: '1h' });
 }
 
 function signExpiredJwt(userId: string): string {

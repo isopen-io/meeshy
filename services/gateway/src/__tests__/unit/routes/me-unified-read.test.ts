@@ -172,7 +172,7 @@ function buildPrisma() {
 }
 
 function signJwt(userId: string = USER_ID): string {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: '1h' });
+  return jwt.sign({ userId, sid: 'test-session' }, JWT_SECRET, { expiresIn: '1h' });
 }
 
 let app: FastifyInstance;
