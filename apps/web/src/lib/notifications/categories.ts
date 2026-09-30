@@ -151,6 +151,13 @@ const CATEGORY_HUES: Readonly<Record<NotificationCategory, string>> = {
 
 export const categoryHue = (category: NotificationCategory): string => CATEGORY_HUES[category];
 
+const FAMILIES = Object.keys(FAMILY_TYPES) as readonly FamilyCategory[];
+
+/** La famille d'un TYPE — celle dont la bannière in-app porte l'icône (#8727) ; `system` pour un type inconnu. */
+export function notificationFamily(type: string): FamilyCategory {
+  return FAMILIES.find((family) => FAMILY_TYPES[family].includes(type)) ?? 'system';
+}
+
 const isFamily = (category: NotificationCategory): category is FamilyCategory => category !== 'all' && category !== 'unread';
 
 /** Les paramètres de `GET /notifications` qui rendent CETTE catégorie. */

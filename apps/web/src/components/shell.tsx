@@ -1,10 +1,12 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
+import { useStore } from 'zustand/react';
 
 import { useEmailGatePresenter } from '@/lib/activation/email-gate-presenter';
 import { useActivationInviteArmed } from '@/lib/activation/invite-gate';
 import { useAppUpdateAnnounced } from '@/lib/app-update/pending-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 import { useRoute } from '@/lib/router';
@@ -144,7 +146,20 @@ const chargerGardeEmail = () =>
   }));
 const EmailGateHost = lazy(chargerGardeEmail);
 
+/**
+ * ...ET LA BANNIÈRE IN-APP (#8727), septième exception : une notification
+ * réseau descend sur toutes les routes. `inAppBannerStore` seul est statique
+ * (la connexion l'alimente) ; sa première bannière va chercher la peinture et
+ * les libellés.
+ */
+const chargerBanniereNotification = () =>
+  Promise.all([import('./notification-toast'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.NotificationToastHost,
+  }));
+const NotificationToastHost = lazy(chargerBanniereNotification);
+
 export default function Shell({ children }: { children: ReactNode }) {
+  const banniereNotification = useStore(inAppBannerStore, (state) => state.current !== null);
   const pastilleArmee = useSyncPillArmed();
   const majAnnoncee = useAppUpdateAnnounced();
   const invitationArmee = useActivationInviteArmed();
@@ -196,6 +211,11 @@ export default function Shell({ children }: { children: ReactNode }) {
       {/* L'APPEL AU-DESSUS DE TOUT (#6382) — un appel survit à la navigation
           et un appel entrant s'affiche sur toutes les routes, comme
           `CallPresentationLayer.swift`. Sans appel, rien n'est chargé. */}
+      {banniereNotification ? (
+        <Suspense fallback={null}>
+          <NotificationToastHost />
+        </Suspense>
+      ) : null}
       <CallLayer />
       {invitationArmee ? (
         <Suspense fallback={null}>

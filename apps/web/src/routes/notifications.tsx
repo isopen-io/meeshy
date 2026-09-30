@@ -1,10 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
-import { Glyph, GlyphSvg } from '@/components/glyph';
-import type { GlyphName } from '@/components/glyphs';
-import { NOTIFICATIONS_GLYPHS, type NotificationsGlyphName } from '@/components/glyphs-notifications';
+import { Glyph } from '@/components/glyph';
 import { LensPaginationFooter } from '@/components/lens-pagination-footer';
+import { CategoryGlyphView } from '@/components/notification-category-glyph';
 import { NotificationRow } from '@/components/notification-row';
 import { PullIndicator } from '@/components/pull-indicator';
 import { NOTIFICATIONS_PAGE_SIZE } from '@/lib/api/notifications';
@@ -76,27 +75,6 @@ const EMPTY: readonly NotificationRecord[] = [];
  * tombe sous AA pour un texte de cette taille sur fond clair. */
 const BRAND_INK = 'text-[color:var(--ios-indigo-400)] light:text-[color:var(--ios-indigo-600)]';
 
-type CategoryGlyph = { readonly set: 'socle'; readonly name: GlyphName } | { readonly set: 'ecran'; readonly name: NotificationsGlyphName };
-
-/** `NotificationCategory.icon` d'iOS, glyphe pour glyphe (`extract-glyphs.mjs` § NOTIFICATIONS). */
-const CATEGORY_GLYPHS: Readonly<Record<NotificationCategory, CategoryGlyph>> = {
-  all: { set: 'socle', name: 'bell' },
-  unread: { set: 'ecran', name: 'circle' },
-  messages: { set: 'ecran', name: 'chatCircle' },
-  reactions: { set: 'ecran', name: 'heart' },
-  mentions: { set: 'ecran', name: 'at' },
-  social: { set: 'ecran', name: 'thumbsUp' },
-  contacts: { set: 'ecran', name: 'userPlus' },
-  groups: { set: 'ecran', name: 'usersThree' },
-  calls: { set: 'socle', name: 'phone' },
-  translations: { set: 'ecran', name: 'globe' },
-  system: { set: 'ecran', name: 'gear' },
-};
-
-function CategoryGlyphView({ category, size }: { readonly category: NotificationCategory; readonly size: number }) {
-  const glyph = CATEGORY_GLYPHS[category];
-  return glyph.set === 'socle' ? <Glyph name={glyph.name} size={size} /> : <GlyphSvg glyph={NOTIFICATIONS_GLYPHS[glyph.name]} size={size} />;
-}
 
 const categoryLabel = (language: InterfaceLanguage, category: NotificationCategory): string =>
   translate(language, `notifications.category.${category}` as const);

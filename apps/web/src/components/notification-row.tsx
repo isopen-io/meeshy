@@ -71,9 +71,9 @@ export type NotificationRowProps = {
   readonly connectRequested?: boolean;
 };
 
-type SurfaceProps = { readonly className: string; readonly style: CSSProperties; readonly onClick: () => void; readonly children: ReactNode };
+export type SurfaceProps = { readonly className: string; readonly style: CSSProperties; readonly onClick: () => void; readonly children: ReactNode };
 
-function TargetLink({ target, ...surface }: SurfaceProps & { readonly target: NotificationTarget }) {
+export function TargetLink({ target, ...surface }: SurfaceProps & { readonly target: NotificationTarget }) {
   switch (target.route) {
     case 'thread':
       return <Link to="thread" params={target.params} {...surface} />;
@@ -114,7 +114,7 @@ function CallBackButton({ language, callBack }: { readonly language: InterfaceLa
   );
 }
 
-const CONTENT_GLYPHS: Readonly<Record<Extract<RowFooter, { kind: 'content' }>['content'], GlyphShape>> = {
+export const CONTENT_GLYPHS: Readonly<Record<Extract<RowFooter, { kind: 'content' }>['content'], GlyphShape>> = {
   story: NOTIFICATIONS_GLYPHS.circleDashed,
   reel: PROGRESSION_GLYPHS.filmStrip,
   mood: GLYPHS.smiley,
@@ -123,7 +123,7 @@ const CONTENT_GLYPHS: Readonly<Record<Extract<RowFooter, { kind: 'content' }>['c
 };
 
 /** Le médaillon d'un palier : l'icône du badge sur un disque en relief, teinté du type — la ligne dit QUEL badge avant qu'on la lise. */
-function MilestoneMedallion({ glyph, accent }: { readonly glyph: GlyphShape; readonly accent: string }) {
+export function MilestoneMedallion({ glyph, accent }: { readonly glyph: GlyphShape; readonly accent: string }) {
   return (
     <span
       data-notification-milestone
