@@ -44,7 +44,7 @@ export const MEESH_DEBIT_ORDER: readonly (readonly EngagementAxisKey[])[] = [
   // son arrivée n'ait pas à renuméroter l'ordre décidé par le porteur.
   ['content.story'],
   ['content.post', 'content.reel'],
-  ['tool.sticker', 'tool.in_app_edit', 'tool.direct_publish'],
+  ['tool.sticker', 'tool.in_app_edit', 'tool.direct_publish', 'tool.reaction', 'tool.attachment'],
   // AVANT-DERNIER rang : le LIEN social (#5766). Il se reprend après tout ce
   // qu'on produit seul, parce qu'un lien partagé, un ami qui rejoint ou une
   // amitié nouée engagent quelqu'un d'AUTRE — mais il n'est pas le plancher :
