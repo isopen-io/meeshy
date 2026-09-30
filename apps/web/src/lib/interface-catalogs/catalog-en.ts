@@ -10,6 +10,7 @@ import enPassword from './catalog-en-password';
 import enAccounts from './catalog-en-accounts';
 import enCall from './catalog-en-call';
 import enRowActions from './catalog-en-row-actions';
+import enEngagement from './catalog-en-engagement';
 import enCallShell from './catalog-en-call-shell';
 import enCallJoin from './catalog-en-call-join';
 import enCallDecline from './catalog-en-call-decline';
@@ -227,6 +228,7 @@ const en = {
   ...enAccounts,
   ...enCall,
   ...enRowActions,
+  ...enEngagement,
   ...enCallShell,
   ...enCallJoin,
   ...enCallDecline,

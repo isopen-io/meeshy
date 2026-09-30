@@ -86,6 +86,29 @@ extension ConversationView {
     // `readingModeAffordanceCluster` dans ConversationView.swift, même
     // débordement de pile au décodage de mangled name, 2026-08-17).
     var headerCallButtons: AnyView {
+        AnyView(HStack(spacing: MeeshySpacing.xs) {
+            headerEngagementBadge
+            headerCallButtonsOnly
+        }
+        .task(id: liveConversation?.id) {
+            await ConversationEngagementStore.shared.revalidate(liveConversation?.id ?? "")
+        })
+    }
+
+    // MARK: - « 🔥 série · N (M) » (#8906)
+
+    /// Ce que le lecteur a gagné dans CETTE conversation. Elle se lit avec les
+    /// actions (en-tête replié, aperçu) ou sous le titre (en-tête déplié, qui ne
+    /// porte aucune action) — jamais aux deux endroits à la fois.
+    var headerEngagementBadge: some View {
+        ConversationEngagementBadge(
+            conversationId: liveConversation?.id ?? "",
+            seed: liveConversation?.viewerEngagement,
+            accentColor: accentColor
+        )
+    }
+
+    private var headerCallButtonsOnly: AnyView {
         // #3585 — un groupe s'appelle depuis le MÊME bouton qu'un contact : la
         // poignée de l'appel est la conversation, son nom le titre du groupe.
         if conversation?.type == .group, let groupId = conversation?.id, !groupId.isEmpty {
@@ -145,9 +168,14 @@ extension ConversationView {
         // au-dessus dans le même en-tête.
         let isEncrypted = liveConversation?.encryptionMode != nil
         let hasTags = conversationSection != nil || !(liveConversation?.tags.isEmpty ?? true) || isEncrypted
+        let showsEngagement = !headerLayout.showsActions
         if hasTags {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: MeeshySpacing.xs) {
+                    if showsEngagement {
+                        headerEngagementBadge
+                    }
+
                     // Lock icon (encryption only, no text)
                     if isEncrypted {
                         Image(systemName: "lock.fill")
@@ -197,6 +225,8 @@ extension ConversationView {
                     }
                 }
             }
+        } else if showsEngagement {
+            headerEngagementBadge
         }
     }
 

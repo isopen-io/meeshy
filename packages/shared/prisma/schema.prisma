@@ -4958,6 +4958,65 @@ model EngagementConversationCredit {
   @@index([userId, axisKey])
 }
 
+/// Un crédit d'engagement par ENSEMBLE de personnes (#8906) : une conversation
+/// privée avec la même personne, ou un groupe créé avec les mêmes membres, ne
+/// rapporte qu'une fois. `signature` est l'empreinte (sha256) des identifiants
+/// triés — voir `memberSignature` côté gateway.
+model EngagementSignatureCredit {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @db.ObjectId
+  /// "conversation.private" | "conversation.group_created"
+  axisKey        String
+  signature      String
+  conversationId String   @db.ObjectId
+  creditedAt     DateTime @default(now())
+
+  @@unique([userId, axisKey, signature])
+  @@index([userId, axisKey])
+}
+
+/// LE BARÈME d'engagement réglé par l'administration (#8906) — une ligne
+/// singleton (`key = "default"`). `config` porte un `EngagementScale`
+/// (`@meeshy/shared/types/engagement-scale`), relu par `parseEngagementScale`
+/// à chaque chargement : une ligne illisible retombe sur les défauts, jamais
+/// sur un barème à moitié lu. Absente ⇒ les défauts (les constantes du code).
+model EngagementScaleConfig {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  key         String   @unique @default("default")
+  config      Json
+  /// L'ADMIN/BIGBOSS qui a écrit la dernière version.
+  updatedById String?  @db.ObjectId
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// Ce qu'une conversation a rapporté à UN utilisateur (#8906) — « N (M) 🔥 »
+/// de l'en-tête et de la rangée focale. Un document par (utilisateur,
+/// conversation), écrit UNIQUEMENT par `EngagementService` au crédit d'un geste
+/// fait dans cette conversation.
+model ConversationEngagement {
+  id                String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId            String    @db.ObjectId
+  conversationId    String    @db.ObjectId
+  /// N — points crédités depuis toujours dans cette conversation.
+  totalPoints       Int       @default(0)
+  /// M — points crédités le jour civil `day`.
+  dayPoints         Int       @default(0)
+  /// Jour civil (marqueur `Date.UTC(y, m, d)` dans le fuseau du lecteur) du
+  /// dernier crédit — même convention que `User.lastStreakDate`.
+  day               DateTime?
+  /// Actions créditées le jour `day`, par axe — `{ "tool.reaction": 12 }` —
+  /// la mémoire du plafond journalier `dailyCapPerConversation`.
+  dayCounts         Json?
+  /// Jours civils consécutifs avec au moins un crédit dans cette conversation.
+  streakDays        Int       @default(0)
+  longestStreakDays Int       @default(0)
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([userId, conversationId])
+  @@index([userId, updatedAt])
+}
+
 /// LE REGISTRE DES MEESHES — journal en AJOUT SEUL (#5743).
 ///
 /// Une valeur qu'on peut ENVOYER, PERDRE par sanction et DÉPENSER n'est pas un

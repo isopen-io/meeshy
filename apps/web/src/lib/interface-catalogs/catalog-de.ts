@@ -10,6 +10,7 @@ import dePassword from './catalog-de-password';
 import deAccounts from './catalog-de-accounts';
 import deCall from './catalog-de-call';
 import deRowActions from './catalog-de-row-actions';
+import deEngagement from './catalog-de-engagement';
 import deCallShell from './catalog-de-call-shell';
 import deCallJoin from './catalog-de-call-join';
 import deCallDecline from './catalog-de-call-decline';
@@ -227,6 +228,7 @@ const de = {
   ...deAccounts,
   ...deCall,
   ...deRowActions,
+  ...deEngagement,
   ...deCallShell,
   ...deCallJoin,
   ...deCallDecline,

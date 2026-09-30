@@ -62,6 +62,7 @@ import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
 import { AfterReadSeenContext, useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
+import { useEngagementRevalidation } from '@/lib/view/use-conversation-engagement';
 import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { useThreadJump } from '@/lib/view/use-thread-jump';
@@ -539,6 +540,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     queryClient,
   });
   const noteAfterReadSeen = afterRead.noteSeenUpTo;
+  /* « N (M) 🔥 » (#8906) — l'état serveur relu à l'ouverture du fil. */
+  useEngagementRevalidation(conversationId);
   const onMarkCaughtUp = useCallback((markedConversationId: string, caughtUpToMessageId: string) => {
     noteAfterReadSeen(caughtUpToMessageId);
     void markCaughtUp({

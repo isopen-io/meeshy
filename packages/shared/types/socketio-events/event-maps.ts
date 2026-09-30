@@ -9,6 +9,7 @@
  * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
  */
 
+import type { ConversationEngagementSnapshot } from '../engagement-scale.js';
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
 import type {
   CommentAddedEventData,
@@ -252,6 +253,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.VIEWING_START]: (data: ViewingEvent) => void;
   [SERVER_EVENTS.VIEWING_STOP]: (data: ViewingEvent) => void;
   [SERVER_EVENTS.VIEWING_SNAPSHOT]: (data: ViewingSnapshotEvent) => void;
+  [SERVER_EVENTS.ENGAGEMENT_CONVERSATION_UPDATED]: (data: ConversationEngagementSnapshot) => void;
   [SERVER_EVENTS.USER_STATUS]: (data: UserStatusEvent) => void;
   [SERVER_EVENTS.PRESENCE_SNAPSHOT]: (data: PresenceSnapshotEventData) => void;
   [SERVER_EVENTS.CONVERSATION_JOINED]: (data: ConversationParticipationEventData) => void;
