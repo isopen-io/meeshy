@@ -389,26 +389,13 @@ extension ConversationViewModel {
                         if !updates.isEmpty {
                             try? await persistence.updateDeliveryCounters(updates)
                         }
-                        // Surface any messages in the cache that aren't yet in GRDB.
-                        let currentIds = Set(self.messages.map(\.id))
-                        let newFromCache = data.filter { !currentIds.contains($0.id) }
-                        if !newFromCache.isEmpty {
-                            // Convert domain messages back to IncomingMessageData for GRDB upsert.
-                            let incoming = newFromCache.map { msg in
-                                MessagePersistenceActor.IncomingMessageData(
-                                    id: msg.id,
-                                    conversationId: msg.conversationId,
-                                    senderId: msg.senderId,
-                                    content: msg.content.isEmpty ? nil : msg.content,
-                                    createdAt: msg.createdAt,
-                                    computedState: .delivered,
-                                    // Le message vient du CACHE, il connaît sa
-                                    // source : la taire ferait naître un avis
-                                    // système comme une parole ordinaire.
-                                    messageSource: msg.messageSource.rawValue,
-                                    messageType: msg.messageType.rawValue
-                                )
-                            }
+                        // Surface any messages in the cache that aren't yet in GRDB —
+                        // never a dead ephemeral, never without its protection (#7552).
+                        let incoming = CachedThreadSurfacing.rows(
+                            data,
+                            present: Set(self.messages.map(\.id))
+                        )
+                        if !incoming.isEmpty {
                             await self.messagePersistence.bufferIncoming(incoming)
                             self.prefetchRecentMedia()
                         }

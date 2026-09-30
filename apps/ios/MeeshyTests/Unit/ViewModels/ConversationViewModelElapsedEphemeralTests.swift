@@ -182,6 +182,66 @@ final class ConversationViewModelElapsedEphemeralTests: XCTestCase {
         XCTAssertFalse(gone(flags: [], expiresAt: now.addingTimeInterval(60)))
     }
 
+    // MARK: - #7552 : le cache ne ressuscite pas un éphémère en message ordinaire
+
+    private func cached(_ id: String, flags: MessageEffectFlags = [.ephemeral], expiresAt: Date? = nil,
+                        duration: Int? = nil) -> Message {
+        var message = Message(id: id, conversationId: conversationId, senderId: "autre", content: "secret", isMe: false)
+        message.effects.flags = flags
+        message.effects.ephemeralDuration = duration
+        message.expiresAt = expiresAt
+        return message
+    }
+
+    func test_cacheRowsToSurface_elapsedEphemeralAbsentFromThread_isNotResurrected() {
+        let rows = CachedThreadSurfacing.rows(
+            [cached("m1", expiresAt: now.addingTimeInterval(-5))],
+            present: [], ledger: FakeEphemeralLedger(), now: now)
+        XCTAssertTrue(rows.isEmpty, "un éphémère échu que GRDB a effacé ne revient pas depuis le cache")
+    }
+
+    func test_cacheRowsToSurface_deadInLedger_isNotResurrected() {
+        let ledger = FakeEphemeralLedger(deaths: ["m1": now.addingTimeInterval(-30)])
+        let rows = CachedThreadSurfacing.rows(
+            [cached("m1", duration: 60)], present: [], ledger: ledger, now: now)
+        XCTAssertTrue(rows.isEmpty)
+    }
+
+    func test_cacheRowsToSurface_liveEphemeral_keepsItsProtection() throws {
+        let deadline = now.addingTimeInterval(45)
+        let rows = CachedThreadSurfacing.rows(
+            [cached("m1", flags: [.ephemeral, .blurred], expiresAt: deadline, duration: 60)],
+            present: [], ledger: FakeEphemeralLedger(), now: now)
+        let row = try XCTUnwrap(rows.first)
+        XCTAssertEqual(row.effectFlags, MessageEffectFlags([.ephemeral, .blurred]).rawValue)
+        XCTAssertEqual(row.ephemeralDuration, 60)
+        XCTAssertEqual(row.expiresAt, deadline)
+    }
+
+    func test_cacheRowsToSurface_alreadyInThread_isSkipped() {
+        let rows = CachedThreadSurfacing.rows(
+            [cached("m1", flags: [])], present: ["m1"],
+            ledger: FakeEphemeralLedger(), now: now)
+        XCTAssertTrue(rows.isEmpty)
+    }
+
+    func test_cacheRowsToSurface_ordinaryMessage_surfaces() {
+        let rows = CachedThreadSurfacing.rows(
+            [cached("m1", flags: [])], present: [],
+            ledger: FakeEphemeralLedger(), now: now)
+        XCTAssertEqual(rows.map(\.id), ["m1"])
+        XCTAssertEqual(rows.first?.effectFlags, 0)
+    }
+
+    func test_wiring_theCacheSurfacingGoesThroughTheEphemeralFilter() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("Meeshy/Features/Main/ViewModels/ConversationViewModel+Lifecycle.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(source.contains("CachedThreadSurfacing.rows("),
+                      "le rattrapage depuis le cache ne recopie plus les messages champ par champ")
+    }
+
     func test_wiring_theStorePublishesNoDeadEphemeral() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
