@@ -22,4 +22,30 @@ final class VitrineSourceGuardTests: XCTestCase {
             XCTAssertEqual(lignes.last, "#endif", "\(fichier.lastPathComponent) ne finit pas par #endif")
         }
     }
+
+    /// Hors de son dossier, la vitrine ne vit que dans des blocs `#if DEBUG`.
+    func test_everyVitrineReference_outsideItsFolder_isInsideADebugBlock() throws {
+        let fichiers = [
+            "apps/ios/Meeshy/MeeshyApp.swift",
+            "apps/ios/Meeshy/Features/Main/Components/SyncPill.swift",
+            "packages/MeeshySDK/Sources/MeeshySDK/Services/ShareLinkService.swift",
+            "packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine+Vitrine.swift",
+        ]
+        for chemin in fichiers {
+            var pile: [Bool] = []
+            var references = 0
+            let lignes = try String(contentsOf: depot.appendingPathComponent(chemin), encoding: .utf8)
+                .components(separatedBy: .newlines)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+            for ligne in lignes {
+                if ligne.hasPrefix("#if") { pile.append(ligne == "#if DEBUG"); continue }
+                if ligne.hasPrefix("#else") || ligne.hasPrefix("#elseif") { if !pile.isEmpty { pile[pile.count - 1] = false }; continue }
+                if ligne.hasPrefix("#endif") { _ = pile.popLast(); continue }
+                guard ligne.contains("Vitrine") || ligne.contains("debugLinkInfoOverride") else { continue }
+                references += 1
+                XCTAssertTrue(pile.contains(true), "\(chemin) : « \(ligne) » vit hors d'un bloc #if DEBUG")
+            }
+            XCTAssertGreaterThan(references, 0, "\(chemin) ne mentionne plus la vitrine : retirer ce fichier de la garde.")
+        }
+    }
 }
