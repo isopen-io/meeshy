@@ -32,7 +32,8 @@ public struct MessageCardSubjectMedia: Equatable, Sendable {
 /// LES MÉDIAS (#8692) : une photo, une vidéo (sa première image) ou un son se
 /// peignent — sauf une pièce CHIFFRÉE, dont le fichier n'est pas lisible
 /// hors de la bulle. Une pièce floutée ou à vue unique rend le message
-/// entier inexportable : la protection d'une pièce protège son message.
+/// entier inexportable : la protection d'une pièce protège son message. Le
+/// message CITÉ apporte aussi ses médias, après ceux de la réponse (#8901).
 public struct MessageCardSubject: Equatable, Sendable {
     public let quoted: MessageCardPart?
     public let reply: MessageCardPart
@@ -72,7 +73,11 @@ public struct MessageCardSubject: Equatable, Sendable {
 
     /// Les pièces qu'une carte peut peindre — photo, vidéo, son, dans l'ordre du message.
     public static func paintableMedia(of message: MeeshyMessage) -> [MessageCardSubjectMedia] {
-        message.attachments.compactMap { attachment in
+        paintableMedia(of: message.attachments)
+    }
+
+    static func paintableMedia(of attachments: [MeeshyMessageAttachment]) -> [MessageCardSubjectMedia] {
+        attachments.compactMap { attachment in
             guard !attachment.isEncrypted, !attachment.isBlurred, !attachment.isViewOnce else { return nil }
             let kind: MessageCardMediaKind
             switch AttachmentKind(mimeType: attachment.mimeType) {
@@ -108,6 +113,8 @@ public struct MessageCardSubject: Equatable, Sendable {
     ///   - translations: les traductions servies du message, par code de langue.
     ///   - language: la langue d'export choisie — `nil` : la carte montre ce que le lecteur lit.
     ///   - quotedAt: l'heure du message cité, quand l'appelant l'a sous la main.
+    ///   - quotedMessage: le message cité RÉEL quand il est en mémoire — il apporte
+    ///     toutes ses pièces peignables ; sinon la citation apporte la sienne.
     public static func of(
         message: MeeshyMessage,
         servedText: String?,
@@ -115,6 +122,7 @@ public struct MessageCardSubject: Equatable, Sendable {
         viewer: Viewer,
         language: String? = nil,
         quotedAt: Date? = nil,
+        quotedMessage: MeeshyMessage? = nil,
         now: Date
     ) -> MessageCardSubject? {
         guard isExportable(message, now: now) else { return nil }
@@ -140,8 +148,27 @@ public struct MessageCardSubject: Equatable, Sendable {
             reply: reply,
             sentAt: message.createdAt,
             quotedAt: message.replyTo == nil ? nil : quotedAt,
-            media: media
+            media: media + quotedMedia(message.replyTo, quotedMessage: quotedMessage, now: now).filter { quoted in
+                !media.contains { $0.media.id == quoted.media.id }
+            }
         )
+    }
+
+    /// **LE MÉDIA DU MESSAGE CITÉ** (#8901) — répondre à une photo par du texte,
+    /// c'est répondre À la photo : la carte la peint, après les médias de la
+    /// réponse. Mêmes gardes que la citation (story, humeur, protégée,
+    /// supprimée, échue ⇒ rien) ; le message cité RÉEL, quand il est en
+    /// mémoire, apporte toutes ses pièces sous SES gardes (`isExportable`,
+    /// `paintableMedia`) ; sinon la citation apporte la pièce qu'elle décrit.
+    static func quotedMedia(_ reference: ReplyReference?, quotedMessage: MeeshyMessage?, now: Date) -> [MessageCardSubjectMedia] {
+        guard let reference, !reference.isStoryReply, reference.moodEmoji == nil,
+              !reference.quotedMediaIsProtected, !reference.isQuotedMessageDeleted else { return [] }
+        if let expiresAt = reference.quotedExpiresAt, expiresAt <= now { return [] }
+        if let quotedMessage, quotedMessage.id == reference.messageId {
+            return isExportable(quotedMessage, now: now) ? paintableMedia(of: quotedMessage) : []
+        }
+        guard let attachment = reference.quotedAttachment else { return [] }
+        return paintableMedia(of: [attachment])
     }
 
     /// **Un COMMENTAIRE devient une carte** (#8692) — le texte servi par le
