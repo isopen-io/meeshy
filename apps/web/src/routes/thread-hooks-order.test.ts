@@ -75,6 +75,7 @@ const HOOK_NAMES = [
   'useMessageMenu',
   'useAuthorStoryRings',
   'useEphemeralDestruction',
+  'useLivingMessages',
   'useOlderMessages',
   'useReadTracking',
   'useAfterReadConsumption',

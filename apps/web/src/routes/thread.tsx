@@ -46,6 +46,9 @@ import { useOnline } from '@/lib/net/online';
 import { useThreadTyping } from '@/lib/view/use-thread-typing';
 import { useConversationViewing } from '@/lib/view/use-conversation-viewing';
 import { useEphemeralDestruction } from '@/lib/view/ephemeral-destruction';
+import { useLivingMessages } from '@/lib/view/ephemeral-gone';
+import { isMineOf } from '@/lib/view/message';
+import type { Message } from '@/lib/api/types';
 import { useThreadReadingMode } from '@/lib/reading-mode/use-thread-reading-mode';
 import { readingModeStore } from '@/lib/reading-mode/store';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
@@ -294,10 +297,15 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
    * revue-correction #5813, défaut majeur 5 (voir le doc-comment de
    * `mergeTimeline` pour le scénario qu'une concaténation inverse).
    */
-  const messages = useMemo(
+  const timeline = useMemo(
     () => mergeTimeline(threadData.messages, pending),
     [threadData.messages, pending],
   );
+  /* UN ÉPHÉMÈRE PARTI QUITTE LE FIL (#8900) — pas seulement sa peau : sa
+     rangée, son `aria-label`, sa hauteur virtualisée, et le Résumé qui lit
+     ce même `messages`. La rangée qui brûle reste le temps de l'effet. */
+  const isMine = useCallback((message: Message) => isMineOf(message, viewer.id ?? ''), [viewer.id]);
+  const messages = useLivingMessages({ messages: timeline, isMine, destroyingIds, expiredIds });
   const placed = useMemo(() => place(messages, { locale: readerLocale }), [messages, readerLocale]);
   const group = conversation !== undefined && isGroup(conversation);
   /** LES TROIS QUI PARLENT LE PLUS dans ce qui est chargé (#7830) — groupe seulement. */
