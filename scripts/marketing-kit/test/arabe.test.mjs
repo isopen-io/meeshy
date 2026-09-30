@@ -3,6 +3,7 @@ import { toString } from '../lib/html.mjs'
 import { contexte, ecran } from '../lib/gabarits.mjs'
 import { pageSociale } from '../templates/social/page.mjs'
 import { pageCapture } from '../templates/appstore/composition.mjs'
+import { APPAREILS } from '../templates/appstore/plan.mjs'
 
 const texteVisible = (page) => page.replace(/<style>[\s\S]*?<\/style>|<script>[\s\S]*?<\/script>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
 
@@ -18,9 +19,13 @@ describe('accord du nombre en arabe — « أيام » de 3 à 10, « يومًا
     expect(faussesJournees(toString(ecran('progression', contexte({ lang: 'ar', theme: 'light' }))))).toEqual([])
   })
 
-  test('les captures App Store Progression (iPhone 7, iPad 5)', () => {
-    expect(faussesJournees(texteVisible(pageCapture({ appareil: 'iphone', lang: 'ar', rang: 7 })))).toEqual([])
-    expect(faussesJournees(texteVisible(pageCapture({ appareil: 'ipad', lang: 'ar', rang: 5 })))).toEqual([])
+  test('toutes les captures App Store — Progression, et les « 12 jours » du couple', () => {
+    for (const appareil of Object.keys(APPAREILS)) {
+      APPAREILS[appareil].captures.forEach((capture, i) => {
+        const fautes = faussesJournees(texteVisible(pageCapture({ appareil, lang: 'ar', rang: i + 1 })))
+        expect({ appareil, ecran: capture.ecran, fautes }).toEqual({ appareil, ecran: capture.ecran, fautes: [] })
+      })
+    }
   })
 
   test('les visuels sociaux qui montrent une série (V3 « jour 30 », C2-5 « jour 1 », C4-2)', () => {
