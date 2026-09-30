@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand/react';
 
@@ -150,7 +150,18 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (dragFrom.current === null) return;
     const delta = event.clientY - dragFrom.current;
-    if (Math.abs(delta) > 6) dragged.current = true;
+    if (Math.abs(delta) > 6 && !dragged.current) {
+      dragged.current = true;
+      /* Le geste CAPTURE le pointeur dès qu'il glisse : à la souris, la carte
+         résiste au tirage et le curseur la quitte — relâché dessous, le
+         `pointerup` n'aurait atteint personne. Pas avant : capturé dès l'appui,
+         le clic d'un simple toucher viserait la carte, plus le lien. */
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        /* Un pointeur synthétique n'a pas toujours de capture : le geste reste suivi par la carte. */
+      }
+    }
     /* Vers le haut la carte suit le doigt ; vers le bas elle résiste — elle
        dit qu'elle s'ouvre, elle ne descend pas. */
     setDragY(delta < 0 ? delta : previewId === undefined ? 0 : Math.min(18, delta * 0.25));
@@ -164,7 +175,7 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
     if (outcome === 'dismiss') onDismiss();
     if (outcome === 'preview') openPreview();
   };
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'ArrowDown' || previewId === undefined) return;
     event.preventDefault();
     openPreview();
@@ -184,6 +195,10 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
     className: 'flex w-full items-center gap-3 pt-3 pb-4 ps-3.5 pe-12 text-start focus-visible:outline-2 focus-visible:-outline-offset-2',
     style: { outlineColor: 'var(--color-ios-brand)', borderRadius: CARD_RADIUS },
     onClick: open,
+    /* Un LIEN se glisse nativement à la souris : Chromium lance son
+       glisser-déposer et annule le geste (`pointercancel`) — ni le balayage
+       ni le tirage n'aboutissaient jamais au pointeur. */
+    draggable: false,
     ...(previewId === undefined
       ? {}
       : { 'aria-keyshortcuts': 'ArrowDown', 'aria-description': translateNotificationRow(language, 'notifications.banner.previewHint') }),

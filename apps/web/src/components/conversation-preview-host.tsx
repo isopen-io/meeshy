@@ -34,7 +34,7 @@ export function ConversationPreviewHost() {
   if (conversationId === null) return null;
   return (
     <ConversationPreviewSheet key={conversationId} conversationId={conversationId} onClose={closeConversationPreview}>
-      <Suspense fallback={<ThreadSkeleton />}>
+      <Suspense fallback={<ThreadSkeleton preview />}>
         <LazyThreadScreen preview={{ conversationId }} />
       </Suspense>
     </ConversationPreviewSheet>

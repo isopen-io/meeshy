@@ -12,6 +12,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { ConversationPreviewSheet } from './conversation-preview-sheet';
 import { NotificationBanner } from './notification-toast';
 import { ThreadHeader } from './thread-header';
+import { ThreadError, ThreadRefused, ThreadSkeleton } from './thread-states';
 
 /**
  * **TIRER LA BANNIÈRE VERS LE BAS OUVRE L'APERÇU DE LA CONVERSATION** (#8821,
@@ -80,6 +81,23 @@ describe('le geste de la bannière', () => {
     expect(conversationPreviewStore.getState().conversationId).toBe('c1');
     expect(dismissed.length).toBe(1);
     expect(host).toBeDefined();
+  });
+
+  test('à la souris, le lien ne se glisse pas — sans quoi le navigateur annule le geste', async () => {
+    await mounter.mount(<NotificationBanner notification={record()} onDismiss={() => undefined} />);
+    expect(document.querySelector('[data-in-app-banner] a[href="/c/c1"]')?.getAttribute('draggable')).toBe('false');
+  });
+
+  test('à la souris, la carte CAPTURE le pointeur : relâché sous elle, le geste aboutit quand même', async () => {
+    await mounter.mount(<NotificationBanner notification={record()} onDismiss={() => undefined} />);
+    const card = document.querySelector<HTMLElement>('[data-in-app-banner] > div');
+    if (card === null) throw new Error('carte absente');
+    const captured: number[] = [];
+    card.setPointerCapture = (pointerId: number) => {
+      captured.push(pointerId);
+    };
+    await drag(card, 10, 80);
+    expect(captured).toEqual([1]);
   });
 
   test('un tirage trop court ne fait rien', async () => {
@@ -153,6 +171,24 @@ describe('l’en-tête de l’aperçu — le COMPLET, sans chevron retour', () =
     expect(html).toContain('aria-label="Rechercher dans la conversation"');
     expect(html).toContain('class="thread-header glass');
     expect(html).toContain('aria-label="Détails de la conversation"');
+  });
+});
+
+describe('les états du fil en aperçu — chargement, refus, échec : aucun chevron non plus', () => {
+  test('le squelette, le refus et l’échec ne portent AUCUN retour, et remplissent la feuille', () => {
+    for (const html of [
+      renderToStaticMarkup(<ThreadSkeleton preview />),
+      renderToStaticMarkup(<ThreadRefused preview />),
+      renderToStaticMarkup(<ThreadError preview onRetry={() => undefined} />),
+    ]) {
+      expect(html).not.toContain('Retour');
+      expect(html).not.toContain('h-dvh');
+    }
+  });
+
+  test('hors aperçu, rien ne change : le retour reste', () => {
+    expect(renderToStaticMarkup(<ThreadSkeleton />)).toContain('aria-label="Retour"');
+    expect(renderToStaticMarkup(<ThreadRefused />)).toContain('Retour aux conversations');
   });
 });
 

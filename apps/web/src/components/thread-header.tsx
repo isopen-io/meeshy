@@ -273,7 +273,9 @@ export function ThreadHeader({
           </div>
         ) : null}
 
-        {(preview || expanded) && group && activeMembers !== undefined ? (
+        {/* Pas en APERÇU : à 390 px, la pile des trois actifs écrasait le
+            titre à une lettre — l'identité d'abord, l'avatar dit déjà le groupe. */}
+        {expanded && !preview && group && activeMembers !== undefined ? (
           <ActiveMembersStack members={activeMembers} accent={accent} storyRingOf={storyRingOf} onOpenDetails={onOpenDetails} />
         ) : null}
 

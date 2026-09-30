@@ -128,7 +128,12 @@ export function ConversationPreviewSheet({
         data-preview-scrim
         aria-hidden="true"
         className="absolute inset-0"
-        style={{ backgroundColor: 'rgb(0 0 0 / 0.42)', opacity: dragY === 0 ? 1 : Math.max(0.3, 1 - dragY / 400) }}
+        style={{
+          backgroundColor: 'rgb(0 0 0 / 0.45)',
+          backdropFilter: 'blur(6px)',
+          WebkitBackdropFilter: 'blur(6px)',
+          opacity: dragY === 0 ? 1 : Math.max(0.3, 1 - dragY / 400),
+        }}
         onClick={onClose}
       />
       <div

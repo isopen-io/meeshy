@@ -593,9 +593,10 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
    * TypeScript qui suit rend `conversation` NON-optionnel pour le reste de
    * la fonction.
    */
-  if (threadData.status === 'refused') return <ThreadRefused />;
-  if (threadData.status === 'error') return <ThreadError onRetry={threadData.refetch} />;
-  if (threadData.status === 'pending' || conversation === undefined) return <ThreadSkeleton />;
+  const inPreview = preview !== undefined;
+  if (threadData.status === 'refused') return <ThreadRefused preview={inPreview} />;
+  if (threadData.status === 'error') return <ThreadError onRetry={threadData.refetch} preview={inPreview} />;
+  if (threadData.status === 'pending' || conversation === undefined) return <ThreadSkeleton preview={inPreview} />;
 
   const title = titleOf(conversation, viewer.id ?? '');
   const accent = accentOf(conversation);
