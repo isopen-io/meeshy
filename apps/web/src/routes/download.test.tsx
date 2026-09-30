@@ -69,17 +69,16 @@ describe('/download — ce que voit quelqu’un qui ne connaît pas Meeshy (#729
     }
   });
 
-  test('les captures Android existent en clair ET en sombre ; une langue sans capture retombe sur l’anglais', () => {
+  test('les captures Android existent en clair ET en sombre, dans la langue du lecteur — aucune ne retombe (#8804)', () => {
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       const { android } = downloadShots(language);
       expect(android.length).toBe(4);
       for (const shot of android) {
+        expect(shot.src).toContain(`/store-shots/android/${language}/`);
         expect(existsSync(join(PUBLIC, shot.src))).toBe(true);
         expect(existsSync(join(PUBLIC, shot.darkSrc))).toBe(true);
       }
     }
-    expect(downloadShots('ar').android[0]?.src).toContain('/store-shots/android/ar/');
-    expect(downloadShots('de').android[0]?.src).toContain('/android/en/');
   });
 
   test('chaque capture porte un texte alternatif, sa taille, et la page nomme ses deux galeries', () => {

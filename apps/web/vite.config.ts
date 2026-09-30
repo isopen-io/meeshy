@@ -290,7 +290,7 @@ const dropServiceWorkerScripts = (): Plugin => ({
 /**
  * LES CAPTURES DE `/download` N'ENTRENT PAS DANS LA COQUE (#8801).
  *
- * `public/store-shots/` porte ~1,2 Mo de captures d'écran que seule la page
+ * `public/store-shots/` porte ~1,9 Mo de captures d'écran que seule la page
  * `/download` du WEB affiche : dans l'APK et l'IPA, elles seraient du poids
  * mort. La page les charge depuis l'origine publique quand `__SHELL__` est
  * vrai (`routes/download.tsx`).
