@@ -200,7 +200,9 @@ struct ComposerSceneSurface: View {
 
     /// Un outil est-il ouvert ? Lu sur `railMode`, la seule source qui le
     /// SAIT — voir `ComposerObjectChips.isServed`.
-    private var toolIsOpen: Bool { railMode.opensTool }
+    private var toolIsOpen: Bool {
+        ComposerToolFocus.toolIsOpen(railOpensTool: railMode.opensTool, editsBackground: editsBackground)
+    }
 
     /// **Plus d'`activeObjectChipId`** (2026-09-05) : un jeton ouvrait une
     /// bande montée SOUS la scène, donc visible en même temps que lui — d'où un
@@ -266,6 +268,10 @@ struct ComposerSceneSurface: View {
     /// c'est-à-dire le geste qui AJOUTE — pas un objet déjà posé. Le meuble
     /// tient la distinction (`ComposerFirstView.lowZoneShowsToolOptions`).
     var toolOptions: AnyView?
+    /// **Le FOND s'édite en ligne** (#8847) : ses outils au rail droit, leurs
+    /// contrôles dans `toolOptions` — et tout le reste du chrome cède, comme à
+    /// un outil du rail (`ComposerToolFocus.toolIsOpen`).
+    var editsBackground: Bool = false
 
     /// L'édition EN LIGNE, relayée au canvas : le texte se saisit à sa vraie
     /// place, dans sa vraie police, sur le vrai fond.
@@ -471,7 +477,8 @@ struct ComposerSceneSurface: View {
     /// comme le reste du chrome, et ses réglages vivent au-dessus de
     /// l'historique.
     private var floatingRail: AnyView {
-        guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
+        guard ComposerToolFocus.isShown(.sceneDoors, toolIsOpen: toolIsOpen),
+              case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
         let portes = ComposerSceneFloatingRail.sideRow(from: servies, format: format)
         if portes.isEmpty && sceneToggles.isEmpty { return AnyView(EmptyView()) }
         return AnyView(
@@ -504,7 +511,8 @@ struct ComposerSceneSurface: View {
         // **Un outil ouvert ne prend plus le bas** (#8652) : ses contrôleurs
         // remplacent les portes du rail de gauche, et la rangée basse cède
         // avec le reste du chrome.
-        guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
+        guard ComposerToolFocus.isShown(.sceneDoors, toolIsOpen: toolIsOpen),
+              case .doors(let servies) = railMode else { return AnyView(EmptyView()) }
         let portes = ComposerSceneFloatingRail.lowRow(from: servies, format: format)
         guard !portes.isEmpty else { return AnyView(EmptyView()) }
         return AnyView(

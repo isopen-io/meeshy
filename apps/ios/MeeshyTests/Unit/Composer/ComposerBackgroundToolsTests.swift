@@ -134,6 +134,7 @@ final class ComposerBackgroundToolsTests: XCTestCase {
         XCTAssertEqual(focus, .tool([controle]))
     }
 
+    @MainActor
     func test_backgroundSection_peintSonEtatOuvert() {
         XCTAssertTrue(ComposerTrailingColumnPaint(.backgroundSection(.media(.filter), isOpen: true)).isOn)
         XCTAssertFalse(ComposerTrailingColumnPaint(.backgroundSection(.media(.filter), isOpen: false)).isOn)

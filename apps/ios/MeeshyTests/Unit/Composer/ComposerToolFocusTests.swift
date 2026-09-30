@@ -96,8 +96,10 @@ final class ComposerToolFocusTests: XCTestCase {
         }
         XCTAssertTrue(surface.contains("options: trailingOptions"),
                       "le rail droit porte les réglages de l'outil et leur (x) (#8713)")
-        XCTAssertTrue(surface.contains("guard case .doors(let servies) = railMode else { return AnyView(EmptyView()) }"),
+        XCTAssertTrue(surface.contains("case .doors(let servies) = railMode else { return AnyView(EmptyView()) }"),
                       "un outil ouvert vide le rail gauche : ses réglages vivent à droite")
+        XCTAssertTrue(surface.contains("guard ComposerToolFocus.isShown(.sceneDoors, toolIsOpen: toolIsOpen),"),
+                      "l'édition du fond vide aussi les portes (#8847) — par la règle, pas par le seul mode du rail")
     }
 
     func test_hote_effaceLeSocle_quandUnOutilDeLaSceneEstOuvert() throws {

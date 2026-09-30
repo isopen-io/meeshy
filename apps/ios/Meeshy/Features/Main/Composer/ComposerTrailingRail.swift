@@ -409,6 +409,9 @@ struct ComposerTrailingColumnPaint {
         if options.contains(where: { if case .sceneEffect = $0 { return true }; return false }) {
             return ComposerSceneEffectCopy.column
         }
+        if options.contains(where: { if case .backgroundSection = $0 { return true }; return false }) {
+            return ComposerBackgroundToolsCopy.entered
+        }
         if options.contains(.exitTool) { return ComposerRailCopy.toolRailLabel }
         return ComposerTrailingRailCopy.railLabel
     }
@@ -430,6 +433,11 @@ struct ComposerTrailingColumnPaint {
             symbol = ComposerObjectEditorRail.symbolName(section)
             label = ComposerObjectEditorCopy.entry(section)
             isOn = false
+            tint = neutre
+        case .backgroundSection(let section, let ouvert):
+            symbol = ComposerObjectEditorRail.symbolName(section)
+            label = ComposerObjectEditorCopy.entry(section)
+            isOn = ouvert
             tint = neutre
         case .objectAction(let action):
             symbol = action.systemImage
