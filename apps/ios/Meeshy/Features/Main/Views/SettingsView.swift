@@ -429,6 +429,7 @@ struct SettingsView: View {
         HapticFeedback.light()
         UILanguageOverride.explicitChoice = code
         UILanguageOverride.applyIfNeeded()
+        UILanguageOverride.refreshNotificationLanguage()
         interfaceLanguageChoice = code
         showInterfaceLanguageRestartHint = true
     }
