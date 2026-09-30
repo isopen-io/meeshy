@@ -84,6 +84,10 @@ enum GroupPeerLinkEvent: Equatable, Sendable {
     case failed
     /// Une piste vidéo distante est arrivée (ou a changé).
     case remoteVideo
+    /// Le canal de contrôle du lien est ouvert (aperçu avant décroché, #8795).
+    case controlOpened
+    /// Un message reçu sur le canal de contrôle.
+    case control(Data)
 }
 
 struct GroupPeerLinkConfiguration: Sendable {
@@ -97,6 +101,9 @@ struct GroupPeerLinkConfiguration: Sendable {
     let sendsVideo: Bool
     /// L'aperçu avant décroché de l'appelé (#8480) : il reçoit, n'envoie rien.
     var receiveOnly = false
+    /// L'aperçu de l'appelant (#8795) ouvre un canal de contrôle : l'appelé y
+    /// dit qu'il a activé le son. Le répondant accepte celui qu'on lui ouvre.
+    var opensControlChannel = false
 }
 
 extension IceServer {
@@ -120,6 +127,8 @@ protocol GroupPeerLinkProviding: AnyObject, Sendable {
     /// Niveau audio reçu (0…1), `nil` tant qu'aucun paquet n'est arrivé.
     func audioLevel() async -> Double?
     func close()
+    /// Envoie un message sur le canal de contrôle, s'il est ouvert (#8795).
+    func sendControl(_ data: Data)
 }
 
 @MainActor

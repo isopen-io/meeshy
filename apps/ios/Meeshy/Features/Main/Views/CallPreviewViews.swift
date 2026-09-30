@@ -62,17 +62,18 @@ struct CallPreviewSoundButton: View {
     }
 }
 
-/// Chez l'appelant : l'appelé le voit, ou l'entend, avant de décrocher.
+/// Chez l'appelant : ce que l'appelé reçoit VRAIMENT avant de décrocher
+/// (#8795) — « vous voit » dès que la caméra de l'aperçu l'atteint, « vous
+/// entend » seulement quand il a lui-même activé le son.
 struct CallPreviewSeenLabel: View {
     @ObservedObject var preview: CallPreviewCoordinator
     let peerName: String
-    let isVideo: Bool
-    let isMuted: Bool
 
     var body: some View {
+        let exposure = preview.calleeExposure
         ZStack {
-            if preview.isSeenByCallee, let text = Self.text(peerName: peerName, isVideo: isVideo, isMuted: isMuted) {
-                Label(text, systemImage: isVideo ? "eye.fill" : "ear.fill")
+            if let text = Self.text(peerName: peerName, exposure: exposure) {
+                Label(text, systemImage: exposure == .seen ? "eye.fill" : "ear.fill")
                     .font(.caption.weight(.medium))
                     .foregroundColor(.white.opacity(0.85))
                     .padding(.horizontal, 12)
@@ -82,15 +83,87 @@ struct CallPreviewSeenLabel: View {
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: preview.isSeenByCallee)
+        .animation(.easeInOut(duration: 0.25), value: exposure)
     }
 
-    /// Un micro coupé en audio seul : l'appelé ne reçoit rien, rien à annoncer.
-    static func text(peerName: String, isVideo: Bool, isMuted: Bool) -> String? {
-        if isVideo {
+    static func text(peerName: String, exposure: CallPreviewExposure) -> String? {
+        switch exposure {
+        case .nothing:
+            return nil
+        case .seen:
             return String(format: String(localized: "call.preview.seenBy", defaultValue: "%@ vous voit avant de décrocher", bundle: .main), peerName)
+        case .heard:
+            return String(format: String(localized: "call.preview.heardBy", defaultValue: "%@ vous entend avant de décrocher", bundle: .main), peerName)
+        case .seenAndHeard:
+            return String(format: String(localized: "call.preview.heardAndSeenBy", defaultValue: "%@ vous entend et vous voit avant de décrocher", bundle: .main), peerName)
         }
-        guard !isMuted else { return nil }
-        return String(format: String(localized: "call.preview.heardBy", defaultValue: "%@ peut vous entendre avant de décrocher", bundle: .main), peerName)
+    }
+}
+
+/// Chez l'appelant, à côté des filtres : ce que l'appelé reçoit avant de
+/// décrocher (#8795). Micro coupé et caméra activée pour un contact jamais
+/// appelé ; le choix est retenu pour CE contact.
+struct CallPreviewOutgoingControls: View {
+    @ObservedObject var preview: CallPreviewCoordinator
+    let peerName: String
+    let isVideoCall: Bool
+
+    var body: some View {
+        if preview.offersOutgoingControls {
+            let consent = preview.outgoingConsent
+            toggle(
+                isOn: consent.sendsAudio,
+                on: "mic.fill",
+                off: "mic.slash.fill",
+                caption: String(localized: "call.control.mute.caption", defaultValue: "Micro", bundle: .main),
+                label: String(localized: "call.preview.mic.a11y", defaultValue: "Micro avant le décroché", bundle: .main),
+                hint: String(format: String(localized: "call.preview.mic.hint", defaultValue: "Décide si %@ vous entend avant de décrocher", bundle: .main), peerName),
+                action: preview.togglePreviewAudio
+            )
+            if isVideoCall {
+                toggle(
+                    isOn: consent.sendsVideo,
+                    on: "video.fill",
+                    off: "video.slash.fill",
+                    caption: String(localized: "call.control.camera.caption", defaultValue: "Caméra", bundle: .main),
+                    label: String(localized: "call.preview.camera.a11y", defaultValue: "Caméra avant le décroché", bundle: .main),
+                    hint: String(format: String(localized: "call.preview.camera.hint", defaultValue: "Décide si %@ vous voit avant de décrocher", bundle: .main), peerName),
+                    action: preview.togglePreviewVideo
+                )
+            }
+        }
+    }
+
+    private func toggle(
+        isOn: Bool,
+        on: String,
+        off: String,
+        caption: String,
+        label: String,
+        hint: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            HapticFeedback.light()
+            action()
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: isOn ? on : off)
+                    // Doctrine 86i : glyphe de contrôle dans un cercle glass fixe (diameter 64) → figé.
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(isOn ? MeeshyColors.indigo500 : .white.opacity(0.9))
+                    .callControlGlass(diameter: 64, isActive: isOn, tint: MeeshyColors.indigo500)
+
+                Text(caption)
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(.white.opacity(0.7))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+        .buttonStyle(CallPressButtonStyle())
+        .accessibilityLabel(label)
+        .accessibilityHint(hint)
+        .toggleStateAccessibility(isToggle: true, isActive: isOn)
     }
 }

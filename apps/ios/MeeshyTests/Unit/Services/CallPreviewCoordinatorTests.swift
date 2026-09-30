@@ -684,9 +684,15 @@ final class CallPreviewCoordinatorTests: XCTestCase {
         XCTAssertTrue(CallManager.previewRingsInApp(usesCallKit: false, isAppActive: true))
     }
 
-    func test_seenLabel_audioOnlyWithMutedMic_announcesNothing() {
-        XCTAssertNil(CallPreviewSeenLabel.text(peerName: "Bob", isVideo: false, isMuted: true))
-        XCTAssertNotNil(CallPreviewSeenLabel.text(peerName: "Bob", isVideo: false, isMuted: false))
-        XCTAssertNotNil(CallPreviewSeenLabel.text(peerName: "Bob", isVideo: true, isMuted: true))
+    /// #8795 — le libellé dit ce que l'appelé reçoit, rien de plus.
+    func test_seenLabel_saysExactlyWhatTheCalleeGets() {
+        XCTAssertNil(CallPreviewSeenLabel.text(peerName: "Bob", exposure: .nothing))
+        let texts = [CallPreviewExposure.seen, .heard, .seenAndHeard].compactMap {
+            CallPreviewSeenLabel.text(peerName: "Bob", exposure: $0)
+        }
+
+        XCTAssertEqual(texts.count, 3)
+        XCTAssertEqual(Set(texts).count, 3, "vu, entendu, vu et entendu : trois phrases distinctes")
+        XCTAssertTrue(texts.allSatisfy { $0.contains("Bob") })
     }
 }
