@@ -24,7 +24,7 @@ export type ComposerDraftReport = {
  * LA PERSISTANCE DU BROUILLON (#6175) — miroir de la politique
  * `ConversationComposerTextModel.swift:19-78` : fin de mot (espace, retour)
  * ou champ VIDÉ ⇒ persistance IMMÉDIATE ; milieu de mot ⇒ 400 ms ; sortie de
- * vue / perte de focus ⇒ `flush()` (miroir `flushPendingChange()`).
+ * vue, page masquée ou fermée ⇒ `flush()` (miroir `flushPendingChange()`).
  *
  * LA LECTURE EST SYNCHRONE (`useMemo`), PAS DIFFÉRÉE PAR UN EFFET
  * (revue-correction interne, avant toute livraison) — `usePersistedReadingMode`
@@ -124,6 +124,22 @@ export function useComposerDraft(params: {
   );
 
   useEffect(() => () => flush(), [flush]);
+
+  /* LA PAGE QUI S'EFFACE ÉCRIT SA VALEUR EN ATTENTE (#8790) — miroir de
+     `willResignActiveNotification` (`ConversationView.swift`) : la coque
+     Android tue sa WebView en arrière-plan, et l'onglet fermé ne démonte rien. */
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flush);
+    };
+  }, [flush]);
 
   return { initial, initialProtection, report, flush };
 }
