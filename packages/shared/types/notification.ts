@@ -8,6 +8,7 @@
 
 import type { PostType } from './post.js';
 import type { NotificationAttachmentWire } from './notification-attachment-wire.js';
+import type { NotificationContentDetail } from './notification-content-detail.js';
 
 // =====================================================
 // NOTIFICATION TYPES & ENUMS
@@ -282,6 +283,8 @@ export interface NotificationContext extends NotificationAttachmentWire {
    *  étiquetait faux tout message non anglais et faussait la résolution du
    *  Prisme sur la bulle pré-enregistrée. @see schema.prisma Message.originalLanguage */
   readonly messageOriginalLanguage?: string;
+  /** #8857 — position, contact, invitation, lien, sticker, vignette vidéo, réponse à une story. */
+  readonly contentDetail?: NotificationContentDetail;
 }
 
 /**

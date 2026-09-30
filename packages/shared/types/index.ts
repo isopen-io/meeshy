@@ -210,6 +210,7 @@ export {
 
 // Le média inline d'une bannière — hérité par `NotificationContext` (#7003).
 export type { NotificationAttachmentWire } from './notification-attachment-wire.js';
+export type { NotificationContentDetail, NotificationContentCategory } from './notification-content-detail.js';
 
 // Legacy aliases for backwards compatibility
 export type { Notification as PrismaNotification } from './notification.js';
