@@ -12,6 +12,9 @@ struct ThemedConversationRow: View {
     var isDragging: Bool = false
     /// Présence pré-calculée par le parent — évite que chaque ligne observe PresenceManager
     var presenceState: PresenceState = .offline
+    /// Le pair a l'écran de CETTE conversation ouvert (#8892) — valeur
+    /// pré-calculée par le parent, comme `presenceState`.
+    var isPeerHere: Bool = false
     var onViewStory: (() -> Void)? = nil
     var onViewProfile: (() -> Void)? = nil
     var onViewConversationInfo: (() -> Void)? = nil
@@ -312,6 +315,7 @@ struct ThemedConversationRow: View {
         ConversationAvatarView(
             conversation: conversation,
             presenceState: presenceState,
+            isPeerHere: isPeerHere,
             storyRingState: storyRingState,
             moodStatus: moodStatus,
             onViewStory: onViewStory,
@@ -515,6 +519,7 @@ extension ThemedConversationRow: @MainActor Equatable {
         lhs.storyRingState == rhs.storyRingState &&
         lhs.moodStatus?.id == rhs.moodStatus?.id &&
         lhs.presenceState == rhs.presenceState &&
+        lhs.isPeerHere == rhs.isPeerHere &&
         lhs.isSelected == rhs.isSelected &&
         lhs.draftSummary == rhs.draftSummary &&
         lhs.preferredContentLanguages == rhs.preferredContentLanguages
@@ -553,6 +558,7 @@ enum ConversationAvatarMenu {
 private struct ConversationAvatarView: View {
     let conversation: Conversation
     let presenceState: PresenceState?
+    let isPeerHere: Bool
     let storyRingState: StoryRingState
     let moodStatus: StatusEntry?
     var onViewStory: (() -> Void)? = nil
@@ -606,6 +612,7 @@ private struct ConversationAvatarView: View {
                 storyState: storyRingState,
                 moodEmoji: moodStatus?.moodEmoji,
                 presenceState: (isDirect && moodStatus == nil) ? presenceState : nil,
+                isHere: isDirect && isPeerHere,
                 // DM : tap → story (si non lue) sinon profil, via handleTap() de MeeshyAvatar.
                 //   Le handler profil passe par `onTap` (et NON `onViewProfile`) pour
                 //   préserver le tap-vers-profil sans déclencher l'auto-injection d'une

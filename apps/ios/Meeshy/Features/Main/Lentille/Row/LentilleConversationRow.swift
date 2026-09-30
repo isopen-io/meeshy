@@ -26,6 +26,8 @@ struct LentilleConversationRow: View {
     var availableWidth: CGFloat = 200
     var isDragging: Bool = false
     var presenceState: PresenceState = .offline
+    /// Le pair a l'écran de CETTE conversation ouvert (#8892).
+    var isPeerHere: Bool = false
     var onViewStory: (() -> Void)? = nil
     var onViewProfile: (() -> Void)? = nil
     var onViewConversationInfo: (() -> Void)? = nil
@@ -208,6 +210,7 @@ struct LentilleConversationRow: View {
             LentilleRowAvatar(
                 conversation: conversation,
                 presenceState: effectivePresenceState,
+                isPeerHere: isPeerHere,
                 storyRingState: storyRingState,
                 moodStatus: moodStatus,
                 onViewStory: onViewStory,
@@ -545,6 +548,7 @@ extension LentilleConversationRow: @MainActor Equatable {
         lhs.storyRingState == rhs.storyRingState &&
         lhs.moodStatus?.id == rhs.moodStatus?.id &&
         lhs.presenceState == rhs.presenceState &&
+        lhs.isPeerHere == rhs.isPeerHere &&
         lhs.isSelected == rhs.isSelected &&
         lhs.draftSummary == rhs.draftSummary &&
         lhs.preferredContentLanguages == rhs.preferredContentLanguages &&
@@ -569,6 +573,7 @@ extension LentilleConversationRow: @MainActor Equatable {
 private struct LentilleRowAvatar: View {
     let conversation: Conversation
     let presenceState: PresenceState?
+    let isPeerHere: Bool
     let storyRingState: StoryRingState
     let moodStatus: StatusEntry?
     var onViewStory: (() -> Void)? = nil
@@ -629,6 +634,7 @@ private struct LentilleRowAvatar: View {
             // `.offline` = aucun dot (contrat §4.3 « offline = aucun dot »,
             // verrouillé par MeeshyAvatar, pas ici).
             presenceState: moodStatus == nil ? presenceState : nil,
+            isHere: isDirect && isPeerHere,
             onTap: isDirect ? onViewProfile : onViewConversationInfo,
             onViewProfile: nil,
             onViewStory: (isDirect && storyRingState != .none) ? onViewStory : nil,
