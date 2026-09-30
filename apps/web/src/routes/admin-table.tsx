@@ -114,7 +114,7 @@ export function AdminResetButton({ language, onReset }: { readonly language: Int
 export function AdminTable({ children }: { readonly children: ReactNode }) {
   return (
     <div className="overflow-x-auto rounded-card" style={{ border: `1px solid ${EDGE}`, backgroundColor: SURFACE }}>
-      <table className="w-full min-w-[40rem] border-collapse text-left">{children}</table>
+      <table className="w-full min-w-[40rem] border-collapse text-start">{children}</table>
     </div>
   );
 }

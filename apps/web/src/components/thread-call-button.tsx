@@ -149,14 +149,14 @@ export function ThreadCallButton({
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 top-full z-50 mt-1 grid min-w-44 overflow-hidden rounded-card py-1 shadow-lg"
+          className="absolute end-0 top-full z-50 mt-1 grid min-w-44 overflow-hidden rounded-card py-1 shadow-lg"
           style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)' }}
         >
-          <button type="button" role="menuitem" className="flex min-h-11 items-center gap-3 px-4 text-left text-body" onClick={() => call('audio')}>
+          <button type="button" role="menuitem" className="flex min-h-11 items-center gap-3 px-4 text-start text-body" onClick={() => call('audio')}>
             <Glyph name="phone" size={18} style={{ color: 'var(--accent)' }} />
             {translate(language, 'call.action.audio')}
           </button>
-          <button type="button" role="menuitem" className="flex min-h-11 items-center gap-3 px-4 text-left text-body" onClick={() => call('video')}>
+          <button type="button" role="menuitem" className="flex min-h-11 items-center gap-3 px-4 text-start text-body" onClick={() => call('video')}>
             <GlyphSvg glyph={CALLS_GLYPHS.videoCamera} size={18} style={{ color: 'var(--accent)' }} />
             {translate(language, 'call.action.video')}
           </button>

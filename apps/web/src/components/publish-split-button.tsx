@@ -233,7 +233,7 @@ export function PublishSplitButton({
           data-publish-layout-choice={row.mode}
           {...focusProps}
           onClick={() => choose({ kind: row.format, layout: row.mode })}
-          className="flex w-full items-center gap-3 px-4 text-left text-body"
+          className="flex w-full items-center gap-3 px-4 text-start text-body"
           style={{ minHeight: LAYOUT_ITEM_HEIGHT, color: 'var(--color-ios-ink)' }}
         >
           <Suspense fallback={<span aria-hidden="true" className="shrink-0" style={{ width: LAYOUT_MARK_SIZE, height: LAYOUT_MARK_SIZE }} />}>
@@ -263,7 +263,7 @@ export function PublishSplitButton({
           if (isExpanded) collapse(row.format);
           else expand(row.format, index);
         }}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left"
+        className="flex w-full items-center gap-2 px-3 py-2 text-start"
         style={{ minHeight: 44, color: row.refusal === null ? 'var(--color-ios-ink)' : 'var(--color-ios-ink-3)' }}
       >
         <span className="flex min-w-0 flex-1 flex-col items-start">

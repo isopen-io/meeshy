@@ -141,7 +141,7 @@ export function FeedHeader({ pinned, railProps }: { readonly pinned: boolean; re
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
-        <Glyph name="caretLeft" size={20} />
+        <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
       </Link>
       <RailTitleSlot title="Meeshy Feed" pinned={pinned} railProps={railProps} />
       {/* PUBLIER (#7449) — « Publication » ou « Réel », deux adresses sous une

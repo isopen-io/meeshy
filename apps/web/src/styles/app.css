@@ -710,3 +710,27 @@
 :root.light {
   --color-karaoke-ink: var(--ios-indigo-600);
 }
+
+/*
+ * UNE INTERFACE ARABE, UN CONTENU LATIN (#8803). `<html dir="rtl">` retourne la
+ * mise en page ; il retournerait aussi chaque phrase française ou anglaise d'un
+ * message, d'un aperçu ou d'un nom — « .On se voit demain au bureau », le point
+ * en tête. Chaque bloc prend donc le sens de SON contenu (premier caractère
+ * fort), comme `NSWritingDirection.natural` sur iOS ; la géométrie reste celle
+ * du document. L'ALIGNEMENT, lui, suit l'interface (`NSTextAlignment.natural`) :
+ * `start` se résoudrait sur le contenu, donc le corps hérite de `right` et un
+ * `text-start` posé par un écran se lit « côté début de l'INTERFACE » ; un
+ * `text-center` garde la main.
+ */
+:root[dir='rtl'] body {
+  text-align: right;
+}
+
+:root[dir='rtl'] body :where(*),
+:root[dir='rtl'] body ::placeholder {
+  unicode-bidi: plaintext;
+}
+
+:root[dir='rtl'] body .text-start {
+  text-align: right;
+}

@@ -500,7 +500,7 @@ export function MessageMenu({
                   role="menuitem"
                   data-action={item.id}
                   tabIndex={index === roving.activeIndex ? 0 : -1}
-                  className="flex w-full items-center gap-2.5 px-3 text-left text-title font-medium"
+                  className="flex w-full items-center gap-2.5 px-3 text-start text-title font-medium"
                   style={{ minHeight: MENU_ROW_HEIGHT, color: 'var(--color-ios-ink)' }}
                   onClick={() => onListItemChosen(item)}
                 >
@@ -551,7 +551,7 @@ export function MessageMenu({
                   role="menuitemradio"
                   aria-checked={choice.isServed}
                   tabIndex={index === roving.activeIndex ? 0 : -1}
-                  className="flex w-full items-center gap-2.5 px-3 text-left text-title font-medium"
+                  className="flex w-full items-center gap-2.5 px-3 text-start text-title font-medium"
                   style={{ minHeight: MENU_ROW_HEIGHT, color: 'var(--color-ios-ink)' }}
                   onClick={() => onTranslateChosen(choice.code)}
                 >

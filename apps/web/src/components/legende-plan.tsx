@@ -129,7 +129,7 @@ export function LegendePlan({
           className="grid size-11 place-items-center"
           aria-label="Revenir au composeur sans envoyer"
         >
-          <Glyph name="caretLeft" size={20} />
+          <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
         </button>
         <span className="text-mini opacity-80" data-legende-compteur>
           {index + 1} / {pending.length}
