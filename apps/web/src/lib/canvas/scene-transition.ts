@@ -16,7 +16,7 @@ export const SCENE_TRANSITION_MS = 1200;
 /** `StoryTransitionRehearsal.hold` — la scène entière, entre les deux. */
 export const REHEARSAL_HOLD_MS = 600;
 
-const isSceneTransition = (value: unknown): value is SceneTransition =>
+export const isSceneTransition = (value: unknown): value is SceneTransition =>
   typeof value === 'string' && (SCENE_TRANSITIONS as readonly string[]).includes(value);
 
 export function readSceneTransition(raw: Readonly<Record<string, unknown>> | undefined): SceneTransition | null {

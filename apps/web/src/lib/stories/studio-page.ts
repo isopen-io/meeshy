@@ -1,5 +1,6 @@
 import type { ApiFailure } from '@/lib/api/http';
 import type { StoryFilterId } from '@/lib/canvas/media-filter';
+import type { SceneTransition } from '@/lib/canvas/scene-transition';
 
 import { MEDIA_CAPTION_MAX } from './media-caption';
 import type { StoryFrame, StudioMediaKind, StudioPlane } from './story-document';
@@ -96,6 +97,10 @@ export type StudioPage = {
   /** LA DURÉE de la scène animée (#8415), en secondes — `timelineDuration`
    * du document. Absente : une scène statique. */
   readonly duration?: number;
+  /** L'ENTRÉE et la SORTIE de la scène (#8792) — `scene.opening` /
+   * `scene.closing` de CanvasV3. Absentes : aucune transition. */
+  readonly opening?: SceneTransition;
+  readonly closing?: SceneTransition;
 };
 
 /** Une page NEUVE, avec UN texte vide sélectionné — même loi que
