@@ -74,7 +74,7 @@ const deposer = (fixtures, dossier) => {
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms))
 
-export const attendreLeSignal = async ({ existe, delaiMs = 60_000, pasMs = 500, maintenant = Date.now, dormir = pause, etiquette }) => {
+export const attendreLeSignal = async ({ existe, delaiMs = 120_000, pasMs = 500, maintenant = Date.now, dormir = pause, etiquette }) => {
   const limite = maintenant() + delaiMs
   while (!existe()) {
     if (maintenant() > limite) throw new Error(`${etiquette} : aucun signal « prêt » en ${delaiMs / 1000} s — l’app a-t-elle planté ?`)
