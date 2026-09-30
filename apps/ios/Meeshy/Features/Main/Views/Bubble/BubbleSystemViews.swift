@@ -13,15 +13,15 @@ struct BubbleDeletedView: View, Equatable {
     let isDark: Bool
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
+        HStack(alignment: .bottom, spacing: MeeshySpacing.sm) {
             if isMe { Spacer(minLength: 50) }
 
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "nosign")
-                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .medium))
                     .foregroundColor(ThemeManager.shared.textMuted)
                 Text(String(localized: "bubble.system.deleted", defaultValue: "Message supprimé", bundle: .main))
-                    .font(MeeshyFont.relative(13, weight: .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                     .italic()
                     .foregroundColor(ThemeManager.shared.textMuted)
             }
@@ -32,7 +32,7 @@ struct BubbleDeletedView: View, Equatable {
                     .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                     .overlay(
                         Capsule()
-                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: MeeshyBorder.hairline)
                     )
             )
             .accessibilityElement(children: .combine)
@@ -41,7 +41,7 @@ struct BubbleDeletedView: View, Equatable {
             if !isMe { Spacer(minLength: 50) }
         }
         .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, 2)
+        .padding(.vertical, MeeshySpacing.xxs)
     }
 }
 
@@ -83,7 +83,7 @@ struct BubbleSystemNoticeView: View, Equatable {
                             .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
                             .overlay(
                                 Capsule()
-                                    .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                                    .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: MeeshyBorder.hairline)
                             )
                     )
             }
@@ -175,7 +175,7 @@ struct BubbleJoinNoticeView: View, Equatable {
                         .foregroundColor(ThemeManager.shared.textMuted.opacity(0.7))
                         .accessibilityIdentifier("bubble-join-notice-time")
                 }
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: notice.isAnonymous ? "theatermasks.fill" : "person.badge.plus")
                         .font(MeeshyFont.relative(11, weight: .semibold))
                         .foregroundColor(notice.isAnonymous ? .purple : ThemeManager.shared.textMuted)
@@ -193,15 +193,15 @@ struct BubbleJoinNoticeView: View, Equatable {
                         ))
                         .font(MeeshyFont.relative(10.5, weight: .semibold))
                         .foregroundColor(.purple)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, MeeshySpacing.xsPlus)
+                        .padding(.vertical, MeeshySpacing.xxs)
                         .background(Capsule().fill(Color.purple.opacity(isDark ? 0.22 : 0.12)))
                         .accessibilityIdentifier("bubble-join-notice-no-account")
                     }
                 }
 
                 if hasDetailRow {
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         if let handle = presentation.handle {
                             Text(handle)
                                 .font(MeeshyFont.relative(10.5, weight: .medium))
@@ -226,7 +226,7 @@ struct BubbleJoinNoticeView: View, Equatable {
                     .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
                     .overlay(
                         RoundedRectangle(cornerRadius: hasDetailRow ? 14 : 18, style: .continuous)
-                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: MeeshyBorder.hairline)
                     )
             )
             .contentShape(RoundedRectangle(cornerRadius: hasDetailRow ? 14 : 18, style: .continuous))
@@ -252,7 +252,7 @@ struct BubbleJoinNoticeView: View, Equatable {
 
             Spacer(minLength: 24)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
     }
 
     private var openProfileActionLabel: String {

@@ -58,10 +58,10 @@ struct CreateShareLinkView: View {
                         permissionsSection
                         limitsSection
                         createButton
-                            .padding(.top, 8)
+                            .padding(.top, MeeshySpacing.sm)
                             .padding(.bottom, 40)
                     }
-                    .padding(.top, 8)
+                    .padding(.top, MeeshySpacing.sm)
                 }
             }
             .navigationTitle(String(localized: "share.link.create.title", defaultValue: "Nouveau lien de partage", bundle: .main))
@@ -95,10 +95,10 @@ struct CreateShareLinkView: View {
             Button {
                 showConversationPicker = true
             } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     if let conv = selectedConversation {
                         conversationTypeIcon(conv.type)
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(conv.name)
                                 .font(.subheadline.weight(.medium))
                                 .foregroundColor(theme.textPrimary)
@@ -120,7 +120,7 @@ struct CreateShareLinkView: View {
                         .foregroundColor(theme.textMuted)
                         .accessibilityHidden(true)
                 }
-                .padding(14)
+                .padding(MeeshySpacing.mdPlus)
                 .background(rowBackground)
             }
             .buttonStyle(.plain)
@@ -139,14 +139,14 @@ struct CreateShareLinkView: View {
                 divider
                 formTextField(String(localized: "share.link.create.field.description", defaultValue: "Description (optionnel)", bundle: .main), placeholder: String(localized: "share.link.create.field.description.placeholder", defaultValue: "ex: Rejoins notre groupe…", bundle: .main), text: $linkDescription)
                 divider
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     formTextField(String(localized: "share.link.create.field.slug", defaultValue: "Slug URL (optionnel)", bundle: .main), placeholder: String(localized: "share.link.create.field.slug.placeholder", defaultValue: "ex: mon-groupe-2025", bundle: .main), text: $customSlug)
                     if !customSlug.isEmpty {
                         Text("meeshy.me/chat/\(customSlug.lowercased())")
                             .font(.caption2.weight(.medium))
                             .foregroundColor(accent.opacity(0.8))
-                            .padding(.horizontal, 14)
-                            .padding(.bottom, 8)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
+                            .padding(.bottom, MeeshySpacing.sm)
                     }
                 }
             }
@@ -248,10 +248,10 @@ struct CreateShareLinkView: View {
                     subtitle: String(localized: "share.link.create.section.limits.subtitle", defaultValue: "Contrôlez l'audience et la durée de vie du lien", bundle: .main)) {
             VStack(spacing: 0) {
                 // Max utilisations
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     iconBadge("person.2.fill", color: MeeshyColors.shareAccentHex)
                     Toggle(isOn: $maxUsesEnabled) {
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(String(localized: "share.link.create.limit_uses", defaultValue: "Limiter les utilisations", bundle: .main))
                                 .font(.subheadline.weight(.medium))
                                 .foregroundColor(theme.textPrimary)
@@ -268,7 +268,7 @@ struct CreateShareLinkView: View {
                     }
                     .tint(accent)
                 }
-                .padding(14)
+                .padding(MeeshySpacing.mdPlus)
                 .background(rowBackground)
 
                 if maxUsesEnabled {
@@ -289,7 +289,7 @@ struct CreateShareLinkView: View {
                             Spacer()
                         }
                     }
-                    .padding(14)
+                    .padding(MeeshySpacing.mdPlus)
                     .background(rowBackground)
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
@@ -297,9 +297,9 @@ struct CreateShareLinkView: View {
                 divider
 
                 // Expiration
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     iconBadge("clock.badge.xmark", color: MeeshyColors.warningHex)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "share.link.create.expiration", defaultValue: "Expiration", bundle: .main))
                             .font(.subheadline.weight(.medium))
                             .foregroundColor(theme.textPrimary)
@@ -316,7 +316,7 @@ struct CreateShareLinkView: View {
                     .pickerStyle(.menu)
                     .tint(accent)
                 }
-                .padding(14)
+                .padding(MeeshySpacing.mdPlus)
                 .background(rowBackground)
             }
         }
@@ -325,20 +325,20 @@ struct CreateShareLinkView: View {
     // MARK: - Bouton créer
 
     private var createButton: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             if let error = errorMessage {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "exclamationmark.circle.fill")
                         .foregroundColor(MeeshyColors.error)
                     Text(error)
                         .font(.footnote)
                         .foregroundColor(MeeshyColors.error)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, MeeshySpacing.xl)
             }
 
             Button(action: create) {
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     if isCreating {
                         ProgressView().tint(.white).scaleEffect(0.85)
                     } else {
@@ -352,13 +352,13 @@ struct CreateShareLinkView: View {
                         .foregroundColor(.white)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
+                .padding(.vertical, MeeshySpacing.lg)
 
                 .background {
                     if selectedConversation == nil {
-                        RoundedRectangle(cornerRadius: 16).fill(Color.white.opacity(0.1))
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg).fill(Color.white.opacity(0.1))
                     } else {
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .fill(LinearGradient(
                                 colors: [MeeshyColors.shareAccent, MeeshyColors.indigo300],
                                 startPoint: .leading, endPoint: .trailing
@@ -367,7 +367,7 @@ struct CreateShareLinkView: View {
                 }
             }
             .disabled(selectedConversation == nil || isCreating)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, MeeshySpacing.xl)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedConversation == nil)
         }
     }
@@ -389,8 +389,8 @@ struct CreateShareLinkView: View {
         subtitle: String? = nil,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: icon)
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(accent)
@@ -400,8 +400,8 @@ struct CreateShareLinkView: View {
                     .foregroundColor(theme.textSecondary)
                     .accessibilityAddTraits(.isHeader)
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.top, MeeshySpacing.lg)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(title)
             .accessibilityAddTraits(.isHeader)
@@ -410,21 +410,21 @@ struct CreateShareLinkView: View {
                 Text(subtitle)
                     .font(.caption)
                     .foregroundColor(theme.textMuted)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, MeeshySpacing.xl)
             }
 
             content()
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(Color.white.opacity(0.06), lineWidth: 1)
                 )
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
         }
     }
 
     private func formTextField(_ label: String, placeholder: String, text: Binding<String>) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(label)
                 .font(.caption2.weight(.medium))
                 .foregroundColor(theme.textSecondary)
@@ -434,8 +434,8 @@ struct CreateShareLinkView: View {
                 .foregroundColor(theme.textPrimary)
                 .accessibilityLabel(label)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.md)
         .background(rowBackground)
     }
 
@@ -446,10 +446,10 @@ struct CreateShareLinkView: View {
         iconColor: String,
         isOn: Binding<Bool>
     ) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             iconBadge(icon, color: iconColor)
             Toggle(isOn: isOn) {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(title)
                         .font(.subheadline.weight(.medium))
                         .foregroundColor(theme.textPrimary)
@@ -460,13 +460,13 @@ struct CreateShareLinkView: View {
             }
             .tint(accent)
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(rowBackground)
     }
 
     private func iconBadge(_ icon: String, color: String) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                 .fill(Color(hex: color).opacity(0.15))
                 .frame(width: 34, height: 34)
             Image(systemName: icon)
@@ -572,7 +572,7 @@ private struct ConversationPickerSheet: View {
                                     selected = conv
                                     isPresented = false
                                 } label: {
-                                    HStack(spacing: 12) {
+                                    HStack(spacing: MeeshySpacing.md) {
                                         Text(conv.name)
                                             .foregroundColor(theme.textPrimary)
                                         Spacer()

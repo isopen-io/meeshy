@@ -126,7 +126,7 @@ struct StatusBubbleOverlay: View {
             .fill(.ultraThinMaterial)
             .frame(width: size, height: size)
             .overlay(
-                Circle().stroke(Color(hex: status.avatarColor).opacity(0.3), lineWidth: 0.5)
+                Circle().stroke(Color(hex: status.avatarColor).opacity(0.3), lineWidth: MeeshyBorder.hairline)
             )
             .shadow(color: Color.black.opacity(0.06), radius: 2, y: 1)
     }
@@ -134,12 +134,12 @@ struct StatusBubbleOverlay: View {
     // MARK: - Bubble Content
 
     private var bubbleContent: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             if let audioUrl = status.audioUrl, !audioUrl.isEmpty {
                 audioPlayerRow(urlString: audioUrl)
             } else if let content = status.content, !content.isEmpty {
                 Text(content)
-                    .font(MeeshyFont.relative(13))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -148,7 +148,7 @@ struct StatusBubbleOverlay: View {
             // "via @username" for republished statuses
             if let via = status.viaUsername {
                 Text(String(localized: "status.bubble.via", defaultValue: "via @\(via)", bundle: .main))
-                    .font(MeeshyFont.relative(11))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundColor(theme.textMuted)
             }
 
@@ -159,41 +159,41 @@ struct StatusBubbleOverlay: View {
             // Ancienneté + « Republier » (autres statuts uniquement) sur une seule ligne
             // basse séparée par un point médian — libère toute la largeur de la bulle
             // pour le texte de l'humeur au lieu de le partager avec le timestamp.
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Text(status.timeAgo)
-                    .font(MeeshyFont.relative(10, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
                 if onRepublish != nil {
                     MetaSeparator()
-                        .font(MeeshyFont.relative(10, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
 
                     Button {
                         dismiss()
                         onRepublish?(status)
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: "arrow.2.squarepath")
                                 .font(MeeshyFont.relative(11))
                             Text(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main))
-                                .font(MeeshyFont.relative(12, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                         }
                         .foregroundColor(MeeshyColors.indigo400)
                     }
                 }
             }
         }
-        .padding(.horizontal, 12)
+        .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, 9)
         // iOS 26 Liquid Glass — floating mood bubble. The SDK Compatibility wrapper
         // owns the gating + the .ultraThinMaterial fallback. The avatar-tinted
         // gradient hairline + elevation shadow stay as overlays ON the glass
         // (same idiom as FloatingCallPillView: adaptiveGlass + stroke overlay + shadow).
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
                 .stroke(
                     LinearGradient(
                         colors: [Color(hex: status.avatarColor).opacity(0.3), Color.white.opacity(0.1)],
@@ -209,7 +209,7 @@ struct StatusBubbleOverlay: View {
     // MARK: - Audio Player
 
     private func audioPlayerRow(urlString: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Button {
                 audioPlayer.togglePlayPause()
             } label: {

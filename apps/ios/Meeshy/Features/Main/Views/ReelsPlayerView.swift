@@ -369,12 +369,12 @@ struct ReelsPlayerView: View {
             Button(action: onClose) {
                 // Glyphe chrome dans un cadre de tap fixe 40×40 : figé (doctrine 82i) ; le bouton porte le libellé
                 Image(systemName: "chevron.backward")
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(width: 40, height: 40)
                     .adaptiveGlass(in: Circle(), tint: .black.opacity(0.35))
             }
-            .padding(.leading, 12)
+            .padding(.leading, MeeshySpacing.md)
             // Sit clearly below the Dynamic Island. `safeArea.top` fluctuates
             // once the status bar hides, so floor it to clear the island reliably.
             .padding(.top, max(safeArea.top, 50) + 28)
@@ -596,8 +596,8 @@ struct ReelPageView: View {
                     }
                     Spacer()
                 }
-                .padding(.top, 8)
-                .padding(.trailing, 8)
+                .padding(.top, MeeshySpacing.sm)
+                .padding(.trailing, MeeshySpacing.sm)
                 .opacity(chromeHidden ? 0 : 1)
                 .allowsHitTesting(!chromeHidden)
                 .animation(.easeInOut(duration: 0.25), value: chromeHidden)
@@ -625,8 +625,8 @@ struct ReelPageView: View {
                             )
                         }
                     )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 10)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.bottom, MeeshySpacing.smPlus)
                 }
 
                 // Crédit du son EMPRUNTÉ (réel « son de bibliothèque seul ») —
@@ -635,27 +635,27 @@ struct ReelPageView: View {
                 // discrète au-dessus de la rangée auteur.
                 if let track = borrowedSoundTrack, isActive {
                     borrowedSoundBadge(track)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 10)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.bottom, MeeshySpacing.smPlus)
                 }
 
-                HStack(alignment: .bottom, spacing: 12) {
+                HStack(alignment: .bottom, spacing: MeeshySpacing.md) {
                     infoOverlay
                     Spacer(minLength: 8)
                     actionRail
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
 
                 // Draggable scrub bar — only for the active video reel. Sits
                 // just below the description / action rail. Drag to seek.
                 if isVideoReel && isActive {
                     ReelScrubBar(manager: playerManager, accentColor: accentColor)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 14)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.top, MeeshySpacing.mdPlus)
                 } else if isSceneReel && isActive {
                     ReelSceneProgressBar(clock: sceneClock, accentColor: accentColor)
-                        .padding(.horizontal, 16)
-                        .padding(.top, 14)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.top, MeeshySpacing.mdPlus)
                 }
             }
             // Sit the description / action rail / scrub lower, closer to the
@@ -815,7 +815,7 @@ struct ReelPageView: View {
     /// Pill de crédit d'un son emprunté : « titre · @auteur » (ou le libellé
     /// « Son original » localisé quand l'auteur n'a pas nommé son son).
     private func borrowedSoundBadge(_ track: StoryAudioPlayerObject) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: "music.note")
                 .font(.caption.weight(.semibold))
                 .accessibilityHidden(true)
@@ -824,7 +824,7 @@ struct ReelPageView: View {
                 .lineLimit(1)
         }
         .foregroundColor(.white)
-        .padding(.horizontal, 12)
+        .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, 7)
         .background(Capsule().fill(.ultraThinMaterial))
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -80,7 +80,7 @@ struct OnboardingPrismIllustration: View {
             ForEach(Self.orbitFlags, id: \.flag) { item in
                 Text(verbatim: item.flag)
                     .font(MeeshyFont.relative(MeeshyFont.titleSize))
-                    .padding(6)
+                    .padding(MeeshySpacing.xsPlus)
                     .background(Circle().fill(isDark ? MeeshyColors.indigo950 : Color.white))
                     .shadow(color: MeeshyColors.indigo700.opacity(0.18), radius: 6, y: 2)
                     .offset(item.offset)
@@ -111,7 +111,7 @@ struct OnboardingPrismIllustration: View {
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous)
                 .fill(translated
                       ? AnyShapeStyle(MeeshyColors.brandGradient)
                       : AnyShapeStyle(isDark ? Color.white.opacity(0.10) : Color.white))
@@ -164,7 +164,7 @@ struct OnboardingGlobalIllustration: View {
     }
 
     private func sampleBubble(_ sample: (flag: String, text: String)) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Text(verbatim: sample.flag)
             Text(sample.text)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium, design: .rounded))
@@ -208,7 +208,7 @@ struct OnboardingStoryIllustration: View {
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundStyle(.white)
                 .padding(.horizontal, MeeshySpacing.sm)
-                .padding(.vertical, 4)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(Capsule().fill(MeeshyColors.warning))
                 .offset(x: -58, y: -52)
         }
@@ -239,7 +239,7 @@ struct OnboardingFriendsIllustration: View {
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .heavy, design: .rounded))
                 .foregroundStyle(.white)
                 .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, 6)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(Capsule().fill(MeeshyColors.success))
                 .offset(x: 64, y: -40)
         }
@@ -300,7 +300,7 @@ struct OnboardingNotificationIllustration: View {
                 Spacer(minLength: 0)
             }
             .padding(MeeshySpacing.md)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.regularMaterial))
+            .background(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous).fill(.regularMaterial))
             .shadow(color: MeeshyColors.indigo700.opacity(0.15), radius: 10, y: 4)
         }
         .onboardingMotion { reduce in

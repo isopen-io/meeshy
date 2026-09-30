@@ -27,7 +27,7 @@ struct CommentQuotedMediaBanner: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             // La BARRE de citation — le même signe que partout ailleurs dans le
             // produit pour « ceci est repris d'ailleurs ».
             RoundedRectangle(cornerRadius: 1.5)
@@ -43,10 +43,10 @@ struct CommentQuotedMediaBanner: View {
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 6)
+        .padding(.vertical, MeeshySpacing.xs)
+        .padding(.horizontal, MeeshySpacing.xsPlus)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                 .fill(Color(hex: accentColor).opacity(0.06))
         )
         .frame(height: 42)
@@ -75,7 +75,7 @@ struct CommentQuotationChip: View {
 
     var body: some View {
         if let citation = store.quotation(for: postId) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 CommentQuotedMediaThumbnail(citation: citation, side: 30, accentColor: accentColor)
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -111,8 +111,8 @@ struct CommentQuotationChip: View {
                                                 defaultValue: "Retirer la citation",
                                                 bundle: .main)))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
     }

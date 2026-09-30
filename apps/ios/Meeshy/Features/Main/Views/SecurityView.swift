@@ -151,7 +151,7 @@ struct SecurityView: View {
     // MARK: - Sections Content
 
     private var sectionsContent: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: MeeshySpacing.xxl) {
             passwordSection
             twoFactorSection
             emailSection
@@ -160,22 +160,22 @@ struct SecurityView: View {
             activeSessionsSection
             Spacer().frame(height: 40)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.lg)
     }
 
     // MARK: - Password Section
 
     private var passwordSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "settings.security.password", defaultValue: "Mot de passe", bundle: .main), icon: "lock.fill", color: "6366F1")
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            sectionHeader(title: String(localized: "settings.security.password", defaultValue: "Mot de passe", bundle: .main), icon: "lock.fill", color: MeeshyColors.brandPrimaryHex)
 
             Button {
                 HapticFeedback.light()
                 showChangePassword = true
             } label: {
-                HStack(spacing: 12) {
-                    fieldIcon("key.fill", color: "6366F1")
+                HStack(spacing: MeeshySpacing.md) {
+                    fieldIcon("key.fill", color: MeeshyColors.brandPrimaryHex)
 
                     Text(String(localized: "settings.security.change_password", defaultValue: "Changer le mot de passe", bundle: .main))
                         .font(.subheadline.weight(.medium))
@@ -187,24 +187,24 @@ struct SecurityView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.md)
             }
-            .background(sectionBackground(tint: "6366F1"))
+            .background(sectionBackground(tint: MeeshyColors.brandPrimaryHex))
         }
     }
 
     // MARK: - Email Section
 
     private var emailSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "settings.security.email", defaultValue: "Email", bundle: .main), icon: "envelope.fill", color: accentColor)
 
             VStack(spacing: 0) {
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     fieldIcon("envelope.fill", color: accentColor)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "settings.security.email.current", defaultValue: "Email actuel", bundle: .main))
                             .font(.caption2.weight(.medium))
                             .foregroundColor(theme.textMuted)
@@ -220,8 +220,8 @@ struct SecurityView: View {
                         verificationBadge(verified: user?.emailVerifiedAt != nil)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.smPlus)
 
                 if isEditingEmail {
                     emailEditContent
@@ -235,15 +235,15 @@ struct SecurityView: View {
                                 isEditingEmail = true
                             }
                         } label: {
-                            HStack(spacing: 8) {
+                            HStack(spacing: MeeshySpacing.sm) {
                                 Image(systemName: "pencil")
                                     .font(.caption.weight(.semibold))
                                 Text(String(localized: "common.edit", defaultValue: "Modifier", bundle: .main))
                                     .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(MeeshyColors.indigo500)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
+                            .padding(.vertical, MeeshySpacing.sm)
                         }
 
                         if let email = user?.email, !email.isEmpty, user?.emailVerifiedAt == nil {
@@ -252,30 +252,30 @@ struct SecurityView: View {
                                 newEmail = email
                                 submitEmailChange()
                             } label: {
-                                HStack(spacing: 8) {
+                                HStack(spacing: MeeshySpacing.sm) {
                                     Image(systemName: "checkmark.seal.fill")
                                         .font(.caption.weight(.semibold))
                                     Text(String(localized: "common.verify", defaultValue: "Vérifier", bundle: .main))
                                         .font(.footnote.weight(.semibold))
                                 }
                                 .foregroundColor(MeeshyColors.success)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
+                                .padding(.horizontal, MeeshySpacing.mdPlus)
+                                .padding(.vertical, MeeshySpacing.sm)
                             }
                         }
                         
                         Spacer()
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 10)
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.bottom, MeeshySpacing.smPlus)
                 }
 
                 if let emailError {
                     Text(emailError)
                         .font(.caption.weight(.medium))
                         .foregroundColor(MeeshyColors.error)
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 10)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.bottom, MeeshySpacing.smPlus)
                 }
             }
             .background(sectionBackground(tint: accentColor))
@@ -283,8 +283,8 @@ struct SecurityView: View {
     }
 
     private var emailEditContent: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.smPlus) {
+            HStack(spacing: MeeshySpacing.md) {
                 fieldIcon("at", color: accentColor)
 
                 TextField(String(localized: "settings.security.email.new", defaultValue: "Nouvel email", bundle: .main), text: $newEmail)
@@ -295,10 +295,10 @@ struct SecurityView: View {
                     .textInputAutocapitalization(.never)
                     .disableAutocorrection(true)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.sm)
 
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Button {
                     HapticFeedback.light()
                     withAnimation { isEditingEmail = false; newEmail = ""; emailError = nil }
@@ -306,8 +306,8 @@ struct SecurityView: View {
                     Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.textMuted)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.vertical, MeeshySpacing.sm)
                         .background(Capsule().fill(theme.textMuted.opacity(0.12)))
                 }
 
@@ -315,7 +315,7 @@ struct SecurityView: View {
                     HapticFeedback.medium()
                     submitEmailChange()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         if emailLoading {
                             ProgressView().scaleEffect(0.7).tint(.white)
                         }
@@ -323,8 +323,8 @@ struct SecurityView: View {
                             .font(.footnote.weight(.bold))
                     }
                     .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.vertical, MeeshySpacing.sm)
                     .background(
                         Capsule().fill(
                             newEmail.contains("@") && !emailLoading
@@ -335,14 +335,14 @@ struct SecurityView: View {
                 }
                 .disabled(!newEmail.contains("@") || emailLoading)
             }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.bottom, MeeshySpacing.smPlus)
         }
     }
 
     private var emailSentContent: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "envelope.badge.fill")
                     .font(.subheadline)
                     .foregroundColor(MeeshyColors.success)
@@ -350,7 +350,7 @@ struct SecurityView: View {
                     .font(.footnote.weight(.medium))
                     .foregroundColor(MeeshyColors.success)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
 
             Button {
                 HapticFeedback.light()
@@ -363,21 +363,21 @@ struct SecurityView: View {
                     .foregroundColor(resendCooldown > 0 ? theme.textMuted : MeeshyColors.indigo500)
             }
             .disabled(resendCooldown > 0)
-            .padding(.bottom, 10)
+            .padding(.bottom, MeeshySpacing.smPlus)
         }
     }
 
     // MARK: - Phone Section
 
     private var phoneSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "settings.security.phone", defaultValue: "Téléphone", bundle: .main), icon: "phone.fill", color: "818CF8")
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            sectionHeader(title: String(localized: "settings.security.phone", defaultValue: "Téléphone", bundle: .main), icon: "phone.fill", color: MeeshyColors.indigo400Hex)
 
             VStack(spacing: 0) {
-                HStack(spacing: 12) {
-                    fieldIcon("phone.fill", color: "818CF8")
+                HStack(spacing: MeeshySpacing.md) {
+                    fieldIcon("phone.fill", color: MeeshyColors.indigo400Hex)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "settings.security.phone.current", defaultValue: "Téléphone actuel", bundle: .main))
                             .font(.caption2.weight(.medium))
                             .foregroundColor(theme.textMuted)
@@ -398,8 +398,8 @@ struct SecurityView: View {
                         verificationBadge(verified: user?.phoneVerifiedAt != nil)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.smPlus)
 
                 if phoneFlow.step == .codeSent {
                     phoneCodeContent
@@ -411,15 +411,15 @@ struct SecurityView: View {
                             HapticFeedback.light()
                             phoneFlow.beginEditing()
                         } label: {
-                            HStack(spacing: 8) {
+                            HStack(spacing: MeeshySpacing.sm) {
                                 Image(systemName: "pencil")
                                     .font(.caption.weight(.semibold))
                                 Text(String(localized: "common.edit", defaultValue: "Modifier", bundle: .main))
                                     .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(MeeshyColors.indigo400)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
+                            .padding(.vertical, MeeshySpacing.sm)
                         }
 
                         if let phone = user?.phoneNumber, !phone.isEmpty, user?.phoneVerifiedAt == nil {
@@ -427,40 +427,40 @@ struct SecurityView: View {
                                 HapticFeedback.light()
                                 Task { await phoneFlow.requestCode(for: phone) }
                             } label: {
-                                HStack(spacing: 8) {
+                                HStack(spacing: MeeshySpacing.sm) {
                                     Image(systemName: "checkmark.seal.fill")
                                         .font(.caption.weight(.semibold))
                                     Text(String(localized: "common.verify", defaultValue: "Vérifier", bundle: .main))
                                         .font(.footnote.weight(.semibold))
                                 }
                                 .foregroundColor(MeeshyColors.success)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
+                                .padding(.horizontal, MeeshySpacing.mdPlus)
+                                .padding(.vertical, MeeshySpacing.sm)
                             }
                         }
                         
                         Spacer()
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 10)
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.bottom, MeeshySpacing.smPlus)
                 }
 
                 if let phoneError = phoneFlow.error {
                     Text(phoneError)
                         .font(.caption.weight(.medium))
                         .foregroundColor(MeeshyColors.error)
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 10)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.bottom, MeeshySpacing.smPlus)
                 }
             }
-            .background(sectionBackground(tint: "818CF8"))
+            .background(sectionBackground(tint: MeeshyColors.indigo400Hex))
         }
     }
 
     private var phoneEditContent: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 12) {
-                fieldIcon("phone.badge.plus", color: "818CF8")
+        VStack(spacing: MeeshySpacing.smPlus) {
+            HStack(spacing: MeeshySpacing.md) {
+                fieldIcon("phone.badge.plus", color: MeeshyColors.indigo400Hex)
 
                 TextField("+33 6 12 34 56 78", text: $phoneFlow.newPhone)
                     .font(.subheadline.weight(.medium))
@@ -468,10 +468,10 @@ struct SecurityView: View {
                     .textContentType(.telephoneNumber)
                     .keyboardType(.phonePad)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.sm)
 
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Button {
                     HapticFeedback.light()
                     phoneFlow.cancel()
@@ -479,8 +479,8 @@ struct SecurityView: View {
                     Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.textMuted)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.vertical, MeeshySpacing.sm)
                         .background(Capsule().fill(theme.textMuted.opacity(0.12)))
                 }
 
@@ -488,7 +488,7 @@ struct SecurityView: View {
                     HapticFeedback.medium()
                     Task { await phoneFlow.sendCode() }
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         if phoneFlow.isSending {
                             ProgressView().scaleEffect(0.7).tint(.white)
                         }
@@ -496,8 +496,8 @@ struct SecurityView: View {
                             .font(.footnote.weight(.bold))
                     }
                     .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.vertical, MeeshySpacing.sm)
                     .background(
                         Capsule().fill(
                             phoneFlow.canSend
@@ -508,14 +508,14 @@ struct SecurityView: View {
                 }
                 .disabled(!phoneFlow.canSend)
             }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.bottom, MeeshySpacing.smPlus)
         }
     }
 
     private var phoneCodeContent: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.smPlus) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "ellipsis.message.fill")
                     .font(.subheadline)
                     .foregroundColor(MeeshyColors.success)
@@ -523,20 +523,20 @@ struct SecurityView: View {
                     .font(.footnote.weight(.medium))
                     .foregroundColor(MeeshyColors.success)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
 
-            HStack(spacing: 12) {
-                fieldIcon("number", color: "818CF8")
+            HStack(spacing: MeeshySpacing.md) {
+                fieldIcon("number", color: MeeshyColors.indigo400Hex)
 
                 TextField(String(localized: "settings.security.phone.code_placeholder", defaultValue: "Code à 6 chiffres", bundle: .main), text: $phoneFlow.code)
                     .font(.system(.callout, design: .monospaced).weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .keyboardType(.numberPad)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.sm)
 
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Button {
                     HapticFeedback.light()
                     phoneFlow.cancel()
@@ -544,8 +544,8 @@ struct SecurityView: View {
                     Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.textMuted)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.vertical, MeeshySpacing.sm)
                         .background(Capsule().fill(theme.textMuted.opacity(0.12)))
                 }
 
@@ -553,7 +553,7 @@ struct SecurityView: View {
                     HapticFeedback.medium()
                     Task { await phoneFlow.verifyCode() }
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         if phoneFlow.isVerifying {
                             ProgressView().scaleEffect(0.7).tint(.white)
                         }
@@ -561,8 +561,8 @@ struct SecurityView: View {
                             .font(.footnote.weight(.bold))
                     }
                     .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.vertical, MeeshySpacing.sm)
                     .background(
                         Capsule().fill(
                             phoneFlow.canVerify
@@ -573,8 +573,8 @@ struct SecurityView: View {
                 }
                 .disabled(!phoneFlow.canVerify)
             }
-            .padding(.horizontal, 14)
-            .padding(.bottom, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.bottom, MeeshySpacing.smPlus)
         }
     }
 
@@ -584,15 +584,15 @@ struct SecurityView: View {
         let hasMasterPIN = lockManager.masterPinConfigured
         let lockedCount = lockManager.lockedConversationIds.count
         let lockColor = "F87171"
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "settings.security.locked_conversations", defaultValue: "Conversations verrouillées", bundle: .main), icon: "lock.shield.fill", color: lockColor)
 
             VStack(spacing: 0) {
                 // Status row
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     fieldIcon("lock.shield.fill", color: lockColor)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "settings.security.master_pin", defaultValue: "Code PIN principal", bundle: .main))
                             .font(.caption2.weight(.medium))
                             .foregroundColor(theme.textMuted)
@@ -606,12 +606,12 @@ struct SecurityView: View {
                     Spacer()
 
                     if hasMasterPIN {
-                        HStack(spacing: 8) {
+                        HStack(spacing: MeeshySpacing.sm) {
                             if lockedCount > 0 {
                                 Text("\(lockedCount) \(String(localized: "settings.security.locks", defaultValue: "verrou(s)", bundle: .main))")
                                     .font(.caption2.weight(.semibold))
                                     .foregroundColor(MeeshyColors.error)
-                                    .padding(.horizontal, 8)
+                                    .padding(.horizontal, MeeshySpacing.sm)
                                     .padding(.vertical, 3)
                                     .background(Capsule().fill(MeeshyColors.error.opacity(0.15)))
                             }
@@ -621,25 +621,25 @@ struct SecurityView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.smPlus)
 
                 // Actions
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     if !hasMasterPIN {
                         Button {
                             HapticFeedback.medium()
                             showPinSetupSheet = true
                         } label: {
-                            HStack(spacing: 6) {
+                            HStack(spacing: MeeshySpacing.xsPlus) {
                                 Image(systemName: "plus.circle.fill")
                                     .font(.caption)
                                 Text(String(localized: "settings.security.configure", defaultValue: "Configurer", bundle: .main))
                                     .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
+                            .padding(.vertical, MeeshySpacing.sm)
                             // Le (+) « Configurer » passe en verre PROÉMINENT (#6481) :
                             // le verre simple rendrait le texte blanc illisible avant
                             // iOS 26, où la variante proéminente garde l'aplat rouge.
@@ -650,15 +650,15 @@ struct SecurityView: View {
                             HapticFeedback.light()
                             showPinChangeSheet = true
                         } label: {
-                            HStack(spacing: 6) {
+                            HStack(spacing: MeeshySpacing.xsPlus) {
                                 Image(systemName: "pencil.circle.fill")
                                     .font(.caption)
                                 Text(String(localized: "common.edit", defaultValue: "Modifier", bundle: .main))
                                     .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(MeeshyColors.error)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
+                            .padding(.vertical, MeeshySpacing.sm)
                             .background(Capsule().fill(MeeshyColors.error.opacity(0.12)))
                         }
 
@@ -667,15 +667,15 @@ struct SecurityView: View {
                                 HapticFeedback.medium()
                                 showUnlockAllSheet = true
                             } label: {
-                                HStack(spacing: 6) {
+                                HStack(spacing: MeeshySpacing.xsPlus) {
                                     Image(systemName: "lock.open.fill")
                                         .font(.caption)
                                     Text("\(String(localized: "settings.security.unlock_all", defaultValue: "Déverrouiller tout", bundle: .main)) (\(lockedCount))")
                                         .font(.footnote.weight(.semibold))
                                 }
                                 .foregroundColor(.white)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
+                                .padding(.horizontal, MeeshySpacing.mdPlus)
+                                .padding(.vertical, MeeshySpacing.sm)
                                 .background(Capsule().fill(MeeshyColors.warning))
                             }
                         }
@@ -685,22 +685,22 @@ struct SecurityView: View {
                                 HapticFeedback.medium()
                                 showPinRemoveSheet = true
                             } label: {
-                                HStack(spacing: 6) {
+                                HStack(spacing: MeeshySpacing.xsPlus) {
                                     Image(systemName: "trash.circle.fill")
                                         .font(.caption)
                                     Text(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main))
                                         .font(.footnote.weight(.semibold))
                                 }
                                 .foregroundColor(MeeshyColors.error)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 8)
+                                .padding(.horizontal, MeeshySpacing.mdPlus)
+                                .padding(.vertical, MeeshySpacing.sm)
                                 .background(Capsule().fill(MeeshyColors.error.opacity(0.10)))
                             }
                         }
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.bottom, MeeshySpacing.smPlus)
             }
             .background(sectionBackground(tint: lockColor))
         }
@@ -710,7 +710,7 @@ struct SecurityView: View {
 
     private var twoFactorSection: some View {
         let tfaColor = "6366F1"
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(
                 title: String(localized: "2fa_section_title", defaultValue: "Authentification à deux facteurs"),
                 icon: "shield.lefthalf.filled",
@@ -718,10 +718,10 @@ struct SecurityView: View {
             )
 
             VStack(spacing: 0) {
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     fieldIcon("shield.lefthalf.filled", color: tfaColor)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "2fa_status_label", defaultValue: "Statut 2FA"))
                             .font(.caption2.weight(.medium))
                             .foregroundColor(theme.textMuted)
@@ -744,29 +744,29 @@ struct SecurityView: View {
                         Text(String(localized: "2fa_badge_active", defaultValue: "Actif"))
                             .font(.caption2.weight(.semibold))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, MeeshySpacing.xsPlus)
+                            .padding(.vertical, MeeshySpacing.xxs)
                             .background(Capsule().fill(MeeshyColors.success))
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.smPlus)
 
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     if twoFactorViewModel.isEnabled {
                         Button {
                             HapticFeedback.light()
                             showBackupCodesSheet = true
                         } label: {
-                            HStack(spacing: 6) {
+                            HStack(spacing: MeeshySpacing.xsPlus) {
                                 Image(systemName: "key.fill")
                                     .font(.caption)
                                 Text(String(localized: "2fa_backup_codes_button", defaultValue: "Codes de secours"))
                                     .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(MeeshyColors.indigo500)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
+                            .padding(.vertical, MeeshySpacing.sm)
                             .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.12)))
                         }
 
@@ -774,15 +774,15 @@ struct SecurityView: View {
                             HapticFeedback.medium()
                             showTwoFactorDisableSheet = true
                         } label: {
-                            HStack(spacing: 6) {
+                            HStack(spacing: MeeshySpacing.xsPlus) {
                                 Image(systemName: "shield.slash.fill")
                                     .font(.caption)
                                 Text(String(localized: "2fa_disable_button", defaultValue: "Désactiver"))
                                     .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(MeeshyColors.error)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
+                            .padding(.vertical, MeeshySpacing.sm)
                             .background(Capsule().fill(MeeshyColors.error.opacity(0.10)))
                         }
                     } else {
@@ -790,28 +790,28 @@ struct SecurityView: View {
                             HapticFeedback.medium()
                             showTwoFactorSetupSheet = true
                         } label: {
-                            HStack(spacing: 6) {
+                            HStack(spacing: MeeshySpacing.xsPlus) {
                                 Image(systemName: "shield.lefthalf.filled.badge.checkmark")
                                     .font(.caption)
                                 Text(String(localized: "2fa_enable_button", defaultValue: "Activer la 2FA"))
                                     .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
+                            .padding(.vertical, MeeshySpacing.sm)
                             .background(Capsule().fill(MeeshyColors.indigo500))
                         }
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.bottom, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.bottom, MeeshySpacing.smPlus)
 
                 if let twoFactorError = twoFactorViewModel.error {
                     Text(twoFactorError)
                         .font(.caption.weight(.medium))
                         .foregroundColor(MeeshyColors.error)
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 10)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.bottom, MeeshySpacing.smPlus)
                 }
             }
             .background(sectionBackground(tint: tfaColor))
@@ -821,15 +821,15 @@ struct SecurityView: View {
     // MARK: - Active Sessions Section
 
     private var activeSessionsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "security_sessions_header", defaultValue: "Sessions"), icon: "laptopcomputer.and.iphone", color: "818CF8")
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            sectionHeader(title: String(localized: "security_sessions_header", defaultValue: "Sessions"), icon: "laptopcomputer.and.iphone", color: MeeshyColors.indigo400Hex)
 
             Button {
                 HapticFeedback.light()
                 showActiveSessions = true
             } label: {
-                HStack(spacing: 12) {
-                    fieldIcon("laptopcomputer.and.iphone", color: "818CF8")
+                HStack(spacing: MeeshySpacing.md) {
+                    fieldIcon("laptopcomputer.and.iphone", color: MeeshyColors.indigo400Hex)
 
                     Text(String(localized: "security_sessions_manage", defaultValue: "Gérer les sessions actives"))
                         .font(.subheadline.weight(.medium))
@@ -841,10 +841,10 @@ struct SecurityView: View {
                         .font(.caption.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.md)
             }
-            .background(sectionBackground(tint: "818CF8"))
+            .background(sectionBackground(tint: MeeshyColors.indigo400Hex))
         }
         .sheet(isPresented: $showActiveSessions) {
             ActiveSessionsView()
@@ -855,7 +855,7 @@ struct SecurityView: View {
     // MARK: - Components
 
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
                 .font(.caption.weight(.semibold))
                 .foregroundColor(Color(hex: color))
@@ -864,14 +864,14 @@ struct SecurityView: View {
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
-        .padding(.leading, 4)
+        .padding(.leading, MeeshySpacing.xs)
     }
 
     private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: 16)
+        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
             .fill(theme.surfaceGradient(tint: tint))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(theme.border(tint: tint), lineWidth: 1)
             )
     }
@@ -882,7 +882,7 @@ struct SecurityView: View {
             .foregroundColor(Color(hex: color))
             .frame(width: 28, height: 28)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                     .fill(Color(hex: color).opacity(0.12))
             )
     }
@@ -893,8 +893,8 @@ struct SecurityView: View {
              : String(localized: "settings.security.not_verified", defaultValue: "Non vérifié", bundle: .main))
             .font(.caption2.weight(.semibold))
             .foregroundColor(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
+            .padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(verified ? MeeshyColors.success : MeeshyColors.warning))
             .accessibilityLabel(verified
                                 ? String(localized: "settings.security.verified", defaultValue: "Vérifié", bundle: .main)

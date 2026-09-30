@@ -24,8 +24,8 @@ struct CallsTab: View {
                 placeholder: String(localized: "calls.search.placeholder", defaultValue: "Rechercher un appel", bundle: .main),
                 query: $viewModel.searchQuery
             )
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
             filterChips
             if viewModel.eraseFailed {
                 eraseFailedBanner
@@ -60,7 +60,7 @@ struct CallsTab: View {
     // MARK: - Filter Chips
 
     private var filterChips: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             chip(.all, label: String(localized: "calls.filter.all", defaultValue: "Tous", bundle: .main))
             chip(.missed, label: String(localized: "calls.filter.missed", defaultValue: "Manqués", bundle: .main))
             Spacer()
@@ -68,8 +68,8 @@ struct CallsTab: View {
                 clearAllButton
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     private func chip(_ filter: CallHistoryFilter, label: String) -> some View {
@@ -89,8 +89,8 @@ struct CallsTab: View {
             Text(String(localized: "calls.clearAll", defaultValue: "Tout effacer", bundle: .main))
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(MeeshyColors.error)
-                .padding(.horizontal, 8)
-                .frame(minWidth: 44, minHeight: 44)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -98,7 +98,7 @@ struct CallsTab: View {
     }
 
     private var eraseFailedBanner: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundColor(MeeshyColors.error)
                 .accessibilityHidden(true)
@@ -118,11 +118,11 @@ struct CallsTab: View {
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
-        .padding(.leading, 12)
+        .padding(.leading, MeeshySpacing.md)
         .background(MeeshyColors.error.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 6)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.xsPlus)
         .accessibilityElement(children: .contain)
     }
 
@@ -223,9 +223,9 @@ private struct CallJournalRow: View, Equatable {
         let color = DynamicColorGenerator.colorForName(name)
 
         VStack(spacing: 0) {
-            HStack(spacing: 14) {
+            HStack(spacing: MeeshySpacing.mdPlus) {
                 Button(action: onTap) {
-                    HStack(spacing: 14) {
+                    HStack(spacing: MeeshySpacing.mdPlus) {
                         MeeshyAvatar(
                             name: name,
                             context: .userListItem,
@@ -293,8 +293,8 @@ private struct CallJournalRow: View, Equatable {
                     )
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.vertical, MeeshySpacing.md)
             Divider().opacity(0.15).padding(.leading, 70)
         }
     }

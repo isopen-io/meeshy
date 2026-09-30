@@ -48,7 +48,7 @@ struct ConversationMediaHubView: View {
             }
             content
         }
-        .padding(.bottom, 32)
+        .padding(.bottom, MeeshySpacing.xxxl)
         .task { model.select(model.selectedKind) }
         .adaptiveOnChange(of: query) { _, text in model.updateQuery(text) }
         .onDisappear { model.close() }
@@ -65,7 +65,7 @@ struct ConversationMediaHubView: View {
     // MARK: - Recherche
 
     private var searchField: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass")
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(mutedText)
@@ -86,25 +86,25 @@ struct ConversationMediaHubView: View {
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, MeeshySpacing.smPlus)
         .frame(minHeight: 44)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .strokeBorder(mutedText.opacity(0.15), lineWidth: 1)
         )
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.md)
     }
 
     // MARK: - Segments
 
     private var segmentBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(ConversationMediaKind.allCases, id: \.self) { kind in
                     let selected = model.selectedKind == kind
                     Button {
@@ -119,8 +119,8 @@ struct ConversationMediaHubView: View {
                     .accessibilityAddTraits(selected ? [.isSelected] : [])
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.smPlus)
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(ConversationMediaHubCopy.segmentsLabel)
@@ -131,8 +131,8 @@ struct ConversationMediaHubView: View {
             .font(.footnote.weight(.medium))
             .foregroundColor(MeeshyColors.warning)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.bottom, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.sm)
     }
 
     // MARK: - Contenu
@@ -143,23 +143,23 @@ struct ConversationMediaHubView: View {
         if listing.items.isEmpty {
             emptyContent(listing.phase)
         } else if model.selectedKind == .visual {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: 3), spacing: 2) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: MeeshySpacing.xxs), count: 3), spacing: 2) {
                 ForEach(listing.items) { item in
                     visualTile(item)
                         .onAppear { if item.id == listing.items.last?.id { model.loadMore() } }
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, MeeshySpacing.xxs)
             listFooter(listing)
         } else {
-            LazyVStack(spacing: 14) {
+            LazyVStack(spacing: MeeshySpacing.mdPlus) {
                 ForEach(listing.items) { item in
                     row(item)
                         .onAppear { if item.id == listing.items.last?.id { model.loadMore() } }
                 }
                 listFooter(listing)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
         }
     }
 
@@ -211,9 +211,9 @@ struct ConversationMediaHubView: View {
 
     @ViewBuilder
     private func row(_ item: ConversationMediaHubItem) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             rowBody(item)
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Text("\(senderName(item)) · \(dateLabel(item.sentAt))")
                     .font(.caption)
                     .foregroundColor(mutedText)

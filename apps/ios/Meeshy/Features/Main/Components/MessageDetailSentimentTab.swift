@@ -1,5 +1,6 @@
 import SwiftUI
 import NaturalLanguage
+import MeeshyUI
 
 // MARK: - Sentiment Tab
 
@@ -20,7 +21,7 @@ struct MessageDetailSentimentTab: View, Equatable {
         let score = Self.analyzeSentiment(content)
         let label = Self.sentimentLabel(score)
 
-        return VStack(spacing: 16) {
+        return VStack(spacing: MeeshySpacing.lg) {
             // Hero emoji — figé (doctrine 84i/86i : glyphe hero à taille fixe, un
             // scaling XXXL déborderait la carte) et décoratif : le sentiment est déjà
             // porté par le libellé + la valeur VoiceOver groupée ci-dessous.
@@ -55,7 +56,7 @@ struct MessageDetailSentimentTab: View, Equatable {
                 }
             }
             .frame(height: 18)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, MeeshySpacing.xl)
             // Jauge décorative custom (GeometryReader) : illisible par VoiceOver, sa
             // valeur est exposée sur l'élément groupé.
             .accessibilityHidden(true)
@@ -65,7 +66,7 @@ struct MessageDetailSentimentTab: View, Equatable {
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
+        .padding(.vertical, MeeshySpacing.sm)
         // Regroupe emoji + libellé + jauge + score en un seul élément VoiceOver
         // cohérent : « Sentiment » (label) → « Positif, score 0,42 » (value).
         .accessibilityElement(children: .ignore)

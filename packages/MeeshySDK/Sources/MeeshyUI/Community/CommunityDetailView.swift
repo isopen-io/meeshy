@@ -60,8 +60,8 @@ public struct CommunityDetailView: View {
                             Text(String(localized: "community.detail.tab.feed", defaultValue: "Feed", bundle: .module)).tag(1)
                         }
                         .pickerStyle(.segmented)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.vertical, MeeshySpacing.sm)
                         
                         if selectedTab == 0 {
                             conversationsSection
@@ -73,7 +73,7 @@ public struct CommunityDetailView: View {
 
                 // Navigation header flottant par-dessus la bannière
                 navigationHeader(community)
-                    .padding(.top, 8)
+                    .padding(.top, MeeshySpacing.sm)
 
             } else if let error = viewModel.errorMessage {
                 EmptyStateView(
@@ -157,7 +157,7 @@ public struct CommunityDetailView: View {
                 }
             } label: {
                 Image(systemName: "chevron.backward")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(width: 36, height: 36)
                     .background(Color.black.opacity(0.35))
@@ -185,7 +185,7 @@ public struct CommunityDetailView: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(width: 36, height: 36)
                         .background(Color.black.opacity(0.35))
@@ -197,7 +197,7 @@ public struct CommunityDetailView: View {
                     // Reagir a la communaute
                 } label: {
                     Image(systemName: "heart.fill")
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(width: 36, height: 36)
                         .background(Color.black.opacity(0.35))
@@ -205,8 +205,8 @@ public struct CommunityDetailView: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 4)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.xs)
     }
 
     // MARK: - Header (bannière + avatar + infos)
@@ -232,20 +232,20 @@ public struct CommunityDetailView: View {
 
                 // Avatar overlapping
                 communityAvatar(community, color: color)
-                    .padding(.leading, 16)
+                    .padding(.leading, MeeshySpacing.lg)
                     .offset(y: 36)
             }
 
             // Infos communauté
             HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                     Text(community.name)
-                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .font(.system(size: MeeshyFont.titleSize, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
 
                     if let desc = community.description, !desc.isEmpty {
                         Text(desc)
-                            .font(.system(size: 13, design: .rounded))
+                            .font(.system(size: MeeshyFont.subheadSize, design: .rounded))
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(2)
                     }
@@ -254,21 +254,21 @@ public struct CommunityDetailView: View {
 
                 Spacer()
 
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: community.isPrivate ? "lock.fill" : "globe")
                         .font(.system(size: 11))
                     Text(community.isPrivate ? String(localized: "community.privacy.private", defaultValue: "Privee", bundle: .module) : String(localized: "community.privacy.public", defaultValue: "Publique", bundle: .module))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                 }
                 .foregroundColor(theme.textMuted)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, 5)
                 .background(theme.backgroundSecondary)
                 .clipShape(Capsule())
                 .padding(.top, 44)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.lg)
         }
     }
 
@@ -294,7 +294,7 @@ public struct CommunityDetailView: View {
             avatarURL: community.avatar
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
                 .stroke(theme.backgroundPrimary, lineWidth: 3)
         )
     }
@@ -308,24 +308,24 @@ public struct CommunityDetailView: View {
             Divider().frame(height: 30)
             statItem(value: "\(community.conversationCount)", label: String(localized: "community.detail.stats.channels", defaultValue: "Channels", bundle: .module), icon: "bubble.left.and.bubble.right.fill")
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, MeeshySpacing.md)
         .background(theme.backgroundSecondary.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 16)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     private func statItem(value: String, label: String, icon: String) -> some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: icon)
-                    .font(.system(size: 12))
+                    .font(.system(size: MeeshyIconSize.xs))
                     .foregroundColor(MeeshyColors.brandPrimary)
                 Text(value)
-                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                    .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
             }
             Text(label)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
@@ -335,8 +335,8 @@ public struct CommunityDetailView: View {
 
     @ViewBuilder
     private func actionsSection(_ community: MeeshyCommunity) -> some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
+            HStack(spacing: MeeshySpacing.md) {
                 actionButton(icon: "person.2.fill", title: String(localized: "community.detail.action.members", defaultValue: "Membres", bundle: .module)) {
                     onOpenMembers?(community.id)
                 }
@@ -367,37 +367,37 @@ public struct CommunityDetailView: View {
                 Button {
                     showLeaveConfirm = true
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "rectangle.portrait.and.arrow.right")
                         Text(String(localized: "community.detail.leave.label", defaultValue: "Quitter la communaute", bundle: .module))
                     }
                     .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundColor(MeeshyColors.error)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                     .background(MeeshyColors.error.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.lg)
     }
 
     private func actionButton(icon: String, title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 6) {
+            VStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: icon)
-                    .font(.system(size: 18))
+                    .font(.system(size: MeeshyIconSize.lg))
                     .foregroundColor(MeeshyColors.brandPrimary)
                 Text(title)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .font(.system(size: MeeshyFont.footnoteSize, weight: .medium, design: .rounded))
                     .foregroundColor(theme.textSecondary)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, MeeshySpacing.md)
             .background(theme.backgroundSecondary.opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         }
     }
 
@@ -405,7 +405,7 @@ public struct CommunityDetailView: View {
 
     @ViewBuilder
     private var conversationsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             if viewModel.conversations.isEmpty && !viewModel.isLoading {
                 EmptyStateView(
                     icon: "bubble.left.and.bubble.right",
@@ -428,13 +428,13 @@ public struct CommunityDetailView: View {
                 }
             }
         }
-        .padding(.top, 8)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     @ViewBuilder
     private var postsSection: some View {
         // Placeholder for Community Posts / Stories
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             // Le libellé + l'action ne sont posés QUE si l'hôte sait créer un
             // post de communauté. `EmptyStateView` masque son bouton quand
             // `onAction` est nil : l'état vide reste informatif au lieu
@@ -451,27 +451,27 @@ public struct CommunityDetailView: View {
             )
             .frame(height: 200)
         }
-        .padding(.top, 8)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     private func conversationRow(_ conversation: APIConversation) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "number")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                 .foregroundColor(MeeshyColors.brandPrimary)
                 .frame(width: 36, height: 36)
                 .background(MeeshyColors.brandPrimary.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(conversation.title ?? conversation.identifier ?? String(localized: "community.detail.channel.fallbackName", defaultValue: "Channel", bundle: .module))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 if let desc = conversation.description, !desc.isEmpty {
                     Text(desc)
-                        .font(.system(size: 12, weight: .regular))
+                        .font(.system(size: MeeshyFont.smallSize, weight: .regular))
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(1)
                 }
@@ -481,12 +481,12 @@ public struct CommunityDetailView: View {
 
             if let count = conversation.memberCount {
                 Text("\(count)")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .contentShape(Rectangle())
     }
 }
@@ -637,19 +637,19 @@ struct AddChannelSheet: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 40))
                 .foregroundColor(theme.textMuted)
             Text(searchText.isEmpty ? String(localized: "community.addChannel.empty.noConversations", defaultValue: "Aucune conversation disponible", bundle: .module) : String(localized: "community.addChannel.empty.noResults", defaultValue: "Aucun resultat", bundle: .module))
-                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .font(.system(size: MeeshyFont.bodySize, weight: .medium, design: .rounded))
                 .foregroundColor(theme.textSecondary)
             if searchText.isEmpty {
                 Text(String(localized: "community.addChannel.empty.hint", defaultValue: "Creez d'abord une conversation pour l'ajouter ici.", bundle: .module))
-                    .font(.system(size: 13))
+                    .font(.system(size: MeeshyFont.subheadSize))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, MeeshySpacing.xxxl)
             }
         }
     }
@@ -684,31 +684,31 @@ struct AddChannelSheet: View {
     }
 
     private func channelRow(_ conversation: APIConversation) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "number")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(MeeshyColors.brandPrimary)
                 .frame(width: 32, height: 32)
                 .background(MeeshyColors.brandPrimary.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(conversation.title ?? conversation.identifier ?? String(localized: "community.addChannel.conversation.fallbackName", defaultValue: "Conversation", bundle: .module))
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     if let count = conversation.memberCount {
                         Label("\(count)", systemImage: "person.2.fill")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
                             .foregroundColor(theme.textMuted)
                     }
 
                     if conversation.communityId != nil {
                         Label(String(localized: "community.addChannel.otherCommunity", defaultValue: "Autre communaute", bundle: .module), systemImage: "arrow.triangle.swap")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(Color(hex: "F59E0B"))
+                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
+                            .foregroundColor(MeeshyColors.amber500)
                     }
                 }
             }
@@ -720,15 +720,15 @@ struct AddChannelSheet: View {
                     .tint(MeeshyColors.brandPrimary)
             } else if conversation.communityId != nil {
                 Image(systemName: "arrow.forward.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(Color(hex: "F59E0B"))
+                    .font(.system(size: MeeshyIconSize.xl))
+                    .foregroundColor(MeeshyColors.amber500)
             } else {
                 Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 20))
+                    .font(.system(size: MeeshyIconSize.xl))
                     .foregroundColor(MeeshyColors.brandPrimary)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
     }
 
     private func handleTap(_ conversation: APIConversation) {

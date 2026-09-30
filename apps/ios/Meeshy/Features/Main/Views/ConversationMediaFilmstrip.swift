@@ -279,7 +279,7 @@ private struct FilmstripThumbnail: View, Equatable {
     }
 
     private var shape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
+        RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
     }
 
     /// Une vignette n'affiche JAMAIS le fichier plein format : la vignette
@@ -329,7 +329,7 @@ private struct FilmstripThumbnail: View, Equatable {
             ZStack {
                 Color.black.opacity(0.6)
                 Image(systemName: "photo.badge.exclamationmark")
-                    .font(MeeshyFont.relative(18, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .foregroundColor(.white.opacity(0.7))
             }

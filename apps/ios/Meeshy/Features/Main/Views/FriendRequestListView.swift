@@ -79,8 +79,8 @@ struct FriendRequestListView: View {
             // titre reste centré.
             Color.clear.frame(width: 44)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // MARK: - Content
@@ -107,7 +107,7 @@ struct FriendRequestListView: View {
                         friendRequestRow(request)
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
             }
         }
     }
@@ -137,7 +137,7 @@ struct FriendRequestListView: View {
         let name = sender?.name ?? "Inconnu"
         let color = DynamicColorGenerator.colorForName(name)
 
-        return HStack(spacing: 14) {
+        return HStack(spacing: MeeshySpacing.mdPlus) {
             MeeshyAvatar(
                 name: name,
                 context: .userListItem,
@@ -224,8 +224,8 @@ struct FriendRequestListView: View {
                 .accessibilityLabel(String(localized: "friends.requests.accept", defaultValue: "Accepter la demande", bundle: .main))
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // MARK: - Helpers

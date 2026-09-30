@@ -19,7 +19,7 @@ struct ProfileProgressionEntry: View {
         } label: {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "trophy.fill")
-                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                     .foregroundColor(tint)
                     .frame(width: 28, height: 28)
                     .background(
@@ -28,19 +28,19 @@ struct ProfileProgressionEntry: View {
                     )
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(String(localized: "profile.progression.title", defaultValue: "Progression", bundle: .main))
-                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                     Text(String(localized: "profile.progression.subtitle", defaultValue: "Badges, niveau et série", bundle: .main))
-                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
 
                 Spacer()
 
                 Image(systemName: "chevron.forward")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundColor(theme.textMuted)
                     .accessibilityHidden(true)
             }

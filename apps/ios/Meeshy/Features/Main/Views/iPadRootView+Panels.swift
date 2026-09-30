@@ -227,17 +227,17 @@ struct iPadLeftColumnHeader: View {
     private var isDark: Bool { colorScheme == .dark }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             if showFeedButton {
                 Button {
                     HapticFeedback.light()
                     onFeedTap?()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "square.stack.fill")
-                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                         Text(String(localized: "root.ipad.feed", defaultValue: "Flux", bundle: .main))
-                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     }
                     .foregroundStyle(
                         LinearGradient(
@@ -246,8 +246,8 @@ struct iPadLeftColumnHeader: View {
                             endPoint: .trailing
                         )
                     )
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
                         Capsule()
                             .fill(MeeshyColors.indigo100.opacity(isDark ? 0.15 : 1))
@@ -256,7 +256,7 @@ struct iPadLeftColumnHeader: View {
             }
 
             Text(title)
-                .font(MeeshyFont.relative(20, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -269,14 +269,14 @@ struct iPadLeftColumnHeader: View {
                 } label: {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "bell.fill")
-                            .font(MeeshyFont.relative(16, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                             .foregroundColor(theme.textSecondary)
 
                         if notificationCount > 0 {
                             Text(NotificationBadge.displayed(notificationCount))
                                 // Doctrine 86i : le compteur reste figé face au Dynamic
                                 // Type, mais la pastille s'élargit — « 99+ » entier.
-                                .font(MeeshyFont.relative(9, weight: NotificationBadge.fontWeight))
+                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: NotificationBadge.fontWeight))
                                 .foregroundColor(.white)
                                 .lineLimit(1)
                                 .padding(.horizontal, 5)
@@ -297,14 +297,14 @@ struct iPadLeftColumnHeader: View {
                     onSettingsTap()
                 } label: {
                     Image(systemName: "gearshape.fill")
-                        .font(MeeshyFont.relative(16, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                 }
                 .accessibilityLabel(String(localized: "root.ipad.settings", defaultValue: "Paramètres", bundle: .main))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
         .background(theme.backgroundPrimary.opacity(0.95))
     }
 }

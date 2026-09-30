@@ -211,7 +211,7 @@ extension ConversationMediaGalleryView {
                 }
             )
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, 4)
+            .padding(.bottom, MeeshySpacing.xs)
             .transition(.asymmetric(
                 insertion: .scale(scale: 0.85, anchor: .bottomLeading).combined(with: .opacity),
                 removal: .opacity

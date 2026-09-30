@@ -89,16 +89,16 @@ public struct MeeshyAudioTranscriptPlayer: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             transcript
             barre
         }
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
                 .fill(tint.opacity(0.10))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
                         .stroke(tint.opacity(0.28), lineWidth: 1)
                 )
         )
@@ -125,7 +125,7 @@ public struct MeeshyAudioTranscriptPlayer: View {
             let actif = indexActif
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                         ForEach(Array(lignes.enumerated()), id: \.element.id) { index, cue in
                             ligne(cue, actif: index == actif)
                         }
@@ -166,7 +166,7 @@ public struct MeeshyAudioTranscriptPlayer: View {
     // MARK: - La bande et ses deux cibles
 
     private var barre: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             boutonLecture
             zoneEdition
         }
@@ -207,7 +207,7 @@ public struct MeeshyAudioTranscriptPlayer: View {
     /// reste alors ce qu'elle est : le dessin d'un son, avec sa durée.
     @ViewBuilder
     private var zoneEdition: some View {
-        let contenu = HStack(spacing: 10) {
+        let contenu = HStack(spacing: MeeshySpacing.smPlus) {
             bande
             Text(Self.horloge(player.playhead) + " / " + Self.horloge(dureeEffective))
                 .font(.caption2.monospacedDigit())

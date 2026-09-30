@@ -654,7 +654,7 @@ struct ConversationMediaGalleryView: View {
         let langues = captionLanguages(id)
         if !langues.isEmpty {
             let active = activeCaptionLanguage(id)
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 ForEach(langues, id: \.self) { code in
                     LanguageFlagChip(code: code,
                                      isActive: active == code,
@@ -667,8 +667,8 @@ struct ConversationMediaGalleryView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 2)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.xxs)
             .accessibilityLabel(String(localized: "gallery.caption.languages",
                                        defaultValue: "Langue de la légende",
                                        bundle: .main))
@@ -692,7 +692,7 @@ struct ConversationMediaGalleryView: View {
                                     captionExpanded.toggle()
                                 }
                             })
-            .padding(.vertical, 8)
+            .padding(.vertical, MeeshySpacing.sm)
     }
 
     // MARK: - Controls Overlay
@@ -706,7 +706,7 @@ struct ConversationMediaGalleryView: View {
                     // Chrome : glyphe `xmark` figé dans un cercle glass 40pt
                     // (doctrine 82i) — ne pas scaler. Glass APRÈS le sizing.
                     Image(systemName: "xmark")
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: MeeshyIconSize.md, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 40, height: 40)
                         .adaptiveGlass(in: Circle(), interactive: true)
@@ -981,7 +981,7 @@ struct ConversationMediaGalleryView: View {
                 }
             } label: {
                 Image(systemName: "arrowshape.turn.up.left.fill")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                     .glassControlForeground()
                     .frame(width: MediaStageActionColumn.glass,
                            height: MediaStageActionColumn.glass)
@@ -1025,23 +1025,23 @@ struct ConversationMediaGalleryView: View {
 
     private func bottomMetadataOverlay(_ att: MessageAttachment) -> some View {
         let info = senderInfoMap[att.id]
-        return VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             // Rangée auteur : affichée seulement si l'info est fournie par le call
             // site — sinon on masque (pas d'avatar « ? » vide au-dessus des dimensions).
             if let info {
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     MeeshyAvatar(
                         name: info.senderName,
                         context: .messageBubble,
                         accentColor: info.senderColor,
                         avatarURL: info.senderAvatarURL
                     )
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(info.senderName)
-                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                             .foregroundColor(.white)
                         Text(info.sentAt, format: .dateTime.day().month(.abbreviated).hour().minute())
-                            .font(MeeshyFont.relative(12, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                             .foregroundColor(.white.opacity(0.6))
                     }
                     // **Les actions ont quitté cette rangée** (#6161) : elles
@@ -1057,7 +1057,7 @@ struct ConversationMediaGalleryView: View {
             // pièce est synthétique, et la ligne n'y montrerait qu'un glyphe
             // « photo » qui ment sur ce qu'on regarde. L'auteur et sa date restent.
             if sceneContext?.scenes[att.id] == nil {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     // Glyphe de type média décoratif (apparié aux dimensions) —
                     // scale avec le texte mais masqué de VoiceOver.
                     Image(systemName: att.type == .video ? "video.fill" : "photo")
@@ -1066,12 +1066,12 @@ struct ConversationMediaGalleryView: View {
                         .accessibilityHidden(true)
                     if let w = att.width, let h = att.height, w > 0, h > 0 {
                         Text("\(w) \u{00D7} \(h)")
-                            .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .monospaced))
                             .foregroundColor(.white.opacity(0.6))
                     }
                     if att.fileSize > 0 {
                         Text(att.fileSizeFormatted)
-                            .font(MeeshyFont.relative(11, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                             .foregroundColor(.white.opacity(0.5))
                     }
                     Spacer()
@@ -1083,9 +1083,9 @@ struct ConversationMediaGalleryView: View {
                 .accessibilityHidden(mediaMetadataAccessibilityLabel(att).isEmpty)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.md)
+        .padding(.bottom, MeeshySpacing.sm)
     }
 
     // MARK: - Actions

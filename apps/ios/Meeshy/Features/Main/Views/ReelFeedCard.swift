@@ -201,8 +201,8 @@ struct ReelFeedCard: View, Equatable {
                 soundButtonOverlay
             }
             .frame(width: width, height: height)
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
             .onTapGesture { onTapMedia() }
         }
         .frame(height: reelCardHeight(mediaWidth: media?.width, mediaHeight: media?.height, cardWidth: cardWidthEstimate))
@@ -308,14 +308,14 @@ struct ReelFeedCard: View, Equatable {
                     Image(systemName: "ellipsis")
                         .font(MeeshyFont.relative(15, weight: .bold))
                         .glassControlForeground()
-                        .padding(8)
+                        .padding(MeeshySpacing.sm)
                         .background(Circle().fill(.ultraThinMaterial))
                         .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
                         .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
                         .contentShape(Circle())
                         .mediaChromeTinted()
                 }
-                .padding(10)
+                .padding(MeeshySpacing.smPlus)
                 .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
                 .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
             }
@@ -339,7 +339,7 @@ struct ReelFeedCard: View, Equatable {
                         ReelFeedSoundIntent.shared.toggleSound()
                         HapticFeedback.light()
                     }
-                    .padding(10)
+                    .padding(MeeshySpacing.smPlus)
                     Spacer()
                 }
                 Spacer()
@@ -350,7 +350,7 @@ struct ReelFeedCard: View, Equatable {
     // MARK: - Overlay bas (scrim + auteur + texte + boutons)
 
     private var bottomOverlay: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Spacer()
             if repostedReel != nil {
                 Label(String(localized: "feed.reel.republished.by", defaultValue: "Republié par \(post.author)", bundle: .main),
@@ -387,7 +387,7 @@ struct ReelFeedCard: View, Equatable {
             }
             actionsRow
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             LinearGradient(
@@ -408,7 +408,7 @@ struct ReelFeedCard: View, Equatable {
 
     private var authorRow: some View {
         Button { onTapAuthor(repostedReel?.authorId ?? post.authorId) } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 MeeshyAvatar(
                     name: displayAuthor,
                     context: .custom(34),
@@ -457,7 +457,7 @@ struct ReelFeedCard: View, Equatable {
             count: count,
             label: a11yLabel,
             tint: .white.opacity(0.85),
-            iconFont: MeeshyFont.relative(10, weight: .semibold)
+            iconFont: MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold)
         )
     }
 

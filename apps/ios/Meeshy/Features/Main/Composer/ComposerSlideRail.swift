@@ -61,7 +61,7 @@ struct ComposerSlideRail: View {
     var body: some View {
         if slides.count > 1 {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ForEach(Array(slides.enumerated()), id: \.element.id) { index, slide in
                         Button { onSelect(index) } label: {
                             tuile(slide, index: index)
@@ -72,7 +72,7 @@ struct ComposerSlideRail: View {
                             index: index + 1, total: slides.count)))
                     }
                 }
-                .padding(.vertical, 2)
+                .padding(.vertical, MeeshySpacing.xxs)
             }
             .id(imagesVersion)
         }
@@ -112,9 +112,9 @@ struct ComposerSlideRail: View {
         )
         // La diapositive est une scène : TOUJOURS 9:16 (`SceneShape.aspect`, #6896/#6904).
         .frame(width: cote * SceneShape.aspect, height: cote)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))
         .overlay(
-            RoundedRectangle(cornerRadius: 4)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                 .strokeBorder(index == currentIndex
                               ? MeeshyColors.brandPrimary
                               : Color.white.opacity(0.25),

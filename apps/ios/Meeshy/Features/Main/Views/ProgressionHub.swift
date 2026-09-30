@@ -145,13 +145,13 @@ struct ProgressionLastAchievementHero: View {
         // seule identité de la vue.
         let teinte = obtenu ? MeeshyColors.success : MeeshyColors.textMuted(isDark: isDark)
         HStack(spacing: MeeshySpacing.md) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                 .fill(teinte.opacity(0.22))
                 .frame(width: 48, height: 48)
                 .overlay(Image(systemName: "trophy.fill").foregroundStyle(teinte))
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(bandeau(montre: montre != nil, obtenu: obtenu))
                     .font(.caption2.weight(.semibold))
                     .textCase(.uppercase)
@@ -167,12 +167,12 @@ struct ProgressionLastAchievementHero: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .fill(teinte.opacity(0.12))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                         .stroke(teinte.opacity(0.28), lineWidth: 1)
                 )
         )
@@ -219,7 +219,7 @@ struct ProgressionLevelHero: View {
                 .font(.caption)
                 .foregroundStyle(theme.textMuted)
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
             RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: MeeshyColors.brandPrimary))
@@ -253,7 +253,7 @@ struct ProgressionElansHero: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "wand.and.stars").foregroundStyle(MeeshyColors.brandPrimary)
                 Text(titre).font(.body.weight(.bold)).foregroundStyle(theme.textPrimary)
                 Spacer(minLength: 0)
@@ -271,12 +271,12 @@ struct ProgressionElansHero: View {
                     .foregroundStyle(theme.textMuted)
             }
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .fill(MeeshyColors.brandPrimary.opacity(0.10))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                         .stroke(MeeshyColors.brandPrimary.opacity(0.24), lineWidth: 1)
                 )
         )
@@ -351,7 +351,7 @@ struct ProgressionSectionLink: View {
     var body: some View {
         Button(action: onOpen) {
             HStack(spacing: MeeshySpacing.md) {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
                     .fill(teinte.opacity(0.16))
                     .frame(width: 36, height: 36)
                     .overlay(Image(systemName: symbole).font(.subheadline).foregroundStyle(teinte))
@@ -367,7 +367,7 @@ struct ProgressionSectionLink: View {
                 // se retourne avec la langue ; garde : `RightToLeftLayoutGuardTests`.
                 Image(systemName: "chevron.forward").font(.footnote).foregroundStyle(theme.textMuted)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .frame(minHeight: 56)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
@@ -397,13 +397,13 @@ struct ProgressionFlammeHero: View {
 
     var body: some View {
         HStack(spacing: MeeshySpacing.md) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                 .fill(MeeshyColors.warning.opacity(0.20))
                 .frame(width: 48, height: 48)
                 .overlay(Image(systemName: "flame.fill").foregroundStyle(MeeshyColors.warning))
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 // La SÉMANTIQUE d'abord, comme ses deux voisins : le hero
                 // s'ouvrait sur un chiffre sans nom.
                 Text(ProgressionCopy.heroStreakTitle)
@@ -429,12 +429,12 @@ struct ProgressionFlammeHero: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .fill(MeeshyColors.warning.opacity(0.12))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                         .stroke(MeeshyColors.warning.opacity(0.26), lineWidth: 1)
                 )
         )
@@ -455,8 +455,8 @@ struct ProgressionWrap: View {
             ForEach(items, id: \.self) { item in
                 Text(item)
                     .font(.caption)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
+                    .padding(.vertical, MeeshySpacing.xs)
                     .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.16)))
             }
         }
@@ -543,7 +543,7 @@ struct ProgressionSectionPage: View {
                         dismiss()
                     } label: {
                         Image(systemName: "chevron.backward")
-                            .font(MeeshyFont.relative(16, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                             .foregroundColor(MeeshyColors.brandPrimary)
                             .frame(width: 44, height: 44)
                     }
@@ -564,12 +564,12 @@ struct ProgressionSectionPage: View {
                         Text(compte(progress))
                             .font(.body.weight(.bold))
                             .foregroundStyle(teinte)
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, MeeshySpacing.md)
                             .padding(.vertical, 7)
                             .adaptiveGlass(in: Capsule(), tint: teinte.opacity(0.18))
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
 
                 ScrollView(showsIndicators: false) {
                     VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
@@ -579,8 +579,8 @@ struct ProgressionSectionPage: View {
                         Spacer().frame(height: 40)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.sm)
                 }
             }
         }

@@ -107,8 +107,8 @@ public struct MediaTranscriptionView: View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
                 flowTranscription
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.sm)
             }
             .frame(maxHeight: maxHeight)
             .background(transcriptionBackground)
@@ -181,11 +181,11 @@ public struct MediaTranscriptionView: View {
     }
 
     private var transcriptionBackground: some View {
-        RoundedRectangle(cornerRadius: 12)
+        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
             .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                    .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04), lineWidth: MeeshyBorder.hairline)
             )
     }
 }

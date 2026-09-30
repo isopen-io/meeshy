@@ -26,7 +26,7 @@ private struct ContactsSkeletonRow: View {
                 .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                     .fill(theme.textMuted.opacity(0.12))
                     .frame(width: 120, height: 14)
                 RoundedRectangle(cornerRadius: 3)

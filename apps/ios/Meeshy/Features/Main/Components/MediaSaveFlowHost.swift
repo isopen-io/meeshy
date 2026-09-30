@@ -108,7 +108,7 @@ struct MediaSaveFlowModifier: ViewModifier {
 /// bouton qui ne fait rien ment plus qu'il n'aide.
 private struct MediaSavePreparingIndicator: View {
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             ProgressView()
                 .progressViewStyle(.circular)
                 .tint(.white)
@@ -116,11 +116,11 @@ private struct MediaSavePreparingIndicator: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.white)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.mdPlus)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.25), radius: 18, y: 8)

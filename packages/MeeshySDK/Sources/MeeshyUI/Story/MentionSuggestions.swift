@@ -224,7 +224,7 @@ struct MentionSuggestionRow: View {
                          avatarURL: user.avatar)
             VStack(alignment: .leading, spacing: 1) {
                 Text(user.displayName ?? user.username)
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     .lineLimit(1)
                 Text("@\(user.username)")
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
@@ -353,16 +353,16 @@ public struct StoryMentionPickerSheet: View {
     /// endroit d'où une référence SILENCIEUSE se voit — et donc le seul d'où
     /// elle se retire.
     private var alreadyReferenced: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             sectionTitle(String(localized: "reference.sheet.alreadyReferenced",
                                 defaultValue: "Déjà référencées", bundle: .module))
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ForEach(references, id: \.username) { reference in
                         referenceChip(reference)
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
             }
             // Nommer quelqu'un lui ouvre le contenu même hors de l'audience
             // choisie : c'est une conséquence du geste, elle se dit là où le
@@ -372,24 +372,24 @@ public struct StoryMentionPickerSheet: View {
                         bundle: .module))
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
         }
-        .padding(.bottom, 10)
+        .padding(.bottom, MeeshySpacing.smPlus)
     }
 
     private func sectionTitle(_ text: String) -> some View {
         HStack {
             Text(text)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
                 .foregroundStyle(.secondary)
             Spacer()
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 4)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     private func referenceChip(_ reference: ComposerReference) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             // `Menu` et non `contextMenu` : sur une pastille déjà posée, le
             // geste attendu est un TAP — changer de mode et en choisir un sont
             // le même geste.
@@ -401,11 +401,11 @@ public struct StoryMentionPickerSheet: View {
                     ))
                 }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: reference.display.symbolName)
                         .font(.system(size: 11, weight: .semibold))
                     Text("@\(reference.username)")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
                         .lineLimit(1)
                 }
                 .foregroundStyle(reference.display == .silent ? Color.secondary : Color.primary)
@@ -422,8 +422,8 @@ public struct StoryMentionPickerSheet: View {
             .buttonStyle(.plain)
             .accessibilityLabel("\(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .module)) @\(reference.username)")
         }
-        .padding(.leading, 12)
-        .padding(.trailing, 10)
+        .padding(.leading, MeeshySpacing.md)
+        .padding(.trailing, MeeshySpacing.smPlus)
         .padding(.vertical, 7)
         .frame(minHeight: 36)
         .background(Capsule().fill(Color(.secondarySystemBackground)))

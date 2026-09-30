@@ -19,13 +19,13 @@ extension ConversationView {
                 if composerState.isLoadingMedia {
                     ProgressView()
                         .tint(Color(hex: accentColor))
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, MeeshySpacing.md)
                 }
             }
             if composerState.isUploading, let progress = composerState.uploadProgress {
                 UploadProgressBar(progress: progress, accentColor: accentColor)
-                    .padding(.horizontal, 8)
-                    .padding(.bottom, 4)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.bottom, MeeshySpacing.xs)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -59,21 +59,21 @@ extension ConversationView {
                     // d'un mood n'est pas `previewText` seul, il porte l'emoji
                     // et la date, que le flot ne saurait pas composer.
                     Text(QuotedReplyPresentation.title(author: composerReplyTitle(reply)))
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                         .foregroundColor(Color(hex: reply.isMe ? accentColor : reply.authorColor))
                         .lineLimit(QuotedReplyPresentation.titleLineLimit)
 
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Text(emoji)
-                            .font(MeeshyFont.relative(12))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         if let date = reply.storyPublishedAt {
                             Text(date, style: .relative)
-                                .font(MeeshyFont.relative(11))
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                                 .foregroundColor(theme.textMuted)
                         }
                         if !reply.previewText.isEmpty {
                             Text(reply.previewText)
-                                .font(MeeshyFont.relative(12))
+                                .font(MeeshyFont.relative(MeeshyFont.smallSize))
                                 .foregroundColor(theme.textSecondary)
                                 .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .composer))
                         }
@@ -84,10 +84,10 @@ extension ConversationView {
                     // coulent dans le même paragraphe ; le budget de coupure
                     // est celui de la peau `composer` (2 lignes), lu à la
                     // taille de texte du lecteur.
-                    HStack(alignment: .top, spacing: 4) {
+                    HStack(alignment: .top, spacing: MeeshySpacing.xs) {
                         if let attType = reply.attachmentType {
                             Image(systemName: composerReplyAttachmentIcon(attType))
-                                .font(MeeshyFont.relative(10, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .medium))
                                 .foregroundColor(theme.textSecondary)
                         }
 
@@ -111,7 +111,7 @@ extension ConversationView {
 
                 if let details = quotedDetails {
                     Text(details)
-                        .font(MeeshyFont.relative(11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(theme.textMuted)
                         .lineLimit(QuotedReplyPresentation.titleLineLimit)
                 }
@@ -134,13 +134,13 @@ extension ConversationView {
             }
             .accessibilityLabel(String(localized: "conversation.view.composer.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                 )
         )
@@ -167,17 +167,17 @@ extension ConversationView {
                 .frame(width: 3, height: 36)
 
             Image(systemName: "pencil")
-                .font(MeeshyFont.relative(14, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(MeeshyColors.warning)
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(localized: "conversation.view.composer.edit_message", defaultValue: "Modifier le message", bundle: .main))
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     .foregroundColor(MeeshyColors.warning)
 
                 Text(composerState.editingOriginalContent ?? "")
-                    .font(MeeshyFont.relative(12))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
             }
@@ -196,13 +196,13 @@ extension ConversationView {
             }
             .accessibilityLabel(String(localized: "conversation.view.composer.cancel_edit", defaultValue: "Annuler la modification", bundle: .main))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: MeeshyColors.warningHex))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(theme.border(tint: MeeshyColors.warningHex, intensity: 0.3), lineWidth: 1)
                 )
         )
@@ -314,7 +314,7 @@ extension ConversationView {
                     }
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 40, height: 40)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
                     .onTapGesture {
                         if let url = MeeshyConfig.resolveMediaURL(thumbUrl) {
                             composerState.previewMedia = PreviewMedia(url: url, type: "image")
@@ -330,7 +330,7 @@ extension ConversationView {
                         }
                         .aspectRatio(contentMode: .fill)
                         .frame(width: 40, height: 40)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
 
                         Image(systemName: "play.circle.fill")
                             // Doctrine 86i : overlay play décoratif borné par la vignette fixe 40×40 → figé + masqué.
@@ -348,7 +348,7 @@ extension ConversationView {
                 }
 
             case .audio:
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "play.fill")
                         // Doctrine 86i : glyphe décoratif du badge audio (waveform) → figé + masqué.
                         .font(.system(size: 8, weight: .bold))
@@ -365,14 +365,14 @@ extension ConversationView {
                     }
                     .frame(height: 22)
                 }
-                .padding(.horizontal, 6)
-                .padding(.vertical, 6)
+                .padding(.horizontal, MeeshySpacing.xsPlus)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                         .fill(accent.opacity(0.08))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(accent.opacity(0.15), lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.xs)
+                                .stroke(accent.opacity(0.15), lineWidth: MeeshyBorder.hairline)
                         )
                 )
                 .onTapGesture {
@@ -401,7 +401,7 @@ extension ConversationView {
     /// fichier), et seule la bulle optimiste pose ce rawValue.
     private var composerReplyLocationTile: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                 .fill(
                     LinearGradient(
                         colors: [MeeshyColors.success.opacity(0.15), MeeshyColors.success.opacity(0.08)],
@@ -411,8 +411,8 @@ extension ConversationView {
                 )
                 .frame(width: 40, height: 40)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(MeeshyColors.success.opacity(0.2), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xs)
+                        .stroke(MeeshyColors.success.opacity(0.2), lineWidth: MeeshyBorder.hairline)
                 )
 
             VStack(spacing: 1) {
@@ -431,12 +431,12 @@ extension ConversationView {
 
     private func replyAttachmentFallbackBadge(icon: String, color: Color) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                 .fill(color.opacity(0.1))
                 .frame(width: 40, height: 40)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(color.opacity(0.2), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xs)
+                        .stroke(color.opacity(0.2), lineWidth: MeeshyBorder.hairline)
                 )
             Image(systemName: icon)
                 // Doctrine 86i : glyphe décoratif borné par le badge fixe 40×40 → figé + masqué.
@@ -472,14 +472,14 @@ private struct ComposerQuotedFlow: View {
 
     var body: some View {
         (Text(title)
-            .font(MeeshyFont.relative(12, weight: .semibold))
+            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             .foregroundColor(titleColor)
          + Text(" ")
          + Text(QuotedReplyPresentation.wordTruncated(
                 preview,
                 maxCharacters: QuotedReplyPresentation.previewCharacterBudget(
                     for: .composer, dynamicTypeSize: dynamicTypeSize)))
-            .font(MeeshyFont.relative(12))
+            .font(MeeshyFont.relative(MeeshyFont.smallSize))
             .foregroundColor(previewColor))
         .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .composer))
     }

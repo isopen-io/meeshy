@@ -134,7 +134,7 @@ struct ThemedConversationRow: View {
 
                 HStack(alignment: .top) {
                     // Name with type indicator
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Text(conversation.displayName)
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: conversation.userState.unreadCount > 0 ? .bold : .semibold))
                             .foregroundColor(textPrimary)
@@ -166,7 +166,7 @@ struct ThemedConversationRow: View {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                             .foregroundColor(accent.opacity(0.7))
-                            .padding(.top, 2)
+                            .padding(.top, MeeshySpacing.xxs)
                             .accessibilityHidden(true)
                     }
 
@@ -181,7 +181,7 @@ struct ThemedConversationRow: View {
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent))
                         .layoutPriority(1)
-                        .padding(.top, 2)
+                        .padding(.top, MeeshySpacing.xxs)
                 }
 
                 // Last message with attachment indicators
@@ -215,7 +215,7 @@ struct ThemedConversationRow: View {
                 RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                     .fill(accent)
                     .frame(width: 3)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .transition(.asymmetric(
                         insertion: .move(edge: .leading).combined(with: .opacity),
                         removal: .opacity
@@ -285,7 +285,7 @@ struct ThemedConversationRow: View {
     // MARK: - Tags Row
     private var tagsRow: some View {
         let tagInfo = visibleTagsInfo
-        return HStack(spacing: 6) {
+        return HStack(spacing: MeeshySpacing.xsPlus) {
             // Show dynamically calculated visible tags
             ForEach(tagInfo.tags) { tag in
                 TagChip(tag: tag)
@@ -296,8 +296,8 @@ struct ThemedConversationRow: View {
                 Text("+\(tagInfo.remaining)")
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
                     .foregroundColor(textMuted)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, MeeshySpacing.xsPlus)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(
                         Capsule()
                             .fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.08))
@@ -334,8 +334,8 @@ struct ThemedConversationRow: View {
             }
         }
         .foregroundColor(accent)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
+        .padding(.horizontal, MeeshySpacing.xsPlus)
+        .padding(.vertical, MeeshySpacing.xxs)
         .background(
             Capsule()
                 .fill(accent.opacity(isDark ? 0.2 : 0.15))
@@ -360,7 +360,7 @@ struct ThemedConversationRow: View {
             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: NotificationBadge.fontWeight))
             .foregroundColor(.white)
             .padding(.horizontal, 7)
-            .padding(.vertical, 4)
+            .padding(.vertical, MeeshySpacing.xs)
             .frame(minWidth: 24, minHeight: 24)
             .background(
                 Capsule()
@@ -465,7 +465,7 @@ struct ThemedConversationRow: View {
 
     @ViewBuilder
     private func draftPreviewView(_ draft: DraftSummary) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Text(draft.previewText.isEmpty
                 ? String(localized: "draft.label", bundle: .main)
                 : String(localized: "draft.label_prefix", bundle: .main))
@@ -634,8 +634,8 @@ private struct ConversationAvatarView: View {
                 Text(text)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.vertical, MeeshySpacing.xs)
                     .background(
                         Capsule()
                             .fill(Color.black.opacity(0.75))

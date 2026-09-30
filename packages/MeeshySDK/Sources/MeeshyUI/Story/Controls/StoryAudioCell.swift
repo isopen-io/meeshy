@@ -42,7 +42,7 @@ struct StoryAudioCell: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             playPauseButton
             waveformView
                 .frame(maxWidth: .infinity)
@@ -52,10 +52,10 @@ struct StoryAudioCell: View {
             volumeSlider
             deleteButton
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                 .fill(rowBgFill)
         )
         .onAppear {
@@ -168,7 +168,7 @@ struct StoryAudioCell: View {
 
     private var durationLabel: some View {
         Text(formatDuration(playback.duration))
-            .font(.system(size: 10, weight: .medium, design: .monospaced))
+            .font(.system(size: MeeshyFont.captionSize, weight: .medium, design: .monospaced))
             .foregroundColor(secondaryText)
             .frame(minWidth: 32)
     }
@@ -179,7 +179,7 @@ struct StoryAudioCell: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: isBackground ? "speaker.wave.2.circle.fill" : "speaker.wave.2.circle")
-                .font(.system(size: 18, weight: .medium))
+                .font(.system(size: MeeshyIconSize.lg, weight: .medium))
                 .foregroundColor(isBackground ? MeeshyColors.indigo400 : secondaryText)
                 .frame(width: 28, height: 28)
         }
@@ -237,7 +237,7 @@ struct StoryAudioCell: View {
             HapticFeedback.medium()
         } label: {
             Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: MeeshyIconSize.md, weight: .medium))
                 .foregroundColor(.red.opacity(0.85))
                 .frame(width: 22, height: 22)
         }

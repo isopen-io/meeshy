@@ -154,13 +154,13 @@ struct StoryHeaderView: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             if let group = currentGroup {
                 Button {
                     HapticFeedback.light()
                     selectedProfileUser = .from(storyGroup: group)
                 } label: {
-                    HStack(spacing: 10) {
+                    HStack(spacing: MeeshySpacing.smPlus) {
                         ZStack {
                             // Glow radial au long press
                             if avatarLongPressGlow {
@@ -217,7 +217,7 @@ struct StoryHeaderView: View {
                             }
                         }
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             HStack(spacing: 5) {
                                 // Nom borné à 16 caractères comme dans les bulles de
                                 // conversation (directive user 2026-07-30) : au-delà,
@@ -226,7 +226,7 @@ struct StoryHeaderView: View {
                                 // en dernier recours seulement — la borne est posée
                                 // à la source.
                                 Text(DisplayName.truncated(group.username))
-                                    .font(MeeshyFont.relative(15, weight: .bold))
+                                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                                     .foregroundColor(.white)
                                     .lineLimit(1)
 
@@ -251,7 +251,7 @@ struct StoryHeaderView: View {
                                 // pour elle-même.
                                 if let story = currentStory {
                                     Text(story.timeAgo)
-                                        .font(MeeshyFont.relative(12, weight: .medium))
+                                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                                         .foregroundColor(.white.opacity(0.75))
                                 }
 
@@ -261,12 +261,12 @@ struct StoryHeaderView: View {
                                 // user 2026-07-13, IMG_1154).
                                 if let story = currentStory, story.repostOfId != nil {
                                     Image(systemName: "arrow.2.squarepath")
-                                        .font(MeeshyFont.relative(10, weight: .semibold))
+                                        .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                                         .foregroundColor(.white.opacity(0.6))
                                         .accessibilityHidden(true)
                                     if let handle = story.repostAuthorUsername ?? story.repostAuthorName {
                                         Text("@\(handle)")
-                                            .font(MeeshyFont.relative(12, weight: .regular))
+                                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                                             .foregroundColor(.white.opacity(0.65))
                                             .lineLimit(1)
                                     }
@@ -586,11 +586,11 @@ struct StoryHeaderView: View {
                         Circle()
                             .fill(.ultraThinMaterial)
                             .overlay(Circle().fill(Color.black.opacity(0.15)))
-                            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
+                            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: MeeshyBorder.hairline))
                     )
                     .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
             }
-            .frame(minWidth: 44, minHeight: 44)
+            .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
             .accessibilityLabel(String(localized: "story.viewer.a11y.options", defaultValue: "Options de la story", bundle: .main))
 
             // Close button
@@ -600,18 +600,18 @@ struct StoryHeaderView: View {
             } label: {
                 // Glyphe chrome dans un cadre de tap fixe 36×36 : figé (doctrine 82i) ; le bouton porte le libellé
                 Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.sm, weight: .bold))
                     .foregroundColor(.white.opacity(0.9))
                     .frame(width: 36, height: 36)
                     .background(
                         Circle()
                             .fill(.ultraThinMaterial)
                             .overlay(Circle().fill(Color.black.opacity(0.2)))
-                            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
+                            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: MeeshyBorder.hairline))
                     )
                     .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
             }
-            .frame(minWidth: 44, minHeight: 44)
+            .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
             .accessibilityHint(String(localized: "story.viewer.a11y.close.hint", defaultValue: "Ferme le lecteur de stories", bundle: .main))
         }

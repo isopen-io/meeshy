@@ -18,7 +18,7 @@ struct MemberManagementSection: View {
     // MARK: - Body
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             sectionHeader
             sectionContainer
         }
@@ -37,14 +37,14 @@ struct MemberManagementSection: View {
     // MARK: - Section Header
 
     private var sectionHeader: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: "person.3.fill")
                 .font(MeeshyFont.relative(11, weight: .semibold))
                 .foregroundColor(sectionColor)
                 .accessibilityHidden(true)
 
             Text(headerTitle)
-                .font(MeeshyFont.relative(11, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
                 .foregroundColor(theme.textMuted)
                 .tracking(1.2)
         }
@@ -77,11 +77,11 @@ struct MemberManagementSection: View {
             }
         }
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary.opacity(0.5))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .strokeBorder(sectionColor.opacity(0.2), lineWidth: 1)
         )
     }
@@ -89,14 +89,14 @@ struct MemberManagementSection: View {
     // MARK: - Search Bar
 
     private var searchBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "magnifyingglass")
                 .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
 
             TextField(String(localized: "member-management.search", defaultValue: "Rechercher un membre…", bundle: .main), text: $viewModel.memberSearchText)
-                .font(MeeshyFont.relative(14, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -106,21 +106,21 @@ struct MemberManagementSection: View {
                     viewModel.memberSearchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(MeeshyFont.relative(14))
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm))
                         .foregroundColor(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "accessibility.clear_search", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(theme.textMuted.opacity(0.06))
         )
-        .padding(.horizontal, 12)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.top, MeeshySpacing.md)
+        .padding(.bottom, MeeshySpacing.sm)
     }
 
     // MARK: - Member List
@@ -137,7 +137,7 @@ struct MemberManagementSection: View {
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
     }
 
     // MARK: - Member Row
@@ -147,7 +147,7 @@ struct MemberManagementSection: View {
         let avatarColor = DynamicColorGenerator.colorForName(displayName)
         let targetRole = MemberRole(rawValue: participant.effectiveRole) ?? .member
 
-        return HStack(spacing: 12) {
+        return HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: displayName,
                 context: .userListItem,
@@ -157,9 +157,9 @@ struct MemberManagementSection: View {
             .frame(width: 36, height: 36)
             .clipShape(Circle())
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(displayName)
-                    .font(MeeshyFont.relative(14, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
@@ -191,8 +191,8 @@ struct MemberManagementSection: View {
                 .accessibilityLabel(String(format: String(localized: "member-management.options-a11y", defaultValue: "Options pour %@", bundle: .main), displayName))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .contentShape(Rectangle())
     }
 
@@ -207,9 +207,9 @@ struct MemberManagementSection: View {
                         .font(MeeshyFont.relative(9))
                         .accessibilityHidden(true)
                     Text(String(localized: "member-management.role.creator", defaultValue: "Créateur", bundle: .main))
-                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 }
-                .foregroundColor(Color(hex: "F8B500"))
+                .foregroundColor(MeeshyColors.tileSaffron)
 
             case .admin:
                 HStack(spacing: 3) {
@@ -217,7 +217,7 @@ struct MemberManagementSection: View {
                         .font(MeeshyFont.relative(9))
                         .accessibilityHidden(true)
                     Text(String(localized: "member-management.role.admin", defaultValue: "Admin", bundle: .main))
-                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.info)
 
@@ -227,7 +227,7 @@ struct MemberManagementSection: View {
                         .font(MeeshyFont.relative(9))
                         .accessibilityHidden(true)
                     Text(String(localized: "member-management.role.moderator", defaultValue: "Modérateur", bundle: .main))
-                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.success)
 
@@ -244,17 +244,17 @@ struct MemberManagementSection: View {
             HapticFeedback.light()
             showAddParticipant = true
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "person.badge.plus")
                     .font(MeeshyFont.relative(13, weight: .semibold))
                     .accessibilityHidden(true)
 
                 Text(String(localized: "participants.add.title", defaultValue: "Ajouter un membre", bundle: .main))
-                    .font(MeeshyFont.relative(14, weight: .semibold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold, design: .rounded))
             }
             .foregroundColor(sectionColor)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, MeeshySpacing.md)
             .overlay(
                 Rectangle()
                     .fill(sectionColor.opacity(0.15))
@@ -273,17 +273,17 @@ struct MemberManagementSection: View {
                 skeletonRow
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
     }
 
     private var skeletonRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Circle()
                 .fill(theme.textMuted.opacity(0.1))
                 .frame(width: 36, height: 36)
 
-            VStack(alignment: .leading, spacing: 4) {
-                RoundedRectangle(cornerRadius: 4)
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                     .fill(theme.textMuted.opacity(0.1))
                     .frame(width: 100, height: 12)
 
@@ -294,28 +294,28 @@ struct MemberManagementSection: View {
 
             Spacer()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .shimmer()
     }
 
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             // Fixed 28pt: decorative empty-state hero glyph — the adjacent label carries
             // the meaning, so it stays fixed and is hidden from VoiceOver (precedent 90i).
             Image(systemName: "person.slash")
-                .font(.system(size: 28, weight: .light))
+                .font(.system(size: MeeshyIconSize.xxxl, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
 
             Text(String(localized: "member-management.empty", defaultValue: "Aucun membre trouvé", bundle: .main))
-                .font(MeeshyFont.relative(13, weight: .medium, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium, design: .rounded))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
+        .padding(.vertical, MeeshySpacing.xxl)
         .accessibilityElement(children: .combine)
     }
 

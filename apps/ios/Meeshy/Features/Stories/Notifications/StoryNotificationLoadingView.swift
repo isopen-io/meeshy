@@ -21,7 +21,7 @@ public struct StoryNotificationLoadingView: View {
         ZStack {
             Color.black.opacity(0.6)
                 .ignoresSafeArea()
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 ProgressView()
                     .progressViewStyle(.circular)
                     .tint(.white)

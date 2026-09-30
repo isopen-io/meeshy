@@ -71,7 +71,7 @@ struct ThemedBackButton: View {
                 // Chevron — always visible, in a fixed 40-pt slot so the
                 // back affordance stays anchored regardless of pill width
                 Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(16, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .bold))
                     .foregroundStyle(gradientFill)
                     .frame(width: 40, height: 40)
 
@@ -83,7 +83,7 @@ struct ThemedBackButton: View {
                     Rectangle()
                         .fill(Color(hex: color).opacity(0.35))
                         .frame(width: 1, height: 22)
-                        .padding(.trailing, 6)
+                        .padding(.trailing, MeeshySpacing.xsPlus)
 
                     // Red pill — the eye-catcher. Sits INSIDE the outer
                     // glass capsule, hugged by 6-pt padding on each side
@@ -102,14 +102,14 @@ struct ThemedBackButton: View {
                         .foregroundColor(.white)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, MeeshySpacing.sm)
                         .frame(minWidth: 22, minHeight: 22)
                         .background(
                             Capsule()
                                 .fill(badgeBackground)
                                 .shadow(color: badgeBackground.opacity(0.4), radius: 3, y: 1)
                         )
-                        .padding(.trailing, 6)
+                        .padding(.trailing, MeeshySpacing.xsPlus)
                         .accessibilityHidden(true)
                         .transition(.scale.combined(with: .opacity))
                 }

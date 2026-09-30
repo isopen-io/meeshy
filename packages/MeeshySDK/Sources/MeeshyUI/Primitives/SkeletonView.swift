@@ -100,7 +100,7 @@ public struct SkeletonConversationRow: View {
     public init() {}
 
     public var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: MeeshySpacing.mdPlus) {
             // Avatar placeholder
             Circle()
                 .fill(theme.textMuted.opacity(0.12))
@@ -108,7 +108,7 @@ public struct SkeletonConversationRow: View {
                 .skeletonShimmer()
 
             // Text lines
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 HStack {
                     SkeletonShape(height: 14, cornerRadius: MeeshyRadius.sm)
                         .frame(maxWidth: .infinity)
@@ -125,12 +125,12 @@ public struct SkeletonConversationRow: View {
                     .frame(width: min(WindowMetrics.windowSize.width * 0.5, 280))
             }
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
                 .fill(theme.textMuted.opacity(0.04))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
                         .stroke(theme.textMuted.opacity(0.06), lineWidth: 1)
                 )
         )

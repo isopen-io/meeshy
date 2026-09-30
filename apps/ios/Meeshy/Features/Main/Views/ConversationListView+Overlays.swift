@@ -477,7 +477,7 @@ extension ConversationListView {
                     // liste réapparaît sous la carte devenue chip draggable.
                     .opacity(contextMenuAppeared ? Double(1 - dragMorphProgress) : 0)
 
-                VStack(spacing: 16) {
+                VStack(spacing: MeeshySpacing.lg) {
                     // Aperçu d'appui long = la carte des DERNIERS MESSAGES
                     // (bannière, avatar/logo, titre, icônes d'en-tête, fil
                     // récent) — drapeau Lentille ON comme OFF (décision user
@@ -658,7 +658,7 @@ extension ConversationListView {
                     .opacity(contextMenuAppeared ? Double(1 - dragMorphProgress) : 0)
                     .blur(radius: contextMenuAppeared ? 6 * dragMorphProgress : 6)
                 }
-                .padding(.horizontal, 20)
+                .padding(.horizontal, MeeshySpacing.xl)
             }
             .zIndex(300)
             .onAppear {
@@ -1013,17 +1013,17 @@ struct ConversationListHeaderOverlay: View {
                         HapticFeedback.light()
                         iPadFeedAction()
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: "square.stack.fill")
                                 .font(MeeshyFont.relative(13, weight: .semibold))
                                 .accessibilityHidden(true)
                             Text(String(localized: "conversation.list.feed", defaultValue: "Flux", bundle: .main))
-                                .font(MeeshyFont.relative(13, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         }
                         .foregroundStyle(
                             LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                         )
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
                         .padding(.vertical, 5)
                         .background(
                             Capsule()
@@ -1034,7 +1034,7 @@ struct ConversationListHeaderOverlay: View {
             },
             titleView: {
                 Text(verbatim: "Meeshy Chats")
-                    .font(MeeshyFont.relative(28, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .bold, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
                     )
@@ -1048,17 +1048,17 @@ struct ConversationListHeaderOverlay: View {
                 // Header action glyphs (link/plus/bell/gear + notification badge) keep
                 // fixed point sizes: two sit inside 40x40 glass circles and the row reads
                 // as chrome — scaling them with Dynamic Type would break the toolbar grid.
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     // iOS 26 Liquid Glass for the two primary actions (share link +
                     // new conversation), grouped so the glass circles blend. Gating/
                     // fallback owned by the SDK Compatibility wrappers.
                     AdaptiveGlassContainer(spacing: 10) {
-                        HStack(spacing: 12) {
+                        HStack(spacing: MeeshySpacing.md) {
                             Button {
                                 showShareLinkSheet = true
                             } label: {
                                 Image(systemName: "link.badge.plus")
-                                    .font(.system(size: 18, weight: .semibold))
+                                    .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                                     .foregroundColor(MeeshyColors.indigo500)
                                     .frame(width: 40, height: 40)
                                     .adaptiveGlass(in: Circle(), interactive: true)
@@ -1069,7 +1069,7 @@ struct ConversationListHeaderOverlay: View {
                                 onNewConversation?()
                             } label: {
                                 Image(systemName: "plus")
-                                    .font(.system(size: 18, weight: .bold))
+                                    .font(.system(size: MeeshyIconSize.lg, weight: .bold))
                                     .foregroundColor(MeeshyColors.indigo500)
                                     .frame(width: 40, height: 40)
                                     .adaptiveGlass(in: Circle(), interactive: true)
@@ -1093,7 +1093,7 @@ struct ConversationListHeaderOverlay: View {
                         } label: {
                             ZStack(alignment: .topTrailing) {
                                 Image(systemName: "bell.fill")
-                                    .font(.system(size: 18, weight: .semibold))
+                                    .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                                     .foregroundColor(MeeshyColors.indigo500)
 
                                 if iPadNotificationCount > 0 {
@@ -1120,7 +1120,7 @@ struct ConversationListHeaderOverlay: View {
                             onSettingsTap()
                         } label: {
                             Image(systemName: "gearshape.fill")
-                                .font(.system(size: 18, weight: .semibold))
+                                .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                                 .foregroundColor(MeeshyColors.indigo500)
                         }
                         .accessibilityLabel(String(localized: "conversation.list.settings", defaultValue: "Réglages", bundle: .main))
@@ -1184,22 +1184,22 @@ struct ConversationListBottomBar: View {
             if showSearchOverlay {
                 VStack(spacing: 0) {
                     communitiesSection
-                        .padding(.vertical, 10)
+                        .padding(.vertical, MeeshySpacing.smPlus)
                     categoryFilters
                 }
-                .padding(.top, 6)
-                .padding(.bottom, 4)
+                .padding(.top, MeeshySpacing.xsPlus)
+                .padding(.bottom, MeeshySpacing.xs)
                 .background(
-                    RoundedRectangle(cornerRadius: 24)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
                         .fill(.ultraThinMaterial)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 24)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.xxl)
                                 .stroke(theme.inputBorder, lineWidth: 1)
                         )
                         .shadow(color: Color.black.opacity(0.12), radius: 14, y: 6)
                 )
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.bottom, MeeshySpacing.sm)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
@@ -1210,10 +1210,10 @@ struct ConversationListBottomBar: View {
 
     // MARK: - Communities Section
     private var communitiesSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             HStack {
                 Text(String(localized: "communities.title", defaultValue: "Communautés"))
-                    .font(MeeshyFont.relative(16, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.error, MeeshyColors.indigo300],
@@ -1224,12 +1224,12 @@ struct ConversationListBottomBar: View {
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
 
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     Button {
                         router.push(.communityList)
                     } label: {
                         Text(String(localized: "action.see_all", defaultValue: "Voir tout"))
-                            .font(MeeshyFont.relative(12, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                             .foregroundColor(MeeshyColors.indigo300)
                     }
                     .accessibilityLabel(String(localized: "accessibility.see_all_communities", defaultValue: "Voir toutes les communautes"))
@@ -1241,7 +1241,7 @@ struct ConversationListBottomBar: View {
                         HapticFeedback.light()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(MeeshyFont.relative(18))
+                            .font(MeeshyFont.relative(MeeshyIconSize.lg))
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.7)],
@@ -1253,10 +1253,10 @@ struct ConversationListBottomBar: View {
                     .accessibilityLabel(String(localized: "accessibility.close_communities", defaultValue: "Fermer les communautes"))
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     ForEach(userCommunities, id: \.id) { community in
                         ThemedCommunityCard(community: community) {
                             HapticFeedback.light()
@@ -1265,7 +1265,7 @@ struct ConversationListBottomBar: View {
                         .equatable()
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
             }
         }
     }
@@ -1273,7 +1273,7 @@ struct ConversationListBottomBar: View {
     // MARK: - Category Filters
     private var categoryFilters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 ForEach(ConversationFilter.allCases) { filter in
                     ThemedFilterChip(
                         title: filter.displayName,
@@ -1291,14 +1291,14 @@ struct ConversationListBottomBar: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.sm)
         }
     }
 
     // MARK: - Themed Search Bar
     private var themedSearchBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             // Magnifying glass: tappable to toggle search overlay (communities + filters)
             Button {
                 HapticFeedback.light()
@@ -1310,7 +1310,7 @@ struct ConversationListBottomBar: View {
                 }
             } label: {
                 Image(systemName: "magnifyingglass")
-                    .font(MeeshyFont.relative(16, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                     .foregroundStyle(
                         isActive ?
                         AnyShapeStyle(LinearGradient(colors: [MeeshyColors.error, MeeshyColors.indigo300], startPoint: .leading, endPoint: .trailing)) :
@@ -1339,7 +1339,7 @@ struct ConversationListBottomBar: View {
                 showWidgetPreview = true
             } label: {
                 Image(systemName: "square.grid.2x2")
-                    .font(MeeshyFont.relative(16, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.warning, MeeshyColors.indigo500],
@@ -1357,7 +1357,7 @@ struct ConversationListBottomBar: View {
                 showGlobalSearch = true
             } label: {
                 Image(systemName: "text.magnifyingglass")
-                    .font(MeeshyFont.relative(16, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [MeeshyColors.indigo600, MeeshyColors.indigo300],
@@ -1369,13 +1369,13 @@ struct ConversationListBottomBar: View {
             .accessibilityLabel(String(localized: "accessibility.global_search", defaultValue: "Recherche globale"))
             .accessibilityHint(String(localized: "accessibility.global_search.hint", defaultValue: "Rechercher dans tous les messages, conversations et utilisateurs"))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 22)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 22)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus)
                         .stroke(
                             isActive ?
                             AnyShapeStyle(LinearGradient(colors: [MeeshyColors.error, MeeshyColors.indigo300], startPoint: .leading, endPoint: .trailing)) :
@@ -1397,8 +1397,8 @@ struct ConversationListBottomBar: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.lg)
     }
 }
 
@@ -1427,7 +1427,7 @@ struct ConversationSearchFieldHost: View {
         )
             .focused(isSearching)
             .foregroundColor(theme.textPrimary)
-            .font(MeeshyFont.relative(15))
+            .font(MeeshyFont.relative(MeeshyFont.bodySize))
             .accessibilityLabel(String(localized: "conversation.list.search_conversations", defaultValue: "Rechercher des conversations", bundle: .main))
             .adaptiveOnChange(of: searchTextModel.text.isEmpty, initial: true) { _, nowEmpty in
                 isEmpty = nowEmpty

@@ -29,7 +29,7 @@ struct FaceRampView: View {
                         FaceRampEntryButton(entry: entry, isDark: isDark) { onTap(entry) }
                     }
                 }
-                .padding(.horizontal, 2) // laisse respirer l'anneau de la première/dernière pastille
+                .padding(.horizontal, MeeshySpacing.xxs) // laisse respirer l'anneau de la première/dernière pastille
             }
         }
         .accessibilityElement(children: .contain)
@@ -60,7 +60,7 @@ private struct FaceRampEntryButton: View {
                     }
                 }
                 Text(entry.displayName)
-                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(isDark ? .white.opacity(0.75) : .black.opacity(0.65))
                     .lineLimit(1)
                     .frame(maxWidth: FocalMetrics.Avatar.size * 2.2)
@@ -83,11 +83,11 @@ private struct FaceRampEntryButton: View {
 
     private var badge: some View {
         Text("\(entry.awaitingCount)")
-            .font(MeeshyFont.relative(10, weight: .heavy))
+            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .heavy))
             .foregroundColor(.white)
             .padding(.horizontal, 5)
             .frame(minWidth: 16, minHeight: 16)
             .background(Capsule().fill(MeeshyColors.indigo500))
-            .overlay(Capsule().strokeBorder(isDark ? Color.black : Color.white, lineWidth: 1.5))
+            .overlay(Capsule().strokeBorder(isDark ? Color.black : Color.white, lineWidth: MeeshyBorder.emphasis))
     }
 }

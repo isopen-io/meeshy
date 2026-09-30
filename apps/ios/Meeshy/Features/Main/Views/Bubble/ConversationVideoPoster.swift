@@ -74,14 +74,14 @@ struct ConversationVideoPoster: View {
                 HStack {
                     Spacer()
                     Text(formatted)
-                        .font(MeeshyFont.relative(10, weight: .semibold, design: .monospaced))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white)
                         .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
+                        .padding(.vertical, MeeshySpacing.xxs)
                         .background(Capsule().fill(Color.black.opacity(0.6)))
                 }
-                .padding(.trailing, 4)
-                .padding(.bottom, 4)
+                .padding(.trailing, MeeshySpacing.xs)
+                .padding(.bottom, MeeshySpacing.xs)
             }
         }
     }

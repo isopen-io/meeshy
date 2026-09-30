@@ -43,7 +43,7 @@ public struct TranscriptionBadgeView: View {
                 .foregroundColor(Color(hex: accentColor).opacity(0.8))
 
             Text(isExpanded ? String(localized: "media.transcription.title", defaultValue: "Transcription", bundle: .module) : previewText)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(.secondary)
                 .lineLimit(1)
 
@@ -53,23 +53,23 @@ public struct TranscriptionBadgeView: View {
                 .font(.system(size: 8, weight: .bold))
                 .foregroundColor(.secondary.opacity(0.6))
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MeeshySpacing.sm)
         .padding(.vertical, 5)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous)
                 .fill(Color(hex: accentColor).opacity(0.06))
         )
         .contentShape(Rectangle())
     }
 
     private var expandedContent: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             Text(transcriptionText)
-                .font(.system(size: 12))
+                .font(.system(size: MeeshyFont.smallSize))
                 .foregroundColor(.primary.opacity(0.9))
                 .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if let lang = language {
                     HStack(spacing: 3) {
                         Image(systemName: "globe")
@@ -103,9 +103,9 @@ public struct TranscriptionBadgeView: View {
                 Spacer()
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .padding(.top, 2)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xsPlus)
+        .padding(.top, MeeshySpacing.xxs)
     }
 
     private var previewText: String {

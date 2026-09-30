@@ -72,7 +72,7 @@ struct BubbleFooter: View, Equatable {
     @ViewBuilder
     private var rowFooter: some View {
         if let sender = model.sender {
-            HStack(alignment: .top, spacing: 8) {
+            HStack(alignment: .top, spacing: MeeshySpacing.sm) {
                 MeeshyAvatar(
                     name: sender.name,
                     context: .messageBubble,
@@ -87,8 +87,8 @@ struct BubbleFooter: View, Equatable {
                     onViewStory: actions.onViewStory,
                     contextMenuItems: avatarMenu(sender: sender)
                 )
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         // Nom borné à 16 caractères (directive user 2026-07-30) :
                         // au-delà, le pseudo mangeait la rangée et repoussait
                         // l'heure + l'accusé de lecture contre le bord. Le
@@ -111,7 +111,7 @@ struct BubbleFooter: View, Equatable {
                 }
             }
         } else {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 metaLeading
                 Spacer(minLength: 4)
                 metaTrailing
@@ -165,7 +165,7 @@ struct BubbleFooter: View, Equatable {
             .accessibilityLabel(String(localized: "bubble.footer.translation.request", defaultValue: "Demander la traduction", bundle: .main))
         }
         if !model.flags.isEmpty {
-            HStack(spacing: 2) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 ForEach(model.flags, id: \.code) { flag in
                     footerFlagPill(flag)
                 }

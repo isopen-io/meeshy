@@ -105,7 +105,7 @@ private struct CallFloatingReactionView: View {
 
     var body: some View {
         Text(emoji.rawValue)
-            .font(MeeshyFont.relative(34))
+            .font(MeeshyFont.relative(MeeshyFont.largeTitleSize))
             .offset(y: launched && !reduceMotion ? -260 : 0)
             .scaleEffect(launched && !reduceMotion ? 2.4 : 1.6)
             .opacity(launched ? 0 : 1)
@@ -120,9 +120,9 @@ struct CallInviteStrip: View, Equatable {
     let invites: [CallPendingInvite]
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             ForEach(invites) { invite in
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     MeeshyAvatar(name: invite.displayName, context: .typingIndicator, avatarURL: invite.avatar)
                     Text(invite.displayName)
                         .font(.footnote.weight(.semibold))
@@ -132,7 +132,7 @@ struct CallInviteStrip: View, Equatable {
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.75))
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .frame(minHeight: 44)
                 .callChromeGlass(in: Capsule())
                 .accessibilityElement(children: .combine)
@@ -152,7 +152,7 @@ struct CallControlsNoticePill: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.notice == rhs.notice }
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Text(CallControlsCopy.notice(notice))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(.white)
@@ -167,7 +167,7 @@ struct CallControlsNoticePill: View, Equatable {
             .buttonStyle(.plain)
             .accessibilityLabel(CallRecordingCopy.close)
         }
-        .padding(.leading, 14)
+        .padding(.leading, MeeshySpacing.mdPlus)
         .callChromeGlass(in: Capsule())
         .task(id: notice) {
             try? await Task.sleep(nanoseconds: 4_000_000_000)
@@ -207,7 +207,7 @@ struct CallAddPeopleSheet: View {
                             onInvite(CallInvitedUser(userId: friend.id, username: friend.username, displayName: friend.displayName, avatar: friend.avatar))
                             dismiss()
                         } label: {
-                            HStack(spacing: 12) {
+                            HStack(spacing: MeeshySpacing.md) {
                                 MeeshyAvatar(name: friend.displayName ?? friend.username, context: .userListItem, avatarURL: friend.avatar)
                                 Text(friend.displayName ?? friend.username)
                                     .font(.body)

@@ -111,7 +111,7 @@ struct StorySaveProgressRing: View {
                     .onAppear { sweepPhase += 1 }
             }
             Text("\(Self.percent(progress))")
-                .font(MeeshyFont.relative(9, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .foregroundColor(.secondary)

@@ -14,7 +14,7 @@ struct ActivationInviteView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
                 header
                 proofs
                 if let email = model.email, model.missing.contains(.email) {
@@ -30,7 +30,7 @@ struct ActivationInviteView: View {
                 }
                 closeButton
             }
-            .padding(24)
+            .padding(MeeshySpacing.xxl)
             .iPadFormWidth()
         }
         .background(theme.backgroundPrimary.ignoresSafeArea())
@@ -40,7 +40,7 @@ struct ActivationInviteView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Text(String(localized: "activation.invite.title", defaultValue: "Validez votre compte", bundle: .main))
                 .font(.system(.title2, design: .rounded).weight(.bold))
                 .foregroundStyle(theme.textPrimary)
@@ -79,7 +79,7 @@ struct ActivationInviteView: View {
     }
 
     private var phoneStep: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             Text(String(localized: "activation.phone.label", defaultValue: "Ajoutez un numéro pour sécuriser et récupérer votre compte", bundle: .main))
                 .font(.body.weight(.semibold))
                 .foregroundStyle(theme.textPrimary)
@@ -90,7 +90,7 @@ struct ActivationInviteView: View {
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity, minHeight: 48)
                     .foregroundStyle(theme.textPrimary)
-                    .background(RoundedRectangle(cornerRadius: 14).stroke(MeeshyColors.indigo400.opacity(0.5), lineWidth: 1.5))
+                    .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).stroke(MeeshyColors.indigo400.opacity(0.5), lineWidth: MeeshyBorder.emphasis))
             }
             .buttonStyle(.plain)
         }
@@ -132,7 +132,7 @@ struct ActivationEmailStep: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             Text(String(localized: "activation.email.label", defaultValue: "Confirmez votre adresse e-mail", bundle: .main))
                 .font(.body.weight(.semibold))
                 .foregroundStyle(theme.textPrimary)
@@ -171,7 +171,7 @@ struct ActivationEmailStep: View {
                 .font(.body.weight(.bold))
                 .frame(maxWidth: .infinity, minHeight: 48)
                 .foregroundStyle(.white)
-                .background(RoundedRectangle(cornerRadius: 14).fill(MeeshyColors.brandGradient))
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(MeeshyColors.brandGradient))
         }
         .buttonStyle(.plain)
         .disabled(code.isResending)

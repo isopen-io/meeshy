@@ -82,7 +82,7 @@ struct BubbleCallNoticeView: View, Equatable {
             // d'appel sont désormais atteignables (`PrimaryAction.callDetail`).
             // VoiceOver n'a ni double tap ni appui long : les DEUX
             // destinations lui sont offertes explicitement ci-dessous.
-            VStack(alignment: isOutgoing ? .trailing : .leading, spacing: 6) {
+            VStack(alignment: isOutgoing ? .trailing : .leading, spacing: MeeshySpacing.xsPlus) {
                 card
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) {
@@ -110,8 +110,8 @@ struct BubbleCallNoticeView: View, Equatable {
             }
             if !isOutgoing { Spacer(minLength: 48) }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 4)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.xs)
     }
 
     private var card: some View {
@@ -169,7 +169,7 @@ struct BubbleCallNoticeView: View, Equatable {
     /// Replaces the metrics row while the call is ongoing (no duration, no
     /// data — those only exist once the call is terminal).
     private func liveRow(subtitle: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Circle()
                 .fill(tint)
                 .frame(width: 7, height: 7)
@@ -190,7 +190,7 @@ struct BubbleCallNoticeView: View, Equatable {
     }
 
     private func metric(icon: String, text: String) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(11, weight: .semibold))
             Text(text)
@@ -238,7 +238,7 @@ struct BubbleCallNoticeView: View, Equatable {
             RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .fill(tint.opacity(isDark ? 0.06 : 0.03))
             RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                .stroke(tint.opacity(isDark ? 0.25 : 0.15), lineWidth: 0.5)
+                .stroke(tint.opacity(isDark ? 0.25 : 0.15), lineWidth: MeeshyBorder.hairline)
         }
     }
 
@@ -381,7 +381,7 @@ struct CallSummaryDetailSheet: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 header
                 if onCallBack != nil {
                     callBackButton
@@ -396,7 +396,7 @@ struct CallSummaryDetailSheet: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(MeeshySpacing.xl)
             // iPad/Mac width cap — mirrors FloatingCallPillView's established
             // 560pt ceiling: without it, `callBackButton`/`detailRow`'s Spacer()
             // stretch edge-to-edge on a wide sheet instead of reading as a
@@ -423,7 +423,7 @@ struct CallSummaryDetailSheet: View {
     // MARK: - Header
 
     private var header: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             ZStack {
                 Circle()
                     .fill(tint.opacity(0.12))
@@ -436,20 +436,20 @@ struct CallSummaryDetailSheet: View {
                 ZStack {
                     Circle().fill(theme.backgroundPrimary).frame(width: 26, height: 26)
                     Image(systemName: directionGlyph)
-                        .font(MeeshyFont.relative(12, weight: .black))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .black))
                         .foregroundColor(tint)
                 }
                 .offset(x: 4, y: 4)
             }
             Text(title)
-                .font(MeeshyFont.relative(20, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
             Text(timestamp.formatted(date: .abbreviated, time: .shortened))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
-        .padding(.top, 8)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     // MARK: - Call back
@@ -460,13 +460,13 @@ struct CallSummaryDetailSheet: View {
             HapticFeedback.medium()
             dismiss()
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: mediaGlyph)
                 Text(callBackTitle).font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, MeeshySpacing.md)
             .adaptiveGlassProminent(in: Capsule(), tint: Color(hex: accentHex))
         }
         .accessibilityLabel(callBackTitle)
@@ -512,7 +512,7 @@ struct CallSummaryDetailSheet: View {
                 qualityRow(quality)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
         .adaptiveGlass(
             in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous),
             tint: tint.opacity(0.14)
@@ -522,7 +522,7 @@ struct CallSummaryDetailSheet: View {
     /// Network-quality row. A per-second quality histogram can render here later
     /// (the metadata already exposes an ordered `NetworkQuality` scale).
     private func qualityRow(_ quality: CallSummaryMetadata.NetworkQuality) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "waveform")
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(Color(hex: accentHex))
@@ -546,7 +546,7 @@ struct CallSummaryDetailSheet: View {
     }
 
     private func detailRow(icon: String, label: String, value: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(Color(hex: accentHex))

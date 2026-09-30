@@ -27,7 +27,7 @@ public struct AdaptiveContentUnavailableView: View {
     }
 
     private var legacyBody: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: systemImage)
                 .font(.system(size: 52))
                 .foregroundStyle(.secondary)

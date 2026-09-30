@@ -36,7 +36,7 @@ public struct LanguageSelector: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -58,14 +58,14 @@ public struct LanguageSelector: View {
                         .rotationEffect(.degrees(isExpanded ? 180 : 0))
                         .foregroundStyle(.secondary)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(Color(hex: "2D2D40").opacity(0.6))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
                 )
             }
@@ -73,7 +73,7 @@ public struct LanguageSelector: View {
 
             if isExpanded {
                 ScrollView {
-                    LazyVStack(spacing: 2) {
+                    LazyVStack(spacing: MeeshySpacing.xxs) {
                         ForEach(languages) { lang in
                             Button {
                                 selectedId = lang.id
@@ -90,8 +90,8 @@ public struct LanguageSelector: View {
                                             .foregroundStyle(MeeshyColors.brandPrimary)
                                     }
                                 }
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
+                                .padding(.horizontal, MeeshySpacing.lg)
+                                .padding(.vertical, MeeshySpacing.smPlus)
                                 .background(
                                     lang.id == selectedId ?
                                         MeeshyColors.brandPrimary.opacity(0.15) :
@@ -104,10 +104,10 @@ public struct LanguageSelector: View {
                 }
                 .frame(maxHeight: 250)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(Color(hex: "2D2D40").opacity(0.8))
                 )
-                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }

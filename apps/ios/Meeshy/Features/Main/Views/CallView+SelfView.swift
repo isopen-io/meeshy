@@ -72,9 +72,9 @@ extension CallView {
                 // primary). Swap flips both with one tap.
                 videoStream(local: !effectiveSwapStreams, contentMode: .scaleAspectFill)
                     .frame(width: size.width, height: size.height)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .stroke(Color.white.opacity(0.3), lineWidth: 1)
                     )
                     .overlay(alignment: .topTrailing) { selfTileZoomSlot(tileSize: size) }
@@ -163,9 +163,9 @@ extension CallView {
             let base = pipCenter(pipCorner, in: geo.size, size: size, safeArea: geo.safeAreaInsets)
             videoSuspendedTileBody
                 .frame(width: size.width, height: size.height)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .stroke(MeeshyColors.warning.opacity(0.7), lineWidth: 1)
                 )
                 .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
@@ -202,9 +202,9 @@ extension CallView {
             }
             .opacity(0.45)
             // …"video paused" affordance on top.
-            VStack(spacing: 6) {
+            VStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "video.slash.fill")
-                    .font(MeeshyFont.relative(18, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
                     .foregroundColor(MeeshyColors.warning)
                     .accessibilityHidden(true)
                 Text(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))

@@ -76,7 +76,7 @@ struct PeopleDiscoveryView: View {
                 subTabButton(tab)
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MeeshySpacing.sm)
         .overlay(alignment: .bottom) { Divider().opacity(0.3) }
     }
 

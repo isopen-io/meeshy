@@ -173,13 +173,13 @@ struct BubbleReactionsOverlay: View, Equatable {
                 .foregroundColor(accent)
         }
         .frame(height: 22)
-        .padding(.horizontal, 6)
+        .padding(.horizontal, MeeshySpacing.xsPlus)
         .background(
             Capsule()
                 .fill(isDark ? accent.opacity(0.12) : accent.opacity(0.08))
                 .overlay(
                     Capsule()
-                        .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: 0.5)
+                        .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: MeeshyBorder.hairline)
                 )
         )
         .accessibilityLabel(String(format: String(localized: "bubble.reactions.moreCount", defaultValue: "%d réactions de plus", bundle: .main), count))
@@ -189,7 +189,7 @@ struct BubbleReactionsOverlay: View, Equatable {
     // MARK: - Reaction pill (was: reactionPill)
 
     private func pill(reaction: ReactionSummary, accent: Color) -> some View {
-        let pillContent = HStack(spacing: 2) {
+        let pillContent = HStack(spacing: MeeshySpacing.xxs) {
             Text(reaction.emoji)
                 .font(.caption2)
             if reaction.count > 1 {

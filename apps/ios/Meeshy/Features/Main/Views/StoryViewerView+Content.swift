@@ -149,7 +149,7 @@ extension StoryViewerView {
             if let filter = currentStory?.storyEffects?.filter {
                 switch filter {
                 case "vintage":
-                    Color(hex: "F8B500").opacity(0.15)
+                    MeeshyColors.tileSaffron.opacity(0.15)
                         .blendMode(.multiply)
                 case "bw":
                     Color.gray.opacity(0.4)
@@ -1409,7 +1409,7 @@ struct StoryViewersSheet: View {
                     Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
                         dismiss()
                     }
-                    .font(MeeshyFont.relative(16, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                     .foregroundColor(accentColor)
                 }
             }
@@ -1431,7 +1431,7 @@ struct StoryViewersSheet: View {
     }
 
     private func viewerRow(_ viewer: StoryViewerItem) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             // Local-first mood (StatusViewModel) + presence (PresenceManager
             // live store). `onViewProfile` + row tap open the viewer's profile.
             MeeshyAvatar(
@@ -1444,46 +1444,46 @@ struct StoryViewersSheet: View {
                 onMoodTap: statusViewModel.moodTapHandler(for: viewer.id)
             )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 HStack {
                     Text(viewer.displayName)
-                        .font(MeeshyFont.relative(16, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                         .foregroundColor(.primary)
 
                     if viewer.hasReshared {
                         Image(systemName: "arrow.2.squarepath")
-                            .font(MeeshyFont.relative(12, weight: .bold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .bold))
                             .foregroundColor(accentColor)
                     }
 
                     Spacer()
 
                     Text(viewer.viewedAt, style: .time)
-                        .font(MeeshyFont.relative(12))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundColor(.secondary)
                 }
 
                 if let reply = viewer.replyContent {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "arrowshape.turn.up.left.fill")
-                            .font(MeeshyFont.relative(10))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                         Text(reply)
-                            .font(MeeshyFont.relative(14))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize))
                             .lineLimit(1)
                     }
                     .foregroundColor(.secondary)
                 } else if let reaction = viewer.reactionEmoji {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "heart.fill")
-                            .font(MeeshyFont.relative(10))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                             .foregroundColor(MeeshyColors.error)
                         Text(reaction)
-                            .font(MeeshyFont.relative(14))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize))
                     }
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
         .contentShape(Rectangle())
         .onTapGesture { onOpenProfile(viewer) }
         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
@@ -1570,7 +1570,7 @@ struct StoryCommentThread: View {
         if !autoPreview.isEmpty && !isExpanded {
             ForEach(autoPreview) { reply in
                 makeRow(reply, userLang)
-                    .padding(.leading, 32)
+                    .padding(.leading, MeeshySpacing.xxxl)
                     .id(reply.id)
             }
         }
@@ -1580,18 +1580,18 @@ struct StoryCommentThread: View {
                 HapticFeedback.light()
                 onToggleThread()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(MeeshyFont.relative(9, weight: .bold))
                     let remaining = max(0, comment.replies - 2)
                     Text(isExpanded
                          ? "Masquer"
                          : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
-                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 }
                 .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
                 .padding(.leading, 40)
-                .padding(.vertical, 4)
+                .padding(.vertical, MeeshySpacing.xs)
                 .storyOverlayLegible()
             }
         }
@@ -1603,13 +1603,13 @@ struct StoryCommentThread: View {
                     ProgressView().tint(.white.opacity(0.5)).scaleEffect(0.7)
                     Spacer()
                 }
-                .padding(.leading, 32)
-                .padding(.vertical, 4)
+                .padding(.leading, MeeshySpacing.xxxl)
+                .padding(.vertical, MeeshySpacing.xs)
             }
 
             ForEach(replies) { reply in
                 makeRow(reply, userLang)
-                    .padding(.leading, 32)
+                    .padding(.leading, MeeshySpacing.xxxl)
                     .id(reply.id)
             }
 
@@ -1618,15 +1618,15 @@ struct StoryCommentThread: View {
                     HapticFeedback.light()
                     Task { await onLoadMoreReplies() }
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "chevron.down")
                             .font(MeeshyFont.relative(9, weight: .bold))
                         Text(String(localized: "story.viewer.comments.loadMoreReplies", defaultValue: "Voir plus de réponses", bundle: .main))
-                            .font(MeeshyFont.relative(11, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     }
                     .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
                     .padding(.leading, 40)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, MeeshySpacing.xs)
                     .storyOverlayLegible()
                 }
                 .accessibilityLabel(String(localized: "a11y.story.comments.loadMoreReplies", defaultValue: "Charger plus de réponses", bundle: .main))
@@ -1745,17 +1745,17 @@ struct StoryCommentsOverlayView: View {
     private var expiredStoryBanner: some View {
         Label {
             Text(String(localized: "story.viewer.expiredBanner", defaultValue: "Story expirée — les commentaires restent visibles", bundle: .main))
-                .font(MeeshyFont.relative(11, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .lineLimit(1)
         } icon: {
             Image(systemName: "clock.badge.xmark")
                 .font(MeeshyFont.relative(11, weight: .semibold))
         }
         .foregroundColor(.white.opacity(0.85))
-        .padding(.horizontal, 12)
+        .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, 7)
         .background(Capsule().fill(MeeshyColors.error.opacity(0.32)))
-        .padding(.bottom, 6)
+        .padding(.bottom, MeeshySpacing.xsPlus)
         .transition(.opacity)
     }
 
@@ -1848,7 +1848,7 @@ struct StoryCommentsOverlayView: View {
     private func commentsList(_ topLevel: [FeedComment]) -> some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
-                LazyVStack(alignment: .leading, spacing: 8) {
+                LazyVStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                     ForEach(Array(topLevel.enumerated()), id: \.element.id) { idx, comment in
                         // Separator between top-level comments — `Divider()`
                         // SwiftUI natif (1pt, white opacity ~15%) au lieu de la
@@ -1858,7 +1858,7 @@ struct StoryCommentsOverlayView: View {
                             Divider()
                                 .overlay(Color.white.opacity(0.28))
                                 .shadow(color: .black.opacity(0.3), radius: 1)
-                                .padding(.vertical, 4)
+                                .padding(.vertical, MeeshySpacing.xs)
                         }
 
                         StoryCommentThread(
@@ -1883,7 +1883,7 @@ struct StoryCommentsOverlayView: View {
                             ProgressView().tint(.white.opacity(0.6))
                             Spacer()
                         }
-                        .padding(.vertical, 8)
+                        .padding(.vertical, MeeshySpacing.sm)
                     }
 
                     if topLevel.isEmpty && !isLoadingComments {
@@ -1899,8 +1899,8 @@ struct StoryCommentsOverlayView: View {
                 // sidebar (Layer 8 ~56+6=62pt depuis le bord droit).
                 .padding(.leading, 28)
                 .padding(.trailing, 80)
-                .padding(.top, 24)
-                .padding(.bottom, 12)
+                .padding(.top, MeeshySpacing.xxl)
+                .padding(.bottom, MeeshySpacing.md)
             }
             .adaptiveOnChange(of: storyComments.count) { _, _ in
                 // Notification → RÉPONSE précise : le parent est chargé
@@ -1967,7 +1967,7 @@ struct StoryCommentsOverlayView: View {
     // MARK: - Empty State
 
     private var emptyPlaceholder: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "bubble.left.and.bubble.right")
                 // Doctrine 84i/86i : glyphe héros décoratif de l'état vide → taille
                 // figée + masqué de VoiceOver (les deux libellés ci-dessous portent
@@ -1976,14 +1976,14 @@ struct StoryCommentsOverlayView: View {
                 .foregroundColor(.white.opacity(0.7))
                 .accessibilityHidden(true)
             Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
-                .font(MeeshyFont.relative(13, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(.white.opacity(0.85))
             Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier à commenter !", bundle: .main))
-                .font(MeeshyFont.relative(11))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 .foregroundColor(.white.opacity(0.65))
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 32)
+        .padding(.vertical, MeeshySpacing.xxxl)
         .storyOverlayLegible()
     }
 

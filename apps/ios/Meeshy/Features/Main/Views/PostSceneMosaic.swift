@@ -220,7 +220,7 @@ struct PostSceneMosaic: View {
             }
             .frame(maxWidth: largeurDeBoite)
             .frame(maxWidth: .infinity, alignment: .center)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
             .reportReelFrame(id: post.id, kind: .scene)
 
             pastilles
@@ -285,7 +285,7 @@ struct PostSceneMosaic: View {
                 }
             }
         }
-        .padding(.horizontal, 10)
+        .padding(.horizontal, MeeshySpacing.smPlus)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
@@ -298,11 +298,11 @@ struct PostSceneMosaic: View {
             // Glyphe dans un cercle de dimension FIXE : il déborderait s'il
             // scalait. La cible tactile reste à 44.
             Image(systemName: glyphe)
-                .font(MeeshyFont.relative(14, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
                 .foregroundColor(.white)
                 .frame(width: UIFontMetrics.default.scaledValue(for: 34), height: UIFontMetrics.default.scaledValue(for: 34))
                 .background(Circle().fill(.black.opacity(0.45)))
-                .frame(minWidth: 44, minHeight: 44)
+                .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -311,12 +311,12 @@ struct PostSceneMosaic: View {
 
     private var compteur: some View {
         Text("\(page + 1) / \(document.scenes.count)")
-            .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
+            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
             .foregroundColor(.white)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, 5)
             .background(Capsule().fill(.black.opacity(0.5)))
-            .padding(10)
+            .padding(MeeshySpacing.smPlus)
             .contentTransition(.numericText())
             .animation(.spring(response: 0.3), value: page)
             .accessibilityHidden(true)
@@ -326,7 +326,7 @@ struct PostSceneMosaic: View {
     /// celles du carrousel des médias, et pour la même raison : posées à
     /// l'intérieur, elles se disputeraient le bas avec la légende.
     private var pastilles: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             ForEach(document.scenes.indices, id: \.self) { position in
                 Capsule()
                     .fill(position == page
@@ -465,7 +465,7 @@ struct PostSceneMosaic: View {
         // > UIKit imbriquée reste dedans. `.clipped()` pose le masque de rendu
         // > que le représentable n'a pas.
         .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         .overlay(alignment: .center) { report(tuile) }
         // **Une scène cinématique se signale comme une vidéo.** Le glyphe ne
         // se pose que sur ce qui NE joue pas : sur la page en lecture, il
@@ -480,7 +480,7 @@ struct PostSceneMosaic: View {
                 else if bouge { glypheDeLecture }
             }
         }
-        .contentShape(RoundedRectangle(cornerRadius: 12))
+        .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         .onTapGesture { onTapScene?(tuile.sceneIndex) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(libelle(tuile, bouge: bouge))
@@ -552,11 +552,11 @@ struct PostSceneMosaic: View {
     private func indicateurDeSonCoupe(_ document: CanvasV3) -> some View {
         if montreLIndicateurDeSonCoupe {
             Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: true))
-                .font(MeeshyFont.relative(10, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
                 .foregroundColor(.white)
                 .frame(width: UIFontMetrics.default.scaledValue(for: 22), height: UIFontMetrics.default.scaledValue(for: 22))
                 .background(Circle().fill(.black.opacity(0.45)))
-                .padding(8)
+                .padding(MeeshySpacing.sm)
                 .allowsHitTesting(false)
                 .accessibilityLabel(Text(String(
                     localized: "feed.scene.sound.muted",
@@ -567,11 +567,11 @@ struct PostSceneMosaic: View {
 
     private var glypheDeLecture: some View {
         Image(systemName: "play.fill")
-            .font(MeeshyFont.relative(10, weight: .bold))
+            .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
             .foregroundColor(.black.opacity(0.75))
             .frame(width: UIFontMetrics.default.scaledValue(for: 22), height: UIFontMetrics.default.scaledValue(for: 22))
             .background(Circle().fill(.white.opacity(0.85)))
-            .padding(8)
+            .padding(MeeshySpacing.sm)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }

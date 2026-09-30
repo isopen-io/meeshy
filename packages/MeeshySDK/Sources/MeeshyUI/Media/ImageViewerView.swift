@@ -122,11 +122,11 @@ public struct ImageViewerView: View {
                     Spacer()
                     Button { onDelete(); HapticFeedback.light() } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 18))
+                            .font(.system(size: MeeshyIconSize.lg))
                             .foregroundColor(MeeshyColors.error)
                             .background(Circle().fill(.ultraThinMaterial).frame(width: 14, height: 14))
                     }
-                    .padding(6)
+                    .padding(MeeshySpacing.xsPlus)
                 }
                 Spacer()
             }
@@ -139,16 +139,16 @@ public struct ImageViewerView: View {
                     Button { onEdit(); HapticFeedback.light() } label: {
                         HStack(spacing: 3) {
                             Image(systemName: "pencil")
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                             Text(String(localized: "media.image.edit", defaultValue: "\u{00C9}diter", bundle: .module))
-                                .font(.system(size: 10, weight: .semibold))
+                                .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
                         }
                         .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, MeeshySpacing.sm)
+                        .padding(.vertical, MeeshySpacing.xs)
                         .background(Capsule().fill(.black.opacity(0.5)))
                     }
-                    .padding(6)
+                    .padding(MeeshySpacing.xsPlus)
                     Spacer()
                 }
             }
@@ -160,12 +160,12 @@ public struct ImageViewerView: View {
                 HStack {
                     Spacer()
                     Text(attachment.fileSizeFormatted)
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.system(size: MeeshyFont.microSize, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
+                        .padding(.vertical, MeeshySpacing.xxs)
                         .background(Capsule().fill(.black.opacity(0.5)))
-                        .padding(6)
+                        .padding(MeeshySpacing.xsPlus)
                 }
             }
         }
@@ -280,7 +280,7 @@ public struct ImageFullscreen: View {
                     HStack {
                         Button { dismiss() } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 28))
+                                .font(.system(size: MeeshyIconSize.xxxl))
                                 .foregroundColor(.white.opacity(0.8))
                                 .padding()
                         }
@@ -309,8 +309,8 @@ public struct ImageFullscreen: View {
                             .foregroundColor(.white.opacity(0.9))
                             .frame(width: 40, height: 40)
                             .background(Circle().fill(Color.white.opacity(0.2)))
-                            .padding(.trailing, 12)
-                            .padding(.top, 8)
+                            .padding(.trailing, MeeshySpacing.md)
+                            .padding(.top, MeeshySpacing.sm)
                         }
                         .disabled(saveState == .saving || saveState == .saved)
                     }
@@ -329,8 +329,8 @@ public struct ImageFullscreen: View {
                         )
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .padding(.vertical, MeeshySpacing.md)
                         .background(.ultraThinMaterial)
                         .tint(Color(hex: accentColor))
                     }

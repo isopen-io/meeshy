@@ -28,11 +28,11 @@ struct CommunityLinksView: View {
                 header
                 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
-                        communityStatsOverview.padding(.horizontal, 16)
-                        communityLinksSection.padding(.horizontal, 16)
+                    VStack(spacing: MeeshySpacing.xl) {
+                        communityStatsOverview.padding(.horizontal, MeeshySpacing.lg)
+                        communityLinksSection.padding(.horizontal, MeeshySpacing.lg)
                     }
-                    .padding(.top, 8).padding(.bottom, 40)
+                    .padding(.top, MeeshySpacing.sm).padding(.bottom, 40)
                 }
                 .refreshable { await viewModel.load() }
             }
@@ -50,7 +50,7 @@ struct CommunityLinksView: View {
                 back()
             } label: {
                 Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                     .foregroundColor(accent)
             }
             .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
@@ -58,7 +58,7 @@ struct CommunityLinksView: View {
             Spacer()
 
             Text(String(localized: "community.links.title", defaultValue: "Liens communauté", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -69,17 +69,17 @@ struct CommunityLinksView: View {
                 router.push(.communityCreate)
             } label: {
                 Image(systemName: "plus.circle.fill")
-                    .font(MeeshyFont.relative(22))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxl))
                     .foregroundColor(accent)
             }
             .accessibilityLabel(String(localized: "community.links.create.a11y", defaultValue: "Créer une communauté", bundle: .main))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     private var communityStatsOverview: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             communityStatCard("\(viewModel.stats.totalCommunities)", label: String(localized: "community.links.stat.groups", defaultValue: "Groupes", bundle: .main), icon: "person.3.fill")
             communityStatCard("\(viewModel.stats.activeCommunities)", label: String(localized: "community.links.stat.active", defaultValue: "Actifs", bundle: .main), icon: "checkmark.circle.fill")
             communityStatCard("\(viewModel.stats.totalMembers)", label: String(localized: "community.links.stat.members", defaultValue: "Membres", bundle: .main), icon: "person.fill")
@@ -87,26 +87,26 @@ struct CommunityLinksView: View {
     }
 
     private func communityStatCard(_ value: String, label: String, icon: String) -> some View {
-        VStack(spacing: 6) {
-            Image(systemName: icon).font(MeeshyFont.relative(20))
+        VStack(spacing: MeeshySpacing.xsPlus) {
+            Image(systemName: icon).font(MeeshyFont.relative(MeeshyIconSize.xl))
                 .foregroundColor(accent)
                 .accessibilityHidden(true)
             Text(value).font(MeeshyFont.relative(24, weight: .bold)).foregroundColor(theme.textPrimary)
-            Text(label).font(MeeshyFont.relative(11)).foregroundColor(theme.textSecondary)
+            Text(label).font(MeeshyFont.relative(MeeshyFont.footnoteSize)).foregroundColor(theme.textSecondary)
         }
-        .frame(maxWidth: .infinity).padding(14)
+        .frame(maxWidth: .infinity).padding(MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: accentHex))
-                .overlay(RoundedRectangle(cornerRadius: 16)
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(accent.opacity(0.2), lineWidth: 1))
         )
         .accessibilityElement(children: .combine)
     }
 
     private var communityLinksSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(String(localized: "community.links.section.mine", defaultValue: "MES COMMUNAUTÉS", bundle: .main)).font(MeeshyFont.relative(12, weight: .semibold))
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            Text(String(localized: "community.links.section.mine", defaultValue: "MES COMMUNAUTÉS", bundle: .main)).font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundColor(theme.textSecondary).kerning(0.8)
                 .accessibilityAddTraits(.isHeader)
 
@@ -128,9 +128,9 @@ struct CommunityLinksView: View {
                     accentColor: accentHex,
                     compact: true
                 )
-                .padding(.vertical, 24)
+                .padding(.vertical, MeeshySpacing.xxl)
             } else {
-                VStack(spacing: 8) {
+                VStack(spacing: MeeshySpacing.sm) {
                     ForEach(viewModel.links) { link in
                         NavigationLink(destination: CommunityLinkDetailView(link: link)) {
                             communityLinkRow(link)
@@ -147,40 +147,40 @@ struct CommunityLinksView: View {
     }
 
     private func communityLinkRow(_ link: CommunityLink) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             ZStack {
                 Circle().fill(accent.opacity(0.15)).frame(width: 40, height: 40)
                 // Glyphe dans un cercle de dimension fixe 40×40 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
-                Image(systemName: "person.3.fill").font(.system(size: 14))
+                Image(systemName: "person.3.fill").font(.system(size: MeeshyIconSize.sm))
                     .foregroundColor(accent)
                     .accessibilityHidden(true)
             }
             VStack(alignment: .leading, spacing: 3) {
-                Text(link.name).font(MeeshyFont.relative(15, weight: .semibold))
+                Text(link.name).font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(theme.textPrimary).lineLimit(1)
                 Text(String(localized: "community.links.row.subtitle", defaultValue: "\(link.memberCount) membres · \(link.identifier)", bundle: .main))
-                    .font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted).lineLimit(1)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(theme.textMuted).lineLimit(1)
             }
             Spacer()
             Button {
                 copyJoinLink(link)
             } label: {
-                Image(systemName: "doc.on.doc").font(MeeshyFont.relative(16))
+                Image(systemName: "doc.on.doc").font(MeeshyFont.relative(MeeshyIconSize.md))
                     .foregroundColor(accent)
-            }.padding(.horizontal, 4)
+            }.padding(.horizontal, MeeshySpacing.xs)
             // Nested inside the row's NavigationLink, this Button is unreachable by
             // VoiceOver — the link absorbs its whole label as one element. Hide the
             // duplicate glyph here and re-expose the copy as an `.accessibilityAction`
             // on the combined row below, so VoiceOver users can still copy the invite.
             .accessibilityHidden(true)
-            Image(systemName: "chevron.forward").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
+            Image(systemName: "chevron.forward").font(MeeshyFont.relative(MeeshyIconSize.xs)).foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentHex))
-                .overlay(RoundedRectangle(cornerRadius: 14)
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .stroke(accent.opacity(0.15), lineWidth: 1))
         )
         .accessibilityElement(children: .combine)

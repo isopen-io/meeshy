@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 struct CommunityLinkDetailView: View {
     let link: CommunityLink
@@ -14,13 +15,13 @@ struct CommunityLinkDetailView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
             ScrollView {
-                VStack(spacing: 20) {
-                    headerCard.padding(.horizontal, 16)
-                    actionsBar.padding(.horizontal, 16)
-                    statsSection.padding(.horizontal, 16)
-                    infoSection.padding(.horizontal, 16)
+                VStack(spacing: MeeshySpacing.xl) {
+                    headerCard.padding(.horizontal, MeeshySpacing.lg)
+                    actionsBar.padding(.horizontal, MeeshySpacing.lg)
+                    statsSection.padding(.horizontal, MeeshySpacing.lg)
+                    infoSection.padding(.horizontal, MeeshySpacing.lg)
                 }
-                .padding(.top, 16).padding(.bottom, 60)
+                .padding(.top, MeeshySpacing.lg).padding(.bottom, 60)
             }
         }
         .navigationTitle(link.name)
@@ -28,7 +29,7 @@ struct CommunityLinkDetailView: View {
     }
 
     private var headerCard: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             ZStack {
                 Circle().fill(MeeshyColors.communityAccent.opacity(0.15)).frame(width: 60, height: 60)
                 // Glyphe héros dans un cercle de dimension fixe 60×60 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
@@ -36,19 +37,19 @@ struct CommunityLinkDetailView: View {
                     .foregroundColor(MeeshyColors.communityAccent)
                     .accessibilityHidden(true)
             }
-            Text(link.name).font(MeeshyFont.relative(20, weight: .bold)).foregroundColor(theme.textPrimary)
-            Text(link.joinUrl).font(MeeshyFont.relative(12, design: .monospaced))
+            Text(link.name).font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold)).foregroundColor(theme.textPrimary)
+            Text(link.joinUrl).font(MeeshyFont.relative(MeeshyFont.smallSize, design: .monospaced))
                 .foregroundColor(theme.textSecondary).lineLimit(2).multilineTextAlignment(.center)
         }
-        .padding(20).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 20).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
-            .overlay(RoundedRectangle(cornerRadius: 20)
+        .padding(MeeshySpacing.xl).frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl).fill(theme.surfaceGradient(tint: MeeshyColors.communityAccentHex))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .stroke(MeeshyColors.communityAccent.opacity(0.2), lineWidth: 1)))
         .accessibilityElement(children: .combine)
     }
 
     private var actionsBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             communityActionButton(String(localized: "common.copy", defaultValue: "Copier", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
                                   color: copiedFeedback ? MeeshyColors.success : MeeshyColors.communityAccent) {
                 UIPasteboard.general.string = link.joinUrl
@@ -91,21 +92,21 @@ struct CommunityLinkDetailView: View {
     }
 
     private func communityActionButtonLabel(_ label: String, icon: String, color: Color) -> some View {
-        VStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xsPlus) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(color.opacity(0.15))
                     .frame(width: 52, height: 52)
                 // Glyphe dans une tuile de dimension fixe 52×52 : figé (déborderait s'il scalait) — le libellé sous le glyphe est lu par VoiceOver (doctrine 86i)
-                Image(systemName: icon).font(.system(size: 22)).foregroundColor(color)
+                Image(systemName: icon).font(.system(size: MeeshyIconSize.xxl)).foregroundColor(color)
                     .accessibilityHidden(true)
             }
-            Text(label).font(MeeshyFont.relative(10, weight: .medium)).foregroundColor(theme.textSecondary)
+            Text(label).font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium)).foregroundColor(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
     }
 
     private var statsSection: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             communityStatCard("\(link.memberCount)",
                               label: String(localized: "communityLink.members", defaultValue: "Membres", bundle: .main),
                               icon: "person.fill", color: MeeshyColors.communityAccentHex)
@@ -119,46 +120,46 @@ struct CommunityLinkDetailView: View {
     }
 
     private func communityStatCard(_ value: String, label: String, icon: String, color: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon).font(MeeshyFont.relative(22)).foregroundColor(Color(hex: color))
+        HStack(spacing: MeeshySpacing.md) {
+            Image(systemName: icon).font(MeeshyFont.relative(MeeshyIconSize.xxl)).foregroundColor(Color(hex: color))
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(value).font(MeeshyFont.relative(22, weight: .bold)).foregroundColor(theme.textPrimary)
-                Text(label).font(MeeshyFont.relative(12)).foregroundColor(theme.textSecondary)
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                Text(value).font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold)).foregroundColor(theme.textPrimary)
+                Text(label).font(MeeshyFont.relative(MeeshyFont.smallSize)).foregroundColor(theme.textSecondary)
             }
             Spacer()
         }
-        .padding(14).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 14).fill(theme.surfaceGradient(tint: color))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: color).opacity(0.2), lineWidth: 1)))
+        .padding(MeeshySpacing.mdPlus).frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.surfaceGradient(tint: color))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md).stroke(Color(hex: color).opacity(0.2), lineWidth: 1)))
         .accessibilityElement(children: .combine)
     }
 
     private var infoSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(localized: "communityLink.informations", defaultValue: "INFORMATIONS", bundle: .main))
                 .font(.caption.weight(.semibold))
                 .foregroundColor(theme.textSecondary).kerning(0.8)
                 .accessibilityAddTraits(.isHeader)
             VStack(spacing: 0) {
                 infoRow(String(localized: "communityLink.identifier", defaultValue: "Identifiant", bundle: .main), value: link.identifier)
-                Divider().padding(.leading, 16)
+                Divider().padding(.leading, MeeshySpacing.lg)
                 infoRow(String(localized: "communityLink.fullLink", defaultValue: "Lien complet", bundle: .main), value: link.joinUrl)
-                Divider().padding(.leading, 16)
+                Divider().padding(.leading, MeeshySpacing.lg)
                 infoRow(String(localized: "communityLink.createdAt", defaultValue: "Créé le", bundle: .main), value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
             }
-            .background(RoundedRectangle(cornerRadius: 14)
+            .background(RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
         }
     }
 
     private func infoRow(_ label: String, value: String) -> some View {
         HStack {
-            Text(label).font(MeeshyFont.relative(14)).foregroundColor(theme.textSecondary)
+            Text(label).font(MeeshyFont.relative(MeeshyFont.labelSize)).foregroundColor(theme.textSecondary)
             Spacer()
-            Text(value).font(MeeshyFont.relative(13, weight: .medium)).foregroundColor(theme.textPrimary).lineLimit(1)
+            Text(value).font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium)).foregroundColor(theme.textPrimary).lineLimit(1)
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg).padding(.vertical, MeeshySpacing.md)
         .accessibilityElement(children: .combine)
     }
 }

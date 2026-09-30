@@ -80,7 +80,7 @@ struct AudioCarouselView: View {
     @State private var pendingPlayTask: Task<Void, Never>?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             ZStack(alignment: .topTrailing) {
                 AdaptiveHorizontalPager(
                     items: items,
@@ -102,8 +102,8 @@ struct AudioCarouselView: View {
 
                 if items.count > 1 {
                     pageIndicator
-                        .padding(.trailing, 6)
-                        .padding(.top, 2)
+                        .padding(.trailing, MeeshySpacing.xsPlus)
+                        .padding(.top, MeeshySpacing.xxs)
                 }
             }
             .onPreferenceChange(AudioCarouselHeightKey.self) { newHeight in
@@ -125,7 +125,7 @@ struct AudioCarouselView: View {
                     accentHex: accentColor,
                     onTap: { onTapConsentNotice?() }
                 )
-                .padding(.top, 6)
+                .padding(.top, MeeshySpacing.xsPlus)
             }
         }
         .onAppear {
@@ -238,7 +238,7 @@ struct AudioCarouselView: View {
             audioQueueTailProvider: audioQueueTailProvider
         )
         .equatable()
-        .padding(.trailing, 4)
+        .padding(.trailing, MeeshySpacing.xs)
     }
 
     // MARK: - Page Indicator (mirrors BubbleCarouselView)
@@ -265,26 +265,26 @@ struct AudioCarouselView: View {
                             .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentIndex)
                     }
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, MeeshySpacing.smPlus)
                 .padding(.vertical, 5)
                 .background(
                     Capsule()
                         .fill(.ultraThinMaterial.opacity(0.7))
-                        .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+                        .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: MeeshyBorder.hairline))
                 )
             } else {
                 Text("\(currentIndex + 1) / \(items.count)")
                     // Dynamic-Type-aware: the counter scales with the reader's
                     // text size (the capsule has flexible padding, no fixed width,
                     // so it grows with the glyphs — no truncation).
-                    .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
                     .padding(.vertical, 5)
                     .background(
                         Capsule()
                             .fill(.ultraThinMaterial.opacity(0.7))
-                            .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
+                            .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: MeeshyBorder.hairline))
                     )
                     .contentTransition(.numericText())
                     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentIndex)

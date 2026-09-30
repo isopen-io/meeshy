@@ -32,7 +32,7 @@ extension ReelsPlayerView {
     }
 
     private var noReelsState: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.mdPlus) {
             // Glyphe héros décoratif, masqué à VoiceOver (le texte porte le
             // sens). La taille SCALE : rien ne l'entoure qui déborderait, et un
             // fichier neuf n'a pas droit à une taille figée — la garde
@@ -53,7 +53,7 @@ extension ReelsPlayerView {
     /// pager est noir plein écran : la palette est donc celle du viewer (blanc
     /// sur noir), pas celle du thème clair/sombre de l'app.
     private func loadFailureState(message: String) -> some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.mdPlus) {
             Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
                 .font(MeeshyFont.relative(44))
                 .foregroundColor(.white.opacity(0.7))
@@ -62,7 +62,7 @@ extension ReelsPlayerView {
                 .font(.headline)
                 .foregroundColor(.white)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, MeeshySpacing.xxxl)
             Button {
                 HapticFeedback.light()
                 Task { await viewModel.retryLoad() }
@@ -70,8 +70,8 @@ extension ReelsPlayerView {
                 Text(String(localized: "common.retry"))
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.black)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, MeeshySpacing.xxl)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                     .background(Capsule().fill(Color.white))
             }
             // Cible 44 pt (HIG) : le libellé seul ne les atteint pas en

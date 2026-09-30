@@ -23,22 +23,22 @@ struct SkeletonFeedPost: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             headerRow
             bodyLines
             mediaBlock
             actionRow
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
                 .fill(cardBackground)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus)
                         .stroke(borderColor, lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(String(localized: "skeleton.feed.post.loading", defaultValue: "Chargement d'une publication", bundle: .main)))
     }
@@ -46,13 +46,13 @@ struct SkeletonFeedPost: View {
     // MARK: - Sections
 
     private var headerRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Circle()
                 .fill(placeholderColor)
                 .frame(width: 40, height: 40)
                 .skeletonShimmer()
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                 SkeletonShape(width: 120, height: 12, cornerRadius: 4)
                 SkeletonShape(width: 80, height: 10, cornerRadius: 4)
             }
@@ -64,7 +64,7 @@ struct SkeletonFeedPost: View {
     }
 
     private var bodyLines: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             ForEach(0..<bodyLineCount, id: \.self) { idx in
                 SkeletonShape(
                     width: nil,
@@ -90,9 +90,9 @@ struct SkeletonFeedPost: View {
     }
 
     private var actionRow: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: MeeshySpacing.lg) {
             ForEach(0..<4, id: \.self) { _ in
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Circle()
                         .fill(placeholderColor)
                         .frame(width: 18, height: 18)
@@ -102,7 +102,7 @@ struct SkeletonFeedPost: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.top, 4)
+        .padding(.top, MeeshySpacing.xs)
     }
 
     // MARK: - Theme
@@ -137,7 +137,7 @@ struct SkeletonFeedList: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             ForEach(0..<count, id: \.self) { _ in
                 SkeletonFeedPost()
             }

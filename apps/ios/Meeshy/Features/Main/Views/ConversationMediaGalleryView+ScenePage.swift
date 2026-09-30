@@ -376,7 +376,7 @@ struct GalleryScenePlayPause: View {
             onToggle()
         } label: {
             Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                .font(MeeshyFont.relative(28, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxxl, weight: .bold))
                 .foregroundColor(.white)
                 .offset(x: isPlaying ? 0 : 2)
                 .frame(width: UIFontMetrics.default.scaledValue(for: 64),

@@ -67,7 +67,7 @@ struct StoryActionButton: View {
             // vertical 8→3 — le rail complet gagne ~30 % de compacité (parité
             // TikTok/IG) tout en gardant ≥ 44pt de hauteur tappable par bouton
             // (glyph 46 + label ~12 + 2×3 de padding).
-            VStack(spacing: 2) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 ZStack {
                     // Plus de cartouche circulaire : style « glyph flottant »
                     // TikTok/Instagram (spec user 2026-06-25 « supprimer les
@@ -88,13 +88,13 @@ struct StoryActionButton: View {
                             // fixe 46×46 → taille figée (le Dynamic Type déborderait
                             // du rail vertical compact style TikTok/IG). Bouton
                             // labellisé par `Text(label)` ci-dessous → VoiceOver OK.
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(.system(size: MeeshyFont.title3Size, weight: .semibold))
                             .foregroundStyle(accentOutline != nil ? accentOutlineColor : (activeGlow ?? activeColor))
                             .scaleEffect(1.22)
                     }
 
                     Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.xl, weight: .semibold))
                         .glassControlForeground()
                         .adaptiveSymbolBounce(value: isActive)
                 }
@@ -131,7 +131,7 @@ struct StoryActionButton: View {
             // (3pt vertical + spacing 8/6 du rail : ≤ 2pt de jour entre deux
             // zones tappables — la protection anti-tap-traversant reste réelle.)
             .padding(.vertical, 3)
-            .padding(.horizontal, 6)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
             .contentShape(Rectangle())
             .mediaChromeGlyph()
         }

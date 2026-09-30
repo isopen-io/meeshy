@@ -2188,7 +2188,7 @@ struct ConversationView: View {
             ConversationTitleLabel(
                 name: conversation?.displayName ?? "Conversation",
                 favoriteEmoji: conversation?.userState.reaction,
-                font: MeeshyFont.relative(15, weight: .semibold, design: .rounded),
+                font: MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded),
                 color: .white
             )
             Spacer()
@@ -2430,7 +2430,7 @@ struct ConversationView: View {
             ConversationTitleLabel(
                 name: conversation?.displayName ?? "Conversation",
                 favoriteEmoji: conversation?.userState.reaction,
-                font: MeeshyFont.relative(13, weight: .bold, design: .rounded),
+                font: MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded),
                 color: isDark ? .white : MeeshyColors.indigo950, // blanc sur le verre clair était illisible (#8822)
                 lineLimit: 2
             )
@@ -2439,7 +2439,7 @@ struct ConversationView: View {
             // REST response lands — no blocking spinner.
             if viewModel.isRevalidating {
                 Image(systemName: "sparkles")
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.85))
                     .adaptiveSymbolPulse()
                     .accessibilityLabel(String(localized: "conversation.view.refreshing_background", bundle: .main))

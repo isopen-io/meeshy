@@ -435,7 +435,7 @@ struct BubbleStandardLayout: View {
         HStack(alignment: .bottom, spacing: 0) {
             if isMe && !standalone { Spacer(minLength: 50) }
 
-            VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
+            VStack(alignment: isMe ? .trailing : .leading, spacing: MeeshySpacing.xs) {
                 // Pin indicator
                 if content.isPinned {
                     BubblePinnedIndicator()
@@ -697,7 +697,7 @@ struct BubbleStandardLayout: View {
     @ViewBuilder
     private func contentStackBody(shouldBlur: Bool) -> some View {
         let isMe = content.isMe
-        VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
+        VStack(alignment: isMe ? .trailing : .leading, spacing: MeeshySpacing.xs) {
             // Grille visuelle (images + videos) ou carrousel inline
             if !visualAttachments.isEmpty {
                 if showCarousel {
@@ -734,7 +734,7 @@ struct BubbleStandardLayout: View {
                                     isDark: isDark
                                 )
                                 .equatable()
-                                .padding(8)
+                                .padding(MeeshySpacing.sm)
                                 .transition(.opacity)
                             }
                         }
@@ -872,7 +872,7 @@ struct BubbleStandardLayout: View {
         // la date a un endroit excentre). Le VStack exterieur conserve
         // l'alignement isMe pour le secondary content (langue alternative
         // active) qui descend dessous.
-        VStack(alignment: content.isMe ? .trailing : .leading, spacing: 2) {
+        VStack(alignment: content.isMe ? .trailing : .leading, spacing: MeeshySpacing.xxs) {
             HStack(alignment: .lastTextBaseline, spacing: 6) {
                 // Emoji-only intentionally renders the ORIGINAL `message.content`,
                 // not the translated text — emoji bubbles are not translated.
@@ -917,7 +917,7 @@ struct BubbleStandardLayout: View {
         // les deux rendus divergent au premier cas de bord.
         if let reply = content.reply, detachedStoryCitation == nil {
             quotedReplyView(reply.reference)
-                .padding(.bottom, 4)
+                .padding(.bottom, MeeshySpacing.xs)
                 .onTapGesture {
                     guard reply.reference.opensQuotedTarget else { return }
                     HapticFeedback.light()
@@ -932,7 +932,7 @@ struct BubbleStandardLayout: View {
         // « modifié » se dit dans le PIED, à côté de l'heure (#7620) — posé
         // ici, le crayon tombait dans le coin arrondi que le clip rogne.
         if hasBubbleBodyContent {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 // Lieu porté par `message.location` (voie serveur actuelle).
                 // Rendu UNE seule fois : le builder exclut la pièce jointe
                 // `.location` de `content.attachments` quand le message porte
@@ -977,7 +977,7 @@ struct BubbleStandardLayout: View {
 
                 secondaryContentView
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.vertical, content.hasTextOrNonMediaContent ? 10 : 4)
         }
     }
@@ -1001,7 +1001,7 @@ struct BubbleStandardLayout: View {
             // Wrapped in a VStack so the Layout sees the body as ONE opaque
             // subview — a bare @ViewBuilder property would be flattened into
             // its individual conditional branches.
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 bubbleInnerContent
             }
             // `textBubbleContent` n'est plus rendu pour `audioHostsReply` /
@@ -1103,7 +1103,7 @@ struct BubbleStandardLayout: View {
             .equatable()
             .padding(.horizontal, showIdentityBar ? 10 : 14)
             .padding(.top, showIdentityBar ? 8 : 0)
-            .padding(.bottom, 8)
+            .padding(.bottom, MeeshySpacing.sm)
     }
 
     /// Live read of the global network monitor. Kept as a computed property

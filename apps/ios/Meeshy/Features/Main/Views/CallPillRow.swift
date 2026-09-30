@@ -8,7 +8,7 @@ struct CallPanelHeader: View {
     let onClose: () -> Void
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             headerButton(symbol: "chevron.backward", label: CallControlsCopy.backToMenu, action: onBack)
             Text(title)
                 .font(.footnote.weight(.semibold))
@@ -18,8 +18,8 @@ struct CallPanelHeader: View {
             Spacer(minLength: 0)
             headerButton(symbol: "xmark", label: CallControlsCopy.closePanel, action: onClose)
         }
-        .padding(.horizontal, 6)
-        .padding(.top, 2)
+        .padding(.horizontal, MeeshySpacing.xsPlus)
+        .padding(.top, MeeshySpacing.xxs)
     }
 
     private func headerButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
@@ -47,27 +47,27 @@ struct CallPillRow<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             if let title {
                 Text(title)
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(.white.opacity(0.6))
                     .textCase(.uppercase)
                     .lineLimit(1)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                     .accessibilityAddTraits(.isHeader)
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 2) {
+                HStack(alignment: .top, spacing: MeeshySpacing.xxs) {
                     content
                 }
-                .padding(.horizontal, 8)
+                .padding(.horizontal, MeeshySpacing.sm)
                 .callRowScrollTargetLayout()
             }
             .callRowScrollTargetBehavior()
             .modifier(CallRowScrollInteraction())
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, MeeshySpacing.sm)
         .accessibilityElement(children: .contain)
     }
 }
@@ -91,7 +91,7 @@ struct CallPillChip: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 4) {
+            VStack(spacing: MeeshySpacing.xs) {
                 artwork
                 if let caption {
                     Text(caption)
@@ -131,9 +131,9 @@ struct CallPillChip: View {
                 .resizable()
                 .aspectRatio(contentMode: .fill)
                 .frame(width: 36, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous)
                         .stroke(isSelected ? Color.white : Color.white.opacity(0.2), lineWidth: isSelected ? 2 : 0.5)
                 )
                 .accessibilityHidden(true)

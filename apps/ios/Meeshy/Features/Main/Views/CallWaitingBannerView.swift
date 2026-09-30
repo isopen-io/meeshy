@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import MeeshyUI
 
 struct CallWaitingBannerView: View {
     // Audit P2-iOS-11 — refactored from a `show()`-returning-a-new-View
@@ -36,12 +37,12 @@ struct CallWaitingBannerView: View {
     var body: some View {
         if isVisible {
             VStack(spacing: 0) {
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     Image(systemName: "phone.fill")
                         .font(.title3)
                         .foregroundStyle(.white)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(callerName)
                             .font(.headline)
                             .foregroundStyle(.white)
@@ -64,7 +65,7 @@ struct CallWaitingBannerView: View {
                         Text(String(localized: "call.waiting.reject", defaultValue: "Refuser", bundle: .main))
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, MeeshySpacing.lg)
                             .padding(.vertical, 8)
                             // HIG 44x44pt minimum tap target (audit 2026-07-03):
                             // the capsule's own padding alone yields a ~32-36pt
@@ -83,7 +84,7 @@ struct CallWaitingBannerView: View {
                         Text(String(localized: "call.waiting.answer", defaultValue: "Répondre", bundle: .main))
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, MeeshySpacing.lg)
                             .padding(.vertical, 8)
                             .frame(minHeight: 44)
                             .background(MeeshyColors.success, in: Capsule())
@@ -91,14 +92,14 @@ struct CallWaitingBannerView: View {
                     .accessibilityLabel(String(localized: "call.waiting.answer.a11y", defaultValue: "Raccrocher et repondre a \(callerName)", bundle: .main))
                     .accessibilityHint(String(localized: "call.waiting.answer.hint", defaultValue: "Termine l'appel en cours et répond au nouvel appel entrant", bundle: .main))
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.md)
             }
             .background(.ultraThinMaterial.opacity(0.9))
             .background(Color.black.opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.top, MeeshySpacing.sm)
             // P2-iOS-9 — slide from top when motion is allowed; fade only
             // when reduce motion is on (no translational movement).
             .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))

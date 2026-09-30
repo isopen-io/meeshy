@@ -55,7 +55,7 @@ public struct TagInputField: View {
             ForEach(selectedTags, id: \.self) { tag in
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(tag)
-                        .font(MeeshyFont.relative(12, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                         .foregroundColor(accentColor)
                     Button {
                         selectedTags.removeAll { $0 == tag }
@@ -81,7 +81,7 @@ public struct TagInputField: View {
             TextField(String(localized: "tag.placeholder", defaultValue: "Ajouter un tag…", bundle: .module), text: $editing)
                 .focused($focused)
                 .textFieldStyle(.plain)
-                .font(MeeshyFont.relative(15, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .onSubmit { submit() }
@@ -113,10 +113,10 @@ public struct TagInputField: View {
                     addTag(tag)
                 } label: {
                     HStack {
-                        Image(systemName: "tag.fill").font(MeeshyFont.relative(10)).foregroundColor(.secondary)
-                        Text(tag).font(MeeshyFont.relative(14, weight: .medium))
+                        Image(systemName: "tag.fill").font(MeeshyFont.relative(MeeshyIconSize.xxs)).foregroundColor(.secondary)
+                        Text(tag).font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                         Spacer()
-                        Image(systemName: "arrow.turn.down.left").font(MeeshyFont.relative(10)).foregroundColor(.secondary)
+                        Image(systemName: "arrow.turn.down.left").font(MeeshyFont.relative(MeeshyIconSize.xxs)).foregroundColor(.secondary)
                     }
                     .padding(.horizontal, MeeshySpacing.md).padding(.vertical, MeeshySpacing.sm)
                 }
@@ -132,7 +132,7 @@ public struct TagInputField: View {
                     HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "plus.circle.fill").foregroundColor(accentColor)
                         Text(String(localized: "common.create_quoted", defaultValue: "Créer « \(trimmedQuery) »", bundle: .module))
-                            .font(MeeshyFont.relative(13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                             .foregroundColor(accentColor)
                         Spacer()
                     }

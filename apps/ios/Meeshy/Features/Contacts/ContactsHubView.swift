@@ -66,7 +66,7 @@ struct ContactsHubView: View {
                 tabButton(tab)
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MeeshySpacing.sm)
         .overlay(alignment: .bottom) {
             Divider().opacity(0.3)
         }

@@ -253,7 +253,7 @@ public struct AudioForegroundChip: View {
     }
 
     private var chipContent: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             muteToggleIcon
                 .frame(width: 18, height: 18)
             // Son de bibliothèque → crédit défilant « titre · @pseudo · M:SS » ;
@@ -287,8 +287,8 @@ public struct AudioForegroundChip: View {
                     .opacity(isUserMuted ? 0.35 : 1.0)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(.ultraThinMaterial, in: Capsule())
         .overlay(
             Capsule()
@@ -320,7 +320,7 @@ public struct AudioForegroundChip: View {
     @ViewBuilder
     private var iconView: some View {
         let icon = Image(systemName: iconName)
-            .font(.system(size: 14, weight: .bold))
+            .font(.system(size: MeeshyIconSize.sm, weight: .bold))
         if isUserMuted {
             icon.foregroundColor(.white.opacity(0.55))
         } else {

@@ -69,9 +69,9 @@ struct BackgroundSoundBadge: View, Equatable {
         case .none:
             EmptyView()
         case .original:
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "music.note")
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                     .foregroundColor(Color(hex: accentHex).opacity(0.85))
                     .accessibilityLabel(String(localized: "story.viewer.a11y.backgroundAudio", defaultValue: "Audio de fond", bundle: .main))
                 StoryHeaderAudioWaveform()

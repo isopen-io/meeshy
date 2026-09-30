@@ -34,7 +34,7 @@ struct GalleryMediaUnavailableView: View {
     let onRetry: () -> Void
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.mdPlus) {
             Image(systemName: "photo.badge.exclamationmark")
                 .font(MeeshyFont.relative(44))
                 .foregroundColor(.white.opacity(0.55))
@@ -53,7 +53,7 @@ struct GalleryMediaUnavailableView: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(24)
+        .padding(MeeshySpacing.xxl)
         .accessibilityElement(children: .contain)
     }
 }

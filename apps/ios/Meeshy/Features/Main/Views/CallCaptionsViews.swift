@@ -69,8 +69,8 @@ struct CallCaptionRow: View {
             guard line.canRevealOriginal else { return }
             onToggleOriginal()
         } label: {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(speakerHeading)
                         .font(.caption.weight(.semibold))
                         .foregroundColor(Color(hex: line.speakerColorHex))
@@ -125,18 +125,18 @@ struct CallCaptionsBand: View {
     var body: some View {
         if hasOwnGlass {
             content
-                .padding(.leading, 14)
-                .padding(.trailing, 4)
-                .padding(.vertical, 6)
-                .callChromeGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .padding(.leading, MeeshySpacing.mdPlus)
+                .padding(.trailing, MeeshySpacing.xs)
+                .padding(.vertical, MeeshySpacing.xsPlus)
+                .callChromeGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
         } else {
             content
         }
     }
 
     private var content: some View {
-        HStack(alignment: .top, spacing: 4) {
-            VStack(alignment: .leading, spacing: 8) {
+        HStack(alignment: .top, spacing: MeeshySpacing.xs) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 if lines.isEmpty {
                     Text(CallCaptionsCopy.waiting)
                         .font(.footnote)
@@ -148,7 +148,7 @@ struct CallCaptionsBand: View {
                     }
                 }
             }
-            .padding(.vertical, 6)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             if let onOpenJournal {
                 Button(action: onOpenJournal) {
                     Image(systemName: "list.bullet.rectangle")
@@ -184,7 +184,7 @@ struct CallJournalList: View {
         GeometryReader { viewport in
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
+                    LazyVStack(alignment: .leading, spacing: MeeshySpacing.md) {
                         if segments.isEmpty {
                             Text(CallCaptionsCopy.waiting)
                                 .font(.callout)
@@ -233,7 +233,7 @@ struct CallJournalList: View {
                                 proxy.scrollTo(Self.liveEdge, anchor: .bottom)
                             }
                         }
-                        .padding(.bottom, 12)
+                        .padding(.bottom, MeeshySpacing.md)
                         .transition(.opacity)
                     }
                 }
@@ -255,7 +255,7 @@ struct CallJournalList: View {
 
     private func returnToLive(action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "arrow.down")
                     .font(.footnote.weight(.bold))
                     .accessibilityHidden(true)
@@ -269,10 +269,10 @@ struct CallJournalList: View {
                 }
             }
             .foregroundColor(.white)
-            .padding(.horizontal, 14)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
             .frame(minHeight: 44)
             .background(Capsule().fill(Color.black.opacity(0.7)))
-            .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.5))
+            .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: MeeshyBorder.hairline))
             .contentShape(Capsule())
         }
         .buttonStyle(CallPressButtonStyle())

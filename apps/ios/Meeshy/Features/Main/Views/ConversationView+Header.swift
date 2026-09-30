@@ -147,7 +147,7 @@ extension ConversationView {
         let hasTags = conversationSection != nil || !(liveConversation?.tags.isEmpty ?? true) || isEncrypted
         if hasTags {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     // Lock icon (encryption only, no text)
                     if isEncrypted {
                         Image(systemName: "lock.fill")
@@ -158,7 +158,7 @@ extension ConversationView {
 
                     // Category tag
                     if let section = conversationSection {
-                        HStack(spacing: 2) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             Image(systemName: section.icon)
                                 .font(MeeshyFont.relative(7, weight: .bold))
                                 .accessibilityHidden(true)
@@ -167,13 +167,13 @@ extension ConversationView {
                         }
                         .foregroundColor(Color(hex: section.color))
                         .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
+                        .padding(.vertical, MeeshySpacing.xxs)
                         .background(
                             Capsule()
                                 .fill(Color(hex: section.color).opacity(0.2))
                                 .overlay(
                                     Capsule()
-                                        .stroke(Color(hex: section.color).opacity(0.3), lineWidth: 0.5)
+                                        .stroke(Color(hex: section.color).opacity(0.3), lineWidth: MeeshyBorder.hairline)
                                 )
                         )
                     }
@@ -184,13 +184,13 @@ extension ConversationView {
                                 .font(MeeshyFont.relative(8, weight: .semibold))
                                 .foregroundColor(Color(hex: tag.color))
                                 .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
+                                .padding(.vertical, MeeshySpacing.xxs)
                                 .background(
                                     Capsule()
                                         .fill(Color(hex: tag.color).opacity(0.12))
                                         .overlay(
                                             Capsule()
-                                                .stroke(Color(hex: tag.color).opacity(0.25), lineWidth: 0.5)
+                                                .stroke(Color(hex: tag.color).opacity(0.25), lineWidth: MeeshyBorder.hairline)
                                         )
                                 )
                         }
@@ -324,17 +324,17 @@ private struct HeaderCallButtonsView: View {
                     .fill(MeeshyColors.success)
                     .frame(width: 7, height: 7)
                 Image(systemName: "phone.fill")
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                 Text(callManager.formattedDuration)
-                    .font(MeeshyFont.relative(11, weight: .semibold, design: .monospaced))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
             }
             .foregroundColor(MeeshyColors.success)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, 5)
             .background(
                 Capsule()
                     .fill(MeeshyColors.success.opacity(0.15))
-                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(0.3), lineWidth: 0.5))
+                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(0.3), lineWidth: MeeshyBorder.hairline))
             )
         }
         .accessibilityLabel(String(localized: "call.header.return", defaultValue: "Appel en cours, toucher pour revenir", bundle: .main))
@@ -365,17 +365,17 @@ private struct HeaderCallButtonsView: View {
                     .fill(MeeshyColors.success)
                     .frame(width: 7, height: 7)
                 Image(systemName: "phone.fill")
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                 Text(String(localized: "call.header.rejoin", defaultValue: "Rejoindre", bundle: .main))
-                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
             }
             .foregroundColor(MeeshyColors.success)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, 5)
             .background(
                 Capsule()
                     .fill(MeeshyColors.success.opacity(0.15))
-                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(0.3), lineWidth: 0.5))
+                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(0.3), lineWidth: MeeshyBorder.hairline))
             )
         }
         .accessibilityLabel(String(localized: "call.header.rejoin.a11y", defaultValue: "Appel en cours, toucher pour rejoindre", bundle: .main))
@@ -603,7 +603,7 @@ private struct ConversationHeaderAvatarView: View {
                     contextMenuItems: directContextMenu
                 )
             } else {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     // Stacked active member avatars
                     if !topActiveMembers.isEmpty {
                         HStack(spacing: -6) {
@@ -678,7 +678,7 @@ private struct HeaderOpenFullGlyph: View {
 
     var body: some View {
         Image(systemName: "arrow.up.left.and.arrow.down.right")
-            .font(MeeshyFont.relative(12, weight: .semibold))
+            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
             .foregroundStyle(Color(hex: accentColor))
             .frame(width: 28, height: 28)
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))

@@ -106,7 +106,7 @@ extension AudioPlayerView {
                 slotDivider
                 transcriptionShimmer
             }
-            .padding(.bottom, 6)
+            .padding(.bottom, MeeshySpacing.xsPlus)
             .transition(.opacity)
         } else if AudioTranscriptionReveal.shouldShowRevealCTA(
             hasSegments: !displaySegments.isEmpty,
@@ -128,15 +128,15 @@ extension AudioPlayerView {
                     }
                     HapticFeedback.light()
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "text.badge.plus")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
                         Text(String(localized: "media.audio.transcribe", defaultValue: "Transcrire", bundle: .module))
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
                     }
                     .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                 }
             }
             .transition(.opacity)
@@ -149,15 +149,15 @@ extension AudioPlayerView {
                     : displaySegments
 
                 inlineFlowTranscription(segments: segments)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.sm)
 
                 if isLongTranscription {
                     expandToggleButton
                 }
                 retranscribeButton
             }
-            .padding(.bottom, 6)
+            .padding(.bottom, MeeshySpacing.xsPlus)
             .transition(.opacity)
         } else if let onRequest = onRequestTranscription {
             // No transcription yet AND none in flight: ONLY the initial
@@ -176,15 +176,15 @@ extension AudioPlayerView {
                     onRequest()
                     HapticFeedback.light()
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "text.badge.plus")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
                         Text(String(localized: "media.audio.transcribe", defaultValue: "Transcrire", bundle: .module))
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: MeeshyFont.captionSize, weight: .medium))
                     }
                     .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                 }
             }
             .transition(.opacity)
@@ -209,10 +209,10 @@ extension AudioPlayerView {
     var flatTranscriptionBlock: some View {
         if isTranscribing && displaySegments.isEmpty {
             transcriptionShimmer
-                .padding(.top, 2)
+                .padding(.top, MeeshySpacing.xxs)
                 .transition(.opacity)
         } else if !displaySegments.isEmpty {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 if chromePlan.flatTranscriptionFollowsPlayback {
                     inlineFlowTranscription(segments: renderedSegments)
                     seeMoreButton
@@ -229,7 +229,7 @@ extension AudioPlayerView {
                     retranscribeButton
                 }
             }
-            .padding(.top, 2)
+            .padding(.top, MeeshySpacing.xxs)
             .transition(.opacity)
         } else if chromePlan.showsTranscribeCTA, let onRequest = onRequestTranscription {
             Button {
@@ -239,14 +239,14 @@ extension AudioPlayerView {
                 onRequest()
                 HapticFeedback.light()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "text.badge.plus")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
                     Text(String(localized: "media.audio.transcribe", defaultValue: "Transcrire", bundle: .module))
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: MeeshyFont.captionSize, weight: .medium))
                 }
                 .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
-                .padding(.vertical, 4)
+                .padding(.vertical, MeeshySpacing.xs)
             }
             .transition(.opacity)
         }
@@ -259,13 +259,13 @@ extension AudioPlayerView {
     @ViewBuilder
     private var transcriptionShimmer: some View {
         let lineColor: Color = isDark ? Color.white.opacity(0.10) : Color.black.opacity(0.08)
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             shimmerLine(color: lineColor, width: nil)
             shimmerLine(color: lineColor, width: nil)
             shimmerLine(color: lineColor, width: 120)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .opacity(transcriptionPulsePhase ? 0.55 : 1.0)
         .animation(
             .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
@@ -286,7 +286,7 @@ extension AudioPlayerView {
     }
 
     private func shimmerLine(color: Color, width: CGFloat?) -> some View {
-        RoundedRectangle(cornerRadius: 4)
+        RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
             .fill(color)
             .frame(width: width, height: 9)
             .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
@@ -349,7 +349,7 @@ extension AudioPlayerView {
                 HapticFeedback.light()
                 onFullscreen()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(String(localized: "media.audio.transcription.see_more",
                                 defaultValue: "Voir plus", bundle: .module))
                         .font(.system(size: 10, weight: .semibold))
@@ -358,7 +358,7 @@ extension AudioPlayerView {
                 }
                 .foregroundColor(accent)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
+                .padding(.vertical, MeeshySpacing.xsPlus)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -378,12 +378,12 @@ extension AudioPlayerView {
                 onRetranscribe()
                 HapticFeedback.light()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     if isRetranscribing {
                         ProgressView().scaleEffect(0.6)
                     } else {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
                     }
                     Text(String(localized: "media.audio.retranscribe",
                                  defaultValue: "Re-transcrire", bundle: .module))
@@ -391,7 +391,7 @@ extension AudioPlayerView {
                 }
                 .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
+                .padding(.vertical, MeeshySpacing.xsPlus)
             }
             .disabled(isRetranscribing)
         }
@@ -510,7 +510,7 @@ extension AudioPlayerView {
                 HapticFeedback.light()
             } label: {
                 Text(single.text)
-                    .font(.system(size: 13, weight: isActive ? .bold : .regular))
+                    .font(.system(size: MeeshyFont.subheadSize, weight: isActive ? .bold : .regular))
                     .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
@@ -518,7 +518,7 @@ extension AudioPlayerView {
                     .padding(.horizontal, isActive ? 2 : 0)
                     .padding(.vertical, isActive ? 1 : 0)
                     .background(
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                             .fill(Color(hex: accentColor).opacity(isActive ? 0.12 : 0))
                     )
             }
@@ -542,12 +542,12 @@ extension AudioPlayerView {
                         HapticFeedback.light()
                     } label: {
                         Text(segment.text + " ")
-                            .font(.system(size: 13, weight: isActive ? .bold : .regular))
+                            .font(.system(size: MeeshyFont.subheadSize, weight: isActive ? .bold : .regular))
                             .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
                             .padding(.horizontal, isActive ? 2 : 0)
                             .padding(.vertical, isActive ? 1 : 0)
                             .background(
-                                RoundedRectangle(cornerRadius: 4)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                                     .fill(Color(hex: accentColor).opacity(isActive ? 0.12 : 0))
                             )
                     }

@@ -53,7 +53,7 @@ extension CallView {
                             .frame(width: 44, height: 44)
                             .contentShape(Rectangle())
                     }
-                    .padding(.leading, 8)
+                    .padding(.leading, MeeshySpacing.sm)
                     .accessibilityLabel(String(localized: "call.openConversation", defaultValue: "Conversation", bundle: .main))
                     .accessibilityHint(String(localized: "call.openConversation.hint", defaultValue: "Ouvre la conversation en gardant l'appel actif", bundle: .main))
                 }
@@ -66,7 +66,7 @@ extension CallView {
             }
             Spacer()
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .padding(.top, Self.chromeTopInset)
         // §7.3 — l'en-tête se masque avec la pilule et les rails.
         .callChromeVisibility(isChromeVisible)
@@ -85,7 +85,7 @@ extension CallView {
     }
 
     private var durationChip: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             TransientCallSignalGlyph(strength: signalStrength)
             Text(callManager.formattedDuration)
                 .font(.caption2.weight(.medium).monospacedDigit())
@@ -115,8 +115,8 @@ extension CallView {
         // announcements (glyph, then digits, then icon) instead of the
         // single composed sentence `videoDurationBadgeAccessibilityLabel`.
         .accessibilityElement(children: .ignore)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xs)
         // Verre adaptatif à fond sombre (#8394) : lisible sur un flux clair.
         .callChromeGlass(in: Capsule())
         .clipShape(Capsule())

@@ -65,7 +65,7 @@ struct ComposerHashtagSheet: View {
             champ
 
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
                     if !current.isEmpty { bloc(titre: ComposerAudienceCopy.hashtagsSection, tags: current, posees: true) }
                     if !trending.isEmpty {
                         bloc(titre: ComposerHashtagCopy.trending,
@@ -75,8 +75,8 @@ struct ComposerHashtagSheet: View {
                              posees: false)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.bottom, MeeshySpacing.xxl)
             }
         }
         .background(MeeshyColors.indigo950.ignoresSafeArea())
@@ -104,9 +104,9 @@ struct ComposerHashtagSheet: View {
     }
 
     private var champ: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Text("#")
-                .font(MeeshyFont.relative(17, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                 .foregroundStyle(MeeshyColors.hashtagColor(isDark: true))
             TextField(ComposerHashtagCopy.placeholder, text: $saisie)
                 .textInputAutocapitalization(.never)
@@ -116,18 +116,18 @@ struct ComposerHashtagSheet: View {
                 .onSubmit { ajouter() }
             Button(action: ajouter) {
                 Text(ComposerHashtagCopy.add)
-                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundStyle(peutAjouter ? MeeshyColors.brandPrimary : .white.opacity(0.25))
             }
             .buttonStyle(.plain)
             .disabled(!peutAjouter)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
         .frame(minHeight: 48)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
             .fill(Color.white.opacity(0.07)))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.sm)
     }
 
     private func ajouter() {
@@ -140,7 +140,7 @@ struct ComposerHashtagSheet: View {
     @ViewBuilder
     private func bloc(titre: String, tags: [String], posees: Bool) -> some View {
         if !tags.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 Text(titre)
                     .font(MeeshyFont.relative(9.5, weight: .semibold))
                     .tracking(1.2)
@@ -150,9 +150,9 @@ struct ComposerHashtagSheet: View {
                         onToggle(tag)
                         HapticFeedback.light()
                     } label: {
-                        HStack(spacing: 6) {
+                        HStack(spacing: MeeshySpacing.xsPlus) {
                             Text("#\(tag)")
-                                .font(MeeshyFont.relative(12, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                                 .foregroundStyle(posees
                                                  ? MeeshyColors.hashtagColor(isDark: true)
                                                  : .white.opacity(0.85))
@@ -172,7 +172,7 @@ struct ComposerHashtagSheet: View {
                     .accessibilityAddTraits(posees ? [.isSelected] : [])
                 }
             }
-            .padding(.top, 10)
+            .padding(.top, MeeshySpacing.smPlus)
         }
     }
 }

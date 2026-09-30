@@ -365,7 +365,7 @@ struct OnboardingProgressBar: View {
     let isDark: Bool
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             ForEach(0..<max(count, 1), id: \.self) { index in
                 Capsule()
                     .fill(index < position

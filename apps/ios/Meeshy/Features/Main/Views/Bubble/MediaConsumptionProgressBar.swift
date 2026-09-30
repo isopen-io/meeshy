@@ -46,8 +46,8 @@ struct MediaConsumptionProgressBar: View {
                 }
             }
             .frame(height: 3)
-            .padding(.horizontal, 6)
-            .padding(.bottom, 6)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
+            .padding(.bottom, MeeshySpacing.xsPlus)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }

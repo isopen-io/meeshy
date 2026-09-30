@@ -185,12 +185,12 @@ struct BubbleStoryCitationCard: View, Equatable {
 
             if overlaysSceneText {
                 Text(sceneText)
-                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
                     .lineLimit(4)
                     .shadow(color: .black.opacity(0.55), radius: 3, y: 1)
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -238,7 +238,7 @@ struct BubbleStoryCitationCard: View, Equatable {
     /// Une ligne à soi n'a pas de largeur à négocier.
     private var strip: some View {
         VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "arrowshape.turn.up.left.fill")
                     .font(MeeshyFont.relative(9))
                     // Le libellé posé à côté DIT déjà « réponse » : le glyphe est
@@ -246,14 +246,14 @@ struct BubbleStoryCitationCard: View, Equatable {
                     .accessibilityHidden(true)
 
                 Text(stripLabel)
-                    .font(MeeshyFont.relative(10, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
 
             if isUnavailable {
                 Text(unavailableLabel)
-                    .font(MeeshyFont.relative(9, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             } else if let date = reply.storyPublishedAt {
@@ -266,15 +266,15 @@ struct BubbleStoryCitationCard: View, Equatable {
                 // convient ici : une citation est un instantané du passé, pas
                 // un compteur.
                 Text(RelativeTimeFormatter.shortString(for: date))
-                    .font(MeeshyFont.relative(9))
+                    .font(MeeshyFont.relative(MeeshyFont.microSize))
                     .foregroundStyle(stripTint.opacity(0.7))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
         }
         .foregroundStyle(stripTint)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(hex: accentHex).opacity(isDark ? 0.28 : 0.16))
     }

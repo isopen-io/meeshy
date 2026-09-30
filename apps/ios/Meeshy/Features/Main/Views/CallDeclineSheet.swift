@@ -15,14 +15,14 @@ struct CallDeclineSheet: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                     ForEach(CallDeclineQuickReply.allCases) { reply in
                         quickReplyButton(reply)
                     }
                     customField
-                        .padding(.top, 12)
+                        .padding(.top, MeeshySpacing.md)
                 }
-                .padding(16)
+                .padding(MeeshySpacing.lg)
             }
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(String(localized: "call.decline.title", defaultValue: "Refuser avec un message", bundle: .main))
@@ -44,16 +44,16 @@ struct CallDeclineSheet: View {
             Text(reply.text)
                 .font(.body)
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                .padding(.horizontal, 14)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous))
         .accessibilityHint(String(localized: "call.decline.reply.hint", defaultValue: "Refuse l'appel et envoie ce message", bundle: .main))
     }
 
     private var customField: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             TextField(
                 String(localized: "call.decline.custom.placeholder", defaultValue: "Écrire un message…", bundle: .main),
                 text: $draft
@@ -64,9 +64,9 @@ struct CallDeclineSheet: View {
                 guard value.count > CallDeclineReplyRule.maxLength else { return }
                 draft = String(value.prefix(CallDeclineReplyRule.maxLength))
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
             .frame(minHeight: 44)
-            .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous))
             .accessibilityLabel(String(localized: "call.decline.custom.label", defaultValue: "Votre message", bundle: .main))
 
             Button(action: sendDraft) {

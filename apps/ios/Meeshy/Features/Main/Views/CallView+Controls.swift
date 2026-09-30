@@ -26,7 +26,7 @@ extension CallView {
                 showEffectsToolbar.toggle()
             }
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: showEffectsToolbar ? "xmark" : "camera.filters")
                     // Doctrine 86i : glyphe de contrôle dans un cercle glass fixe (diameter 64) → figé.
                     .font(.system(size: 24, weight: .medium))
@@ -54,7 +54,7 @@ extension CallView {
         Button {
             callManager.endCall()
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "phone.down.fill")
                     // Doctrine 86i : glyphe de fin d'appel dans un cercle glass fixe (diameter 56) → figé.
                     .font(.system(size: 24, weight: .medium))

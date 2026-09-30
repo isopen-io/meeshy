@@ -286,7 +286,7 @@ struct MessageOverlayMenu: View {
             ZStack {
                 dismissBackground
 
-                VStack(spacing: 10) {
+                VStack(spacing: MeeshySpacing.smPlus) {
                     // Zone tappable haute — `maxHeight: .infinity` laisse ce
                     // spacer absorber l'espace au-dessus du cluster
                     // bulle+emojis+panneau. Le cluster reste donc ancre vers
@@ -310,7 +310,7 @@ struct MessageOverlayMenu: View {
                             if !message.isMe { Spacer(minLength: 44) }
                         }
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 4)
+                        .padding(.horizontal, MeeshySpacing.xs)
                         .opacity(isVisible ? 1 : 0)
                         .offset(y: isVisible ? 0 : -28)
                         .scaleEffect(
@@ -328,7 +328,7 @@ struct MessageOverlayMenu: View {
                             emojiQuickBar
                             if !message.isMe { Spacer(minLength: 0) }
                         }
-                        .padding(.horizontal, 14)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
                         .opacity(isVisible ? 1 : 0)
                         .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
                         .offset(y: isVisible ? 0 : 18)
@@ -357,8 +357,8 @@ struct MessageOverlayMenu: View {
                             accentHex: contactColor,
                             onSelect: { handlePrimaryAction($0) }
                         )
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 12)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.bottom, MeeshySpacing.md)
                         .opacity(isVisible ? 1 : 0)
                         .scaleEffect(isVisible ? 1.0 : 0.85, anchor: .top)
                     }
@@ -579,7 +579,7 @@ struct MessageOverlayMenu: View {
     // MARK: - Message Preview (aligned left/right)
 
     private var messagePreview: some View {
-        VStack(alignment: message.isMe ? .trailing : .leading, spacing: 6) {
+        VStack(alignment: message.isMe ? .trailing : .leading, spacing: MeeshySpacing.xsPlus) {
             previewSenderHeader
 
             previewContent
@@ -596,7 +596,7 @@ struct MessageOverlayMenu: View {
             maxWidth: DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass),
             alignment: message.isMe ? .trailing : .leading
         )
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MeeshySpacing.sm)
         // Halo lumineux ancre a l'accent de la conversation + ombre
         // profonde : le preview semble decolle de la liste, flottant
         // au-dessus du flou. Les deux ombres ne s'allument qu'une fois
@@ -616,7 +616,7 @@ struct MessageOverlayMenu: View {
         let name = isMe ? "Moi" : (message.senderName ?? "?")
         let color = isMe ? contactColor : (message.senderColor ?? contactColor)
 
-        return HStack(spacing: 6) {
+        return HStack(spacing: MeeshySpacing.xsPlus) {
             if !isMe {
                 MeeshyAvatar(
                     name: name,
@@ -627,15 +627,15 @@ struct MessageOverlayMenu: View {
             }
 
             Text(name)
-                .font(MeeshyFont.relative(13, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(Color(hex: color))
 
             MetaSeparator()
-                .font(MeeshyFont.relative(13))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(theme.textMuted)
 
             Text(formatExactDate(message.createdAt))
-                .font(MeeshyFont.relative(12))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize))
                 .foregroundColor(theme.textMuted)
         }
     }
@@ -672,7 +672,7 @@ struct MessageOverlayMenu: View {
         let audios = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .audio }
         let files = message.attachments.filter { !AttachmentKind(mimeType: $0.mimeType).isMedia }
 
-        VStack(alignment: message.isMe ? .trailing : .leading, spacing: 8) {
+        VStack(alignment: message.isMe ? .trailing : .leading, spacing: MeeshySpacing.sm) {
             if !images.isEmpty {
                 OverlayPreviewMediaGrid(attachments: images, masked: false)
             }
@@ -749,13 +749,13 @@ struct MessageOverlayMenu: View {
         let showDelivery = message.isMe
         let shouldRenderMeta = hasFlags || showDelivery
 
-        return VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
+        return VStack(alignment: message.isMe ? .trailing : .leading, spacing: MeeshySpacing.xs) {
             Text(truncated)
-                .font(MeeshyFont.relative(15))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .foregroundColor(message.isMe ? .white : theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 14)
-                .padding(.top, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.top, MeeshySpacing.smPlus)
                 .padding(.bottom, shouldRenderMeta ? 4 : 10)
 
             if shouldRenderMeta {
@@ -768,8 +768,8 @@ struct MessageOverlayMenu: View {
                     onTranslateTap: nil,
                     isMe: message.isMe
                 )
-                .padding(.horizontal, 14)
-                .padding(.bottom, 8)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.bottom, MeeshySpacing.sm)
                 .allowsHitTesting(false)
             }
         }
@@ -780,11 +780,11 @@ struct MessageOverlayMenu: View {
                 isDark: isDark
             )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
         // Liseré subtil a la teinte de la bulle — donne du relief au
         // preview flottant sans alourdir la lecture.
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                 .stroke(
                     Color(hex: bubbleAccentHex).opacity(message.isMe ? 0.0 : 0.18),
                     lineWidth: 0.75
@@ -797,35 +797,35 @@ struct MessageOverlayMenu: View {
     private func previewFileRow(_ attachment: MessageAttachment) -> some View {
         let accent = Color(hex: contactColor)
 
-        return HStack(spacing: 10) {
+        return HStack(spacing: MeeshySpacing.smPlus) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                     .fill(accent.opacity(0.15))
                     .frame(width: 36, height: 36)
                 // Decorative glyph inside a fixed 36×36 badge — kept fixed so
                 // it never overflows the badge; filename text carries the label.
                 Image(systemName: "doc.fill")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                     .foregroundColor(accent)
                     .accessibilityHidden(true)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName)
-                    .font(MeeshyFont.relative(13, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 Text(formatFileSize(attachment.fileSize))
-                    .font(MeeshyFont.relative(11))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundColor(theme.textMuted)
             }
 
             Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
         )
     }
@@ -867,8 +867,8 @@ private struct PreviewAudioPlayer: View {
     private var accent: Color { Color(hex: contactColor) }
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Button { player.toggle(url: attachment.fileUrl) } label: {
                     ZStack {
                         Circle()
@@ -882,7 +882,7 @@ private struct PreviewAudioPlayer: View {
                             // Glyph inside a fixed 40×40 circle — kept fixed to
                             // stay centred; the Button carries the a11y label.
                             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                                 .foregroundColor(accent)
                         }
                     }
@@ -893,14 +893,14 @@ private struct PreviewAudioPlayer: View {
                     : String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main))
                 .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.spokenTotalDuration(totalDuration: attachment.duration)))
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
-                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
                     Text(player.timeLabel(totalDuration: attachment.duration))
-                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .monospacedDigit()
                 }
@@ -922,18 +922,18 @@ private struct PreviewAudioPlayer: View {
                     }
                 } label: {
                     Text("\(String(format: "%.2g", player.playbackRate))x")
-                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundColor(accent)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, MeeshySpacing.sm)
+                        .padding(.vertical, MeeshySpacing.xs)
                         .background(Capsule().fill(accent.opacity(0.12)))
                 }
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Button { player.skip(seconds: -5) } label: {
                     Image(systemName: "gobackward.5")
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
@@ -952,7 +952,7 @@ private struct PreviewAudioPlayer: View {
 
                 // Pourcentage d'avancement
                 Text(LocalizedNumber.percent(player.percentInt))
-                    .font(MeeshyFont.relative(11, weight: .heavy, design: .monospaced))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy, design: .monospaced))
                     .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
                     .frame(minWidth: 36)
                     .contentTransition(.numericText())
@@ -961,17 +961,17 @@ private struct PreviewAudioPlayer: View {
 
                 Button { player.skip(seconds: 5) } label: {
                     Image(systemName: "goforward.5")
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Avancer de 5 secondes", bundle: .main))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
         )
         .onDisappear { player.stop() }
@@ -1021,7 +1021,7 @@ private struct PreviewVideoPlayer: View {
                                 // Glyph inside a fixed 52×52 play circle — kept
                                 // fixed; the Button carries the a11y label.
                                 Image(systemName: "play.fill")
-                                    .font(.system(size: 20))
+                                    .font(.system(size: MeeshyIconSize.xl))
                                     .foregroundColor(.white)
                                     .offset(x: 2)
                             )
@@ -1036,12 +1036,12 @@ private struct PreviewVideoPlayer: View {
                 videoControls
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
         .onDisappear { player.stop() }
     }
 
     private var videoControls: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             Slider(
                 value: Binding(
                     get: { player.progress },
@@ -1053,7 +1053,7 @@ private struct PreviewVideoPlayer: View {
             .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Position de lecture", bundle: .main))
             .accessibilityValue(LocalizedNumber.percent(player.percentInt))
 
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Button { player.toggle(url: attachment.fileUrl) } label: {
                     if player.isLoading {
                         ProgressView()
@@ -1062,7 +1062,7 @@ private struct PreviewVideoPlayer: View {
                             .frame(width: 14, height: 14)
                     } else {
                         Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                             .foregroundColor(accent)
                     }
                 }
@@ -1073,14 +1073,14 @@ private struct PreviewVideoPlayer: View {
 
                 Button { player.skip(seconds: -5) } label: {
                     Image(systemName: "gobackward.5")
-                        .font(MeeshyFont.relative(12, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Reculer de 5 secondes", bundle: .main))
 
                 Text(LocalizedNumber.percent(player.percentInt))
-                    .font(MeeshyFont.relative(10, weight: .heavy, design: .monospaced))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .heavy, design: .monospaced))
                     .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
                     .frame(minWidth: 32)
                     .contentTransition(.numericText())
@@ -1089,7 +1089,7 @@ private struct PreviewVideoPlayer: View {
 
                 Button { player.skip(seconds: 5) } label: {
                     Image(systemName: "goforward.5")
-                        .font(MeeshyFont.relative(12, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
@@ -1098,15 +1098,15 @@ private struct PreviewVideoPlayer: View {
                 Spacer()
 
                 Text(player.timeLabel(totalDuration: attachment.duration))
-                    .font(MeeshyFont.relative(10, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .monospacedDigit()
 
                 speedMenu
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
             UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 0)
                 .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
@@ -1129,7 +1129,7 @@ private struct PreviewVideoPlayer: View {
             }
         } label: {
             Text("\(String(format: "%.2g", player.playbackRate))x")
-                .font(MeeshyFont.relative(10, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 .foregroundColor(accent)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)

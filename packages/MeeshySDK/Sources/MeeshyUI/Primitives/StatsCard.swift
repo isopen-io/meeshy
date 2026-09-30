@@ -26,7 +26,7 @@ public struct StatsCard: View {
     }
 
     public var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             // Icon with circular background
             ZStack {
                 Circle()
@@ -34,26 +34,26 @@ public struct StatsCard: View {
                     .frame(width: 40, height: 40)
 
                 Image(systemName: icon)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.system(size: MeeshyIconSize.md, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
 
             // Label and value
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
                 Text(value)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
             }
 
             Spacer()
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(theme.surfaceGradient(tint: accentColor))
-        .glassCard(cornerRadius: 12)
+        .glassCard(cornerRadius: MeeshyRadius.smPlus)
     }
 }
 
@@ -62,7 +62,7 @@ public struct StatsCard: View {
 #if DEBUG
 struct StatsCard_Previews: PreviewProvider {
     static var previews: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             StatsCard(
                 icon: "paperplane.fill",
                 label: "Messages envoyés",

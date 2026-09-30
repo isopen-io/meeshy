@@ -31,7 +31,7 @@ struct BubbleDeliveryCheck: View, Equatable {
     var body: some View {
         if isOffline, isInFlight {
             Image(systemName: "hourglass")
-                .font(MeeshyFont.relative(10, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                 .foregroundColor(MeeshyColors.warning)
                 .accessibilityLabel(Self.label(.offlinePending))
         } else {
@@ -48,7 +48,7 @@ struct BubbleDeliveryCheck: View, Equatable {
             SendingClockGlyph(sendStartedAt: sendStartedAt, tint: tint)
         case .clock:
             Image(systemName: "clock")
-                .font(MeeshyFont.relative(10))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                 .foregroundColor(tint.opacity(0.7))
                 .accessibilityLabel(Self.label(.sending))
         case .slow:
@@ -59,7 +59,7 @@ struct BubbleDeliveryCheck: View, Equatable {
             // seulement après épuisement du budget outbox. La teinte warning
             // distingue toujours l'envoi lent/retenté d'un envoi frais.
             Image(systemName: "clock")
-                .font(MeeshyFont.relative(10, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                 .foregroundColor(MeeshyColors.warning)
                 .accessibilityLabel(Self.label(.slow))
         case .sent:
@@ -69,7 +69,7 @@ struct BubbleDeliveryCheck: View, Equatable {
             // (directive user — « le coche simple double et violet ne soient
             // pas en gras »). `.semibold` faisait ressortir la coche simple.
             Image(systemName: "checkmark")
-                .font(MeeshyFont.relative(10, weight: .regular))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .regular))
                 .foregroundColor(tint)
                 .accessibilityLabel(Self.label(.sent))
         case .delivered:
@@ -80,7 +80,7 @@ struct BubbleDeliveryCheck: View, Equatable {
                 .accessibilityLabel(Self.label(.read))
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
-                .font(MeeshyFont.relative(10, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
                 .foregroundColor(MeeshyColors.stateFailed)
                 .accessibilityLabel(Self.label(.failed))
         }
@@ -158,7 +158,7 @@ struct BubbleDeliveryCheck: View, Equatable {
             Group {
                 if isRevealed {
                     Image(systemName: "clock")
-                        .font(MeeshyFont.relative(10))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                         .foregroundColor(tint)
                         .accessibilityLabel(BubbleDeliveryCheck.label(.sending))
                 } else {

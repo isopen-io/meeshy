@@ -13,9 +13,9 @@ struct PendingLinkNotice: View {
 
     var body: some View {
         if isVisible {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: "link")
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                     .foregroundStyle(MeeshyColors.indigo500)
                     .accessibilityHidden(true)
                 Text(String(localized: "auth.pendingLink.notice",
@@ -25,12 +25,12 @@ struct PendingLinkNotice: View {
                     .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.md)
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .background(MeeshyColors.indigo500.opacity(0.10), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .background(MeeshyColors.indigo500.opacity(0.10), in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
             .accessibilityElement(children: .combine)
             .transition(.move(edge: .top).combined(with: .opacity))
         }

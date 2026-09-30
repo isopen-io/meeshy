@@ -123,7 +123,7 @@ struct StoryTrayView: View {
             // are not materialised. A heavy user with 50+ story groups
             // previously instantiated all 50 `MeeshyAvatar` instances at
             // tray load (~8-12MB) even when only 4-5 fit on screen.
-            LazyHStack(spacing: 12) {
+            LazyHStack(spacing: MeeshySpacing.md) {
                 myStoryButton
                     .bounceOnAppear(delay: 0)
 
@@ -138,8 +138,8 @@ struct StoryTrayView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.sm)
         }
     }
 
@@ -470,7 +470,7 @@ private struct MyStoryButton: View {
                             // (cf. MeeshyAvatar.badgeSize .storyTray).
                             // Emoji dans un cercle de dimension fixe 32×32 : figé (déborderait s'il scalait, doctrine 86i)
                             Text("\u{1F4AD}")
-                                .font(.system(size: 20))
+                                .font(.system(size: MeeshyFont.title3Size))
                                 .frame(width: 32, height: 32)
                                 .background(Circle().fill(theme.backgroundPrimary))
                         }
@@ -546,7 +546,7 @@ private struct MyStoryButton: View {
             }
 
             Text(String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main))
-                .font(MeeshyFont.relative(10, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
         }
     }
@@ -596,7 +596,7 @@ private struct StoryUploadOverlay: View {
 
                 // Glyphe dans un cercle d'upload de dimension fixe 50×50 : figé (déborderait s'il scalait, doctrine 86i)
                 Image(systemName: "exclamationmark.triangle")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.sm, weight: .bold))
                     .foregroundColor(.white)
             } else {
                 Circle()
@@ -801,7 +801,7 @@ struct PinnedStoryTrailBand: View {
             // spring repeatForever) à CHAQUE traversée du seuil de reveal du
             // scroll, y compris hors écran. Lazy = seuls les ~8 anneaux
             // visibles vivent (et animent).
-            LazyHStack(alignment: .top, spacing: 12) {
+            LazyHStack(alignment: .top, spacing: MeeshySpacing.md) {
                 // Sa propre story EN TÊTE, à la place qu'occupait le bouton
                 // « + » : depuis son retrait (directive user 2026-08-13), c'est
                 // cet avatar-ci qui porte l'accès à la composition — deux
@@ -848,7 +848,7 @@ struct PinnedStoryTrailBand: View {
                     .zoomTransitionSource(id: group.id, in: zoomNamespace)
                 }
             }
-            .padding(.leading, 16)
+            .padding(.leading, MeeshySpacing.lg)
             // Fin de piste : la trail court jusqu'au bord droit de l'écran et
             // passe SOUS les boutons d'actions (supersession 2026-08-18 — « de
             // bout d'écran à bout d'écran »). Sans cet encart, le dernier anneau
@@ -856,8 +856,8 @@ struct PinnedStoryTrailBand: View {
             // l'atteindre, jamais le voir. La valeur vit dans le catalogue du
             // header, seul endroit qui connaisse la largeur de son chrome.
             .padding(.trailing, CollapsibleHeaderMetrics.accessoryTrailingClearance)
-            .padding(.top, 2)
-            .padding(.bottom, 4)
+            .padding(.top, MeeshySpacing.xxs)
+            .padding(.bottom, MeeshySpacing.xs)
         }
         // No own background — this view is injected as the `CollapsibleHeader`
         // accessory slot, so the header surface masks the content underneath.

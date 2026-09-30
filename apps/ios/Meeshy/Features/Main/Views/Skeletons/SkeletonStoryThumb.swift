@@ -26,10 +26,10 @@ struct SkeletonStoryThumb: View {
     }
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             ZStack {
                 Circle()
-                    .stroke(ringColor, lineWidth: 2)
+                    .stroke(ringColor, lineWidth: MeeshyBorder.strong)
                     .frame(width: ringDiameter, height: ringDiameter)
                 Circle()
                     .fill(placeholderColor)
@@ -70,13 +70,13 @@ struct SkeletonStoryTrayRow: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 ForEach(0..<count, id: \.self) { _ in
                     SkeletonStoryThumb()
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.sm)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(String(localized: "skeleton.stories.loading", defaultValue: "Chargement des stories", bundle: .main)))

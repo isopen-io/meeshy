@@ -309,10 +309,10 @@ struct ComposerObjectEditorView: View {
                     Image(systemName: "chevron.backward")
                         .font(MeeshyFont.relative(15, weight: .semibold))
                     Text(LocalizedNumber.exact(objectCount))
-                        .font(MeeshyFont.relative(16, weight: .semibold).monospacedDigit())
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold).monospacedDigit())
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .frame(minWidth: 44, minHeight: 40)
                 // **Verre ADAPTATIF, jamais `glassEffect` en direct** (#4997) :
                 // l'enrobage du SDK rend le vrai Liquid Glass sur iOS 26 et un
@@ -328,18 +328,18 @@ struct ComposerObjectEditorView: View {
             Spacer()
             Button(action: onClose) {
                 Text(ComposerObjectEditorCopy.done)
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     // Blanc sur la capsule PROÉMINENTE, comme « Publier » : les
                     // deux sont l'action terminale de leur écran, et le même
                     // geste doit avoir partout le même relief.
                     .foregroundStyle(.white)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                     .frame(minHeight: 40)
                     .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, 8)
     }
 
@@ -450,8 +450,8 @@ struct ComposerObjectEditorView: View {
         // Les DEUX couloirs sont de nouveau occupés (#5026) — les outils à
         // gauche, l'historique à droite — et la carte s'encastre entre eux,
         // comme sur la surface de scène.
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.smPlus)
     }
 
     // MARK: - Les deux rails, dans les couloirs
@@ -500,7 +500,7 @@ struct ComposerObjectEditorView: View {
     /// > geste.
     private var toolRail: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 8) {
+            VStack(spacing: MeeshySpacing.sm) {
                 ForEach(ComposerObjectEditorRail.entries(
                     for: family,
                     hasTrimmableSource: objectHasTrimmableSource,
@@ -554,7 +554,7 @@ struct ComposerObjectEditorView: View {
                                             ? [.isButton, .isSelected] : .isButton)
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, MeeshySpacing.xs)
         }
         .frame(width: ComposerObjectEditorRail.railWidth)
         // **Plus de CARTE depuis le 2026-09-27** : le #5097 l'avait posée pour
@@ -747,11 +747,11 @@ struct ComposerObjectEditorView: View {
         // **La plaque de VERRE du bas** (directive porteur 2026-09-27 : « en bas
         // une plaque de verre dans laquelle apparaissent les options des
         // différents outils d'édition, le tout en adaptive glass »).
-        .padding(.vertical, 10)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous),
                        tint: plateauTint.opacity(0.55))
-        .padding(.horizontal, 8)
-        .padding(.bottom, 4)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     /// Les options d'un objet TEXTE, dans l'ordre que la rangée du SDK a fixé —
@@ -797,7 +797,7 @@ struct ComposerObjectEditorView: View {
             timingSection
             planSection
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .padding(.bottom, 28)
     }
 
@@ -815,9 +815,9 @@ struct ComposerObjectEditorView: View {
     /// glissières nues perdrait au premier réglage.
     private var timingSection: some View {
         section(ComposerObjectEditorCopy.timing, .timing) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 Text(ComposerObjectEditorCopy.window(timing, slideDuration: slideDuration))
-                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     .foregroundStyle(.white.opacity(0.75))
                     .accessibilityLabel(ComposerObjectEditorCopy.window(timing, slideDuration: slideDuration))
 
@@ -848,7 +848,7 @@ struct ComposerObjectEditorView: View {
                     }
                 )) {
                     Text(ComposerObjectEditorCopy.permanent)
-                        .font(MeeshyFont.relative(13, weight: .regular))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                         .foregroundStyle(.white.opacity(0.85))
                 }
                 .tint(MeeshyColors.brandPrimary)
@@ -857,14 +857,14 @@ struct ComposerObjectEditorView: View {
     }
 
     private func slider(titre: String, valeur: Binding<Double>, borne: Double) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             HStack {
                 Text(titre)
-                    .font(MeeshyFont.relative(11, weight: .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
                     .foregroundStyle(.white.opacity(0.55))
                 Spacer()
                 Text(ComposerObjectEditorCopy.seconds(valeur.wrappedValue))
-                    .font(MeeshyFont.relative(11, weight: .medium).monospacedDigit())
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium).monospacedDigit())
                     .foregroundStyle(.white.opacity(0.75))
             }
             Slider(value: valeur, in: 0...borne)
@@ -959,7 +959,7 @@ struct ComposerObjectEditorView: View {
             // « enlève les captions partout ») : le bouton allumé du rail dit
             // déjà quel outil est ouvert. Le titre reste celui que VoiceOver
             // annonce pour le groupe (dimension 5).
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 content()
                     .frame(maxWidth: .infinity, alignment: .leading)
             }

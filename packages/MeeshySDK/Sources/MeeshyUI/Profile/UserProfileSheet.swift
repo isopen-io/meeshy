@@ -171,8 +171,8 @@ public struct UserProfileSheet: View {
             identitySection(offset: 0)
                 .padding(.top, -40)
             blockedByMeCard
-                .padding(.horizontal, 20)
-                .padding(.top, 16)
+                .padding(.horizontal, MeeshySpacing.xl)
+                .padding(.top, MeeshySpacing.lg)
             Spacer()
         }
         .background(theme.backgroundPrimary)
@@ -191,7 +191,7 @@ public struct UserProfileSheet: View {
 
                 Section {
                     tabContent
-                        .padding(.top, 16)
+                        .padding(.top, MeeshySpacing.lg)
                 } header: {
                     ScrollOffsetReader(relay: scrollRelay) { offset in
                         pinnedTabBar(offset: offset)
@@ -241,7 +241,7 @@ public struct UserProfileSheet: View {
     var tabContent: some View {
         if effectiveIsLoading {
             loadingPlaceholder
-                .padding(.horizontal, 20)
+                .padding(.horizontal, MeeshySpacing.xl)
         } else {
             switch selectedTab {
             case .posts:
@@ -476,26 +476,26 @@ public struct UserProfileSheet: View {
     // MARK: - Bio Card
 
     func bioCard(_ bio: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(bio)
                 .font(.callout)
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(5)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(theme.surfaceGradient(tint: resolvedAccent))
-        .glassCard(cornerRadius: 16)
+        .glassCard(cornerRadius: MeeshyRadius.lg)
     }
 
     // MARK: - Info Chip
 
     func infoChip(icon: String, text: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             if icon.count > 1 {
                 // Emoji flag
                 Text(icon)
-                    .font(.system(size: 14))
+                    .font(.system(size: MeeshyFont.labelSize))
             } else {
                 // SF Symbol
                 Image(systemName: icon)
@@ -503,11 +503,11 @@ public struct UserProfileSheet: View {
                     .foregroundColor(Color(hex: resolvedAccent))
             }
             Text(text)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(theme.surface(tint: resolvedAccent, intensity: 0.12))
         .clipShape(Capsule())
         .overlay(
@@ -518,22 +518,22 @@ public struct UserProfileSheet: View {
     // MARK: - E2EE Badge
 
     var e2eeBadge: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "lock.shield.fill")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(MeeshyColors.success)
 
             Text(String(localized: "profile.e2ee.enabled", defaultValue: "Chiffrement de bout en bout activé", bundle: .module))
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(MeeshyColors.success)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(MeeshyColors.success.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(MeeshyColors.success.opacity(0.3), lineWidth: 1.5)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                .stroke(MeeshyColors.success.opacity(0.3), lineWidth: MeeshyBorder.emphasis)
         )
     }
 
@@ -545,7 +545,7 @@ public struct UserProfileSheet: View {
         let regLang = LanguageDisplay.from(code: displayUser.regionalLanguage)
 
         if sysLang != nil || regLang != nil {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if let lang = sysLang {
                     languagePill(lang)
                 }
@@ -557,15 +557,15 @@ public struct UserProfileSheet: View {
     }
 
     func languagePill(_ lang: LanguageDisplay) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Text(lang.flag)
-                .font(.system(size: 14))
+                .font(.system(size: MeeshyFont.labelSize))
             Text(lang.name)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(theme.surface(tint: resolvedAccent, intensity: 0.12))
         .clipShape(Capsule())
         .overlay(
@@ -624,17 +624,17 @@ public struct UserProfileSheet: View {
     // MARK: - Loading Placeholder
 
     var loadingPlaceholder: some View {
-        VStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 12)
+        VStack(spacing: MeeshySpacing.md) {
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
                 .frame(height: 60)
                 .shimmer()
 
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 20)
+            HStack(spacing: MeeshySpacing.sm) {
+                RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                     .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
                     .frame(width: 80, height: 30)
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                     .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
                     .frame(width: 80, height: 30)
             }
@@ -645,9 +645,9 @@ public struct UserProfileSheet: View {
     // MARK: - Blocked By Me
 
     private var blockedByMeCard: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             Text(String(localized: "profile.blocked.byMe", defaultValue: "Vous avez bloque cet utilisateur", bundle: .module))
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
 
             Button {
@@ -655,10 +655,10 @@ public struct UserProfileSheet: View {
                 Task { await unblockUser() }
             } label: {
                 Text(String(localized: "profile.blocked.unblock", defaultValue: "Debloquer", bundle: .module))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, MeeshySpacing.xxl)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                     .background(
                         LinearGradient(
                             colors: [MeeshyColors.success, MeeshyColors.successDeep],
@@ -670,9 +670,9 @@ public struct UserProfileSheet: View {
             .pressable()
         }
         .frame(maxWidth: .infinity)
-        .padding(20)
+        .padding(MeeshySpacing.xl)
         .background(theme.surfaceGradient(tint: "888888"))
-        .glassCard(cornerRadius: 16)
+        .glassCard(cornerRadius: MeeshyRadius.lg)
     }
 
     // MARK: - Helpers

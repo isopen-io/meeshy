@@ -204,7 +204,7 @@ extension SignupView {
                     avatarURL: owner.avatar
                 )
                 .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(verbatim: owner.maskedDisplayName)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)

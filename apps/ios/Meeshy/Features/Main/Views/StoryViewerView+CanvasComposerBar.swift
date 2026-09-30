@@ -136,22 +136,22 @@ struct StoryComposerBarView: View {
             textBinding: $commentText,
             replyBanner: replyingToStoryComment.map { reply in
                 AnyView(
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(Color(hex: reply.authorColor))
                             .frame(width: 3, height: 30)
 
                         VStack(alignment: .leading, spacing: 1) {
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: "arrowshape.turn.up.left.fill")
                                     .font(MeeshyFont.relative(9, weight: .semibold))
                                     .foregroundColor(Color(hex: reply.authorColor))
                                 Text(String(localized: "story.viewer.replyTo", defaultValue: "R\u{00E9}ponse \u{00E0} \(reply.author)", bundle: .main))
-                                    .font(MeeshyFont.relative(11, weight: .semibold))
+                                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                                     .foregroundColor(Color(hex: reply.authorColor))
                             }
                             Text(reply.displayContent)
-                                .font(MeeshyFont.relative(11))
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                                 .foregroundColor(.white.opacity(0.6))
                                 .lineLimit(1)
                         }
@@ -172,8 +172,8 @@ struct StoryComposerBarView: View {
                         }
                         .accessibilityLabel(String(localized: "story.viewer.reply.cancel", defaultValue: "Annuler la réponse", bundle: .main))
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.sm)
                     .background(Color(hex: reply.authorColor).opacity(0.18))
                     .overlay(
                         Rectangle()

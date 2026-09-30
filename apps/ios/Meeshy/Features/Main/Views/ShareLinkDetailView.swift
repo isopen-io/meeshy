@@ -80,10 +80,10 @@ struct ShareLinkDetailView: View {
     }
 
     private var heroCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             HStack(spacing: MeeshySpacing.md) {
                 groupLogo
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(groupName)
                         .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .heavy, design: .rounded))
                         .lineLimit(2)
@@ -101,7 +101,7 @@ struct ShareLinkDetailView: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
                 .padding(.horizontal, MeeshySpacing.md)
-                .padding(.vertical, 10)
+                .padding(.vertical, MeeshySpacing.smPlus)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(RoundedRectangle(cornerRadius: MeeshyRadius.sm).fill(Color.white.opacity(0.16)))
                 .environment(\.layoutDirection, .leftToRight)
@@ -115,7 +115,7 @@ struct ShareLinkDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 shareActionButton
                 Button(action: copyLink) {
                     heroButtonLabel(copiedFeedback ? ShareLinkDetailCopy.copied : ShareLinkDetailCopy.copyLink,
@@ -129,7 +129,7 @@ struct ShareLinkDetailView: View {
         .padding(MeeshySpacing.xl)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xxl, style: .continuous)
                 .fill(LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700, MeeshyColors.purple600],
                                      startPoint: .topLeading, endPoint: .bottomTrailing))
         )
@@ -137,7 +137,7 @@ struct ShareLinkDetailView: View {
     }
 
     private var groupLogo: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
+        RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
             .fill(Color.white.opacity(0.2))
             .overlay(
                 CachedAsyncImage(url: link.conversation?.avatar, targetSize: CGSize(width: 48, height: 48), showsStatusOverlays: false) {
@@ -147,7 +147,7 @@ struct ShareLinkDetailView: View {
                 }
                 .scaledToFill()
             )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
             .frame(width: 48, height: 48)
             .accessibilityHidden(true)
     }
@@ -156,7 +156,7 @@ struct ShareLinkDetailView: View {
         Text(link.isActive ? ShareLinkDetailCopy.active : ShareLinkDetailCopy.inactive)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy))
             .textCase(.uppercase)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, 5)
             .background(Capsule().fill(link.isActive ? MeeshyColors.success.opacity(0.9) : Color.white.opacity(0.25)))
             .foregroundColor(link.isActive ? MeeshyColors.indigo950 : .white)
@@ -200,7 +200,7 @@ struct ShareLinkDetailView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
-                .stroke(Color.white.opacity(filled ? 0 : 0.45), lineWidth: 1.5)
+                .stroke(Color.white.opacity(filled ? 0 : 0.45), lineWidth: MeeshyBorder.emphasis)
         )
         .contentShape(Rectangle())
     }

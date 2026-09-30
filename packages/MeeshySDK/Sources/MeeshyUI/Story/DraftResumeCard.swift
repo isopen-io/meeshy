@@ -72,15 +72,15 @@ public struct DraftResumeCard: View {
     }
 
     public var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             if let cover {
                 Image(uiImage: cover)
                     .resizable()
                     .scaledToFill()
                     .frame(width: Self.coverSize.width, height: Self.coverSize.height)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
                             .stroke(MeeshyColors.indigo400.opacity(0.6), lineWidth: 1)
                     )
                     .accessibilityHidden(true)
@@ -89,10 +89,10 @@ public struct DraftResumeCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(String(localized: "story.draft.resume.title",
                             defaultValue: "Reprendre votre story ?", bundle: .module))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(String(localized: "story.draft.resume.slides",
                                 defaultValue: "\(slideCount) slide(s)", bundle: .module))
                     if let freshness = Self.freshnessLabel(from: updatedAt) {
@@ -100,7 +100,7 @@ public struct DraftResumeCard: View {
                         Text(freshness)
                     }
                 }
-                .font(MeeshyFont.relative(12))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize))
                 .foregroundStyle(.white.opacity(0.7))
                 .lineLimit(1)
             }
@@ -110,7 +110,7 @@ public struct DraftResumeCard: View {
             // Deux actions côte à côte, 44 pt de contact chacune (D1).
             // « Recommencer » porte la seule destruction — ranger n'est PAS
             // jeter, et c'est l'hôte qui range sur interaction avec le canvas.
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 // `.lineLimit(1)` + `.fixedSize` : les libellés d'action gardent
                 // leur largeur intrinsèque — c'est le titre/sous-titre (lineLimit 1
                 // + Spacer) qui absorbe la compression du bandeau, jamais les
@@ -119,11 +119,11 @@ public struct DraftResumeCard: View {
                 Button(action: onDiscard) {
                     Text(String(localized: "story.draft.resume.discard",
                                 defaultValue: "Recommencer", bundle: .module))
-                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.85))
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, 14)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
                         .frame(minHeight: 44)
                         .contentShape(Capsule())
                         .background(Capsule().stroke(Color.white.opacity(0.35), lineWidth: 1))
@@ -131,11 +131,11 @@ public struct DraftResumeCard: View {
                 Button(action: onResume) {
                     Text(String(localized: "story.draft.resume.resume",
                                 defaultValue: "Reprendre", bundle: .module))
-                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                         .foregroundStyle(.white)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, MeeshySpacing.lg)
                         .frame(minHeight: 44)
                         .contentShape(Capsule())
                         .background(Capsule().fill(MeeshyColors.brandGradient))
@@ -143,9 +143,9 @@ public struct DraftResumeCard: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.md)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
         .environment(\.colorScheme, .dark)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "story.draft.resume.a11y",

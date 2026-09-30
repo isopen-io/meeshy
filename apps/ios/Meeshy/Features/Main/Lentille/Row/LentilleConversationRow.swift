@@ -114,7 +114,7 @@ struct LentilleConversationRow: View {
         HStack(alignment: .center, spacing: MeeshySpacing.md) {
             avatarView
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 if let magnification {
                     LentilleMagnifiedTopLine(
                         conversation: conversation,
@@ -155,7 +155,7 @@ struct LentilleConversationRow: View {
                 RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                     .fill(accent)
                     .frame(width: 3)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
             }
         }
         .contentShape(Rectangle())
@@ -486,7 +486,7 @@ struct LentilleConversationRow: View {
     }
 
     private func draftLine(_ draft: DraftSummary) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Text(draft.previewText.isEmpty
                 ? String(localized: "draft.label", bundle: .main)
                 : String(localized: "draft.label_prefix", bundle: .main))

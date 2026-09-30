@@ -100,7 +100,7 @@ struct StoryAuthorIdentityCard: View {
     }
 
     private var identityContent: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.mdPlus) {
             // `storyTray` = 88 pt, le plus grand context avatar — l'identité
             // est le sujet de l'écran. Présence + mood délégués au badge/capsule
             // dédiés ci-dessous (plus lisibles qu'un dot 10 pt sur l'avatar).
@@ -110,7 +110,7 @@ struct StoryAuthorIdentityCard: View {
                 accentColor: avatarColor,
                 avatarURL: avatarURL
             )
-            VStack(spacing: 4) {
+            VStack(spacing: MeeshySpacing.xs) {
                 Text(intro.displayName ?? intro.username)
                     .font(.title2.weight(.bold))
                     .foregroundStyle(.white)
@@ -124,7 +124,7 @@ struct StoryAuthorIdentityCard: View {
                 presenceBadge
             }
             if let emoji = intro.moodEmoji {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Text(emoji).font(.title3)
                     if let message = intro.moodMessage, !message.isEmpty {
                         Text(message)
@@ -133,12 +133,12 @@ struct StoryAuthorIdentityCard: View {
                             .lineLimit(2)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(.ultraThinMaterial, in: Capsule())
             }
         }
-        .padding(.horizontal, 32)
+        .padding(.horizontal, MeeshySpacing.xxxl)
     }
 
     // Règle 1/3/5 : au-delà de 5 min d'inactivité (offline), AUCUN badge —
@@ -147,7 +147,7 @@ struct StoryAuthorIdentityCard: View {
     private var presenceBadge: some View {
         let state = presence?.state ?? .offline
         if state.showsIndicator {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Circle()
                     .fill(state.dotColor)
                     .frame(width: 9, height: 9)

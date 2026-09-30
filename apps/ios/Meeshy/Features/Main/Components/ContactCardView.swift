@@ -42,17 +42,17 @@ struct ContactCardView: View, Equatable {
     private var accent: Color { Color(hex: accentHex) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             header
             if let account = model.primaryAccount {
                 ContactAccountActionRow(model: model, account: account, accentHex: accentHex, style: .compact)
             }
         }
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .frame(width: 256, alignment: .leading)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .stroke(accent.opacity(0.25), lineWidth: 1)
         )
         .task { await model.load() }
@@ -68,9 +68,9 @@ struct ContactCardView: View, Equatable {
             HapticFeedback.light()
             withoutCoverAnimation { isShowingDetail = true }
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 leadingAvatar
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(String(localized: "contact-card.shared", defaultValue: "Contact partagé", bundle: .main))
                         .font(.caption2.weight(.semibold))
                         .foregroundColor(accent)
@@ -111,7 +111,7 @@ struct ContactCardView: View, Equatable {
             ZStack {
                 Circle().fill(LinearGradient(colors: [accent, accent.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 Image(systemName: "person.crop.circle.fill")
-                    .font(MeeshyFont.relative(18, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .foregroundColor(.white)
             }
@@ -161,7 +161,7 @@ struct ContactAccountActionRow: View {
         let actions = model.actions(for: account)
         let isBusy = model.busyUserIds.contains(account.userId)
         if actions != .none {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 switch actions.connect {
                 case .connect:
                     actionButton(String(localized: "contact-card.action.connect", defaultValue: "Se connecter", bundle: .main), icon: "person.badge.plus", filled: true, disabled: isBusy) {

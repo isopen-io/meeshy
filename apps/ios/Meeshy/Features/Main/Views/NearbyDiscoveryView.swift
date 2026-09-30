@@ -250,7 +250,7 @@ struct NearbyDiscoveryView: View {
                 Task { await viewModel.refresh() }
             } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(MeeshyFont.relative(14, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
                     .foregroundColor(theme.textPrimary)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(theme.backgroundSecondary.opacity(0.9)))
@@ -280,7 +280,7 @@ struct NearbyDiscoveryView: View {
             .accessibilityIdentifier("feed.nearby.section")
         } else {
             Text(Self.sectionLabel(.nearby))
-                .font(MeeshyFont.relative(14, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.sm)
@@ -333,10 +333,10 @@ struct NearbyDiscoveryView: View {
         if let text = statusText {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: viewModel.isOffline ? "wifi.slash" : "clock.arrow.circlepath")
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                     .accessibilityHidden(true)
                 Text(text)
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             }
             .foregroundColor(viewModel.isOffline ? MeeshyColors.warning : theme.textSecondary)
             .padding(.horizontal, MeeshySpacing.md)
@@ -395,7 +395,7 @@ struct NearbyDiscoveryView: View {
             Task { await viewModel.setRadius(kilometers: km) }
         } label: {
             Text(String(format: "%.0f km", km))
-                .font(MeeshyFont.relative(12, weight: isSelected ? .semibold : .regular))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: isSelected ? .semibold : .regular))
                 .foregroundColor(isSelected ? .white : theme.textSecondary)
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.xs)
@@ -423,14 +423,14 @@ struct NearbyDiscoveryView: View {
                 )
                 .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(post.author)
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
                     if !post.displayContent.isEmpty {
                         Text(post.displayContent)
-                            .font(MeeshyFont.relative(12))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
@@ -441,7 +441,7 @@ struct NearbyDiscoveryView: View {
 
                 if let meters = viewModel.distanceMeters(for: post.id) {
                     Text(NearbyDistanceLabel.short(meters: meters))
-                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundColor(MeeshyColors.indigo500)
                 }
 
@@ -513,12 +513,12 @@ struct NearbyEmptyStateCard: View {
                 .accessibilityHidden(true)
 
             Text(title)
-                .font(MeeshyFont.relative(16, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
             Text(detail)
-                .font(MeeshyFont.relative(13))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -531,7 +531,7 @@ struct NearbyEmptyStateCard: View {
                         bundle: .main
                     )
                 )
-                .font(MeeshyFont.relative(11))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -541,7 +541,7 @@ struct NearbyEmptyStateCard: View {
                 Task { await action() }
             } label: {
                 Text(actionTitle)
-                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.vertical, MeeshySpacing.sm)
@@ -555,7 +555,7 @@ struct NearbyEmptyStateCard: View {
                     Task { await secondaryAction() }
                 } label: {
                     Text(secondaryTitle)
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(MeeshyColors.indigo500)
                         .padding(.horizontal, MeeshySpacing.xl)
                         .padding(.vertical, MeeshySpacing.xs)
@@ -662,31 +662,31 @@ struct NearbyPostRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: MeeshySpacing.xs) {
                         Text(post.author)
-                            .font(MeeshyFont.relative(13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
                         Spacer(minLength: 0)
                         if let distanceMeters {
                             Text(NearbyDistanceLabel.short(meters: distanceMeters))
-                                .font(MeeshyFont.relative(11, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                                 .foregroundColor(MeeshyColors.indigo500)
                         }
                     }
                     if !post.displayContent.isEmpty {
                         Text(post.displayContent)
-                            .font(MeeshyFont.relative(12))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(3)
                             .multilineTextAlignment(.leading)
                     }
                     if let label = post.location.flatMap({ $0.name ?? $0.address }), !label.isEmpty {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: "mappin.circle.fill")
-                                .font(MeeshyFont.relative(10, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                                 .accessibilityHidden(true)
                             Text(label).lineLimit(1)
                         }
-                        .font(MeeshyFont.relative(11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(theme.textMuted)
                     }
                 }
@@ -714,9 +714,9 @@ struct NearbySkeletonRow: View {
                 .fill(theme.backgroundTertiary)
                 .frame(width: 40, height: 40)
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                RoundedRectangle(cornerRadius: 4).fill(theme.backgroundTertiary).frame(width: 120, height: 10)
-                RoundedRectangle(cornerRadius: 4).fill(theme.backgroundTertiary).frame(height: 10)
-                RoundedRectangle(cornerRadius: 4).fill(theme.backgroundTertiary).frame(width: 180, height: 10)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(theme.backgroundTertiary).frame(width: 120, height: 10)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(theme.backgroundTertiary).frame(height: 10)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(theme.backgroundTertiary).frame(width: 180, height: 10)
             }
         }
         .padding(MeeshySpacing.md)

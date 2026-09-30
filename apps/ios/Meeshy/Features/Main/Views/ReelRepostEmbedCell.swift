@@ -84,7 +84,7 @@ struct ReelRepostEmbedCell: View {
     private let stripHeight: CGFloat = 116
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             attributionHeader
 
             // The re-poster's own added text (quote). The reel's caption is
@@ -147,7 +147,7 @@ struct ReelRepostEmbedCell: View {
             Text(String(localized: "story.repost.from", defaultValue: "Repartagé depuis", bundle: .main) + " @\(handle)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .padding(.bottom, 4)
+                .padding(.bottom, MeeshySpacing.xs)
         }
     }
 
@@ -155,11 +155,11 @@ struct ReelRepostEmbedCell: View {
 
     @ViewBuilder
     private func reelCard(_ repost: RepostContent) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             mediaStrip(repost)
 
             // Original author
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 MeeshyAvatar(
                     name: repost.author,
                     context: .postComment,
@@ -190,12 +190,12 @@ struct ReelRepostEmbedCell: View {
             statsRow(repost)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.mode.isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(theme.accentText(repost.authorColor).opacity(0.2), lineWidth: 1)
                 )
         )
@@ -215,7 +215,7 @@ struct ReelRepostEmbedCell: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: stripHeight)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
         // Publish this card's frame so the feed coordinator can elect it (keyed on
         // the containing post id — see `reelCellId`). Same `.global` aggregation as
         // the native `ReelFeedCard`, so native + repost cells compete in one election.
@@ -278,11 +278,11 @@ struct ReelRepostEmbedCell: View {
                     // doctrine 86i — badge décoratif borné par la bande média de hauteur fixe (stripHeight)
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(6)
+                    .padding(MeeshySpacing.xsPlus)
                     .background(Circle().fill(.ultraThinMaterial))
                     .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
                     .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
             }
             Spacer()
         }
@@ -292,8 +292,8 @@ struct ReelRepostEmbedCell: View {
     // MARK: - Stats (likes — shares count is not in the repost payload)
 
     private func statsRow(_ repost: RepostContent) -> some View {
-        HStack(spacing: 16) {
-            HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.lg) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "heart.fill")
                     .font(.caption2)
                     .accessibilityHidden(true)

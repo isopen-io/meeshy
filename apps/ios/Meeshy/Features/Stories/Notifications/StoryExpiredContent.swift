@@ -53,7 +53,7 @@ public struct StoryExpiredContent: View {
         ZStack {
             background.ignoresSafeArea()
 
-            VStack(spacing: 24) {
+            VStack(spacing: MeeshySpacing.xxl) {
                 Spacer(minLength: 0)
                 actorHeader
                 triggerVisual
@@ -62,9 +62,9 @@ public struct StoryExpiredContent: View {
                 Spacer(minLength: 0)
                 createCTA
                 backLink
-                    .padding(.bottom, 24)
+                    .padding(.bottom, MeeshySpacing.xxl)
             }
-            .padding(.horizontal, 32)
+            .padding(.horizontal, MeeshySpacing.xxxl)
         }
         .foregroundStyle(Self.foregroundOnBackground(background))
     }
@@ -85,14 +85,14 @@ public struct StoryExpiredContent: View {
     @ViewBuilder
     private var actorHeader: some View {
         let foreground = Self.foregroundOnBackground(background)
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: context.actorDisplayName,
                 context: .custom(32),
                 avatarURL: context.actorAvatar
             )
             .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(context.actorDisplayName)
                     .font(.headline)
                     .foregroundStyle(foreground)
@@ -144,7 +144,7 @@ public struct StoryExpiredContent: View {
     @ViewBuilder
     private var titleBlock: some View {
         let foreground = Self.foregroundOnBackground(background)
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Text("notifications.story.expired.title")
                 .font(.title2.bold())
                 .foregroundStyle(foreground)
@@ -172,9 +172,9 @@ public struct StoryExpiredContent: View {
             Text("notifications.story.expired.cta.create")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(foreground)
                 )
                 .foregroundStyle(background)

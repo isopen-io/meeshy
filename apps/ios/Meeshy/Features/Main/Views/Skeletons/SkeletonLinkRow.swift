@@ -28,13 +28,13 @@ struct SkeletonLinkRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Circle()
                 .fill(placeholderColor)
                 .frame(width: 40, height: 40)
                 .skeletonShimmer()
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                 SkeletonShape(width: titleWidth, height: 14, cornerRadius: 4)
                 SkeletonShape(width: subtitleWidth, height: 11, cornerRadius: 4)
             }
@@ -43,12 +43,12 @@ struct SkeletonLinkRow: View {
 
             SkeletonShape(width: 20, height: 20, cornerRadius: 6)
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(cardBackground)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(borderColor, lineWidth: 1)
                 )
         )
@@ -88,7 +88,7 @@ struct SkeletonLinkList: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             ForEach(0..<count, id: \.self) { index in
                 SkeletonLinkRow(index: index)
             }

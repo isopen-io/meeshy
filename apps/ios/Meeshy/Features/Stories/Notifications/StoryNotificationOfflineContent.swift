@@ -27,12 +27,12 @@ public struct StoryNotificationOfflineContent: View {
         ZStack {
             Color.black.opacity(0.85).ignoresSafeArea()
 
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 Image(systemName: cause.symbolName)
                     .font(.system(size: 40))
                     .foregroundStyle(.white.opacity(0.85))
                     .accessibilityHidden(true)
-                VStack(spacing: 8) {
+                VStack(spacing: MeeshySpacing.sm) {
                     Text(cause.title)
                         .font(.title3.bold())
                         .foregroundStyle(.white)
@@ -41,7 +41,7 @@ public struct StoryNotificationOfflineContent: View {
                         .foregroundStyle(.white.opacity(0.75))
                 }
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, MeeshySpacing.xxxl)
 
                 Button {
                     HapticFeedback.light()
@@ -50,7 +50,7 @@ public struct StoryNotificationOfflineContent: View {
                     Text(String(localized: "story.viewer.retry", defaultValue: "Réessayer", bundle: .main))
                         .font(.headline)
                         .padding(.horizontal, 28)
-                        .padding(.vertical, 12)
+                        .padding(.vertical, MeeshySpacing.md)
                         .background(Capsule().fill(.white))
                         .foregroundStyle(.black)
                 }

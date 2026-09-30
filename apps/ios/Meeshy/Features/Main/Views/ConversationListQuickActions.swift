@@ -146,10 +146,10 @@ struct ConversationListQuickActions: View, Equatable {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(title)
-                    .font(MeeshyFont.relative(17, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
                     .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
                 Text(subtitle)
-                    .font(MeeshyFont.relative(13))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -182,10 +182,10 @@ struct ConversationListQuickActions: View, Equatable {
         } label: {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: action.icon)
-                    .font(MeeshyFont.relative(22, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .semibold))
                     .frame(width: 28)
                 Text(action.title)
-                    .font(MeeshyFont.relative(16, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                     .multilineTextAlignment(.leading)
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)
@@ -194,7 +194,7 @@ struct ConversationListQuickActions: View, Equatable {
                 // « à main droite » — en arabe la rangée se retourne et lui
                 // avec (`RightToLeftLayoutGuardTests`).
                 Image(systemName: "chevron.forward")
-                    .font(MeeshyFont.relative(14, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
                     .opacity(0.8)
             }
             .foregroundColor(.white)
@@ -220,12 +220,12 @@ struct ConversationListQuickActions: View, Equatable {
         } label: {
             VStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: action.icon)
-                    .font(MeeshyFont.relative(20, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(width: 44, height: 44)
                     .background(gradientBox(action.gradient, radius: 14))
                 Text(action.title)
-                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
                     .multilineTextAlignment(.center)
                     .lineLimit(2)

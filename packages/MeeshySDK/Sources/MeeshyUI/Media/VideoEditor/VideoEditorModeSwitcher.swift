@@ -23,11 +23,11 @@ public struct VideoEditorModeSwitcher: View, Equatable {
     }
 
     public var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             segment(for: .simple, label: "Simple", systemImage: "square.split.2x1")
             segment(for: .pro, label: "Pro", systemImage: "slider.horizontal.below.rectangle")
         }
-        .padding(4)
+        .padding(MeeshySpacing.xs)
         .fixedSize(horizontal: true, vertical: false)
         .background(
             Capsule().fill(
@@ -37,7 +37,7 @@ public struct VideoEditorModeSwitcher: View, Equatable {
             )
         )
         .overlay(
-            Capsule().strokeBorder(MeeshyColors.indigo400.opacity(0.25), lineWidth: 0.5)
+            Capsule().strokeBorder(MeeshyColors.indigo400.opacity(0.25), lineWidth: MeeshyBorder.hairline)
         )
         .animation(.spring(response: 0.32, dampingFraction: 0.72), value: mode)
         .accessibilityElement(children: .contain)
@@ -54,10 +54,10 @@ public struct VideoEditorModeSwitcher: View, Equatable {
                 Image(systemName: systemImage)
                     .font(.system(size: 11, weight: .semibold))
                 Text(label)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .frame(minWidth: 72)
             .foregroundStyle(foreground(isActive: isActive))
             .background(

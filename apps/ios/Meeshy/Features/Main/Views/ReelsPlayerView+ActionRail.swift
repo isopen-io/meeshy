@@ -235,8 +235,8 @@ private struct ReelActionButton: View {
             // 2026-06-28). `contentShape(Rectangle())` rend tout le rectangle
             // élargi (padding inclus) sensible, et le padding vertical comble les
             // gaps entre les boutons du rail.
-            .padding(.vertical, 6)
-            .padding(.horizontal, 6)
+            .padding(.vertical, MeeshySpacing.xsPlus)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
             .contentShape(Rectangle())
             .mediaChromeGlyph()
         }

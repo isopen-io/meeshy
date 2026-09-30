@@ -1,6 +1,7 @@
 import SwiftUI
 import os
 import MeeshySDK
+import MeeshyUI
 
 /// Reactive wrapper that shows a loading state until storyGroups are available,
 /// then seamlessly transitions to StoryViewerView. Solves the race condition
@@ -216,7 +217,7 @@ struct StoryViewerContainer: View {
 
     private var loadingOverlay: some View {
         ZStack {
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 ProgressView()
                     .tint(.white)
                     .scaleEffect(1.3)
@@ -231,7 +232,7 @@ struct StoryViewerContainer: View {
 
     private var notFoundOverlay: some View {
         ZStack {
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 Image(systemName: "exclamationmark.circle")
                     // Doctrine 84i/86i : glyphe hero d'etat d'erreur (~38pt, decoratif) → fige ;
                     // le titre ci-dessous porte le sens. Masque de VoiceOver.
@@ -247,17 +248,17 @@ struct StoryViewerContainer: View {
                     .multilineTextAlignment(.center)
                     .foregroundColor(.white.opacity(0.6))
                     .font(.footnote)
-                    .padding(.horizontal, 32)
+                    .padding(.horizontal, MeeshySpacing.xxxl)
 
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     Button {
                         Task { await retryFetch(uid: uid) }
                     } label: {
                         Text(String(localized: "story.viewer.retry", defaultValue: "Réessayer", bundle: .main))
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(.black)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
+                            .padding(.horizontal, MeeshySpacing.xl)
+                            .padding(.vertical, MeeshySpacing.smPlus)
                             .background(Capsule().fill(Color.white))
                     }
 
@@ -267,14 +268,14 @@ struct StoryViewerContainer: View {
                         Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
+                            .padding(.horizontal, MeeshySpacing.xl)
+                            .padding(.vertical, MeeshySpacing.smPlus)
                             .background(Capsule().stroke(Color.white.opacity(0.4), lineWidth: 1))
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
             }
-            .padding(24)
+            .padding(MeeshySpacing.xxl)
 
             closeButton
         }
@@ -294,8 +295,8 @@ struct StoryViewerContainer: View {
                         .background(Circle().fill(Color.white.opacity(0.2)))
                 }
                 .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-                .padding(.trailing, 16)
-                .padding(.top, 8)
+                .padding(.trailing, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.sm)
             }
             Spacer()
         }

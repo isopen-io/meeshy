@@ -391,7 +391,7 @@ struct StoryActionSidebarView: View {
             sidebarContent(spacing: 6)
             ScrollView(.vertical, showsIndicators: false) {
                 sidebarContent(spacing: 6)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, MeeshySpacing.xs)
             }
         }
         // #6704 — le glyphe et le libellé de chaque bouton se teintent depuis la slide
@@ -850,12 +850,12 @@ struct StoryActionSidebarView: View {
                 .overlay(alignment: .topLeading) {
                     if let code = displayedLanguageCode, !code.isEmpty {
                         Text(code.uppercased())
-                            .font(MeeshyFont.relative(9, weight: .bold, design: .monospaced))
+                            .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold, design: .monospaced))
                             .foregroundColor(.white)
                             .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
+                            .padding(.vertical, MeeshySpacing.xxs)
                             .background(Capsule().fill(MeeshyColors.indigo500))
-                            .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: 0.5))
+                            .overlay(Capsule().stroke(Color.white.opacity(0.5), lineWidth: MeeshyBorder.hairline))
                             .offset(x: -12, y: -2)
                             .allowsHitTesting(false)
                             .accessibilityHidden(true)

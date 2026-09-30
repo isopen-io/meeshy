@@ -730,7 +730,7 @@ public struct NotificationBadge: View {
     public var body: some View {
         if count > 0 {
             Text(Self.displayed(count))
-                .font(MeeshyFont.relative(10, weight: Self.fontWeight))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: Self.fontWeight))
                 .foregroundColor(.white)
                 .lineLimit(1)
                 // Ni `minimumScaleFactor`, ni cadre carré figé : la pastille

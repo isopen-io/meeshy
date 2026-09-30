@@ -28,15 +28,15 @@ struct BubbleSecondaryContent: View, Equatable {
             : textPrimary.opacity(0.8)
 
         VStack(spacing: 0) {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                 Circle().fill(langColor).frame(width: 4, height: 4)
                 Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
             }
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 if let display = display {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Text(display.flag).font(.caption)
                         Text(display.name)
                             .font(.caption2.weight(.semibold))
@@ -55,7 +55,7 @@ struct BubbleSecondaryContent: View, Equatable {
                 )
                 .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, MeeshySpacing.sm)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(langColor.opacity(0.12))
         }

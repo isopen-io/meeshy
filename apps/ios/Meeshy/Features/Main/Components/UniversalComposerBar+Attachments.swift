@@ -16,18 +16,18 @@ extension UniversalComposerBar {
 
     var attachmentsPreview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(allAttachments) { attachment in
                     attachmentChip(attachment)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.sm)
         }
     }
 
     func attachmentChip(_ attachment: ComposerAttachment) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             // Type icon
             Image(systemName: attachment.type.glyph)
                 .font(.caption)
@@ -61,8 +61,8 @@ extension UniversalComposerBar {
             }
             .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
             Capsule()
                 .fill(style == .dark ? Color.white.opacity(0.12) : theme.inputBackground)
@@ -99,7 +99,7 @@ extension UniversalComposerBar {
                     }
                 }
                 .padding(.horizontal, 18)
-                .padding(.vertical, 12)
+                .padding(.vertical, MeeshySpacing.md)
             }
 
             // Inline recent photos/videos — selectable straight into the
@@ -107,7 +107,7 @@ extension UniversalComposerBar {
             // scrollable grid fills the remaining panel height on every idiom;
             // only hosts WITHOUT it need the trailing spacer.
             if let onRecentMediaSelected {
-                Divider().opacity(0.4).padding(.horizontal, 14)
+                Divider().opacity(0.4).padding(.horizontal, MeeshySpacing.mdPlus)
                 RecentMediaStrip(
                     accentColor: servedAccentHex,
                     onOpenLibrary: { openFullPhotoLibrary(preselecting: $0) },
@@ -176,8 +176,8 @@ extension UniversalComposerBar {
         Capsule()
             .fill(mutedColor.opacity(emphasis))
             .frame(width: 36, height: 4)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
+            .padding(.top, MeeshySpacing.sm)
+            .padding(.bottom, MeeshySpacing.xs)
     }
 
     /// La décision vit dans `ComposerPanelHandleLaw` (pure, testée) ; ce geste
@@ -249,19 +249,19 @@ extension UniversalComposerBar {
         // access never disappears.
         if onPhotoLibrary != nil && onRecentMediaSelected == nil {
             tiles.append(CarouselTile(
-                id: "photo", icon: "photo.fill", color: "9B59B6",
+                id: "photo", icon: "photo.fill", color: MeeshyColors.tileAmethystHex,
                 label: String(localized: "composer.attach.photo", defaultValue: "Photos", bundle: .main)
             ) { fire { onPhotoLibrary?() } })
         }
         if onCamera != nil {
             tiles.append(CarouselTile(
-                id: "camera", icon: "camera.fill", color: "F8B500",
+                id: "camera", icon: "camera.fill", color: MeeshyColors.tileSaffronHex,
                 label: String(localized: "composer.attach.camera", defaultValue: "Caméra", bundle: .main)
             ) { fire { onCamera?() } })
         }
         if onFilePicker != nil {
             tiles.append(CarouselTile(
-                id: "file", icon: "doc.fill", color: "45B7D1",
+                id: "file", icon: "doc.fill", color: MeeshyColors.tileSkyHex,
                 label: String(localized: "composer.attach.file", defaultValue: "Fichier", bundle: .main)
             ) { fire { onFilePicker?() } })
         }
@@ -273,7 +273,7 @@ extension UniversalComposerBar {
         }
         if showLocation && onLocationRequest != nil {
             tiles.append(CarouselTile(
-                id: "location", icon: "location.fill", color: "2ECC71",
+                id: "location", icon: "location.fill", color: MeeshyColors.tileEmeraldHex,
                 label: String(localized: "composer.attach.location", defaultValue: "Position", bundle: .main)
             ) { fire { onLocationRequest?() } })
         }
@@ -466,12 +466,12 @@ extension UniversalComposerBar {
     }
 
     func clipboardContentPreview(_ clip: ClipboardContent) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "doc.plaintext.fill")
                 .font(.body)
                 .foregroundColor(MeeshyColors.indigo500)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(String(localized: "composer.clipboard.title", defaultValue: "Contenu du presse-papiers", bundle: .main))
                     .font(.caption2.weight(.bold))
                     .foregroundColor(style == .dark ? .white : theme.textPrimary)
@@ -499,18 +499,18 @@ extension UniversalComposerBar {
             }
             .accessibilityLabel(String(localized: "composer.a11y.removeClipboardContent", defaultValue: "Retirer le contenu du presse-papier", bundle: .main))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(style == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .stroke(MeeshyColors.indigo500.opacity(0.3), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 12)
-        .padding(.bottom, 4)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     // MARK: - Helpers

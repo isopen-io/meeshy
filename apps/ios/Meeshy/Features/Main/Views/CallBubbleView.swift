@@ -84,7 +84,7 @@ struct CallBubbleView: View {
                 .shadow(color: Color.black.opacity(0.3), radius: 8, y: 4)
                 .overlay(alignment: .topTrailing) {
                     TransientCallSignalGlyph(strength: signalStrength)
-                        .padding(6)
+                        .padding(MeeshySpacing.xsPlus)
                         .background(Circle().fill(Color.black.opacity(0.55)))
                         .offset(x: 16, y: -16)
                 }
@@ -146,12 +146,12 @@ struct CallBubbleView: View {
     }
 
     private var tierControlBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             muteButton
             speakerButton
             hangupButton
         }
-        .padding(.top, 10)
+        .padding(.top, MeeshySpacing.smPlus)
     }
 
     private func accessibilityTierLabel(for tier: CallBubbleSizeTier) -> String {

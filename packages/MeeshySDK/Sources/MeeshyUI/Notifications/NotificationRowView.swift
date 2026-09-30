@@ -70,7 +70,7 @@ public struct NotificationRowView: View, Equatable {
 
     private var rowButton: some View {
         Button { onTap?() } label: {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: MeeshySpacing.md) {
                 leadingView
                 contentView
                 Spacer(minLength: 4)
@@ -79,8 +79,8 @@ public struct NotificationRowView: View, Equatable {
                 }
                 timestampView
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.md)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -101,14 +101,14 @@ public struct NotificationRowView: View, Equatable {
     private var quickActionsRow: some View {
         let actions = notification.quickActions(isFriend: isFriend)
         if let onQuickAction, !actions.isEmpty {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(actions, id: \.self) { action in
                     quickActionButton(action, perform: onQuickAction)
                 }
             }
             .padding(.leading, 16 + 44 + 12)
-            .padding(.trailing, 16)
-            .padding(.bottom, 12)
+            .padding(.trailing, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.md)
         }
     }
 
@@ -134,9 +134,9 @@ public struct NotificationRowView: View, Equatable {
             perform(action)
         } label: {
             Label(label, systemImage: icon)
-                .font(MeeshyFont.relative(13, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(isPrimary ? .white : (isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600))
-                .padding(.horizontal, 14)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
                 .frame(minHeight: 44)
                 .background(Capsule().fill(isPrimary ? MeeshyColors.indigo600 : MeeshyColors.indigo500.opacity(0.14)))
                 .contentShape(Capsule())
@@ -205,20 +205,20 @@ public struct NotificationRowView: View, Equatable {
     private var contentView: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(presentation.title)
-                .font(MeeshyFont.relative(14, weight: notification.isRead ? .medium : .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: notification.isRead ? .medium : .semibold))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(2)
 
             if let body = presentation.body {
                 Text(body)
-                    .font(MeeshyFont.relative(13))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(2)
             }
 
             if let quote = presentation.quote {
                 Text(quote)
-                    .font(MeeshyFont.relative(12))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
                     .italic()
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
@@ -226,7 +226,7 @@ public struct NotificationRowView: View, Equatable {
 
             if let footer = presentation.footer {
                 footerView(footer)
-                    .padding(.top, 2)
+                    .padding(.top, MeeshySpacing.xxs)
             }
         }
     }
@@ -245,7 +245,7 @@ public struct NotificationRowView: View, Equatable {
                         tint: isExpired ? MeeshyColors.error : theme.textMuted)
         case .plain(let text):
             Text(text)
-                .font(MeeshyFont.relative(11))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 .foregroundColor(theme.textMuted)
                 .lineLimit(1)
         }
@@ -259,7 +259,7 @@ public struct NotificationRowView: View, Equatable {
             Text(text)
                 .lineLimit(1)
         }
-        .font(MeeshyFont.relative(11))
+        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
         .foregroundColor(tint)
     }
 
@@ -279,7 +279,7 @@ public struct NotificationRowView: View, Equatable {
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .stroke(theme.textMuted.opacity(0.15), lineWidth: 0.5)
+                .stroke(theme.textMuted.opacity(0.15), lineWidth: MeeshyBorder.hairline)
         )
         .accessibilityHidden(true)
     }
@@ -288,7 +288,7 @@ public struct NotificationRowView: View, Equatable {
 
     private var timestampView: some View {
         Text(relativeTime)
-            .font(MeeshyFont.relative(11, weight: .medium))
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             .foregroundColor(theme.textMuted)
     }
 

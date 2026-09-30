@@ -141,8 +141,8 @@ extension UniversalComposerBar {
                     .font(.caption2.weight(.bold))
             }
             .fixedSize()
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .adaptiveLiquidGlass(in: Capsule(), tint: style == .dark ? nil : servedAccent.opacity(0.18))
             .foregroundColor(
                 style == .dark
@@ -171,8 +171,8 @@ extension UniversalComposerBar {
                 .frame(width: 36, height: 4)
             Spacer()
         }
-        .padding(.top, 8)
-        .padding(.bottom, 2)
+        .padding(.top, MeeshySpacing.sm)
+        .padding(.bottom, MeeshySpacing.xxs)
     }
 }
 

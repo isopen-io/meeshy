@@ -872,8 +872,8 @@ struct RiverBubbleView: View, Equatable {
                 .equatable()
                 .contentShape(Rectangle())
                 .onTapGesture { openQuotedMedia(media.reference) }
-                .padding(.leading, 8)
-                .padding(.top, 4)
+                .padding(.leading, MeeshySpacing.sm)
+                .padding(.top, MeeshySpacing.xs)
             Spacer(minLength: 0)
         }
         .fixedSize(horizontal: false, vertical: true)
@@ -916,7 +916,7 @@ struct RiverBubbleView: View, Equatable {
                 .font(MeeshyFont.relative(FocalMetrics.Text.size - 2))
                 .foregroundColor(metaTint)
                 .lineLimit(1)
-                .padding(.leading, 8)
+                .padding(.leading, MeeshySpacing.sm)
         }
         // Le rail prend la hauteur de la LIGNE, jamais celle qu'on lui propose.
         .fixedSize(horizontal: false, vertical: true)

@@ -18,7 +18,7 @@ struct StoryTextEditTopBar: View {
             finishButton
         }
         .padding(.horizontal, TextEditToolbarMetrics.horizontalMargin)
-        .padding(.top, 6)
+        .padding(.top, MeeshySpacing.xsPlus)
     }
 
     /// Rang de contour (0…4) traduit en poids de trait — la bulle montre

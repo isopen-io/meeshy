@@ -72,7 +72,7 @@ public struct CommunityListView: View {
             trailing: {
                 Button { onCreateCommunity?() } label: {
                     Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 22))
+                        .font(.system(size: MeeshyIconSize.xxl))
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
@@ -90,14 +90,14 @@ public struct CommunityListView: View {
     // MARK: - Search Bar
 
     private var searchBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14))
+                .font(.system(size: MeeshyIconSize.sm))
                 .foregroundColor(theme.textMuted)
 
             TextField(String(localized: "community.list.search.placeholder", defaultValue: "Rechercher...", bundle: .module), text: $viewModel.searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 15, design: .rounded))
+                .font(.system(size: MeeshyFont.bodySize, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             if !viewModel.searchText.isEmpty {
@@ -105,24 +105,24 @@ public struct CommunityListView: View {
                     viewModel.searchText = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(.system(size: MeeshyIconSize.sm))
                         .foregroundColor(theme.textMuted)
                 }
             }
         }
-        .padding(10)
+        .padding(MeeshySpacing.smPlus)
         .background(theme.backgroundSecondary.opacity(0.5))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.sm)
     }
 
     // MARK: - Empty State
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             Image(systemName: "person.3.fill")
-                .font(.system(size: 48))
+                .font(.system(size: MeeshyIconSize.hero))
                 .foregroundStyle(
                     LinearGradient(
                         colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
@@ -132,23 +132,23 @@ public struct CommunityListView: View {
                 )
 
             Text(String(localized: "community.list.empty.title", defaultValue: "Aucune communaute", bundle: .module))
-                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "community.list.empty.subtitle", defaultValue: "Rejoins ou cree une communaute pour collaborer", bundle: .module))
-                .font(.system(size: 14, design: .rounded))
+                .font(.system(size: MeeshyFont.labelSize, design: .rounded))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
             Button { onCreateCommunity?() } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "plus.circle.fill")
                     Text(String(localized: "community.list.empty.createButton", defaultValue: "Creer une communaute", bundle: .module))
                 }
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundColor(.white)
-                .padding(.horizontal, 24)
-                .padding(.vertical, 12)
+                .padding(.horizontal, MeeshySpacing.xxl)
+                .padding(.vertical, MeeshySpacing.md)
                 .background(
                     LinearGradient(
                         colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
@@ -175,7 +175,7 @@ public struct CommunityListView: View {
             .frame(height: 0)
 
             LazyVGrid(
-                columns: [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)],
+                columns: [GridItem(.flexible(), spacing: MeeshySpacing.mdPlus), GridItem(.flexible(), spacing: MeeshySpacing.mdPlus)],
                 spacing: 14
             ) {
                 ForEach(Array(viewModel.communities.enumerated()), id: \.element.id) { index, community in
@@ -196,9 +196,9 @@ public struct CommunityListView: View {
                         .task { await viewModel.loadMore() }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
-            .padding(.bottom, 20)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.xs)
+            .padding(.bottom, MeeshySpacing.xl)
         }
         .coordinateSpace(name: "scroll")
         .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
@@ -241,26 +241,26 @@ private struct VibrantCommunityCard: View, Equatable {
                 size: 44,
                 accentColor: accentColor
             )
-            .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 2))
+            .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: MeeshyBorder.strong))
             .shadow(color: Color.black.opacity(0.25), radius: 4, y: 2)
             .rotationEffect(.degrees(isPressed ? -8 : 0))
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            .padding(.trailing, 10)
-            .padding(.top, 10)
+            .padding(.trailing, MeeshySpacing.smPlus)
+            .padding(.top, MeeshySpacing.smPlus)
 
             HStack(spacing: 3) {
                 Image(systemName: community.isPrivate ? "lock.fill" : "globe")
                     .font(.system(size: 8, weight: .semibold))
             }
             .foregroundColor(.white.opacity(0.85))
-            .padding(.horizontal, 6)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
             .padding(.vertical, 3)
             .background(Color.black.opacity(0.25))
             .clipShape(Capsule())
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .padding(.leading, 10)
-            .padding(.top, 10)
+            .padding(.leading, MeeshySpacing.smPlus)
+            .padding(.top, MeeshySpacing.smPlus)
 
             LinearGradient(
                 colors: [.clear, .clear, Color.black.opacity(0.65)],
@@ -268,41 +268,41 @@ private struct VibrantCommunityCard: View, Equatable {
                 endPoint: .bottom
             )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(community.name)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(.system(size: MeeshyFont.bodySize, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
 
                 if let desc = community.description, !desc.isEmpty {
                     Text(desc)
-                        .font(.system(size: 11, design: .rounded))
+                        .font(.system(size: MeeshyFont.footnoteSize, design: .rounded))
                         .foregroundColor(.white.opacity(0.8))
                         .lineLimit(2)
                 }
 
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     HStack(spacing: 3) {
                         Image(systemName: "person.2.fill")
                             .font(.system(size: 9))
                         Text(CompactCountLabel.text(community.memberCount))
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
                     }
 
                     HStack(spacing: 3) {
                         Image(systemName: "bubble.left.fill")
                             .font(.system(size: 9))
                         Text(CompactCountLabel.text(community.conversationCount))
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
                     }
                 }
                 .foregroundColor(.white.opacity(0.9))
             }
-            .padding(12)
+            .padding(MeeshySpacing.md)
         }
         .frame(height: 180)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl))
         .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 8, y: 4)
         .scaleEffect(isPressed ? 0.95 : 1)
         .animation(.spring(response: 0.25, dampingFraction: 0.65), value: isPressed)

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 
 /// **Le viseur est UNE vue qui GRANDIT — jamais deux vues qui se remplacent.**
 ///
@@ -133,19 +134,19 @@ struct ComposerSceneQuickCaptureHint: View {
         // texte EST déjà le cadre 9:16 de la scène — un rectangle dessiné
         // dedans la redirait en plus petit. Les icônes passent devant LEUR
         // geste, là où elles disent quelque chose.
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             Text(ComposerSceneCameraCopy.emptySceneTitle)
                 .font(.system(.title2, design: .rounded).weight(.bold))
             Text(ComposerSceneCameraCopy.emptySceneInvite)
                 .font(.system(.subheadline, design: .rounded))
                 .opacity(0.9)
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 ForEach(ComposerSceneQuickCapture.gestureLines(hint), id: \.symbol) { ligne in
                     Label(ComposerSceneCameraCopy.gestureLine(ligne), systemImage: ligne.symbol)
                 }
             }
             .font(.system(.headline, design: .rounded).weight(.semibold))
-            .padding(.top, 6)
+            .padding(.top, MeeshySpacing.xsPlus)
         }
         .multilineTextAlignment(.center)
         .fixedSize(horizontal: false, vertical: true)

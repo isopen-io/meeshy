@@ -114,7 +114,7 @@ extension UserProfileSheet {
     // MARK: - Identity
 
     func identitySection(offset: CGFloat) -> some View {
-        VStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xsPlus) {
             profileAvatar
                 .bounceOnAppear()
                 .onTapGesture {
@@ -144,7 +144,7 @@ extension UserProfileSheet {
             }
             .font(.system(size: 14, weight: .medium))
         }
-        .padding(.top, 4)
+        .padding(.top, MeeshySpacing.xs)
         // Gate the expanded identity from VoiceOver once the compact pinned bar
         // becomes the primary (mostly collapsed) — avoids a duplicate name/@user.
         .accessibilityHidden(ProfileHeaderMetrics.progress(offset: offset) > 0.5)
@@ -209,8 +209,8 @@ extension UserProfileSheet {
                     tabButton(tab)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.top, MeeshySpacing.md)
 
             Divider()
                 .opacity(0.3)
@@ -241,13 +241,13 @@ extension UserProfileSheet {
             dismiss()
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .frame(width: 36, height: 36)
                 .adaptiveGlass(in: Circle())
         }
-        .padding(.leading, 16)
-        .padding(.top, 14)
+        .padding(.leading, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.mdPlus)
         .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
         .accessibilityHint(String(localized: "profile.close.hint", defaultValue: "Ferme le profil", bundle: .module))
     }
@@ -259,15 +259,15 @@ extension UserProfileSheet {
                 selectedTab = tab
             }
         } label: {
-            VStack(spacing: 4) {
-                HStack(spacing: 4) {
+            VStack(spacing: MeeshySpacing.xs) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: tab.icon)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                     Text(tab.title)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                 }
                 .foregroundColor(selectedTab == tab ? Color(hex: resolvedAccent) : theme.textMuted)
-                .padding(.vertical, 10)
+                .padding(.vertical, MeeshySpacing.smPlus)
 
                 Rectangle()
                     .fill(selectedTab == tab ? Color(hex: resolvedAccent) : Color.clear)
@@ -287,7 +287,7 @@ extension UserProfileSheet {
     /// for legibility. Opacity is driven by the caller (`collapsibleLayout`).
     @ViewBuilder
     var compactPinnedBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             MeeshyAvatar(
                 name: displayUser.resolvedDisplayName,
                 context: .custom(32),
@@ -299,11 +299,11 @@ extension UserProfileSheet {
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(displayUser.resolvedDisplayName)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .font(.system(size: MeeshyFont.bodySize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 Text("@\(displayUser.username)")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(Color(hex: resolvedAccent))
                     .lineLimit(1)
             }
@@ -313,8 +313,8 @@ extension UserProfileSheet {
         // Leading inset clears the top-left close button (36pt @ leading 16) so
         // the compact avatar/name never sit underneath it when collapsed.
         .padding(.leading, 56)
-        .padding(.trailing, 16)
-        .padding(.vertical, 8)
+        .padding(.trailing, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
         .frame(height: ProfileHeaderMetrics.collapsedBar)
         .background(theme.backgroundPrimary)
         .overlay(alignment: .bottom) {

@@ -29,7 +29,7 @@ struct ReelFeedSoundButton: View {
             Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: !isSoundAudible))
                 .font(MeeshyFont.relative(13, weight: .bold))
                 .foregroundColor(.white)
-                .padding(8)
+                .padding(MeeshySpacing.sm)
                 .background(Circle().fill(.ultraThinMaterial))
                 .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 1))
                 .shadow(color: .black.opacity(0.25), radius: 3, y: 1)

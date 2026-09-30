@@ -46,7 +46,7 @@ struct NotificationListSkeleton: View {
                     row(index: index)
                 }
             }
-            .padding(.top, 4)
+            .padding(.top, MeeshySpacing.xs)
         }
         .scrollDisabled(true)
         .accessibilityElement(children: .ignore)
@@ -60,14 +60,14 @@ struct NotificationListSkeleton: View {
     }
 
     private func row(index: Int) -> some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: MeeshySpacing.md) {
             Circle()
                 .fill(theme.textMuted.opacity(0.12))
                 .frame(width: 44, height: 44)
                 .skeletonShimmer()
 
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                HStack(spacing: MeeshySpacing.sm) {
                     SkeletonShape(height: 13, cornerRadius: MeeshyRadius.sm)
                         .frame(width: titleWidth(index))
                     Spacer(minLength: 8)
@@ -79,8 +79,8 @@ struct NotificationListSkeleton: View {
                     .frame(width: bodyWidth(index))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
         .accessibilityHidden(true)
     }
 
@@ -115,7 +115,7 @@ struct NotificationListErrorState: View {
     }
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             Spacer()
 
             Image(systemName: "wifi.exclamationmark")
@@ -155,8 +155,8 @@ struct NotificationListErrorState: View {
                 )
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 10)
+                .padding(.horizontal, MeeshySpacing.xl)
+                .padding(.vertical, MeeshySpacing.smPlus)
                 .background(Capsule().fill(brandColor))
             }
             .buttonStyle(.plain)
@@ -164,7 +164,7 @@ struct NotificationListErrorState: View {
 
             Spacer()
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, MeeshySpacing.xxl)
         .frame(maxWidth: .infinity)
     }
 }

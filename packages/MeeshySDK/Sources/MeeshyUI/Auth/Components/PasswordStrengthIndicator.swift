@@ -59,8 +59,8 @@ public struct PasswordStrengthIndicator: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+            HStack(spacing: MeeshySpacing.xs) {
                 ForEach(0..<5, id: \.self) { index in
                     RoundedRectangle(cornerRadius: 2)
                         .fill(index < strength ? color : Color.white.opacity(0.1))

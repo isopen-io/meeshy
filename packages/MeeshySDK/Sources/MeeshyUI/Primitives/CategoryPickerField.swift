@@ -76,7 +76,7 @@ public struct CategoryPickerField: View {
         return HStack(spacing: MeeshySpacing.xs) {
             Circle().fill(chipColor).frame(width: 8, height: 8)
             Text(category.name)
-                .font(MeeshyFont.relative(13, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(chipColor)
             Button {
                 selectedId = nil
@@ -101,7 +101,7 @@ public struct CategoryPickerField: View {
             TextField(placeholder, text: $editing)
                 .focused($focused)
                 .textFieldStyle(.plain)
-                .font(MeeshyFont.relative(15, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.words)
                 .onSubmit { submit() }
@@ -146,7 +146,7 @@ public struct CategoryPickerField: View {
                 } label: {
                     HStack(spacing: MeeshySpacing.sm) {
                         Circle().fill(Color(hex: cat.color ?? "6366F1")).frame(width: 8, height: 8)
-                        Text(cat.name).font(MeeshyFont.relative(14, weight: .medium))
+                        Text(cat.name).font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                         Spacer()
                     }
                     .padding(.horizontal, MeeshySpacing.md).padding(.vertical, MeeshySpacing.sm)
@@ -167,7 +167,7 @@ public struct CategoryPickerField: View {
                             Image(systemName: "plus.circle.fill").foregroundColor(accentColor)
                         }
                         Text(String(localized: "common.create_quoted", defaultValue: "Créer « \(trimmedQuery) »", bundle: .module))
-                            .font(MeeshyFont.relative(13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                             .foregroundColor(accentColor)
                         Spacer()
                     }

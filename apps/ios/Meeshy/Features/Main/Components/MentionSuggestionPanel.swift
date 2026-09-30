@@ -44,7 +44,7 @@ struct MentionSuggestionPanel: View {
                     mentionSkeletonRows
                 } else if controller.suggestions.isEmpty {
                     Text(ComposerDocumentCopy.mentionEmpty)
-                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                         .frame(maxWidth: .infinity, minHeight: 44)
                 } else {
@@ -52,7 +52,7 @@ struct MentionSuggestionPanel: View {
                         Button {
                             pick(candidate)
                         } label: {
-                            HStack(spacing: 10) {
+                            HStack(spacing: MeeshySpacing.smPlus) {
                                 MeeshyAvatar(
                                     name: candidate.displayName,
                                     context: .userListItem,
@@ -61,16 +61,16 @@ struct MentionSuggestionPanel: View {
                                 )
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text(candidate.displayName)
-                                        .font(MeeshyFont.relative(14, weight: .semibold))
+                                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                                         .foregroundColor(theme.textPrimary)
                                     Text("@\(candidate.username)")
-                                        .font(MeeshyFont.relative(12))
+                                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                                         .foregroundColor(theme.textSecondary)
                                 }
                                 Spacer()
                             }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 12)
+                            .padding(.horizontal, MeeshySpacing.lg)
+                            .padding(.vertical, MeeshySpacing.md)
                             .frame(minHeight: 44)
                         }
                         .accessibilityLabel("\(String(localized: "composer.mention.label", defaultValue: "Mention", bundle: .main)) \(candidate.displayName)")
@@ -98,25 +98,25 @@ struct MentionSuggestionPanel: View {
     private var mentionSkeletonRows: some View {
         VStack(spacing: 0) {
             ForEach(0..<3, id: \.self) { _ in
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     Circle()
                         .fill(theme.inputBackground)
                         .frame(width: 36, height: 36)
                         .shimmer()
-                    VStack(alignment: .leading, spacing: 4) {
-                        RoundedRectangle(cornerRadius: 4)
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                        RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                             .fill(theme.inputBackground)
                             .frame(width: 100, height: 12)
                             .shimmer()
-                        RoundedRectangle(cornerRadius: 4)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                             .fill(theme.inputBackground)
                             .frame(width: 70, height: 10)
                             .shimmer()
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.md)
                 .frame(minHeight: 44)
             }
         }

@@ -29,7 +29,7 @@ struct ProfileLanguagePickerSheet: View {
                 theme.backgroundGradient.ignoresSafeArea()
 
                 ScrollView {
-                    LazyVStack(spacing: 2) {
+                    LazyVStack(spacing: MeeshySpacing.xxs) {
                         if allowClear {
                             clearRow
                         }
@@ -37,8 +37,8 @@ struct ProfileLanguagePickerSheet: View {
                             languageRow(lang)
                         }
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.sm)
                 }
             }
             .searchable(text: $searchText, prompt: String(localized: "language-picker.search", defaultValue: "Rechercher une langue", bundle: .main))
@@ -59,7 +59,7 @@ struct ProfileLanguagePickerSheet: View {
             onSelect("")
             dismiss()
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "xmark.circle")
                     .font(.title3)
                     .foregroundColor(theme.textMuted)
@@ -73,10 +73,10 @@ struct ProfileLanguagePickerSheet: View {
                         .foregroundColor(MeeshyColors.indigo500)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(selectedCode.isEmpty
                         ? MeeshyColors.indigo500.opacity(0.1)
                         : Color.clear)
@@ -93,12 +93,12 @@ struct ProfileLanguagePickerSheet: View {
             onSelect(lang.code)
             dismiss()
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 Text(lang.flag)
                     .font(.title2)
                     .frame(width: 36)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(lang.nativeName)
                         .font(.body.weight(.medium))
                         .foregroundColor(theme.textPrimary)
@@ -114,10 +114,10 @@ struct ProfileLanguagePickerSheet: View {
                         .foregroundColor(Color(hex: lang.colorHex))
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(isSelected
                         ? Color(hex: lang.colorHex).opacity(0.1)
                         : Color.clear)

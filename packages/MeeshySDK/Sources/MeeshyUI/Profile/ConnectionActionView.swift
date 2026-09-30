@@ -98,16 +98,16 @@ public struct ConnectionActionView: View {
     // MARK: - Sub-views
 
     private func badge(text: String, color: Color, icon: String? = nil) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             if let icon {
                 Image(systemName: icon)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
             }
             Text(text)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
         }
         .foregroundColor(color)
-        .padding(.horizontal, 10)
+        .padding(.horizontal, MeeshySpacing.smPlus)
         .padding(.vertical, 5)
         .background(Capsule().fill(color.opacity(0.15)))
         .accessibilityLabel(text)
@@ -116,7 +116,7 @@ public struct ConnectionActionView: View {
     private func pendingReceivedButtons(requestId: String) -> some View {
         let declineLabel = String(localized: "connection.action.decline", defaultValue: "Refuser", bundle: .module)
         let acceptLabel = String(localized: "connection.action.accept", defaultValue: "Accepter", bundle: .module)
-        return HStack(spacing: 6) {
+        return HStack(spacing: MeeshySpacing.xsPlus) {
             Button {
                 Task { await decline(requestId: requestId) }
             } label: {
@@ -149,14 +149,14 @@ public struct ConnectionActionView: View {
         return Button {
             Task { await cancelSent() }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "clock")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 Text(pendingLabel)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
             .foregroundColor(MeeshyColors.warning)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, 5)
             .background(Capsule().fill(MeeshyColors.warning.opacity(0.15)))
             .overlay(Capsule().stroke(MeeshyColors.warning.opacity(0.5), lineWidth: 1))
@@ -170,14 +170,14 @@ public struct ConnectionActionView: View {
         return Button {
             Task { await sendRequest() }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "person.badge.plus")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 Text(addLabel)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
             .foregroundColor(.white)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, 5)
             .background(Capsule().fill(accentColor))
         }

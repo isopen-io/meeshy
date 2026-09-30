@@ -431,7 +431,7 @@ struct CallView: View {
             // (white-on-white). This keeps the call screen correct in .dark AND
             // .light appearance.
             LinearGradient(
-                colors: [Color(hex: "09090B"), Color(hex: "0F0D19"), Color(hex: "13111C")],
+                colors: [MeeshyColors.surfaceDarkBase, MeeshyColors.surfaceDarkDeep, MeeshyColors.surfaceDarkRaised],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )

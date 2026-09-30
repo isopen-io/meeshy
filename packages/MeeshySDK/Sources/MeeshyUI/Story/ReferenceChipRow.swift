@@ -30,20 +30,20 @@ public struct ReferenceChipRow: View, Equatable {
     public var body: some View {
         if !references.isEmpty {
             Button(action: onTap) {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "person.2.fill")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                     Text(label)
-                        .font(.system(size: 13, weight: .medium))
-                    HStack(spacing: 4) {
+                        .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                    HStack(spacing: MeeshySpacing.xs) {
                         ForEach(references, id: \.username) { reference in
                             Image(systemName: reference.display.symbolName)
-                                .font(.system(size: 10))
+                                .font(.system(size: MeeshyIconSize.xxs))
                                 .foregroundStyle(reference.display == .silent ? Color.secondary : accentColor)
                         }
                     }
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, 7)
                 .background(Capsule().fill(accentColor.opacity(0.12)))
             }

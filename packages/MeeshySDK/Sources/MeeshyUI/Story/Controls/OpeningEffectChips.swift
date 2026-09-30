@@ -54,13 +54,13 @@ public struct OpeningEffectChips: View {
 
     public var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 chip(nil)
                 ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
                     chip(effect)
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, MeeshySpacing.xxs)
         }
     }
 
@@ -86,10 +86,10 @@ public struct OpeningEffectChips: View {
             HapticFeedback.light()
         } label: {
             Text(title)
-                .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                .font(.system(size: MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
                 .foregroundColor(textColor)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(Capsule().fill(fillColor))
                 .overlay(Capsule().strokeBorder(strokeColor, lineWidth: 1))
         }

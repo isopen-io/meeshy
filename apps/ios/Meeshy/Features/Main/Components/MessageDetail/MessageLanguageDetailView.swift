@@ -70,9 +70,9 @@ struct MessageLanguageDetailView: View {
         let originalLang = message.originalLanguage
         let originalColor = Color(hex: LanguageDisplay.colorHex(for:originalLang))
 
-        return VStack(alignment: .leading, spacing: 14) {
+        return VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             // Original language banner
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Circle()
                     .fill(originalColor)
                     .frame(width: 8, height: 8)
@@ -90,13 +90,13 @@ struct MessageLanguageDetailView: View {
                     .padding(.vertical, 3)
                     .background(Capsule().fill(originalColor.opacity(0.12)))
             }
-            .padding(10)
+            .padding(MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(originalColor.opacity(isDark ? 0.08 : 0.05))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(originalColor.opacity(0.15), lineWidth: 0.5)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                            .stroke(originalColor.opacity(0.15), lineWidth: MeeshyBorder.hairline)
                     )
             )
 
@@ -106,9 +106,9 @@ struct MessageLanguageDetailView: View {
                     .font(.footnote)
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(3)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, MeeshySpacing.xs)
             } else if let transcription {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "waveform")
                         .font(.caption2.weight(.medium))
                         .foregroundColor(originalColor.opacity(0.7))
@@ -117,15 +117,15 @@ struct MessageLanguageDetailView: View {
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(3)
                 }
-                .padding(.horizontal, 4)
+                .padding(.horizontal, MeeshySpacing.xs)
             }
 
             // Selected translation display
             if let selectedCode = selectedLanguageCode, let translated = translations[selectedCode] {
                 let langColor = Color(hex: LanguageDisplay.colorHex(for:selectedCode))
 
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Circle()
                             .fill(langColor)
                             .frame(width: 6, height: 6)
@@ -154,13 +154,13 @@ struct MessageLanguageDetailView: View {
                         .foregroundColor(theme.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .fill(langColor.opacity(isDark ? 0.08 : 0.05))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(langColor.opacity(0.2), lineWidth: 0.5)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                                .stroke(langColor.opacity(0.2), lineWidth: MeeshyBorder.hairline)
                         )
                 )
                 .transition(.opacity.combined(with: .move(edge: .top)))
@@ -180,8 +180,8 @@ struct MessageLanguageDetailView: View {
                 Text(translationError)
                     .font(.caption2)
                     .foregroundColor(MeeshyColors.error)
-                    .padding(.horizontal, 8)
-                    .padding(.top, 4)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.top, MeeshySpacing.xs)
                     .transition(.opacity)
             }
         }
@@ -253,7 +253,7 @@ struct MessageLanguageDetailView: View {
                 }
             }
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 // Color dot
                 Circle()
                     .fill(langColor)
@@ -317,15 +317,15 @@ struct MessageLanguageDetailView: View {
                     Text(String(localized: "message-detail.translate", defaultValue: "Traduire", bundle: .main))
                         .font(.caption2.weight(.medium))
                         .foregroundColor(langColor)
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, MeeshySpacing.sm)
                         .padding(.vertical, 3)
                         .background(Capsule().fill(langColor.opacity(0.12)))
                 }
             }
             .padding(.vertical, 9)
-            .padding(.horizontal, 8)
+            .padding(.horizontal, MeeshySpacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                     .fill(isSelected
                         ? langColor.opacity(isDark ? 0.08 : 0.05)
                         : Color.clear)

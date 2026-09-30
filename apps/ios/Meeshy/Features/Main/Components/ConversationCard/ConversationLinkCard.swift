@@ -73,11 +73,11 @@ struct ConversationLinkCard: View {
             }
             .padding(MeeshySpacing.sm)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                     .fill(isDark ? MeeshyColors.indigo950.opacity(0.55) : Color.white.opacity(0.85))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                     .stroke(isDark ? MeeshyColors.indigo800.opacity(0.6) : MeeshyColors.indigo100, lineWidth: 1)
             )
             .accessibilityIdentifier("conversation-link-card")
@@ -93,17 +93,17 @@ struct ConversationLinkCardSkeleton: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                 .fill(Color(hex: accentHex).opacity(0.25))
                 .frame(height: 72)
-            RoundedRectangle(cornerRadius: 4).fill(placeholder).frame(width: 140, height: 14)
-            RoundedRectangle(cornerRadius: 4).fill(placeholder).frame(height: 10)
-            RoundedRectangle(cornerRadius: 10).fill(placeholder).frame(height: 44)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(placeholder).frame(width: 140, height: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(placeholder).frame(height: 10)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm).fill(placeholder).frame(height: 44)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .fill(isDark ? MeeshyColors.indigo950.opacity(0.55) : Color.white.opacity(0.85))
         )
         .redacted(reason: .placeholder)
@@ -127,12 +127,12 @@ struct ConversationLinkCardNotice: View, Equatable {
     var body: some View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(18, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
                 .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
                 .frame(width: 40, height: 40)
                 .background(Circle().fill(isDark ? MeeshyColors.indigo900 : MeeshyColors.indigo50))
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                     .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
@@ -146,11 +146,11 @@ struct ConversationLinkCardNotice: View, Equatable {
         .padding(MeeshySpacing.md)
         .frame(minHeight: 64)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .fill(isDark ? MeeshyColors.indigo950.opacity(0.55) : Color.white.opacity(0.85))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .stroke(isDark ? MeeshyColors.indigo800.opacity(0.6) : MeeshyColors.indigo100, lineWidth: 1)
         )
         .accessibilityElement(children: .combine)

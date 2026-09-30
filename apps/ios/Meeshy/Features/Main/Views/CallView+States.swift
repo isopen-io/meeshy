@@ -17,20 +17,20 @@ extension CallView {
 
             // Pulsing avatar
             pulsingAvatar
-                .padding(.bottom, 24)
+                .padding(.bottom, MeeshySpacing.xxl)
 
             // Name
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
-                .padding(.bottom, 8)
+                .padding(.bottom, MeeshySpacing.sm)
 
             // §H2 — Status: "Appel en cours…" until 6s have elapsed, then the
             // calmer "En attente du correspondant…" so the user knows the ring
             // is reaching the peer (not a silent failure). The watchdog task
             // below drives this flag and auto-cancels on state transition.
-            VStack(spacing: 4) {
+            VStack(spacing: MeeshySpacing.xs) {
                 Text(sdpOfferSlow
                     ? String(localized: "call.outgoing.waiting", defaultValue: "En attente du correspondant…", bundle: .main)
                     : String(localized: "call.outgoing.ringing", defaultValue: "Appel en cours...", bundle: .main))
@@ -44,22 +44,22 @@ extension CallView {
                         .transition(.opacity)
                 }
             }
-            .padding(.bottom, 8)
+            .padding(.bottom, MeeshySpacing.sm)
             .animation(.easeInOut(duration: 0.3), value: sdpOfferSlow)
 
             // Call type badge
             callTypeBadge
-                .padding(.bottom, 16)
+                .padding(.bottom, MeeshySpacing.lg)
 
             // #8480, #8795 — ce que l'appelé reçoit vraiment avant de décrocher
             CallPreviewSeenLabel(preview: .shared, peerName: peerDisplayName)
                 .frame(minHeight: 28)
-                .padding(.bottom, 16)
+                .padding(.bottom, MeeshySpacing.lg)
 
             Spacer()
 
             // #8795 — micro et caméra de l'aperçu, puis filtres et raccroché
-            HStack(spacing: 20) {
+            HStack(spacing: MeeshySpacing.xl) {
                 CallPreviewOutgoingControls(
                     preview: .shared,
                     peerName: peerDisplayName,
@@ -99,15 +99,15 @@ extension CallView {
             Spacer()
 
             pulsingAvatar
-                .padding(.bottom, 24)
+                .padding(.bottom, MeeshySpacing.xxl)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
-                .padding(.bottom, 8)
+                .padding(.bottom, MeeshySpacing.sm)
 
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ProgressView()
                     .tint(MeeshyColors.indigo400)
                     .accessibilityHidden(true)
@@ -136,7 +136,7 @@ extension CallView {
     // MARK: - Ended
 
     func endedView(reason: CallEndReason) -> some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             Spacer()
 
             avatarCircle(size: 100)
@@ -172,12 +172,12 @@ extension CallView {
                     )
                     .font(.callout.weight(.semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, MeeshySpacing.xxl)
+                    .padding(.vertical, MeeshySpacing.md)
                     .frame(minHeight: 44)
                     .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.success)
                 }
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
                 .accessibilityLabel(String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main))
             }
 
@@ -307,7 +307,7 @@ extension CallView {
         }
         .frame(width: size, height: size)
         // Liseré au ton du fond : détache la pastille du grand cercle.
-        .overlay(Circle().stroke(Color(hex: "0F0D19"), lineWidth: 3))
+        .overlay(Circle().stroke(MeeshyColors.surfaceDarkDeep, lineWidth: 3))
         .accessibilityLabel(String(localized: "call.avatar.you", defaultValue: "Vous", bundle: .main))
     }
 
@@ -321,7 +321,7 @@ extension CallView {
     }
 
     func statusPill(icon: String, text: String, color: Color) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
                 .font(.caption2.weight(.semibold))
                 .accessibilityHidden(true)
@@ -329,8 +329,8 @@ extension CallView {
                 .font(.caption2.weight(.medium))
         }
         .foregroundColor(color)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xs)
         .background(
             Capsule()
                 .fill(color.opacity(0.12))

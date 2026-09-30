@@ -134,14 +134,14 @@ struct DownloadBadgeView: View {
                     .fill(accent.opacity(0.85))
                     .frame(width: 48, height: 48)
                 Image(systemName: "arrow.down.to.line")
-                    .font(MeeshyFont.relative(22, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .bold))
                     .foregroundColor(.white)
             }
             .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
 
             if !totalSizeText.isEmpty {
                 Text(totalSizeText)
-                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, 3)
@@ -152,7 +152,7 @@ struct DownloadBadgeView: View {
 
     private var downloadingBadge: some View {
         Button { downloader.cancel() } label: {
-            VStack(spacing: 2) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 ZStack {
                     Circle()
                         .stroke(Color.white.opacity(0.15), lineWidth: 2.5)
@@ -181,9 +181,9 @@ struct DownloadBadgeView: View {
                     .minimumScaleFactor(0.5)
             }
             .padding(5)
-            .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.6)))
+            .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(.black.opacity(0.6)))
         }
-        .padding(4)
+        .padding(MeeshySpacing.xs)
         .accessibilityLabel(String(localized: "a11y.media.download.cancel", defaultValue: "Annuler le téléchargement", bundle: .main))
         .accessibilityValue(downloader.progress.formatted(.percent))
     }
@@ -502,7 +502,7 @@ struct AudioMediaView: View, Equatable {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             audioPlayer
 
             // Legacy caption rendering OUTSIDE the playerBackground (faded,
@@ -526,8 +526,8 @@ struct AudioMediaView: View, Equatable {
                 )
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, 4)
-                .padding(.top, 2)
+                .padding(.leading, MeeshySpacing.xs)
+                .padding(.top, MeeshySpacing.xxs)
                 .tint(Color(hex: contactColor))
             }
             if Self.shouldShowConsentNotice(isMe: parentIsMe, voiceConsentMissing: voiceConsentMissing) {
@@ -537,7 +537,7 @@ struct AudioMediaView: View, Equatable {
                     accentHex: accentColor,
                     onTap: { onTapConsentNotice?() }
                 )
-                .padding(.top, 6)
+                .padding(.top, MeeshySpacing.xsPlus)
             }
         }
         .fullScreenCover(isPresented: $showAudioFullscreen) {

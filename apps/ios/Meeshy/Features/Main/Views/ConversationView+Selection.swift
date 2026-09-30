@@ -78,12 +78,12 @@ extension ConversationView {
     /// tant que la sélection est active — voir le site de montage
     /// (`ConversationView.body`, branche `isSelectionModeActive`).
     var selectionToolbar: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: MeeshySpacing.lg) {
             Button {
                 endSelectionMode()
             } label: {
                 Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
             }
             .accessibilityIdentifier("conversation.selection.cancel")
 
@@ -106,7 +106,7 @@ extension ConversationView {
             // d'un élément (un seul sélectionné ⇒ pas de compteur).
             if overlayState.selectedMessageIds.count >= 2 {
                 Text(selectionCountLabel)
-                    .font(MeeshyFont.relative(13))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(ThemeManager.shared.textSecondary)
                     .accessibilityIdentifier("conversation.selection.count")
             }
@@ -124,13 +124,13 @@ extension ConversationView {
                     String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main),
                     systemImage: "arrowshape.turn.up.right"
                 )
-                .font(MeeshyFont.relative(15, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
             }
             .disabled(overlayState.selectedMessageIds.isEmpty)
             .accessibilityIdentifier("conversation.selection.forward")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
         .background(.regularMaterial)
     }
 

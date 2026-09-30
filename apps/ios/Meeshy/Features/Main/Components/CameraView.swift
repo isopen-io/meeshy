@@ -162,8 +162,8 @@ struct CameraView: View {
             }
             .accessibilityLabel(flashAccessibilityLabel)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     // **Le vocabulaire du flash a été EXTRAIT** (#4080) : la barre du viseur en
@@ -182,7 +182,7 @@ struct CameraView: View {
     // MARK: - Bottom Controls
 
     private var bottomControls: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: MeeshySpacing.xl) {
             if camera.isRecordingVideo {
                 recordingIndicator
             }
@@ -211,7 +211,7 @@ struct CameraView: View {
     }
 
     private var modeSwitcher: some View {
-        HStack(spacing: 24) {
+        HStack(spacing: MeeshySpacing.xxl) {
             modeTab(String(localized: "camera.mode.photo", defaultValue: "Photo", bundle: .main), selected: !isVideoMode) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isVideoMode = false }
                 HapticFeedback.light()
@@ -229,7 +229,7 @@ struct CameraView: View {
     private func modeTab(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(MeeshyFont.relative(14, weight: selected ? .bold : .medium))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: selected ? .bold : .medium))
                 .foregroundColor(selected ? .white : .white.opacity(0.5))
         }
         .accessibilityAddTraits(selected ? [.isSelected] : [])
@@ -297,16 +297,16 @@ struct CameraView: View {
     }
 
     private var recordingIndicator: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Circle()
                 .fill(MeeshyColors.error)
                 .frame(width: 10, height: 10)
             Text(LocalizedNumber.duration(seconds: camera.recordingDuration))
-                .font(MeeshyFont.relative(16, weight: .semibold, design: .monospaced))
+                .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold, design: .monospaced))
                 .foregroundColor(.white)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(Capsule().fill(.black.opacity(0.5)))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(String(localized: "camera.recording", defaultValue: "Enregistrement en cours", bundle: .main))

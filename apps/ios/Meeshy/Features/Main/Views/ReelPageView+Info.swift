@@ -76,7 +76,7 @@ extension ReelPageView {
             count: count,
             label: a11yLabel,
             tint: .white.opacity(0.85),
-            iconFont: MeeshyFont.relative(10, weight: .semibold)
+            iconFont: MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold)
         )
     }
 
@@ -86,8 +86,8 @@ extension ReelPageView {
     /// variantes light (indigo600/800) seraient illisibles sur la vidéo.
     /// Les URLs restent blanches + soulignées (convention plein écran).
     var infoOverlay: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 // Avatar tap → author's story (if active) else profile.
                 Button(action: onTapAvatar) {
                     MeeshyAvatar(
@@ -235,7 +235,7 @@ struct ReelBorrowedSoundToggle: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: BackgroundSoundBadge.muteIconName(isMuted: !audioPlayer.isPlaying))
-                .font(MeeshyFont.relative(10, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                 .foregroundColor(.white.opacity(0.85))
                 .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())

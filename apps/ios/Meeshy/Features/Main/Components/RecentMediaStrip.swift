@@ -414,26 +414,26 @@ struct RecentMediaStrip: View {
                 Task { await model.requestAccess() }
             }
         } label: {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: "photo.on.rectangle.angled")
-                    .font(MeeshyFont.relative(18, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(model.isAuthorizationRefused
                          ? String(localized: "composer.recent.accessDenied", defaultValue: "Accès aux photos refusé", bundle: .main)
                          : String(localized: "composer.recent.grantAccess", defaultValue: "Autoriser l'accès aux photos", bundle: .main))
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(.primary)
                     Text(model.isAuthorizationRefused
                          ? String(localized: "composer.recent.accessDenied.hint", defaultValue: "Toucher pour ouvrir les Réglages", bundle: .main)
                          : String(localized: "composer.recent.grantAccess.hint", defaultValue: "Pour retrouver vos médias récents ici", bundle: .main))
-                        .font(MeeshyFont.relative(11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(.secondary)
                 }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, hPadding)
-            .padding(.vertical, 14)
+            .padding(.vertical, MeeshySpacing.mdPlus)
         }
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -447,7 +447,7 @@ struct RecentMediaStrip: View {
     /// `.ultraThinMaterial` / solid accent — same layout, no behavior change.
     private var selectionBar: some View {
         AdaptiveGlassContainer(spacing: 12) {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Button {
                     HapticFeedback.light()
                     exitSelection()
@@ -455,7 +455,7 @@ struct RecentMediaStrip: View {
                     Text(String(localized: "composer.recent.cancelSelection", defaultValue: "Annuler", bundle: .main))
                         .font(.caption.weight(.semibold))
                         .foregroundColor(.secondary)
-                        .padding(.horizontal, 12)
+                        .padding(.horizontal, MeeshySpacing.md)
                         .padding(.vertical, 7)
                 }
                 .buttonStyle(.plain)
@@ -467,7 +467,7 @@ struct RecentMediaStrip: View {
                 Button {
                     confirmSelection()
                 } label: {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         if isBatchResolving {
                             ProgressView()
                                 .tint(.white)
@@ -480,7 +480,7 @@ struct RecentMediaStrip: View {
                             .font(.caption.weight(.bold))
                     }
                     .foregroundColor(.white)
-                    .padding(.horizontal, 14)
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.vertical, 7)
                 }
                 .buttonStyle(.plain)
@@ -490,8 +490,8 @@ struct RecentMediaStrip: View {
                 .accessibilityLabel(String(localized: "composer.a11y.addSelection", defaultValue: "Ajouter la sélection", bundle: .main))
             }
             .padding(.horizontal, hPadding)
-            .padding(.top, 8)
-            .padding(.bottom, 2)
+            .padding(.top, MeeshySpacing.sm)
+            .padding(.bottom, MeeshySpacing.xxs)
         }
     }
 
@@ -511,7 +511,7 @@ struct RecentMediaStrip: View {
                     }
                 }
                 .padding(.horizontal, hPadding)
-                .padding(.vertical, 10)
+                .padding(.vertical, MeeshySpacing.smPlus)
             }
         }
     }
@@ -639,13 +639,13 @@ struct RecentMediaStrip: View {
             onOpenLibrary(selection.ids)
         } label: {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .fill(Color(hex: accentColor).opacity(0.12))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .stroke(Color(hex: accentColor).opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
                     )
-                VStack(spacing: 4) {
+                VStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "photo.on.rectangle.angled")
                         .font(.title3)
                     Image(systemName: "plus")
@@ -690,7 +690,7 @@ private struct RecentMediaCell: View {
                         .frame(width: cell, height: cell)
                         .clipped()
                 } else {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .fill(Color.gray.opacity(0.18))
                         .frame(width: cell, height: cell)
                         .overlay(ProgressView().scaleEffect(0.7))
@@ -718,15 +718,15 @@ private struct RecentMediaCell: View {
                 }
 
                 if isResolving {
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .fill(Color.black.opacity(0.35))
                     ProgressView().tint(.white)
                 }
             }
             .frame(width: cell, height: cell)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                     .stroke(Color(hex: accentColor), lineWidth: selectionIndex != nil ? 2 : 0)
             )
         }
@@ -790,7 +790,7 @@ private struct RecentMediaCell: View {
                 ZStack {
                     Circle()
                         .fill(selectionIndex != nil ? Color(hex: accentColor) : Color.black.opacity(0.25))
-                        .overlay(Circle().stroke(Color.white, lineWidth: 1.5))
+                        .overlay(Circle().stroke(Color.white, lineWidth: MeeshyBorder.emphasis))
                         .frame(width: 22, height: 22)
                     if let selectionIndex {
                         Text("\(selectionIndex + 1)")
@@ -798,7 +798,7 @@ private struct RecentMediaCell: View {
                             .foregroundColor(.white)
                     }
                 }
-                .padding(4)
+                .padding(MeeshySpacing.xs)
             }
             Spacer()
         }

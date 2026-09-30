@@ -18,7 +18,7 @@ struct BubbleLinkEmbed: View {
     var body: some View {
         if let video = text.embeddedVideo {
             VideoEmbedContainer(video: video, accent: Color(hex: accentColor), trackedURL: text.embedTrackedURL)
-                .padding(.top, 4)
+                .padding(.top, MeeshySpacing.xs)
         } else if let url = text.firstLinkURL {
             Group {
                 if let target = text.conversationCardTarget {
@@ -28,7 +28,7 @@ struct BubbleLinkEmbed: View {
                     LinkPreviewCard(urlString: url, accentColor: accentColor, isDark: isDark)
                 }
             }
-            .padding(.top, 4)
+            .padding(.top, MeeshySpacing.xs)
         }
     }
 }

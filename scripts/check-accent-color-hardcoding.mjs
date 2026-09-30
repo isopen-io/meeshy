@@ -194,7 +194,13 @@
 // fond choisi, relue au canvas, au lecteur et au composite. C'est le fond
 // d'une SCÈNE, pas le contexte d'une conversation : `accentColor` n'y aurait
 // aucun sens.
-const REFERENCE_LITERAL_COLOR_COUNT = 120;
+//
+// 2026-09-30 (#8877) — littéraux 120 → 67. Le codemod de la charte visuelle
+// échange 53 `Color(hex: "…")` par le jeton `MeeshyColors` de MÊME valeur
+// (indigo, succès/erreur, teintes franches, tuiles, plans nommés) : aucun
+// pixel ne bouge, le codage en dur devient une référence au jeton. Les
+// variables inconnues ne bougent pas (441).
+const REFERENCE_LITERAL_COLOR_COUNT = 67;
 const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 441;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';

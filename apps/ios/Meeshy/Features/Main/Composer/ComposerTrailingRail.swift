@@ -217,7 +217,7 @@ struct ComposerTrailingRail: View {
 
     private var column: some View {
         Group {
-            VStack(spacing: 10) {
+            VStack(spacing: MeeshySpacing.smPlus) {
                 if pushesToThumb { Spacer(minLength: 0) }
                 // **`[+]` TOUT EN HAUT**, jamais mêlée aux contrôleurs de
                 // l'objet : elle n'agit pas sur le même niveau du modèle. Les

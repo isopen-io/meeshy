@@ -38,7 +38,7 @@ struct ReelMetaRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Text(timestamp)
                 .font(.caption2)
                 .foregroundColor(.white.opacity(0.65))
@@ -46,7 +46,7 @@ struct ReelMetaRow: View {
             if !codes.isEmpty {
                 // Translation flags only (the translate toggle is disabled for now):
                 // tap a flag to read that language; the active one is underlined.
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     ForEach(codes, id: \.self) { code in
                         // Registre `.overlay` : la rangée flotte au-dessus de la
                         // vidéo, dont le tap pilote la lecture. Des cibles de

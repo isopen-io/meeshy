@@ -54,7 +54,7 @@ struct CallPillButtonLabel: View {
     let diameter: CGFloat
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             CallPillGlyph(symbol: symbol, kind: kind, diameter: diameter)
             if let caption {
                 Text(caption)
@@ -64,7 +64,7 @@ struct CallPillButtonLabel: View {
                     .minimumScaleFactor(0.7)
             }
         }
-        .frame(minWidth: 44, minHeight: 44)
+        .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
         .contentShape(Rectangle())
     }
 }

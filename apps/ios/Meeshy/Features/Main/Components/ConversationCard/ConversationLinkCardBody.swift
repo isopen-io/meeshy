@@ -44,7 +44,7 @@ struct ConversationLinkCardBody: View, Equatable {
     }
 
     private var groupCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             banner
             identity
             if let description = card.description?.trimmingCharacters(in: .whitespacesAndNewlines), !description.isEmpty {
@@ -62,10 +62,10 @@ struct ConversationLinkCardBody: View, Equatable {
         }
         .padding(.bottom, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                 .fill(isDark ? MeeshyColors.indigo900.opacity(0.45) : MeeshyColors.indigo50.opacity(0.6))
         )
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
     }
@@ -87,7 +87,7 @@ struct ConversationLinkCardBody: View, Equatable {
     }
 
     private var identity: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             avatar
                 .padding(.top, -Self.avatarSide * 0.5)
             Text(title)
@@ -101,21 +101,21 @@ struct ConversationLinkCardBody: View, Equatable {
     }
 
     private var avatar: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
+        RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
             .fill(gradient)
             .overlay(
                 CachedAsyncImage(url: card.avatarUrl,
                                  targetSize: CGSize(width: Self.avatarSide, height: Self.avatarSide),
                                  showsStatusOverlays: false) {
                     Text(verbatim: initials)
-                        .font(MeeshyFont.relative(18, weight: .heavy, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .heavy, design: .rounded))
                         .foregroundColor(.white)
                 }
                 .scaledToFill()
             )
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
                     .stroke(isDark ? MeeshyColors.indigo950 : Color.white, lineWidth: 3)
             )
             .frame(width: Self.avatarSide, height: Self.avatarSide)
@@ -160,7 +160,7 @@ struct ConversationInviteQuote: View {
                 .fill(accent)
                 .frame(width: 3)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 HStack(spacing: MeeshySpacing.sm) {
                     MeeshyAvatar(name: inviter.displayName, context: .custom(28), avatarURL: inviter.avatarUrl,
                                  enablePulse: false, isDark: isDark)
@@ -171,7 +171,7 @@ struct ConversationInviteQuote: View {
                             .foregroundColor(accent)
                             .lineLimit(1)
                         Text(ConversationLinkCardCopy.invitesYou)
-                            .font(MeeshyFont.relative(12))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
                             .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -182,7 +182,7 @@ struct ConversationInviteQuote: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, MeeshySpacing.xxs)
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("conversation-link-card-invite")
@@ -192,7 +192,7 @@ struct ConversationInviteQuote: View {
     /// 2026-09-29, #8726) : un grand guillemet décoratif, puis le texte. Absent,
     /// rien ne se dessine — aucune place réservée.
     private func inviteMessage(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 6) {
+        HStack(alignment: .top, spacing: MeeshySpacing.xsPlus) {
             Text(verbatim: "\u{201C}")
                 .font(MeeshyFont.relative(60, weight: .black, design: .serif))
                 .foregroundColor(accent.opacity(0.7))
@@ -203,13 +203,13 @@ struct ConversationInviteQuote: View {
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium).italic())
                 .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 4)
+                .padding(.top, MeeshySpacing.xs)
         }
         .padding(.horizontal, MeeshySpacing.sm)
-        .padding(.vertical, 6)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                 .fill(accent.opacity(isDark ? 0.16 : 0.08))
         )
         .accessibilityIdentifier("conversation-link-card-invite-message")
@@ -253,7 +253,7 @@ struct ConversationCardStatsRow: View {
             if shown.count > 3 { languagePill(shown[3]) }
             if stats.languages.count > visible {
                 Text(verbatim: "+\(stats.languages.count - visible)")
-                    .font(MeeshyFont.relative(11, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
                     .foregroundColor(isDark ? MeeshyColors.indigo300 : MeeshyColors.neutral500)
                     .fixedSize()
             }
@@ -262,10 +262,10 @@ struct ConversationCardStatsRow: View {
 
     private func languagePill(_ code: String) -> some View {
         Text(verbatim: code.uppercased())
-            .font(MeeshyFont.relative(11, weight: .bold))
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
             .foregroundColor(accent)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
+            .padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(accent.opacity(0.14)))
             .fixedSize()
     }
@@ -275,7 +275,7 @@ struct ConversationCardStatsRow: View {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(11, weight: .semibold))
             Text(value.formatted(.number.notation(.compactName)))
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .monospacedDigit()
         }
         .fixedSize()

@@ -393,7 +393,7 @@ struct BubbleQuotedReply: View, Equatable {
     private var playBadge: some View {
         if mediaGateTap != nil, attachmentKind?.hasTimebasedTrack == true {
             Image(systemName: "play.circle.fill")
-                .font(MeeshyFont.relative(16, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .bold))
                 .foregroundStyle(.white)
                 .shadow(radius: 2)
                 .accessibilityHidden(true)
@@ -627,10 +627,10 @@ struct BubbleQuotedReply: View, Equatable {
 
                 Spacer(minLength: 0)
             }
-            .padding(.leading, 8)
-            .padding(.trailing, 10)
+            .padding(.leading, MeeshySpacing.sm)
+            .padding(.trailing, MeeshySpacing.smPlus)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, MeeshySpacing.sm)
         // La barre d'accent (RoundedRectangle) est infiniment flexible en
         // hauteur : sans fixedSize, un hôte qui sur-propose de la hauteur
         // (VStack du conteneur média+citation quand la vidéo letterboxe)
@@ -644,11 +644,11 @@ struct BubbleQuotedReply: View, Equatable {
         case .card:
             contentBody
                 .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                         .fill(bgColor)
                 )
-                .padding(.horizontal, 6)
-                .padding(.top, 6)
+                .padding(.horizontal, MeeshySpacing.xsPlus)
+                .padding(.top, MeeshySpacing.xsPlus)
         case .inline:
             contentBody
         }
@@ -754,7 +754,7 @@ struct BubbleStoryReplyPreview: View, Equatable {
 
     @ViewBuilder
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "camera.fill")
                 .font(.caption2.weight(.medium))
                 .foregroundColor(previewColor)

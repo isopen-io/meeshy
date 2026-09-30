@@ -137,7 +137,7 @@ extension UserProfileSheet {
 
     @ViewBuilder
     var actionButtons: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             if offersCall {
                 callButtons
             }
@@ -179,18 +179,18 @@ extension UserProfileSheet {
                     action: { Task { await declineRequest() } }
                 )
             case .connected:
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(.system(size: MeeshyIconSize.sm))
                         .foregroundColor(MeeshyColors.success)
                     Text(String(localized: "profile.status.connected", defaultValue: "Connectes", bundle: .module))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
                         .foregroundColor(MeeshyColors.success)
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .padding(.vertical, MeeshySpacing.md)
                 .background(MeeshyColors.success.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             }
 
             if isBlocked {
@@ -250,20 +250,20 @@ extension UserProfileSheet {
     }
 
     private func connectionContextRow(icon: String, text: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: MeeshySpacing.sm) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(Color(hex: resolvedAccent))
             Text(text)
-                .font(.system(size: 13))
+                .font(.system(size: MeeshyFont.subheadSize))
                 .foregroundColor(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .background(theme.surface(tint: resolvedAccent, intensity: 0.1))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         .accessibilityElement(children: .combine)
     }
 
@@ -272,7 +272,7 @@ extension UserProfileSheet {
     }
 
     private var callButtons: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             callButton(
                 isVideo: false,
                 icon: "phone.fill",
@@ -304,20 +304,20 @@ extension UserProfileSheet {
             HapticFeedback.medium()
             action()
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: icon)
                     .font(.system(size: 13, weight: .semibold))
                 Text(label)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
             }
             .foregroundColor(color)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, MeeshySpacing.md)
             .background(color.opacity(0.1))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(color.opacity(0.3), lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                    .stroke(color.opacity(0.3), lineWidth: MeeshyBorder.emphasis)
             )
         }
         .pressable()
@@ -364,13 +364,13 @@ extension UserProfileSheet {
     var voiceCard: some View {
         if displayUser.voicePublic == true,
            let url = displayUser.voiceSampleUrl, !url.isEmpty {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "waveform")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(Color(hex: resolvedAccent))
                     Text(String(localized: "profile.voice.title", defaultValue: "Voix", bundle: .module))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                 }
 
@@ -419,7 +419,7 @@ extension UserProfileSheet {
             }
 
             if let stats = effectiveUserStats {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     miniStatChip(icon: "paperplane.fill", value: stats.totalMessages,
                                  label: String(localized: "profile.stats.messagesShort", defaultValue: "Messages", bundle: .module))
                     miniStatChip(icon: "character.book.closed.fill", value: stats.totalTranslations,
@@ -430,9 +430,9 @@ extension UserProfileSheet {
                                  label: String(localized: "profile.stats.daysShort", defaultValue: "Jours", bundle: .module))
                 }
             } else if effectiveIsLoadingStats {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ForEach(0..<4, id: \.self) { _ in
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .fill(theme.surface(tint: resolvedAccent, intensity: 0.1))
                             .frame(height: 56)
                             .shimmer()
@@ -449,12 +449,12 @@ extension UserProfileSheet {
     }
 
     private func miniStatChip(icon: String, value: Int, label: String) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: MeeshyIconSize.sm, weight: .medium))
                 .foregroundColor(Color(hex: resolvedAccent))
             Text("\(value)")
-                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .font(.system(size: MeeshyFont.bodySize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
             Text(label)
                 .font(.caption2)
@@ -463,7 +463,7 @@ extension UserProfileSheet {
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .background(theme.surfaceGradient(tint: resolvedAccent))
         .glassCard(cornerRadius: MeeshyRadius.lg)
         .accessibilityElement(children: .combine)
@@ -480,7 +480,7 @@ extension UserProfileSheet {
         SettingsCard(tint: resolvedAccent) {
             SettingsRow(icon: icon, title: label, color: resolvedAccent) {
                 Text(value)
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
             }
             .accessibilityElement(children: .combine)

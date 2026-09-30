@@ -147,7 +147,7 @@ public struct NotificationListView: View {
     /// posé AVANT l'aller-retour, retiré s'il échoue.
     @State private var connectRequestedIds: Set<String> = []
 
-    private let brandColor = Color(hex: "6366F1")
+    private let brandColor = MeeshyColors.indigo500
 
     public init(
         onNotificationTap: ((APINotification) -> Void)? = nil,
@@ -208,7 +208,7 @@ public struct NotificationListView: View {
                                 Task { await viewModel.markAllRead() }
                             } label: {
                                 Text(String(localized: "notifications.markAllRead", defaultValue: "Tout lire", bundle: .module))
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                                     .foregroundColor(brandColor)
                             }
                         } else {
@@ -220,9 +220,9 @@ public struct NotificationListView: View {
 
             if viewModel.unreadCount > 0 {
                 Text("\(viewModel.unreadCount) non lue\(viewModel.unreadCount > 1 ? "s" : "")")
-                    .font(.system(size: 11))
+                    .font(.system(size: MeeshyFont.footnoteSize))
                     .foregroundColor(brandColor)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, MeeshySpacing.xs)
             }
         }
     }
@@ -231,13 +231,13 @@ public struct NotificationListView: View {
 
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(NotificationCategory.allCases, id: \.self) { category in
                     filterChip(category: category)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.sm)
         }
     }
 
@@ -257,13 +257,13 @@ public struct NotificationListView: View {
         } label: {
             HStack(spacing: 5) {
                 Image(systemName: category.icon)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 Text(category.label)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
             .foregroundColor(isSelected ? .white : Color(hex: chipColor))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
                 Capsule()
                     .fill(isSelected ? Color(hex: chipColor) : Color(hex: chipColor).opacity(0.12))
@@ -367,18 +367,18 @@ public struct NotificationListView: View {
             }
         }()
 
-        return VStack(spacing: 16) {
+        return VStack(spacing: MeeshySpacing.lg) {
             Spacer()
             Image(systemName: category.icon)
-                .font(.system(size: 48))
+                .font(.system(size: MeeshyIconSize.hero))
                 .foregroundColor(Color(hex: category.color).opacity(0.4))
 
             Text(emptyMessage)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: MeeshyFont.calloutSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "notifications.empty.subtitle", defaultValue: "Vos notifications apparaitront ici", bundle: .module))
-                .font(.system(size: 13))
+                .font(.system(size: MeeshyFont.subheadSize))
                 .foregroundColor(theme.textMuted)
             Spacer()
         }

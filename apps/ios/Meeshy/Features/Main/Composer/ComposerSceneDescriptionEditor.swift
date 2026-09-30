@@ -106,8 +106,8 @@ struct ComposerSceneDescriptionEditor: View {
         // elle, teinté du plateau comme le reste du chrome.
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous),
                        tint: plateauTint.opacity(0.55))
-        .padding(.horizontal, 8)
-        .padding(.bottom, 4)
+        .padding(.horizontal, MeeshySpacing.sm)
+        .padding(.bottom, MeeshySpacing.xs)
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .environment(\.colorScheme, .dark)
     }
@@ -138,8 +138,8 @@ struct ComposerSceneDescriptionEditor: View {
             languageAccessory: languageAccessory,
             validationLabel: validationLabel
         )
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .frame(maxWidth: .infinity)
         .background { mesure }
         .onPreferenceChange(ComposerDescriptionEditorHeightKey.self) { hauteur in

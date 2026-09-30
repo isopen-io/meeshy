@@ -38,7 +38,7 @@ struct FirstUnreadSeparatorRow: View, Equatable {
     private var label: String { UnreadCountLabel.messages(count) }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Rectangle().fill(lineColor).frame(height: 1)
             Text(label)
                 .font(.caption.weight(.semibold))
@@ -47,8 +47,8 @@ struct FirstUnreadSeparatorRow: View, Equatable {
                 .fixedSize(horizontal: true, vertical: false)
             Rectangle().fill(lineColor).frame(height: 1)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
         .accessibilityAddTraits(.isHeader)

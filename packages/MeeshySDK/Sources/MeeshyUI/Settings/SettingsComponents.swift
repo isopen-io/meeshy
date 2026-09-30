@@ -80,9 +80,9 @@ public struct SettingsSectionHeader: View {
     public var body: some View {
         HStack(spacing: 7) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
             Text(title.uppercased())
-                .font(MeeshyFont.relative(12, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
                 .tracking(1.1)
         }
         .foregroundColor(Color(hex: color))
@@ -182,9 +182,9 @@ public struct SettingsRow<Trailing: View>: View {
             iconTile
 
             VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(title)
-                        .font(MeeshyFont.relative(16, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     if let info, let onInfo {
@@ -193,7 +193,7 @@ public struct SettingsRow<Trailing: View>: View {
                 }
                 if let subtitle {
                     Text(subtitle)
-                        .font(MeeshyFont.relative(13, weight: .regular))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
                         .foregroundColor(theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -244,7 +244,7 @@ public struct SettingsInfoButton: View {
             action(info)
         } label: {
             Image(systemName: "info.circle")
-                .font(MeeshyFont.relative(14, weight: .regular))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .regular))
                 .foregroundColor(Color(hex: color).opacity(0.85))
                 // La cible tactile atteint 44 pt sans que l'icône grossisse.
                 .frame(width: SettingsRowMetrics.minimumHeight,
@@ -317,12 +317,12 @@ private struct SettingsInfoOverlay: ViewModifier {
     private func card(_ presented: SettingsInfo) -> some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             Text(presented.title)
-                .font(MeeshyFont.relative(18, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Text(presented.message)
-                .font(MeeshyFont.relative(15, weight: .regular))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .regular))
                 .foregroundColor(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -330,7 +330,7 @@ private struct SettingsInfoOverlay: ViewModifier {
                 dismiss()
             } label: {
                 Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(Color(hex: MeeshyColors.brandPrimaryHex))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, MeeshySpacing.md)

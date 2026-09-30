@@ -14,7 +14,7 @@ struct ComposerFormatBar: View {
     let onFormat: (ComposerTextFormat.Style) -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             ForEach(ComposerTextFormat.Style.allCases, id: \.self) { style in
                 Button {
                     HapticFeedback.light()
@@ -23,7 +23,7 @@ struct ComposerFormatBar: View {
                     letter(style)
                         .frame(width: 44, height: 36)
                         .background(
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                 .fill(accent.opacity(0.12))
                         )
                 }

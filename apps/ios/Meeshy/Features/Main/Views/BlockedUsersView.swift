@@ -106,7 +106,7 @@ struct BlockedUsersView: View {
                 .frame(width: 44, height: 44)
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                RoundedRectangle(cornerRadius: 4)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                     .fill(theme.textMuted.opacity(0.12))
                     .frame(width: 120, height: 14)
                 RoundedRectangle(cornerRadius: 3)
@@ -176,14 +176,14 @@ struct BlockedUsersView: View {
             )
             .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(user.name)
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")
-                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
             }
@@ -196,7 +196,7 @@ struct BlockedUsersView: View {
                 userToUnblock = user
             } label: {
                 Text(String(localized: "blocked.users.unblock.action", defaultValue: "Débloquer", bundle: .main))
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.xs)

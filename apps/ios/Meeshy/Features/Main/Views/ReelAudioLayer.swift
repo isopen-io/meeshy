@@ -91,7 +91,7 @@ struct ReelAudioView: View {
                 fontSize: 22,
                 onSeek: { time in player.seekToTime(time) }
             )
-            .padding(.horizontal, 20)
+            .padding(.horizontal, MeeshySpacing.xl)
             // Clear the bottom chrome (control + flags + author + rail).
             .padding(.bottom, 200)
             // Cross-fade when the language (and thus the segments) changes.

@@ -109,7 +109,7 @@ public struct MeeshyAudioTrimmer: View {
     }
 
     public var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             playButton
             strip
         }
@@ -146,7 +146,7 @@ public struct MeeshyAudioTrimmer: View {
     private var strip: some View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(tint.opacity(0.10))
 
                 Canvas { context, size in
@@ -157,8 +157,8 @@ public struct MeeshyAudioTrimmer: View {
                 handle(.start)
                 handle(.end)
             }
-            .contentShape(RoundedRectangle(cornerRadius: 14))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
             .gesture(scrollGesture)
             .simultaneousGesture(pinchGesture)
             .onAppear { stripWidth = proxy.size.width }

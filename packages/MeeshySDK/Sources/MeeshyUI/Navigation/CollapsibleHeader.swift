@@ -302,7 +302,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                 // rangée (`.background` plus bas), et le chrome droit flotte
                 // dessus.
                 ZStack(alignment: .leading) {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         if let titleView {
                             titleView()
                                 .scaleEffect(lerp(1.0, 0.65, progress), anchor: .leading)
@@ -341,7 +341,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                 if showCollapsedSubtitle {
                     makeSubtitleText(subtitle ?? "", size: 12, opacity: 0.5)
                         .lineLimit(1)
-                        .padding(.leading, 8)
+                        .padding(.leading, MeeshySpacing.sm)
                         .opacity(max(0, (progress - 0.7) / 0.3))
                         // Même raison que le titre : purement informatif, il ne
                         // prend jamais le geste destiné à la trail derrière lui.
@@ -362,7 +362,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                 // (retour user 2026-08-14, trois signalements), et rien ne dit
                 // qu'un futur occupant élastique de la fente ne reviendra pas.
                 trailing()
-                    .frame(minWidth: 44, minHeight: 44)
+                    .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                     .layoutPriority(2)
                     // L'écart avec le titre (ou la trail qui l'occupe) appartient
                     // aux ACTIONS, pas au `Spacer` : réservé avec elles au titre
@@ -485,7 +485,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                 .foregroundColor(backArrowColor)
                 .frame(width: CollapsibleHeaderMetrics.roundChromeDiameter, height: CollapsibleHeaderMetrics.roundChromeDiameter)
                 .adaptiveGlass(in: Circle(), interactive: true)
-                .frame(minWidth: 44, minHeight: 44)
+                .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)

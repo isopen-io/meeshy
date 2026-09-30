@@ -156,7 +156,7 @@ public struct MeeshyVideoThumbnail: View {
             Circle().fill(.ultraThinMaterial).frame(width: 44, height: 44)
             Circle().fill(Color(hex: accentColor).opacity(0.85)).frame(width: 38, height: 38)
             Image(systemName: "play.fill")
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: MeeshyIconSize.md, weight: .bold))
                 .foregroundColor(.white)
                 .offset(x: 1.5)
         }
@@ -171,15 +171,15 @@ public struct MeeshyVideoThumbnail: View {
             Spacer()
             HStack {
                 Text(formatted)
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .font(.system(size: MeeshyFont.captionSize, weight: .semibold, design: .monospaced))
                     .foregroundColor(.white)
                     .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(Capsule().fill(Color.black.opacity(0.6)))
                 Spacer()
             }
-            .padding(.leading, 4)
-            .padding(.bottom, 4)
+            .padding(.leading, MeeshySpacing.xs)
+            .padding(.bottom, MeeshySpacing.xs)
         }
     }
 

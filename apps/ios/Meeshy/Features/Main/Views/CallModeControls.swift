@@ -18,7 +18,7 @@ struct CallEffectsModeControls: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.mdPlus) {
             if showsSettings {
                 settingsRow
                     .transition(.opacity)
@@ -78,7 +78,7 @@ struct CallEffectsModeControls: View {
     }
 
     private var categoryPicker: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             ForEach(CallEffectsCategory.allCases, id: \.self) { item in
                 if item != CallEffectsCategory.allCases.first {
                     Text(verbatim: "·")
@@ -93,7 +93,7 @@ struct CallEffectsModeControls: View {
                     Text(CallModeCopy.categoryName(item))
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(.white.opacity(category == item ? 1 : 0.55))
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, MeeshySpacing.sm)
                         .frame(minHeight: 44)
                         .contentShape(Rectangle())
                 }
@@ -176,8 +176,8 @@ struct CallEffectsModeControls: View {
     private var settingsRow: some View {
         let limit = Double(VideoFilterConfig.brightnessLimit)
         let percent = LocalizedNumber.percent(Int((Double(config.brightness) / limit * 100).rounded()))
-        return HStack(spacing: 14) {
-            HStack(spacing: 8) {
+        return HStack(spacing: MeeshySpacing.mdPlus) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "sun.min")
                     .font(.footnote)
                     .foregroundColor(.white.opacity(0.8))
@@ -202,7 +202,7 @@ struct CallEffectsModeControls: View {
                 HapticFeedback.light()
             }
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, MeeshySpacing.xxl)
     }
 }
 
@@ -223,7 +223,7 @@ struct CallMontageModeControls: View {
         let people = subjects.count
         let selection = CallMontageFrameRule.reconcile(capture.choice, people: people)
         let chip = CallMontageFrameRule.chip(of: selection)
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.mdPlus) {
             CallFrameMoodChips(
                 chips: CallMontageFrameRule.chips(forPeople: people),
                 selected: chip,

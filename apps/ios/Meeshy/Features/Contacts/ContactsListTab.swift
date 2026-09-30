@@ -28,13 +28,13 @@ struct ContactsListTab: View {
 
     private var filterChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(ContactFilter.allCases, id: \.self) { filter in
                     chipButton(filter)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.smPlus)
         }
     }
 
@@ -96,8 +96,8 @@ struct ContactsListTab: View {
                 placeholder: String(localized: "contacts.list.search-placeholder", defaultValue: "Rechercher un contact", bundle: .main),
                 query: $viewModel.searchQuery
             )
-            .padding(.horizontal, 16)
-            .padding(.bottom, 4)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.xs)
 
             ScrollView(.vertical, showsIndicators: false) {
                 ContactsScrollSentinel()
@@ -114,7 +114,7 @@ struct ContactsListTab: View {
                         .equatable()
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, MeeshySpacing.xs)
             }
             .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
             .refreshable { await viewModel.loadFriends(forceNetwork: true) }
@@ -158,7 +158,7 @@ private struct ContactRow: View, Equatable {
         let name = user.name
         let color = DynamicColorGenerator.colorForName(name)
         return Button(action: onOpen) {
-            HStack(spacing: 14) {
+            HStack(spacing: MeeshySpacing.mdPlus) {
                 MeeshyAvatar(
                     name: name,
                     context: .userListItem,
@@ -196,8 +196,8 @@ private struct ContactRow: View, Equatable {
                     .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textMuted.opacity(0.5))
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.vertical, MeeshySpacing.md)
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)

@@ -502,7 +502,7 @@ public struct MeeshyAvatar: View {
         let dot = Circle()
             .fill(presence.dotColor)
             .frame(width: context.onlineDotSize, height: context.onlineDotSize)
-            .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
+            .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: MeeshyBorder.strong))
             .onTapGesture {
                 HapticFeedback.light()
                 onOnlineTap?()

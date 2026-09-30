@@ -131,7 +131,7 @@ public struct UserIdentityBar: View {
     }
 
     public var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             if let avatar {
                 MeeshyAvatar(
                     name: name ?? "",
@@ -149,8 +149,8 @@ public struct UserIdentityBar: View {
                 )
             }
 
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                HStack(spacing: MeeshySpacing.xs) {
                     ForEach(leadingPrimary) { element in
                         renderElement(element)
                     }
@@ -161,7 +161,7 @@ public struct UserIdentityBar: View {
                 }
 
                 if !leadingSecondary.isEmpty || !trailingSecondary.isEmpty {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         ForEach(leadingSecondary) { element in
                             renderElement(element)
                         }
@@ -183,14 +183,14 @@ public struct UserIdentityBar: View {
         case .name:
             if let name {
                 Text(name)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
             }
 
         case .username(let value):
             Text(value)
-                .font(.system(size: 11))
+                .font(.system(size: MeeshyFont.footnoteSize))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
 
@@ -198,7 +198,7 @@ public struct UserIdentityBar: View {
             if role != .member {
                 Label {
                     Text(role.displayName)
-                        .font(.system(size: 11))
+                        .font(.system(size: MeeshyFont.footnoteSize))
                 } icon: {
                     Image(systemName: role.icon)
                         .font(.system(size: 11))
@@ -208,7 +208,7 @@ public struct UserIdentityBar: View {
 
         case .time(let value):
             Text(value)
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(tintColor ?? theme.textSecondary)
 
         case .delivery(let status):
@@ -219,7 +219,7 @@ public struct UserIdentityBar: View {
 
         case .translateButton(let action):
             Image(systemName: "translate")
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
                 .foregroundColor(MeeshyColors.brandPrimary)
                 .onTapGesture { action() }
                 .accessibilityLabel(String(localized: "userIdentity.translation.available", defaultValue: "Traduction disponible", bundle: .module))
@@ -229,29 +229,29 @@ public struct UserIdentityBar: View {
             // vert online, orange away, gris idle. Règle 1/3/5 : `offline`
             // n'émet RIEN (gating central `showsIndicator`).
             if state.showsIndicator {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Circle()
                         .fill(state.dotColor)
                         .frame(width: 6, height: 6)
                     Text(state.localizedLabel)
-                        .font(.system(size: 11))
+                        .font(.system(size: MeeshyFont.footnoteSize))
                         .foregroundColor(state.dotColor)
                 }
             }
 
         case .memberSince(let value):
             Text(value)
-                .font(.system(size: 11))
+                .font(.system(size: MeeshyFont.footnoteSize))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
 
         case .actionButton(let label, let action):
             Button(action: action) {
                 Text(label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(MeeshyColors.indigo500)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
+                    .padding(.vertical, MeeshySpacing.xs)
                     .background(
                         Capsule()
                             .fill(MeeshyColors.indigo500.opacity(0.15))
@@ -273,15 +273,15 @@ public struct UserIdentityBar: View {
                     }
                 }
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(label)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                     Image(systemName: "chevron.down")
                         .font(.system(size: 8, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.indigo500)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
+                .padding(.horizontal, MeeshySpacing.smPlus)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule()
                         .fill(MeeshyColors.indigo500.opacity(0.15))
@@ -290,7 +290,7 @@ public struct UserIdentityBar: View {
 
         case .text(let value, _):
             Text(value)
-                .font(.system(size: 11))
+                .font(.system(size: MeeshyFont.footnoteSize))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
         }
@@ -320,7 +320,7 @@ public struct UserIdentityBar: View {
         switch status {
         case .sending:
             Image(systemName: "clock")
-                .font(.system(size: 10))
+                .font(.system(size: MeeshyIconSize.xxs))
                 .foregroundColor(secondaryColor)
         case .invisible:
             // Spec §6.2 — optimistic applied locally, debounced for 200ms before
@@ -330,7 +330,7 @@ public struct UserIdentityBar: View {
         case .clock:
             // 200ms-5s without ACK: subtle clock glyph hinting "still sending".
             Image(systemName: "clock")
-                .font(.system(size: 10))
+                .font(.system(size: MeeshyIconSize.xxs))
                 .foregroundColor(secondaryColor.opacity(0.7))
         case .slow:
             // 5s-30s without ACK or auto-retry in flight: warmer "slow send"
@@ -338,18 +338,18 @@ public struct UserIdentityBar: View {
             // (message-send-failure-retry-flow, règle 2) : aucun glyphe
             // évoquant un échec tant que l'état n'est pas `.failed`.
             Image(systemName: "clock")
-                .font(.system(size: 10))
+                .font(.system(size: MeeshyIconSize.xxs))
                 .foregroundColor(MeeshyColors.warning)
         case .sent:
             Image(systemName: "checkmark")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 .foregroundColor(secondaryColor)
         case .delivered:
             ZStack(alignment: .leading) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .regular))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .regular))
                 Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .regular))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .regular))
                     .offset(x: 4)
             }
             .foregroundColor(secondaryColor)
@@ -367,7 +367,7 @@ public struct UserIdentityBar: View {
             .accessibilityLabel(String(localized: "userIdentity.read", defaultValue: "Lu", bundle: .module))
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 10))
+                .font(.system(size: MeeshyIconSize.xxs))
                 .foregroundColor(MeeshyColors.error)
         }
     }
@@ -376,7 +376,7 @@ public struct UserIdentityBar: View {
 
     @ViewBuilder
     private func flagsView(codes: [String], active: String?, onTap: ((String) -> Void)?) -> some View {
-        HStack(spacing: 2) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(codes, id: \.self) { code in
                 let display = LanguageDisplay.from(code: code)
                 let isActive = code == active

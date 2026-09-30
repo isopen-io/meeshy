@@ -37,7 +37,7 @@ extension PostDetailView {
             HapticFeedback.light()
             router.push(.postDetail(repost.id))
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "arrow.2.squarepath")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textMuted)
@@ -49,8 +49,8 @@ extension PostDetailView {
                     .font(.caption2.weight(.semibold))
                     .foregroundColor(theme.textMuted)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.smPlus)
         }
         .buttonStyle(PlainButtonStyle())
         .accessibilityLabel(String(format: String(localized: "a11y.post.repost_author", defaultValue: "Publication repartagée de %@", bundle: .main), repost.author))
@@ -67,7 +67,7 @@ extension PostDetailView {
                 HapticFeedback.light()
                 router.push(.postDetail(repost.id))
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     MeeshyAvatar(
                         name: repost.author,
                         context: .postComment,
@@ -75,11 +75,11 @@ extension PostDetailView {
                         avatarURL: repost.authorAvatarURL
                     )
                     .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(repost.author)
                             .font(.footnote.weight(.semibold))
                             .foregroundColor(theme.accentText(repost.authorColor))
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Text(repost.timestamp, style: .relative)
                                 .font(.caption2)
                                 .foregroundColor(theme.textMuted)
@@ -94,9 +94,9 @@ extension PostDetailView {
                 }
             }
             .buttonStyle(PlainButtonStyle())
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.top, MeeshySpacing.smPlus)
+            .padding(.bottom, MeeshySpacing.xsPlus)
             .accessibilityElement(children: .ignore)
             .accessibilityAddTraits(.isButton)
             .accessibilityLabel(String(format: String(localized: "a11y.post.repost_author", defaultValue: "Publication repartagée de %@", bundle: .main), repost.author))
@@ -115,8 +115,8 @@ extension PostDetailView {
                     .lineLimit(6)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 6)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.bottom, MeeshySpacing.xsPlus)
                     .accessibilityLabel(String(format: String(localized: "a11y.post.repost_content", defaultValue: "Contenu repartagé : %@", bundle: .main), repostDisplayContent))
 
                 // Inline secondary translation for repost
@@ -125,7 +125,7 @@ extension PostDetailView {
                     let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
                     let display = LanguageDisplay.from(code: code)
                     VStack(spacing: 0) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: MeeshySpacing.xsPlus) {
                             Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
                             Circle().fill(langColor).frame(width: 3, height: 3)
                             Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
@@ -144,14 +144,14 @@ extension PostDetailView {
                                 .foregroundColor(theme.textPrimary.opacity(0.8))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
-                        .padding(.vertical, 6)
-                        .padding(.horizontal, 8)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
+                        .padding(.horizontal, MeeshySpacing.sm)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(langColor.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 6)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.bottom, MeeshySpacing.xsPlus)
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
@@ -191,15 +191,15 @@ extension PostDetailView {
                                                                     viewerPaused: isCanvasPaused)
                     )
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.bottom, MeeshySpacing.sm)
             } else if !repost.media.isEmpty {
                 // Standard media attachments — owner is the CITED repost, not
                 // the outer post: its audio's Now Playing card must show the
                 // quoted author's name/avatar, not the outer post's.
                 detailMediaSection(repost.media, owner: DetailMediaAuthor(repost: repost))
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.bottom, MeeshySpacing.sm)
             }
 
             // Lieu du post SOURCE — sticker cliquable, même surface plein
@@ -208,8 +208,8 @@ extension PostDetailView {
                 FeedPostLocationSticker(place: place) {
                     detailFullscreenPlace = BubbleFullscreenPlace(place: place)
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.bottom, MeeshySpacing.sm)
             }
 
             // Audio URL (legacy story audio)
@@ -253,15 +253,15 @@ extension PostDetailView {
                         )
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10))
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.bottom, MeeshySpacing.sm)
             }
 
             // Stats row
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 if repost.likes > 0 {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "heart.fill")
                             .font(.caption2)
                         Text("\(repost.likes)")
@@ -274,20 +274,20 @@ extension PostDetailView {
                 }
                 Spacer()
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.bottom, MeeshySpacing.sm)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: repost.authorColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(theme.border(tint: repost.authorColor, intensity: 0.2), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     // MARK: - Repost Language Support

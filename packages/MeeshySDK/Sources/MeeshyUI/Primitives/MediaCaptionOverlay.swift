@@ -89,8 +89,8 @@ public nonisolated enum MediaCaptionRule {
 /// point. Seul le doigt y gagne.
 private extension View {
     func captionAffordanceHitArea() -> some View {
-        self.padding(.vertical, 14)      // 16 + 2 × 14 = 44
-            .padding(.horizontal, 10)
+        self.padding(.vertical, MeeshySpacing.mdPlus)      // 16 + 2 × 14 = 44
+            .padding(.horizontal, MeeshySpacing.smPlus)
             .contentShape(Rectangle())
             .padding(.vertical, -14)
             .padding(.horizontal, -10)
@@ -301,7 +301,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     /// conteneur ne porte pas d'`allowsHitTesting(false)` : il éteindrait le
     /// bouton avec le reste — le défaut même que ce composant corrige.
     private var collapsedCaption: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             render(collapsed.head, 14)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -371,7 +371,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
             .padding(.leading, horizontalInset)
             .padding(.trailing, horizontalInset + expandedTrailingInset)
             .frame(maxWidth: .infinity, alignment: .leading)
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             ScrollViewReader { proxy in
                 // **Aucune barre de défilement** (directive porteur 2026-09-03).
                 //
@@ -440,7 +440,7 @@ public struct MediaCaptionOverlay<TextBody: View>: View {
     private func affordance(_ label: String, hint: String) -> some View {
         Button(action: onToggle) {
             Text(label)
-                .font(MeeshyFont.relative(13, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
                 .foregroundColor(MeeshyColors.indigo300)
                 .legibleOverCanvas()
         }

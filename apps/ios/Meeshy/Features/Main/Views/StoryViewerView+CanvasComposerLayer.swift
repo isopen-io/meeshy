@@ -140,7 +140,7 @@ extension StoryCardView {
                 // la carte reader (`readerCanvasFraming`) et le
                 // `.padding(.trailing, 16)` du sidebar — même rythme 16pt
                 // pour les trois colonnes de chrome.
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .simultaneousGesture(composerDragGesture)
                 .frame(height: isFolded ? 0 : nil, alignment: .top)
                 .opacity(isFolded ? 0 : 1)

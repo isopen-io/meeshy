@@ -31,7 +31,7 @@ public struct SoundDetailView: View {
         NavigationStack {
             ScrollView {
                 header
-                Divider().padding(.vertical, 12)
+                Divider().padding(.vertical, MeeshySpacing.md)
                 content
             }
             .navigationTitle(String(localized: "story.sound.detail.title",
@@ -48,14 +48,14 @@ public struct SoundDetailView: View {
     }
 
     private var header: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             cover
             Text(SoundLibraryPickerModel.displayTitle(for: sound))
-                .font(.system(size: 17, weight: .semibold))
+                .font(.system(size: MeeshyFont.headlineSize, weight: .semibold))
                 .multilineTextAlignment(.center)
                 .lineLimit(2)
             if let author = sound.authorLabel {
-                Text(author).font(.system(size: 13)).foregroundStyle(.secondary)
+                Text(author).font(.system(size: MeeshyFont.subheadSize)).foregroundStyle(.secondary)
             }
             counters
             Button {
@@ -69,8 +69,8 @@ public struct SoundDetailView: View {
             .controlSize(.regular)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 12)
-        .padding(.horizontal, 16)
+        .padding(.top, MeeshySpacing.md)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     private var cover: some View {
@@ -88,13 +88,13 @@ public struct SoundDetailView: View {
             }
         }
         .frame(width: 96, height: 96)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
     }
 
     /// Les deux mêmes compteurs que la ligne du sélecteur, et ils décrivent
     /// exactement la grille du dessous : qui doute peut recompter.
     private var counters: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: MeeshySpacing.mdPlus) {
             if sound.postCount > 0 {
                 Label(sound.postCount.formatted(.number.notation(.compactName)), systemImage: "rectangle.stack")
             }
@@ -122,14 +122,14 @@ public struct SoundDetailView: View {
             if model.canLoadMore {
                 ProgressView()
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, MeeshySpacing.lg)
                     .task { await model.loadMore() }
             }
         }
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "square.stack")
                 .font(.system(size: 30, weight: .light))
                 .foregroundStyle(.secondary)
@@ -141,7 +141,7 @@ public struct SoundDetailView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, MeeshySpacing.xxxl)
         }
         .padding(.top, 40)
     }
@@ -171,10 +171,10 @@ struct SoundPostTile: View {
 
             if post.viewCount > 0 {
                 Label(post.viewCount.formatted(.number.notation(.compactName)), systemImage: "play.fill")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundStyle(.white)
                     .shadow(radius: 2)
-                    .padding(6)
+                    .padding(MeeshySpacing.xsPlus)
             }
         }
         .aspectRatio(1, contentMode: .fill)

@@ -72,7 +72,7 @@ public struct VideoTransportControls: View {
                     centerLayer
                     Spacer()
                     if hasBottomBar {
-                        bottomBar.padding(.horizontal, 16)
+                        bottomBar.padding(.horizontal, MeeshySpacing.lg)
                     }
                 }
             case .center:
@@ -99,7 +99,7 @@ public struct VideoTransportControls: View {
 
     private var centerControls: some View {
         AdaptiveGlassContainer(spacing: 32) {
-            HStack(spacing: 32) {
+            HStack(spacing: MeeshySpacing.xxxl) {
                 if showsSkip { skipButton(systemName: "gobackward.10", seconds: -10) }
                 if controls.contains(.playPause) { playPauseButton }
                 if showsSkip { skipButton(systemName: "goforward.10", seconds: 10) }
@@ -119,7 +119,7 @@ public struct VideoTransportControls: View {
             // Glyphe figé : contrôle circulaire de taille fixe (52pt).
             // Glass appliqué APRÈS le sizing (règle AdaptiveGlass).
             Image(systemName: systemName)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xxl, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 52, height: 52)
                 .adaptiveGlass(in: Circle(), interactive: true)
@@ -135,7 +135,7 @@ public struct VideoTransportControls: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 28, weight: .bold))
+                .font(.system(size: MeeshyIconSize.xxxl, weight: .bold))
                 .foregroundColor(.white)
                 .offset(x: manager.isPlaying ? 0 : 2)
                 .adaptiveSymbolReplace(id: manager.isPlaying)
@@ -150,7 +150,7 @@ public struct VideoTransportControls: View {
     // MARK: - Barre unique bas : temps · scrubber · durée · mute · airplay · ⋯
 
     private var bottomBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             if TransportLayout.showsElapsedTime(placement: placement, controls: controls) {
                 timeLabel(isSeeking ? seekValue * manager.duration : manager.currentTime)
             }
@@ -166,7 +166,7 @@ public struct VideoTransportControls: View {
             }
             if TransportLayout.showsMenuButton(for: controls) { moreMenu }
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
         .frame(height: TransportLayout.barHeight)
         .modifier(TransportBarSurface(glass: TransportLayout.wrapsBarInGlass(placement: placement)))
     }
@@ -178,7 +178,7 @@ public struct VideoTransportControls: View {
     /// défilant et la ligne tressaute à chaque seconde.
     private func timeLabel(_ seconds: Double) -> some View {
         Text(formatMediaDuration(seconds))
-            .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            .font(.system(size: MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
             .foregroundColor(.white.opacity(0.85))
             .lineLimit(1)
             .fixedSize()
@@ -190,7 +190,7 @@ public struct VideoTransportControls: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: manager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(manager.isMuted ? accent : .white)
                 .frame(width: 32, height: 32)
                 .contentShape(Circle())

@@ -73,7 +73,7 @@ struct AddParticipantSheet: View {
     private var headerBar: some View {
         HStack {
             Text(String(localized: "participants.add.title", defaultValue: "Ajouter un membre", bundle: .main))
-                .font(MeeshyFont.relative(17, weight: .semibold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
@@ -93,22 +93,22 @@ struct AddParticipantSheet: View {
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 16)
-        .padding(.bottom, 8)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.top, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.sm)
     }
 
     // MARK: - Search Field
 
     private var searchField: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "magnifyingglass")
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
 
             TextField(String(localized: "participants.add.search-placeholder", defaultValue: "Rechercher un utilisateur…", bundle: .main), text: $searchQuery)
-                .font(MeeshyFont.relative(15))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .foregroundColor(theme.textPrimary)
                 .focused($isSearchFocused)
                 .autocorrectionDisabled()
@@ -123,20 +123,20 @@ struct AddParticipantSheet: View {
                     searchResults = []
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(MeeshyFont.relative(16))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md))
                         .foregroundColor(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(theme.textMuted.opacity(0.08))
         )
-        .padding(.horizontal, 20)
-        .padding(.bottom, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.bottom, MeeshySpacing.md)
     }
 
     // MARK: - Results List
@@ -145,13 +145,13 @@ struct AddParticipantSheet: View {
     private var resultsList: some View {
         ScrollView(.vertical, showsIndicators: false) {
             if isSearching {
-                VStack(spacing: 12) {
+                VStack(spacing: MeeshySpacing.md) {
                     ForEach(0..<3, id: \.self) { _ in
                         searchSkeletonRow
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 8)
+                .padding(.horizontal, MeeshySpacing.xl)
+                .padding(.top, MeeshySpacing.sm)
                 // Collapse the shimmer placeholders into one spoken element so VoiceOver
                 // announces the loading state once instead of stopping on 3 empty rows.
                 .accessibilityElement(children: .ignore)
@@ -170,10 +170,10 @@ struct AddParticipantSheet: View {
 
             if let error = errorMessage {
                 Text(error)
-                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.top, MeeshySpacing.sm)
             }
         }
     }
@@ -185,7 +185,7 @@ struct AddParticipantSheet: View {
         let isAdding = addingUserId == user.id
         let color = DynamicColorGenerator.colorForName(user.name)
 
-        return HStack(spacing: 12) {
+        return HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: user.name,
                 context: .userListItem,
@@ -199,14 +199,14 @@ struct AddParticipantSheet: View {
             // mood tap / context menu, so hiding removes no action.
             .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(user.name)
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                     .foregroundColor(isMember ? theme.textMuted : theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
             }
@@ -216,9 +216,9 @@ struct AddParticipantSheet: View {
 
             if isMember {
                 Text(String(localized: "participants.add.member", defaultValue: "Membre", bundle: .main))
-                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(theme.textMuted)
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
                     .padding(.vertical, 5)
                     .background(Capsule().fill(theme.textMuted.opacity(0.1)))
             } else if isAdding {
@@ -230,17 +230,17 @@ struct AddParticipantSheet: View {
                     Task { await addParticipant(userId: user.id) }
                 } label: {
                     Text(String(localized: "common.add", defaultValue: "Ajouter", bundle: .main))
-                        .font(MeeshyFont.relative(12, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(Capsule().fill(accent))
                 }
                 .accessibilityLabel(String(format: String(localized: "participants.add.add-a11y", defaultValue: "Ajouter %@", bundle: .main), user.name))
             }
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .opacity(isMember ? 0.5 : 1)
         .contentShape(Rectangle())
     }
@@ -274,12 +274,12 @@ struct AddParticipantSheet: View {
     // MARK: - Skeleton Row
 
     private var searchSkeletonRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Circle()
                 .fill(theme.textMuted.opacity(0.12))
                 .frame(width: 36, height: 36)
-            VStack(alignment: .leading, spacing: 4) {
-                RoundedRectangle(cornerRadius: 4)
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                     .fill(theme.textMuted.opacity(0.12))
                     .frame(width: 100, height: 12)
                 RoundedRectangle(cornerRadius: 3)

@@ -28,13 +28,13 @@ struct TrackingLinksView: View {
                 header
                 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
+                    VStack(spacing: MeeshySpacing.xl) {
                         if let stats = viewModel.stats {
-                            trackingStatsOverview(stats).padding(.horizontal, 16)
+                            trackingStatsOverview(stats).padding(.horizontal, MeeshySpacing.lg)
                         }
-                        linksSection.padding(.horizontal, 16)
+                        linksSection.padding(.horizontal, MeeshySpacing.lg)
                     }
-                    .padding(.top, 8).padding(.bottom, 40)
+                    .padding(.top, MeeshySpacing.sm).padding(.bottom, 40)
                 }
                 .refreshable { await viewModel.load() }
             }
@@ -58,7 +58,7 @@ struct TrackingLinksView: View {
                 back()
             } label: {
                 Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                     .foregroundColor(accent)
             }
             .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
@@ -77,17 +77,17 @@ struct TrackingLinksView: View {
                 showCreate = true
             } label: {
                 Image(systemName: "plus.circle.fill")
-                    .font(MeeshyFont.relative(22))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxl))
                     .foregroundColor(accent)
             }
             .accessibilityLabel(String(localized: "tracking.links.create.a11y", defaultValue: "Créer un lien de tracking", bundle: .main))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     private func trackingStatsOverview(_ stats: TrackingLinkStats) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             trackingStatCard("\(stats.totalLinks)", label: String(localized: "tracking.links.stats.links", defaultValue: "Liens", bundle: .main), icon: "link")
             trackingStatCard("\(stats.totalClicks)", label: String(localized: "tracking.links.stats.clicks", defaultValue: "Clics", bundle: .main), icon: "cursorarrow.click")
             trackingStatCard("\(stats.uniqueClicks)", label: String(localized: "tracking.links.stats.uniques", defaultValue: "Uniques", bundle: .main), icon: "person.fill")
@@ -96,9 +96,9 @@ struct TrackingLinksView: View {
     }
 
     private func trackingStatCard(_ value: String, label: String, icon: String) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(16))
+                .font(MeeshyFont.relative(MeeshyIconSize.md))
                 .foregroundColor(accent)
                 .accessibilityHidden(true)
             Text(value)
@@ -109,18 +109,18 @@ struct TrackingLinksView: View {
                 .foregroundColor(theme.textSecondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentHex))
-                .overlay(RoundedRectangle(cornerRadius: 14)
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .stroke(accent.opacity(0.2), lineWidth: 1))
         )
         .accessibilityElement(children: .combine)
     }
 
     private var linksSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             Text(String(localized: "tracking.links.section.myLinks", defaultValue: "MES LIENS", bundle: .main)).font(.caption.weight(.semibold))
                 .foregroundColor(theme.textSecondary).kerning(0.8)
                 .accessibilityAddTraits(.isHeader)
@@ -130,7 +130,7 @@ struct TrackingLinksView: View {
             } else if viewModel.links.isEmpty {
                 trackingEmptyState
             } else {
-                VStack(spacing: 8) {
+                VStack(spacing: MeeshySpacing.sm) {
                     ForEach(viewModel.links) { link in
                         NavigationLink(destination: TrackingLinkDetailView(link: link)) {
                             trackingLinkRow(link)
@@ -155,17 +155,17 @@ struct TrackingLinksView: View {
             accentColor: MeeshyColors.trackingAccentHex,
             compact: true
         )
-        .padding(.vertical, 24)
+        .padding(.vertical, MeeshySpacing.xxl)
     }
 
     private func trackingLinkRow(_ link: TrackingLink) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             ZStack {
                 Circle().fill((link.isActive ? accent : MeeshyColors.neutral500).opacity(0.15))
                     .frame(width: 40, height: 40)
                 // Glyphe dans un cercle de dimension fixe 40×40 : figé (déborderait s'il scalait) + masqué VoiceOver (doctrine 86i)
                 Image(systemName: "chart.bar.fill")
-                    .font(.system(size: 16))
+                    .font(.system(size: MeeshyIconSize.md))
                     .foregroundColor(link.isActive ? accent : MeeshyColors.neutral500)
                     .accessibilityHidden(true)
             }
@@ -173,7 +173,7 @@ struct TrackingLinksView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(link.displayName).font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary).lineLimit(1)
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(String(localized: "tracking.links.row.clicks", defaultValue: "\(link.totalClicks) clics", bundle: .main))
                         .font(.caption).foregroundColor(accent)
                     Text(String(localized: "tracking.links.row.uniques", defaultValue: "· \(link.uniqueClicks) uniques", bundle: .main))
@@ -190,19 +190,19 @@ struct TrackingLinksView: View {
                 UIPasteboard.general.string = link.shortUrl
                 HapticFeedback.success()
             } label: {
-                Image(systemName: "doc.on.doc").font(MeeshyFont.relative(16))
+                Image(systemName: "doc.on.doc").font(MeeshyFont.relative(MeeshyIconSize.md))
                     .foregroundColor(accent)
-            }.padding(.horizontal, 4)
+            }.padding(.horizontal, MeeshySpacing.xs)
             .accessibilityLabel(String(localized: "common.copyLink", defaultValue: "Copier le lien", bundle: .main))
 
-            Image(systemName: "chevron.forward").font(MeeshyFont.relative(12)).foregroundColor(theme.textMuted)
+            Image(systemName: "chevron.forward").font(MeeshyFont.relative(MeeshyIconSize.xs)).foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentHex))
-                .overlay(RoundedRectangle(cornerRadius: 14)
+                .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .stroke(accent.opacity(0.15), lineWidth: 1))
         )
     }

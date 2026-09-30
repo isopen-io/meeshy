@@ -64,16 +64,16 @@ struct VideoEditorStage: View {
         VStack {
             Spacer()
             Text(text)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, 7)
                 .background(
                     RoundedRectangle(cornerRadius: 9, style: .continuous)
                         .fill(.black.opacity(0.55))
                 )
-                .padding(.horizontal, 24)
+                .padding(.horizontal, MeeshySpacing.xxl)
                 .padding(.bottom, 18)
                 .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
         }

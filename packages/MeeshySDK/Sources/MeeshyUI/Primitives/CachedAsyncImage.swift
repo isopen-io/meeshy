@@ -86,12 +86,12 @@ public struct CachedAsyncImage<Placeholder: View>: View {
                             hasFailed = false
                             retryCount += 1
                         } label: {
-                            VStack(spacing: 4) {
+                            VStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: "arrow.clockwise.circle.fill")
-                                    .font(.system(size: 22, weight: .medium))
+                                    .font(.system(size: MeeshyIconSize.xxl, weight: .medium))
                                     .foregroundStyle(.white.opacity(0.7))
                                 Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
                                     .foregroundStyle(.white.opacity(0.5))
                             }
                         }

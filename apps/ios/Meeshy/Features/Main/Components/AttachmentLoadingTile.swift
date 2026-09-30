@@ -19,7 +19,7 @@ struct AttachmentLoadingTile: View {
     var onCancel: (() -> Void)? = nil
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             ZStack(alignment: .topTrailing) {
                 tileBody
                     .frame(width: size, height: size)
@@ -46,7 +46,7 @@ struct AttachmentLoadingTile: View {
             }
 
             Text(label)
-                .font(MeeshyFont.relative(10, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(ThemeManager.shared.textSecondary)
                 .lineLimit(1)
                 .frame(width: max(size, 60))
@@ -124,7 +124,7 @@ struct AttachmentLoadingTile: View {
                 .padding(5)
                 .background(Circle().fill(Color.black.opacity(0.4)))
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                .padding(4)
+                .padding(MeeshySpacing.xs)
         } else {
             // No preview yet (bytes still loading) — full placeholder + label.
             VStack(spacing: 3) {
@@ -139,14 +139,14 @@ struct AttachmentLoadingTile: View {
                     .foregroundColor(.white.opacity(0.9))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, MeeshySpacing.xs)
             }
         }
     }
 
     @ViewBuilder
     private var failureOverlay: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: MeeshySpacing.xxs) {
             Image(systemName: "exclamationmark.triangle.fill")
                 // Doctrine 86i : glyphe d'erreur borné par la tuile fixe → figé ; décoratif
                 // (le libellé « Erreur » adjacent porte le sens).
@@ -158,7 +158,7 @@ struct AttachmentLoadingTile: View {
                 .font(.system(size: 8, weight: .semibold))
                 .foregroundColor(.white)
         }
-        .padding(6)
+        .padding(MeeshySpacing.xsPlus)
         .background(
             RoundedRectangle(cornerRadius: cornerRadius)
                 .fill(MeeshyColors.error.opacity(0.65))

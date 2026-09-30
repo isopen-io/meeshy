@@ -112,7 +112,7 @@ extension SignupView {
         }
     }
 
-    static var phoneGlassShape: RoundedRectangle { RoundedRectangle(cornerRadius: 22, style: .continuous) }
+    static var phoneGlassShape: RoundedRectangle { RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous) }
 
     /// « Plus tard → » — sur la ligne du libellé, aligné en fin (#8842), et il
     /// disparaît une fois l'adresse parue : il n'y a plus rien à passer

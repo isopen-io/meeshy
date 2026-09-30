@@ -512,7 +512,7 @@ struct ComposerMoodSurface: View {
             .accessibilityLabel(Text(ComposerMoodCopy.close))
 
             Text(viaUsername == nil ? ComposerMoodCopy.moodQuestion : ComposerMoodCopy.repostTitle)
-                .font(MeeshyFont.relative(16, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                 .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                 .lineLimit(1)
 
@@ -532,11 +532,11 @@ struct ComposerMoodSurface: View {
         if let via = viaUsername {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "arrow.2.squarepath")
-                    .font(MeeshyFont.relative(12))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs))
                     .foregroundColor(MeeshyColors.indigo400)
                     .accessibilityHidden(true)
                 Text(ComposerMoodCopy.repostVia(via))
-                    .font(MeeshyFont.relative(13, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(MeeshyColors.textSecondary(isDark: true))
             }
             .padding(.horizontal, MeeshySpacing.md)
@@ -647,7 +647,7 @@ struct ComposerMoodSurface: View {
                     .font(MeeshyFont.relative(11))
                     .accessibilityHidden(true)
                 Text(showsCount ? "\(candidate.label) (\(visibilityUserIds.count))" : candidate.label)
-                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
             }
             .foregroundColor(isSelected ? Color.white : MeeshyColors.textSecondary(isDark: true))
             .padding(.horizontal, MeeshySpacing.md)
@@ -715,13 +715,13 @@ struct ComposerMoodSurface: View {
         ZStack(alignment: .leading) {
             if text.isEmpty {
                 Text(ComposerMoodCopy.placeholder)
-                    .font(MeeshyFont.relative(15))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize))
                     .foregroundColor(MeeshyColors.textSecondary(isDark: true))
                     .padding(.horizontal, MeeshySpacing.md)
                     .allowsHitTesting(false)
             }
             TextField("", text: $text)
-                .font(MeeshyFont.relative(15))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                 .padding(MeeshySpacing.md)
                 .accessibilityLabel(Text(ComposerMoodCopy.placeholder))
@@ -765,7 +765,7 @@ struct ComposerMoodSurface: View {
                 count: text.count,
                 limit: ComposerMoodPolicy.contentLimit,
                 warningThreshold: ComposerMoodPolicy.warningThreshold,
-                font: MeeshyFont.relative(10, weight: .medium),
+                font: MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium),
                 mutedColor: MeeshyColors.textSecondary(isDark: true)
             )
             .padding(.trailing, MeeshySpacing.md)

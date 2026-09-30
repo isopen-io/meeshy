@@ -9,7 +9,7 @@ struct VideoEditorFABColumn: View {
     let onTap: (VideoEditorToolCategory) -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             fab(category: .style, accent: MeeshyColors.indigo300)
             fab(category: .edit, accent: MeeshyColors.indigo400)
         }

@@ -115,7 +115,7 @@ struct GalleryImagePage: View, Equatable {
     /// format malgré une source partielle, ex. thumbHash seul).
     private var emptyStateGlyph: some View {
         Image(systemName: "photo")
-            .font(.system(size: 48))
+            .font(.system(size: MeeshyIconSize.hero))
             .foregroundColor(.white.opacity(0.3))
             .accessibilityHidden(true)
     }
@@ -826,13 +826,13 @@ struct GalleryVideoPage: View, Equatable {
         switch availability {
         case .ready:
             Image(systemName: "play.fill")
-                .font(.system(size: 22, weight: .bold))
+                .font(.system(size: MeeshyIconSize.xxl, weight: .bold))
                 .foregroundColor(.white)
                 .offset(x: 2)
         case .needsDownload:
-            VStack(spacing: 2) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xl, weight: .bold))
                     .foregroundColor(.white)
                 if attachment.fileSize > 0 {
                     Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))

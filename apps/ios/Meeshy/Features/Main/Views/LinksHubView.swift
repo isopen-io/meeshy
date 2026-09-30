@@ -82,13 +82,13 @@ struct LinksHubView: View {
     // MARK: - Header Banner
 
     private var headerBanner: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: "link.badge.plus")
                     .font(.title.weight(.bold))
                     .foregroundColor(MeeshyColors.communityAccent)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(String(localized: "links.hub.banner.title", defaultValue: "Gérez vos liens", bundle: .main))
                         .font(.headline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
@@ -173,7 +173,7 @@ struct LinksHubView: View {
             HapticFeedback.light()
             router.push(route)
         } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: MeeshySpacing.mdPlus) {
                 // Icône
                 ZStack {
                     Circle()
@@ -200,7 +200,7 @@ struct LinksHubView: View {
                 Spacer()
 
                 // Actions: bouton créer + chevron
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     if let onCreate {
                         Button {
                             HapticFeedback.medium()

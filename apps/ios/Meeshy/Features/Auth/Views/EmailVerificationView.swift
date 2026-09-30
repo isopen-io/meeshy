@@ -50,7 +50,7 @@ struct EmailVerificationView: View {
                     Spacer()
                     Spacer()
                 }
-                .padding(.horizontal, 24)
+                .padding(.horizontal, MeeshySpacing.xxl)
                 .iPadFormWidth()
 
                 successOverlay
@@ -107,7 +107,7 @@ struct EmailVerificationView: View {
     /// Un compte NÉ de cette connexion le dit (#8035) ; un compte EXISTANT qui
     /// attend son activation dit pourquoi et où chercher le code (#8186).
     private var subtitleSection: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             Text(Self.markdown(viewModel.lead.subtitle(email: viewModel.email)))
                 .font(.subheadline)
             if let inboxHint = viewModel.lead.inboxHint {
@@ -117,7 +117,7 @@ struct EmailVerificationView: View {
         }
         .multilineTextAlignment(.center)
         .foregroundStyle(theme.textSecondary)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     private static func markdown(_ text: String) -> AttributedString {
@@ -127,7 +127,7 @@ struct EmailVerificationView: View {
     // MARK: - Resend Section
 
     private var resendSection: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Text(String(localized: "emailVerification.noCode", defaultValue: "Vous n'avez pas reçu le code ?"))
                 .font(.footnote)
                 .foregroundStyle(theme.textSecondary)
@@ -135,7 +135,7 @@ struct EmailVerificationView: View {
             Button {
                 Task { await viewModel.resendCode() }
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     if viewModel.isResending {
                         ProgressView()
                             .controlSize(.small)
@@ -180,7 +180,7 @@ struct EmailVerificationView: View {
                 theme.backgroundPrimary.opacity(0.9)
                     .ignoresSafeArea()
 
-                VStack(spacing: 20) {
+                VStack(spacing: MeeshySpacing.xl) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(.largeTitle))
                         .foregroundStyle(MeeshyColors.success)

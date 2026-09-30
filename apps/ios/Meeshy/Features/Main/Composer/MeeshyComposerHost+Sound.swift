@@ -647,19 +647,19 @@ extension MeeshyComposerHost {
     @ViewBuilder
     var soundRolePicker: some View {
         let effectif = chosenSoundRole ?? automaticSoundRole
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             Text(ComposerSoundRoleCopy.title)
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundStyle(.secondary)
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(ComposerAudioRole.allCases, id: \.self) { role in
                     Button {
                         chosenSoundRole = role
                         HapticFeedback.light()
                     } label: {
                         Text(ComposerSoundRoleCopy.label(role))
-                            .font(MeeshyFont.relative(13, weight: .medium))
-                            .padding(.horizontal, 12)
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
+                            .padding(.horizontal, MeeshySpacing.md)
                             .padding(.vertical, 7)
                             .background(
                                 Capsule().fill(role == effectif
@@ -673,7 +673,7 @@ extension MeeshyComposerHost {
                 }
             }
         }
-        .padding(.top, 10)
+        .padding(.top, MeeshySpacing.smPlus)
     }
 
     /// Ce que la règle ferait si l'auteur ne disait rien — la source unique,

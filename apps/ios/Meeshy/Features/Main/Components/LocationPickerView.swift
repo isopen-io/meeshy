@@ -150,7 +150,7 @@ struct LocationPickerView: View {
                 }
                 ToolbarItem(placement: .principal) {
                     Text(String(localized: "location.title", defaultValue: "Choisir un lieu", bundle: .main))
-                        .font(MeeshyFont.relative(16, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                         .accessibilityAddTraits(.isHeader)
                 }
             }
@@ -183,24 +183,24 @@ struct LocationPickerView: View {
         Button {
             MediaPermissionCoordinator.openSettings()
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "location.slash.fill")
                     .font(MeeshyFont.relative(13, weight: .semibold))
                 Text(MediaPermissionCoordinator.locationDeniedMessage)
-                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
             }
             .foregroundColor(MeeshyColors.warning)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(MeeshyColors.warning.opacity(0.15))
             )
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     // MARK: - Map
@@ -283,7 +283,7 @@ struct LocationPickerView: View {
     /// la barre. Elle s'efface quand des résultats s'affichent : la liste a
     /// alors la priorité visuelle, et c'est le seul recouvrement accepté.
     private var floatingControls: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             controlButton(
                 icon: "info.circle",
                 label: String(localized: "location.settings.open", defaultValue: "Réglages de partage de position", bundle: .main)
@@ -301,8 +301,8 @@ struct LocationPickerView: View {
                 }
             }
         }
-        .padding(.trailing, 16)
-        .padding(.top, 12)
+        .padding(.trailing, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.md)
         // Cadre pleine largeur pour ancrer la colonne à droite. La zone vide à
         // gauche ne capte rien (aucun fond, aucun `contentShape`), la carte
         // reste donc déplaçable dessous — même patron que la barre de recherche
@@ -345,14 +345,14 @@ struct LocationPickerView: View {
     // MARK: - Search Bar
 
     private var searchBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass")
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                 .foregroundColor(Color(hex: accentColor))
                 .accessibilityHidden(true)
 
             TextField(String(localized: "location.search-placeholder", defaultValue: "Rechercher un lieu…", bundle: .main), text: $searchText)
-                .font(MeeshyFont.relative(14))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
                 .onSubmit { viewModel.search(query: searchText) }
@@ -378,11 +378,11 @@ struct LocationPickerView: View {
                 } label: {
                     Label(String(localized: "location.nearby", defaultValue: "Autour de moi", bundle: .main),
                           systemImage: "location.circle.fill")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                         .labelStyle(.titleAndIcon)
                         .lineLimit(1)
                         .foregroundColor(Color(hex: accentColor))
-                        .padding(.horizontal, 10)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
                         .frame(minHeight: 30)
                         .background(Capsule().fill(Color(hex: accentColor).opacity(0.12)))
                 }
@@ -395,22 +395,22 @@ struct LocationPickerView: View {
                     viewModel.searchResults.removeAll()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(MeeshyFont.relative(14))
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm))
                         .foregroundColor(.secondary)
                 }
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.smPlus)
         // iOS 26 Liquid Glass — floating search bar over the map. The SDK
         // Compatibility wrapper owns the gating + the .ultraThinMaterial fallback.
         // Neutral (no tint): a search bar reads as OS chrome, not conversation content.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
         .overlay(alignment: .top) {
             if !viewModel.searchResults.isEmpty {
                 searchResultsList
@@ -444,7 +444,7 @@ struct LocationPickerView: View {
                     searchText = item.name ?? ""
                     viewModel.searchResults.removeAll()
                 } label: {
-                    HStack(spacing: 10) {
+                    HStack(spacing: MeeshySpacing.smPlus) {
                         // Glyph constrained in a fixed 28×28 badge — a scalable
                         // font would overflow the frame. Kept fixed + hidden from
                         // VoiceOver (the result name carries the meaning; doctrine 86i).
@@ -463,23 +463,23 @@ struct LocationPickerView: View {
                             .background(Circle().fill(Color(hex: onMap.accent).opacity(0.14)))
                             .accessibilityHidden(true)
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(item.name ?? String(localized: "location.unknown", defaultValue: "Lieu inconnu", bundle: .main))
-                                .font(MeeshyFont.relative(13, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                                 .foregroundColor(.primary)
                                 .lineLimit(1)
 
                             if let subtitle = item.placemark.title {
                                 Text(subtitle)
-                                    .font(MeeshyFont.relative(11))
+                                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                                     .foregroundColor(.secondary)
                                     .lineLimit(1)
                             }
                         }
                         Spacer()
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.sm)
                 }
                 if item != viewModel.searchResults.last {
                     Divider().padding(.leading, 50)
@@ -489,22 +489,22 @@ struct LocationPickerView: View {
         // Neutral Liquid Glass: a search-results dropdown floating over the map
         // is suggestion chrome, not content — kept neutral for the same reason
         // as the @mention autocomplete bar (no accent tint on chrome surfaces).
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 12))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     // MARK: - Bottom Card
 
     private var bottomCard: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.md) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: "location.fill")
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     // Couleurs SÉMANTIQUES, pas les tokens du thème : cette
                     // carte est du verre posé sur la carte, dont le fond est
                     // devenu imprévisible avec les styles satellite et hybride.
@@ -514,25 +514,25 @@ struct LocationPickerView: View {
                     // fait `LocationFullscreenView` sur sa propre carte du bas.
                     if let title = displayedTitle {
                         Text(title)
-                            .font(MeeshyFont.relative(13, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                             .foregroundColor(.primary)
                             .lineLimit(2)
                     } else if viewModel.isGeocoding {
-                        HStack(spacing: 6) {
+                        HStack(spacing: MeeshySpacing.xsPlus) {
                             ProgressView()
                                 .scaleEffect(0.7)
                             Text(String(localized: "location.geocoding", defaultValue: "Recherche de l'adresse…", bundle: .main))
-                                .font(MeeshyFont.relative(12))
+                                .font(MeeshyFont.relative(MeeshyFont.smallSize))
                                 .foregroundColor(.secondary)
                         }
                     } else {
                         Text(String(localized: "location.move-prompt", defaultValue: "Déplacez la carte pour choisir", bundle: .main))
-                            .font(MeeshyFont.relative(12))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
                             .foregroundColor(.secondary)
                     }
 
                     if let place = displayedPlace {
-                        HStack(spacing: 6) {
+                        HStack(spacing: MeeshySpacing.xsPlus) {
                             // Une paire de coordonnées est une valeur ATOMIQUE :
                             // coupée en plusieurs lignes elle devient illisible.
                             // Vérifié au simulateur en taille accessibilité XXXL
@@ -542,15 +542,15 @@ struct LocationPickerView: View {
                             // sa croissance est plafonnée — le reste de la carte
                             // continue de suivre le Dynamic Type normalement.
                             Text(formattedCoordinates(of: place))
-                                .font(MeeshyFont.relative(10, weight: .medium, design: .monospaced))
+                                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium, design: .monospaced))
                                 .foregroundColor(.secondary)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.6)
                             Text(verbatim: "·")
-                                .font(MeeshyFont.relative(10))
+                                .font(MeeshyFont.relative(MeeshyFont.captionSize))
                                 .foregroundColor(.secondary)
                             Text(LocationSharingLabels.precisionBadge(precision))
-                                .font(MeeshyFont.relative(10, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                                 .foregroundColor(Color(hex: onMap.accent))
                                 .lineLimit(1)
                         }
@@ -577,17 +577,17 @@ struct LocationPickerView: View {
                 HapticFeedback.success()
                 dismiss()
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "checkmark")
-                        .font(MeeshyFont.relative(14, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
                     Text(String(localized: "common.confirm", defaultValue: "Confirmer", bundle: .main))
-                        .font(MeeshyFont.relative(13, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .padding(.vertical, MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .fill(
                             // Le dégradé de la CONVERSATION : primaire vers
                             // accent, pas primaire vers lui-même atténué.
@@ -602,14 +602,14 @@ struct LocationPickerView: View {
             .disabled(displayedPlace == nil)
             .opacity(displayedPlace == nil ? 0.5 : 1)
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         // iOS 26 Liquid Glass — floating bottom action card over the map. Neutral
         // glass; the inner accent CTA + secondary button stay as fills ON the glass.
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
         .shadow(color: .black.opacity(0.1), radius: 12, y: -4)
-        .padding(.horizontal, 12)
-        .padding(.bottom, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.bottom, MeeshySpacing.sm)
     }
 
     /// Ce qui PARTIRA, précision appliquée. La carte du bas montre exactement

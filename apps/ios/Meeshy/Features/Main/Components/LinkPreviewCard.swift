@@ -109,10 +109,10 @@ struct LinkPreviewCard: View {
                 .fill(accent)
                 .frame(width: 3)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 if let siteName = meta.siteName?.nilIfBlank ?? meta.host {
                     Text(siteName)
-                        .font(MeeshyFont.relative(10, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                         .foregroundStyle(accent)
                         .textCase(.uppercase)
                         .tracking(0.3)
@@ -120,20 +120,20 @@ struct LinkPreviewCard: View {
                 }
                 if let title = meta.title?.nilIfBlank {
                     Text(title)
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                         .lineLimit(2)
                 }
                 if let description = meta.description?.nilIfBlank {
                     Text(description)
-                        .font(MeeshyFont.relative(11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.7))
                         .lineLimit(2)
                 }
             }
-            .padding(.leading, 10)
-            .padding(.vertical, 8)
-            .padding(.trailing, 10)
+            .padding(.leading, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.sm)
+            .padding(.trailing, MeeshySpacing.smPlus)
 
             Spacer(minLength: 0)
 
@@ -144,67 +144,67 @@ struct LinkPreviewCard: View {
         .frame(minHeight: 64)
         .background(cardBackground)
         .overlay(cardBorder)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
     }
 
     private var skeletonCard: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             RoundedRectangle(cornerRadius: 2, style: .continuous)
                 .fill(accent)
                 .frame(width: 3)
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                 Text(fallbackHost)
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                     .foregroundStyle(accent)
                     .lineLimit(1)
                 Text(urlString)
-                    .font(MeeshyFont.relative(11))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.6))
                     .lineLimit(1)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, MeeshySpacing.sm)
             Spacer(minLength: 0)
             ProgressView()
                 .scaleEffect(0.6)
-                .padding(.trailing, 10)
+                .padding(.trailing, MeeshySpacing.smPlus)
         }
         // Match `populatedCard`'s floor so the skeleton → populated transition
         // doesn't change the card's height and shift the bubble on load.
         .frame(minHeight: 64)
         .background(cardBackground)
         .overlay(cardBorder)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
     }
 
     /// Terminal state when the URL has no usable OG metadata: same shell as the
     /// skeleton (host + url, stable 64-pt floor) but a static link glyph instead
     /// of a spinner — the card stops "loading forever".
     private var failedCard: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             RoundedRectangle(cornerRadius: 2, style: .continuous)
                 .fill(accent)
                 .frame(width: 3)
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                 Text(fallbackHost)
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                     .foregroundStyle(accent)
                     .lineLimit(1)
                 Text(urlString)
-                    .font(MeeshyFont.relative(11))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundStyle(isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo700.opacity(0.6))
                     .lineLimit(1)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, MeeshySpacing.sm)
             Spacer(minLength: 0)
             Image(systemName: "link")
-                .font(MeeshyFont.relative(14, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                 .foregroundStyle(accent.opacity(0.6))
-                .padding(.trailing, 12)
+                .padding(.trailing, MeeshySpacing.md)
         }
         .frame(minHeight: 64)
         .background(cardBackground)
         .overlay(cardBorder)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
     }
 
     private func thumbnail(_ urlString: String) -> some View {
@@ -222,7 +222,7 @@ struct LinkPreviewCard: View {
                 .fill(accent.opacity(0.1))
                 .overlay(
                     Image(systemName: "link")
-                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                         .foregroundStyle(accent.opacity(0.6))
                 )
         }
@@ -232,13 +232,13 @@ struct LinkPreviewCard: View {
     }
 
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
+        RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
             .fill(isDark ? MeeshyColors.indigo950.opacity(0.45) : MeeshyColors.indigo50)
     }
 
     private var cardBorder: some View {
-        RoundedRectangle(cornerRadius: 10, style: .continuous)
-            .stroke(accent.opacity(0.18), lineWidth: 0.5)
+        RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
+            .stroke(accent.opacity(0.18), lineWidth: MeeshyBorder.hairline)
     }
 }
 

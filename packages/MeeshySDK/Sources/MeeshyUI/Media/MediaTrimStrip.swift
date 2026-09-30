@@ -63,7 +63,7 @@ public struct MediaTrimStrip: View {
     private static let hauteur: CGFloat = 56
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             GeometryReader { geo in
                 piste(largeur: geo.size.width)
             }
@@ -82,7 +82,7 @@ public struct MediaTrimStrip: View {
         return ZStack(alignment: .leading) {
             source
                 .frame(width: largeur, height: Self.hauteur)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous))
 
             // Ce qu'on RETIRE, assombri mais lisible : c'est en le voyant qu'on
             // sait si la poignée est au bon endroit.
@@ -155,7 +155,7 @@ public struct MediaTrimStrip: View {
     /// translation CUMULÉE du geste en deltas INCRÉMENTAUX, sans quoi la dérive
     /// composerait quadratiquement à chaque image.
     private func fenetre(x: CGFloat, largeur: CGFloat, pisteLargeur: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
+        RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous)
             .strokeBorder(accent, lineWidth: 2.5)
             .frame(width: largeur, height: Self.hauteur)
             .overlay {
@@ -173,12 +173,12 @@ public struct MediaTrimStrip: View {
     }
 
     private var legende: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Text(Self.duree(bounds.duration))
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundStyle(accent)
             Text(Self.surLabel(Self.duree(sourceDuration)))
-                .font(MeeshyFont.relative(12, weight: .regular))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                 .foregroundStyle(.secondary)
             Spacer(minLength: 0)
         }

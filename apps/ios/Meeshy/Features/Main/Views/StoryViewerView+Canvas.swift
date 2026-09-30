@@ -1584,7 +1584,7 @@ struct StoryCardView: View {
                     onScrubStateChanged: onScrubStateChanged,
                     onSeek: seekTimer
                 )
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, MeeshySpacing.md)
                     .padding(.top, topInset + 4)
 
                 StoryHeaderView(
@@ -1607,8 +1607,8 @@ struct StoryCardView: View {
                     isFullscreenStorySession: $isFullscreenStorySession,
                     chromeVisible: $chromeVisible
                 )
-                    .padding(.horizontal, 16)
-                    .padding(.top, 10)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.smPlus)
 
                 // Les personnes que la story NOMME en mode NOTE, sous l'auteur.
                 //
@@ -1635,8 +1635,8 @@ struct StoryCardView: View {
                     onTapReference: { selectedProfileUser = .from(reference: $0) }
                 )
                 .equatable()
-                .padding(.horizontal, 16)
-                .padding(.top, 6)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.xsPlus)
 
                 Spacer()
             }
@@ -1744,7 +1744,7 @@ struct StoryCardView: View {
                     // visibly too tight — button labels « React », « Répondre »,
                     // « Envoyer », « Son » were clipped on the right
                     // (bug user 2026-05-28 « les elements sortent du viewport »).
-                    .padding(.trailing, 16)
+                    .padding(.trailing, MeeshySpacing.lg)
             }
             .padding(.top, topReserved)
             .padding(.bottom, bottomReserved)

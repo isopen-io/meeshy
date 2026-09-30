@@ -51,7 +51,7 @@ public struct InviteLandingView: View {
                     .padding(.top, MeeshySpacing.lg)
                 InviteGuestTermsCard(info: info, now: now, isDark: isDark)
                     .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.top, 10)
+                    .padding(.top, MeeshySpacing.smPlus)
             }
             .padding(.bottom, MeeshySpacing.xxl)
         }

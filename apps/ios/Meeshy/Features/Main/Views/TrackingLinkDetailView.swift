@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 /// The QR bitmap is minted on demand, so `ShareLink` — which needs its item at
 /// view-construction time — cannot carry it. Wrapping the render in an
@@ -33,18 +34,18 @@ struct TrackingLinkDetailView: View {
         ZStack {
             theme.backgroundGradient.ignoresSafeArea()
             ScrollView {
-                VStack(spacing: 20) {
-                    headerCard.padding(.horizontal, 16)
-                    actionsBar.padding(.horizontal, 16)
-                    mainStatsSection.padding(.horizontal, 16)
+                VStack(spacing: MeeshySpacing.xl) {
+                    headerCard.padding(.horizontal, MeeshySpacing.lg)
+                    actionsBar.padding(.horizontal, MeeshySpacing.lg)
+                    mainStatsSection.padding(.horizontal, MeeshySpacing.lg)
                     if !viewModel.clicks.isEmpty {
-                        geoBreakdown.padding(.horizontal, 16)
-                        deviceBreakdown.padding(.horizontal, 16)
-                        clicksTimeline.padding(.horizontal, 16)
+                        geoBreakdown.padding(.horizontal, MeeshySpacing.lg)
+                        deviceBreakdown.padding(.horizontal, MeeshySpacing.lg)
+                        clicksTimeline.padding(.horizontal, MeeshySpacing.lg)
                     }
-                    utmInfoSection.padding(.horizontal, 16)
+                    utmInfoSection.padding(.horizontal, MeeshySpacing.lg)
                 }
-                .padding(.top, 16).padding(.bottom, 60)
+                .padding(.top, MeeshySpacing.lg).padding(.bottom, 60)
             }
         }
         .navigationTitle(link.displayName)
@@ -62,7 +63,7 @@ struct TrackingLinkDetailView: View {
     // MARK: - Header card
 
     private var headerCard: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             ZStack {
                 Circle().fill((link.isActive ? MeeshyColors.trackingAccent : MeeshyColors.neutral500).opacity(0.15))
                     .frame(width: 60, height: 60)
@@ -73,15 +74,15 @@ struct TrackingLinkDetailView: View {
             Text(link.displayName).font(.headline.weight(.bold)).foregroundColor(theme.textPrimary)
             Text(link.shortUrl).font(.system(.caption, design: .monospaced))
                 .foregroundColor(theme.textSecondary).lineLimit(1)
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 if let c = link.campaign { utmTag(c, color: MeeshyColors.trackingAccent) }
                 if let s = link.source { utmTag(s, color: MeeshyColors.brandPrimary) }
                 if let m = link.medium { utmTag(m, color: MeeshyColors.indigo300) }
             }
         }
-        .padding(20).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 20).fill(theme.surfaceGradient(tint: MeeshyColors.trackingAccentHex))
-            .overlay(RoundedRectangle(cornerRadius: 20)
+        .padding(MeeshySpacing.xl).frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.xl).fill(theme.surfaceGradient(tint: MeeshyColors.trackingAccentHex))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .stroke(MeeshyColors.trackingAccent.opacity(0.2), lineWidth: 1)))
         .accessibilityElement(children: .combine)
         .accessibilityValue(link.isActive
@@ -92,14 +93,14 @@ struct TrackingLinkDetailView: View {
     private func utmTag(_ value: String, color: Color) -> some View {
         Text(value).font(.caption2.weight(.medium))
             .foregroundColor(color)
-            .padding(.horizontal, 8).padding(.vertical, 3)
+            .padding(.horizontal, MeeshySpacing.sm).padding(.vertical, 3)
             .background(Capsule().fill(color.opacity(0.12)))
     }
 
     // MARK: - Actions bar
 
     private var actionsBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             detailActionButton(String(localized: "tracking.link.detail.copy", defaultValue: "Copier", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
                                color: copiedFeedback ? MeeshyColors.success : MeeshyColors.trackingAccent) {
                 UIPasteboard.general.string = link.shortUrl
@@ -145,7 +146,7 @@ struct TrackingLinkDetailView: View {
     private func actionButtonLabel(_ label: String, icon: String, color: Color) -> some View {
         VStack(spacing: 5) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12).fill(color.opacity(0.15))
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(color.opacity(0.15))
                     .frame(width: 46, height: 46)
                 Image(systemName: icon).font(.body)
                     .foregroundColor(color)
@@ -159,9 +160,9 @@ struct TrackingLinkDetailView: View {
     // MARK: - Main stats
 
     private var mainStatsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             sectionTitle(String(localized: "tracking.link.detail.stats.title", defaultValue: "STATISTIQUES", bundle: .main))
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 bigStatCard("\(link.totalClicks)", label: String(localized: "tracking.link.detail.stats.totalClicks", defaultValue: "Total des clics", bundle: .main), icon: "cursorarrow.click", color: MeeshyColors.trackingAccentHex)
                 bigStatCard("\(link.uniqueClicks)", label: String(localized: "tracking.link.detail.stats.uniqueClicks", defaultValue: "Clics uniques", bundle: .main), icon: "person.fill", color: MeeshyColors.brandPrimaryHex)
             }
@@ -172,24 +173,24 @@ struct TrackingLinkDetailView: View {
                     Text(String(localized: "tracking.link.detail.lastClick", defaultValue: "Dernier clic : \(last.formatted(date: .abbreviated, time: .shortened))", bundle: .main))
                         .font(.footnote).foregroundColor(theme.textMuted)
                 }
-                .padding(.horizontal, 4)
+                .padding(.horizontal, MeeshySpacing.xs)
             }
         }
     }
 
     private func bigStatCard(_ value: String, label: String, icon: String, color: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon).font(.title2).foregroundColor(Color(hex: color))
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(value).font(.title2.weight(.bold)).foregroundColor(theme.textPrimary)
                 Text(label).font(.caption).foregroundColor(theme.textSecondary)
             }
             Spacer()
         }
-        .padding(14).frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 14).fill(theme.surfaceGradient(tint: color))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: color).opacity(0.2), lineWidth: 1)))
+        .padding(MeeshySpacing.mdPlus).frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md).fill(theme.surfaceGradient(tint: color))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.md).stroke(Color(hex: color).opacity(0.2), lineWidth: 1)))
         .accessibilityElement(children: .combine)
     }
 
@@ -202,14 +203,14 @@ struct TrackingLinkDetailView: View {
     // MARK: - Device breakdown
 
     private var deviceBreakdown: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             breakdownCard(title: String(localized: "tracking.link.detail.devices", defaultValue: "APPAREILS", bundle: .main), icon: "iphone", color: MeeshyColors.brandPrimary, items: viewModel.topDevices)
             breakdownCard(title: String(localized: "tracking.link.detail.browsers", defaultValue: "NAVIGATEURS", bundle: .main), icon: "safari.fill", color: MeeshyColors.success, items: viewModel.topBrowsers)
         }
     }
 
     private func breakdownCard(title: String, icon: String, color: Color, items: [(String, Int)]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             HStack {
                 Image(systemName: icon).font(.footnote).foregroundColor(color)
                     .accessibilityHidden(true)
@@ -217,29 +218,29 @@ struct TrackingLinkDetailView: View {
             }
             if items.isEmpty {
                 Text(String(localized: "tracking.link.detail.noData", defaultValue: "Aucune donnée", bundle: .main)).font(.footnote).foregroundColor(theme.textMuted)
-                    .frame(maxWidth: .infinity, alignment: .center).padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .center).padding(.vertical, MeeshySpacing.sm)
             } else {
-                VStack(spacing: 8) {
+                VStack(spacing: MeeshySpacing.sm) {
                     ForEach(items.prefix(5), id: \.0) { item in
                         breakdownRow(item.0, count: item.1, total: link.totalClicks, color: color)
                     }
                 }
             }
         }
-        .padding(16)
-        .background(RoundedRectangle(cornerRadius: 16)
+        .padding(MeeshySpacing.lg)
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.lg)
             .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.08), lineWidth: 1)))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.lg).stroke(Color.white.opacity(0.08), lineWidth: 1)))
     }
 
     private func breakdownRow(_ label: String, count: Int, total: Int, color: Color) -> some View {
         let pct = total > 0 ? CGFloat(count) / CGFloat(total) : 0
-        return HStack(spacing: 8) {
+        return HStack(spacing: MeeshySpacing.sm) {
             Text(label).font(.footnote).foregroundColor(theme.textPrimary).frame(width: 80, alignment: .leading)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4).fill(color.opacity(0.15)).frame(height: 8)
-                    RoundedRectangle(cornerRadius: 4).fill(color.opacity(0.7))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(color.opacity(0.15)).frame(height: 8)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs).fill(color.opacity(0.7))
                         .frame(width: geo.size.width * pct, height: 8)
                 }
             }
@@ -253,7 +254,7 @@ struct TrackingLinkDetailView: View {
     // MARK: - Timeline des clics
 
     private var clicksTimeline: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             HStack {
                 Image(systemName: "list.bullet.clipboard").font(.footnote)
                     .foregroundColor(MeeshyColors.trackingAccent)
@@ -270,21 +271,21 @@ struct TrackingLinkDetailView: View {
                     }
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 14)
+            .background(RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
         }
     }
 
     private func clickRow(_ click: TrackingLinkClick) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             ZStack {
                 Circle().fill(deviceColor(click.device).opacity(0.12)).frame(width: 36, height: 36)
                 Image(systemName: deviceIcon(click.device)).font(.subheadline)
                     .foregroundColor(deviceColor(click.device))
             }
             .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     if let country = click.country { Text(countryFlag(country)).font(.callout) }
                     Text(click.city ?? click.country ?? String(localized: "tracking.link.detail.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.footnote.weight(.medium)).foregroundColor(theme.textPrimary)
@@ -292,7 +293,7 @@ struct TrackingLinkDetailView: View {
                         Text("· \(social)").font(.caption).foregroundColor(MeeshyColors.trackingAccent)
                     }
                 }
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     if let browser = click.browser {
                         Text(browser).font(.caption2).foregroundColor(theme.textMuted)
                     }
@@ -302,7 +303,7 @@ struct TrackingLinkDetailView: View {
                 }
             }
             Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: MeeshySpacing.xxs) {
                 Text(click.clickedAt.formatted(.relative(presentation: .named)))
                     .font(.caption2).foregroundColor(theme.textMuted)
                 Circle().fill(click.redirectStatus == "confirmed" ? MeeshyColors.success : MeeshyColors.error)
@@ -312,27 +313,27 @@ struct TrackingLinkDetailView: View {
                         : String(localized: "tracking.link.detail.a11y.redirectFailed", defaultValue: "Redirection échouée", bundle: .main))
             }
         }
-        .padding(.horizontal, 12).padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md).padding(.vertical, MeeshySpacing.smPlus)
         .accessibilityElement(children: .combine)
     }
 
     // MARK: - UTM info
 
     private var utmInfoSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             sectionTitle(String(localized: "tracking.link.detail.utm.title", defaultValue: "CONFIGURATION UTM", bundle: .main))
             VStack(spacing: 0) {
                 if let c = link.campaign { infoRow("Campaign", value: c) }
-                if link.campaign != nil && link.source != nil { Divider().padding(.leading, 16) }
+                if link.campaign != nil && link.source != nil { Divider().padding(.leading, MeeshySpacing.lg) }
                 if let s = link.source { infoRow("Source", value: s) }
-                if link.source != nil && link.medium != nil { Divider().padding(.leading, 16) }
+                if link.source != nil && link.medium != nil { Divider().padding(.leading, MeeshySpacing.lg) }
                 if let m = link.medium { infoRow("Medium", value: m) }
-                Divider().padding(.leading, 16)
+                Divider().padding(.leading, MeeshySpacing.lg)
                 infoRow(String(localized: "tracking.link.detail.destinationUrl", defaultValue: "URL de destination", bundle: .main), value: link.originalUrl)
-                Divider().padding(.leading, 16)
+                Divider().padding(.leading, MeeshySpacing.lg)
                 infoRow(String(localized: "tracking.link.detail.createdAt", defaultValue: "Créé le", bundle: .main), value: link.createdAt.formatted(date: .abbreviated, time: .shortened))
             }
-            .background(RoundedRectangle(cornerRadius: 14)
+            .background(RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)))
         }
     }
@@ -350,7 +351,7 @@ struct TrackingLinkDetailView: View {
             Spacer()
             Text(value).font(.footnote.weight(.medium)).foregroundColor(theme.textPrimary).lineLimit(1)
         }
-        .padding(.horizontal, 16).padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg).padding(.vertical, MeeshySpacing.md)
         .accessibilityElement(children: .combine)
     }
 

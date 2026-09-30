@@ -13,13 +13,13 @@ extension CallView {
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
-                VStack(spacing: 14) {
+                VStack(spacing: MeeshySpacing.mdPlus) {
                     if mode == .effects {
                         effectsCompanions
                     }
                     if showTranscript {
                         captionsBand(hasOwnGlass: true, opensJournal: false)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, MeeshySpacing.lg)
                     }
                     modeControls(mode)
                 }

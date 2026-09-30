@@ -102,7 +102,7 @@ extension ComposerObjectEditorView {
                     }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .padding(.bottom, 28)
         }
     }
@@ -125,7 +125,7 @@ extension ComposerObjectEditorView {
                     trimBand(source)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
             .padding(.bottom, 28)
         }
     }

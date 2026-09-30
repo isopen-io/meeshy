@@ -53,9 +53,9 @@ struct StorySentinelView: View {
             marque
                 .padding(.bottom, 28)
             titre
-                .padding(.bottom, 14)
+                .padding(.bottom, MeeshySpacing.mdPlus)
             explication
-                .padding(.bottom, 32)
+                .padding(.bottom, MeeshySpacing.xxxl)
             boutonMettreAJour
                 .padding(.bottom, 18)
             boutonPasser
@@ -73,8 +73,8 @@ struct StorySentinelView: View {
     /// Le losange en pointillés : un cadre qui DIT qu'il est vide, là où un
     /// cadre plein prétendrait montrer quelque chose.
     private var marque: some View {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
-            .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 5]))
+        RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
+            .strokeBorder(style: StrokeStyle(lineWidth: MeeshyBorder.emphasis, dash: [6, 5]))
             .foregroundStyle(MeeshyColors.indigo400.opacity(0.55))
             .frame(width: 132, height: 132)
             .overlay(
@@ -87,7 +87,7 @@ struct StorySentinelView: View {
 
     private var titre: some View {
         Text(StorySentinelCopy.title)
-            .font(MeeshyFont.relative(28, weight: .bold))
+            .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .bold))
             .foregroundStyle(.white)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
@@ -104,7 +104,7 @@ struct StorySentinelView: View {
     private var boutonMettreAJour: some View {
         Button(action: onUpdate) {
             Text(StorySentinelCopy.update)
-                .font(MeeshyFont.relative(15, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 .tracking(1.4)
                 .foregroundStyle(MeeshyColors.indigo950)
                 .frame(maxWidth: .infinity)
@@ -122,7 +122,7 @@ struct StorySentinelView: View {
     private var boutonPasser: some View {
         Button(action: onSkip) {
             Text(StorySentinelCopy.skip)
-                .font(MeeshyFont.relative(13, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .tracking(1.2)
                 .foregroundStyle(.white.opacity(0.66))
                 .frame(maxWidth: .infinity)
