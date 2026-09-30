@@ -1,5 +1,6 @@
 // Source : docs/marketing/campagne-2026-09/captures-app-store.md § 4 (validé porteur 2026-09-24).
-// L'arabe doit être relu par un locuteur natif avant soumission.
+// L'arabe doit être relu par un locuteur natif avant soumission. L9 nomme la ville du partenaire
+// de la vitrine (#8825) : Séoul pour une lectrice, Osaka pour un lecteur (de, pt, ar).
 export const LEGENDES = {
   L1: {
     fr: 'Ta voix. Leur langue.',
@@ -77,10 +78,10 @@ export const LEGENDES = {
     fr: 'Appelle Séoul. Lis chaque mot.',
     en: 'Call Seoul. Read every word.',
     es: 'Llama a Seúl. Lee cada palabra.',
-    de: 'Ruf Seoul an. Lies jedes Wort.',
+    de: 'Ruf Osaka an. Lies jedes Wort.',
     it: 'Chiama Seul. Leggi ogni parola.',
-    pt: 'Ligue para Seul. Leia cada palavra.',
-    ar: 'اتصل بسيول. واقرأ كل كلمة.',
+    pt: 'Ligue para Osaka. Leia cada palavra.',
+    ar: 'اتصل بأوساكا. واقرأ كل كلمة.',
   },
   L10: {
     fr: 'Un lien. Sans compte.',
@@ -90,5 +91,25 @@ export const LEGENDES = {
     it: 'Un link. Nessun account.',
     pt: 'Um link. Sem conta.',
     ar: 'رابط واحد. بلا حساب.',
+  },
+  // #8825 — la conversation amoureuse : le proverbe de chaque langue, détourné.
+  L11: {
+    fr: 'Loin des yeux. Près du cœur.',
+    en: 'Out of sight. Never out of mind.',
+    es: 'Lejos de los ojos. Cerca del corazón.',
+    de: 'Aus den Augen. Nie aus dem Sinn.',
+    it: 'Lontano dagli occhi. Vicino al cuore.',
+    pt: 'Longe dos olhos. Perto do coração.',
+    ar: 'بعيد عن العين. قريب من القلب.',
+  },
+  // #8825 — le débat acharné.
+  L12: {
+    fr: 'Ça chauffe. Tout le monde suit.',
+    en: 'Things heat up. Everyone keeps up.',
+    es: 'Se arma el debate. Todos lo siguen.',
+    de: 'Es wird hitzig. Alle reden mit.',
+    it: 'Si accende il dibattito. Tutti seguono.',
+    pt: 'O debate esquenta. Todo mundo acompanha.',
+    ar: 'النقاش يحتدم. والكل يتابع.',
   },
 }

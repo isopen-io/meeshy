@@ -6,22 +6,22 @@ import { pageCapture, pagePoster } from './composition.mjs'
 
 const theme = (sequence) => sequence.map((c) => (c.theme === 'dark' ? 'S' : 'C')).join('-')
 
-describe('séquences App Store (captures-app-store.md § 2-3)', () => {
-  test('iPhone : dix captures, légendes L1→L10, alternance S-C-S-C-S-S-C-S-S-C', () => {
+describe('séquences App Store (captures-app-store.md § 2-3, #8825)', () => {
+  test('iPhone : dix captures, les conversations d’abord, alternance S-C-S-C-S-C-S-S-C-C', () => {
     const { captures } = APPAREILS.iphone
-    expect(captures.map((c) => c.legende)).toEqual(['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9', 'L10'])
-    expect(theme(captures)).toBe('S-C-S-C-S-S-C-S-S-C')
+    expect(captures.map((c) => c.legende)).toEqual(['L1', 'L11', 'L2', 'L12', 'L9', 'L3', 'L4', 'L6', 'L7', 'L10'])
+    expect(theme(captures)).toBe('S-C-S-C-S-C-S-S-C-C')
   })
 
-  test('iPad : sept captures P1→P7 avec les légendes du § 3', () => {
+  test('iPad : neuf captures, le même récit que l’iPhone', () => {
     const { captures } = APPAREILS.ipad
-    expect(captures.map((c) => c.legende)).toEqual(['L1', 'L3', 'L4', 'L2', 'L7', 'L9', 'L6'])
-    expect(theme(captures)).toBe('S-C-S-C-C-S-S')
+    expect(captures.map((c) => c.legende)).toEqual(['L1', 'L11', 'L2', 'L12', 'L9', 'L3', 'L4', 'L6', 'L7'])
+    expect(theme(captures)).toBe('S-C-S-C-S-C-S-S-C')
   })
 
-  test('tailles exigées par App Store Connect', () => {
+  test('tailles par défaut d’App Store Connect : iPhone 6,9" et iPad 13", en portrait', () => {
     expect([APPAREILS.iphone.width, APPAREILS.iphone.height]).toEqual([1320, 2868])
-    expect([APPAREILS.ipad.width, APPAREILS.ipad.height]).toEqual([2752, 2064])
+    expect([APPAREILS.ipad.width, APPAREILS.ipad.height]).toEqual([2064, 2752])
     expect([POSTER.width, POSTER.height]).toEqual([886, 1920])
   })
 })
@@ -30,7 +30,7 @@ describe('fichiers fastlane', () => {
   test('les locales fastlane et le nommage iphone69_NN / ipad13_NN', () => {
     expect(cheminFastlane({ appareil: 'iphone', lang: 'fr', rang: 1 })).toMatch(/apps\/ios\/fastlane\/screenshots\/fr-FR\/iphone69_01\.png$/)
     expect(cheminFastlane({ appareil: 'iphone', lang: 'pt', rang: 10 })).toMatch(/screenshots\/pt-BR\/iphone69_10\.png$/)
-    expect(cheminFastlane({ appareil: 'ipad', lang: 'it', rang: 7 })).toMatch(/screenshots\/it\/ipad13_07\.png$/)
+    expect(cheminFastlane({ appareil: 'ipad', lang: 'it', rang: 9 })).toMatch(/screenshots\/it\/ipad13_09\.png$/)
     expect(cheminFastlane({ appareil: 'ipad', lang: 'ar', rang: 2 })).toMatch(/screenshots\/ar-SA\/ipad13_02\.png$/)
   })
 
@@ -91,29 +91,9 @@ describe('pages composées', () => {
   })
 })
 
-describe('capture 8 — badges et Meesh frappées', () => {
+describe('légende des badges (hors vitrine depuis #8825)', () => {
   test('la légende dit « badges », comme l’écran (« Badge gagné »)', () => {
     expect(LEGENDES.L8.fr).toStartWith('Débloque des badges.')
     expect(LEGENDES.L8.en).toStartWith('Unlock badges.')
-  })
-
-  test('la frappe est MONTRÉE : la carte Meesh de Progression flotte sous le badge, sans loupe redondante sur le solde', () => {
-    for (const lang of KIT_LANGS) {
-      const html = pageCapture({ appareil: 'iphone', lang, rang: 8 })
-      expect(html).not.toContain('data-loupe=')
-      expect(html).toMatch(/class="as-carte-flottante[^"]*"[\s\S]*class="p-card meesh"/)
-    }
-  })
-})
-
-describe('appel vidéo — le correspondant', () => {
-  test('la vidéo du correspondant porte ses initiales (portrait flouté, sans visage dessiné)', () => {
-    for (const lang of ['fr', 'ar']) {
-      const html = pageCapture({ appareil: 'iphone', lang, rang: 9 })
-      expect(html).toContain('call-illu')
-      expect(html).toMatch(/class="call-avatar[\s\S]*?>MP</)
-    }
-    const ipad = pageCapture({ appareil: 'ipad', lang: 'fr', rang: 6 })
-    expect(ipad).toMatch(/class="call-avatar[\s\S]*?>MP</)
   })
 })
