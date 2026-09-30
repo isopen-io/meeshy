@@ -116,9 +116,13 @@ public struct NotificationToastView: View {
                             .foregroundColor(theme.textMuted)
                     }
 
-                    if banner.body != nil || banner.thumbnailURL != nil || banner.reactionBadge != nil {
+                    if banner.body != nil || banner.showsContentTile || banner.reactionBadge != nil {
                         HStack(alignment: .center, spacing: 8) {
-                            contentPreview(banner)
+                            if banner.showsContentTile {
+                                contentPreview(banner)
+                            } else if let badge = banner.reactionBadge {
+                                Text(badge).font(.system(size: 15))
+                            }
                             if let body = banner.body {
                                 Text(body)
                                     .font(MeeshyFont.relative(13))
@@ -205,8 +209,10 @@ public struct NotificationToastView: View {
         .accessibilityHidden(true)
     }
 
-    /// La vignette du contenu visé, ou son icône typée quand il n'y a pas
-    /// d'image — c'est la même case, jamais deux dispositions différentes.
+    /// La vignette du contenu visé, ou l'icône du contenu SOCIAL visé quand sa
+    /// miniature manque — la même case, jamais deux dispositions. Elle n'est
+    /// posée que si `showsContentTile` (#8897) : pour un message, la pastille
+    /// de l'avatar dit déjà le type et le corps servi nomme le média.
     @ViewBuilder
     private func contentPreview(_ banner: NotificationBannerPresentation) -> some View {
         ZStack(alignment: .bottomTrailing) {
@@ -244,14 +250,18 @@ public struct NotificationToastView: View {
         .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
     }
 
-    private func symbolTile(_ symbol: String) -> some View {
+    /// La case teintée, avec l'icône du contenu social quand il y en a une —
+    /// vide pendant qu'une vraie vignette charge ou si elle échoue.
+    private func symbolTile(_ symbol: String?) -> some View {
         RoundedRectangle(cornerRadius: 8, style: .continuous)
             .fill(accentColor.opacity(isDark ? 0.24 : 0.13))
-            .overlay(
-                Image(systemName: symbol)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(accentColor)
-            )
+            .overlay {
+                if let symbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(accentColor)
+                }
+            }
             .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
     }
 

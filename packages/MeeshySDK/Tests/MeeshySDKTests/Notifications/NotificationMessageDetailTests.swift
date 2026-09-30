@@ -126,24 +126,24 @@ final class NotificationMessageDetailTests: XCTestCase {
 
     // MARK: - Bannière in-app
 
-    func test_banner_location_hasPinSymbolAndDetailedBody() throws {
+    func test_banner_location_saysThePinInTheBodyOnly() throws {
         let event = try makeEvent(context: """
         { "conversationId": "c1", "conversationType": "direct", "messageType": "text",
           "locationLat": 48.8584, "locationLon": "2.2945", "locationName": "Tour Eiffel" }
         """)
         let banner = event.bannerPresentation()
-        XCTAssertEqual(banner.contentSymbol, "mappin.and.ellipse")
+        XCTAssertNil(banner.contentSymbol, "le « 📍 » du corps le dit déjà (#8897)")
         XCTAssertEqual(banner.body, "📍 Tour Eiffel")
     }
 
-    func test_banner_contact_hasPersonSymbolAndName() throws {
+    func test_banner_contact_saysTheNameInTheBodyOnly() throws {
         let event = try makeEvent(context: """
         { "conversationId": "c1", "conversationType": "direct", "contactName": "Jean Dupont" }
         """, metadata: """
         { "attachments": { "count": 1, "firstType": "document", "firstFilename": "jean.vcf" } }
         """)
         let banner = event.bannerPresentation()
-        XCTAssertEqual(banner.contentSymbol, "person.crop.circle.fill")
+        XCTAssertNil(banner.contentSymbol)
         XCTAssertEqual(banner.body, "👤 Jean Dupont")
     }
 
@@ -153,7 +153,7 @@ final class NotificationMessageDetailTests: XCTestCase {
           "inviteUrl": "https://meeshy.me/join/abc", "inviteConversationTitle": "Les voisins" }
         """, content: "✉️ Invitation · Les voisins")
         let banner = event.bannerPresentation()
-        XCTAssertEqual(banner.contentSymbol, "envelope.open.fill")
+        XCTAssertNil(banner.contentSymbol)
         XCTAssertEqual(banner.body, "✉️ Invitation · Les voisins")
     }
 
@@ -163,16 +163,16 @@ final class NotificationMessageDetailTests: XCTestCase {
           "linkDomain": "lemonde.fr", "linkTitle": "Le titre", "linkImageUrl": "https://cdn/og.jpg" }
         """, content: "https://lemonde.fr/a")
         let banner = event.bannerPresentation()
-        XCTAssertEqual(banner.contentSymbol, "link")
+        XCTAssertNil(banner.contentSymbol, "la vignette montre le lien, le « 🔗 » le nomme")
         XCTAssertEqual(banner.body, "🔗 lemonde.fr — Le titre")
         XCTAssertEqual(banner.thumbnailURL, "https://cdn/og.jpg")
     }
 
-    func test_banner_sticker_hasItsOwnSymbol() throws {
+    func test_banner_sticker_hasNoSymbolTile() throws {
         let event = try makeEvent(context: """
         { "conversationId": "c1", "conversationType": "direct", "messageType": "sticker" }
         """, content: "🐱 Sticker")
-        XCTAssertEqual(event.bannerPresentation().contentSymbol, "face.smiling.inverse")
+        XCTAssertFalse(event.bannerPresentation().showsContentTile, "« 🐱 Sticker » se dit dans le corps (#8897)")
     }
 
     func test_banner_video_showsItsThumbnail_neverTheFile() throws {
@@ -184,7 +184,7 @@ final class NotificationMessageDetailTests: XCTestCase {
         """, content: "🎥 Vidéo · 0:12")
         let banner = event.bannerPresentation()
         XCTAssertEqual(banner.thumbnailURL, "https://cdn/v-thumb.jpg")
-        XCTAssertEqual(banner.contentSymbol, "play.rectangle.fill")
+        XCTAssertNil(banner.contentSymbol)
     }
 
     /// Le SECOND verrou : un message qui DÉCLARE une protection ne montre ni
@@ -199,7 +199,7 @@ final class NotificationMessageDetailTests: XCTestCase {
         XCTAssertNil(event.messageDetail)
         XCTAssertEqual(banner.body, "👁️ 📍")
         XCTAssertNil(banner.thumbnailURL)
-        XCTAssertNotEqual(banner.contentSymbol, "mappin.and.ellipse")
+        XCTAssertFalse(banner.showsContentTile)
     }
 
     func test_banner_detailInMetadata_isTheFallback() throws {
