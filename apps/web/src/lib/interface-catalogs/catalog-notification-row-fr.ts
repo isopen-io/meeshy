@@ -28,6 +28,10 @@ const frNotificationRow = {
   'notifications.quick.failed': 'La demande n’a pas pu partir. Réessayez dans un instant.',
   'notifications.banner.label': 'Nouvelle notification',
   'notifications.banner.dismiss': 'Fermer la notification',
+  'notifications.banner.previewHint': 'Tirez vers le bas ou appuyez sur Flèche bas pour un aperçu',
+  'notifications.preview.label': 'Aperçu de la conversation',
+  'notifications.preview.close': 'Fermer l’aperçu',
+  'notifications.preview.open': 'Ouvrir la conversation',
 } as const;
 
 export default frNotificationRow;

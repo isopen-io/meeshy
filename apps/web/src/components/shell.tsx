@@ -7,12 +7,14 @@ import { useAppUpdateAnnounced } from '@/lib/app-update/pending-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { conversationPreviewStore } from '@/lib/notifications/conversation-preview';
 import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 import { useRoute } from '@/lib/router';
 
 import { CallLayer } from './call-layer';
+import { loadConversationPreviewHost } from './conversation-preview-chunks';
 import { ProfilePeekHost } from './profile-peek-host';
 
 /**
@@ -163,8 +165,19 @@ const chargerBanniereNotification = () =>
   }));
 const NotificationToastHost = lazy(chargerBanniereNotification);
 
+/**
+ * ...ET L'APERÇU DE CONVERSATION TIRÉ DE LA BANNIÈRE (#8821) : il survit à la
+ * bannière qui l'a ouvert, d'où son propre magasin et son propre hôte.
+ */
+const ConversationPreviewHost = lazy(() =>
+  Promise.all([loadConversationPreviewHost(), loadNotificationRowCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.ConversationPreviewHost,
+  })),
+);
+
 export default function Shell({ children }: { children: ReactNode }) {
   const banniereNotification = useStore(inAppBannerStore, (state) => state.current !== null);
+  const apercuOuvert = useStore(conversationPreviewStore, (state) => state.conversationId !== null);
   const pastilleArmee = useSyncPillArmed();
   const majAnnoncee = useAppUpdateAnnounced();
   const invitationArmee = useActivationInviteArmed();
@@ -238,6 +251,11 @@ export default function Shell({ children }: { children: ReactNode }) {
       {menusArmes ? (
         <Suspense fallback={null}>
           <FloatingMenus routeKey={routeKey} />
+        </Suspense>
+      ) : null}
+      {apercuOuvert ? (
+        <Suspense fallback={null}>
+          <ConversationPreviewHost />
         </Suspense>
       ) : null}
     </div>

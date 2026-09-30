@@ -115,16 +115,22 @@ struct RootNotificationToastOverlay: View {
     /// Recette DEBUG (#8723) : `-MeeshyBannerPreview audio` pose, deux secondes
     /// après l'ouverture, la bannière de la capture porteur (un vocal dont la
     /// passerelle a déjà composé le libellé) — sans socket ni envoi.
+    /// `-MeeshyBannerConversation <id>` (#8822) la rattache à une conversation
+    /// réelle du compte : la tirer vers le bas ouvre alors son aperçu.
     private static func presentLaunchPreviewIfRequested(on manager: NotificationToastManager) async {
-        guard ProcessInfo.processInfo.arguments.contains("-MeeshyBannerPreview") else { return }
+        let arguments = ProcessInfo.processInfo.arguments
+        guard arguments.contains("-MeeshyBannerPreview") else { return }
         try? await Task.sleep(for: .seconds(2))
+        let conversationId = arguments.firstIndex(of: "-MeeshyBannerConversation")
+            .flatMap { arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }
+            .flatMap { $0.allSatisfy(\.isHexDigit) ? $0 : nil } ?? ""
         let fixture = #"""
         {"id":"preview-8723","userId":"me","type":"new_message","title":"Abed Dollar",
          "content":"🎵 Audio · 0:32 · 193 Ko",
          "actor":{"id":"preview-actor","displayName":"Abed Dollar"},
-         "context":{"conversationType":"direct"},
+         "context":{"conversationType":"direct","conversationId":"CONVERSATION_ID"},
          "metadata":{"commentPreview":"🎵 Audio · 0:32 · 193 Ko","attachments":{"count":1,"firstType":"audio"}}}
-        """#
+        """#.replacingOccurrences(of: "CONVERSATION_ID", with: conversationId)
         guard let event = try? JSONDecoder().decode(SocketNotificationEvent.self, from: Data(fixture.utf8)) else { return }
         manager.presentPreviewToast(event)
     }

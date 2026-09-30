@@ -59,7 +59,7 @@ const HOOK_NAMES = [
   'useSyncExternalStore',
   'useQueryClient',
   'useStore',
-  'useParams',
+  'useOptionalRoute',
   'useOnline',
   'useConversationsSnapshot',
   'useReaderLanguages',
@@ -88,9 +88,9 @@ const HOOK_NAMES = [
 ] as const;
 
 const EARLY_RETURN_MARKERS = [
-  "return <ThreadRefused />",
-  "return <ThreadError onRetry={threadData.refetch} />",
-  "return <ThreadSkeleton />",
+  "return <ThreadRefused preview={inPreview} />",
+  "return <ThreadError onRetry={threadData.refetch} preview={inPreview} />",
+  "return <ThreadSkeleton preview={inPreview} />",
 ] as const;
 
 describe('ThreadScreen — Rules of Hooks : aucun hook après un retour anticipé (#6175, défaut bloquant 1)', () => {

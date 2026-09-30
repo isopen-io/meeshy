@@ -22,6 +22,10 @@ const esNotificationRow = {
   'notifications.quick.failed': 'No se pudo enviar la solicitud. Inténtalo de nuevo en un momento.',
   'notifications.banner.label': 'Nueva notificación',
   'notifications.banner.dismiss': 'Cerrar la notificación',
+  'notifications.banner.previewHint': 'Desliza hacia abajo o pulsa Flecha abajo para una vista previa',
+  'notifications.preview.label': 'Vista previa de la conversación',
+  'notifications.preview.close': 'Cerrar la vista previa',
+  'notifications.preview.open': 'Abrir la conversación',
 } as const satisfies NotificationRowCatalog;
 
 export default esNotificationRow;

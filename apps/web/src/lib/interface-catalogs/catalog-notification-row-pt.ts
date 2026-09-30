@@ -22,6 +22,10 @@ const ptNotificationRow = {
   'notifications.quick.failed': 'Não foi possível enviar o pedido. Tente de novo em instantes.',
   'notifications.banner.label': 'Nova notificação',
   'notifications.banner.dismiss': 'Fechar a notificação',
+  'notifications.banner.previewHint': 'Puxe para baixo ou prima Seta para baixo para pré-visualizar',
+  'notifications.preview.label': 'Pré-visualização da conversa',
+  'notifications.preview.close': 'Fechar a pré-visualização',
+  'notifications.preview.open': 'Abrir a conversa',
 } as const satisfies NotificationRowCatalog;
 
 export default ptNotificationRow;

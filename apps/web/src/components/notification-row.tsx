@@ -72,7 +72,17 @@ export type NotificationRowProps = {
   readonly connectRequested?: boolean;
 };
 
-export type SurfaceProps = { readonly className: string; readonly style: CSSProperties; readonly onClick: () => void; readonly children: ReactNode };
+export type SurfaceProps = {
+  readonly className: string;
+  readonly style: CSSProperties;
+  readonly onClick: () => void;
+  readonly children: ReactNode;
+  /** Le raccourci que la surface ANNONCE (la bannière : Flèche bas ouvre l'aperçu, #8821). */
+  readonly 'aria-keyshortcuts'?: string;
+  readonly 'aria-description'?: string;
+  /** `false` sur une surface qu'on BALAIE : un lien que le navigateur glisse annule le geste (`pointercancel`). */
+  readonly draggable?: boolean;
+};
 
 export function TargetLink({ target, ...surface }: SurfaceProps & { readonly target: NotificationTarget }) {
   switch (target.route) {
