@@ -205,8 +205,10 @@ public struct NotificationToastView: View {
         .accessibilityHidden(true)
     }
 
-    /// La vignette du contenu visé, ou son icône typée quand il n'y a pas
-    /// d'image — c'est la même case, jamais deux dispositions différentes.
+    /// La vignette du contenu visé, ou l'icône du contenu SOCIAL visé quand sa
+    /// miniature manque — la même case, jamais deux dispositions. Elle n'est
+    /// posée que si `showsContentTile` (#8897) : pour un message, la pastille
+    /// de l'avatar dit déjà le type et le corps servi nomme le média.
     @ViewBuilder
     private func contentPreview(_ banner: NotificationBannerPresentation) -> some View {
         ZStack(alignment: .bottomTrailing) {
