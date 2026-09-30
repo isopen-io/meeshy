@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import type { EngagementActivityOptions } from '../engagement/EngagementService';
+import { memberSignature } from '../engagement/memberSignature';
 import { conversationStatsService } from '../ConversationStatsService';
 import {
   conversationMessageStatsService,
@@ -97,6 +98,7 @@ export interface PostSaveEngagementService {
     userId: string,
     axisKey: EngagementAxisKey,
     conversationId: string,
+    options?: { readonly signature?: string },
   ): Promise<void>;
 }
 
@@ -326,11 +328,23 @@ export function runMessagePostSaveEffects(params: {
       .then(async () => {
         const conversation = await readConversation();
         if (!conversation) return;
-        await engagementService.recordConversationActivity(
-          senderUserId,
-          conversationEngagementAxis(conversation),
-          message.conversationId
-        );
+        const axisKey = conversationEngagementAxis(conversation);
+        if (axisKey !== 'conversation.private') {
+          await engagementService.recordConversationActivity(senderUserId, axisKey, message.conversationId);
+          return;
+        }
+        // Une conversation privée rapporte une fois par ENSEMBLE de personnes
+        // (#8906) : la même personne, ou le même groupe, ne rapporte plus.
+        const members = await prisma.conversation.findUnique({
+          where: { id: message.conversationId },
+          select: { participants: { where: { isActive: true }, select: { userId: true } } },
+        });
+        const peers = (members?.participants ?? [])
+          .map((participant) => participant.userId)
+          .filter((id): id is string => typeof id === 'string' && id !== senderUserId);
+        await engagementService.recordConversationActivity(senderUserId, axisKey, message.conversationId, {
+          signature: memberSignature(peers),
+        });
       })
       .catch(report('engagement'));
   }

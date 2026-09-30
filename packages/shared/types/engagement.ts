@@ -20,6 +20,7 @@ export const ENGAGEMENT_AXES = [
   'conversation.private',
   'conversation.public',
   'conversation.community',
+  'conversation.group_created',
   'tool.sticker',
   'tool.in_app_edit',
   'tool.direct_publish',
@@ -134,6 +135,11 @@ export const COMMENT_AXIS_WEIGHT = 3;
 export const CONVERSATION_AXIS_WEIGHT = 5;
 export const TOOL_AXIS_WEIGHT = 1;
 /**
+ * **1** (arbitrage porteur, 2026-09-30, #8906) : créer un groupe « apporte un
+ * point » — une fois par ENSEMBLE de membres, jamais pour un groupe identique.
+ */
+export const GROUP_CREATION_AXIS_WEIGHT = 1;
+/**
  * **7 — deuxième poids du catalogue** (arbitrage porteur, 2026-09-09, qui a
  * renversé la proposition initiale de 4).
  *
@@ -156,6 +162,7 @@ export const ENGAGEMENT_AXIS_WEIGHTS: Record<EngagementAxisKey, number> = {
   'conversation.private': CONVERSATION_AXIS_WEIGHT,
   'conversation.public': CONVERSATION_AXIS_WEIGHT,
   'conversation.community': CONVERSATION_AXIS_WEIGHT,
+  'conversation.group_created': GROUP_CREATION_AXIS_WEIGHT,
   'tool.sticker': TOOL_AXIS_WEIGHT,
   'tool.in_app_edit': TOOL_AXIS_WEIGHT,
   'tool.direct_publish': TOOL_AXIS_WEIGHT,

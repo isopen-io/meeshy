@@ -118,7 +118,7 @@ describe('catalogue de streaks & badges — TS et Swift ne peuvent pas diverger'
     // et pièce jointe (#8906, 2026-09-30). Le compte
     // est ÉPINGLÉ pour qu'un axe ajouté par accident se voie ; un axe ajouté
     // DÉLIBÉRÉMENT met ce nombre à jour dans le même commit.
-    expect(ENGAGEMENT_AXES).toHaveLength(19);
+    expect(ENGAGEMENT_AXES).toHaveLength(20);
     expect(ENGAGEMENT_ACHIEVEMENT_KEYS).toHaveLength(5);
   });
 });

@@ -26,12 +26,14 @@ jest.mock('../../../services/ConversationMessageStatsService', () => ({
 }));
 
 import { runMessagePostSaveEffects } from '../../../services/messaging/messagePostSaveEffects';
+import { memberSignature } from '../../../services/engagement/memberSignature';
 
 const CONV_ID = '507f1f77bcf86cd799439022';
 const MSG_ID = '507f1f77bcf86cd799439044';
 const PART_ID = '507f1f77bcf86cd799439033';
 
 const USER_ID = '507f1f77bcf86cd799439055';
+const PEER_ID = '507f1f77bcf86cd799439066';
 
 function makeMessage(overrides: Record<string, unknown> = {}) {
   return {
@@ -56,6 +58,7 @@ function makePrisma(overrides: { conversationType?: string | null; communityId?:
       findUnique: jest.fn<any>().mockResolvedValue({
         type: overrides.conversationType === undefined ? 'direct' : overrides.conversationType,
         communityId: overrides.communityId ?? null,
+        participants: [{ userId: USER_ID }, { userId: PEER_ID }, { userId: null }],
       }),
     },
   } as any;
@@ -395,7 +398,8 @@ describe('runMessagePostSaveEffects — axe d\'engagement des conversations', ()
     expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
       USER_ID,
       'conversation.private',
-      CONV_ID
+      CONV_ID,
+      { signature: memberSignature([PEER_ID]) }
     );
   });
 
@@ -415,7 +419,8 @@ describe('runMessagePostSaveEffects — axe d\'engagement des conversations', ()
     expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
       USER_ID,
       'conversation.private',
-      CONV_ID
+      CONV_ID,
+      { signature: memberSignature([PEER_ID]) }
     );
   });
 
@@ -586,7 +591,8 @@ describe('runMessagePostSaveEffects — axe d\'engagement des stickers (#5541)',
     expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
       USER_ID,
       'conversation.private',
-      CONV_ID
+      CONV_ID,
+      { signature: memberSignature([PEER_ID]) }
     );
   });
 

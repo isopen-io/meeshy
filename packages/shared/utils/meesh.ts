@@ -52,7 +52,7 @@ export const MEESH_DEBIT_ORDER: readonly (readonly EngagementAxisKey[])[] = [
   ['social.tracked_link', 'social.share', 'social.invite_joined', 'social.friendship'],
   // DERNIER rang : on ne reprend les points d'une conversation que si rien
   // d'autre ne suffit — et jamais ses actions (voir `MEESH_POINTS_ONLY_AXES`).
-  ['conversation.private', 'conversation.public', 'conversation.community'],
+  ['conversation.private', 'conversation.public', 'conversation.community', 'conversation.group_created'],
 ];
 
 /**
@@ -115,6 +115,7 @@ export const MEESH_POINTS_ONLY_AXES: readonly EngagementAxisKey[] = [
   'conversation.private',
   'conversation.public',
   'conversation.community',
+  'conversation.group_created',
 ];
 
 /** `true` si la frappe reprend aussi des ACTIONS sur cet axe (donc si ses badges peuvent s'éteindre). */

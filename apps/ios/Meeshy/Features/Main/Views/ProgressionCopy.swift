@@ -36,6 +36,8 @@ enum ProgressionCopy {
             return String(localized: "progression.axis.conversation.public", defaultValue: "Conversations publiques", bundle: .main)
         case .communityConversation:
             return String(localized: "progression.axis.conversation.community", defaultValue: "Conversations de communauté", bundle: .main)
+        case .groupCreated:
+            return String(localized: "progression.axis.conversation.group_created", defaultValue: "Groupes créés", bundle: .main)
         case .sticker:
             return String(localized: "progression.axis.tool.sticker", defaultValue: "Stickers posés", bundle: .main)
         case .inAppEdit:

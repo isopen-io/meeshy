@@ -42,6 +42,7 @@ import { ONE_DAY_MS, civilDayInTimezone, startOfUtcDay } from './civilDay';
 import { ConversationEngagementRecorder, isDailyCapReached } from './ConversationEngagementRecorder';
 import { engagementScaleServiceFor, type EngagementScaleSource } from './EngagementScaleService';
 import { getEngagementEmitIO } from './engagement-emit-registry';
+import { memberSignature } from './memberSignature';
 
 const log = enhancedLogger.child({ module: 'EngagementService' });
 
@@ -313,6 +314,7 @@ export class EngagementService {
     userId: string,
     axisKey: EngagementAxisKey,
     conversationId: string,
+    options: { readonly signature?: string } = {},
   ): Promise<void> {
     try {
       await this.prisma.engagementConversationCredit.create({
@@ -323,7 +325,44 @@ export class EngagementService {
       throw err;
     }
 
+    if (options.signature !== undefined && !(await this.claimSignature(userId, axisKey, options.signature, conversationId))) {
+      return;
+    }
+
     await this.recordActivity(userId, axisKey, { conversationId });
+  }
+
+  /**
+   * Créer un groupe (#8906) : un point, une fois par ENSEMBLE de membres —
+   * un second groupe avec les mêmes personnes ne rapporte rien, un groupe
+   * avec une personne de plus rapporte.
+   */
+  async recordGroupCreation(userId: string, conversationId: string, memberIds: readonly string[]): Promise<void> {
+    const axisKey: EngagementAxisKey = 'conversation.group_created';
+    const signature = memberSignature([userId, ...memberIds]);
+    if (!(await this.claimSignature(userId, axisKey, signature, conversationId))) return;
+    await this.recordActivity(userId, axisKey, { conversationId });
+  }
+
+  /**
+   * Réserve l'ensemble de personnes pour cet axe. `false` quand il a déjà
+   * crédité — la contrainte unique tranche, jamais une relecture.
+   */
+  private async claimSignature(
+    userId: string,
+    axisKey: EngagementAxisKey,
+    signature: string,
+    conversationId: string,
+  ): Promise<boolean> {
+    try {
+      await this.prisma.engagementSignatureCredit.create({
+        data: { userId, axisKey, signature, conversationId },
+      });
+      return true;
+    } catch (err) {
+      if (isP2002(err)) return false;
+      throw err;
+    }
   }
 
   /**

@@ -4958,6 +4958,23 @@ model EngagementConversationCredit {
   @@index([userId, axisKey])
 }
 
+/// Un crédit d'engagement par ENSEMBLE de personnes (#8906) : une conversation
+/// privée avec la même personne, ou un groupe créé avec les mêmes membres, ne
+/// rapporte qu'une fois. `signature` est l'empreinte (sha256) des identifiants
+/// triés — voir `memberSignature` côté gateway.
+model EngagementSignatureCredit {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @db.ObjectId
+  /// "conversation.private" | "conversation.group_created"
+  axisKey        String
+  signature      String
+  conversationId String   @db.ObjectId
+  creditedAt     DateTime @default(now())
+
+  @@unique([userId, axisKey, signature])
+  @@index([userId, axisKey])
+}
+
 /// LE BARÈME d'engagement réglé par l'administration (#8906) — une ligne
 /// singleton (`key = "default"`). `config` porte un `EngagementScale`
 /// (`@meeshy/shared/types/engagement-scale`), relu par `parseEngagementScale`

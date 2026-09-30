@@ -23,6 +23,8 @@ public enum EngagementAxisKey: String, CaseIterable, Codable, Sendable, Hashable
     case privateConversation = "conversation.private"
     case publicConversation = "conversation.public"
     case communityConversation = "conversation.community"
+    // Créer un groupe (#8906) — une fois par ENSEMBLE de membres.
+    case groupCreated = "conversation.group_created"
     case sticker = "tool.sticker"
     case inAppEdit = "tool.in_app_edit"
     case directPublish = "tool.direct_publish"
