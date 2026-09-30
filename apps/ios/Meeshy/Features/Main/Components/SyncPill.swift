@@ -127,7 +127,11 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
 nonisolated enum SyncPillVisibility {
     static func isVisible(storyViewerPresenting: Bool,
                           inAppNoticePresenting: Bool) -> Bool {
-        !storyViewerPresenting && !inAppNoticePresenting
+        #if DEBUG
+        // Vitrine (#8855) : le serveur injoignable est voulu, son bandeau hors champ.
+        if VitrineLaunch.isActive { return false }
+        #endif
+        return !storyViewerPresenting && !inAppNoticePresenting
     }
 }
 
