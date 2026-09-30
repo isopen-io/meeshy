@@ -2,7 +2,9 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import { uploadProfileImage } from '@/lib/profile/image-upload';
 
+import type { AccountVault } from './accounts';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
+import { repaintMyPortrait } from './my-portrait';
 import {
   LANGUAGE_PATCH_KEYS,
   MY_PROFILE_QUERY_KEY,
@@ -45,6 +47,8 @@ import type { SessionProfileFields, SessionStoreApi, SessionUser } from './sessi
 export type ProfileActionDeps = ProfileDeps & {
   readonly queryClient: QueryClient;
   readonly session: SessionStoreApi;
+  /** La liste des comptes de l'appareil (#8886). */
+  readonly accounts: Pick<AccountVault, 'refreshUser'>;
   readonly isOnline: () => boolean;
 };
 
@@ -129,10 +133,18 @@ function confirmOntoPublicProfile(queryClient: QueryClient, profile: MyProfile):
   );
 }
 
+/**
+ * La valeur SERVIE s'écrit partout où le porteur se voit : le cache du profil,
+ * la session (en-tête, réglages, rail des stories), ma fiche publique et la
+ * ligne de mon compte dans la liste de l'appareil (#8886) — celle que la
+ * connexion et « Changer de compte » affichent.
+ */
 function confirm(deps: ProfileActionDeps, profile: MyProfile): void {
   deps.queryClient.setQueryData(MY_PROFILE_QUERY_KEY, profile);
   deps.session.getState().updateUser(sessionFieldsOfProfile(profile));
   confirmOntoPublicProfile(deps.queryClient, profile);
+  const user = heldUser(deps.session);
+  if (user !== undefined) deps.accounts.refreshUser(user);
 }
 
 const heldUser = (session: SessionStoreApi): SessionUser | undefined => {
@@ -211,5 +223,6 @@ export async function performImageUpdate(params: {
   if (!result.ok) return { status: 'refused', error: result.error };
 
   confirm(deps, result.data);
+  repaintMyPortrait(deps.queryClient, { userId: result.data.id, avatar: result.data.avatar, banner: result.data.banner });
   return { status: 'saved', url, bytesSent };
 }
