@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { registerAuditLogRoutes } from './audit-logs';
+import { registerMonitoringRoutes } from './monitoring';
+import { registerTrackingLinkAdminRoutes } from './tracking-links';
 
 /**
  * Le montage des surfaces de SUPERVISION de l'administration (#8876).
@@ -11,4 +13,6 @@ import { registerAuditLogRoutes } from './audit-logs';
  */
 export async function adminOversightRoutes(fastify: FastifyInstance): Promise<void> {
   registerAuditLogRoutes(fastify);
+  registerTrackingLinkAdminRoutes(fastify);
+  registerMonitoringRoutes(fastify);
 }
