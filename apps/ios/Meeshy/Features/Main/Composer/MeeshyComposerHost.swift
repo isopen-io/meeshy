@@ -224,9 +224,9 @@ struct MeeshyComposerHost: View {
     /// capsule publie le format de la porte. Le chevron choisit ; seul Publier
     /// envoie (maquette plein écran, 2026-09-27). Lu par `armedChoice`.
     @State var armedPublishChoice: ComposerPublishChoice?
-    /// La bascule post → story (#8793) : armée par la scène, verrouillée par
-    /// l'auteur. Lue et écrite par `applyStoryAutoSwitch` / `chooseArmedPublish`.
-    @State var storyAutoSwitch = ComposerStoryAutoSwitch.State()
+    /// La bascule post → réel (#8793) : armée par la scène, verrouillée par
+    /// l'auteur. Lue et écrite par `applyReelAutoSwitch` / `chooseArmedPublish`.
+    @State var reelAutoSwitch = ComposerReelAutoSwitch.State()
     /// Le post à une seule vidéo qui attend « C'est un Réel / C'est un Post » (#8603).
     @State var pendingReelOffer: ComposerPublishChoice?
     @State var composerVisibility: PostVisibility
@@ -1019,9 +1019,9 @@ struct MeeshyComposerHost: View {
             seedStoryCanvasIfNeeded()
         }
         // #8793 — une vidéo de fond, ou un son sur une image de fond, arme la
-        // story ; le choix de l'auteur au chevron n'est jamais écrasé.
-        .adaptiveOnChange(of: sceneDemandsStory, initial: true) { _, demande in
-            applyStoryAutoSwitch(demands: demande)
+        // réel ; le choix de l'auteur au chevron n'est jamais écrasé.
+        .adaptiveOnChange(of: reelAutoSwitchInput, initial: true) { _, entree in
+            applyReelAutoSwitch(entree)
         }
         // **Aucun viseur ne s'ouvre au montage** (#4036, #4851 — porteur
         // 2026-09-03). Une tâche de montage appelait ici la fonction qui

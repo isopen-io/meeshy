@@ -159,8 +159,13 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
 
     func test_leChevron_choisitSansPublier_laPartiePrincipalePublieLeChoixArme() throws {
         let fleche = compact(try XCTUnwrap(bloc("var publishButton", dans: try hostCode())))
-        XCTAssertTrue(fleche.contains("onChoose:{armedPublishChoice=$0}"),
+        XCTAssertTrue(fleche.contains("onChoose:{chooseArmedPublish($0)}"),
                       "Le chevron RETIENT le choix ; il ne publie pas.")
+        // #8793 : retenir le choix, c'est l'ARMER et verrouiller la bascule
+        // automatique vers le réel — jamais le publier.
+        let choix = compact(try XCTUnwrap(bloc("func chooseArmedPublish(", dans: try hostCode())))
+        XCTAssertTrue(choix.contains("armedPublishChoice=choice"))
+        XCTAssertFalse(choix.contains("Publish(choice)"), "Choisir ne publie pas.")
         XCTAssertFalse(fleche.contains("onPublish:"), "Le chevron ne publie plus.")
         XCTAssertTrue(fleche.contains("requestSoclePublish(armedChoice)"),
                       "Seule la partie principale publie, et elle publie ce qui est armé.")

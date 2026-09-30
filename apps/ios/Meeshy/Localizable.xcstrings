@@ -78968,49 +78968,49 @@
         }
       }
     },
-    "composer.storySwitch.announcement": {
+    "composer.reelSwitch.announcement": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تم التحويل إلى قصة"
+            "value": "تم التحويل إلى ريل"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zur Story gewechselt"
+            "value": "Zum Reel gewechselt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Switched to story"
+            "value": "Switched to reel"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publicación cambiada a historia"
+            "value": "Publicación cambiada a reel"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publication passée en story"
+            "value": "Publication passée en réel"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pubblicazione passata a storia"
+            "value": "Pubblicazione passata a reel"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Publicação alterada para story"
+            "value": "Publicação alterada para reel"
           }
         }
       }

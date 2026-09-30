@@ -20,6 +20,7 @@ public nonisolated enum StoryFilterThumbnails {
     private static let renderScale: CGFloat = 3
 
     private final class Tiles: @unchecked Sendable {
+        nonisolated deinit {}
         let images: [String: UIImage]
         init(_ images: [String: UIImage]) { self.images = images }
     }
