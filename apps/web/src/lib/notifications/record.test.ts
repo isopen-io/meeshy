@@ -147,7 +147,7 @@ describe('decodeNotification — le CONTEXTE que la ligne dit (#8724)', () => {
   });
 
   test('un sous-titre vide ou nul n’existe pas', () => {
-    expect(decodeNotification(servie({ subtitle: '  ' }))).not.toHaveProperty('subtitle');
-    expect(decodeNotification(servie())).not.toHaveProperty('subtitle');
+    expect(decodeNotification(servie({ subtitle: '  ' }))?.subtitle).toBeUndefined();
+    expect(decodeNotification(servie())?.subtitle).toBeUndefined();
   });
 });

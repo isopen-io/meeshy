@@ -14,12 +14,14 @@ import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib
 import { useOnline } from '@/lib/net/online';
 import { NOTIFICATION_CATEGORIES, categoryHue, type NotificationCategory } from '@/lib/notifications/categories';
 import type { NotificationRecord } from '@/lib/notifications/record';
+import { notificationQuickActions, type NotificationQuickAction } from '@/lib/notifications/row-presentation';
 import { useSearch } from '@/lib/router';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
 import { PULL_THRESHOLD, pullTransform } from '@/lib/view/pull-to-refresh';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useMinute } from '@/lib/view/use-minute';
 import { useNotificationCounts } from '@/lib/view/use-notification-counts';
+import { useNotificationQuickActions } from '@/lib/view/use-notification-quick-actions';
 import {
   deleteNotificationAction,
   markAllNotificationsReadAction,
@@ -324,6 +326,23 @@ export default function NotificationsScreen() {
   const onMarkAllRead = useCallback(() => void markAllNotificationsReadAction().then(announceFailure), [announceFailure]);
   const onRefresh = useCallback(() => refreshNotificationsAction(category), [category]);
 
+  /* Les paniers d'amitié ne sont lus que si une ligne propose un geste (#8727). */
+  const offersQuickActions = notifications.some((n) => notificationQuickActions(n, { isFriend: false }).length > 0);
+  const quick = useNotificationQuickActions({ enabled: offersQuickActions });
+  const performQuickAction = quick.perform;
+  const byId = useMemo(() => new Map(notifications.map((n) => [n.id, n])), [notifications]);
+  const onQuickAction = useCallback(
+    (id: string, action: NotificationQuickAction) => {
+      const notification = byId.get(id);
+      if (notification === undefined) return;
+      void performQuickAction(action, notification).then((outcome) => {
+        if (outcome === 'offline') setAnnouncement(translate(language, 'notifications.offline.title'));
+        if (outcome === 'failed') setAnnouncement(translate(language, action.kind === 'connect' ? 'notifications.quick.failed' : 'notifications.failure'));
+      });
+    },
+    [byId, language, performQuickAction],
+  );
+
   const pull = usePullToRefresh({ root: frame, onRefresh, threshold: PULL_THRESHOLD });
   const { observe: observeTail } = useLoadMoreSentinel({
     root: frame,
@@ -352,6 +371,10 @@ export default function NotificationsScreen() {
             onOpen={onOpen}
             onMarkRead={onOpen}
             onDelete={onDelete}
+            onQuickAction={onQuickAction}
+            {...(notification.actor === null
+              ? {}
+              : { isFriend: quick.isFriend(notification.actor.id), connectRequested: quick.connectRequested(notification.actor.id) })}
           />
         ))}
         <LensPaginationFooter
