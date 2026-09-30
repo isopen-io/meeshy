@@ -149,8 +149,10 @@ struct CallPreviewOutgoingControls: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: isOn ? on : off)
-                    // Doctrine 86i : glyphe de contrôle dans un cercle glass fixe (diameter 64) → figé.
-                    .font(.system(size: 24, weight: .medium))
+                    // Le glyphe suit Dynamic Type, borné pour tenir dans son
+                    // cercle de 64 pt (règle du 264i : aucune taille figée neuve).
+                    .font(MeeshyFont.relative(24, weight: .medium))
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .foregroundColor(isOn ? MeeshyColors.indigo500 : .white.opacity(0.9))
                     .callControlGlass(diameter: 64, isActive: isOn, tint: MeeshyColors.indigo500)
 
