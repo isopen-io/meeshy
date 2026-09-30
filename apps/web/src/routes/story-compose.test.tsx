@@ -254,6 +254,24 @@ describe('StoryComposeScreen — le brouillon SURVIT, et un média PRÊT n’est
     expect(effects.scenes[0]!.objects.map((o) => o.payload.postMediaId).filter(Boolean)).toEqual(['pm-1']);
   });
 
+  /** #8849 (jumelle de #8848) — la création en cours se sauvegarde seule, son
+   * FORMAT compris : rouverte (rechargement, onglet tué, autre entrée), elle
+   * revient en post, pas en story. */
+  test('un POST en cours, rouvert par l’entrée story, revient en POST avec son texte', async () => {
+    const drafts = createStudioDraftStore(null);
+    const el = mount(harness({ drafts }).deps, 'POST');
+    typeText(el, 'Un post pas fini');
+    await flush(() => drafts.get(VIEWER_ID)?.kind === 'POST');
+
+    unmountAll();
+    const bench = harness({ drafts });
+    const remounted = mount(bench.deps, 'STORY');
+    expect(remounted.querySelector<HTMLTextAreaElement>('#story-studio-text')?.value).toBe('Un post pas fini');
+    act(() => publishButton(remounted)!.click());
+    await flush(() => bench.posts.length > 0);
+    expect(bench.posts[0]?.type).toBe('POST');
+  });
+
   test('une publication qui RÉUSSIT purge le brouillon', async () => {
     const drafts = createStudioDraftStore(null);
     const el = mount(harness({ drafts }).deps);

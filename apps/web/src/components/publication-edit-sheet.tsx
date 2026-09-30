@@ -4,6 +4,7 @@ import type { EditPostOutcome } from '@/lib/api/publication-actions';
 import { POST_CONTENT_MAX_LENGTH, publicationEditState } from '@/lib/feed/publication-edit';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import type { DraftStore } from '@/lib/send/draft-store';
 
 import { Sheet } from './sheet';
 
@@ -57,6 +58,7 @@ export function PublicationEditSheet({
   originalLanguage,
   onSave,
   onClose,
+  drafts,
 }: {
   readonly postId: string;
   readonly original: string;
@@ -65,9 +67,20 @@ export function PublicationEditSheet({
   readonly originalLanguage: string;
   readonly onSave: (postId: string, content: string) => Promise<EditPostOutcome>;
   readonly onClose: () => void;
+  /** LA SAUVEGARDE AUTOMATIQUE de l'édition (#8849, jumelle de #8848) — le
+   * magasin des brouillons du lecteur, sous la clé de CETTE publication. */
+  readonly drafts?: { readonly store: DraftStore; readonly scope: string };
 }) {
   const language = currentInterfaceLanguage();
-  const [draft, setDraft] = useState(original);
+  const draftKey = `post-edit.${postId}`;
+  const [draft, setDraftText] = useState(() => drafts?.store.getDraft(drafts.scope, draftKey)?.text ?? original);
+  /** Le texte original n'est pas un brouillon : y revenir efface la sauvegarde. */
+  const persist = (text: string) =>
+    drafts?.store.setDraft(drafts.scope, draftKey, { text: text === original ? '' : text, language: originalLanguage, protection: {} });
+  const setDraft = (text: string) => {
+    setDraftText(text);
+    persist(text);
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<'offline' | 'failed' | 'busy' | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
@@ -96,6 +109,8 @@ export function PublicationEditSheet({
     setBusy(true);
     setError(null);
     void onSave(postId, draft).then((outcome) => {
+      // Publiée, même feuille fermée pendant le vol : plus rien à reprendre.
+      if (outcome === 'done') persist(original);
       if (!mounted.current) return;
       setBusy(false);
       if (outcome === 'done') {
@@ -168,7 +183,10 @@ export function PublicationEditSheet({
             type="button"
             data-publication-edit-cancel
             disabled={busy}
-            onClick={onClose}
+            onClick={() => {
+              persist(original);
+              onClose();
+            }}
             className="rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{ minHeight: 44, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)', opacity: busy ? 0.5 : 1 }}
           >
