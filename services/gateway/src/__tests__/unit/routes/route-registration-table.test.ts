@@ -179,7 +179,12 @@ describe('ROUTE_TABLE (#4278)', () => {
     // 70 : #8101 ajoute `contacts-resolve` — l'adresse NEUVE `POST
     // /api/v1/contacts/resolve` (la carte de visite partagée), montage
     // autonome. Aucun alias, aucune route retirée ni renommée.
-    expect(ROUTE_TABLE.length).toBe(70);
+    // 71 : #8876 ajoute `admin-oversight` — le montage AUTONOME des surfaces de
+    // supervision de la « vue de dieu » de l'administration (journal d'audit,
+    // liens de suivi, fiche de communauté, supervision). Une seule entrée sous
+    // `/api/v1/admin`, qui enregistre ses quatre modules elle-même ; aucun
+    // alias, aucune route retirée ni renommée.
+    expect(ROUTE_TABLE.length).toBe(71);
   });
 });
 
