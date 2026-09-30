@@ -42,8 +42,8 @@ struct VitrineSeedTargetsReels: VitrineSeedTargets {
 
     func enregistrerMedia(_ fichier: URL, genre: VitrineFixtures.Media.Genre, cle: String) async {
         switch genre {
-        case .image: await CacheCoordinator.shared.images.seed(copyingLocalFile: fichier, for: cle)
-        case .audio: await CacheCoordinator.shared.audio.seed(copyingLocalFile: fichier, for: cle)
+        case .image: await VitrineSeeder.remplacer(fichier, dans: CacheCoordinator.shared.images, cle: cle)
+        case .audio: await VitrineSeeder.remplacer(fichier, dans: CacheCoordinator.shared.audio, cle: cle)
         }
     }
 
@@ -60,6 +60,13 @@ enum VitrineSeeder {
     /// l'atelier Imagine) : face à l'hôte mort, l'URL relative elle-même.
     static func cleDeCache(_ url: String) -> String {
         MeeshyConfig.resolveMediaURL(url)?.absoluteString ?? url
+    }
+
+    /// Un média resynthétisé garde son URL : le cache doit servir le NOUVEAU fichier. `seed` seul est
+    /// idempotent et garderait l'ancien, que l'écran jouerait sous la durée et le karaoké du nouveau.
+    static func remplacer(_ fichier: URL, dans store: DiskCacheStore, cle: String) async {
+        await store.invalidate(for: cle)
+        await store.seed(copyingLocalFile: fichier, for: cle)
     }
 
     /// AVANT la restauration de la session : ce que les racines lisent dès leur montage — les

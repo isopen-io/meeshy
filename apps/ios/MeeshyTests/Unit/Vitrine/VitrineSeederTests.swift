@@ -111,6 +111,27 @@ final class VitrineSeederTests: XCTestCase {
         XCTAssertEqual(piece.audioTranslations?["fr"]?.segments?.count, attendue.segments?.count)
     }
 
+    /// Un vocal resynthétisé garde son URL : le cache doit servir le NOUVEAU fichier. `seed` seul,
+    /// idempotent, garderait l'ancien — et l'écran jouerait une piste que les fixtures ne décrivent plus.
+    func test_remplacer_aMediaAlreadyCached_servesTheNewFile() async throws {
+        let racine = FileManager.default.temporaryDirectory.appendingPathComponent("vitrine-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: racine, withIntermediateDirectories: true)
+        let politique = CachePolicy(ttl: 3600, staleTTL: nil, maxItemCount: nil, storageLocation: .disk(subdir: "Vitrine", maxBytes: 10_000_000))
+        let store = DiskCacheStore(policy: politique, baseDirectory: racine)
+        let ancien = racine.appendingPathComponent("ancien.m4a")
+        let nouveau = racine.appendingPathComponent("nouveau.m4a")
+        try Data("ancien".utf8).write(to: ancien)
+        try Data("nouveau".utf8).write(to: nouveau)
+        let cle = "/api/v1/attachments/file/vitrine/vocal-minjun.p-fr.m4a"
+        await store.seed(copyingLocalFile: ancien, for: cle)
+
+        await VitrineSeeder.remplacer(nouveau, dans: store, cle: cle)
+
+        let fichierServi = await store.localFileURL(for: cle)
+        let servi = try XCTUnwrap(fichierServi)
+        XCTAssertEqual(try Data(contentsOf: servi), Data("nouveau".utf8))
+    }
+
     /// Un dossier où chaque média des fixtures existe — le script de capture y dépose les vrais.
     private static func dossierDeMedias(_ f: VitrineFixtures) throws -> URL {
         let dossier = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
