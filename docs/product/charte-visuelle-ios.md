@@ -193,4 +193,64 @@ avant d'écrire un contrôle ; toute divergence nouvelle s'ajoute au § 6.3 avec
 
 ## 7. Cliquet
 
-_À compléter par le lot #8877._
+Une charte tenue à la main dure jusqu'à la vue suivante. `apps/ios/MeeshyTests/Unit/Guards/DesignLiteralRatchetGuardTests.swift`
+(#8877) borne la population des littéraux de design RESTANTS : quatre compteurs qui ne peuvent que descendre, sur le modèle de
+`FixedFontSizeGuardTests` (tailles figées) et `FileSizeBudgetGuardTests` (budget de taille). Il ne juge pas un littéral —
+un rayon 2–3 d'une barre fine ou un espacement 0 sont légitimes (§ 2) — il interdit que la population REMONTE.
+
+### 7.1 Ce qui est compté
+
+Racines balayées : `apps/ios/Meeshy` et `packages/MeeshySDK/Sources/MeeshyUI`, sur le texte masqué par
+`DeclarationBodyScanner.mask` (commentaires et contenu des chaînes effacés : un exemple écrit dans un doc-comment ne compte pas).
+Les extensions et la cible cœur ne sont pas balayées : elles ne voient pas `MeeshyUI` (§ 2). Le cadre libre du § 2 est exclu
+fichier par fichier (`exemptions` du test, une raison par ligne) ; un glob qui ne désigne plus aucun fichier fait rougir la garde.
+
+| Population | Motif (ICU = `grep -P`) | Jeton attendu |
+|---|---|---|
+| `hex` | `(?<![A-Za-z])Color\(hex:[ \t]*\x22` — `Color(hex: "…")` littéral ; `Color(hex: accentColor)` ne compte pas | `MeeshyColors.<nom>` |
+| `rgb` | `(?<![A-Za-z])Color\(red:[ \t]*[0-9.]` | `MeeshyColors.<nom>` |
+| `cornerRadius` | `cornerRadius(:\|\()[ \t]*[0-9]` | `MeeshyRadius.<pas>` |
+| `padding` | `\.padding\((\.[a-z]+,[ \t]*\|\[[^\]\n]*\],[ \t]*)?[0-9]` | `MeeshySpacing.<pas>` |
+
+La mesure est LARGE : `cornerRadius: 14 * scale` compte, bien que le codemod le laisse (§ 4.1, jamais de jeton dans une expression).
+Un plafond demande que la population ne remonte pas, pas qu'elle tombe à zéro. Les tailles de police figées ont déjà leur cliquet
+(`FixedFontSizeGuardTests`, § 3 `MeeshyFont`) ; les espacements de pile (`spacing:`) ne sont pas épinglés ici.
+
+### 7.2 Les plafonds
+
+Chaque plafond est épinglé sur le compte `grep` BRUT des mêmes fichiers, parce que ce compte est une borne supérieure de celui de la
+garde (il compte aussi commentaires et chaînes, que la garde masque) : le poser ne peut pas faire rougir le test. Commande de
+référence, `EXEMPT` étant l'alternation des globs de `exemptions` (`*` → `.*`, ancrée `^(…)$`) :
+
+```
+git ls-files 'apps/ios/Meeshy/*.swift' 'packages/MeeshySDK/Sources/MeeshyUI/*.swift' \
+  | grep -vE "$EXEMPT" | xargs grep -Po '<motif>' | wc -l
+```
+
+| Population | Plafond (`grep`, hors cadre libre) | Compte masqué équivalent |
+|---|---|---|
+| `hex` | 13 | 13 |
+| `rgb` | 3 | 3 |
+| `cornerRadius` | 120 | 117 |
+| `padding` | 190 | 178 |
+
+Le jour où une population descend, son plafond descend DANS LE MÊME COMMIT, à la valeur mesurée ; un plafond qui garde du mou
+n'est plus un cliquet. Un littéral légitime (cadre d'un tiers, glyphe borné) rejoint `exemptions` avec sa raison, ou le plafond
+monte dans un commit qui dit pourquoi — jamais en silence.
+
+### 7.3 Avant / après le lot #8877
+
+Comptes `grep` de tout `apps/ios` + `MeeshyUI` (extensions, cadre libre et variables compris), mesurés par `count.sh` du lot :
+
+| Sorte | Avant | Après le codemod | HEAD du lot |
+|---|---|---|---|
+| `Color(hex:` | 971 | 930 | 927 |
+| `Color(red:` | 78 | 78 | 78 |
+| `.font(.system(size: N` | 983 | 452 | 349 |
+| `cornerRadius` numérique | 910 | 216 | 183 |
+| `.padding(` numérique | 2 895 | 496 | 335 |
+| `spacing:` numérique | 2 659 | 905 | 731 |
+
+Les `Color(hex:` restants sont en grande majorité des couleurs CALCULÉES (`accentColor`, couleur d'expéditeur : libres, § 2) ; les
+littéraux hors cadre libre que le cliquet épingle sont les 13 / 3 / 120 / 190 du § 7.2. « HEAD du lot » inclut la relecture et
+les lots de plein écran (#8878) qui ont suivi le codemod.
