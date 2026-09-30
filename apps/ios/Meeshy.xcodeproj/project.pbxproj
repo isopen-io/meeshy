@@ -2488,6 +2488,7 @@
 		F3F79041834D5E10D10E9D79 /* CallEndReasonMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B3331D1DB5EE43A5E20CB32 /* CallEndReasonMapper.swift */; };
 		F3FCD08FE20FAED4B0D781AC /* ComposerDropResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7BD50758FEAFB8E40647418 /* ComposerDropResolver.swift */; };
 		F4226A6B23D47608E46EBE08 /* ComposerStoryCanvasTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CE745348CD2E875D0FABD25 /* ComposerStoryCanvasTests.swift */; };
+		F4301F7E18395EE42D891D40 /* UserNotificationsUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F912F556E396482AA1533501 /* UserNotificationsUI.framework */; };
 		F44252E24CC4BE7B38BABA9E /* MessageStickerFavorite.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8031BD70DAC89F08423DB491 /* MessageStickerFavorite.swift */; };
 		F446235F08DC41D304478548 /* CallStarter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A610A8A7A4A6B76A7D1A186D /* CallStarter.swift */; };
 		F4A3BB4486F0D3DE97A912BD /* ComposerCanonicalZoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45AB35F3938D39ABD9EACD27 /* ComposerCanonicalZoneTests.swift */; };
@@ -5203,6 +5204,7 @@
 		F8A6A552D12BDFB84C955C92 /* MessageListViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListViewControllerTests.swift; sourceTree = "<group>"; };
 		F8C8FCB77D28C791EA11A786 /* StoryExportShareViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryExportShareViewModelTests.swift; sourceTree = "<group>"; };
 		F8EFC95C0FF653255E36C2CC /* ShareMediaStaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareMediaStaging.swift; sourceTree = "<group>"; };
+		F912F556E396482AA1533501 /* UserNotificationsUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UserNotificationsUI.framework; path = System/Library/Frameworks/UserNotificationsUI.framework; sourceTree = SDKROOT; };
 		F925DB1B1ECEF832E88B86A4 /* EmailSignInWordingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmailSignInWordingTests.swift; sourceTree = "<group>"; };
 		F92779606CE4BDB425AF76FF /* MediaGalleryGestureArbitrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaGalleryGestureArbitrationTests.swift; sourceTree = "<group>"; };
 		F93D26807151EA94371C2318 /* MeeshyComposerHost+Socle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyComposerHost+Socle.swift"; sourceTree = "<group>"; };
@@ -5299,6 +5301,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				BBC06957E3FCDEAE3CAB430F /* MeeshySDK in Frameworks */,
+				F4301F7E18395EE42D891D40 /* UserNotificationsUI.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -6846,6 +6849,7 @@
 				316141DEA0589C218A7D9E6C /* MeeshyUIDeviceTests */,
 				00B61685604373ED5FF975B5 /* MeeshyWidgets */,
 				B179BFD2FDAE5473E2A63674 /* Packages */,
+				F628FC89A44AF25B5AAC7C84 /* Frameworks */,
 				F121C0AAA9428DB850C5DC59 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -8748,6 +8752,14 @@
 				FA831A23D729002CDA5548F2 /* EmailVerificationGateScreen.swift */,
 			);
 			path = Activation;
+			sourceTree = "<group>";
+		};
+		F628FC89A44AF25B5AAC7C84 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				F912F556E396482AA1533501 /* UserNotificationsUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -11933,6 +11945,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationContentExtension/MeeshyNotificationContentExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				ENABLE_DEBUG_DYLIB = NO;
 				INFOPLIST_FILE = MeeshyNotificationContentExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -11951,6 +11964,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationContentExtension/MeeshyNotificationContentExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				ENABLE_DEBUG_DYLIB = NO;
 				INFOPLIST_FILE = MeeshyNotificationContentExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
 				LD_RUNPATH_SEARCH_PATHS = (

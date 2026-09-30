@@ -1,6 +1,9 @@
 import AVFoundation
 import Combine
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "me.meeshy.app.notification-content", category: "player")
 
 /// Ce que la notification déployée demande à un lecteur : le bouton natif
 /// (`mediaPlayPauseButtonType`) joue et met en pause, la vue change la vitesse.
@@ -45,6 +48,7 @@ final class NotificationAudioPlayer: ObservableObject, NotificationAudioPlayerPr
     }
 
     func play() {
+        logger.info("play at \(self.elapsed, privacy: .public)")
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
         try? AVAudioSession.sharedInstance().setActive(true)
         if let item = player.currentItem, item.currentTime() >= item.duration, item.duration.isNumeric {
@@ -55,6 +59,7 @@ final class NotificationAudioPlayer: ObservableObject, NotificationAudioPlayerPr
     }
 
     func pause() {
+        logger.info("pause at \(self.elapsed, privacy: .public)")
         player.pause()
         isPlaying = false
     }
@@ -95,6 +100,7 @@ final class NotificationAudioPlayer: ObservableObject, NotificationAudioPlayerPr
     }
 
     private func finish() {
+        logger.info("finished")
         isPlaying = false
         elapsed = duration
         onFinish?()

@@ -331,9 +331,17 @@ targets:
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.notification-content
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: MeeshyNotificationContentExtension/MeeshyNotificationContentExtension.entitlements
+      # iOS cherche la classe de contexte du point d'extension
+      # (`_UNNotificationContentExtensionVendorContext`) dans l'EXÉCUTABLE,
+      # avant tout chargement. En Debug, Xcode déplace le code et ses liens
+      # dans `….debug.dylib` (aperçus) : l'exécutable ne lie plus
+      # UserNotificationsUI, et la notification déployée restait VIDE
+      # (« Unable to find NSExtensionContextClass », mesuré au simulateur).
+      ENABLE_DEBUG_DYLIB: NO
     dependencies:
       - package: MeeshySDK
         product: MeeshySDK
+      - sdk: UserNotificationsUI.framework
 
   # Share Extension — "Share to Meeshy" depuis d'autres apps. ShareViewController
   # est auto-contenu (frameworks système + container App Group group.me.meeshy.apps) ;

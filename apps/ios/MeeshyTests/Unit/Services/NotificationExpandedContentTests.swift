@@ -208,4 +208,18 @@ final class NotificationExpandedContentTests: XCTestCase {
         ])
         XCTAssertEqual(attributes["UNNotificationExtensionUserInteractionEnabled"] as? Bool, true)
     }
+
+    /// iOS cherche la classe de contexte du point d'extension dans
+    /// l'EXÉCUTABLE avant de charger quoi que ce soit. Un exécutable qui ne
+    /// lie pas `UserNotificationsUI` — le cas en Debug quand Xcode déplace le
+    /// code dans `….debug.dylib` — se lance, ne plante pas, et rend une
+    /// notification déployée VIDE : mesuré au simulateur, invisible à tout le
+    /// reste de la suite.
+    func test_embeddedContentExtension_executableLinksUserNotificationsUI() throws {
+        let plugins = try XCTUnwrap(Bundle.main.builtInPlugInsURL)
+        let appex = try XCTUnwrap(Bundle(url: plugins.appendingPathComponent("MeeshyNotificationContentExtension.appex")))
+        let executable = try Data(contentsOf: try XCTUnwrap(appex.executableURL))
+        XCTAssertNotNil(executable.range(of: Data("UserNotificationsUI.framework".utf8)),
+                        "l'exécutable de l'extension de contenu ne lie pas UserNotificationsUI")
+    }
 }
