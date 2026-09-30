@@ -25,11 +25,13 @@ nonisolated final class DetailAttachmentBox: @unchecked Sendable {
 nonisolated extension NotificationService {
 
     /// Les libellés du corps détaillé, résolus dans le catalogue de
-    /// l'extension (qui ne partage pas celui de l'app).
+    /// l'extension (qui ne partage pas celui de l'app), dans la langue que
+    /// l'app publie au groupe d'app (#8951).
     static var detailLabels: NotificationMessageDetail.Labels {
-        NotificationMessageDetail.Labels(
-            sharedLocation: NSLocalizedString("notification.detail.sharedLocation", comment: ""),
-            invitation: NSLocalizedString("notification.detail.invitation", comment: "")
+        let bundle = InterfaceLanguageResolver.bundle()
+        return NotificationMessageDetail.Labels(
+            sharedLocation: NSLocalizedString("notification.detail.sharedLocation", bundle: bundle, comment: ""),
+            invitation: NSLocalizedString("notification.detail.invitation", bundle: bundle, comment: "")
         )
     }
 

@@ -37,6 +37,11 @@ export interface AuthHandlerDependencies {
    */
   emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
   /**
+   * « Est dans la conversation » (#8892) : redit à l'arrivant, une fois ses
+   * rooms jointes, qui a déjà l'écran de chacune de ses conversations ouvert.
+   */
+  emitViewingSnapshots?: (socket: Socket) => Promise<void>;
+  /**
    * CALL-RESILIENCE (Vague 44) — broadcasts PARTICIPANT_LEFT/call:ended for the
    * anonymous-guest auto-leave below. Injected by MeeshySocketIOManager (owns
    * `io` and `CallEventsHandler`), curried down to
@@ -87,6 +92,7 @@ export class AuthHandler {
   private socketToUser: Map<string, string>;
   private userSockets: Map<string, Set<string>>;
   private emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
+  private emitViewingSnapshots?: (socket: Socket) => Promise<void>;
   private broadcastCallParticipantLeft?: AuthHandlerDependencies['broadcastCallParticipantLeft'];
   private forceCleanupCallParticipant?: AuthHandlerDependencies['forceCleanupCallParticipant'];
   private absorbAlreadyEndedCallLeave?: AuthHandlerDependencies['absorbAlreadyEndedCallLeave'];
@@ -101,6 +107,7 @@ export class AuthHandler {
     this.socketToUser = deps.socketToUser;
     this.userSockets = deps.userSockets;
     this.emitPresenceSnapshot = deps.emitPresenceSnapshot;
+    this.emitViewingSnapshots = deps.emitViewingSnapshots;
     this.broadcastCallParticipantLeft = deps.broadcastCallParticipantLeft;
     this.forceCleanupCallParticipant = deps.forceCleanupCallParticipant;
     this.absorbAlreadyEndedCallLeave = deps.absorbAlreadyEndedCallLeave;
@@ -399,6 +406,9 @@ export class AuthHandler {
         logger.error('failed to emit presence snapshot (JWT auth)', { userId: user.id, error });
       });
     }
+    this.emitViewingSnapshots?.(socket).catch(error => {
+      logger.error('failed to emit viewing snapshots (JWT auth)', { userId: user.id, error });
+    });
   }
 
   /**
@@ -534,6 +544,9 @@ export class AuthHandler {
         logger.error('failed to emit presence snapshot for anonymous', { anonymousId: socketUser.id, error });
       });
     }
+    this.emitViewingSnapshots?.(socket).catch(error => {
+      logger.error('failed to emit viewing snapshots for anonymous', { anonymousId: socketUser.id, error });
+    });
   }
 
   // Node's `setTimeout` truncates any delay above ~24.8 days (a 32-bit signed

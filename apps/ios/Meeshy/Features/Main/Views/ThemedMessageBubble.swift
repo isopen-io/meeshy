@@ -129,6 +129,9 @@ struct ThemedMessageBubble: View {
     var preferredAudioLangCode: String? = nil
     var showAvatar: Bool = true
     var presenceState: PresenceState? = nil
+    /// L'auteur a l'écran de CETTE conversation ouvert (#8892) — résolu par
+    /// l'hôte, jamais lu ici sur `PresenceManager`.
+    var senderIsHere: Bool = false
     var senderMoodEmoji: String? = nil
     var senderStoryRingState: StoryRingState = .none
     var onViewStory: (() -> Void)? = nil
@@ -486,6 +489,7 @@ struct ThemedMessageBubble: View {
             preferredTranslation: preferredTranslation,
             showAvatar: showAvatar,
             presenceState: presenceState,
+            senderIsHere: senderIsHere,
             senderMoodEmoji: senderMoodEmoji,
             senderStoryRingState: senderStoryRingState,
             allAudioItems: allAudioItems,
@@ -662,6 +666,7 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.highlightSearchTerm == rhs.highlightSearchTerm &&
         // Sender state — pushed by the server without bumping message.updatedAt
         lhs.presenceState == rhs.presenceState &&
+        lhs.senderIsHere == rhs.senderIsHere &&
         lhs.senderMoodEmoji == rhs.senderMoodEmoji &&
         lhs.senderStoryRingState == rhs.senderStoryRingState &&
         // Group state — recomputed by parent on neighbor changes

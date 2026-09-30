@@ -10,6 +10,7 @@ import arPassword from './catalog-ar-password';
 import arAccounts from './catalog-ar-accounts';
 import arCall from './catalog-ar-call';
 import arRowActions from './catalog-ar-row-actions';
+import arEngagement from './catalog-ar-engagement';
 import arCallShell from './catalog-ar-call-shell';
 import arCallJoin from './catalog-ar-call-join';
 import arCallDecline from './catalog-ar-call-decline';
@@ -227,6 +228,7 @@ const ar = {
   ...arAccounts,
   ...arCall,
   ...arRowActions,
+  ...arEngagement,
   ...arCallShell,
   ...arCallJoin,
   ...arCallDecline,
@@ -283,6 +285,7 @@ const ar = {
   'notifications.category.reactions': 'التفاعلات',
   'notifications.category.mentions': 'الإشارات',
   'notifications.category.social': 'اجتماعي',
+  'notifications.category.engagement': 'التفاعل',
   'notifications.category.contacts': 'جهات الاتصال',
   'notifications.category.groups': 'المجموعات',
   'notifications.category.calls': 'المكالمات',

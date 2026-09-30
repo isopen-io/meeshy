@@ -198,7 +198,7 @@ export function AdminUserPasswordSheet({
                 className="shrink-0 rounded-chip px-4 text-body font-semibold disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={{
                   minHeight: 44,
-                  color: enfonce ? 'white' : INK,
+                  color: enfonce ? 'var(--color-ios-on-brand)' : INK,
                   backgroundColor: enfonce ? BRAND : 'var(--color-ios-surface)',
                   border: `1px solid ${enfonce ? BRAND : 'var(--color-edge)'}`,
                   outlineColor: BRAND,

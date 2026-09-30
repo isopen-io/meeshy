@@ -162,7 +162,7 @@ export function KeypadStatusView({ language, status, onRetry }: { readonly langu
           type="button"
           data-keypad-retry
           onClick={onRetry}
-          className="mt-1 grid place-items-center rounded-chip px-5 text-body font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="mt-1 grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ backgroundColor: 'var(--ios-indigo-600)', minHeight: 44, outlineColor: BRAND }}
         >
           {translate(language, 'keypad.retry')}

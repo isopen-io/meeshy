@@ -121,7 +121,7 @@ export function PhoneCodeForm({
           onClick={() => void sendPhoneCode()}
           disabled={phoneStep === 'sending' || phone.trim() === ''}
           aria-busy={phoneStep === 'sending'}
-          className="grid place-items-center rounded-chip px-4 font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
+          className="grid place-items-center rounded-chip px-4 font-bold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
           style={phonePrimaryButton}
         >
           {translate(language, phoneStep === 'sending' ? 'activation.phone.busy' : 'activation.phone.send')}
@@ -157,7 +157,7 @@ export function PhoneCodeForm({
         onClick={() => void confirmPhoneCode()}
         disabled={phoneCode.length !== 6 || phoneStep === 'verifying'}
         aria-busy={phoneStep === 'verifying'}
-        className="grid place-items-center rounded-chip px-4 font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
+        className="grid place-items-center rounded-chip px-4 font-bold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
         style={phonePrimaryButton}
       >
         {translate(language, 'activation.phone.verify')}

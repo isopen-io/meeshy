@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { PRESENCE_HEX } from '@meeshy/shared/utils/user-presence';
+
 import { Avatar } from '@/components/avatar';
 import { adminIdentityQueryOptions, adminUsersQueryKey, loadAdminUsers, type AdminUserRow } from '@/lib/api/admin';
 import { adminUserDetailQueryKey } from '@/lib/api/admin-user-detail';
@@ -83,7 +85,7 @@ function UserRow({
               <span
                 aria-hidden="true"
                 className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full"
-                style={{ backgroundColor: '#34D399', border: '2px solid var(--color-ios-surface)' }}
+                style={{ backgroundColor: PRESENCE_HEX.success, border: '2px solid var(--color-ios-surface)' }}
               />
             ) : null}
           </span>
@@ -106,7 +108,7 @@ function UserRow({
       </Td>
       <Td className="text-caption">
         {compte.isActive ? (
-          <span style={{ color: 'var(--color-success, #34D399)' }}>{translateAdmin(language, 'admin.filter.active')}</span>
+          <span style={{ color: 'var(--color-success)' }}>{translateAdmin(language, 'admin.filter.active')}</span>
         ) : (
           <span style={{ color: 'var(--color-danger)' }}>{translateAdmin(language, 'admin.users.inactive')}</span>
         )}

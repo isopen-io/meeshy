@@ -6,7 +6,7 @@
  * > sélectionné avec (X), et le rail du bas audience, publication ; les (+)
  * > n'ont pas besoin d'être là quand un outil est ouvert ! »
  *
- * Un outil ouvert (l'édition d'un objet — texte ou calque —, le Cadre) ne
+ * Un outil ouvert (l'édition d'un objet — texte ou calque —, le fond) ne
  * s'AJOUTE plus à un écran déjà complet : l'en-tête (✕, scènes, Animé, ⋯),
  * le couloir des portes et ses (+), le rail droit et son (+) de scène, le
  * socle (audience, Publier) cèdent en fondu. Restent la scène, les réglages
@@ -16,22 +16,13 @@
  * La FRISE n'est pas un outil au sens de cette loi : c'est un MODE de la
  * scène, dont la bascule vit au rail droit — elle garde sa géographie (#8415).
  */
-export type StudioOpenTool = 'object' | 'frame' | null;
+export type StudioOpenTool = 'object' | 'background' | null;
 
-export function studioOpenTool({
-  editing,
-  frameOpen,
-  hasBackground,
-  timelineOpen,
-}: {
-  readonly editing: string | null;
-  readonly frameOpen: boolean;
-  readonly hasBackground: boolean;
-  readonly timelineOpen: boolean;
-}): StudioOpenTool {
+/** L'édition d'un objet passe devant celle du fond ; éditer le FOND est un
+ * outil ouvert (#8849, jumelle de `ComposerToolFocus.toolIsOpen`, #8847). */
+export function studioOpenTool({ editing, editsBackground }: { readonly editing: string | null; readonly editsBackground: boolean }): StudioOpenTool {
   if (editing !== null) return 'object';
-  if (frameOpen && hasBackground && !timelineOpen) return 'frame';
-  return null;
+  return editsBackground ? 'background' : null;
 }
 
 export type StudioChrome = {
@@ -49,8 +40,11 @@ export type StudioChrome = {
 
 const EVERYTHING: StudioChrome = { header: true, leadingRail: true, trailingRail: true, socleRow: true, socleCard: true };
 const FOCUSED: StudioChrome = { header: false, leadingRail: false, trailingRail: false, socleRow: false, socleCard: false };
+/** Les outils du FOND vivent au rail droit : lui seul reste (#8849). */
+const BACKGROUND_TOOLS: StudioChrome = { ...FOCUSED, trailingRail: true };
 
 export function studioChrome({ tool, timelineOpen }: { readonly tool: StudioOpenTool; readonly timelineOpen: boolean }): StudioChrome {
+  if (tool === 'background') return BACKGROUND_TOOLS;
   if (tool !== null) return FOCUSED;
   if (timelineOpen) return { ...EVERYTHING, leadingRail: false, socleCard: false };
   return EVERYTHING;

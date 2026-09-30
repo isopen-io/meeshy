@@ -1668,6 +1668,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let typingStarted = PassthroughSubject<TypingEvent, Never>()
     public let typingStopped = PassthroughSubject<TypingEvent, Never>()
     public let conversationViewing = PassthroughSubject<ConversationViewingEvent, Never>()
+    public let conversationEngagementUpdated = PassthroughSubject<ConversationEngagementSnapshot, Never>()
 
     // Combine publishers — presence
     public let unreadUpdated = PassthroughSubject<UnreadUpdateEvent, Never>()
@@ -3156,6 +3157,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         registerViewOnceHandlers(on: socket)
         registerCitedPostHandlers(on: socket)
+        registerConversationEngagementHandlers(on: socket)
         registerCallRecordingHandlers(on: socket)
         registerCallControlHandlers(on: socket)
         registerCallPreviewHandlers(on: socket)

@@ -29,6 +29,8 @@ public struct ConversationViewers: Equatable, Sendable {
             return replacing(change.conversationId, with: users(in: change.conversationId).subtracting([change.userId]))
         case .snapshot(let snapshot):
             return replacing(snapshot.conversationId, with: Set(snapshot.userIds))
+        case .sessionStarted:
+            return ConversationViewers()
         }
     }
 
@@ -36,5 +38,14 @@ public struct ConversationViewers: Equatable, Sendable {
         var next = usersByConversation
         next[conversationId] = users
         return ConversationViewers(usersByConversation: next)
+    }
+}
+
+public extension MeeshyMessage {
+    /// La clé sous laquelle le serveur annonce l'auteur dans `viewing:*` :
+    /// l'identifiant de COMPTE d'un inscrit, celui de PARTICIPATION d'un
+    /// visiteur anonyme. `senderId` est toujours l'identifiant de participation.
+    var viewingKey: String {
+        senderIsAnonymous ? senderId : (senderUserId ?? senderId)
     }
 }

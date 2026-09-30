@@ -10,6 +10,7 @@ import itPassword from './catalog-it-password';
 import itAccounts from './catalog-it-accounts';
 import itCall from './catalog-it-call';
 import itRowActions from './catalog-it-row-actions';
+import itEngagement from './catalog-it-engagement';
 import itCallShell from './catalog-it-call-shell';
 import itCallJoin from './catalog-it-call-join';
 import itCallDecline from './catalog-it-call-decline';
@@ -227,6 +228,7 @@ const it = {
   ...itAccounts,
   ...itCall,
   ...itRowActions,
+  ...itEngagement,
   ...itCallShell,
   ...itCallJoin,
   ...itCallDecline,
@@ -283,6 +285,7 @@ const it = {
   'notifications.category.reactions': 'Reazioni',
   'notifications.category.mentions': 'Menzioni',
   'notifications.category.social': 'Social',
+  'notifications.category.engagement': 'Coinvolgimento',
   'notifications.category.contacts': 'Contatti',
   'notifications.category.groups': 'Gruppi',
   'notifications.category.calls': 'Chiamate',

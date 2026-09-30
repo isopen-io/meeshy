@@ -79,6 +79,50 @@ describe('Mascot — le personnage', () => {
   });
 });
 
+describe('Mascot — les trois déclinaisons du colibri (#8908)', () => {
+  test('peint le coach à l’aquarelle par défaut', () => {
+    const html = renderToStaticMarkup(<Mascot mood="counting" />);
+    expect(html).toContain('data-mascot-variant="aquarelle"');
+    expect(html).toContain('feTurbulence');
+  });
+
+  test('trace le glyphe d’un seul trait à la couleur du texte, sans aucun remplissage de couleur', () => {
+    const html = renderToStaticMarkup(<Mascot mood="counting" variant="glyph" />);
+    expect(html).toContain('data-mascot-variant="glyph"');
+    expect(html).toContain('stroke="currentColor"');
+    expect(html).not.toMatch(/fill="(#|var\()/);
+  });
+
+  test('donne au réaliste son plumage irisé', () => {
+    const html = renderToStaticMarkup(<Mascot mood="counting" variant="realiste" />);
+    expect(html).toContain('data-mascot-variant="realiste"');
+    expect(html).toContain('linearGradient');
+  });
+
+  test('ne partage aucun identifiant de filtre ou de dégradé entre deux mascottes de la même page', () => {
+    const html = renderToStaticMarkup(
+      <div>
+        <Mascot mood="counting" variant="realiste" />
+        <Mascot mood="cheer" variant="realiste" />
+        <Mascot mood="counting" />
+        <Mascot mood="cheer" />
+      </div>,
+    );
+    const ids = [...html.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  test('garde les quatre humeurs dans chaque déclinaison', () => {
+    (['aquarelle', 'glyph', 'realiste'] as const).forEach((variant) => {
+      expect(renderToStaticMarkup(<Mascot mood="minting" variant={variant} />)).toContain('data-mascot-coin');
+      expect(renderToStaticMarkup(<Mascot mood="streak" variant={variant} />)).toContain('data-mascot-flame');
+      expect(renderToStaticMarkup(<Mascot mood="cheer" variant={variant} />)).toContain('data-mascot-eyes="happy"');
+      expect(renderToStaticMarkup(<Mascot mood="counting" variant={variant} />)).toContain('data-mascot-eyes="open"');
+    });
+  });
+});
+
 describe('MascotCoach — la mascotte et sa bulle', () => {
   test('annonce sa phrase poliment', () => {
     const html = renderToStaticMarkup(<MascotCoach moment={{ mood: 'ready', line: { kind: 'can-mint', mintCost: 50 } }} />);

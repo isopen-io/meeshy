@@ -295,7 +295,7 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
 
   return (
     <div ref={root} role="region" aria-label={t(language, 'callStudio.mode.montage')} onKeyDown={onKeyDown} className="flex w-full flex-col items-center gap-3" data-call-mode="montage">
-      <div className="pointer-events-none fixed inset-0 z-0 grid place-items-center bg-black" data-call-mode-preview="montage">
+      <div className="pointer-events-none fixed inset-0 z-0 grid place-items-center bg-media-backdrop" data-call-mode-preview="montage">
         <canvas
           ref={preview}
           width={previewSize.width}

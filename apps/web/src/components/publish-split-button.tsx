@@ -309,7 +309,7 @@ export function PublishSplitButton({
   return (
     <div
       data-publish-split
-      className="flex shrink-0 items-center overflow-hidden rounded-chip text-white"
+      className="flex shrink-0 items-center overflow-hidden rounded-chip text-ios-on-brand"
       style={{ backgroundColor: 'var(--color-ios-brand)', opacity: disabled && menuDisabled ? 0.4 : 1 }}
     >
       <button
@@ -320,11 +320,11 @@ export function PublishSplitButton({
         disabled={disabled}
         aria-busy={busy}
         className="grid place-items-center px-4 text-body font-semibold focus-visible:outline-2 disabled:opacity-60"
-        style={{ minHeight: 44, outlineColor: '#fff', outlineOffset: -4 }}
+        style={{ minHeight: 44, outlineColor: 'var(--color-ios-on-brand)', outlineOffset: -4 }}
       >
         {label}
       </button>
-      <span aria-hidden="true" style={{ width: 1, height: 20, backgroundColor: 'rgba(255,255,255,0.4)' }} />
+      <span aria-hidden="true" style={{ width: 1, height: 20, backgroundColor: 'color-mix(in srgb, var(--color-ios-on-brand) 40%, transparent)' }} />
       <button
         ref={buttonRef}
         type="button"
@@ -338,7 +338,7 @@ export function PublishSplitButton({
           setOpen((value) => !value);
         }}
         className="grid place-items-center focus-visible:outline-2 disabled:opacity-60"
-        style={{ minHeight: 44, minWidth: 44, outlineColor: '#fff', outlineOffset: -4 }}
+        style={{ minHeight: 44, minWidth: 44, outlineColor: 'var(--color-ios-on-brand)', outlineOffset: -4 }}
       >
         <Glyph name="caretDown" size={16} />
       </button>

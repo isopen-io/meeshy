@@ -415,7 +415,7 @@ sync_build_number() {
 PROJECT_FRESHNESS_CHECKED=false
 
 # Racines globbées récursivement par project.yml (une par target).
-PROJECT_SOURCE_ROOTS=(Meeshy MeeshyTests MeeshyWidgets MeeshyNotificationExtension MeeshyShareExtension)
+PROJECT_SOURCE_ROOTS=(Meeshy MeeshyTests MeeshyWidgets MeeshyNotificationExtension MeeshyNotificationContentExtension MeeshyShareExtension)
 
 # Fichiers `.swift` présents sur disque mais absents du pbxproj compilé.
 #

@@ -306,7 +306,7 @@ export function CommentComposer({
           width: 44,
           height: 44,
           background: vide || sending ? 'var(--color-ios-card)' : 'var(--color-ios-brand)',
-          color: vide || sending ? 'var(--color-ios-ink-3)' : '#fff',
+          color: vide || sending ? 'var(--color-ios-ink-3)' : 'var(--color-ios-on-brand)',
           outlineColor: 'var(--color-ios-brand)',
         }}
       >

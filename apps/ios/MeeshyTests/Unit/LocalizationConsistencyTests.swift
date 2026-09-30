@@ -39,6 +39,7 @@ final class LocalizationConsistencyTests: XCTestCase {
     static let sourceRoots = [
         "apps/ios/Meeshy",
         "apps/ios/MeeshyNotificationExtension",
+        "apps/ios/MeeshyNotificationContentExtension",
         "apps/ios/MeeshyWidgets",
         "apps/ios/MeeshyShareExtension",
         "packages/MeeshySDK/Sources",

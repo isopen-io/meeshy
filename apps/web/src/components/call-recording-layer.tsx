@@ -16,9 +16,9 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
  * ça s'est arrêté. Au-dessus de l'écran d'appel comme de sa pastille.
  */
 
-const PILL_BG = 'rgba(17,16,24,0.92)';
-const RECORD_RED = '#ef4444';
-const ACCEPT = '#22c55e';
+const PILL_BG = 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent)';
+const RECORD_RED = 'var(--ios-error-strong)';
+const ACCEPT = 'var(--ios-success)';
 const NOTICE_MS = 4_000;
 
 type NoticeKey =
@@ -65,15 +65,15 @@ export function CallRecordingPanel({
         role="alertdialog"
         aria-label={question}
         className="fixed inset-x-3 z-[215] mx-auto flex max-w-md flex-col gap-3 rounded-card p-4 shadow-lg"
-        style={{ background: PILL_BG, color: '#fff', top: TOP }}
+        style={{ background: PILL_BG, color: 'var(--color-on-media)', top: TOP }}
         data-call-recording-ask=""
       >
         <p className="text-body font-semibold">{question}</p>
-        <p className="text-mini" style={{ color: 'rgba(255,255,255,0.72)' }}>
+        <p className="text-mini" style={{ color: 'var(--color-on-media-3)' }}>
           {translate(language, 'callRecording.askDetail')}
         </p>
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={() => onAnswer(false)} className="min-h-11 rounded-full px-4 text-body font-semibold" style={{ background: 'rgba(255,255,255,0.14)' }} data-call-recording-answer="refuse">
+          <button type="button" onClick={() => onAnswer(false)} className="min-h-11 rounded-full px-4 text-body font-semibold" style={{ background: 'var(--color-media-fill)' }} data-call-recording-answer="refuse">
             {translate(language, 'callRecording.refuse')}
           </button>
           <button type="button" onClick={() => onAnswer(true)} className="min-h-11 rounded-full px-4 text-body font-semibold" style={{ background: ACCEPT }} data-call-recording-answer="accept">
@@ -90,7 +90,7 @@ export function CallRecordingPanel({
       <div
         role="status"
         className="fixed inset-x-0 z-[215] mx-auto flex w-fit items-center gap-2 rounded-full py-1 ps-4 pe-1 text-body shadow-lg"
-        style={{ background: PILL_BG, color: '#fff', top: TOP }}
+        style={{ background: PILL_BG, color: 'var(--color-on-media)', top: TOP }}
         data-call-recording-indicator={recording ? 'recording' : 'waiting'}
       >
         <span aria-hidden className={recording ? 'size-2.5 animate-pulse rounded-full' : 'size-2.5 rounded-full'} style={{ background: RECORD_RED }} />
@@ -103,7 +103,7 @@ export function CallRecordingPanel({
             className="grid size-11 place-items-center rounded-full"
             data-call-recording-stop=""
           >
-            <span aria-hidden className="size-3.5 rounded-[3px]" style={{ background: '#fff' }} />
+            <span aria-hidden className="size-3.5 rounded-[3px]" style={{ background: 'var(--color-on-media)' }} />
           </button>
         )}
       </div>
@@ -114,7 +114,7 @@ export function CallRecordingPanel({
     <div
       role="status"
       className="fixed inset-x-0 z-[215] mx-auto flex w-fit max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full py-1 ps-4 pe-1 text-body shadow-lg"
-      style={{ background: PILL_BG, color: '#fff', top: TOP }}
+      style={{ background: PILL_BG, color: 'var(--color-on-media)', top: TOP }}
       data-call-recording-notice={notice.kind}
     >
       <span>{translate(language, noticeKey(notice))}</span>

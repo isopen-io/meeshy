@@ -465,7 +465,7 @@ export function MessageMenu({
                teinté à l'accent DÉJÀ résolu (`accentOf`, jamais un second
                calcul de couleur) et une ombre noire — l'aperçu se décolle
                ainsi du voile flouté sur les DEUX peaux et les DEUX schémas. */
-            filter: `drop-shadow(0 0 22px color-mix(in srgb, var(--accent) 28%, transparent)) drop-shadow(0 16px 16px rgba(0, 0, 0, 0.26))`,
+            filter: `drop-shadow(0 0 22px color-mix(in srgb, var(--accent) 28%, transparent)) drop-shadow(0 16px 16px color-mix(in srgb, var(--color-scrim-soft) 65%, transparent))`,
             /* LA SURFACE (revue #5814, défaut majeur 11) — SEULE la rangée
                plate (Focal/Script) en a besoin : elle n'a ni fond ni rayon
                propres, et se confondait avec le voile flouté. Une bulle

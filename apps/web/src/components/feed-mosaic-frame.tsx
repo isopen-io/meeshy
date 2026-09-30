@@ -79,8 +79,8 @@ export function FeedMosaicFrame({
               {tile.overflow > 0 ? (
                 <span
                   data-feed-mosaic-overflow
-                  className="pointer-events-none absolute inset-0 grid place-items-center font-bold text-white"
-                  style={{ backgroundColor: `rgba(0,0,0,${MOSAIC_OVERFLOW_VEIL_OPACITY})`, fontSize: MOSAIC_OVERFLOW_LABEL_SIZE }}
+                  className="pointer-events-none absolute inset-0 grid place-items-center font-bold text-on-media"
+                  style={{ backgroundColor: `color-mix(in srgb, var(--color-media-backdrop) ${MOSAIC_OVERFLOW_VEIL_OPACITY * 100}%, transparent)`, fontSize: MOSAIC_OVERFLOW_LABEL_SIZE }}
                 >
                   {`+${tile.overflow}`}
                 </span>

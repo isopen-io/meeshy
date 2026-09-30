@@ -150,7 +150,8 @@ final class NotificationDetailTests: XCTestCase {
 
     func test_categories_carryTheirActions_andForegroundTheApp() throws {
         let reply = UNTextInputNotificationAction(identifier: MeeshyNotificationAction.reply.rawValue, title: "Répondre", options: [])
-        let categories = NotificationDetailCategories.categories(reply: reply)
+        let markRead = UNNotificationAction(identifier: MeeshyNotificationAction.markRead.rawValue, title: "Lu", options: [])
+        let categories = NotificationDetailCategories.categories(reply: reply, markRead: markRead)
         let byId = Dictionary(uniqueKeysWithValues: categories.map { ($0.identifier, $0) })
 
         let expected: [(MeeshyNotificationCategory, MeeshyNotificationAction)] = [

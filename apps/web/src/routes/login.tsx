@@ -284,7 +284,7 @@ export function LoginDoors({
       {method === 'password' || requires2FA ? <AuthTitle gradient="login" /> : null}
 
       {!online ? (
-        <p className="w-full rounded-[14px] px-4 py-2 text-center text-caption" style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink-2)' }}>
+        <p className="w-full rounded-field px-4 py-2 text-center text-caption" style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink-2)' }}>
           Hors ligne — la connexion n’est pas possible pour l’instant.
         </p>
       ) : null}

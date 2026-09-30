@@ -27,7 +27,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * lit de droite à gauche même sous une interface française.
  */
 
-const INK_2 = 'rgba(255,255,255,0.72)';
+const INK_2 = 'var(--color-on-media-3)';
 
 const NOTE_KEY = { listening: 'callCaptions.listening', unsupported: 'callCaptions.unsupported', denied: 'callCaptions.denied' } as const;
 
@@ -63,7 +63,7 @@ function CaptionLine({
       <strong style={{ color }}>{speaker} · </strong>
       <span dir="auto">{shown}</span>
       {languages === null ? null : (
-        <span className="ms-1.5 inline-block rounded px-1 align-middle text-[10px] font-semibold tracking-wide" style={{ color: INK_2, border: `1px solid ${INK_2}` }} data-call-caption-languages="">
+        <span className="ms-1.5 inline-block rounded px-1 align-middle text-check font-semibold tracking-wide" style={{ color: INK_2, border: `1px solid ${INK_2}` }} data-call-caption-languages="">
           {languages}
         </span>
       )}

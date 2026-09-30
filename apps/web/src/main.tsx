@@ -229,6 +229,10 @@ if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
     void import('@/lib/calls/call-back-intent').then(({ listenCallBackIntentsInBrowser }) =>
       listenCallBackIntentsInBrowser(),
     );
+    /** ET « RÉPONDRE » SUR UNE NOTIFICATION DE MESSAGE MET LE CURSEUR DANS LE COMPOSEUR (#8860). */
+    void import('@/lib/notifications/composer-focus-intent').then(({ listenComposerFocusIntentsInBrowser }) =>
+      listenComposerFocusIntentsInBrowser(),
+    );
     /**
      * ET LE WORKER PEUT ACCUSER LA REMISE D'UN PUSH, ONGLET FERMÉ (#7368,
      * W4). `sw-push.js` (script classique) ne lit ni `localStorage` ni aucun

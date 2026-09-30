@@ -28,6 +28,7 @@ import { NOTIFICATIONS_GLYPHS } from './glyphs-notifications';
 import { PROGRESSION_GLYPHS } from './glyphs-progression';
 import { milestoneGlyph } from './milestone-glyph';
 import { NotificationRowMenu } from './notification-row-menu';
+import { NotificationSwipe } from './notification-swipe';
 
 /**
  * **UNE LIGNE DE LA CLOCHE** (#6288) — miroir de `NotificationRowView`
@@ -216,7 +217,7 @@ function QuickActions({
             style={{
               minHeight: 44,
               outlineColor: 'var(--color-ios-brand)',
-              color: primary ? '#fff' : 'var(--color-ios-brand)',
+              color: primary ? 'var(--color-ios-on-brand)' : 'var(--color-ios-brand)',
               backgroundColor: primary ? 'var(--color-ios-brand)' : 'color-mix(in srgb, var(--color-ios-brand) 14%, transparent)',
             }}
           >
@@ -287,6 +288,7 @@ function NotificationRowView({
     className: `flex w-full items-start gap-3 py-3 ${callBack === null ? 'pe-14' : 'pe-24'} ps-4 text-start focus-visible:outline-2 focus-visible:-outline-offset-2`,
     style: { outlineColor: 'var(--color-ios-brand)' },
     onClick: () => onOpen(id),
+    draggable: false,
     children: (
       <>
         <span className="relative shrink-0">
@@ -347,17 +349,24 @@ function NotificationRowView({
         ...(unread ? { backgroundColor: `color-mix(in srgb, ${accent} 7%, transparent)` } : {}),
       }}
     >
-      <div className="relative">
-        {target === null ? (
-          <button type="button" className={surface.className} style={surface.style} onClick={surface.onClick}>
-            {surface.children}
-          </button>
-        ) : (
-          <TargetLink target={target} {...surface} />
-        )}
-        {callBack === null ? null : <CallBackButton language={language} callBack={callBack} />}
-        <NotificationRowMenu language={language} unread={unread} onMarkRead={() => onMarkRead(id)} onDelete={() => onDelete(id)} />
-      </div>
+      {/* Glisser vers la fin de la ligne la SUPPRIME (#8960) — le fond de la
+          rangée glisse avec elle, la corbeille se révèle dessous. */}
+      <NotificationSwipe
+        onDelete={() => onDelete(id)}
+        background={unread ? `color-mix(in srgb, ${accent} 7%, var(--color-canvas))` : 'var(--color-canvas)'}
+      >
+        <div className="relative">
+          {target === null ? (
+            <button type="button" className={surface.className} style={surface.style} onClick={surface.onClick}>
+              {surface.children}
+            </button>
+          ) : (
+            <TargetLink target={target} {...surface} />
+          )}
+          {callBack === null ? null : <CallBackButton language={language} callBack={callBack} />}
+          <NotificationRowMenu language={language} unread={unread} onMarkRead={() => onMarkRead(id)} onDelete={() => onDelete(id)} />
+        </div>
+      </NotificationSwipe>
       {actions.length === 0 || onQuickAction === undefined ? null : (
         <QuickActions actions={actions} language={language} connectRequested={connectRequested} onQuickAction={(action) => onQuickAction(id, action)} />
       )}

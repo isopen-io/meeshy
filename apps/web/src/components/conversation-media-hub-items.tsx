@@ -129,7 +129,7 @@ export function MediaTile({
           />
         )}
         {isVideo ? (
-          <span className="absolute bottom-1 left-1 grid place-items-center rounded-full text-white" style={{ width: 22, height: 22, backgroundColor: 'rgba(0,0,0,0.55)' }}>
+          <span className="absolute bottom-1 left-1 grid place-items-center rounded-full text-on-media" style={{ width: 22, height: 22, backgroundColor: 'var(--color-scrim)' }}>
             <Glyph name="fillPlay" size={12} />
           </span>
         ) : null}

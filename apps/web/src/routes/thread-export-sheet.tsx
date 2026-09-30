@@ -446,8 +446,8 @@ export function MessageExportSheet({
                     aria-pressed={focus === 'background'}
                     aria-label={translateExportCard(language, 'export.card.part.background')}
                     onClick={() => touchPart('background')}
-                    className="absolute inset-0 block overflow-hidden rounded-[18px] focus-visible:outline-2 focus-visible:outline-offset-4"
-                    style={{ boxShadow: '0 18px 48px color-mix(in srgb, black 35%, transparent)' }}
+                    className="absolute inset-0 block overflow-hidden rounded-bubble focus-visible:outline-2 focus-visible:outline-offset-4"
+                    style={{ boxShadow: '0 18px 48px color-mix(in srgb, var(--color-media-backdrop) 35%, transparent)' }}
                   >
                     <img src={shown.url} alt={translateExportCard(language, 'export.card.preview')} data-export-preview={ready ? format.template : ''} className="block h-full w-full" />
                   </button>
@@ -459,14 +459,14 @@ export function MessageExportSheet({
                       aria-pressed={focus === region.part}
                       aria-label={translateExportCard(language, PART_LABEL[region.part])}
                       onClick={() => touchPart(region.part)}
-                      className="absolute rounded-[12px] focus-visible:outline-2 focus-visible:outline-offset-2"
+                      className="absolute rounded-quote focus-visible:outline-2 focus-visible:outline-offset-2"
                       style={{
                         left: `calc(${percent(region.x, shown.width)} - ${ZONE_SLOP}px)`,
                         top: `calc(${percent(region.y, shown.height)} - ${ZONE_SLOP}px)`,
                         width: `calc(${percent(region.width, shown.width)} + ${2 * ZONE_SLOP}px)`,
                         height: `calc(${percent(region.height, shown.height)} + ${2 * ZONE_SLOP}px)`,
-                        outline: focus === region.part ? '2px solid white' : undefined,
-                        boxShadow: focus === region.part ? '0 0 0 4px color-mix(in srgb, black 25%, transparent)' : undefined,
+                        outline: focus === region.part ? '2px solid var(--color-on-media)' : undefined,
+                        boxShadow: focus === region.part ? '0 0 0 4px color-mix(in srgb, var(--color-media-backdrop) 25%, transparent)' : undefined,
                       }}
                     />
                   ))}
@@ -536,7 +536,7 @@ export function MessageExportSheet({
             disabled={!ready || saving}
             onClick={() => void send('save')}
             className="glass-prominent glass-accent inline-flex items-center justify-center gap-2 rounded-full text-body font-bold transition-transform active:scale-[0.98] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 motion-reduce:transition-none"
-            style={{ minHeight: 50, color: 'white' }}
+            style={{ minHeight: 50, color: 'var(--color-ios-on-brand)' }}
           >
             <Glyph name="downloadSimple" size={18} />
             {translateExportCard(language, 'export.card.save')}

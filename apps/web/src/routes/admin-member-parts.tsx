@@ -207,7 +207,7 @@ export function SectionButton({
 }) {
   const teinte =
     tone === 'primary'
-      ? { color: 'white', background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))' }
+      ? { color: 'var(--color-ios-on-brand)', background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))' }
       : tone === 'danger'
         ? { color: 'var(--color-danger)', border: '1px solid color-mix(in srgb, var(--color-danger) 40%, transparent)' }
         : { color: INK, border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)' };
@@ -362,7 +362,7 @@ export function Bascule({
         className="relative h-7 w-12 shrink-0 rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
         style={{ backgroundColor: actif ? BRAND : 'color-mix(in srgb, var(--color-ios-ink-3) 35%, transparent)', outlineColor: BRAND }}
       >
-        <span aria-hidden="true" className="absolute top-0.5 size-6 rounded-full bg-white transition-all" style={{ insetInlineStart: actif ? 'calc(100% - 1.625rem)' : '0.125rem' }} />
+        <span aria-hidden="true" className="absolute top-0.5 size-6 rounded-full bg-ios-on-brand transition-all" style={{ insetInlineStart: actif ? 'calc(100% - 1.625rem)' : '0.125rem' }} />
       </button>
     </div>
   );

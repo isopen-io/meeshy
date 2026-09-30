@@ -503,12 +503,15 @@ if (target2 !== null) {
   await twoFrames();
 }
 
-/* ── 5. le SON se place SUR LA SCÈNE, la LÉGENDE s'écrit au CADRE ─────────── */
+/* ── 5. le SON se place SUR LA SCÈNE, la LÉGENDE s'écrit dans l'outil « Décrire »
+   du fond (#8849), ouvert depuis le rail droit ─────────────────────────────── */
 await page.click('[data-story-option="sound-plane:foreground"]');
 await page.click('[data-story-option="frame"]');
+await page.waitForSelector('[data-story-option="background:describe"]', { timeout: 8000 });
+await page.click('[data-story-option="background:describe"]');
 await page.waitForSelector('#story-studio-caption-visual', { timeout: 8000 });
 await page.fill('#story-studio-caption-visual', 'Au lever du jour');
-await page.click('[data-story-frame-done]');
+await page.click('[data-story-option="background:exit"]');
 await twoFrames();
 
 /* ── 6. PUBLIER, puis RELIRE le document qui part ────────────────────────── */

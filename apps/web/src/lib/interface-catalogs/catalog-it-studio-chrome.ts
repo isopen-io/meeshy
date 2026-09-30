@@ -84,7 +84,7 @@ const itStudioChrome = {
   'story.studio.camera.shutter.photo': 'Scatta una foto',
   'story.studio.camera.shutter.start': 'Avvia la registrazione',
   'story.studio.camera.shutter.stop': 'Interrompi la registrazione',
-  'story.studio.camera.hint.photo': 'Tocca lo schermo: foto · tieni premuto il pulsante: video',
+  'story.studio.camera.hint.photo': 'Tocca lo schermo: foto · tienilo premuto: video',
   'story.studio.camera.hint.video': 'Tocca per filmare · tocca di nuovo per posare',
   'story.studio.camera.unavailable': 'La fotocamera non è disponibile. Consentila nelle impostazioni del browser.',
   'story.studio.camera.recording': 'Registrazione in corso',
@@ -116,6 +116,9 @@ const itStudioChrome = {
   'story.studio.background.menu.retake': 'Scatta di nuovo',
   'story.studio.background.menu.forward': 'Porta in primo piano',
   'story.studio.background.menu.remove': 'Rimuovi lo sfondo',
+  'story.studio.background.tools': 'Strumenti dello sfondo',
+  'story.studio.background.tools.describe': 'Descrivi',
+  'story.studio.background.tools.leave': 'Torna alla scena',
   'story.studio.reelSwitch.announcement': 'Passato a reel',
 } satisfies StudioChromeCatalogSlice;
 
