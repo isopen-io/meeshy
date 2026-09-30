@@ -264,7 +264,7 @@ describe('runMessagePostSaveEffects — axe d\'engagement du contenu audio', () 
     });
     await flush();
 
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.audio_message');
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.audio_message', { conversationId: CONV_ID });
   });
 
   it('ne crédite PAS content.audio_message pour un message sans pièce jointe audio — l\'axe texte (#5532) le crédite à sa place', async () => {
@@ -281,7 +281,8 @@ describe('runMessagePostSaveEffects — axe d\'engagement du contenu audio', () 
 
     expect(engagementService.recordActivity).not.toHaveBeenCalledWith(
       expect.anything(),
-      'content.audio_message'
+      'content.audio_message',
+      expect.anything()
     );
   });
 
@@ -298,7 +299,7 @@ describe('runMessagePostSaveEffects — axe d\'engagement du contenu audio', () 
     });
     await flush();
 
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.audio_message');
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.audio_message', { conversationId: CONV_ID });
   });
 
   it('ne crédite rien pour un expéditeur anonyme, même avec une pièce jointe audio', async () => {
@@ -546,7 +547,7 @@ describe('runMessagePostSaveEffects — axe d\'engagement des stickers (#5541)',
     });
     await flush();
 
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'tool.sticker');
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'tool.sticker', { conversationId: CONV_ID });
   });
 
   it('ne crédite pas tool.sticker pour un message sans sticker', async () => {
@@ -563,7 +564,8 @@ describe('runMessagePostSaveEffects — axe d\'engagement des stickers (#5541)',
 
     expect(engagementService.recordActivity).not.toHaveBeenCalledWith(
       expect.anything(),
-      'tool.sticker'
+      'tool.sticker',
+      expect.anything()
     );
   });
 
@@ -580,7 +582,7 @@ describe('runMessagePostSaveEffects — axe d\'engagement des stickers (#5541)',
     });
     await flush();
 
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'tool.sticker');
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'tool.sticker', { conversationId: CONV_ID });
     expect(engagementService.recordConversationActivity).toHaveBeenCalledWith(
       USER_ID,
       'conversation.private',
@@ -661,7 +663,7 @@ describe('runMessagePostSaveEffects — axe d\'engagement des messages texte (#5
     });
     await flush();
 
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message');
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: CONV_ID });
   });
 
   it('crédite content.text_message quand la pièce jointe n\'est pas audio', async () => {
@@ -677,7 +679,7 @@ describe('runMessagePostSaveEffects — axe d\'engagement des messages texte (#5
     });
     await flush();
 
-    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message');
+    expect(engagementService.recordActivity).toHaveBeenCalledWith(USER_ID, 'content.text_message', { conversationId: CONV_ID });
   });
 
   it('ne crédite PAS content.text_message quand une pièce jointe audio est présente — distinct de content.audio_message', async () => {
@@ -695,7 +697,8 @@ describe('runMessagePostSaveEffects — axe d\'engagement des messages texte (#5
 
     expect(engagementService.recordActivity).not.toHaveBeenCalledWith(
       expect.anything(),
-      'content.text_message'
+      'content.text_message',
+      expect.anything()
     );
   });
 

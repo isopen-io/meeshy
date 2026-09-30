@@ -61,6 +61,8 @@ function makePrisma(overrides: Partial<{
     engagementConversationCredit: {
       create: overrides.conversationCreditCreate ?? jest.fn().mockResolvedValue({}),
     },
+    engagementScaleConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+    conversationEngagement: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
     user: {
       // Same mock answers both `recordActivity`'s language lookups (badge/streak
       // notifications) and `updateStreak`'s state read — none of the existing
@@ -99,6 +101,8 @@ function makeStreakPrisma(streakState: {
     engagementConversationCredit: {
       create: jest.fn().mockResolvedValue({}),
     },
+    engagementScaleConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+    conversationEngagement: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
     user: {
       findUnique,
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({}),
@@ -133,6 +137,8 @@ function makeLevelPrisma(overrides: Partial<{
     engagementConversationCredit: {
       create: jest.fn().mockResolvedValue({}),
     },
+    engagementScaleConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+    conversationEngagement: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
     user: {
       findUnique: jest.fn().mockResolvedValue(null),
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({ engagementScore: 0 }),
