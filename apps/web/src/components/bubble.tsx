@@ -15,6 +15,7 @@ import { protectionOf } from '@/lib/reading-mode/protection';
 import { BUBBLE_STICKER_SIDE } from '@/lib/reading-mode/metrics';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
+import { hereKeyOf } from '@/lib/view/use-conversation-viewing';
 import { AuthorAvatar } from './author-avatar';
 import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
@@ -614,6 +615,7 @@ export function Bubble({
             >
               {showsIdentity ? (
                 <AuthorAvatar
+                  authorId={hereKeyOf(message.sender)}
                   initials={initialsOf(message.sender?.displayName ?? '')}
                   color="var(--accent)"
                   size={32}

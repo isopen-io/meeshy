@@ -657,7 +657,7 @@ private struct ConversationHeaderAvatarView: View {
                                     storyState: storyState,
                                     moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
                                     presenceState: PresenceManager.shared.presenceState(for: member.id),
-                                    isHere: isHere(member.id),
+                                    isHere: isHere(member.viewingKey),
                                     onTap: { openMember(member, storyState: storyState) },
                                     onMoodTap: statusViewModel.moodTapHandler(for: member.id),
                                     contextMenuItems: memberContextMenu(for: member, storyState: storyState)

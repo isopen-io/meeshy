@@ -26,12 +26,16 @@ final class ConversationViewingReporterTests: XCTestCase {
         }
     }
 
-    private func makeSUT(isForeground: Bool = true) -> (sut: ConversationViewingReporter, emitter: SpyViewingEmitter, connection: PassthroughSubject<Bool, Never>) {
+    private func makeSUT(
+        isForeground: Bool = true,
+        reconnections: PassthroughSubject<Void, Never> = PassthroughSubject<Void, Never>()
+    ) -> (sut: ConversationViewingReporter, emitter: SpyViewingEmitter, connection: PassthroughSubject<Bool, Never>) {
         let emitter = SpyViewingEmitter()
         let connection = PassthroughSubject<Bool, Never>()
         let sut = ConversationViewingReporter(
             emitter: emitter,
             connection: connection.eraseToAnyPublisher(),
+            reconnections: reconnections.eraseToAnyPublisher(),
             isForeground: isForeground
         )
         return (sut, emitter, connection)
@@ -140,5 +144,20 @@ final class ConversationViewingReporterTests: XCTestCase {
 
         await fulfillment(of: [nothing], timeout: 0.3)
         XCTAssertEqual(emitter.calls, [.start("conv-a"), .stop("conv-a")])
+    }
+
+    func test_reconnect_withoutDisconnectTransition_reannouncesTheActiveConversation() async {
+        let reconnections = PassthroughSubject<Void, Never>()
+        let (sut, emitter, _) = makeSUT(reconnections: reconnections)
+        sut.conversationOpened("conv-a")
+        let reannounced = expectation(description: "viewing:start re-emitted on silent reconnect")
+        emitter.onCall = { call in
+            if call == .start("conv-a") { reannounced.fulfill() }
+        }
+
+        reconnections.send(())
+
+        await fulfillment(of: [reannounced], timeout: 1)
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .start("conv-a")])
     }
 }

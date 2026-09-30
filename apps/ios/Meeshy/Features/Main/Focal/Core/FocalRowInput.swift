@@ -94,6 +94,8 @@ struct FocalRowInput: Equatable {
     let senderThumbHash: String?
     let senderColorHex: String
     let senderPresence: PresenceState
+    /// L'auteur a l'écran de CETTE conversation ouvert (#8892).
+    let senderIsHere: Bool
     let senderStoryRing: StoryRingState
     let senderMoodEmoji: String?
     /// L'auteur n'a PAS de compte (`MeeshyMessage.senderIsAnonymous`, dérivé de
@@ -199,6 +201,7 @@ struct FocalRowInput: Equatable {
         senderThumbHash: String?,
         senderColorHex: String,
         senderPresence: PresenceState,
+        senderIsHere: Bool = false,
         senderStoryRing: StoryRingState,
         senderMoodEmoji: String?,
         senderIsAnonymous: Bool = false,
@@ -240,6 +243,7 @@ struct FocalRowInput: Equatable {
         self.senderThumbHash = senderThumbHash
         self.senderColorHex = senderColorHex
         self.senderPresence = senderPresence
+        self.senderIsHere = senderIsHere
         self.senderStoryRing = senderStoryRing
         self.senderMoodEmoji = senderMoodEmoji
         self.senderIsAnonymous = senderIsAnonymous
@@ -291,6 +295,7 @@ struct FocalRowInput: Equatable {
             && lhs.senderThumbHash == rhs.senderThumbHash
             && lhs.senderColorHex == rhs.senderColorHex
             && lhs.senderPresence == rhs.senderPresence
+            && lhs.senderIsHere == rhs.senderIsHere
             && lhs.senderIsAnonymous == rhs.senderIsAnonymous
             && lhs.senderStoryRing == rhs.senderStoryRing
             && lhs.senderMoodEmoji == rhs.senderMoodEmoji

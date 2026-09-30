@@ -332,6 +332,7 @@
 		1FC855236FA4DFDA372B4348 /* StarredMessagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 353450F62264AA9373DE1298 /* StarredMessagesView.swift */; };
 		1FCFF0BC78942C0E3203EE78 /* NotificationCallBackActionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D50CC2AAD1A71B64317392 /* NotificationCallBackActionTests.swift */; };
 		1FD88C667076A5F2CF7815E8 /* BubbleStandardLayout+Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F4937F432D49B989DB5F1DA /* BubbleStandardLayout+Media.swift */; };
+		06540BD77D77CB7D22E4621B /* BubbleStandardLayout+Accessibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52FCCF38D910A1D251432600 /* BubbleStandardLayout+Accessibility.swift */; };
 		1FD8C962D242176994BC3B2C /* ReelsPlayerView+EmptyState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8B7EEB9132504FAC886F7D7 /* ReelsPlayerView+EmptyState.swift */; };
 		20113A20BB1AB30DED558033 /* AuthModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA1C8242E81A7A84C68ABAE4 /* AuthModels.swift */; };
 		20407CC2B00D51A6A651E03B /* MessageGroupLanguageFanOutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54188ED24C6434C94E85CD8F /* MessageGroupLanguageFanOutTests.swift */; };
@@ -957,6 +958,8 @@
 		5E7E06C343704EA2ADAD089F /* ComposerToolFocusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A670A7E76A101B67D1328106 /* ComposerToolFocusTests.swift */; };
 		5E8B411A2968F65CD2FADA5E /* NotificationQuickActionPerformer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107526DEB22721F757F1776C /* NotificationQuickActionPerformer.swift */; };
 		5EAB761D82373617A242DC64 /* MessageListViewController+Insets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E77851961D937288E1EB6C1 /* MessageListViewController+Insets.swift */; };
+		D8DB08A9534747A218E7EFE4 /* TypingIndicatorBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F65AB31689C101AFF9FA37E /* TypingIndicatorBubble.swift */; };
+		5E02F9FDCF5306B75E239FB1 /* MessageListViewController+ConversationViewers.swift in Sources */ = {isa = PBXBuildFile; fileRef = E191B1520389FC7C69A7B6DB /* MessageListViewController+ConversationViewers.swift */; };
 		5EB6B957D4231C779E7692DB /* CallRecordingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C2654D14000BA1B261CF5F8 /* CallRecordingService.swift */; };
 		5EC025CB9A2D0DE78B39DF65 /* ConversationMediaGalleryView+LoadFailure.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0FB7A9DC4311341A1025B6F /* ConversationMediaGalleryView+LoadFailure.swift */; };
 		5ECEEB20AFF3657F6E070484 /* StickerSubjectLift.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0B59CA477033E75355412770 /* StickerSubjectLift.swift */; };
@@ -3142,6 +3145,7 @@
 		2F2DD47B929F94E8ECC54CA1 /* ConversationView+ViewOnceExit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationView+ViewOnceExit.swift"; sourceTree = "<group>"; };
 		2F3F3D277F5BF4FE32DDAB11 /* ImageDownsamplingConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageDownsamplingConfig.swift; sourceTree = "<group>"; };
 		2F4937F432D49B989DB5F1DA /* BubbleStandardLayout+Media.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BubbleStandardLayout+Media.swift"; sourceTree = "<group>"; };
+		52FCCF38D910A1D251432600 /* BubbleStandardLayout+Accessibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BubbleStandardLayout+Accessibility.swift"; sourceTree = "<group>"; };
 		2F7955FEE33A52D416DD73C3 /* ConversationLanguagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLanguagePreferences.swift; sourceTree = "<group>"; };
 		2FA122D0EA58DA2D0C5B3064 /* StoryViewerCommentRollbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerCommentRollbackTests.swift; sourceTree = "<group>"; };
 		2FA13AE6A893D93AEDB5DC5F /* SplashScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashScreen.swift; sourceTree = "<group>"; };
@@ -3986,6 +3990,8 @@
 		7E5AC770BFC4F3F7BC016B43 /* CallCaptureIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallCaptureIdentity.swift; sourceTree = "<group>"; };
 		7E6EA36630546D9EDE3053AD /* iPadRootViewPerfRerenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iPadRootViewPerfRerenderTests.swift; sourceTree = "<group>"; };
 		7E77851961D937288E1EB6C1 /* MessageListViewController+Insets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageListViewController+Insets.swift"; sourceTree = "<group>"; };
+		2F65AB31689C101AFF9FA37E /* TypingIndicatorBubble.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingIndicatorBubble.swift; sourceTree = "<group>"; };
+		E191B1520389FC7C69A7B6DB /* MessageListViewController+ConversationViewers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageListViewController+ConversationViewers.swift"; sourceTree = "<group>"; };
 		7E7F39838F76502F5DF1BC77 /* SampleHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleHandler.swift; sourceTree = "<group>"; };
 		7E896535ACC04675488DD5E7 /* DeepLinkRouterTrackedDestinationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkRouterTrackedDestinationTests.swift; sourceTree = "<group>"; };
 		7E936CDC76217F0CE8357AA0 /* CallNetworkPathMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallNetworkPathMonitor.swift; sourceTree = "<group>"; };
@@ -7510,6 +7516,8 @@
 				CA8F52CA9F8649E69DFA4CA4 /* MessageListViewController.swift */,
 				3F0E6C19F6C6918A49DDEE62 /* MessageListViewController+FocalScene.swift */,
 				7E77851961D937288E1EB6C1 /* MessageListViewController+Insets.swift */,
+				2F65AB31689C101AFF9FA37E /* TypingIndicatorBubble.swift */,
+				E191B1520389FC7C69A7B6DB /* MessageListViewController+ConversationViewers.swift */,
 				AF25F23599555992D5EE644C /* MessageListViewController+LongMessage.swift */,
 				564DB73EB15ED3523171AC69 /* MessageListViewController+QuotedMedia.swift */,
 				C4890E00C943F348D701BAA7 /* MessageListViewController+SeenTracking.swift */,
@@ -8598,6 +8606,7 @@
 				DC5625A3FFF7FFD71902EC57 /* BubbleSecondaryContent.swift */,
 				867F7A4CB879D7390F12F046 /* BubbleStandardLayout.swift */,
 				2F4937F432D49B989DB5F1DA /* BubbleStandardLayout+Media.swift */,
+				52FCCF38D910A1D251432600 /* BubbleStandardLayout+Accessibility.swift */,
 				5B6ADF42360F752DF843F756 /* BubbleSticker.swift */,
 				75040D52EB0EABBA43794A49 /* BubbleStoryCitationCard.swift */,
 				FED7DB1863271ED8DD5E7F80 /* BubbleSystemViews.swift */,
@@ -9147,6 +9156,7 @@
 				2F026B6387C2C5A36A79476E /* BubbleReactionsOverlay.swift in Sources */,
 				7D6FB68FB50AEB4C41096ACC /* BubbleSecondaryContent.swift in Sources */,
 				1FD88C667076A5F2CF7815E8 /* BubbleStandardLayout+Media.swift in Sources */,
+				06540BD77D77CB7D22E4621B /* BubbleStandardLayout+Accessibility.swift in Sources */,
 				523219510BBAFB6B2E3927F4 /* BubbleStandardLayout.swift in Sources */,
 				2852E32CB57CB3C721A3A2DF /* BubbleSticker.swift in Sources */,
 				A2094BA746C7BE8D0750C273 /* BubbleStoryCitationCard.swift in Sources */,
@@ -9856,6 +9866,8 @@
 				FA98AEDA092D7450C8C2BFD7 /* MessageListView.swift in Sources */,
 				B347AFB5EB0F5D784C3A96AE /* MessageListViewController+FocalScene.swift in Sources */,
 				5EAB761D82373617A242DC64 /* MessageListViewController+Insets.swift in Sources */,
+				D8DB08A9534747A218E7EFE4 /* TypingIndicatorBubble.swift in Sources */,
+				5E02F9FDCF5306B75E239FB1 /* MessageListViewController+ConversationViewers.swift in Sources */,
 				9603E45C3477F2ABF0BE652D /* MessageListViewController+LongMessage.swift in Sources */,
 				4DB1002CA0D74102C42A25E9 /* MessageListViewController+QuotedMedia.swift in Sources */,
 				8489A5A69018F3BA70EAC494 /* MessageListViewController+SeenTracking.swift in Sources */,

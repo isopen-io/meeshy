@@ -1163,12 +1163,14 @@ final class MessageListViewController: UIViewController {
             // pastille 22 de l'auteur + points pulsants accent SANS capsule ;
             // la capsule reste le rendu du mode bulles.
             let typingFlat = self.readingMode != .bubbles
+            let typingHere = self.conversationHereUserIds
             cell.contentConfiguration = UIHostingConfiguration {
                 TypingIndicatorBubble(
                     participants: typingRoster,
                     accentHex: typingAccent,
                     isDark: typingDark,
-                    isFlat: typingFlat
+                    isFlat: typingFlat,
+                    hereUserIds: typingHere
                 )
                 .scaleEffect(x: 1, y: -1)
             }
@@ -1429,6 +1431,7 @@ final class MessageListViewController: UIViewController {
             let senderRingState: StoryRingState = isMine
                 ? .none
                 : stories.storyRingState(forUserId: senderId)
+            let senderIsHere = !isMine && self.conversationHereUserIds.contains(message.viewingKey)
             let viewSenderStoryHandler = self.onViewSenderStory
 
             // Menu d'appui long — DEUX chemins par version d'OS (miroir des
@@ -1530,6 +1533,7 @@ final class MessageListViewController: UIViewController {
                         // évaluation de son body (audit fluidité 2026-08-21).
                         preferredAudioLangCode: preferredAudioLang,
                         showAvatar: !direct,
+                        senderIsHere: senderIsHere,
                         senderStoryRingState: senderRingState,
                         onViewStory: (senderRingState != .none)
                             ? { viewSenderStoryHandler?(senderId) }
@@ -1672,6 +1676,7 @@ final class MessageListViewController: UIViewController {
                     senderThumbHash: nil,
                     senderColorHex: message.senderColor ?? accent,
                     senderPresence: PresenceManager.shared.presenceState(for: senderId),
+                    senderIsHere: senderIsHere,
                     senderStoryRing: senderRingState,
                     senderMoodEmoji: statuses.statusForUser(userId: senderId)?.moodEmoji,
                     senderIsAnonymous: message.senderIsAnonymous,

@@ -72,6 +72,7 @@ const HOOK_NAMES = [
   'useThreadChromeSignals',
   'useThreadTyping',
   'useConversationViewing',
+  'useHereIn',
   'useMessageMenu',
   'useAuthorStoryRings',
   'useEphemeralDestruction',
