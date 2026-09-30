@@ -14,6 +14,16 @@ import { requirePermission, withAudit } from '../../middleware/authorize';
 import { signaler, limiteursDeSignalement } from '../reports';
 import { dateDeRetrait, depreciee } from '../../utils/deprecation';
 import { apiPath } from '@meeshy/shared/api/prefix';
+import { enrichReports } from './reports-enrichment';
+import {
+  reportArraySuccess,
+  reportOneSuccess,
+  reportPageSuccess,
+  reportsListQuerystring,
+  reportsListSuccess,
+} from './reports-schemas';
+import { reponsesEnErreur } from './oversight-schemas';
+import { adminViewer } from './oversight-viewer';
 
 const DEPUIS_REPORTS = '2026-08-29';
 
@@ -111,17 +121,28 @@ export async function reportRoutes(fastify: FastifyInstance) {
    * Lister les signalements avec pagination et filtres
    */
   fastify.get('/', {
-    onRequest: [fastify.authenticate, requireModeratorPermission]
+    onRequest: [fastify.authenticate, requireModeratorPermission],
+    schema: {
+      description: 'Liste les signalements, nommés (signalant, modérateur, entité signalée). canModerateContent. #8876.',
+      tags: ['admin'],
+      summary: 'List reports (admin)',
+      security: [{ bearerAuth: [] }],
+      querystring: reportsListQuerystring,
+      response: { 200: reportsListSuccess, ...reponsesEnErreur },
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
+      const viewer = adminViewer(request);
 
       const filters: ReportFilters = {
         reportedType: query.reportedType,
         reportType: query.reportType,
         status: query.status,
         reporterId: query.reporterId,
-        moderatorId: query.moderatorId,
+        moderatorId: query.assigned === 'me' ? viewer.id : query.moderatorId,
+        unassigned: query.assigned === 'none',
+        reportedEntityId: query.reportedEntityId,
         sortBy: resolveReportSortKey(query.sortBy),
         sortOrder: resolveReportSortOrder(query.sortOrder)
       };
@@ -144,7 +165,11 @@ export async function reportRoutes(fastify: FastifyInstance) {
         result.reports.length
       );
 
-      return sendSuccess(reply, { reports: result.reports, pagination: paginationMeta });
+      const reports = await enrichReports(fastify.prisma, result.reports, {
+        canSeeExcerpt: viewer.can('canModerateContent'),
+      });
+
+      return sendSuccess(reply, { reports, pagination: paginationMeta });
     } catch (error) {
       logError(fastify.log, 'List reports error:', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation des signalements');
@@ -173,7 +198,14 @@ export async function reportRoutes(fastify: FastifyInstance) {
    * Obtenir les signalements recents
    */
   fastify.get('/recent', {
-    onRequest: [fastify.authenticate, requireModeratorPermission]
+    onRequest: [fastify.authenticate, requireModeratorPermission],
+    schema: {
+      description: 'Les signalements des dernières 24 heures, nommés. canModerateContent. #8876.',
+      tags: ['admin'],
+      summary: 'Recent reports (admin)',
+      security: [{ bearerAuth: [] }],
+      response: { 200: reportArraySuccess, ...reponsesEnErreur },
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const query = request.query as any;
@@ -183,7 +215,10 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       const reports = await reportService.getRecentReports(limit);
 
-      return sendSuccess(reply, reports);
+      return sendSuccess(
+        reply,
+        await enrichReports(fastify.prisma, reports, { canSeeExcerpt: adminViewer(request).can('canModerateContent') })
+      );
     } catch (error) {
       logError(fastify.log, 'Get recent reports error:', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation des signalements recents');
@@ -195,7 +230,14 @@ export async function reportRoutes(fastify: FastifyInstance) {
    * Obtenir un signalement par ID
    */
   fastify.get('/:id', {
-    onRequest: [fastify.authenticate, requireModeratorPermission]
+    onRequest: [fastify.authenticate, requireModeratorPermission],
+    schema: {
+      description: 'Un signalement, nommé (signalant, modérateur, entité signalée). canModerateContent. #8876.',
+      tags: ['admin'],
+      summary: 'Get one report (admin)',
+      security: [{ bearerAuth: [] }],
+      response: { 200: reportOneSuccess, ...reponsesEnErreur },
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
@@ -206,7 +248,11 @@ export async function reportRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Signalement non trouve');
       }
 
-      return sendSuccess(reply, report);
+      const [served] = await enrichReports(fastify.prisma, [report], {
+        canSeeExcerpt: adminViewer(request).can('canModerateContent'),
+      });
+
+      return sendSuccess(reply, served);
     } catch (error) {
       logError(fastify.log, 'Get report error:', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation du signalement');
@@ -320,7 +366,14 @@ export async function reportRoutes(fastify: FastifyInstance) {
    * qu'une seconde convention inventee pour l'occasion.
    */
   fastify.get('/entity/:type/:id', {
-    onRequest: [fastify.authenticate, requireModeratorPermission]
+    onRequest: [fastify.authenticate, requireModeratorPermission],
+    schema: {
+      description: "Une page des signalements d'une entité, nommés. canModerateContent. #8876.",
+      tags: ['admin'],
+      summary: 'Reports of one entity (admin)',
+      security: [{ bearerAuth: [] }],
+      response: { 200: reportPageSuccess, ...reponsesEnErreur },
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { type, id } = request.params as { type: string; id: string };
@@ -329,7 +382,11 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       const { reports, total } = await reportService.getReportsForEntity(type, id, offset, limit);
 
-      return sendPaginatedSuccess(reply, reports, buildPaginationMeta(total, offset, limit, reports.length));
+      const served = await enrichReports(fastify.prisma, reports, {
+        canSeeExcerpt: adminViewer(request).can('canModerateContent'),
+      });
+
+      return sendPaginatedSuccess(reply, served, buildPaginationMeta(total, offset, limit, reports.length));
     } catch (error) {
       logError(fastify.log, 'Get entity reports error:', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation des signalements');
@@ -362,7 +419,14 @@ export async function reportRoutes(fastify: FastifyInstance) {
    * Obtenir les signalements assignes au moderateur connecte
    */
   fastify.get('/moderator/mine', {
-    onRequest: [fastify.authenticate, requireModeratorPermission]
+    onRequest: [fastify.authenticate, requireModeratorPermission],
+    schema: {
+      description: "Les signalements en cours assignés à l'appelant, nommés. canModerateContent. #8876.",
+      tags: ['admin'],
+      summary: 'My assigned reports (admin)',
+      security: [{ bearerAuth: [] }],
+      response: { 200: reportArraySuccess, ...reponsesEnErreur },
+    }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -370,7 +434,10 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       const reports = await reportService.getModeratorReports(moderatorId);
 
-      return sendSuccess(reply, reports);
+      return sendSuccess(
+        reply,
+        await enrichReports(fastify.prisma, reports, { canSeeExcerpt: adminViewer(request).can('canModerateContent') })
+      );
     } catch (error) {
       logError(fastify.log, 'Get moderator reports error:', error);
       return sendInternalError(reply, 'Erreur lors de la recuperation des signalements');
