@@ -224,6 +224,9 @@ targets:
       - target: MeeshyWidgets
       - target: MeeshyNotificationExtension
       # #8859 — la notification DÉPLOYÉE (lecteur de vocal, carte, fiche).
+      # App ID `me.meeshy.app.notification-content` enregistré au portail le
+      # 2026-10-01 (T75359QHNV, seed D72UK7R5RE, APP_GROUPS — #8953) et listé
+      # dans `fastlane/Matchfile` + les lanes `sync_certificates`/`force_sync`.
       - target: MeeshyNotificationContentExtension
       # Ré-embarquée 2026-07-28. Le blocage historique de l'archive de
       # distribution ("No profiles for 'me.meeshy.app.share-extension' were
@@ -233,8 +236,8 @@ targets:
       # par le signing automatique via `-allowProvisioningUpdates` (Gymfile).
       - target: MeeshyShareExtension
       # #8063 — partage d'écran pendant un appel (ReplayKit). L'App ID
-      # `me.meeshy.app.broadcast` (capability APP_GROUPS) doit exister au
-      # portail et figurer dans Matchfile / Fastfile avant l'archive de release.
+      # `me.meeshy.app.broadcast` existe au portail (67U4MGRB8C, APP_GROUPS)
+      # et figure dans Matchfile / Fastfile depuis le 2026-10-01 (#8953).
       - target: MeeshyBroadcastExtension
       - package: MeeshySDK
         product: MeeshySDK
