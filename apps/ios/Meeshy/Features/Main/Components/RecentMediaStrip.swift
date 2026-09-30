@@ -86,7 +86,7 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
 
     /// True once a fetch attempt has run, so the view never re-prompts.
     private var didLoad = false
-    private var fetchLimit = 40
+    private var fetchLimit = RecentMediaStrip.headSampleCount
     private var isObservingLibrary = false
 
     deinit {
@@ -102,7 +102,7 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
     /// un prompt sans contexte, souvent refusé définitivement. Tant que l'accès
     /// n'est pas accordé, la vue affiche une tuile d'invitation dont le tap
     /// appelle `requestAccess()`.
-    func load(limit: Int = 40) {
+    func load(limit: Int = RecentMediaStrip.headSampleCount) {
         guard !didLoad else { return }
         didLoad = true
         fetchLimit = limit
@@ -329,9 +329,9 @@ final class RecentMediaStripModel: NSObject, ObservableObject, PHPhotoLibraryCha
 // MARK: - RecentMediaStrip
 // ============================================================================
 
-/// Two-row strip of the 19 most recent photos/videos, shown beneath the
-/// attachment carousel. Tapping a thumbnail hands the resolved media to
-/// `onSelect`.
+/// Scrollable four-column grid of the most recent photos/videos, shown beneath
+/// the attachment carousel and filling the rest of the panel. Tapping a
+/// thumbnail hands the resolved media to `onSelect`.
 ///
 /// La tuile « ouvrir la photothèque » (`onOpenLibrary`) est la PREMIÈRE cellule,
 /// avant la première image : la sortie vers la photothèque complète doit être
@@ -363,39 +363,22 @@ struct RecentMediaStrip: View {
     private let spacing: CGFloat = 8
     private let hPadding: CGFloat = 12
 
-    /// iPad / macOS use the roomy vertical grid; iPhone keeps the horizontal
-    /// strip. Keyed on the device idiom (NOT horizontalSizeClass) because a sheet
-    /// on iPad can report a `.compact` width even with ample room — and the
-    /// screen-width cell sizing only misfires on iPad/macOS where the sheet is far
-    /// narrower than the screen.
-    private var usesGridLayout: Bool { DeviceLayout.isPad }
-
-    /// Compact (iPhone): the composer fills the window width, so the window is a
-    /// faithful proxy for the container. Regular (iPad / macOS) MUST size from the
-    /// real container width — the comments sheet is far narrower than the window,
-    /// and sizing four cells off the full window is exactly what made the old
-    /// strip overflow into the unstructured mess.
-    ///
-    /// The window, not `UIScreen.main.bounds`: identical on iPhone (where this
-    /// branch runs, `usesGridLayout` being `false` only there), and correct by
-    /// construction if the compact branch is ever reached in a narrow window.
-    private var compactCell: CGFloat { cell(forContainerWidth: DeviceLayout.windowSize.width) }
-
+    /// Cells are sized from the REAL container width, never the window: the
+    /// composer panel is inset from the window edges (and a comments sheet on
+    /// iPad is far narrower), so window-sized cells overflowed the panel.
     private func cell(forContainerWidth width: CGFloat) -> CGFloat {
         max(40, ((width - hPadding * 2) - spacing * CGFloat(columns - 1)) / CGFloat(columns))
     }
 
-    /// Échantillon de tête : 19 médias. Avec la tuile « ouvrir la photothèque »
-    /// EN PREMIER, la bande compte 20 cellules — exactement 10 colonnes de deux
-    /// rangées sur iPhone, 5 rangées de quatre sur iPad. Aucun reste boiteux.
+    /// Échantillon de tête : TOUT ce que le modèle va chercher, 40 médias
+    /// (#8869). Le plafond de 19 masquait 21 médias déjà chargés, et la bande
+    /// horizontale de deux rangées n'en montrait que 7 sans défiler.
     ///
     /// `nonisolated static` pour être vérifiable telle quelle par un test, sans
     /// photothèque ni contexte d'acteur — même précédent que
     /// `RecentMediaStripModel.thumbnailRequestOptions()`.
-    nonisolated static let headSampleCount = 19
+    nonisolated static let headSampleCount = 40
 
-    /// Les deux dispositions montrent le même échantillon de tête ; seule la
-    /// géométrie change (bande horizontale iPhone / grille verticale iPad).
     private var samples: [PHAsset] { Array(model.assets.prefix(Self.headSampleCount)) }
 
     var body: some View {
@@ -407,13 +390,11 @@ struct RecentMediaStrip: View {
             Group {
                 if model.needsAuthorization {
                     authorizationTile
-                } else if usesGridLayout {
-                    regularGrid
                 } else {
-                    compactStrip
-                        .frame(maxHeight: .infinity, alignment: .top)
+                    grid
                 }
             }
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .task { model.load() }
         .adaptiveOnChange(of: selection.ids) { _, ids in onSelectionChanged?(ids) }
@@ -514,9 +495,11 @@ struct RecentMediaStrip: View {
         }
     }
 
-    /// iPad / macOS — a roomy four-column vertical grid sized to the REAL
-    /// container width, scrollable so every recent item is reachable.
-    private var regularGrid: some View {
+    /// One layout for every idiom (#8869): a four-column vertical grid sized to
+    /// the REAL container width and scrolling inside the height the panel
+    /// gives it. The former iPhone strip — two fixed rows scrolling sideways —
+    /// sat mid-panel with a void above and below, and showed 7 media.
+    private var grid: some View {
         GeometryReader { geo in
             let c = cell(forContainerWidth: geo.size.width)
             let cols = Array(repeating: GridItem(.fixed(c), spacing: spacing), count: columns)
@@ -530,25 +513,6 @@ struct RecentMediaStrip: View {
                 .padding(.horizontal, hPadding)
                 .padding(.vertical, 10)
             }
-        }
-    }
-
-    /// iPhone — the original two-row horizontal strip.
-    private var compactStrip: some View {
-        let c = compactCell
-        let rows = [
-            GridItem(.fixed(c), spacing: spacing),
-            GridItem(.fixed(c), spacing: spacing)
-        ]
-        return ScrollView(.horizontal, showsIndicators: false) {
-            LazyHGrid(rows: rows, spacing: spacing) {
-                openLibraryTile(c)
-                ForEach(samples, id: \.localIdentifier) { asset in
-                    cellView(asset, size: c)
-                }
-            }
-            .padding(.horizontal, hPadding)
-            .padding(.vertical, 6)
         }
     }
 
