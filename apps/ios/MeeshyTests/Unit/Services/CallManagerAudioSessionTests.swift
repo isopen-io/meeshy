@@ -1254,7 +1254,8 @@ final class BubbleCallNoticeViewAccessibilityTests: XCTestCase {
         guard let range = source.range(of: "private func qualityRow(_ quality: CallSummaryMetadata.NetworkQuality) -> some View {") else {
             XCTFail("qualityRow not found"); return
         }
-        let endIdx = source.index(range.upperBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
+        let body = source[range.upperBound...]
+        let endIdx = body.range(of: "\n    private func ")?.lowerBound ?? source.endIndex
         let vicinity = String(source[range.lowerBound..<endIdx])
         XCTAssertTrue(
             vicinity.contains(".accessibilityElement(children: .combine)"),

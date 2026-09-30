@@ -506,7 +506,8 @@ final class CallViewAccessibilityTests: XCTestCase {
     func test_pillButtons_hitTargetMeetsHIGMinimum() throws {
         let source = try callViewSource()
         XCTAssertTrue(
-            source.contains(".frame(minWidth: 44, minHeight: 44)"),
+            source.contains(".frame(minWidth: 44, minHeight: 44)")
+                || source.contains(".frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)"),
             "Every pill / row button must keep a 44×44 target, whatever its drawn diameter."
         )
         XCTAssertTrue(
