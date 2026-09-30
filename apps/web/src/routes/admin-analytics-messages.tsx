@@ -208,7 +208,7 @@ function HoursChart({ language, block }: { readonly language: InterfaceLanguage;
         rows: hourly.map((value, hour) => [hourLabel(hour, language), formatCount(value, language)]),
       }}
     >
-      <ul dir="ltr" className="flex items-end gap-0.5" style={{ height: 140 }}>
+      <ul aria-hidden="true" dir="ltr" className="flex items-end gap-0.5" style={{ height: 140 }}>
         {hourly.map((value, hour) => (
           <li key={hour} data-admin-bar={String(hour)} title={`${hourLabel(hour, language)} : ${formatCount(value, language)}`} className="relative flex h-full min-w-0 flex-1 items-end">
             <span

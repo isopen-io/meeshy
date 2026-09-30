@@ -6,6 +6,7 @@ import { adminDayLabel, hourLabel, weekdayName } from '@/lib/admin/interpret/tim
 import type { AdminDeps } from '@/lib/api/admin';
 import type { MessagesPeriod } from '@/lib/api/admin-message-stats';
 import { adminIdentityFixture, expectNoRawIdentifiers } from '@/test-support/admin-assertions';
+import { createRouter, navigate } from '@/lib/router';
 import { setupAdminKitTests } from '@/test-support/admin-harness';
 
 import { AdminMessagesTab } from './admin-analytics-messages';
@@ -117,6 +118,20 @@ describe('les membres les plus actifs — de vrais noms, des fiches', () => {
     expect(guest?.textContent).toContain('Invité sans nom');
     expect(guest?.textContent).not.toContain('Unknown');
     expect(guest?.querySelector('a')?.getAttribute('href')).toBe(`/admin/anonymous/${GUEST_PARTICIPANT}`);
+  });
+
+  test('sous /adm, les puces ouvrent les fiches sous /adm — jamais l’autre espace (D-76)', async () => {
+    const { deps } = statsGateway();
+    const { Router } = createRouter(
+      { admAnalytics: { pattern: '/adm/analytics', screen: async () => ({ default: () => <AdminMessagesTab language="fr" deps={deps} period="30d" /> }) } },
+      () => <p>absent</p>,
+    );
+    navigate('/adm/analytics', true);
+    const host = await mount(<Router wrap={(children) => children} skeleton={null} />, BIGBOSS);
+    for (let attempt = 0; attempt < 20 && host.querySelector(`[data-admin-top-sender="${AWA}"]`) === null; attempt += 1) await mounter.settle();
+
+    expect(host.querySelector(`[data-admin-top-sender="${AWA}"] a`)?.getAttribute('href')).toBe(`/adm/users/${AWA}`);
+    expect(host.querySelector(`[data-admin-top-sender="${GUEST_PARTICIPANT}"] a`)?.getAttribute('href')).toBe(`/adm/anonymous/${GUEST_PARTICIPANT}`);
   });
 
   test('un lecteur qui ne peut pas ouvrir les comptes voit les noms, sans lien (loi 4)', async () => {

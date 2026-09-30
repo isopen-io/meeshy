@@ -235,11 +235,18 @@ describe('la période et l’onglet vivent dans l’adresse', () => {
     expect(host.querySelector('[data-admin-tab-panel="activity"]')).not.toBeNull();
   });
 
-  test('les onglets sont un tablist ARIA de trois entrées', async () => {
+  test('les onglets sont un tablist ARIA de trois entrées, et le contenu un tabpanel nommé par l’onglet actif', async () => {
     const host = await openPanel('/probe', statsGateway().deps);
     const tabs = [...host.querySelectorAll('[role="tab"]')].map((node) => node.textContent);
     expect(tabs).toEqual(['Activité', 'Messages', 'Appels']);
     expect(tab(host, 'activity')?.getAttribute('aria-selected')).toBe('true');
+    expect(host.querySelector('[role="tabpanel"]')?.getAttribute('aria-label')).toBe('Activité');
+  });
+
+  test('un seul titre de niveau 1, des sections titrées de niveau 2', async () => {
+    const host = await openPanel('/probe', statsGateway().deps);
+    expect(host.querySelectorAll('h1')).toHaveLength(1);
+    expect([...host.querySelectorAll('h2')].map((heading) => heading.textContent)).toEqual(['En ce moment', 'Santé de l’usage', 'Tendances']);
   });
 });
 
@@ -279,6 +286,29 @@ describe('les états de l’onglet Activité', () => {
 
     expect(statText(host, 'messages-per-user')).toContain('13');
     expect(gateway.paths().filter((path) => path.startsWith('/api/v1/admin/analytics/kpis'))).toHaveLength(2);
+  });
+
+  test('erreur d’UN graphique : il garde son titre, dit l’erreur et son « Réessayer » relit SA lecture seule', async () => {
+    let served = false;
+    const gateway = statsGateway({
+      '/api/v1/admin/analytics/volume-timeline': () => {
+        if (served) return { ok: true, data: PAYLOADS['/api/v1/admin/analytics/volume-timeline'] };
+        served = true;
+        return { ok: false, status: 500, error: 'boom' };
+      },
+    });
+    const host = await openPanel('/probe', gateway.deps);
+
+    const volume = chart(host, 'volume');
+    expect(volume?.querySelector('figcaption')?.textContent).toContain('Volume des messages');
+    expect(volume?.querySelector('[data-admin-error]')).not.toBeNull();
+    expect(chart(host, 'hourly')?.querySelector('[data-admin-error]')).toBeNull();
+
+    await mounter.click(volume?.querySelector<HTMLButtonElement>('[data-admin-retry]') ?? null);
+
+    expect(chart(host, 'volume')?.querySelector('[data-admin-chart-body]')).not.toBeNull();
+    expect(gateway.paths().filter((path) => path.startsWith('/api/v1/admin/analytics/volume-timeline'))).toHaveLength(2);
+    expect(gateway.paths().filter((path) => path.startsWith('/api/v1/admin/analytics/hourly-activity'))).toHaveLength(1);
   });
 
   test('une lecture qui échoue ALORS QUE des données sont en cache les garde et le dit', async () => {

@@ -29,7 +29,7 @@ type PeriodControlProps<T extends WindowPeriod> = {
 function WithPeriod<T extends WindowPeriod>({ language, periods, fallback, children }: PeriodControlProps<T>) {
   const [period, setPeriod] = usePeriodParam(periods, fallback);
   return (
-    <>
+    <div className="grid gap-6">
       <AdminFilterChips
         label={translateAdmin(language, 'admin.kit.period.label')}
         options={periods.map((value) => ({ value, label: periodLabel(language, value) }))}
@@ -40,8 +40,31 @@ function WithPeriod<T extends WindowPeriod>({ language, periods, fallback, child
         }}
       />
       {children(period)}
-    </>
+    </div>
   );
+}
+
+function TabBody({ tab, language, deps, now }: { readonly tab: (typeof TABS)[number]; readonly language: InterfaceLanguage; readonly deps: AdminDeps; readonly now: Date }) {
+  switch (tab) {
+    case 'activity':
+      return (
+        <WithPeriod language={language} periods={ACTIVITY_PERIODS} fallback={ACTIVITY_DEFAULT}>
+          {(period) => <AdminActivityTab language={language} deps={deps} now={now} period={period} />}
+        </WithPeriod>
+      );
+    case 'messages':
+      return (
+        <WithPeriod language={language} periods={MESSAGES_PERIODS} fallback={MESSAGES_DEFAULT}>
+          {(period) => <AdminMessagesTab language={language} deps={deps} period={period} />}
+        </WithPeriod>
+      );
+    case 'calls':
+      return (
+        <WithPeriod language={language} periods={CALLS_PERIODS} fallback={CALLS_DEFAULT}>
+          {(period) => <AdminCallsTab language={language} deps={deps} period={period} />}
+        </WithPeriod>
+      );
+  }
 }
 
 /**
@@ -78,21 +101,9 @@ export function AdminAnalyticsPanel({
         active={tab}
         onChange={setTab}
       />
-      {tab === 'activity' ? (
-        <WithPeriod language={language} periods={ACTIVITY_PERIODS} fallback={ACTIVITY_DEFAULT}>
-          {(period) => <AdminActivityTab language={language} deps={deps} now={clock} period={period} />}
-        </WithPeriod>
-      ) : null}
-      {tab === 'messages' ? (
-        <WithPeriod language={language} periods={MESSAGES_PERIODS} fallback={MESSAGES_DEFAULT}>
-          {(period) => <AdminMessagesTab language={language} deps={deps} period={period} />}
-        </WithPeriod>
-      ) : null}
-      {tab === 'calls' ? (
-        <WithPeriod language={language} periods={CALLS_PERIODS} fallback={CALLS_DEFAULT}>
-          {(period) => <AdminCallsTab language={language} deps={deps} period={period} />}
-        </WithPeriod>
-      ) : null}
+      <div role="tabpanel" aria-label={translateAdmin(language, `admin.analytics.tab.${tab}`)}>
+        <TabBody tab={tab} language={language} deps={deps} now={clock} />
+      </div>
     </div>
   );
 }
