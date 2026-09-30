@@ -137,6 +137,35 @@ function assertNever(value: never): never {
   throw new Error(`Genre d'entité d'administration non géré : ${String(value)}`);
 }
 
+type LinkProps = {
+  readonly target: AdminTarget;
+  readonly children: ReactNode;
+  readonly className?: string;
+  readonly style?: CSSProperties;
+  readonly anchor?: string;
+  readonly ariaLabel?: string;
+};
+
+/**
+ * LE LIEN, SANS GARDE (#8876) — résout la cible dans l'espace donné. Exporté pour
+ * que les dix genres d'entité se mesurent TOUS, y compris ceux dont la section
+ * n'est pas encore prête (`AdminLink` ne les rendrait pas en lien) : c'est ici que
+ * vit le `switch` exhaustif, et un lot qui bascule son drapeau ne doit pas être le
+ * premier à l'exécuter. Un appelant du produit passe par `AdminLink`.
+ */
+export function AdminRouteLink({ target, space, children, className, style, anchor, ariaLabel }: LinkProps & { readonly space: AdminSpace }) {
+  const attrs = attributes(
+    {
+      className: `${className ?? ''} ${FOCUS}`.trim(),
+      style: { ...FOCUS_STYLE, ...style },
+      ...(anchor === undefined ? {} : { anchor }),
+      ...(ariaLabel === undefined ? {} : { ariaLabel }),
+    },
+    target.search,
+  );
+  return target.kind === 'section' ? sectionLink(target.section, space, children, attrs) : entityLink(target.entity, target.id, space, children, attrs);
+}
+
 /**
  * UN LIEN D'ADMINISTRATION (#8876) — vers une section ou la fiche d'une entité,
  * TOUJOURS dans l'espace courant (`/adm` reste `/adm`, D-76).
@@ -145,21 +174,7 @@ function assertNever(value: never): never {
  * (permission manquante, ou section pas encore prête), il rend le texte SEUL —
  * jamais un lien vers un refus ou un écran d'attente (loi 4).
  */
-export function AdminLink({
-  target,
-  children,
-  className,
-  style,
-  anchor,
-  ariaLabel,
-}: {
-  readonly target: AdminTarget;
-  readonly children: ReactNode;
-  readonly className?: string;
-  readonly style?: CSSProperties;
-  readonly anchor?: string;
-  readonly ariaLabel?: string;
-}) {
+export function AdminLink({ target, children, className, style, anchor, ariaLabel }: LinkProps) {
   const reach = useAdminReach();
   const section = target.kind === 'section' ? target.section : sectionOfEntity(target.entity);
 
@@ -171,19 +186,18 @@ export function AdminLink({
     );
   }
 
-  const attrs = attributes(
-    {
-      className: `${className ?? ''} ${FOCUS}`.trim(),
-      style: { ...FOCUS_STYLE, ...style },
-      ...(anchor === undefined ? {} : { anchor }),
-      ...(ariaLabel === undefined ? {} : { ariaLabel }),
-    },
-    target.search,
+  return (
+    <AdminRouteLink
+      target={target}
+      space={reach.space}
+      {...(className === undefined ? {} : { className })}
+      {...(style === undefined ? {} : { style })}
+      {...(anchor === undefined ? {} : { anchor })}
+      {...(ariaLabel === undefined ? {} : { ariaLabel })}
+    >
+      {children}
+    </AdminRouteLink>
   );
-
-  return target.kind === 'section'
-    ? sectionLink(target.section, reach.space, children, attrs)
-    : entityLink(target.entity, target.id, reach.space, children, attrs);
 }
 
 export function AdminEntityLink({
@@ -246,9 +260,48 @@ function ChipVisual({ entity, size }: { readonly entity: AdminEntityRef; readonl
 }
 
 /**
+ * L'IDENTITÉ D'UNE ENTITÉ, SANS LIEN (#8876) — avatar (ou glyphe du genre), VRAI
+ * NOM, secondaire. C'est ce qu'une colonne PRIMAIRE de liste pose : la liste
+ * enveloppe elle-même la cellule dans le lien vers la fiche, et un lien dans un
+ * lien n'est pas du HTML valide. Partout ailleurs, `AdminEntityChip`.
+ */
+export function AdminEntityIdentity({
+  language,
+  entity,
+  size = 'md',
+}: {
+  readonly language: InterfaceLanguage;
+  readonly entity: AdminEntityRef;
+  readonly size?: 'sm' | 'md';
+}) {
+  const deleted = entity.deleted === true;
+  return (
+    <span className="flex min-w-0 items-center gap-3" data-admin-entity={entity.kind}>
+      <ChipVisual entity={entity} size={size === 'sm' ? 28 : 36} />
+      <span className="min-w-0">
+        <span className="block truncate font-medium" style={{ color: INK, textDecoration: deleted ? 'line-through' : 'none' }}>
+          {entity.label}
+        </span>
+        {entity.secondary === undefined || entity.secondary === null ? null : (
+          <span className="block truncate text-caption" style={{ color: INK2 }}>
+            {entity.secondary}
+          </span>
+        )}
+        {deleted ? (
+          <span className="block text-caption" style={{ color: INK2 }}>
+            {translateAdmin(language, 'admin.kit.entity.deleted')}
+          </span>
+        ) : null}
+      </span>
+    </span>
+  );
+}
+
+/**
  * LA PUCE D'ENTITÉ (#8876) — avatar (ou glyphe du genre), VRAI NOM, secondaire.
- * Le nom est le lien vers la fiche quand le lecteur peut l'ouvrir ; sinon une
- * étiquette. L'identifiant n'apparaît jamais ici.
+ * La puce ENTIÈRE est le lien vers la fiche (cible de 44 px) quand le lecteur
+ * peut l'ouvrir ; sinon une étiquette — et une entité supprimée n'a plus de
+ * fiche à ouvrir. L'identifiant n'apparaît jamais ici.
  */
 export function AdminEntityChip({
   language,
@@ -259,41 +312,16 @@ export function AdminEntityChip({
   readonly entity: AdminEntityRef;
   readonly size?: 'sm' | 'md';
 }) {
-  const pixels = size === 'sm' ? 28 : 36;
-  const deleted = entity.deleted === true;
-  const name = (
-    <span className="min-w-0">
-      <span className="block truncate font-medium" style={{ color: INK, textDecoration: deleted ? 'line-through' : 'none' }}>
-        {entity.label}
-      </span>
-      {entity.secondary === undefined || entity.secondary === null ? null : (
-        <span className="block truncate text-caption" style={{ color: INK2 }}>
-          {entity.secondary}
-        </span>
-      )}
-    </span>
-  );
-
+  const identity = <AdminEntityIdentity language={language} entity={entity} size={size} />;
+  if (entity.deleted === true) return identity;
   return (
-    <span className="flex min-w-0 items-center gap-3" data-admin-entity={entity.kind}>
-      <ChipVisual entity={entity} size={pixels} />
-      {deleted ? (
-        <span className="min-w-0">
-          {name}
-          <span className="block text-caption" style={{ color: INK2 }}>
-            {translateAdmin(language, 'admin.kit.entity.deleted')}
-          </span>
-        </span>
-      ) : (
-        <AdminLink
-          target={{ kind: 'entity', entity: entity.kind, id: entity.id }}
-          className="flex min-w-0 items-center"
-          style={{ minHeight: 44 }}
-          ariaLabel={translateAdmin(language, 'admin.kit.entity.open', { name: entity.label })}
-        >
-          {name}
-        </AdminLink>
-      )}
-    </span>
+    <AdminLink
+      target={{ kind: 'entity', entity: entity.kind, id: entity.id }}
+      className="flex min-w-0 items-center"
+      style={{ minHeight: 44 }}
+      ariaLabel={translateAdmin(language, 'admin.kit.entity.open', { name: entity.label })}
+    >
+      {identity}
+    </AdminLink>
   );
 }

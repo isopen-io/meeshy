@@ -40,8 +40,16 @@ export async function mountAdminAt(mounter: Mounter, url: string, identity: Admi
   return host;
 }
 
-/** À appeler après chaque témoin : l'adresse et le cache ne doivent pas fuir d'un témoin à l'autre. */
-export function resetAdminRouter(): void {
+/**
+ * À appeler après chaque témoin : l'adresse et le cache ne doivent pas fuir d'un
+ * témoin à l'autre. **Le routeur est démonté AVANT que l'adresse ne change** :
+ * naviguer vers `/` sous un routeur encore monté ferait rendre l'écran des
+ * conversations dans le témoin, qui chargerait ses données et mettrait à jour
+ * l'arbre après le démontage du DOM — des erreurs non attrapées « entre deux
+ * témoins ».
+ */
+export function resetAdminRouter(mounter: Mounter): void {
+  mounter.unmountAll();
   appQueryClient.clear();
   navigate('/', true);
 }

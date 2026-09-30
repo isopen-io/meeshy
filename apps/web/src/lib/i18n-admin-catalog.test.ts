@@ -6,6 +6,7 @@ import {
   loadAdminInterfaceCatalog,
   suspendForAdminInterfaceCatalog,
   translateAdmin,
+  translateAdminMaybe,
   type AdminInterfaceCatalog,
 } from './i18n-admin-catalog';
 import { catalogPlaceholders } from './i18n-catalog';
@@ -111,5 +112,25 @@ describe('suspendForAdminInterfaceCatalog', () => {
       await thrown;
     }
     expect(() => suspendForAdminInterfaceCatalog('it')).not.toThrow();
+  });
+});
+
+/**
+ * LA LECTURE TOLÉRANTE (#8876) — la bibliothèque d'interprétation COMPOSE ses
+ * clés (`admin.enum.<famille>.<code>`) depuis un code servi : une clé absente se
+ * dit `null`, jamais une exception ni une chaîne vide.
+ */
+describe('translateAdminMaybe', () => {
+  test('rend le texte d’une clé connue, dans la langue demandée', async () => {
+    await loadAll();
+    expect(translateAdminMaybe('fr', 'admin.enum.role.BIGBOSS')).toBe('Créateur');
+    expect(translateAdminMaybe('en', 'admin.enum.role.BIGBOSS')).toBe('Creator');
+  });
+
+  test('rend null pour une clé que le catalogue ne porte pas — y compris une clé héritée du prototype', async () => {
+    await loadAll();
+    expect(translateAdminMaybe('fr', 'admin.enum.role.SUPERVILLAIN')).toBeNull();
+    expect(translateAdminMaybe('fr', 'toString')).toBeNull();
+    expect(translateAdminMaybe('fr', '')).toBeNull();
   });
 });

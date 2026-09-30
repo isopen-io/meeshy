@@ -6,6 +6,7 @@ import { visibleAdminSections, type AdminPermissions } from '@/lib/admin/section
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { navigate } from '@/lib/router';
 import { createActMounter } from '@/test-support/act-mount';
 import { adminIdentityFixture, expectNoRawIdentifiers } from '@/test-support/admin-assertions';
 import { mountAdminAt, resetAdminRouter } from '@/test-support/admin-router';
@@ -51,6 +52,7 @@ const mounter = createActMounter();
 afterEach(() => {
   mounter.unmountAll();
   appQueryClient.clear();
+  navigate('/', true);
 });
 
 const MATRICE: AdminPermissions = {
@@ -174,7 +176,7 @@ describe('le hub reste DANS l’espace où l’on est (D-76)', () => {
 
     expect(liens.length).toBeGreaterThan(0);
     expect(liens.filter((href) => !href.startsWith('/adm/'))).toEqual([]);
-    resetAdminRouter();
+    resetAdminRouter(mounter);
   });
 
   test('depuis /admin, chaque tuile mène sous /admin', async () => {
@@ -182,6 +184,6 @@ describe('le hub reste DANS l’espace où l’on est (D-76)', () => {
     const liens = [...host.querySelectorAll('[data-admin-section]')].map((lien) => lien.getAttribute('href') ?? '');
 
     expect(liens.filter((href) => !href.startsWith('/admin/'))).toEqual([]);
-    resetAdminRouter();
+    resetAdminRouter(mounter);
   });
 });

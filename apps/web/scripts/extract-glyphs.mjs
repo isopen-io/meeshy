@@ -390,11 +390,10 @@ emit({
  */
 const COMPOSER = ['stop', 'camera', 'map-pin', 'sticker', 'clipboard-text', 'image-square', 'x', 'user-circle', 'video-camera'];
 
-/* AVERTISSEMENT (#7280) — `glyphs-feed.ts` porte un `mapPin` AJOUTÉ À LA MAIN
-   (#6901), que ce script ne connaît pas : le relancer le SUPPRIME. Avant de
-   committer une regeneration, verifier `git diff src/components/glyphs-*.ts`
-   et ne garder que les jeux qu'on voulait toucher — ou ajouter `map-pin` a
-   FEED, ce qui ferait perdre son doc-comment. */
+/* HISTORIQUE (#7280, soldé par #8876) — `glyphs-feed.ts` portait un `mapPin`
+   AJOUTÉ À LA MAIN que ce script ne connaissait pas : le relancer le
+   supprimait. `map-pin` est désormais dans `FEED` : la régénération est
+   IDEMPOTENTE, `git diff src/components/glyphs-*.ts` reste vide. */
 
 emit({
   ids: COMPOSER,
@@ -530,8 +529,14 @@ emit({
  * `speaker-slash` (#6898) : l'indicateur « son coupe » d'une scene elue du fil,
  * miroir de `BackgroundSoundBadge.muteIconName` (`FeedSceneAutoplay.swift:186-200`)
  * -- jusqu'ici un trace RECOPIE a la main dans `scene-player.tsx`.
+ *
+ * `map-pin` (#6901, #8876) : la pastille de LIEU d'une scene canvas
+ * (`scene-object-place.tsx`). Le glyphe avait ete AJOUTE A LA MAIN a
+ * `glyphs-feed.ts` : relancer ce script le supprimait en silence, et aucun
+ * autre jeu ne pouvait etre regenere sans defaire celui-ci. Il est desormais
+ * extrait comme les autres -- le script est idempotent, `git diff` reste vide.
  */
-const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play', 'speaker-slash', 'arrow-bend-up-left'];
+const FEED = ['heart', 'heart-fill', 'chat-circle', 'arrows-clockwise', 'bookmark', 'bookmark-fill', 'share-network', 'waveform', 'caret-right', 'monitor-play', 'speaker-slash', 'arrow-bend-up-left', 'map-pin'];
 
 emit({
   ids: FEED,
