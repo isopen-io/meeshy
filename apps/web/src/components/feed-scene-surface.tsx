@@ -177,16 +177,16 @@ export function FeedSceneSurface({
           <span
             data-feed-scene-paused-glyph=""
             className="pointer-events-none absolute end-2.5 bottom-2.5 grid place-items-center rounded-full"
-            style={{ width: 26, height: 26, backgroundColor: 'rgba(0,0,0,0.45)' }}
+            style={{ width: 26, height: 26, backgroundColor: 'var(--color-scrim)' }}
           >
-            <Glyph name="fillPlay" size={13} style={{ color: 'white' }} />
+            <Glyph name="fillPlay" size={13} style={{ color: 'var(--color-on-media)' }} />
           </span>
         ) : null}
         {caption !== undefined ? (
           <span
             data-feed-scene-caption
-            className="pointer-events-none absolute inset-x-0 bottom-0 block px-2 py-1.5 text-start text-check text-white"
-            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}
+            className="pointer-events-none absolute inset-x-0 bottom-0 block px-2 py-1.5 text-start text-check text-on-media"
+            style={{ background: 'linear-gradient(to top, var(--color-scrim-strong), transparent)' }}
             {...(caption.language !== undefined ? { lang: caption.language } : {})}
           >
             {truncateWords(caption.text, captionWordLimit).text}
@@ -214,7 +214,7 @@ export function FeedSceneSurface({
           }}
           aria-label={label}
           className="relative block size-full focus-visible:outline-2 focus-visible:-outline-offset-4"
-          style={{ outlineColor: 'white' }}
+          style={{ outlineColor: 'var(--color-on-media)' }}
         >
           {body}
         </button>

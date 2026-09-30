@@ -145,7 +145,7 @@ export function FeedPostMenu({
         /* UNE VRAIE BOÎTE DE 44 (`check-profile.mjs` mesure la boîte, pas un
            débord `::after`) ; le DISQUE visible garde 34, la cote iOS. */
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:-outline-offset-2"
-        style={{ outlineColor: overlay ? 'white' : 'var(--color-ios-brand)' }}
+        style={{ outlineColor: overlay ? 'var(--color-on-media)' : 'var(--color-ios-brand)' }}
       >
         <span
           aria-hidden
@@ -153,8 +153,8 @@ export function FeedPostMenu({
           style={{
             width: DISC_SIZE,
             height: DISC_SIZE,
-            color: overlay ? 'white' : 'var(--color-ios-ink-3)',
-            backgroundColor: overlay ? 'rgba(0,0,0,0.35)' : 'transparent',
+            color: overlay ? 'var(--color-on-media)' : 'var(--color-ios-ink-3)',
+            backgroundColor: overlay ? 'var(--color-scrim-soft)' : 'transparent',
           }}
         >
           <GlyphSvg glyph={THREAD_MENU_GLYPHS.dotsThree} size={20} />

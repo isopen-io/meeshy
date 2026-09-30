@@ -179,7 +179,7 @@ export function PublicationEditSheet({
             data-publication-edit-save
             disabled={!submittable || busy}
             onClick={save}
-            className="rounded-chip px-5 text-body font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="rounded-chip px-5 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{
               minHeight: 44,
               backgroundColor: 'var(--color-ios-brand)',

@@ -35,7 +35,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * au contraste (aucune matière ne dépend du flou pour rester lisible), sans
  * réécrire le verre hors de son site.
  */
-export const QUICK_STRIP_CHROME = 'rgba(0,0,0,0.55)';
+export const QUICK_STRIP_CHROME = 'var(--color-scrim)';
 
 const ORIGINAL_ID = 'original';
 /** > 5 langues ⇒ mode DÉFILANT (`inlineCap` d'iOS, `QuickBar.swift:44-58`). */
@@ -88,7 +88,7 @@ export function PublicationLanguageBar({ languages, active, language, onSelect, 
       className="pointer-events-auto flex items-center gap-2 rounded-full px-2 py-1.5"
       style={{
         background: QUICK_STRIP_CHROME,
-        border: '1px solid rgba(255,255,255,0.12)',
+        border: '1px solid var(--color-media-fill)',
         ...(scrolls ? { maxWidth: 180, overflowX: 'auto' } : {}),
       }}
     >
@@ -98,7 +98,7 @@ export function PublicationLanguageBar({ languages, active, language, onSelect, 
         onClick={() => onSelect('original')}
         aria-pressed={active === 'original'}
         className="shrink-0 rounded-chip px-2 text-check font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{ color: '#fff', minHeight: 44, minWidth: 44, outlineColor: '#fff' }}
+        style={{ color: 'var(--color-on-media)', minHeight: 44, minWidth: 44, outlineColor: 'var(--color-on-media)' }}
       >
         {translate(language, 'story.language.original')}
       </button>
@@ -114,7 +114,7 @@ export function PublicationLanguageBar({ languages, active, language, onSelect, 
             aria-pressed={isActive}
             aria-label={spokenLanguageName(code)}
             className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-            style={{ minWidth: 44, minHeight: 44, opacity: isActive ? 1 : 0.55, outlineColor: '#fff' }}
+            style={{ minWidth: 44, minHeight: 44, opacity: isActive ? 1 : 0.55, outlineColor: 'var(--color-on-media)' }}
           >
             <span aria-hidden="true" style={{ fontSize: 22, lineHeight: 1 }}>
               {info.flag}
@@ -132,7 +132,7 @@ export function PublicationLanguageBar({ languages, active, language, onSelect, 
           onClick={onOpenMore}
           aria-label={translate(language, 'story.language.more')}
           className="grid shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.15)', color: '#fff', outlineColor: '#fff' }}
+          style={{ width: 32, height: 32, background: 'var(--color-media-fill)', color: 'var(--color-on-media)', outlineColor: 'var(--color-on-media)' }}
         >
           +
         </button>
