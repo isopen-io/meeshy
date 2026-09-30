@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { registerAuditLogRoutes } from './audit-logs';
 
 /**
  * Le montage des surfaces de SUPERVISION de l'administration (#8876).
@@ -8,6 +9,6 @@ import type { FastifyInstance } from 'fastify';
  * vit ici. Chaque module déclare sa propre garde AU NIVEAU DE LA ROUTE — ce
  * fichier n'en décide aucune.
  */
-export async function adminOversightRoutes(_fastify: FastifyInstance): Promise<void> {
-  // Les quatre modules s'enregistrent ici, un par un, au fil de leur livraison.
+export async function adminOversightRoutes(fastify: FastifyInstance): Promise<void> {
+  registerAuditLogRoutes(fastify);
 }
