@@ -73,7 +73,7 @@ extension ConversationView {
             HapticFeedback.light()
             onOpenFullConversation?()
         } label: {
-            HeaderOpenFullGlyph(accentColor: accentColor, secondaryColor: secondaryColor)
+            HeaderOpenFullGlyph(accentColor: accentColor)
         }
         .accessibilityLabel(String(localized: "conversation.preview.openFull", defaultValue: "Ouvrir la conversation", bundle: .main))
         .accessibilityIdentifier("conversation.preview.openFull"))
@@ -235,12 +235,11 @@ extension ConversationView {
 /// (`HeaderSearchGlyph`), type NOMINAL pour borner la chaîne de types de l'en-tête.
 private struct HeaderOpenFullGlyph: View {
     let accentColor: String
-    let secondaryColor: String
 
     var body: some View {
         Image(systemName: "arrow.up.left.and.arrow.down.right")
             .font(MeeshyFont.relative(12, weight: .semibold))
-            .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            .foregroundStyle(Color(hex: accentColor))
             .frame(width: 28, height: 28)
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
             .meeshyTapTarget()
