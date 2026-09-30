@@ -33,6 +33,7 @@ import esContactCard from './catalog-es-contact-card';
 import esQuote from './catalog-es-quote';
 import esCommentRow from './catalog-es-comment-row';
 import esContactDiscovery from './catalog-es-contact-discovery';
+import esDownload from './catalog-es-download';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -1071,11 +1072,7 @@ const es = {
   'message-detail.load-error': 'No se pudo cargar esta información',
   'message-detail.retry': 'Reintentar',
 
-  'download.title': 'Descarga Meeshy',
-  'download.body': 'Escribe en tu idioma y lee en el tuyo: Meeshy traduce cada mensaje por el camino.',
-  'download.appStore': 'Descargar en el App Store',
-  'download.web': 'Abrir Meeshy en el navegador',
-  'download.otherPlatforms': 'En Android y en el ordenador, Meeshy funciona directamente en el navegador.',
+  ...esDownload,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...esComposerAttach,

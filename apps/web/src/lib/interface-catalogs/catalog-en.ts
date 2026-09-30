@@ -33,6 +33,7 @@ import enContactCard from './catalog-en-contact-card';
 import enQuote from './catalog-en-quote';
 import enCommentRow from './catalog-en-comment-row';
 import enContactDiscovery from './catalog-en-contact-discovery';
+import enDownload from './catalog-en-download';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -1071,11 +1072,7 @@ const en = {
   'message-detail.load-error': 'Couldn’t load this information',
   'message-detail.retry': 'Retry',
 
-  'download.title': 'Get Meeshy',
-  'download.body': 'Write in your language, read in yours: Meeshy translates every message on the way.',
-  'download.appStore': 'Download on the App Store',
-  'download.web': 'Open Meeshy in your browser',
-  'download.otherPlatforms': 'On Android and on a computer, Meeshy runs right in your browser.',
+  ...enDownload,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...enComposerAttach,

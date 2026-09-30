@@ -33,6 +33,7 @@ import deContactCard from './catalog-de-contact-card';
 import deQuote from './catalog-de-quote';
 import deCommentRow from './catalog-de-comment-row';
 import deContactDiscovery from './catalog-de-contact-discovery';
+import deDownload from './catalog-de-download';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -1071,11 +1072,7 @@ const de = {
   'message-detail.load-error': 'Diese Informationen konnten nicht geladen werden',
   'message-detail.retry': 'Erneut versuchen',
 
-  'download.title': 'Meeshy holen',
-  'download.body': 'Schreibe in deiner Sprache und lies in deiner: Meeshy übersetzt jede Nachricht unterwegs.',
-  'download.appStore': 'Laden im App Store',
-  'download.web': 'Meeshy im Browser öffnen',
-  'download.otherPlatforms': 'Auf Android und am Computer läuft Meeshy direkt im Browser.',
+  ...deDownload,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...deComposerAttach,

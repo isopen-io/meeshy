@@ -14,7 +14,7 @@
  * lie donc l'adresse PUBLIQUE, que Capacitor confie au navigateur du système,
  * comme l'app iOS native (`AboutView.swift`).
  */
-export type InstitutionalPage = 'terms' | 'privacy';
+export type InstitutionalPage = 'about' | 'contact' | 'faq' | 'help' | 'partners' | 'privacy' | 'terms';
 
 const CANONICAL_ORIGIN = 'https://meeshy.me';
 

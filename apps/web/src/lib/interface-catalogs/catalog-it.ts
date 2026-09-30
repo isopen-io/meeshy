@@ -33,6 +33,7 @@ import itContactCard from './catalog-it-contact-card';
 import itQuote from './catalog-it-quote';
 import itCommentRow from './catalog-it-comment-row';
 import itContactDiscovery from './catalog-it-contact-discovery';
+import itDownload from './catalog-it-download';
 
 const it = {
   'announce.messageSent': 'Messaggio inviato',
@@ -1071,11 +1072,7 @@ const it = {
   'message-detail.load-error': 'Impossibile caricare queste informazioni',
   'message-detail.retry': 'Riprova',
 
-  'download.title': 'Scarica Meeshy',
-  'download.body': 'Scrivi nella tua lingua e leggi nella tua: Meeshy traduce ogni messaggio lungo la strada.',
-  'download.appStore': 'Scarica su App Store',
-  'download.web': 'Apri Meeshy nel browser',
-  'download.otherPlatforms': 'Su Android e su computer, Meeshy funziona direttamente nel browser.',
+  ...itDownload,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...itComposerAttach,
