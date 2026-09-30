@@ -10,10 +10,15 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR
 
 describe('habillage des vraies captures (#8855)', () => {
   test('la vraie capture remplit l’écran du cadre, sous le titre de sa scène', () => {
-    const html = pageCapture({ appareil: 'iphone', lang: 'fr', rang: 2, plan: VITRINE, ecranReel: PNG })
+    const html = pageCapture({ appareil: 'iphone', lang: 'fr', rang: 5, plan: VITRINE, ecranReel: PNG })
     expect(html).toContain(`<img class="ecran-reel" src="data:image/png;base64,${PNG.toString('base64')}"`)
     expect(html).toMatch(/class="device-screen"[\s\S]*class="ecran-reel"/)
     expect(html).toContain('Garde ta série')
+  })
+
+  test('Imagine a son titre, sur ses deux lignes', () => {
+    const html = pageCapture({ appareil: 'iphone', lang: 'fr', rang: 6, plan: VITRINE, ecranReel: PNG })
+    expect(html.replace(/<[^>]+>/g, '')).toContain('Un message. Une image. Sa langue.')
   })
 
   test('sans capture (mesure du corps de titre), la page se compose sans écran', () => {

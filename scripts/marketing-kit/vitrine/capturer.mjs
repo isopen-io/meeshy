@@ -3,15 +3,17 @@
 //   node scripts/marketing-kit/vitrine/capturer.mjs --lang fr --appareil iphone,ipad --construire
 //   node scripts/marketing-kit/vitrine/capturer.mjs --lang all --scene global
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { REPO_ROOT } from '../lib/catalog.mjs'
 import { KIT_LANGS } from '../lib/locales.mjs'
+import { CREDITS } from '../lib/photos.mjs'
 import { pngInfo } from '../lib/png.mjs'
 import { VITRINE } from '../templates/vitrine/plan.mjs'
 import { exporterVitrine } from './fixtures.mjs'
+import { DOSSIER_PHOTOS, fichierVoix, lireVoix, synthetiser } from './medias.mjs'
 import { SIMULATEURS, assurerSimulateur, barreDEtat, demarrer } from './simulateurs.mjs'
 
 export const BUNDLE = 'me.meeshy.app'
@@ -34,6 +36,24 @@ export const argumentsDeLancement = ({ scene, lang }) => [
 ]
 
 export const cheminBrut = ({ appareil, lang, scene }) => resolve(SORTIE_BRUTE, appareil, lang, `${scene}.png`)
+
+// Les fixtures d'une langue, chaque vocal portant la durée et la taille MESURÉES de sa piste.
+export const fixturesMesurees = ({ lang, maintenant, mesurer }) => {
+  const provisoires = exporterVitrine({ lang, maintenant })
+  const mesures = Object.fromEntries(provisoires.medias.filter((m) => m.genre === 'audio').map((m) => [m.url, mesurer(m)]))
+  return exporterVitrine({ lang, maintenant, mesures })
+}
+
+// La source d'un média sur le Mac : la photo du kit, ou le vocal synthétisé.
+export const sourceDuMedia = (media) => (media.genre === 'image' ? resolve(DOSSIER_PHOTOS, CREDITS[media.photo].fichier) : fichierVoix(media))
+
+const deposer = (fixtures, dossier) => {
+  const medias = resolve(dossier, 'medias')
+  rmSync(medias, { recursive: true, force: true })
+  mkdirSync(medias, { recursive: true })
+  for (const media of fixtures.medias) copyFileSync(sourceDuMedia(media), resolve(medias, media.fichier))
+  writeFileSync(resolve(dossier, 'fixtures.json'), JSON.stringify(fixtures))
+}
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -65,7 +85,7 @@ const construire = (udid) => {
   return resolve(DERIVED_DATA, 'Products/Debug-iphonesimulator/Meeshy.app')
 }
 
-const capturer = async ({ udid, appareil, lang, capture }) => {
+const capturer = async ({ udid, appareil, lang, capture, voix }) => {
   const { scene, theme } = capture
   const etiquette = `${appareil}/${lang}/${scene}`
   simctl('ui', udid, 'appearance', theme === 'dark' ? 'dark' : 'light')
@@ -73,7 +93,7 @@ const capturer = async ({ udid, appareil, lang, capture }) => {
   const dossier = resolve(simctl('get_app_container', udid, BUNDLE, 'data').trim(), 'Documents/vitrine')
   mkdirSync(dossier, { recursive: true })
   rmSync(resolve(dossier, 'pret.txt'), { force: true })
-  writeFileSync(resolve(dossier, 'fixtures.json'), JSON.stringify(exporterVitrine({ lang, maintenant: new Date() })))
+  deposer(fixturesMesurees({ lang, maintenant: new Date(), mesurer: (media) => synthetiser(media, voix) }), dossier)
   simctl('launch', udid, BUNDLE, ...argumentsDeLancement({ scene, lang }))
   await attendreLeSignal({ existe: () => existsSync(resolve(dossier, 'pret.txt')), etiquette })
   await pause(1500)
@@ -108,10 +128,11 @@ const main = async () => {
     for (const udid of Object.values(udids)) simctl('install', udid, app)
   }
   const scenes = values.scene?.split(',')
+  const voix = lireVoix(execFileSync('say', ['-v', '?'], { encoding: 'utf8' }))
   for (const appareil of appareils) {
     for (const lang of langs) {
       for (const capture of VITRINE[appareil].captures.filter((c) => !scenes || scenes.includes(c.scene))) {
-        console.log(`✓ ${await capturer({ udid: udids[appareil], appareil, lang, capture })}`)
+        console.log(`✓ ${await capturer({ udid: udids[appareil], appareil, lang, capture, voix })}`)
       }
     }
   }
