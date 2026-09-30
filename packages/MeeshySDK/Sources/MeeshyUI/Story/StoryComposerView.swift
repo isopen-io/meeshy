@@ -446,7 +446,7 @@ public struct StoryComposerView: View {
                         discardOfferedDraft()
                     }
                 )
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
                 // Dégage le rail de FABs (48 pt + marge + safe area), comme les
                 // amorces de page blanche : le bandeau se pose AU-DESSUS des
                 // outils, il ne les recouvre pas. MÊME constante que les

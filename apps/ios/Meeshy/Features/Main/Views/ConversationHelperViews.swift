@@ -39,7 +39,7 @@ struct ThemedBackButton: View {
 
     private var gradientStroke: LinearGradient {
         LinearGradient(
-            colors: [Color(hex: color).opacity(0.5), MeeshyColors.indigo300.opacity(0.5)],
+            colors: [Color(hex: color).opacity(MeeshyOpacity.strong), MeeshyColors.indigo300.opacity(MeeshyOpacity.strong)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -71,9 +71,9 @@ struct ThemedBackButton: View {
                 // Chevron — always visible, in a fixed 40-pt slot so the
                 // back affordance stays anchored regardless of pill width
                 Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(16, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .bold))
                     .foregroundStyle(gradientFill)
-                    .frame(width: 40, height: 40)
+                    .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
 
                 if showsPill {
                     // Vertical separator between chevron and red pill —
@@ -81,9 +81,9 @@ struct ThemedBackButton: View {
                     // the surrounding glass-capsule mood instead of
                     // looking like a hardcoded grey divider.
                     Rectangle()
-                        .fill(Color(hex: color).opacity(0.35))
+                        .fill(Color(hex: color).opacity(MeeshyOpacity.medium))
                         .frame(width: 1, height: 22)
-                        .padding(.trailing, 6)
+                        .padding(.trailing, MeeshySpacing.xsPlus)
 
                     // Red pill — the eye-catcher. Sits INSIDE the outer
                     // glass capsule, hugged by 6-pt padding on each side
@@ -102,14 +102,14 @@ struct ThemedBackButton: View {
                         .foregroundColor(.white)
                         .lineLimit(1)
                         .fixedSize(horizontal: true, vertical: false)
-                        .padding(.horizontal, 8)
+                        .padding(.horizontal, MeeshySpacing.sm)
                         .frame(minWidth: 22, minHeight: 22)
                         .background(
                             Capsule()
                                 .fill(badgeBackground)
                                 .shadow(color: badgeBackground.opacity(0.4), radius: 3, y: 1)
                         )
-                        .padding(.trailing, 6)
+                        .padding(.trailing, MeeshySpacing.xsPlus)
                         .accessibilityHidden(true)
                         .transition(.scale.combined(with: .opacity))
                 }
@@ -118,7 +118,7 @@ struct ThemedBackButton: View {
                 Capsule()
                     .fill(.ultraThinMaterial)
                     .overlay(Capsule().stroke(gradientStroke, lineWidth: 1))
-                    .shadow(color: Color(hex: color).opacity(0.3), radius: 6, y: 3)
+                    .shadow(color: Color(hex: color).opacity(MeeshyOpacity.medium), radius: 6, y: 3)
                     .opacity(compactMode ? 0 : 1)
                     .scaleEffect(compactMode ? 0.4 : 1, anchor: .leading)
             )

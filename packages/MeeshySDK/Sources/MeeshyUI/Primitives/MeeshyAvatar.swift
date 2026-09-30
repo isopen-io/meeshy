@@ -248,6 +248,9 @@ public struct MeeshyAvatar: View {
     /// (hors ligne > 30min) ne rend PAS de dot non plus — seuls online/recent
     /// (vert) et away (orange) affichent une pastille.
     public var presenceState: PresenceState? = nil
+    /// Le pair a l'écran de CETTE conversation ouvert (#8892) : point à la
+    /// couleur primaire, même quand `presenceState` est masqué.
+    public var isHere: Bool = false
     public var onTap: (() -> Void)? = nil
     public var onViewProfile: (() -> Void)? = nil
     public var onViewStory: (() -> Void)? = nil
@@ -261,7 +264,7 @@ public struct MeeshyAvatar: View {
     public init(name: String, context: AvatarContext, kind: AvatarKind = .user, accentColor: String = "",
                 secondaryColor: String? = nil, avatarURL: String? = nil, thumbHash: String? = nil,
                 storyState: StoryRingState = .none, moodEmoji: String? = nil,
-                presenceState: PresenceState? = nil, enablePulse: Bool? = nil,
+                presenceState: PresenceState? = nil, isHere: Bool = false, enablePulse: Bool? = nil,
                 isDark: Bool = ThemeManager.shared.mode.isDark,
                 onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil,
                 onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil,
@@ -269,6 +272,7 @@ public struct MeeshyAvatar: View {
         self.name = name; self.context = context; self.kind = kind; self.accentColor = accentColor
         self.secondaryColor = secondaryColor; self.avatarURL = avatarURL; self.thumbHash = thumbHash
         self.storyState = storyState; self.moodEmoji = moodEmoji; self.presenceState = presenceState
+        self.isHere = isHere
         self.enablePulse = enablePulse ?? context.defaultPulse; self.isDark = isDark
         self.onTap = onTap; self.onViewProfile = onViewProfile; self.onViewStory = onViewStory
         self.onMoodTap = onMoodTap; self.onOnlineTap = onOnlineTap; self.contextMenuItems = contextMenuItems
@@ -304,12 +308,18 @@ public struct MeeshyAvatar: View {
         return context.showsMoodBadge ? moodEmoji : nil
     }
 
-    private var effectivePresence: PresenceState? {
+    private var effectivePresence: AvatarPresenceDot? {
         guard kind == .user, context.showsOnlineDot else { return nil }
         // Offline (>30min) : aucun dot. Le gris reste défini dans
         // PresenceState.dotColor pour les affichages labellisés, pas ici.
-        guard presenceState != .offline else { return nil }
-        return presenceState
+        // « Ici » (#8892) prime et se rend même sans présence servie.
+        return AvatarPresenceDot.resolve(presence: presenceState, isHere: isHere)
+    }
+
+    /// VoiceOver : le nom, et « dans la conversation » quand le pair y est.
+    private var accessibilityName: String {
+        guard effectivePresence == .here else { return name }
+        return "\(name), \(AvatarPresenceDot.here.localizedLabel)"
     }
 
     private var hasTapHandler: Bool {
@@ -417,10 +427,10 @@ public struct MeeshyAvatar: View {
                         }
                     }
                 }
-                .accessibilityLabel(name)
+                .accessibilityLabel(accessibilityName)
         } else {
             tappable
-                .accessibilityLabel(name)
+                .accessibilityLabel(accessibilityName)
         }
     }
 
@@ -461,7 +471,7 @@ public struct MeeshyAvatar: View {
                 .frame(width: context.ringSize, height: context.ringSize)
         case .read:
             Circle()
-                .stroke(Color(hex: resolvedAccent).opacity(0.3), lineWidth: context.ringWidth)
+                .stroke(Color(hex: resolvedAccent).opacity(MeeshyOpacity.medium), lineWidth: context.ringWidth)
                 .frame(width: context.ringSize, height: context.ringSize)
         case .none:
             EmptyView()
@@ -496,13 +506,13 @@ public struct MeeshyAvatar: View {
     }
 
     @ViewBuilder
-    private func onlineDot(for presence: PresenceState) -> some View {
-        // Couleur via le mapping central PresenceState.dotColor (PresenceStyle) :
-        // vert online/recent, orange away, gris offline.
+    private func onlineDot(for presence: AvatarPresenceDot) -> some View {
+        // Couleur via le mapping central AvatarPresenceDot.color (PresenceStyle) :
+        // primaire « ici », vert online/recent, orange away, gris idle.
         let dot = Circle()
-            .fill(presence.dotColor)
+            .fill(presence.color)
             .frame(width: context.onlineDotSize, height: context.onlineDotSize)
-            .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
+            .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: MeeshyBorder.strong))
             .onTapGesture {
                 HapticFeedback.light()
                 onOnlineTap?()

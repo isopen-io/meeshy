@@ -14,7 +14,7 @@ extension ConversationView {
     // MARK: - Pending Attachments Preview
     var pendingAttachmentsPreview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 ForEach(composerState.preparingAttachments) { prep in
                     AttachmentLoadingTile(prep: prep) {
                         cancelPreparation(prep)
@@ -27,15 +27,15 @@ extension ConversationView {
                     pendingPlaceTile(place)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.smPlus)
         }
         .frame(height: 100)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                 )
         )
@@ -43,7 +43,7 @@ extension ConversationView {
 
     // MARK: - Attachment Preview Tile
     func attachmentPreviewTile(_ attachment: MessageAttachment) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             ZStack(alignment: .topTrailing) {
                 // Tappable preview area
                 Button {
@@ -56,23 +56,23 @@ extension ConversationView {
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: 56, height: 56)
-                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
 
                             if attachment.type == .video {
                                 Image(systemName: "play.circle.fill")
                                     // Doctrine 86i : overlay décoratif borné par la tuile fixe 56×56 → figé + masqué.
                                     .font(.system(size: 20))
-                                    .foregroundStyle(.white, .black.opacity(0.4))
+                                    .foregroundStyle(MeeshyColors.mediaChromeForeground, MeeshyColors.mediaChromeFill)
                                     .accessibilityHidden(true)
                             } else if attachment.type == .image {
                                 Image(systemName: "eye.fill")
                                     // Doctrine 86i : indicateur décoratif borné par la tuile fixe 56×56 → figé + masqué.
                                     .font(.system(size: 10, weight: .bold))
                                     .foregroundColor(.white)
-                                    .padding(4)
-                                    .background(Circle().fill(.black.opacity(0.4)))
+                                    .padding(MeeshySpacing.xs)
+                                    .background(Circle().fill(MeeshyColors.mediaChromeFill))
                                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                                    .padding(3)
+                                    .padding(MeeshySpacing.xxs)
                                     .accessibilityHidden(true)
                             }
                         } else if attachment.type == .audio {
@@ -80,10 +80,10 @@ extension ConversationView {
                         } else if attachment.type == .location {
                             locationTileFallback()
                         } else {
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.7)],
+                                        colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(MeeshyOpacity.heavy)],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -122,7 +122,7 @@ extension ConversationView {
             }
 
             Text(labelForAttachment(attachment))
-                .font(MeeshyFont.relative(10, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: 60)
@@ -222,21 +222,21 @@ extension ConversationView {
     func attachmentPreviewUnavailableFallback(onDismiss: @escaping () -> Void) -> some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 Image(systemName: "photo.badge.exclamationmark")
                     .font(.system(size: 40))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.heavy))
                 Text(String(localized: "conversation.view.composer.attachmentUnavailable",
                             defaultValue: "Pièce jointe indisponible", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                     .foregroundColor(.white)
                 Button(action: onDismiss) {
                     Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 10)
-                        .background(Capsule().fill(.white.opacity(0.15)))
+                        .padding(.horizontal, MeeshySpacing.xxl)
+                        .padding(.vertical, MeeshySpacing.smPlus)
+                        .background(Capsule().fill(.white.opacity(MeeshyOpacity.light)))
                 }
             }
         }
@@ -246,7 +246,7 @@ extension ConversationView {
 
     private func locationTileFallback() -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .fill(
                     LinearGradient(
                         colors: [MeeshyColors.success, MeeshyColors.successDeep],
@@ -256,14 +256,14 @@ extension ConversationView {
                 )
                 .frame(width: 56, height: 56)
 
-            VStack(spacing: 2) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "mappin.circle.fill")
                     // Doctrine 86i : glyphe décoratif borné par la tuile fixe 56×56 → figé + masqué.
                     .font(.system(size: 22))
-                    .foregroundStyle(.white, .white.opacity(0.3))
+                    .foregroundStyle(.white, .white.opacity(MeeshyOpacity.medium))
                     .accessibilityHidden(true)
                 Circle()
-                    .fill(Color.white.opacity(0.3))
+                    .fill(Color.white.opacity(MeeshyOpacity.medium))
                     .frame(width: 8, height: 4)
                     .scaleEffect(x: 1.8, y: 1)
             }
@@ -278,7 +278,7 @@ extension ConversationView {
     /// couvrait par accident).
     private func pendingPlaceTile(_ place: SharedPlace) -> some View {
         let label = MediaKindLabel.placeLabel(place.name)
-        return VStack(spacing: 4) {
+        return VStack(spacing: MeeshySpacing.xs) {
             ZStack(alignment: .topTrailing) {
                 locationTileFallback()
 
@@ -300,7 +300,7 @@ extension ConversationView {
             }
 
             Text(label)
-                .font(MeeshyFont.relative(10, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .lineLimit(1)
                 .frame(width: 60)
@@ -340,17 +340,17 @@ struct PendingAudioTile: View {
         let color = Color(hex: attachment.thumbnailColor)
         let isPlaying = player.isPlaying
         return ZStack {
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                 .fill(
                     LinearGradient(
-                        colors: [color, color.opacity(0.7)],
+                        colors: [color, color.opacity(MeeshyOpacity.heavy)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
                 .frame(width: 56, height: 56)
 
-            VStack(spacing: 3) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 HStack(spacing: 1.5) {
                     ForEach(0..<7, id: \.self) { i in
                         let h: CGFloat = [0.3, 0.8, 0.5, 1.0, 0.4, 0.9, 0.6][i]
@@ -364,7 +364,7 @@ struct PendingAudioTile: View {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                     // Doctrine 86i : glyphe décoratif borné par la tuile fixe 56×56 → figé + masqué.
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
                     .accessibilityHidden(true)
             }
         }

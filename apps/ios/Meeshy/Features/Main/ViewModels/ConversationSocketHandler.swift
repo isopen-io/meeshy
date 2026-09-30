@@ -186,6 +186,7 @@ final class ConversationSocketHandler {
         // avant la garde d'idempotence de `loadMessages` (#4943).
         armSocketSubscriptions()
         messageSocket.joinConversation(conversationId)
+        ConversationViewingReporter.shared.conversationOpened(conversationId)
         NotificationToastManager.shared.onConversationOpened(conversationId)
         NotificationCoordinator.shared.markConversationRead(conversationId)
     }
@@ -214,6 +215,7 @@ final class ConversationSocketHandler {
                 // d'entrer — et toutes ses notifications se remettaient à
                 // s'afficher par-dessus le fil qu'on lisait.
                 NotificationToastManager.shared.onConversationClosed(id)
+                ConversationViewingReporter.shared.conversationClosed(id)
             }
             if isEmittingTyping {
                 MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)

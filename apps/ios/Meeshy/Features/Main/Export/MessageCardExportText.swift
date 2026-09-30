@@ -71,6 +71,13 @@ enum MessageCardExportText {
         String(localized: key, defaultValue: fallback, bundle: .main)
     }
 
+    /// « Un média n'a pas pu se charger » — `nil` quand tout est arrivé (#8901).
+    static func mediaFailure(count: Int) -> String? {
+        guard count > 0 else { return nil }
+        guard count > 1 else { return text("export.card.media.failed.one", "Un média n’a pas pu se charger.") }
+        return String(format: text("export.card.media.failed.other", "%lld médias n’ont pas pu se charger."), count)
+    }
+
     static func partLabel(_ part: MessageCardPartID) -> String {
         switch part {
         case .header: return text("export.card.part.header", "En-tête")

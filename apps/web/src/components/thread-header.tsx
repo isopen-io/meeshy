@@ -18,6 +18,7 @@ import { avatarMenuEntries } from '@/lib/view/avatar-menu';
 import type { ActiveMember } from '@/lib/view/top-active-members';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { Link } from '@/routes/route-table';
+import { useIsHere } from '@/lib/view/use-conversation-viewing';
 
 /**
  * L'EN-TÊTE DU FIL — extrait de `routes/thread.tsx` (revue #5814, défaut
@@ -103,6 +104,8 @@ export function ThreadHeader({
      texte — il nomme la conversation, pas une personne. */
   const peer = peerOf(conversation, viewerId);
   const peerRing = peer === undefined ? undefined : storyRingOf?.(peer.userId ?? peer.user?.id);
+  /* LE PAIR A LA CONVERSATION OUVERTE (#8892) — sa pastille passe à la couleur primaire. */
+  const peerHere = useIsHere(conversation.id, peer?.userId ?? peer?.user?.id ?? undefined);
   /* LE MENU D'APPUI LONG DE L'IDENTITÉ DE L'EN-TÊTE — celui d'un avatar
      d'auteur (#7828) : le pair (profil, story) en direct, et les détails de la
      conversation partout où l'hôte sait les ouvrir. */
@@ -299,7 +302,7 @@ export function ThreadHeader({
               color={accent}
               size={44}
               {...(photo === undefined ? {} : { src: photo })}
-              {...(group ? {} : { presence: presenceOf(peerOf(conversation, viewerId)) })}
+              {...(group ? {} : { presence: presenceOf(peerOf(conversation, viewerId)), here: peerHere })}
             />
           </button>
         </AvatarMenuTrigger>

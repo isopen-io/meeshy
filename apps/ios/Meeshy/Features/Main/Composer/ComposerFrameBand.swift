@@ -18,15 +18,15 @@ struct ComposerFrameBand: View {
         // **Sans libellé** (directive porteur 2026-09-27 : « enlève les captions
         // partout ») : deux icônes de cadrage et cinq pastilles, chacune avec
         // son nom ACCESSIBLE — la vue ne perd rien pour VoiceOver.
-        HStack(spacing: 12) {
-            HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.md) {
+            HStack(spacing: MeeshySpacing.sm) {
                 fitChoice(StoryBackgroundFraming.fit, label: ComposerFrameCopy.fit, symbol: "rectangle.center.inset.filled")
                 fitChoice(StoryBackgroundFraming.fill, label: ComposerFrameCopy.fill, symbol: "rectangle.fill")
             }
             Divider()
                 .frame(height: 28)
                 .overlay(Color.white.opacity(0.25))
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 ForEach(StoryBackdrop.allCases, id: \.self) { fond in
                     backdropChoice(fond)
                 }
@@ -34,8 +34,8 @@ struct ComposerFrameBand: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(ComposerFrameCopy.title))
-        .padding(10)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 18, style: .continuous),
+        .padding(MeeshySpacing.smPlus)
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous),
                        tint: plateauTint.opacity(0.55))
         .padding(.horizontal, ComposerRailGeometry.outerMargin)
     }
@@ -78,7 +78,7 @@ struct ComposerFrameBand: View {
 
     private func swatch(_ fond: StoryBackdrop) -> AnyShapeStyle {
         guard let hex = fond.solidHex else {
-            return AnyShapeStyle(LinearGradient(colors: [Color(hex: "FB923C"), Color(hex: "4F46E5")],
+            return AnyShapeStyle(LinearGradient(colors: [Color(hex: "FB923C"), MeeshyColors.indigo600],
                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
         }
         return AnyShapeStyle(Color(hex: hex))

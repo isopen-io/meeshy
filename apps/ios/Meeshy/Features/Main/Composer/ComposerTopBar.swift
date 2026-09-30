@@ -73,7 +73,7 @@ struct ComposerTopBar: View {
     // l'envoi : rien autour de lui ne se ferme.
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Button(action: onClose) {
                 Image(systemName: "xmark")
                     .font(.system(size: 13, weight: .bold))

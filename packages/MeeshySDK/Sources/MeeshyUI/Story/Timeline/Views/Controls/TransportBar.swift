@@ -119,7 +119,7 @@ public struct TransportBar: View {
             playButton
             if let onSave {
                 saveButton(onSave)
-                    .padding(.leading, 10)
+                    .padding(.leading, MeeshySpacing.smPlus)
             }
             ViewThatFits(in: .horizontal) {
                 trailingCluster(showTime: showsTimeReadout, showZoomLabel: true, spacing: 10)
@@ -129,8 +129,8 @@ public struct TransportBar: View {
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .frame(minHeight: 44)
         .background(rowBackground)
         // MARK: - Keyboard Shortcuts (iPad / external keyboard)
@@ -239,7 +239,7 @@ public struct TransportBar: View {
         // Pro inspector and tests expect from `formatTime(seconds:)`.
         let nowPrecise = Self.formatTime(seconds: currentTime)
         let totalPrecise = Self.formatTime(seconds: duration)
-        return HStack(spacing: 4) {
+        return HStack(spacing: MeeshySpacing.xs) {
             Text(nowCompact)
                 .foregroundStyle(MeeshyColors.indigo700)
             Text("/")
@@ -259,7 +259,7 @@ public struct TransportBar: View {
     @ViewBuilder
     private var undoRedoCluster: some View {
         if let canUndo, let canRedo {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Button(action: onUndo) {
                     Image(systemName: "arrow.uturn.backward")
                         .frame(width: 30, height: 30)
@@ -293,15 +293,15 @@ public struct TransportBar: View {
     private var snapChip: some View {
         if let isSnapEnabled {
             Button(action: onSnapToggle) {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Circle()
                         .fill(isSnapEnabled ? MeeshyColors.success : Color.secondary.opacity(0.4))
                         .frame(width: 8, height: 8)
                     Text(String(localized: "story.timeline.toolbar.snap", bundle: .module))
                         .font(.caption2.weight(.semibold))
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, MeeshySpacing.xs)
                 .background(
                     Capsule().fill(isSnapEnabled
                                    ? MeeshyColors.indigo500.opacity(0.15)
@@ -323,7 +323,7 @@ public struct TransportBar: View {
     ///   le zoom reste réglable via − / + et le pincement. Toujours affiché
     ///   dès qu'il y a la place (16 Pro, iPad, paysage).
     private func zoomCluster(showLabel: Bool) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Button(action: onZoomOut) {
                 Image(systemName: "minus.magnifyingglass")
                     .frame(width: 30, height: 30)

@@ -388,20 +388,20 @@ private struct AudioFullscreenPage: View {
         VStack(spacing: 0) {
             topBar
                 .padding(.top, 50)
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
 
             Spacer()
 
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 waveformSection
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, MeeshySpacing.xxl)
 
                 centerControls
 
-                VStack(spacing: 8) {
-                    seekBar.padding(.horizontal, 24)
-                    timeRow.padding(.horizontal, 24)
-                    speedRow.padding(.horizontal, 24)
+                VStack(spacing: MeeshySpacing.sm) {
+                    seekBar.padding(.horizontal, MeeshySpacing.xxl)
+                    timeRow.padding(.horizontal, MeeshySpacing.xxl)
+                    speedRow.padding(.horizontal, MeeshySpacing.xxl)
                 }
             }
 
@@ -421,35 +421,35 @@ private struct AudioFullscreenPage: View {
                 .multilineTextAlignment(.leading)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 20)
-                .padding(.top, 14)
+                .padding(.horizontal, MeeshySpacing.xl)
+                .padding(.top, MeeshySpacing.mdPlus)
                 .tint(accent)
             }
 
             // Transcription (capped height)
             if !displaySegments.isEmpty {
                 transcriptionSection
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.sm)
                     .frame(maxHeight: 120)
             } else {
                 transcriptionEmptyState
-                    .padding(.horizontal, 16)
-                    .padding(.top, 8)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.sm)
                     .frame(maxHeight: 120)
             }
 
             // Language strip right below transcription — CHOISIR quelle version
             // écouter (original + versions traduites, Prisme).
             inlineLanguageFlags
-                .padding(.horizontal, 16)
-                .padding(.top, 10)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.smPlus)
 
             // Author info EN BAS, sous la ligne des langues (l'utilisateur choisit
             // d'abord la version à écouter, l'auteur est une méta secondaire).
             authorInfoRow
-                .padding(.horizontal, 20)
-                .padding(.top, 14)
+                .padding(.horizontal, MeeshySpacing.xl)
+                .padding(.top, MeeshySpacing.mdPlus)
 
             Spacer(minLength: 0)
         }
@@ -579,47 +579,32 @@ private struct AudioFullscreenPage: View {
     // MARK: - Top Bar
 
     private var topBar: some View {
-        HStack(spacing: 12) {
-            Button {
-                onDismiss()
-                HapticFeedback.light()
-            } label: {
-                // Glyphe chrome figé à 36×36 (doctrine 82i) ; le libellé porte le sens.
-                // Le second cadre est la CIBLE : la pastille reste 36, la zone tapable
-                // atteint le plancher HIG de 44 — seule façon de sortir du plein écran.
-                Image(systemName: "xmark")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.white.opacity(0.2)))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Circle())
-            }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+        HStack(spacing: MeeshySpacing.md) {
+            FullscreenCloseButton { onDismiss() }
 
             Spacer()
 
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 if totalPages > 1 {
                     Text("\(pageIndex + 1) / \(totalPages)")
-                        .font(MeeshyFont.relative(13, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .monospaced))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(Capsule().fill(.ultraThinMaterial.opacity(0.7)))
                         .contentTransition(.numericText())
                         .animation(.spring(response: 0.3), value: pageIndex)
                 }
                 if let dur = attachment.durationFormatted {
                     Text(dur)
-                        .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .monospaced))
                 }
                 if let codec = attachment.codec {
                     Text(codec.uppercased())
-                        .font(MeeshyFont.relative(10, weight: .bold, design: .monospaced))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(Color.white.opacity(0.1)))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold, design: .monospaced))
+                        .padding(.horizontal, MeeshySpacing.xs)
+                        .padding(.vertical, MeeshySpacing.xxs)
+                        .background(Capsule().fill(Color.white.opacity(MeeshyOpacity.subtle)))
                 }
             }
             .foregroundColor(.white.opacity(0.5))
@@ -634,7 +619,7 @@ private struct AudioFullscreenPage: View {
 
     private var authorInfoRow: some View {
         let authorColor = item.author.accentColor.isEmpty ? contactColor : item.author.accentColor
-        return HStack(spacing: 10) {
+        return HStack(spacing: MeeshySpacing.smPlus) {
             Button {
                 selectedProfileUser = item.author
                 HapticFeedback.light()
@@ -653,27 +638,27 @@ private struct AudioFullscreenPage: View {
                 selectedProfileUser = item.author
                 HapticFeedback.light()
             } label: {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(item.authorName)
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(.white)
                         .lineLimit(1)
 
                     Text(item.createdAt, format: .dateTime.day().month(.abbreviated).hour().minute())
-                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(.white.opacity(0.4))
                 }
             }
 
             Spacer()
 
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "waveform")
-                    .font(MeeshyFont.relative(10))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                     .foregroundColor(.white.opacity(0.4))
                 if attachment.fileSize > 0 {
                     Text(attachment.fileSizeFormatted)
-                        .font(MeeshyFont.relative(10, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(.white.opacity(0.35))
                 }
             }
@@ -684,22 +669,16 @@ private struct AudioFullscreenPage: View {
 
     private var downloadButton: some View {
         Button { requestSave() } label: {
-            Group {
-                if saveCoordinator.isProcessing {
-                    ProgressView().tint(.white)
-                } else {
-                    Image(systemName: "arrow.down.to.line")
-                }
+            if saveCoordinator.isProcessing {
+                ProgressView()
+                    .tint(MeeshyColors.mediaChromeForeground)
+                    .frame(width: FullscreenChromeMetrics.tapTarget,
+                           height: FullscreenChromeMetrics.tapTarget)
+            } else {
+                FullscreenChromeDisc(systemImage: FullscreenChromeSymbol.save)
             }
-            // Glyphe chrome figé à 36×36 (doctrine 82i) ; le libellé porte le sens.
-            // Second cadre = cible tapable au plancher HIG, pastille inchangée.
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundColor(.white.opacity(0.9))
-            .frame(width: 36, height: 36)
-            .background(Circle().fill(Color.white.opacity(0.2)))
-            .frame(width: 44, height: 44)
-            .contentShape(Circle())
         }
+        .buttonStyle(.plain)
         .disabled(saveCoordinator.isProcessing)
         .accessibilityLabel(String(localized: "media.download", defaultValue: "Télécharger", bundle: .main))
         // Composant UNIFIÉ « Enregistrer » : même sheet de destinations que
@@ -745,7 +724,7 @@ private struct AudioFullscreenPage: View {
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "gobackward.10")
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xxxl, weight: .semibold))
                     .foregroundColor(.white)
             }
             .accessibilityLabel(String(localized: "media.skipBack10s", defaultValue: "Reculer de 10 secondes", bundle: .main))
@@ -782,7 +761,7 @@ private struct AudioFullscreenPage: View {
                 HapticFeedback.light()
             } label: {
                 Image(systemName: "goforward.10")
-                    .font(.system(size: 28, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xxxl, weight: .semibold))
                     .foregroundColor(.white)
             }
             .accessibilityLabel(String(localized: "media.skipForward10s", defaultValue: "Avancer de 10 secondes", bundle: .main))
@@ -804,7 +783,7 @@ private struct AudioFullscreenPage: View {
 
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.white.opacity(0.3))
+                    .fill(Color.white.opacity(MeeshyOpacity.medium))
                     .frame(height: trackHeight)
 
                 Capsule()
@@ -814,7 +793,7 @@ private struct AudioFullscreenPage: View {
                 Circle()
                     .fill(Color.white)
                     .frame(width: thumbSize, height: thumbSize)
-                    .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                    .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 2, y: 1)
                     .offset(x: max(0, min(filledWidth - thumbSize / 2, geo.size.width - thumbSize)))
             }
             .frame(height: max(trackHeight, thumbSize))
@@ -841,35 +820,35 @@ private struct AudioFullscreenPage: View {
     private var timeRow: some View {
         HStack {
             Text(formatMediaDuration(isSeeking ? seekValue * estimatedDuration : player.currentTime))
-                .font(MeeshyFont.relative(12, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white.opacity(0.7))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
 
             Spacer()
 
             Text(formatMediaDuration(estimatedDuration))
-                .font(MeeshyFont.relative(12, weight: .semibold, design: .monospaced))
-                .foregroundColor(.white.opacity(0.7))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
         }
     }
 
     // MARK: - Speed Row
 
     private var speedRow: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             ForEach(fullscreenSpeeds, id: \.rawValue) { speed in
                 Button {
                     player.setSpeed(speed)
                 } label: {
                     Text(speed.label)
-                        .font(MeeshyFont.relative(12, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
                         .foregroundColor(player.speed == speed ? .black : .white.opacity(0.7))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
                             Capsule().fill(
                                 player.speed == speed
                                     ? accent
-                                    : Color.white.opacity(0.15)
+                                    : Color.white.opacity(MeeshyOpacity.light)
                             )
                         )
                 }
@@ -899,16 +878,16 @@ private struct AudioFullscreenPage: View {
     // MARK: - Transcription Empty State
 
     private var transcriptionEmptyState: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: MeeshySpacing.mdPlus) {
             Spacer(minLength: 0)
 
             Image(systemName: "text.word.spacing")
-                .font(MeeshyFont.relative(28, weight: .light))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxxl, weight: .light))
                 .foregroundColor(.white.opacity(0.25))
                 .accessibilityHidden(true)
 
             Text(String(localized: "audio.fullscreen.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(.white.opacity(0.4))
 
             // Tap = transcription LOCALE (on-device, instantané, sans réseau).
@@ -917,21 +896,21 @@ private struct AudioFullscreenPage: View {
             Button {
                 runLocalTranscription()
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     if isRequestingTranscription {
                         ProgressView()
                             .tint(.white)
                             .scaleEffect(0.7)
                     } else {
                         Image(systemName: "waveform.and.mic")
-                            .font(MeeshyFont.relative(13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     }
                     Text(String(localized: "audio.fullscreen.transcription.action", defaultValue: "Transcrire", bundle: .main))
-                        .font(MeeshyFont.relative(13, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
                 }
                 .foregroundColor(.white)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 10)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.smPlus)
                 .background(Capsule().fill(accent.opacity(0.7)))
             }
             .disabled(isRequestingTranscription)
@@ -1067,9 +1046,9 @@ private struct AudioFullscreenPage: View {
         // "ajouter une langue" ancré à droite (hors du scroll, toujours
         // accessible). Sans ScrollView, les pills wrappaient en 2 lignes
         // ("Fran/çais", "Deu/tsch"…) dès qu'on dépassait 3 langues.
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     languagePill(flag: originalFlag, code: "orig",
                                  label: LanguageDisplay.from(code: item.originalLanguage)?.name ?? String(localized: "audio.fullscreen.language.original", defaultValue: "Original", bundle: .main),
                                  isSelected: selectedLanguage == "orig")
@@ -1084,7 +1063,7 @@ private struct AudioFullscreenPage: View {
                         )
                     }
                 }
-                .padding(.horizontal, 2)
+                .padding(.horizontal, MeeshySpacing.xxs)
             }
 
             Button {
@@ -1098,13 +1077,13 @@ private struct AudioFullscreenPage: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.5))
                     .frame(width: 26, height: 26)
-                    .background(Circle().fill(Color.white.opacity(0.08)))
+                    .background(Circle().fill(Color.white.opacity(MeeshyOpacity.subtle)))
                     .frame(width: 44, height: 44)
                     .contentShape(Circle())
             }
             .accessibilityLabel(String(localized: "audio.fullscreen.language.choose", defaultValue: "Traduire l'audio", bundle: .main))
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MeeshySpacing.sm)
     }
 
     private func languagePill(flag: String, code: String, label: String, isSelected: Bool) -> some View {
@@ -1115,17 +1094,17 @@ private struct AudioFullscreenPage: View {
         return Button {
             selectLanguage(code)
         } label: {
-            HStack(spacing: 3) {
-                Text(flag).font(MeeshyFont.relative(12))
+            HStack(spacing: MeeshySpacing.xxs) {
+                Text(flag).font(MeeshyFont.relative(MeeshyFont.smallSize))
                 Text(label)
-                    .font(MeeshyFont.relative(10, weight: isSelected ? .bold : .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: isSelected ? .bold : .medium))
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
             .foregroundColor(isSelected ? .white : .white.opacity(0.55))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(isSelected ? langColor.opacity(0.6) : Color.white.opacity(0.07)))
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
+            .background(Capsule().fill(isSelected ? langColor.opacity(0.6) : Color.white.opacity(MeeshyOpacity.subtle)))
         }
         // The active listening language is signaled only by fill/weight — expose
         // it as a VoiceOver trait so the selected language pill is distinguishable.

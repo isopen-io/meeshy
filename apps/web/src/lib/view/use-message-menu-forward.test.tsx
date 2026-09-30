@@ -159,3 +159,29 @@ describe('« Transférer » depuis la BARRE — ouvre la feuille, ou refuse avec
     expect(announced).toEqual(['Un message à vue unique ne peut pas être transféré']);
   });
 });
+
+/**
+ * LE GLISSÉ ET L'ICÔNE « RÉPONDRE » (#7559, #8899) PASSENT PAR LE MENU : même
+ * offre (`messageMenuItems`), et rien ne s'offre en sélection.
+ */
+describe('l’offre du glissé est celle du menu', () => {
+  test('un message ordinaire se répond et se transfère', () => {
+    const { api } = mount([ordinary('m1')]);
+    expect(api().swipeActionsOf(ordinary('m1'))).toEqual({ canReply: true, canForward: true });
+  });
+
+  test('une vue unique ne se cite ni ne se transfère', () => {
+    const { api } = mount([viewOnce('v1')]);
+    expect(api().swipeActionsOf(viewOnce('v1'))).toEqual({ canReply: false, canForward: false });
+  });
+
+  test('en sélection, rien ne s’offre ; le glissé ← arme la sélection comme le menu', () => {
+    const { api } = mount([ordinary('m1'), ordinary('m2')]);
+    act(() => {
+      api().onMenuAction('m1', 'forward');
+    });
+    expect(api().selection).toEqual({ ids: ['m1'] });
+    expect(api().forwardIds).toBeNull();
+    expect(api().swipeActionsOf(ordinary('m2'))).toBeUndefined();
+  });
+});

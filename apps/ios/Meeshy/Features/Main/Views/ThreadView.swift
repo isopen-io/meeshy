@@ -63,27 +63,27 @@ struct ThreadView: View {
                 .font(.caption.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // MARK: - Content
 
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
                 parentMessageView
                 repliesDivider
                 repliesList
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
         }
     }
 
     private var parentMessageView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.sm) {
                 MeeshyAvatar(
                     name: parentMessage.senderName ?? "?",
                     context: .messageBubble,
@@ -92,7 +92,7 @@ struct ThreadView: View {
                     onMoodTap: statusViewModel.moodTapHandler(for: parentMessage.senderId)
                 )
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(parentMessage.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
@@ -110,12 +110,12 @@ struct ThreadView: View {
                 .font(.subheadline)
                 .foregroundColor(theme.textPrimary)
         }
-        .padding(14)
+        .padding(MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )
@@ -124,16 +124,16 @@ struct ThreadView: View {
     private var repliesDivider: some View {
         HStack {
             Rectangle()
-                .fill(Color(hex: accentColor).opacity(0.3))
+                .fill(Color(hex: accentColor).opacity(MeeshyOpacity.medium))
                 .frame(height: 1)
 
             Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) reponses", bundle: .main))
                 .font(.caption2.weight(.bold))
                 .foregroundColor(Color(hex: accentColor))
-                .padding(.horizontal, 8)
+                .padding(.horizontal, MeeshySpacing.sm)
 
             Rectangle()
-                .fill(Color(hex: accentColor).opacity(0.3))
+                .fill(Color(hex: accentColor).opacity(MeeshyOpacity.medium))
                 .frame(height: 1)
         }
         .accessibilityElement(children: .combine)
@@ -141,7 +141,7 @@ struct ThreadView: View {
     }
 
     private var repliesList: some View {
-        LazyVStack(spacing: 8) {
+        LazyVStack(spacing: MeeshySpacing.sm) {
             ForEach(replies) { reply in
                 replyRow(reply)
             }
@@ -149,7 +149,7 @@ struct ThreadView: View {
     }
 
     private func replyRow(_ message: MeeshyMessage) -> some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: MeeshySpacing.smPlus) {
             MeeshyAvatar(
                 name: message.senderName ?? "?",
                 context: .postComment,
@@ -158,7 +158,7 @@ struct ThreadView: View {
                 onMoodTap: statusViewModel.moodTapHandler(for: message.senderId)
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 HStack {
                     Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.caption.weight(.semibold))
@@ -177,29 +177,29 @@ struct ThreadView: View {
 
             Spacer()
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
     }
 
     // MARK: - Composer
 
     private var composerBar: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             if let sendError {
                 Text(sendError)
                     .font(.caption2)
                     .foregroundColor(MeeshyColors.error)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                     .transition(.opacity)
                     .accessibilityLabel(String(localized: "thread.send.error", defaultValue: "Erreur d'envoi"))
                     .accessibilityValue(sendError)
             }
 
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 TextField(String(localized: "thread.reply.placeholder", defaultValue: "Répondre…", bundle: .main), text: $replyText)
                     .font(.subheadline)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                     .background(
                         Capsule()
                             .fill(theme.surfaceGradient(tint: accentColor))
@@ -235,10 +235,10 @@ struct ThreadView: View {
                     ? Text("")
                     : Text(String(localized: "composer.send.hint", defaultValue: "Envoie le texte saisi", bundle: .main)))
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
         }
-        .padding(.vertical, 10)
-        .background(isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.8))
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .background(isDark ? Color.black.opacity(MeeshyOpacity.medium) : Color.white.opacity(MeeshyOpacity.intense))
     }
 
     // MARK: - Actions

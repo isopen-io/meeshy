@@ -10,18 +10,16 @@ import MeeshyUI
 // l'ensemble vers le plafond pour une responsabilité qui se tient toute seule.
 //
 // Ce que ce fichier porte : la règle de cotes de la colonne (pure, jouable en
-// XCTest), la CIBLE tactile que chaque action partage, et la traînée d'émojis —
-// qui déménage ici sans changer d'un caractère, `scale: 1.5` et son commentaire
-// entier compris (voir plus bas : cette valeur ne survit QUE par son
-// commentaire).
+// XCTest) et la traînée d'émojis — la rangée du SDK (`FullscreenReactionStrip`,
+// #8878), à l'échelle par défaut du composant que tous les hôtes partagent.
 
 // MARK: - Les cotes de la colonne
 
 /// **Ce que la colonne d'actions mesure** — et pourquoi deux nombres et non un.
 ///
-/// Le VERRE fait 40 pt : c'est le gabarit du chrome de tout le visualiseur
-/// (doctrine 82i, le glyphe est borné par un cadre fixe et ne scale pas). La
-/// CIBLE fait 44 : c'est le minimum tactile de la dimension 5. Les confondre
+/// Le VERRE est le disque du chrome plein écran (`FullscreenChromeMetrics`,
+/// #8878) : le glyphe est borné par un cadre fixe et ne scale pas (doctrine 82i).
+/// La CIBLE est le minimum tactile de la dimension 5. Les confondre
 /// rend soit une pastille trop grosse, soit une cible trop petite — et la
 /// seconde erreur est la pire ici, parce qu'un doigt qui RATE une action
 /// atterrit sur le cadre, qui l'interprète comme le tap de #6142 et entre en
@@ -34,17 +32,15 @@ nonisolated enum MediaStageActionColumn {
 
     /// Le cercle de verre — ce qu'on VOIT. Même valeur que la porte de sortie du
     /// couloir haut : les contrôles du visualiseur ont UN gabarit.
-    static let glass: CGFloat = 40
+    static let glass: CGFloat = FullscreenChromeMetrics.discDiameter
 
-    /// La zone tactile — ce qu'on TOUCHE. Elle déborde le verre de 2 pt tout
-    /// autour, et c'est ce débordement que `mediaStageActionTarget()` doit
-    /// rendre PLEIN.
-    static let target: CGFloat = 44
+    /// La zone tactile — ce qu'on TOUCHE. Elle déborde le verre tout autour.
+    static let target: CGFloat = FullscreenChromeMetrics.tapTarget
 
     /// L'intervalle entre deux actions. Le gabarit de la barre latérale du
     /// lecteur de story (`StoryViewerView+Sidebar.swift`, « rapprocher les FABs,
     /// on y voit trop d'espace », directive 2026-07-10).
-    static let spacing: CGFloat = 8
+    static let spacing: CGFloat = FullscreenChromeMetrics.railSpacing
 
     /// La largeur que la colonne occupe SUR le cadre. Elle n'en retire rien au
     /// solveur : `MediaStageFraming.Corridors` ne gagne aucun champ au #6161 —
@@ -57,30 +53,6 @@ nonisolated enum MediaStageActionColumn {
     static func height(actions: Int) -> CGFloat {
         guard actions > 0 else { return 0 }
         return CGFloat(actions) * target + CGFloat(actions - 1) * spacing
-    }
-}
-
-// MARK: - La cible tactile, une seule fois
-
-extension View {
-
-    /// **La cible d'une action de la colonne — pleine, et de la même taille pour
-    /// les trois.**
-    ///
-    /// `contentShape(Rectangle())` n'est pas une précaution : c'est la garde.
-    /// Sans elle, la zone touchable d'un `Image` glassé est le cercle, et les
-    /// quatre coins du carré de 44 — plus l'anneau de 2 pt entre le verre et la
-    /// cible — laissent passer le doigt vers le cadre, une couche plus bas.
-    /// Le cadre, lui, écoute les trois portes de #6142 : le tap y ouvre le plein
-    /// écran. **Rater une action n'a alors pas l'air d'un raté — ça a l'air d'un
-    /// autre geste.**
-    ///
-    /// Un seul site pour les trois actions : trois `.frame(width: 44 …)`
-    /// recopiés seraient trois règles qui se ressemblent, jusqu'au jour où l'une
-    /// bouge.
-    func mediaStageActionTarget() -> some View {
-        frame(width: MediaStageActionColumn.target, height: MediaStageActionColumn.target)
-            .contentShape(Rectangle())
     }
 }
 
@@ -180,23 +152,7 @@ extension ConversationMediaGalleryView {
                                                attachment: att,
                                                hasHandler: onReactToMedia != nil && (reactableMedia?(att) ?? true),
                                                isOpen: reactionBarOpen) {
-            EmojiReactionPicker(
-                quickEmojis: MeeshyQuickReactions.standard,
-                style: .dark,
-                // ÉCHELLE 1,5 — le gabarit de la story, dont celui-ci DÉRIVE
-                // (#6083 pour la forme, #6084 pour ce site). Le 2 posé
-                // l'après-midi du 2026-09-11 a été ramené à 1,5 le soir même :
-                // « ×0,75, elles sont trop grosses » (directive porteur, sur
-                // capture, les deux barres nommées dans la même phrase).
-                //
-                // Les deux barres bougent ENSEMBLE, et c'est le point : ce
-                // site n'a pas d'échelle à lui, il rend le gabarit arrêté pour
-                // la story. Deux valeurs différentes ici et dans
-                // `StoryViewerView+Sidebar.swift` ne seraient pas deux
-                // décisions, ce serait un oubli.
-                scale: 1.5,
-                scrollable: true,
-                chrome: .none,
+            FullscreenReactionStrip(
                 onReact: { emoji in
                     onReactToMedia?(att, emoji)
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -211,7 +167,7 @@ extension ConversationMediaGalleryView {
                 }
             )
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, 4)
+            .padding(.bottom, MeeshySpacing.xs)
             .transition(.asymmetric(
                 insertion: .scale(scale: 0.85, anchor: .bottomLeading).combined(with: .opacity),
                 removal: .opacity

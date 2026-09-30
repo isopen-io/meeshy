@@ -75,12 +75,12 @@ struct QuotedAudioPreview: View, Equatable {
     private var progress: Double { state?.progress ?? 0 }
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: glyph)
-                .font(MeeshyFont.relative(18, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .bold))
                 .foregroundStyle(tint)
 
-            HStack(alignment: .center, spacing: 2) {
+            HStack(alignment: .center, spacing: MeeshySpacing.xxs) {
                 ForEach(bars.indices, id: \.self) { index in
                     Capsule()
                         .fill(tint.opacity(Double(index) / Double(max(bars.count, 1)) < progress ? 1 : 0.55))
@@ -88,9 +88,9 @@ struct QuotedAudioPreview: View, Equatable {
                 }
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MeeshySpacing.sm)
         .frame(height: QuotedReplyPresentation.quotedAudioHeight)
-        .background(Capsule().fill(tint.opacity(0.12)))
+        .background(Capsule().fill(tint.opacity(MeeshyOpacity.light)))
         .frame(minHeight: showsPlayGlyph ? Self.minimumTapHeight : nil)
         .contentShape(Rectangle())
         .onReceive(playback) { state = $0 }

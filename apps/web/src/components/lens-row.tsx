@@ -109,6 +109,12 @@ export type LensRowProps = {
    *    écrit est TOUJOURS verte »).
    */
   typists?: readonly string[] | undefined;
+  /**
+   * LE PAIR A CETTE CONVERSATION OUVERTE (#8892) — distribué par l'écran
+   * (`useHerePeers`) comme `typists`. Prime sur la frappe : sa pastille passe
+   * à la couleur primaire Meeshy.
+   */
+  peerHere?: boolean | undefined;
   /** Langue de CADRAGE des libellés — l'interface par défaut ; injectable pour les témoins. */
   interfaceLanguage?: string | undefined;
   /** Horloge injectable — jamais `Date.now()` lu dans un témoin. */
@@ -124,6 +130,7 @@ function LensRowImpl({
   unreadCount,
   onRowAction,
   typists,
+  peerHere = false,
   interfaceLanguage,
   now,
 }: LensRowProps) {
@@ -300,7 +307,7 @@ function LensRowImpl({
               name={title}
               opacity={chromeFade}
               {...(photo === undefined ? {} : { src: photo })}
-              {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)) })}
+              {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)), here: peerHere })}
             />
           </Link>
         ) : (
@@ -312,7 +319,7 @@ function LensRowImpl({
             opacity={chromeFade}
             profileUsername={peerHandle}
             {...(photo === undefined ? {} : { src: photo })}
-            {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)) })}
+            {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)), here: peerHere })}
           />
         )}
 
@@ -565,6 +572,7 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
      toutes les autres se seraient re-rendues pour rien. C'est ce que le
      doc-comment de `useTypistNames` promet de borner. */
   if ((prev.typists ?? []).join('\u0001') !== (next.typists ?? []).join('\u0001')) return false;
+  if ((prev.peerHere ?? false) !== (next.peerHere ?? false)) return false;
   if (prev.interfaceLanguage !== next.interfaceLanguage || prev.now !== next.now) return false;
 
   const s1 = prev.status ?? AT_REST;

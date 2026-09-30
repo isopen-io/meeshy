@@ -53,7 +53,7 @@ extension MessageCardExportTray {
     var framePanel: some View {
         let orientations = MessageCardTrayOffer.headerOrientations(format, hasTitle: hasTitle)
         let placements = MessageCardTrayOffer.placements(format)
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             row {
                 ForEach(orientations, id: \.self) { orientation in
                     tile(MessageCardExportText.headerLabel(orientation), selected: orientation == format.disposition.headerOrientation) {
@@ -89,7 +89,7 @@ extension MessageCardExportTray {
     var mediaPanel: some View {
         let layouts = MessageCardTrayOffer.mediaLayouts(mediaKinds)
         let styles = MessageCardTrayOffer.audioStyles(mediaKinds)
-        return VStack(alignment: .leading, spacing: 8) {
+        return VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             if !layouts.isEmpty {
                 row {
                     ForEach(layouts, id: \.self) { layout in
@@ -126,8 +126,8 @@ struct MessageCardAspectGlyph: View {
         let side: CGFloat = 32
         let size = ratio >= 1 ? CGSize(width: side, height: side / ratio) : CGSize(width: side * ratio, height: side)
         ZStack {
-            RoundedRectangle(cornerRadius: 4, style: .continuous)
-                .strokeBorder(Color.primary, style: StrokeStyle(lineWidth: 2, dash: aspect == .auto ? [3, 3] : []))
+            RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous)
+                .strokeBorder(Color.primary, style: StrokeStyle(lineWidth: MeeshyBorder.strong, dash: aspect == .auto ? [3, 3] : []))
                 .frame(width: size.width, height: size.height)
             if let ratio = aspect.ratio {
                 Text(verbatim: ratio)

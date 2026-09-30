@@ -33,7 +33,7 @@ struct FeedPostEmbedRow: View {
     var body: some View {
         if let embeddedVideo {
             VideoEmbedContainer(video: embeddedVideo, accent: Color(hex: accentHex), trackedURL: embedTrackedURL)
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
         }
     }
 }

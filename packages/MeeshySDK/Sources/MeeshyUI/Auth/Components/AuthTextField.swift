@@ -45,8 +45,8 @@ public struct AuthTextField: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
+            HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: icon)
                     .foregroundStyle(isFocused ? MeeshyColors.brandPrimary : theme.textMuted)
                     .frame(width: 20)
@@ -69,8 +69,8 @@ public struct AuthTextField: View {
                         .autocorrectionDisabled()
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
@@ -79,8 +79,8 @@ public struct AuthTextField: View {
                 RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .strokeBorder(
                         isFocused ? MeeshyColors.brandPrimary.opacity(0.6) :
-                            validationError != nil ? Color.red.opacity(0.5) :
-                            theme.inputBorder.opacity(0.3),
+                            validationError != nil ? Color.red.opacity(MeeshyOpacity.strong) :
+                            theme.inputBorder.opacity(MeeshyOpacity.medium),
                         lineWidth: 1
                     )
             )
@@ -88,8 +88,8 @@ public struct AuthTextField: View {
             if let error = validationError {
                 Text(error)
                     .font(.caption)
-                    .foregroundStyle(.red.opacity(0.8))
-                    .padding(.leading, 4)
+                    .foregroundStyle(.red.opacity(MeeshyOpacity.intense))
+                    .padding(.leading, MeeshySpacing.xs)
             }
         }
         .adaptiveOnChange(of: text) { _, newValue in

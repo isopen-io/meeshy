@@ -287,25 +287,25 @@ struct CommentsSheetView: View {
     /// Bandeau au-dessus du composer pendant une édition — sortie possible
     /// par la croix (le composer revient en mode création, texte effacé).
     private var editingBanner: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "pencil")
-                .font(MeeshyFont.relative(12))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs))
                 .foregroundColor(Color(hex: accentColor))
             Text(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
-                .font(MeeshyFont.relative(12, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
             Spacer()
             Button {
                 cancelEditComment()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(MeeshyFont.relative(14))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm))
                     .foregroundColor(theme.textMuted)
             }
             .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(theme.inputBackground.opacity(0.6))
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
@@ -421,14 +421,14 @@ struct CommentsSheetView: View {
                                     highlightedCommentId: highlightedCommentId
                                 )
                                 .background(
-                                    RoundedRectangle(cornerRadius: 12)
+                                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                         .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))
                                 )
                                 .animation(.easeInOut(duration: 0.4), value: highlightedCommentId)
                                 .id("comment-\(comment.id)")
                             }
                         }
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.bottom, 100)
                     }
                     .onAppear {
@@ -468,7 +468,7 @@ struct CommentsSheetView: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text(String(localized: "feed.comments.count", defaultValue: "\(commentCount) commentaires", bundle: .main))
-                        .font(MeeshyFont.relative(16, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
                 }
@@ -479,7 +479,7 @@ struct CommentsSheetView: View {
                     } label: {
                         // Figé : chrome xmark dans un cadre tap fixe 32×32 (doctrine 82i).
                         Image(systemName: "xmark")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                             .foregroundColor(theme.textSecondary)
                             .frame(width: 32, height: 32)
                             .background(Circle().fill(theme.inputBackground))
@@ -1054,14 +1054,14 @@ struct CommentsSheetView: View {
     // MARK: - Comment Reply Banner
 
     private func commentReplyBanner(_ reply: FeedComment) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(Color(hex: reply.authorColor))
                 .frame(width: 3, height: 36)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(reply.author)
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     .foregroundColor(Color(hex: reply.authorColor))
 
                 MessageTextRenderer.render(
@@ -1092,15 +1092,15 @@ struct CommentsSheetView: View {
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }
             .accessibilityLabel(String(localized: "a11y.comment.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
-            .meeshyTapTarget(44)
+            .meeshyTapTarget(MeeshyControlSize.tapTarget)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
                 )
         )
@@ -1219,9 +1219,9 @@ struct CommentsSheetView: View {
 
     private var commentAttachmentsPreview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if let place = commentPendingPlace {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: "location.fill")
                             .font(.caption)
                             .foregroundColor(MeeshyColors.success)
@@ -1243,17 +1243,17 @@ struct CommentsSheetView: View {
                         }
                         .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
                         Capsule()
                             .fill(theme.inputBackground)
-                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
+                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: MeeshyBorder.hairline))
                     )
                     .foregroundColor(theme.textPrimary)
                 }
                 ForEach(commentAttachments) { attachment in
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: attachment.type.glyph)
                             .font(.caption)
                             .foregroundColor(Color(hex: attachment.thumbnailColor))
@@ -1276,18 +1276,18 @@ struct CommentsSheetView: View {
                         }
                         .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
                         Capsule()
                             .fill(theme.inputBackground)
-                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
+                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: MeeshyBorder.hairline))
                     )
                     .foregroundColor(theme.textPrimary)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.sm)
         }
     }
 
@@ -1336,7 +1336,7 @@ struct CommentsSheetView: View {
                     ? ComposerAttachment(
                         id: "video-\(UUID().uuidString)", type: .video,
                         name: MediaKindLabel.name(.video),
-                        url: url, size: data.count, thumbnailColor: "FF6B6B")
+                        url: url, size: data.count, thumbnailColor: MeeshyColors.tileCoralHex)
                     : ComposerAttachment.image(url: url)
                 await MainActor.run { commentAttachments.append(attachment) }
             }

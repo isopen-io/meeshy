@@ -83,10 +83,10 @@ struct ComposerToolPanelHost: View {
     private var mutedText: Color { (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.55) }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             headerRow
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.sm)
 
             // Tool-specific body — Phase 2 placeholder. Wired in Phase 4.
             // `alignment: .top` : un contenu plus haut que la fenêtre du panel
@@ -106,7 +106,7 @@ struct ComposerToolPanelHost: View {
                 .frame(height: max(0, panelHeight - 50), alignment: .top)
                 .padding(.horizontal, Self.horizontalPadding(for: tool))
                 .clipped()
-                .padding(.bottom, 8)
+                .padding(.bottom, MeeshySpacing.sm)
         }
         .frame(maxWidth: .infinity)
         // Pas de material ici — le bandeau parent fournit déjà le tint opaque
@@ -120,11 +120,11 @@ struct ComposerToolPanelHost: View {
     /// gère la transition vers le nouveau panel).
     @ViewBuilder
     private var headerRow: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             backButton
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     ForEach(otherTools, id: \.rawValue) { other in
                         switchChip(for: other)
                     }
@@ -135,7 +135,7 @@ struct ComposerToolPanelHost: View {
 
     private var backButton: some View {
         Button(action: { onBack() }) {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "chevron.backward")
                     .font(.system(size: 14, weight: .semibold))
                 Text(toolTitle).font(MeeshyFont.relative(14, weight: .semibold))
@@ -143,8 +143,8 @@ struct ComposerToolPanelHost: View {
         }
         .foregroundColor(primaryText)
         .buttonStyle(.plain)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(.ultraThinMaterial, in: Capsule())
         .accessibilityLabel(String(
             localized: "story.composer.tool.back",
@@ -159,14 +159,14 @@ struct ComposerToolPanelHost: View {
             onSwitchTool?(other)
             HapticFeedback.light()
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: other.symbolName)
                     .font(.system(size: 11, weight: .semibold))
                 Text(Self.title(for: other))
                     .font(MeeshyFont.relative(12, weight: .medium))
             }
             .foregroundColor(secondaryText)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, 5)
             .background(
                 Capsule()
@@ -176,7 +176,7 @@ struct ComposerToolPanelHost: View {
             )
             .overlay(
                 Capsule()
-                    .stroke(mutedText.opacity(0.25), lineWidth: 0.5)
+                    .stroke(mutedText.opacity(0.25), lineWidth: MeeshyBorder.hairline)
             )
         }
         .buttonStyle(.plain)
@@ -299,8 +299,8 @@ struct ComposerToolPanelHost: View {
     // MARK: - Audio Panel
 
     private var audioPanel: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.smPlus) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if viewModel.canAddAudio {
                     Button { showAudioDocumentPicker = true } label: {
                         MediaPillLabel(icon: "waveform", text: String(localized: "story.composer.addAudioFile", defaultValue: "Audio", bundle: .module), destructive: false)
@@ -317,7 +317,7 @@ struct ComposerToolPanelHost: View {
 
             if let audios = viewModel.currentEffects.audioPlayerObjects, !audios.isEmpty {
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 4) {
+                    VStack(spacing: MeeshySpacing.xs) {
                         ForEach(audios) { audio in
                             StoryAudioCell(
                                 audio: audio,
@@ -330,7 +330,7 @@ struct ComposerToolPanelHost: View {
                             )
                         }
                     }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, MeeshySpacing.md)
                 }
                 .frame(maxHeight: 150)
             }
@@ -362,9 +362,9 @@ struct ComposerToolPanelHost: View {
         // (inférée `@Sendable`) en constante Sendable — voir
         // `ConversationSettingsView.visualSection`.
         let addMediaLabel = String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Video", bundle: .module)
-        return VStack(spacing: 10) {
+        return VStack(spacing: MeeshySpacing.smPlus) {
             // Add buttons
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if viewModel.canAddMedia {
                     PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
                         MediaPillLabel(icon: "photo.on.rectangle.angled", text: addMediaLabel, destructive: false)
@@ -381,13 +381,13 @@ struct ComposerToolPanelHost: View {
             // reste de l'UX (long-press déjà utilisé sur le canvas).
             if let mediaObjects = viewModel.currentEffects.mediaObjects, !mediaObjects.isEmpty {
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 4) {
+                    VStack(spacing: MeeshySpacing.xs) {
                         ForEach(mediaObjects) { media in
                             mediaItemRow(media)
                                 .draggable(media.id) {
                                     // Aperçu visuel pendant le drag — version compacte
                                     // de la row avec juste le nom du media et son rôle.
-                                    HStack(spacing: 6) {
+                                    HStack(spacing: MeeshySpacing.xsPlus) {
                                         Image(systemName: media.kind == .image ? "photo.fill" : "video.fill")
                                             .font(.system(size: 14))
                                         Text(media.kind == .image
@@ -396,10 +396,10 @@ struct ComposerToolPanelHost: View {
                                             .font(.system(size: 13, weight: .semibold))
                                     }
                                     .foregroundColor(primaryText)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, MeeshySpacing.md)
+                                    .padding(.vertical, MeeshySpacing.sm)
                                     .background(
-                                        RoundedRectangle(cornerRadius: 10)
+                                        RoundedRectangle(cornerRadius: MeeshyRadius.sm)
                                             .fill(MeeshyColors.indigo400.opacity(0.25))
                                     )
                                 }
@@ -419,7 +419,7 @@ struct ComposerToolPanelHost: View {
                                 }
                         }
                     }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, MeeshySpacing.md)
                 }
                 .frame(maxHeight: 150)
             }
@@ -437,7 +437,7 @@ struct ComposerToolPanelHost: View {
                         onAllowSoundExtractionChanged?(allowed)
                     }
                 )
-                .padding(.horizontal, 4)
+                .padding(.horizontal, MeeshySpacing.xs)
             }
         }
         // Ouvrir l'outil Media sur une slide vierge déclenche directement le
@@ -472,7 +472,7 @@ struct ComposerToolPanelHost: View {
         let hasAccessibilityInfo = !accessibilityStore.alt(for: media.id).isEmpty
             || !accessibilityStore.caption(for: media.id).isEmpty
         VStack(alignment: .leading, spacing: isAccessibilityExpanded ? 6 : 0) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 // Thumbnail
                 Group {
                     if let img = viewModel.loadedImages[media.id] {
@@ -508,7 +508,7 @@ struct ComposerToolPanelHost: View {
                 Spacer(minLength: 4)
 
                 // Action buttons — compact icon row
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     // Mute un-bouton (vidéos uniquement — une image n'a rien à
                     // couper). Persisté via `volume` (0 = muet) : l'aperçu, le
                     // reader et l'export honorent tous ce réglage.
@@ -573,10 +573,10 @@ struct ComposerToolPanelHost: View {
                     }
                 }
             }
-            .padding(.horizontal, 8)
+            .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, 5)
             .background(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                     .fill(rowBgFill)
             )
 
@@ -636,7 +636,7 @@ struct ComposerToolPanelHost: View {
 
     @ViewBuilder
     private var textPanel: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             // Rangée d'outils de pose : texte, sticker, lieu, mention.
             //
             // ICÔNES SEULES, en grand (directive user 2026-08-19 : « met plutôt
@@ -652,7 +652,7 @@ struct ComposerToolPanelHost: View {
             // VoiceOver. Une icône nue sans étiquette serait un bouton muet pour
             // qui ne voit pas l'écran — et les clés du catalogue resteraient
             // vivantes sans personne pour les lire.
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 if viewModel.canAddText {
                     toolIconButton(
                         systemImage: "textformat",
@@ -716,12 +716,12 @@ struct ComposerToolPanelHost: View {
             let texts = viewModel.currentEffects.textObjects
             if !texts.isEmpty {
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(spacing: 4) {
+                    VStack(spacing: MeeshySpacing.xs) {
                         ForEach(texts) { text in
                             textItemRow(text)
                         }
                     }
-                    .padding(.horizontal, 12)
+                    .padding(.horizontal, MeeshySpacing.md)
                 }
                 .frame(maxHeight: 170)
             }
@@ -751,11 +751,11 @@ struct ComposerToolPanelHost: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: 20, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xl, weight: .semibold))
                 .foregroundColor(MeeshyColors.brandPrimary)
                 .frame(width: 44, height: 44)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .fill(MeeshyColors.brandPrimary.opacity(0.12))
                 )
         }
@@ -788,7 +788,7 @@ struct ComposerToolPanelHost: View {
             return trimmed
         }()
         let textHex = text.textColor ?? "FFFFFF"
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             // Pastille couleur — rappelle la couleur courante du texte.
             ZStack {
                 RoundedRectangle(cornerRadius: 5)
@@ -800,7 +800,7 @@ struct ComposerToolPanelHost: View {
             .frame(width: 32, height: 32)
             .overlay(
                 RoundedRectangle(cornerRadius: 5)
-                    .stroke(Color.white.opacity(0.25), lineWidth: 0.5)
+                    .stroke(Color.white.opacity(0.25), lineWidth: MeeshyBorder.hairline)
             )
 
             // Aperçu + style
@@ -816,7 +816,7 @@ struct ComposerToolPanelHost: View {
 
             Spacer(minLength: 4)
 
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 textActionBtn(icon: "pencil", color: actionTint, tip: "Éditer") {
                     onEditText?(text.id)
                 }
@@ -837,10 +837,10 @@ struct ComposerToolPanelHost: View {
                 }
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MeeshySpacing.sm)
         .padding(.vertical, 5)
         .background(
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                 .fill(rowBgFill)
         )
         .contentShape(Rectangle())
@@ -871,7 +871,7 @@ struct ComposerToolPanelHost: View {
     private var texturePanel: some View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
                         let isSelected = viewModel.backgroundColor == "#\(hex)"
                         Button {
@@ -883,7 +883,7 @@ struct ComposerToolPanelHost: View {
                                 .frame(width: 44, height: 44)
                                 .overlay(
                                     Circle().stroke(Color.white, lineWidth: isSelected ? 3 : 0)
-                                        .padding(2)
+                                        .padding(MeeshySpacing.xxs)
                                 )
                                 .shadow(color: Color(hex: hex).opacity(isSelected ? 0.5 : 0), radius: 6)
                         }
@@ -913,7 +913,7 @@ struct ComposerToolPanelHost: View {
                                 .frame(width: 44, height: 44)
                                 .overlay(
                                     Circle().stroke(Color.white, lineWidth: isSelected ? 3 : 0)
-                                        .padding(2)
+                                        .padding(MeeshySpacing.xxs)
                                 )
                                 .shadow(color: Color(hex: pair.0).opacity(isSelected ? 0.5 : 0), radius: 6)
                         }
@@ -923,8 +923,8 @@ struct ComposerToolPanelHost: View {
                         .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
                 }
-                .padding(.horizontal, 2)
-                .padding(.vertical, 14)
+                .padding(.horizontal, MeeshySpacing.xxs)
+                .padding(.vertical, MeeshySpacing.mdPlus)
             }
 
             // C1 — l'animation d'ouverture du slide devient accessible par
@@ -939,8 +939,8 @@ struct ComposerToolPanelHost: View {
             ))
             .font(.system(size: 12, weight: .semibold))
             .foregroundColor(mutedText)
-            .padding(.horizontal, 2)
-            .padding(.bottom, 8)
+            .padding(.horizontal, MeeshySpacing.xxs)
+            .padding(.bottom, MeeshySpacing.sm)
 
             OpeningEffectChips(selection: viewModel.openingEffect) { effect in
                 viewModel.openingEffect = effect

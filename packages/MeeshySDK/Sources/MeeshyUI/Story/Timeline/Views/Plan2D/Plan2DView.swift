@@ -144,7 +144,7 @@ public struct Plan2DView: View, Equatable {
                     var gridLine = Path()
                     gridLine.move(to: CGPoint(x: x, y: 0))
                     gridLine.addLine(to: CGPoint(x: x, y: size.height))
-                    context.stroke(gridLine, with: .color(gridColor), lineWidth: 0.5)
+                    context.stroke(gridLine, with: .color(gridColor), lineWidth: MeeshyBorder.hairline)
                 }
             }
 
