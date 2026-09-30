@@ -466,7 +466,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             options: [.customDismissAction]
         )
 
-        UNUserNotificationCenter.current().setNotificationCategories([
+        UNUserNotificationCenter.current().setNotificationCategories(Set([
             messageCategory,
             mentionCategory,
             friendRequestCategory,
@@ -475,7 +475,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             callIncomingCategory,
             callMissedCategory,
             legacyCallCategory
-        ] + NotificationDetailCategories.categories(reply: replyAction))
+        ] + NotificationDetailCategories.categories(reply: replyAction)))
     }
 
     // MARK: - Crash Reporting Bootstrap
