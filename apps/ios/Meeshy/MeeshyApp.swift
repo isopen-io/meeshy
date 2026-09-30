@@ -269,12 +269,12 @@ struct MeeshyApp: App {
                 .task {
                     ImageDownsamplingConfig.applyGlobal()
                     KeychainManager.shared.migrateToAfterFirstUnlock()
-                    MeeshyConfig.shared.restoreEnvironment()
                     #if DEBUG
                     // Vitrine App Store (#8855) : session fictive et lien fixé AVANT la
-                    // restauration de session — voir `VitrineStage`.
+                    // restauration de l'environnement et de la session — voir `VitrineStage`.
                     VitrineStage.preparer()
                     #endif
+                    MeeshyConfig.shared.restoreEnvironment()
                     // Miroir de l'environnement pour les extensions (NSE +
                     // partage), qui n'ont pas accès à MeeshyConfig. À poser
                     // APRÈS restoreEnvironment, sinon on publierait la valeur

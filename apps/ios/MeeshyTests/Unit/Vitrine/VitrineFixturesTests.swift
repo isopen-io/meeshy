@@ -29,6 +29,22 @@ final class VitrineFixturesTests: XCTestCase {
         XCTAssertFalse(f.lienInvitation.requireAccount)
     }
 
+    /// Les champs OPTIONNELS que les scènes affichent : un renommage côté Swift les jetterait sans
+    /// la moindre erreur de décodage, et l'écran se viderait en silence.
+    func test_decoder_kitSample_keepsTheOptionalFieldsTheScenesShow() throws {
+        let f = try VitrineFixtures.decoder(Data(contentsOf: echantillon))
+        let global = try XCTUnwrap(f.conversations.first { $0.type == "global" })
+        XCTAssertEqual(global.lastMessageOriginalLanguage, "ko")
+        XCTAssertNotNil(global.lastMessageTranslations?["fr"], "Aperçu de liste sans Prisme.")
+        XCTAssertEqual(f.conversations.first { $0.title == "Pizza Night 🍕" }?.unreadCount, 9)
+        for direct in f.conversations where direct.type == "direct" {
+            XCTAssertEqual(direct.participants?.count, 2, "Conversation directe sans ses deux membres.")
+        }
+        XCTAssertNotNil(f.progression.meesh?.firstMintedAt, "Progression sans Meesh.")
+        XCTAssertEqual(f.progression.elan?.factor, 3, "Progression sans Élan.")
+        XCTAssertEqual(f.lienInvitation.name, "Lisboa ✈️")
+    }
+
     func test_decoder_unknownVersion_throwsVersionInconnue() throws {
         var brut = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: echantillon)) as? [String: Any])
         brut["version"] = 2

@@ -15,6 +15,12 @@ final class VitrineSessionTests: XCTestCase {
         XCTAssertThrowsError(try VitrineSession.verifierIsolement(origine: "https://gate.staging.meeshy.me"))
     }
 
+    /// Une boucle locale n'est pas un hôte mort : la passerelle de dev écoute sur `localhost:3000`.
+    func test_verifierIsolement_liveLocalGateway_isRefused() {
+        XCTAssertThrowsError(try VitrineSession.verifierIsolement(origine: "http://localhost:3000"))
+        XCTAssertThrowsError(try VitrineSession.verifierIsolement(origine: "http://127.0.0.1:3000"))
+    }
+
     func test_poser_writesTheThreeKeysRestoreStoredSessionReads() throws {
         let keychain = VitrineKeychain()
         let lecteur = MeeshyUser(id: "68f0000000000000000000aa", username: "lea.mtn", displayName: "Léa Martin")
@@ -30,6 +36,43 @@ final class VitrineSessionTests: XCTestCase {
         try VitrineSession.poser(MeeshyUser(id: "68f0000000000000000000aa", username: "lea.mtn"), keychain: keychain)
         VitrineSession.retirer(keychain: keychain)
         XCTAssertNil(keychain.load(forKey: "meeshy_active_user_id", account: nil))
+    }
+
+    /// Lancée sur un appareil qui porte une vraie session, la vitrine refuse au lieu de la remplacer.
+    func test_verifierProprietaire_foreignActiveSession_isRefused() throws {
+        let keychain = VitrineKeychain()
+        try keychain.save("68f0000000000000000000ee", forKey: "meeshy_active_user_id", account: nil)
+        XCTAssertThrowsError(try VitrineSession.verifierProprietaire(lecteur: "68f0000000000000000000aa", keychain: keychain)) { erreur in
+            XCTAssertEqual(erreur as? VitrineSessionRefus, .sessionReelle("68f0000000000000000000ee"))
+        }
+    }
+
+    func test_verifierProprietaire_foreignSavedAccount_isRefused() throws {
+        let keychain = VitrineKeychain()
+        try keychain.save(Self.comptes(["68f0000000000000000000ee"]), forKey: "meeshy_saved_accounts", account: nil)
+        XCTAssertThrowsError(try VitrineSession.verifierProprietaire(lecteur: "68f0000000000000000000aa", keychain: keychain)) { erreur in
+            XCTAssertEqual(erreur as? VitrineSessionRefus, .sessionReelle("68f0000000000000000000ee"))
+        }
+    }
+
+    /// Changer de langue entre deux captures remplace le lecteur que la vitrine a posé elle-même.
+    func test_verifierProprietaire_aReaderTheVitrinePosed_isAccepted() throws {
+        let keychain = VitrineKeychain()
+        try VitrineSession.poser(MeeshyUser(id: "68f0000000000000000000aa", username: "lea.mtn"), keychain: keychain)
+        try keychain.save(Self.comptes(["68f0000000000000000000aa"]), forKey: "meeshy_saved_accounts", account: nil)
+        XCTAssertNoThrow(try VitrineSession.verifierProprietaire(lecteur: "68f0000000000000000000bb", keychain: keychain))
+    }
+
+    func test_retirer_leavesAForeignActiveSessionUntouched() throws {
+        let keychain = VitrineKeychain()
+        try keychain.save("68f0000000000000000000ee", forKey: "meeshy_active_user_id", account: nil)
+        VitrineSession.retirer(keychain: keychain)
+        XCTAssertEqual(keychain.load(forKey: "meeshy_active_user_id", account: nil), "68f0000000000000000000ee")
+    }
+
+    private static func comptes(_ ids: [String]) throws -> String {
+        let comptes = ids.map { SavedAccount(id: $0, username: $0, displayName: nil, avatarURL: nil, lastActiveAt: Date()) }
+        return String(decoding: try JSONEncoder().encode(comptes), as: UTF8.self)
     }
 
     func test_jetonFictif_isAStructurallyValidJwtThatNeverExpires() {

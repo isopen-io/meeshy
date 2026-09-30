@@ -13,13 +13,15 @@ enum VitrineStage {
 
     private static var fixtures: VitrineFixtures?
 
-    /// Juste après `MeeshyConfig.shared.restoreEnvironment()`.
+    /// Juste AVANT `MeeshyConfig.shared.restoreEnvironment()` : un refus arrête l'app avant que
+    /// l'environnement de la vitrine ne soit recopié dans les préférences.
     static func preparer() {
         guard let scene = VitrineLaunch.scene() else { return }
         do {
             try VitrineSession.verifierIsolement(origine: MeeshyConfig.shared.persistedServerOrigin)
-            MeeshyConfig.debugWebOriginOverride = originePublique
             let f = try VitrineFixtures.charger()
+            try VitrineSession.verifierProprietaire(lecteur: f.lecteur.id)
+            MeeshyConfig.debugWebOriginOverride = originePublique
             fixtures = f
             try? FileManager.default.removeItem(at: VitrineLaunch.marqueurPret)
             servir(f.lienInvitation, pour: scene)
