@@ -62,6 +62,9 @@ final class NotificationDetailCaptureTests: XCTestCase {
         return try JSONDecoder().decode(SocketNotificationEvent.self, from: Data(json.utf8))
     }
 
+    /// `ImageRenderer` ne peint pas le verre d'iOS 26 (`glassEffect`) : la
+    /// bannière y sort vide. Le banc se joue donc sur un runtime iOS 17/18,
+    /// où `adaptiveGlass` retombe sur son matériau de repli.
     private func snapshot<V: View>(_ view: V, size: CGSize, dark: Bool, to path: String) throws {
         let content = view
             .frame(width: size.width, height: size.height)
