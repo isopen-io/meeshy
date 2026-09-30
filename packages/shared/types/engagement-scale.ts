@@ -137,12 +137,15 @@ const isIntIn = (value: unknown, min: number, max: number): value is number =>
 const isNumberIn = (value: unknown, min: number, max: number): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 
+const isDailyCap = (value: unknown): value is number | null =>
+  value === null || isIntIn(value, 0, 100_000);
+
 function parseOperationRule(value: unknown): EngagementOperationRule | null {
   if (!isRecord(value)) return null;
   const { points, multiplied, dailyCapPerConversation } = value;
   if (!isIntIn(points, 0, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
   if (typeof multiplied !== 'boolean') return null;
-  if (dailyCapPerConversation !== null && !isIntIn(dailyCapPerConversation, 0, 100_000)) return null;
+  if (!isDailyCap(dailyCapPerConversation)) return null;
   return { points, multiplied, dailyCapPerConversation };
 }
 

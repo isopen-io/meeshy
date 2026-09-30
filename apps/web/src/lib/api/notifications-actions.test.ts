@@ -22,7 +22,9 @@ import {
  * instantané → application locale → réseau → retour arrière sur échec.
  */
 
-const record = (id: string, isRead: boolean, type = 'new_message'): NotificationRecord => ({
+/* Une demande d'ami se RELIT : elle reste sous « Toutes » une fois lue — le
+   message consommé, lui, en sort (#8960, témoin dédié plus bas). */
+const record = (id: string, isRead: boolean, type = 'friend_request'): NotificationRecord => ({
   id,
   type,
   title: null,
@@ -115,6 +117,21 @@ describe('marquer UNE notification lue', () => {
     expect(unread(queryClient)).toBe(0);
     release({ ok: true, data: undefined });
     await pending;
+  });
+});
+
+describe('un message lu est CONSOMMÉ (#8960)', () => {
+  test('il quitte « Toutes » avant la réponse, et y revient si la passerelle refuse', async () => {
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(notificationListKey('all'), page([record('m1', false, 'new_message'), record('f1', false)]));
+    const { transport, release } = suspended();
+
+    const pending = performMarkNotificationRead({ id: 'm1', deps: { source: 'gateway', transport, queryClient } });
+    expect(ids(queryClient, 'all')).toEqual(['f1']);
+
+    release({ ok: false, status: 500, error: 'boom' });
+    expect(await pending).toBe(false);
+    expect(ids(queryClient, 'all')).toEqual(['m1', 'f1']);
   });
 });
 

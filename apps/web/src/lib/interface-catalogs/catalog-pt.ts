@@ -289,6 +289,7 @@ const pt = {
   'notifications.category.reactions': 'Reações',
   'notifications.category.mentions': 'Menções',
   'notifications.category.social': 'Social',
+  'notifications.category.engagement': 'Engajamento',
   'notifications.category.contacts': 'Contatos',
   'notifications.category.groups': 'Grupos',
   'notifications.category.calls': 'Chamadas',
