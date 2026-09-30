@@ -136,23 +136,23 @@ struct StoryComposerBarView: View {
             textBinding: $commentText,
             replyBanner: replyingToStoryComment.map { reply in
                 AnyView(
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(Color(hex: reply.authorColor))
                             .frame(width: 3, height: 30)
 
                         VStack(alignment: .leading, spacing: 1) {
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: "arrowshape.turn.up.left.fill")
-                                    .font(MeeshyFont.relative(9, weight: .semibold))
+                                    .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
                                     .foregroundColor(Color(hex: reply.authorColor))
                                 Text(String(localized: "story.viewer.replyTo", defaultValue: "R\u{00E9}ponse \u{00E0} \(reply.author)", bundle: .main))
-                                    .font(MeeshyFont.relative(11, weight: .semibold))
+                                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                                     .foregroundColor(Color(hex: reply.authorColor))
                             }
                             Text(reply.displayContent)
-                                .font(MeeshyFont.relative(11))
-                                .foregroundColor(.white.opacity(0.6))
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                                .foregroundColor(MeeshyColors.mediaChromeTertiary)
                                 .lineLimit(1)
                         }
 
@@ -166,19 +166,19 @@ struct StoryComposerBarView: View {
                             Image(systemName: "xmark")
                                 // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 22×22 → figé.
                                 .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(MeeshyColors.mediaChromeTertiary)
                                 .frame(width: 22, height: 22)
-                                .background(Circle().fill(Color.white.opacity(0.12)))
+                                .background(Circle().fill(Color.white.opacity(MeeshyOpacity.light)))
                         }
                         .accessibilityLabel(String(localized: "story.viewer.reply.cancel", defaultValue: "Annuler la réponse", bundle: .main))
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.md)
+                    .padding(.vertical, MeeshySpacing.sm)
                     .background(Color(hex: reply.authorColor).opacity(0.18))
                     .overlay(
                         Rectangle()
                             .fill(Color(hex: reply.authorColor).opacity(0.35))
-                            .frame(height: 0.5),
+                            .frame(height: MeeshyBorder.hairline),
                         alignment: .bottom
                     )
                 )

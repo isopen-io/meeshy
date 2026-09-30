@@ -116,15 +116,15 @@ struct ComposerSceneCameraBar: View {
             shutterRow
             hint
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 12)
-        .padding(.bottom, 16)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.top, MeeshySpacing.md)
+        .padding(.bottom, MeeshySpacing.lg)
     }
 
     // MARK: - En tête de la carte
 
     private var topControls: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             flashCluster
             Spacer(minLength: 0)
             // **La croix est TOUJOURS là** (#8653, directive porteur
@@ -191,7 +191,7 @@ struct ComposerSceneCameraBar: View {
                 // resterait minuscule pendant que tout le reste grandit — et une
                 // cible de 40 pt avec un glyphe de 15 pt est illisible pour qui
                 // a besoin de la grande taille.
-                .font(MeeshyFont.relative(15, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 40, height: 40)
                 .adaptiveGlass(in: Circle())
@@ -204,9 +204,9 @@ struct ComposerSceneCameraBar: View {
     // MARK: - La bande des segments (#4099, vue `4b`)
 
     private var segmentStrip: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xsPlus) {
             GeometryReader { geo in
-                HStack(spacing: 2) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     ForEach(Array(zip(segments, ComposerCaptureSegments.shares(segments))),
                             id: \.0.id) { segment, part in
                         Capsule()
@@ -218,8 +218,8 @@ struct ComposerSceneCameraBar: View {
             }
             .frame(height: 3)
 
-            HStack(spacing: 8) {
-                HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.sm) {
+                HStack(spacing: MeeshySpacing.xs) {
                     // **Le témoin d'enregistrement BAT.** Un point rouge fixe
                     // ne distingue pas « ça tourne » de « il y a des segments »
                     // — et c'est précisément la confusion que le chrono figé
@@ -238,15 +238,15 @@ struct ComposerSceneCameraBar: View {
                             segments: segments,
                             live: liveDuration,
                             recording: stage == .recording)))
-                        .font(MeeshyFont.relative(11, weight: .semibold, design: .monospaced))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
                         .foregroundStyle(.white)
                 }
-                .padding(.horizontal, 9)
+                .padding(.horizontal, MeeshySpacing.sm)
                 .frame(height: 24)
                 .adaptiveGlass(in: Capsule())
 
                 Text(ComposerSceneCameraCopy.segmentCount(segments.count))
-                    .font(MeeshyFont.relative(10, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
                     .foregroundStyle(.white.opacity(0.85))
 
                 Spacer(minLength: 4)
@@ -263,7 +263,7 @@ struct ComposerSceneCameraBar: View {
                 }
             }
         }
-        .padding(.top, 10)
+        .padding(.top, MeeshySpacing.smPlus)
     }
 
     // MARK: - Le déclencheur — un seul, trois intentions
@@ -284,7 +284,7 @@ struct ComposerSceneCameraBar: View {
     /// droite, chacun dans un emplacement réservé — un cadenas qui paraît ne
     /// déplace pas le bouton sous le doigt.
     private var shutterRow: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             ZStack(alignment: .trailing) {
                 Color.clear
                 if stage == .recording || ComposerCaptureZoom.showsBadge(capture.zoomFactor) {
@@ -311,24 +311,24 @@ struct ComposerSceneCameraBar: View {
     /// 1, le geste bascule et le déclencheur devient le bouton stop.
     private var lockTrack: some View {
         let progres = max(lockProgress, capture.lockProgress)
-        return HStack(spacing: 6) {
+        return HStack(spacing: MeeshySpacing.xsPlus) {
             // `forward`, jamais `right` : ce chevron montre la direction du
             // GESTE — glisser vers le cadenas pour verrouiller la prise — et
             // en arabe la piste part de l'autre bord. Un côté physique y
             // pointerait à l'opposé du doigt.
             Image(systemName: "chevron.forward")
-                .font(MeeshyFont.relative(12, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .bold))
                 .foregroundStyle(.white.opacity(0.45 + 0.55 * progres))
             Image(systemName: progres >= 1 ? "lock.fill" : "lock.open.fill")
                 .font(MeeshyFont.relative(17, weight: .semibold))
                 .foregroundStyle(.white)
                 .scaleEffect(reduceMotion ? 1 : 1 + 0.15 * progres)
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
         .frame(height: 44)
         .adaptiveGlass(in: Capsule())
         .overlay(
-            Capsule().strokeBorder(.white.opacity(0.3 + 0.5 * progres), lineWidth: 2)
+            Capsule().strokeBorder(.white.opacity(0.3 + 0.5 * progres), lineWidth: MeeshyBorder.strong)
         )
         .accessibilityHidden(true)
         .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .leading)))
@@ -340,7 +340,7 @@ struct ComposerSceneCameraBar: View {
                 .stroke(isLocked ? MeeshyColors.error : .white, lineWidth: 4)
                 .frame(width: 76, height: 76)
             if stage == .recording {
-                RoundedRectangle(cornerRadius: 7)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                     .fill(MeeshyColors.error)
                     .frame(width: 30, height: 30)
             } else {
@@ -441,13 +441,13 @@ struct ComposerSceneCameraBar: View {
         // Pendant que le doigt tient, la phrase dit le cadenas (#8671).
         Text(showsLock ? ComposerSceneCameraCopy.lockHint
                        : ComposerSceneCameraCopy.hint(mode: mode, stage: stage))
-            .font(MeeshyFont.relative(11, design: .monospaced))
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .monospaced))
             .foregroundStyle(.white.opacity(0.85))
             .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
             .multilineTextAlignment(.center)
             .lineLimit(2)
             .minimumScaleFactor(0.75)
-            .padding(.top, 10)
+            .padding(.top, MeeshySpacing.smPlus)
             .accessibilityHidden(true)
     }
 }
@@ -492,7 +492,7 @@ struct ComposerFlashIntensitySlider: View {
                                                           width: Self.trackWidth))
                 }
         )
-        .padding(.trailing, 14)
+        .padding(.trailing, MeeshySpacing.mdPlus)
         .accessibilityElement()
         .accessibilityLabel(ComposerSceneCameraCopy.flashIntensityLabel)
         .accessibilityValue(ComposerSceneCameraCopy.flashIntensityValue(level))
@@ -515,14 +515,14 @@ struct ComposerCaptureZoomChip: View {
     let onStep: (Bool) -> Void
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "arrow.up.and.down")
-                .font(MeeshyFont.relative(10, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
             Text(ComposerSceneCameraCopy.zoomValue(factor))
-                .font(MeeshyFont.relative(12, weight: .semibold, design: .monospaced))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
         }
         .foregroundStyle(ComposerCaptureZoom.showsBadge(factor) ? Color.yellow : .white)
-        .padding(.horizontal, 10)
+        .padding(.horizontal, MeeshySpacing.smPlus)
         .frame(height: 32)
         .adaptiveGlass(in: Capsule())
         .accessibilityElement()

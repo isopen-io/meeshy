@@ -107,7 +107,7 @@ struct FocalIdentityHeader: View, Equatable {
             // plutôt qu'une page de profil vide.
             if let onTap { onTap() } else { onOpenProfile?(profileUser) }
         } label: {
-            HStack(spacing: 7) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 MeeshyAvatar(
                     name: senderDisplayName,
                     context: .custom(avatarSize),

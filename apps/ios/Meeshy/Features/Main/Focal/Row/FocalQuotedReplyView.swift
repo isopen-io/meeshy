@@ -380,7 +380,7 @@ struct FocalQuotedReplyView: View, Equatable {
             // Même glyphe que la zone média sans miniature : UN seul
             // vocabulaire visuel pour « ceci se joue ».
             Image(systemName: "play.circle.fill")
-                .font(MeeshyFont.relative(16, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .bold))
                 .foregroundStyle(.white)
                 .shadow(radius: 2)
                 .accessibilityHidden(true)
@@ -429,14 +429,14 @@ struct FocalQuotedReplyView: View, Equatable {
     @ViewBuilder
     private var previewLine: some View {
         if let emoji = reference.moodEmoji {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Text(emoji).font(MeeshyFont.relative(MeeshyFont.captionSize))
                 Text(reference.previewText)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize))
                     .foregroundColor(previewColor)
             }
         } else if reference.isStoryReply {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "camera.fill")
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(previewColor)
@@ -446,7 +446,7 @@ struct FocalQuotedReplyView: View, Equatable {
                     .foregroundColor(previewColor)
             }
         } else {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 previewGlyph
                 let fallback = attachmentKind?.shortLabel ?? String(localized: "bubble.reply.media", defaultValue: "Médias", bundle: .main)
                 MessageTextRenderer.render(

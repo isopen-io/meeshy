@@ -59,9 +59,9 @@ public struct MediaAltTextField: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(labels.label)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: MeeshyFont.footnoteSize, weight: .semibold))
                 .foregroundStyle(.secondary)
 
             TextField(

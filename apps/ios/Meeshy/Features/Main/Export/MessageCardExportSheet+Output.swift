@@ -19,7 +19,7 @@ extension MessageCardExportSheet {
     var outputPicker: some View {
         let offered = offeredOutputs
         if offered.count > 1 {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(offered, id: \.self) { item in
                     let selected = item == output
                     Button {
@@ -29,7 +29,7 @@ extension MessageCardExportSheet {
                         Label(MessageCardExportText.outputLabel(item), systemImage: MessageCardExportSymbols.output(item))
                             .font(.subheadline.weight(.semibold))
                             .lineLimit(1)
-                            .padding(.horizontal, 14)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
                             .frame(maxWidth: .infinity, minHeight: 44)
                             .foregroundStyle(selected ? Color(uiColor: .systemBackground) : Color.primary)
                             .background(Capsule().fill(selected ? Color.primary : Color.primary.opacity(0.07)))
@@ -46,7 +46,7 @@ extension MessageCardExportSheet {
     }
 
     var actions: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             if let progress = motion.value {
                 ProgressView(value: progress) {
                     Text(MessageCardExportText.text("export.card.motion.running", "Animation en cours…"))
@@ -56,7 +56,7 @@ extension MessageCardExportSheet {
                 .tint(accent)
                 .accessibilityValue(Text(progress, format: .percent.precision(.fractionLength(0))))
             }
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Button { save() } label: {
                     Label(MessageCardExportText.text("export.card.save", "Sauvegarder"), systemImage: "square.and.arrow.down")
                         .font(.body.weight(.semibold))

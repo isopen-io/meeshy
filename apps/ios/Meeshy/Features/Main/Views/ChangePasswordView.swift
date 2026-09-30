@@ -56,7 +56,7 @@ struct ChangePasswordView: View {
     // MARK: - Form Content
 
     private var formContent: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: MeeshySpacing.xxl) {
             currentPasswordSection
             newPasswordSection
             validationHints
@@ -64,15 +64,15 @@ struct ChangePasswordView: View {
 
             Spacer().frame(height: 40)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.lg)
         .iPadFormWidth()
     }
 
     // MARK: - Current Password
 
     private var currentPasswordSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "auth.password.change.current.section", defaultValue: "Mot de passe actuel", bundle: .main), icon: "lock.fill", color: MeeshyColors.indigo600Hex)
 
             VStack(spacing: 0) {
@@ -99,7 +99,7 @@ struct ChangePasswordView: View {
     // MARK: - New Password
 
     private var newPasswordSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             sectionHeader(title: String(localized: "auth.password.change.new.section", defaultValue: "Nouveau mot de passe", bundle: .main), icon: "key.fill", color: accentColor)
 
             VStack(spacing: 0) {
@@ -113,12 +113,12 @@ struct ChangePasswordView: View {
                 )
 
                 if !newPassword.isEmpty {
-                    HStack(spacing: 12) {
+                    HStack(spacing: MeeshySpacing.md) {
                         Color.clear.frame(width: 28, height: 1)
                         PasswordStrengthIndicator(password: newPassword)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 8)
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.bottom, MeeshySpacing.sm)
                 }
 
                 secureField(
@@ -144,7 +144,7 @@ struct ChangePasswordView: View {
     // MARK: - Validation Hints
 
     private var validationHints: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             validationRow(
                 text: String(localized: "auth.password.change.validation.length", defaultValue: "Minimum 8 caractères", bundle: .main),
                 met: newPassword.count >= 8
@@ -154,11 +154,11 @@ struct ChangePasswordView: View {
                 met: passwordsMatch && !newPassword.isEmpty
             )
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, MeeshySpacing.xs)
     }
 
     private func validationRow(text: String, met: Bool) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: met ? "checkmark.circle.fill" : "circle")
                 .font(.subheadline)
                 .foregroundColor(met ? MeeshyColors.success : theme.textMuted)
@@ -182,7 +182,7 @@ struct ChangePasswordView: View {
     // MARK: - Save Button
 
     private var saveButton: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             if let errorMessage {
                 Text(errorMessage)
                     .font(.caption.weight(.medium))
@@ -195,7 +195,7 @@ struct ChangePasswordView: View {
                 HapticFeedback.medium()
                 changePassword()
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     if isSaving {
                         ProgressView()
                             .scaleEffect(0.8)
@@ -206,9 +206,9 @@ struct ChangePasswordView: View {
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .fill(
                             isValid && !isSaving
                                 ? Color(hex: accentColor)
@@ -224,11 +224,11 @@ struct ChangePasswordView: View {
     // MARK: - Success Overlay
 
     private var successOverlay: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             // Héros décoratif ≥40pt : diamètre fixe, exclu du Dynamic Type (doctrine 84i/87i).
             // Le sens est porté par le texte ci-dessous → masqué de VoiceOver.
             Image(systemName: "checkmark.shield.fill")
-                .font(.system(size: 48))
+                .font(.system(size: MeeshyIconSize.hero))
                 .foregroundColor(MeeshyColors.success)
                 .accessibilityHidden(true)
 
@@ -240,11 +240,11 @@ struct ChangePasswordView: View {
         .accessibilityElement(children: .combine)
         .padding(MeeshySpacing.xxxl)
         .background(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(MeeshyColors.success.opacity(0.3), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xl)
+                        .stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: 1)
                 )
         )
         .transition(.scale.combined(with: .opacity))
@@ -253,7 +253,7 @@ struct ChangePasswordView: View {
     // MARK: - Reusable Components
 
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
                 .font(.caption.weight(.semibold))
                 .foregroundColor(Color(hex: color))
@@ -262,7 +262,7 @@ struct ChangePasswordView: View {
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
-        .padding(.leading, 4)
+        .padding(.leading, MeeshySpacing.xs)
         // Parité DeleteAccountView : titre de section navigable au rotor VoiceOver.
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
@@ -276,20 +276,20 @@ struct ChangePasswordView: View {
         color: String,
         field: Field
     ) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(Color(hex: color))
-                .frame(width: 28, height: 28)
+                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(hex: color).opacity(0.12))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xs)
+                        .fill(Color(hex: color).opacity(MeeshyOpacity.light))
                 )
                 // Glyphe décoratif : le sens du champ est porté par son
                 // accessibilityLabel ci-dessous → jamais relu par VoiceOver.
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(title)
                     .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
@@ -319,8 +319,8 @@ struct ChangePasswordView: View {
 
             Spacer()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     // MARK: - Actions

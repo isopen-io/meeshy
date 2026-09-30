@@ -1,4 +1,5 @@
 import XCTest
+import MeeshyUI
 @testable import Meeshy
 
 /// **Le menu ⋯ remplace le bouton d'enregistrement direct** (#6145, directive
@@ -56,23 +57,32 @@ final class ConversationMediaGalleryMenuTests: XCTestCase {
 
     // MARK: - Le glyphe
 
-    func test_theMenuGlyph_isAVerticalEllipsis_inTheSameGlassCircleAsTheCross() throws {
-        let glyph = try body(of: "private var overflowGlyph: some View {")
+    /// **Le ⋯ est le menu du chrome plein écran** (#8878) : l'ellipse HORIZONTALE,
+    /// vocabulaire du fil, du réel et de la story — la verticalité (#6145) est
+    /// abandonnée pour que les visualiseurs n'aient qu'un seul ⋯. Ce qui survit de
+    /// l'intention d'origine : le MÊME disque que la croix, et une cible de 44 pt.
+    /// Les deux cotes vivent dans `FullscreenChromeMetrics` (épinglées côté SDK par
+    /// `FullscreenChromeMetricsTests`), pas dans ce fichier.
+    func test_theMenuGlyph_isTheSharedChromeMenu_inTheSameDiscAsTheCross() throws {
+        let menu = try body(of: "var overflowMenu: some View {")
 
         XCTAssertTrue(
-            glyph.contains("Image(systemName: \"ellipsis\")")
-                && glyph.contains(".rotationEffect(.degrees(90))"),
-            "l'ellipse est VERTICALE — SF Symbols n'en porte pas de glyphe, elle se tourne"
+            menu.contains("FullscreenMoreMenu(isBusy: saveCoordinator.isProcessing)"),
+            "le ⋯ est la brique partagée du SDK, son état occupé vient du coordinateur d'enregistrement"
+        )
+        XCTAssertFalse(
+            try source().contains("rotationEffect(.degrees(90))"),
+            "l'ellipse n'est plus tournée : un seul ⋯, horizontal, pour tous les visualiseurs"
         )
         XCTAssertTrue(
-            glyph.contains(".frame(width: 40, height: 40)")
-                && glyph.contains("adaptiveGlass(in: Circle()"),
-            "même cercle glass 40 pt que la croix — le couloir n'a pas deux grammaires"
+            menu.contains("width: FullscreenChromeMetrics.tapTarget")
+                && menu.contains("height: FullscreenChromeMetrics.tapTarget"),
+            "l'emplacement du ⋯ absent garde la cible de 44 pt du chrome — le couloir ne saute pas"
         )
-        XCTAssertTrue(
-            glyph.contains(".frame(width: 44, height: 44)") && glyph.contains(".contentShape("),
-            "la cible tactile vaut 44 pt : le verre reste à 40, la zone touchable l'entoure"
-        )
+        XCTAssertEqual(FullscreenChromeMetrics.discDiameter, MeeshyControlSize.regular,
+                       "même disque que la croix : les deux occupants du couloir ont UN gabarit")
+        XCTAssertGreaterThanOrEqual(FullscreenChromeMetrics.tapTarget, 44,
+                                    "la cible tactile vaut 44 pt")
     }
 
     // MARK: - Deux verbes, deux transports

@@ -54,13 +54,13 @@ public struct OpeningEffectChips: View {
 
     public var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 chip(nil)
                 ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
                     chip(effect)
                 }
             }
-            .padding(.horizontal, 2)
+            .padding(.horizontal, MeeshySpacing.xxs)
         }
     }
 
@@ -76,20 +76,20 @@ public struct OpeningEffectChips: View {
         // Non sélectionné : texte adaptatif sur remplissage subtil adaptatif.
         let textColor: Color = isSelected ? .white : (isDark ? .white : MeeshyColors.indigo950)
         let fillColor: Color = isSelected
-            ? MeeshyColors.brandPrimary.opacity(0.85)
-            : (isDark ? Color.white.opacity(0.10) : MeeshyColors.indigo950.opacity(0.06))
+            ? MeeshyColors.brandPrimary.opacity(MeeshyOpacity.intense)
+            : (isDark ? Color.white.opacity(MeeshyOpacity.subtle) : MeeshyColors.indigo950.opacity(MeeshyOpacity.faint))
         let strokeColor: Color = isSelected
-            ? MeeshyColors.brandPrimary.opacity(0.35)
-            : (isDark ? Color.white.opacity(0.12) : MeeshyColors.indigo950.opacity(0.14))
+            ? MeeshyColors.brandPrimary.opacity(MeeshyOpacity.medium)
+            : (isDark ? Color.white.opacity(MeeshyOpacity.light) : MeeshyColors.indigo950.opacity(MeeshyOpacity.light))
         return Button {
             onSelect(effect)
             HapticFeedback.light()
         } label: {
             Text(title)
-                .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                .font(.system(size: MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
                 .foregroundColor(textColor)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(Capsule().fill(fillColor))
                 .overlay(Capsule().strokeBorder(strokeColor, lineWidth: 1))
         }

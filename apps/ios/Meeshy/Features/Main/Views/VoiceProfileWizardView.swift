@@ -89,19 +89,19 @@ struct VoiceProfileWizardView: View {
             )
 
             stepIndicator
-                .padding(.horizontal, 16)
-                .padding(.top, 4)
-                .padding(.bottom, 8)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.top, MeeshySpacing.xs)
+                .padding(.bottom, MeeshySpacing.sm)
         }
     }
 
     private var stepIndicator: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             ForEach(VoiceProfileWizardStep.allCases, id: \.rawValue) { step in
                 Capsule()
                     .fill(step.rawValue <= viewModel.currentStep.rawValue
                           ? accent
-                          : theme.textMuted.opacity(0.3))
+                          : theme.textMuted.opacity(MeeshyOpacity.medium))
                     .frame(height: 3)
             }
         }
@@ -113,14 +113,14 @@ struct VoiceProfileWizardView: View {
 
     private var consentStep: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: MeeshySpacing.xxl) {
                 Spacer().frame(height: 20)
 
                 Image(systemName: "waveform.circle.fill")
                     .font(.system(size: 64)) // icône héros décorative — figée (≥40pt)
                     .foregroundStyle(
                         LinearGradient(
-                            colors: [accent, accent.opacity(0.7)],
+                            colors: [accent, accent.opacity(MeeshyOpacity.heavy)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -128,57 +128,57 @@ struct VoiceProfileWizardView: View {
                     .accessibilityHidden(true)
 
                 Text(String(localized: "voice.profile.wizard.title", defaultValue: "Profil vocal", bundle: .main))
-                    .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
 
                 Text(String(localized: "voice.profile.wizard.intro", defaultValue: "Enregistrez votre voix pour activer le clonage vocal personnalisé. Vos messages audio traduits garderont votre voix naturelle.", bundle: .main))
-                    .font(MeeshyFont.relative(15))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize))
                     .multilineTextAlignment(.center)
                     .foregroundColor(theme.textSecondary)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, MeeshySpacing.xxl)
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     consentInfoRow(icon: "mic.fill", text: String(localized: "voice.profile.wizard.consent.samples", defaultValue: "3 échantillons vocaux de 10 secondes minimum", bundle: .main))
                     consentInfoRow(icon: "lock.shield.fill", text: String(localized: "voice.profile.wizard.consent.encrypted", defaultValue: "Données chiffrées et stockées de manière sécurisée", bundle: .main))
                     consentInfoRow(icon: "trash.fill", text: String(localized: "voice.profile.wizard.consent.rgpd", defaultValue: "Suppression possible à tout moment (RGPD)", bundle: .main))
                     consentInfoRow(icon: "waveform.path", text: String(localized: "voice.profile.wizard.consent.use", defaultValue: "Utilisé pour générer des traductions avec votre voix", bundle: .main))
                 }
-                .padding(16)
+                .padding(MeeshySpacing.lg)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .fill(theme.backgroundSecondary)
                 )
-                .padding(.horizontal, 20)
+                .padding(.horizontal, MeeshySpacing.xl)
 
                 if let error = viewModel.error {
                     Text(error)
-                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, MeeshySpacing.xl)
                 }
 
                 Button {
                     HapticFeedback.medium()
                     viewModel.proceedToAgeVerification()
                 } label: {
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         if viewModel.isLoading {
                             ProgressView()
                                 .tint(.white)
                         }
                         Text(String(localized: "voice.profile.wizard.acceptContinue", defaultValue: "J'accepte et je continue", bundle: .main))
-                            .font(MeeshyFont.relative(16, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, MeeshySpacing.lg)
                     .background(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .fill(accent)
                     )
                 }
                 .disabled(viewModel.isLoading)
-                .padding(.horizontal, 20)
+                .padding(.horizontal, MeeshySpacing.xl)
 
                 Spacer().frame(height: 32)
             }
@@ -186,14 +186,14 @@ struct VoiceProfileWizardView: View {
     }
 
     private func consentInfoRow(icon: String, text: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(14))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm))
                 .foregroundColor(accent)
                 .frame(width: 24)
                 .accessibilityHidden(true) // glyphe décoratif — le texte porte l'information
             Text(text)
-                .font(MeeshyFont.relative(14))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .foregroundColor(theme.textSecondary)
         }
     }
@@ -201,7 +201,7 @@ struct VoiceProfileWizardView: View {
     // MARK: - Age Verification Step
 
     private var ageVerificationStep: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: MeeshySpacing.xxl) {
             Spacer()
 
             Image(systemName: "person.badge.shield.checkmark.fill")
@@ -210,47 +210,47 @@ struct VoiceProfileWizardView: View {
                 .accessibilityHidden(true)
 
             Text(String(localized: "voice.profile.wizard.ageVerification", defaultValue: "Vérification de l'âge", bundle: .main))
-                .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "voice.profile.wizard.ageVerification.description", defaultValue: "Le clonage vocal nécessite une vérification d'âge pour les mineurs.", bundle: .main))
-                .font(MeeshyFont.relative(15))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .multilineTextAlignment(.center)
                 .foregroundColor(theme.textSecondary)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, MeeshySpacing.xxxl)
 
             DatePicker(String(localized: "voice.profile.wizard.birthDate", defaultValue: "Date de naissance", bundle: .main), selection: $viewModel.birthDate, displayedComponents: .date)
                 .datePickerStyle(.wheel)
                 .labelsHidden()
-                .padding(.horizontal, 20)
+                .padding(.horizontal, MeeshySpacing.xl)
 
             Button {
                 HapticFeedback.medium()
                 Task { await viewModel.grantConsent() }
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     if viewModel.isLoading {
                         ProgressView().tint(.white)
                     }
                     Text(String(localized: "voice.profile.wizard.confirm", defaultValue: "Confirmer", bundle: .main))
-                        .font(MeeshyFont.relative(16, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
+                .padding(.vertical, MeeshySpacing.lg)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(accent)
                 )
             }
             .disabled(viewModel.isLoading)
-            .padding(.horizontal, 20)
+            .padding(.horizontal, MeeshySpacing.xl)
 
             if let error = viewModel.error {
                 Text(error)
-                    .font(MeeshyFont.relative(13, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, MeeshySpacing.xl)
             }
 
             Spacer()
@@ -261,18 +261,18 @@ struct VoiceProfileWizardView: View {
 
     private var recordingStep: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 Spacer().frame(height: 16)
 
                 Text(String(localized: "voice.profile.wizard.recording.title", defaultValue: "Enregistrez votre voix", bundle: .main))
-                    .font(MeeshyFont.relative(22, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
 
                 Text(String(localized: "voice.profile.wizard.recording.description", defaultValue: "Lisez à voix haute les deux ou trois phrases affichées, sans forcer le ton. Minimum 3 échantillons de 10 secondes.", bundle: .main))
-                    .font(MeeshyFont.relative(14))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize))
                     .multilineTextAlignment(.center)
                     .foregroundColor(theme.textSecondary)
-                    .padding(.horizontal, 24)
+                    .padding(.horizontal, MeeshySpacing.xxl)
 
                 VoiceRecordingView(
                     accentColor: accentColor,
@@ -287,9 +287,9 @@ struct VoiceProfileWizardView: View {
 
                 if let error = viewModel.error {
                     Text(error)
-                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, MeeshySpacing.xl)
                 }
 
                 Spacer().frame(height: 32)
@@ -300,7 +300,7 @@ struct VoiceProfileWizardView: View {
     // MARK: - Processing Step
 
     private var processingStep: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: MeeshySpacing.xxl) {
             Spacer()
 
             ProgressView()
@@ -308,12 +308,12 @@ struct VoiceProfileWizardView: View {
                 .tint(accent)
 
             Text(String(localized: "voice.profile.wizard.analyzing", defaultValue: "Analyse en cours…", bundle: .main))
-                .font(MeeshyFont.relative(22, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             if viewModel.totalToUpload > 0 {
                 Text(String(localized: "voice.profile.wizard.uploadProgress", defaultValue: "Envoi \(viewModel.uploadedCount)/\(viewModel.totalToUpload) échantillons", bundle: .main))
-                    .font(MeeshyFont.relative(14, weight: .medium, design: .monospaced))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium, design: .monospaced))
                     .foregroundColor(theme.textSecondary)
 
                 ProgressView(value: Double(viewModel.uploadedCount), total: Double(viewModel.totalToUpload))
@@ -322,14 +322,14 @@ struct VoiceProfileWizardView: View {
             }
 
             Text(String(localized: "voice.profile.wizard.creating", defaultValue: "Votre profil vocal est en cours de création. Cela peut prendre quelques instants.", bundle: .main))
-                .font(MeeshyFont.relative(14))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .multilineTextAlignment(.center)
                 .foregroundColor(theme.textMuted)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, MeeshySpacing.xxxl)
 
             if let error = viewModel.error {
                 Text(error)
-                    .font(MeeshyFont.relative(13, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
             }
 
@@ -340,7 +340,7 @@ struct VoiceProfileWizardView: View {
     // MARK: - Complete Step
 
     private var completeStep: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: MeeshySpacing.xxl) {
             Spacer()
 
             Image(systemName: "checkmark.circle.fill")
@@ -349,11 +349,11 @@ struct VoiceProfileWizardView: View {
                 .accessibilityHidden(true)
 
             Text(String(localized: "voice.profile.wizard.created", defaultValue: "Profil vocal créé !", bundle: .main))
-                .font(MeeshyFont.relative(24, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             if let profile = viewModel.profile {
-                VStack(spacing: 8) {
+                VStack(spacing: MeeshySpacing.sm) {
                     profileInfoRow(label: String(localized: "voice.profile.samples", defaultValue: "Échantillons", bundle: .main), value: "\(profile.sampleCount)")
                     profileInfoRow(label: String(localized: "voice.profile.totalDuration", defaultValue: "Durée totale", bundle: .main), value: "\(profile.totalDurationSeconds)s")
                     if let quality = profile.quality {
@@ -361,35 +361,35 @@ struct VoiceProfileWizardView: View {
                     }
                     profileInfoRow(label: String(localized: "voice.profile.status", defaultValue: "Statut", bundle: .main), value: profile.status.rawValue.capitalized)
                 }
-                .padding(16)
+                .padding(MeeshySpacing.lg)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .fill(theme.backgroundSecondary)
                 )
-                .padding(.horizontal, 20)
+                .padding(.horizontal, MeeshySpacing.xl)
             }
 
             Text(String(localized: "voice.profile.wizard.success.message", defaultValue: "Vos messages audio traduits utiliseront désormais votre voix clonée.", bundle: .main))
-                .font(MeeshyFont.relative(14))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .multilineTextAlignment(.center)
                 .foregroundColor(theme.textSecondary)
-                .padding(.horizontal, 32)
+                .padding(.horizontal, MeeshySpacing.xxxl)
 
             Button {
                 HapticFeedback.success()
                 dismiss()
             } label: {
                 Text(String(localized: "voice.profile.wizard.finish", defaultValue: "Terminer", bundle: .main))
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
+                    .padding(.vertical, MeeshySpacing.lg)
                     .background(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .fill(accent)
                     )
             }
-            .padding(.horizontal, 20)
+            .padding(.horizontal, MeeshySpacing.xl)
 
             Spacer()
         }
@@ -398,11 +398,11 @@ struct VoiceProfileWizardView: View {
     private func profileInfoRow(label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(MeeshyFont.relative(14))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .foregroundColor(theme.textSecondary)
             Spacer()
             Text(value)
-                .font(MeeshyFont.relative(14, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
         }
         .accessibilityElement(children: .combine)

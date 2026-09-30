@@ -34,7 +34,8 @@ import MeeshyUI
 //  VoiceOver, et qui SUIVENT le chrome au même ressort. Rien n'est réécrit :
 //  « partir du fait que le composant est déjà fait » est la directive du
 //  2026-09-17, et elle vaut pour le voile comme elle a valu pour la carte
-//  (`SceneCard`) et pour le sol (`SceneFloorView`).
+//  (`SceneCard`) et pour le sol (`SceneFloorView`). Son dessin vit dans le SDK
+//  (`FullscreenScrims`, #8878), que les visionneuses sans scène montent aussi.
 //
 //  **Son nom garde « StoryReader », et c'est juste** : c'est le voile de la
 //  story qu'on réutilise, comme la CARTE de la story et le SOL de la story. Le

@@ -52,7 +52,7 @@ public struct MessageProtectionChrome: View, Equatable {
             // n'a aucune protection et ne paie pas une pile de capsules vides.
             EmptyView()
         } else {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 // `enumerated()` plutôt qu'un `id: \.self` : deux badges de même
                 // forme (impossible aujourd'hui, mais rien ne l'interdit) ne
                 // doivent pas se voler leur identité de vue. Le rang est stable
@@ -136,13 +136,13 @@ public struct MessageProtectionChrome: View, Equatable {
 
     @ViewBuilder
     private func chrome<Content: View>(tint: Color, @ViewBuilder content: () -> Content) -> some View {
-        HStack(spacing: 4) { content() }
+        HStack(spacing: MeeshySpacing.xs) { content() }
             .padding(.horizontal, isCompact ? 6 : 8)
-            .padding(.vertical, 4)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
                     .fill(tint.opacity(isDark ? 0.15 : 0.1))
-                    .overlay(Capsule().stroke(tint.opacity(0.3), lineWidth: 0.5))
+                    .overlay(Capsule().stroke(tint.opacity(0.3), lineWidth: MeeshyBorder.hairline))
             )
     }
 

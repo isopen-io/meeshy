@@ -25,16 +25,16 @@ extension FeedPostCard {
                 Rectangle()
                     .fill(theme.inputBorder.opacity(0.5))
                     .frame(height: 1)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
 
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     let comments = post.topComments
                     ForEach(Array(comments.enumerated()), id: \.element.id) { index, comment in
                         topCommentRow(comment: comment, isLast: index == comments.count - 1)
                     }
 
                     // "See all comments" link
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         // Stacked avatars of remaining commenters
                         if post.comments.count > 3 {
                             HStack(spacing: -6) {
@@ -47,7 +47,7 @@ extension FeedPostCard {
                                     )
                                         .overlay(
                                             Circle()
-                                                .stroke(theme.backgroundPrimary, lineWidth: 1.5)
+                                                .stroke(theme.backgroundPrimary, lineWidth: MeeshyBorder.emphasis)
                                         )
                                         .zIndex(Double(3 - index))
                                 }
@@ -65,9 +65,9 @@ extension FeedPostCard {
                             .foregroundColor(theme.textMuted)
                             .accessibilityHidden(true)
                     }
-                    .padding(.top, 4)
+                    .padding(.top, MeeshySpacing.xs)
                 }
-                .padding(14)
+                .padding(MeeshySpacing.mdPlus)
             }
         }
         .buttonStyle(PlainButtonStyle())
@@ -87,7 +87,7 @@ extension FeedPostCard {
     // MARK: - Top Comment Row
     func topCommentRow(comment: FeedComment, isLast: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .top, spacing: MeeshySpacing.smPlus) {
                 // Avatar
                 let commentMood = moodLookup?(comment.authorId)
                 MeeshyAvatar(
@@ -105,9 +105,9 @@ extension FeedPostCard {
                     ]
                 )
 
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     // Author name + language flags
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Text(comment.author)
                             .font(.footnote.weight(.semibold))
                             .foregroundColor(theme.accentText(comment.authorColor))
@@ -124,7 +124,7 @@ extension FeedPostCard {
                             // donc en une phrase, et une seule. La paire n'est PAS
                             // interactive ici (l'aperçu ouvre le commentaire) :
                             // pas de `LanguageFlagChip`, qui est un contrôle.
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Text(LanguageFlagChip.flag(for: origLang))
                                     .font(.caption2)
                                 Text(LanguageFlagChip.flag(for: targetLang))
@@ -143,7 +143,7 @@ extension FeedPostCard {
                     // Le CORPS — texte + média — porte les effets du commentaire,
                     // voile du flou compris (#8582) : l'aperçu ne montre plus en
                     // clair ce que la feuille masque.
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                         // Content (Prisme Linguistique) — masqué pour un commentaire
                         // média-seul (displayContent vide) : évite une ligne fantôme.
                         if !comment.displayContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -169,7 +169,7 @@ extension FeedPostCard {
                                 authorColor: comment.authorColor,
                                 sentAt: comment.timestamp
                             )
-                            .padding(.top, 2)
+                            .padding(.top, MeeshySpacing.xxs)
                         }
                     }
                     .commentBody(effects: comment.effects)
@@ -180,13 +180,13 @@ extension FeedPostCard {
                         FeedPostLocationSticker(place: place) {
                             fullscreenPlace = BubbleFullscreenPlace(place: place)
                         }
-                        .padding(.top, 2)
+                        .padding(.top, MeeshySpacing.xxs)
                     }
 
                     // Stats row: likes and replies
-                    HStack(spacing: 16) {
+                    HStack(spacing: MeeshySpacing.lg) {
                         // Likes
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: "heart.fill")
                                 .font(.caption)
                                 .foregroundColor(MeeshyColors.error)
@@ -198,7 +198,7 @@ extension FeedPostCard {
 
                         // Replies
                         if comment.replies > 0 {
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: "arrowshape.turn.up.left.fill")
                                     .font(.caption2)
                                     .foregroundColor(theme.accentText(accentColor).opacity(0.7))
@@ -216,7 +216,7 @@ extension FeedPostCard {
                             .font(.caption2)
                             .foregroundColor(theme.textMuted)
                     }
-                    .padding(.top, 2)
+                    .padding(.top, MeeshySpacing.xxs)
                 }
             }
             // Glisser un commentaire de l'aperçu ouvre la feuille EN RÉPONSE à
@@ -230,7 +230,7 @@ extension FeedPostCard {
                     .fill(theme.inputBorder.opacity(0.3))
                     .frame(height: 1)
                     .padding(.leading, 42)
-                    .padding(.top, 10)
+                    .padding(.top, MeeshySpacing.smPlus)
             }
         }
     }

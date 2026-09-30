@@ -1,6 +1,7 @@
 import XCTest
 import CoreGraphics
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// **Les actions quittent le bas du cadre pour un couloir latéral du plateau**
@@ -83,15 +84,20 @@ final class MediaGalleryActionColumnTests: XCTestCase {
     // MARK: - 1 · Les cotes de la colonne
 
     /// **Une cible ne descend jamais sous 44 pt** (dimension 5 de la roadmap),
-    /// et le VERRE reste à 40 — doctrine 82i, le glyphe est borné par un cadre
+    /// et le VERRE est le disque du chrome plein écran (#8878, charte § 5 : 36 pt,
+    /// `MeeshyControlSize.regular`) — doctrine 82i, le glyphe est borné par un cadre
     /// fixe. Les deux nombres ne disent donc pas la même chose : l'un est ce
     /// qu'on VOIT, l'autre ce qu'on TOUCHE, et les confondre rend soit une
     /// pastille trop grosse, soit une cible trop petite.
     func test_laCible_dUneAction_nEstJamaisSousQuaranteQuatre() {
         XCTAssertGreaterThanOrEqual(MediaStageActionColumn.target, 44,
                                     "la cible tactile ne descend pas sous 44 pt")
-        XCTAssertEqual(MediaStageActionColumn.glass, 40,
-                       "le verre reste au gabarit 40 pt du chrome (doctrine 82i)")
+        XCTAssertEqual(MediaStageActionColumn.glass, FullscreenChromeMetrics.discDiameter,
+                       "le verre est le disque du chrome plein écran (doctrine 82i) — une seule cote")
+        XCTAssertEqual(MediaStageActionColumn.target, FullscreenChromeMetrics.tapTarget,
+                       "la cible est celle du chrome plein écran — une seule cote")
+        XCTAssertEqual(MediaStageActionColumn.spacing, FullscreenChromeMetrics.railSpacing,
+                       "l'intervalle est celui du rail plein écran — une seule cote")
         XCTAssertGreaterThan(MediaStageActionColumn.target, MediaStageActionColumn.glass,
                              "la cible DÉBORDE le verre : c'est ce débordement qui doit être "
                                  + "consommé, sinon il tombe sur le cadre et ouvre le plein écran")
@@ -166,17 +172,18 @@ final class MediaGalleryActionColumnTests: XCTestCase {
             "les actions ne se montent plus dans la rangée de l'auteur : c'est tout l'objet "
                 + "du #6161."
         )
-        XCTAssertTrue(compact(colonne).contains("VStack("),
-                      "la colonne est VERTICALE — c'est la loi de l'issue, mot pour mot")
+        XCTAssertTrue(compact(colonne).contains("FullscreenActionRail{"),
+                      "la colonne est VERTICALE — c'est la loi de l'issue, mot pour mot — et c'est "
+                          + "le rail du SDK (#8878), une pile à intervalle `railSpacing`")
         XCTAssertTrue(compact(colonne).contains("mediaActions("),
                       "et c'est ELLE qui monte les trois actions")
         XCTAssertTrue(
             compact(colonne).contains("alignment:.trailing"),
             "à DROITE du cadre — gabarit de `StoryViewerView+Sidebar.swift`"
         )
-        XCTAssertTrue(
-            compact(colonne).contains("spacing:MediaStageActionColumn.spacing"),
-            "l'espacement vient de la règle, pas d'un nombre recopié dans la vue"
+        XCTAssertFalse(
+            compact(colonne).contains("spacing:"),
+            "l'espacement vient du rail partagé, pas d'un nombre recopié dans la vue"
         )
     }
 
@@ -286,7 +293,7 @@ final class MediaGalleryActionColumnTests: XCTestCase {
                       "la légende dépliable aussi")
         XCTAssertTrue(compact(ligneAuteur).contains("att.fileSizeFormatted"),
                       "et la ligne format / dimensions / poids avec elle")
-        XCTAssertTrue(compact(code).contains("StoryReaderScrims("),
+        XCTAssertTrue(compact(code).contains("FullscreenScrims("),
                       "et leur voile reste — celui de l'ÉCRAN désormais : c'est l'effet que le " +
                       "porteur a validé, au site où il le produit vraiment")
     }
@@ -305,27 +312,22 @@ final class MediaGalleryActionColumnTests: XCTestCase {
     /// pas un état interne.
     func test_chaqueAction_consommeToutSaCible_etNeLaisseRienPasserAuCadre() throws {
         let code = try unit()
-        guard let cible = corps("func mediaStageActionTarget()", dans: code),
-              let actions = corps("private func mediaActions(", dans: code) else {
-            return XCTFail("`mediaStageActionTarget` ou `mediaActions` introuvable")
+        guard let actions = corps("private func mediaActions(", dans: code) else {
+            return XCTFail("`mediaActions` introuvable")
         }
-        let platCible = compact(cible)
+        let plat = compact(actions)
 
-        XCTAssertTrue(
-            platCible.contains("frame(width:MediaStageActionColumn.target,height:MediaStageActionColumn.target)"),
-            "la cible mesure `MediaStageActionColumn.target` — l'identité, jamais 44 recopié"
-        )
-        XCTAssertTrue(
-            platCible.contains(".contentShape(Rectangle())"),
-            "et elle est PLEINE : sans cela l'anneau entre le verre et la cible laisse "
-                + "passer le doigt vers le cadre, qui ouvre le plein écran."
-        )
         XCTAssertEqual(
-            AppSourceGuard.occurrences(ofIdentifier: "mediaStageActionTarget",
-                                       in: compact(actions)),
+            plat.components(separatedBy: "style:.disc(.adaptive)").count - 1,
             3,
-            "les TROIS actions passent par la même cible — réagir, répondre, composer. "
-                + "Une seule oubliée et c'est elle qui ouvrira le plein écran."
+            "les TROIS actions passent par le même disque du chrome plein écran — réagir, "
+                + "répondre, composer. Son cadre de `FullscreenChromeMetrics.tapTarget` et sa forme "
+                + "de contenu PLEINE sont ceux du SDK : sans eux l'anneau entre le verre et la "
+                + "cible laisse passer le doigt vers le cadre, qui ouvre le plein écran."
+        )
+        XCTAssertFalse(
+            plat.contains("adaptiveGlass("),
+            "aucune action ne repeint son propre verre : c'est le disque partagé qui le pose"
         )
     }
 

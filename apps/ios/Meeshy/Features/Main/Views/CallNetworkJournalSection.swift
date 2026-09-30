@@ -176,7 +176,7 @@ struct CallNetworkJournalSection: View {
         VStack(alignment: .leading, spacing: 0) {
             sectionTitle(CallNetworkJournalPresentation.title)
             ForEach(presentation.summary) { row in
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     Text(row.title)
                         .font(.subheadline)
                         .foregroundColor(theme.textMuted)
@@ -215,7 +215,7 @@ struct CallNetworkJournalSection: View {
     }
 
     private func momentRow(_ moment: CallNetworkJournalPresentation.Moment) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
+        HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.smPlus) {
             Text(moment.elapsed)
                 .font(.caption.monospacedDigit())
                 .foregroundColor(theme.textMuted)
@@ -224,7 +224,7 @@ struct CallNetworkJournalSection: View {
                 .fill(moment.isAlert ? MeeshyColors.warning : accentColor)
                 .frame(width: 6, height: 6)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(moment.text)
                     .font(.subheadline)
                     .foregroundColor(theme.textPrimary)
@@ -237,7 +237,7 @@ struct CallNetworkJournalSection: View {
             Spacer(minLength: 0)
         }
         .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, 6)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .accessibilityElement(children: .combine)
     }
 }

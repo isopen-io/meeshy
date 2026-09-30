@@ -148,7 +148,7 @@ struct LocationSharingSettingsSection: View {
                 defaultValue: "Aux niveaux Quartier et Ville, seule la zone est transmise — pas l'adresse exacte.",
                 bundle: .main
             ))
-            .font(MeeshyFont.relative(12))
+            .font(MeeshyFont.relative(MeeshyFont.smallSize))
             .foregroundColor(theme.textMuted)
             .padding(.horizontal, MeeshySpacing.xs)
         }
@@ -196,7 +196,7 @@ struct LocationSharingSettingsSection: View {
         } label: {
             SettingsRow(icon: icon, title: title, color: accentColor) {
                 Image(systemName: "checkmark")
-                    .font(MeeshyFont.relative(14, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
                     .foregroundColor(Color(hex: accentColor))
                     .opacity(isSelected ? 1 : 0)
             }
@@ -233,7 +233,7 @@ struct LocationSharingSettingsSheet: View {
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text(String(localized: "location.settings.title", defaultValue: "Partage de position", bundle: .main))
-                        .font(MeeshyFont.relative(16, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                         .accessibilityAddTraits(.isHeader)
                 }
                 ToolbarItem(placement: .confirmationAction) {

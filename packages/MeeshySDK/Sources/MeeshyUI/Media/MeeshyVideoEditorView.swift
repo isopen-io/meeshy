@@ -59,11 +59,11 @@ public struct MeeshyVideoEditorView: View {
             VideoEditorStage(viewModel: viewModel)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.black)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .padding(.horizontal, 12)
-                .padding(.bottom, 8)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.bottom, MeeshySpacing.sm)
             VideoEditorTimeline(viewModel: viewModel)
-                .padding(.horizontal, 8)
+                .padding(.horizontal, MeeshySpacing.sm)
             bottomDock
         }
         .padding(.top, insets.top + 8)
@@ -103,14 +103,14 @@ public struct MeeshyVideoEditorView: View {
     // MARK: - Top bar
 
     private var topBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Button {
                 viewModel.cancelEditing()
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xs, weight: .bold))
                     .foregroundStyle(theme.textPrimary)
-                    .frame(width: 38, height: 38)
+                    .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     .background(theme.glassMaterial, in: Circle())
             }
             .buttonStyle(.plain)
@@ -129,28 +129,28 @@ public struct MeeshyVideoEditorView: View {
             Button {
                 viewModel.confirm()
             } label: {
-                HStack(spacing: 5) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: MeeshyIconSize.xs, weight: .bold))
                     Text(String(localized: "videoEditor.finish", defaultValue: "Terminer", bundle: .module))
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: MeeshyFont.labelSize, weight: .bold))
                 }
                 .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 9)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(Capsule().fill(MeeshyColors.brandGradient))
             }
             .buttonStyle(.plain)
             .disabled(viewModel.isExporting)
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 6)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.xsPlus)
     }
 
     // MARK: - History row
 
     private var historyRow: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             historyButton(icon: "arrow.uturn.backward", enabled: viewModel.canUndo) {
                 viewModel.undo()
             }
@@ -162,7 +162,7 @@ public struct MeeshyVideoEditorView: View {
                 Button {
                     viewModel.resetAllEdits()
                 } label: {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: "arrow.counterclockwise")
                         Text(String(localized: "videoEditor.reset", defaultValue: "Réinitialiser", bundle: .module))
                     }
@@ -172,16 +172,16 @@ public struct MeeshyVideoEditorView: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 4)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.xs)
     }
 
     private func historyButton(icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                 .foregroundStyle(enabled ? theme.textPrimary : theme.textMuted.opacity(0.5))
-                .frame(width: 32, height: 32)
+                .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                 .background(theme.glassMaterial, in: Circle())
         }
         .buttonStyle(.plain)
@@ -194,8 +194,8 @@ public struct MeeshyVideoEditorView: View {
     private var bottomDock: some View {
         if viewModel.panel.isVisible {
             VideoEditorBand(viewModel: viewModel)
-                .padding(.horizontal, 6)
-                .padding(.top, 6)
+                .padding(.horizontal, MeeshySpacing.xsPlus)
+                .padding(.top, MeeshySpacing.xsPlus)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         } else {
             HStack {
@@ -205,9 +205,9 @@ public struct MeeshyVideoEditorView: View {
                 )
                 Spacer()
             }
-            .padding(.leading, 16)
-            .padding(.top, 10)
-            .padding(.bottom, 6)
+            .padding(.leading, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.smPlus)
+            .padding(.bottom, MeeshySpacing.xsPlus)
             .transition(.opacity)
         }
     }
@@ -216,21 +216,21 @@ public struct MeeshyVideoEditorView: View {
 
     private func bannerView(_ banner: VideoEditorViewModel.Banner) -> some View {
         VStack {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: banner.isError ? "exclamationmark.triangle.fill" : "info.circle.fill")
                 Text(banner.message)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
                     .lineLimit(2)
                 Spacer(minLength: 0)
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                     .fill(banner.isError ? theme.error : accent)
             )
-            .padding(.horizontal, 20)
+            .padding(.horizontal, MeeshySpacing.xl)
             .padding(.top, 70)
             Spacer()
         }
@@ -258,33 +258,33 @@ public struct MeeshyVideoEditorView: View {
         ZStack {
             Color.black.opacity(0.72).ignoresSafeArea()
 
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 if case .failed(let message) = viewModel.exportPhase {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.system(size: 34))
                         .foregroundStyle(theme.warning)
                     Text(String(localized: "videoEditor.export.failed", defaultValue: "Export impossible", bundle: .module))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.system(size: MeeshyFont.calloutSize, weight: .bold))
                         .foregroundStyle(theme.textPrimary)
                     Text(message)
-                        .font(.system(size: 12))
+                        .font(.system(size: MeeshyFont.smallSize))
                         .foregroundStyle(theme.textSecondary)
                         .multilineTextAlignment(.center)
-                    HStack(spacing: 12) {
+                    HStack(spacing: MeeshySpacing.md) {
                         overlayButton("Fermer", filled: false) { viewModel.cancelExport() }
                         overlayButton("Réessayer", filled: true) { viewModel.confirm() }
                     }
                 } else {
                     progressRing
                     Text(viewModel.exportPhase == .preparing ? "Préparation…" : "Export \(Int(exportProgress * 100)) %")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
                         .foregroundStyle(theme.textPrimary)
                     overlayButton("Annuler", filled: false) { viewModel.cancelExport() }
                 }
             }
             .padding(28)
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                     .fill(theme.backgroundSecondary)
             )
             .padding(40)
@@ -301,7 +301,7 @@ public struct MeeshyVideoEditorView: View {
                 .stroke(accent, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             Image(systemName: "film")
-                .font(.system(size: 20))
+                .font(.system(size: MeeshyIconSize.xl))
                 .foregroundStyle(theme.textSecondary)
         }
         .frame(width: 78, height: 78)
@@ -311,10 +311,10 @@ public struct MeeshyVideoEditorView: View {
     private func overlayButton(_ title: String, filled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(.system(size: 13, weight: .semibold))
+                .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundStyle(filled ? Color.white : theme.textPrimary)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 9)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(
                     Capsule().fill(filled
                         ? AnyShapeStyle(MeeshyColors.brandGradient)
