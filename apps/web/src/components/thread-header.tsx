@@ -47,7 +47,17 @@ export function ThreadHeader({
   readingMenuRows,
   onSelectReadingMode,
   onResetReadingModeToAuto,
+  preview = false,
 }: {
+  /**
+   * L'EN-TÊTE DE L'APERÇU TIRÉ DEPUIS LA BANNIÈRE (#8821, directive porteur
+   * 2026-09-30 : « afficher tout le header de la conversation dans son bloc de
+   * verre Liquid Glass sans (<) ! »). Le MÊME en-tête, dans le même verre :
+   * aucun chevron retour — l'aperçu n'a pas d'écran d'où revenir, il se ferme
+   * —, l'identité (nom, sous-titre) ET les actions ensemble, sans attendre
+   * qu'on déplie ; l'avatar y ouvre les détails.
+   */
+  readonly preview?: boolean;
   readonly title: string;
   readonly accent: string;
   readonly conversation: Conversation;
@@ -158,17 +168,19 @@ export function ThreadHeader({
           Centré dans ses 44, il aurait sauté de 11 px d'une conversation à
           l'autre — un repère de navigation qui se déplace tout seul.
         */}
-        <Link
-          to="list"
-          className="flex h-11 min-w-11 shrink-0 items-center gap-1 rounded-chip pe-1"
-          style={{ color: 'var(--accent)' }}
-          aria-label={otherUnread > 0 ? `Retour — ${otherUnread} messages non lus ailleurs` : 'Retour'}
-        >
-          <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
-          <UnreadBadge count={otherUnread} />
-        </Link>
+        {preview ? null : (
+          <Link
+            to="list"
+            className="flex h-11 min-w-11 shrink-0 items-center gap-1 rounded-chip pe-1"
+            style={{ color: 'var(--accent)' }}
+            aria-label={otherUnread > 0 ? `Retour — ${otherUnread} messages non lus ailleurs` : 'Retour'}
+          >
+            <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
+            <UnreadBadge count={otherUnread} />
+          </Link>
+        )}
 
-        {expanded ? (
+        {preview || expanded ? (
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
             <h1
               className={`${group && onOpenDetails !== undefined ? '' : 'truncate '}text-title font-bold`}
@@ -207,14 +219,17 @@ export function ThreadHeader({
               {group ? `${conversation.memberCount} participants` : 'Chiffré de bout en bout'}
             </p>
           </div>
-        ) : (
+        ) : null}
+        {preview || !expanded ? (
           /* GRAPPE D'ACTIONS (#5774, travail 3/3) — c'est ELLE seule qui
              s'efface en mode Bulles pendant le geste
              (`[data-chrome-header="actions"] .thread-header-actions`,
              `thread-scene.css`) ; en rangée plate, c'est l'EN-TÊTE ENTIER
-             qui part (`> header`), cette classe n'y ajoute rien de plus. */
-          <div className="thread-header-actions flex flex-1 items-center gap-2">
-            <span className="flex-1" />
+             qui part (`> header`), cette classe n'y ajoute rien de plus.
+             En APERÇU (#8821), elle suit l'identité au lieu de la remplacer :
+             c'est le titre qui prend la place, pas un espaceur. */
+          <div className={`thread-header-actions flex ${preview ? 'shrink-0' : 'flex-1'} items-center gap-2`}>
+            {preview ? null : <span className="flex-1" />}
             {/* LE CHIP DE MODE — SOUS DRAPEAU UNIQUEMENT (D-20, miroir
                 `ConversationView.swift:2391-2430`) : `apiConfig.readingModesEnabled`
                 est un paramètre de CONSTRUCTION, figé au déploiement — quand il
@@ -256,18 +271,23 @@ export function ThreadHeader({
               </ChromeActionDisc>
             </button>
           </div>
-        )}
+        ) : null}
 
-        {expanded && group && activeMembers !== undefined ? (
+        {/* Pas en APERÇU : à 390 px, la pile des trois actifs écrasait le
+            titre à une lettre — l'identité d'abord, l'avatar dit déjà le groupe. */}
+        {expanded && !preview && group && activeMembers !== undefined ? (
           <ActiveMembersStack members={activeMembers} accent={accent} storyRingOf={storyRingOf} onOpenDetails={onOpenDetails} />
         ) : null}
 
         <AvatarMenuTrigger entries={identityMenu} name={title} onOpenDetails={onOpenDetails}>
+          {/* En APERÇU (#8821), l'en-tête n'a rien à déplier : l'avatar y
+              ouvre les détails de la conversation, la porte que le titre
+              déplié offre dans le fil. */}
           <button
             type="button"
-            onClick={onToggleExpanded}
-            aria-expanded={expanded}
-            aria-label={expanded ? 'Replier l’en-tête' : 'Déplier l’en-tête'}
+            onClick={preview ? (onOpenDetails ?? onToggleExpanded) : onToggleExpanded}
+            {...(preview ? { 'aria-haspopup': 'dialog' as const } : { 'aria-expanded': expanded })}
+            aria-label={preview ? 'Détails de la conversation' : expanded ? 'Replier l’en-tête' : 'Déplier l’en-tête'}
             className="shrink-0"
           >
             {/* LA PHOTO PAR `avatarOf` (#6975) — `peerOf(conversation,

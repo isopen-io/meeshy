@@ -4,7 +4,7 @@ import { html } from './html.mjs'
 // captures-app-store.md : aucune Live Activity, aucun îlot à l'image).
 export const DEVICES = {
   iphone: { ecran: { width: 440, height: 956 }, bezel: 13, radius: 68, ecranRadius: 56 },
-  ipad: { ecran: { width: 1376, height: 1032 }, bezel: 24, radius: 52, ecranRadius: 30 },
+  ipad: { ecran: { width: 1032, height: 1376 }, bezel: 24, radius: 52, ecranRadius: 30 },
 }
 
 export const cadre = (device, ecran, { finition = 'titane' } = {}) => {

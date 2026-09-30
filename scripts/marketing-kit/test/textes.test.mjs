@@ -13,9 +13,9 @@ const toutesLesChaines = (valeur) => {
   return []
 }
 
-describe('légendes App Store L1-L10 (captures-app-store.md § 4)', () => {
-  test('dix légendes, chacune dans les sept langues du kit', () => {
-    expect(Object.keys(LEGENDES)).toEqual(['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9', 'L10'])
+describe('légendes App Store L1-L12 (captures-app-store.md § 4, #8825)', () => {
+  test('douze légendes, chacune dans les sept langues du kit', () => {
+    expect(Object.keys(LEGENDES)).toEqual(['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9', 'L10', 'L11', 'L12'])
     for (const legende of Object.values(LEGENDES)) {
       expect(Object.keys(legende).sort()).toEqual([...KIT_LANGS].sort())
     }

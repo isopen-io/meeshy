@@ -34,6 +34,7 @@ import enQuote from './catalog-en-quote';
 import enCommentRow from './catalog-en-comment-row';
 import enContactDiscovery from './catalog-en-contact-discovery';
 import enDownload from './catalog-en-download';
+import enPhonePrompt from './catalog-en-phone-prompt';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -1073,6 +1074,7 @@ const en = {
   'message-detail.retry': 'Retry',
 
   ...enDownload,
+  ...enPhonePrompt,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...enComposerAttach,

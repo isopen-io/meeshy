@@ -76,6 +76,10 @@ nonisolated enum ComposerTrailingColumn {
         case tool([ComposerToolControl])
         case object(sections: [ComposerObjectEditorSection],
                     actions: [StoryCanvasContextAction])
+        /// **L'édition du FOND** (#8847) : ses outils seuls, celui dont les
+        /// contrôles sont ouverts sous la scène marqué, puis le `(x)`.
+        case backgroundTools(sections: [ComposerObjectEditorSection],
+                             open: ComposerObjectEditorSection?)
     }
 
     enum Entry: Equatable, Identifiable {
@@ -84,6 +88,9 @@ nonisolated enum ComposerTrailingColumn {
         /// carrousel en bas, à la place de l'audience et de Publier.
         case sceneEffect(ComposerSceneEffect, isOpen: Bool)
         case editorSection(ComposerObjectEditorSection)
+        /// Un outil du FOND (#8847) — le toucher ouvre ses contrôles SOUS la
+        /// scène, jamais l'éditeur plein écran.
+        case backgroundSection(ComposerObjectEditorSection, isOpen: Bool)
         case objectAction(StoryCanvasContextAction)
         /// Le `(x)` d'un outil : il le termine et rend les portes.
         case exitTool
@@ -96,6 +103,7 @@ nonisolated enum ComposerTrailingColumn {
             case .toolControl(let control):   return "tool.\(control.id)"
             case .sceneEffect(let effet, _):  return "effect.\(effet.rawValue)"
             case .editorSection(let section): return "section.\(section.identifier)"
+            case .backgroundSection(let section, _): return "background.\(section.identifier)"
             case .objectAction(let action):   return "action.\(String(describing: action))"
             case .exitTool:                   return "exit.tool"
             case .exitObject:                 return "exit.object"
@@ -106,7 +114,8 @@ nonisolated enum ComposerTrailingColumn {
         var isExit: Bool {
             switch self {
             case .exitTool, .exitObject:                          return true
-            case .toolControl, .sceneEffect, .editorSection, .objectAction: return false
+            case .toolControl, .sceneEffect, .editorSection, .backgroundSection, .objectAction:
+                return false
             }
         }
     }
@@ -125,8 +134,13 @@ nonisolated enum ComposerTrailingColumn {
                       selection: (sections: [ComposerObjectEditorSection],
                                   actions: [StoryCanvasContextAction])?,
                       effects: [ComposerSceneEffect] = [],
-                      openEffect: ComposerSceneEffect? = nil) -> Focus {
+                      openEffect: ComposerSceneEffect? = nil,
+                      backgroundTools: (sections: [ComposerObjectEditorSection],
+                                        open: ComposerObjectEditorSection?)? = nil) -> Focus {
         if case .tool(let controls) = railMode { return .tool(controls) }
+        if let backgroundTools {
+            return .backgroundTools(sections: backgroundTools.sections, open: backgroundTools.open)
+        }
         guard let selection else {
             return .scene(effects: effects, open: openEffect.flatMap { effects.contains($0) ? $0 : nil })
         }
@@ -145,6 +159,8 @@ nonisolated enum ComposerTrailingColumn {
             return effects.map { Entry.sceneEffect($0, isOpen: $0 == open) }
         case .tool(let controls):
             return controls.map(Entry.toolControl) + [.exitTool]
+        case .backgroundTools(let sections, let open):
+            return sections.map { Entry.backgroundSection($0, isOpen: $0 == open) } + [.exitTool]
         case .object(let sections, let actions):
             let modifier = actions.contains(.edit) ? [Entry.objectAction(.edit)] : []
             let reste = actions.filter { action in
@@ -159,7 +175,7 @@ nonisolated enum ComposerTrailingColumn {
 
     static func foot(for focus: Focus, timeServed: Bool) -> [Foot] {
         switch focus {
-        case .tool:
+        case .tool, .backgroundTools:
             return [.undo, .redo]
         case .scene, .object:
             return (timeServed ? [.time] : []) + [.undo, .redo]

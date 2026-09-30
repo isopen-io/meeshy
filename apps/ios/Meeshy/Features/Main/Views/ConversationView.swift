@@ -1335,10 +1335,10 @@ struct ConversationView: View {
                 // le repos du fil ne bouge pas d'un point.
                 bottomInset: composerHeight + 16 + (previewMode ? 0 : DeviceLayout.safeAreaBottom),
                 bottomInsetTransition: listInsetTransition,
-                // 0 en preview, ni voile : hébergée dans une `.sheet` à détentes, déjà
-                // sous la status bar, la vue décalerait le flux dans le vide.
+                // 0 en preview : `.sheet` à détentes, déjà sous la status bar. La
+                // bande est réservée partout — l'aperçu porte l'en-tête (#8822).
                 topInset: previewMode ? 0 : DeviceLayout.safeAreaTop,
-                headerBandHeight: previewMode ? 0 : headerState.bandHeight,
+                headerBandHeight: headerState.bandHeight,
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
@@ -1860,18 +1860,6 @@ struct ConversationView: View {
             // cellule du flux de messages, rendue en dernier par
             // `MessageListViewController` (voir `MessageListItem.typingIndicator`).
 
-            // Notification preview: a tap anywhere over the message area opens
-            // the full conversation (navigation transition). The composer is
-            // excluded (bottom inset) so the user can still reply in place.
-            if previewMode {
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture { onOpenFullConversation?() }
-                    .padding(.bottom, composerHeight)
-                    .zIndex(49)
-                    .accessibilityLabel(String(localized: "conversation.preview.open", bundle: .main))
-            }
-
             floatingHeaderSection
 
             // Quick reaction bar — a floating overlay anchored to the bubble
@@ -2152,10 +2140,11 @@ struct ConversationView: View {
     private var floatingHeaderSectionBody: some View {
         ConversationFloatingHeaderSection(
             isAnonymous: isAnonymous,
-            isTyping: isTyping,
+            isTyping: isTyping && headerLayout.yieldsToTypingBar,
             showSearch: headerState.showSearch,
             showOptions: composerState.showOptions,
             hidesHeaderActions: hidesHeaderActionsForScroll,
+            measuresBandHeight: headerLayout.measuresBandHeight,
             anonymousBar: { AnyView(anonymousHeaderBar) },
             typingBar: { AnyView(typingHeaderBar) },
             // Focal/Script + défilement : le header entier glisse vers le bord
@@ -2239,7 +2228,7 @@ struct ConversationView: View {
     /// struct pour la trace et le raisonnement complet.
     private var expandedHeaderBand: AnyView {
         AnyView(ConversationExpandedHeaderBand(
-            showOptions: composerState.showOptions,
+            layout: headerLayout,
             backButton: {
                 AnyView(ThemedBackButton(
                     color: accentColor,
@@ -2265,7 +2254,7 @@ struct ConversationView: View {
     // `__swift_instantiateConcreteTypeFromMangledNameV2`.
     private var expandedHeaderMidContent: AnyView {
         AnyView(ConversationHeaderMidContent(
-            showOptions: composerState.showOptions,
+            layout: headerLayout,
             titleAndTags: { AnyView(expandedHeaderTitleAndTags) },
             actionButtons: { headerButtonsCluster }
         ))
@@ -2294,11 +2283,13 @@ struct ConversationView: View {
     // NOMINAL supprime : son nom se substitue au sous-arbre entier dans le
     // mangled name, donc le démangleur n'a plus à le parcourir.
     private var headerButtonsCluster: AnyView {
-        AnyView(ConversationHeaderActionsCluster(
+        let cluster = ConversationHeaderActionsCluster(
             callButtons: { headerCallButtons },
             searchButton: { expandedHeaderSearchButton },
             readingModeCluster: { readingModeAffordanceCluster }
-        ))
+        )
+        guard headerLayout.showsOpenFullConversation else { return AnyView(cluster) }
+        return AnyView(HStack(spacing: 0) { cluster; openFullConversationButton })
     }
 
     /// Chip de mode + bouton Aa (§WS-7 travaux 3-4, arbitrage F-086bis) —
@@ -2440,7 +2431,7 @@ struct ConversationView: View {
                 name: conversation?.displayName ?? "Conversation",
                 favoriteEmoji: conversation?.userState.reaction,
                 font: MeeshyFont.relative(13, weight: .bold, design: .rounded),
-                color: .white,
+                color: isDark ? .white : MeeshyColors.indigo950, // blanc sur le verre clair était illisible (#8822)
                 lineLimit: 2
             )
             // Subtle "revalidating" sparkle: shown while we serve stale cache
@@ -2476,10 +2467,10 @@ struct ConversationView: View {
     }
 
     private var expandedHeaderBackground: AnyView {
-        guard composerState.showOptions else { return AnyView(Color.clear) }
+        // Le BLOC DE VERRE (#8822) : Liquid Glass sur iOS 26, matériau avant.
+        guard headerLayout.isGlassBlock else { return AnyView(Color.clear) }
         return AnyView(
-            RoundedRectangle(cornerRadius: MeeshyRadius.xxl - 2)
-                .fill(.ultraThinMaterial)
+            Color.clear.adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xxl - 2))
                 .overlay(
                     RoundedRectangle(cornerRadius: MeeshyRadius.xxl - 2)
                         .stroke(

@@ -87,6 +87,38 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
                        .ignore, "des segments en attente de ✓ ne se perdent pas sous une photo")
     }
 
+    // MARK: - Viseur armé : l'appui long FILME (#8846)
+
+    /// > « le longpress à partir de la scène doit déclencher la capture vidéo
+    /// > après avoir armé l'objectif » — directive porteur 2026-09-30.
+    func test_armedHold_viseurArme_demarreLaVideo_danstousLesFormatsQuiFilment() {
+        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .story), .startFilming)
+        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .post), .startFilming)
+        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .reel), .startFilming)
+    }
+
+    func test_armedHold_horsViseurArme_ouSansVideo_nePrendRien() {
+        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .off, format: .story), .ignore)
+        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .recording, format: .story), .ignore,
+                       "une prise en cours n'en démarre pas une seconde")
+        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .status), .ignore)
+    }
+
+    /// Le toucher reste la photo, l'appui long la vidéo : deux gestes, deux
+    /// intentions, sur la MÊME nappe du viseur armé.
+    func test_viseurArme_toucherEtAppuiLong_nePortentPasLaMemeIntention() {
+        XCTAssertEqual(ComposerSceneQuickCapture.armedTap(stage: .armed, format: .story, pendingSegments: 0),
+                       .takePhoto)
+        XCTAssertEqual(ComposerSceneQuickCapture.armedHold(stage: .armed, format: .story), .startFilming)
+    }
+
+    /// La nappe du viseur armé câble l'appui long vers la prise vidéo.
+    func test_nappeDuViseurArme_cableLAppuiLongVersLaVideo() throws {
+        let hote = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift")
+        XCTAssertTrue(hote.contains("handleArmedSceneHold()"), "l'appui long de la nappe ne démarre rien")
+        XCTAssertTrue(hote.contains("handleArmedSceneHoldEnded()"), "relâcher n'arrête pas la prise")
+    }
+
     /// La levée d'un appui long se lit désormais sur le cadenas (#8671) —
     /// `ComposerCaptureHold.release`, éprouvée par `ComposerCaptureLockZoomFlashTests`.
     func test_release_clotLaPrise_ouAnnuleCeQuiNAPasDemarre() {

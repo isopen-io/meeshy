@@ -1,5 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 
+import { conversationPreviewStore } from './conversation-preview';
 import type { NotificationRecord } from './record';
 
 /**
@@ -13,7 +14,9 @@ import type { NotificationRecord } from './record';
  * peinture vivent dans le chunk de la bannière, chargé quand elle descend.
  *
  * - elle se tait sur le fil de SA conversation (le contenu y est déjà lu —
- *   `activeConversationId` d'iOS), pour une ligne déjà lue, et pour un appel
+ *   `activeConversationId` d'iOS) comme sur celle ouverte EN APERÇU (#8821,
+ *   `?? notificationPreviewConversation?.id` d'iOS), pour une ligne déjà
+ *   lue, et pour un appel
  *   entrant ou terminé : la couche d'appel le présente elle-même ;
  * - une nouvelle bannière REMPLACE la précédente, sans file d'attente.
  */
@@ -23,7 +26,9 @@ const CALL_LAYER_TYPES = new Set(['incoming_call', 'incoming_call_alert', 'call'
 export function shouldShowBanner(notification: NotificationRecord, { pathname }: { readonly pathname: string }): boolean {
   if (notification.state.isRead || CALL_LAYER_TYPES.has(notification.type)) return false;
   const conversationId = notification.context.conversationId;
-  return conversationId === undefined || pathname !== `/c/${encodeURIComponent(conversationId)}`;
+  if (conversationId === undefined) return true;
+  if (conversationPreviewStore.getState().conversationId === conversationId) return false;
+  return pathname !== `/c/${encodeURIComponent(conversationId)}`;
 }
 
 type BannerState = {

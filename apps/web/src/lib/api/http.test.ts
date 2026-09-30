@@ -528,3 +528,44 @@ describe('createHttpTransport — le détenteur masqué d’un EMAIL_TAKEN (#821
     expect(result.ok ? true : 'emailOwner' in result).toBe(false);
   });
 });
+
+describe('createHttpTransport — le crédential FORCÉ par l’appel (#8816)', () => {
+  test('`credential: null` part NU : ni Bearer ni jeton d’invité, même sous un compte', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: {} } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl, credential: () => ({ kind: 'registered', token: 'jwt-1' }) });
+    await transport.request({ method: 'POST', path: '/api/v1/links/mshy_x/members', body: { language: 'fr' }, credential: null });
+    expect(headerOf(calls[0]!.init, 'Authorization')).toBeNull();
+    expect(headerOf(calls[0]!.init, 'X-Session-Token')).toBeNull();
+  });
+
+  test('un 401 sur un crédential forcé ne ferme PAS la session courante', async () => {
+    const { impl } = fakeFetch({ status: 401, body: { success: false, error: 'x' } });
+    let closed = 0;
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: impl,
+      credential: () => ({ kind: 'registered', token: 'jwt-1' }),
+      onUnauthorized: () => {
+        closed += 1;
+      },
+    });
+    await transport.request({ method: 'POST', path: '/api/v1/links/mshy_x/members', credential: null });
+    expect(closed).toBe(0);
+  });
+
+  test('la réponse d’un appel forcé se résout même si l’identité de session change entre-temps', async () => {
+    let identity = 'u:ada';
+    const impl = (async () => {
+      identity = 'g:anon_1';
+      return new Response(JSON.stringify({ success: true, data: { ok: true } }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const transport = createHttpTransport({
+      base: '',
+      fetchImpl: impl,
+      credential: () => ({ kind: 'registered', token: 'jwt-1' }),
+      identity: () => identity,
+    });
+    const result = await transport.request({ method: 'POST', path: '/api/v1/links/mshy_x/members', credential: null });
+    expect(result.ok).toBe(true);
+  });
+});

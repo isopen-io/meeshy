@@ -1,10 +1,13 @@
 // Plan des captures App Store — docs/marketing/campagne-2026-09/captures-app-store.md § 2 (iPhone),
-// § 3 (iPad), § 5 (poster d'App Preview). `theme` est le mode de l'ÉCRAN ; le fond du gabarit le
-// suit (sombre ⇒ fond vif, clair ⇒ fond lumineux), ce qui rythme la rangée de l'App Store.
+// § 3 (iPad), § 5 (poster d'App Preview), refondu par #8825. `theme` est le mode de l'ÉCRAN ; le
+// fond du gabarit le suit (sombre ⇒ fond vif, clair ⇒ fond lumineux), ce qui rythme la rangée.
 import { resolve } from 'node:path'
 import { REPO_ROOT } from '../../lib/catalog.mjs'
 import { appStoreLocale } from '../../lib/locales.mjs'
 
+// #8825 : les conversations d'abord — l'amour (le vocal entendu dans la langue de l'autre, puis
+// les photos échangées), le fou rire, le débat, l'appel sous-titré — puis le reste de l'app.
+// L'iPad passe en PORTRAIT, le format par défaut d'App Store Connect pour le 13".
 export const APPAREILS = {
   iphone: {
     width: 1320,
@@ -12,31 +15,33 @@ export const APPAREILS = {
     scale: 3,
     prefixe: 'iphone69',
     captures: [
-      { ecran: 'dm', legende: 'L1', theme: 'dark', decor: 'fleche' },
-      { ecran: 'groupe', legende: 'L2', theme: 'light', decor: 'drapeaux-groupe' },
-      { ecran: 'global', legende: 'L3', theme: 'dark', decor: 'bonjours' },
-      { ecran: 'fil', legende: 'L4', theme: 'light' },
-      { ecran: 'decouverte', legende: 'L5', theme: 'dark', decor: 'drapeaux-monde' },
+      { ecran: 'amour', legende: 'L1', theme: 'dark', decor: 'fleche' },
+      { ecran: 'amour-photos', legende: 'L11', theme: 'light', decor: 'coeur-langues' },
+      { ecran: 'drole', legende: 'L2', theme: 'dark', decor: 'drapeaux-drole' },
+      { ecran: 'debat', legende: 'L12', theme: 'light' },
+      { ecran: 'appel-amour', legende: 'L9', theme: 'dark' },
+      { ecran: 'global', legende: 'L3', theme: 'light', decor: 'bonjours' },
+      { ecran: 'fil', legende: 'L4', theme: 'dark' },
       { ecran: 'story', legende: 'L6', theme: 'dark' },
       { ecran: 'progression', legende: 'L7', theme: 'light' },
-      { ecran: 'succes', legende: 'L8', theme: 'dark', decor: 'carte-meesh', deviceTop: 226 },
-      { ecran: 'appel', legende: 'L9', theme: 'dark' },
       { ecran: 'invitation', legende: 'L10', theme: 'light' },
     ],
   },
   ipad: {
-    width: 2752,
-    height: 2064,
+    width: 2064,
+    height: 2752,
     scale: 2,
     prefixe: 'ipad13',
     captures: [
-      { ecran: 'ipad-dm', legende: 'L1', theme: 'dark', decor: 'fleche' },
+      { ecran: 'ipad-amour', legende: 'L1', theme: 'dark', decor: 'fleche' },
+      { ecran: 'ipad-amour-photos', legende: 'L11', theme: 'light', decor: 'coeur-langues' },
+      { ecran: 'ipad-drole', legende: 'L2', theme: 'dark', decor: 'drapeaux-drole' },
+      { ecran: 'ipad-debat', legende: 'L12', theme: 'light' },
+      { ecran: 'ipad-appel-amour', legende: 'L9', theme: 'dark' },
       { ecran: 'ipad-global', legende: 'L3', theme: 'light', decor: 'bonjours' },
       { ecran: 'ipad-fil', legende: 'L4', theme: 'dark' },
-      { ecran: 'ipad-groupe', legende: 'L2', theme: 'light', decor: 'drapeaux-groupe' },
-      { ecran: 'ipad-progression', legende: 'L7', theme: 'light' },
-      { ecran: 'ipad-appel', legende: 'L9', theme: 'dark' },
       { ecran: 'ipad-story', legende: 'L6', theme: 'dark' },
+      { ecran: 'ipad-progression', legende: 'L7', theme: 'light' },
     ],
   },
 }

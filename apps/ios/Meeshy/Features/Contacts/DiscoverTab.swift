@@ -13,6 +13,7 @@ struct DiscoverTab: View {
     @EnvironmentObject private var router: Router
 
     @State private var showSMSComposer = false
+    @State private var isOfferingPhone = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -34,6 +35,21 @@ struct DiscoverTab: View {
             guard viewModel.searchQuery.isEmpty, viewModel.searchResults.isEmpty else { return }
             await viewModel.loadSuggestions()
         }
+        .phonePromptBeforeContactSearch(isPresented: $isOfferingPhone, onContinue: importContacts)
+    }
+
+    /// Retrouver ses contacts : un compte sans numéro se voit d'abord proposer
+    /// d'en ajouter un (#8843), puis l'import part.
+    private func offerPhoneThenSearch() {
+        guard PhonePromptPolicy.shouldOffer(user: AuthManager.shared.currentUser) else {
+            importContacts()
+            return
+        }
+        isOfferingPhone = true
+    }
+
+    private func importContacts() {
+        Task { await viewModel.importContacts() }
     }
 
     // MARK: - Invite Section
@@ -142,7 +158,7 @@ struct DiscoverTab: View {
     private var importContactsButton: some View {
         Button {
             HapticFeedback.light()
-            Task { await viewModel.importContacts() }
+            offerPhoneThenSearch()
         } label: {
             HStack(spacing: 8) {
                 if viewModel.isImportingContacts {

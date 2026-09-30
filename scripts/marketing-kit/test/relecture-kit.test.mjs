@@ -5,8 +5,6 @@ import { typo } from '../lib/composants.mjs'
 import { contexte, ecran } from '../lib/gabarits.mjs'
 import { toString } from '../lib/html.mjs'
 import { KIT_LANGS } from '../lib/locales.mjs'
-import { suggestionsDecouverte } from '../screens/social.mjs'
-import { profilDe } from '../textes/demo.mjs'
 import { pageCapture, pagePoster } from '../templates/appstore/composition.mjs'
 import { corpsDeSerie } from '../templates/appstore/render-appstore.mjs'
 import { APPAREILS } from '../templates/appstore/plan.mjs'
@@ -16,6 +14,7 @@ import { STORIES } from '../templates/social/textes/videos.mjs'
 import { OUT_DIR, cheminSortie, nomPlanche } from '../render.mjs'
 
 const LENT = 120_000
+const rangDe = (appareil, nom) => APPAREILS[appareil].captures.findIndex((c) => c.ecran === nom) + 1
 const sansStyle = (page) => page.replace(/<style>[\s\S]*?<\/style>/g, '').replace(/<script>[\s\S]*?<\/script>/g, '')
 
 describe('typographie', () => {
@@ -31,15 +30,6 @@ describe('révélation en allemand', () => {
   test('après le numéral, seul l’adjectif passe en minuscule : « 10 geknüpfte Freundschaften »', () => {
     const page = toString(ecran('succes', contexte({ lang: 'de', theme: 'dark' })))
     expect(page).toContain('10 geknüpfte Freundschaften')
-  })
-})
-
-describe('capture 05 — les drapeaux sont les PAYS des amis affichés', () => {
-  test.each(KIT_LANGS)('%s : la rangée reprend les drapeaux des suggestions de l’écran Découvrir', (lang) => {
-    const page = pageCapture({ appareil: 'iphone', lang, rang: 5 })
-    const rangee = page.match(/<div class="as-rangee as-pile">([\s\S]*?)<\/div>/)[1]
-    const drapeaux = [...rangee.matchAll(/<span class="as-flag">([^<]+)<\/span>/g)].map((m) => m[1])
-    expect(drapeaux).toEqual(suggestionsDecouverte(lang).map((p) => profilDe(p).drapeau))
   })
 })
 
@@ -133,9 +123,9 @@ describe('mesures en navigateur', () => {
     }
   }, LENT)
 
-  test('capture 03 : la première bulle de Meeshy Global n’est pas coupée sous l’en-tête', async () => {
+  test('capture 06 : la première bulle de Meeshy Global n’est pas coupée sous l’en-tête', async () => {
     for (const lang of KIT_LANGS) {
-      const page = await ouvrir(pageCapture({ appareil: 'iphone', lang, rang: 3 }), { width: 440, height: 956 })
+      const page = await ouvrir(pageCapture({ appareil: 'iphone', lang, rang: rangDe('iphone', 'global') }), { width: 440, height: 956 })
       const coupe = await page.evaluate(() => {
         window.asMiseEnPage()
         const liste = document.querySelector('.messages')
@@ -148,24 +138,51 @@ describe('mesures en navigateur', () => {
     }
   }, LENT)
 
-  test('capture 08 : la carte Meesh flottante ne recouvre pas l’explication du badge', async () => {
-    for (const lang of KIT_LANGS) {
-      const page = await ouvrir(pageCapture({ appareil: 'iphone', lang, rang: 8 }), { width: 440, height: 956 })
-      const chevauche = await page.evaluate(() => {
-        window.asMiseEnPage()
-        const carte = document.querySelector('.as-carte-flottante').getBoundingClientRect()
-        const range = document.createRange()
-        range.selectNodeContents(document.querySelector('.reveal-sub'))
-        return [...range.getClientRects()].some((r) => r.bottom > carte.top && r.top < carte.bottom)
-      })
-      await page.close()
-      expect({ lang, chevauche }).toEqual({ lang, chevauche: false })
+  test('#8825 : aucune photo échangée n’est coupée sous l’en-tête, iPhone et iPad, sept langues', async () => {
+    const cibles = [
+      ['iphone', ['amour', 'amour-photos', 'drole', 'debat']],
+      ['ipad', ['ipad-amour', 'ipad-amour-photos', 'ipad-drole', 'ipad-debat']],
+    ]
+    for (const [appareil, ecrans] of cibles) {
+      const { width, height, scale } = APPAREILS[appareil]
+      for (const nom of ecrans) {
+        for (const lang of KIT_LANGS) {
+          const page = await ouvrir(pageCapture({ appareil, lang, rang: rangDe(appareil, nom) }), { width: width / scale, height: height / scale })
+          const coupees = await page.evaluate(() => {
+            window.asMiseEnPage()
+            const liste = document.querySelector('.messages')
+            const cadre = liste.getBoundingClientRect()
+            const echelle = cadre.height / liste.offsetHeight
+            const seuil = cadre.top + 30 * echelle
+            return [...liste.querySelectorAll('.media-grid')].filter((g) => g.getBoundingClientRect().top < seuil).length
+          })
+          await page.close()
+          expect({ appareil, nom, lang, coupees }).toEqual({ appareil, nom, lang, coupees: 0 })
+        }
+      }
     }
-  }, LENT)
+  }, LENT * 2)
 
-  test('iPad 05 : le panneau Progression est rempli jusqu’au bas de l’image (grille des badges)', async () => {
+  test('#8825 : les conversations iPad remplissent la hauteur du portrait — moins d’un cinquième vide', async () => {
+    const { width, height, scale } = APPAREILS.ipad
+    for (const nom of ['ipad-amour', 'ipad-amour-photos', 'ipad-drole', 'ipad-debat']) {
+      for (const lang of KIT_LANGS) {
+        const page = await ouvrir(pageCapture({ appareil: 'ipad', lang, rang: rangDe('ipad', nom) }), { width: width / scale, height: height / scale })
+        const vide = await page.evaluate(() => {
+          const liste = document.querySelector('.messages')
+          const k = liste.getBoundingClientRect().height / liste.offsetHeight
+          const occupe = [...liste.children].reduce((n, c) => n + c.getBoundingClientRect().height, 0) / k
+          return Math.round((100 * (liste.offsetHeight - occupe)) / liste.offsetHeight)
+        })
+        await page.close()
+        expect({ nom, lang, rempli: vide <= 20 }).toEqual({ nom, lang, rempli: true })
+      }
+    }
+  }, LENT * 2)
+
+  test('iPad 09 : le panneau Progression est rempli jusqu’au bas de l’image (grille des badges)', async () => {
     for (const lang of KIT_LANGS) {
-      const page = await ouvrir(pageCapture({ appareil: 'ipad', lang, rang: 5 }), { width: 1376, height: 1032 })
+      const page = await ouvrir(pageCapture({ appareil: 'ipad', lang, rang: rangDe('ipad', 'ipad-progression') }), { width: 1032, height: 1376 })
       const bas = await page.evaluate(() => {
         window.asMiseEnPage()
         const grille = document.querySelector('.progression-panel .badge-grille')

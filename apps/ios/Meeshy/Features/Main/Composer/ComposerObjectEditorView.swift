@@ -128,12 +128,6 @@ struct ComposerObjectEditorView: View {
     /// plutôt que de prendre tout ce qu'on l'autorise à prendre.
     @State var optionsContentHeight: CGFloat = 0
 
-    /// La durée du fichier source d'un média, mesurée à l'ouverture (#4082).
-    /// Le modèle ne la porte pas de façon fiable ; sans elle, chaque
-    /// réouverture de la bande montrerait une source rétrécie à la fenêtre
-    /// précédente — un rognage qui se referme sur lui-même à chaque visite.
-    @State var mediaSourceDuration: Double = 0
-
     @State private var planZoom: Plan2DZoom = .fit
     @State private var moveOrigin: Double?
 

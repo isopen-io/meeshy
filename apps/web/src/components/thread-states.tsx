@@ -10,7 +10,17 @@ import { Link } from '@/routes/route-table';
  * titre, aucun compte de membres, même sur un refus 403 (« vous n'en êtes
  * pas membre » ne doit pas laisser deviner qu'elle EXISTE davantage qu'un
  * id qui n'existe pas du tout, F8).
+ *
+ * EN APERÇU (#8821, `preview`) — la feuille tirée de la bannière n'a pas
+ * d'écran d'où revenir : aucun chevron, aucune porte « Retour aux
+ * conversations » (la feuille a sa croix), et l'état remplit la feuille au lieu
+ * du viewport.
  */
+
+type PreviewProp = { readonly preview?: boolean | undefined };
+
+const rootClass = (preview: boolean | undefined) =>
+  `flex ${preview === true ? 'h-full' : 'h-dvh'} flex-col overflow-hidden pt-safe`;
 
 /**
  * `content-center` ET NON `place-items-center` SEUL (#5650, revue-correction)
@@ -20,24 +30,26 @@ import { Link } from '@/routes/route-table';
  * éléments éparpillés au lieu d'un bloc. `align-content: center` TASSE les
  * rangées au centre ; `gap-3` redevient l'espacement réel entre elles.
  */
-function MinimalHeader() {
+function MinimalHeader({ preview }: PreviewProp) {
   return (
     <header className="glass z-10 shrink-0">
-      <div className="flex items-center gap-2 px-4 py-2">
+      <div className="flex items-center gap-2 px-4 py-2" style={preview === true ? { minHeight: 60 } : undefined}>
         {/* `--color-ios-ink`, jamais `--color-ios-brand` (#6367) : le chevron
             posé sur cette bande de verre, pire cas (flou désactivé, D-51),
             mesure 2,78:1 en clair / 2,53:1 en sombre avec l'indigo nu —
             sous la barre AA non-texte (3:1). `--color-ios-ink` y tient
             (même ton, même densité que `thread-header.tsx`, mesuré par
             `scripts/lib/glass-contrast.test.ts`). */}
-        <Link
-          to="list"
-          className="grid size-11 shrink-0 place-items-center rounded-chip"
-          style={{ color: 'var(--color-ios-ink)' }}
-          aria-label="Retour"
-        >
-          <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
-        </Link>
+        {preview === true ? null : (
+          <Link
+            to="list"
+            className="grid size-11 shrink-0 place-items-center rounded-chip"
+            style={{ color: 'var(--color-ios-ink)' }}
+            aria-label="Retour"
+          >
+            <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
+          </Link>
+        )}
       </div>
     </header>
   );
@@ -45,10 +57,10 @@ function MinimalHeader() {
 
 /** `status === 'refused'` (D-6) — 403/404 confondus : « elle n'existe pas,
  * ou vous n'en êtes pas membre », jamais l'un ou l'autre distingué. */
-export function ThreadRefused() {
+export function ThreadRefused({ preview }: PreviewProp = {}) {
   return (
-    <div className="flex h-dvh flex-col overflow-hidden pt-safe">
-      <MinimalHeader />
+    <div className={rootClass(preview)}>
+      <MinimalHeader preview={preview} />
       <div className="grid flex-1 content-center justify-items-center gap-3 px-8 text-center">
         <span style={{ color: 'var(--color-ios-ink-3)' }}>
           <Glyph name="lock" size={28} />
@@ -59,13 +71,15 @@ export function ThreadRefused() {
         <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
           Elle n’existe pas, ou vous n’en êtes pas membre.
         </p>
-        <Link
-          to="list"
-          className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
-          style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
-        >
-          Retour aux conversations
-        </Link>
+        {preview === true ? null : (
+          <Link
+            to="list"
+            className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+            style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
+          >
+            Retour aux conversations
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -73,10 +87,10 @@ export function ThreadRefused() {
 
 /** `status === 'error'` — la même carrosserie que `ThreadRefused`, un
  * échec RÉSEAU plutôt qu'un refus : « Réessayer » plutôt qu'un retour seul. */
-export function ThreadError({ onRetry }: { readonly onRetry: () => void }) {
+export function ThreadError({ onRetry, preview }: { readonly onRetry: () => void } & PreviewProp) {
   return (
-    <div className="flex h-dvh flex-col overflow-hidden pt-safe">
-      <MinimalHeader />
+    <div className={rootClass(preview)}>
+      <MinimalHeader preview={preview} />
       <div role="alert" className="grid flex-1 content-center justify-items-center gap-3 px-8 text-center">
         <span style={{ color: 'var(--color-error)' }}>
           <Glyph name="warningCircle" size={28} />
@@ -103,10 +117,10 @@ const SKELETON_ROWS = [0, 1, 2, 3, 4, 5, 6, 7] as const;
 /** `status === 'pending'` — en-tête RÉEL (le retour reste utile pendant le
  * chargement) puis HUIT lignes de `SKELETON_ROW_HEIGHT` (l'estimation du
  * virtualiseur, `thread.tsx:296`), alternées 60 %/45 % de largeur. */
-export function ThreadSkeleton() {
+export function ThreadSkeleton({ preview }: PreviewProp = {}) {
   return (
-    <div className="flex h-dvh flex-col overflow-hidden pt-safe">
-      <MinimalHeader />
+    <div className={rootClass(preview)}>
+      <MinimalHeader preview={preview} />
       <div className="flex flex-1 flex-col gap-2 overflow-hidden px-3.5 pt-2" aria-busy="true" aria-label="Chargement du fil">
         {SKELETON_ROWS.map((i) => (
           <div key={i} className="flex items-end gap-2" style={{ height: SKELETON_ROW_HEIGHT, flexShrink: 0 }}>

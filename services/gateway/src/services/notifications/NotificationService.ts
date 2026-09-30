@@ -59,6 +59,9 @@ import { PushNotificationService } from '../PushNotificationService';
 import { EmailService } from '../EmailService';
 import { loadPostAcl, canUserConsumePost } from '../posts/postVisibility';
 import { pushCategoryForNotificationType, buildPushHeader, dedupePushSubtitle } from './push-header';
+import { contentDetailCategory, contentDetailPushFields } from './content-detail';
+import { servedBannerBody } from './served-banner-body';
+import type { NotificationContentDetail } from '@meeshy/shared/types/notification-content-detail';
 import {
   type MessagePrismSource,
   type MessageBannerSource,
@@ -71,7 +74,6 @@ import {
   UNKNOWN_BANNER_SOURCE,
   MESSAGE_CONTENT_BASIS,
   protectedPreview,
-  buildMessageNotificationBodyI18n,
   truncateMessage,
 } from './notification-preview';
 import type { FanoutDependencies } from './fanout/dependencies';
@@ -482,7 +484,7 @@ export class NotificationService {
   /**
    * La descente NUE — le couple `{ language, text }` élu, ou `null` ⇒ servir
    * l'original. Les deux consommateurs en sont des projections :
-   * {@link servedPreview} pour le corps affiché (cycle 122) et
+   * `servedPreview` (`served-banner-body.ts`) pour le corps affiché (cycle 122) et
    * {@link servedTranslationFields} pour les champs du fil push. Une descente,
    * deux projections — c'est ce qui les empêche de diverger (cycle 123).
    */
@@ -494,75 +496,6 @@ export class NotificationService {
       translations: source.translations,
       originalLanguage: source.originalLanguage,
       preferredLanguages,
-    });
-  }
-
-  /**
-   * Le texte que la bannière AFFICHE — cycle 122.
-   *
-   * Le Prisme ne s'arrête pas aux champs `translatedContent` /
-   * `translatedLanguage` du fil push : ils voyagent depuis le cycle 121 et
-   * AUCUN client ne les lit — ni la NSE iOS, ni l'application, ni Android, ni
-   * le service worker web. Le seul texte que les trois plateformes rendent est
-   * `payload.body`, composé depuis ce `content` : tant qu'il portait l'aperçu
-   * ORIGINAL, la bannière restait dans la langue de l'expéditeur pendant que la
-   * ligne de liste de la même application servait la traduction. Un contenu
-   * RÉSOLU n'est pas un contenu SERVI.
-   *
-   * La condition de substitution vit en amont, dans le choix de la SOURCE
-   * (`previewPrismSource`) : `Message.translations` ne traduit que
-   * `Message.content`, un placeholder de protection n'a pas de source, et une
-   * transcription a la sienne. Ici il ne reste qu'à servir ce qui a été élu.
-   */
-  private servedPreview(params: {
-    preview: string;
-    translation: { readonly text: string } | null;
-  }): string {
-    if (!params.translation) return params.preview;
-    // Un aperçu VIDE n'a rien à substituer : le corps se compose alors
-    // entièrement des badges de pièce jointe, localisés dans la langue de
-    // CADRAGE. Y injecter la traduction remplacerait « 📷 Foto » par un texte
-    // dont `Message.content` — vide — n'est pas la source.
-    if (params.preview.trim() === '') return params.preview;
-    return params.translation.text;
-  }
-
-  /**
-   * Le corps AFFICHÉ d'une bannière de message — cycle 125 bis.
-   *
-   * Deux compositions en une, et c'est leur ORDRE qui compte : le texte servi
-   * par le Prisme ({@link servedPreview}), puis le passage par
-   * `buildMessageNotificationBodyI18n`, qui remplace un texte ABSENT par le
-   * libellé de la première pièce jointe et suffixe les badges des suivantes.
-   *
-   * **Site UNIQUE pour les trois éventails**, et la raison est mesurée :
-   * `createMessageNotification` était le seul des trois à composer, si bien que
-   * la bannière d'une RÉPONSE ou d'une MENTION portant un vocal ou une photo
-   * sans légende arrivait avec un corps VIDE — le symptôme « deux textes pour
-   * un même message » (cycles 121-124) dans sa forme extrême, le second étant
-   * vide. C'est la leçon 271 : une règle écrite une fois par site finit par
-   * manquer à l'un d'eux.
-   *
-   * Sans média (`media` absent ou vide), le résultat est exactement le texte
-   * servi — les deux éventails qui n'en portaient pas gardent leur corps au
-   * caractère près.
-   */
-  private servedBannerBody(params: {
-    lang: string;
-    preview: string;
-    translation: { readonly text: string } | null;
-    media?: NotificationBannerMedia;
-  }): string {
-    return buildMessageNotificationBodyI18n(params.lang, {
-      messagePreview: this.servedPreview({
-        preview: params.preview,
-        translation: params.translation,
-      }),
-      attachments: params.media?.attachments,
-      firstAttachmentFileSize: params.media?.firstAttachmentFileSize,
-      firstAttachmentDuration: params.media?.firstAttachmentDuration,
-      firstAttachmentWidth: params.media?.firstAttachmentWidth,
-      firstAttachmentHeight: params.media?.firstAttachmentHeight,
     });
   }
 
@@ -751,6 +684,7 @@ export class NotificationService {
       prisma: this.prisma,
       createNotification: (params) => this.createNotification(params),
       resolveRecipientLang: (userId) => this.resolveRecipientLang(userId),
+      resolveRecipientPrism: (userId) => this.resolveRecipientPrism(userId),
       canNotifyAboutPost: (postId, recipientId) => this.canNotifyAboutPost(postId, recipientId),
       shouldCreateReactionNotification: (s, r) => this.shouldCreateReactionNotification(s, r),
       isConversationMutedFor: (u, c, t) => this.isConversationMutedFor(u, c, t),
@@ -1046,7 +980,13 @@ export class NotificationService {
           // GW4 — native grouping + actionable banner set by the producer:
           // threadId groups by conversation on iOS; category selects the
           // action set (the NSE only fills these for legacy payloads).
-          const pushCategory = pushCategoryForNotificationType(params.type);
+          // #8857 — la catégorie du CONTENU (position, contact, invitation) sous la
+          // même retenue que ses clés `data` : ses actions le diraient à elles seules.
+          const detailTravels = showPreview && !params.context.notificationLocKey;
+          const pushCategory = pushCategoryForNotificationType(
+            params.type,
+            detailTravels ? contentDetailCategory(params.context.contentDetail) : undefined,
+          );
           const pushPayload = {
               title: showSenderName ? pushTitle : 'Meeshy',
               // Subtitle carries the conversation name for group/global chats
@@ -1179,6 +1119,8 @@ export class NotificationService {
                       : '',
                   }),
                   encryptedContent: params.context.encryptedContent || '',
+                  // #8857 — le détail du contenu, sous le MÊME second verrou que le média.
+                  ...(params.context.notificationLocKey ? {} : contentDetailPushFields(params.context.contentDetail)),
                   ...(params.context.translatedContent ? {
                     translatedContent: params.context.translatedContent,
                     translatedLanguage: params.context.translatedLanguage || '',
@@ -1419,6 +1361,8 @@ export class NotificationService {
     attachmentTracks?: Readonly<Record<string, AttachmentTranslationTrack>>;
     encryptedContent?: string;
     notificationLocKey?: string;
+    /** #8857 — le détail du contenu, retenu par l'éventail dès que le média ne voyage pas. */
+    contentDetail?: NotificationContentDetail;
     /**
      * Ce que `messagePreview` EST, donc ce qui le traduit — cf.
      * {@link PreviewPrismBasis}. Défaut : `message-content` (cas nominal).
@@ -1545,11 +1489,13 @@ export class NotificationService {
     // de service ci-dessus : c'est lui que les trois plateformes rendent.
     // Cycle 125 bis — et la composition vit dans `servedBannerBody`, que les
     // TROIS éventails partagent désormais.
-    const content = this.servedBannerBody({
+    const content = servedBannerBody({
       lang: recipientLang,
       preview: params.messagePreview,
       translation: servedTranslation,
       media: { ...params, firstAttachmentDuration: servedMedia.durationMs ?? null },
+      detail: params.contentDetail,
+      readerId: params.recipientUserId,
     });
 
     return this.createNotification({
@@ -1603,6 +1549,7 @@ export class NotificationService {
         firstAttachmentDurationMs: servedMedia.durationMs,
         encryptedContent: params.encryptedContent,
         notificationLocKey: params.notificationLocKey,
+        ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
         // GW5 — champs de persistance NSE (timestamp serveur + type + Prisme).
         ...this.messageClockFields({
           createdAt: liveMessage.createdAt instanceof Date ? liveMessage.createdAt : null,
@@ -1686,6 +1633,8 @@ export class NotificationService {
      * second verrou de `createNotification`.
      */
     notificationLocKey?: string;
+    /** Cf. `createMessageNotification.contentDetail` — #8857. */
+    contentDetail?: NotificationContentDetail;
   }): Promise<Notification | null> {
     // Anti-spam: rate limit des mentions par paire (sender → recipient)
     if (!this.shouldCreateMentionNotification(params.mentionerUserId, params.mentionedUserId)) {
@@ -1739,11 +1688,13 @@ export class NotificationService {
       // les trois plateformes rendent, pas les champs de service du fil push.
       // Cycle 125 bis — et il se compose comme celui d'un message simple : le
       // libellé de la pièce jointe prend la place d'un texte absent.
-      content: this.servedBannerBody({
+      content: servedBannerBody({
         lang: prism.lang,
         preview: params.messagePreview,
         translation: servedTranslation,
         media: params,
+        detail: params.contentDetail,
+        readerId: params.mentionedUserId,
       }),
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
@@ -1787,6 +1738,7 @@ export class NotificationService {
         // unique producteur, donc sa présence DÉCLARE la protection là où une
         // base peut être omise par un appelant solo.
         notificationLocKey: params.notificationLocKey,
+        ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
         ...this.messageClockFields(prismSource),
       },
 
@@ -1820,6 +1772,8 @@ export class NotificationService {
       previewBasis?: PreviewPrismBasis;
       /** Cf. `createMentionNotification.notificationLocKey`. */
       notificationLocKey?: string;
+      /** Cf. `createMessageNotification.contentDetail` — #8857. */
+      contentDetail?: NotificationContentDetail;
       /** Cf. `createMentionNotification.attachments` — cycle 125 bis. */
       attachments?: NotificationBannerMedia['attachments'];
       firstAttachmentFileSize?: number | null;
@@ -2389,6 +2343,8 @@ export class NotificationService {
      * second verrou de `createNotification`.
      */
     notificationLocKey?: string;
+    /** Cf. `createMessageNotification.contentDetail` — #8857. */
+    contentDetail?: NotificationContentDetail;
   }): Promise<Notification | null> {
     // GW3 — per-conversation mute suppresses reply notifications
     // (a reply is not a mention: it does not pierce the mute).
@@ -2435,11 +2391,13 @@ export class NotificationService {
       // Cycle 122 — cf. `createMentionNotification` : le corps servi descend le
       // Prisme, les champs du fil push ne suffisent pas.
       // Cycle 125 bis — et il se compose comme celui d'un message simple.
-      content: this.servedBannerBody({
+      content: servedBannerBody({
         lang: prism.lang,
         preview: params.messagePreview,
         translation: servedTranslation,
         media: params,
+        detail: params.contentDetail,
+        readerId: params.recipientUserId,
       }),
       collapseId: `conv-${params.conversationId}`,
       lang: prism.lang,
@@ -2476,6 +2434,7 @@ export class NotificationService {
         // unique producteur, donc sa présence DÉCLARE la protection là où une
         // base peut être omise par un appelant solo.
         notificationLocKey: params.notificationLocKey,
+        ...(params.contentDetail ? { contentDetail: params.contentDetail } : {}),
         ...this.messageClockFields(prismSource),
       },
 

@@ -23,6 +23,6 @@ const sheet = (name) => readFileSync(resolve(STYLES_DIR, name), 'utf8')
 let css
 
 export const kitCss = () => {
-  css ??= [scopedIosTokens(), sheet('base.css'), sheet('ecrans.css'), sheet('ecrans-2.css'), sheet('ecrans-3.css'), sheet('ipad.css'), sheet('gabarits.css')].join('\n')
+  css ??= [scopedIosTokens(), sheet('base.css'), sheet('ecrans.css'), sheet('ecrans-2.css'), sheet('ecrans-3.css'), sheet('photos.css'), sheet('ipad.css'), sheet('gabarits.css')].join('\n')
   return css
 }
