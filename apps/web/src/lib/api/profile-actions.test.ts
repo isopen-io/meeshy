@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { QueryClient } from '@tanstack/react-query';
 
 import { resolveReaderLanguages } from '../reader';
+import { participantAvatarOf } from '../view/conversation';
+import { createAccountVault, type AccountVault } from './accounts';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
 import { createHttpTransport } from './http';
 import { MY_PROFILE_QUERY_KEY, type MyProfile } from './profile';
@@ -139,11 +141,13 @@ const depsOf = (params: {
   readonly session: ProfileActionDeps['session'];
   readonly queryClient?: QueryClient;
   readonly online?: boolean;
+  readonly accounts?: AccountVault;
 }): ProfileActionDeps => ({
   source: 'gateway',
   transport: params.transport,
   session: params.session,
   queryClient: params.queryClient ?? new QueryClient(),
+  accounts: params.accounts ?? createAccountVault({ storage: memoryStorage(), now: () => NOW }),
   isOnline: () => params.online ?? true,
 });
 
@@ -441,6 +445,60 @@ describe('changer sa photo — recompressée avant de partir', () => {
     expect(await outcome).toEqual({ status: 'saved', url: key, bytesSent: 48_000 });
     expect(queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.avatar).toBe(key);
     expect(sessionUser(session)?.avatar).toBe(key);
+  });
+
+  /**
+   * #8886 — AILLEURS QUE SUR LE PROFIL. Ma photo est recopiée dans chaque
+   * charge qui me montre (participants, expéditeurs…) et dans la liste des
+   * comptes de l'appareil ; la confirmation les fait toutes suivre, et un
+   * refus n'en touche aucune.
+   */
+  test('confirmée, la nouvelle photo me montre aussi dans mes conversations en cache et dans la liste des comptes', async () => {
+    const key = '2026/09/u-ada/avatar_3.webp';
+    const gateway = heldGateway();
+    const session = signedIn({ user: { avatar: '2026/08/u-ada/ancien.webp' } });
+    const accounts = createAccountVault({ storage: memoryStorage(), now: () => NOW });
+    const held = sessionUser(session);
+    if (held !== undefined) accounts.noteActive(held);
+    const queryClient = new QueryClient();
+    const me = { id: 'p-ada', userId: 'u-ada', avatar: '2026/08/u-ada/ancien.webp', user: { id: 'u-ada', avatar: '2026/08/u-ada/ancien.webp' } };
+    queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, { pages: [{ conversations: [{ id: 'c-1', participants: [me] }] }], pageParams: [null] });
+
+    const outcome = performImageUpdate({
+      kind: 'avatar',
+      file: heavyPhoto(),
+      deps: { ...depsOf({ transport: gateway.transport, session, queryClient, accounts }), recompress: async () => recompressed },
+    });
+    await gateway.arrival();
+    gateway.release(uploaded(key));
+    await gateway.arrival();
+    gateway.release({ status: 200, body: { success: true, data: { user: wireUser({ avatar: key }) } } });
+    expect((await outcome).status).toBe('saved');
+
+    const cached = queryClient.getQueryData<{ pages: { conversations: { participants: (typeof me)[] }[] }[] }>(CONVERSATIONS_QUERY_KEY);
+    expect(participantAvatarOf(cached?.pages[0]?.conversations[0]?.participants[0])).toBe(key);
+    expect(accounts.list()[0]?.user.avatar).toBe(key);
+  });
+
+  test('refusée, aucune copie de ma photo ne bouge', async () => {
+    const gateway = heldGateway();
+    const session = signedIn({ user: { avatar: '2026/08/u-ada/ancien.webp' } });
+    const queryClient = new QueryClient();
+    const conversations = { pages: [{ conversations: [{ id: 'c-1', participants: [{ id: 'p-ada', userId: 'u-ada', avatar: '2026/08/u-ada/ancien.webp' }] }] }] };
+    queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, conversations);
+    const outcome = performImageUpdate({
+      kind: 'avatar',
+      file: heavyPhoto(),
+      deps: { ...depsOf({ transport: gateway.transport, session, queryClient }), recompress: async () => recompressed },
+    });
+    await gateway.arrival();
+    gateway.release(uploaded('2026/09/u-ada/avatar_4.webp'));
+    await gateway.arrival();
+    gateway.release({ status: 400, body: { success: false, error: 'Invalid image format' } });
+
+    expect((await outcome).status).toBe('refused');
+    expect(queryClient.getQueryData(CONVERSATIONS_QUERY_KEY)).toBe(conversations);
+    expect(sessionUser(session)?.avatar).toBe('2026/08/u-ada/ancien.webp');
   });
 
   test('la bannière posée par sa clé de stockage remplace l’ancienne dans le profil', async () => {

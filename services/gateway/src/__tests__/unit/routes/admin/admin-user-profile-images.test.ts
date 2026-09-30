@@ -70,6 +70,9 @@ function fakePrisma(options: { cible?: Row | null; media?: Row | null; upload?: 
       findMany: jest.fn(async () => options.candidates ?? []) as AsyncMock,
       count: jest.fn(async () => (options.candidates ?? []).length) as AsyncMock,
     },
+    participant: {
+      updateMany: jest.fn(async () => ({ count: 2 })) as AsyncMock,
+    },
     messageAttachment: {
       findFirst: jest.fn(async () => (options.upload === undefined ? { fileUrl: '/api/v1/attachments/file/up/a.webp' } : options.upload)) as AsyncMock,
     },
@@ -118,6 +121,10 @@ describe('PUT /admin/users/:userId/profile-images/:kind — choisir parmi les m�
     expect(ecrit.data.avatar).toBe('/api/v1/attachments/file/post/p.jpg');
     expect(typeof ecrit.data.profileCompletionRate).toBe('number');
     expect(emitUserUpdated).toHaveBeenCalledWith({ userId: CIBLE_ID, changes: { avatar: '/api/v1/attachments/file/post/p.jpg' } });
+    expect(prisma.participant.updateMany).toHaveBeenCalledWith({
+      where: { userId: CIBLE_ID, type: 'user', avatar: { not: null } },
+      data: { avatar: null },
+    });
     expect(cacheDel).toHaveBeenCalled();
     expect(createAuditLog).toHaveBeenCalledWith(expect.objectContaining({
       userId: CIBLE_ID,
@@ -211,6 +218,7 @@ describe('PUT /admin/users/:userId/profile-images/:kind — retirer', () => {
 
     expect(res.statusCode).toBe(200);
     expect((prisma.user.update.mock.calls[0]?.[0] as { data: Row }).data).toEqual({ banner: null });
+    expect(prisma.participant.updateMany).not.toHaveBeenCalled();
     expect(emitUserUpdated).toHaveBeenCalledWith({ userId: CIBLE_ID, changes: { banner: null } });
     await app.close();
   });
