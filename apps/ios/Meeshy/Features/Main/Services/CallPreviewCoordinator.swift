@@ -17,6 +17,30 @@ enum CallPreviewPhase: Equatable, Sendable {
     case ended
 }
 
+/// Ce que l'appelé reçoit VRAIMENT de l'appelant avant de décrocher (#8795) :
+/// le libellé de l'appelant n'en dit jamais plus.
+enum CallPreviewExposure: Equatable, Sendable {
+    case nothing
+    case seen
+    case heard
+    case seenAndHeard
+
+    init(sees: Bool, hears: Bool) {
+        switch (sees, hears) {
+        case (true, true): self = .seenAndHeard
+        case (true, false): self = .seen
+        case (false, true): self = .heard
+        case (false, false): self = .nothing
+        }
+    }
+}
+
+/// Ce que l'appelé dit à l'appelant sur le canal de contrôle de l'aperçu
+/// (#8795) — même forme côté web (#8796).
+struct CallPreviewControlMessage: Codable, Equatable, Sendable {
+    let audible: Bool
+}
+
 /// Ce que l'aperçu lit de l'appel que `CallManager` tient.
 struct CallPreviewHostState: Equatable, Sendable {
     let callId: String?
@@ -56,8 +80,11 @@ protocol CallPreviewHostActing: AnyObject {
 ///   décroché et le vrai lien. Ce qu'il reçoit s'affiche derrière la sonnerie,
 ///   muet tant qu'on n'active pas le son.
 /// - **Appelant** : une demande pour SON appel qui sonne ouvre un lien qui offre
-///   son micro et sa caméra, dans l'état où ils sont : un micro coupé pendant
-///   la sonnerie ne s'entend pas, et se rétablit à la connexion.
+///   ce qu'il a choisi pour CE correspondant (#8795 — micro coupé et caméra
+///   activée pour un contact jamais appelé), dans la limite de l'état de ses
+///   médias : un micro coupé pendant la sonnerie ne s'entend pas, et se
+///   rétablit à la connexion. L'appelé lui dit, par le canal de contrôle du
+///   lien, quand il a activé le son.
 ///
 /// Tout passe par `call:preview-signal`, jamais par `call:signal`, où une
 /// réponse décrocherait l'appel. CallKit ne sait pas montrer de vidéo : sur
@@ -78,17 +105,29 @@ final class CallPreviewCoordinator: ObservableObject {
     @Published private(set) var isPreviewAudible = false
     /// Chez l'appelé : le bouton son est proposé dès que l'appel 1:1 sonne.
     @Published private(set) var offersSound = false
-    /// Chez l'appelant : l'appelé le voit (ou l'entend) avant de décrocher.
-    @Published private(set) var isSeenByCallee = false
+    /// Chez l'appelant : le lien d'aperçu atteint l'appelé.
+    @Published private(set) var reachesCallee = false
+    /// Chez l'appelant : les boutons micro et caméra de l'aperçu sont proposés
+    /// pendant que l'appel 1:1 sonne (#8795).
+    @Published private(set) var offersOutgoingControls = false
+    /// Chez l'appelant : ce qu'il laisse voir et entendre à CE correspondant.
+    @Published private(set) var outgoingConsent = CallPreviewConsent.initial
+    /// Chez l'appelant : l'appelé a activé le son de l'aperçu.
+    @Published private(set) var isHeardByCallee = false
+    /// Chez l'appelant : ce que l'appelé reçoit vraiment — ce que dit le libellé.
+    @Published private(set) var calleeExposure = CallPreviewExposure.nothing
 
     private let linkFactory: any GroupPeerLinkFactoryProviding
     private let signaling: any CallPreviewSignalingProviding
+    private let consents: any CallPreviewConsentStoring
     private weak var host: (any CallPreviewHostActing)?
 
     private var state = CallPreviewHostState.idle
     private var link: (any GroupPeerLinkProviding)?
     private var linkCallId: String?
     private var linkGeneration = 0
+    private var linkReceivesOnly = false
+    private var consentCallId: String?
     private var requestedCallId: String?
     private var mutedWhileRinging = false
     private var hostHearsPreview = false
@@ -96,10 +135,12 @@ final class CallPreviewCoordinator: ObservableObject {
 
     init(
         linkFactory: any GroupPeerLinkFactoryProviding = WebRTCGroupPeerLinkFactory.shared,
-        signaling: any CallPreviewSignalingProviding = MessageSocketManager.shared
+        signaling: any CallPreviewSignalingProviding = MessageSocketManager.shared,
+        consents: any CallPreviewConsentStoring = CallPreviewConsentStore.shared
     ) {
         self.linkFactory = linkFactory
         self.signaling = signaling
+        self.consents = consents
     }
 
     func attach(host: any CallPreviewHostActing) {
@@ -116,6 +157,7 @@ final class CallPreviewCoordinator: ObservableObject {
         case .incomingRinging:
             requestPreviewIfNeeded()
         case .outgoingRinging:
+            adoptConsentIfNeeded()
             followLocalMedia(previous: previous)
         case .answering:
             break
@@ -127,6 +169,8 @@ final class CallPreviewCoordinator: ObservableObject {
             mutedWhileRinging = false
         }
         offersSound = next.phase == .incomingRinging && !next.isGroup
+        offersOutgoingControls = next.phase == .outgoingRinging && !next.isGroup
+        refreshExposure()
     }
 
     /// Le bouton son de l'écran de sonnerie : proposé d'emblée, il retient le
@@ -135,12 +179,65 @@ final class CallPreviewCoordinator: ObservableObject {
         guard offersSound else { return }
         isPreviewAudible.toggle()
         applySound()
+        tellCallerTheSound()
     }
 
     private func applySound() {
         guard isPreviewConnected, isPreviewAudible != hostHearsPreview else { return }
         hostHearsPreview = isPreviewAudible
         host?.setPreviewAudible(isPreviewAudible)
+    }
+
+    /// L'appelé dit à l'appelant s'il a activé le son (#8795).
+    private func tellCallerTheSound() {
+        guard let link, linkReceivesOnly,
+              let data = try? JSONEncoder().encode(CallPreviewControlMessage(audible: isPreviewAudible)) else { return }
+        link.sendControl(data)
+    }
+
+    // MARK: - Appelant : ce que l'appelé reçoit avant de décrocher (#8795)
+
+    func togglePreviewAudio() {
+        guard offersOutgoingControls else { return }
+        outgoingConsent.sendsAudio.toggle()
+        rememberConsent()
+        link?.setAudioEnabled(sendsPreviewAudio)
+        refreshExposure()
+    }
+
+    func togglePreviewVideo() {
+        guard offersOutgoingControls else { return }
+        outgoingConsent.sendsVideo.toggle()
+        rememberConsent()
+        refreshExposure()
+        guard let link else { return }
+        let enabled = sendsPreviewVideo
+        Task { await link.setVideoEnabled(enabled) }
+    }
+
+    /// Le micro de l'aperçu : ouvert pour CE correspondant, et pas coupé pour l'appel.
+    private var sendsPreviewAudio: Bool { outgoingConsent.sendsAudio && !state.isMicMuted }
+    /// La caméra de l'aperçu : activée pour CE correspondant, sur un appel vidéo.
+    private var sendsPreviewVideo: Bool { outgoingConsent.sendsVideo && state.isVideoEnabled }
+
+    /// Le choix retenu pour CE correspondant, lu une fois par appel.
+    private func adoptConsentIfNeeded() {
+        guard !state.isGroup, let callId = state.callId, let peer = state.peerUserId, consentCallId != callId else { return }
+        consentCallId = callId
+        outgoingConsent = consents.consent(localUserId: state.localUserId, peerUserId: peer)
+    }
+
+    private func rememberConsent() {
+        guard let peer = state.peerUserId else { return }
+        consents.remember(outgoingConsent, localUserId: state.localUserId, peerUserId: peer)
+    }
+
+    private func refreshExposure() {
+        let sees = reachesCallee && sendsPreviewVideo
+        let hears = reachesCallee && isHeardByCallee && sendsPreviewAudio
+        let next = CallPreviewExposure(sees: sees, hears: hears)
+        guard next != calleeExposure else { return }
+        calleeExposure = next
     }
 
     // MARK: - La passerelle
@@ -200,10 +297,10 @@ final class CallPreviewCoordinator: ObservableObject {
         guard rang else { return }
         if state.isMicMuted != previous.isMicMuted {
             mutedWhileRinging = state.isMicMuted
-            link?.setAudioEnabled(!state.isMicMuted)
+            link?.setAudioEnabled(sendsPreviewAudio)
         }
         if state.isVideoEnabled != previous.isVideoEnabled, let link {
-            let enabled = state.isVideoEnabled
+            let enabled = sendsPreviewVideo
             Task { await link.setVideoEnabled(enabled) }
         }
     }
@@ -226,11 +323,13 @@ final class CallPreviewCoordinator: ObservableObject {
             remoteUserId: peer,
             iceServers: known.isEmpty ? IceServer.defaultServers : known,
             isPolite: receiveOnly,
-            sendsAudio: !receiveOnly && !state.isMicMuted,
-            sendsVideo: !receiveOnly && state.isVideoEnabled,
-            receiveOnly: receiveOnly
+            sendsAudio: !receiveOnly && sendsPreviewAudio,
+            sendsVideo: !receiveOnly && sendsPreviewVideo,
+            receiveOnly: receiveOnly,
+            opensControlChannel: !receiveOnly
         )
         linkGeneration += 1
+        linkReceivesOnly = receiveOnly
         let generation = linkGeneration
         let opened = linkFactory.makeLink(configuration) { [weak self] event in
             guard let self, self.linkGeneration == generation, let current = self.link else { return }
@@ -256,7 +355,8 @@ final class CallPreviewCoordinator: ObservableObject {
             )
         case .state(let linkState):
             guard receiveOnly else {
-                isSeenByCallee = linkState == .connected
+                reachesCallee = linkState == .connected
+                refreshExposure()
                 return
             }
             isPreviewConnected = linkState == .connected
@@ -266,6 +366,13 @@ final class CallPreviewCoordinator: ObservableObject {
             previewVideoTrack = link.remoteVideoTrack
         case .failed:
             closeLink(silencing: true)
+        case .controlOpened:
+            guard receiveOnly else { return }
+            tellCallerTheSound()
+        case .control(let data):
+            guard !receiveOnly, let message = try? JSONDecoder().decode(CallPreviewControlMessage.self, from: data) else { return }
+            isHeardByCallee = message.audible
+            refreshExposure()
         }
     }
 
@@ -276,7 +383,10 @@ final class CallPreviewCoordinator: ObservableObject {
         linkCallId = nil
         previewVideoTrack = nil
         isPreviewConnected = false
-        isSeenByCallee = false
+        reachesCallee = false
+        isHeardByCallee = false
+        linkReceivesOnly = false
+        refreshExposure()
         guard hostHearsPreview else { return }
         hostHearsPreview = false
         if silencing { host?.setPreviewAudible(false) }
@@ -290,6 +400,8 @@ final class CallPreviewCoordinator: ObservableObject {
     private func resetCall(previous: CallPreviewHostState) {
         endPreview(silencing: true)
         requestedCallId = nil
+        consentCallId = nil
+        outgoingConsent = .initial
         mutedWhileRinging = false
         if let callId = previous.callId { iceServers[callId] = nil }
     }

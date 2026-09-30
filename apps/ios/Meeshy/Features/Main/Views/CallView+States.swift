@@ -51,20 +51,20 @@ extension CallView {
             callTypeBadge
                 .padding(.bottom, 16)
 
-            // #8480 — l'appelé voit (ou entend) l'appelant avant de décrocher
-            CallPreviewSeenLabel(
-                preview: .shared,
-                peerName: callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main),
-                isVideo: callManager.isVideoEnabled,
-                isMuted: callManager.isMuted
-            )
-            .frame(minHeight: 28)
-            .padding(.bottom, 16)
+            // #8480, #8795 — ce que l'appelé reçoit vraiment avant de décrocher
+            CallPreviewSeenLabel(preview: .shared, peerName: peerDisplayName)
+                .frame(minHeight: 28)
+                .padding(.bottom, 16)
 
             Spacer()
 
-            // Effects + End call row
-            HStack(spacing: 40) {
+            // #8795 — micro et caméra de l'aperçu, puis filtres et raccroché
+            HStack(spacing: 20) {
+                CallPreviewOutgoingControls(
+                    preview: .shared,
+                    peerName: peerDisplayName,
+                    isVideoCall: callManager.isVideoEnabled
+                )
                 if callManager.isVideoEnabled {
                     effectsToggleButton
                 }
@@ -85,6 +85,11 @@ extension CallView {
                 )
             }
         }
+    }
+
+    /// Le nom du correspondant, tel que la sonnerie l'affiche.
+    var peerDisplayName: String {
+        callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main)
     }
 
     // MARK: - Connecting

@@ -309,6 +309,9 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
             dropMember(userId)
         case .remoteVideo:
             videoRevision += 1
+        case .controlOpened, .control:
+            // Le maillage n'ouvre aucun canal de contrôle : il sert l'aperçu.
+            break
         }
     }
 
