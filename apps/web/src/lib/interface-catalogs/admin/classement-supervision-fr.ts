@@ -1,8 +1,95 @@
 /**
- * LE FRAGMENT « classement-supervision » DU CATALOGUE D’ADMINISTRATION (#8876) — VIDE à la
- * fondation : le lot qui le possède y pose ses clés sous ses préfixes
- * exclusifs (voir `admin-catalog-fragments.test.ts`), dans les sept langues.
+ * LE FRAGMENT « classement-supervision » DU CATALOGUE D’ADMINISTRATION (#8876) — le
+ * classement (`admin.ranking.`) et la supervision de la plateforme
+ * (`admin.monitoring.`). Les libellés de critères disent ce que la passerelle COMPTE,
+ * pas ce que son nom technique laisse croire : `communities_created` compte des
+ * conversations de groupe, jamais des communautés.
  */
-const f = {} as const;
+const f = {
+  'admin.ranking.subtitle': 'Les plus actifs de la plateforme : membres, conversations, messages et liens, sur la période choisie.',
+
+  'admin.ranking.entity.label': 'Ce qu’on classe',
+  'admin.ranking.entity.users': 'Membres',
+  'admin.ranking.entity.conversations': 'Conversations',
+  'admin.ranking.entity.messages': 'Messages',
+  'admin.ranking.entity.links': 'Liens',
+
+  'admin.ranking.criterion.label': 'Critère',
+  'admin.ranking.criterion.users.messages_sent': 'Messages envoyés',
+  'admin.ranking.criterion.users.reactions_given': 'Réactions données',
+  'admin.ranking.criterion.users.reactions_received': 'Réactions reçues',
+  'admin.ranking.criterion.users.replies_received': 'Réponses reçues',
+  'admin.ranking.criterion.users.mentions_received': 'Mentions reçues',
+  'admin.ranking.criterion.users.mentions_sent': 'Mentions envoyées',
+  'admin.ranking.criterion.users.conversations_joined': 'Conversations rejointes',
+  'admin.ranking.criterion.users.communities_created': 'Conversations de groupe créées',
+  'admin.ranking.criterion.users.share_links_created': 'Liens de partage créés',
+  'admin.ranking.criterion.users.files_shared': 'Fichiers partagés',
+  'admin.ranking.criterion.users.reports_sent': 'Signalements envoyés',
+  'admin.ranking.criterion.users.reports_received': 'Signalements reçus',
+  'admin.ranking.criterion.users.friend_requests_sent': 'Demandes de contact envoyées',
+  'admin.ranking.criterion.users.friend_requests_received': 'Demandes de contact reçues',
+  'admin.ranking.criterion.users.calls_initiated': 'Appels lancés',
+  'admin.ranking.criterion.users.call_participations': 'Participations à un appel',
+  'admin.ranking.criterion.users.most_referrals_via_affiliate': 'Parrainages par affiliation',
+  'admin.ranking.criterion.users.most_referrals_via_sharelinks': 'Arrivées par ses liens de partage',
+  'admin.ranking.criterion.users.most_contacts': 'Contacts (amis acceptés)',
+  'admin.ranking.criterion.users.most_tracking_links_created': 'Liens de suivi créés',
+  'admin.ranking.criterion.users.most_tracking_link_clicks': 'Clics sur ses liens de suivi',
+  'admin.ranking.criterion.conversations.message_count': 'Messages échangés',
+  'admin.ranking.criterion.conversations.member_count': 'Membres actifs',
+  'admin.ranking.criterion.conversations.reaction_count': 'Réactions',
+  'admin.ranking.criterion.conversations.files_shared': 'Fichiers partagés',
+  'admin.ranking.criterion.conversations.call_count': 'Appels',
+  'admin.ranking.criterion.conversations.recent_activity': 'Activité la plus récente',
+  'admin.ranking.criterion.messages.most_reactions': 'Les plus réagis',
+  'admin.ranking.criterion.messages.most_replies': 'Les plus commentés',
+  'admin.ranking.criterion.messages.most_mentions': 'Les plus mentionnés',
+  'admin.ranking.criterion.links.tracking_links_most_visited': 'Liens de suivi les plus cliqués',
+  'admin.ranking.criterion.links.tracking_links_most_unique': 'Liens de suivi aux plus de visiteurs distincts',
+  'admin.ranking.criterion.links.share_links_most_used': 'Liens de partage les plus utilisés',
+  'admin.ranking.criterion.links.share_links_most_unique_sessions': 'Liens de partage aux plus de sessions distinctes',
+
+  'admin.ranking.period.label': 'Période',
+  'admin.ranking.period.1d': 'Dernières 24 heures',
+  'admin.ranking.period.7d': '7 derniers jours',
+  'admin.ranking.period.30d': '30 derniers jours',
+  'admin.ranking.period.60d': '60 derniers jours',
+  'admin.ranking.period.90d': '90 derniers jours',
+  'admin.ranking.period.180d': '6 derniers mois',
+  'admin.ranking.period.365d': '12 derniers mois',
+  'admin.ranking.period.all': 'Depuis toujours',
+  'admin.ranking.periodNone': 'Ce critère porte sur tout l’historique : la période ne s’applique pas.',
+  'admin.ranking.periodCreation': 'La période retient les liens créés pendant cette durée, quelle que soit la date des clics.',
+
+  'admin.ranking.limit.label': 'Nombre de lignes',
+  'admin.ranking.limit.option': 'Top {count}',
+  'admin.ranking.count': '{count} dans ce classement',
+
+  'admin.ranking.podium.title': 'Les trois premiers',
+  'admin.ranking.table.title': 'Classement',
+  'admin.ranking.table.titleRest': 'Du 4e rang au dernier',
+  'admin.ranking.table.caption': 'Classement : {criterion}, {period}',
+  'admin.ranking.rank': 'Rang {rank}',
+
+  'admin.ranking.col.rank': 'Rang',
+  'admin.ranking.col.entity.users': 'Membre',
+  'admin.ranking.col.entity.conversations': 'Conversation',
+  'admin.ranking.col.entity.messages': 'Message',
+  'admin.ranking.col.entity.trackingLinks': 'Lien de suivi',
+  'admin.ranking.col.entity.shareLinks': 'Lien de partage',
+  'admin.ranking.col.creator': 'Créé par',
+  'admin.ranking.col.lastActivity': 'Dernière activité',
+  'admin.ranking.col.created': 'Créé',
+
+  'admin.ranking.message.label': 'Message de {sender} dans {conversation}',
+  'admin.ranking.message.meta': '{date} · {type}',
+  'admin.ranking.trackingLink.to': 'Lien vers {host}',
+
+  'admin.ranking.empty': 'Aucun résultat pour ce classement',
+  'admin.ranking.empty.hint.period': 'Aucune activité n’a été comptée sur cette période.',
+  'admin.ranking.empty.hint.all': 'Rien n’a encore été compté pour ce critère.',
+  'admin.ranking.widen': 'Voir toute la période',
+} as const;
 
 export default f;
