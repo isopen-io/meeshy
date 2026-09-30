@@ -1,8 +1,121 @@
 /**
- * LE FRAGMENT « dashboard » DU CATALOGUE D’ADMINISTRATION (#8876) — VIDE à la
- * fondation : le lot qui le possède y pose ses clés sous ses préfixes
- * exclusifs (voir `admin-catalog-fragments.test.ts`), dans les sept langues.
+ * LE FRAGMENT « dashboard » DU CATALOGUE D’ADMINISTRATION (#8876) — les libellés
+ * du tableau de bord « vue de dieu » (spécification § 4), sous le préfixe
+ * exclusif `admin.dash.`. Les valeurs (nombres, dates, durées, noms de langue,
+ * énumérations) ne sont JAMAIS ici : elles viennent de la bibliothèque
+ * d’interprétation (`lib/admin/interpret`), qui les dit dans la langue
+ * d’interface. Ce fragment ne porte que les phrases autour.
  */
-const f = {} as const;
+const f = {
+  'admin.dash.more': 'Voir le détail',
+
+  'admin.dash.zone.now': 'En ce moment',
+  'admin.dash.zone.now.hint': 'Actualisé automatiquement chaque minute tant que cet onglet est ouvert.',
+  'admin.dash.zone.platform': 'Plateforme',
+  'admin.dash.zone.platform.hint': 'Les totaux depuis l’ouverture de Meeshy, recalculés toutes les dix minutes.',
+  'admin.dash.zone.usage': 'Santé de l’usage',
+  'admin.dash.zone.usage.hint': 'Mesurée sur les 30 derniers jours.',
+  'admin.dash.zone.trends': 'Tendances',
+  'admin.dash.zone.trends.hint': 'Les jours et les tranches horaires sont ceux du serveur.',
+  'admin.dash.zone.todo': 'À traiter',
+  'admin.dash.zone.people': 'Personnes et échanges',
+  'admin.dash.zone.system': 'Système',
+
+  'admin.dash.now.online': 'En ligne maintenant',
+  'admin.dash.now.online.caption': 'Comptes vus ces 5 dernières minutes',
+  'admin.dash.now.messages': 'Messages dans la dernière heure',
+  'admin.dash.now.messages.caption': 'Messages supprimés exclus',
+  'admin.dash.now.conversations': 'Conversations actives',
+  'admin.dash.now.conversations.caption': 'Au moins un message dans la dernière heure',
+
+  'admin.dash.platform.users': 'Comptes',
+  'admin.dash.platform.users.caption': '{count} nouveaux en 24 h',
+  'admin.dash.platform.activeUsers': 'Comptes actifs',
+  'admin.dash.platform.activeUsers.share': '{share} des comptes',
+  'admin.dash.platform.activeUsers.caption': '{share} des comptes · {inactive} désactivés',
+  'admin.dash.platform.anonymous': 'Participants anonymes',
+  'admin.dash.platform.anonymous.caption': '{active} actifs · {recent} arrivés en 24 h',
+  'admin.dash.platform.messages': 'Messages',
+  'admin.dash.platform.messages.caption': '{count} en 24 h',
+  'admin.dash.platform.conversations': 'Nouvelles conversations',
+  'admin.dash.platform.conversations.caption': 'Créées ces 24 dernières heures',
+  'admin.dash.platform.communities': 'Communautés',
+  'admin.dash.platform.shareLinks': 'Liens de partage actifs',
+  'admin.dash.platform.shareLinks.caption': 'sur {total}',
+  'admin.dash.platform.admins': 'Administrateurs',
+  'admin.dash.platform.admins.caption': 'Administrateurs et créateur',
+
+  'admin.dash.usage.engagement': 'Taux d’engagement',
+  'admin.dash.usage.engagement.caption': 'Comptes vus sur la période, rapportés à tous les comptes',
+  'admin.dash.usage.growth': 'Croissance',
+  'admin.dash.usage.growth.caption': 'Nouveaux comptes sur la période, rapportés à tous les comptes',
+  'admin.dash.usage.perUser': 'Messages par compte',
+  'admin.dash.usage.perUser.caption': 'Moyenne sur la période',
+  'admin.dash.usage.activeRate': 'Taux de comptes actifs',
+  'admin.dash.usage.activeRate.caption': 'Part des comptes vus au moins une fois sur la période',
+
+  'admin.dash.volume.title': 'Messages par jour (7 derniers jours)',
+  'admin.dash.volume.series': 'Messages',
+  'admin.dash.volume.summary': 'Pic le {day} : {count}',
+  'admin.dash.volume.none': 'Aucun message sur les 7 derniers jours.',
+  'admin.dash.hourly.title': 'Activité par tranche de 3 heures (24 dernières heures)',
+  'admin.dash.hourly.summary': 'Tranche la plus active : de {from} à {to} ({count})',
+  'admin.dash.engagement.title': 'Engagement des comptes',
+  'admin.dash.engagement.summary': '{share} des comptes ont été actifs ces 7 derniers jours.',
+  'admin.dash.languages.title': 'Langues des messages',
+  'admin.dash.languages.summary': 'Langue la plus utilisée : {language} ({count})',
+  'admin.dash.types.title': 'Types de messages (7 jours)',
+  'admin.dash.types.summary': 'Type le plus envoyé : {type} ({share})',
+
+  'admin.dash.moderation.title': 'File de modération',
+  'admin.dash.moderation.pending': 'En attente',
+  'admin.dash.moderation.pending.caption': 'Signalements à prendre en charge',
+  'admin.dash.moderation.review': 'En cours d’examen',
+  'admin.dash.moderation.review.caption': 'Déjà pris en charge par un modérateur',
+  'admin.dash.moderation.delay': 'Délai moyen de résolution',
+  'admin.dash.moderation.delay.caption': 'Hors dossiers classés sans suite',
+  'admin.dash.moderation.recent': 'Signalements des dernières 24 heures',
+  'admin.dash.moderation.empty': 'Aucun signalement ces dernières 24 heures.',
+  'admin.dash.moderation.entityOf': '{kind} de {owner}',
+  'admin.dash.moderation.open': 'Ouvrir le signalement : {name}',
+
+  'admin.dash.broadcasts.title': 'Diffusions en cours',
+  'admin.dash.broadcasts.empty': 'Aucune diffusion en cours d’envoi.',
+  'admin.dash.broadcasts.unnamed': 'Diffusion sans nom',
+  'admin.dash.broadcasts.progress': '{sent} sur {total} envoyés',
+  'admin.dash.broadcasts.failed': '{count} en échec',
+  'admin.dash.broadcasts.progressLabel': 'Progression de l’envoi de {name} : {percent}',
+  'admin.dash.broadcasts.more': 'Et {count} de plus en cours d’envoi',
+
+  'admin.dash.members.title': 'Derniers inscrits',
+  'admin.dash.members.joined': 'inscrit {when}',
+  'admin.dash.members.empty': 'Aucun compte pour le moment.',
+  'admin.dash.rank.conversations.title': 'Conversations les plus actives (7 jours)',
+  'admin.dash.rank.conversations.summary': '{name} est en tête : {count}',
+  'admin.dash.rank.members.title': 'Membres les plus actifs (7 jours)',
+  'admin.dash.rank.members.summary': '{name} est en tête : {count}',
+
+  'admin.dash.system.health': 'Santé de la plateforme',
+  'admin.dash.system.database': 'Base de données',
+  'admin.dash.system.redis': 'Redis (cache)',
+  'admin.dash.system.latency': 'Réponse en {latency}',
+  'admin.dash.system.unreachable': 'Ne répond pas',
+  'admin.dash.system.realtime': 'Connexions en temps réel',
+  'admin.dash.system.realtime.caption': '{count} comptes connectés',
+  'admin.dash.system.breakers': 'Coupe-circuits ouverts',
+  'admin.dash.system.breakers.none': 'Tous les services répondent',
+  'admin.dash.system.breakers.open': 'Coupés : {names}',
+  'admin.dash.system.alert.database': 'La base de données ne répond pas.',
+  'admin.dash.system.alert.redis': 'Le cache Redis ne répond pas.',
+  'admin.dash.system.alert.breakers': 'Des coupe-circuits sont ouverts : des appels sont refusés le temps que le service se rétablisse.',
+
+  'admin.dash.agent.title': 'Agent',
+  'admin.dash.agent.active': 'Configurations actives',
+  'admin.dash.agent.active.caption': 'sur {total} configurations',
+  'admin.dash.agent.messages': 'Messages publiés',
+  'admin.dash.agent.messages.caption': 'Par l’agent, depuis le début',
+  'admin.dash.agent.last': 'Dernière activité',
+  'admin.dash.agent.last.none': 'Aucune activité',
+} as const;
 
 export default f;
