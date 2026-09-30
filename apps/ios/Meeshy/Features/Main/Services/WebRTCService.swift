@@ -53,6 +53,12 @@ final class WebRTCService {
     private let client: any WebRTCClientProviding
     private var iceCandidateBuffer: [IceCandidate] = []
     private var hasRemoteDescription = false
+    /// SDP de la réponse distante déjà appliquée (ou en cours d'application).
+    /// Un doublon exact — l'appelé renvoie sa réponse quand l'accusé tarde,
+    /// la passerelle la rejoue après une reconnexion — ne se réapplique pas :
+    /// la négociation est déjà stable, et l'échec qui en résultait faisait
+    /// raccrocher un appel qui fonctionnait (2026-09-30).
+    private var appliedRemoteAnswerSDP: String?
     private(set) var connectionState: PeerConnectionState = .new
     // Tracks the in-flight flush task so it can be cancelled when the
     // connection is closed — prevents post-teardown addIceCandidate calls
@@ -221,6 +227,11 @@ final class WebRTCService {
     /// media even if ICE connects, so continuing silently leads to a silent call.
     @discardableResult
     func setRemoteDescription(_ description: SessionDescription) async -> Bool {
+        if description.sdp == appliedRemoteAnswerSDP {
+            Logger.webrtc.info("Remote description already applied — duplicate ignored")
+            return true
+        }
+        appliedRemoteAnswerSDP = description.sdp
         do {
             try await client.setRemoteAnswer(description)
             hasRemoteDescription = true
@@ -228,6 +239,7 @@ final class WebRTCService {
             Logger.webrtc.info("Set remote description: \(description.type.rawValue)")
             return true
         } catch {
+            appliedRemoteAnswerSDP = nil
             Logger.webrtc.error("Failed to set remote description: \(error.localizedDescription)")
             return false
         }
@@ -619,6 +631,7 @@ final class WebRTCService {
     func performICERestart() async -> SessionDescription? {
         Logger.webrtc.info("Performing ICE restart")
         hasRemoteDescription = false
+        appliedRemoteAnswerSDP = nil
         iceCandidateBuffer.removeAll()
         // P0-4 — signal the peer connection to embed new ICE credentials in the
         // next offer (IceRestart:true constraint → full ICE re-gather, new ufrag/pwd).
@@ -674,6 +687,7 @@ final class WebRTCService {
         client.disconnectAfterFlushingPendingSend()
         iceCandidateBuffer.removeAll()
         hasRemoteDescription = false
+        appliedRemoteAnswerSDP = nil
         connectionState = .closed
         Logger.webrtc.info("WebRTC connection closed")
     }
