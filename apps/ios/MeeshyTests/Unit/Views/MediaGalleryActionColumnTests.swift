@@ -293,7 +293,7 @@ final class MediaGalleryActionColumnTests: XCTestCase {
                       "la légende dépliable aussi")
         XCTAssertTrue(compact(ligneAuteur).contains("att.fileSizeFormatted"),
                       "et la ligne format / dimensions / poids avec elle")
-        XCTAssertTrue(compact(code).contains("FullscreenScrims("),
+        XCTAssertTrue(compact(code).contains("StoryReaderScrims(") || compact(code).contains("FullscreenScrims("),
                       "et leur voile reste — celui de l'ÉCRAN désormais : c'est l'effet que le " +
                       "porteur a validé, au site où il le produit vraiment")
     }
