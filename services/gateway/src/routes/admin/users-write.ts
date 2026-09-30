@@ -189,7 +189,7 @@ function servir(
   rendu: Rendu | undefined,
   messageParDefaut: string
 ): void {
-  const sanitise = sanitizationService.sanitizeUser(servi as never, role);
+  const sanitise = sanitizationService.sanitizeUser(servi as never, role, { withAdminMetadata: true });
   if (!rendu) {
     sendSuccess(reply, sanitise, { message: messageParDefaut });
     return;

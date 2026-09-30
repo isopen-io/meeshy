@@ -150,8 +150,12 @@ const adminCommunityRowSchema = {
     name: { type: 'string', nullable: true },
     description: { type: 'string', nullable: true },
     avatar: { type: 'string', nullable: true },
+    banner: { type: 'string', nullable: true },
     isPrivate: { type: 'boolean', nullable: true },
+    isActive: { type: 'boolean', nullable: true },
+    deletedAt: { type: 'string', format: 'date-time', nullable: true },
     createdAt: { type: 'string', format: 'date-time' },
+    updatedAt: { type: 'string', format: 'date-time', nullable: true },
     creator: {
       type: 'object',
       nullable: true,
@@ -162,13 +166,19 @@ const adminCommunityRowSchema = {
         avatar: { type: 'string', nullable: true }
       }
     },
+    // #8876 — `members` ne compte plus que les membres ACTIFS : l'ancien compte
+    // incluait les départs (`leftAt`), donc annonçait plus de monde que la
+    // communauté n'en a. Les deux compteurs nommés ci-dessous disent la même
+    // chose sans qu'il faille connaître cette subtilité.
     _count: {
       type: 'object',
       properties: {
         members: { type: 'number' },
         Conversation: { type: 'number' }
       }
-    }
+    },
+    activeMemberCount: { type: 'number' },
+    conversationCount: { type: 'number' }
   }
 } as const;
 
@@ -470,7 +480,9 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
 
   // Gestion des communautes - Liste avec pagination
   fastify.get('/communities', {
-    onRequest: [fastify.authenticate, requireAdmin],
+    // `canManageCommunities` est posée AU NIVEAU DE LA ROUTE (#8876) : le
+    // gestionnaire la relisait seul, ce que `admin-route-level-guard` ne voit pas.
+    onRequest: [fastify.authenticate, requireAdmin, requirePermission('canManageCommunities')],
     schema: {
       description: 'Get paginated list of communities with filtering options. Requires canManageCommunities permission.',
       tags: ['admin'],
@@ -482,7 +494,10 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
           offset: { type: 'string', description: 'Pagination offset', default: '0' },
           limit: { type: 'string', description: 'Pagination limit (max 100)', default: '20' },
           search: { type: 'string', description: 'Search by name, identifier, description' },
-          isPrivate: { type: 'string', enum: ['true', 'false'], description: 'Filter by privacy status' }
+          isPrivate: { type: 'string', enum: ['true', 'false'], description: 'Filter by privacy status' },
+          isActive: { type: 'string', enum: ['true', 'false'], description: 'Filter by activation (a deactivated community is hidden from every public reader)' },
+          sort: { type: 'string', enum: ['createdAt', 'name'], description: 'createdAt (default) or name' },
+          order: { type: 'string', enum: ['asc', 'desc'], description: 'desc (default) or asc' }
         }
       },
       response: {
@@ -510,16 +525,8 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const authContext = (request as UnifiedAuthRequest).authContext;
-      const user = authContext.registeredUser;
-      const permissions = permissionsService.getUserPermissions(user.role as UserRole);
-
-      if (!permissions.canManageCommunities) {
-        return sendForbidden(reply, 'Permission insuffisante pour gerer les communautes');
-      }
-
       /* istanbul ignore next -- Fastify schema applies defaults; destructuring defaults never reached */
-      const { offset = '0', limit = '20', search, isPrivate } = request.query as CommunityListQuery;
+      const { offset = '0', limit = '20', search, isPrivate, isActive, sort, order } = request.query as CommunityListQuery;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Construire les filtres
@@ -537,7 +544,13 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         where.isPrivate = isPrivate === 'true';
       }
 
-      const [communities, totalCount] = await Promise.all([
+      if (isActive !== undefined) {
+        where.isActive = isActive === 'true';
+      }
+
+      const direction = order === 'asc' ? 'asc' : 'desc';
+
+      const [rows, totalCount] = await Promise.all([
         fastify.prisma.community.findMany({
           where,
           select: {
@@ -546,8 +559,12 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
             name: true,
             description: true,
             avatar: true,
+            banner: true,
             isPrivate: true,
+            isActive: true,
+            deletedAt: true,
             createdAt: true,
+            updatedAt: true,
             creator: {
               select: {
                 id: true,
@@ -558,17 +575,27 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
             },
             _count: {
               select: {
-                members: true,
+                // Les membres ACTIFS seulement : `members` comptait aussi les
+                // départs (#8876).
+                members: { where: { isActive: true } },
                 Conversation: true
               }
             }
           },
-          orderBy: { createdAt: 'desc' },
+          orderBy: sort === 'name'
+            ? [{ name: direction }, { id: direction }]
+            : [{ createdAt: direction }, { id: direction }],
           skip: offsetNum,
           take: limitNum
         }),
         fastify.prisma.community.count({ where })
       ]);
+
+      const communities = rows.map((row) => ({
+        ...row,
+        activeMemberCount: row._count.members,
+        conversationCount: row._count.Conversation
+      }));
 
       return sendPaginatedSuccess(reply, communities, {
         total: totalCount,

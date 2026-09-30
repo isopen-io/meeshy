@@ -352,7 +352,16 @@ export const callersIn = (contents, nsNames) => {
 // `conversations.byIdMessagesAfterReadConsume` par le catalogue.
 // 332 → 331 (#8583, 2026-09-28) : les réponses d'un commentaire se chargent
 // par `posts.byPostIdCommentsByCommentIdReplies` (`lib/api/comment-replies.ts`).
-const BASELINE_DEAD_ENTRIES = 331;
+// 331 -> 337 (#8876, 2026-09-30) : six entrées `admin` GÉNÉRÉES depuis
+// `route-manifest.json` pour la vue de Dieu de l'administration —
+// `admin.auditLogs`, `admin.trackingLinks`, `admin.trackingLinksByLinkId`,
+// `admin.monitoring`, `admin.communitiesByCommunityId` et
+// `admin.communitiesByCommunityIdMembers`. Mortes à la naissance PAR
+// CONSTRUCTION : le lot passerelle livre la moitié SERVEUR seule, et la console
+// web qui les appelle par le module de groupe (`adminEndpoints`) est le lot
+// suivant du même chantier, qui ramène cette valeur à 331. Valeur MESURÉE le
+// 2026-09-30.
+const BASELINE_DEAD_ENTRIES = 337;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

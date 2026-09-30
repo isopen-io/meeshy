@@ -87,6 +87,8 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
         where: {
           userId,
           isActive: true,
+          // #8876 — « mes communautés » ne montre pas celles que l'administration a désactivées.
+          community: { isActive: true },
           ...(roleFilter && roleFilter.length > 0 ? { role: { in: roleFilter } } : {})
         },
         include: {
@@ -174,7 +176,8 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
       const userId = authContext.userId;
 
       const community = await fastify.prisma.community.findFirst({
-        where: { id },
+        // #8876 — on ne rejoint pas une communauté désactivée par l'administration.
+        where: { id, isActive: true },
         select: { id: true, isPrivate: true }
       });
 

@@ -603,7 +603,7 @@ describe('Admin anonymous-users routes', () => {
 // ---------------------------------------------------------------------------
 
 describe('Admin invitation routes', () => {
-  const mockPrisma: any = {
+  const mockPrisma: any = { adminAuditLog: { create: jest.fn<any>().mockResolvedValue({}) }, // #8876 : les gestes sont tracés
     friendRequest: {
       findMany: jest.fn<any>(),
       findUnique: jest.fn<any>(),
@@ -634,7 +634,7 @@ describe('Admin invitation routes', () => {
     mockPrisma.friendRequest.findMany.mockResolvedValue([]);
     mockPrisma.friendRequest.count.mockResolvedValue(0);
     mockPrisma.friendRequest.groupBy.mockResolvedValue([]);
-    mockPrisma.friendRequest.findUnique.mockResolvedValue(null);
+    mockPrisma.friendRequest.findUnique.mockResolvedValue({ id: VALID_MONGO_ID, status: 'pending', senderId: 's', receiverId: 'r' }); // #8876 : PATCH lit l'état d'avant
     mockPrisma.friendRequest.update.mockResolvedValue({});
     mockPrisma.friendRequest.aggregateRaw.mockResolvedValue([]);
   });
