@@ -36,7 +36,7 @@ import { topActiveMembers } from '@/lib/view/top-active-members';
 import { accentOf, withAccent } from '@/lib/accent';
 import { conversationStore } from '@/lib/conversation-store';
 import { isGroup, titleOf, unreadOf, participantAvatarOf } from '@/lib/view/conversation';
-import { useParams } from '@/lib/router';
+import { useOptionalRoute } from '@/lib/router';
 import { mergeTimeline, place } from '@/lib/grouping';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useSend } from '@/lib/view/use-send';
@@ -93,9 +93,15 @@ import { ThreadModes } from './thread-modes';
  * lui rend. La prochaine surface s'ajoute dans SA pièce (le saut `?around=`
  * de #7420 dans `useThreadJump`), jamais ici : `thread-size-budget.test.ts`
  * rougit dès que cet hôte ou l'une de ses pièces franchit 1000 lignes.
+ *
+ * EN APERÇU (#8821, `preview`) — le MÊME fil, posé par la feuille tirée
+ * depuis la bannière (`conversation-preview-host.tsx`) : la conversation vient
+ * de l'aperçu et non de l'adresse, la racine remplit la feuille au lieu du
+ * viewport, et l'en-tête se montre COMPLET, sans chevron retour.
  */
-export default function ThreadScreen() {
-  const { conversation: id } = useParams<'/c/$conversation'>();
+export default function ThreadScreen({ preview }: { readonly preview?: { readonly conversationId: string } } = {}) {
+  const route = useOptionalRoute();
+  const id = preview?.conversationId ?? route?.params['conversation'] ?? '';
 
   /**
    * LA SOURCE (#5650, F2/F5/§5 étape 10) — `useThreadData(id)` compose
@@ -634,7 +640,7 @@ export default function ThreadScreen() {
     <ThreadMediaContext.Provider value={threadMedia}>
     <div
       ref={chrome.host}
-      className="relative h-dvh overflow-hidden"
+      className={`relative ${preview === undefined ? 'h-dvh' : 'h-full'} overflow-hidden`}
       style={{ ...withAccent(accent), ...chromeStyleVars(), ...insetVars, ...backdropStyleVars() } as CSSProperties}
     >
       <div className="thread-backdrop" aria-hidden />
@@ -655,6 +661,7 @@ export default function ThreadScreen() {
         readingMenuRows={reading.readingMenuRows}
         onSelectReadingMode={reading.selectReadingMode}
         onResetReadingModeToAuto={reading.resetReadingModeToAuto}
+        preview={preview !== undefined}
       />
       {/*
         L'ANNONCE LECTEUR D'ÉCRAN (#5813, § 6.3 ; #5814, § 5 étape 5 ;
@@ -679,9 +686,9 @@ export default function ThreadScreen() {
         défileur, borné par le header au-dessus et le composeur en dessous
         (« la géométrie fait le travail », §1.5 de la spécification).
       */}
-      <DayPill label={chrome.dayPillLabel} headerExpanded={expanded} />
+      <DayPill label={chrome.dayPillLabel} headerExpanded={expanded || preview !== undefined} />
       <main
-          id="contenu"
+          id={preview === undefined ? 'contenu' : undefined}
           ref={scroller}
         /* `tabIndex={-1}` — focalisable PROGRAMMATIQUEMENT (jamais dans
            l'ordre de tabulation naturel) : c'est ce qui permet à `PageUp` /

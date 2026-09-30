@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from 'zustand/react';
 
@@ -6,6 +6,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { notificationAccent, notificationFamily } from '@/lib/notifications/categories';
+import { openConversationPreview } from '@/lib/notifications/conversation-preview';
 import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
 import { BANNER_LIFETIME_MS, bannerPresentation, bannerSwipeOutcome, type BannerPresentation } from '@/lib/notifications/in-app-banner-view';
 import type { NotificationRecord } from '@/lib/notifications/record';
@@ -18,6 +19,7 @@ import { Avatar } from './avatar';
 import { GlyphSvg } from './glyph';
 import { GLYPHS } from './glyphs';
 import { milestoneGlyph } from './milestone-glyph';
+import { preloadConversationPreview } from './conversation-preview-chunks';
 import { CategoryGlyphView } from './notification-category-glyph';
 import { CONTENT_GLYPHS, MilestoneMedallion, TargetLink, type SurfaceProps } from './notification-row';
 
@@ -31,8 +33,10 @@ import { CONTENT_GLYPHS, MilestoneMedallion, TargetLink, type SurfaceProps } fro
  * L'avatar porte la pastille du TYPE, la ligne de titre porte l'heure, et
  * l'aperçu ne paraît qu'UNE fois (`bannerPresentation`).
  *
- * Gestes : toucher ouvre (et marque lue) ; balayer vers le HAUT ferme ; la
- * croix et Échap ferment au clavier ; survoler ou focaliser suspend le départ.
+ * Gestes : toucher ouvre (et marque lue) ; balayer vers le HAUT ferme ; tirer
+ * vers le BAS — ou Flèche bas au clavier — ouvre la conversation en APERÇU
+ * (#8821, `conversation-preview-sheet.tsx`) ; la croix et Échap ferment au
+ * clavier ; survoler ou focaliser suspend le départ.
  * Elle part seule après 7 s. Entrée en ressort ; sous « réduire les
  * animations », un fondu.
  */
@@ -127,21 +131,43 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
     return () => window.removeEventListener('keydown', onKey);
   }, [onDismiss]);
 
+  /* L'APERÇU (#8821) — tirer vers le bas, ou Flèche bas au clavier, ouvre la
+     conversation en aperçu sans quitter l'écran. Sans conversation (un post
+     aimé, un badge), rien ne s'annonce : aucun geste ne promet ce qu'il ne
+     fait pas. */
+  const previewId = notification.context.conversationId;
+  const openPreview = () => {
+    if (previewId === undefined) return;
+    openConversationPreview(previewId);
+    onDismiss();
+  };
+
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     dragFrom.current = event.clientY;
     dragged.current = false;
+    if (previewId !== undefined) void preloadConversationPreview();
   };
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
     if (dragFrom.current === null) return;
     const delta = event.clientY - dragFrom.current;
     if (Math.abs(delta) > 6) dragged.current = true;
-    setDragY(Math.min(0, delta));
+    /* Vers le haut la carte suit le doigt ; vers le bas elle résiste — elle
+       dit qu'elle s'ouvre, elle ne descend pas. */
+    setDragY(delta < 0 ? delta : previewId === undefined ? 0 : Math.min(18, delta * 0.25));
   };
   const onPointerEnd = (event: PointerEvent<HTMLDivElement>) => {
     const from = dragFrom.current;
     dragFrom.current = null;
     setDragY(0);
-    if (from !== null && bannerSwipeOutcome(event.clientY - from) === 'dismiss') onDismiss();
+    if (from === null) return;
+    const outcome = bannerSwipeOutcome(event.clientY - from);
+    if (outcome === 'dismiss') onDismiss();
+    if (outcome === 'preview') openPreview();
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'ArrowDown' || previewId === undefined) return;
+    event.preventDefault();
+    openPreview();
   };
 
   const open = () => {
@@ -158,6 +184,9 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
     className: 'flex w-full items-center gap-3 pt-3 pb-4 ps-3.5 pe-12 text-start focus-visible:outline-2 focus-visible:-outline-offset-2',
     style: { outlineColor: 'var(--color-ios-brand)', borderRadius: CARD_RADIUS },
     onClick: open,
+    ...(previewId === undefined
+      ? {}
+      : { 'aria-keyshortcuts': 'ArrowDown', 'aria-description': translateNotificationRow(language, 'notifications.banner.previewHint') }),
     children: (
       <>
         <Leading notification={notification} banner={banner} accent={accent} />
@@ -209,6 +238,7 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerEnd}
+        onKeyDown={onKeyDown}
         onPointerCancel={() => {
           dragFrom.current = null;
           setDragY(0);
@@ -232,9 +262,7 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
           }}
         />
         {target === null ? (
-          <button type="button" className={surface.className} style={surface.style} onClick={surface.onClick}>
-            {surface.children}
-          </button>
+          <button type="button" {...surface} />
         ) : (
           <TargetLink target={target} {...surface} />
         )}

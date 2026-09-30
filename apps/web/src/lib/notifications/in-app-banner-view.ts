@@ -29,8 +29,16 @@ export function bannerPresentation(notification: NotificationRecord, options: { 
   return { headline: row.title, body, content, milestone: row.leading.kind === 'milestone' ? row.leading.glyph : null };
 }
 
-/** Vers le HAUT ferme (au-delà de 30 px, seuil d'iOS `NotificationBannerSwipe`) ; en deçà, rien. */
-export const bannerSwipeOutcome = (translationY: number): 'dismiss' | 'none' => (translationY < -30 ? 'dismiss' : 'none');
+/**
+ * Vers le HAUT ferme (au-delà de 30 px) ; vers le BAS ouvre l'aperçu de la
+ * conversation (au-delà de 36 px, #8821) ; en deçà, rien — les seuils d'iOS
+ * `NotificationBannerSwipe.outcome`.
+ */
+export const bannerSwipeOutcome = (translationY: number): 'dismiss' | 'preview' | 'none' => {
+  if (translationY < -30) return 'dismiss';
+  if (translationY > 36) return 'preview';
+  return 'none';
+};
 
 /** La durée de vie d'une bannière — celle d'iOS. */
 export const BANNER_LIFETIME_MS = 7000;

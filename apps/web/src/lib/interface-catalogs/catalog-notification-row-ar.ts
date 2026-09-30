@@ -22,6 +22,10 @@ const arNotificationRow = {
   'notifications.quick.failed': 'تعذّر إرسال الطلب. أعد المحاولة بعد لحظات.',
   'notifications.banner.label': 'إشعار جديد',
   'notifications.banner.dismiss': 'إغلاق الإشعار',
+  'notifications.banner.previewHint': 'اسحب للأسفل أو اضغط السهم السفلي للمعاينة',
+  'notifications.preview.label': 'معاينة المحادثة',
+  'notifications.preview.close': 'إغلاق المعاينة',
+  'notifications.preview.open': 'فتح المحادثة',
 } as const satisfies NotificationRowCatalog;
 
 export default arNotificationRow;

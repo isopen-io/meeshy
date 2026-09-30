@@ -22,6 +22,10 @@ const enNotificationRow = {
   'notifications.quick.failed': 'The request couldn’t be sent. Try again in a moment.',
   'notifications.banner.label': 'New notification',
   'notifications.banner.dismiss': 'Dismiss notification',
+  'notifications.banner.previewHint': 'Pull down or press Arrow Down for a preview',
+  'notifications.preview.label': 'Conversation preview',
+  'notifications.preview.close': 'Close preview',
+  'notifications.preview.open': 'Open conversation',
 } as const satisfies NotificationRowCatalog;
 
 export default enNotificationRow;

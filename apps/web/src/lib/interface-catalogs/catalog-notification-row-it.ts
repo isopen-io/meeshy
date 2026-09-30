@@ -22,6 +22,10 @@ const itNotificationRow = {
   'notifications.quick.failed': 'Non è stato possibile inviare la richiesta. Riprova tra un attimo.',
   'notifications.banner.label': 'Nuova notifica',
   'notifications.banner.dismiss': 'Chiudi la notifica',
+  'notifications.banner.previewHint': 'Trascina verso il basso o premi Freccia giù per un’anteprima',
+  'notifications.preview.label': 'Anteprima della conversazione',
+  'notifications.preview.close': 'Chiudi l’anteprima',
+  'notifications.preview.open': 'Apri la conversazione',
 } as const satisfies NotificationRowCatalog;
 
 export default itNotificationRow;

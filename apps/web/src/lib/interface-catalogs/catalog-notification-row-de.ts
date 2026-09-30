@@ -22,6 +22,10 @@ const deNotificationRow = {
   'notifications.quick.failed': 'Die Anfrage konnte nicht gesendet werden. Versuch es gleich noch einmal.',
   'notifications.banner.label': 'Neue Benachrichtigung',
   'notifications.banner.dismiss': 'Benachrichtigung schließen',
+  'notifications.banner.previewHint': 'Nach unten ziehen oder Pfeil nach unten drücken für eine Vorschau',
+  'notifications.preview.label': 'Unterhaltungsvorschau',
+  'notifications.preview.close': 'Vorschau schließen',
+  'notifications.preview.open': 'Unterhaltung öffnen',
 } as const satisfies NotificationRowCatalog;
 
 export default deNotificationRow;
