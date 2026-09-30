@@ -38,7 +38,7 @@ describe('AdminSectionScreen — la garde de tout écran de section', () => {
 
   test('section PAS PRÊTE : refusée, même pour BIGBOSS — rien ne mène à un écran d’attente', async () => {
     const host = await mount(
-      <AdminSectionScreen section="audit" language="fr" title="Journal d’audit">
+      <AdminSectionScreen section="broadcasts" language="fr" title="Diffusions">
         {() => <p data-contenu>contenu</p>}
       </AdminSectionScreen>,
       BIGBOSS,
@@ -125,10 +125,10 @@ describe('AdminStubScreen — l’écran d’attente, joignable par son adresse 
   const stub = (url: string, identity: ReturnType<typeof adminIdentityFixture>) => mountAdminAt(mounter, url, identity, '[data-admin-shell]');
 
   test('annonce « Cette section arrive », sous le seul h1 de la page, sans identifiant brut', async () => {
-    const host = await stub('/admin/audit', BIGBOSS);
-    expect(host.querySelector('[data-admin-stub="audit"]')).not.toBeNull();
+    const host = await stub('/admin/broadcasts', BIGBOSS);
+    expect(host.querySelector('[data-admin-stub="broadcasts"]')).not.toBeNull();
     expect(host.querySelectorAll('h1')).toHaveLength(1);
-    expect(host.querySelector('h1')?.textContent).toBe('Journal d’audit');
+    expect(host.querySelector('h1')?.textContent).toBe('Diffusions');
     expect(host.textContent).toContain('Cette section arrive');
     expectNoRawIdentifiers(host);
     resetAdminRouter(mounter);
@@ -142,21 +142,21 @@ describe('AdminStubScreen — l’écran d’attente, joignable par son adresse 
   });
 
   test('sans la capacité de la section, le refus unique — l’existence de la section ne se révèle pas', async () => {
-    const host = await stub('/admin/audit', adminIdentityFixture({ role: 'MODERATOR' }));
+    const host = await stub('/admin/broadcasts', adminIdentityFixture({ role: 'MODERATOR' }));
     expect(host.querySelector('[data-admin-stub]')).toBeNull();
     expect(host.textContent).toContain('Espace réservé');
     resetAdminRouter(mounter);
   });
 
-  test('AUDIT, qui porte canViewAuditLogs, entre sur l’attente du journal', async () => {
-    const host = await stub('/admin/audit', adminIdentityFixture({ role: 'AUDIT' }));
-    expect(host.querySelector('[data-admin-stub="audit"]')).not.toBeNull();
+  test('ADMIN, qui porte canManageNotifications, entre sur l’attente des diffusions', async () => {
+    const host = await stub('/admin/broadcasts', adminIdentityFixture({ role: 'ADMIN' }));
+    expect(host.querySelector('[data-admin-stub="broadcasts"]')).not.toBeNull();
     resetAdminRouter(mounter);
   });
 
   test('la section n’est ni au menu ni au hub tant que son drapeau est faux', async () => {
-    const host = await stub('/admin/audit', BIGBOSS);
-    expect(host.querySelector('[data-admin-sidebar] [data-admin-nav="audit"]')).toBeNull();
+    const host = await stub('/admin/broadcasts', BIGBOSS);
+    expect(host.querySelector('[data-admin-sidebar] [data-admin-nav="broadcasts"]')).toBeNull();
     resetAdminRouter(mounter);
   });
 });

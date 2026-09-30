@@ -34,9 +34,9 @@ describe('AdminLink — vers une section ou la fiche d’une entité', () => {
   });
 
   test('une section pas encore prête n’est JAMAIS un lien : texte seul — loi 4', async () => {
-    const host = await mount(<AdminLink target={{ kind: 'section', section: 'audit' }}>Journal</AdminLink>, BIGBOSS);
+    const host = await mount(<AdminLink target={{ kind: 'section', section: 'broadcasts' }}>Diffusions</AdminLink>, BIGBOSS);
     expect(host.querySelector('a')).toBeNull();
-    expect(host.textContent).toBe('Journal');
+    expect(host.textContent).toBe('Diffusions');
   });
 
   test('une section que le lecteur ne peut pas ouvrir est un texte seul, même prête', async () => {

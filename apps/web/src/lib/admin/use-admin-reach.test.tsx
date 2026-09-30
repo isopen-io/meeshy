@@ -21,7 +21,7 @@ function Probe() {
         sovereign: reach.isSovereign,
         ids: reach.sections.map((section) => section.id),
         users: reach.opens('users'),
-        audit: reach.opens('audit'),
+        broadcasts: reach.opens('broadcasts'),
         conversations: reach.opens('conversations'),
         agent: reach.can('canManageAgent'),
         moderate: reach.can('canModerateContent'),
@@ -46,7 +46,7 @@ describe('useAdminReach — ce que le lecteur peut atteindre', () => {
   });
 
   test('une section pas encore prête n’est pas « ouverte », même pour BIGBOSS', async () => {
-    expect((await read(adminIdentityFixture({ role: 'BIGBOSS' }))).audit).toBe(false);
+    expect((await read(adminIdentityFixture({ role: 'BIGBOSS' }))).broadcasts).toBe(false);
   });
 
   test('ADMIN a le rang sans être souverain', async () => {
