@@ -207,7 +207,52 @@ public struct SocketNotificationDetailFields: Decodable, Sendable, Equatable {
             let isWhole = number.rounded() == number && abs(number) < 1e15
             return (name, isWhole ? String(Int64(number)) : String(number))
         }
-        values = Dictionary(pairs, uniquingKeysWith: { first, _ in first })
+        let flat = Dictionary(pairs, uniquingKeysWith: { first, _ in first })
+        // La passerelle (#8857) pose le détail dans `context.contentDetail`,
+        // OBJET imbriqué (`NotificationContentDetail`), et ne l'APLATIT que
+        // pour le fil push. Il se lit ici sous les mêmes noms que la charge
+        // APNs, pour qu'un seul lecteur serve les deux surfaces.
+        let nested = (try? container.decodeIfPresent(NestedContentDetail.self, forKey: DetailKey("contentDetail")))
+            .flatMap { $0 }?.flattened ?? [:]
+        values = flat.merging(nested) { flatValue, _ in flatValue }
+    }
+
+    /// Miroir de `NotificationContentDetail` (`packages/shared/types/notification-content-detail.ts`).
+    private struct NestedContentDetail: Decodable {
+        struct Location: Decodable { let latitude: Double; let longitude: Double; let name: String?; let address: String? }
+        struct Contact: Decodable { let name: String? }
+        struct Invite: Decodable { let url: String; let conversationTitle: String?; let memberCount: Int? }
+        struct Link: Decodable { let url: String; let domain: String? }
+        struct Sticker: Decodable { let emoji: String? }
+        struct StoryReply: Decodable {}
+
+        let location: Location?
+        let contact: Contact?
+        let invite: Invite?
+        let link: Link?
+        let sticker: Sticker?
+        let videoThumbnailUrl: String?
+        let storyReply: StoryReply?
+
+        var flattened: [String: String] {
+            let pairs: [(String, String?)] = [
+                ("locationLat", location.map { String($0.latitude) }),
+                ("locationLon", location.map { String($0.longitude) }),
+                ("locationName", location?.name),
+                ("locationAddress", location?.address),
+                ("contactName", contact?.name),
+                ("inviteUrl", invite?.url),
+                ("inviteConversationTitle", invite?.conversationTitle),
+                ("inviteMemberCount", invite?.memberCount.map(String.init)),
+                ("linkUrl", link?.url),
+                ("linkDomain", link?.domain),
+                ("thumbnailUrl", videoThumbnailUrl),
+                ("storyReply", storyReply.map { _ in "1" }),
+                ("sticker", sticker.map { $0.emoji ?? "1" }),
+            ]
+            return Dictionary(pairs.compactMap { key, value in value.map { (key, $0) } },
+                              uniquingKeysWith: { first, _ in first })
+        }
     }
 
     public subscript(_ key: String) -> String? { values[key] }
