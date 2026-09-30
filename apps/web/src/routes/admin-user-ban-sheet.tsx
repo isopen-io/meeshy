@@ -1,15 +1,21 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { AdminBadge } from '@/components/admin/badges';
 import { Field } from '@/components/field';
 import { Sheet } from '@/components/sheet';
+import { personLabel } from '@/lib/admin/interpret/labels';
+import { sentenceCase } from '@/lib/admin/interpret/language';
+import { adminDate } from '@/lib/admin/interpret/time';
 import {
   adminUserBansQueryKey,
+  adminUserBansQueryOptions,
   banAdminUser,
   liftAdminUserBan,
-  loadAdminUserBans,
   type AdminBan,
+  type AdminBanActor,
 } from '@/lib/api/admin-user-bans';
+import type { AdminDeps } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -59,22 +65,17 @@ export function AdminUserBanSheet({
   language,
   onClose,
   onAnnounce,
+  deps = apiDeps,
 }: {
   readonly userId: string;
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
   readonly onAnnounce: (texte: string) => void;
+  /** Le port, injectable : la feuille se mesure sans passerelle. */
+  readonly deps?: AdminDeps;
 }) {
   const client = useQueryClient();
-  const historique = useQuery({
-    queryKey: adminUserBansQueryKey(userId),
-    queryFn: async ({ signal }) => {
-      const resultat = await loadAdminUserBans({ ...apiDeps, userId, signal });
-      if (!resultat.ok) throw new Error(resultat.error);
-      return resultat.data;
-    },
-    retry: false,
-  });
+  const historique = useQuery(adminUserBansQueryOptions(deps, userId));
 
   const [motif, setMotif] = useState('');
   const [focus, setFocus] = useState(false);
@@ -104,7 +105,7 @@ export function AdminUserBanSheet({
   const bannir = () =>
     appliquer(() =>
       banAdminUser({
-        ...apiDeps,
+        ...deps,
         userId,
         reason: motif,
         // Absent = permanent. Une date saisie devient un ISO complet, la
@@ -168,7 +169,7 @@ export function AdminUserBanSheet({
                 ban={ban}
                 language={language}
                 envoi={envoi}
-                onLift={() => void appliquer(() => liftAdminUserBan({ ...apiDeps, userId, banId: ban.id }))}
+                onLift={() => void appliquer(() => liftAdminUserBan({ ...deps, userId, banId: ban.id }))}
               />
             ))
           )}
@@ -182,6 +183,10 @@ export function AdminUserBanSheet({
   );
 }
 
+/** Le nom d'un acteur : son nom affiché, jamais un identifiant ; `null` quand son compte n'existe plus. */
+const actorLabel = (actor: AdminBanActor | null, language: InterfaceLanguage): string | null =>
+  actor === null ? null : personLabel({ displayName: actor.displayName, username: actor.username }, language);
+
 function BanRow({
   ban,
   language,
@@ -194,6 +199,9 @@ function BanRow({
   readonly onLift: () => void;
 }) {
   const etat = etatDe(ban);
+  const banner = actorLabel(ban.bannedBy, language);
+  const lifter = actorLabel(ban.liftedBy, language);
+  const tone = etat === 'active' ? 'danger' : 'neutral';
 
   return (
     <div
@@ -203,16 +211,35 @@ function BanRow({
       style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
     >
       <div className="flex items-baseline gap-2">
-        <span className="min-w-0 flex-1 truncate text-body" style={{ color: INK }}>
+        <span className="min-w-0 flex-1 break-words text-body" style={{ color: INK }}>
           {ban.reason}
         </span>
-        <span
-          className="shrink-0 text-caption"
-          style={{ color: etat === 'active' ? 'var(--color-danger)' : INK2 }}
-        >
-          {translateAdmin(language, etat === 'active' ? 'admin.ban.active' : etat === 'lifted' ? 'admin.ban.lifted' : 'admin.ban.expired')}
-        </span>
+        <AdminBadge tone={tone}>
+          {sentenceCase(translateAdmin(language, etat === 'active' ? 'admin.ban.active' : etat === 'lifted' ? 'admin.ban.lifted' : 'admin.ban.expired'), language)}
+        </AdminBadge>
       </div>
+      <p className="text-caption" style={{ color: INK2 }} data-admin-ban-by="">
+        {ban.createdAt === null
+          ? null
+          : banner === null
+            ? translateAdmin(language, 'admin.people.ban.byUnknown', { date: adminDate(ban.createdAt, language) })
+            : translateAdmin(language, 'admin.people.ban.by', { name: banner, date: adminDate(ban.createdAt, language) })}
+      </p>
+      <p className="text-caption" style={{ color: INK2 }}>
+        {ban.expiresAt === null
+          ? translateAdmin(language, 'admin.ban.permanent')
+          : translateAdmin(language, 'admin.people.ban.until', { date: adminDate(ban.expiresAt, language) })}
+      </p>
+      {ban.liftedAt === null ? null : (
+        <p className="text-caption" style={{ color: INK2 }} data-admin-ban-lifted="">
+          {ban.liftedBySystem
+            ? translateAdmin(language, 'admin.people.ban.liftedBySystem', { date: adminDate(ban.liftedAt, language) })
+            : lifter === null
+              ? translateAdmin(language, 'admin.people.ban.liftedUnknown', { date: adminDate(ban.liftedAt, language) })
+              : translateAdmin(language, 'admin.people.ban.liftedBy', { name: lifter, date: adminDate(ban.liftedAt, language) })}
+          {ban.liftReason === null ? null : ` · ${translateAdmin(language, 'admin.people.ban.liftReason', { reason: ban.liftReason })}`}
+        </p>
+      )}
       {etat === 'active' ? (
         <ActionButton tone="secondary" disabled={envoi} onClick={onLift}>
           {translateAdmin(language, 'admin.ban.lift')}

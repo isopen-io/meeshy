@@ -1,6 +1,7 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 import { asCount, asRecord, asText, type AdminDeps } from './admin';
+import type { AdminPage } from './admin-page';
 import type { ApiResult } from './http';
 
 /**
@@ -15,10 +16,19 @@ export const adminUsersQueryKey = (adresse: string) => ['admin', 'users', adress
 
 export const ADMIN_USERS_PAGE_SIZE = 20;
 
+const dateOuNull = (valeur: unknown): string | null => (typeof valeur === 'string' && valeur !== '' ? valeur : null);
+
 export type AdminUserRow = {
   readonly id: string;
   readonly username: string;
+  /**
+   * Le nom affiché TEL QUE SERVI — vide quand le compte n'en a pas. Le décodeur ne
+   * fabrique aucun libellé : `personLabel` compose le nom lisible (nom affiché, puis
+   * « Prénom Nom », puis `@pseudo`), et c'est lui seul qui décide du repli.
+   */
   readonly displayName: string;
+  readonly firstName: string;
+  readonly lastName: string;
   readonly email: string;
   readonly role: string;
   readonly isActive: boolean;
@@ -28,7 +38,12 @@ export type AdminUserRow = {
   /** Masquée par la passerelle sous `canViewPresence` — `null` n'y veut pas dire « jamais ». */
   readonly lastActiveAt: string | null;
   readonly emailVerified: boolean;
+  readonly phoneVerified: boolean;
   readonly twoFactorEnabled: boolean;
+  /** Les trois dates dont `accountStateOf` tire l'état du compte — jamais un statut recalculé ici. */
+  readonly lockedUntil: string | null;
+  readonly deactivatedAt: string | null;
+  readonly deletedAt: string | null;
 };
 
 export type AdminUsersPage = {
@@ -55,13 +70,12 @@ export function decodeAdminUsers(raw: unknown, offset: number): AdminUsersPage {
     .map((entree): AdminUserRow | null => {
       const ligne = asRecord(entree);
       if (ligne === null || typeof ligne.id !== 'string') return null;
-      const username = asText(ligne.username);
       return {
         id: ligne.id,
-        username,
-        // Le nom affiché retombe sur le pseudo — jamais une ligne sans nom
-        // dans un tableau où l'on cherche quelqu'un.
-        displayName: asText(ligne.displayName) || username,
+        username: asText(ligne.username),
+        displayName: asText(ligne.displayName).trim(),
+        firstName: asText(ligne.firstName).trim(),
+        lastName: asText(ligne.lastName).trim(),
         email: asText(ligne.email),
         role: asText(ligne.role) || 'USER',
         isActive: ligne.isActive !== false,
@@ -70,7 +84,11 @@ export function decodeAdminUsers(raw: unknown, offset: number): AdminUsersPage {
         avatar: asText(ligne.avatar),
         lastActiveAt: typeof ligne.lastActiveAt === 'string' ? ligne.lastActiveAt : null,
         emailVerified: typeof ligne.emailVerifiedAt === 'string' || ligne.emailVerified === true,
+        phoneVerified: typeof ligne.phoneVerifiedAt === 'string' || ligne.phoneVerified === true,
         twoFactorEnabled: typeof ligne.twoFactorEnabledAt === 'string' || ligne.twoFactorEnabled === true,
+        lockedUntil: dateOuNull(ligne.lockedUntil),
+        deactivatedAt: dateOuNull(ligne.deactivatedAt),
+        deletedAt: dateOuNull(ligne.deletedAt),
       };
     })
     .filter((ligne): ligne is AdminUserRow => ligne !== null);
@@ -113,4 +131,15 @@ export async function loadAdminUsers(
   if (!result.ok) return result;
 
   return { ok: true, data: decodeAdminUsers(result.data, params.offset) };
+}
+
+/**
+ * La même lecture, rendue sous la forme commune des listes d'administration
+ * (`{ rows, total, hasMore }`) que `useAdminList` consomme — un seul chargeur, deux
+ * formes de sortie : `loadAdminUsers` garde la forme historique (`users`).
+ */
+export async function loadAdminUsersPage(params: Parameters<typeof loadAdminUsers>[0]): Promise<ApiResult<AdminPage<AdminUserRow>>> {
+  const result = await loadAdminUsers(params);
+  if (!result.ok) return result;
+  return { ok: true, data: { rows: result.data.users, total: result.data.total, hasMore: result.data.hasMore } };
 }

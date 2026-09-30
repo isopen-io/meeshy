@@ -2,19 +2,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { CollapsibleSection } from '@/components/collapsible-section';
+import { interpretPreferenceValue, preferenceLabel, preferenceOptions } from '@/lib/admin/preference-labels';
 import type { AdminDeps } from '@/lib/api/admin';
 import {
   ADMIN_PREFERENCE_CATEGORIES,
   ADMIN_READ_ONLY_PREFERENCES,
-  ADMIN_STAT_KEYS,
   adminUserPreferencesQueryKey,
-  adminUserStatsQueryOptions,
   loadAdminUserPreferences,
   patchAdminUserPreferences,
   type AdminPreferenceCategory,
   type AdminPreferenceDocument,
   type AdminPreferenceValue,
-  type AdminStatKey,
   type AdminUserPreferences,
 } from '@/lib/api/admin-user-member';
 import { apiDeps } from '@/lib/api/deps';
@@ -22,39 +20,24 @@ import type { ApiFailure } from '@/lib/api/http';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
-import { AdminSection, AdminSkeleton } from './admin-parts';
+import { AdminSkeleton } from './admin-parts';
 
 /**
- * **LES CHIFFRES ET LES PRÉFÉRENCES D'UN MEMBRE** (#7845).
+ * **LES PRÉFÉRENCES D'UN MEMBRE** (#7845, #7920) — l'onglet, catégorie par
+ * catégorie. Chaque clé porte son LIBELLÉ traduit (`lib/admin/preference-labels.ts`)
+ * et sa valeur se DIT en mots sous ce libellé — Activé, Facultatif, ×1,5, 30 jours,
+ * 22:00, anglais — ; le contrôle qui la modifie lui ressemble (bascule, liste aux
+ * options NOMMÉES, nombre, texte).
  *
- * Les chiffres vivent sur l'onglet Profil ; les préférences ont leur onglet,
- * catégorie par catégorie, chaque valeur modifiable par le contrôle qui lui
- * ressemble (bascule, liste, nombre, texte). Une écriture s'applique TOUT DE
- * SUITE à l'écran et revient en arrière si la passerelle la refuse — avec le
- * motif du refus : consentement du membre manquant, rang insuffisant, valeur
- * invalide. Les trois clés de chiffrement se lisent sans s'écrire.
+ * Une écriture s'applique TOUT DE SUITE à l'écran et revient en arrière si la
+ * passerelle la refuse — avec le motif du refus : consentement du membre manquant,
+ * rang insuffisant, valeur invalide. Les trois clés de chiffrement se lisent sans
+ * s'écrire. Le nom d'une clé (`showReadReceipts`) n'est jamais lu à l'écran : il ne
+ * vit que dans l'ancre de test `data-admin-preference`.
  */
 const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
 const CARTE = { backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' } as const;
-
-const LIBELLES_CHIFFRES = {
-  messagesSent: 'admin.stats.messagesSent',
-  conversations: 'admin.stats.conversations',
-  posts: 'admin.stats.posts',
-  reels: 'admin.stats.reels',
-  stories: 'admin.stats.stories',
-  comments: 'admin.stats.comments',
-  reactionsGiven: 'admin.stats.reactionsGiven',
-  mediaUploaded: 'admin.stats.mediaUploaded',
-  friends: 'admin.stats.friends',
-  pendingFriendRequestsIn: 'admin.stats.pendingIn',
-  pendingFriendRequestsOut: 'admin.stats.pendingOut',
-  reportsFiled: 'admin.stats.reportsFiled',
-  reportsReceived: 'admin.stats.reportsReceived',
-  activeSessions: 'admin.stats.activeSessions',
-  communities: 'admin.stats.communities',
-} as const satisfies Readonly<Record<AdminStatKey, string>>;
 
 const LIBELLES_CATEGORIES = {
   privacy: 'admin.prefs.privacy',
@@ -65,62 +48,6 @@ const LIBELLES_CATEGORIES = {
   document: 'admin.prefs.document',
   application: 'admin.prefs.application',
 } as const satisfies Readonly<Record<AdminPreferenceCategory, string>>;
-
-/** Les valeurs admises des clés à liste fermée, telles que les schémas de la passerelle les déclarent. */
-const LISTES: Readonly<Record<string, readonly string[]>> = {
-  'privacy.encryptionPreference': ['disabled', 'optional', 'always'],
-  'message.defaultFontSize': ['small', 'medium', 'large'],
-  'message.defaultTextAlign': ['left', 'center', 'right'],
-  'audio.transcriptionSource': ['auto', 'mobile', 'server'],
-  'audio.translatedAudioFormat': ['mp3', 'wav', 'ogg'],
-  'audio.audioQuality': ['low', 'medium', 'high', 'lossless'],
-  'audio.voiceCloneQuality': ['fast', 'balanced', 'quality'],
-  'video.videoQuality': ['low', 'medium', 'high', 'auto'],
-  'video.videoFrameRate': ['15', '24', '30', '60'],
-  'video.videoResolution': ['480p', '720p', '1080p', 'auto'],
-  'video.videoCodec': ['VP8', 'VP9', 'H264', 'H265', 'AV1'],
-  'video.videoLayout': ['grid', 'speaker', 'sidebar'],
-  'application.theme': ['light', 'dark', 'auto'],
-  'application.fontSize': ['small', 'medium', 'large'],
-  'application.lineHeight': ['tight', 'normal', 'relaxed', 'loose'],
-  'application.sidebarPosition': ['left', 'right'],
-};
-
-export function AdminUserStatsSection({
-  userId,
-  language,
-  deps = apiDeps,
-}: {
-  readonly userId: string;
-  readonly language: InterfaceLanguage;
-  readonly deps?: AdminDeps;
-}) {
-  const chiffres = useQuery(adminUserStatsQueryOptions(deps, userId));
-  return (
-    <AdminSection titre={translateAdmin(language, 'admin.stats.title')}>
-      {chiffres.isPending ? (
-        <AdminSkeleton rows={2} />
-      ) : chiffres.data === undefined ? (
-        <p className="text-caption" style={{ color: INK2 }}>
-          {translateAdmin(language, 'admin.users.unavailable')}
-        </p>
-      ) : (
-        <dl className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5" data-admin-stats="">
-          {ADMIN_STAT_KEYS.filter((cle) => chiffres.data[cle] !== null).map((cle) => (
-            <div key={cle} className="rounded-card px-3 py-2" style={CARTE} data-admin-stat={cle}>
-              <dt className="truncate text-caption" style={{ color: INK2 }}>
-                {translateAdmin(language, LIBELLES_CHIFFRES[cle])}
-              </dt>
-              <dd className="m-0 text-title font-semibold tabular-nums" style={{ color: INK }}>
-                {(chiffres.data[cle] ?? 0).toLocaleString(language)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </AdminSection>
-  );
-}
 
 const motifDuRefus = (echec: ApiFailure, language: InterfaceLanguage): string => {
   if (echec.code === 'CONSENT_REQUIRED') return translateAdmin(language, 'admin.prefs.consent');
@@ -246,32 +173,42 @@ function LignePreference({
   const idControle = `admin-pref-${categorie}-${cle}`;
   return (
     <li className="flex min-h-11 items-center justify-between gap-3 py-1" data-admin-preference={`${categorie}.${cle}`}>
-      <label htmlFor={idControle} className="min-w-0 flex-1 truncate font-mono text-caption" style={{ color: INK }}>
-        {cle}
-        {lectureSeule ? (
-          <span className="ms-2 font-sans" style={{ color: INK2 }}>
-            · {translateAdmin(language, 'admin.prefs.readOnly')}
-          </span>
-        ) : null}
-      </label>
-      <Controle id={idControle} chemin={`${categorie}.${cle}`} valeur={valeur} desactive={lectureSeule} onChange={onChange} />
+      <div className="min-w-0 flex-1">
+        <label htmlFor={idControle} className="block break-words text-body" style={{ color: INK }}>
+          {preferenceLabel(categorie, cle, language)}
+          {lectureSeule ? (
+            <span className="ms-2 text-caption" style={{ color: INK2 }}>
+              · {translateAdmin(language, 'admin.prefs.readOnly')}
+            </span>
+          ) : null}
+        </label>
+        <p className="break-words text-caption" style={{ color: INK2 }} data-admin-preference-value="">
+          {interpretPreferenceValue(categorie, cle, valeur, language)}
+        </p>
+      </div>
+      <Controle id={idControle} categorie={categorie} cle={cle} valeur={valeur} language={language} desactive={lectureSeule} onChange={onChange} />
     </li>
   );
 }
 
 function Controle({
   id,
-  chemin,
+  categorie,
+  cle,
   valeur,
+  language,
   desactive,
   onChange,
 }: {
   readonly id: string;
-  readonly chemin: string;
+  readonly categorie: AdminPreferenceCategory;
+  readonly cle: string;
   readonly valeur: AdminPreferenceValue;
+  readonly language: InterfaceLanguage;
   readonly desactive: boolean;
   readonly onChange: (valeur: AdminPreferenceValue) => void;
 }) {
+  const chemin = `${categorie}.${cle}`;
   if (typeof valeur === 'boolean') {
     return (
       <button
@@ -282,8 +219,8 @@ function Controle({
         disabled={desactive}
         data-admin-preference-switch={chemin}
         onClick={() => onChange(!valeur)}
-        className="relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50"
-        style={{ backgroundColor: valeur ? 'var(--color-ios-brand)' : 'color-mix(in srgb, var(--color-ios-ink-3) 35%, transparent)' }}
+        className="relative h-7 w-12 shrink-0 rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
+        style={{ backgroundColor: valeur ? 'var(--color-ios-brand)' : 'color-mix(in srgb, var(--color-ios-ink-3) 35%, transparent)', outlineColor: 'var(--color-ios-brand)' }}
       >
         <span
           aria-hidden="true"
@@ -293,8 +230,11 @@ function Controle({
       </button>
     );
   }
-  const liste = LISTES[chemin];
-  if (liste !== undefined && typeof valeur === 'string') {
+  const options = preferenceOptions(categorie, cle, language);
+  if (options !== null && typeof valeur === 'string') {
+    /* Une valeur SERVIE hors de la liste (une option plus récente que ce client) reste choisie et
+       visible : la remplacer en silence par la première option ferait « changer » la préférence. */
+    const liste = options.some((option) => option.value === valeur) ? options : [{ value: valeur, label: interpretPreferenceValue(categorie, cle, valeur, language) }, ...options];
     return (
       <select
         id={id}
@@ -302,12 +242,12 @@ function Controle({
         disabled={desactive}
         data-admin-preference-select={chemin}
         onChange={(event) => onChange(event.currentTarget.value)}
-        className="min-h-11 shrink-0 rounded-chip px-2 text-input"
-        style={CARTE}
+        className="min-h-11 shrink-0 rounded-chip px-2 text-input focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ ...CARTE, color: INK, outlineColor: 'var(--color-ios-brand)' }}
       >
         {liste.map((option) => (
-          <option key={option} value={option}>
-            {option}
+          <option key={option.value} value={option.value}>
+            {option.label}
           </option>
         ))}
       </select>
@@ -316,11 +256,7 @@ function Controle({
   if (typeof valeur === 'number' || typeof valeur === 'string') {
     return <ChampLibre key={String(valeur)} id={id} chemin={chemin} valeur={valeur} desactive={desactive} onChange={onChange} />;
   }
-  return (
-    <code className="max-w-[50%] truncate text-caption" style={{ color: INK2 }}>
-      {JSON.stringify(valeur)}
-    </code>
-  );
+  return null;
 }
 
 /** Un nombre ou un texte s'écrit à la VALIDATION (Entrée ou sortie du champ), jamais à chaque frappe. */
@@ -364,8 +300,8 @@ function ChampLibre({
       onKeyDown={(event) => {
         if (event.key === 'Enter') valider();
       }}
-      className="min-h-11 w-32 shrink-0 rounded-chip px-2 text-input tabular-nums"
-      style={CARTE}
+      className="min-h-11 w-32 shrink-0 rounded-chip px-2 text-input tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2"
+      style={{ ...CARTE, color: INK, outlineColor: 'var(--color-ios-brand)' }}
     />
   );
 }
