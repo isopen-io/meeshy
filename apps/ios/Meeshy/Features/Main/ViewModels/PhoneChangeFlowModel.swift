@@ -37,6 +37,11 @@ final class PhoneChangeFlowModel: ObservableObject {
     private let userService: UserServiceProviding
     private let authManager: AuthManaging
 
+    /// SE-0466 : sans elle, la deinit synthétisée est isolée au main actor et
+    /// double-libère sur iOS 26.1 quand la feuille se démonte
+    /// (`MainActorDeinitSourceGuardTests`). Corps vide : rien d'isolé à toucher.
+    nonisolated deinit {}
+
     init(
         userService: UserServiceProviding = UserService.shared,
         authManager: AuthManaging = AuthManager.shared
