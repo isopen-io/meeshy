@@ -261,7 +261,7 @@ public extension SocketNotificationEvent {
     }
 
     var isStickerMessage: Bool {
-        detailFields["messageType"]?.lowercased() == "sticker"
+        detailFields["messageType"]?.lowercased() == "sticker" || detailFields["sticker"] != nil
     }
 
     private var declaresProtection: Bool {

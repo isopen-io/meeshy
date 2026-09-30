@@ -35,11 +35,22 @@ nonisolated enum NotificationDetailPolicy {
     /// `MEESHY_INVITE` quand le message en porte le détail, la catégorie de
     /// base sinon. Dérivée par l'extension elle-même plutôt que lue sur
     /// `aps.category` : un gateway plus ancien ne la pose pas.
-    static func refinedCategory(_ base: String, type: String, userInfo: [AnyHashable: Any]) -> String {
+    static func refinedCategory(
+        _ base: String,
+        type: String,
+        userInfo: [AnyHashable: Any],
+        declared: String? = nil
+    ) -> String {
         guard base == "MEESHY_MESSAGE", refinableTypes.contains(type),
-              let refined = detail(userInfo: userInfo)?.categoryIdentifier else { return base }
-        return refined
+              !NSEAttachmentPolicy.declaresProtection(userInfo: userInfo) else { return base }
+        if let refined = detail(userInfo: userInfo)?.categoryIdentifier { return refined }
+        // Une carte de visite SANS nom ne porte aucune clé `data` (#8857) :
+        // seule la catégorie posée par la passerelle (`aps.category`) la dit.
+        guard let declared, detailCategories.contains(declared) else { return base }
+        return declared
     }
+
+    private static let detailCategories: Set<String> = ["MEESHY_LOCATION", "MEESHY_CONTACT", "MEESHY_INVITE"]
 
     /// La vignette d'une VIDÉO — jamais le fichier : l'enveloppe mémoire de
     /// l'extension ne le supporte pas (#7003). `nil` pour un message protégé.

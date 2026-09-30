@@ -8,7 +8,7 @@ import Foundation
 /// ni comparer ses cas (même précédent que `RecentMediaSelection`).
 nonisolated enum ComposerPanelHandleOutcome: Equatable {
     /// Swipe-up → ouvre la photothèque COMPLÈTE (picker système, onglets
-    /// Photos / Albums), en remplacement de l'échantillon de 19 vignettes. Même
+    /// Photos / Albums), en remplacement de l'échantillon de 40 médias récents. Même
     /// destination que la tuile « + » du strip et que l'outil Média du composer
     /// de story.
     case openFullLibrary
