@@ -671,7 +671,7 @@ public struct UserProfileSheet: View {
         }
         .frame(maxWidth: .infinity)
         .padding(MeeshySpacing.xl)
-        .background(theme.surfaceGradient(tint: "888888"))
+        .background(theme.surfaceGradient(tint: MeeshyColors.blockedNeutralHex))
         .glassCard(cornerRadius: MeeshyRadius.lg)
     }
 

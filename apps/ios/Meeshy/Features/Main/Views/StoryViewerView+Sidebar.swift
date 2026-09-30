@@ -525,6 +525,7 @@ struct StoryActionSidebarView: View {
                     label: reactLabel,
                     hint: StoryActionButton.hint(label: reactLabel, isActive: reactIsActive),
                     caption: storyReactionCount > 0 ? "\(storyReactionCount)" : reactLabel,
+                    accessibilityValue: storyReactionCount > 0 ? LocalizedNumber.exact(storyReactionCount) : nil,
                     isOpen: reactIsActive
                 ) {
                     // Tap simple = la barre s'ouvre (directive user 2026-08-20).

@@ -133,6 +133,11 @@ final class DesignTokenVocabularyTests: XCTestCase {
         assertSameColor(MeeshyColors.surfaceLightInput, Color(hex: "F5F3FF"), "F5F3FF")
     }
 
+    func test_blockedNeutral_matchesItsHexAndTwin() {
+        XCTAssertEqual(MeeshyColors.blockedNeutralHex, "888888")
+        assertSameColor(MeeshyColors.blockedNeutral, Color(hex: "888888"), "888888")
+    }
+
     func test_mediaChrome_isLightInkOverDarkVeils() {
         assertSameColor(MeeshyColors.mediaChromeForeground, .white, "foreground")
         assertSameColor(MeeshyColors.mediaChromeSecondary, Color.white.opacity(0.85), "secondary")

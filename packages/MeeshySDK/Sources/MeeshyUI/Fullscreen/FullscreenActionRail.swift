@@ -113,7 +113,7 @@ public struct FullscreenActionButton: View {
         }
         .frame(width: FullscreenChromeMetrics.floatingCellWidth)
         .frame(minHeight: FullscreenChromeMetrics.tapTarget)
-        .contentShape(Rectangle())
+        .contentShape(Rectangle().inset(by: -FullscreenChromeMetrics.railSpacing / 2))
     }
 
     @ViewBuilder

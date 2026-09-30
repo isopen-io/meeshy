@@ -161,7 +161,7 @@ extension UserProfileSheet {
         MeeshyAvatar(
             name: avatarName,
             context: .profileSheet,
-            accentColor: isBlockedByTarget ? "888888" : resolvedAccent,
+            accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : resolvedAccent,
             avatarURL: displayUser.avatarURL,
             storyState: ringState,
             moodEmoji: isBlockedByTarget ? nil : moodEmoji,
@@ -291,7 +291,7 @@ extension UserProfileSheet {
             MeeshyAvatar(
                 name: displayUser.resolvedDisplayName,
                 context: .custom(32),
-                accentColor: isBlockedByTarget ? "888888" : resolvedAccent,
+                accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : resolvedAccent,
                 avatarURL: displayUser.avatarURL,
                 storyState: .none,
                 presenceState: isBlockedByTarget ? nil : resolvedPresence

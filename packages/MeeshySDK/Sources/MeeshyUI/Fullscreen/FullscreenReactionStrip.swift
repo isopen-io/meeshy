@@ -57,6 +57,7 @@ public extension FullscreenActionButton {
                       hint: String? = nil,
                       style: FullscreenActionStyle = .floating,
                       caption: String? = nil,
+                      accessibilityValue: String? = nil,
                       isOpen: Bool,
                       handlesTapViaGesture: Bool = false,
                       action: @escaping () -> Void) -> FullscreenActionButton {
@@ -65,6 +66,7 @@ public extension FullscreenActionButton {
                                hint: hint,
                                style: style,
                                caption: caption,
+                               accessibilityValue: accessibilityValue,
                                badgeSystemImage: FullscreenChromeSymbol.reactBadge,
                                isActive: isOpen,
                                activeTint: MeeshyColors.indigo400,
@@ -78,6 +80,7 @@ public extension FullscreenActionButton {
                       hint: String? = nil,
                       style: FullscreenActionStyle = .floating,
                       caption: String? = nil,
+                      accessibilityValue: String? = nil,
                       isOpen: Bool = false,
                       action: @escaping () -> Void) -> FullscreenActionButton {
         FullscreenActionButton(systemImage: FullscreenChromeSymbol.reply,
@@ -85,6 +88,7 @@ public extension FullscreenActionButton {
                                hint: hint,
                                style: style,
                                caption: caption,
+                               accessibilityValue: accessibilityValue,
                                isActive: isOpen,
                                activeTint: MeeshyColors.indigo400,
                                action: action)

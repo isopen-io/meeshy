@@ -200,8 +200,14 @@
 // (indigo, succès/erreur, teintes franches, tuiles, plans nommés) : aucun
 // pixel ne bouge, le codage en dur devient une référence au jeton. Les
 // variables inconnues ne bougent pas (441).
-const REFERENCE_LITERAL_COLOR_COUNT = 67;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 441;
+//
+// 2026-09-30 (#8877, harmonisation vue par vue) — littéraux 67 → 65, variables
+// inconnues 441 → 438 : les plans de saisie de `ReportMessageSheet` deviennent
+// `surfaceDarkInput` / `surfaceLightInput` ; deux `Color(hex: MeeshyColors.…Hex)`
+// deviennent le jeton `Color` lui-même, et le contour « j'ai réagi » à la couleur
+// de l'auteur quitte le rail de la story avec le chrome plein écran (#8878).
+const REFERENCE_LITERAL_COLOR_COUNT = 65;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 438;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

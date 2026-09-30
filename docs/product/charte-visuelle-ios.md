@@ -47,6 +47,7 @@ Vocabulaire tiré d'une mesure de fréquence sur 626 fichiers (app, extensions, 
 | Accent violet | `purple500/600/700`, `violet950` | `A855F7` `8B5CF6` `B24BF3` `2E1065` |
 | Sémantique | `success` `error` `warning` `info` (+ `errorSoft` `errorStrong` `errorDark` `successDeep`) | `34D399` `F87171` `FBBF24` `60A5FA` |
 | Neutres | `neutral400/500/600` | `9CA3AF` `6B7280` `4B5563` |
+| **Accent neutre d'un profil bloqué** (nouveau) | `blockedNeutral` (+ `Hex`) — l'`accentColor` et la teinte de fond que `UserProfileSheet` substitue à celles de l'utilisateur quand il vous a bloqué | `888888` (ΔE2000 ≥ 10 de `neutral400/500` : aucun gris voisin ne le remplace) |
 | **Teintes franches** (nouveau) | `blue500`, `orange500`, `amber500` (+ `Hex`) | `3B82F6` `F97316` `F59E0B` |
 | **Tuiles** (nouveau) — icône de rangée de réglage, carte de stat, catégorie | `tileCoral` `tileSaffron` `tileBlue` `tileAmethyst` `tileSky` `tileEmerald` `tileTeal` `tileCyan` `tileRose` (+ `Hex`) | `FF6B6B` `F8B500` `3498DB` `9B59B6` `45B7D1` `2ECC71` `4ECDC4` `08D9D6` `FF2E63` |
 | **Plans nommés** (nouveau) | `surfaceDarkBase` `surfaceDarkDeep` `surfaceDarkRaised` `surfaceDarkInput` / `surfaceLightRaised` `surfaceLightMist` `surfaceLightInput` | `09090B` `0F0D19` `13111C` `16142A` / `F8F7FF` `FAFAFF` `F5F3FF` |
@@ -110,6 +111,7 @@ gonfle pas une vue dense). Jamais sur une vue à instantané (`MeeshyUITests/**/
 | Opacité | ± 0,03 sous 0,2 ; ± 0,05 au-dessus, vers `MeeshyOpacity` | 0.06 → subtle 0.08 · 0.35 → medium 0.3 · 0.9 → intense 0.85 |
 | Voile `isDark ? blanc : noir` | fond → `surfaceFill` ; disque de bouton → `controlFill` ; `.stroke` → `hairline` | `white 0.05 : black 0.03` → `surfaceFill(isDark:)` |
 | Couleur | ΔE2000 ≤ 3 d'un jeton de MÊME rôle → ce jeton ; au-delà, garder et demander un jeton | `2D2D40`, `24243E`, `1A1A2E` : mesurer avant de rapprocher de `surfaceDarkRaised` / `indigo950` |
+| Couleur sans jeton, sous 3 sites | reste littérale : un jeton se nomme pour un rôle récurrent (≥ 3 sites), jamais pour une valeur isolée | `E91E63` (appels, carte de stat — ΔE 6,1 de `tileRose`, 2 sites), `DC2626` (fin du dégradé d'enregistrement — ΔE 7,6 d'`errorStrong`, 1 site) |
 | Texte gris ad hoc | `.white.opacity(0.4–0.6)` / `.black.opacity(0.3–0.5)` en méta → `textMuted(isDark:)` / `textSecondary(isDark:)` | ces jetons tiennent AA, les gris ad hoc non |
 
 ## 5. Boutons, icônes, fonds, bordures
@@ -163,8 +165,8 @@ Surfaces : galerie de pièces jointes (conversation, post, commentaire), plein �
 | Menu | `ellipsis` HORIZONTAL (vocabulaire du fil, du réel et de la story), bord de FIN de la barre haute, même disque que la croix ; le contenu reste à l'hôte | `FullscreenMoreMenu` |
 | Disque | verre teinté `mediaChromeFill`, glyphe `mediaChromeForeground` (`.onMedia`) ; `.adaptive` (verre nu + `glassControlForeground()`) SEULEMENT sous un schéma mesuré sur le média (`mediaChromeTinted()`, #6693) | `FullscreenChromeDisc` |
 | Identité | avatar fourni par l'hôte (`MeeshyAvatar`), nom `bodySize` semibold `mediaChromeForeground`, date SUR la ligne du nom en `smallSize` `mediaChromeTertiary` (vue `2f`), ombre `legibleOverCanvas` | `FullscreenIdentityRow` |
-| Rail d'actions | bord de FIN, ancré en bas ; ordre : Réagir (ou J'aime), Répondre (ou Commentaires), puis la surface ; intervalle `MeeshySpacing.sm` | `FullscreenActionRail`, `FullscreenActionButton` |
-| Réagir | `face.smiling` + badge `plus` ; le tap OUVRE la rangée, jamais un émoji à l'aveugle ; ouvert, teinte `indigo400` | `FullscreenActionButton.react` |
+| Rail d'actions | bord de FIN, ancré en bas ; ordre : Réagir (ou J'aime), Répondre (ou Commentaires), puis la surface ; intervalle `MeeshySpacing.sm`, que la cible d'une action flottante recouvre à moitié — un doigt qui tombe entre deux actions n'atteint jamais le média (tap de navigation, bug 2026-06-28) | `FullscreenActionRail`, `FullscreenActionButton` |
+| Réagir | `face.smiling` + badge `plus` ; le tap OUVRE la rangée, jamais un émoji à l'aveugle ; ouvert, teinte `indigo400` ; VoiceOver lit le verbe en libellé et le compteur en VALEUR (`accessibilityValue:`, `LocalizedNumber.exact`) | `FullscreenActionButton.react` |
 | Rangée d'émojis | `EmojiReactionPicker` à l'échelle par défaut, `MeeshyQuickReactions.standard`, défilante, `chrome: .none` ; « + » → sélecteur complet | `FullscreenReactionStrip` |
 | Répondre | `arrowshape.turn.up.left.fill` ; ouvre une barre de saisie au bas de l'écran qui CITE le média, sans quitter le visualiseur ; la scène ignore le clavier (`ignoresSafeArea(.keyboard)`), la barre le suit | `FullscreenActionButton.reply` + composeur de l'app |
 | Commentaires | `bubble.right.fill` + compteur (`CompactCountLabel`) | `FullscreenActionButton` |

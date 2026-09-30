@@ -177,6 +177,11 @@ public nonisolated struct MeeshyColors {
     public static let surfaceLightMist = Color(hex: "FAFAFF")
     public static let surfaceLightInput = Color(hex: "F5F3FF")
 
+    // MARK: - Accent neutre d'un profil bloqué (#8877)
+
+    public static let blockedNeutral = Color(hex: "888888")
+    public static let blockedNeutralHex = "888888"
+
     // MARK: - Chrome posé sur un média plein écran (#8878)
 
     public static let mediaChromeForeground = Color.white
