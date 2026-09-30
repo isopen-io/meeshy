@@ -250,6 +250,43 @@ final class WebRTCServiceTests: XCTestCase {
         XCTAssertEqual(client.addIceCandidateCallCount, 0)
     }
 
+    /// 2026-09-30 — l'appelé RENVOIE sa réponse quand l'accusé tarde (socket
+    /// de l'appelant coupée un instant) : l'appelant la reçoit deux fois. La
+    /// seconde application échouait (négociation déjà stable) et
+    /// `handleRemoteAnswer` raccrochait un appel qui fonctionnait.
+    func test_setRemoteDescription_sameAnswerTwice_appliesOnceAndSucceedsTwice() async {
+        let (sut, client) = makeSUT()
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\no=answer 1\r\n")
+        let first = await sut.setRemoteDescription(desc)
+        client.setRemoteAnswerResult = .failure(WebRTCError.failedToCreateSDP)
+        let second = await sut.setRemoteDescription(desc)
+        XCTAssertTrue(first)
+        XCTAssertTrue(second, "un doublon exact de la réponse déjà appliquée ne fait jamais échouer l'appel")
+        XCTAssertEqual(client.setRemoteAnswerCallCount, 1)
+    }
+
+    func test_setRemoteDescription_afterICERestart_appliesTheSameSDPAgain() async {
+        let (sut, client) = makeSUT()
+        client.createOfferResult = .success(SessionDescription(type: .offer, sdp: "restart-offer"))
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\no=answer 1\r\n")
+        await sut.setRemoteDescription(desc)
+        _ = await sut.performICERestart()
+        await sut.setRemoteDescription(desc)
+        XCTAssertEqual(client.setRemoteAnswerCallCount, 2)
+    }
+
+    func test_setRemoteDescription_afterFailure_retriesTheSameSDP() async {
+        let (sut, client) = makeSUT()
+        client.setRemoteAnswerResult = .failure(WebRTCError.failedToCreateSDP)
+        let desc = SessionDescription(type: .answer, sdp: "v=0\r\no=answer 1\r\n")
+        let failed = await sut.setRemoteDescription(desc)
+        client.setRemoteAnswerResult = .success(())
+        let retried = await sut.setRemoteDescription(desc)
+        XCTAssertFalse(failed)
+        XCTAssertTrue(retried)
+        XCTAssertEqual(client.setRemoteAnswerCallCount, 2)
+    }
+
     // MARK: - ICE Restart
 
     func test_performICERestart_returnsNewOffer() async {
@@ -975,7 +1012,11 @@ private nonisolated final class TestableWebRTCClient: WebRTCClientProviding {
     func createOffer() async throws -> SessionDescription { try createOfferResult.get() }
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { try createAnswerResult.get() }
     var setRemoteAnswerResult: Result<Void, Error> = .success(())
-    func setRemoteAnswer(_ answer: SessionDescription) async throws { try setRemoteAnswerResult.get() }
+    private(set) var setRemoteAnswerCallCount = 0
+    func setRemoteAnswer(_ answer: SessionDescription) async throws {
+        setRemoteAnswerCallCount += 1
+        try setRemoteAnswerResult.get()
+    }
     func addIceCandidate(_ candidate: IceCandidate) async throws {
         addIceCandidateCallCount += 1
         addedCandidates.append(candidate)

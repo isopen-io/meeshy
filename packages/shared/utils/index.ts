@@ -22,6 +22,7 @@ export * from './notification-strings.js';
 export * from './notification-banner.js';
 export * from './notification-read-bulk.js';
 export * from './duration-format.js';
+export * from './text-truncate.js';
 export * from './call-transcript.js';
 export * from './relative-time.js';
 export * from './time-remaining.js';

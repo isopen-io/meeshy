@@ -119,6 +119,7 @@ import {
   createTwoFactorNotification,
   createLoginNewDeviceNotification,
 } from './builders/account-security';
+import { sliceCodePoints } from '@meeshy/shared/utils/text-truncate';
 
 /** Budget APNs — au-delà, la charge est dégradée par étages (cf. `createNotification`). */
 const PUSHED_TRANSLATION_MAX_CHARS = 200;
@@ -903,7 +904,7 @@ export class NotificationService {
       // (ex. « Votre publication : « aperçu » ») prime, sinon la base localisée
       // du builder. SANS date — le client append la date locale.
       const persistedSubtitle = (params.subtitle && params.subtitle.trim() !== '')
-        ? params.subtitle.trim().slice(0, 160)
+        ? sliceCodePoints(params.subtitle.trim(), 160)
         : (display.subtitle ?? null);
       // Titre persisté : le builder localisé quand il en a un (types sociaux),
       // sinon le titre explicite de l'appelant (annonce système : son sujet).
@@ -3338,7 +3339,7 @@ export class NotificationService {
         ...formatted,
         title,
         subtitle: (row.subtitle && row.subtitle.trim() !== '')
-          ? row.subtitle.trim().slice(0, 120)
+          ? sliceCodePoints(row.subtitle.trim(), 120)
           : subtitle,
       };
 

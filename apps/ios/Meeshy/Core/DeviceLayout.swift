@@ -45,6 +45,29 @@ enum DeviceLayout {
         return scene.windows.first
     }
 
+    /// The window the app MEASURES against: its own normal-level window,
+    /// never an overlay floating above it.
+    ///
+    /// Since #8725 the call screen lives in its own `UIWindow` above the app,
+    /// and that window becomes key. Measured off `activeWindow`, the call
+    /// view read `safeAreaInsets` of the very window SwiftUI was laying out —
+    /// an AttributeGraph cycle (« cycle detected ») after which the call view
+    /// never updated again: the caller stayed on « Appel en cours… » with no
+    /// microphone control, the callee on « Appel entrant » after answering,
+    /// and the peer's video never took the screen (2026-09-30, measured on the
+    /// simulator: zero body re-evaluation once the cycle was reported). The
+    /// app window and a full-screen overlay share the same insets; reading
+    /// the app window breaks the loop.
+    static var measurementWindow: UIWindow? {
+        guard let scene = activeWindowScene else { return nil }
+        var firstNormal: UIWindow?
+        for window in scene.windows where window.windowLevel == .normal {
+            if window.isKeyWindow { return window }
+            if firstNormal == nil { firstNormal = window }
+        }
+        return firstNormal ?? activeWindow
+    }
+
     /// Size of the window the app is actually rendered in.
     ///
     /// `UIScreen.main` is deprecated since iOS 16 *and* reports the physical
@@ -59,7 +82,7 @@ enum DeviceLayout {
     /// Prefer a `GeometryReader`'s own `size` wherever one is already in scope:
     /// this is the answer for views that have no container measurement to read.
     static var windowSize: CGSize {
-        activeWindow?.bounds.size ?? UIScreen.main.bounds.size
+        measurementWindow?.bounds.size ?? UIScreen.main.bounds.size
     }
 
     /// Bottom safe-area inset of the window the app is actually rendered in.
@@ -72,7 +95,7 @@ enum DeviceLayout {
     /// scope. This exists for views rendered inside `.ignoresSafeArea()`, where
     /// the reader reports `0` and the real inset is only knowable from the window.
     static var safeAreaBottom: CGFloat {
-        activeWindow?.safeAreaInsets.bottom ?? 0
+        measurementWindow?.safeAreaInsets.bottom ?? 0
     }
 
     /// Top safe-area inset of the window the app is actually rendered in.
@@ -83,7 +106,7 @@ enum DeviceLayout {
     /// user is looking at — read off a background scene it silently misreads
     /// the hardware.
     static var safeAreaTop: CGFloat {
-        activeWindow?.safeAreaInsets.top ?? 0
+        measurementWindow?.safeAreaInsets.top ?? 0
     }
 
     static func bubbleMaxWidth(containerWidth: CGFloat, sizeClass: UserInterfaceSizeClass?) -> CGFloat {

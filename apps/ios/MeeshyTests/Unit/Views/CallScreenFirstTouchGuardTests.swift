@@ -145,4 +145,60 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
         XCTAssertTrue(configure.contains("setAllowHapticsAndSystemSoundsDuringRecording(true)"),
                       "Sans ce choix, iOS tait tout retour haptique pendant que l'appel enregistre le micro")
     }
+
+    // MARK: - Pile du fil principal sur appareil (2026-09-30)
+
+    /// Cinq `.ips` d'un iPhone : `___chkstk_darwin` dans `closure #1 in
+    /// CallView.callSurface` — la fermeture du `ZStack` réservait la trame de
+    /// toutes ses branches à la fois, au-delà du 1 Mo de pile d'un appareil. Le
+    /// simulateur (8 Mo) ne peut pas rougir : seule la FORME se garde.
+    func test_callSurface_nePorteQueDesBlocsEffacés() throws {
+        let unit = try view("CallView.swift")
+        let surface = try block("private var callSurface: some View {", until: ".ignoresSafeArea()", in: unit)
+        for erased in ["surfaceBackdrop", "surfaceContent", "surfaceEffects", "AnyView(topChrome)"] {
+            XCTAssertTrue(surface.contains(erased), "\(erased) doit rester un bloc effacé de la surface d'appel")
+        }
+        for inline in ["switch callManager.callState", "connectedView", "CallEffectsOverlay(", "LocalCameraVideoView("] {
+            XCTAssertFalse(surface.contains(inline), "\(inline) ne se pose plus DANS la fermeture de callSurface")
+        }
+        for declaration in ["private var surfaceBackdrop: AnyView { AnyView(surfaceBackdropBody) }",
+                            "private var surfaceContent: AnyView { AnyView(surfaceContentBody) }",
+                            "private var surfaceEffects: AnyView { AnyView(surfaceEffectsBody) }"] {
+            XCTAssertTrue(unit.contains(declaration), "l'effacement vit à la DÉCLARATION : \(declaration)")
+        }
+    }
+
+    /// `.ips` du 2026-09-29 : `closure #1 in closure #1 in
+    /// ConversationCardStatsRow.row(languages:)` trappait sur
+    /// `com.apple.SwiftUI.AsyncRenderer` — la fermeture d'un `ForEach` hérite de
+    /// l'isolation @MainActor, iOS 26 la rappelle hors du fil principal.
+    func test_statsRow_nePasseAucuneFermetureAuRenduAsynchrone() throws {
+        let unit = try code("Meeshy/Features/Main/Components/ConversationCard/ConversationLinkCardBody.swift")
+        let row = try block("struct ConversationCardStatsRow: View {", until: "private func metric(", in: unit)
+        XCTAssertFalse(row.contains("ForEach("), "aucune fermeture de ForEach dans la rangée mesurée hors du fil principal")
+        XCTAssertTrue(row.contains("languagePill(shown[0])"))
+    }
+
+    /// 2026-09-30 — dans un `GlassEffectContainer` (iOS 26) le verre est composé
+    /// par le conteneur, qui ignore l'opacité de ses enfants : la pilule restait
+    /// dessinée après le masquage automatique, visible mais sourde. Au terme du
+    /// fondu, le contenu est retiré du rendu.
+    func test_chromeVisibility_retireLeContenuDuRenduAuTermeDuFondu() throws {
+        let unit = try view("CallControlGlass.swift")
+        let modifier = try block("private struct CallChromeVisibilityModifier: ViewModifier {", until: "enum CallButtonFill", in: unit)
+        XCTAssertTrue(modifier.contains("content.hidden()"), "le contenu masqué quitte le rendu, pas seulement l'opacité")
+        XCTAssertTrue(modifier.contains("if accepts {"), "il reste rendu tant qu'il répond (grâce du fondu, #8735)")
+    }
+
+    /// 2026-09-30 — l'aperçu de l'appelant (#8480) posé en `.background` d'un
+    /// `VStack` sans cadre n'était peint que sur la largeur des boutons : une
+    /// colonne au milieu de l'écran de sonnerie.
+    func test_apercuDeLAppelant_couvreTouteLaSonnerie() throws {
+        let incoming = try view("IncomingCallView.swift")
+        let framed = try XCTUnwrap(incoming.range(of: ".frame(maxWidth: .infinity, maxHeight: .infinity)"))
+        let backdrop = try XCTUnwrap(incoming.range(of: ".background { CallPreviewBackdrop(preview: .shared) }"))
+        XCTAssertLessThan(framed.lowerBound, backdrop.lowerBound, "le cadre plein écran précède l'aperçu")
+        let connecting = try block("var connectingView: some View {", until: "var pulsingAvatar", in: try view("CallView+States.swift"))
+        XCTAssertTrue(connecting.contains(".frame(maxWidth: .infinity, maxHeight: .infinity)"))
+    }
 }
