@@ -135,7 +135,7 @@ struct ConversationHeaderGlass: View {
                     RoundedRectangle(cornerRadius: Self.blockRadius)
                         .stroke(rim(startPoint: .leading, endPoint: .trailing), lineWidth: 1)
                 )
-                .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 8, y: 2)
+                .shadow(color: Color(hex: accentColor).opacity(MeeshyOpacity.light), radius: 8, y: 2)
                 .transition(.scale(scale: 0.1, anchor: .trailing).combined(with: .opacity))
         case .edgeToEdgeBand:
             // Le verre monte sous la poignée et jusqu'au bord de la feuille ;
@@ -145,13 +145,13 @@ struct ConversationHeaderGlass: View {
                     rim(startPoint: .leading, endPoint: .trailing)
                         .frame(height: 1)
                 }
-                .shadow(color: Color(hex: accentColor).opacity(0.14), radius: 8, y: 3)
+                .shadow(color: Color(hex: accentColor).opacity(MeeshyOpacity.light), radius: 8, y: 3)
                 .ignoresSafeArea(edges: .top)
         }
     }
 
     private func rim(startPoint: UnitPoint, endPoint: UnitPoint) -> LinearGradient {
-        LinearGradient(colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)],
+        LinearGradient(colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(MeeshyOpacity.light)],
                        startPoint: startPoint, endPoint: endPoint)
     }
 }
