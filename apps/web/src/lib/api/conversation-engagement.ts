@@ -1,5 +1,6 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
+import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 import {
   isConversationEngagementSnapshot,
@@ -7,6 +8,8 @@ import {
 } from '@meeshy/shared/types/engagement-scale';
 
 import type { SocketClient } from '@/lib/net/socket';
+
+import type { HttpTransport } from './http';
 
 /**
  * « N (M) 🔥 » — L'ÉTAT D'ENGAGEMENT D'UNE CONVERSATION POUR SON LECTEUR (#8906).
@@ -95,4 +98,26 @@ export function bindConversationEngagement(params: {
   };
   socket.on(SERVER_EVENTS.ENGAGEMENT_CONVERSATION_UPDATED, onUpdated);
   return () => socket.off(SERVER_EVENTS.ENGAGEMENT_CONVERSATION_UPDATED, onUpdated);
+}
+
+/**
+ * Relit l'état SERVEUR à l'ouverture du fil (`GET conversations/:id/engagement`) :
+ * un geste crédité sur un autre appareil n'a rien poussé ici. L'instantané passe
+ * la garde et concourt au magasin comme un reçu — jamais il ne fait reculer la
+ * pastille. Un échec se tait : la pastille garde ce qu'elle avait.
+ */
+export async function revalidateConversationEngagement(params: {
+  readonly transport: HttpTransport;
+  readonly store: EngagementStoreApi;
+  readonly conversationId: string;
+  readonly signal?: AbortSignal;
+}): Promise<void> {
+  const result = await params.transport.request<unknown>({
+    method: 'GET',
+    path: conversationsEndpoints.byIdEngagement(params.conversationId),
+    ...(params.signal === undefined ? {} : { signal: params.signal }),
+  });
+  if (!result.ok || !isConversationEngagementSnapshot(result.data)) return;
+  if (result.data.conversationId !== params.conversationId) return;
+  params.store.getState().apply(result.data);
 }

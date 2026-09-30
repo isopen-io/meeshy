@@ -11,23 +11,23 @@ struct ConversationEngagementPill: View, Equatable {
     let streakDays: Int
     let pointsText: String
     let accessibilityText: String
-    let accentHex: String
+    let accentColor: String
 
-    init(snapshot: ConversationEngagementSnapshot, accentHex: String) {
+    init(snapshot: ConversationEngagementSnapshot, accentColor: String) {
         self.streakDays = snapshot.streakDays
         self.pointsText = snapshot.pointsText
         self.accessibilityText = Self.accessibilityText(for: snapshot)
-        self.accentHex = accentHex
+        self.accentColor = accentColor
     }
 
     static func == (lhs: ConversationEngagementPill, rhs: ConversationEngagementPill) -> Bool {
         lhs.streakDays == rhs.streakDays
             && lhs.pointsText == rhs.pointsText
             && lhs.accessibilityText == rhs.accessibilityText
-            && lhs.accentHex == rhs.accentHex
+            && lhs.accentColor == rhs.accentColor
     }
 
-    private var accent: Color { Color(hex: accentHex) }
+    private var accent: Color { Color(hex: accentColor) }
 
     var body: some View {
         HStack(spacing: 3) {
@@ -80,12 +80,12 @@ struct ConversationEngagementPill: View, Equatable {
 struct ConversationEngagementBadge: View {
     let conversationId: String
     let seed: ConversationEngagementSnapshot?
-    let accentHex: String
+    let accentColor: String
     @ObservedObject var store: ConversationEngagementStore = .shared
 
     var body: some View {
         if let shown = store.displayed(for: conversationId, seed: seed, at: Date()) {
-            ConversationEngagementPill(snapshot: shown, accentHex: accentHex)
+            ConversationEngagementPill(snapshot: shown, accentColor: accentColor)
                 .equatable()
                 .task(id: seed) { store.seed(seed) }
         }

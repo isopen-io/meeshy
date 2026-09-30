@@ -104,7 +104,7 @@ extension ConversationView {
         ConversationEngagementBadge(
             conversationId: liveConversation?.id ?? "",
             seed: liveConversation?.viewerEngagement,
-            accentHex: accentColor
+            accentColor: accentColor
         )
     }
 

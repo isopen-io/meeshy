@@ -352,7 +352,7 @@ struct LentilleConversationRow: View {
                 ConversationEngagementBadge(
                     conversationId: conversation.id,
                     seed: conversation.viewerEngagement,
-                    accentHex: conversation.accentColor
+                    accentColor: conversation.accentColor
                 )
             }
 

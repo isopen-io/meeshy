@@ -8,8 +8,10 @@ import {
   createEngagementStore,
   effectiveEngagementOf,
   freshestEngagement,
+  revalidateConversationEngagement,
   servedEngagementOf,
 } from './conversation-engagement';
+import type { ApiResult, HttpTransport } from './http';
 import { resetIdentityScopedStores } from './identity-scoped-stores';
 import { createOutboxStore } from '../send/outbox-store';
 import { conversationStore } from '../conversation-store';
@@ -165,5 +167,52 @@ describe('les points sont à UNE identité', () => {
     resetIdentityScopedStores({ outbox: createOutboxStore(), conversations: conversationStore, typing: createTypingStore(), engagement });
 
     expect(engagement.getState().byConversation).toEqual({});
+  });
+});
+
+describe('la relecture à l’ouverture du fil', () => {
+  const transportServing = (result: ApiResult<unknown>) => {
+    const paths: string[] = [];
+    const transport = {
+      request: async (request: { readonly path: string }) => {
+        paths.push(request.path);
+        return result;
+      },
+    } as unknown as HttpTransport;
+    return { transport, paths };
+  };
+
+  test('sème l’état servi par la passerelle', async () => {
+    const store = createEngagementStore();
+    const { transport, paths } = transportServing({ ok: true, data: snapshot() });
+
+    await revalidateConversationEngagement({ transport, store, conversationId: 'conv-a' });
+
+    expect(paths).toEqual(['/api/v1/conversations/conv-a/engagement']);
+    expect(store.getState().byConversation['conv-a']).toEqual(snapshot());
+  });
+
+  test('ne fait jamais reculer un état reçu plus frais', async () => {
+    const store = createEngagementStore();
+    store.getState().apply(snapshot());
+    const { transport } = transportServing({ ok: true, data: snapshot({ totalPoints: 10, day: '2026-09-29' }) });
+
+    await revalidateConversationEngagement({ transport, store, conversationId: 'conv-a' });
+
+    expect(store.getState().byConversation['conv-a']).toEqual(snapshot());
+  });
+
+  test('ignore un échec, une forme inattendue ou une autre conversation', async () => {
+    const store = createEngagementStore();
+    for (const result of [
+      { ok: false, status: 500, error: 'boom' },
+      { ok: true, data: { totalPoints: 'x' } },
+      { ok: true, data: snapshot({ conversationId: 'conv-b' }) },
+    ] as const) {
+      const { transport } = transportServing(result as ApiResult<unknown>);
+      await revalidateConversationEngagement({ transport, store, conversationId: 'conv-a' });
+    }
+
+    expect(store.getState().byConversation).toEqual({});
   });
 });
