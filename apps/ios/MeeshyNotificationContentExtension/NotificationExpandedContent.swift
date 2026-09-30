@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 import UniformTypeIdentifiers
 import MeeshySDK
@@ -71,6 +72,34 @@ nonisolated enum NotificationExpandedContent: Equatable, Sendable {
 nonisolated struct NotificationAudioDetail: Equatable, Sendable {
     let remoteURL: URL
     let durationMs: Int?
+}
+
+/// **La géométrie du lecteur** : une rangée, un axe. La pastille de lecture, la
+/// ligne de progression et la pastille de vitesse sont centrées sur le MÊME axe
+/// horizontal ; les deux pastilles ont le même gabarit. Le bouton natif
+/// (`mediaPlayPauseButtonType`) est dessiné par le système au cadre qu'on lui
+/// donne : ce cadre est calculé ici, au centre de la pastille, pour que la vue
+/// et le système ne puissent pas se désaligner.
+nonisolated struct NotificationPlayerGeometry: Equatable, Sendable {
+    let height: CGFloat
+    let inset: CGFloat
+    let pillSide: CGFloat
+    let glyphSide: CGFloat
+
+    static let standard = NotificationPlayerGeometry(height: 72, inset: 16, pillSide: 44, glyphSide: 20)
+
+    var axisY: CGFloat { height / 2 }
+
+    var nativeButtonFrame: CGRect {
+        let centerX = inset + pillSide / 2
+        return CGRect(x: centerX - glyphSide / 2, y: axisY - glyphSide / 2, width: glyphSide, height: glyphSide)
+    }
+
+    /// La part de la piste sous le doigt, bornée à [0, 1].
+    static func seekFraction(x: CGFloat, trackWidth: CGFloat) -> Double {
+        guard trackWidth > 0 else { return 0 }
+        return Double(min(1, max(0, x / trackWidth)))
+    }
 }
 
 /// Les petites lois du lecteur : vitesse, horloge, progression.

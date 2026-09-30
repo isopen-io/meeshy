@@ -152,6 +152,28 @@ final class NotificationExpandedContentTests: XCTestCase {
         XCTAssertEqual(NotificationPlaybackRate.progress(elapsed: 3, duration: .nan), 0)
     }
 
+    // MARK: - Lecteur : un seul axe
+
+    /// Le bouton natif est dessiné par le SYSTÈME à `nativeButtonFrame` : il
+    /// doit tomber au centre de la pastille de lecture, sur l'axe de la ligne
+    /// de progression, et au même gabarit que la pastille de vitesse.
+    func test_nativeButtonFrame_isCentredInThePlayPill_onTheRowAxis() {
+        let geometry = NotificationPlayerGeometry.standard
+        let frame = geometry.nativeButtonFrame
+        XCTAssertEqual(frame.midY, geometry.axisY, accuracy: 0.001)
+        XCTAssertEqual(frame.midX, geometry.inset + geometry.pillSide / 2, accuracy: 0.001)
+        XCTAssertEqual(geometry.axisY, geometry.height / 2, accuracy: 0.001)
+        XCTAssertLessThan(frame.width, geometry.pillSide)
+        XCTAssertGreaterThanOrEqual(geometry.pillSide, 44)
+    }
+
+    func test_seekFraction_followsTheFinger_andStaysOnTheTrack() {
+        XCTAssertEqual(NotificationPlayerGeometry.seekFraction(x: 50, trackWidth: 200), 0.25, accuracy: 0.0001)
+        XCTAssertEqual(NotificationPlayerGeometry.seekFraction(x: -20, trackWidth: 200), 0)
+        XCTAssertEqual(NotificationPlayerGeometry.seekFraction(x: 260, trackWidth: 200), 1)
+        XCTAssertEqual(NotificationPlayerGeometry.seekFraction(x: 10, trackWidth: 0), 0)
+    }
+
     // MARK: - Catégorie : ce qui fait choisir l'extension
 
     func test_refinedCategory_voiceMessage_isTheAudioCategory() {
