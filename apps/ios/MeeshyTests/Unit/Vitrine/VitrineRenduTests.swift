@@ -42,6 +42,12 @@ final class VitrineRenduTests: XCTestCase {
         XCTAssertEqual(VitrineScene.lien.rendusAttendus(conversationId: nil, appareil: .ipad), [.lien])
     }
 
+    func test_rendusAttendus_conversationScenesWaitForTheirConversation() {
+        for scene in [VitrineScene.amour, .groupe, .imagine] {
+            XCTAssertEqual(scene.rendusAttendus(conversationId: "c2", appareil: .ipad), [.conversation("c2")], "\(scene)")
+        }
+    }
+
     /// Sans conversation connue, la scène attend un rendu qui ne viendra jamais : la capture échoue
     /// en la nommant plutôt que de photographier autre chose.
     func test_rendusAttendus_unknownConversation_isNeverSatisfied() {

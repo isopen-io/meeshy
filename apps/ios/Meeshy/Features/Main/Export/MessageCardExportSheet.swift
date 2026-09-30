@@ -437,6 +437,11 @@ struct MessageCardExportSheet: View {
         mediaVersion += 1
     }
 
+    /// Les pixels des médias sont là, et aucun n'a échoué : la carte montre ce qui partira.
+    private var mediaArePainted: Bool {
+        request.subject.media.isEmpty || (mediaVersion > 0 && loadedMedia.failed.isEmpty)
+    }
+
     private func render() async {
         guard loaded else { return }
         let key = renderKey
@@ -460,10 +465,13 @@ struct MessageCardExportSheet: View {
         // L'export rapide attend les pixels des médias : il ne part jamais
         // avec leurs couleurs d'attente.
         // Un média en échec retient l'export rapide : l'atelier le dit et attend « Réessayer ».
-        if request.quick && !quickSent && (request.subject.media.isEmpty || (mediaVersion > 0 && loadedMedia.failed.isEmpty)) {
+        if request.quick && !quickSent && mediaArePainted {
             quickSent = true
             save()
         }
+        #if DEBUG
+        if mediaArePainted { VitrineRendu.shared.signaler(.imagine) }
+        #endif
     }
 
     static let dateFormatter: DateFormatter = {

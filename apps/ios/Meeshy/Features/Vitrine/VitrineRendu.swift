@@ -8,6 +8,8 @@ nonisolated enum VitrineEvenement: Hashable, Sendable {
     case progression
     case lien
     case fil
+    /// La carte d'Imagine peinte, médias compris.
+    case imagine
 }
 
 nonisolated enum VitrineAppareil: Sendable {
@@ -21,7 +23,7 @@ extension VitrineScene {
     /// observée : la capture échoue en nommant la scène plutôt que de photographier autre chose.
     nonisolated func rendusAttendus(conversationId: String?, appareil: VitrineAppareil) -> Set<VitrineEvenement> {
         switch self {
-        case .global: return [.conversation(conversationId ?? "")]
+        case .global, .amour, .groupe, .imagine: return [.conversation(conversationId ?? "")]
         case .progression: return appareil == .ipad ? [.progression, .fil] : [.progression]
         case .lien: return [.lien]
         }

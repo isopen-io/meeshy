@@ -79,6 +79,7 @@ enum VitrineStage {
             let destination = f.destination(scene)
             montrer(scene, destination, f)
             await VitrineRendu.shared.attendre(scene.rendusAttendus(conversationId: destination?.conversationId, appareil: appareil))
+            await achever(scene, destination, f)
             await annoncer(scene)
         }
     }
@@ -96,7 +97,7 @@ enum VitrineStage {
 
     private static func montrer(_ scene: VitrineScene, _ destination: VitrineFixtures.Destination?, _ f: VitrineFixtures) {
         switch scene {
-        case .global:
+        case .global, .amour, .groupe, .imagine:
             guard let conversation = f.conversationsServies().first(where: { $0.id == destination?.conversationId }) else {
                 fatalError("Vitrine « \(scene.rawValue) » : sa conversation manque aux fixtures")
             }
@@ -106,6 +107,57 @@ enum VitrineStage {
         case .lien:
             break
         }
+    }
+
+    /// Ce que la scène FAIT une fois sa conversation affichée — le geste qu'y ferait le lecteur.
+    private static func achever(_ scene: VitrineScene, _ destination: VitrineFixtures.Destination?, _ f: VitrineFixtures) async {
+        switch scene {
+        case .amour: await faireEntendre(destination)
+        case .groupe: rouvrirSurLOriginal(destination)
+        case .imagine: await imaginer(destination, f)
+        case .global, .progression, .lien: break
+        }
+    }
+
+    /// Le vocal part comme sous le doigt du lecteur (`playAudio` : la piste que sert le Prisme) ;
+    /// la scène est prête quand le karaoké a quitté le premier mot.
+    private static func faireEntendre(_ destination: VitrineFixtures.Destination?) async {
+        guard let conversation = VitrineRendu.shared.conversation, let attachmentId = destination?.attachmentId else {
+            fatalError("Vitrine « amour » : aucun vocal à faire entendre")
+        }
+        conversation.playAudio(attachmentId: attachmentId)
+        for await instant in ConversationAudioCoordinator.shared.$currentTime.values where instant >= 1 { break }
+    }
+
+    /// Le Prisme à un tap : ce message-là se relit dans la langue où il a été écrit.
+    private static func rouvrirSurLOriginal(_ destination: VitrineFixtures.Destination?) {
+        guard let conversation = VitrineRendu.shared.conversation, let messageId = destination?.messageId,
+              let message = conversation.messages.first(where: { $0.id == messageId }) else {
+            fatalError("Vitrine « groupe » : le message à rouvrir sur son original manque")
+        }
+        conversation.setBubbleActiveDisplayLanguage(message.originalLanguage, for: messageId)
+    }
+
+    /// L'atelier Imagine sur le message, tel que la conversation l'ouvre ; prête quand la carte est peinte.
+    private static func imaginer(_ destination: VitrineFixtures.Destination?, _ f: VitrineFixtures) async {
+        guard let vue = VitrineRendu.shared.conversation, let messageId = destination?.messageId,
+              let message = vue.messages.first(where: { $0.id == messageId }),
+              let conversation = f.conversationsServies().first(where: { $0.id == destination?.conversationId }),
+              let request = MessageCardExportMenu.request(
+                  message: message,
+                  translations: vue.messageTranslations[messageId] ?? [],
+                  servedText: vue.preferredTranslation(for: messageId)?.translatedContent,
+                  viewer: MessageCardSubject.Viewer(id: f.lecteur.id, displayName: f.lecteur.displayName, username: f.lecteur.username),
+                  handle: f.lecteur.username,
+                  quotedMessage: nil,
+                  conversationTitle: conversation.title,
+                  accentColor: conversation.accentColor,
+                  quick: false
+              ) else {
+            fatalError("Vitrine « imagine » : le message à imaginer manque")
+        }
+        MessageCardExportPresenter.present(request)
+        await VitrineRendu.shared.attendre([.imagine])
     }
 
     /// Le rendu est observé ; « prêt » tombe une fois la pose passée.
