@@ -136,17 +136,17 @@ const FAMILY_TYPES: Readonly<Record<FamilyCategory, readonly string[]>> = {
 };
 
 const CATEGORY_HUES: Readonly<Record<NotificationCategory, string>> = {
-  all: '#6366F1',
-  unread: '#FF6B6B',
-  messages: '#3498DB',
-  reactions: '#FF6B6B',
-  mentions: '#9B59B6',
-  social: '#F8B500',
-  contacts: '#4ECDC4',
-  groups: '#F8B500',
-  calls: '#E91E63',
-  translations: '#08D9D6',
-  system: '#6366F1',
+  all: 'var(--ios-indigo-500)',
+  unread: '#FF6B6B', // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
+  messages: '#3498DB', // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
+  reactions: '#FF6B6B', // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
+  mentions: '#9B59B6', // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
+  social: '#F8B500', // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
+  contacts: '#4ECDC4', // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
+  groups: '#F8B500', // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
+  calls: '#E91E63', // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
+  translations: '#08D9D6', // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
+  system: 'var(--ios-indigo-500)',
 };
 
 export const categoryHue = (category: NotificationCategory): string => CATEGORY_HUES[category];
@@ -183,7 +183,7 @@ export function categoryAccepts(
 
 const ACCENTS: ReadonlyArray<readonly [string, readonly string[]]> = [
   [
-    '#3498DB',
+    '#3498DB', // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
     [
       'new_message',
       'NEW_MESSAGE',
@@ -202,10 +202,10 @@ const ACCENTS: ReadonlyArray<readonly [string, readonly string[]]> = [
       'message_forwarded',
     ],
   ],
-  ['#FF6B6B', FAMILY_TYPES.reactions],
-  ['#9B59B6', ['user_mentioned', 'mention', 'MENTION', 'post_repost']],
+  ['#FF6B6B', FAMILY_TYPES.reactions], // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
+  ['#9B59B6', ['user_mentioned', 'mention', 'MENTION', 'post_repost']], // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
   [
-    '#4ECDC4',
+    '#4ECDC4', // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
     [
       ...FAMILY_TYPES.contacts,
       'added_to_conversation',
@@ -216,7 +216,7 @@ const ACCENTS: ReadonlyArray<readonly [string, readonly string[]]> = [
     ],
   ],
   [
-    '#F8B500',
+    '#F8B500', // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
     [
       'community_invite',
       'community_joined',
@@ -232,14 +232,14 @@ const ACCENTS: ReadonlyArray<readonly [string, readonly string[]]> = [
       'member_role_changed',
     ],
   ],
-  ['#FBBF24', ['achievement_unlocked', 'ACHIEVEMENT_UNLOCKED', 'streak_milestone', 'level_up', 'badge_earned']],
-  ['#E91E63', FAMILY_TYPES.calls],
-  ['#2ECC71', ['AFFILIATE_SIGNUP']],
-  ['#EF4444', ['security_alert', 'login_new_device', 'SYSTEM_ALERT', 'password_changed', 'two_factor_enabled', 'two_factor_disabled']],
-  ['#08D9D6', FAMILY_TYPES.translations],
+  ['var(--ios-warning)', ['achievement_unlocked', 'ACHIEVEMENT_UNLOCKED', 'streak_milestone', 'level_up', 'badge_earned']],
+  ['#E91E63', FAMILY_TYPES.calls], // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
+  ['#2ECC71', ['AFFILIATE_SIGNUP']], // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
+  ['var(--ios-error-strong)', ['security_alert', 'login_new_device', 'SYSTEM_ALERT', 'password_changed', 'two_factor_enabled', 'two_factor_disabled']],
+  ['#08D9D6', FAMILY_TYPES.translations], // harmony-exempt: palette catégorielle miroir de NotificationCategory.swift, à remonter dans le SDK (#8879)
 ];
 
 const ACCENT_BY_TYPE: ReadonlyMap<string, string> = new Map(ACCENTS.flatMap(([hex, types]) => types.map((type) => [type, hex] as const)));
 
 /** L'accent d'une LIGNE — celui de son type, l'indigo du système pour un type inconnu. */
-export const notificationAccent = (type: string): string => ACCENT_BY_TYPE.get(type) ?? '#6366F1';
+export const notificationAccent = (type: string): string => ACCENT_BY_TYPE.get(type) ?? 'var(--ios-indigo-500)';

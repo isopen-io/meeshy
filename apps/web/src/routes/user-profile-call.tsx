@@ -42,7 +42,7 @@ export const ProfileCallButtons = memo(function ProfileCallButtons({
           disabled={disabled}
           aria-label={translate(language, media === 'video' ? 'keypad.call.video.named' : 'keypad.call.audio.named', { name })}
           onClick={() => onCall(media)}
-          className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-card px-3 text-body font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
+          className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-card px-3 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
           style={{ backgroundColor: 'var(--ios-indigo-600)', outlineColor: BRAND }}
         >
           {media === 'video' ? <GlyphSvg glyph={CALLS_GLYPHS.videoCamera} size={18} /> : <Glyph name="phone" size={18} />}

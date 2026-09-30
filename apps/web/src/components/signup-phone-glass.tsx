@@ -78,7 +78,7 @@ export function SignupPhoneGlass({
       <div
         ref={glass}
         data-signup-phone-glass
-        className="glass glass-card flex items-center gap-1 rounded-[22px] ps-1.5 pe-3"
+        className="glass glass-card flex items-center gap-1 rounded-field-ios ps-1.5 pe-3"
         style={{
           minHeight: 56,
           border: `1px solid ${focused ? 'color-mix(in srgb, var(--ios-indigo-500) 60%, transparent)' : 'color-mix(in srgb, var(--color-ios-ink) 12%, transparent)'}`,
@@ -94,7 +94,7 @@ export function SignupPhoneGlass({
           type="button"
           data-signup-country
           onClick={onOpenCountry}
-          className="flex items-center gap-1.5 rounded-[18px] px-3"
+          className="flex items-center gap-1.5 rounded-bubble px-3"
           style={{ minHeight: 44 }}
           aria-label={`Pays : ${countryName(country, locale)}, ${country.dialCode}`}
         >

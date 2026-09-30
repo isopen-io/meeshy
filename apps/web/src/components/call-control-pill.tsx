@@ -59,7 +59,7 @@ export function CallControlPill({ call, language, set, expanded, onToggle, promi
   return (
     <>
       <div
-        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} relative isolate mx-auto flex flex-col rounded-[28px] p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${expanded ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
+        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} relative isolate mx-auto flex flex-col rounded-sheet p-1.5 before:absolute before:-inset-2 before:-z-10 before:rounded-[34px] ${expanded ? 'w-[min(calc(100%-1.5rem),26rem)]' : 'w-fit'}`}
         data-call-control-pill={expanded ? 'grown' : 'pill'}
         data-call-chrome-keep=""
       >
@@ -73,7 +73,7 @@ export function CallControlPill({ call, language, set, expanded, onToggle, promi
                 </Suspense>
               )}
             </div>
-            <hr className="mx-2 my-2 border-0 border-t border-white/20" />
+            <hr className="mx-2 my-2 border-0 border-t border-media-hairline" />
           </>
         ) : null}
         <div className="flex items-center justify-center gap-2">

@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 602,
+  "routeCount": 605,
   "routes": [
     {
       "method": "DELETE",
@@ -1569,6 +1569,21 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/engagement-scale",
+      "module": "engagementScaleAdminRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/invitations",
       "module": "invitationRoutes",
       "mountPrefix": "/api/v1/admin/invitations",
@@ -2696,6 +2711,20 @@
         "S3"
       ],
       "securityBasisKey": "optional-identity",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/conversations/:id/engagement",
+      "module": "anonyme~2",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
       "hierarchyGated": false,
       "adminPrefixed": false
     },
@@ -8207,6 +8236,21 @@
         "S5"
       ],
       "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/admin/engagement-scale",
+      "module": "engagementScaleAdminRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
       "hierarchyGated": false,
       "adminPrefixed": true
     },

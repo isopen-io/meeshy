@@ -147,7 +147,7 @@ export function BackgroundLayer({
       // au-delà. Il se pose sur un fond NOIR (le canvas d'iOS), jamais sur
       // l'aplat de carte : à `LETTERBOX_FILL_OPACITY`, ce qui transparaît ne
       // doit pas changer avec le schéma.
-      <span aria-hidden="true" className="absolute inset-0 block overflow-hidden" style={{ backgroundColor: '#000' }}>
+      <span aria-hidden="true" className="absolute inset-0 block overflow-hidden" style={{ backgroundColor: 'var(--color-media-backdrop)' }}>
         {/* eslint-disable-next-line jsx-a11y/alt-text */}
         <img
           data-scene-letterbox

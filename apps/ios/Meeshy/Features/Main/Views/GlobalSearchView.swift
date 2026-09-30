@@ -662,7 +662,7 @@ struct GlobalSearchView: View {
 
         case .expired:
             HStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: "timer.badge.xmark")
+                Image(systemName: MessageProtectionSymbols.expired)
                     .font(MeeshyFont.relative(11, weight: .medium))
                 Text(String(localized: "message.expired", defaultValue: "Message expiré"))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize).italic())

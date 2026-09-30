@@ -100,7 +100,7 @@ const isPlainRecord = (value: unknown): value is Record<string, unknown> => type
 
 /** L'aplat quand aucune empreinte n'existe — le voile du chrome du lecteur,
  * jamais la teinte de carte du thème (le lecteur est un canevas sombre forcé). */
-const NEUTRAL_PLACEHOLDER = 'rgba(255,255,255,0.08)';
+const NEUTRAL_PLACEHOLDER = 'var(--color-media-fill)';
 
 function clipInset(rect: Rect, canvas: { readonly width: number; readonly height: number }, radius: number): string {
   const right = canvas.width - rect.x - rect.width;

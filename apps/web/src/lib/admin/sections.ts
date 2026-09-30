@@ -88,6 +88,7 @@ export type AdminSectionLabelKey =
   | 'admin.nav.broadcasts'
   | 'admin.nav.settings'
   | 'admin.nav.agent'
+  | 'admin.nav.engagementScale'
   | 'admin.nav.monitoring';
 
 /**
@@ -96,7 +97,7 @@ export type AdminSectionLabelKey =
  * compile que sur une route qui existe, et la tuile ne peut plus viser un autre
  * écran que le sien.
  */
-export type AdminRoute = 'admin' | 'adminUsers' | 'adminAnonymous' | 'adminConversations' | 'adminAgent';
+export type AdminRoute = 'admin' | 'adminUsers' | 'adminAnonymous' | 'adminConversations' | 'adminAgent' | 'adminEngagementScale';
 
 export type AdminSection = {
   readonly id: string;
@@ -159,6 +160,16 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
      sa garde serveur est une permission, pas un rang. */
   { id: 'agent', labelKey: 'admin.nav.agent', route: 'adminAgent', permission: 'canManageAgent', glyph: '🤖' },
   { id: 'monitoring', labelKey: 'admin.nav.monitoring', route: null, permission: 'canAccessAdmin', glyph: '💓' },
+  /* LE BARÈME DE POINTS (#8906) — ce que chaque geste rapporte. La passerelle
+     le réserve à ADMIN et BIGBOSS : `adminRankOnly`, sous l'accès à l'espace. */
+  {
+    id: 'engagementScale',
+    labelKey: 'admin.nav.engagementScale',
+    route: 'adminEngagementScale',
+    permission: 'canAccessAdmin',
+    adminRankOnly: true,
+    glyph: '🔥',
+  },
 ];
 
 /**

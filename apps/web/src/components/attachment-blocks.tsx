@@ -279,9 +279,9 @@ function VoiceAttachment({
           aria-label={isPlaying ? 'Mettre en pause' : "Lire l'audio"}
         >
           {isPlaying ? (
-            <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={13} className="text-white" />
+            <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={13} className="text-ios-on-brand" />
           ) : (
-            <Glyph name="fillPlay" size={13} className="text-white" />
+            <Glyph name="fillPlay" size={13} className="text-ios-on-brand" />
           )}
         </button>
         {/* L'ONDE SE PARCOURT AU DOIGT (#6306) — elle était `aria-hidden` et

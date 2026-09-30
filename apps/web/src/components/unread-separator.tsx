@@ -16,7 +16,7 @@ export function UnreadSeparator({ label }: { readonly label: string }) {
       <span
         role="heading"
         aria-level={2}
-        className="rounded-chip px-3 py-1 text-time font-semibold text-white"
+        className="rounded-chip px-3 py-1 text-time font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)' }}
       >
         {label}

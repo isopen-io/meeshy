@@ -183,12 +183,15 @@ public nonisolated struct MeeshyColors {
     public static let blockedNeutralHex = "888888"
 
     // MARK: - Chrome posé sur un média plein écran (#8878)
+    //
+    // Les noms des vues iOS, ALIAS de l'échelle `onMedia` / `scrim` ci-dessus
+    // (#8879) : une seule valeur par couleur, dérivée vers le web.
 
-    public static let mediaChromeForeground = Color.white
-    public static let mediaChromeSecondary = Color.white.opacity(0.85)
-    public static let mediaChromeTertiary = Color.white.opacity(0.7)
-    public static let mediaChromeFill = Color.black.opacity(0.35)
-    public static let mediaScrim = Color.black.opacity(0.5)
+    public static let mediaChromeForeground = onMedia
+    public static let mediaChromeSecondary = onMediaSecondary
+    public static let mediaChromeTertiary = onMediaMuted
+    public static let mediaChromeFill = mediaBackdrop.opacity(0.35)
+    public static let mediaScrim = scrim
 
     public static let mediaScrimTop = LinearGradient(
         colors: [Color.black.opacity(0.55), Color.black.opacity(0)],
@@ -199,6 +202,39 @@ public nonisolated struct MeeshyColors {
         colors: [Color.black.opacity(0), Color.black.opacity(0.55)],
         startPoint: .top, endPoint: .bottom
     )
+
+    // MARK: - Chrome posé sur un média (#8879)
+    //
+    // Une visionneuse plein écran (image d'un commentaire, média d'une
+    // conversation, story, réel) est TOUJOURS sombre, quel que soit le schéma :
+    // ses contrôles s'écrivent en blanc sur un voile noir. Les vues les
+    // portaient en littéral (`.white.opacity(0.85)`, `Color.black.opacity(0.5)`
+    // — plus de trois cents sites) ; l'échelle est nommée ici, FERMÉE, et
+    // dérivée vers `packages/design-tokens/ios.css` (`--ios-on-media*`,
+    // `--ios-media-*`, `--ios-scrim*`) pour que le web lise la même.
+
+    /// L'encre d'un contrôle ou d'un texte posé sur un média.
+    public static let onMedia = Color(hex: "FFFFFF")
+    /// Texte secondaire sur un média (horodatage, sous-titre).
+    public static let onMediaSecondary = onMedia.opacity(0.85)
+    /// Texte discret sur un média (compteur, méta).
+    public static let onMediaMuted = onMedia.opacity(0.7)
+    /// Remplissage d'un bouton ou d'une puce posé sur un média.
+    public static let mediaFill = onMedia.opacity(0.15)
+    /// Filet d'un contrôle posé sur un média.
+    public static let mediaHairline = onMedia.opacity(0.2)
+    /// Le fond d'une visionneuse plein écran.
+    public static let mediaBackdrop = Color(hex: "000000")
+    /// Voile léger : dégradé sous le chrome, disque derrière une icône.
+    public static let scrimSoft = mediaBackdrop.opacity(0.3)
+    /// Voile régulier : sous un texte posé sur un média.
+    public static let scrim = mediaBackdrop.opacity(0.5)
+    /// Voile appuyé : ce qui assombrit un média derrière une feuille.
+    public static let scrimStrong = mediaBackdrop.opacity(0.7)
+
+    /// L'encre posée sur un APLAT de couleur — marque, accent de
+    /// conversation — : le blanc des boutons pleins.
+    public static let onBrand = Color(hex: "FFFFFF")
 
     /// Fond du badge de compteur de messages non lus, thématisé.
     /// Light : rouge vif (`error`). Dark : rouge foncé (`errorDark`).

@@ -120,6 +120,12 @@ export const SERVER_EVENTS = {
   VIEWING_STOP: 'viewing:stop',
   /** Réponse au seul émetteur d'un `viewing:start` : les pairs déjà présents. */
   VIEWING_SNAPSHOT: 'viewing:snapshot',
+  /**
+   * Les points et la série qu'une conversation a rapportés à son LECTEUR ont
+   * changé (#8906) — `ConversationEngagementSnapshot`, émis dans la room
+   * `user:<id>` du seul crédité, jamais dans la room de la conversation.
+   */
+  ENGAGEMENT_CONVERSATION_UPDATED: 'engagement:conversation-updated',
   USER_STATUS: 'user:status',
   /**
    * Snapshot émis à l'authentification socket : liste des userIds actuellement

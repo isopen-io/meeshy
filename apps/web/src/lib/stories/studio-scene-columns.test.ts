@@ -103,3 +103,32 @@ describe('studioTrailingFocus / studioTrailingOptions / studioTrailingFoot — l
     expect(studioTrailingFoot(tool, true)).toEqual(['undo', 'redo']);
   });
 });
+
+/** LES OUTILS DU FOND AU RAIL DROIT (#8849, jumelle de `ComposerTrailingColumn`
+ * iOS en édition du fond, #8847) — ses outils, ses gestes, puis le (x) qui
+ * rend la scène ; l'historique reste au pied. */
+describe('studioTrailingFocus — l’édition du fond', () => {
+  const background = { sections: ['frame', 'filter', 'describe'] as const, open: 'filter' as const, actions: ['retake', 'remove'] as const };
+
+  test('ses outils (l’ouvert marqué), ses gestes, puis le (x) en dernier', () => {
+    const focus = studioTrailingFocus({ toolOpen: false, object: null, effects: ['opening'], openEffect: 'opening', background });
+    expect(studioTrailingOptions(focus)).toEqual([
+      { kind: 'background-section', section: 'frame', open: false },
+      { kind: 'background-section', section: 'filter', open: true },
+      { kind: 'background-section', section: 'describe', open: false },
+      { kind: 'background-action', action: 'retake' },
+      { kind: 'background-action', action: 'remove' },
+      { kind: 'exit-tool' },
+    ]);
+  });
+
+  test('elle l’emporte sur un objet touché et sur les effets de la scène', () => {
+    const focus = studioTrailingFocus({ toolOpen: false, object: { id: 't1', actions: ['edit'] }, effects: ['opening'], openEffect: null, background });
+    expect(focus.kind).toBe('background');
+  });
+
+  test('annuler et rétablir restent pendant l’outil, jamais « Temps »', () => {
+    const focus = studioTrailingFocus({ toolOpen: false, object: null, effects: [], openEffect: null, background });
+    expect(studioTrailingFoot(focus, true)).toEqual(['undo', 'redo']);
+  });
+});

@@ -123,8 +123,11 @@ final class PresenceManager: ObservableObject {
 
         // Contrairement à `presenceMap` (ci-dessous), l'ensemble des présents
         // NE survit PAS à une coupure : le serveur retire la présence à l'écran
-        // de chaque socket déconnecté, et ne la ré-annonce qu'aux nouveaux
-        // `viewing:start`. La garder ferait briller un point primaire périmé.
+        // de chaque socket déconnecté, puis ré-annonce après `authenticated`
+        // un `viewing:snapshot` par conversation NON VIDE — une conversation
+        // vidée entre-temps n'en reçoit aucun. La garder ferait briller un
+        // point primaire périmé ; `.sessionStarted` la vide aussi quand une
+        // reconnexion automatique ne passe pas par `isConnected == false`.
         MessageSocketManager.shared.$isConnected
             .removeDuplicates()
             .filter { !$0 }
@@ -223,7 +226,7 @@ final class PresenceManager: ObservableObject {
             noteActivity(userId: change.userId)
         case .snapshot(let snapshot):
             snapshot.userIds.forEach { noteActivity(userId: $0) }
-        case .left:
+        case .left, .sessionStarted:
             break
         }
     }

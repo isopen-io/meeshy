@@ -273,7 +273,7 @@ function Family({ actions, context }: { readonly actions: readonly (MineAction |
 export const ROW_SCROLL = 'flex gap-1 overflow-x-auto overscroll-x-none px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&>*]:shrink-0';
 
 /** La légende d'une rangée, en petites capitales. */
-export const ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-white/70 [font-variant-caps:all-small-caps]';
+export const ROW_TITLE = 'px-2 text-mini font-semibold tracking-wide text-on-media-3 [font-variant-caps:all-small-caps]';
 
 type RowsProps = { readonly call: ActiveCall; readonly set: CallControlSet; readonly language: InterfaceLanguage; readonly panels: CallPanels; readonly kit: CallRowsKit };
 

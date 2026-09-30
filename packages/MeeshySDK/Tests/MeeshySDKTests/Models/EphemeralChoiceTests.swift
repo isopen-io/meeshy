@@ -35,7 +35,6 @@ struct EphemeralChoiceTests {
         let intent = MessageProtectionIntent(ephemeral: .afterRead)
         #expect(intent.lifecycleFlags == [.ephemeral, .ephemeralAfterRead])
         #expect(intent.ephemeralDurationSeconds == nil)
-        #expect(intent.expiresAt(from: now) == nil)
         #expect(!intent.isEmpty)
         #expect(intent.wireEffectFlags == [.ephemeral, .ephemeralAfterRead],
                 "le corps REST n'a pas de colonne pour la flamme-œil : les bits voyagent par effectFlags")

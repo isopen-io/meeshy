@@ -347,6 +347,13 @@ struct LentilleConversationRow: View {
                         onShowParticipants: magnification.onShowParticipants
                     )
                 }
+                // Ce que le lecteur a gagné ici (#8906) — sur la seule rangée
+                // élue : l'hôte observe le magasin, jamais une rangée au repos.
+                ConversationEngagementBadge(
+                    conversationId: conversation.id,
+                    seed: conversation.viewerEngagement,
+                    accentColor: conversation.accentColor
+                )
             }
 
             Spacer(minLength: 0)

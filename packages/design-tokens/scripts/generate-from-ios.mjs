@@ -70,6 +70,22 @@ for (const m of swiftCouleurs.matchAll(/public static func (\w+)\(isDark: Bool\)
 }
 
 const constantes = new Map();
+/**
+ * Une QUATRIÈME forme (#8879) : `public static let nom = autre.opacity(0.5)`,
+ * celle de l'échelle du chrome posé sur un média. Elle se lit comme un alias
+ * dont on garde l'alpha, rendu en `color-mix(… transparent)` — la même écriture
+ * que `terme()` donne à une fonction `isDark`.
+ */
+const translucide = (source, alpha) =>
+  `color-mix(in srgb, ${source} ${Math.round(Number(alpha) * 100)}%, transparent)`;
+for (const m of swiftCouleurs.matchAll(
+  /^\s*public static let (\w+)\s*=\s*(\w+)\.opacity\(([\d.]+)\)\s*$/gm,
+)) {
+  const [, name, source, alpha] = m;
+  const hex = new RegExp(`public static let ${source}\\s*=\\s*Color\\(hex:\\s*"([0-9A-Fa-f]{6})"\\)`).exec(swiftCouleurs);
+  if (!hex) echoue(`${name} : la source de l'opacité (${source}) n'est pas une Color(hex:) déclarée`);
+  constantes.set(name, translucide(`#${hex[1].toLowerCase()}`, alpha));
+}
 for (const m of swiftCouleurs.matchAll(
   /^\s*public static let (\w+)\s*=\s*(?:Color\(hex:\s*"([0-9A-Fa-f]{6})"\)|"([0-9A-Fa-f]{6})"|(\w+))\s*$/gm,
 )) {
@@ -338,6 +354,28 @@ const SEMANTIQUES = [
   ['stateConcealed', '--ios-state-concealed'],
   ['stateFailed', '--ios-state-failed'],
 ];
+/**
+ * LE CHROME POSÉ SUR UN MÉDIA (#8879) — une échelle FERMÉE, hors schéma : une
+ * visionneuse plein écran est sombre dans les deux. Le web la lit au lieu de
+ * réécrire `#fff`, `rgba(0,0,0,.5)` ou `bg-black/40` écran par écran.
+ */
+const MEDIA = [
+  ['onMedia', '--ios-on-media'],
+  ['onMediaSecondary', '--ios-on-media-2'],
+  ['onMediaMuted', '--ios-on-media-3'],
+  ['mediaFill', '--ios-media-fill'],
+  ['mediaHairline', '--ios-media-hairline'],
+  ['mediaBackdrop', '--ios-media-backdrop'],
+  ['scrimSoft', '--ios-scrim-soft'],
+  ['scrim', '--ios-scrim'],
+  ['scrimStrong', '--ios-scrim-strong'],
+  ['onBrand', '--ios-on-brand'],
+];
+const media = MEDIA.map(([swift, css]) => {
+  if (!constantes.has(swift)) echoue(`constante attendue absente : ${swift}`);
+  return row(css, constantes.get(swift));
+});
+
 const semantiques = SEMANTIQUES.map(([swift, css]) => {
   if (!constantes.has(swift)) echoue(`constante attendue absente : ${swift}`);
   return row(css, constantes.get(swift));
@@ -354,11 +392,11 @@ const output = `/* GÉNÉRÉ — ne pas éditer à la main.
  * elle a besoin des valeurs iOS. Elle les recopiait à la main — une seconde
  * table, que la charte interdit. Elles sont désormais DÉRIVÉES.
  *
- * CE FICHIER NE REMPLACE PAS tokens.css, qui reste la table de la v3 : les deux
- * assignent les mêmes couleurs à des RÔLES DIFFÉRENTS (design-tokens fait de
- * indigo400 sa primaire, iOS de indigo500 ; les neutres de la v3 sont violacés,
- * ceux d'iOS sont des gris vrais). Unifier ces rôles changerait le rendu de
- * web-v2, ce qu'aucune décision n'a demandé — c'est le reste de #5445.
+ * LES RÔLES DU SDK GAGNENT (#8879, directive porteur 2026-09-30) : là où
+ * tokens.css, dark.css et light.css donnaient à un rôle une autre valeur que
+ * celle-ci, ils POINTENT désormais vers la variable --ios-* correspondante.
+ * Seuls restent des valeurs les rôles qu'iOS n'a pas, ou dont la valeur iOS
+ * tombe sous AA dans l'usage de la table — voir docs/product/charte-visuelle-web.md.
  */
 
 :root,
@@ -368,6 +406,9 @@ ${ramp.join('\n')}
 
   /* Les couleurs sémantiques et les neutres — hors schéma également. */
 ${semantiques.join('\n')}
+
+  /* Le chrome posé sur un média, et l'encre d'un aplat de marque — hors schéma. */
+${media.join('\n')}
 
   /* Les plans et les encres, schéma SOMBRE. */
 ${row('--ios-surface', fonctions.get('backgroundPrimary').dark)}
@@ -427,7 +468,7 @@ if (process.argv.includes('--check')) {
 
 writeFileSync(OUTPUT, output);
 console.log(
-  `  ios.css écrit — ${ramp.length} pas de rampe, ${semantiques.length} sémantiques, ` +
+  `  ios.css écrit — ${ramp.length} pas de rampe, ${semantiques.length} sémantiques, ${media.length} jetons de chrome sur média, ` +
     `${espaces.size} espaces, ${rayons.size} rayons, ${polices.size} polices, ` +
     `${HORS_TABLE_IOS.length + HORS_TABLE_PAR_SCHEMA.length} valeurs hors table iOS ` +
     `(dont ${HORS_TABLE_PAR_SCHEMA.length} dépendantes du schéma).`,

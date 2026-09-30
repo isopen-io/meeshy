@@ -59,7 +59,7 @@ export function StreamVideo({
       muted
       aria-label={label}
       className={className}
-      style={{ objectFit: fit, transform: transform === '' ? undefined : transform, backgroundColor: '#000' }}
+      style={{ objectFit: fit, transform: transform === '' ? undefined : transform, backgroundColor: 'var(--color-media-backdrop)' }}
       data-call-stream={fit}
       data-call-member={member}
       {...(self ? { 'data-call-self': '' } : {})}

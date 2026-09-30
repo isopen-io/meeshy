@@ -277,7 +277,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
             >
               <span
                 className={`grid size-full place-items-center overflow-hidden rounded-full transition-[scale,opacity] duration-200 motion-reduce:transition-none ${checked ? 'scale-110 opacity-100' : 'scale-[0.82] opacity-60'}`}
-                style={{ boxShadow: checked ? '0 0 0 3px white, 0 6px 18px rgb(0 0 0 / 0.45)' : 'inset 0 0 0 1px rgb(255 255 255 / 0.3)', background: 'rgb(0 0 0 / 0.35)' }}
+                style={{ boxShadow: checked ? '0 0 0 3px var(--color-on-media), var(--shadow-lg)' : 'inset 0 0 0 1px var(--color-media-hairline)', background: 'var(--color-scrim-soft)' }}
                 data-carousel-face=""
               >
                 {item.visual}
@@ -286,7 +286,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
           );
         })}
       </div>
-      <p aria-hidden className="h-5 w-full truncate px-4 text-center text-mini font-semibold text-white [contain:strict] [text-shadow:0_1px_4px_rgb(0_0_0/0.6)]" style={{ height: '1lh' }} data-call-mode-selected="">
+      <p aria-hidden className="h-5 w-full truncate px-4 text-center text-mini font-semibold text-on-media [contain:strict] [text-shadow:0_1px_2px_var(--color-scrim)]" style={{ height: '1lh' }} data-call-mode-selected="">
         {current?.label ?? ''}
       </p>
       {capture === undefined ? null : (
@@ -309,7 +309,7 @@ type BarProps = {
 
 const SIDE_SHAPE = 'grid size-12 place-items-center rounded-full transition-transform active:scale-95 motion-reduce:transition-none';
 
-const SIDE = `${SIDE_SHAPE} text-white`;
+const SIDE = `${SIDE_SHAPE} text-on-media`;
 
 /** La barre d'un mode : ✕ Quitter · (la vidéo au clavier) · les options. */
 export function CallModeBar({ quit, center = null, options }: BarProps) {
@@ -335,7 +335,7 @@ export function ModeOption({ label, glyph, onPress, pressed, data = {} }: { read
       title={label}
       {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
       onClick={onPress}
-      className={pressed === true ? `bg-white text-[var(--ios-indigo-950)] ${SIDE_SHAPE}` : `glass-call ${SIDE}`}
+      className={pressed === true ? `bg-on-media text-[var(--ios-indigo-950)] ${SIDE_SHAPE}` : `glass-call ${SIDE}`}
       {...data}
     >
       {glyph}

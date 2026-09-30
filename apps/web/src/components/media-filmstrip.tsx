@@ -19,6 +19,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { Glyph } from './glyph';
 import { MediaUnavailable } from './media-unavailable';
+import { GLYPH_SIZE } from './ui-chrome';
 
 /**
  * `MediaFilmstrip` (#6221) — la pellicule en couloir bas de la visionneuse,
@@ -91,7 +92,7 @@ export function MediaFilmstrip({
       aria-label="Pellicule"
       ref={trackRef}
       onScroll={onScroll}
-      className="flex overflow-x-auto box-border"
+      className="pointer-events-auto flex overflow-x-auto box-border"
       style={{
         height: FILMSTRIP_RESERVED_HEIGHT,
         gap: FILMSTRIP.spacing,
@@ -124,22 +125,22 @@ export function MediaFilmstrip({
             aria-label={isMasked ? `Média protégé ${index + 1} sur ${items.length}` : `Média ${index + 1} sur ${items.length}`}
             {...(isCurrent ? { 'aria-current': 'true' as const } : {})}
             onClick={() => onSelect(index)}
-            className="media-filmstrip-item relative flex shrink-0 items-center justify-center overflow-hidden bg-black"
+            className="media-filmstrip-item relative flex shrink-0 items-center justify-center overflow-hidden bg-media-backdrop"
             style={{
               width: FILMSTRIP.itemSide,
               height: FILMSTRIP.itemSide,
               opacity: isCurrent ? 1 : 0.55,
               transform: isCurrent ? 'scale(1)' : 'scale(0.9)',
-              border: isCurrent ? '2px solid var(--accent)' : '1px solid rgba(255,255,255,0.18)',
+              border: isCurrent ? '2px solid var(--color-on-media)' : '1px solid var(--color-media-hairline)',
             }}
           >
             {isMasked ? (
-              <Glyph name="eyeSlash" size={14} className="media-filmstrip-masked-glyph" />
+              <Glyph name="eyeSlash" size={GLYPH_SIZE.sm} className="text-on-media-3" />
             ) : (
               <>
                 {thumb !== undefined ? <FilmstripThumb src={thumb} language={language} /> : null}
                 {kindOf(attachment) === 'video' ? (
-                  <Glyph name="fillPlay" size={16} className="absolute inset-0 m-auto text-white" />
+                  <Glyph name="fillPlay" size={GLYPH_SIZE.md} className="absolute inset-0 m-auto text-on-media" />
                 ) : null}
               </>
             )}

@@ -140,9 +140,11 @@ describe('ReelPage — commenter et repartager depuis le rail (#6484)', () => {
     expect(html).toMatch(/data-reel-gesture="repost"[^>]*aria-pressed="false"/);
   });
 
-  test('un compte à zéro reste AFFICHÉ (comportement existant, distinct d’iOS — #7449)', () => {
+  test('un compte à zéro ne s’affiche PAS — la règle commune des plein écrans (#8879, comme iOS)', () => {
     const html = page({ ...REEL_SUNSET_EN, commentCount: 0 }, { onComment: () => undefined, onRepost: () => undefined });
-    expect(html).toMatch(/data-reel-gesture="comment"[\s\S]*?tabular-nums"[^>]*>0</);
+    const comment = /data-reel-gesture="comment"[\s\S]*?<\/button>/.exec(html)?.[0] ?? '';
+    expect(comment).not.toContain('data-viewer-count');
+    expect(comment).toContain('aria-label="Commenter"');
   });
 });
 
@@ -255,7 +257,7 @@ describe('les états du lecteur sont DESSINÉS, jamais un écran noir muet', () 
     expect(html).toContain('role="alert"');
     expect(html).toContain('Impossible de charger les réels');
     expect(html).toContain('Réessayer');
-    expect(html).toContain('min-height:44px');
+    expect(html).toContain('btn-primary');
   });
 
   test('hors ligne à cache froid : la coupure, et aucune promesse de réels déjà chargés', () => {
@@ -574,5 +576,125 @@ describe('ReelPage — le rail agit : commenter et repartager appellent l’écr
       root.unmount();
     });
     container.remove();
+  });
+});
+
+/**
+ * **LE CHROME COMMUN DES PLEIN ÉCRANS** (#8879, `docs/product/visionneuse-plein-ecran.md`)
+ * — le réel rend SORTIE, RÉPONSE et RÉACTION par les primitives que la story et
+ * le média de conversation rendent aussi (`viewer-chrome.tsx`), et chaque geste
+ * appelle le rappel qui EXISTAIT déjà : aucun nouveau chemin de données.
+ */
+describe('ReelPage et son cadre — le chrome commun des visionneuses (#8879)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  const mountNode = (node: React.ReactElement) => {
+    const container = window.document.createElement('div');
+    window.document.body.appendChild(container);
+    const root = createRoot(container);
+    act(() => {
+      root.render(node);
+    });
+    return {
+      container,
+      unmount: () => {
+        act(() => {
+          root.unmount();
+        });
+        container.remove();
+      },
+    };
+  };
+
+  const reelPage = (overrides: Partial<Parameters<typeof ReelPage>[0]> = {}) => (
+    <ReelPage
+      model={modelOf(REEL_SUNSET_EN)}
+      index={0}
+      count={1}
+      mode="far"
+      soundOn={false}
+      language="fr"
+      preferredLanguages={['fr']}
+      onToggleSound={() => undefined}
+      onGesture={() => undefined}
+      onShare={() => undefined}
+      onSoundBlocked={() => undefined}
+      {...overrides}
+    />
+  );
+
+  test('la capsule « Répondre… » ouvre la feuille de commentaires de CE réel — le même rappel que le bouton « Commenter »', () => {
+    const calls: string[] = [];
+    const view = mountNode(reelPage({ onComment: (postId) => calls.push(postId) }));
+    const capsule = view.container.querySelector<HTMLButtonElement>('[data-viewer-reply]');
+    expect(capsule?.textContent).toContain('Écrire un commentaire');
+    act(() => {
+      capsule?.click();
+    });
+    act(() => {
+      view.container.querySelector<HTMLButtonElement>('[data-reel-gesture="comment"]')?.click();
+    });
+    expect(calls).toEqual([REEL_SUNSET_EN.id, REEL_SUNSET_EN.id]);
+    view.unmount();
+  });
+
+  test('loi 4 — un visiteur qui ne peut pas écrire n’a NI capsule NI bouton « Commenter »', () => {
+    const view = mountNode(reelPage());
+    expect(view.container.querySelector('[data-viewer-reply]')).toBeNull();
+    expect(view.container.querySelector('[data-reel-gesture="comment"]')).toBeNull();
+    view.unmount();
+  });
+
+  test('réagir appelle le geste existant, une fois, avec l’identité du réel — depuis le rail commun', () => {
+    const gestures: string[] = [];
+    const view = mountNode(reelPage({ onGesture: (postId, kind) => gestures.push(`${kind}:${postId}`) }));
+    const like = view.container.querySelector<HTMLButtonElement>('[data-viewer-rail] [data-viewer-action="like"]');
+    expect(like?.getAttribute('data-reel-gesture')).toBe('like');
+    act(() => {
+      like?.click();
+    });
+    expect(gestures).toEqual([`like:${REEL_SUNSET_EN.id}`]);
+    view.unmount();
+  });
+
+  test('l’auteur reste EN BAS avec la légende (divergence admise : le pager vertical), sur une ligne d’identité commune', () => {
+    const view = mountNode(reelPage());
+    const caption = view.container.querySelector('[data-viewer-bottom-bar] [data-viewer-caption]');
+    expect(caption?.querySelector('[data-viewer-identity]')).not.toBeNull();
+    expect(caption?.querySelector('[data-reel-caption]')).not.toBeNull();
+    expect(view.container.querySelector('[data-viewer-top-bar]')).toBeNull();
+    view.unmount();
+  });
+
+  test('« Retour » est la sortie commune : ‹ en TÊTE de barre, nommée, et elle appelle la sortie existante', () => {
+    const calls: string[] = [];
+    const view = mountNode(<ReelsBackButton language="fr" onBack={() => calls.push('back')} />);
+    const exit = view.container.querySelector<HTMLButtonElement>('[data-reels-back]');
+    expect(exit?.getAttribute('data-viewer-exit')).toBe('back');
+    expect(exit?.getAttribute('aria-label')).toBe('Retour');
+    expect(view.container.querySelector('[data-viewer-top-bar] > div')?.firstElementChild === exit).toBe(true);
+    act(() => {
+      exit?.click();
+    });
+    expect(calls).toEqual(['back']);
+    view.unmount();
+  });
+
+  test('aucun noir ni blanc écrits à la main : le disque de pause, la progression et le voile sont des jetons', () => {
+    const html = page(REEL_STUDIO);
+    expect(html).not.toMatch(/rgba\(0, ?0, ?0/);
+    expect(html).not.toMatch(/rgba\(255, ?255, ?255/);
+    expect(html).toContain('var(--color-on-media-2)');
   });
 });

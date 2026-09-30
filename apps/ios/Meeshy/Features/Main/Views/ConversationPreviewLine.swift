@@ -250,7 +250,7 @@ struct ConversationPreviewLine: View {
         case .forward?: return "arrowshape.turn.up.right"
         case .viewOnce?: return MessageProtectionSymbols.viewOnce
         case .ephemeral?: return MessageProtectionSymbols.ephemeral
-        case .expired?: return "timer.badge.xmark"
+        case .expired?: return MessageProtectionSymbols.expired
         case .hidden?: return MessageProtectionSymbols.blurred
         case .encrypted?: return "lock.fill"
         }

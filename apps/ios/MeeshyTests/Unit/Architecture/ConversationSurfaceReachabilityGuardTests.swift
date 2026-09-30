@@ -825,10 +825,25 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
         let corps = String(send[insert.lowerBound...])
         XCTAssertFalse(corps.contains("expiresAt: nil, effectFlags: 0"),
                        "La ligne optimiste d'un média ne doit plus naître sans protection.")
-        XCTAssertTrue(corps.contains("expiresAt: protection.expiresAt(from: now)"),
-                      "Elle doit dater son échéance depuis l'intention saisie au tap.")
+        XCTAssertTrue(corps.contains("ephemeralDuration: protection.ephemeralDurationSeconds"),
+                      "Elle doit porter la DURÉE saisie au tap — jamais une échéance (#8905).")
         XCTAssertTrue(corps.contains("effectFlags: protection.lifecycleFlags.rawValue"),
                       "Et porter les bits de cycle de vie correspondants.")
+    }
+
+    /// **L'envoi n'est pas une réception** (#8905). Aucune ligne optimiste —
+    /// texte en ligne, hors ligne ou média — ne grave `envoi + durée` :
+    /// l'expéditeur lit « en attente de réception » jusqu'à ce que la
+    /// passerelle serve `max D(u)`. Une échéance client décomptait dès l'envoi
+    /// et survivait à l'accusé (l'upsert coalesce `api ?? existant`).
+    func test_aucuneLigneOptimiste_neGraveDÉchéanceClient() throws {
+        let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
+        XCTAssertFalse(send.contains("intent.expiresAt("), "Une échéance calculée à l'envoi fait décompter l'expéditeur.")
+        XCTAssertFalse(send.contains("protection.expiresAt("), "Idem pour la ligne d'un média.")
+        XCTAssertEqual(send.components(separatedBy: "ephemeralDuration: intent.ephemeralDurationSeconds").count - 1, 1,
+                       "La ligne HORS LIGNE porte la durée.")
+        XCTAssertEqual(send.components(separatedBy: "ephemeralDuration: resolvedEphemeralDuration\n").count - 1, 1,
+                       "La ligne EN LIGNE porte la durée.")
     }
 
     /// La ligne optimiste d'un TEXTE porte les DEUX axes, unis.

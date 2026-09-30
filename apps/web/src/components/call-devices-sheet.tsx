@@ -34,7 +34,7 @@ import { useBackDismiss } from '@/lib/view/use-back-dismiss';
  */
 
 const EMPTY: CallDeviceGroups = { camera: [], microphone: [], speaker: [] };
-const INK_2 = 'rgba(255,255,255,0.72)';
+const INK_2 = 'var(--color-on-media-3)';
 
 const ROUTE_KEY = {
   earpiece: 'call.audioRoute.earpiece',
@@ -104,11 +104,11 @@ function Choice({ label, checked, onPick, id }: { readonly label: string; readon
       aria-checked={checked}
       onClick={onPick}
       className="flex min-h-11 w-full items-center gap-3 rounded-card px-3 text-start text-body"
-      style={{ background: checked ? 'rgba(255,255,255,0.16)' : 'transparent', color: '#fff' }}
+      style={{ background: checked ? 'var(--color-media-fill)' : 'transparent', color: 'var(--color-on-media)' }}
       data-call-device-option={id}
     >
-      <span aria-hidden className="grid size-5 shrink-0 place-items-center rounded-full border-2" style={{ borderColor: checked ? '#fff' : INK_2 }}>
-        {checked ? <span className="size-2.5 rounded-full" style={{ background: '#fff' }} /> : null}
+      <span aria-hidden className="grid size-5 shrink-0 place-items-center rounded-full border-2" style={{ borderColor: checked ? 'var(--color-on-media)' : INK_2 }}>
+        {checked ? <span className="size-2.5 rounded-full" style={{ background: 'var(--color-on-media)' }} /> : null}
       </span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
     </button>
@@ -199,14 +199,14 @@ export function CallDevicesSheet({ onClose }: { readonly onClose: () => void }) 
 
   return (
     <div className="fixed inset-0 z-[220] flex items-end justify-center sm:items-center" data-call-devices="">
-      <button type="button" aria-label={translate(language, 'call.close')} tabIndex={-1} onClick={onClose} className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.5)' }} />
+      <button type="button" aria-label={translate(language, 'call.close')} tabIndex={-1} onClick={onClose} className="absolute inset-0" style={{ background: 'var(--color-scrim)' }} />
       <div
         ref={panel}
         role="dialog"
         aria-modal="true"
         aria-labelledby="call-devices-title"
         className="relative flex max-h-[85vh] w-full max-w-md flex-col gap-4 overflow-y-auto rounded-t-card p-4 pb-safe sm:rounded-card"
-        style={{ background: '#1c1a24', color: '#fff' }}
+        style={{ background: 'var(--ios-indigo-950)', color: 'var(--color-on-media)' }}
       >
         <div className="flex items-center justify-between gap-2">
           <h2 id="call-devices-title" className="text-body font-semibold">
@@ -217,7 +217,7 @@ export function CallDevicesSheet({ onClose }: { readonly onClose: () => void }) 
           </button>
         </div>
         {failed ? (
-          <p role="alert" className="rounded-card px-3 py-2 text-body" style={{ background: 'rgba(239,68,68,0.2)' }}>
+          <p role="alert" className="rounded-card px-3 py-2 text-body" style={{ background: 'color-mix(in srgb, var(--ios-error-strong) 20%, transparent)' }}>
             {translate(language, 'call.devices.failed')}
           </p>
         ) : null}

@@ -18,7 +18,7 @@ import { CALL_FEEDBACK_GLYPHS } from './glyphs-call-feedback';
 export const FEEDBACK_IDLE_MS = 20_000;
 
 const RATINGS: readonly CallFeedbackRating[] = [1, 2, 3, 4, 5];
-const STAR = '#f5b400';
+const STAR = 'var(--ios-warning)';
 
 export function CallFeedbackCard({
   prompt,
@@ -55,7 +55,7 @@ export function CallFeedbackCard({
       <section
         aria-labelledby="call-feedback-title"
         className="pointer-events-auto flex w-full max-w-sm flex-col gap-3 rounded-card p-4 shadow-lg"
-        style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', boxShadow: '0 8px 24px rgb(0 0 0 / 0.18)' }}
+        style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', boxShadow: 'var(--shadow-lg)' }}
         data-call-feedback={prompt.callId}
       >
         <div className="flex items-start gap-2">
@@ -108,7 +108,7 @@ export function CallFeedbackCard({
                     className="min-h-11 rounded-chip px-3 text-check"
                     style={{
                       backgroundColor: on ? 'var(--color-ios-brand)' : 'var(--color-ios-surface)',
-                      color: on ? '#fff' : 'var(--color-ios-ink)',
+                      color: on ? 'var(--color-ios-on-brand)' : 'var(--color-ios-ink)',
                     }}
                     data-call-feedback-issue={issue}
                   >
@@ -122,7 +122,7 @@ export function CallFeedbackCard({
                 type="button"
                 onClick={() => onRate(rating, issues)}
                 className="min-h-11 rounded-full px-5 text-body font-semibold"
-                style={{ backgroundColor: 'var(--color-ios-brand)', color: '#fff' }}
+                style={{ backgroundColor: 'var(--color-ios-brand)', color: 'var(--color-ios-on-brand)' }}
               >
                 {translate(language, 'callFeedback.send')}
               </button>

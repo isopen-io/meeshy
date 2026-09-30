@@ -95,7 +95,7 @@ export function PostDetailRefused() {
       </p>
       <Link
         to="feed"
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
         Retour au fil
@@ -119,7 +119,7 @@ export function PostDetailError({ online, onRetry }: { readonly online: boolean;
       <button
         type="button"
         onClick={onRetry}
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
         Réessayer

@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import { GlyphSvg, type GlyphShape } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
@@ -13,59 +13,49 @@ import {
   type StoryActionRailButton,
   type StoryActionRailPlan,
 } from '@/lib/stories/action-rail';
+import { GLYPH_SIZE } from '@/components/ui-chrome';
 import { percent, ringAppearance } from '@/lib/stories/save-progress';
 import type { StorySaveJobView } from '@/lib/stories/save-store';
+
+import { VIEWER_GLASS, VIEWER_RAIL_CORRIDOR, ViewerActionRail, type ViewerAction, type ViewerProbe } from './viewer-chrome';
 
 /**
  * **LE RAIL D'ACTIONS DU LECTEUR DE STORIES** — miroir de
  * `StoryActionSidebarView` (`apps/ios/.../StoryViewerView+Sidebar.swift:464-836`),
- * posé sur le bord FIN de la scène, en bas, comme le rail des Réels
- * (`reel-page.tsx` — même disque, même compteur, même pas de 44 px : deux
- * rails du même produit ne peuvent pas se toucher différemment).
+ * posé sur le bord FIN de la scène, en bas.
  *
- * **CE COMPOSANT NE DÉCIDE RIEN.** La loi vit dans
- * `lib/stories/action-rail.ts` (pure, éprouvée hors DOM) et l'ORDRE en est
- * une donnée unique (`STORY_ACTION_RAIL_ORDER`) que ce rendu PARCOURT — il
- * n'existe nulle part une seconde liste à tenir d'accord avec elle. Le
- * fichier Swift a supprimé ses blocs numérotés pour exactement cette raison
- * (« déplacer le son d'un cran a suffi à rendre la moitié de la suite
- * fausse »).
+ * **LE DESSIN EST CELUI DE TOUS LES PLEIN ÉCRANS** (#8879,
+ * `docs/product/visionneuse-plein-ecran.md`) : le disque de verre de 40 dans une
+ * cible de 44, le compteur, l'écart de 8, la barre d'outils verticale, les
+ * coupures du geste de plateau — tout cela est `ViewerActionRail`
+ * (`viewer-chrome.tsx`), le MÊME rail que celui des Réels et de la visionneuse
+ * de médias. Ce fichier ne garde que ce qui est PROPRE à la story : la loi
+ * (quels boutons, pour qui), les tracés, les libellés, l'anneau d'export.
  *
- * **LOI 4 — UN CONTRÔLE EXISTE S'IL A UN EFFET.** Un bouton n'est rendu que
- * si la loi le dit **et** que l'hôte remet un gestionnaire (`handlers`).
- * C'est la généralisation du `canReply: onReplyToStory != nil` d'iOS : le
- * gel décide de l'APPARTENANCE, la remise d'un gestionnaire décide de
- * l'ATTEIGNABILITÉ, et les deux sont structurels — aucune branche à oublier
- * au rendu, aucun décor qui ne fait rien. Les actions que la v3.1 ne sait
- * pas encore FAIRE (`repost`, `translations`) n'ont donc pas de
- * gestionnaire, et ne sont pas là (D-88) ; `views`, `share` et `save` ont
- * rejoint le plan AUTEUR avec #7116 — `share`/`save` seulement quand la
- * story porte un média exportable (`storyDownloadableMedia`).
+ * **CE COMPOSANT NE DÉCIDE RIEN.** La loi vit dans `lib/stories/action-rail.ts`
+ * (pure, éprouvée hors DOM) et l'ORDRE en est une donnée unique
+ * (`STORY_ACTION_RAIL_ORDER`) que ce rendu PARCOURT — il n'existe nulle part
+ * une seconde liste à tenir d'accord avec elle.
  *
- * **LE SCHÉMA** — la scène est peinte par le contenu de la story, pas par le
- * thème : le rail vit sur du blanc franc + ombre portée en clair COMME en
- * sombre (le lecteur force `colorScheme: 'dark'`, `routes/story.tsx:630`), et
- * son disque est le même `rgba(0,0,0,0.35)` que celui des Réels. Un rail qui
- * suivrait le thème de l'application serait illisible une fois sur deux, la
- * photo d'en dessous n'ayant aucune raison de le suivre.
+ * **LOI 4 — UN CONTRÔLE EXISTE S'IL A UN EFFET.** Un bouton n'est rendu que si
+ * la loi le dit **et** que l'hôte remet un gestionnaire (`handlers`), **et**
+ * qu'un tracé existe. Les actions que la v3.1 ne sait pas encore FAIRE
+ * (`repost`, `translations`) n'ont donc pas de gestionnaire, et ne sont pas là
+ * (D-88) ; `views`, `share` et `save` ont rejoint le plan AUTEUR avec #7116.
+ *
+ * **« RÉPONDRE » N'EST PLUS UN BOUTON DU RAIL** : c'est la capsule « Répondre… »
+ * de la barre basse (`ViewerBottomBar`), la même sur tous les plein écrans. Le
+ * bouton reste connu de la loi — l'hôte ne lui remet simplement plus de
+ * gestionnaire.
  */
-
-/** Le disque sous le glyphe — la valeur du rail des Réels (`reel-page.tsx`),
- * lue une fois ici pour que les deux rails ne divergent pas. */
-const RAIL_DISC = 'rgba(0,0,0,0.35)';
 
 /**
- * **LE COULOIR QUE LE RAIL RÉSERVE**, en pixels — 44 de bouton + 8 de marge de
- * fin + 8 de respiration. La LÉGENDE de la story doit s'arrêter là : mesuré au
- * navigateur sur `/story/st-amie-2` (390×844), le bloc de légende courait de
- * x 16 à x 374 pendant que le bouton « Commentaires » occupait x 338→382 et y
- * 769→832 — une phrase un peu plus longue passait SOUS le rail. iOS borne la
- * légende par la barre latérale (`StoryViewerView+CanvasCaption.swift`) ; ici
- * la valeur est EXPORTÉE plutôt que recopiée chez l'hôte, pour qu'élargir le
- * rail déplace la légende dans le même geste.
+ * Le couloir que le rail réserve au bord de fin — UNE valeur, celle des
+ * primitives. La barre basse partage sa rangée avec le rail : la légende ne
+ * passe donc plus jamais dessous, sans que l'hôte ait à réserver quoi que ce soit.
  */
-export const STORY_ACTION_RAIL_CORRIDOR = 60;
-const TEXT_SHADOW = '0 1px 2px rgba(0,0,0,0.55)';
+export const STORY_ACTION_RAIL_CORRIDOR = VIEWER_RAIL_CORRIDOR;
+const TEXT_SHADOW = '0 1px 2px var(--color-scrim)';
 
 type RailGlyphs = { readonly idle: GlyphShape; readonly active?: GlyphShape };
 
@@ -222,82 +212,6 @@ export type StoryActionRailProps = {
   readonly anchored?: { readonly action: StoryActionRailButton; readonly node: ReactNode };
 };
 
-function RailButton({
-  action,
-  label,
-  glyph,
-  count,
-  pressed,
-  onPress,
-  badge,
-}: {
-  readonly action: StoryActionRailButton;
-  readonly label: string;
-  readonly glyph: GlyphShape;
-  readonly count?: number | undefined;
-  readonly pressed?: boolean | undefined;
-  readonly onPress: () => void;
-  /** `null`/absent ⇒ aucune capsule — un badge SUR un bouton absent du rail
-   * ne rend jamais rien (le filtre `boutons` en amont l'exclut déjà). */
-  readonly badge?: string | null | undefined;
-}) {
-  return (
-    <button
-      type="button"
-      data-story-action={action}
-      /* LA PRISE HISTORIQUE DU SON SURVIT À SON DÉMÉNAGEMENT (#4508) — le
-         bouton a quitté la ligne auteur pour la tête du rail, et c'est la
-         MÊME commande : `check-story-scene.mjs` la tape par
-         `[data-story-sound-toggle]`. La retirer aurait rendu ce gate VERT
-         PAR OMISSION sur un contrôle devenu introuvable. */
-      {...(action === 'sound' ? { 'data-story-sound-toggle': '' } : {})}
-      /* LE GESTE DU LECTEUR NE DOIT PAS AVALER LE TAP. Le plateau porte
-         `onPointerDown`/`onPointerUp` pour naviguer d'une story à l'autre :
-         sans cette coupure, toucher « Répondre » dans le tiers droit ferait
-         AUSSI avancer d'une story — le bouton aurait l'air de ne rien faire,
-         et le vrai coupable serait invisible. Même remède que `CloseButton`
-         et `SoundToggle` (`routes/story.tsx`, `story-parts.tsx`). */
-      onPointerDown={(e) => e.stopPropagation()}
-      onPointerUp={(e) => e.stopPropagation()}
-      onClick={onPress}
-      aria-label={label}
-      {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
-      className="pointer-events-auto flex flex-col items-center gap-1 rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ color: '#fff', outlineColor: '#fff', minWidth: 44 }}
-    >
-      <span className="relative grid place-items-center rounded-full" style={{ width: 44, height: 44, background: RAIL_DISC }}>
-        <GlyphSvg glyph={glyph} size={22} />
-        {badge === undefined || badge === null ? null : (
-          <span
-            data-story-action-badge
-            aria-hidden="true"
-            className="absolute rounded-menu font-semibold"
-            style={{
-              top: -2,
-              insetInlineStart: -12,
-              padding: '1px 4px',
-              fontSize: 9,
-              fontFamily: 'monospace',
-              lineHeight: 1.3,
-              color: '#fff',
-              background: 'var(--ios-indigo-500)',
-              border: '0.5px solid rgba(255,255,255,0.5)',
-              pointerEvents: 'none',
-            }}
-          >
-            {badge}
-          </span>
-        )}
-      </span>
-      {count !== undefined ? (
-        <span className="text-check font-semibold tabular-nums" style={{ textShadow: TEXT_SHADOW }}>
-          {count}
-        </span>
-      ) : null}
-    </button>
-  );
-}
-
 /**
  * **L'ANNEAU D'EXPORT** (#7116) — miroir de `StorySaveProgressRing.swift` :
  * le CHIFFRE et l'ARC dérivent tous deux de `percent`
@@ -354,7 +268,7 @@ function SaveProgressRing({
 }) {
   const figure = job.progress === null ? null : percent(job.progress);
   const appearance = ringAppearance({ cancellable: job.cancellable, indeterminate: figure === null });
-  const color = appearance.tone === 'accent' ? 'var(--ios-indigo-400)' : 'rgba(255,255,255,0.6)';
+  const color = appearance.tone === 'accent' ? 'var(--ios-indigo-400)' : 'var(--color-on-media-3)';
   const value =
     figure === null
       ? { 'aria-busy': true }
@@ -370,14 +284,13 @@ function SaveProgressRing({
       aria-valuemin={0}
       aria-valuemax={100}
       {...value}
-      className="relative grid place-items-center rounded-full"
-      /* LE MÊME DISQUE QUE SES VOISINS (`RAIL_DISC`, 44) — sans lui, l'anneau
-         se posait NU sur la photo : une piste blanche à 25 % sur un ciel clair
-         ne se lit pas, et la face « Enregistrer » changeait de silhouette. */
-      style={{ width: 44, height: 44, background: RAIL_DISC }}
+      /* LE MÊME DISQUE QUE SES VOISINS (`VIEWER_GLASS`, 40) — sans lui, l'anneau
+         se posait NU sur la photo : une piste blanche sur un ciel clair ne se
+         lit pas, et la face « Enregistrer » changeait de silhouette. */
+      className={`${VIEWER_GLASS} viewer-disc relative grid place-items-center rounded-full`}
     >
       <svg width={RING_SIZE} height={RING_SIZE} viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`} aria-hidden="true">
-        <circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth={RING_STROKE} />
+        <circle cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_RADIUS} fill="none" stroke="var(--color-media-hairline)" strokeWidth={RING_STROKE} />
         {figure === null ? null : <RingArc share={figure / 100} color={color} />}
       </svg>
       {appearance.sweeps ? (
@@ -393,7 +306,7 @@ function SaveProgressRing({
         </svg>
       ) : null}
       {figure === null ? null : (
-        <span className="absolute text-mini font-semibold tabular-nums" style={{ color: '#fff', textShadow: TEXT_SHADOW }} aria-hidden="true">
+        <span className="absolute text-mini font-semibold tabular-nums" style={{ color: 'var(--color-on-media)', textShadow: TEXT_SHADOW }} aria-hidden="true">
           {figure}
         </span>
       )}
@@ -407,7 +320,7 @@ function SaveProgressRing({
      couvre la case 44×44 ; l'anneau reste dans l'arbre avec sa valeur. */
   const cancellable = job.cancellable && onCancel !== undefined;
   return (
-    <div className="relative grid place-items-center" style={{ width: 44, height: 44 }}>
+    <div className="relative grid size-11 place-items-center">
       {ring}
       {cancellable ? (
         <button
@@ -417,16 +330,18 @@ function SaveProgressRing({
           onPointerUp={(e) => e.stopPropagation()}
           onClick={onCancel}
           aria-label={translate(language, 'story.save.cancel')}
-          className="pointer-events-auto absolute inset-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
-          style={{ outlineColor: '#fff' }}
+          className="pointer-events-auto absolute inset-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-on-media"
         />
       ) : null}
     </div>
   );
 }
 
-const usefulCount = (value: number | null | undefined): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+const probeOf = (action: StoryActionRailButton): ViewerProbe =>
+  /* LA PRISE HISTORIQUE DU SON SURVIT À SON DÉMÉNAGEMENT (#4508) : le bouton a
+     quitté la ligne auteur pour la tête du rail, et c'est la MÊME commande —
+     `check-story-scene.mjs` la tape par `[data-story-sound-toggle]`. */
+  action === 'sound' ? { 'data-story-action': action, 'data-story-sound-toggle': '' } : { 'data-story-action': action };
 
 export function StoryActionRail({
   plan,
@@ -443,101 +358,48 @@ export function StoryActionRail({
   /* La loi d'abord, le gestionnaire ensuite — dans CET ordre, pour qu'un
      bouton sans gestionnaire ne soit pas seulement invisible mais ABSENT du
      DOM : un `disabled` annoncerait une action que le produit ne rend pas. */
-  const boutons = storyActionRailButtons(plan).filter(
-    (action) => handlers[action] !== undefined && GLYPH_OF[action] !== undefined,
-  );
+  const boutons = storyActionRailButtons(plan).filter((action) => handlers[action] !== undefined && GLYPH_OF[action] !== undefined);
   if (boutons.length === 0) return null;
 
-  /**
-   * **UN RAIL QU'ON NE VOIT PLUS NE DOIT PAS RESTER UNE COMMANDE.** L'opacité
-   * ne retire que ce que l'ŒIL voit : le conteneur porte bien
-   * `pointer-events-none`, mais CHAQUE bouton le ré-active
-   * (`pointer-events-auto`, § `RailButton`) — c'est nécessaire au rail VISIBLE,
-   * pour que le geste de plateau passe ENTRE les boutons. Masqué, le rail
-   * restait donc cliquable ET tabulable : `routes/story.tsx` le masque quand la
-   * feuille de commentaires s'ouvre, et ses boutons invisibles commandaient
-   * par-dessus elle — « Commentaires » recouvrant le bouton d'envoi du
-   * composeur.
-   *
-   * `inert` retire le sous-arbre des DEUX arbres en un geste — jamais un couple
-   * `aria-hidden` + `tabindex="-1"` à tenir par bouton, qui se désynchroniserait
-   * au premier bouton ajouté (même remède et même raison que
-   * `story-rail.tsx:405-422`). `aria-hidden` DISPARAÎT avec lui : il ne parlait
-   * qu'à l'arbre d'accessibilité, et posé sur un sous-arbre focusable il est
-   * la violation que les vérificateurs nomment `aria-hidden-focus`.
-   *
-   * Et une région INERTE n'a rien à annoncer : **son libellé tombe avec elle**,
-   * sinon c'est lui qui reste dans l'arbre pendant que son contenu en sort.
-   *
-   * Le rail est ici le nœud le PLUS HAUT qu'il rende : un seul `inert` suffit,
-   * là où `story-rail.tsx` a dû le poser aussi sur son enveloppe (le doublon
-   * s'était reconstitué un cran au-dessus de l'attribut).
-   */
-  const masked = hidden === true;
-
-  const style: CSSProperties = {
-    paddingBottom: 'calc(var(--safe-bottom, 0px) + 12px)',
-    opacity: masked ? 0 : 1,
-    transition: 'opacity 180ms ease',
-  };
+  const actions: readonly ViewerAction[] = boutons.map((action) => {
+    /* Non-null : `boutons` ne garde que les actions dont le tracé existe. */
+    const glyphs = GLYPH_OF[action] as RailGlyphs;
+    const isPressed = pressed?.[action];
+    /* `sound` est le seul bouton dont l'état ALLUMÉ est « pas enfoncé » :
+       `aria-pressed` y dit « muet », donc le glyphe PLEIN (haut-parleur
+       ouvert) correspond à `false`. Les autres suivent la règle usuelle. */
+    const showsActive = action === 'sound' ? isPressed !== true : isPressed === true;
+    const glyph = showsActive && glyphs.active !== undefined ? glyphs.active : glyphs.idle;
+    /* **`save` A UNE SECONDE FORME** — l'anneau, quand un export est EN COURS
+       pour cette story. `share` reste ici un bouton ORDINAIRE, `save` seul bascule. */
+    const ring =
+      action === 'save' && saving !== null && saving !== undefined
+        ? resolveStoryExportRailButtons({ showsExport: plan.showsExport, saveProgress: saving.progress ?? 0 }).showsSaveProgressRing
+        : false;
+    return {
+      action,
+      label: translate(language, LABEL_OF[action]),
+      glyph: <GlyphSvg glyph={glyph} size={GLYPH_SIZE.lg} />,
+      /* Non-null : le filtre ci-dessus EST la garde. */
+      onPress: handlers[action] as () => void,
+      pressed: isPressed,
+      count: counts?.[action],
+      badge: badges?.[action],
+      /* Le cœur POSÉ prend le rouge du SDK HORS SCHÉMA (`--ios-error`), comme celui des Réels : même geste, même teinte — `--color-error` tombe à #c81e1e en clair, sous 3:1 sur le verre sombre. */
+      ink: action === 'react' && isPressed === true ? 'var(--ios-error)' : undefined,
+      probe: probeOf(action),
+      override:
+        ring && saving !== null && saving !== undefined ? <SaveProgressRing job={saving} onCancel={onCancelSave} language={language} /> : undefined,
+    };
+  });
 
   return (
-    <div
-      data-story-action-rail
-      role="toolbar"
-      aria-label={masked ? undefined : translate(language, 'story.action.rail')}
-      aria-orientation="vertical"
-      className="pointer-events-none absolute end-2 bottom-0 flex flex-col items-center gap-3"
-      style={style}
-      inert={masked}
-    >
-      {boutons.map((action) => {
-        /* **`save` A UNE SECONDE FORME** — l'anneau, quand un export est EN
-           COURS pour cette story. Les deux faces d'`showsExport` (`share` et
-           `save`) apparaissent/disparaissent ENSEMBLE (`resolveStoryExportRailButtons`)
-           — `share` reste ici un bouton ORDINAIRE, `save` seul bascule. */
-        if (action === 'save' && saving !== null && saving !== undefined) {
-          const exportButtons = resolveStoryExportRailButtons({ showsExport: plan.showsExport, saveProgress: saving.progress ?? 0 });
-          if (exportButtons.showsSaveProgressRing) {
-            return <SaveProgressRing key="save" job={saving} onCancel={onCancelSave} language={language} />;
-          }
-        }
-        /* Non-null : `boutons` ne garde que les actions dont le tracé existe. */
-        const glyphs = GLYPH_OF[action] as RailGlyphs;
-        const isPressed = pressed?.[action];
-        /* `sound` est le seul bouton dont l'état ALLUMÉ est « pas enfoncé » :
-           `aria-pressed` y dit « muet », donc le glyphe PLEIN (haut-parleur
-           ouvert) correspond à `false`. Les autres suivent la règle usuelle. */
-        const showsActive = action === 'sound' ? isPressed !== true : isPressed === true;
-        const button = (
-          <RailButton
-            key={action}
-            action={action}
-            label={translate(language, LABEL_OF[action])}
-            glyph={showsActive && glyphs.active !== undefined ? glyphs.active : glyphs.idle}
-            count={usefulCount(counts?.[action])}
-            pressed={isPressed}
-            badge={badges?.[action]}
-            /* Non-null : `boutons` ne garde que les actions dont le
-               gestionnaire existe — le filtre ci-dessus EST la garde. */
-            onPress={handlers[action] as () => void}
-          />
-        );
-        /* **L'ENVELOPPE ANCRÉE** (#7114, § 5.3) — la surface ANCHORED surgit à
-           GAUCHE du bouton visé, `offset -56` d'iOS ≈ 44 (le bouton) + 12
-           (respiration). Elle ne change ni la taille ni l'ORDRE des boutons :
-           l'enveloppe remplace le `<RailButton>` NU au même index de la
-           liste, jamais un nœud de plus dans `boutons.map`. */
-        if (anchored?.action !== action) return button;
-        return (
-          <div key={action} className="relative" data-story-action-anchor={action}>
-            {button}
-            <div className="absolute end-full top-1/2 me-3" style={{ transform: 'translateY(-50%)', zIndex: 10 }}>
-              {anchored.node}
-            </div>
-          </div>
-        );
-      })}
-    </div>
+    <ViewerActionRail
+      probe={{ 'data-story-action-rail': '' }}
+      label={translate(language, 'story.action.rail')}
+      actions={actions}
+      hidden={hidden === true}
+      {...(anchored === undefined ? {} : { anchored: { action: anchored.action, node: anchored.node } })}
+    />
   );
 }

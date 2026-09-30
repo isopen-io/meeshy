@@ -27,6 +27,7 @@ import frPassword from './catalog-fr-password';
 import frAccounts from './catalog-fr-accounts';
 import frCall from './catalog-fr-call';
 import frRowActions from './catalog-fr-row-actions';
+import frEngagement from './catalog-fr-engagement';
 import frCallShell from './catalog-fr-call-shell';
 import frCallJoin from './catalog-fr-call-join';
 import frCallDecline from './catalog-fr-call-decline';
@@ -217,6 +218,7 @@ const fr = {
   ...frAccounts,
   ...frCall,
   ...frRowActions,
+  ...frEngagement,
   ...frCallShell,
   ...frCallJoin,
   ...frCallDecline,

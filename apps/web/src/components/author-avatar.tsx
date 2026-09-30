@@ -1,6 +1,7 @@
 import { useContext, type ComponentProps } from 'react';
 
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
+import { useAuthorHere } from '@/lib/view/use-conversation-viewing';
 
 import { Avatar } from './avatar';
 import { AvatarMenuTrigger, ConversationDetailsContext } from './avatar-menu';
@@ -16,7 +17,15 @@ import { AvatarMenuTrigger, ConversationDetailsContext } from './avatar-menu';
  * appelé comme une fonction PURE par au moins un témoin (voir son doc-comment
  * sur `src`), et ce menu a besoin d'état et d'un contexte.
  */
-export function AuthorAvatar(props: ComponentProps<typeof Avatar>) {
+export function AuthorAvatar({
+  authorId,
+  ...props
+}: ComponentProps<typeof Avatar> & {
+  /** La clé de l'auteur (`hereKeyOf`) : présent dans la conversation, son avatar
+   * porte le point indigo (#8892). */
+  readonly authorId?: string | undefined;
+}) {
+  const here = useAuthorHere(authorId);
   const openDetails = useContext(ConversationDetailsContext);
   const entries = avatarMenuEntries({
     username: props.profileUsername,
@@ -34,7 +43,7 @@ export function AuthorAvatar(props: ComponentProps<typeof Avatar>) {
       name={props.name ?? props.profileUsername ?? ''}
       onOpenDetails={openDetails ?? undefined}
     >
-      <Avatar {...props} />
+      <Avatar {...props} here={here || props.here === true} />
     </AvatarMenuTrigger>
   );
 }

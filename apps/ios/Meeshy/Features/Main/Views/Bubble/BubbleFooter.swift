@@ -81,6 +81,7 @@ struct BubbleFooter: View, Equatable {
                     storyState: sender.storyRing,
                     moodEmoji: sender.moodEmoji,
                     presenceState: sender.presence,
+                    isHere: sender.isHere,
                     enablePulse: false,
                     onTap: actions.onSenderTap,
                     onViewProfile: actions.onSenderTap,

@@ -114,6 +114,28 @@ export class ConversationViewingHandler {
     await this.retractAll(socket.id);
   }
 
+  /**
+   * À l'authentification, après l'entrée dans les rooms : le client vient de
+   * vider ce qu'il savait, la passerelle lui redit qui est ICI dans chacune de
+   * ses conversations — sans attendre que ces pairs rouvrent leur écran.
+   */
+  async emitRoomSnapshots(socket: Socket): Promise<void> {
+    const userIdOrToken = this.socketToUser.get(socket.id);
+    if (!userIdOrToken) return;
+    const connected = getConnectedUser(userIdOrToken, this.connectedUsers);
+    if (!connected) return;
+    const { user, realUserId: userId } = connected;
+
+    const occupied = [...this.byConversation.keys()].filter(id => socket.rooms.has(ROOMS.conversation(id)));
+    if (occupied.length === 0) return;
+
+    const blockRelated = user.isAnonymous ? new Set<string>() : await this.blockRelatedOf(userId);
+    for (const conversationId of occupied) {
+      const userIds = this.viewersOf(conversationId).filter(id => id !== userId && !blockRelated.has(id));
+      if (userIds.length > 0) socket.emit(SERVER_EVENTS.VIEWING_SNAPSHOT, { conversationId, userIds });
+    }
+  }
+
   async handleSocketDisconnecting(socketId: string): Promise<void> {
     await this.retractAll(socketId);
   }

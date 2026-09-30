@@ -66,6 +66,7 @@ describe('au bureau, les plaques restent BORNÉES et centrées', () => {
     await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
     expect(bounded(el.querySelector('[data-story-frame-panel]'))).toEqual([]);
     click(el.querySelector('[data-story-frame-done]'));
+    click(el.querySelector('[data-story-option="background:exit"]'));
 
     typeText(el, 'Bonjour');
     click(el.querySelector('[data-story-object-edit="text-1"]'));
@@ -156,7 +157,7 @@ const fakeRender: StudioRetouchDeps = {
 };
 
 describe('Échap ferme la couche du DESSUS seule', () => {
-  test('retouche + Cadre : Échap ferme le Cadre, la retouche reste ouverte', async () => {
+  test('retouche + Cadre : Échap range le Cadre, puis rend la scène, puis seulement quitte la retouche', async () => {
     const cancels: string[] = [];
     const photo = pendingAttachmentOf(new File([new Uint8Array([1, 2, 3])], 'plage.png', { type: 'image/png' }));
     const el = mountElement(<ComposerRetouch attachment={photo} onDone={() => undefined} onCancel={() => cancels.push('cancel')} render={fakeRender} />);
@@ -166,6 +167,9 @@ describe('Échap ferme la couche du DESSUS seule', () => {
     escape();
     await flush(() => el.querySelector('[data-story-frame-panel]') === null);
     expect(el.querySelector('[data-story-frame-panel]') === null).toBe(true);
+    expect(cancels).toEqual([]);
+    escape();
+    await flush(() => el.querySelector('[data-story-option="background:exit"]') === null);
     expect(cancels).toEqual([]);
     escape();
     expect(cancels).toEqual(['cancel']);

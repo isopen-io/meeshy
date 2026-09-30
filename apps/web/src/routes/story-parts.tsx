@@ -1,6 +1,5 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 
-import { Glyph } from '@/components/glyph';
 import { MediaUnavailable } from '@/components/media-unavailable';
 import { SceneScrubBar, type SceneScrubPainter } from '@/components/scene-scrub-bar';
 import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
@@ -264,7 +263,7 @@ export function StoryMediaLayer({
         <MediaUnavailable language={currentInterfaceLanguage()} />
       ) : caption !== null ? (
         <p
-          className="text-center text-title font-semibold"
+          className="viewer-ink-shadow text-center text-title font-semibold"
           style={{ fontSize: 28, lineHeight: 1.3 }}
           lang={caption.language || undefined}
         >
@@ -272,36 +271,6 @@ export function StoryMediaLayer({
         </p>
       ) : null}
     </div>
-  );
-}
-
-/**
- * **LA CROIX DU LECTEUR** — extraite de `story.tsx` (#7112, revue) parce que
- * le fichier hôte franchissait 1 000 lignes : « on extrait d'abord, on ajoute
- * ensuite » (CLAUDE.md § budget), jamais un plafond relevé.
- *
- * Elle porte `pointer-events-auto` : son conteneur est un chrome en
- * `pointer-events-none`, et sans cela la croix ne se toucherait pas. C'est
- * cette ré-activation qui rendait la croix CLIQUABLE sous un chrome masqué,
- * jusqu'à ce que l'hôte pose `inert` sur la région (D-90) — la protection se
- * pose donc sur le PARENT, et ce bouton ne la connaît pas : il se tient seul,
- * comme `StoryViewerView+ActionButton.swift:11`.
- *
- * `onPointerDown` stoppé : le plateau navigue au `pointerdown`/`pointerup`,
- * et sans cette coupure fermer le lecteur ferait AUSSI avancer d'une story.
- */
-export function CloseButton({ onClose }: { readonly onClose: () => void }) {
-  return (
-    <button
-      type="button"
-      onPointerDown={(e) => e.stopPropagation()}
-      onClick={onClose}
-      aria-label="Fermer"
-      className="pointer-events-auto grid shrink-0 place-items-center rounded-full"
-      style={{ width: 44, height: 44, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.12)' }}
-    >
-      <Glyph name="x" size={16} style={{ color: '#fff' }} />
-    </button>
   );
 }
 
@@ -379,7 +348,7 @@ export function ProgressBars({
             className="flex-1 overflow-hidden rounded-full"
             style={{ background: SEGMENT_RAIL }}
           >
-            <span className="block size-full rounded-full" style={{ background: i < index ? '#fff' : 'transparent' }} />
+            <span className="block size-full rounded-full" style={{ background: i < index ? 'var(--color-on-media)' : 'transparent' }} />
           </span>
         ),
       )}
@@ -387,8 +356,8 @@ export function ProgressBars({
   );
 }
 
-/** La piste d'un segment — blanc 20 %, la même pour le segment courant. */
-const SEGMENT_RAIL = 'rgba(255,255,255,0.2)';
+/** La piste d'un segment — le filet des médias (blanc 20 %), le même pour le segment courant. */
+const SEGMENT_RAIL = 'var(--color-media-hairline)';
 
 /** Le dégradé du segment COURANT (`indigo500 → error → indigo400`). */
 const ACTIVE_SEGMENT_FILL = 'linear-gradient(90deg, var(--color-ios-brand), var(--ios-error), var(--color-i400))';

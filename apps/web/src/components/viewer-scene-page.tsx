@@ -35,6 +35,8 @@ import { MEDIA_TRANSPORT_GLYPHS } from './glyphs-media-transport';
 import type { SceneClockHandle } from './scene-clock';
 import { lazyScenePlayer } from './scene-player-lazy';
 import { SceneScrubBar, type SceneScrubPainter } from './scene-scrub-bar';
+import { GLYPH_SIZE } from './ui-chrome';
+import { VIEWER_GLASS } from './viewer-chrome';
 
 /**
  * `ViewerScenePage` (#6902, § B de la spécification `scenes-plein-ecran`) —
@@ -83,9 +85,13 @@ import { SceneScrubBar, type SceneScrubPainter } from './scene-scrub-bar';
  */
 const ScenePlayer = lazyScenePlayer.Component;
 
+/** Les deux contrôles de la scène sont le MÊME disque que le rail du chrome commun (#8879) : 40 de verre dans 44 de cible. */
+const SCENE_CONTROL_HIT = 'grid size-11 place-items-center text-on-media';
+const SCENE_CONTROL_DISC = `${VIEWER_GLASS} viewer-disc grid place-items-center rounded-full`;
+
 function sceneBackgroundColor(scene: CanvasScene | undefined): string {
   const color = scene === undefined ? undefined : backgroundMedia(scene)?.payload.background;
-  return typeof color === 'string' && color !== '' ? color : '#000';
+  return typeof color === 'string' && color !== '' ? color : 'var(--color-media-backdrop)';
 }
 
 export type ViewerScenePageProps = {
@@ -264,9 +270,11 @@ export function ViewerScenePage({
                 e.stopPropagation();
                 toggle();
               }}
-              className="media-viewer-scene-control tap-target-34 grid place-items-center rounded-full text-white"
+              className={SCENE_CONTROL_HIT}
             >
-              {scenePlaybackShowsPlay(playback) ? <Glyph name="fillPlay" size={15} /> : <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={15} />}
+              <span className={SCENE_CONTROL_DISC}>
+                {scenePlaybackShowsPlay(playback) ? <Glyph name="fillPlay" size={GLYPH_SIZE.sm} /> : <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={GLYPH_SIZE.sm} />}
+              </span>
             </button>
           ) : null}
           {audible ? (
@@ -278,9 +286,11 @@ export function ViewerScenePage({
                 e.stopPropagation();
                 setMuted((m) => !m);
               }}
-              className="media-viewer-scene-control tap-target-34 grid place-items-center rounded-full text-white"
+              className={SCENE_CONTROL_HIT}
             >
-              <GlyphSvg glyph={muted ? MEDIA_TRANSPORT_GLYPHS.speakerSlash : MEDIA_TRANSPORT_GLYPHS.speakerHigh} size={15} />
+              <span className={SCENE_CONTROL_DISC}>
+                <GlyphSvg glyph={muted ? MEDIA_TRANSPORT_GLYPHS.speakerSlash : MEDIA_TRANSPORT_GLYPHS.speakerHigh} size={GLYPH_SIZE.sm} />
+              </span>
             </button>
           ) : null}
         </div>
@@ -307,7 +317,7 @@ export function ViewerScenePage({
                 durationSeconds={duration}
                 language={language}
                 align="center"
-                fill="#fff"
+                fill="var(--color-on-media)"
                 painterRef={painterRef}
                 onScrubStart={() => setScrubbing(true)}
                 onScrub={(seconds) => clockRef.current?.seek(seconds)}

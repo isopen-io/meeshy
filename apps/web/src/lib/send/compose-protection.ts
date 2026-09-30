@@ -41,7 +41,7 @@ export const NO_PROTECTION: ComposeProtection = {};
  * (`ephemeralSeconds`), sous cette valeur réservée, pour que le brouillon, la
  * préférence collante et le rail le portent sans seconde bascule. Aucune
  * durée réelle ne vaut 0 seconde : la valeur ne peut pas être prise pour une
- * échéance — `protectionFieldsOf` ne pose jamais d'`expiresAt` pour elle.
+ * échéance — `protectionFieldsOf` ne pose jamais de durée pour elle.
  */
 export const EPHEMERAL_AFTER_READ_SECONDS = 0;
 
@@ -82,23 +82,27 @@ export function ephemeralDurationLabelOf(seconds: number): EphemeralDurationOpti
 }
 
 /**
- * LES CHAMPS `Message` RÉSOLUS depuis la protection choisie, À L'INSTANT
- * `now` (évalué UNE fois, à la création du message local — jamais relu au
- * renvoi, miroir `EphemeralDuration.expiresAt` évaluée « à l'ENVOI »,
- * `CoreModels.swift:977`). Consommée par `localMessageOf` (`local-message.ts`)
- * pour que la bulle optimiste porte exactement ce qui partira, ET par
- * `bodyOf` (`perform-send.ts`) qui relit ces mêmes champs plutôt que de
- * recomposer une seconde fois depuis `ComposeProtection` — un seul site de
- * composition, deux lecteurs.
+ * LES CHAMPS `Message` RÉSOLUS depuis la protection choisie. Consommée par
+ * `localMessageOf` (`local-message.ts`) pour que la bulle optimiste porte
+ * exactement ce qui partira, ET par `bodyOf` (`perform-send.ts`) qui relit ces
+ * mêmes champs plutôt que de recomposer une seconde fois depuis
+ * `ComposeProtection` — un seul site de composition, deux lecteurs.
+ *
+ * **UNE DURÉE, JAMAIS UNE ÉCHÉANCE (#8905).** L'envoi n'est pas une
+ * réception : l'expéditeur lit « en attente de réception » jusqu'à ce que la
+ * passerelle lui serve `max D(u)` (`message:countdown-started`). Une échéance
+ * `envoi + durée` posée ici le faisait décompter dès l'envoi — miroir
+ * `MessageProtectionIntent` (SDK iOS), qui n'en calcule plus aucune.
  */
 export type ProtectionFields = {
   readonly isBlurred: boolean;
   readonly isViewOnce: boolean;
   readonly effectFlags: number;
-  readonly expiresAt?: Date;
+  /** Secondes entières, > 0 — absente pour un message non éphémère et pour la flamme-œil. */
+  readonly ephemeralDuration?: number;
 };
 
-export function protectionFieldsOf(protection: ComposeProtection, now: number): ProtectionFields {
+export function protectionFieldsOf(protection: ComposeProtection): ProtectionFields {
   // Flou et vue unique sont EXCLUSIFS (#7667) : la vue unique, plus forte,
   // gagne — second verrou derrière `toggledVeil`, miroir
   // `MessageProtectionIntent.init` (SDK iOS).
@@ -116,7 +120,7 @@ export function protectionFieldsOf(protection: ComposeProtection, now: number): 
     effectFlags: flags,
     ...(protection.ephemeralSeconds === undefined || afterRead
       ? {}
-      : { expiresAt: new Date(now + protection.ephemeralSeconds * 1000) }),
+      : { ephemeralDuration: protection.ephemeralSeconds }),
   };
 }
 
