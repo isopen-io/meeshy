@@ -1,4 +1,6 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import {
   SWIPE_ACTION_ZONE,
@@ -13,6 +15,9 @@ import {
   swipeResistanceOf,
   swipeYieldsTo,
 } from './swipe';
+
+beforeAll(() => ensureHappyDomRegistered());
+afterAll(async () => releaseHappyDomIfRegistered());
 
 describe('la loi du glissé latéral — miroir de BubbleSwipeResistance (#7559)', () => {
   test('les seuils sont ceux d’iOS : 22 px / 3:1 en normal, 48 px / 4:1 en résistant', () => {
