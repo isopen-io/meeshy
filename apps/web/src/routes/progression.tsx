@@ -354,7 +354,7 @@ export function SectionLink({ section, progress }: { section: ProgressionSection
         {fait} / {total}
       </span>
       <span style={{ color: INK_2 }} aria-hidden="true">
-        <GlyphSvg glyph={PROGRESSION_GLYPHS.caretRight} size={16} />
+        <GlyphSvg glyph={PROGRESSION_GLYPHS.caretRight} size={16} className="rtl:-scale-x-100" />
       </span>
     </Link>
   );
@@ -638,7 +638,7 @@ export default function ProgressionScreen() {
         <div className="flex items-center gap-2 px-4 py-2">
           <Link to="list" className="grid size-11 shrink-0 place-items-center" style={{ color: BRAND }} aria-label="Retour">
             <GlassBack>
-              <Glyph name="caretLeft" size={22} />
+              <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
             </GlassBack>
           </Link>
           <h1 className="flex-1 truncate text-title font-bold" style={{ color: INK }}>

@@ -686,7 +686,7 @@ export function Quote({
   return (
     <div
       data-quote-card
-      className="mb-1.5 flex w-full rounded-quote text-left"
+      className="mb-1.5 flex w-full rounded-quote text-start"
       style={{ backgroundColor: isMine ? 'var(--color-quote-mine)' : 'var(--color-quote)' }}
     >
       <QuoteRail isMine={isMine} />
@@ -699,7 +699,7 @@ export function Quote({
           media={media}
           quote={quote}
           languages={languages}
-          className="relative my-1.5 ml-1.5 shrink-0 overflow-hidden rounded-media"
+          className="relative my-1.5 ms-1.5 shrink-0 overflow-hidden rounded-media"
           style={{
             width: QUOTE_THUMBNAIL_PX,
             height: QUOTE_THUMBNAIL_PX,
@@ -723,7 +723,7 @@ export function Quote({
           {media.timebased ? <Glyph name="fillPlay" size={12} className="absolute inset-0 m-auto text-white" /> : null}
         </QuoteOpenZone>
       ) : null}
-      <span className="flex min-w-0 flex-1 flex-col items-start pr-2.5 pl-2">
+      <span className="flex min-w-0 flex-1 flex-col items-start pe-2.5 ps-2">
         {/* Le nom et le texte cite COULENT DANS LE MEME PARAGRAPHE (directive
             iOS #5103) : deux lignes separees feraient de la citation un bloc
             aussi haut que le message, et c'est le message qu'on vient lire. */}
@@ -731,7 +731,7 @@ export function Quote({
           type="button"
           onClick={onJump}
           data-quote-jump
-          className={`w-full min-w-0 pt-2 text-left text-title ${lowerZone ? '' : 'pb-2'}`}
+          className={`w-full min-w-0 pt-2 text-start text-title ${lowerZone ? '' : 'pb-2'}`}
           {...(media === null ? {} : { 'data-quote-media': media.kind })}
           aria-label={label}
         >
@@ -742,7 +742,7 @@ export function Quote({
             <GlyphSvg
               glyph={QUOTE_GLYPH[media.kind]}
               size={11}
-              className="mr-1 inline-block align-baseline"
+              className="me-1 inline-block align-baseline"
               style={{ color: ink }}
             />
           ) : null}
@@ -829,7 +829,7 @@ export function FailedSendBand({
     reason === undefined
       ? translate(language, 'message.send.failed')
       : translate(language, 'message.send.failed.reason', { reason });
-  const className = 'mb-1.5 flex w-full items-center gap-1.5 rounded-quote px-2 text-left text-mini font-semibold';
+  const className = 'mb-1.5 flex w-full items-center gap-1.5 rounded-quote px-2 text-start text-mini font-semibold';
   const style = {
     backgroundColor: 'color-mix(in srgb, var(--color-error) 18%, transparent)',
     color: textColor,

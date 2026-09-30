@@ -248,7 +248,7 @@ export function ComposerTopRow({
         {counter ? (
           <span
             data-composer-counter
-            className="shrink-0 pr-1 font-mono text-[11px] font-semibold"
+            className="shrink-0 pe-1 font-mono text-[11px] font-semibold"
             style={{ color: counter.overflow ? 'var(--color-error)' : 'var(--color-ios-ink-2)' }}
           >
             {counter.text}

@@ -65,7 +65,7 @@ export function CallDetailHeader({ language }: { readonly language: InterfaceLan
         style={{ color: BRAND, outlineColor: BRAND }}
       >
         <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} />
+          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
         </ChromeActionDisc>
       </Link>
       <h1 className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: INK }}>
@@ -111,7 +111,7 @@ function DetailRow({ glyph, label, value, field }: { readonly glyph: ReactNode; 
       <dt className="text-body" style={{ color: INK_2 }}>
         {label}
       </dt>
-      <dd className="ml-auto min-w-0 truncate text-right text-body font-medium tabular-nums" style={{ color: INK }}>
+      <dd className="ms-auto min-w-0 truncate text-end text-body font-medium tabular-nums" style={{ color: INK }}>
         {value}
       </dd>
     </div>

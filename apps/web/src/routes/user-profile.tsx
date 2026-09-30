@@ -88,7 +88,7 @@ function ProfileHeaderBar({ title }: { readonly title: string }) {
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
-        <Glyph name="caretLeft" size={20} />
+        <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
       </Link>
       <h1 className="truncate text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
         {title}

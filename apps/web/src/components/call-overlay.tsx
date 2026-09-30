@@ -66,7 +66,7 @@ function CallPill({ call }: { readonly call: ActiveCall }) {
   };
   return (
     <div
-      className="fixed left-1/2 z-[190] flex -translate-x-1/2 items-center gap-1 rounded-full py-1 pl-1 pr-1 shadow-lg"
+      className="fixed left-1/2 z-[190] flex -translate-x-1/2 items-center gap-1 rounded-full py-1 ps-1 pe-1 shadow-lg"
       style={{ background: PILL_BG, color: '#fff', top: 'calc(env(safe-area-inset-top) + 0.5rem)', touchAction: 'pan-y' }}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}

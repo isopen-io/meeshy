@@ -68,7 +68,7 @@ export function ForwardSheet({
                 type="button"
                 data-forward-target={conversation.id}
                 onClick={() => onPick(conversation.id)}
-                className="flex w-full items-center gap-3 px-4 text-left text-body"
+                className="flex w-full items-center gap-3 px-4 text-start text-body"
                 style={{ minHeight: 56, color: 'var(--color-ios-ink)' }}
               >
                 <Avatar

@@ -375,7 +375,7 @@ function PlaybackRow({
               <div className="h-1 rounded-full" style={{ width: `${fraction * 100}%`, backgroundColor: 'var(--color-primary)' }} />
             </div>
             <span
-              className="text-mini text-right font-semibold tabular-nums"
+              className="text-mini text-end font-semibold tabular-nums"
               style={{ color: 'var(--color-ios-ink-3)', minWidth: 30 }}
               aria-hidden="true"
               data-message-receipts-percent

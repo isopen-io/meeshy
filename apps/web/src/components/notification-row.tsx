@@ -83,7 +83,7 @@ function CallBackButton({ language, callBack }: { readonly language: InterfaceLa
       data-notification-call-back={callBack.media}
       aria-label={translate(language, 'call.callBack.named', { name: callBack.title })}
       onClick={() => callActions.start(callBack)}
-      className="absolute top-1/2 right-12 grid size-11 -translate-y-1/2 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+      className="absolute top-1/2 end-12 grid size-11 -translate-y-1/2 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
       style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
     >
       {callBack.media === 'video' ? <GlyphSvg glyph={CALLS_GLYPHS.videoCamera} size={20} /> : <Glyph name="phone" size={20} />}
@@ -102,7 +102,7 @@ function NotificationRowView({ notification, language, now, onOpen, onMarkRead, 
   const callBack = notificationCallBack(notification);
 
   const surface: SurfaceProps = {
-    className: `flex w-full items-start gap-3 py-3 ${callBack === null ? 'pr-14' : 'pr-24'} pl-4 text-left focus-visible:outline-2 focus-visible:-outline-offset-2`,
+    className: `flex w-full items-start gap-3 py-3 ${callBack === null ? 'pe-14' : 'pe-24'} ps-4 text-start focus-visible:outline-2 focus-visible:-outline-offset-2`,
     style: {
       outlineColor: 'var(--color-ios-brand)',
       ...(unread ? { backgroundColor: `color-mix(in srgb, ${accent} 7%, transparent)` } : {}),

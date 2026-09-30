@@ -69,7 +69,7 @@ export function ShareLinkSheet({ conversations, viewerId, deps, origin, onClose,
               type="button"
               disabled={busyId !== null}
               onClick={() => void onSelect(c.id)}
-              className="flex w-full items-center gap-3 px-4 py-3 text-left disabled:opacity-50"
+              className="flex w-full items-center gap-3 px-4 py-3 text-start disabled:opacity-50"
               style={{ minHeight: 44 }}
             >
               <span className="flex-1 truncate text-body font-medium" style={{ color: 'var(--color-ios-ink)' }}>

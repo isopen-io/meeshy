@@ -29,7 +29,7 @@ import type { Block, Card, FramedRow, ContentPage, Section } from './type';
 
 function Chips({ items }: { items: readonly string[] }) {
   return (
-    <ul className="ml-5 list-disc space-y-1.5">
+    <ul className="ms-5 list-disc space-y-1.5">
       {items.map((item) => (
         <li key={item}>{item}</li>
       ))}

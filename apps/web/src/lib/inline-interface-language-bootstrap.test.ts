@@ -4,6 +4,7 @@ import {
   DEFAULT_INTERFACE_LANGUAGE,
   INLINE_INTERFACE_LANGUAGE_BOOTSTRAP,
   INTERFACE_LANGUAGE_KEY,
+  interfaceDirection,
 } from './inline-interface-language-bootstrap.js';
 
 /**
@@ -21,6 +22,7 @@ function run(options: {
   readonly navigatorLanguages: readonly string[];
 }) {
   let lang = '';
+  let dir = '';
   const fakeDocument = {
     documentElement: {
       set lang(value: string) {
@@ -28,6 +30,12 @@ function run(options: {
       },
       get lang() {
         return lang;
+      },
+      set dir(value: string) {
+        dir = value;
+      },
+      get dir() {
+        return dir;
       },
     },
   };
@@ -42,8 +50,11 @@ function run(options: {
 
   const bootstrap = new Function('document', 'localStorage', 'navigator', INLINE_INTERFACE_LANGUAGE_BOOTSTRAP);
   bootstrap(fakeDocument, fakeLocalStorage, fakeNavigator);
+  lastDir = dir;
   return lang;
 }
+
+let lastDir = '';
 
 test('un choix stocké et cataloguée l’emporte sur navigator.languages', () => {
   expect(run({ stored: 'en', navigatorLanguages: ['fr-FR', 'fr'] })).toBe('en');
@@ -67,4 +78,23 @@ test('rien de stocké, aucune langue de navigator.languages cataloguée : repli 
 
 test('un stockage refusé (mode privé) ne lève pas — même patron que le schéma : le `catch` unique enveloppe tout le bloc, donc il laisse la valeur statique du HTML plutôt que de retomber sur navigator.languages', () => {
   expect(run({ stored: 'DENIED', navigatorLanguages: ['en-US'] })).toBe('');
+});
+
+test('l’arabe se lit de droite à gauche : le script pose `dir="rtl"` AVANT la première peinture (#8803)', () => {
+  expect(run({ stored: 'ar', navigatorLanguages: ['fr-FR'] })).toBe('ar');
+  expect(lastDir).toBe('rtl');
+  expect(run({ stored: null, navigatorLanguages: ['ar-SA'] })).toBe('ar');
+  expect(lastDir).toBe('rtl');
+});
+
+test('les six autres langues se lisent de gauche à droite (#8803)', () => {
+  for (const language of ['fr', 'en', 'es', 'pt', 'de', 'it']) {
+    run({ stored: language, navigatorLanguages: ['ar'] });
+    expect(lastDir).toBe('ltr');
+  }
+});
+
+test('interfaceDirection : la même règle, en fonction (#8803)', () => {
+  expect(interfaceDirection('ar')).toBe('rtl');
+  expect(interfaceDirection('fr')).toBe('ltr');
 });

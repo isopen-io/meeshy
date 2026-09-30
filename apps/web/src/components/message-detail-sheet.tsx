@@ -106,7 +106,7 @@ export function MessageDetailSheet({
                 entry.run?.();
                 onClose();
               }}
-              className="flex w-full items-center gap-2.5 px-4 text-left text-body"
+              className="flex w-full items-center gap-2.5 px-4 text-start text-body"
               style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
             >
               <GlyphSvg glyph={entry.glyph} size={18} style={{ color: 'var(--accent)' }} />
@@ -124,7 +124,7 @@ export function MessageDetailSheet({
               star.onToggle();
               onClose();
             }}
-            className="flex w-full items-center gap-2.5 px-4 text-left text-body"
+            className="flex w-full items-center gap-2.5 px-4 text-start text-body"
             style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
           >
             <GlyphSvg
@@ -146,7 +146,7 @@ export function MessageDetailSheet({
               <button
                 type="button"
                 onClick={() => onPickLanguage(choice.code)}
-                className="flex w-full items-center gap-2.5 px-4 text-left text-body"
+                className="flex w-full items-center gap-2.5 px-4 text-start text-body"
                 style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
               >
                 <span aria-hidden>{flag(choice.code)}</span>
