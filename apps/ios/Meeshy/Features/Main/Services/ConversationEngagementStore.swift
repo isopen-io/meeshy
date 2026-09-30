@@ -29,14 +29,19 @@ final class ConversationEngagementStore: ObservableObject, ConversationEngagemen
     @Published private(set) var snapshots: [String: ConversationEngagementSnapshot] = [:]
 
     private let calendar: Calendar
+    private let fetch: @Sendable (String) async throws -> ConversationEngagementSnapshot
     private var cancellables = Set<AnyCancellable>()
 
     init(
         updates: AnyPublisher<ConversationEngagementSnapshot, Never> = MessageSocketManager.shared.conversationEngagementUpdated.eraseToAnyPublisher(),
         authentication: AnyPublisher<Bool, Never> = AuthManager.shared.$isAuthenticated.eraseToAnyPublisher(),
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        fetch: @escaping @Sendable (String) async throws -> ConversationEngagementSnapshot = {
+            try await ConversationService.shared.engagement(conversationId: $0)
+        }
     ) {
         self.calendar = calendar
+        self.fetch = fetch
 
         updates
             .receive(on: DispatchQueue.main)
@@ -90,6 +95,16 @@ final class ConversationEngagementStore: ObservableObject, ConversationEngagemen
         guard let snapshot else { return }
         if let current = snapshots[snapshot.conversationId], !snapshot.isFresher(than: current) { return }
         snapshots[snapshot.conversationId] = snapshot
+    }
+
+    /// Relit l'état serveur à l'ouverture d'une conversation : un geste crédité
+    /// sur un autre appareil n'a pas poussé ici. Silencieux en cas d'échec — la
+    /// pastille garde ce qu'elle avait.
+    func revalidate(_ conversationId: String) async {
+        guard !conversationId.isEmpty,
+              let fetched = try? await fetch(conversationId),
+              fetched.conversationId == conversationId else { return }
+        seed(fetched)
     }
 
     func reset() {

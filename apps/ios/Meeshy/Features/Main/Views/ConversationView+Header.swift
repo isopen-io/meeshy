@@ -89,6 +89,9 @@ extension ConversationView {
         AnyView(HStack(spacing: MeeshySpacing.xs) {
             headerEngagementBadge
             headerCallButtonsOnly
+        }
+        .task(id: liveConversation?.id) {
+            await ConversationEngagementStore.shared.revalidate(liveConversation?.id ?? "")
         })
     }
 

@@ -16,7 +16,9 @@ final class ConversationEngagementStoreTests: XCTestCase {
         let calendar: Calendar
     }
 
-    private func makeSUT() -> Harness {
+    private func makeSUT(
+        fetch: @escaping @Sendable (String) async throws -> ConversationEngagementSnapshot = { _ in throw URLError(.notConnectedToInternet) }
+    ) -> Harness {
         let updates = PassthroughSubject<ConversationEngagementSnapshot, Never>()
         let authentication = CurrentValueSubject<Bool, Never>(true)
         var calendar = Calendar(identifier: .gregorian)
@@ -24,7 +26,8 @@ final class ConversationEngagementStoreTests: XCTestCase {
         let sut = ConversationEngagementStore(
             updates: updates.eraseToAnyPublisher(),
             authentication: authentication.eraseToAnyPublisher(),
-            calendar: calendar
+            calendar: calendar,
+            fetch: fetch
         )
         return Harness(sut: sut, updates: updates, authentication: authentication, calendar: calendar)
     }
@@ -47,6 +50,36 @@ final class ConversationEngagementStoreTests: XCTestCase {
 
     private func noon(_ day: Int, month: Int = 9, in calendar: Calendar) -> Date {
         calendar.date(from: DateComponents(year: 2026, month: month, day: day, hour: 12))!
+    }
+
+    // MARK: - Relecture à l'ouverture
+
+    func test_revalidate_seedsServerState() async {
+        let served = snapshot(total: 90, today: 9)
+        let h = makeSUT(fetch: { _ in served })
+
+        await h.sut.revalidate("conv-a")
+
+        XCTAssertEqual(h.sut.snapshot(for: "conv-a"), served)
+    }
+
+    func test_revalidate_neverRollsBackFresherLocalState() async {
+        let stale = snapshot(total: 10, today: 1, streak: 1, day: "2026-09-29")
+        let h = makeSUT(fetch: { _ in stale })
+        h.sut.seed(snapshot())
+
+        await h.sut.revalidate("conv-a")
+
+        XCTAssertEqual(h.sut.snapshot(for: "conv-a"), snapshot())
+    }
+
+    func test_revalidate_onFailure_keepsWhatItHad() async {
+        let h = makeSUT()
+        h.sut.seed(snapshot())
+
+        await h.sut.revalidate("conv-a")
+
+        XCTAssertEqual(h.sut.snapshot(for: "conv-a"), snapshot())
     }
 
     // MARK: - Semis (liste, détail)
