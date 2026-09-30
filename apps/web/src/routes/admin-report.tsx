@@ -23,8 +23,7 @@ import {
 import { apiDeps } from '@/lib/api/deps';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -54,7 +53,7 @@ const defaultNow = (): Date => new Date();
 const isAction = (value: string | null): value is (typeof REPORT_ACTIONS)[number] => REPORT_ACTIONS.some((action) => action === value);
 
 type ReportPanelProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly reportId: string;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
@@ -208,7 +207,8 @@ export function AdminReportPanel({ language, reportId, deps = apiDeps, now = def
 }
 
 export default function AdminReportScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   const { report: reportId } = useParams<'/admin/reports/$report'>();
 
   return (

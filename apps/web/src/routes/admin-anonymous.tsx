@@ -16,8 +16,7 @@ import { anonymousConversationRefOf, anonymousEntityOf, anonymousPresenceOf, ano
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminAnonymousQueryKey, loadAdminAnonymousListPage, type AdminAnonymousRow } from '@/lib/api/admin-anonymous';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES ANONYMES** (#7873, #8876) — les personnes entrées par un lien de partage,
@@ -46,7 +45,7 @@ export function AdminAnonymousPanel({
   deps = apiDeps,
   now = () => new Date(),
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
 }) {
@@ -193,7 +192,8 @@ export function AdminAnonymousPanel({
 }
 
 export default function AdminAnonymousScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   const title = translateAdmin(language, 'admin.nav.anonymous');
 
   return (

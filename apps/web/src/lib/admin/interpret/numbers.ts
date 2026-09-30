@@ -1,4 +1,4 @@
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * LES NOMBRES, DITS EN MOTS (#8876) — comptes, parts, octets, montants.
@@ -13,11 +13,11 @@ const NONE = '—';
 const isNumber = (value: number | null | undefined): value is number =>
   value !== null && value !== undefined && Number.isFinite(value);
 
-export function formatCount(value: number | null | undefined, language: InterfaceLanguage): string {
+export function formatCount(value: number | null | undefined, language: AdminLanguage): string {
   return isNumber(value) ? new Intl.NumberFormat(language).format(value) : NONE;
 }
 
-export function formatCompact(value: number | null | undefined, language: InterfaceLanguage): string {
+export function formatCompact(value: number | null | undefined, language: AdminLanguage): string {
   return isNumber(value)
     ? new Intl.NumberFormat(language, { notation: 'compact', maximumFractionDigits: 1 }).format(value)
     : NONE;
@@ -26,7 +26,7 @@ export function formatCompact(value: number | null | undefined, language: Interf
 export function formatPercent(
   value: number | null | undefined,
   scale: 'ratio' | 'hundred',
-  language: InterfaceLanguage,
+  language: AdminLanguage,
   digits = 0,
 ): string {
   if (!isNumber(value)) return NONE;
@@ -39,7 +39,7 @@ export function formatPercent(
 
 const BYTE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'] as const;
 
-export function formatBytes(bytes: number | null | undefined, language: InterfaceLanguage): string {
+export function formatBytes(bytes: number | null | undefined, language: AdminLanguage): string {
   if (!isNumber(bytes) || bytes < 0) return NONE;
   const exponent = Math.min(BYTE_UNITS.length - 1, bytes < 1024 ? 0 : Math.floor(Math.log(bytes) / Math.log(1024)));
   const scaled = bytes / 1024 ** exponent;
@@ -51,7 +51,7 @@ export function formatBytes(bytes: number | null | undefined, language: Interfac
   }).format(scaled);
 }
 
-export function formatMoney(usd: number | null | undefined, language: InterfaceLanguage): string {
+export function formatMoney(usd: number | null | undefined, language: AdminLanguage): string {
   return isNumber(usd)
     ? new Intl.NumberFormat(language, { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(usd)
     : NONE;

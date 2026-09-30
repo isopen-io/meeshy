@@ -11,8 +11,7 @@ import type { DashStat } from '@/lib/admin/dashboard-cards';
 import type { DashBlock } from '@/lib/admin/dashboard-block';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES PIÈCES COMMUNES DU TABLEAU DE BORD** (#8876, § 4) — une ZONE (un titre,
@@ -22,7 +21,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * d'à côté.
  */
 export type DashContext = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps: AdminDeps;
   readonly now: Date;
 };
@@ -69,7 +68,7 @@ export function DashStats({
   stats,
   columns = 4,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly id: string;
   readonly block: DashBlock<unknown>;
   readonly stats: readonly DashStat[];
@@ -109,7 +108,7 @@ export function DashBody<T>({
   rows = 3,
   children,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly title: string;
   readonly block: DashBlock<T>;
   readonly rows?: number;
@@ -167,7 +166,7 @@ export function DashChartFrame({
   more,
   children,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly block: DashBlock<unknown>;
   readonly more: AdminTarget;
   readonly children: ReactNode;
@@ -182,7 +181,7 @@ export function DashChartFrame({
 }
 
 /** « Voir le détail » — rendu SEULEMENT si le lecteur peut ouvrir la section visée : jamais un lien vers un refus ni vers un écran d'attente. */
-export function DashMore({ language, target }: { readonly language: InterfaceLanguage; readonly target: AdminTarget }) {
+export function DashMore({ language, target }: { readonly language: AdminLanguage; readonly target: AdminTarget }) {
   const reach = useAdminReach();
   const section = target.kind === 'section' ? target.section : sectionOfEntity(target.entity);
   if (!reach.opens(section)) return null;
@@ -190,7 +189,7 @@ export function DashMore({ language, target }: { readonly language: InterfaceLan
   return (
     <AdminLink target={target} anchor="dash-more" className="inline-flex w-fit items-center gap-1 text-caption font-medium" style={{ minHeight: 44, color: BRAND }}>
       {translateAdmin(language, 'admin.dash.more')}
-      <AdminGlyph name="caretRight" size={14} className="rtl:-scale-x-100" />
+      <AdminGlyph name="caretRight" size={14} />
     </AdminLink>
   );
 }

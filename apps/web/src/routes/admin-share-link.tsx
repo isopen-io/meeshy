@@ -14,8 +14,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { adminShareLinkKey, loadAdminShareLink } from '@/lib/api/admin-share-links';
 import { ApiError, unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -47,7 +46,7 @@ import {
 const defaultNow = (): Date => new Date();
 
 type ShareLinkPanelProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly shareLinkId: string;
   readonly reach: AdminReach;
   readonly deps?: AdminDeps;
@@ -165,7 +164,8 @@ export function AdminShareLinkPanel({ language, shareLinkId, reach, deps = apiDe
 }
 
 export default function AdminShareLinkScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   const { link: shareLinkId } = useParams<'/admin/share-links/$link'>();
 
   return (

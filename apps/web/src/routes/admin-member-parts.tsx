@@ -4,8 +4,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { Field } from '@/components/field';
 import { adminUserDetailQueryKey, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES BRIQUES DE LA FICHE ÉDITABLE D'UN MEMBRE** (#8289).
@@ -44,7 +43,7 @@ export type SectionState =
   | { readonly phase: 'error'; readonly message: string };
 
 /** Le motif d'un refus, dit dans la langue de l'administrateur — jamais le texte brut de la passerelle. */
-export function refusalOf(failure: ApiFailure, language: InterfaceLanguage): string {
+export function refusalOf(failure: ApiFailure, language: AdminLanguage): string {
   if (failure.code === 'USERNAME_TAKEN') return translateAdmin(language, 'admin.create.usernameTaken');
   if (failure.code === 'EMAIL_TAKEN') return translateAdmin(language, 'admin.create.emailTaken');
   if (failure.code === 'TWO_FACTOR_NOT_ENROLLED') return translateAdmin(language, 'admin.security.twoFactorNotEnrolled');
@@ -65,7 +64,7 @@ export function useMemberWrite({
   onAnnounce,
 }: {
   readonly userId: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
 }) {
   const client = useQueryClient();
@@ -130,7 +129,7 @@ export function MemberSection({
 }: {
   readonly name: string;
   readonly titre: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   /** `null` : la section n'a RIEN à enregistrer d'un bloc (ses gestes sont immédiats). */
   readonly dirty: boolean | null;
   readonly state: SectionState;
@@ -369,7 +368,7 @@ export function Bascule({
 }
 
 /** Vérifié ✓ ou non : le MOT porte l'état, la couleur ne fait que l'appuyer. */
-export function BadgeVerifie({ verifie, language }: { readonly verifie: boolean; readonly language: InterfaceLanguage }) {
+export function BadgeVerifie({ verifie, language }: { readonly verifie: boolean; readonly language: AdminLanguage }) {
   const teinte = verifie ? 'var(--color-success)' : 'var(--color-ios-ink-2)';
   return (
     <span

@@ -8,8 +8,7 @@ import { AdminTabs, useAdminTab } from '@/components/admin/tabs';
 import { ACTIVITY_DEFAULT, ACTIVITY_PERIODS, CALLS_DEFAULT, CALLS_PERIODS, MESSAGES_DEFAULT, MESSAGES_PERIODS } from '@/lib/admin/analytics-windows';
 import type { AdminDeps } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { AdminActivityTab } from './admin-analytics-activity';
 import { AdminCallsTab } from './admin-analytics-calls';
@@ -19,7 +18,7 @@ import { periodLabel, usePeriodParam, type WindowPeriod } from './admin-analytic
 const TABS = ['activity', 'messages', 'calls'] as const;
 
 type PeriodControlProps<T extends WindowPeriod> = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly periods: readonly T[];
   readonly fallback: T;
   readonly children: (period: T) => ReactNode;
@@ -44,7 +43,7 @@ function WithPeriod<T extends WindowPeriod>({ language, periods, fallback, child
   );
 }
 
-function TabBody({ tab, language, deps, now }: { readonly tab: (typeof TABS)[number]; readonly language: InterfaceLanguage; readonly deps: AdminDeps; readonly now: Date }) {
+function TabBody({ tab, language, deps, now }: { readonly tab: (typeof TABS)[number]; readonly language: AdminLanguage; readonly deps: AdminDeps; readonly now: Date }) {
   switch (tab) {
     case 'activity':
       return (
@@ -80,7 +79,7 @@ export function AdminAnalyticsPanel({
   deps = apiDeps,
   now,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
   readonly now?: Date;
 }) {
@@ -110,7 +109,8 @@ export function AdminAnalyticsPanel({
 
 /** **LES STATISTIQUES** — `/admin/analytics` et `/adm/analytics`, gardés par `canViewAnalytics` (la section). */
 export default function AdminAnalyticsScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   return (
     <AdminSectionScreen section="analytics" language={language} title={translateAdmin(language, 'admin.nav.analytics')}>
       {() => <AdminAnalyticsPanel language={language} />}

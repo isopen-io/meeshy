@@ -30,8 +30,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { adminRankingQueryKey, loadAdminRanking, type AdminRankingResult } from '@/lib/api/admin-ranking';
 import { ApiError, unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useSearch } from '@/lib/router';
 import type { AdminOption } from '@/routes/admin-table';
 
@@ -57,12 +56,12 @@ const defaultNow = (): Date => new Date();
 const option = (value: string, label: string): AdminOption => ({ value, label });
 
 type RankingPanelProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
 };
 
-function labelsOf(language: InterfaceLanguage, shown: AdminRankingResult): RankingLabels {
+function labelsOf(language: AdminLanguage, shown: AdminRankingResult): RankingLabels {
   const branch = rankingBranchOf(shown.entityType, shown.criterion);
   return {
     entity: translateAdmin(language, `admin.ranking.col.entity.${branch}`),
@@ -232,7 +231,8 @@ export function AdminRankingPanel({ language, deps = apiDeps, now = defaultNow }
 }
 
 export default function AdminRankingScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
 
   return (
     <AdminSectionScreen section="ranking" language={language} title={translateAdmin(language, 'admin.nav.ranking')}>

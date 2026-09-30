@@ -5,7 +5,7 @@ import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { countryName, languageName, platformLabel, sentenceCase } from './language';
 
 beforeAll(async () => {
-  await Promise.all((['fr', 'en', 'ar'] as const).map((language) => loadAdminInterfaceCatalog(language)));
+  await Promise.all((['fr', 'en', 'es', 'pt'] as const).map((language) => loadAdminInterfaceCatalog(language)));
 });
 
 describe('languageName — le NOM de la langue, dans la langue d’interface', () => {
@@ -16,8 +16,9 @@ describe('languageName — le NOM de la langue, dans la langue d’interface', (
     expect(languageName('pt-BR', 'fr')).toBe('portugais brésilien');
   });
 
-  test('l’arabe nomme en arabe', () => {
-    expect(languageName('es', 'ar')).toBe('الإسبانية');
+  test('le portugais nomme en portugais, l’espagnol en espagnol', () => {
+    expect(languageName('es', 'pt').toLowerCase()).toBe('espanhol');
+    expect(languageName('fr', 'es').toLowerCase()).toBe('francés');
   });
 
   test('l’absence se dit « Aucune » — jamais un code', () => {

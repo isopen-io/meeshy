@@ -21,8 +21,7 @@ import { useAdminList } from '@/lib/admin/use-admin-list';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminTrackingLinksListKey, loadAdminTrackingLinks, type AdminTrackingLinkRow } from '@/lib/api/admin-tracking-links';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AdminOption } from '@/routes/admin-table';
 
 import { LinkPerson } from './admin-share-link-parts';
@@ -44,7 +43,7 @@ const defaultNow = (): Date => new Date();
 const option = (value: string, label: string): AdminOption => ({ value, label });
 
 type TrackingLinksPanelProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
 };
@@ -172,7 +171,8 @@ export function AdminTrackingLinksPanel({ language, deps = apiDeps, now = defaul
 }
 
 export default function AdminTrackingLinksScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
 
   return (
     <AdminSectionScreen section="trackingLinks" language={language} title={translateAdmin(language, 'admin.nav.trackingLinks')}>

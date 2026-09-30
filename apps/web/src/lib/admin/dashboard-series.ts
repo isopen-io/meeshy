@@ -1,8 +1,7 @@
 import { peakOf } from '@/components/admin/charts/chart-scale';
 import type { AdminHourBucket, AdminLanguageShare, AdminMessageTypeShare } from '@/lib/api/admin-overview';
 import type { AdminRankedConversation, AdminRankedMember } from '@/lib/api/admin-overview-queue';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import type { AdminTarget } from './admin-routes';
 import { interpretActivityBucket, interpretConversationType, interpretMessageType } from './interpret/enums';
@@ -37,7 +36,7 @@ const sum = (values: readonly number[]): number => values.reduce((total, value) 
 export function volumeView(
   days: readonly number[],
   now: Date,
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): { readonly points: readonly TimelinePoint[]; readonly summary: string } {
   const labels = dayLabelsEndingToday(days.length, now, language);
   const points = days.map((value, index) => ({ x: labels[index] ?? '', value }));
@@ -55,7 +54,7 @@ export function volumeView(
 /** Les tranches de trois heures, dans l'ordre chronologique du serveur ; chacune porte l'heure où elle COMMENCE. */
 export function hourlyView(
   buckets: readonly AdminHourBucket[],
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): { readonly data: readonly BarDatum[]; readonly summary: string } {
   const data = buckets.map((bucket) => ({
     key: `hour-${bucket.startHour}`,
@@ -79,7 +78,7 @@ export function hourlyView(
 /** Les quatre tranches d'engagement, par INDICE (très actifs → inactifs) ; la phrase donne la part des comptes actifs sur 7 jours. */
 export function engagementView(
   buckets: readonly number[],
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): { readonly data: readonly ShareDatum[]; readonly summary: string } {
   const data = buckets.map((value, index) => ({
     key: `bucket-${index}`,
@@ -99,7 +98,7 @@ export function engagementView(
 /** Les langues des messages, nommées dans la langue d'interface — jamais « FR » ni « Unknown ». */
 export function languagesView(
   shares: readonly AdminLanguageShare[],
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): { readonly data: readonly BarDatum[]; readonly summary: string } {
   const data = shares.map((share) => ({
     key: share.code,
@@ -119,7 +118,7 @@ export function languagesView(
 /** Les types de messages, du plus envoyé au moins envoyé : le graphique n'en nomme que quatre, le reste se replie dans « Autres ». */
 export function typesView(
   shares: readonly AdminMessageTypeShare[],
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): { readonly data: readonly ShareDatum[]; readonly summary: string } {
   const ordered = [...shares].sort((a, b) => b.count - a.count);
   const data = ordered.map((share) => ({ key: share.type, label: interpretMessageType(share.type, language).label, value: share.count }));
@@ -143,7 +142,7 @@ export function typesView(
  */
 export function rankedConversationsView(
   rows: readonly AdminRankedConversation[],
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): { readonly data: readonly BarDatum[]; readonly summary: string } {
   const data = rows.map((row): BarDatum => ({
     key: row.id,
@@ -156,7 +155,7 @@ export function rankedConversationsView(
 
 export function rankedMembersView(
   rows: readonly AdminRankedMember[],
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): { readonly data: readonly BarDatum[]; readonly summary: string } {
   const data = rows.map((row): BarDatum => ({
     key: row.id,
@@ -170,7 +169,7 @@ export function rankedMembersView(
 function leaderSummary(
   data: readonly BarDatum[],
   key: 'admin.dash.rank.conversations.summary' | 'admin.dash.rank.members.summary',
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): string {
   const peak = peakOf(data);
   const leader = peak === null ? undefined : data[peak.index];

@@ -1,6 +1,5 @@
 import type { AdminShareLink, AdminShareLinkRow } from '@/lib/api/admin-share-links';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { shareLinkStateOf } from './interpret/enums';
 import { countryName, languageName, sentenceCase } from './interpret/language';
@@ -17,11 +16,11 @@ import type { Interpreted } from './interpret/types';
  * pas écrire de messages »), et une permission que la charge ne porte pas se dit
  * « Non communiqué » — jamais un « non » inventé.
  */
-export const shareLinkState = (link: AdminShareLinkRow, now: Date, language: InterfaceLanguage): Interpreted =>
+export const shareLinkState = (link: AdminShareLinkRow, now: Date, language: AdminLanguage): Interpreted =>
   shareLinkStateOf({ isActive: link.isActive, expiresAt: link.expiresAt, maxUses: link.maxUses, currentUses: link.currentUses }, now, language);
 
 /** « 12 sur 50 » quand il y a un plafond, « 12, sans limite » sinon. Le plafond nul ou absent est « sans limite » (la passerelle ne plafonne pas à zéro). */
-export function shareLinkUsage(used: number, max: number | null, language: InterfaceLanguage): string {
+export function shareLinkUsage(used: number, max: number | null, language: AdminLanguage): string {
   const params = { used: formatCount(used, language) };
   return max === null || max <= 0
     ? translateAdmin(language, 'admin.shareLink.usage.unlimited', params)
@@ -48,7 +47,7 @@ const REQUIREMENTS: readonly { readonly id: RequirementId; readonly pick: (link:
 ];
 
 /** Ce que les invités peuvent faire — écrire, envoyer des fichiers, des images, lire l'historique — chacun en une phrase. */
-export function shareLinkGuestPermissions(link: AdminShareLink, language: InterfaceLanguage): readonly ShareLinkFlag[] {
+export function shareLinkGuestPermissions(link: AdminShareLink, language: AdminLanguage): readonly ShareLinkFlag[] {
   return PERMISSIONS.map(({ id, pick }) => {
     const allowed = pick(link);
     return {
@@ -68,7 +67,7 @@ export function shareLinkGuestPermissions(link: AdminShareLink, language: Interf
 }
 
 /** Ce que le lien exige de celui qui entre — un compte, un pseudonyme, une adresse e-mail, une date de naissance. */
-export function shareLinkRequirements(link: AdminShareLink, language: InterfaceLanguage): readonly ShareLinkFlag[] {
+export function shareLinkRequirements(link: AdminShareLink, language: AdminLanguage): readonly ShareLinkFlag[] {
   return REQUIREMENTS.map(({ id, pick }) => {
     const required = pick(link);
     return {
@@ -93,11 +92,11 @@ export type ShareLinkRestrictions = {
   readonly languages: readonly string[];
 };
 
-const uniqueSorted = (names: readonly string[], language: InterfaceLanguage): readonly string[] =>
+const uniqueSorted = (names: readonly string[], language: AdminLanguage): readonly string[] =>
   [...new Set(names)].sort((left, right) => left.localeCompare(right, language));
 
 /** Pays et langues NOMMÉS — jamais « FR » ni « wo » ; un code que personne ne sait nommer se dit « Pays inconnu » / « Langue inconnue ». */
-export function shareLinkRestrictions(link: AdminShareLink, language: InterfaceLanguage): ShareLinkRestrictions {
+export function shareLinkRestrictions(link: AdminShareLink, language: AdminLanguage): ShareLinkRestrictions {
   return {
     countries: uniqueSorted(link.allowedCountries.map((code) => countryName(code, language)), language),
     languages: uniqueSorted(link.allowedLanguages.map((code) => sentenceCase(languageName(code, language), language)), language),

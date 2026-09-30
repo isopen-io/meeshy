@@ -22,21 +22,20 @@ import {
   type KpiPeriod,
   type MessageTypeShare,
 } from '@/lib/api/admin-analytics';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { Metric, StaleDataNotice, StatsBlock, StatsSection, useStatsQuery, windowNote, type Block } from './admin-analytics-parts';
 
 type TabProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps: AdminDeps;
   readonly now: Date;
   readonly period: KpiPeriod;
 };
 
-const noMessages = (language: InterfaceLanguage): string => translateAdmin(language, 'admin.analytics.messages.trends.none');
+const noMessages = (language: AdminLanguage): string => translateAdmin(language, 'admin.analytics.messages.trends.none');
 
-function VolumeChart({ language, now, block }: { readonly language: InterfaceLanguage; readonly now: Date; readonly block: Block<readonly number[]> }) {
+function VolumeChart({ language, now, block }: { readonly language: AdminLanguage; readonly now: Date; readonly block: Block<readonly number[]> }) {
   const values = block.data ?? [];
   const labels = dayLabelsEndingToday(values.length, now, language);
   const points = values.map((value, index) => ({ x: labels[index] ?? '', value }));
@@ -61,7 +60,7 @@ function VolumeChart({ language, now, block }: { readonly language: InterfaceLan
 }
 
 /** Les tranches sont étiquetées par leur HEURE DE DÉBUT : la barre « 14 h » compte de 14 h à 17 h. */
-function HourlyChart({ language, block }: { readonly language: InterfaceLanguage; readonly block: Block<readonly HourlyBucket[]> }) {
+function HourlyChart({ language, block }: { readonly language: AdminLanguage; readonly block: Block<readonly HourlyBucket[]> }) {
   const buckets = block.data ?? [];
   const busiest = peakOf(buckets.map((bucket) => ({ value: bucket.messages })));
   const top = busiest === null ? undefined : buckets[busiest.index];
@@ -86,7 +85,7 @@ function HourlyChart({ language, block }: { readonly language: InterfaceLanguage
 }
 
 /** Les tranches d'engagement sont NOMMÉES par leur position servie (très actifs, actifs, occasionnels, inactifs) : le nom français du serveur est ignoré. */
-function DistributionChart({ language, block }: { readonly language: InterfaceLanguage; readonly block: Block<readonly number[]> }) {
+function DistributionChart({ language, block }: { readonly language: AdminLanguage; readonly block: Block<readonly number[]> }) {
   const counts = block.data ?? [];
   const total = counts.reduce((sum, count) => sum + count, 0);
   const data = counts.map((count, index) => ({ key: `bucket-${index}`, label: interpretActivityBucket(index, language).label, value: count }));
@@ -120,7 +119,7 @@ function DistributionChart({ language, block }: { readonly language: InterfaceLa
   );
 }
 
-function TypesChart({ language, block }: { readonly language: InterfaceLanguage; readonly block: Block<readonly MessageTypeShare[]> }) {
+function TypesChart({ language, block }: { readonly language: AdminLanguage; readonly block: Block<readonly MessageTypeShare[]> }) {
   const shares = [...(block.data ?? [])].sort((left, right) => right.count - left.count);
   const data = mergeByLabel(shares.map((share) => ({ key: share.type, label: interpretMessageType(share.type, language).label, value: share.count })));
   const top = shares[0];

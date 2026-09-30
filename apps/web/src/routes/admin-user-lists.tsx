@@ -29,8 +29,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import type { Viewer } from '@/lib/api/viewer';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 
 import { AdminSkeleton } from './admin-parts';
@@ -100,7 +99,7 @@ function Pagination({
   taille,
   onOffset,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly offset: number;
   readonly hasMore: boolean;
   readonly taille: number;
@@ -131,7 +130,7 @@ function Pagination({
  * n'a pas répondu. Les confondre ferait chercher une panne là où il n'y a qu'un
  * tunnel. Mêmes clés que la section Agent, qui portait déjà cette distinction.
  */
-function Absence({ language, online }: { readonly language: InterfaceLanguage; readonly online: boolean }) {
+function Absence({ language, online }: { readonly language: AdminLanguage; readonly online: boolean }) {
   return (
     <p className="text-caption" style={{ color: INK2 }} data-admin-absence>
       {translateAdmin(language, online ? 'admin.convList.unavailable' : 'admin.offline')}
@@ -145,7 +144,7 @@ export function AdminUserMediaSection({
   deps = apiDeps,
 }: {
   readonly userId: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   /** Le port, injectable — MÊME porte que la section des conversations : une
    * asymétrie entre deux sections jumelles rend l'une mesurable et l'autre
    * non, ce qui décide en silence de ce qui sera gardé. */
@@ -194,14 +193,14 @@ export function AdminUserMediaSection({
 }
 
 /** Le GENRE d'un média, dit en mots — « Image », « Vidéo », « Audio », « Document » — jamais son type MIME brut. */
-function mediaKind(mimeType: string, language: InterfaceLanguage): string {
+function mediaKind(mimeType: string, language: AdminLanguage): string {
   if (mimeType.startsWith('image/')) return translateAdmin(language, 'admin.people.media.kind.image');
   if (mimeType.startsWith('video/')) return translateAdmin(language, 'admin.people.media.kind.video');
   if (mimeType.startsWith('audio/')) return translateAdmin(language, 'admin.people.media.kind.audio');
   return translateAdmin(language, 'admin.people.media.kind.document');
 }
 
-function MediaRow({ media, language }: { readonly media: AdminMedia; readonly language: InterfaceLanguage }) {
+function MediaRow({ media, language }: { readonly media: AdminMedia; readonly language: AdminLanguage }) {
   return (
     <li data-admin-media={media.id} className="flex items-center gap-3 rounded-card px-4 py-3" style={CARTE}>
       <div className="min-w-0 flex-1">
@@ -233,7 +232,7 @@ function MediaRow({ media, language }: { readonly media: AdminMedia; readonly la
  * LE NOM D'UNE CONVERSATION — son titre, ou à défaut les noms de ses membres (« Awa et Jean »,
  * « Awa, Jean et 3 autres »), jamais son identifiant : un identifiant n'est pas un nom.
  */
-const nameOf = (conversation: AdminConversation, language: InterfaceLanguage): string =>
+const nameOf = (conversation: AdminConversation, language: AdminLanguage): string =>
   conversationLabel(
     { title: conversation.title, type: conversation.type, participants: conversation.participants, total: conversation.memberCount },
     language,
@@ -247,7 +246,7 @@ const nameOf = (conversation: AdminConversation, language: InterfaceLanguage): s
  * y compris celles du membre — une conversation qu'il n'a jamais vue ainsi.
  * `isAnonymous: false` : on regarde un COMPTE, par définition.
  */
-function viewerDuMembre(membre: AdminUserDetail, language: InterfaceLanguage): Viewer {
+function viewerDuMembre(membre: AdminUserDetail, language: AdminLanguage): Viewer {
   return {
     id: membre.id,
     handle: membre.username,
@@ -265,7 +264,7 @@ export function AdminUserConversationsSection({
   deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   /** Le verdict d'une configuration, dit au lecteur d'écran par la fiche. */
   readonly onAnnounce?: (texte: string) => void;
   /** La fiche d'administration d'une conversation, dans l'espace courant — `null` pour qui n'a pas la section des conversations. */
@@ -429,7 +428,7 @@ function ConversationRow({
   gerer,
 }: {
   readonly conversation: AdminConversation;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onOpen: () => void;
   readonly onConfigure: (() => void) | null;
   readonly gerer: 'adminConversation' | 'admConversation' | null;

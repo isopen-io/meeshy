@@ -16,9 +16,8 @@ import {
 import type { AdminConversation } from '@/lib/api/admin-user-conversations';
 import { apiDeps } from '@/lib/api/deps';
 import type { ApiFailure } from '@/lib/api/http';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
 import { ActionButton } from '@/routes/link-page-parts';
 
 /**
@@ -206,7 +205,7 @@ export function AdminConversationSettingsSheet({
    * rôle ni retrait.
    */
   readonly userId?: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onClose: () => void;
   readonly onAnnounce: (texte: string) => void;
   /** Appelé après toute écriture réussie : l'hôte invalide sa liste. */

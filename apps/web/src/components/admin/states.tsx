@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
 
 import type { AdminTone } from '@/lib/admin/interpret/types';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 
 import { AdminGlyph, type AdminGlyphName } from './admin-glyph';
@@ -49,7 +48,7 @@ export function AdminErrorState({
   message,
   onRetry,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly message?: string;
   readonly onRetry: () => void;
 }) {
@@ -76,7 +75,7 @@ export function AdminErrorState({
 }
 
 /** UN BLOC refusé (403) dans un écran ouvert : le reste de l'écran continue de servir. */
-export function AdminDeniedInline({ language }: { readonly language: InterfaceLanguage }) {
+export function AdminDeniedInline({ language }: { readonly language: AdminLanguage }) {
   return (
     <div data-admin-denied-inline className="flex items-center gap-3 rounded-card p-4" style={CARD}>
       <span aria-hidden="true" style={{ color: INK2 }}>
@@ -125,7 +124,7 @@ export function AdminInlineNotice({
 }
 
 /** HORS LIGNE : les données en cache restent affichées, les gestes se désactivent (l'écran lit `useOnline`). */
-export function AdminOfflineNotice({ language }: { readonly language: InterfaceLanguage }) {
+export function AdminOfflineNotice({ language }: { readonly language: AdminLanguage }) {
   const online = useOnline();
   if (online) return null;
   return <AdminInlineNotice tone="warning" text={translateAdmin(language, 'admin.kit.offline')} />;

@@ -21,8 +21,7 @@ import {
   type AgentControlledUser,
 } from '@/lib/api/admin-agent';
 import { unwrap } from '@/lib/api/client';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 import { useLiveAnnouncer, type AnnouncementTone } from '@/lib/view/use-live-announcer';
 import { AdminAnnouncement } from '@/routes/admin-parts';
@@ -105,7 +104,7 @@ export function AgentRelaunchControl({
   onAnnounce,
 }: {
   readonly conversationId: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps: AdminDeps;
   readonly isScanning: boolean;
   readonly currentNode: string | null;
@@ -207,7 +206,7 @@ export function AgentRelaunchControl({
   );
 }
 
-function ControlledUserChip({ language, user }: { readonly language: InterfaceLanguage; readonly user: AgentControlledUser }) {
+function ControlledUserChip({ language, user }: { readonly language: AdminLanguage; readonly user: AgentControlledUser }) {
   const secondary = user.language === null ? null : sentenceCase(languageName(user.language, language), language);
   const handle = personSecondary(user.username);
   return (
@@ -247,7 +246,7 @@ export function AgentConversationControl({
   now = () => new Date(),
 }: {
   readonly conversationId: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps: AdminDeps;
   /** L'hôte a déjà sa région vivante (la fiche d'une conversation) : le bloc lui parle au lieu d'en ouvrir une seconde. */
   readonly onAnnounce?: (message: string, tone?: AnnouncementTone) => void;

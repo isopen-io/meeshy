@@ -12,8 +12,7 @@ import {
   loadAdminInvitationStats,
 } from '@/lib/api/admin-invitations';
 import { unwrap } from '@/lib/api/client';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LE BANDEAU DES DEMANDES DE CONTACT** (#8876, #6729) — six chiffres et la courbe
@@ -24,7 +23,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * affiché : malgré son nom, c'est une répartition par statut, que les cartes
  * disent déjà. Le taux d'acceptation est servi sur 0–100 (`hundred`).
  */
-export function InvitationsOverview({ language, deps }: { readonly language: InterfaceLanguage; readonly deps: AdminDeps }) {
+export function InvitationsOverview({ language, deps }: { readonly language: AdminLanguage; readonly deps: AdminDeps }) {
   const stats = useQuery({
     queryKey: ADMIN_INVITATIONS_STATS_KEY,
     queryFn: async ({ signal }) => unwrap(await loadAdminInvitationStats({ ...deps, signal })),

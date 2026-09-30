@@ -6,8 +6,7 @@ import { INK, INK2, INK3, TONE_COLOR } from '@/components/admin/tone';
 import { interpretRole } from '@/lib/admin/interpret/enums';
 import { SOVEREIGN_GESTURES, capabilityOpensText, capabilityRows } from '@/lib/admin/settings-access';
 import type { AdminReach } from '@/lib/admin/use-admin-reach';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **VOTRE ACCÈS** (#8876, #6732) — le rôle, les dix capacités servies dites en mots
@@ -21,7 +20,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  */
 const SOVEREIGN_GLYPH = 'shieldCheck' as const;
 
-export function AccessBlock({ language, reach }: { readonly language: InterfaceLanguage; readonly reach: AdminReach }) {
+export function AccessBlock({ language, reach }: { readonly language: AdminLanguage; readonly reach: AdminReach }) {
   const role = interpretRole(reach.role, language);
   const rows = capabilityRows({ granted: reach.can, reached: reach.sections });
 

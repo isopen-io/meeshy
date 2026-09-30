@@ -24,24 +24,23 @@ import {
   type MessagesTrends,
   type TopSender,
 } from '@/lib/api/admin-message-stats';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { Metric, StaleDataNotice, StatsBlock, StatsSection, useStatsQuery, windowNote, type Block } from './admin-analytics-parts';
 
 type TabProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps: AdminDeps;
   readonly period: MessagesPeriod;
 };
 
-const noMessages = (language: InterfaceLanguage): string => translateAdmin(language, 'admin.analytics.messages.trends.none');
+const noMessages = (language: AdminLanguage): string => translateAdmin(language, 'admin.analytics.messages.trends.none');
 
 /** Un compte de messages, dit avec son unité (« 320 messages »). */
-const messageCount = (count: number, language: InterfaceLanguage): string =>
+const messageCount = (count: number, language: AdminLanguage): string =>
   translateAdmin(language, 'admin.analytics.messages.senders.count', { count: formatCount(count, language) });
 
-function TimelineChart({ language, block }: { readonly language: InterfaceLanguage; readonly block: Block<MessagesStats> }) {
+function TimelineChart({ language, block }: { readonly language: AdminLanguage; readonly block: Block<MessagesStats> }) {
   const days = block.data?.byDay ?? [];
   const points = days.map((day) => ({ x: adminDayLabel(day.date, language), value: day.count }));
   const peak = peakOf(points);
@@ -68,7 +67,7 @@ function TimelineChart({ language, block }: { readonly language: InterfaceLangua
   );
 }
 
-function TypesChart({ language, block }: { readonly language: InterfaceLanguage; readonly block: Block<MessagesStats> }) {
+function TypesChart({ language, block }: { readonly language: AdminLanguage; readonly block: Block<MessagesStats> }) {
   const byType = block.data?.byType ?? [];
   const total = byType.reduce((sum, entry) => sum + entry.count, 0);
   const data = mergeByLabel(byType.map((entry) => ({ key: entry.type, label: interpretMessageType(entry.type, language).label, value: entry.count })));
@@ -96,7 +95,7 @@ function TypesChart({ language, block }: { readonly language: InterfaceLanguage;
 }
 
 /** Un membre du classement : un compte est une fiche, un invité (dont le serveur ne sert aucun nom) renvoie à sa fiche d'invité. */
-function senderEntity(sender: TopSender, language: InterfaceLanguage): AdminEntityRef {
+function senderEntity(sender: TopSender, language: AdminLanguage): AdminEntityRef {
   if (sender.guest) return { kind: 'anonymous', id: sender.userId, label: guestLabel(null, language) };
   const secondary = personSecondary(sender.username);
   return {
@@ -107,7 +106,7 @@ function senderEntity(sender: TopSender, language: InterfaceLanguage): AdminEnti
   };
 }
 
-function TopSenders({ language, block }: { readonly language: InterfaceLanguage; readonly block: Block<MessagesStats> }) {
+function TopSenders({ language, block }: { readonly language: AdminLanguage; readonly block: Block<MessagesStats> }) {
   const senders = block.data?.topSenders ?? [];
   const max = Math.max(1, ...senders.map((sender) => sender.messageCount));
 
@@ -155,7 +154,7 @@ function TopSenders({ language, block }: { readonly language: InterfaceLanguage;
  * L'heure et le jour de pointe se lisent par INDICE (0 = dimanche) et se nomment
  * dans la langue d'interface ; sans aucun message il n'y a PAS de pic.
  */
-function TrendCards({ language, block }: { readonly language: InterfaceLanguage; readonly block: Block<MessagesTrends> }) {
+function TrendCards({ language, block }: { readonly language: AdminLanguage; readonly block: Block<MessagesTrends> }) {
   return (
     <AdminStatGrid columns={2}>
       <Metric
@@ -183,7 +182,7 @@ function TrendCards({ language, block }: { readonly language: InterfaceLanguage;
 }
 
 /** Vingt-quatre colonnes : à 375 px le kit en ferait des bâtons illisibles, d'où ce dessin local — un libellé toutes les trois heures, toutes les valeurs dans le tableau. */
-function HoursChart({ language, block }: { readonly language: InterfaceLanguage; readonly block: Block<MessagesTrends> }) {
+function HoursChart({ language, block }: { readonly language: AdminLanguage; readonly block: Block<MessagesTrends> }) {
   const hourly = block.data?.hourly ?? [];
   const peak = peakOf(hourly.map((value) => ({ value })));
   const max = Math.max(1, ...hourly);
@@ -229,7 +228,7 @@ function HoursChart({ language, block }: { readonly language: InterfaceLanguage;
   );
 }
 
-function WeekdaysChart({ language, block }: { readonly language: InterfaceLanguage; readonly block: Block<MessagesTrends> }) {
+function WeekdaysChart({ language, block }: { readonly language: AdminLanguage; readonly block: Block<MessagesTrends> }) {
   const weekday = block.data?.weekday ?? [];
   const peak = peakOf(weekday.map((value) => ({ value })));
   const summary =

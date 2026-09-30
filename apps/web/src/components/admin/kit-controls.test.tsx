@@ -141,12 +141,12 @@ describe('AdminTabs — des onglets ARIA', () => {
     expect(roles(host)[2]?.getAttribute('aria-selected')).toBe('true');
   });
 
-  test('les flèches sont INVERSÉES en arabe : droite recule dans l’ordre de lecture', async () => {
+  test('les flèches ne s’inversent JAMAIS : l’administration est à l’endroit même dans une interface arabe', async () => {
     document.documentElement.dir = 'rtl';
     try {
       const host = await mount(<Harness start="messages" />);
       await press(host, 1, 'ArrowRight');
-      expect(roles(host)[0]?.getAttribute('aria-selected')).toBe('true');
+      expect(roles(host)[2]?.getAttribute('aria-selected')).toBe('true');
     } finally {
       document.documentElement.dir = 'ltr';
     }

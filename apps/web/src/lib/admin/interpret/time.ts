@@ -1,5 +1,5 @@
 import { classifyRelativeTime } from '@/lib/relative-time';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import type { AdminMoment } from './types';
 
@@ -26,7 +26,7 @@ function parse(iso: string | null | undefined): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function relativeText(target: Date, now: Date, language: InterfaceLanguage): string {
+function relativeText(target: Date, now: Date, language: AdminLanguage): string {
   const formatter = new Intl.RelativeTimeFormat(language, { numeric: 'auto' });
   const future = target.getTime() > now.getTime();
   const sign = future ? 1 : -1;
@@ -59,7 +59,7 @@ function relativeText(target: Date, now: Date, language: InterfaceLanguage): str
 export function adminMomentOf(
   iso: string | null | undefined,
   now: Date,
-  language: InterfaceLanguage,
+  language: AdminLanguage,
   options?: AdminTimeOptions,
 ): AdminMoment | null {
   const date = parse(iso);
@@ -73,7 +73,7 @@ export function adminMomentOf(
   };
 }
 
-export function adminDate(iso: string | null | undefined, language: InterfaceLanguage, options?: AdminTimeOptions): string {
+export function adminDate(iso: string | null | undefined, language: AdminLanguage, options?: AdminTimeOptions): string {
   const date = parse(iso);
   if (date === null) return NONE;
   return new Intl.DateTimeFormat(language, { dateStyle: 'medium', ...zoneOf(options) }).format(date);
@@ -81,10 +81,10 @@ export function adminDate(iso: string | null | undefined, language: InterfaceLan
 
 const DAY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-const dayFormatter = (language: InterfaceLanguage): Intl.DateTimeFormat =>
+const dayFormatter = (language: AdminLanguage): Intl.DateTimeFormat =>
   new Intl.DateTimeFormat(language, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
-export function adminDayLabel(day: string, language: InterfaceLanguage): string {
+export function adminDayLabel(day: string, language: AdminLanguage): string {
   const match = DAY_PATTERN.exec(day);
   if (match === null) return NONE;
   const [, year, month, date] = match;
@@ -94,27 +94,27 @@ export function adminDayLabel(day: string, language: InterfaceLanguage): string 
   return roundTrips ? dayFormatter(language).format(instant) : NONE;
 }
 
-export function dayLabelsEndingToday(count: number, now: Date, language: InterfaceLanguage): readonly string[] {
+export function dayLabelsEndingToday(count: number, now: Date, language: AdminLanguage): readonly string[] {
   const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   const formatter = dayFormatter(language);
   const length = Math.max(0, Math.floor(count));
   return Array.from({ length }, (_, index) => formatter.format(new Date(today - (length - 1 - index) * DAY_MS)));
 }
 
-export function hourLabel(hour: number, language: InterfaceLanguage): string {
+export function hourLabel(hour: number, language: AdminLanguage): string {
   if (!Number.isInteger(hour) || hour < 0 || hour > 23) return NONE;
   return new Intl.DateTimeFormat(language, { hour: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(2000, 0, 1, hour)));
 }
 
 /** 0 = dimanche, comme `Date.getDay()`. */
-export function weekdayName(index: number, language: InterfaceLanguage): string {
+export function weekdayName(index: number, language: AdminLanguage): string {
   if (!Number.isInteger(index) || index < 0 || index > 6) return NONE;
   return new Intl.DateTimeFormat(language, { weekday: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(2023, 0, 1 + index)));
 }
 
 type DurationUnit = 'millisecond' | 'second' | 'minute' | 'hour' | 'day';
 
-function unitText(value: number, unit: DurationUnit, language: InterfaceLanguage, padded = false): string {
+function unitText(value: number, unit: DurationUnit, language: AdminLanguage, padded = false): string {
   return new Intl.NumberFormat(language, {
     style: 'unit',
     unit,
@@ -124,13 +124,13 @@ function unitText(value: number, unit: DurationUnit, language: InterfaceLanguage
   }).format(value);
 }
 
-function secondsText(seconds: number, language: InterfaceLanguage): string {
+function secondsText(seconds: number, language: AdminLanguage): string {
   return new Intl.NumberFormat(language, { style: 'unit', unit: 'second', unitDisplay: 'short', maximumFractionDigits: 1 }).format(seconds);
 }
 
 const pair = (first: string, second: string, secondValue: number): string => (secondValue === 0 ? first : `${first} ${second}`);
 
-export function formatDuration(value: number | null | undefined, unit: 'ms' | 's', language: InterfaceLanguage): string {
+export function formatDuration(value: number | null | undefined, unit: 'ms' | 's', language: AdminLanguage): string {
   if (value === null || value === undefined || !Number.isFinite(value) || value < 0) return NONE;
   const milliseconds = unit === 'ms' ? value : value * 1000;
 

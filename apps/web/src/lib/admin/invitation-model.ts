@@ -1,6 +1,5 @@
 import type { AdminInvitationDay } from '@/lib/api/admin-invitations';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { interpretInvitationStatus } from './interpret/enums';
 import { adminDayLabel } from './interpret/time';
@@ -33,7 +32,7 @@ export type InvitationSeries = {
  * « acceptées » et « refusées » sont des sous-ensembles de celles-ci — c'est la
  * définition de la passerelle, pas une répartition qui s'additionne.
  */
-export function invitationSeries(days: readonly AdminInvitationDay[], language: InterfaceLanguage): InvitationSeries {
+export function invitationSeries(days: readonly AdminInvitationDay[], language: AdminLanguage): InvitationSeries {
   const labelled = days.map((day) => ({ ...day, label: adminDayLabel(day.date, language) }));
   const point = (pick: (day: AdminInvitationDay) => number) => labelled.map((day) => ({ x: day.label, value: pick(day) }));
 
@@ -54,7 +53,7 @@ export function invitationSeries(days: readonly AdminInvitationDay[], language: 
  * dans la bibliothèque d'interprétation (refusée par le destinataire OU annulée
  * par un administrateur). Un statut inconnu n'explique rien.
  */
-export function invitationStatusExplain(status: string, language: InterfaceLanguage): string | null {
+export function invitationStatusExplain(status: string, language: AdminLanguage): string | null {
   switch (status.trim().toLowerCase()) {
     case 'pending':
       return translateAdmin(language, 'admin.invitation.explain.pending');

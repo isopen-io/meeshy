@@ -8,8 +8,7 @@ import { readSidebarFolded, writeSidebarFolded } from '@/lib/admin/admin-space';
 import { useAdminAction } from '@/lib/admin/use-admin-action';
 import type { AdminDeps } from '@/lib/api/admin';
 import { ADMIN_DASHBOARD_KEYS, recomputeAdminDashboard } from '@/lib/api/admin-settings';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
 /**
@@ -39,7 +38,7 @@ export function DashboardBlock({
   online,
   announce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps: AdminDeps;
   readonly online: boolean;
   readonly announce: Announce;
@@ -100,7 +99,7 @@ export function DashboardBlock({
  * navigateur — une commodité, jamais un état partagé. Elle s'applique à la prochaine
  * ouverture de l'administration, et le message du geste le dit.
  */
-export function SpaceBlock({ language, announce }: { readonly language: InterfaceLanguage; readonly announce: Announce }) {
+export function SpaceBlock({ language, announce }: { readonly language: AdminLanguage; readonly announce: Announce }) {
   const [folded, setFolded] = useState(readSidebarFolded);
   const labelId = useId();
   const hintId = useId();

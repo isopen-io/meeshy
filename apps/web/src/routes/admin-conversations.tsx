@@ -32,8 +32,7 @@ import {
   type AdminInstanceParticipant,
 } from '@/lib/api/admin-conversations';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { participantAvatarOf } from '@/lib/view/conversation';
 import type { AdminOption } from '@/routes/admin-table';
 
@@ -74,7 +73,7 @@ const STACK_SIZE = 6;
 const Unbroken = ({ children }: { readonly children: ReactNode }) => <span className="whitespace-nowrap">{children}</span>;
 
 /** La pile des premiers membres : décorative, le nombre exact se lit dans la colonne « Membres ». */
-function MemberStack({ language, participants }: { readonly language: InterfaceLanguage; readonly participants: readonly AdminInstanceParticipant[] }) {
+function MemberStack({ language, participants }: { readonly language: AdminLanguage; readonly participants: readonly AdminInstanceParticipant[] }) {
   if (participants.length === 0) return null;
   const shown = participants.slice(0, STACK_SIZE);
   return (
@@ -98,7 +97,7 @@ function MemberStack({ language, participants }: { readonly language: InterfaceL
 }
 
 type ConversationsPanelProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
 };
@@ -262,7 +261,8 @@ export function AdminConversationsPanel({ language, deps = apiDeps, now = defaul
 }
 
 export default function AdminConversationsScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
 
   return (
     <AdminSectionScreen section="conversations" language={language} title={translateAdmin(language, 'admin.nav.conversations')}>

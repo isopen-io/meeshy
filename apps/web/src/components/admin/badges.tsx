@@ -2,7 +2,7 @@ import type { Interpreted } from '@/lib/admin/interpret/types';
 import { interpretRole } from '@/lib/admin/interpret/enums';
 import { languageName, sentenceCase } from '@/lib/admin/interpret/language';
 import type { AdminTone } from '@/lib/admin/interpret/types';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { AdminGlyph, type AdminGlyphName } from './admin-glyph';
 import { TONE_COLOR, toneBackground } from './tone';
@@ -46,12 +46,12 @@ export function AdminInterpretedBadge({ value }: { readonly value: Interpreted }
   );
 }
 
-export function AdminRoleBadge({ language, role }: { readonly language: InterfaceLanguage; readonly role: string | null }) {
+export function AdminRoleBadge({ language, role }: { readonly language: AdminLanguage; readonly role: string | null }) {
   return <AdminInterpretedBadge value={interpretRole(role, language)} />;
 }
 
 /** Le NOM de la langue, dans la langue d'interface — jamais « ES ». */
-export function AdminLanguageBadge({ language, code }: { readonly language: InterfaceLanguage; readonly code: string | null }) {
+export function AdminLanguageBadge({ language, code }: { readonly language: AdminLanguage; readonly code: string | null }) {
   return (
     <AdminBadge tone="neutral" glyph="globe">
       {sentenceCase(languageName(code, language), language)}

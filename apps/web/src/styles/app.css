@@ -734,3 +734,28 @@
 :root[dir='rtl'] body .text-start {
   text-align: right;
 }
+
+/*
+ * L'ADMINISTRATION EST TOUJOURS À L'ENDROIT (D-159, directive porteur
+ * 2026-09-30). Son cadre porte `dir="ltr"` quelle que soit la langue
+ * d'interface — une interface arabe lit l'administration en anglais — mais les
+ * règles ci-dessus décrivent le corps par un sélecteur DESCENDANT : elles
+ * atteignent le cadre malgré son `dir`, et l'`unicode-bidi: plaintext` hérité
+ * + l'alignement `right` remettraient à droite chaque texte d'une mise en page
+ * qui lit de gauche à droite. On les rend ici, sous le cadre seulement ; le
+ * reste du document garde son sens. (`revert` rend la valeur de la feuille de
+ * style du navigateur : `isolate` pour un élément qui porte `dir`.)
+ */
+:root[dir='rtl'] [data-admin-shell] {
+  text-align: left;
+}
+
+:root[dir='rtl'] [data-admin-shell],
+:root[dir='rtl'] [data-admin-shell] :where(*),
+:root[dir='rtl'] [data-admin-shell] ::placeholder {
+  unicode-bidi: revert;
+}
+
+:root[dir='rtl'] [data-admin-shell] .text-start {
+  text-align: left;
+}

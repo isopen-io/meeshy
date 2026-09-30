@@ -3,8 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 import { beforeAll, describe, expect, test } from 'bun:test';
 
-import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
-import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+import { ADMIN_LANGUAGES, loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 
 import { KNOWN_AUDIT_FIELDS, auditFieldLabel, auditValue, summarizeUserAgent } from './audit-fields';
 
@@ -18,7 +17,7 @@ const NOW = new Date('2026-09-30T12:00:00.000Z');
 const AUDIT_FR = fileURLToPath(new URL('../interface-catalogs/admin/audit-reglages-fr.ts', import.meta.url));
 
 beforeAll(async () => {
-  await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadAdminInterfaceCatalog(language)));
+  await Promise.all(ADMIN_LANGUAGES.map((language) => loadAdminInterfaceCatalog(language)));
 });
 
 describe('auditFieldLabel — le champ en mots', () => {
@@ -28,8 +27,8 @@ describe('auditFieldLabel — le champ en mots', () => {
     expect(auditFieldLabel('twoFactorEnabled', 'en')).toBe('Two-factor authentication');
   });
 
-  test('toute la table des champs connus est dite dans les sept langues', () => {
-    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+  test('toute la table des champs connus est dite dans les quatre langues de l’administration', () => {
+    for (const language of ADMIN_LANGUAGES) {
       for (const field of KNOWN_AUDIT_FIELDS) expect(auditFieldLabel(field, language).trim()).not.toBe('');
     }
   });

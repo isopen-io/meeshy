@@ -17,8 +17,7 @@ import {
 } from '@/lib/api/admin-user-member';
 import { apiDeps } from '@/lib/api/deps';
 import type { ApiFailure } from '@/lib/api/http';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { AdminSkeleton } from './admin-parts';
 
@@ -49,7 +48,7 @@ const LIBELLES_CATEGORIES = {
   application: 'admin.prefs.application',
 } as const satisfies Readonly<Record<AdminPreferenceCategory, string>>;
 
-const motifDuRefus = (echec: ApiFailure, language: InterfaceLanguage): string => {
+const motifDuRefus = (echec: ApiFailure, language: AdminLanguage): string => {
   if (echec.code === 'CONSENT_REQUIRED') return translateAdmin(language, 'admin.prefs.consent');
   if (echec.status === 403) return translateAdmin(language, 'admin.prefs.reserved');
   if (echec.status === 400) return translateAdmin(language, 'admin.prefs.invalid');
@@ -69,7 +68,7 @@ export function AdminUserPreferencesTab({
   deps = apiDeps,
 }: {
   readonly userId: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
   readonly deps?: AdminDeps;
 }) {
@@ -166,7 +165,7 @@ function LignePreference({
   readonly categorie: AdminPreferenceCategory;
   readonly cle: string;
   readonly valeur: AdminPreferenceValue;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onChange: (valeur: AdminPreferenceValue) => void;
 }) {
   const lectureSeule = (ADMIN_READ_ONLY_PREFERENCES[categorie] ?? []).includes(cle);
@@ -204,7 +203,7 @@ function Controle({
   readonly categorie: AdminPreferenceCategory;
   readonly cle: string;
   readonly valeur: AdminPreferenceValue;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly desactive: boolean;
   readonly onChange: (valeur: AdminPreferenceValue) => void;
 }) {

@@ -20,8 +20,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { adminUserDetailQueryKey } from '@/lib/api/admin-user-detail';
 import { adminUsersQueryKey, loadAdminUsersPage, type AdminUserRow } from '@/lib/api/admin-users';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useRoute } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
@@ -57,7 +56,7 @@ const SECURITY_LABELS = {
 } as const;
 
 /** La sécurité d'un compte DITE EN MOTS — jamais une icône seule, jamais la couleur seule. */
-function SecurityWords({ row, language }: { readonly row: AdminUserRow; readonly language: InterfaceLanguage }) {
+function SecurityWords({ row, language }: { readonly row: AdminUserRow; readonly language: AdminLanguage }) {
   return (
     <span data-admin-security-words className="flex flex-wrap justify-end gap-1 md:justify-start">
       {row.emailVerified ? (
@@ -100,7 +99,7 @@ export function AdminUsersPanel({
   deps = apiDeps,
   now = () => new Date(),
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
 }) {
@@ -264,7 +263,8 @@ export function AdminUsersPanel({
 }
 
 export default function AdminUsersScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   const { key } = useRoute();
   /** On reste dans l'espace d'où l'on vient (D-76). */
   const cible = key === 'admUsers' ? ('admUser' as const) : ('adminUser' as const);

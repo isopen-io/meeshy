@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 
-import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
-import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+import { ADMIN_LANGUAGES, loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { adminIdentityFixture } from '@/test-support/admin-assertions';
 
 import type { AdminSectionId } from './admin-routes';
@@ -14,7 +13,7 @@ import { CAPABILITY_KEYS, SOVEREIGN_GESTURES, capabilityOpensText, capabilityRow
  * (`ADMIN_SECTIONS`) : jamais une seconde matrice à tenir d'accord avec la première.
  */
 beforeAll(async () => {
-  await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadAdminInterfaceCatalog(language)));
+  await Promise.all(ADMIN_LANGUAGES.map((language) => loadAdminInterfaceCatalog(language)));
 });
 
 const BIGBOSS = adminIdentityFixture({ role: 'BIGBOSS' });
@@ -32,9 +31,9 @@ describe('les dix capacités', () => {
     expect(new Set(CAPABILITY_KEYS).size).toBe(10);
   });
 
-  test('chacune est dite dans les sept langues : libellé et explication', async () => {
+  test('chacune est dite dans les quatre langues de l’administration : libellé et explication', async () => {
     const { translateAdmin } = await import('@/lib/i18n-admin-catalog');
-    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+    for (const language of ADMIN_LANGUAGES) {
       for (const key of CAPABILITY_KEYS) {
         expect(translateAdmin(language, `admin.settings.cap.${key}.label`).trim()).not.toBe('');
         expect(translateAdmin(language, `admin.settings.cap.${key}.explain`).trim()).not.toBe('');
@@ -119,10 +118,10 @@ describe('capabilityOpensText — une phrase', () => {
 });
 
 describe('les gestes du créateur', () => {
-  test('six gestes, chacun dit dans les sept langues', async () => {
+  test('six gestes, chacun dit dans les quatre langues de l’administration', async () => {
     const { translateAdmin } = await import('@/lib/i18n-admin-catalog');
     expect([...SOVEREIGN_GESTURES]).toEqual(['readMessages', 'listConversations', 'revealLink', 'consents', 'agentModel', 'agentReset']);
-    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+    for (const language of ADMIN_LANGUAGES) {
       for (const gesture of SOVEREIGN_GESTURES) expect(translateAdmin(language, `admin.settings.sovereign.${gesture}`).trim()).not.toBe('');
     }
   });

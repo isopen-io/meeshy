@@ -7,8 +7,7 @@ import { formatCount, formatPercent } from '@/lib/admin/interpret/numbers';
 import { adminDate, adminMomentOf } from '@/lib/admin/interpret/time';
 import { ageOf, deviceLabel, formatDays, formatYears } from '@/lib/admin/member-meta';
 import type { AdminMemberMetadata, AdminUserDetail } from '@/lib/api/admin-user-detail';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES MÉTADONNÉES D'UN MEMBRE, INTERPRÉTÉES** (#8005) — la colonne latérale de
@@ -34,7 +33,7 @@ export function AdminMemberMeta({
   onAnnounce,
 }: {
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly now?: () => Date;
   readonly onAnnounce?: (message: string) => void;
 }) {
@@ -143,7 +142,7 @@ const CONSENTS = [
   ['consent-voiceCloning', 'admin.people.consent.voiceCloning', 'voiceCloningEnabledAt'],
 ] as const satisfies readonly (readonly [string, AdminPlainCatalogKey, keyof AdminMemberMetadata])[];
 
-function AccountMetadata({ metadata, language, now }: { readonly metadata: AdminMemberMetadata; readonly language: InterfaceLanguage; readonly now: Date }) {
+function AccountMetadata({ metadata, language, now }: { readonly metadata: AdminMemberMetadata; readonly language: AdminLanguage; readonly now: Date }) {
   const t = (key: AdminPlainCatalogKey) => translateAdmin(language, key);
   const notProvided = t('admin.value.notProvided');
   const yesNo = (value: boolean) => t(value ? 'admin.value.yes' : 'admin.value.no');

@@ -45,7 +45,7 @@ const f = {
   'admin.people.twoFactor.off': 'Desativado',
   'admin.people.twoFactor.codes': '{count} código(s) de cópia de segurança restante(s)',
   'admin.people.twoFactor.offExplain': 'Only o/a member can turn it on, by pairing an authenticator app.',
-  'admin.people.motive.required': 'Motivo',
+  'admin.people.motive.required': 'Motivo escrito (obrigatório, mínimo de 10 caracteres)',
   'admin.people.password.neverChanged': 'Nunca alterada',
   'admin.people.password.changedOn': 'Alterada em {date}',
   'admin.people.consent.voiceProfile': 'Perfil de voz',

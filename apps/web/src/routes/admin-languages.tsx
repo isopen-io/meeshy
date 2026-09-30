@@ -22,8 +22,7 @@ import {
   type LanguageStats,
 } from '@/lib/api/admin-languages';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { Metric, StaleDataNotice, StatsBlock, StatsSection, periodLabel, useStatsQuery, usePeriodParam, windowNote, type Block } from './admin-analytics-parts';
 import { LanguagePairsTable, LanguagesDetailTable, TranslationAccuracyTable } from './admin-languages-parts';
@@ -33,7 +32,7 @@ const LIMIT = 10;
 const NAMED_SERIES = 3;
 const USER_LANGUAGES_SHOWN = 10;
 
-function ShareChart({ language, block }: { readonly language: InterfaceLanguage; readonly block: Block<LanguageStats> }) {
+function ShareChart({ language, block }: { readonly language: AdminLanguage; readonly block: Block<LanguageStats> }) {
   const languages = block.data?.languages ?? [];
   const top = languages[0];
   const summary =
@@ -56,7 +55,7 @@ function ShareChart({ language, block }: { readonly language: InterfaceLanguage;
 }
 
 /** Les comptes par langue d'interface : les dix premières langues, le reste sommé dans « Autres langues ». */
-function UsersChart({ language, block }: { readonly language: InterfaceLanguage; readonly block: Block<LanguageStats> }) {
+function UsersChart({ language, block }: { readonly language: AdminLanguage; readonly block: Block<LanguageStats> }) {
   const entries = block.data?.usersByLanguage ?? [];
   const named = mergeByLabel(entries.map((entry) => ({ key: entry.code, label: languageTitle(entry.code, language), value: entry.count })));
   const others = named.slice(USER_LANGUAGES_SHOWN).reduce((sum, entry) => sum + entry.value, 0);
@@ -78,7 +77,7 @@ function UsersChart({ language, block }: { readonly language: InterfaceLanguage;
 }
 
 /** Trois langues nommées + « Autres langues » : le kit dessine quatre séries au plus. */
-function TimelineChart({ language, block }: { readonly language: InterfaceLanguage; readonly block: Block<readonly LanguageDay[]> }) {
+function TimelineChart({ language, block }: { readonly language: AdminLanguage; readonly block: Block<readonly LanguageDay[]> }) {
   const folded = foldLanguageTimeline(block.data ?? [], NAMED_SERIES);
   const labels = folded.dates.map((date) => adminDayLabel(date, language));
   const series = folded.series.map((entry) => ({
@@ -106,7 +105,7 @@ function TimelineChart({ language, block }: { readonly language: InterfaceLangua
   );
 }
 
-function PeriodBody({ language, block, period }: { readonly language: InterfaceLanguage; readonly block: Block<LanguageStats>; readonly period: '7d' | '30d' | '90d' }) {
+function PeriodBody({ language, block, period }: { readonly language: AdminLanguage; readonly block: Block<LanguageStats>; readonly period: '7d' | '30d' | '90d' }) {
   const data = block.data;
   const languages = data?.languages ?? [];
 
@@ -169,7 +168,7 @@ function PeriodBody({ language, block, period }: { readonly language: InterfaceL
  * jours retombe sur 30, et la fenêtre réelle est écrite) ; la précision porte sur
  * toutes les périodes.
  */
-export function AdminLanguagesPanel({ language, deps = apiDeps }: { readonly language: InterfaceLanguage; readonly deps?: AdminDeps }) {
+export function AdminLanguagesPanel({ language, deps = apiDeps }: { readonly language: AdminLanguage; readonly deps?: AdminDeps }) {
   const [period, setPeriod] = usePeriodParam(LANGUAGES_PERIODS, LANGUAGES_DEFAULT);
   const timelinePeriod = timelinePeriodOf(period);
   const stats = useStatsQuery(languagesKeys.stats(period, LIMIT), (signal) => loadLanguageStats({ ...deps, period, limit: LIMIT, signal }));
@@ -242,7 +241,8 @@ export function AdminLanguagesPanel({ language, deps = apiDeps }: { readonly lan
 
 /** **LANGUES ET TRADUCTIONS** — `/admin/languages` et `/adm/languages`, gardés par `canViewAnalytics` (la section). */
 export default function AdminLanguagesScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   return (
     <AdminSectionScreen section="languages" language={language} title={translateAdmin(language, 'admin.nav.languages')}>
       {() => <AdminLanguagesPanel language={language} />}

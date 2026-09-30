@@ -32,8 +32,7 @@ import {
   type AdminWatchedRoute,
 } from '@/lib/api/admin-monitoring';
 import { ApiError, unwrap } from '@/lib/api/client';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useSearch } from '@/lib/router';
 import type { AdminOption } from '@/routes/admin-table';
 
@@ -57,7 +56,7 @@ const defaultNow = (): Date => new Date();
 const option = (value: string, label: string): AdminOption => ({ value, label });
 
 type MonitoringRoutesProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps: AdminDeps;
   readonly now?: () => Date;
 };

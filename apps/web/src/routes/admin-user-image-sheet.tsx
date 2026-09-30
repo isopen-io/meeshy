@@ -14,9 +14,8 @@ import {
 import { apiDeps } from '@/lib/api/deps';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { ProfileImageKind } from '@/lib/api/profile';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
 import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
 import { ActionButton } from '@/routes/link-page-parts';
 
@@ -70,7 +69,7 @@ export function AdminUserImageSheet({
 }: {
   readonly membre: AdminUserDetail;
   readonly kind: ProfileImageKind;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onClose: () => void;
   readonly onSaved: (membre: AdminUserDetail, kind: ProfileImageKind) => void;
   readonly onAnnounce: (texte: string) => void;

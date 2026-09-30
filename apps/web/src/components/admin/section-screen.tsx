@@ -2,9 +2,8 @@ import type { ReactNode } from 'react';
 
 import { ADMIN_FICHES, adminListRoute, type AdminBack, type AdminSectionId } from '@/lib/admin/admin-routes';
 import { useAdminReach, type AdminReach } from '@/lib/admin/use-admin-reach';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOptionalRoute } from '@/lib/router';
 import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
 
@@ -28,7 +27,7 @@ export function AdminSectionScreen({
   children,
 }: {
   readonly section: AdminSectionId;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly title: string;
   readonly back?: AdminBack;
   readonly actions?: ReactNode;

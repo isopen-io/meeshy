@@ -1,5 +1,4 @@
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LE VRAI NOM D'UNE DIFFUSION** (#8876, #6731) — son nom ; à défaut son objet ;
@@ -7,7 +6,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * diffusion sans nom, mais une ligne corrompue ne doit pas se peindre par son
  * ObjectId.
  */
-export function broadcastLabel(broadcast: { readonly name: string; readonly subject: string }, language: InterfaceLanguage): string {
+export function broadcastLabel(broadcast: { readonly name: string; readonly subject: string }, language: AdminLanguage): string {
   const name = broadcast.name.trim();
   if (name !== '') return name;
   const subject = broadcast.subject.trim();

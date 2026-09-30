@@ -3,8 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
-import { loadAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
-import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+import { ADMIN_LANGUAGES, loadAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
 import { expectNoRawIdentifiers } from '@/test-support/admin-assertions';
 import { createActMounter } from '@/test-support/act-mount';
 import { servedPagination } from '@/test-support/served-pagination';
@@ -35,8 +34,8 @@ import { AdminAgentPanel } from './admin-agent-parts';
  * - les deux listes sont deux sections toujours dépliées du kit, plus des
  *   sections repliables.
  *
- * Le témoin des SEPT langues est le seul qui puisse l'attraper : une seule
- * langue vérifiée laisserait six libellés dire autre chose, et c'est
+ * Le témoin des QUATRE langues est le seul qui puisse l'attraper : une seule
+ * langue vérifiée laisserait trois libellés dire autre chose, et c'est
  * exactement la forme qu'un catalogue fait prendre à ce défaut.
  */
 
@@ -371,10 +370,10 @@ describe('L’ÉCRAN EST COMPOSÉ DU KIT — deux sections nommées, des chiffre
   });
 });
 
-describe('LE LIBELLÉ DE RELANCE MENTIONNE LA PUBLICATION — dans les SEPT langues', () => {
+describe('LE LIBELLÉ DE RELANCE MENTIONNE LA PUBLICATION — dans les QUATRE langues de l’administration', () => {
   /**
    * Un mot par langue, choisi dans la FAMILLE de « publier » : c'est le seul
-   * fait que le libellé doit porter. Vérifier une seule langue laisserait six
+   * fait que le libellé doit porter. Vérifier une seule langue laisserait trois
    * libellés promettre une simple analyse — et c'est précisément la forme que
    * prend ce défaut dans un catalogue, où chaque langue est traduite à part.
    */
@@ -383,13 +382,10 @@ describe('LE LIBELLÉ DE RELANCE MENTIONNE LA PUBLICATION — dans les SEPT lang
     en: 'publish',
     es: 'publicar',
     pt: 'publicar',
-    de: 'veröffentlich',
-    it: 'pubblicare',
-    ar: 'ينشر',
   };
 
-  test('les sept catalogues disent que la relance peut PUBLIER', async () => {
-    for (const langue of SUPPORTED_INTERFACE_LANGUAGES) {
+  test('les quatre catalogues disent que la relance peut PUBLIER', async () => {
+    for (const langue of ADMIN_LANGUAGES) {
       await loadAdminInterfaceCatalog(langue);
       const effet = translateAdmin(langue, 'admin.agent.effect').toLowerCase();
 
@@ -398,7 +394,7 @@ describe('LE LIBELLÉ DE RELANCE MENTIONNE LA PUBLICATION — dans les SEPT lang
   });
 
   test('le bouton ne s’appelle jamais « relancer l’analyse » — un nom qui cacherait l’effet', async () => {
-    for (const langue of SUPPORTED_INTERFACE_LANGUAGES) {
+    for (const langue of ADMIN_LANGUAGES) {
       await loadAdminInterfaceCatalog(langue);
       const libelle = translateAdmin(langue, 'admin.agent.relaunch').toLowerCase();
 
@@ -453,7 +449,7 @@ describe('le libellé d’échec ne nomme aucune des deux actions — dans les S
       .map((mot) => mot.slice(0, RADICAL));
 
   test('aucun radical partagé avec « relancer » ni avec « arrêter »', async () => {
-    for (const langue of SUPPORTED_INTERFACE_LANGUAGES) {
+    for (const langue of ADMIN_LANGUAGES) {
       await loadAdminInterfaceCatalog(langue);
       const echec = radicauxDe(translateAdmin(langue, 'admin.agent.failed'));
       const actions = [

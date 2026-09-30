@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
 
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -29,7 +28,7 @@ const INK2 = 'var(--color-ios-ink-2)';
  * droit » de « le serveur n'a pas répondu » sur une porte d'administration
  * apprend à un visiteur non autorisé si l'espace existe et s'il est vivant.
  */
-export function AdminDenied({ language }: { readonly language: InterfaceLanguage }) {
+export function AdminDenied({ language }: { readonly language: AdminLanguage }) {
   return (
     <div className="grid flex-1 place-items-center p-6 text-center">
       <div className="grid gap-3">

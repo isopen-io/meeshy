@@ -1,6 +1,5 @@
 import type { AdminGlyphName } from '@/components/glyphs-admin';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import type { AdminTone, Interpreted } from './interpret/types';
 
@@ -128,7 +127,7 @@ export type AuditActionInterpreted = Interpreted & {
 };
 
 /** Le code d'une action, dit en mots ; un code inconnu devient « Action non répertoriée ». */
-export function interpretAuditAction(code: string, language: InterfaceLanguage): AuditActionInterpreted {
+export function interpretAuditAction(code: string, language: AdminLanguage): AuditActionInterpreted {
   if (!isKnownAction(code)) {
     return {
       label: translateAdmin(language, 'admin.audit.action.unknown'),

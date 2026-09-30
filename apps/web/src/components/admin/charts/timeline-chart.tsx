@@ -1,7 +1,6 @@
 import { useState, type PointerEvent } from 'react';
 
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { AdminChartCard, seriesColor, type AdminChartState } from './chart-card';
 import { linearScale, niceTicks } from './chart-scale';
@@ -35,7 +34,7 @@ export function AdminTimelineChart({
   state = 'ready',
   onRetry,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly id: string;
   readonly title: string;
   readonly series: readonly Series[];

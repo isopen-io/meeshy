@@ -1,12 +1,11 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 
-import { loadAdminInterfaceCatalog, translateAdminMaybe } from '@/lib/i18n-admin-catalog';
-import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+import { ADMIN_LANGUAGES, loadAdminInterfaceCatalog, translateAdminMaybe } from '@/lib/i18n-admin-catalog';
 
 import { CALL_END_REASONS, CALL_ISSUES, callEndReasonLabel, callIssueLabel, formatDecimal, mergeByLabel } from './analytics-labels';
 
 beforeAll(async () => {
-  await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadAdminInterfaceCatalog(language)));
+  await Promise.all(ADMIN_LANGUAGES.map((language) => loadAdminInterfaceCatalog(language)));
 });
 
 describe('les motifs de fin d’appel, dits en mots', () => {
@@ -23,8 +22,8 @@ describe('les motifs de fin d’appel, dits en mots', () => {
     expect(callEndReasonLabel('', 'fr')).toBe('Non reconnu');
   });
 
-  test('les clés du vocabulaire existent dans les sept langues — un motif ne peut pas se dire « non reconnu » faute de traduction', () => {
-    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+  test('les clés du vocabulaire existent dans les quatre langues de l’administration — un motif ne peut pas se dire « non reconnu » faute de traduction', () => {
+    for (const language of ADMIN_LANGUAGES) {
       for (const code of CALL_END_REASONS) expect({ language, code, label: translateAdminMaybe(language, `admin.analytics.calls.reason.${code}`) === null }).toEqual({ language, code, label: false });
       for (const code of CALL_ISSUES) expect({ language, code, label: translateAdminMaybe(language, `admin.analytics.calls.issue.${code}`) === null }).toEqual({ language, code, label: false });
     }

@@ -8,8 +8,7 @@ import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { gallerySlidesOf, stepSlide, type GallerySlide } from '@/lib/admin/user-gallery';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { AdminSection, AdminSkeleton } from './admin-parts';
 
@@ -22,12 +21,12 @@ import { AdminSection, AdminSkeleton } from './admin-parts';
  * requête. Une image protégée reste une diapositive sans image, qui dit
  * qu'elle existe et ne se montre pas.
  *
- * Clavier : les flèches gauche/droite changent d'image (inversées en RTL),
+ * Clavier : les flèches gauche/droite changent d'image (l'administration est toujours LTR),
  * les vignettes sont des boutons, et la position se lit « 2 / 7 ».
  */
 const INK2 = 'var(--color-ios-ink-2)';
 
-const libelleDe = (diapo: GallerySlide, language: InterfaceLanguage): string => {
+const libelleDe = (diapo: GallerySlide, language: AdminLanguage): string => {
   if (diapo.kind !== 'media') return translateAdmin(language, diapo.kind === 'avatar' ? 'admin.gallery.avatar' : 'admin.gallery.banner');
   const source = translateAdmin(language, diapo.media.source === 'message' ? 'admin.media.fromMessage' : 'admin.media.fromPost');
   return diapo.media.originalName === '' ? source : `${diapo.media.originalName} · ${source}`;
@@ -39,7 +38,7 @@ export function AdminUserGallery({
   deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
 }) {
   const [index, setIndex] = useState(0);
@@ -93,8 +92,8 @@ export function AdminUserGallery({
         className="grid gap-3 focus-visible:outline-2"
         style={{ outlineColor: 'var(--color-ios-brand)' }}
         onKeyDown={(event) => {
-          if (event.key === 'ArrowRight') aller(document.dir === 'rtl' ? -1 : 1);
-          if (event.key === 'ArrowLeft') aller(document.dir === 'rtl' ? 1 : -1);
+          if (event.key === 'ArrowRight') aller(1);
+          if (event.key === 'ArrowLeft') aller(-1);
         }}
       >
         <figure
@@ -169,7 +168,7 @@ function BoutonPas({ libelle, cote, onClick }: { readonly libelle: string; reado
       className={`absolute top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full ${cote === 'start' ? 'start-2' : 'end-2'}`}
       style={{ backgroundColor: 'color-mix(in srgb, black 45%, transparent)', color: 'white' }}
     >
-      <span className="grid place-items-center rtl:-scale-x-100">
+      <span className="grid place-items-center">
         <span className="grid place-items-center" style={cote === 'end' ? { transform: 'scaleX(-1)' } : {}}>
           <Glyph name="caretLeft" size={18} />
         </span>

@@ -1,8 +1,7 @@
 import { routeInSpace } from '@/lib/admin/admin-space';
 import { ADMIN_GROUPS } from '@/lib/admin/sections';
 import type { AdminReach } from '@/lib/admin/use-admin-reach';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { Link } from '@/routes/route-table';
 
 import { AdminGlyph } from './admin-glyph';
@@ -17,7 +16,7 @@ import { BRAND, EDGE, INK, INK2, SURFACE, toneBackground } from './tone';
  * tableau de bord, où l'on se trouve : jamais une tuile qui ne mène nulle part,
  * jamais une tuile pour la page qu'on regarde.
  */
-export function AdminSectionDirectory({ language, reach }: { readonly language: InterfaceLanguage; readonly reach: AdminReach }) {
+export function AdminSectionDirectory({ language, reach }: { readonly language: AdminLanguage; readonly reach: AdminReach }) {
   const groupes = ADMIN_GROUPS.map((groupe) => ({
     groupe,
     tuiles: reach.sections.filter((section) => section.group === groupe.id && section.id !== 'dashboard'),

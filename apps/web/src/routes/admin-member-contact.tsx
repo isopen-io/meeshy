@@ -6,8 +6,7 @@ import { updateAdminUser } from '@/lib/api/admin-user-actions';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { requestAdminUserVerification, type AdminContactChannel } from '@/lib/api/admin-user-verifications';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { BadgeVerifie, INK2, MemberSection, SectionButton, Texte, useFieldFocus, useMemberWrite } from './admin-member-parts';
 
@@ -32,7 +31,7 @@ export function AdminMemberContactSection({
   deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
   readonly deps?: AdminDeps;
 }) {
@@ -123,7 +122,7 @@ function ContactRow({
 }: {
   readonly channel: AdminContactChannel;
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
   readonly deps: AdminDeps;
   readonly gesturesWaiting: boolean;

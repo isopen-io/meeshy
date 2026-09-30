@@ -4,7 +4,7 @@ import { visibleAdminSections } from '@/lib/admin/sections';
 import type { AdminDeps } from '@/lib/api/admin';
 import type { ApiResult } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { createRouter, navigate } from '@/lib/router';
 import { adminIdentityFixture, expectNoRawIdentifiers, type AdminIdentityFixture } from '@/test-support/admin-assertions';
 import { setupAdminKitTests } from '@/test-support/admin-harness';
@@ -54,7 +54,7 @@ const FICHE = {
 const at = (reply: ApiResult<unknown>): RoutedReply => (request) =>
   request.method === 'GET' && pathOf(request) === `/api/v1/admin/anonymous-users/${ID}` ? reply : undefined;
 
-async function open(options: { readonly identity?: AdminIdentityFixture; readonly reply?: ApiResult<unknown>; readonly language?: InterfaceLanguage } = {}) {
+async function open(options: { readonly identity?: AdminIdentityFixture; readonly reply?: ApiResult<unknown>; readonly language?: AdminLanguage } = {}) {
   appQueryClient.removeQueries({ queryKey: ['admin', 'anonymous-one', ID] });
   const gateway = routedTransport(at(options.reply ?? { ok: true, data: FICHE }));
   const deps: AdminDeps = { source: 'gateway', transport: gateway.transport };

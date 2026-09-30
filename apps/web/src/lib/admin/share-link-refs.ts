@@ -1,6 +1,6 @@
 import type { AdminEntityRef } from '@/components/admin/entity-chip';
 import type { AdminLinkConversation, AdminLinkPerson } from '@/lib/api/admin-share-links-person';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { interpretConversationType } from './interpret/enums';
 import { conversationLabel, guestLabel, personLabel, personSecondary } from './interpret/labels';
@@ -15,7 +15,7 @@ import { conversationLabel, guestLabel, personLabel, personSecondary } from './i
  * dit « Personne inconnue » en texte simple — une puce fabriquée n'aurait aucun
  * identifiant vers lequel mener.
  */
-export function userRefOf(person: AdminLinkPerson | null, language: InterfaceLanguage): AdminEntityRef | null {
+export function userRefOf(person: AdminLinkPerson | null, language: AdminLanguage): AdminEntityRef | null {
   if (person === null) return null;
   return {
     kind: 'user',
@@ -27,7 +27,7 @@ export function userRefOf(person: AdminLinkPerson | null, language: InterfaceLan
 }
 
 /** Une conversation : son titre, sinon « Conversation sans titre » ; son TYPE nommé en secondaire (aucun aperçu de membres n'est servi ici). */
-export function conversationRefOf(conversation: AdminLinkConversation | null, language: InterfaceLanguage): AdminEntityRef | null {
+export function conversationRefOf(conversation: AdminLinkConversation | null, language: AdminLanguage): AdminEntityRef | null {
   if (conversation === null) return null;
   return {
     kind: 'conversation',
@@ -38,6 +38,6 @@ export function conversationRefOf(conversation: AdminLinkConversation | null, la
 }
 
 /** Un invité arrivé par un lien : son pseudonyme, sinon « Invité sans nom ». */
-export function guestRefOf(guest: { readonly id: string; readonly displayName: string | null; readonly avatar: string | null }, language: InterfaceLanguage): AdminEntityRef {
+export function guestRefOf(guest: { readonly id: string; readonly displayName: string | null; readonly avatar: string | null }, language: AdminLanguage): AdminEntityRef {
   return { kind: 'anonymous', id: guest.id, label: guestLabel(guest.displayName, language), avatarUrl: guest.avatar };
 }

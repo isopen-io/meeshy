@@ -5,7 +5,7 @@ import { shareLinkState } from '@/lib/admin/share-link-model';
 import { conversationRefOf, userRefOf } from '@/lib/admin/share-link-refs';
 import type { AdminShareLinkRow } from '@/lib/api/admin-share-links';
 import type { AdminLinkConversation, AdminLinkPerson } from '@/lib/api/admin-share-links-person';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES PIÈCES COMMUNES DU LOT « LIENS »** (#8876, #6729) — la puce d'une
@@ -17,19 +17,19 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * depuis) ne devient pas une puce : elle se dit en texte simple, parce qu'il n'y a
  * plus de fiche vers laquelle mener — jamais un identifiant à la place du nom.
  */
-export function LinkPerson({ language, person }: { readonly language: InterfaceLanguage; readonly person: AdminLinkPerson | null }) {
+export function LinkPerson({ language, person }: { readonly language: AdminLanguage; readonly person: AdminLinkPerson | null }) {
   const ref = userRefOf(person, language);
   if (ref === null) return <span>{personLabel(null, language)}</span>;
   return <AdminEntityChip language={language} entity={ref} />;
 }
 
-export function LinkConversation({ language, conversation }: { readonly language: InterfaceLanguage; readonly conversation: AdminLinkConversation | null }) {
+export function LinkConversation({ language, conversation }: { readonly language: AdminLanguage; readonly conversation: AdminLinkConversation | null }) {
   const ref = conversationRefOf(conversation, language);
   if (ref === null) return <span>—</span>;
   return <AdminEntityChip language={language} entity={ref} />;
 }
 
 /** L'état d'un lien de partage, nommé : fermé > expiré > quota atteint > actif — l'explication en infobulle. */
-export function ShareLinkStateBadge({ language, link, now }: { readonly language: InterfaceLanguage; readonly link: AdminShareLinkRow; readonly now: Date }) {
+export function ShareLinkStateBadge({ language, link, now }: { readonly language: AdminLanguage; readonly link: AdminShareLinkRow; readonly now: Date }) {
   return <AdminInterpretedBadge value={shareLinkState(link, now, language)} />;
 }

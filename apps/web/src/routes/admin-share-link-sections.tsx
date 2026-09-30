@@ -8,8 +8,7 @@ import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { shareLinkGuestPermissions, shareLinkRequirements, shareLinkRestrictions, shareLinkState, type ShareLinkFlag } from '@/lib/admin/share-link-model';
 import { guestRefOf } from '@/lib/admin/share-link-refs';
 import type { AdminShareLink } from '@/lib/api/admin-share-links';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { LinkConversation, LinkPerson } from './admin-share-link-parts';
 
@@ -25,7 +24,7 @@ import { LinkConversation, LinkPerson } from './admin-share-link-parts';
 const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
 
-export function ConversationSection({ language, link }: { readonly language: InterfaceLanguage; readonly link: AdminShareLink }) {
+export function ConversationSection({ language, link }: { readonly language: AdminLanguage; readonly link: AdminShareLink }) {
   return (
     <AdminFicheSection id="conversation" title={translateAdmin(language, 'admin.shareLink.section.conversation')}>
       {link.conversation === null ? (
@@ -52,7 +51,7 @@ function FlagList({ flags, anchor }: { readonly flags: readonly ShareLinkFlag[];
   );
 }
 
-export function PermissionsSection({ language, link }: { readonly language: InterfaceLanguage; readonly link: AdminShareLink }) {
+export function PermissionsSection({ language, link }: { readonly language: AdminLanguage; readonly link: AdminShareLink }) {
   return (
     <AdminFicheSection id="permissions" title={translateAdmin(language, 'admin.shareLink.section.permissions')}>
       <FlagList anchor="permissions" flags={shareLinkGuestPermissions(link, language)} />
@@ -60,7 +59,7 @@ export function PermissionsSection({ language, link }: { readonly language: Inte
   );
 }
 
-export function RequirementsSection({ language, link }: { readonly language: InterfaceLanguage; readonly link: AdminShareLink }) {
+export function RequirementsSection({ language, link }: { readonly language: AdminLanguage; readonly link: AdminShareLink }) {
   return (
     <AdminFicheSection id="requirements" title={translateAdmin(language, 'admin.shareLink.section.requirements')}>
       <FlagList anchor="requirements" flags={shareLinkRequirements(link, language)} />
@@ -90,7 +89,7 @@ function RestrictionRow({ anchor, label, names, none }: { readonly anchor: strin
   );
 }
 
-export function RestrictionsSection({ language, link }: { readonly language: InterfaceLanguage; readonly link: AdminShareLink }) {
+export function RestrictionsSection({ language, link }: { readonly language: AdminLanguage; readonly link: AdminShareLink }) {
   const restrictions = shareLinkRestrictions(link, language);
   const none = translateAdmin(language, 'admin.shareLink.restrict.none');
   return (
@@ -103,7 +102,7 @@ export function RestrictionsSection({ language, link }: { readonly language: Int
   );
 }
 
-export function GuestsSection({ language, link, now }: { readonly language: InterfaceLanguage; readonly link: AdminShareLink; readonly now: Date }) {
+export function GuestsSection({ language, link, now }: { readonly language: AdminLanguage; readonly link: AdminShareLink; readonly now: Date }) {
   return (
     <AdminFicheSection id="guests" title={translateAdmin(language, 'admin.shareLink.section.guests')}>
       {link.recentGuests.length === 0 ? (
@@ -133,7 +132,7 @@ export function ShareLinkMeta({
   now,
   onAnnounce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly link: AdminShareLink;
   readonly now: Date;
   readonly onAnnounce: (message: string) => void;

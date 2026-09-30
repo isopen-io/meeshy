@@ -4,8 +4,7 @@ import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { BRAND, EDGE, INK, INK2, INK3, SURFACE } from '@/components/admin/tone';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import type { ChoiceOption } from '@/lib/admin/broadcast-form';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES CHAMPS DE LA FEUILLE DE COMPOSITION** (#8876, #6731) — un champ texte, un
@@ -168,7 +167,7 @@ export function ChoiceField({
   onChange,
   anchor,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly id: string;
   readonly legend: string;
   readonly hint: string;

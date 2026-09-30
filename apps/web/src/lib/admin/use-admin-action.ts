@@ -2,8 +2,7 @@ import { useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
 type ActionState =
@@ -29,7 +28,7 @@ export type AdminGesture<Result> = {
  * invalides » ; 409 → conflit avec l'état courant ; échec réseau (statut 0) →
  * « réessayez » ; tout le reste → le serveur n'a pas pu.
  */
-function refusal(failure: ApiFailure, language: InterfaceLanguage): string {
+function refusal(failure: ApiFailure, language: AdminLanguage): string {
   if (failure.status === 403) return translateAdmin(language, 'admin.kit.refused.permission');
   if (failure.status === 400) {
     const served = failure.error.trim();
@@ -50,7 +49,7 @@ function refusal(failure: ApiFailure, language: InterfaceLanguage): string {
  * succès comme refus — un geste sans retour ne se tait pas.
  */
 export function useAdminAction<Result>(params: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (message: string, tone?: AnnouncementTone) => void;
 }) {
   const queryClient = useQueryClient();

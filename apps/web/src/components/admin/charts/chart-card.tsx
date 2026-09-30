@@ -1,7 +1,6 @@
 import { useId, useState, type ReactNode } from 'react';
 
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { AdminGlyph } from '../admin-glyph';
 import { AdminErrorState } from '../states';
@@ -98,7 +97,7 @@ export function AdminChartCard({
   empty,
   children,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly id: string;
   readonly title: string;
   readonly summary: string;

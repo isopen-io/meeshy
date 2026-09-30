@@ -18,8 +18,7 @@ import { ADMIN_PERIODS } from '@/lib/admin/period';
 import type { AdminDeps } from '@/lib/api/admin';
 import type { AdminAuditEntry } from '@/lib/api/admin-audit';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AdminOption } from '@/routes/admin-table';
 
 import { AuditDetailSheet } from './admin-audit-detail';
@@ -46,7 +45,7 @@ const defaultNow = (): Date => new Date();
 const option = (value: string, label: string): AdminOption => ({ value, label });
 
 type AuditPanelProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
 };
@@ -199,7 +198,8 @@ export function AdminAuditPanel({ language, deps = apiDeps, now = defaultNow }: 
 }
 
 export default function AdminAuditScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
 
   return (
     <AdminSectionScreen section="audit" language={language} title={translateAdmin(language, 'admin.nav.audit')}>

@@ -1,9 +1,8 @@
 import { agentAccess } from '@/lib/admin/agent-access';
 import { adminListRoute } from '@/lib/admin/admin-routes';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { AdminAgentPanel } from '@/routes/admin-agent-parts';
 import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
 
@@ -39,7 +38,8 @@ import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-par
  * au 403.
  */
 export default function AdminAgentScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   const reach = useAdminReach();
 
   const access = agentAccess({

@@ -21,8 +21,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { adminPostQueryKey, loadAdminPost, type AdminPostFiche } from '@/lib/api/admin-posts-detail';
 import { ApiError, unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useParams } from '@/lib/router';
 import { participantAvatarOf } from '@/lib/view/conversation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -46,7 +45,7 @@ import { AdminPostRemoval, PostCommentsSection, PostMediaSection, PostViewersSec
  *
  * Gardée par `canModerateContent`.
  */
-function Content({ language, fiche }: { readonly language: InterfaceLanguage; readonly fiche: AdminPostFiche }) {
+function Content({ language, fiche }: { readonly language: AdminLanguage; readonly fiche: AdminPostFiche }) {
   return (
     <AdminFicheSection id="content" title={translateAdmin(language, 'admin.posts.section.content')}>
       {fiche.restricted ? <AdminInlineNotice tone="info" text={translateAdmin(language, 'admin.posts.content.restricted')} /> : null}
@@ -80,7 +79,7 @@ function Content({ language, fiche }: { readonly language: InterfaceLanguage; re
   );
 }
 
-function Context({ language, fiche }: { readonly language: InterfaceLanguage; readonly fiche: AdminPostFiche }) {
+function Context({ language, fiche }: { readonly language: AdminLanguage; readonly fiche: AdminPostFiche }) {
   const author = personRef(fiche.author, language);
   const community = fiche.community === null ? null : communityRef(fiche.community, language);
   const repost = fiche.repostOf === null ? null : postRef(fiche.repostOf, language);
@@ -123,7 +122,7 @@ function Metadata({
   now,
   onAnnounce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly fiche: AdminPostFiche;
   readonly now: Date;
   readonly onAnnounce: (message: string) => void;
@@ -173,7 +172,7 @@ export function AdminPostPanel({
   deps = apiDeps,
   now = new Date(),
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly postId: string;
   readonly deps?: AdminDeps;
   readonly now?: Date;
@@ -297,7 +296,8 @@ export function AdminPostPanel({
 }
 
 export default function AdminPostScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   const { post } = useParams<'/admin/posts/$post'>();
   return (
     <AdminSectionScreen section="posts" language={language} title={translateAdmin(language, 'admin.nav.posts')}>

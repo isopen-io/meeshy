@@ -9,8 +9,7 @@ import type {
 } from '@meeshy/shared/types/preferences';
 
 import type { AdminPreferenceCategory, AdminPreferenceValue } from '@/lib/api/admin-user-member';
-import { translateAdmin, translateAdminMaybe } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, translateAdminMaybe, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { languageName, sentenceCase } from './interpret/language';
 import { formatBytes, formatCount, formatPercent } from './interpret/numbers';
@@ -277,7 +276,7 @@ export function humanizeKey(key: string): string {
   return words === '' ? key : `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
 }
 
-export function preferenceLabel(category: AdminPreferenceCategory, key: string, language: InterfaceLanguage): string {
+export function preferenceLabel(category: AdminPreferenceCategory, key: string, language: AdminLanguage): string {
   return translateAdminMaybe(language, preferenceLabelKey(category, key)) ?? humanizeKey(key);
 }
 
@@ -308,7 +307,7 @@ export const PREFERENCE_CHOICES: Readonly<Record<Choice, readonly string[]>> = {
 };
 
 /** Le NOM d'une option d'énumération — `admin.people.prefValue.<famille>.<option>` — ou son libellé humanisé. */
-export function choiceLabel(choice: Choice, option: string, language: InterfaceLanguage): string {
+export function choiceLabel(choice: Choice, option: string, language: AdminLanguage): string {
   return translateAdminMaybe(language, `admin.people.prefValue.${choice}.${option}`) ?? sentenceCase(humanizeKey(option).toLowerCase(), language);
 }
 
@@ -316,7 +315,7 @@ export function choiceLabel(choice: Choice, option: string, language: InterfaceL
 export function preferenceOptions(
   category: AdminPreferenceCategory,
   key: string,
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): readonly { readonly value: string; readonly label: string }[] | null {
   const kind = preferenceKindOf(category, key);
   if (kind === null || typeof kind === 'string' || !('choice' in kind)) return null;
@@ -329,7 +328,7 @@ const MEGABYTE = 1_048_576;
 
 const strings = (value: AdminPreferenceValue): readonly string[] => (Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []);
 
-function clockText(value: string, language: InterfaceLanguage): string {
+function clockText(value: string, language: AdminLanguage): string {
   const match = /^(\d{1,2}):(\d{2})$/.exec(value);
   if (match === null) return value;
   const instant = new Date(Date.UTC(1970, 0, 1, Number(match[1]), Number(match[2])));
@@ -344,7 +343,7 @@ function utcOffsetText(minutes: number): string {
   return `UTC${sign}${hours}:${rest}`;
 }
 
-function decimal(value: number, language: InterfaceLanguage): string {
+function decimal(value: number, language: AdminLanguage): string {
   return new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(value);
 }
 
@@ -358,7 +357,7 @@ export function interpretPreferenceValue(
   category: AdminPreferenceCategory,
   key: string,
   value: AdminPreferenceValue,
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): string {
   const kind = preferenceKindOf(category, key);
 

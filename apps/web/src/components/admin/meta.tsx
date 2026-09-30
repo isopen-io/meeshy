@@ -1,8 +1,7 @@
 import { useState, type ReactNode } from 'react';
 
 import type { AdminMoment } from '@/lib/admin/interpret/types';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { copyPlainText } from '@/lib/view/copy-text';
 
 import { AdminGlyph } from './admin-glyph';
@@ -64,7 +63,7 @@ export function AdminTechnicalId({
   label,
   onAnnounce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly id: string;
   readonly label?: string;
   readonly onAnnounce?: (message: string) => void;

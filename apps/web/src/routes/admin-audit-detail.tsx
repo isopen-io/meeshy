@@ -8,8 +8,7 @@ import { auditFieldLabel, auditValue, summarizeUserAgent } from '@/lib/admin/aud
 import { interpretAuditAction } from '@/lib/admin/audit-vocabulary';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import type { AdminAuditChange, AdminAuditEntry, AdminAuditPerson } from '@/lib/api/admin-audit';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { AdminAnnouncement } from '@/routes/admin-parts';
 
@@ -61,7 +60,7 @@ function Person({
   allLabel,
   searchKey,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly person: AdminAuditPerson | null;
   readonly allLabel: string;
   readonly searchKey: 'admin' | 'subject';
@@ -74,7 +73,7 @@ function Person({
   );
 }
 
-function ChangesTable({ language, entry, now }: { readonly language: InterfaceLanguage; readonly entry: AdminAuditEntry; readonly now: Date }) {
+function ChangesTable({ language, entry, now }: { readonly language: AdminLanguage; readonly entry: AdminAuditEntry; readonly now: Date }) {
   const changes: readonly AdminAuditChange[] = entry.changes ?? [];
   if (changes.length === 0) {
     return (
@@ -130,7 +129,7 @@ function ChangesTable({ language, entry, now }: { readonly language: InterfaceLa
   );
 }
 
-function Network({ language, entry }: { readonly language: InterfaceLanguage; readonly entry: AdminAuditEntry }) {
+function Network({ language, entry }: { readonly language: AdminLanguage; readonly entry: AdminAuditEntry }) {
   if (entry.ipAddress === null && entry.userAgent === null) return null;
   const agent = summarizeUserAgent(entry.userAgent);
   return (
@@ -162,7 +161,7 @@ export function AuditDetailSheet({
   now,
   onClose,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly entry: AdminAuditEntry;
   readonly now: Date;
   readonly onClose: () => void;

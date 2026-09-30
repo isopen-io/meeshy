@@ -42,9 +42,9 @@ const f = {
   'admin.ranking.criterion.messages.most_replies': 'Most replied to',
   'admin.ranking.criterion.messages.most_mentions': 'Most mentioned',
   'admin.ranking.criterion.links.tracking_links_most_visited': 'Ligações',
-  'admin.ranking.criterion.links.tracking_links_most_unique': 'Ligações',
+  'admin.ranking.criterion.links.tracking_links_most_unique': 'Ligações de seguimento com mais visitantes distintos',
   'admin.ranking.criterion.links.share_links_most_used': 'Ligações',
-  'admin.ranking.criterion.links.share_links_most_unique_sessions': 'Ligações',
+  'admin.ranking.criterion.links.share_links_most_unique_sessions': 'Ligações de partilha com mais sessões distintas',
 
   'admin.ranking.period.label': 'Período',
   'admin.ranking.period.1d': 'Últimas 24 horas',
@@ -79,7 +79,7 @@ const f = {
   'admin.ranking.col.created': 'Criado',
 
   'admin.ranking.message.label': 'Message from {sender} em {conversation}',
-  'admin.ranking.message.meta': '{date} · {tipo}',
+  'admin.ranking.message.meta': '{date} · {type}',
   'admin.ranking.trackingLink.to': 'Link para {host}',
 
   'admin.ranking.empty': 'No result for this ranking',

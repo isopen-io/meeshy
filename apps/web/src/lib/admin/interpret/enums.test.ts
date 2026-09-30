@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 
-import { loadAdminInterfaceCatalog, translateAdminMaybe } from '@/lib/i18n-admin-catalog';
-import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+import { ADMIN_LANGUAGES, loadAdminInterfaceCatalog, translateAdminMaybe } from '@/lib/i18n-admin-catalog';
 
 import {
   ENUM_FAMILIES,
@@ -25,20 +24,20 @@ const PAST = '2026-09-01T00:00:00Z';
 const FUTURE = '2026-12-01T00:00:00Z';
 
 beforeAll(async () => {
-  await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadAdminInterfaceCatalog(language)));
+  await Promise.all(ADMIN_LANGUAGES.map((language) => loadAdminInterfaceCatalog(language)));
 });
 
 const families = Object.keys(ENUM_FAMILIES) as AdminEnumFamily[];
 const codesOf = (family: AdminEnumFamily): readonly string[] => Object.keys(ENUM_FAMILIES[family]);
 
-describe('chaque code de chaque famille est nommé dans les sept langues', () => {
+describe('chaque code de chaque famille est nommé dans les quatre langues de l’administration', () => {
   test('la table couvre les vingt-neuf tables de la spécification (qualité d’appel et de traduction se partagent la leur)', () => {
     expect(families).toHaveLength(29);
   });
 
   for (const family of families) {
     test(`${family} : libellé, ton et explication existent partout`, () => {
-      for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      for (const language of ADMIN_LANGUAGES) {
         for (const code of codesOf(family)) {
           const value = interpretEnum(family, code, language);
           expect({ language, family, code, unrecognized: value.label === translateAdminMaybe(language, 'admin.value.unrecognized') }).toEqual({

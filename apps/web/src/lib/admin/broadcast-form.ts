@@ -2,7 +2,7 @@ import { getLanguagesWithTranslation } from '@meeshy/shared/utils/languages';
 
 import type { AdminBroadcast, AdminBroadcastActivity, AdminBroadcastBody, AdminBroadcastTargeting } from '@/lib/api/admin-broadcasts';
 import { COUNTRIES } from '@/lib/countries';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { countryName, languageName, sentenceCase } from './interpret/language';
 
@@ -43,8 +43,8 @@ export const newBroadcastForm = (sourceLanguage: string): BroadcastForm => ({
   countries: [],
 });
 
-/** La langue dans laquelle on écrit par défaut : celle de l'interface — les sept sont des langues que la traduction sait servir. */
-export const defaultSourceLanguage = (language: InterfaceLanguage): string => language;
+/** La langue dans laquelle on écrit par défaut : celle de l'ADMINISTRATION — les quatre sont des langues que la traduction sait servir. */
+export const defaultSourceLanguage = (language: AdminLanguage): string => language;
 
 export const formOfBroadcast = (broadcast: Pick<AdminBroadcast, 'name' | 'subject' | 'body' | 'sourceLanguage' | 'targeting'>): BroadcastForm => ({
   name: broadcast.name,
@@ -106,7 +106,7 @@ export function bodyOfForm(form: BroadcastForm): AdminBroadcastBody {
 
 export type ChoiceOption = { readonly value: string; readonly label: string };
 
-const byLabel = (language: InterfaceLanguage) => (a: ChoiceOption, b: ChoiceOption) => a.label.localeCompare(b.label, language);
+const byLabel = (language: AdminLanguage) => (a: ChoiceOption, b: ChoiceOption) => a.label.localeCompare(b.label, language);
 
 /**
  * LES LANGUES QU'ON PEUT CHOISIR — celles que la traduction sait servir (la
@@ -115,13 +115,13 @@ const byLabel = (language: InterfaceLanguage) => (a: ChoiceOption, b: ChoiceOpti
  * n'appartiennent pas à la liste : les retirer en silence changerait le ciblage
  * d'un brouillon au simple fait de l'ouvrir.
  */
-export function languageOptions(language: InterfaceLanguage, extra: readonly string[] = []): readonly ChoiceOption[] {
+export function languageOptions(language: AdminLanguage, extra: readonly string[] = []): readonly ChoiceOption[] {
   const known = getLanguagesWithTranslation().map((info) => info.code);
   const codes = [...new Set([...known, ...extra])];
   return codes.map((code) => ({ value: code, label: sentenceCase(languageName(code, language), language) })).sort(byLabel(language));
 }
 
 /** LES PAYS — ceux que garde la liste de l'application (`lib/countries.ts`, générée), nommés dans la langue d'interface. */
-export function countryOptions(language: InterfaceLanguage): readonly ChoiceOption[] {
+export function countryOptions(language: AdminLanguage): readonly ChoiceOption[] {
   return COUNTRIES.map((country) => ({ value: country.id, label: countryName(country.id, language) })).sort(byLabel(language));
 }

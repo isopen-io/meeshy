@@ -1,5 +1,4 @@
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import type { AdminSectionId } from './admin-routes';
 import { ADMIN_SECTIONS, type AdminPermissionKey, type AdminSection } from './sections';
@@ -50,7 +49,7 @@ export function capabilityRows(params: {
 }
 
 /** La phrase : « Ouvre : Comptes et Anonymes », « Ouvrirait : … », ou « N’ouvre aucune section à elle seule. » */
-export function capabilityOpensText(row: CapabilityRow, language: InterfaceLanguage): string {
+export function capabilityOpensText(row: CapabilityRow, language: AdminLanguage): string {
   if (row.opens.length === 0) return translateAdmin(language, 'admin.settings.access.opensNothing');
   const sections = new Intl.ListFormat(language, { style: 'long', type: 'conjunction' }).format(
     row.opens.map((id) => translateAdmin(language, `admin.nav.${id}`)),

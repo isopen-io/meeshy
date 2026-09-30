@@ -3,8 +3,7 @@ import type {
   AdminRecentReport,
   AdminSendingBroadcasts,
 } from '@/lib/api/admin-overview-queue';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { interpretReportStatus, interpretReportType, interpretReportedEntity } from './interpret/enums';
 import { personLabel, personSecondary } from './interpret/labels';
@@ -39,7 +38,7 @@ const joinLine = (parts: readonly (string | null)[]): string => parts.filter((pa
  * communauté, son), sinon « {genre} de {propriétaire} » (message, publication,
  * commentaire — qui n'ont pas de titre), sinon le seul genre.
  */
-export function reportedEntityName(entity: AdminRecentReport['entity'], language: InterfaceLanguage): string {
+export function reportedEntityName(entity: AdminRecentReport['entity'], language: AdminLanguage): string {
   const kind = interpretReportedEntity(entity?.kind, language).label;
   if (entity === null) return kind;
   if (entity.label !== null) return entity.label;
@@ -47,7 +46,7 @@ export function reportedEntityName(entity: AdminRecentReport['entity'], language
   return translateAdmin(language, 'admin.dash.moderation.entityOf', { kind, owner: personLabel(entity.owner, language) });
 }
 
-export function recentReportRows(reports: readonly AdminRecentReport[], now: Date, language: InterfaceLanguage): readonly DashReportRow[] {
+export function recentReportRows(reports: readonly AdminRecentReport[], now: Date, language: AdminLanguage): readonly DashReportRow[] {
   return reports.map((report) => {
     const named = report.entity?.label !== null && report.entity !== null;
     return {
@@ -76,7 +75,7 @@ export type DashBroadcastRow = {
 
 export function broadcastRows(
   data: AdminSendingBroadcasts,
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): { readonly rows: readonly DashBroadcastRow[]; readonly more: string | null } {
   const rows = data.rows.map((row): DashBroadcastRow => ({
     id: row.id,
@@ -100,7 +99,7 @@ export type DashMemberRow = {
   readonly avatar: string | null;
 };
 
-export function recentMemberRows(members: readonly AdminRecentMember[], now: Date, language: InterfaceLanguage): readonly DashMemberRow[] {
+export function recentMemberRows(members: readonly AdminRecentMember[], now: Date, language: AdminLanguage): readonly DashMemberRow[] {
   return members.map((member) => {
     const joined = adminMomentOf(member.createdAt, now, language);
     const secondary = joinLine([

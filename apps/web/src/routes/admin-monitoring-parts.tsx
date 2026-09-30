@@ -6,8 +6,7 @@ import { AdminMomentText } from '@/components/admin/meta';
 import { BRAND, EDGE, INK, INK2, INK3, SURFACE, TONE_COLOR } from '@/components/admin/tone';
 import { formatDuration } from '@/lib/admin/interpret/time';
 import type { AdminMoment, Interpreted } from '@/lib/admin/interpret/types';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { PlainTh, Td } from '@/routes/admin-table';
 
 /**
@@ -46,7 +45,7 @@ export function MonitoringSection({
   );
 }
 
-export function RefreshButton({ language, busy, onRefresh }: { readonly language: InterfaceLanguage; readonly busy: boolean; readonly onRefresh: () => void }) {
+export function RefreshButton({ language, busy, onRefresh }: { readonly language: AdminLanguage; readonly busy: boolean; readonly onRefresh: () => void }) {
   return (
     <button
       type="button"
@@ -76,7 +75,7 @@ export function ServiceCard({
   status,
   latencyMs,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly anchor: string;
   readonly title: string;
   readonly status: Interpreted;

@@ -13,8 +13,7 @@ import {
   type AdminReportCount,
   type AdminReportStats,
 } from '@/lib/api/admin-reports';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LE BANDEAU DE LA FILE DE MODÉRATION** (#8876, #6726) — `GET /admin/reports/stats`.
@@ -44,7 +43,7 @@ function shareData(counts: readonly AdminReportCount[], labelOf: (key: string) =
   return counts.map((entry) => ({ key: entry.key, label: labelOf(entry.key), value: entry.count }));
 }
 
-export function AdminReportsStats({ language, deps }: { readonly language: InterfaceLanguage; readonly deps: AdminDeps }) {
+export function AdminReportsStats({ language, deps }: { readonly language: AdminLanguage; readonly deps: AdminDeps }) {
   const query = useQuery({
     queryKey: ADMIN_REPORTS_STATS_KEY,
     queryFn: async ({ signal }) => unwrap(await loadAdminReportStats({ ...deps, signal })),

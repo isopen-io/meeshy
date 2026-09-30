@@ -1,7 +1,7 @@
 import { getUserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 
 import type { AdminEntityRef } from '@/components/admin/entity-chip';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { personLabel, personSecondary, type PersonNameFields } from './interpret/labels';
 
@@ -24,7 +24,7 @@ export type PersonFacts = PersonNameFields & {
  * `getUserPresenceStatus` (1/3/5 minutes) : jamais une couleur écrite ici, la
  * pastille se peint par `Avatar presence=`. `now` est injecté.
  */
-export function userEntityOf(person: PersonFacts, language: InterfaceLanguage, now: Date): AdminEntityRef {
+export function userEntityOf(person: PersonFacts, language: AdminLanguage, now: Date): AdminEntityRef {
   const hasPresence = person.isOnline !== undefined || person.lastActiveAt !== undefined;
   const secondary = personSecondary(person.username);
   return {

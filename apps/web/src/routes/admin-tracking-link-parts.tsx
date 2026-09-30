@@ -4,8 +4,7 @@ import { AdminEntityChip } from '@/components/admin/entity-chip';
 import { interpretTrackingTarget } from '@/lib/admin/interpret/enums';
 import { trackingLinkState, trackingTargetRef } from '@/lib/admin/tracking-link-model';
 import type { AdminTrackingLinkRow } from '@/lib/api/admin-tracking-links';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { copyPlainText } from '@/lib/view/copy-text';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
@@ -15,7 +14,7 @@ import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
  */
 const INK2 = 'var(--color-ios-ink-2)';
 
-export function TrackingStateBadge({ language, link, now }: { readonly language: InterfaceLanguage; readonly link: AdminTrackingLinkRow; readonly now: Date }) {
+export function TrackingStateBadge({ language, link, now }: { readonly language: AdminLanguage; readonly link: AdminTrackingLinkRow; readonly now: Date }) {
   return <AdminInterpretedBadge value={trackingLinkState(link, now, language)} />;
 }
 
@@ -24,14 +23,14 @@ export function TrackingStateBadge({ language, link, now }: { readonly language:
  * un site externe (ou une cible sans entité), le GENRE nommé en texte — jamais un
  * identifiant.
  */
-export function TrackingTarget({ language, link }: { readonly language: InterfaceLanguage; readonly link: AdminTrackingLinkRow }) {
+export function TrackingTarget({ language, link }: { readonly language: AdminLanguage; readonly link: AdminTrackingLinkRow }) {
   const ref = trackingTargetRef(link, language);
   if (ref === null) return <span>{interpretTrackingTarget(link.targetType, language).label}</span>;
   return <AdminEntityChip language={language} entity={ref} />;
 }
 
 /** La campagne, la source et le support, chacun sous son libellé — « — » quand aucun n'est posé. */
-export function TrackingUtm({ language, link }: { readonly language: InterfaceLanguage; readonly link: AdminTrackingLinkRow }) {
+export function TrackingUtm({ language, link }: { readonly language: AdminLanguage; readonly link: AdminTrackingLinkRow }) {
   const lines = [
     { id: 'campaign', label: translateAdmin(language, 'admin.tracking.utm.campaign'), value: link.campaign },
     { id: 'source', label: translateAdmin(language, 'admin.tracking.utm.source'), value: link.source },
@@ -60,7 +59,7 @@ export function CopyableAddress({
   anchor,
   onAnnounce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly value: string;
   readonly anchor: string;
   readonly onAnnounce: (message: string, tone?: AnnouncementTone) => void;

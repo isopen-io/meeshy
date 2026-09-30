@@ -1,7 +1,6 @@
 import type { AdminEntityRef } from '@/components/admin/entity-chip';
 import type { AdminReport, AdminReportPerson, AdminReportedEntity } from '@/lib/api/admin-reports';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import type { AdminEntityKind, AdminTarget } from './admin-routes';
 import { interpretReportedEntity } from './interpret/enums';
@@ -37,12 +36,12 @@ export type ReportedTarget = {
 
 const CONTENT_KINDS: ReadonlySet<string> = new Set(['message', 'post', 'story', 'comment']);
 
-const kindLabel = (type: string, language: InterfaceLanguage): string => interpretReportedEntity(type, language).label;
+const kindLabel = (type: string, language: AdminLanguage): string => interpretReportedEntity(type, language).label;
 
 /** Un compte, pas un invité : seul un compte a un `@pseudo`, et seul son identifiant ouvre une fiche membre. */
 const isAccount = (person: AdminReportPerson | null): person is AdminReportPerson => person !== null && person.username !== '';
 
-const personRef = (person: AdminReportPerson, language: InterfaceLanguage): AdminEntityRef => ({
+const personRef = (person: AdminReportPerson, language: AdminLanguage): AdminEntityRef => ({
   kind: 'user',
   id: person.id,
   label: personLabel(person, language),
@@ -50,7 +49,7 @@ const personRef = (person: AdminReportPerson, language: InterfaceLanguage): Admi
   avatarUrl: person.avatar,
 });
 
-function entityLabel(type: string, entity: AdminReportedEntity, language: InterfaceLanguage): string {
+function entityLabel(type: string, entity: AdminReportedEntity, language: AdminLanguage): string {
   const author = personLabel(entity.owner, language);
   switch (type) {
     case 'message':
@@ -67,7 +66,7 @@ function entityLabel(type: string, entity: AdminReportedEntity, language: Interf
   }
 }
 
-function entitySecondary(type: string, entity: AdminReportedEntity, language: InterfaceLanguage): string | null {
+function entitySecondary(type: string, entity: AdminReportedEntity, language: AdminLanguage): string | null {
   if (CONTENT_KINDS.has(type)) {
     const excerpt = excerptOf(entity.excerpt, EXCERPT_IN_LIST);
     if (excerpt !== null) return excerpt;
@@ -103,7 +102,7 @@ function ficheKindOf(type: string, entity: AdminReportedEntity | null): AdminEnt
 /** Sans fiche, le genre ne sert qu'au glyphe de la puce : un message vit dans une conversation, un commentaire dans une publication. */
 const GLYPH_KIND: Readonly<Record<string, AdminEntityKind>> = { message: 'conversation', comment: 'post', sound: 'post' };
 
-export function reportedTargetOf(report: AdminReport, language: InterfaceLanguage): ReportedTarget {
+export function reportedTargetOf(report: AdminReport, language: AdminLanguage): ReportedTarget {
   const type = report.reportedType;
   const entity = report.reportedEntity;
   const ficheKind = ficheKindOf(type, entity);
@@ -140,20 +139,20 @@ export type ReportPersonView =
  */
 export function reportReporterOf(
   report: Pick<AdminReport, 'reporter' | 'reporterId' | 'reporterName'>,
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): ReportPersonView {
   if (report.reporter !== null) return { kind: 'person', ref: personRef(report.reporter, language) };
   if (report.reporterName !== null) return { kind: 'named', name: report.reporterName };
   return report.reporterId === null ? { kind: 'anonymous' } : { kind: 'gone' };
 }
 
-export function reportModeratorOf(report: Pick<AdminReport, 'moderator' | 'moderatorId'>, language: InterfaceLanguage): ReportPersonView {
+export function reportModeratorOf(report: Pick<AdminReport, 'moderator' | 'moderatorId'>, language: AdminLanguage): ReportPersonView {
   if (report.moderator !== null) return { kind: 'person', ref: personRef(report.moderator, language) };
   return report.moderatorId === null ? { kind: 'none' } : { kind: 'gone' };
 }
 
 /** Le mot qui désigne une personne d'un signalement quand on n'a pas la place d'une puce (phrase, annonce). */
-export function reportPersonName(view: ReportPersonView, language: InterfaceLanguage): string {
+export function reportPersonName(view: ReportPersonView, language: AdminLanguage): string {
   switch (view.kind) {
     case 'person':
       return view.ref.label;
@@ -173,14 +172,14 @@ export function reportPersonName(view: ReportPersonView, language: InterfaceLang
  * invité (son nom, sans lien — son identifiant n'est pas celui d'un compte) ;
  * `null` quand le serveur n'en sert pas.
  */
-export function reportedOwnerOf(report: AdminReport, language: InterfaceLanguage): ReportPersonView | null {
+export function reportedOwnerOf(report: AdminReport, language: AdminLanguage): ReportPersonView | null {
   const owner = report.reportedEntity?.owner ?? null;
   if (owner === null) return null;
   return isAccount(owner) ? { kind: 'person', ref: personRef(owner, language) } : { kind: 'named', name: personLabel(owner, language) };
 }
 
 /** La conversation d'un message signalé, nommée — la fiche où se fait la lecture souveraine. */
-export function reportedConversationOf(report: AdminReport, language: InterfaceLanguage): AdminEntityRef | null {
+export function reportedConversationOf(report: AdminReport, language: AdminLanguage): AdminEntityRef | null {
   const conversation = report.reportedEntity?.conversation ?? null;
   if (report.reportedType !== 'message' || conversation === null) return null;
   return { kind: 'conversation', id: conversation.id, label: conversationLabel({ title: conversation.title }, language) };
@@ -277,7 +276,7 @@ const SECURITY_TAB = { tab: 'security' } as const;
  * Un invité n'a pas de fiche membre (son identifiant n'est pas celui d'un
  * compte) : aucun lien d'auteur pour lui. Un élément supprimé n'a plus de fiche.
  */
-export function reportActionLinks(report: AdminReport, language: InterfaceLanguage): readonly ReportActionLink[] {
+export function reportActionLinks(report: AdminReport, language: AdminLanguage): readonly ReportActionLink[] {
   const entity = report.reportedEntity;
   const alive = entity === null || !entity.deleted;
   const owner = entity?.owner ?? null;

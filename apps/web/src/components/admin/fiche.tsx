@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { Avatar } from '@/components/avatar';
 import type { UserPresenceStatus } from '@/lib/api/types';
 import type { AdminEntityKind, AdminTarget } from '@/lib/admin/admin-routes';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { AdminGlyph, type AdminGlyphName } from './admin-glyph';
 import { AdminLink } from './entity-chip';
@@ -60,7 +60,7 @@ export function AdminIdentityHeader({
   badges,
   actions,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly title: string;
   readonly secondary?: string;
   readonly avatar?: {

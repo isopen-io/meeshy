@@ -13,8 +13,7 @@ import {
   type BroadcastFormField,
 } from '@/lib/admin/broadcast-form';
 import { BROADCAST_ACTIVITIES, type AdminBroadcastActivity, type AdminBroadcastBody } from '@/lib/api/admin-broadcasts';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { ChoiceField, SelectField, TextField } from './admin-broadcast-fields';
 
@@ -65,7 +64,7 @@ export function BroadcastComposerSheet({
   onSubmit,
   onCancel,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly mode: 'create' | 'edit';
   readonly initial: BroadcastForm;
   readonly busy: boolean;

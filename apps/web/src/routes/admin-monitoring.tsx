@@ -5,8 +5,7 @@ import { AdminTabs, useAdminTab } from '@/components/admin/tabs';
 import { MONITORING_TABS } from '@/lib/admin/monitoring-state';
 import type { AdminDeps } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { MonitoringHealth } from './admin-monitoring-health';
 import { MonitoringRoutes } from './admin-monitoring-routes';
@@ -26,7 +25,7 @@ import { MonitoringRoutes } from './admin-monitoring-routes';
 const defaultNow = (): Date => new Date();
 
 type MonitoringPanelProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
   /** La cadence de relecture de la santé, en ms — injectable pour les témoins. */
@@ -67,7 +66,8 @@ export function AdminMonitoringPanel({ language, deps = apiDeps, now = defaultNo
 }
 
 export default function AdminMonitoringScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
 
   return (
     <AdminSectionScreen section="monitoring" language={language} title={translateAdmin(language, 'admin.nav.monitoring')}>

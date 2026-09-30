@@ -19,8 +19,7 @@ import {
   type AdminReportAck,
   type ReportDecision,
 } from '@/lib/api/admin-reports';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
 /**
@@ -123,7 +122,7 @@ export function ReportGestures({
   announce,
   onDeleted,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly report: AdminReport;
   readonly deps: AdminDeps;
   readonly viewerId: string | null;

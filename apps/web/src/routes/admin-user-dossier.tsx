@@ -41,8 +41,7 @@ import {
 } from '@/lib/api/admin-user-dossier';
 import { apiDeps } from '@/lib/api/deps';
 import type { ApiResult } from '@/lib/api/http';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 
 import { AdminLine, AdminSection, AdminSkeleton } from './admin-parts';
@@ -87,7 +86,7 @@ async function servi<T>(promesse: Promise<ApiResult<T>>): Promise<T> {
   return resultat.data;
 }
 
-function Etat({ language, error }: { readonly language: InterfaceLanguage; readonly error: unknown }) {
+function Etat({ language, error }: { readonly language: AdminLanguage; readonly error: unknown }) {
   const online = useOnline();
   const refuse = error instanceof LectureRefusee && error.status === 403;
   const cle = refuse ? 'admin.dossier.restricted' : online ? 'admin.convList.unavailable' : 'admin.offline';
@@ -98,7 +97,7 @@ function Etat({ language, error }: { readonly language: InterfaceLanguage; reado
   );
 }
 
-function Vide({ language }: { readonly language: InterfaceLanguage }) {
+function Vide({ language }: { readonly language: AdminLanguage }) {
   return (
     <p className="text-caption" style={{ color: INK2 }} data-admin-dossier-empty>
       {translateAdmin(language, 'admin.dossier.empty')}
@@ -115,7 +114,7 @@ function Paginee<T>({
   entetes,
   ligne,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly query: { readonly isPending: boolean; readonly data: AdminDossierPage<T> | undefined; readonly error: unknown };
   readonly offset: number;
   readonly onOffset: (offset: number) => void;
@@ -159,9 +158,9 @@ function Titre({ children }: { readonly children: ReactNode }) {
   );
 }
 
-type TabProps = { readonly userId: string; readonly language: InterfaceLanguage; readonly deps?: AdminDeps; readonly now?: () => Date };
+type TabProps = { readonly userId: string; readonly language: AdminLanguage; readonly deps?: AdminDeps; readonly now?: () => Date };
 
-const moment = (iso: string | null, now: Date, language: InterfaceLanguage) => <AdminMomentText moment={adminMomentOf(iso, now, language)} />;
+const moment = (iso: string | null, now: Date, language: AdminLanguage) => <AdminMomentText moment={adminMomentOf(iso, now, language)} />;
 
 export function AdminUserContactsTab({ userId, language, deps = apiDeps, now = () => new Date() }: TabProps) {
   const activite = useQuery({
@@ -246,7 +245,7 @@ export function AdminUserCommunitiesTab({ userId, language, deps = apiDeps }: Ta
   );
 }
 
-function LigneCommunaute({ communaute, language }: { readonly communaute: AdminCommunity; readonly language: InterfaceLanguage }) {
+function LigneCommunaute({ communaute, language }: { readonly communaute: AdminCommunity; readonly language: AdminLanguage }) {
   return (
     <tr data-admin-community={communaute.id}>
       <Td>
@@ -417,7 +416,7 @@ function LigneSignalement({
   now,
 }: {
   readonly report: AdminReport;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly recu: boolean;
   readonly now: Date;
 }) {

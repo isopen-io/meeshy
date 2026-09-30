@@ -1,8 +1,7 @@
 import { asRecord } from '@/lib/api/admin';
 import type { AdminCommunityChange } from '@/lib/api/admin-communities-detail';
 import type { Interpreted } from '@/lib/admin/interpret/types';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **L'ÉTAT D'UNE COMMUNAUTÉ, DIT EN MOTS** (#8876) — la passerelle sert deux
@@ -14,7 +13,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * changerait rien n'est pas dessiné (loi 4) — on ne propose pas « Désactiver » à
  * une communauté déjà désactivée.
  */
-export function communityVisibilityOf(isPrivate: boolean, language: InterfaceLanguage): Interpreted {
+export function communityVisibilityOf(isPrivate: boolean, language: AdminLanguage): Interpreted {
   return isPrivate
     ? {
         label: translateAdmin(language, 'admin.community.visibility.private'),
@@ -30,7 +29,7 @@ export function communityVisibilityOf(isPrivate: boolean, language: InterfaceLan
       };
 }
 
-export function communityStateOf(isActive: boolean, language: InterfaceLanguage): Interpreted {
+export function communityStateOf(isActive: boolean, language: AdminLanguage): Interpreted {
   return isActive
     ? { label: translateAdmin(language, 'admin.community.state.active'), tone: 'success', explain: null, glyph: 'checkCircle', raw: 'active' }
     : {
@@ -73,7 +72,7 @@ export type CommunityGestureWords = {
 };
 
 /** Les mots de chaque geste : un `switch` EXHAUSTIF — un geste ajouté sans ses mots ne compile pas. */
-export function communityGestureWords(id: CommunityGestureId, language: InterfaceLanguage): CommunityGestureWords {
+export function communityGestureWords(id: CommunityGestureId, language: AdminLanguage): CommunityGestureWords {
   switch (id) {
     case 'deactivate':
       return {

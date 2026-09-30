@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AdminOption } from '@/routes/admin-table';
 
 import { AdminGlyph } from './admin-glyph';
@@ -36,7 +35,7 @@ export function AdminListToolbar({
   onReset,
   trailing,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly search?: { readonly label: string; readonly value: string; readonly onChange: (q: string) => void };
   readonly filters?: readonly AdminToolbarFilter[];
   readonly onReset?: () => void;

@@ -5,8 +5,7 @@ import { AdminMomentText } from '@/components/admin/meta';
 import { BRAND, EDGE, INK, INK2, SURFACE, TONE_COLOR, toneBackground } from '@/components/admin/tone';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import type { RankingRowView } from '@/lib/admin/ranking-view';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { PlainTh, Td } from '@/routes/admin-table';
 
 /**
@@ -28,7 +27,7 @@ export type RankingLabels = {
   readonly creator: string;
 };
 
-function RankMark({ language, rank }: { readonly language: InterfaceLanguage; readonly rank: number }) {
+function RankMark({ language, rank }: { readonly language: AdminLanguage; readonly rank: number }) {
   const first = rank === 1;
   return (
     <span
@@ -43,7 +42,7 @@ function RankMark({ language, rank }: { readonly language: InterfaceLanguage; re
   );
 }
 
-function CreatorLine({ language, view, label }: { readonly language: InterfaceLanguage; readonly view: RankingRowView; readonly label: string }) {
+function CreatorLine({ language, view, label }: { readonly language: AdminLanguage; readonly view: RankingRowView; readonly label: string }) {
   if (view.creator === null) return null;
   return (
     <span className="flex min-w-0 flex-wrap items-center gap-x-2">
@@ -62,7 +61,7 @@ export function RankingPodium({
   showValue,
   dimmed,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly views: readonly RankingRowView[];
   readonly labels: RankingLabels;
   readonly showValue: boolean;
@@ -110,7 +109,7 @@ export function RankingTable({
   caption,
   dimmed,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly views: readonly RankingRowView[];
   readonly labels: RankingLabels;
   readonly showValue: boolean;
@@ -207,7 +206,7 @@ export function RankingTable({
 const PLACEHOLDER = 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)';
 
 /** Le squelette : trois cartes de podium et six rangées — la forme de ce qui va arriver, jamais un spinner. */
-export function RankingSkeleton({ language }: { readonly language: InterfaceLanguage }) {
+export function RankingSkeleton({ language }: { readonly language: AdminLanguage }) {
   return (
     <div data-admin-ranking-skeleton aria-busy="true" aria-label={translateAdmin(language, 'admin.kit.loading')} className="grid gap-4">
       <div aria-hidden="true" className="grid grid-cols-1 gap-3 sm:grid-cols-3 md:gap-4">

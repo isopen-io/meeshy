@@ -5,8 +5,7 @@ import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
 import { useAdminAction } from '@/lib/admin/use-admin-action';
 import { adminUserDetailQueryKey, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import type { ApiResult } from '@/lib/api/http';
-import type { AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { AdminPlainCatalogKey, AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
@@ -46,7 +45,7 @@ export function useMemberGestures({
   onAnnounce,
 }: {
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string, tone?: AnnouncementTone) => void;
 }): {
   readonly ask: (gesture: MemberGesture) => void;

@@ -25,8 +25,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { adminAnonymousOneQueryOptions, type AdminAnonymousOne } from '@/lib/api/admin-anonymous';
 import { ApiError } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useParams } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
@@ -52,7 +51,7 @@ import { AdminAnnouncement, AdminSkeleton } from './admin-parts';
  * (`AdminEntityChip` lit la portée) : jamais un lien vers un refus.
  */
 
-function FicheState({ language, onRetry, denied, notFound }: { readonly language: InterfaceLanguage; readonly onRetry: () => void; readonly denied: boolean; readonly notFound: boolean }) {
+function FicheState({ language, onRetry, denied, notFound }: { readonly language: AdminLanguage; readonly onRetry: () => void; readonly denied: boolean; readonly notFound: boolean }) {
   if (denied) return <AdminDeniedInline language={language} />;
   return (
     <AdminErrorState
@@ -63,7 +62,7 @@ function FicheState({ language, onRetry, denied, notFound }: { readonly language
   );
 }
 
-function PermissionList({ fiche, language }: { readonly fiche: AdminAnonymousOne; readonly language: InterfaceLanguage }) {
+function PermissionList({ fiche, language }: { readonly fiche: AdminAnonymousOne; readonly language: AdminLanguage }) {
   return (
     <div className="grid gap-3">
       <p className="text-caption" style={{ color: INK2 }}>
@@ -83,7 +82,7 @@ function PermissionList({ fiche, language }: { readonly fiche: AdminAnonymousOne
   );
 }
 
-function EntryLink({ fiche, language, now }: { readonly fiche: AdminAnonymousOne; readonly language: InterfaceLanguage; readonly now: Date }) {
+function EntryLink({ fiche, language, now }: { readonly fiche: AdminAnonymousOne; readonly language: AdminLanguage; readonly now: Date }) {
   const link = fiche.shareLink;
   if (link === null) {
     return (
@@ -117,7 +116,7 @@ export function AdminAnonymousFiche({
   now = () => new Date(),
 }: {
   readonly participantId: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
 }) {
@@ -239,7 +238,8 @@ export function AdminAnonymousFiche({
 }
 
 export default function AdminAnonymousOneScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   const { participant } = useParams<'/admin/anonymous/$participant'>();
 
   return (

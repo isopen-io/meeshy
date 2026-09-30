@@ -4,8 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { UserAuditAction } from '@meeshy/shared/types';
 import { beforeAll, describe, expect, test } from 'bun:test';
 
-import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
-import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+import { ADMIN_LANGUAGES, loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 
 import {
   AUDIT_ACTIONS,
@@ -28,7 +27,7 @@ import {
 const GATEWAY_SRC = fileURLToPath(new URL('../../../../../services/gateway/src', import.meta.url));
 
 beforeAll(async () => {
-  await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadAdminInterfaceCatalog(language)));
+  await Promise.all(ADMIN_LANGUAGES.map((language) => loadAdminInterfaceCatalog(language)));
 });
 
 const isProductionSource = (path: string): boolean => path.endsWith('.ts') && !path.includes('__tests__') && !path.includes('.test.');
@@ -87,8 +86,8 @@ describe('la reconnaissance — aucun code écrit par la passerelle ne reste san
   });
 });
 
-describe('chaque code est dit dans les sept langues', () => {
-  for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+describe('chaque code est dit dans les quatre langues de l’administration', () => {
+  for (const language of ADMIN_LANGUAGES) {
     test(`${language} : libellé, explication, glyphe et ton pour chacun des codes`, () => {
       for (const code of Object.keys(AUDIT_ACTIONS)) {
         const interpreted = interpretAuditAction(code, language);

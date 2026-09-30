@@ -1,8 +1,7 @@
 import type { AdminEntityRef } from '@/components/admin/entity-chip';
 import type { AdminPersonRef } from '@/lib/api/admin-posts';
 import { conversationLabel, personLabel, personSecondary, postLabel } from '@/lib/admin/interpret/labels';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES RÉFÉRENCES D'ENTITÉ DU LOT « CONTENUS »** (#8876) — ce que les puces
@@ -14,7 +13,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * photo n'a pas de clé `avatarUrl` — c'est ce qui fait dessiner au chip le
  * glyphe de son genre plutôt qu'un rond d'initiales.
  */
-export function personRef(person: AdminPersonRef | null, language: InterfaceLanguage): AdminEntityRef | null {
+export function personRef(person: AdminPersonRef | null, language: AdminLanguage): AdminEntityRef | null {
   if (person === null) return null;
   return {
     kind: 'user',
@@ -27,7 +26,7 @@ export function personRef(person: AdminPersonRef | null, language: InterfaceLang
 
 export function postRef(
   post: { readonly id: string; readonly type: string | null; readonly author: AdminPersonRef | null },
-  language: InterfaceLanguage,
+  language: AdminLanguage,
   secondary: string | null = null,
 ): AdminEntityRef {
   return { kind: 'post', id: post.id, label: postLabel({ type: post.type, author: post.author }, language), secondary };
@@ -35,7 +34,7 @@ export function postRef(
 
 export function communityRef(
   community: { readonly id: string; readonly name: string; readonly identifier: string; readonly avatar: string | null },
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): AdminEntityRef {
   const name = community.name.trim();
   const identifier = community.identifier.trim();
@@ -50,7 +49,7 @@ export function communityRef(
 
 export function conversationRef(
   conversation: { readonly id: string; readonly title: string | null; readonly type: string | null },
-  language: InterfaceLanguage,
+  language: AdminLanguage,
   secondary: string | null,
 ): AdminEntityRef {
   return {

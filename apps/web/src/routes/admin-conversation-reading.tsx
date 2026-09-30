@@ -13,8 +13,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
 import type { Viewer } from '@/lib/api/viewer';
 import { place } from '@/lib/grouping';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useThreadScene } from '@/lib/reading-mode/scene';
 import { AdminSkeleton } from '@/routes/admin-parts';
 import { ThreadModes } from '@/routes/thread-modes';
@@ -119,7 +118,7 @@ export function AdminConversationReading({
 }: {
   readonly conversationId: string;
   /** La langue de l'INTERFACE d'administration (motif, boutons) — jamais celle du contenu. */
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   /**
    * **LE PRISME DE QUI** — et donc s'il y a quelque chose à ANNONCER.
    *

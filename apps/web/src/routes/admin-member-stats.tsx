@@ -6,8 +6,7 @@ import { formatCount } from '@/lib/admin/interpret/numbers';
 import type { AdminDeps } from '@/lib/api/admin';
 import { ADMIN_STAT_KEYS, adminUserStatsQueryOptions, type AdminStatKey } from '@/lib/api/admin-user-member';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES QUINZE CHIFFRES D'UN MEMBRE** (#7845, #8005) — le bandeau de la fiche :
@@ -48,7 +47,7 @@ export function AdminMemberStats({
   deps = apiDeps,
 }: {
   readonly userId: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
 }) {
   const stats = useQuery(adminUserStatsQueryOptions(deps, userId));

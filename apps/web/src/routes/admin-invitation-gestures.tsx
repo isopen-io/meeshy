@@ -8,8 +8,7 @@ import { useAdminAction } from '@/lib/admin/use-admin-action';
 import { type AdminDeps, asRecord } from '@/lib/api/admin';
 import { ADMIN_INVITATIONS_KEY, adminInvitationKey, cancelAdminInvitation, type AdminInvitation } from '@/lib/api/admin-invitations';
 import type { AdminLinkAck } from '@/lib/api/admin-share-links-person';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
 /**
@@ -36,7 +35,7 @@ export function InvitationGestures({
   online,
   announce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly invitation: AdminInvitation;
   readonly deps: AdminDeps;
   readonly online: boolean;

@@ -3,8 +3,7 @@ import type { AdminReport } from '@/lib/api/admin-reports';
 import { interpretReportStatus, interpretReportType } from '@/lib/admin/interpret/enums';
 import { AdminInterpretedBadge } from '@/components/admin/badges';
 import { reportedTargetOf, type ReportPersonView } from '@/lib/admin/report-model';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
@@ -17,7 +16,7 @@ const INK2 = 'var(--color-ios-ink-2)';
  */
 
 /** Une personne d'un signalement : la puce nommée (lien vers sa fiche), ou le mot qui dit pourquoi il n'y en a pas. */
-export function ReportPerson({ language, view, size = 'sm' }: { readonly language: InterfaceLanguage; readonly view: ReportPersonView; readonly size?: 'sm' | 'md' }) {
+export function ReportPerson({ language, view, size = 'sm' }: { readonly language: AdminLanguage; readonly view: ReportPersonView; readonly size?: 'sm' | 'md' }) {
   switch (view.kind) {
     case 'person':
       return <AdminEntityChip language={language} entity={view.ref} size={size} />;
@@ -44,7 +43,7 @@ export function ReportedElement({
   report,
   primary = false,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly report: AdminReport;
   readonly primary?: boolean;
 }) {
@@ -53,10 +52,10 @@ export function ReportedElement({
   return <AdminEntityChip language={language} entity={target.ref} />;
 }
 
-export const ReportStatusBadge = ({ language, status }: { readonly language: InterfaceLanguage; readonly status: string }) => (
+export const ReportStatusBadge = ({ language, status }: { readonly language: AdminLanguage; readonly status: string }) => (
   <AdminInterpretedBadge value={interpretReportStatus(status, language)} />
 );
 
-export const ReportReasonBadge = ({ language, reportType }: { readonly language: InterfaceLanguage; readonly reportType: string }) => (
+export const ReportReasonBadge = ({ language, reportType }: { readonly language: AdminLanguage; readonly reportType: string }) => (
   <AdminInterpretedBadge value={interpretReportType(reportType, language)} />
 );

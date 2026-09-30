@@ -17,8 +17,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { adminBroadcastKey, adminBroadcastPreviewKey, loadAdminBroadcast, type AdminBroadcast, type AdminBroadcastPreview } from '@/lib/api/admin-broadcasts';
 import { ApiError, unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -48,7 +47,7 @@ import { AudienceSection, BroadcastMeta, ContentSection, EmailSection, InAppSect
 const defaultNow = (): Date => new Date();
 
 type BroadcastPanelProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly broadcastId: string;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
@@ -206,7 +205,8 @@ export function AdminBroadcastPanel({ language, broadcastId, deps = apiDeps, now
 }
 
 export default function AdminBroadcastScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   const { broadcast: broadcastId } = useParams<'/admin/broadcasts/$broadcast'>();
 
   return (

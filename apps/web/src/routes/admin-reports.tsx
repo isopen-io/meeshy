@@ -24,8 +24,7 @@ import { useAdminList } from '@/lib/admin/use-admin-list';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminReportsListKey, loadAdminReports, type AdminReport } from '@/lib/api/admin-reports';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AdminOption } from '@/routes/admin-table';
 
 import { ReportPerson, ReportReasonBadge, ReportStatusBadge, ReportedElement } from './admin-report-parts';
@@ -51,7 +50,7 @@ const defaultNow = (): Date => new Date();
 const option = (value: string, label: string): AdminOption => ({ value, label });
 
 type ReportsPanelProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
 };
@@ -165,7 +164,8 @@ export function AdminReportsPanel({ language, deps = apiDeps, now = defaultNow }
 }
 
 export default function AdminReportsScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
 
   return (
     <AdminSectionScreen section="reports" language={language} title={translateAdmin(language, 'admin.nav.reports')}>

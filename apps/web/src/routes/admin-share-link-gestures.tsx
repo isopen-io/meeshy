@@ -18,8 +18,7 @@ import {
   type AdminShareLinkSecret,
 } from '@/lib/api/admin-share-links';
 import type { AdminLinkAck } from '@/lib/api/admin-share-links-person';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { copyPlainText } from '@/lib/view/copy-text';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
@@ -86,7 +85,7 @@ function GestureButton({ anchor, label, glyph, danger, disabled, onClick }: {
 
 /** Une clé révélée : en `code`, sous l'ancre des identifiants techniques, avec sa copie annoncée. */
 function SecretRow({ language, label, value, onAnnounce }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly label: string;
   readonly value: string;
   readonly onAnnounce: (message: string, tone?: AnnouncementTone) => void;
@@ -121,7 +120,7 @@ function SecretRow({ language, label, value, onAnnounce }: {
 }
 
 function RevealedSecretSheet({ language, secret, onClose, onAnnounce }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly secret: AdminShareLinkSecret;
   readonly onClose: () => void;
   readonly onAnnounce: (message: string, tone?: AnnouncementTone) => void;
@@ -160,7 +159,7 @@ export function ShareLinkGestures({
   online,
   announce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly link: AdminShareLink;
   readonly reach: AdminReach;
   readonly deps: AdminDeps;

@@ -7,8 +7,7 @@ import { useAdminAction } from '@/lib/admin/use-admin-action';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminCommunityQueryKey, updateAdminCommunity, type AdminCommunityFiche, type AdminCommunityUpdate } from '@/lib/api/admin-communities-detail';
 import { useOnline } from '@/lib/net/online';
-import type { InterfaceLanguage } from '@/lib/interface-language';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
 /**
@@ -56,7 +55,7 @@ export function AdminCommunityActions({
   deps,
   onAnnounce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly fiche: AdminCommunityFiche;
   readonly deps: AdminDeps;
   readonly onAnnounce: (message: string, tone?: AnnouncementTone) => void;

@@ -1,5 +1,4 @@
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import {
   interpretConversationType,
@@ -81,7 +80,7 @@ const humanizeSegment = (segment: string): string =>
     .trim()
     .toLowerCase();
 
-export function auditFieldLabel(field: string, language: InterfaceLanguage): string {
+export function auditFieldLabel(field: string, language: AdminLanguage): string {
   if (isKnownField(field)) return translateAdmin(language, `admin.audit.field.${field}`);
   const segments = field.split('.').map(humanizeSegment).filter((segment) => segment !== '');
   return segments.length === 0 ? NONE : sentenceCase(segments.join(' › '), language);
@@ -96,7 +95,7 @@ const COUNT = /^\d{1,12}$/;
 const LANGUAGE_FIELDS: ReadonlySet<string> = new Set(['systemLanguage', 'regionalLanguage', 'customDestinationLanguage']);
 
 /** L'énumération d'un champ dépend de CE QUI change : le rôle d'un compte n'est pas celui d'un participant. */
-function enumerated(entity: string, field: string, value: string, language: InterfaceLanguage): string | null {
+function enumerated(entity: string, field: string, value: string, language: AdminLanguage): string | null {
   if (field === 'role') return (entity === 'Conversation' ? interpretParticipantRole(value, language) : interpretRole(value, language)).label;
   if (field === 'status' && entity === 'Report') return interpretReportStatus(value, language).label;
   if (field === 'status' && entity === 'FriendRequest') return interpretInvitationStatus(value, language).label;
@@ -108,7 +107,7 @@ function enumerated(entity: string, field: string, value: string, language: Inte
 
 export function auditValue(
   params: { readonly field: string; readonly value: string | null; readonly entity: string },
-  language: InterfaceLanguage,
+  language: AdminLanguage,
   now: Date,
 ): AuditValue {
   const { field, value, entity } = params;

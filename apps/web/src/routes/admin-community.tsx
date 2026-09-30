@@ -23,8 +23,7 @@ import { adminCommunityQueryKey, loadAdminCommunity, type AdminCommunityFiche } 
 import { ApiError, unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { attachmentSrc } from '@/lib/api/media-url';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useParams, useSearch } from '@/lib/router';
 import { participantAvatarOf } from '@/lib/view/conversation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -50,7 +49,7 @@ import { AdminCommunityMembers } from './admin-community-members';
 const TABS = ['overview', 'members'] as const;
 const CONVERSATIONS_SHOWN = 20;
 
-function Banner({ language, src }: { readonly language: InterfaceLanguage; readonly src: string }) {
+function Banner({ language, src }: { readonly language: AdminLanguage; readonly src: string }) {
   return (
     <img
       src={attachmentSrc(src)}
@@ -63,7 +62,7 @@ function Banner({ language, src }: { readonly language: InterfaceLanguage; reado
   );
 }
 
-function Overview({ language, fiche, now }: { readonly language: InterfaceLanguage; readonly fiche: AdminCommunityFiche; readonly now: Date }) {
+function Overview({ language, fiche, now }: { readonly language: AdminLanguage; readonly fiche: AdminCommunityFiche; readonly now: Date }) {
   return (
     <>
       <AdminFicheSection id="description" title={translateAdmin(language, 'admin.community.section.description')}>
@@ -135,7 +134,7 @@ function Metadata({
   now,
   onAnnounce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly fiche: AdminCommunityFiche;
   readonly now: Date;
   readonly onAnnounce: (message: string) => void;
@@ -173,7 +172,7 @@ export function AdminCommunityPanel({
   deps = apiDeps,
   now = new Date(),
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly communityId: string;
   readonly deps?: AdminDeps;
   readonly now?: Date;
@@ -299,7 +298,8 @@ export function AdminCommunityPanel({
 }
 
 export default function AdminCommunityScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   const { community } = useParams<'/admin/communities/$community'>();
   return (
     <AdminSectionScreen section="communities" language={language} title={translateAdmin(language, 'admin.nav.communities')}>

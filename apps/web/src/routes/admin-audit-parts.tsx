@@ -6,8 +6,7 @@ import { interpretAuditAction } from '@/lib/admin/audit-vocabulary';
 import { auditPersonRef, auditTargetOf } from '@/lib/admin/audit-target';
 import type { AdminTone } from '@/lib/admin/interpret/types';
 import type { AdminAuditEntry, AdminAuditPerson, AdminAuditTarget } from '@/lib/api/admin-audit';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES PIÈCES DU JOURNAL D'AUDIT** (#8876, #6727) — l'action avec son glyphe et son
@@ -16,7 +15,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  */
 
 /** Le badge qui dit qu'une lecture a ouvert du privé — le mot « Lecture souveraine », jamais la seule couleur. */
-export function SovereignBadge({ language }: { readonly language: InterfaceLanguage }) {
+export function SovereignBadge({ language }: { readonly language: AdminLanguage }) {
   return (
     <span title={translateAdmin(language, 'admin.audit.badge.sovereign.explain')}>
       <AdminBadge tone="info" glyph="eye" anchor="sovereign">
@@ -45,7 +44,7 @@ export function AuditActionCell({
   entry,
   onOpen,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly entry: AdminAuditEntry;
   readonly onOpen: (entry: AdminAuditEntry) => void;
 }) {
@@ -71,7 +70,7 @@ export function AuditActionCell({
 }
 
 /** Une personne du journal en puce nommée ; absente, « Système ou compte supprimé » — jamais un identifiant. */
-export function AuditPerson({ language, person }: { readonly language: InterfaceLanguage; readonly person: AdminAuditPerson | null }) {
+export function AuditPerson({ language, person }: { readonly language: AdminLanguage; readonly person: AdminAuditPerson | null }) {
   if (person === null) {
     return (
       <span className="text-body" style={{ color: INK2 }} data-admin-audit-actor="unknown">
@@ -83,7 +82,7 @@ export function AuditPerson({ language, person }: { readonly language: Interface
 }
 
 /** La cible : une puce vers la fiche quand le genre en a une, sinon le nom du genre en texte. */
-export function AuditTarget({ language, target }: { readonly language: InterfaceLanguage; readonly target: AdminAuditTarget }) {
+export function AuditTarget({ language, target }: { readonly language: AdminLanguage; readonly target: AdminAuditTarget }) {
   const display = auditTargetOf(target, language);
   if (display.kind === 'entity') return <AdminEntityChip language={language} entity={display.entity} size="sm" />;
   return (

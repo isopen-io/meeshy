@@ -182,7 +182,7 @@ const f = {
   'admin.lang.pairs.translations': 'Traduções',
   'admin.lang.pairs.confidence': 'Confiança média',
   'admin.lang.pairs.empty': 'Nenhuma tradução neste período.',
-  'admin.lang.pair': '{de} → {to}',
+  'admin.lang.pair': '{from} → {to}',
   'admin.lang.confidence.none': 'Não medida',
   'admin.lang.timeline.title': 'Idiomas ao longo dos dias',
   'admin.lang.timeline.hint': 'Os três idiomas mais escritos do período; os demais são agrupados.',

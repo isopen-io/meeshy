@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
 
-import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
-import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
+import { ADMIN_LANGUAGES, loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 
 import {
   AGENT_OUTCOMES,
@@ -14,11 +13,11 @@ import {
 
 /**
  * **CE QUE L'AGENT FAIT, EN MOTS** (#8876) — chaque code que le service agent
- * écrit se dit dans les sept langues ; un code inconnu s'avoue « Non reconnu » et
+ * écrit se dit dans les quatre langues de l’administration ; un code inconnu s'avoue « Non reconnu » et
  * ne se peint jamais ; la conversation suivie est nommée.
  */
 beforeAll(async () => {
-  await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadAdminInterfaceCatalog(language)));
+  await Promise.all(ADMIN_LANGUAGES.map((language) => loadAdminInterfaceCatalog(language)));
 });
 
 describe('l’issue d’un scan', () => {
@@ -68,9 +67,9 @@ describe('l’étape du graphe', () => {
   });
 });
 
-describe('les sept langues portent chaque code', () => {
+describe('les quatre langues de l’administration portent chaque code', () => {
   test('issues, déclencheurs et étapes ont un libellé dans chaque langue — jamais « Non reconnu »', () => {
-    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+    for (const language of ADMIN_LANGUAGES) {
       const unrecognized = interpretAgentOutcome('inconnu', language).label;
       for (const outcome of AGENT_OUTCOMES) {
         expect({ language, outcome, recognized: interpretAgentOutcome(outcome, language).label !== unrecognized }).toEqual({ language, outcome, recognized: true });

@@ -2,8 +2,7 @@ import { AdminOfflineNotice } from '@/components/admin/states';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { DashSection, DashZone, type DashContext } from './admin-dashboard-parts';
 import { AgentBlock, HealthBlock, NowBlock, PlatformBlock, UsageBlock } from './admin-dashboard-numbers';
@@ -49,7 +48,7 @@ export function AdminDashboardPanel({
   deps = apiDeps,
   now = () => new Date(),
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
 }) {

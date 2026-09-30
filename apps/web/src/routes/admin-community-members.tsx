@@ -11,8 +11,7 @@ import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { personRef } from '@/lib/admin/post-entities';
 import type { AdminDeps } from '@/lib/api/admin';
 import type { AdminCommunityMember } from '@/lib/api/admin-communities-detail';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES MEMBRES D'UNE COMMUNAUTÉ** (#8876) — l'onglet « Membres » de la fiche :
@@ -30,7 +29,7 @@ export function AdminCommunityMembers({
   deps,
   now,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly communityId: string;
   readonly deps: AdminDeps;
   readonly now: Date;

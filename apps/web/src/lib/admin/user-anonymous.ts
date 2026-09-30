@@ -2,8 +2,7 @@ import { getUserPresenceStatus } from '@meeshy/shared/utils/user-presence';
 
 import type { AdminEntityRef } from '@/components/admin/entity-chip';
 import type { AdminAnonymousConversation, AdminAnonymousRow } from '@/lib/api/admin-anonymous';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { interpretAccountState, interpretConversationType, interpretPresence } from './interpret/enums';
 import { conversationLabel, guestLabel } from './interpret/labels';
@@ -18,7 +17,7 @@ import { humanizeKey } from './preference-labels';
  */
 
 /** Un invité, comme une ENTITÉ : son nom (jamais « — » ni son identifiant), sa photo, sa présence CALCULÉE. */
-export function anonymousEntityOf(row: AdminAnonymousRow, language: InterfaceLanguage, now: Date): AdminEntityRef {
+export function anonymousEntityOf(row: AdminAnonymousRow, language: AdminLanguage, now: Date): AdminEntityRef {
   return {
     kind: 'anonymous',
     id: row.id,
@@ -29,7 +28,7 @@ export function anonymousEntityOf(row: AdminAnonymousRow, language: InterfaceLan
 }
 
 /** La conversation où il parle : son titre (ou « Conversation sans titre »), son type dit en mots quand il est servi. */
-export function anonymousConversationRefOf(conversation: AdminAnonymousConversation, language: InterfaceLanguage): AdminEntityRef {
+export function anonymousConversationRefOf(conversation: AdminAnonymousConversation, language: AdminLanguage): AdminEntityRef {
   return {
     kind: 'conversation',
     id: conversation.id,
@@ -42,7 +41,7 @@ export function anonymousConversationRefOf(conversation: AdminAnonymousConversat
  * Un SEUL état, le plus parlant : parti (`leftAt`) > accès retiré (`isActive` faux,
  * sans départ daté — typiquement un lien fermé) > actif.
  */
-export function anonymousStateOf(row: Pick<AdminAnonymousRow, 'isActive' | 'leftAt'>, language: InterfaceLanguage): Interpreted {
+export function anonymousStateOf(row: Pick<AdminAnonymousRow, 'isActive' | 'leftAt'>, language: AdminLanguage): Interpreted {
   if (row.leftAt !== null) {
     return { label: translateAdmin(language, 'admin.people.anonymous.state.left'), tone: 'neutral', explain: translateAdmin(language, 'admin.people.anonymous.state.left.explain'), glyph: 'userMinus', raw: 'left' };
   }
@@ -57,7 +56,7 @@ export function anonymousStateOf(row: Pick<AdminAnonymousRow, 'isActive' | 'left
  * lecteur sans rang d'administration reçoit `isOnline: false` et aucune activité :
  * ce n'est pas « hors ligne depuis toujours »).
  */
-export function anonymousPresenceOf(row: Pick<AdminAnonymousRow, 'isOnline' | 'lastActiveAt'>, now: Date, language: InterfaceLanguage): Interpreted {
+export function anonymousPresenceOf(row: Pick<AdminAnonymousRow, 'isOnline' | 'lastActiveAt'>, now: Date, language: AdminLanguage): Interpreted {
   if (!row.isOnline && row.lastActiveAt === null) return interpretPresence('unknown', language);
   return interpretPresence(getUserPresenceStatus(row, now.getTime()), language);
 }
@@ -83,7 +82,7 @@ const isPermissionKey = (key: string): key is AnonymousPermissionKey => ANONYMOU
  * jamais `canSendFiles`. Une permission que la passerelle ajouterait demain est
  * humanisée et dite Oui / Non : un repli, jamais la clé brute.
  */
-export function anonymousPermissionPhrase(key: string, granted: boolean, language: InterfaceLanguage): string {
+export function anonymousPermissionPhrase(key: string, granted: boolean, language: AdminLanguage): string {
   if (!isPermissionKey(key)) return `${humanizeKey(key)} : ${translateAdmin(language, granted ? 'admin.list.yes' : 'admin.list.no')}`;
   return translateAdmin(language, granted ? `admin.people.anonymous.perm.${key}.yes` : `admin.people.anonymous.perm.${key}.no`);
 }

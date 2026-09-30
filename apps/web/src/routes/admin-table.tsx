@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
 
 import type { SortOrder } from '@/lib/admin/list-state';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES PIÈCES D'UNE LISTE D'ADMINISTRATION** (#7873) — barre de filtres,
@@ -97,7 +96,7 @@ export function AdminSelect({
   );
 }
 
-export function AdminResetButton({ language, onReset }: { readonly language: InterfaceLanguage; readonly onReset: () => void }) {
+export function AdminResetButton({ language, onReset }: { readonly language: AdminLanguage; readonly onReset: () => void }) {
   return (
     <button
       type="button"
@@ -136,7 +135,7 @@ export function SortableTh({
   onSort,
   className = '',
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly label: string;
   readonly column: string;
   readonly sort: string;
@@ -183,7 +182,7 @@ export function AdminPager({
   pageSizes,
   onPage,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly offset: number;
   readonly limit: number;
   readonly count: number;

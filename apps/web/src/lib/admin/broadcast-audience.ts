@@ -1,6 +1,5 @@
 import type { AdminBroadcastTargeting } from '@/lib/api/admin-broadcasts';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { countryName, languageName } from './interpret/language';
 
@@ -20,11 +19,11 @@ import { countryName, languageName } from './interpret/language';
 const DEFAULT_INACTIVE_DAYS = 30;
 
 /** Des jours, dits avec le pluriel de la langue (« 1 jour », « 30 jours », « 30 days »). */
-export function formatDays(days: number, language: InterfaceLanguage): string {
+export function formatDays(days: number, language: AdminLanguage): string {
   return new Intl.NumberFormat(language, { style: 'unit', unit: 'day', unitDisplay: 'long' }).format(days);
 }
 
-function activityPhrase(targeting: AdminBroadcastTargeting, language: InterfaceLanguage): string {
+function activityPhrase(targeting: AdminBroadcastTargeting, language: AdminLanguage): string {
   switch (targeting.activity) {
     case 'active':
       return translateAdmin(language, 'admin.broadcast.audience.active');
@@ -37,7 +36,7 @@ function activityPhrase(targeting: AdminBroadcastTargeting, language: InterfaceL
   }
 }
 
-export function audienceSentence(targeting: AdminBroadcastTargeting, language: InterfaceLanguage): string {
+export function audienceSentence(targeting: AdminBroadcastTargeting, language: AdminLanguage): string {
   const list = new Intl.ListFormat(language, { style: 'long', type: 'conjunction' });
   const languages =
     targeting.languages.length === 0

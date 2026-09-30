@@ -10,8 +10,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { agentOverviewQueryKey, loadAgentOverview } from '@/lib/api/admin-agent';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { AdminAnnouncement } from '@/routes/admin-parts';
 
@@ -49,7 +48,7 @@ export function AdminAgentPanel({
   deps = apiDeps,
   now = defaultNow,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
 }) {

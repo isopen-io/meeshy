@@ -13,8 +13,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { adminTrackingLinkKey, loadAdminTrackingLink } from '@/lib/api/admin-tracking-links';
 import { ApiError, unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -41,7 +40,7 @@ import { CampaignSection, DestinationSection, RecentClicksSection, TargetSection
 const defaultNow = (): Date => new Date();
 
 type TrackingLinkPanelProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly linkId: string;
   readonly reach: AdminReach;
   readonly deps?: AdminDeps;
@@ -150,7 +149,8 @@ export function AdminTrackingLinkPanel({ language, linkId, reach, deps = apiDeps
 }
 
 export default function AdminTrackingLinkScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   const { link: linkId } = useParams<'/admin/tracking-links/$link'>();
 
   return (

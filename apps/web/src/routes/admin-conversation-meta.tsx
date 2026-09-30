@@ -6,8 +6,7 @@ import { interpretConversationType, interpretEncryption, interpretWriteRole } fr
 import { booleanPhrase, excerptOf, personLabel, personSecondary } from '@/lib/admin/interpret/labels';
 import { adminMomentOf, formatDuration } from '@/lib/admin/interpret/time';
 import type { AdminConversationFiche } from '@/lib/api/admin-conversation-fiche';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES MÉTADONNÉES D'UNE CONVERSATION, INTERPRÉTÉES** (#8876) — chaque champ
@@ -38,7 +37,7 @@ export function ConversationMeta({
   now,
   onAnnounce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly fiche: AdminConversationFiche;
   readonly now: Date;
   readonly onAnnounce: (message: string) => void;

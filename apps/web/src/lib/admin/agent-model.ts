@@ -2,8 +2,7 @@ import type { AdminEntityRef } from '@/components/admin/entity-chip';
 import type { AdminGlyphName } from '@/components/glyphs-admin';
 import { conversationLabel } from '@/lib/admin/interpret/labels';
 import type { AdminTone, Interpreted } from '@/lib/admin/interpret/types';
-import { translateAdmin, translateAdminMaybe } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, translateAdminMaybe, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **CE QUE L'AGENT FAIT, EN MOTS** (#8876) — l'issue d'un scan, son déclencheur,
@@ -41,7 +40,7 @@ function interpretAgentCode<T extends string>(
   codes: readonly T[],
   table: Readonly<Record<T, Entry>>,
   code: string | null | undefined,
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): Interpreted {
   const raw = code?.trim() ?? '';
   if (raw === '') return { label: translateAdmin(language, 'admin.value.notProvided'), tone: 'neutral', explain: null, raw: '' };
@@ -57,14 +56,14 @@ function interpretAgentCode<T extends string>(
   };
 }
 
-export const interpretAgentOutcome = (code: string | null | undefined, language: InterfaceLanguage): Interpreted =>
+export const interpretAgentOutcome = (code: string | null | undefined, language: AdminLanguage): Interpreted =>
   interpretAgentCode('outcome', AGENT_OUTCOMES, OUTCOME_TABLE, code, language);
 
-export const interpretAgentTrigger = (code: string | null | undefined, language: InterfaceLanguage): Interpreted =>
+export const interpretAgentTrigger = (code: string | null | undefined, language: AdminLanguage): Interpreted =>
   interpretAgentCode('trigger', AGENT_TRIGGERS, TRIGGER_TABLE, code, language);
 
 /** Ce que l'agent est EN TRAIN de faire, dit à la suite de « Scan en cours : » (« rédige un message »). Une étape inconnue reste dite, sans nom de nœud. */
-export function agentNodeLabel(node: string | null, language: InterfaceLanguage): string {
+export function agentNodeLabel(node: string | null, language: AdminLanguage): string {
   const known = node === null ? undefined : AGENT_NODES.find((candidate) => candidate === node);
   return translateAdmin(language, known === undefined ? 'admin.agentPanel.node.unknown' : `admin.agentPanel.node.${known}`);
 }
@@ -77,7 +76,7 @@ export function agentNodeLabel(node: string | null, language: InterfaceLanguage)
  */
 export function agentConversationRefOf(
   conversation: { readonly conversationId: string; readonly title: string | null; readonly conversationType: string | null },
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): AdminEntityRef {
   return {
     kind: 'conversation',

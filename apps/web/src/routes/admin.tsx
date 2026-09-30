@@ -2,9 +2,8 @@ import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionDirectory } from '@/components/admin/section-directory';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { interpretRole } from '@/lib/admin/interpret/enums';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { AdminDashboardPanel } from '@/routes/admin-dashboard';
 
 /**
@@ -29,7 +28,8 @@ import { AdminDashboardPanel } from '@/routes/admin-dashboard';
  * n'a pas de tuile (loi 4).
  */
 export default function AdminScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
 
   return (
     <AdminSectionScreen section="dashboard" language={language} title={translate(language, 'admin.title')} back="list">

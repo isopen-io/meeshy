@@ -1,5 +1,4 @@
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { interpretPostType, interpretReportType } from './enums';
 
@@ -22,7 +21,7 @@ export type PersonNameFields = {
 
 const text = (value: string | null | undefined): string => value?.trim() ?? '';
 
-export function personLabel(person: PersonNameFields | null | undefined, language: InterfaceLanguage): string {
+export function personLabel(person: PersonNameFields | null | undefined, language: AdminLanguage): string {
   if (person === null || person === undefined) return translateAdmin(language, 'admin.value.person.unknown');
   const displayName = text(person.displayName);
   if (displayName !== '') return displayName;
@@ -32,7 +31,7 @@ export function personLabel(person: PersonNameFields | null | undefined, languag
   return username === '' ? translateAdmin(language, 'admin.value.person.unnamed') : `@${username}`;
 }
 
-export function guestLabel(displayName: string | null | undefined, language: InterfaceLanguage): string {
+export function guestLabel(displayName: string | null | undefined, language: AdminLanguage): string {
   const name = text(displayName);
   return name === '' ? translateAdmin(language, 'admin.value.guest.unnamed') : name;
 }
@@ -63,7 +62,7 @@ export type ConversationNameFields = {
   readonly total?: number | null;
 };
 
-export function conversationLabel(conversation: ConversationNameFields, language: InterfaceLanguage): string {
+export function conversationLabel(conversation: ConversationNameFields, language: AdminLanguage): string {
   const title = text(conversation.title);
   if (title !== '') return title;
 
@@ -82,14 +81,14 @@ export function conversationLabel(conversation: ConversationNameFields, language
     : translateAdmin(language, 'admin.value.conversation.moreMany', { names: head, count: String(rest) });
 }
 
-export function shareLinkLabel(link: { readonly name?: string | null }, language: InterfaceLanguage): string {
+export function shareLinkLabel(link: { readonly name?: string | null }, language: AdminLanguage): string {
   const name = text(link.name);
   return name === '' ? translateAdmin(language, 'admin.value.shareLink.unnamed') : name;
 }
 
 export function trackingLinkLabel(
   link: { readonly name?: string | null; readonly campaign?: string | null },
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): string {
   const name = text(link.name);
   if (name !== '') return name;
@@ -99,7 +98,7 @@ export function trackingLinkLabel(
 
 export function postLabel(
   post: { readonly type?: string | null; readonly author?: PersonNameFields | null },
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): string {
   return translateAdmin(language, 'admin.value.post.by', {
     type: interpretPostType(post.type, language).label,
@@ -115,13 +114,13 @@ export function excerptOf(content: string | null | undefined, max = 80): string 
   return characters.length <= max ? flat : `${characters.slice(0, max - 1).join('').trimEnd()}…`;
 }
 
-export function reportLabel(report: { readonly type?: string | null }, language: InterfaceLanguage): string {
+export function reportLabel(report: { readonly type?: string | null }, language: AdminLanguage): string {
   return translateAdmin(language, 'admin.value.report.titled', { reason: interpretReportType(report.type, language).label });
 }
 
 export function invitationLabel(
   invitation: { readonly sender?: PersonNameFields | null; readonly recipient?: PersonNameFields | null },
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): string {
   return translateAdmin(language, 'admin.value.invitation.label', {
     sender: personLabel(invitation.sender, language),
@@ -133,7 +132,7 @@ export function invitationLabel(
 export function booleanPhrase(
   value: boolean | null | undefined,
   phrases: { readonly yes: string; readonly no: string; readonly unknown?: string },
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): string {
   if (value === true) return phrases.yes;
   if (value === false) return phrases.no;

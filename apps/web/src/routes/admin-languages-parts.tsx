@@ -5,8 +5,7 @@ import { EDGE, INK, INK2, INK3, SURFACE } from '@/components/admin/tone';
 import { accuracyConfidenceText, accuracyQuality, growthView, languageTitle, pairConfidenceText, pairLabel } from '@/lib/admin/languages-view';
 import { formatCount, formatPercent } from '@/lib/admin/interpret/numbers';
 import type { LanguagePair, LanguageRow, TranslationAccuracyRow } from '@/lib/api/admin-languages';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { PlainTh, Td } from '@/routes/admin-table';
 
 type StaticColumn<Row> = {
@@ -94,13 +93,13 @@ function StaticTable<Row>({
 }
 
 /** « +12 % » avec sa flèche ; aucune donnée se dit « — », jamais un « 0 % » fabriqué. */
-function Growth({ language, growth }: { readonly language: InterfaceLanguage; readonly growth: number | null }) {
+function Growth({ language, growth }: { readonly language: AdminLanguage; readonly growth: number | null }) {
   const view = growthView(growth, language);
   return view === null ? <span style={{ color: INK3 }}>—</span> : <AdminBadge tone={view.tone} glyph={view.glyph}>{view.text}</AdminBadge>;
 }
 
 /** Le détail par langue : messages, auteurs (comptes, sans les invités), part (0–100) et évolution. */
-export function LanguagesDetailTable({ language, rows }: { readonly language: InterfaceLanguage; readonly rows: readonly LanguageRow[] }) {
+export function LanguagesDetailTable({ language, rows }: { readonly language: AdminLanguage; readonly rows: readonly LanguageRow[] }) {
   return (
     <div className="grid gap-2">
       <StaticTable
@@ -128,7 +127,7 @@ export function LanguagesDetailTable({ language, rows }: { readonly language: In
 }
 
 /** Les paires de la période : la confiance est servie en PART (0–1). */
-export function LanguagePairsTable({ language, rows }: { readonly language: InterfaceLanguage; readonly rows: readonly LanguagePair[] }) {
+export function LanguagePairsTable({ language, rows }: { readonly language: AdminLanguage; readonly rows: readonly LanguagePair[] }) {
   return (
     <StaticTable
       id="pairs"
@@ -145,7 +144,7 @@ export function LanguagePairsTable({ language, rows }: { readonly language: Inte
 }
 
 /** La précision : la confiance est servie en POURCENTAGE (0–100) — l'autre échelle — et la qualité se lit en mot. */
-export function TranslationAccuracyTable({ language, rows }: { readonly language: InterfaceLanguage; readonly rows: readonly TranslationAccuracyRow[] }) {
+export function TranslationAccuracyTable({ language, rows }: { readonly language: AdminLanguage; readonly rows: readonly TranslationAccuracyRow[] }) {
   return (
     <StaticTable
       id="accuracy"

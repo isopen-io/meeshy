@@ -1,8 +1,7 @@
 import type { AdminDashboard } from '@/lib/api/admin-dashboard';
 import type { AdminKpis, AdminRealtime } from '@/lib/api/admin-overview';
 import type { AdminAgentDigest, AdminMonitoring, AdminReportsQueue } from '@/lib/api/admin-overview-queue';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import type { AdminTarget } from './admin-routes';
 import { interpretServiceStatus } from './interpret/enums';
@@ -40,7 +39,7 @@ const known = (value: number | null | undefined): value is number => value !== n
 
 const captioned = (caption: string | null): { readonly caption?: string } => (caption === null ? {} : { caption });
 
-export function nowStats(data: AdminRealtime | null, language: InterfaceLanguage): readonly DashStat[] {
+export function nowStats(data: AdminRealtime | null, language: AdminLanguage): readonly DashStat[] {
   const analytics = section('analytics');
   return [
     {
@@ -67,7 +66,7 @@ export function nowStats(data: AdminRealtime | null, language: InterfaceLanguage
   ];
 }
 
-function activeUsersCaption(data: AdminDashboard | null, language: InterfaceLanguage): string | null {
+function activeUsersCaption(data: AdminDashboard | null, language: AdminLanguage): string | null {
   if (data === null || data.activeUsers === null || data.totalUsers === null || data.totalUsers === 0) return null;
   const share = formatPercent(data.activeUsers / data.totalUsers, 'ratio', language);
   return data.inactiveUsers === null
@@ -75,7 +74,7 @@ function activeUsersCaption(data: AdminDashboard | null, language: InterfaceLang
     : translateAdmin(language, 'admin.dash.platform.activeUsers.caption', { share, inactive: formatCount(data.inactiveUsers, language) });
 }
 
-function anonymousCaption(data: AdminDashboard | null, language: InterfaceLanguage): string | null {
+function anonymousCaption(data: AdminDashboard | null, language: AdminLanguage): string | null {
   if (data === null || data.activeAnonymousUsers === null || data.newAnonymousUsers24h === null) return null;
   return translateAdmin(language, 'admin.dash.platform.anonymous.caption', {
     active: formatCount(data.activeAnonymousUsers, language),
@@ -83,7 +82,7 @@ function anonymousCaption(data: AdminDashboard | null, language: InterfaceLangua
   });
 }
 
-export function platformStats(data: AdminDashboard | null, language: InterfaceLanguage): readonly DashStat[] {
+export function platformStats(data: AdminDashboard | null, language: AdminLanguage): readonly DashStat[] {
   const count = (value: number | null | undefined) => (data === null ? PENDING : formatCount(value, language));
   return [
     {
@@ -150,7 +149,7 @@ export function platformStats(data: AdminDashboard | null, language: InterfaceLa
   ];
 }
 
-export function usageStats(data: AdminKpis | null, language: InterfaceLanguage): readonly DashStat[] {
+export function usageStats(data: AdminKpis | null, language: AdminLanguage): readonly DashStat[] {
   const analytics = section('analytics');
   const percent = (value: number | null | undefined) => (data === null ? PENDING : formatPercent(value, 'hundred', language));
   return [
@@ -190,10 +189,10 @@ export function usageStats(data: AdminKpis | null, language: InterfaceLanguage):
  * n'est encore résolu — une absence de mesure, pas une réponse instantanée :
  * « — », jamais « 0 ms ».
  */
-const resolutionDelay = (hours: number | null | undefined, language: InterfaceLanguage): string =>
+const resolutionDelay = (hours: number | null | undefined, language: AdminLanguage): string =>
   hours === null || hours === undefined || hours <= 0 ? PENDING : formatDuration(hours * 3600, 's', language);
 
-export function moderationStats(data: AdminReportsQueue | null, language: InterfaceLanguage): readonly DashStat[] {
+export function moderationStats(data: AdminReportsQueue | null, language: AdminLanguage): readonly DashStat[] {
   const count = (value: number | null | undefined) => (data === null ? PENDING : formatCount(value, language));
   return [
     {
@@ -224,7 +223,7 @@ function dependencyStat(
   anchor: string,
   labelKey: 'admin.dash.system.database' | 'admin.dash.system.redis',
   dependency: AdminMonitoring['database'] | undefined,
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): DashStat {
   const status = interpretServiceStatus(dependency?.status ?? 'unknown', language);
   const caption =
@@ -247,7 +246,7 @@ function dependencyStat(
 export const openBreakers = (data: AdminMonitoring): readonly string[] =>
   data.breakers.filter((breaker) => breaker.state === 'OPEN').map((breaker) => breaker.name);
 
-export function healthStats(data: AdminMonitoring | null, language: InterfaceLanguage): readonly DashStat[] {
+export function healthStats(data: AdminMonitoring | null, language: AdminLanguage): readonly DashStat[] {
   const open = data === null ? [] : openBreakers(data);
   return [
     dependencyStat('health-database', 'admin.dash.system.database', data?.database, language),
@@ -278,7 +277,7 @@ export function healthStats(data: AdminMonitoring | null, language: InterfaceLan
 }
 
 /** Ce qui ne va pas, en phrases : la base ou Redis qui ne répondent pas, des coupe-circuits ouverts. Vide si tout va bien. */
-export function healthAlerts(data: AdminMonitoring, language: InterfaceLanguage): readonly string[] {
+export function healthAlerts(data: AdminMonitoring, language: AdminLanguage): readonly string[] {
   return [
     data.database.status === 'down' ? translateAdmin(language, 'admin.dash.system.alert.database') : null,
     data.redis.status === 'down' ? translateAdmin(language, 'admin.dash.system.alert.redis') : null,
@@ -286,7 +285,7 @@ export function healthAlerts(data: AdminMonitoring, language: InterfaceLanguage)
   ].filter((sentence): sentence is string => sentence !== null);
 }
 
-export function agentStats(data: AdminAgentDigest | null, now: Date, language: InterfaceLanguage): readonly DashStat[] {
+export function agentStats(data: AdminAgentDigest | null, now: Date, language: AdminLanguage): readonly DashStat[] {
   const agent = section('agent');
   const last = data === null ? null : adminMomentOf(data.lastActivityAt, now, language);
   return [

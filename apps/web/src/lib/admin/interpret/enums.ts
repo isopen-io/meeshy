@@ -1,6 +1,5 @@
 import type { AdminGlyphName } from '@/components/glyphs-admin';
-import { translateAdmin, translateAdminMaybe } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, translateAdminMaybe, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import type { AdminTone, Interpreted } from './types';
 
@@ -105,21 +104,21 @@ function codeOf(table: Table, raw: string, aliases: Readonly<Record<string, stri
   return aliased === undefined ? null : aliased;
 }
 
-const unrecognized = (language: InterfaceLanguage, raw: string): Interpreted => ({
+const unrecognized = (language: AdminLanguage, raw: string): Interpreted => ({
   label: translateAdmin(language, 'admin.value.unrecognized'),
   tone: 'neutral',
   explain: null,
   raw,
 });
 
-const notProvided = (language: InterfaceLanguage): Interpreted => ({
+const notProvided = (language: AdminLanguage): Interpreted => ({
   label: translateAdmin(language, 'admin.value.notProvided'),
   tone: 'neutral',
   explain: null,
   raw: '',
 });
 
-export function interpretEnum(family: AdminEnumFamily, code: string | null | undefined, language: InterfaceLanguage): Interpreted {
+export function interpretEnum(family: AdminEnumFamily, code: string | null | undefined, language: AdminLanguage): Interpreted {
   const raw = code?.trim() ?? '';
   if (raw === '') return notProvided(language);
 
@@ -140,7 +139,7 @@ export function interpretEnum(family: AdminEnumFamily, code: string | null | und
   return { label, tone: entry.tone, explain, ...(glyph === undefined ? {} : { glyph }), raw };
 }
 
-type Interpreter = (code: string | null | undefined, language: InterfaceLanguage) => Interpreted;
+type Interpreter = (code: string | null | undefined, language: AdminLanguage) => Interpreted;
 
 const interpreter =
   (family: AdminEnumFamily): Interpreter =>
@@ -178,7 +177,7 @@ export const interpretFriendStatus = interpreter('friendStatus');
 export const interpretPresence = interpreter('presence');
 
 /** Par POSITION (0 à 3) : la passerelle sert les tranches d'activité dans un ordre fixe, avec des libellés français que l'on ignore. */
-export const interpretActivityBucket = (index: number, language: InterfaceLanguage): Interpreted =>
+export const interpretActivityBucket = (index: number, language: AdminLanguage): Interpreted =>
   interpretEnum('activityBucket', Number.isInteger(index) ? String(index) : null, language);
 
 const isFuture = (iso: string | null | undefined, now: Date): boolean => {
@@ -204,7 +203,7 @@ export type AccountStateFacts = {
 };
 
 /** UN seul état, le plus grave d'abord : supprimé > banni > verrouillé > désactivé > actif. */
-export function accountStateOf(facts: AccountStateFacts, now: Date, language: InterfaceLanguage): Interpreted {
+export function accountStateOf(facts: AccountStateFacts, now: Date, language: AdminLanguage): Interpreted {
   if (isSet(facts.deletedAt)) return interpretAccountState('deleted', language);
   if (facts.activeBan === true) return interpretAccountState('banned', language);
   if (isFuture(facts.lockedUntil, now)) return interpretAccountState('locked', language);
@@ -220,7 +219,7 @@ export type ShareLinkFacts = {
 };
 
 /** Fermé à la main > expiré > quota atteint > actif. */
-export function shareLinkStateOf(facts: ShareLinkFacts, now: Date, language: InterfaceLanguage): Interpreted {
+export function shareLinkStateOf(facts: ShareLinkFacts, now: Date, language: AdminLanguage): Interpreted {
   if (facts.isActive === false) return interpretShareLinkState('closed', language);
   if (isPast(facts.expiresAt, now)) return interpretShareLinkState('expired', language);
   const { maxUses, currentUses } = facts;
@@ -231,7 +230,7 @@ export function shareLinkStateOf(facts: ShareLinkFacts, now: Date, language: Int
 export type TrackingLinkFacts = { readonly isActive?: boolean | null; readonly expiresAt?: string | null };
 
 /** Désactivé > expiré > actif. */
-export function trackingLinkStateOf(facts: TrackingLinkFacts, now: Date, language: InterfaceLanguage): Interpreted {
+export function trackingLinkStateOf(facts: TrackingLinkFacts, now: Date, language: AdminLanguage): Interpreted {
   if (facts.isActive === false) return interpretTrackingLinkState('inactive', language);
   if (isPast(facts.expiresAt, now)) return interpretTrackingLinkState('expired', language);
   return interpretTrackingLinkState('active', language);

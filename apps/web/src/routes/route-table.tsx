@@ -1,4 +1,4 @@
-import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
+import { currentAdminLanguage, loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog, suspendForInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadInviteCatalog } from '@/lib/i18n-invite-catalog';
@@ -30,13 +30,18 @@ const reelsScreen = () => import('@/routes/reels');
    #6834), en PARALLÈLE de son chunk d'écran — même discipline que
    `screenPrerequisite` plus bas pour le catalogue commun, mais scopée aux
    seules routes d'administration : c'est ce qui sort ces clés de la somme
-   que TOUT lecteur téléchargerait sinon (`i18n-admin-catalog.ts`). */
+   que TOUT lecteur téléchargerait sinon (`i18n-admin-catalog.ts`).
+
+   La langue chargée est celle de l'ADMINISTRATION (`currentAdminLanguage`,
+   fr · en · es · pt — les autres interfaces la lisent en anglais, D-159), pas
+   celle de l'interface ; et `loadAdminInterfaceCatalog` charge avec elle le
+   catalogue commun de cette langue, que le cadre lit aussi. */
 const adminScreen = () =>
-  Promise.all([import('@/routes/admin'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminUsersScreen = () =>
-  Promise.all([import('@/routes/admin-users'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-users'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminUserScreen = () =>
-  Promise.all([import('@/routes/admin-user'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-user'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 /* LA LECTURE SOUVERAINE DES CONVERSATIONS (#6862) — mêmes DEUX adresses, même
    `import()` unique, pour la même raison que les comptes.
 
@@ -47,63 +52,63 @@ const adminUserScreen = () =>
    écran qui plante à l'ouverture, un défaut qu'aucun gate ne voit : ni `tsc`
    (les deux formes typent pareil), ni les témoins (aucun ne monte la route). */
 const adminConversationsScreen = () =>
-  Promise.all([import('@/routes/admin-conversations'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-conversations'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminConversationScreen = () =>
-  Promise.all([import('@/routes/admin-conversation'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-conversation'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 /* LE PILOTAGE DE L'AGENT (#6733) — mêmes DEUX adresses, même `import()`
    unique, et le MÊME chargement du catalogue d'administration que ses voisins.
    `admin-catalog-loading.test.ts` garde désormais cette discipline pour toute
    route `/adm…` : un `import()` nu s'y voit nommé, là où il ne cassait
    jusqu'ici qu'à l'exécution, chez le seul lecteur qui ouvre l'écran. */
 const adminAnonymousScreen = () =>
-  Promise.all([import('@/routes/admin-anonymous'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-anonymous'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminAnonymousOneScreen = () =>
-  Promise.all([import('@/routes/admin-anonymous-one'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-anonymous-one'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminAgentScreen = () =>
-  Promise.all([import('@/routes/admin-agent'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-agent'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 
 /* LES ÉCRANS DE LA VUE DE DIEU (#8876) — chaque route neuve charge AUSSI le
    catalogue d'administration (`admin-catalog-loading.test.ts`). */
 const adminInvitationsScreen = () =>
-  Promise.all([import('@/routes/admin-invitations'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-invitations'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminInvitationScreen = () =>
-  Promise.all([import('@/routes/admin-invitation'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-invitation'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminCommunitiesScreen = () =>
-  Promise.all([import('@/routes/admin-communities'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-communities'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminCommunityScreen = () =>
-  Promise.all([import('@/routes/admin-community'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-community'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminShareLinksScreen = () =>
-  Promise.all([import('@/routes/admin-share-links'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-share-links'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminShareLinkScreen = () =>
-  Promise.all([import('@/routes/admin-share-link'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-share-link'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminPostsScreen = () =>
-  Promise.all([import('@/routes/admin-posts'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-posts'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminPostScreen = () =>
-  Promise.all([import('@/routes/admin-post'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-post'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminReportsScreen = () =>
-  Promise.all([import('@/routes/admin-reports'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-reports'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminReportScreen = () =>
-  Promise.all([import('@/routes/admin-report'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-report'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminAuditScreen = () =>
-  Promise.all([import('@/routes/admin-audit'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-audit'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminAnalyticsScreen = () =>
-  Promise.all([import('@/routes/admin-analytics'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-analytics'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminRankingScreen = () =>
-  Promise.all([import('@/routes/admin-ranking'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-ranking'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminTrackingLinksScreen = () =>
-  Promise.all([import('@/routes/admin-tracking-links'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-tracking-links'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminTrackingLinkScreen = () =>
-  Promise.all([import('@/routes/admin-tracking-link'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-tracking-link'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminBroadcastsScreen = () =>
-  Promise.all([import('@/routes/admin-broadcasts'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-broadcasts'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminBroadcastScreen = () =>
-  Promise.all([import('@/routes/admin-broadcast'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-broadcast'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminMonitoringScreen = () =>
-  Promise.all([import('@/routes/admin-monitoring'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-monitoring'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminLanguagesScreen = () =>
-  Promise.all([import('@/routes/admin-languages'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-languages'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminSettingsScreen = () =>
-  Promise.all([import('@/routes/admin-settings'), loadAdminInterfaceCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+  Promise.all([import('@/routes/admin-settings'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 /* L'ACCUEIL POST-INSCRIPTION (#7729) — son chunk ET son catalogue
    (`onboarding.*`), en parallèle, comme l'administration : un compte ne voit
    ce parcours qu'une fois, aucun autre lecteur n'en paie les octets, et

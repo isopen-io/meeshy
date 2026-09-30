@@ -23,8 +23,7 @@ import { useAdminList } from '@/lib/admin/use-admin-list';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminInvitationsListKey, loadAdminInvitations, type AdminInvitationRow } from '@/lib/api/admin-invitations';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AdminOption } from '@/routes/admin-table';
 
 import { InvitationStatusBadge } from './admin-invitation-parts';
@@ -46,7 +45,7 @@ const defaultNow = (): Date => new Date();
 const option = (value: string, label: string): AdminOption => ({ value, label });
 
 type InvitationsPanelProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
 };
@@ -161,7 +160,8 @@ export function AdminInvitationsPanel({ language, deps = apiDeps, now = defaultN
 }
 
 export default function AdminInvitationsScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
 
   return (
     <AdminSectionScreen section="invitations" language={language} title={translateAdmin(language, 'admin.nav.invitations')}>

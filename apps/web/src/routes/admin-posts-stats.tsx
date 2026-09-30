@@ -15,8 +15,7 @@ import { personRef, postRef } from '@/lib/admin/post-entities';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminPostsStatsQueryKey, loadAdminPostsStats, type AdminPostsStats } from '@/lib/api/admin-posts';
 import { unwrap } from '@/lib/api/client';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LE BANDEAU DE CHIFFRES DES PUBLICATIONS** (#8876) — ce que la plateforme a
@@ -39,7 +38,7 @@ const listTarget = (search: Readonly<Record<string, string>>): AdminTarget => ({
   ...(Object.keys(search).length === 0 ? {} : { search }),
 });
 
-function Charts({ language, stats }: { readonly language: InterfaceLanguage; readonly stats: AdminPostsStats }) {
+function Charts({ language, stats }: { readonly language: AdminLanguage; readonly stats: AdminPostsStats }) {
   const parts = stats.byType.map(({ type, count }) => ({ key: type, label: interpretPostType(type, language).label, value: count }));
   const top = parts[0];
   const authors = stats.topAuthors.flatMap(({ author, postCount }) => {
@@ -107,7 +106,7 @@ export function AdminPostsStatsBand({
   period,
   enabled,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps: AdminDeps;
   readonly period: PostPeriod | undefined;
   readonly enabled: boolean;

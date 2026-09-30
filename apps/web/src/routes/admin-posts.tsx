@@ -22,8 +22,7 @@ import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminPostsQueryKey, loadAdminPosts, type AdminPostRow } from '@/lib/api/admin-posts';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useSearch } from '@/lib/router';
 
 import { AdminPostsStatsBand } from './admin-posts-stats';
@@ -48,7 +47,7 @@ import { AdminPostsStatsBand } from './admin-posts-stats';
 type SortKey = (typeof POST_LIST_SPEC.sortKeys)[number];
 type FilterKey = keyof typeof POST_LIST_SPEC.filters;
 
-function ExcerptCell({ row, language }: { readonly row: AdminPostRow; readonly language: InterfaceLanguage }) {
+function ExcerptCell({ row, language }: { readonly row: AdminPostRow; readonly language: AdminLanguage }) {
   const excerpt = postExcerptOf(row, language);
   return (
     <span className="grid max-w-md gap-1">
@@ -69,7 +68,7 @@ export function AdminPostsPanel({
   deps = apiDeps,
   now = new Date(),
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps?: AdminDeps;
   readonly now?: Date;
 }) {
@@ -219,7 +218,8 @@ export function AdminPostsPanel({
 }
 
 export default function AdminPostsScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   return (
     <AdminSectionScreen section="posts" language={language} title={translateAdmin(language, 'admin.nav.posts')}>
       {() => <AdminPostsPanel language={language} />}

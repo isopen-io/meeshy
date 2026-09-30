@@ -8,8 +8,7 @@ import { countryName } from '@/lib/admin/interpret/language';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { trackingConversationRef, trackingDeviceLabel, trackingLinkState, trackingPlainLabel, trackingTargetRef } from '@/lib/admin/tracking-link-model';
 import type { AdminTrackingClick, AdminTrackingLink } from '@/lib/api/admin-tracking-links';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
 import { LinkPerson } from './admin-share-link-parts';
@@ -30,7 +29,7 @@ const EDGE = 'var(--color-edge)';
 
 type Announce = (message: string, tone?: AnnouncementTone) => void;
 
-export function DestinationSection({ language, link, onAnnounce }: { readonly language: InterfaceLanguage; readonly link: AdminTrackingLink; readonly onAnnounce: Announce }) {
+export function DestinationSection({ language, link, onAnnounce }: { readonly language: AdminLanguage; readonly link: AdminTrackingLink; readonly onAnnounce: Announce }) {
   return (
     <AdminFicheSection id="destination" title={translateAdmin(language, 'admin.tracking.section.destination')}>
       <dl className="grid gap-3">
@@ -51,7 +50,7 @@ export function DestinationSection({ language, link, onAnnounce }: { readonly la
   );
 }
 
-export function CampaignSection({ language, link }: { readonly language: InterfaceLanguage; readonly link: AdminTrackingLink }) {
+export function CampaignSection({ language, link }: { readonly language: AdminLanguage; readonly link: AdminTrackingLink }) {
   const none = translateAdmin(language, 'admin.value.notProvided');
   return (
     <AdminFicheSection id="campaign" title={translateAdmin(language, 'admin.tracking.section.campaign')}>
@@ -64,7 +63,7 @@ export function CampaignSection({ language, link }: { readonly language: Interfa
   );
 }
 
-export function TargetSection({ language, link }: { readonly language: InterfaceLanguage; readonly link: AdminTrackingLink }) {
+export function TargetSection({ language, link }: { readonly language: AdminLanguage; readonly link: AdminTrackingLink }) {
   const target = trackingTargetRef(link, language);
   const conversation = trackingConversationRef(link, language);
   return (
@@ -83,12 +82,12 @@ export function TargetSection({ language, link }: { readonly language: Interface
   );
 }
 
-const place = (click: AdminTrackingClick, language: InterfaceLanguage): string => {
+const place = (click: AdminTrackingClick, language: AdminLanguage): string => {
   const country = countryName(click.country, language);
   return click.city === null ? country : translateAdmin(language, 'admin.tracking.recent.place', { city: click.city, country });
 };
 
-function RecentTable({ language, clicks, now }: { readonly language: InterfaceLanguage; readonly clicks: readonly AdminTrackingClick[]; readonly now: Date }) {
+function RecentTable({ language, clicks, now }: { readonly language: AdminLanguage; readonly clicks: readonly AdminTrackingClick[]; readonly now: Date }) {
   const when = (click: AdminTrackingClick) => <AdminMomentText moment={adminMomentOf(click.clickedAt, now, language)} />;
   const from = (click: AdminTrackingClick) => click.referrer ?? translateAdmin(language, 'admin.tracking.recent.direct');
   const redirect = (click: AdminTrackingClick) => <AdminInterpretedBadge value={interpretRedirectStatus(click.redirectStatus ?? 'pending', language)} />;
@@ -149,7 +148,7 @@ function RecentTable({ language, clicks, now }: { readonly language: InterfaceLa
   );
 }
 
-export function RecentClicksSection({ language, link, now }: { readonly language: InterfaceLanguage; readonly link: AdminTrackingLink; readonly now: Date }) {
+export function RecentClicksSection({ language, link, now }: { readonly language: AdminLanguage; readonly link: AdminTrackingLink; readonly now: Date }) {
   return (
     <AdminFicheSection id="recent" title={translateAdmin(language, 'admin.tracking.section.recent')}>
       {link.recentClicks.length === 0 ? (
@@ -170,7 +169,7 @@ export function TrackingMeta({
   now,
   onAnnounce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly link: AdminTrackingLink;
   readonly now: Date;
   readonly onAnnounce: (message: string) => void;

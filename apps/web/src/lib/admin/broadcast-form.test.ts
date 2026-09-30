@@ -53,7 +53,7 @@ describe('newBroadcastForm', () => {
 
   test('la langue du message par défaut est celle de l’interface', () => {
     expect(defaultSourceLanguage('fr')).toBe('fr');
-    expect(defaultSourceLanguage('ar')).toBe('ar');
+    expect(defaultSourceLanguage('pt')).toBe('pt');
   });
 });
 

@@ -1,7 +1,6 @@
 import type { AdminEntityRef } from '@/components/admin/entity-chip';
 import type { AdminAuditPerson, AdminAuditTarget } from '@/lib/api/admin-audit';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { interpretConversationType, interpretReportedEntity } from './interpret/enums';
 import { conversationLabel, personLabel, personSecondary, postLabel, reportLabel, shareLinkLabel, trackingLinkLabel } from './interpret/labels';
@@ -56,7 +55,7 @@ type KnownType = (typeof KNOWN_TYPES)[number];
 const isKnownType = (type: string): type is KnownType => KNOWN_TYPES.some((known) => known === type);
 
 /** Le GENRE d'élément, dit en mots — le libellé générique d'une cible sans nom, et les options du filtre. */
-export function auditEntityLabel(type: string, language: InterfaceLanguage): string {
+export function auditEntityLabel(type: string, language: AdminLanguage): string {
   return translateAdmin(language, isKnownType(type) ? `admin.audit.target.${type}` : 'admin.audit.target.unknown');
 }
 
@@ -66,7 +65,7 @@ export type AuditTargetDisplay =
 
 const secondaryOf = (text: string | null): { readonly secondary?: string } => (text === null ? {} : { secondary: text });
 
-function namedLabel(target: AdminAuditTarget, language: InterfaceLanguage): string {
+function namedLabel(target: AdminAuditTarget, language: AdminLanguage): string {
   switch (target.type) {
     case 'Conversation':
       return conversationLabel({ title: target.label, type: target.secondary }, language);
@@ -83,7 +82,7 @@ function namedLabel(target: AdminAuditTarget, language: InterfaceLanguage): stri
   }
 }
 
-function namedSecondary(target: AdminAuditTarget, language: InterfaceLanguage): string | null {
+function namedSecondary(target: AdminAuditTarget, language: AdminLanguage): string | null {
   if (target.secondary === null) return null;
   switch (target.type) {
     case 'Conversation':
@@ -97,7 +96,7 @@ function namedSecondary(target: AdminAuditTarget, language: InterfaceLanguage): 
   }
 }
 
-export function auditTargetOf(target: AdminAuditTarget, language: InterfaceLanguage): AuditTargetDisplay {
+export function auditTargetOf(target: AdminAuditTarget, language: AdminLanguage): AuditTargetDisplay {
   const kind = ENTITY_KINDS[target.type];
   if (kind === undefined) return { kind: 'plain', label: auditEntityLabel(target.type, language), secondary: null };
 
@@ -110,7 +109,7 @@ export function auditTargetOf(target: AdminAuditTarget, language: InterfaceLangu
 }
 
 /** Une personne du journal : nom affiché en libellé, @username en secondaire (sauf s'il EST le libellé), photo. */
-export function auditPersonRef(person: AdminAuditPerson, language: InterfaceLanguage): AdminEntityRef {
+export function auditPersonRef(person: AdminAuditPerson, language: AdminLanguage): AdminEntityRef {
   const label = personLabel(person, language);
   const secondary = personSecondary(person.username);
   return {

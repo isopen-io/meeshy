@@ -1,8 +1,7 @@
 import type { AdminPostRow } from '@/lib/api/admin-posts';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { interpretPostType } from '@/lib/admin/interpret/enums';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES PHRASES D'UNE PUBLICATION** (#8876) — ce que la liste et la fiche disent
@@ -14,7 +13,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * `one` — la phrase reste grammaticale en français et en anglais, et
  * approximative ailleurs tant que la passe de traduction n'a pas eu lieu.
  */
-const pluralOf = (count: number, language: InterfaceLanguage): 'one' | 'other' =>
+const pluralOf = (count: number, language: AdminLanguage): 'one' | 'other' =>
   new Intl.PluralRules(language).select(count) === 'one' ? 'one' : 'other';
 
 export type PostExcerpt = {
@@ -29,7 +28,7 @@ export type PostExcerpt = {
  * statut ; sinon « Sans texte ». Une ligne n'est jamais vide : une cellule vide
  * se lit comme une donnée manquante, pas comme une publication muette.
  */
-export function postExcerptOf(row: AdminPostRow, language: InterfaceLanguage): PostExcerpt {
+export function postExcerptOf(row: AdminPostRow, language: AdminLanguage): PostExcerpt {
   if (row.restricted) return { kind: 'restricted', text: translateAdmin(language, 'admin.posts.restricted') };
   if (row.excerpt !== null) return { kind: 'text', text: row.excerpt };
   if (row.mediaCount > 0) {
@@ -46,7 +45,7 @@ export function postExcerptOf(row: AdminPostRow, language: InterfaceLanguage): P
  * « Masquée à 2 personnes » (`EXCEPT`). `null` pour toute autre audience ou une
  * taille non servie — jamais une phrase qui inventerait un nombre.
  */
-export function audiencePhrase(visibility: string | null, count: number | null, language: InterfaceLanguage): string | null {
+export function audiencePhrase(visibility: string | null, count: number | null, language: AdminLanguage): string | null {
   if (count === null) return null;
   const params = { count: formatCount(count, language) };
   const plural = pluralOf(count, language);
@@ -55,7 +54,7 @@ export function audiencePhrase(visibility: string | null, count: number | null, 
   return null;
 }
 
-export function translationsPhrase(count: number, language: InterfaceLanguage): string {
+export function translationsPhrase(count: number, language: AdminLanguage): string {
   if (count === 0) return translateAdmin(language, 'admin.posts.content.translations.none');
   return translateAdmin(language, `admin.posts.content.translations.${pluralOf(count, language)}`, { count: formatCount(count, language) });
 }

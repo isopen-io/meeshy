@@ -15,8 +15,7 @@ import { useDocumentVisible } from '@/lib/admin/monitoring-visibility';
 import type { AdminDeps } from '@/lib/api/admin';
 import { ADMIN_MONITORING_HEALTH_KEY, loadAdminMonitoring, type AdminCircuitBreaker, type AdminMonitoring } from '@/lib/api/admin-monitoring';
 import { ApiError, unwrap } from '@/lib/api/client';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { MonitoringSection, RefreshButton, ServiceCard } from './admin-monitoring-parts';
 
@@ -35,7 +34,7 @@ import { MonitoringSection, RefreshButton, ServiceCard } from './admin-monitorin
 const defaultNow = (): Date => new Date();
 
 export type MonitoringHealthProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps: AdminDeps;
   readonly now?: () => Date;
   readonly refreshMs?: number;
@@ -54,7 +53,7 @@ function Metric({ label, children }: { readonly label: string; readonly children
   );
 }
 
-function BreakerItem({ language, breaker, now }: { readonly language: InterfaceLanguage; readonly breaker: AdminCircuitBreaker; readonly now: Date }) {
+function BreakerItem({ language, breaker, now }: { readonly language: AdminLanguage; readonly breaker: AdminCircuitBreaker; readonly now: Date }) {
   const state = breakerStateOf(breaker.state, language);
   const open = state.raw.toUpperCase() === 'OPEN';
   const lastFailure = adminMomentOf(breaker.lastFailureAt, now, language);
@@ -90,7 +89,7 @@ function BreakerItem({ language, breaker, now }: { readonly language: InterfaceL
   );
 }
 
-function HealthBody({ language, monitoring, now }: { readonly language: InterfaceLanguage; readonly monitoring: AdminMonitoring; readonly now: Date }) {
+function HealthBody({ language, monitoring, now }: { readonly language: AdminLanguage; readonly monitoring: AdminMonitoring; readonly now: Date }) {
   const t = (key: AdminPlainCatalogKey): string => translateAdmin(language, key);
   const { gateway, realtime, translator, presenceUpdates } = monitoring;
   const count = (value: number) => formatCount(value, language);

@@ -4,8 +4,7 @@ import type { AdminGlyphName } from '@/components/glyphs-admin';
 import { languageName, sentenceCase } from '@/lib/admin/interpret/language';
 import { formatPercent } from '@/lib/admin/interpret/numbers';
 import type { AdminTone, Interpreted } from '@/lib/admin/interpret/types';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES LANGUES, MISES EN FORME** (#8876, #6728) — les fonctions pures de
@@ -17,14 +16,14 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 // --- Les noms ------------------------------------------------------------------------
 
 /** Un nom de langue posé SEUL (carte, légende, cellule) ouvre par une majuscule : « Français » ; dans une phrase ou une paire, il reste « français ». */
-export const languageTitle = (code: string, language: InterfaceLanguage): string => sentenceCase(languageName(code, language), language);
+export const languageTitle = (code: string, language: AdminLanguage): string => sentenceCase(languageName(code, language), language);
 
 // --- Les paires et la confiance ---------------------------------------------------
 
-export const pairLabel = (from: string, to: string, language: InterfaceLanguage): string =>
+export const pairLabel = (from: string, to: string, language: AdminLanguage): string =>
   translateAdmin(language, 'admin.lang.pair', { from: languageName(from, language), to: languageName(to, language) });
 
-const notMeasured = (language: InterfaceLanguage): string => translateAdmin(language, 'admin.lang.confidence.none');
+const notMeasured = (language: AdminLanguage): string => translateAdmin(language, 'admin.lang.confidence.none');
 
 /**
  * **Les DEUX échelles de confiance servies** — `languagesStats` (les paires de la
@@ -35,10 +34,10 @@ const notMeasured = (language: InterfaceLanguage): string => translateAdmin(lang
  * Zéro signifie « aucun score mesuré » côté serveur, pas « confiance nulle » :
  * il se dit « Non mesurée ».
  */
-export const pairConfidenceText = (value: number, language: InterfaceLanguage): string =>
+export const pairConfidenceText = (value: number, language: AdminLanguage): string =>
   value > 0 ? formatPercent(value, 'ratio', language) : notMeasured(language);
 
-export const accuracyConfidenceText = (value: number, language: InterfaceLanguage): string =>
+export const accuracyConfidenceText = (value: number, language: AdminLanguage): string =>
   value > 0 ? formatPercent(value, 'hundred', language) : notMeasured(language);
 
 /**
@@ -46,7 +45,7 @@ export const accuracyConfidenceText = (value: number, language: InterfaceLanguag
  * donc aussi quand RIEN n'est mesuré : on ne l'affiche pas comme une mauvaise
  * traduction, c'est l'absence de mesure.
  */
-export function accuracyQuality(row: Pick<TranslationAccuracyRow, 'avgConfidence' | 'quality'>, language: InterfaceLanguage): Interpreted {
+export function accuracyQuality(row: Pick<TranslationAccuracyRow, 'avgConfidence' | 'quality'>, language: AdminLanguage): Interpreted {
   if (row.avgConfidence <= 0) return { label: notMeasured(language), tone: 'neutral', explain: null, raw: '' };
   return interpretTranslationQuality(row.quality, language);
 }
@@ -60,7 +59,7 @@ export type GrowthView = { readonly text: string; readonly tone: AdminTone; read
  * au signe ET au glyphe, jamais à la seule couleur. `null` — aucune donnée — rend
  * `null` : pas de « 0 % » fabriqué.
  */
-export function growthView(growth: number | null, language: InterfaceLanguage): GrowthView | null {
+export function growthView(growth: number | null, language: AdminLanguage): GrowthView | null {
   if (growth === null) return null;
   const text = new Intl.NumberFormat(language, { style: 'percent', signDisplay: 'exceptZero', maximumFractionDigits: 0 }).format(growth / 100);
   if (growth > 0) return { text, tone: 'success', glyph: 'trendUp' };

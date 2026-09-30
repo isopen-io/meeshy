@@ -6,8 +6,7 @@ import { AdminDeniedInline, AdminErrorState, AdminInlineNotice } from '@/compone
 import { INK, INK2 } from '@/components/admin/tone';
 import { ApiError, unwrap } from '@/lib/api/client';
 import type { ApiResult } from '@/lib/api/http';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useSearch } from '@/lib/router';
 
 /**
@@ -76,7 +75,7 @@ export function StatsBlock<T>({
   groupError = false,
   children,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly query: UseQueryResult<T>;
   readonly groupError?: boolean;
   readonly children: (block: Block<T>) => ReactNode;
@@ -88,7 +87,7 @@ export function StatsBlock<T>({
 }
 
 /** Un rafraîchissement a échoué alors que des données sont à l'écran : on les garde, et on le dit. */
-export function StaleDataNotice({ language, queries }: { readonly language: InterfaceLanguage; readonly queries: readonly UseQueryResult<unknown>[] }) {
+export function StaleDataNotice({ language, queries }: { readonly language: AdminLanguage; readonly queries: readonly UseQueryResult<unknown>[] }) {
   const stale = queries.some((query) => query.isError && query.data !== undefined);
   return stale ? <AdminInlineNotice tone="warning" text={translateAdmin(language, 'admin.kit.cached')} /> : null;
 }
@@ -102,7 +101,7 @@ export function Metric<T>({
   value,
   caption,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly block: Block<T>;
   readonly anchor: string;
   readonly label: string;
@@ -155,7 +154,7 @@ export function StatsSection({
 export type WindowPeriod = '24h' | '7d' | '30d' | '90d';
 
 /** Le libellé d'une puce de période : celui du kit (`admin.kit.period.*`), partagé par tous les écrans. */
-export function periodLabel(language: InterfaceLanguage, period: WindowPeriod): string {
+export function periodLabel(language: AdminLanguage, period: WindowPeriod): string {
   switch (period) {
     case '24h':
       return translateAdmin(language, 'admin.kit.period.24h');
@@ -169,7 +168,7 @@ export function periodLabel(language: InterfaceLanguage, period: WindowPeriod): 
 }
 
 /** « Période : 7 derniers jours » — la fenêtre RÉELLEMENT servie par le bloc. */
-export function windowNote(language: InterfaceLanguage, period: WindowPeriod): string {
+export function windowNote(language: AdminLanguage, period: WindowPeriod): string {
   return translateAdmin(language, 'admin.analytics.window.note', { window: translateAdmin(language, `admin.analytics.window.${period}`) });
 }
 

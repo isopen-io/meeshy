@@ -19,8 +19,7 @@ import { adminUserDetailQueryOptions, type AdminUserDetail } from '@/lib/api/adm
 import { adminUserStatsQueryOptions } from '@/lib/api/admin-user-member';
 import { ApiError } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useParams, useSearch } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
@@ -71,7 +70,7 @@ import { AdminUserTabs } from './admin-user-tabs';
  */
 
 /** Un refus se dit comme un refus (403), un membre introuvable comme tel (404) : jamais les deux comme « une panne ». */
-function FicheState({ language, onRetry, denied, notFound }: { readonly language: InterfaceLanguage; readonly onRetry: () => void; readonly denied: boolean; readonly notFound: boolean }) {
+function FicheState({ language, onRetry, denied, notFound }: { readonly language: AdminLanguage; readonly onRetry: () => void; readonly denied: boolean; readonly notFound: boolean }) {
   if (denied) return <AdminDeniedInline language={language} />;
   return <AdminErrorState language={language} message={translateAdmin(language, notFound ? 'admin.people.notFound' : 'admin.user.unavailable')} onRetry={onRetry} />;
 }
@@ -84,7 +83,7 @@ export function AdminUserFiche({
   now = () => new Date(),
 }: {
   readonly userId: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly reach: AdminReach;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
@@ -222,7 +221,7 @@ export function AdminUserFiche({
  * désactivé > actif), e-mail vérifié ou non, téléphone vérifié, double authentification.
  * Chacun porte son MOT : la couleur ne dit jamais seule.
  */
-function Badges({ membre, language, state }: { readonly membre: AdminUserDetail; readonly language: InterfaceLanguage; readonly state: ReturnType<typeof accountStateOf> }) {
+function Badges({ membre, language, state }: { readonly membre: AdminUserDetail; readonly language: AdminLanguage; readonly state: ReturnType<typeof accountStateOf> }) {
   return (
     <>
       <AdminRoleBadge language={language} role={membre.role} />
@@ -249,7 +248,8 @@ function Badges({ membre, language, state }: { readonly membre: AdminUserDetail;
 }
 
 export default function AdminUserScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   const { user: userId } = useParams<'/admin/users/$user'>();
 
   return (

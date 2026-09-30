@@ -1,7 +1,6 @@
 import type { AdminEntityRef } from '@/components/admin/entity-chip';
 import type { AdminRankingPerson, AdminRankingRow } from '@/lib/api/admin-ranking';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { interpretConversationType, interpretMessageType } from './interpret/enums';
 import { conversationLabel, guestLabel, personLabel, personSecondary, shareLinkLabel, trackingLinkLabel } from './interpret/labels';
@@ -28,7 +27,7 @@ export type RankingRowView = {
 };
 
 export type RankingViewContext = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly now: Date;
   readonly showValue: boolean;
 };
@@ -36,7 +35,7 @@ export type RankingViewContext = {
 /** Un avatar n'est posé que s'il existe : sans lui, un lien ou une conversation garde le glyphe de son genre. */
 const withAvatar = (ref: AdminEntityRef, avatar: string | null): AdminEntityRef => (avatar === null ? ref : { ...ref, avatarUrl: avatar });
 
-function creatorRef(creator: AdminRankingPerson | null, language: InterfaceLanguage): AdminEntityRef | null {
+function creatorRef(creator: AdminRankingPerson | null, language: AdminLanguage): AdminEntityRef | null {
   if (creator === null) return null;
   return {
     kind: 'user',
@@ -50,7 +49,7 @@ function creatorRef(creator: AdminRankingPerson | null, language: InterfaceLangu
 function conversationRef(
   row: { readonly title: string | null; readonly type: string | null },
   id: string,
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): AdminEntityRef {
   return {
     kind: 'conversation',
@@ -60,7 +59,7 @@ function conversationRef(
   };
 }
 
-function entityRef(row: AdminRankingRow, language: InterfaceLanguage): AdminEntityRef {
+function entityRef(row: AdminRankingRow, language: AdminLanguage): AdminEntityRef {
   switch (row.kind) {
     case 'users':
       return row.account === null

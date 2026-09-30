@@ -27,8 +27,7 @@ import type { AdminReach } from '@/lib/admin/use-admin-reach';
 import { ApiError } from '@/lib/api/client';
 import type { AdminPage } from '@/lib/api/admin-page';
 import type { AdminReport } from '@/lib/api/admin-reports';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { ReportPerson, ReportReasonBadge, ReportStatusBadge, ReportedElement } from './admin-report-parts';
 
@@ -46,11 +45,11 @@ const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
  * protection se dit « Contenu protégé » (jamais un vide), une date de prise en
  * charge qui n'a pas été conservée se dit, un compte disparu se dit.
  */
-const moment = (iso: string | null, now: Date, language: InterfaceLanguage) => adminMomentOf(iso, now, language);
+const moment = (iso: string | null, now: Date, language: AdminLanguage) => adminMomentOf(iso, now, language);
 
 const CONTENT_KINDS: readonly string[] = ['message', 'post', 'story', 'comment'];
 
-function ReportedBody({ language, report }: { readonly language: InterfaceLanguage; readonly report: AdminReport }) {
+function ReportedBody({ language, report }: { readonly language: AdminLanguage; readonly report: AdminReport }) {
   const entity = report.reportedEntity;
   if (entity === null) return <AdminInlineNotice tone="neutral" text={translateAdmin(language, 'admin.moderation.reported.unavailable')} />;
   if (entity.deleted) return <AdminInlineNotice tone="neutral" text={translateAdmin(language, 'admin.moderation.reported.deleted')} />;
@@ -92,7 +91,7 @@ function ReportedBody({ language, report }: { readonly language: InterfaceLangua
   ) : null;
 }
 
-export function ReportedSection({ language, report }: { readonly language: InterfaceLanguage; readonly report: AdminReport }) {
+export function ReportedSection({ language, report }: { readonly language: AdminLanguage; readonly report: AdminReport }) {
   const owner = reportedOwnerOf(report, language);
   const conversation = reportedConversationOf(report, language);
   const creator = report.reportedType === 'community';
@@ -122,7 +121,7 @@ export function ReportedSection({ language, report }: { readonly language: Inter
   );
 }
 
-export function ReasonSection({ language, report }: { readonly language: InterfaceLanguage; readonly report: AdminReport }) {
+export function ReasonSection({ language, report }: { readonly language: AdminLanguage; readonly report: AdminReport }) {
   return (
     <AdminFicheSection id="reason" title={translateAdmin(language, 'admin.moderation.section.reason')}>
       <dl className="grid gap-3">
@@ -157,7 +156,7 @@ export function HandlingSection({
   actionChoice,
   onActionChoice,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly report: AdminReport;
   readonly editable: boolean;
   readonly actionChoice: string;
@@ -235,7 +234,7 @@ export function HandlingSection({
 
 const STEP_GLYPH = { resolved: 'checkCircle', rejected: 'x', dismissed: 'prohibit' } as const satisfies Readonly<Record<string, AdminGlyphName>>;
 
-function StepView({ language, report, step, now }: { readonly language: InterfaceLanguage; readonly report: AdminReport; readonly step: ReportTimelineStep; readonly now: Date }) {
+function StepView({ language, report, step, now }: { readonly language: AdminLanguage; readonly report: AdminReport; readonly step: ReportTimelineStep; readonly now: Date }) {
   const when = moment(step.at, now, language);
   const tone = step.id === 'closed' ? interpretReportStatus(step.status, language).tone : 'neutral';
   const glyph: AdminGlyphName = step.id === 'received' ? 'flag' : step.id === 'taken' ? 'eye' : STEP_GLYPH[step.status];
@@ -263,7 +262,7 @@ function StepView({ language, report, step, now }: { readonly language: Interfac
   );
 }
 
-export function TimelineSection({ language, report, now }: { readonly language: InterfaceLanguage; readonly report: AdminReport; readonly now: Date }) {
+export function TimelineSection({ language, report, now }: { readonly language: AdminLanguage; readonly report: AdminReport; readonly now: Date }) {
   return (
     <AdminFicheSection id="timeline" title={translateAdmin(language, 'admin.moderation.section.timeline')}>
       <ol data-admin-timeline className="grid gap-4">
@@ -281,7 +280,7 @@ export function SiblingsSection({
   siblings,
   now,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly report: AdminReport;
   readonly siblings: UseQueryResult<AdminPage<AdminReport>>;
   readonly now: Date;
@@ -360,7 +359,7 @@ export function SiblingsSection({
   );
 }
 
-function actionLabel(language: InterfaceLanguage, link: ReportActionLink): string {
+function actionLabel(language: AdminLanguage, link: ReportActionLink): string {
   switch (link.id) {
     case 'authorSecurity':
       return translateAdmin(language, 'admin.moderation.actions.authorSecurity', { name: link.name });
@@ -383,7 +382,7 @@ function actionLabel(language: InterfaceLanguage, link: ReportActionLink): strin
  * confirmation, son motif et sa trace d'audit ; un lien que le lecteur ne pourrait
  * pas ouvrir (section non servie à son rôle) n'est pas dessiné.
  */
-export function ActionsSection({ language, report, reach }: { readonly language: InterfaceLanguage; readonly report: AdminReport; readonly reach: AdminReach }) {
+export function ActionsSection({ language, report, reach }: { readonly language: AdminLanguage; readonly report: AdminReport; readonly reach: AdminReach }) {
   const links = reportActionLinks(report, language).filter((link) => link.target.kind === 'entity' && reach.opens(sectionOfEntity(link.target.entity)));
 
   return (
@@ -406,7 +405,7 @@ export function ActionsSection({ language, report, reach }: { readonly language:
                 style={{ minHeight: 44, border: `1px solid ${EDGE}`, color: INK }}
               >
                 <span className="min-w-0 break-words text-body font-medium">{actionLabel(language, link)}</span>
-                <AdminGlyph name="arrowSquareOut" size={16} className="shrink-0 rtl:-scale-x-100" />
+                <AdminGlyph name="arrowSquareOut" size={16} className="shrink-0" />
               </AdminLink>
             </li>
           ))}
@@ -422,7 +421,7 @@ export function ReportMeta({
   now,
   onAnnounce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly report: AdminReport;
   readonly now: Date;
   readonly onAnnounce: (message: string) => void;

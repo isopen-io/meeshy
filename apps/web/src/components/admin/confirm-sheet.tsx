@@ -1,8 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { Sheet } from '@/components/sheet';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { BRAND, EDGE, INK, INK2, SURFACE } from './tone';
 
@@ -35,7 +34,7 @@ export function AdminConfirmSheet({
   onConfirm,
   onCancel,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly title: string;
   readonly body: string;
   readonly confirmLabel: string;

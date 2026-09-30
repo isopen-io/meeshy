@@ -16,9 +16,8 @@ import {
   type AdminSpace,
 } from '@/lib/admin/admin-space';
 import { ADMIN_GROUPS, visibleAdminSections, type ServedAdminSection } from '@/lib/admin/sections';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOptionalRoute } from '@/lib/router';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { Link } from '@/routes/route-table';
@@ -68,7 +67,7 @@ function AdminNavItem({
   folded,
   onNavigate,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly section: ServedAdminSection;
   readonly space: AdminSpace;
   readonly active: string | null;
@@ -116,7 +115,7 @@ function AdminNav({
   folded,
   onNavigate,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly sections: readonly ServedAdminSection[];
   readonly space: AdminSpace;
   readonly active: string | null;
@@ -157,7 +156,7 @@ function AdminNav({
   );
 }
 
-function BackToApp({ language, folded }: { readonly language: InterfaceLanguage; readonly folded: boolean }) {
+function BackToApp({ language, folded }: { readonly language: AdminLanguage; readonly folded: boolean }) {
   const libelle = translateAdmin(language, 'admin.shell.backToApp');
   return (
     <Link
@@ -167,7 +166,7 @@ function BackToApp({ language, folded }: { readonly language: InterfaceLanguage;
       className={`mx-2 mb-3 flex items-center gap-3 rounded-chip px-3 text-caption focus-visible:outline-2 focus-visible:outline-offset-2 ${folded ? 'justify-center' : ''}`}
       style={{ minHeight: 44, color: INK2, outlineColor: BRAND }}
     >
-      <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
+      <Glyph name="caretLeft" size={16} />
       <span className={folded ? 'sr-only' : 'truncate'}>{libelle}</span>
     </Link>
   );
@@ -200,7 +199,7 @@ export function AdminHeader({
   backLabel,
   actions,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly title: string;
   /**
    * Un écran de DÉTAIL revient à la liste d'où l'on vient, et dans l'ESPACE
@@ -219,7 +218,6 @@ export function AdminHeader({
     <header
       className="flex shrink-0 items-center gap-1 px-2 md:px-6"
       style={{ height: ADMIN_HEADER_HEIGHT, borderBottom: `1px solid ${EDGE}` }}
-      lang={language}
     >
       {onMenu === undefined ? null : (
         <button
@@ -243,7 +241,7 @@ export function AdminHeader({
         style={{ color: BRAND, outlineColor: BRAND }}
       >
         <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
+          <Glyph name="caretLeft" size={16} />
         </ChromeActionDisc>
       </Link>
       {titreDansLeContenu ? (
@@ -279,7 +277,7 @@ function AdminDrawer({
   active,
   onClose,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly sections: readonly ServedAdminSection[];
   readonly space: AdminSpace;
   readonly active: string | null;
@@ -351,7 +349,7 @@ export function AdminScreenFrame({
   actions,
   children,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly title: string;
   readonly back: AdminBack;
   /** Voir `AdminHeading` — `'content'` : l'écran pose son `<h1>` lui-même. */
@@ -380,7 +378,7 @@ export function AdminScreenFrame({
   };
 
   return (
-    <div className="flex h-dvh overflow-hidden pt-safe" data-admin-shell>
+    <div className="flex h-dvh overflow-hidden pt-safe" data-admin-shell lang={language} dir="ltr">
       <aside
         data-admin-sidebar
         data-folded={folded ? 'true' : 'false'}

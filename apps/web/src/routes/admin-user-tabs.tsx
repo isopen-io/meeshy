@@ -1,6 +1,5 @@
 import { ADMIN_USER_TABS, type AdminUserTab } from '@/lib/admin/user-tabs';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 const INK2 = 'var(--color-ios-ink-2)';
 
@@ -30,7 +29,7 @@ export function AdminUserTabs({
   actif,
   onChange,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly actif: AdminUserTab;
   readonly onChange: (onglet: AdminUserTab) => void;
 }) {
@@ -47,8 +46,8 @@ export function AdminUserTabs({
       className="flex gap-1 overflow-x-auto"
       style={{ borderBottom: '1px solid var(--color-edge)' }}
       onKeyDown={(event) => {
-        if (event.key === 'ArrowRight') aller(document.dir === 'rtl' ? -1 : 1);
-        if (event.key === 'ArrowLeft') aller(document.dir === 'rtl' ? 1 : -1);
+        if (event.key === 'ArrowRight') aller(1);
+        if (event.key === 'ArrowLeft') aller(-1);
       }}
     >
       {ADMIN_USER_TABS.map((onglet) => {

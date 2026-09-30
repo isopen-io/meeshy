@@ -8,8 +8,7 @@ import type { AdminReach } from '@/lib/admin/use-admin-reach';
 import { type AdminDeps, asRecord } from '@/lib/api/admin';
 import type { AdminLinkAck } from '@/lib/api/admin-share-links-person';
 import { ADMIN_TRACKING_LINKS_KEY, adminTrackingLinkKey, setAdminTrackingLinkActive, type AdminTrackingLink } from '@/lib/api/admin-tracking-links';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
 /**
@@ -39,7 +38,7 @@ export function TrackingLinkGestures({
   online,
   announce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly link: AdminTrackingLink;
   readonly reach: AdminReach;
   readonly deps: AdminDeps;

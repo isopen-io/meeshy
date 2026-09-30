@@ -1,6 +1,5 @@
 import type { AdminTone } from '@/lib/admin/interpret/types';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { TONE_COLOR } from '../tone';
 import { AdminChartCard, ADMIN_OTHERS_TOKEN, ADMIN_SERIES_TOKENS, seriesColor, type AdminChartState } from './chart-card';
@@ -34,7 +33,7 @@ export function AdminShareChart({
   state = 'ready',
   onRetry,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly id: string;
   readonly title: string;
   readonly data: readonly Datum[];
@@ -99,7 +98,7 @@ export function AdminShareChart({
             })}
           </svg>
         ) : (
-          <svg aria-hidden="true" data-admin-chart-svg width="100%" height={12} className="rtl:-scale-x-100" style={{ display: 'block' }}>
+          <svg aria-hidden="true" data-admin-chart-svg width="100%" height={12} style={{ display: 'block' }}>
             {parts.map((part, index) => {
               const segment = segments[index];
               return segment === undefined || segment.share === 0 ? null : (

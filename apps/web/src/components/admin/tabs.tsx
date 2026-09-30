@@ -6,13 +6,13 @@ import { BRAND, EDGE, INK, INK2 } from './tone';
 
 export type AdminTabDefinition<T extends string> = { readonly id: T; readonly label: string; readonly count?: string };
 
-const isRtl = (): boolean => typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
-
 /**
  * **DES ONGLETS ARIA** (#8876) — `role="tablist"`, un seul onglet dans l'ordre de
  * tabulation (celui qui est actif : la tabulation traverse la liste d'un coup,
- * les flèches la parcourent), Début/Fin, et les flèches INVERSÉES en arabe — la
- * flèche droite avance dans le sens de la lecture, donc recule à droite-gauche.
+ * les flèches la parcourent), Début/Fin. L'administration se lit toujours de
+ * gauche à droite (`dir="ltr"` à la racine, quelle que soit la langue
+ * d'interface — D-159) : la flèche droite avance, sans jamais consulter le
+ * sens du document, qu'une interface arabe retourne autour d'elle.
  * Activation automatique : un onglet qui prend le focus est ouvert.
  *
  * L'onglet actif porte `aria-selected` ET un filet de 2 px sous son libellé : la
@@ -32,12 +32,11 @@ export function AdminTabs<T extends string>({
   const uid = useId();
 
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    const step = isRtl() ? -1 : 1;
     const target =
       event.key === 'ArrowRight'
-        ? index + step
+        ? index + 1
         : event.key === 'ArrowLeft'
-          ? index - step
+          ? index - 1
           : event.key === 'Home'
             ? 0
             : event.key === 'End'

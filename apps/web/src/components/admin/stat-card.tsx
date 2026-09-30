@@ -3,8 +3,7 @@ import type { ReactNode } from 'react';
 import type { AdminTarget } from '@/lib/admin/admin-routes';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import type { AdminTone } from '@/lib/admin/interpret/types';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { AdminSparkline } from './charts/sparkline';
 import { AdminGlyph } from './admin-glyph';
@@ -33,7 +32,7 @@ function deltaTone(delta: AdminDelta): AdminTone {
  * La variation : flèche + signe + pourcentage + la période, et un MOT pour le
  * lecteur d'écran (« en hausse de 12 % ») — le ton ne porte jamais seul le sens.
  */
-function Delta({ language, delta }: { readonly language: InterfaceLanguage; readonly delta: AdminDelta }) {
+function Delta({ language, delta }: { readonly language: AdminLanguage; readonly delta: AdminDelta }) {
   const percent = new Intl.NumberFormat(language, { style: 'percent', maximumFractionDigits: 1 }).format(Math.abs(delta.ratio));
   const tone = deltaTone(delta);
   const word =
@@ -73,7 +72,7 @@ export function AdminStatCard({
   state = 'ready',
   onRetry,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly label: string;
   readonly value: string;
   readonly caption?: string;

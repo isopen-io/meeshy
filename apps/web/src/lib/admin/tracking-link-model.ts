@@ -1,7 +1,6 @@
 import type { AdminEntityRef } from '@/components/admin/entity-chip';
 import type { AdminTrackingBucket, AdminTrackingDay, AdminTrackingLinkRow } from '@/lib/api/admin-tracking-links';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { interpretRedirectStatus, interpretTrackingTarget, trackingLinkStateOf } from './interpret/enums';
 import { countryName, sentenceCase } from './interpret/language';
@@ -19,7 +18,7 @@ import type { AdminTone, Interpreted } from './interpret/types';
  * brut — et deux codes que personne ne sait nommer ne produisent pas deux fois le
  * même mot.
  */
-export const trackingLinkState = (link: AdminTrackingLinkRow, now: Date, language: InterfaceLanguage): Interpreted =>
+export const trackingLinkState = (link: AdminTrackingLinkRow, now: Date, language: AdminLanguage): Interpreted =>
   trackingLinkStateOf({ isActive: link.isActive, expiresAt: link.expiresAt }, now, language);
 
 const POST_TYPES: ReadonlySet<string> = new Set(['POST', 'REEL', 'STORY', 'STATUS']);
@@ -31,7 +30,7 @@ const POST_TYPES: ReadonlySet<string> = new Set(['POST', 'REEL', 'STORY', 'STATU
  * dit « supprimé » — la puce n'a alors plus de fiche où mener. Une conversation
  * sans titre reste cliquable : le nom absent peut être un simple groupe sans titre.
  */
-export function trackingTargetRef(link: AdminTrackingLinkRow, language: InterfaceLanguage): AdminEntityRef | null {
+export function trackingTargetRef(link: AdminTrackingLinkRow, language: AdminLanguage): AdminEntityRef | null {
   const target = link.target;
   if (target === null || link.targetType === 'EXTERNAL') return null;
   const kind = interpretTrackingTarget(target.type, language).label;
@@ -53,7 +52,7 @@ export function trackingTargetRef(link: AdminTrackingLinkRow, language: Interfac
 }
 
 /** La conversation d'où le lien a été posé, quand il y en a une. */
-export function trackingConversationRef(link: AdminTrackingLinkRow, language: InterfaceLanguage): AdminEntityRef | null {
+export function trackingConversationRef(link: AdminTrackingLinkRow, language: AdminLanguage): AdminEntityRef | null {
   if (link.conversation === null) return null;
   return { kind: 'conversation', id: link.conversation.id, label: conversationLabel({ title: link.conversation.title }, language) };
 }
@@ -76,7 +75,7 @@ export type TrackingDaySeries = {
  * premier et le dernier, valent donc ZÉRO ; au-delà de 90 jours, on garde les plus
  * récents.
  */
-export function trackingDaySeries(days: readonly AdminTrackingDay[], language: InterfaceLanguage): TrackingDaySeries {
+export function trackingDaySeries(days: readonly AdminTrackingDay[], language: AdminLanguage): TrackingDaySeries {
   const counted = new Map(days.map((day) => [day.date, day.count]));
   const ordered = [...counted.keys()].sort();
   const first = ordered[0];
@@ -109,7 +108,7 @@ export function mergeByLabel(items: readonly TrackingDatum[]): readonly Tracking
 }
 
 /** Mobile, tablette, ordinateur — nommés ; tout autre appareil servi est un nom de modèle, posé tel quel avec une majuscule ; absent → « Non renseigné ». */
-export function trackingDeviceLabel(code: string | null | undefined, language: InterfaceLanguage): string {
+export function trackingDeviceLabel(code: string | null | undefined, language: AdminLanguage): string {
   const raw = code?.trim() ?? '';
   if (raw === '') return translateAdmin(language, 'admin.value.notProvided');
   switch (raw.toLowerCase()) {
@@ -125,26 +124,26 @@ export function trackingDeviceLabel(code: string | null | undefined, language: I
 }
 
 /** Un nom servi en clair (navigateur, système, source sociale) : posé tel quel, « Non renseigné » quand il manque. */
-export function trackingPlainLabel(value: string | null | undefined, language: InterfaceLanguage): string {
+export function trackingPlainLabel(value: string | null | undefined, language: AdminLanguage): string {
   const raw = value?.trim() ?? '';
   return raw === '' ? translateAdmin(language, 'admin.value.notProvided') : raw;
 }
 
 const datum = (bucket: AdminTrackingBucket, label: string): TrackingDatum => ({ key: bucket.key, label, value: bucket.count });
 
-export const trackingCountryData = (buckets: readonly AdminTrackingBucket[], language: InterfaceLanguage): readonly TrackingDatum[] =>
+export const trackingCountryData = (buckets: readonly AdminTrackingBucket[], language: AdminLanguage): readonly TrackingDatum[] =>
   mergeByLabel(buckets.map((bucket) => datum(bucket, countryName(bucket.key, language))));
 
-export const trackingDeviceData = (buckets: readonly AdminTrackingBucket[], language: InterfaceLanguage): readonly TrackingDatum[] =>
+export const trackingDeviceData = (buckets: readonly AdminTrackingBucket[], language: AdminLanguage): readonly TrackingDatum[] =>
   mergeByLabel(buckets.map((bucket) => datum(bucket, trackingDeviceLabel(bucket.key, language))));
 
-export const trackingPlainData = (buckets: readonly AdminTrackingBucket[], language: InterfaceLanguage): readonly TrackingDatum[] =>
+export const trackingPlainData = (buckets: readonly AdminTrackingBucket[], language: AdminLanguage): readonly TrackingDatum[] =>
   mergeByLabel(buckets.map((bucket) => datum(bucket, sentenceCase(trackingPlainLabel(bucket.key, language), language))));
 
 /** Les redirections, nommées, avec le ton de leur état (réussie, en attente, échouée) — réservé aux distributions d'état. */
 export function trackingRedirectData(
   buckets: readonly AdminTrackingBucket[],
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): { readonly data: readonly TrackingDatum[]; readonly tones: Readonly<Record<string, AdminTone>> } {
   const interpreted = buckets.map((bucket) => ({ bucket, meaning: interpretRedirectStatus(bucket.key, language) }));
   return {

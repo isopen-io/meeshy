@@ -4,9 +4,8 @@ import type { ReactElement } from 'react';
 
 import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
 import { appQueryClient } from '@/lib/api/query-client';
-import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
+import { loadAdminInterfaceCatalog, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
 import { navigate } from '@/lib/router';
 
 import { createActMounter } from './act-mount';
@@ -25,7 +24,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
  * identité est passée, la pose dans le cache sous la clé de la matrice (fraîche
  * 5 min : aucune requête ne part) ; sans identité, la matrice reste en vol.
  */
-export function setupAdminKitTests(options: { readonly languages?: readonly InterfaceLanguage[] } = {}) {
+export function setupAdminKitTests(options: { readonly languages?: readonly AdminLanguage[] } = {}) {
   const mounter = createActMounter();
 
   beforeAll(async () => {

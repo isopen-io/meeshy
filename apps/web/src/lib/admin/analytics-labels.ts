@@ -1,5 +1,4 @@
-import { translateAdmin, translateAdminMaybe } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, translateAdminMaybe, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LE VOCABULAIRE DES STATISTIQUES QUE LE SOCLE NE PORTE PAS** (#8876, #6728) —
@@ -35,14 +34,14 @@ export const CALL_ISSUES = ['audio_quality', 'video_quality', 'dropped', 'echo',
 
 const isIn = <T extends string>(list: readonly T[], code: string): boolean => list.some((entry) => entry === code);
 
-function vocabulary(family: 'reason' | 'issue', known: readonly string[], code: string, language: InterfaceLanguage): string {
+function vocabulary(family: 'reason' | 'issue', known: readonly string[], code: string, language: AdminLanguage): string {
   const label = isIn(known, code) ? translateAdminMaybe(language, `admin.analytics.calls.${family}.${code}`) : null;
   return label ?? translateAdmin(language, 'admin.value.unrecognized');
 }
 
-export const callEndReasonLabel = (code: string, language: InterfaceLanguage): string => vocabulary('reason', CALL_END_REASONS, code, language);
+export const callEndReasonLabel = (code: string, language: AdminLanguage): string => vocabulary('reason', CALL_END_REASONS, code, language);
 
-export const callIssueLabel = (code: string, language: InterfaceLanguage): string => vocabulary('issue', CALL_ISSUES, code, language);
+export const callIssueLabel = (code: string, language: AdminLanguage): string => vocabulary('issue', CALL_ISSUES, code, language);
 
 export type LabelledValue = { readonly key: string; readonly label: string; readonly value: number };
 
@@ -63,7 +62,7 @@ export function mergeByLabel(items: readonly LabelledValue[]): readonly Labelled
 }
 
 /** Un nombre à décimales limitées (« 0,3 »), jamais « 0,30000000000000004 ». `null` se dit « — ». */
-export function formatDecimal(value: number | null, language: InterfaceLanguage, digits = 1): string {
+export function formatDecimal(value: number | null, language: AdminLanguage, digits = 1): string {
   if (value === null || !Number.isFinite(value)) return '—';
   return new Intl.NumberFormat(language, { minimumFractionDigits: 0, maximumFractionDigits: digits }).format(value);
 }

@@ -1,7 +1,6 @@
 import { getLanguageInfo, isSupportedLanguage } from '@meeshy/shared/utils/languages';
 
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * LES LANGUES, LES PAYS ET LES PLATEFORMES, NOMMÉS (#8876) — jamais un code.
@@ -11,7 +10,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * référentiel partagé ne sert que de repli, pour un code qu'`Intl` ne connaît
  * pas mais que Meeshy supporte.
  */
-function displayName(code: string, language: InterfaceLanguage, type: 'language' | 'region'): string | null {
+function displayName(code: string, language: AdminLanguage, type: 'language' | 'region'): string | null {
   try {
     return new Intl.DisplayNames([language], { type, fallback: 'none' }).of(code) ?? null;
   } catch {
@@ -20,12 +19,12 @@ function displayName(code: string, language: InterfaceLanguage, type: 'language'
 }
 
 /** « espagnol » → « Espagnol » : un nom posé seul (badge, cellule) ouvre par une majuscule. */
-export function sentenceCase(text: string, language: InterfaceLanguage): string {
+export function sentenceCase(text: string, language: AdminLanguage): string {
   const first = text.charAt(0);
   return first === '' ? text : `${first.toLocaleUpperCase(language)}${text.slice(1)}`;
 }
 
-export function languageName(code: string | null | undefined, language: InterfaceLanguage): string {
+export function languageName(code: string | null | undefined, language: AdminLanguage): string {
   const normalized = code?.trim() ?? '';
   if (normalized === '') return translateAdmin(language, 'admin.value.noLanguage');
 
@@ -39,14 +38,14 @@ export function languageName(code: string | null | undefined, language: Interfac
   return translateAdmin(language, 'admin.value.languageUnknown');
 }
 
-export function countryName(code: string | null | undefined, language: InterfaceLanguage): string {
+export function countryName(code: string | null | undefined, language: AdminLanguage): string {
   const normalized = code?.trim().toUpperCase() ?? '';
   if (normalized === '') return translateAdmin(language, 'admin.value.countryUnknown');
   const named = displayName(normalized, language, 'region');
   return named !== null && named !== normalized ? named : translateAdmin(language, 'admin.value.countryUnknown');
 }
 
-export function platformLabel(code: string | null | undefined, language: InterfaceLanguage): string {
+export function platformLabel(code: string | null | undefined, language: AdminLanguage): string {
   switch (code?.trim().toLowerCase()) {
     case 'ios':
       return translateAdmin(language, 'admin.value.platform.ios');

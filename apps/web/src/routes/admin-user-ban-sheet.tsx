@@ -17,9 +17,8 @@ import {
 } from '@/lib/api/admin-user-bans';
 import type { AdminDeps } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
 import { ActionButton } from '@/routes/link-page-parts';
 
 import { AdminSkeleton } from './admin-parts';
@@ -68,7 +67,7 @@ export function AdminUserBanSheet({
   deps = apiDeps,
 }: {
   readonly userId: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onClose: () => void;
   readonly onAnnounce: (texte: string) => void;
   /** Le port, injectable : la feuille se mesure sans passerelle. */
@@ -184,7 +183,7 @@ export function AdminUserBanSheet({
 }
 
 /** Le nom d'un acteur : son nom affiché, jamais un identifiant ; `null` quand son compte n'existe plus. */
-const actorLabel = (actor: AdminBanActor | null, language: InterfaceLanguage): string | null =>
+const actorLabel = (actor: AdminBanActor | null, language: AdminLanguage): string | null =>
   actor === null ? null : personLabel({ displayName: actor.displayName, username: actor.username }, language);
 
 function BanRow({
@@ -194,7 +193,7 @@ function BanRow({
   onLift,
 }: {
   readonly ban: AdminBan;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly envoi: boolean;
   readonly onLift: () => void;
 }) {

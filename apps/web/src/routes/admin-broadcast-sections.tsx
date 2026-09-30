@@ -14,8 +14,7 @@ import { countryName, languageName, sentenceCase } from '@/lib/admin/interpret/l
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import type { AdminBroadcast, AdminBroadcastPerson, AdminBroadcastPreview, AdminBroadcastTranslation } from '@/lib/api/admin-broadcasts';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES BLOCS D'UNE FICHE DE DIFFUSION** (#8876, #6731) — le contenu dans sa langue
@@ -32,7 +31,7 @@ const BAR_LIMIT = 8;
 
 type Moment = ReturnType<typeof adminMomentOf>;
 
-const momentOf = (iso: string | null, now: Date, language: InterfaceLanguage): Moment => adminMomentOf(iso, now, language);
+const momentOf = (iso: string | null, now: Date, language: AdminLanguage): Moment => adminMomentOf(iso, now, language);
 
 function Text({ lang, children }: { readonly lang: string; readonly children: string }) {
   return (
@@ -42,7 +41,7 @@ function Text({ lang, children }: { readonly lang: string; readonly children: st
   );
 }
 
-export function ContentSection({ language, broadcast }: { readonly language: InterfaceLanguage; readonly broadcast: AdminBroadcast }) {
+export function ContentSection({ language, broadcast }: { readonly language: AdminLanguage; readonly broadcast: AdminBroadcast }) {
   const t = (key: AdminPlainCatalogKey) => translateAdmin(language, key);
   return (
     <AdminFicheSection id="content" title={t('admin.broadcast.section.content')}>
@@ -82,7 +81,7 @@ function TranslationPanel({ translation }: { readonly translation: AdminBroadcas
   );
 }
 
-function TranslationTabs({ language, translations }: { readonly language: InterfaceLanguage; readonly translations: readonly AdminBroadcastTranslation[] }) {
+function TranslationTabs({ language, translations }: { readonly language: AdminLanguage; readonly translations: readonly AdminBroadcastTranslation[] }) {
   const ids = translations.map((translation) => translation.language);
   const [active, setActive] = useAdminTab(ids, ids[0] ?? '');
   const current = translations.find((translation) => translation.language === active) ?? translations[0];
@@ -99,7 +98,7 @@ function TranslationTabs({ language, translations }: { readonly language: Interf
   );
 }
 
-export function TranslationsSection({ language, broadcast }: { readonly language: InterfaceLanguage; readonly broadcast: AdminBroadcast }) {
+export function TranslationsSection({ language, broadcast }: { readonly language: AdminLanguage; readonly broadcast: AdminBroadcast }) {
   const none = broadcast.status === 'DRAFT' ? 'admin.broadcast.translations.none.draft' : 'admin.broadcast.translations.none.prepared';
   return (
     <AdminFicheSection id="translations" title={translateAdmin(language, 'admin.broadcast.section.translations')}>
@@ -116,7 +115,7 @@ export function TranslationsSection({ language, broadcast }: { readonly language
 
 const UNKNOWN_COUNTRY = 'unknown';
 
-function PreviewCharts({ language, preview }: { readonly language: InterfaceLanguage; readonly preview: AdminBroadcastPreview }) {
+function PreviewCharts({ language, preview }: { readonly language: AdminLanguage; readonly preview: AdminBroadcastPreview }) {
   const others = translateAdmin(language, 'admin.kit.chart.others');
   const languages = breakdownBars({
     entries: preview.byLanguage.map((entry) => ({ key: entry.language, value: entry.count })),
@@ -163,7 +162,7 @@ export function AudienceSection({
   broadcast,
   preview,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly broadcast: AdminBroadcast;
   readonly preview: AdminBroadcastPreview | undefined;
 }) {
@@ -189,7 +188,7 @@ export function AudienceSection({
   );
 }
 
-export function EmailSection({ language, broadcast, now }: { readonly language: InterfaceLanguage; readonly broadcast: AdminBroadcast; readonly now: Date }) {
+export function EmailSection({ language, broadcast, now }: { readonly language: AdminLanguage; readonly broadcast: AdminBroadcast; readonly now: Date }) {
   const t = (key: AdminPlainCatalogKey) => translateAdmin(language, key);
   const started = broadcast.status === 'SENDING' || broadcast.status === 'SENT' || broadcast.status === 'FAILED';
   const done = broadcast.sentCount + broadcast.failedCount;
@@ -244,7 +243,7 @@ const IN_APP_STATE: Readonly<Record<InAppState, { readonly key: AdminPlainCatalo
   done: { key: 'admin.broadcast.inApp.state.done', tone: 'success' },
 };
 
-export function InAppSection({ language, broadcast, now }: { readonly language: InterfaceLanguage; readonly broadcast: AdminBroadcast; readonly now: Date }) {
+export function InAppSection({ language, broadcast, now }: { readonly language: AdminLanguage; readonly broadcast: AdminBroadcast; readonly now: Date }) {
   const t = (key: AdminPlainCatalogKey) => translateAdmin(language, key);
   const state = inAppStateOf(broadcast);
   const badge = IN_APP_STATE[state];
@@ -271,7 +270,7 @@ export function InAppSection({ language, broadcast, now }: { readonly language: 
   );
 }
 
-function PersonChip({ language, person }: { readonly language: InterfaceLanguage; readonly person: AdminBroadcastPerson | null }) {
+function PersonChip({ language, person }: { readonly language: AdminLanguage; readonly person: AdminBroadcastPerson | null }) {
   if (person === null) return <span style={{ color: INK2 }}>{translateAdmin(language, 'admin.broadcast.people.unknown')}</span>;
   return (
     <AdminEntityChip
@@ -281,7 +280,7 @@ function PersonChip({ language, person }: { readonly language: InterfaceLanguage
   );
 }
 
-export function PeopleSection({ language, broadcast }: { readonly language: InterfaceLanguage; readonly broadcast: AdminBroadcast }) {
+export function PeopleSection({ language, broadcast }: { readonly language: AdminLanguage; readonly broadcast: AdminBroadcast }) {
   const t = (key: AdminPlainCatalogKey) => translateAdmin(language, key);
   return (
     <AdminFicheSection id="people" title={t('admin.broadcast.section.people')}>
@@ -304,7 +303,7 @@ export function BroadcastMeta({
   now,
   onAnnounce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly broadcast: AdminBroadcast;
   readonly now: Date;
   readonly onAnnounce: (message: string) => void;

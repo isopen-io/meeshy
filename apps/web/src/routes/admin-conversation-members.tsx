@@ -30,8 +30,7 @@ import {
 } from '@/lib/api/admin-conversation-settings';
 import { ADMIN_CONVERSATIONS_ROOT_KEY } from '@/lib/api/admin-conversations';
 import type { ApiResult } from '@/lib/api/http';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
 /**
@@ -98,7 +97,7 @@ const patchedRows =
     isMembersPage(before) ? { ...before, rows: before.rows.map((row) => (row.id === memberId ? patch(row) : row)) } : before;
 
 type MemberActionsProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly member: AdminConversationMember;
   readonly gestures: MemberGestures;
   readonly online: boolean;
@@ -169,7 +168,7 @@ export function ConversationMembers({
   now,
   announce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly conversationId: string;
   readonly conversationType: string;
   readonly deps: AdminDeps;

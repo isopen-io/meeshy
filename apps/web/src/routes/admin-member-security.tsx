@@ -8,8 +8,7 @@ import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { ADMIN_WRITABLE_CONSENTS, setAdminUserConsent, unlockAdminUser, type AdminConsent } from '@/lib/api/admin-user-security';
 import { setAdminUserTwoFactor, setAdminUserVerification, type AdminProofChannel } from '@/lib/api/admin-user-verifications';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { useMemberGestures, type MemberGesture } from './admin-member-gestures';
 import { INK, INK2, MemberSection, SectionButton } from './admin-member-parts';
@@ -88,7 +87,7 @@ export function AdminMemberSecuritySection({
   now = () => new Date(),
 }: {
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   /** Le nombre de sessions actives servi par `…/stats`, `null` tant qu'il ne l'est pas. */
   readonly sessions: number | null;
   readonly onAnnounce: (texte: string) => void;

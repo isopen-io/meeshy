@@ -30,8 +30,7 @@ import {
   type AgentTrackedConversation,
 } from '@/lib/api/admin-agent';
 import { unwrap } from '@/lib/api/client';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 import type { AdminOption } from '@/routes/admin-table';
 import { AdminSkeleton } from '@/routes/admin-parts';
@@ -63,7 +62,7 @@ const defaultNow = (): Date => new Date();
 const option = (value: string, label: string): AdminOption => ({ value, label });
 
 type ListProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps: AdminDeps;
   readonly now?: () => Date;
 };
@@ -177,7 +176,7 @@ function LogOpenCell({
   row,
   onOpen,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly row: AgentScanLogRow;
   readonly onOpen: () => void;
 }) {
@@ -324,7 +323,7 @@ export function AgentLogDetailSheet({
   onClose,
 }: {
   readonly logId: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps: AdminDeps;
   readonly now?: () => Date;
   readonly onClose: () => void;

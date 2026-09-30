@@ -1,6 +1,5 @@
 import type { AdminTarget } from '@/lib/admin/admin-routes';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { AdminLink } from '../entity-chip';
 import { AdminChartCard, seriesColor, type AdminChartState } from './chart-card';
@@ -34,7 +33,7 @@ export function AdminBarChart({
   state = 'ready',
   onRetry,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly id: string;
   readonly title: string;
   readonly data: readonly Datum[];
@@ -86,7 +85,7 @@ export function AdminBarChart({
                   {format(datum.value)}
                 </span>
               </div>
-              <svg aria-hidden="true" width="100%" height={ROW_HEIGHT} className="rtl:-scale-x-100" style={{ display: 'block', overflow: 'hidden' }}>
+              <svg aria-hidden="true" width="100%" height={ROW_HEIGHT} style={{ display: 'block', overflow: 'hidden' }}>
                 <rect x={-4} y={0} height={ROW_HEIGHT} rx={4} fill={seriesColor(0)} style={{ width: `calc(${Math.round(share(datum.value) * 10_000) / 100}% + 4px)` }} />
               </svg>
             </li>

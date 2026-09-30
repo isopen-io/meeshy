@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
 
 import type { AdminTarget } from '@/lib/admin/admin-routes';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { AdminGlyph } from './admin-glyph';
 import { AdminLink } from './entity-chip';
@@ -23,7 +22,7 @@ export function AdminPageHeader({
   badges,
   actions,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly title: string;
   readonly subtitle?: string;
   readonly crumbs?: readonly AdminCrumb[];
@@ -37,7 +36,7 @@ export function AdminPageHeader({
           <ol className="flex flex-wrap items-center gap-1 text-caption" style={{ color: INK2 }}>
             {crumbs.map((crumb, index) => (
               <li key={`${index}-${crumb.label}`} className="flex items-center gap-1">
-                {index === 0 ? null : <AdminGlyph name="caretRight" size={12} className="rtl:-scale-x-100" />}
+                {index === 0 ? null : <AdminGlyph name="caretRight" size={12} />}
                 {crumb.target === undefined || index === crumbs.length - 1 ? (
                   <span {...(index === crumbs.length - 1 ? { 'aria-current': 'page' as const } : {})}>{crumb.label}</span>
                 ) : (

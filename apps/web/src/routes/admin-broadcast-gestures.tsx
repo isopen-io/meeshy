@@ -24,8 +24,7 @@ import {
   type AdminBroadcastBody,
   type AdminBroadcastPreview,
 } from '@/lib/api/admin-broadcasts';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
 import { BroadcastComposerSheet } from './admin-broadcast-compose';
@@ -118,7 +117,7 @@ export function BroadcastGestures({
   announce,
   onDeleted,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly broadcast: AdminBroadcast;
   readonly preview: AdminBroadcastPreview | undefined;
   readonly deps: AdminDeps;

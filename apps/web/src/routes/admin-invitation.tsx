@@ -15,8 +15,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { adminInvitationKey, loadAdminInvitation } from '@/lib/api/admin-invitations';
 import { ApiError, unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -40,7 +39,7 @@ import { LinkPerson } from './admin-share-link-parts';
 const defaultNow = (): Date => new Date();
 
 type InvitationPanelProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly invitationId: string;
   readonly deps?: AdminDeps;
   readonly now?: () => Date;
@@ -197,7 +196,8 @@ export function AdminInvitationPanel({ language, invitationId, deps = apiDeps, n
 }
 
 export default function AdminInvitationScreen() {
-  const language = currentInterfaceLanguage();
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
   const { invitation: invitationId } = useParams<'/admin/invitations/$invitation'>();
 
   return (

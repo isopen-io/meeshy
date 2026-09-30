@@ -6,10 +6,9 @@ import { createAdminUser, missingCreateFields, type AdminUserCreateInput } from 
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import { ADMIN_ROLES } from '@/lib/admin/user-list';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
-import type { InterfaceLanguage } from '@/lib/interface-language';
 import { ActionButton } from '@/routes/link-page-parts';
 
 import { Texte } from './admin-member-parts';
@@ -56,7 +55,7 @@ export function AdminUserCreateSheet({
   onAnnounce,
   deps = apiDeps,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onClose: () => void;
   readonly onCreated: (membre: AdminUserDetail) => void;
   readonly onAnnounce: (texte: string) => void;

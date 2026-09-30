@@ -1,5 +1,4 @@
-import { translateAdminMaybe } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdminMaybe, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES ÉVÉNEMENTS DE SÉCURITÉ, DITS EN MOTS** (#8876) — le journal de sécurité d'un
@@ -14,7 +13,7 @@ function humanize(code: string): string {
   return words === '' ? code : `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
 }
 
-export function securityEventLabel(eventType: string, language: InterfaceLanguage): string {
+export function securityEventLabel(eventType: string, language: AdminLanguage): string {
   const key = eventType.trim().toUpperCase();
   return translateAdminMaybe(language, `admin.people.secEvent.${key}`) ?? humanize(eventType);
 }

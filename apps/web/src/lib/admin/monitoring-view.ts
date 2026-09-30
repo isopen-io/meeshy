@@ -1,7 +1,6 @@
 import type { AdminGlyphName } from '@/components/glyphs-admin';
 import type { AdminMonitoring, AdminWatchedRoute, AdminRouteUsageEntry } from '@/lib/api/admin-monitoring';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { interpretCircuitState } from './interpret/enums';
 import { platformLabel } from './interpret/language';
@@ -27,7 +26,7 @@ const isDown = (status: string): boolean => status.trim().toLowerCase() !== 'up'
 const issue = (id: HealthIssue['id'], tone: AdminTone, text: string): HealthIssue => ({ id, tone, text });
 
 /** Ce qui ne va pas, dans l'ordre où un administrateur le traite : les données d'abord, les services ensuite. Vide = tout va bien. */
-export function healthIssuesOf(monitoring: AdminMonitoring, language: InterfaceLanguage): readonly HealthIssue[] {
+export function healthIssuesOf(monitoring: AdminMonitoring, language: AdminLanguage): readonly HealthIssue[] {
   const stateCount = (state: string): number => monitoring.circuitBreakers.filter((breaker) => breaker.state.toUpperCase() === state).length;
   const open = stateCount('OPEN');
   const halfOpen = stateCount('HALF_OPEN');
@@ -46,7 +45,7 @@ export function healthIssuesOf(monitoring: AdminMonitoring, language: InterfaceL
 }
 
 /** Un coupe-circuit ouvert est en DANGER avec son mot (« Coupé ») ; l'explication dit ce que cela change. */
-export const breakerStateOf = (state: string, language: InterfaceLanguage): Interpreted => interpretCircuitState(state, language);
+export const breakerStateOf = (state: string, language: AdminLanguage): Interpreted => interpretCircuitState(state, language);
 
 const VERDICT_GLYPH: Readonly<Partial<Record<AdminTone, AdminGlyphName>>> = { success: 'checkCircle', warning: 'warning', info: 'info' };
 
@@ -75,7 +74,7 @@ function verdictOf(route: AdminWatchedRoute): Verdict {
  * plus montée a un zéro qui ne prouve RIEN (`matched: false`) : jamais « retirable »
  * par un faux vert. Seule une adresse montée, observée et jamais appelée l'est.
  */
-export function routeVerdictOf(route: AdminWatchedRoute, language: InterfaceLanguage): Interpreted {
+export function routeVerdictOf(route: AdminWatchedRoute, language: AdminLanguage): Interpreted {
   const verdict = verdictOf(route);
   const glyph = VERDICT_GLYPH[verdict.tone];
   return {
@@ -95,14 +94,14 @@ const PLATFORM_OWN: Readonly<Record<string, AdminPlainCatalogKey>> = {
 };
 
 /** Le seau TOTAL d'une route surveillée dit « toutes plateformes » ; une plateforme connue se nomme ; `absent`, `bot`, `script` ont leurs mots. */
-export function routePlatformLabel(entry: Pick<AdminRouteUsageEntry, 'platform' | 'total'>, language: InterfaceLanguage): string {
+export function routePlatformLabel(entry: Pick<AdminRouteUsageEntry, 'platform' | 'total'>, language: AdminLanguage): string {
   if (entry.total) return translateAdmin(language, 'admin.monitoring.routes.platform.all');
   const own = PLATFORM_OWN[entry.platform.trim().toLowerCase()];
   return own === undefined ? platformLabel(entry.platform, language) : translateAdmin(language, own);
 }
 
 /** `absent` et `invalid` sont des verdicts SERVIS, pas des trous : ils se disent. Une version lisible est écrite telle quelle (« 2.4.0 »). */
-export function routeVersionLabel(entry: Pick<AdminRouteUsageEntry, 'version' | 'total'>, language: InterfaceLanguage): string {
+export function routeVersionLabel(entry: Pick<AdminRouteUsageEntry, 'version' | 'total'>, language: AdminLanguage): string {
   if (entry.total) return translateAdmin(language, 'admin.monitoring.routes.version.all');
   const version = entry.version.trim();
   if (version === '' || version === 'absent') return translateAdmin(language, 'admin.monitoring.routes.version.absent');
@@ -141,7 +140,7 @@ export type BlindSpotView = { readonly id: string; readonly title: string; reado
  * un code que cette version ne connaît pas garde la phrase servie, sous un titre
  * neutre : une limite nouvelle se lit quand même, elle n'est jamais masquée.
  */
-export function blindSpotOf(served: string, language: InterfaceLanguage): BlindSpotView {
+export function blindSpotOf(served: string, language: AdminLanguage): BlindSpotView {
   const cut = served.indexOf(BLIND_SPOT_SEPARATOR);
   const code = (cut === -1 ? served : served.slice(0, cut)).trim();
   const known = BLIND_SPOTS[code];

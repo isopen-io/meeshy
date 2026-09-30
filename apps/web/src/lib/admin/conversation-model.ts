@@ -5,7 +5,7 @@ import type { Interpreted } from '@/lib/admin/interpret/types';
 import type { AdminConversationMember, AdminConversationFiche } from '@/lib/api/admin-conversation-fiche';
 import type { AdminInstanceParticipant, AdminParticipantKind } from '@/lib/api/admin-conversations';
 import type { AdminConversation, AdminConversationParticipant } from '@/lib/api/admin-user-conversations';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **CE QU'UNE CONVERSATION ET SES MEMBRES SONT, EN MOTS** (#8876) — la couche
@@ -26,7 +26,7 @@ type NamedParticipant = {
 };
 
 /** Le NOM d'un membre : un invité se dit « Invité sans nom » s'il n'en a pas, un compte retombe sur son @pseudo. */
-export function participantName(participant: NamedParticipant, language: InterfaceLanguage): string {
+export function participantName(participant: NamedParticipant, language: AdminLanguage): string {
   return participant.kind === 'anonymous'
     ? guestLabel(participant.displayName, language)
     : personLabel({ displayName: participant.displayName, username: participant.username ?? null }, language);
@@ -43,7 +43,7 @@ type NamedConversation = {
  * Le nom d'une conversation : son titre, sinon les noms de ses membres (le
  * nombre TOTAL est passé, l'aperçu n'en sert que six : « Awa, Jean et 3 autres »).
  */
-export function conversationNameOf(conversation: NamedConversation, language: InterfaceLanguage): string {
+export function conversationNameOf(conversation: NamedConversation, language: AdminLanguage): string {
   return conversationLabel(
     {
       title: conversation.title,
@@ -56,7 +56,7 @@ export function conversationNameOf(conversation: NamedConversation, language: In
 }
 
 /** Le nom de la fiche : l'aperçu de six membres tient lieu de `participants`, le total vient de `memberCount`. */
-export function ficheNameOf(fiche: AdminConversationFiche, language: InterfaceLanguage): string {
+export function ficheNameOf(fiche: AdminConversationFiche, language: AdminLanguage): string {
   return conversationNameOf(
     { title: fiche.title, type: fiche.type, memberCount: fiche.memberCount, participants: fiche.participantsPreview },
     language,
@@ -70,7 +70,7 @@ export function ficheNameOf(fiche: AdminConversationFiche, language: InterfaceLa
  */
 export function conversationStateOf(
   facts: { readonly isActive: boolean; readonly closedAt: string | null },
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): Interpreted {
   if (facts.closedAt !== null) return interpretConversationState('closed', language);
   return interpretConversationState(facts.isActive ? 'active' : 'archived', language);
@@ -79,7 +79,7 @@ export function conversationStateOf(
 /** La conversation comme ENTITÉ nommée — avec son image quand elle en a une, le glyphe du genre sinon. */
 export function conversationRefOf(
   conversation: NamedConversation & { readonly id: string; readonly avatar: string | null },
-  language: InterfaceLanguage,
+  language: AdminLanguage,
 ): AdminEntityRef {
   return {
     kind: 'conversation',
@@ -90,7 +90,7 @@ export function conversationRefOf(
 }
 
 /** Un membre de l'aperçu, comme personne nommée (un invité renvoie à sa fiche d'anonyme, un robot à rien). */
-export function previewMemberRefOf(participant: AdminInstanceParticipant, language: InterfaceLanguage): AdminEntityRef {
+export function previewMemberRefOf(participant: AdminInstanceParticipant, language: AdminLanguage): AdminEntityRef {
   const label = participantName(participant, language);
   return {
     kind: participant.kind === 'anonymous' ? 'anonymous' : 'user',
@@ -106,7 +106,7 @@ export function previewMemberRefOf(participant: AdminInstanceParticipant, langua
  * réellement en ligne — un membre parti n'est ni en ligne ni hors ligne, il n'est
  * plus là.
  */
-export function memberRefOf(member: AdminConversationMember, language: InterfaceLanguage): AdminEntityRef {
+export function memberRefOf(member: AdminConversationMember, language: AdminLanguage): AdminEntityRef {
   const secondary = member.kind === 'user' ? personSecondary(member.username) : null;
   return {
     kind: member.kind === 'anonymous' ? 'anonymous' : 'user',

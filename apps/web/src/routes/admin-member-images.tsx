@@ -8,8 +8,7 @@ import { adminUserDetailQueryKey, type AdminUserDetail } from '@/lib/api/admin-u
 import { apiDeps } from '@/lib/api/deps';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { ProfileImageKind } from '@/lib/api/profile';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { MemberSection, SectionButton, type SectionState } from './admin-member-parts';
 import { AdminUserImageSheet } from './admin-user-image-sheet';
@@ -36,7 +35,7 @@ export function AdminMemberImagesSection({
   deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
   readonly deps?: AdminDeps;
 }) {
@@ -118,7 +117,7 @@ export function AdminMemberImagesSection({
 }
 
 /** La bannière, ou son dégradé quand elle manque — ou quand son adresse ne répond plus. */
-function Banniere({ url, language }: { readonly url: string; readonly language: InterfaceLanguage }) {
+function Banniere({ url, language }: { readonly url: string; readonly language: AdminLanguage }) {
   const [echec, setEchec] = useState<string | null>(null);
   const montre = url !== '' && echec !== url;
   return (

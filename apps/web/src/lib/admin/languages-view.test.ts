@@ -14,7 +14,7 @@ import {
 } from './languages-view';
 
 beforeAll(async () => {
-  await Promise.all([loadAdminInterfaceCatalog('fr'), loadAdminInterfaceCatalog('en'), loadAdminInterfaceCatalog('ar')]);
+  await Promise.all([loadAdminInterfaceCatalog('fr'), loadAdminInterfaceCatalog('en'), loadAdminInterfaceCatalog('es'), loadAdminInterfaceCatalog('pt')]);
 });
 
 describe('pairLabel — la paire se lit « français → anglais », jamais « fr → en »', () => {
@@ -27,8 +27,9 @@ describe('pairLabel — la paire se lit « français → anglais », jamais « f
     expect(pairLabel('unknown', 'en', 'fr')).not.toContain('unknown');
   });
 
-  test('en arabe, la flèche regarde dans le sens de la lecture', () => {
-    expect(pairLabel('fr', 'en', 'ar')).toContain('←');
+  test('en espagnol et en portugais, la paire se dit dans la langue de l’administration', () => {
+    expect(pairLabel('fr', 'en', 'es').toLowerCase()).toBe('francés → inglés');
+    expect(pairLabel('fr', 'en', 'pt').toLowerCase()).toBe('francês → inglês');
   });
 });
 

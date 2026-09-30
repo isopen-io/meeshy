@@ -3,6 +3,7 @@
 > Chantier #8876 · milestone #101 « L'administration vit dans la v2, réécrite sur son design system » · 2026-09-30
 > Application : `apps/web` (Vite + Preact + Capacitor), passerelle `services/gateway`, catalogues générés `packages/shared/api/endpoints`.
 > Ce document est un BROUILLON DE CONCEPTION tracké : l'état de chaque tâche vit dans son issue GitHub, jamais ici.
+> **AMENDEMENT du 2026-09-30 (directive porteur, `apps/web/decisions.md` D-159) : l'administration est servie en QUATRE langues — français, anglais, espagnol, portugais, « c'est tout ».** Partout où ce document écrit « sept langues », lire « quatre » ; une langue d'interface hors de ces quatre (allemand, italien, arabe) lit l'administration en anglais — textes et formats —, `lang="en" dir="ltr"` à la racine. Les fragments et catalogues `de`, `it`, `ar` n'existent plus et ne s'écrivent plus.
 
 ## 0. Cadre
 

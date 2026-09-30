@@ -12,8 +12,7 @@ import {
 } from '@/lib/admin/admin-routes';
 import { personInitials } from '@/lib/admin/interpret/labels';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { participantAvatarOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
@@ -270,7 +269,7 @@ export function AdminEntityIdentity({
   entity,
   size = 'md',
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly entity: AdminEntityRef;
   readonly size?: 'sm' | 'md';
 }) {
@@ -308,7 +307,7 @@ export function AdminEntityChip({
   entity,
   size = 'md',
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly entity: AdminEntityRef;
   readonly size?: 'sm' | 'md';
 }) {

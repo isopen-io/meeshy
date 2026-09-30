@@ -12,8 +12,7 @@ import {
   type TrackingDatum,
 } from '@/lib/admin/tracking-link-model';
 import type { AdminTrackingLink } from '@/lib/api/admin-tracking-links';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **CE QUE RAPPORTENT LES CLICS** (#8876, #6729) — la courbe des clics par jour et
@@ -28,7 +27,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  */
 const MAX_BARS = 8;
 
-export function TrackingCharts({ language, link }: { readonly language: InterfaceLanguage; readonly link: AdminTrackingLink }) {
+export function TrackingCharts({ language, link }: { readonly language: AdminLanguage; readonly link: AdminTrackingLink }) {
   const { stats } = link;
   const count = (value: number) => formatCount(value, language);
   const series = trackingDaySeries(stats.clicksByDate, language);

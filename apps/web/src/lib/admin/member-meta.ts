@@ -1,4 +1,4 @@
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { platformLabel } from './interpret/language';
 
@@ -51,7 +51,7 @@ function familyOf(userAgent: string): DeviceFamily {
  * `platformLabel`. Un agent qu'on ne sait pas lire ne s'affiche PAS tel quel :
  * « Plateforme inconnue ». Vide ⇒ `null` (l'appelant dit « Non renseigné »).
  */
-export function deviceLabel(userAgent: string | null | undefined, language: InterfaceLanguage): string | null {
+export function deviceLabel(userAgent: string | null | undefined, language: AdminLanguage): string | null {
   const agent = userAgent?.trim() ?? '';
   if (agent === '') return null;
   const family = familyOf(agent);
@@ -61,11 +61,11 @@ export function deviceLabel(userAgent: string | null | undefined, language: Inte
 }
 
 /** Une durée en JOURS, avec l'unité de la langue (« 4 jours », « 4 days ») — pluriels compris. */
-export function formatDays(days: number, language: InterfaceLanguage): string {
+export function formatDays(days: number, language: AdminLanguage): string {
   return new Intl.NumberFormat(language, { style: 'unit', unit: 'day', unitDisplay: 'long' }).format(days);
 }
 
 /** Des ANNÉES, avec l'unité de la langue (« 31 ans », « 31 years »). */
-export function formatYears(years: number, language: InterfaceLanguage): string {
+export function formatYears(years: number, language: AdminLanguage): string {
   return new Intl.NumberFormat(language, { style: 'unit', unit: 'year', unitDisplay: 'long' }).format(years);
 }

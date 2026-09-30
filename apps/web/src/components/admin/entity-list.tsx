@@ -3,8 +3,7 @@ import type { ReactNode } from 'react';
 import { ApiError } from '@/lib/api/client';
 import type { AdminSectionId, AdminTarget } from '@/lib/admin/admin-routes';
 import type { AdminListController } from '@/lib/admin/use-admin-list';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { AdminPager, PlainTh, SortableTh, Td } from '@/routes/admin-table';
 
 import { AdminLink } from './entity-chip';
@@ -60,7 +59,7 @@ export function AdminEntityList<Row, S extends string, F extends string, I exten
   filteredEmpty,
   pageSizes = [20, 50, 100],
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly section: AdminSectionId;
   readonly list: AdminListController<Row, S, F, I>;
   readonly columns: readonly AdminColumn<Row>[];

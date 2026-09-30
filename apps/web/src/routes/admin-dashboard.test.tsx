@@ -9,7 +9,7 @@ import { routedTransport, type RoutedReply } from '@/test-support/routed-transpo
 import { visibleAdminSections } from '@/lib/admin/sections';
 import { ADMIN_DASHBOARD_QUERY_KEY } from '@/lib/api/admin-dashboard';
 import { appQueryClient } from '@/lib/api/query-client';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LE TABLEAU DE BORD « VUE DE DIEU »** (#8876, § 4) — le panneau monté comme
@@ -29,7 +29,7 @@ const BIGBOSS = adminIdentityFixture({ role: 'BIGBOSS' });
 
 const flat = (text: string | null | undefined): string => (text ?? '').replace(/[  ]/g, ' ').replace(/\s+/g, ' ').trim();
 
-async function dashboard(options: { readonly identity?: AdminIdentityFixture; readonly replies?: readonly RoutedReply[]; readonly language?: InterfaceLanguage } = {}) {
+async function dashboard(options: { readonly identity?: AdminIdentityFixture; readonly replies?: readonly RoutedReply[]; readonly language?: AdminLanguage } = {}) {
   const { transport, calls } = routedTransport(...(options.replies ?? []), dashboardReplies());
   const host = await mount(
     <AdminDashboardPanel language={options.language ?? 'fr'} deps={{ source: 'gateway', transport }} now={() => NOW} />,

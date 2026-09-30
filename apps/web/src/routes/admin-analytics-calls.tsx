@@ -12,22 +12,21 @@ import { formatDuration } from '@/lib/admin/interpret/time';
 import type { AdminTone } from '@/lib/admin/interpret/types';
 import type { AdminDeps } from '@/lib/api/admin';
 import { analyticsKeys, loadAnalyticsCalls, type AnalyticsCalls, type KpiPeriod } from '@/lib/api/admin-analytics';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { Metric, StaleDataNotice, StatsBlock, StatsSection, useStatsQuery, windowNote, type Block } from './admin-analytics-parts';
 
 type TabProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps: AdminDeps;
   readonly period: KpiPeriod;
 };
 
 /** Une part (0–1) ; une décimale sous 10 %, sans quoi « 1,2 % d'échecs » se lirait « 1 % ». */
-const rateText = (value: number | null, language: InterfaceLanguage): string =>
+const rateText = (value: number | null, language: AdminLanguage): string =>
   formatPercent(value, 'ratio', language, value !== null && value < 0.1 ? 1 : 0);
 
-function QualityChart({ language, calls, state, retry }: { readonly language: InterfaceLanguage; readonly calls: AnalyticsCalls | undefined; readonly state: Block<AnalyticsCalls>['state']; readonly retry: () => void }) {
+function QualityChart({ language, calls, state, retry }: { readonly language: AdminLanguage; readonly calls: AnalyticsCalls | undefined; readonly state: Block<AnalyticsCalls>['state']; readonly retry: () => void }) {
   const shares = calls?.qualityDistribution;
   const codes = ['excellent', 'good', 'fair', 'poor'] as const;
   const interpreted = codes.map((code) => ({ code, view: interpretCallQuality(code, language) }));
@@ -65,7 +64,7 @@ function CountChart({
   state,
   retry,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly id: string;
   readonly title: string;
   readonly summaryKey: 'admin.analytics.calls.platform.summary' | 'admin.analytics.calls.reasons.summary' | 'admin.analytics.calls.feedback.issues.summary';
@@ -92,7 +91,7 @@ function CountChart({
   );
 }
 
-function FeedbackSection({ language, block }: { readonly language: InterfaceLanguage; readonly block: Block<AnalyticsCalls> }) {
+function FeedbackSection({ language, block }: { readonly language: AdminLanguage; readonly block: Block<AnalyticsCalls> }) {
   const feedback = block.data?.feedback;
   const rated = feedback?.ratedCalls ?? 0;
   const ratings = (feedback?.ratingDistribution ?? []).map((count, index) => ({
@@ -162,7 +161,7 @@ function FeedbackSection({ language, block }: { readonly language: InterfaceLang
   );
 }
 
-function CallsBody({ language, block, period }: { readonly language: InterfaceLanguage; readonly block: Block<AnalyticsCalls>; readonly period: KpiPeriod }) {
+function CallsBody({ language, block, period }: { readonly language: AdminLanguage; readonly block: Block<AnalyticsCalls>; readonly period: KpiPeriod }) {
   const data = block.data;
 
   if (block.state === 'ready' && data !== undefined && data.totalCalls === 0) {

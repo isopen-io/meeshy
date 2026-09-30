@@ -24,8 +24,7 @@ import {
 } from '@/lib/api/admin-posts-detail';
 import type { ApiResult } from '@/lib/api/http';
 import { attachmentSrc } from '@/lib/api/media-url';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
@@ -47,7 +46,7 @@ const KIND_LABEL: Readonly<Record<MediaKind, AdminPlainCatalogKey>> = {
   file: 'admin.posts.media.kind.file',
 };
 
-function MediaTile({ language, media, index }: { readonly language: InterfaceLanguage; readonly media: AdminPostMedia; readonly index: number }) {
+function MediaTile({ language, media, index }: { readonly language: AdminLanguage; readonly media: AdminPostMedia; readonly index: number }) {
   const kind = mediaKindOf(media.mimeType);
   const preview = media.thumbnailUrl ?? (kind === 'image' ? media.fileUrl : null);
   const facts = [
@@ -97,7 +96,7 @@ function MediaTile({ language, media, index }: { readonly language: InterfaceLan
   );
 }
 
-export function PostMediaSection({ language, media }: { readonly language: InterfaceLanguage; readonly media: readonly AdminPostMedia[] }) {
+export function PostMediaSection({ language, media }: { readonly language: AdminLanguage; readonly media: readonly AdminPostMedia[] }) {
   if (media.length === 0) return null;
   return (
     <AdminFicheSection id="media" title={translateAdmin(language, 'admin.posts.section.media')}>
@@ -110,7 +109,7 @@ export function PostMediaSection({ language, media }: { readonly language: Inter
   );
 }
 
-export function PostCommentsSection({ language, fiche, now }: { readonly language: InterfaceLanguage; readonly fiche: AdminPostFiche; readonly now: Date }) {
+export function PostCommentsSection({ language, fiche, now }: { readonly language: AdminLanguage; readonly fiche: AdminPostFiche; readonly now: Date }) {
   return (
     <AdminFicheSection id="comments" title={translateAdmin(language, 'admin.posts.section.comments')}>
       {fiche.comments.length === 0 ? (
@@ -149,7 +148,7 @@ export function PostCommentsSection({ language, fiche, now }: { readonly languag
   );
 }
 
-export function PostViewersSection({ language, fiche }: { readonly language: InterfaceLanguage; readonly fiche: AdminPostFiche }) {
+export function PostViewersSection({ language, fiche }: { readonly language: AdminLanguage; readonly fiche: AdminPostFiche }) {
   return (
     <AdminFicheSection id="viewers" title={translateAdmin(language, 'admin.posts.section.viewers')}>
       {fiche.viewers.length === 0 ? (
@@ -202,7 +201,7 @@ export function AdminPostRemoval({
   deps,
   onAnnounce,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly fiche: AdminPostFiche;
   readonly deps: AdminDeps;
   readonly onAnnounce: (message: string, tone?: AnnouncementTone) => void;
