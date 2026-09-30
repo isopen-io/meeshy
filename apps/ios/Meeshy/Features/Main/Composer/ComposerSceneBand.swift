@@ -297,7 +297,7 @@ struct ComposerSceneBandView: View {
     /// répété sur chaque bouton. Un commentaire ne fait pas d'une copie une
     /// source unique (leçon 248i). `BackgroundColorPalette` l'est.
     private var palette: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             BackgroundColorPalette(colors: colors) { hex in
                 onPickColor?(hex)
             }
@@ -317,7 +317,7 @@ struct ComposerSceneBandView: View {
                 OpeningEffectChips(selection: openingEffect,
                                    onDarkSurface: true,
                                    onSelect: onPickOpening)
-                    .padding(.horizontal, 2)
+                    .padding(.horizontal, MeeshySpacing.xxs)
             }
         }
     }

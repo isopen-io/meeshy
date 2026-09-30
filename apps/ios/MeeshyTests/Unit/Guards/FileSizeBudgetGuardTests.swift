@@ -45,7 +45,6 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// toujours. Chaque découpe est un lot à elle seule — `CallManager.swift`
     /// (6462 lignes) n'est pas un lot d'UI/UX.
     private static let legacyOverBudget: Set<String> = [
-        "AudioFullscreenView.swift",
         "BubbleStandardLayout.swift",
         "CallManager.swift",
         "ConversationDashboardView.swift",
@@ -563,7 +562,18 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // `StoryViewerView+Content.swift` : elle en sort d'abord pour
     // `StoryViewerView+CommentMenu.swift` (−44), et l'écho `comment:updated`
     // y délègue son remplacement en place à `StoryCommentEditing` (−2).
-    private static let legacyLineCeiling = 43_276
+    //
+    // #8878 — 43 276 → 42 092 (−1 184). La croix et l'enregistrement du plein écran audio
+    // montent les briques du chrome plein écran de MeeshyUI (`FullscreenCloseButton`,
+    // `FullscreenChromeDisc`) au lieu de peindre leurs disques : `AudioFullscreenView.swift`
+    // repasse SOUS le budget (1 184 lignes comptées), sort de `legacyOverBudget` ENTIER, et le
+    // plafond baisse d'exactement ce qu'il pesait à la sortie.
+    //
+    // #8878 — 42 092 → 42 091 (−1). Le lecteur de story monte son en-tête avec la marge
+    // latérale de `FullscreenTopBarLayout` : le `.padding(.horizontal, …)` que
+    // `StoryViewerView+Canvas.swift` posait autour de `StoryHeaderView` part (−1 ligne).
+    // L'hôte RESTE en dette ; le plafond baisse d'exactement ce que le lot retire.
+    private static let legacyLineCeiling = 42_091
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

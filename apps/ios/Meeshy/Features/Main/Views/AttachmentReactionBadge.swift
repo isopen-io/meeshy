@@ -101,17 +101,17 @@ struct AttachmentReactionBadge: View {
     var body: some View {
         HStack(spacing: 1) {
             ForEach(model.emojis, id: \.self) { emoji in
-                Text(emoji).font(MeeshyFont.relative(11))
+                Text(emoji).font(MeeshyFont.relative(MeeshyFont.footnoteSize))
             }
             if model.total > 1 {
                 Text("\(model.total)")
-                    .font(MeeshyFont.relative(9, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
                     .foregroundColor(.white)
             }
         }
-        .padding(.horizontal, 5).padding(.vertical, 2)
+        .padding(.horizontal, MeeshySpacing.xs).padding(.vertical, MeeshySpacing.xxs)
         .background(
-            Capsule().fill(model.mine ? accent.opacity(0.55) : Color.black.opacity(0.55))
+            Capsule().fill(model.mine ? accent.opacity(MeeshyOpacity.strong) : MeeshyColors.mediaScrim)
         )
         .overlay(
             Capsule().strokeBorder(model.mine ? accent : .clear, lineWidth: model.mine ? 2 : 0)

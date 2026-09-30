@@ -37,7 +37,7 @@ struct ContactCardDetailSheet: View {
 
             if isVisible {
                 card
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                     .transition(reduceMotion ? .opacity : .scale(scale: 0.94).combined(with: .opacity))
             }
         }
@@ -65,7 +65,7 @@ struct ContactCardDetailSheet: View {
         VStack(spacing: 0) {
             header
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
                     if !fields.isEmpty {
                         VStack(spacing: 0) {
                             ForEach(Array(fields.enumerated()), id: \.element.id) { index, field in
@@ -75,29 +75,29 @@ struct ContactCardDetailSheet: View {
                                 }
                             }
                         }
-                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.05)))
+                        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(Color.primary.opacity(MeeshyOpacity.faint)))
                     }
                     ForEach(model.accounts) { account in
                         meeshySection(account)
                     }
                     footerActions
                 }
-                .padding(16)
+                .padding(MeeshySpacing.lg)
             }
             .frame(maxHeight: 560)
         }
         .frame(maxWidth: 520)
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(accent.opacity(0.25), lineWidth: 1))
-        .shadow(color: .black.opacity(0.18), radius: 24, y: 10)
+        .overlay(RoundedRectangle(cornerRadius: 28, style: .continuous).stroke(accent.opacity(MeeshyOpacity.medium), lineWidth: 1))
+        .shadow(color: .black.opacity(MeeshyOpacity.light), radius: 24, y: 10)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
     }
 
     private var header: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: MeeshySpacing.md) {
             ZStack {
-                Circle().fill(LinearGradient(colors: [accent, accent.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                Circle().fill(LinearGradient(colors: [accent, accent.opacity(MeeshyOpacity.heavy)], startPoint: .topLeading, endPoint: .bottomTrailing))
                 Text(Self.initials(model.card?.displayName ?? ""))
                     .font(.title3.weight(.bold))
                     .foregroundColor(.white)
@@ -105,7 +105,7 @@ struct ContactCardDetailSheet: View {
             .frame(width: 52, height: 52)
             .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(model.card?.displayName ?? "")
                     .font(.title3.weight(.bold))
                     .foregroundColor(.primary)
@@ -122,15 +122,15 @@ struct ContactCardDetailSheet: View {
                 Image(systemName: "xmark")
                     .font(.body.weight(.semibold))
                     .foregroundColor(.primary)
-                    .frame(width: 44, height: 44)
+                    .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                     .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "contact-card.detail.close", defaultValue: "Fermer la fiche", bundle: .main))
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 16)
-        .padding(.bottom, 4)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     private var subtitle: String? {
@@ -145,12 +145,12 @@ struct ContactCardDetailSheet: View {
             ZStack(alignment: .bottomLeading) {
                 banner(account)
                 MeeshyAvatar(name: account.displayName, context: .storyViewer, accentColor: accentHex, avatarURL: account.avatarUrl, isDark: colorScheme == .dark)
-                    .padding(3)
+                    .padding(MeeshySpacing.xxs)
                     .background(Circle().fill(.ultraThinMaterial))
                     .offset(x: 12, y: 22)
                     .accessibilityHidden(true)
             }
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                 Text(String(localized: "contact-card.on-meeshy", defaultValue: "Sur Meeshy", bundle: .main))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(accent)
@@ -169,20 +169,20 @@ struct ContactCardDetailSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 ContactAccountActionRow(model: model, account: account, accentHex: accentHex, style: .prominent, onWillNavigate: { close() })
-                    .padding(.top, 6)
+                    .padding(.top, MeeshySpacing.xsPlus)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 30)
-            .padding(.bottom, 12)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.top, MeeshySpacing.xxxl)
+            .padding(.bottom, MeeshySpacing.md)
             .accessibilityElement(children: .contain)
         }
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(0.05)))
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(Color.primary.opacity(MeeshyOpacity.faint)))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous))
     }
 
     @ViewBuilder
     private func banner(_ account: PublicContactAccount) -> some View {
-        let gradient = LinearGradient(colors: [accent.opacity(0.55), accent.opacity(0.2)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        let gradient = LinearGradient(colors: [accent.opacity(MeeshyOpacity.strong), accent.opacity(MeeshyOpacity.light)], startPoint: .topLeading, endPoint: .bottomTrailing)
         if let bannerUrl = account.bannerUrl {
             CachedAsyncImage(url: bannerUrl, targetSize: CGSize(width: 480, height: 96), thumbHash: nil, showsStatusOverlays: false) {
                 gradient
@@ -200,7 +200,7 @@ struct ContactCardDetailSheet: View {
 
     @ViewBuilder
     private var footerActions: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             if model.card != nil {
                 footerButton(String(localized: "contact-card.action.add-to-contacts", defaultValue: "Ajouter aux contacts", bundle: .main), icon: "person.crop.circle.badge.plus") {
                     isShowingAddToContacts = true
@@ -220,7 +220,7 @@ struct ContactCardDetailSheet: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(accent)
                 .frame(maxWidth: .infinity, minHeight: 44)
-                .background(Capsule().fill(accent.opacity(0.12)))
+                .background(Capsule().fill(accent.opacity(MeeshyOpacity.light)))
         }
         .buttonStyle(.plain)
     }
@@ -251,13 +251,13 @@ struct ContactCardFieldRow: View {
     let accent: Color
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .top, spacing: MeeshySpacing.md) {
             Image(systemName: field.kind.systemImage)
                 .font(.body.weight(.medium))
                 .foregroundColor(accent)
                 .frame(width: 24, height: 24)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(field.label)
                     .font(.caption)
                     .foregroundColor(.secondary)
@@ -268,9 +268,9 @@ struct ContactCardFieldRow: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(minHeight: 44)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .frame(minHeight: MeeshyControlSize.tapTarget)
         .contentShape(Rectangle())
         .onLongPressGesture(minimumDuration: 0.4) { copy() }
         .accessibilityElement(children: .ignore)

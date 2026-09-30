@@ -179,7 +179,10 @@ describe('ROUTE_TABLE (#4278)', () => {
     // 70 : #8101 ajoute `contacts-resolve` — l'adresse NEUVE `POST
     // /api/v1/contacts/resolve` (la carte de visite partagée), montage
     // autonome. Aucun alias, aucune route retirée ni renommée.
-    expect(ROUTE_TABLE.length).toBe(70);
+    // 71 : #8906 ajoute `admin-engagement-scale` — les adresses NEUVES
+    // `GET`/`PUT /api/v1/admin/engagement-scale` (le barème d'engagement).
+    // Aucun alias, aucune route retirée ni renommée.
+    expect(ROUTE_TABLE.length).toBe(71);
   });
 });
 

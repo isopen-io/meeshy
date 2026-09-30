@@ -37,7 +37,7 @@ public struct ConversationSettingsView: View {
                 settingsHeader
 
                 ScrollView {
-                    VStack(spacing: 20) {
+                    VStack(spacing: MeeshySpacing.xl) {
                         visualSection
                         editSection
 
@@ -49,8 +49,8 @@ public struct ConversationSettingsView: View {
 
                         dangerSection
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 16)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.vertical, MeeshySpacing.lg)
                 }
             }
         }
@@ -119,7 +119,7 @@ public struct ConversationSettingsView: View {
             Spacer()
 
             Text(String(localized: "conversation.settings.title", defaultValue: "Reglages", bundle: .module))
-                .font(.system(size: 16, weight: .semibold, design: .rounded))
+                .font(.system(size: MeeshyFont.calloutSize, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -139,14 +139,14 @@ public struct ConversationSettingsView: View {
                         .tint(MeeshyColors.indigo500)
                 } else {
                     Text(String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module))
-                        .font(.system(size: 16, weight: .semibold, design: .rounded))
+                        .font(.system(size: MeeshyFont.calloutSize, weight: .semibold, design: .rounded))
                         .foregroundColor(viewModel.hasChanges ? MeeshyColors.indigo500 : theme.textMuted)
                 }
             }
             .disabled(!viewModel.hasChanges || viewModel.isSaving)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.mdPlus)
         .background(theme.backgroundPrimary)
         .overlay(alignment: .bottom) {
             Rectangle()
@@ -169,21 +169,21 @@ public struct ConversationSettingsView: View {
             ZStack(alignment: .bottomTrailing) {
                 bannerView
                     .frame(height: 120)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg))
 
                 PhotosPicker(selection: $bannerItem, matching: .images) {
                     Label(bannerEditLabel, systemImage: "photo.fill")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .font(.system(size: MeeshyFont.footnoteSize, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(Capsule().fill(Color.black.opacity(0.5)))
                 }
                 .disabled(viewModel.isUploadingBanner)
-                .padding(8)
+                .padding(MeeshySpacing.sm)
 
                 if viewModel.isUploadingBanner {
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                         .fill(Color.black.opacity(0.4))
                         .frame(height: 120)
                         .overlay(ProgressView().tint(.white))
@@ -205,7 +205,7 @@ public struct ConversationSettingsView: View {
 
                 PhotosPicker(selection: $avatarItem, matching: .images) {
                     Image(systemName: "pencil.circle.fill")
-                        .font(.system(size: 28))
+                        .font(.system(size: MeeshyIconSize.xxxl))
                         .foregroundColor(avatarPencilColor)
                         .background(Circle().fill(avatarPencilBackground))
                 }
@@ -223,9 +223,9 @@ public struct ConversationSettingsView: View {
             .padding(.bottom, -40)
 
             Text(viewModel.title.isEmpty ? viewModel.conversationName : viewModel.title)
-                .font(.system(size: 18, weight: .bold, design: .rounded))
+                .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
         }
     }
 
@@ -256,19 +256,19 @@ public struct ConversationSettingsView: View {
     // MARK: - Edit Section
 
     private var editSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             sectionHeader(String(localized: "conversation.settings.section.info", defaultValue: "Infos", bundle: .module))
 
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 settingsField(label: String(localized: "conversation.settings.field.title", defaultValue: "Titre", bundle: .module)) {
                     TextField(String(localized: "conversation.settings.field.title.placeholder", defaultValue: "Titre de la conversation", bundle: .module), text: $viewModel.title)
-                        .font(.system(size: 16, design: .rounded))
+                        .font(.system(size: MeeshyFont.calloutSize, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                 }
 
                 settingsField(label: String(localized: "conversation.settings.field.description", defaultValue: "Description", bundle: .module)) {
                     TextField(String(localized: "conversation.settings.field.description", defaultValue: "Description", bundle: .module), text: $viewModel.descriptionText, axis: .vertical)
-                        .font(.system(size: 16, design: .rounded))
+                        .font(.system(size: MeeshyFont.calloutSize, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(3...6)
                 }
@@ -279,10 +279,10 @@ public struct ConversationSettingsView: View {
     // MARK: - Permissions Section
 
     private var permissionsSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             sectionHeader(String(localized: "conversation.settings.section.permissions", defaultValue: "Permissions", bundle: .module))
 
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 settingsField(label: String(localized: "conversation.settings.permissions.writeRole", defaultValue: "Qui peut ecrire", bundle: .module)) {
                     Picker("", selection: $viewModel.defaultWriteRole) {
                         Text(String(localized: "conversation.settings.permissions.writeRole.everyone", defaultValue: "Tout le monde", bundle: .module)).tag("everyone")
@@ -295,12 +295,12 @@ public struct ConversationSettingsView: View {
                 }
 
                 HStack {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "conversation.settings.permissions.announcement", defaultValue: "Mode annonce", bundle: .module))
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .font(.system(size: MeeshyFont.labelSize, weight: .medium, design: .rounded))
                             .foregroundColor(theme.textPrimary)
                         Text(String(localized: "conversation.settings.permissions.announcement.subtitle", defaultValue: "Seuls les admins peuvent ecrire", bundle: .module))
-                            .font(.system(size: 11, design: .rounded))
+                            .font(.system(size: MeeshyFont.footnoteSize, design: .rounded))
                             .foregroundColor(theme.textMuted)
                     }
                     Spacer()
@@ -308,9 +308,9 @@ public struct ConversationSettingsView: View {
                         .labelsHidden()
                         .tint(Color(hex: viewModel.accentColor))
                 }
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(theme.backgroundSecondary.opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
 
                 settingsField(label: String(localized: "conversation.settings.permissions.slowMode", defaultValue: "Mode lent", bundle: .module)) {
                     Picker("", selection: $viewModel.slowModeSeconds) {
@@ -324,12 +324,12 @@ public struct ConversationSettingsView: View {
                 }
 
                 HStack {
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "conversation.settings.permissions.autoTranslate", defaultValue: "Traduction automatique", bundle: .module))
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
+                            .font(.system(size: MeeshyFont.labelSize, weight: .medium, design: .rounded))
                             .foregroundColor(theme.textPrimary)
                         Text(String(localized: "conversation.settings.permissions.autoTranslate.subtitle", defaultValue: "Les messages sont traduits automatiquement", bundle: .module))
-                            .font(.system(size: 11, design: .rounded))
+                            .font(.system(size: MeeshyFont.footnoteSize, design: .rounded))
                             .foregroundColor(theme.textMuted)
                     }
                     Spacer()
@@ -337,9 +337,9 @@ public struct ConversationSettingsView: View {
                         .labelsHidden()
                         .tint(Color(hex: viewModel.accentColor))
                 }
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(theme.backgroundSecondary.opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
             }
         }
     }
@@ -347,40 +347,40 @@ public struct ConversationSettingsView: View {
     // MARK: - Members Section
 
     private var membersSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             sectionHeader(String(format: String(localized: "conversation.settings.section.members", defaultValue: "Membres (%d)", bundle: .module), viewModel.totalMemberCount))
 
             VStack(spacing: 0) {
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: MeeshyIconSize.xs, weight: .medium))
                         .foregroundColor(theme.textMuted)
                     TextField(String(localized: "conversation.settings.members.search.placeholder", defaultValue: "Rechercher un membre...", bundle: .module), text: $viewModel.memberSearchText)
-                        .font(.system(size: 14, design: .rounded))
+                        .font(.system(size: MeeshyFont.labelSize, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                     if !viewModel.memberSearchText.isEmpty {
                         Button { viewModel.memberSearchText = "" } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14))
+                                .font(.system(size: MeeshyIconSize.sm))
                                 .foregroundColor(theme.textMuted)
                         }
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.smPlus)
 
                 if viewModel.isLoadingMembers && viewModel.participants.isEmpty {
                     ProgressView()
-                        .padding(.vertical, 20)
+                        .padding(.vertical, MeeshySpacing.xl)
                 } else {
                     let filtered = filteredMembers
                     if filtered.isEmpty {
                         Text(String(localized: "conversation.settings.members.empty", defaultValue: "Aucun membre trouve", bundle: .module))
-                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                            .font(.system(size: MeeshyFont.subheadSize, weight: .medium, design: .rounded))
                             .foregroundColor(theme.textMuted)
-                            .padding(.vertical, 20)
+                            .padding(.vertical, MeeshySpacing.xl)
                     } else {
                         ForEach(Array(filtered.enumerated()), id: \.element.id) { index, participant in
                             memberRow(participant)
@@ -392,7 +392,7 @@ public struct ConversationSettingsView: View {
                 }
             }
             .background(theme.backgroundSecondary.opacity(0.5))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
         }
     }
 
@@ -406,19 +406,19 @@ public struct ConversationSettingsView: View {
         let displayName = participant.name
         let role = MemberRole(rawValue: participant.effectiveRole) ?? .member
 
-        return HStack(spacing: 12) {
+        return HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: displayName,
                 context: .userListItem,
                 accentColor: DynamicColorGenerator.colorForName(displayName),
                 avatarURL: participant.resolvedAvatar
             )
-            .frame(width: 36, height: 36)
+            .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
             .clipShape(Circle())
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(displayName)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
+                    .font(.system(size: MeeshyFont.labelSize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 memberRoleBadge(role)
@@ -431,34 +431,34 @@ public struct ConversationSettingsView: View {
                     memberActions(for: participant, targetRole: role)
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
-                        .frame(width: 32, height: 32)
+                        .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                         .contentShape(Circle())
                 }
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     @ViewBuilder
     private func memberRoleBadge(_ role: MemberRole) -> some View {
         switch role {
         case .creator:
-            HStack(spacing: 3) {
-                Image(systemName: "crown.fill").font(.system(size: 9))
-                Text(String(localized: "conversation.role.creator", defaultValue: "Createur", bundle: .module)).font(.system(size: 11, weight: .medium))
-            }.foregroundColor(Color(hex: "F8B500"))
+            HStack(spacing: MeeshySpacing.xxs) {
+                Image(systemName: "crown.fill").font(.system(size: MeeshyIconSize.xxs))
+                Text(String(localized: "conversation.role.creator", defaultValue: "Createur", bundle: .module)).font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+            }.foregroundColor(MeeshyColors.tileSaffron)
         case .admin:
-            HStack(spacing: 3) {
-                Image(systemName: "shield.fill").font(.system(size: 9))
-                Text(String(localized: "conversation.role.admin", defaultValue: "Admin", bundle: .module)).font(.system(size: 11, weight: .medium))
-            }.foregroundColor(Color(hex: "3B82F6"))
+            HStack(spacing: MeeshySpacing.xxs) {
+                Image(systemName: "shield.fill").font(.system(size: MeeshyIconSize.xxs))
+                Text(String(localized: "conversation.role.admin", defaultValue: "Admin", bundle: .module)).font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
+            }.foregroundColor(MeeshyColors.blue500)
         case .moderator:
-            HStack(spacing: 3) {
-                Image(systemName: "checkmark.shield.fill").font(.system(size: 9))
-                Text(String(localized: "conversation.role.moderator", defaultValue: "Modo", bundle: .module)).font(.system(size: 11, weight: .medium))
+            HStack(spacing: MeeshySpacing.xxs) {
+                Image(systemName: "checkmark.shield.fill").font(.system(size: MeeshyIconSize.xxs))
+                Text(String(localized: "conversation.role.moderator", defaultValue: "Modo", bundle: .module)).font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
             }.foregroundColor(MeeshyColors.success)
         case .member:
             EmptyView()
@@ -523,7 +523,7 @@ public struct ConversationSettingsView: View {
     // MARK: - Danger Section
 
     private var dangerSection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             sectionHeader(String(localized: "conversation.settings.section.danger", defaultValue: "Zone dangereuse", bundle: .module))
 
             Button(role: .destructive) {
@@ -536,9 +536,9 @@ public struct ConversationSettingsView: View {
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundColor(MeeshyColors.error)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, MeeshySpacing.mdPlus)
                 .background(MeeshyColors.error.opacity(0.1))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
             }
 
             if viewModel.currentUserRole == .creator {
@@ -552,9 +552,9 @@ public struct ConversationSettingsView: View {
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .foregroundColor(MeeshyColors.error)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, MeeshySpacing.mdPlus)
                     .background(MeeshyColors.error.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
                 }
             } else {
                 Button {
@@ -567,9 +567,9 @@ public struct ConversationSettingsView: View {
                     .font(.system(size: 15, weight: .semibold, design: .rounded))
                     .foregroundColor(.orange)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, MeeshySpacing.mdPlus)
                     .background(Color.orange.opacity(0.1))
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
                 }
             }
         }
@@ -579,22 +579,22 @@ public struct ConversationSettingsView: View {
 
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 13, weight: .bold, design: .rounded))
+            .font(.system(size: MeeshyFont.subheadSize, weight: .bold, design: .rounded))
             .foregroundColor(theme.textMuted)
             .textCase(.uppercase)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func settingsField<Content: View>(label: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(label)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(.system(size: MeeshyFont.smallSize, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textSecondary)
             content()
                 .textFieldStyle(.plain)
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(theme.backgroundSecondary.opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
         }
     }
 }

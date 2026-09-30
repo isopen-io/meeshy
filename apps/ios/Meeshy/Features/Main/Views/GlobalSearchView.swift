@@ -62,18 +62,18 @@ struct GlobalSearchView: View {
     // MARK: - Header Bar
 
     private var headerBar: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Button {
                 HapticFeedback.light()
                 dismiss()
             } label: {
                 Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(18, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
             }
             .accessibilityLabel(String(localized: "accessibility.back", defaultValue: "Retour"))
 
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: "magnifyingglass")
                     .font(MeeshyFont.relative(15, weight: .medium))
                     .foregroundStyle(
@@ -88,7 +88,7 @@ struct GlobalSearchView: View {
                 TextField(String(localized: "search.global.placeholder", defaultValue: "Rechercher partout..."), text: $viewModel.searchText)
                     .focused($isSearchFieldFocused)
                     .foregroundColor(theme.textPrimary)
-                    .font(MeeshyFont.relative(15))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize))
                     .autocorrectionDisabled()
                     .submitLabel(.search)
                     .onSubmit {
@@ -112,14 +112,14 @@ struct GlobalSearchView: View {
                     .transition(.scale.combined(with: .opacity))
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
             // iOS 26+ : champ de recherche en Liquid Glass natif (chrome de
             // contrôle interactif). iOS < 26 : repli `.ultraThinMaterial`. Le
             // liséré dégradé de marque est conservé en overlay au-dessus du verre.
-            .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20))
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl))
             .overlay(
-                RoundedRectangle(cornerRadius: 20)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xl)
                     .stroke(
                         LinearGradient(
                             colors: [MeeshyColors.error.opacity(0.4), MeeshyColors.indigo300.opacity(0.4)],
@@ -130,9 +130,9 @@ struct GlobalSearchView: View {
                     )
             )
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
+        .padding(.bottom, MeeshySpacing.sm)
     }
 
     // MARK: - Tab Bar
@@ -143,8 +143,8 @@ struct GlobalSearchView: View {
                 tabButton(tab)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 4)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     private func tabButton(_ tab: SearchTab) -> some View {
@@ -157,8 +157,8 @@ struct GlobalSearchView: View {
             }
             HapticFeedback.light()
         } label: {
-            VStack(spacing: 6) {
-                HStack(spacing: 4) {
+            VStack(spacing: MeeshySpacing.xsPlus) {
+                HStack(spacing: MeeshySpacing.xs) {
                     // Icon carries the result-count badge in its
                     // top-trailing corner (iOS app-badge convention).
                     // Previously the count rendered as a Text after
@@ -168,7 +168,7 @@ struct GlobalSearchView: View {
                     // overlay keeps the icon + label on a single line
                     // regardless of count width.
                     Image(systemName: tab.icon)
-                        .font(MeeshyFont.relative(12, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .medium))
                         .overlay(alignment: .topTrailing) {
                             if count > 0 {
                                 Text(NotificationBadge.displayed(count))
@@ -177,7 +177,7 @@ struct GlobalSearchView: View {
                                     // or it clips out of its overlay anchor.
                                     .font(.system(size: 9, weight: NotificationBadge.fontWeight))
                                     .foregroundColor(.white)
-                                    .padding(.horizontal, 4)
+                                    .padding(.horizontal, MeeshySpacing.xs)
                                     .padding(.vertical, 1)
                                     .background(
                                         Capsule()
@@ -194,7 +194,7 @@ struct GlobalSearchView: View {
                             }
                         }
                     Text(tab.localizedName)
-                        .font(MeeshyFont.relative(13, weight: isSelected ? .bold : .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
                 }
@@ -231,7 +231,7 @@ struct GlobalSearchView: View {
 
     private var resultsList: some View {
         ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 8) {
+            LazyVStack(spacing: MeeshySpacing.sm) {
                 if viewModel.searchText.trimmingCharacters(in: .whitespacesAndNewlines).count < 2 {
                     recentSearchesSection
                 } else if tabCount(for: viewModel.selectedTab) == 0 {
@@ -248,8 +248,8 @@ struct GlobalSearchView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
             .padding(.bottom, 120)
         }
         .scrollDismissesKeyboard(.interactively)
@@ -305,12 +305,12 @@ struct GlobalSearchView: View {
     @ViewBuilder
     private var degradedBanner: some View {
         if let failure = blockingFailure {
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Image(systemName: failure.icon)
                     .font(MeeshyFont.relative(13, weight: .semibold))
                     .foregroundColor(MeeshyColors.warning)
                 Text(failure.title)
-                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(2)
                 Spacer(minLength: 8)
@@ -318,12 +318,12 @@ struct GlobalSearchView: View {
                     HapticFeedback.light()
                     Task { await viewModel.retryLastSearch() }
                 }
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo400)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .adaptiveGlass(in: RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md))
             .accessibilityElement(children: .contain)
         }
     }
@@ -337,18 +337,18 @@ struct GlobalSearchView: View {
     @ViewBuilder
     private var revalidationPill: some View {
         if viewModel.isRevalidating {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 ProgressView()
                     .controlSize(.mini)
                     .tint(MeeshyColors.indigo400)
                 Text(String(localized: "search.in_progress", defaultValue: "Recherche en cours..."))
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .adaptiveGlass(in: Capsule())
-            .padding(.top, 6)
+            .padding(.top, MeeshySpacing.xsPlus)
             .transition(.opacity)
             .allowsHitTesting(false)
             .accessibilityElement(children: .combine)
@@ -357,13 +357,13 @@ struct GlobalSearchView: View {
     }
 
     private var searchingIndicator: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             Spacer().frame(height: 60)
             ProgressView()
                 .tint(MeeshyColors.indigo400)
                 .scaleEffect(1.2)
             Text(String(localized: "search.in_progress", defaultValue: "Recherche en cours..."))
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
@@ -389,10 +389,10 @@ struct GlobalSearchView: View {
     private var recentSearchesSection: some View {
         Group {
             if !viewModel.recentSearches.isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.md) {
                     HStack {
                         Image(systemName: "clock.arrow.circlepath")
-                            .font(MeeshyFont.relative(14, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [MeeshyColors.error, MeeshyColors.indigo300],
@@ -402,7 +402,7 @@ struct GlobalSearchView: View {
                             )
                             .accessibilityHidden(true)
                         Text(String(localized: "search.recent", defaultValue: "Recherches recentes"))
-                            .font(MeeshyFont.relative(14, weight: .bold))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
                             .foregroundColor(theme.textPrimary)
                             .accessibilityAddTraits(.isHeader)
 
@@ -415,18 +415,18 @@ struct GlobalSearchView: View {
                             HapticFeedback.light()
                         } label: {
                             Text(String(localized: "action.clear", defaultValue: "Effacer"))
-                                .font(MeeshyFont.relative(12, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                                 .foregroundColor(MeeshyColors.error)
                         }
                         .accessibilityLabel(String(localized: "accessibility.clear_recent_searches", defaultValue: "Effacer les recherches recentes"))
                     }
-                    .padding(.horizontal, 4)
+                    .padding(.horizontal, MeeshySpacing.xs)
 
                     ForEach(viewModel.recentSearches, id: \.self) { query in
                         recentSearchRow(query)
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
             } else {
                 EmptyStateView(
                     icon: "magnifyingglass",
@@ -441,14 +441,14 @@ struct GlobalSearchView: View {
     }
 
     private func recentSearchRow(_ query: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "clock")
-                .font(MeeshyFont.relative(14))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
 
             Text(query)
-                .font(MeeshyFont.relative(14))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(1)
 
@@ -467,10 +467,10 @@ struct GlobalSearchView: View {
             // `.accessibilityAction(named:)` sur la rangée (doctrine 183i).
             .accessibilityHidden(true)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(.ultraThinMaterial)
         )
         .contentShape(Rectangle())
@@ -509,45 +509,45 @@ struct GlobalSearchView: View {
 
     private func messageResultRow(_ result: GlobalSearchMessageResult) -> some View {
         let label = messageResultAccessibilityLabel(result)
-        return HStack(spacing: 12) {
+        return HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: result.conversationName,
                 context: .conversationList,
                 avatarURL: result.conversationAvatar
             )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 HStack {
                     Text(result.conversationName)
-                        .font(MeeshyFont.relative(14, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
                     Spacer()
 
                     Text(Self.formatTimeAgo(result.createdAt))
-                        .font(MeeshyFont.relative(11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(theme.textMuted)
                 }
 
                 Text(result.senderName)
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo300)
                     .lineLimit(1)
 
                 Text(highlightedText(result.content, query: viewModel.resultsQuery))
-                    .font(MeeshyFont.relative(13))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(2)
             }
         }
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(theme.inputBorder, lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .stroke(theme.inputBorder, lineWidth: MeeshyBorder.hairline)
                 )
         )
         .accessibilityElement(children: .combine)
@@ -570,19 +570,19 @@ struct GlobalSearchView: View {
 
     private func conversationResultRow(_ result: GlobalSearchConversationResult) -> some View {
         let label = conversationResultAccessibilityLabel(result)
-        return HStack(spacing: 12) {
+        return HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: result.name,
                 context: .conversationList,
                 avatarURL: result.avatar
             )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 HStack {
                     ConversationTitleLabel(
                         name: result.name,
                         favoriteEmoji: result.conversation.userState.reaction,
-                        font: MeeshyFont.relative(14, weight: .bold),
+                        font: MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold),
                         color: theme.textPrimary
                     )
 
@@ -594,8 +594,8 @@ struct GlobalSearchView: View {
                             // kept off Dynamic Type so the capsule stays pill-tight.
                             .font(.system(size: 11, weight: .bold))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
+                            .padding(.horizontal, MeeshySpacing.xsPlus)
+                            .padding(.vertical, MeeshySpacing.xxs)
                             .background(
                                 Capsule()
                                     .fill(MeeshyColors.error)
@@ -603,18 +603,18 @@ struct GlobalSearchView: View {
                     }
                 }
 
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     conversationTypeIcon(result.type)
-                        .font(MeeshyFont.relative(11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(theme.textMuted)
 
                     Text(result.type.displayName)
-                        .font(MeeshyFont.relative(12))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundColor(theme.textMuted)
 
                     if result.memberCount > 2 {
                         Text(MembersCountLabel.text(result.memberCount))
-                            .font(MeeshyFont.relative(12))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -622,13 +622,13 @@ struct GlobalSearchView: View {
                 conversationLastMessageLabel(result)
             }
         }
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(theme.inputBorder, lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .stroke(theme.inputBorder, lineWidth: MeeshyBorder.hairline)
                 )
         )
         .accessibilityElement(children: .combine)
@@ -641,41 +641,41 @@ struct GlobalSearchView: View {
     private func conversationLastMessageLabel(_ result: GlobalSearchConversationResult) -> some View {
         switch result.conversation.lastMessageSummaryKind() {
         case .hidden:
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "eye.slash")
                     .font(MeeshyFont.relative(11, weight: .medium))
                 Text(String(localized: "conversation.summary.hidden", defaultValue: "1 message caché"))
-                    .font(MeeshyFont.relative(13).italic())
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize).italic())
             }
             .foregroundColor(theme.textSecondary)
             .lineLimit(1)
 
         case .viewOnce:
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: MessageProtectionSymbols.viewOnce)
                     .font(MeeshyFont.relative(11, weight: .medium))
                 Text(String(localized: "conversation.summary.view_once", defaultValue: "1 message vue unique"))
-                    .font(MeeshyFont.relative(13).italic())
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize).italic())
             }
             .foregroundColor(theme.textSecondary)
             .lineLimit(1)
 
         case .expired:
-            HStack(spacing: 4) {
-                Image(systemName: "timer.badge.xmark")
+            HStack(spacing: MeeshySpacing.xs) {
+                Image(systemName: MessageProtectionSymbols.expired)
                     .font(MeeshyFont.relative(11, weight: .medium))
                 Text(String(localized: "message.expired", defaultValue: "Message expiré"))
-                    .font(MeeshyFont.relative(13).italic())
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize).italic())
             }
             .foregroundColor(theme.textSecondary)
             .lineLimit(1)
 
         case .afterRead:
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: "flame.fill")
                     .font(MeeshyFont.relative(11, weight: .medium))
                 Text(String(localized: "protection.afterRead", defaultValue: "Disparaît après lecture"))
-                    .font(MeeshyFont.relative(13).italic())
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize).italic())
             }
             .foregroundColor(theme.textSecondary)
             .lineLimit(1)
@@ -683,7 +683,7 @@ struct GlobalSearchView: View {
         case .ephemeralActive, .standard:
             if let preview = result.lastMessagePreview, !preview.isEmpty {
                 Text(preview)
-                    .font(MeeshyFont.relative(13))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
             }
@@ -705,7 +705,7 @@ struct GlobalSearchView: View {
     private func userResultRow(_ result: GlobalSearchUserResult) -> some View {
         let presence = PresenceManager.shared.resolvedState(userId: result.id, isOnline: result.isOnline)
         let label = userResultAccessibilityLabel(result, presence: presence)
-        return HStack(spacing: 12) {
+        return HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: result.displayName ?? result.username,
                 context: .userListItem,
@@ -723,14 +723,14 @@ struct GlobalSearchView: View {
                 onMoodTap: moodTapResolver?(result.id)
             )
 
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(result.displayName ?? result.username)
-                    .font(MeeshyFont.relative(14, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(result.username)")
-                    .font(MeeshyFont.relative(13))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
             }
@@ -739,17 +739,17 @@ struct GlobalSearchView: View {
 
             if presence == .online {
                 Text(String(localized: "status.online", defaultValue: "En ligne"))
-                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(MeeshyColors.success)
             }
         }
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(theme.inputBorder, lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .stroke(theme.inputBorder, lineWidth: MeeshyBorder.hairline)
                 )
         )
         .accessibilityElement(children: .combine)
@@ -848,7 +848,7 @@ struct GlobalSearchView: View {
         var attributed = AttributedString(text)
         if let range = attributed.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) {
             attributed[range].foregroundColor = MeeshyColors.error
-            attributed[range].font = MeeshyFont.relative(13, weight: .bold)
+            attributed[range].font = MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold)
         }
         return attributed
     }

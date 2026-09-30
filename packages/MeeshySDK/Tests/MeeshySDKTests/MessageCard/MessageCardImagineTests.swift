@@ -316,6 +316,65 @@ struct MessageCardImagineTests {
         #expect(MessageCardSubject.of(message: sealedOnly, servedText: nil, translations: [:], viewer: Self.viewer, now: Self.now) == nil)
     }
 
+    // MARK: - Le média du message CITÉ (#8901)
+
+    private static func quotedPhoto(protected: Bool? = nil, deletedAt: Date? = nil, expiresAt: Date? = nil) -> ReplyReference {
+        var reference = ReplyReference(
+            messageId: "q", authorName: "Bob", previewText: "Regarde ça",
+            attachmentType: "image", attachmentId: "q-img", attachmentThumbnailUrl: "https://x/q-thumb.jpg",
+            attachmentFileUrl: "https://x/q.jpg", attachmentIsProtected: protected,
+            attachmentFacts: ReplyReference.QuotedAttachmentFacts(thumbHash: nil, width: 800, height: 400, durationMs: nil, fileSize: nil, pageCount: nil, mimeType: "image/jpeg")
+        )
+        reference.quotedMessageDeletedAt = deletedAt
+        reference.quotedExpiresAt = expiresAt
+        return reference
+    }
+
+    private static func reply(_ content: String, attachments: [MeeshyMessageAttachment] = [], quoting reference: ReplyReference) -> MeeshyMessage {
+        var message = Self.message(content: content, attachments: attachments)
+        message.replyTo = reference
+        return message
+    }
+
+    @Test func subject_aTextReplyToAPhotoPaintsTheQuotedPhoto() throws {
+        let subject = try #require(MessageCardSubject.of(message: Self.reply("Magnifique !", quoting: Self.quotedPhoto()), servedText: nil, translations: [:], viewer: Self.viewer, now: Self.now))
+        #expect(subject.media.map(\.media.id) == ["q-img"])
+        #expect(subject.media.first?.fileURL == "https://x/q.jpg")
+        #expect(subject.media.first?.media.aspect == 2)
+    }
+
+    @Test func subject_theReplysOwnMediaComeFirst_theQuotedOnesAfter() throws {
+        let own = MeeshyMessageAttachment(id: "own", mimeType: "image/png", fileUrl: "https://x/own.png")
+        let subject = try #require(MessageCardSubject.of(message: Self.reply("Et la mienne", attachments: [own], quoting: Self.quotedPhoto()), servedText: nil, translations: [:], viewer: Self.viewer, now: Self.now))
+        #expect(subject.media.map(\.media.id) == ["own", "q-img"])
+    }
+
+    @Test func subject_aProtectedDeletedOrExpiredQuoteBringsNoMedia() {
+        let references = [
+            Self.quotedPhoto(protected: true),
+            Self.quotedPhoto(deletedAt: Self.now.addingTimeInterval(-60)),
+            Self.quotedPhoto(expiresAt: Self.now.addingTimeInterval(-1)),
+        ]
+        for reference in references {
+            #expect(MessageCardSubject.of(message: Self.reply("Réponse", quoting: reference), servedText: nil, translations: [:], viewer: Self.viewer, now: Self.now)?.media.isEmpty == true)
+        }
+    }
+
+    @Test func subject_theQuotedMessageInMemoryBringsEveryPaintablePiece_underItsOwnGuards() throws {
+        let quoted = MeeshyMessage(id: "q", conversationId: "c", senderId: "u-bob", content: "Deux photos", attachments: [
+            MeeshyMessageAttachment(id: "q-a", mimeType: "image/jpeg", fileUrl: "https://x/a.jpg"),
+            MeeshyMessageAttachment(id: "q-sealed", mimeType: "image/jpeg", fileUrl: "https://x/s.jpg", isEncrypted: true),
+            MeeshyMessageAttachment(id: "q-b", mimeType: "video/mp4", fileUrl: "https://x/b.mp4", thumbnailUrl: "https://x/b.jpg"),
+        ], senderName: "Bob")
+        let subject = try #require(MessageCardSubject.of(message: Self.reply("Belles", quoting: Self.quotedPhoto()), servedText: nil, translations: [:], viewer: Self.viewer, quotedMessage: quoted, now: Self.now))
+        #expect(subject.media.map(\.media.id) == ["q-a", "q-b"])
+        #expect(subject.media.last?.posterURL == "https://x/b.jpg")
+
+        var blurred = quoted
+        blurred.isBlurred = true
+        #expect(MessageCardSubject.of(message: Self.reply("Belles", quoting: Self.quotedPhoto()), servedText: nil, translations: [:], viewer: Self.viewer, quotedMessage: blurred, now: Self.now)?.media.isEmpty == true)
+    }
+
     @Test func subject_aCommentShowsItsServedText_andAProtectedCommentNeverLeaves() throws {
         let comment = FeedComment(id: "c1", author: "Awa", authorId: "u-awa", authorUsername: "awa", content: "Bonjour", originalLanguage: "fr", translatedContent: "Hello",
                                   media: [FeedMedia(id: "m1", type: .video, url: "https://x/v.mp4", thumbnailUrl: "https://x/v.jpg", width: 1920, height: 1080, duration: 8)])

@@ -55,27 +55,26 @@ final class ConversationMediaGalleryVideoControlsTests: XCTestCase {
     func test_controlsOverlay_chrome_usesAdaptiveGlass() throws {
         let source = try gallerySource()
         guard let body = declarationBody("private var controlsOverlay", in: source),
-              let glyphe = declarationBody("private var overflowGlyph: some View {", in: source)
+              let menu = declarationBody("var overflowMenu: some View {", in: source)
         else {
-            XCTFail("controlsOverlay ou overflowGlyph introuvable"); return
+            XCTFail("controlsOverlay ou overflowMenu introuvable"); return
         }
         XCTAssertFalse(
             body.contains("xmark.circle.fill"),
-            "Le X doit être un glyphe xmark dans un cercle .adaptiveGlass, pas le xmark.circle.fill plein."
+            "Le X doit être un glyphe xmark dans un cercle de verre, pas le xmark.circle.fill plein."
+        )
+        // Le verre n'est plus peint ICI : la croix et le ⋯ montent les briques du
+        // chrome plein écran (#8878), dont le disque porte `.adaptiveGlass(` — épinglé
+        // côté SDK par `FullscreenChromeMetricsTests`. Suivre le contrôle jusqu'à la
+        // déclaration qui le PEINT, c'est la même remonte que celle des gardes de muet.
+        XCTAssertTrue(
+            body.contains("FullscreenCloseButton("),
+            "Le X du couloir haut est la croix partagée du chrome plein écran."
         )
         XCTAssertTrue(
-            body.contains(".adaptiveGlass("),
-            "Le X du couloir haut porte sa surface .adaptiveGlass."
-        )
-        // Le ⋯ porte sa surface sur son GLYPHE (`overflowGlyph`), pas sur le
-        // `Menu` qui l'ouvre — le verre habille un cercle de 40 pt, et le menu
-        // n'est qu'un présentateur. Suivre le contrôle jusqu'à la déclaration
-        // qui le PEINT, c'est la même remonte que celle des gardes de muet :
-        // s'arrêter au nom qui l'ouvre, c'est mesurer une indirection.
-        XCTAssertTrue(
-            glyphe.contains(".adaptiveGlass("),
-            "Et le ⋯, qui a remplacé la flèche d'enregistrement au #6145, porte la sienne — "
-            + "les deux occupants du couloir haut sont en verre, pas un seul."
+            menu.contains("FullscreenMoreMenu("),
+            "Et le ⋯, qui a remplacé la flèche d'enregistrement au #6145, est le menu partagé "
+            + "du même chrome — les deux occupants du couloir haut sont en verre, pas un seul."
         )
         XCTAssertFalse(
             body.contains("Circle().fill(Color.white.opacity(0.2))"),

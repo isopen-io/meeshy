@@ -127,7 +127,11 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
 nonisolated enum SyncPillVisibility {
     static func isVisible(storyViewerPresenting: Bool,
                           inAppNoticePresenting: Bool) -> Bool {
-        !storyViewerPresenting && !inAppNoticePresenting
+        #if DEBUG
+        // Vitrine (#8855) : le serveur injoignable est voulu, son bandeau hors champ.
+        if VitrineLaunch.isActive { return false }
+        #endif
+        return !storyViewerPresenting && !inAppNoticePresenting
     }
 }
 
@@ -383,20 +387,20 @@ struct SyncPill: View {
 
     @ViewBuilder
     private var pillContent: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             statusDot
             labelText
                 .transition(.opacity.combined(with: .move(edge: .top)))
                 .id(visibleEntry?.id ?? "empty")
             if entries.count > 1 {
                 Text("\(min(rotator.currentIndex + 1, entries.count))/\(entries.count)")
-                    .font(MeeshyFont.relative(10, weight: .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .regular))
                     .foregroundStyle(isDark ? .white.opacity(0.45) : .primary.opacity(0.4))
                     .monospacedDigit()
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xs)
         .background(
             Capsule()
                 .fill(capsuleBackground)
@@ -477,7 +481,7 @@ struct SyncPill: View {
                 // ce qui borne la fenêtre visible pendant que le Text (fixedSize,
                 // donc plus large que le viewport) glisse dessous via `offset`.
                 Text(label)
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundStyle(textColor)
                     .lineLimit(1)
                     .fixedSize()
@@ -490,7 +494,7 @@ struct SyncPill: View {
                 // `maxTextWidth` n'est qu'un plafond qui ne mord que si le texte
                 // défile.
                 Text(label + (showsDots ? animatedDots : ""))
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundStyle(textColor)
                     .lineLimit(1)
             }
@@ -500,7 +504,7 @@ struct SyncPill: View {
             // qui est affiché (défilant ou non) — toujours à jour pour la
             // PROCHAINE entrée de la rotation.
             Text(label)
-                .font(MeeshyFont.relative(11, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .lineLimit(1)
                 .fixedSize()
                 .hidden()

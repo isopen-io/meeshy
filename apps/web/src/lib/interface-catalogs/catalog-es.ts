@@ -10,6 +10,7 @@ import esPassword from './catalog-es-password';
 import esAccounts from './catalog-es-accounts';
 import esCall from './catalog-es-call';
 import esRowActions from './catalog-es-row-actions';
+import esEngagement from './catalog-es-engagement';
 import esCallShell from './catalog-es-call-shell';
 import esCallJoin from './catalog-es-call-join';
 import esCallDecline from './catalog-es-call-decline';
@@ -227,6 +228,7 @@ const es = {
   ...esAccounts,
   ...esCall,
   ...esRowActions,
+  ...esEngagement,
   ...esCallShell,
   ...esCallJoin,
   ...esCallDecline,

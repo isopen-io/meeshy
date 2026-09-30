@@ -35,14 +35,14 @@ struct LicensesView: View {
     // MARK: - Content
 
     private var pageContent: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             sectionHeader(title: String(localized: "about.licenses.section.open_source", defaultValue: "Open source", bundle: .main), icon: "checkmark.seal.fill", color: accentColor)
 
             Text(String(localized: "about.licenses.intro", defaultValue: "Meeshy utilise les bibliothèques open source suivantes.", bundle: .main))
-                .font(MeeshyFont.relative(13, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 4)
+                .padding(.leading, MeeshySpacing.xs)
                 .textSelection(.enabled)
 
             ForEach(licenses) { license in
@@ -51,8 +51,8 @@ struct LicensesView: View {
 
             Spacer().frame(height: 40)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     // MARK: - License Card
@@ -61,39 +61,39 @@ struct LicensesView: View {
     private func licenseCard(_ license: OpenSourceLicense) -> some View {
         if let destination = URL(string: license.url) {
         Link(destination: destination) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: MeeshySpacing.md) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(license.name)
-                        .font(MeeshyFont.relative(15, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
                     Text(license.author)
-                        .font(MeeshyFont.relative(12, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
 
                 Spacer()
 
                 Text(license.licenseType)
-                    .font(MeeshyFont.relative(10, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.vertical, MeeshySpacing.xs)
                     .background(
                         Capsule().fill(Color(hex: badgeColor(for: license.licenseType)))
                     )
 
                 Image(systemName: "arrow.up.right")
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.md)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .fill(theme.surfaceGradient(tint: accentColor))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                             .stroke(theme.border(tint: accentColor), lineWidth: 1)
                     )
             )
@@ -106,17 +106,17 @@ struct LicensesView: View {
     // MARK: - Helpers
 
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                 .foregroundColor(Color(hex: color))
             Text(title.uppercased())
-                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.leading, 4)
+        .padding(.leading, MeeshySpacing.xs)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
         .accessibilityAddTraits(.isHeader)

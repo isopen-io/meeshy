@@ -44,7 +44,7 @@ extension UniversalComposerBar {
                 }
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 if ephemeralChoice.wrappedValue == .afterRead {
                     FlameEyeGlyph(size: 15, tint: ComposerProtection.ephemeral.tint)
                 } else {
@@ -60,8 +60,8 @@ extension UniversalComposerBar {
                 }
                 if isImposed { imposedLockGlyph(tint: ComposerProtection.ephemeral.tint) }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
                     .fill(isActive
@@ -92,7 +92,7 @@ extension UniversalComposerBar {
     /// La flamme-œil, 15 s, puis les durées existantes (#8303).
     var ephemeralDurationPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Button {
                     HapticFeedback.light()
                     ephemeralChoice.wrappedValue = nil
@@ -103,8 +103,8 @@ extension UniversalComposerBar {
                     Text(String(localized: "composer.ephemeral.off", defaultValue: "Désactivé", bundle: .main))
                         .font(.caption).fontWeight(.semibold)
                         .foregroundColor(ephemeralChoice.wrappedValue == nil ? .white : mutedColor)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
                             Capsule()
                                 .fill(ephemeralChoice.wrappedValue == nil
@@ -117,18 +117,18 @@ extension UniversalComposerBar {
                     ephemeralChoiceChip(choice)
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
         }
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(railSurface)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(ComposerProtection.ephemeral.tint.opacity(0.2), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        .stroke(ComposerProtection.ephemeral.tint.opacity(0.2), lineWidth: MeeshyBorder.hairline)
                 )
         )
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MeeshySpacing.sm)
     }
 
     /// Le rail qui s'ouvre au-dessus de la barre d'outils garde cette marge
@@ -152,7 +152,7 @@ extension UniversalComposerBar {
                 showEphemeralPicker = false
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 if choice == .afterRead {
                     FlameEyeGlyph(size: 13, tint: isSelected ? .white : tint)
                 } else {
@@ -163,12 +163,12 @@ extension UniversalComposerBar {
                     .font(.caption).fontWeight(.semibold)
             }
             .foregroundColor(isSelected ? .white : tint)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
                 Capsule()
                     .fill(isSelected ? tint : tint.opacity(0.1))
-                    .overlay(Capsule().stroke(tint.opacity(0.3), lineWidth: 0.5))
+                    .overlay(Capsule().stroke(tint.opacity(0.3), lineWidth: MeeshyBorder.hairline))
             )
         }
         .accessibilityLabel(EphemeralChoiceCopy.displayLabel(choice))
@@ -190,7 +190,7 @@ extension UniversalComposerBar {
             HapticFeedback.light()
             toggleVeil(.blurred)
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: isActive ? MessageProtectionSymbols.blurredFilled : MessageProtectionSymbols.blurred)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(isActive ? ComposerProtection.blurred.tint : mutedColor)
@@ -202,8 +202,8 @@ extension UniversalComposerBar {
                 }
                 if isImposed { imposedLockGlyph(tint: ComposerProtection.blurred.tint) }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
                     .fill(isActive
@@ -240,7 +240,7 @@ extension UniversalComposerBar {
             HapticFeedback.light()
             toggleVeil(.viewOnce)
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: isActive ? MessageProtectionSymbols.viewOnceFilled : MessageProtectionSymbols.viewOnce)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(isActive ? ComposerProtection.viewOnce.tint : mutedColor)
@@ -251,8 +251,8 @@ extension UniversalComposerBar {
                         .foregroundColor(ComposerProtection.viewOnce.tint)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
                     .fill(isActive
@@ -343,7 +343,7 @@ extension UniversalComposerBar {
                 showEffectsPanel.toggle()
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: isActive ? "wand.and.stars" : "wand.and.stars")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(isActive ? servedAccent : mutedColor)
@@ -354,8 +354,8 @@ extension UniversalComposerBar {
                         .foregroundColor(servedAccent)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
                     .fill(isActive
@@ -392,7 +392,7 @@ extension UniversalComposerBar {
                 showPermanentEffectsPicker.toggle()
             }
         } label: {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: isActive ? "wand.and.stars" : "wand.and.stars")
                     .font(.caption.weight(.semibold))
                     .foregroundColor(isActive ? servedAccent : mutedColor)
@@ -403,8 +403,8 @@ extension UniversalComposerBar {
                         .foregroundColor(servedAccent)
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
                     .fill(isActive
@@ -438,7 +438,7 @@ extension UniversalComposerBar {
         ]
 
         return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(items, id: \.label) { item in
                     let isSelected = pendingEffects.wrappedValue.flags.contains(item.flag)
                     Button {
@@ -449,15 +449,15 @@ extension UniversalComposerBar {
                             pendingEffects.wrappedValue.flags.insert(item.flag)
                         }
                     } label: {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: item.icon)
                                 .font(.caption2)
                             Text(item.label)
                                 .font(.caption).fontWeight(.semibold)
                         }
                         .foregroundColor(isSelected ? .white : servedAccent)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
                             Capsule()
                                 .fill(isSelected
@@ -465,7 +465,7 @@ extension UniversalComposerBar {
                                       : servedAccent.opacity(0.1))
                                 .overlay(
                                     Capsule()
-                                        .stroke(servedAccent.opacity(0.3), lineWidth: 0.5)
+                                        .stroke(servedAccent.opacity(0.3), lineWidth: MeeshyBorder.hairline)
                                 )
                         )
                     }
@@ -474,17 +474,17 @@ extension UniversalComposerBar {
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
         }
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(style == .dark ? Color.black.opacity(0.3) : isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(servedAccent.opacity(0.2), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lg)
+                        .stroke(servedAccent.opacity(0.2), lineWidth: MeeshyBorder.hairline)
                 )
         )
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MeeshySpacing.sm)
     }
 }

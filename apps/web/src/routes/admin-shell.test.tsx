@@ -77,7 +77,7 @@ describe('le menu latéral d’administration', () => {
     const hote = await cadre('ADMIN');
     const menu = hote.querySelector('[data-admin-sidebar]');
 
-    expect(entrees(menu ?? hote)).toEqual(['dashboard', 'users', 'anonymous', 'conversations']);
+    expect(entrees(menu ?? hote)).toEqual(['dashboard', 'users', 'anonymous', 'conversations', 'engagementScale']);
     expect(hote.querySelector('[data-contenu]')?.textContent).toBe('contenu');
   });
 

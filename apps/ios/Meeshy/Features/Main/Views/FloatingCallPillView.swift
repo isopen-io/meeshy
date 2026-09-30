@@ -157,13 +157,13 @@ struct FloatingCallPillView: View {
     // MARK: - Pill Content
 
     private var pillContent: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             CallParticipantVisual(diameter: 44, callManager: callManager)
             userInfoSection
             Spacer(minLength: 8)
             controlButtons
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
         // minHeight (not an exact height): userInfoSection stacks two
         // Dynamic-Type-scalable Text lines that can exceed pillHeight at
         // accessibility text sizes (AX1+) — an exact frame would force-clip
@@ -223,7 +223,7 @@ struct FloatingCallPillView: View {
     // MARK: - User Info
 
     private var userInfoSection: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(callManager.remoteUsername ?? String(localized: "call.pill.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(.white)
@@ -249,7 +249,7 @@ struct FloatingCallPillView: View {
     /// est établi ; sinon le glyphe d'état pré-connexion (sonnerie/connexion en
     /// ambre, rupture réseau en rouge). Le libellé texte survit pour VoiceOver.
     private var statusLine: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             if pillStatus.isConnected {
                 TransientCallSignalGlyph(strength: signalStrength, errorTint: CallBannerContrast.errorStateTint)
                 // Blanc, pas success : #34D399 ne tient que 3.3:1 contre
@@ -295,7 +295,7 @@ struct FloatingCallPillView: View {
     // MARK: - Control Buttons
 
     private var controlButtons: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             muteButton
             speakerButton
             hangupButton

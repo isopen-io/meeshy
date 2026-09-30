@@ -216,8 +216,8 @@ struct ProgressionView: View {
 
                 Spacer().frame(height: 40)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.sm)
         }
         .refreshable { await viewModel.load(forceNetwork: true) }
         .coordinateSpace(name: "scroll")

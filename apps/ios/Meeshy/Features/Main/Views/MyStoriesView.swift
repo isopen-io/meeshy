@@ -176,7 +176,7 @@ struct MyStoriesView: View {
                         onCreateStory()
                     } label: {
                         Image(systemName: "plus")
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(width: 32, height: 32)
                             .adaptiveGlassProminent(in: Circle(), tint: accentColor)
@@ -193,9 +193,9 @@ struct MyStoriesView: View {
                             Text(isSelecting
                                  ? String(localized: "common.cancel", defaultValue: "Annuler")
                                  : String(localized: "story.mine.select", defaultValue: "Sélectionner"))
-                                .font(MeeshyFont.relative(14, weight: .semibold))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
+                                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                                .padding(.horizontal, MeeshySpacing.md)
+                                .padding(.vertical, MeeshySpacing.xsPlus)
                                 .adaptiveGlass(in: Capsule())
                         }
                         .buttonStyle(.plain)
@@ -209,10 +209,10 @@ struct MyStoriesView: View {
                         dismiss()
                     } label: {
                         Text(String(localized: "common.ok", defaultValue: "OK"))
-                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
+                            .padding(.vertical, MeeshySpacing.xsPlus)
                             .adaptiveGlassProminent(in: Capsule(), tint: accentColor)
                     }
                     .buttonStyle(.plain)
@@ -344,8 +344,8 @@ struct MyStoriesView: View {
             }
         }
         .pickerStyle(.segmented)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
     }
 
     // MARK: - Onglet « Publiées »
@@ -378,7 +378,7 @@ struct MyStoriesView: View {
     /// VoiceOver du balayage disparaîtrait sans remplaçant.
     private var publishedGrid: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.md)], spacing: MeeshySpacing.md) {
                 ForEach(activeStories) { story in
                     MyStoryCard(
                         model: publishedCardModel(for: story),
@@ -396,8 +396,8 @@ struct MyStoriesView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.xxl)
         }
     }
 
@@ -460,7 +460,7 @@ struct MyStoriesView: View {
 
     private var queueContent: some View {
         ScrollView {
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 // C5 — TOUTES les publications en cours/en attente sont
                 // listées, pas seulement celle mise en avant sur l'avatar :
                 // c'est la surface où l'on gère la file.
@@ -470,7 +470,7 @@ struct MyStoriesView: View {
                         onRetry: { viewModel.retryUpload(id: upload.id) },
                         onCancel: { viewModel.cancelUpload(id: upload.id) }
                     )
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                 }
                 if !publishService.failedItems.isEmpty {
                     // Les échecs vivent ici : un onglet « Publiées » ne peut
@@ -484,7 +484,7 @@ struct MyStoriesView: View {
                             onResume: { resumeFailedItem(item) },
                             onRetry: { retryFailedItem(item) }
                         )
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, MeeshySpacing.lg)
                             .contextMenu {
                                 Button { resumeFailedItem(item) } label: {
                                     Label(Self.resumeActionTitle, systemImage: "square.and.pencil")
@@ -503,7 +503,7 @@ struct MyStoriesView: View {
                     }
                 }
             }
-            .padding(.bottom, 24)
+            .padding(.bottom, MeeshySpacing.xxl)
         }
     }
 
@@ -532,7 +532,7 @@ struct MyStoriesView: View {
 
     private var draftsContent: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.md)], spacing: MeeshySpacing.md) {
                 ForEach(draftsViewModel.drafts) { draft in
                     MyStoryCard(
                         model: draftCardModel(for: draft),
@@ -547,8 +547,8 @@ struct MyStoriesView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.xxl)
         }
     }
 
@@ -580,7 +580,7 @@ struct MyStoriesView: View {
 
     private var archiveGrid: some View {
         ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: MeeshySpacing.md)], spacing: MeeshySpacing.md) {
                 ForEach(archivedStories) { story in
                     MyStoryCard(
                         model: publishedCardModel(for: story),
@@ -598,19 +598,19 @@ struct MyStoriesView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 24)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.xxl)
         }
     }
 
     private func sectionHeader(_ title: String) -> some View {
         HStack {
             Text(title)
-                .font(MeeshyFont.relative(13, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(.secondary)
             Spacer()
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     private func draftCardModel(for draft: StoryDraftSummary) -> MyStoryCardModel {
@@ -683,15 +683,15 @@ struct MyStoriesView: View {
         } label: {
             Text(String(localized: "story.mine.delete.selected",
                         defaultValue: "Supprimer (\(selectedStoryIDs.count))"))
-                .font(MeeshyFont.relative(15, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
+                .padding(.vertical, MeeshySpacing.mdPlus)
                 .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.error)
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
         .accessibilityLabel(String(localized: "story.mine.delete.selected",
                                     defaultValue: "Supprimer (\(selectedStoryIDs.count))"))
         .accessibilityHint(String(localized: "story.mine.delete.selected.hint",
@@ -1022,23 +1022,23 @@ private struct ActiveUploadRow: View {
     private var isWaiting: Bool { upload.phase.isWaiting }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(uiImage: upload.thumbnailImage)
                 .resizable()
                 .scaledToFill()
                 .frame(width: 44, height: 44)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
                         .stroke(isFailed ? MeeshyColors.error : MeeshyColors.indigo400, lineWidth: 1)
                 )
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(StoryUploadPresentation.statusTitle(for: upload.phase))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 if !isFailed, !isWaiting {
                     Text("\(Int(upload.progress * 100))%")
-                        .font(MeeshyFont.relative(12))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundColor(.secondary)
                 }
             }
@@ -1048,7 +1048,7 @@ private struct ActiveUploadRow: View {
             if isFailed {
                 Button(action: onRetry) {
                     Label(String(localized: "story.tray.retry", defaultValue: "Réessayer", bundle: .main), systemImage: "arrow.clockwise")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 }
                 .buttonStyle(.bordered)
                 Button(role: .destructive, action: onCancel) {
@@ -1060,7 +1060,7 @@ private struct ActiveUploadRow: View {
                 ProgressView()
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
         .accessibilityElement(children: .combine)
     }
 }
@@ -1090,7 +1090,7 @@ private struct FailedStoryRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             ZStack {
                 Circle().fill(MeeshyColors.error.opacity(0.15))
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -1098,17 +1098,17 @@ private struct FailedStoryRow: View {
             }
             .frame(width: 44, height: 44)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(String(localized: "story.mine.failed.title", defaultValue: "Story non publiée"))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 if let lastError = item.lastError {
                     Text(lastError)
-                        .font(MeeshyFont.relative(12))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundColor(.secondary)
                         .lineLimit(2)
                 }
                 Text(relativeTime)
-                    .font(MeeshyFont.relative(11))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundColor(.secondary)
             }
 
@@ -1116,7 +1116,7 @@ private struct FailedStoryRow: View {
 
             Button(action: onResume) {
                 Label(MyStoriesView.resumeActionTitle, systemImage: "square.and.pencil")
-                    .font(MeeshyFont.relative(13, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             }
             .buttonStyle(.borderedProminent)
             .disabled(isResuming)
@@ -1128,7 +1128,7 @@ private struct FailedStoryRow: View {
             .buttonStyle(.bordered)
             .accessibilityLabel(String(localized: "story.tray.retry", defaultValue: "Réessayer", bundle: .main))
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             String(

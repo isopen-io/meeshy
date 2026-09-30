@@ -106,8 +106,8 @@ struct FocalMetaRow: View, Equatable {
         if let onShowReadStatus {
             Button(action: onShowReadStatus) {
                 check
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, MeeshySpacing.xs)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

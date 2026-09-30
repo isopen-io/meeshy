@@ -19,6 +19,8 @@ import type { ActiveMember } from '@/lib/view/top-active-members';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { Link } from '@/routes/route-table';
 import { useIsHere } from '@/lib/view/use-conversation-viewing';
+import { useConversationEngagement } from '@/lib/view/use-conversation-engagement';
+import { EngagementPill } from './engagement-pill';
 
 /**
  * L'EN-TÊTE DU FIL — extrait de `routes/thread.tsx` (revue #5814, défaut
@@ -106,6 +108,9 @@ export function ThreadHeader({
   const peerRing = peer === undefined ? undefined : storyRingOf?.(peer.userId ?? peer.user?.id);
   /* LE PAIR A LA CONVERSATION OUVERTE (#8892) — sa pastille passe à la couleur primaire. */
   const peerHere = useIsHere(conversation.id, peer?.userId ?? peer?.user?.id ?? undefined);
+  /* « N (M) 🔥 » (#8906) — ce que cette conversation a rapporté au lecteur ;
+     dans la grappe d'actions repliée, sous le titre déplié. */
+  const engagement = useConversationEngagement(conversation);
   /* LE MENU D'APPUI LONG DE L'IDENTITÉ DE L'EN-TÊTE — celui d'un avatar
      d'auteur (#7828) : le pair (profil, story) en direct, et les détails de la
      conversation partout où l'hôte sait les ouvrir. */
@@ -223,6 +228,7 @@ export function ThreadHeader({
             </p>
           </div>
         ) : null}
+        {expanded && !preview ? <EngagementPill snapshot={engagement} opensProgression /> : null}
         {preview || !expanded ? (
           /* GRAPPE D'ACTIONS (#5774, travail 3/3) — c'est ELLE seule qui
              s'efface en mode Bulles pendant le geste
@@ -233,6 +239,7 @@ export function ThreadHeader({
              c'est le titre qui prend la place, pas un espaceur. */
           <div className={`thread-header-actions flex ${preview ? 'shrink-0' : 'flex-1'} items-center gap-2`}>
             {preview ? null : <span className="flex-1" />}
+            <EngagementPill snapshot={engagement} opensProgression />
             {/* LE CHIP DE MODE — SOUS DRAPEAU UNIQUEMENT (D-20, miroir
                 `ConversationView.swift:2391-2430`) : `apiConfig.readingModesEnabled`
                 est un paramètre de CONSTRUCTION, figé au déploiement — quand il

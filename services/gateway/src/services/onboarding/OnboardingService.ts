@@ -1,6 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { calculateAge } from '@meeshy/shared/utils/age';
-import { ELAN_WINDOW_DAYS } from '@meeshy/shared/utils/engagement-elan';
 import {
   ONBOARDING_COMPLETION_STEP_IDS,
   ONBOARDING_MAX_SUGGESTIONS,
@@ -16,7 +15,8 @@ import {
   type OnboardingSuggestion,
 } from '@meeshy/shared/types/onboarding';
 import { ACTIVATION_SELECT, mayPublish, resolveAccountActivation } from '../auth/account-activation';
-import { elanInputOf, onboardingStepRewards } from './onboardingRewards';
+import { onboardingStepRewards } from './onboardingRewards';
+import { engagementScaleServiceFor } from '../engagement/EngagementScaleService';
 
 /**
  * L'état d'onboarding post-inscription (#7729) — le SEUL site qui le calcule,
@@ -122,6 +122,7 @@ const USER_STATE_SELECT = {
   blockedUserIds: true,
   onboardingCompletedAt: true,
   onboardingSteps: true,
+  engagementScore: true,
   ...ACTIVATION_SELECT,
 } as const;
 
@@ -140,6 +141,7 @@ const CANDIDATE_SELECT = {
 
 type UserStateRow = {
   id: string;
+  engagementScore: number | null;
   createdAt: Date;
   birthDate: Date | null;
   systemLanguage: string;
@@ -163,6 +165,7 @@ type OnboardingPrisma = Pick<
   | 'engagementCounter'
   | 'engagementConversationCredit'
   | 'engagementMilestone'
+  | 'engagementScaleConfig'
 >;
 
 const languagesOf = (row: { systemLanguage: string; regionalLanguage: string | null }): string[] =>
@@ -202,7 +205,7 @@ export class OnboardingService {
         ? this.suggestions({ user, ageClass, globalConversationId, now })
         : Promise.resolve([]),
       this.prisma.friendRequest.count({ where: { senderId: user.id, status: 'pending' } }),
-      this.stepRewards(user.id, now),
+      this.stepRewards(user.id, user.engagementScore ?? 0, now),
     ]);
     return {
       eligible: window === 'open',
@@ -225,10 +228,11 @@ export class OnboardingService {
    * touchés sur la fenêtre de l'élan et les paliers qui font l'assise — deux
    * lectures indexées (`[userId]`, `[userId, milestoneType]`).
    */
-  private async stepRewards(userId: string, now: Date): Promise<OnboardingStepRewards> {
+  private async stepRewards(userId: string, engagementScore: number, now: Date): Promise<OnboardingStepRewards> {
+    const scale = await engagementScaleServiceFor(this.prisma).current();
     const [counters, milestones] = await Promise.all([
       this.prisma.engagementCounter.findMany({
-        where: { userId, updatedAt: { gte: new Date(now.getTime() - ELAN_WINDOW_DAYS * DAY_MS) } },
+        where: { userId, updatedAt: { gte: new Date(now.getTime() - scale.multiplier.windowDays * DAY_MS) } },
         select: { axisKey: true, updatedAt: true },
       }),
       this.prisma.engagementMilestone.findMany({
@@ -236,7 +240,7 @@ export class OnboardingService {
         select: { milestoneType: true, milestoneKey: true },
       }),
     ]);
-    return onboardingStepRewards(elanInputOf({ counters, milestones, now }));
+    return onboardingStepRewards({ scale, counters, milestones, engagementScore, now });
   }
 
   private async closeExpired(userId: string, now: Date): Promise<Date> {

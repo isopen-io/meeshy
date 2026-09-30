@@ -9,7 +9,7 @@ struct VideoEditorFABColumn: View {
     let onTap: (VideoEditorToolCategory) -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             fab(category: .style, accent: MeeshyColors.indigo300)
             fab(category: .edit, accent: MeeshyColors.indigo400)
         }
@@ -29,7 +29,7 @@ struct VideoEditorFABColumn: View {
                     Circle().stroke(accent.opacity(0.4), lineWidth: 1)
                 }
                 Image(systemName: category.icon)
-                    .font(.system(size: 21, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xl, weight: .semibold))
                     .foregroundStyle(isActive ? .white : accent)
             }
             .frame(width: 56, height: 56)

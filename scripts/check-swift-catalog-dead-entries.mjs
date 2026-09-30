@@ -344,7 +344,12 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 280 → 279 (#8438) : le retrait d'un participant d'appel appelle enfin
 // `DELETE /calls/:callId/participants/:participantId` depuis le catalogue.
 // Valeur MESURÉE le 2026-09-28.
-const BASELINE_DEAD_ENTRIES = 279;
+// 279 → 280 (#8906) : `AdminEndpoint.engagementScale` — le barème de points se
+// règle depuis l'administration WEB (`/admin/engagement-scale`) ; iOS n'a pas
+// d'écran d'administration du barème. Sa jumelle lecteur,
+// `ConversationsEndpoint.byIdEngagement`, est appelée par
+// `ConversationService.engagement(conversationId:)`. Valeur MESURÉE le 2026-09-30.
+const BASELINE_DEAD_ENTRIES = 280;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

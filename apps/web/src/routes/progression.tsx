@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
+import { MascotCoach } from '@/components/mascot';
 import { PROGRESSION_GLYPHS } from '@/components/glyphs-progression';
 import { GLYPHS } from '@/components/glyphs';
 import { GlassSurface, GlassBack } from '@/components/glass-surface';
@@ -38,6 +39,7 @@ import {
 import { progressionLayout, lastAchievement } from '@meeshy/shared/utils/progression-layout';
 import type { ProgressionSection } from '@meeshy/shared/utils/progression-layout';
 import type { EngagementProgress, EngagementMeeshProgress } from '@meeshy/shared/utils/engagement-progress';
+import { mascotEvent as detectMascotEvent, mascotMoment, type MascotEvent } from '@meeshy/shared/utils/mascot';
 import { ENGAGEMENT_AXIS_WEIGHTS, engagementAxisFamily } from '@meeshy/shared/types/engagement';
 import type { EngagementAxisFamily } from '@meeshy/shared/types/engagement';
 
@@ -571,14 +573,18 @@ export function ProgressionBody({
   onMint,
   isMinting,
   mintError,
+  mascotEvent = null,
 }: {
   progress: EngagementProgress;
   onMint: () => void;
   isMinting: boolean;
   mintError?: string | undefined;
+  /** Ce qui vient de se passer (#8907) — la mascotte le célèbre avant de revenir à l'état. */
+  mascotEvent?: MascotEvent | null;
 }) {
   return (
     <div className="flex flex-col gap-4 px-4 py-3">
+      <MascotCoach moment={mascotMoment(progress, mascotEvent)} />
       {progressionLayout(progress).map((bloc) => {
         if (bloc.kind === 'last-achievement') return <LastAchievementHero key="dernier" progress={progress} />;
         if (bloc.kind === 'level') {
@@ -616,10 +622,22 @@ export default function ProgressionScreen() {
    */
   const requestIdRef = useRef<string>(crypto.randomUUID());
 
+  /**
+   * LA MASCOTTE CÉLÈBRE CE QUI CHANGE (#8907) — jamais l'état de la première
+   * lecture. La frappe réussie se célèbre dès la réponse, sans attendre la
+   * relecture ; la relecture qui la confirme rend le même événement, donc la
+   * même ligne, et ne rejoue rien.
+   */
+  const [mascotEvent, setMascotEvent] = useState<MascotEvent | null>(null);
+  const seenProgressRef = useRef<EngagementProgress | null>(null);
+
   const mint = useMutation({
     mutationFn: async () => unwrap(await mintMeesh(httpTransport, requestIdRef.current)),
-    onSuccess: () => {
+    onSuccess: (result) => {
       requestIdRef.current = crypto.randomUUID();
+      if (result.status === 'minted' && result.balance !== undefined) {
+        setMascotEvent({ kind: 'meesh-minted', balance: result.balance });
+      }
       void queryClient.invalidateQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY });
     },
   });
@@ -629,6 +647,13 @@ export default function ProgressionScreen() {
     queryFn: async ({ signal }) =>
       unwrap(await loadEngagementProgress({ ...apiDeps, signal })),
   });
+
+  useEffect(() => {
+    if (query.data === undefined) return;
+    const event = detectMascotEvent(seenProgressRef.current, query.data);
+    seenProgressRef.current = query.data;
+    if (event !== null) setMascotEvent(event);
+  }, [query.data]);
 
   const meesh = query.data?.meesh;
 
@@ -672,6 +697,7 @@ export default function ProgressionScreen() {
             onMint={() => mint.mutate()}
             isMinting={mint.isPending}
             mintError={mint.isError ? MINT_FAILED_MESSAGE : undefined}
+            mascotEvent={mascotEvent}
           />
         ) : query.isError ? (
           <ProgressionError message={query.error.message} online={online} onRetry={() => void query.refetch()} />

@@ -65,6 +65,7 @@ struct MessageCardExportSheet: View {
     @State var thumbnails = MessageCardThumbnailStore()
     @State var loadedMedia: MessageCardLoadedMedia = .empty
     @State var mediaVersion = 0
+    @State var mediaAttempt = 0
     @State var output: MessageCardOutput = .image
     @State var motionTask: Task<Void, Never>?
     @StateObject var motion = MessageCardMotionProgress()
@@ -113,19 +114,19 @@ struct MessageCardExportSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 stage
                 notices
                 AdaptiveGlassContainer(spacing: 12) {
-                    VStack(spacing: 12) {
+                    VStack(spacing: MeeshySpacing.md) {
                         tray
                         outputPicker
                         actions
                     }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 12)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.bottom, MeeshySpacing.md)
             .background(ambient)
             .navigationTitle(MessageCardExportText.text("export.card.title", "Imagine"))
             .navigationBarTitleDisplayMode(.inline)
@@ -134,7 +135,7 @@ struct MessageCardExportSheet: View {
         .tint(accent)
         .onAppear(perform: load)
         .onDisappear { motionTask?.cancel() }
-        .task(id: loaded) { await loadMedia() }
+        .task(id: "\(loaded)|\(mediaAttempt)") { await loadMedia() }
         .task(id: "\(loaded)|\(renderKey)") { await render() }
         .sheet(isPresented: $galleryOpen) {
             MessageCardExportGallery(
@@ -218,7 +219,7 @@ struct MessageCardExportSheet: View {
                         .font(.footnote)
                         .foregroundStyle(MeeshyColors.error)
                 } else {
-                    VStack(spacing: 8) {
+                    VStack(spacing: MeeshySpacing.sm) {
                         ProgressView()
                         Text(MessageCardExportText.text("export.card.rendering", "Préparation de l’image…"))
                             .font(.footnote)
@@ -250,7 +251,7 @@ struct MessageCardExportSheet: View {
             }
         }
         .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
         .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
         .opacity(ready ? 1 : 0.7)
         .animation(.easeInOut(duration: 0.2), value: ready)
@@ -260,18 +261,18 @@ struct MessageCardExportSheet: View {
         let slop = Self.touchSlop
         let focused = focus == region.part
         return Button { pick(region.part) } label: {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                 .fill(Color.white.opacity(0.001))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.white.opacity(focused ? 0.9 : 0), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
+                        .strokeBorder(Color.white.opacity(focused ? 0.9 : 0), style: StrokeStyle(lineWidth: MeeshyBorder.strong, dash: [6, 4]))
                 )
                 .overlay(alignment: .topLeading) {
                     if focused {
                         Text(MessageCardExportText.partLabel(region.part))
                             .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
+                            .padding(.horizontal, MeeshySpacing.sm)
+                            .padding(.vertical, MeeshySpacing.xs)
                             .adaptiveGlass(in: Capsule())
                             .offset(x: 6, y: -12)
                     }
@@ -291,10 +292,10 @@ struct MessageCardExportSheet: View {
         if !touched && rendered != nil {
             Label(MessageCardExportText.text("export.card.hint", "Touchez une partie de la carte pour la régler"), systemImage: "hand.tap")
                 .font(.footnote.weight(.semibold))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.sm)
                 .adaptiveGlass(in: Capsule())
-                .padding(.bottom, 10)
+                .padding(.bottom, MeeshySpacing.smPlus)
                 .allowsHitTesting(false)
                 .transition(.opacity)
         }
@@ -306,6 +307,8 @@ struct MessageCardExportSheet: View {
             Text(notice)
                 .font(.footnote)
                 .foregroundStyle(MeeshyColors.error)
+        } else if let failure = MessageCardExportText.mediaFailure(count: loadedMedia.failed.count) {
+            mediaFailure(failure)
         } else if ready, rendered?.truncated == true {
             Text(MessageCardExportText.text("export.card.truncated", "Message long : la fin est coupée sur l’image."))
                 .font(.footnote)
@@ -404,11 +407,28 @@ struct MessageCardExportSheet: View {
         popular = MessageCardUsage.popular(usage, count: Self.popularCount)
     }
 
+    /// « Un média n'a pas pu se charger » + « Réessayer » (#8901) — jamais un cadre muet.
+    private func mediaFailure(_ message: String) -> some View {
+        HStack(spacing: 12) {
+            Label(message, systemImage: "exclamationmark.triangle")
+                .font(.footnote)
+                .foregroundStyle(MeeshyColors.error)
+            Button(MessageCardExportText.text("export.card.media.retry", "Réessayer")) {
+                HapticFeedback.light()
+                mediaAttempt += 1
+            }
+            .font(.footnote.weight(.semibold))
+            .frame(minHeight: 44)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
     /// Les pixels et l'onde réelle des médias, chargés HORS du MainActor —
-    /// la carte est déjà peinte avec leurs couleurs d'attente.
+    /// la carte est déjà peinte avec leurs couleurs d'attente. Rejoué par
+    /// « Réessayer » (`mediaAttempt`).
     private func loadMedia() async {
         let items = request.subject.media
-        guard loaded, mediaVersion == 0, !items.isEmpty else { return }
+        guard loaded, !items.isEmpty else { return }
         let result = await Task.detached(priority: .userInitiated) {
             await MessageCardMediaLoader.load(items)
         }.value
@@ -439,7 +459,8 @@ struct MessageCardExportSheet: View {
         )
         // L'export rapide attend les pixels des médias : il ne part jamais
         // avec leurs couleurs d'attente.
-        if request.quick && !quickSent && (request.subject.media.isEmpty || mediaVersion > 0) {
+        // Un média en échec retient l'export rapide : l'atelier le dit et attend « Réessayer ».
+        if request.quick && !quickSent && (request.subject.media.isEmpty || (mediaVersion > 0 && loadedMedia.failed.isEmpty)) {
             quickSent = true
             save()
         }

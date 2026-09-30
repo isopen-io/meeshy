@@ -82,7 +82,7 @@ struct BubbleCallNoticeView: View, Equatable {
             // d'appel sont désormais atteignables (`PrimaryAction.callDetail`).
             // VoiceOver n'a ni double tap ni appui long : les DEUX
             // destinations lui sont offertes explicitement ci-dessous.
-            VStack(alignment: isOutgoing ? .trailing : .leading, spacing: 6) {
+            VStack(alignment: isOutgoing ? .trailing : .leading, spacing: MeeshySpacing.xsPlus) {
                 card
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) {
@@ -110,15 +110,15 @@ struct BubbleCallNoticeView: View, Equatable {
             }
             if !isOutgoing { Spacer(minLength: 48) }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 4)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.xs)
     }
 
     private var card: some View {
-        VStack(alignment: .trailing, spacing: 3) {
-            HStack(spacing: 11) {
+        VStack(alignment: .trailing, spacing: MeeshySpacing.xxs) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 leadingGlyph
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(title)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(ThemeManager.shared.textPrimary)
@@ -135,8 +135,8 @@ struct BubbleCallNoticeView: View, Equatable {
                 .foregroundColor(ThemeManager.shared.textMuted)
                 .accessibilityHidden(true)
         }
-        .padding(.horizontal, 13)
-        .padding(.vertical, 9)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .frame(minHeight: 44)
         .background(simpleContour)
         .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous))
@@ -153,7 +153,7 @@ struct BubbleCallNoticeView: View, Equatable {
         let duration = durationLabel
         let data = summary.dataSpentLabel
         if duration != nil || data != nil {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 if let duration { metric(icon: "clock", text: duration) }
                 if duration != nil, data != nil {
                     MetaSeparator()
@@ -169,7 +169,7 @@ struct BubbleCallNoticeView: View, Equatable {
     /// Replaces the metrics row while the call is ongoing (no duration, no
     /// data — those only exist once the call is terminal).
     private func liveRow(subtitle: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Circle()
                 .fill(tint)
                 .frame(width: 7, height: 7)
@@ -190,9 +190,9 @@ struct BubbleCallNoticeView: View, Equatable {
     }
 
     private func metric(icon: String, text: String) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(11, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                 .lineLimit(1)
@@ -210,9 +210,9 @@ struct BubbleCallNoticeView: View, Equatable {
         ZStack {
             Circle()
                 .fill(tint.opacity(isDark ? 0.14 : 0.09))
-                .frame(width: 36, height: 36)
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
             Image(systemName: mediaGlyph)
-                .font(MeeshyFont.relative(15, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(tint)
         }
         .overlay(alignment: .bottomTrailing) { directionChip }
@@ -238,7 +238,7 @@ struct BubbleCallNoticeView: View, Equatable {
             RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
                 .fill(tint.opacity(isDark ? 0.06 : 0.03))
             RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                .stroke(tint.opacity(isDark ? 0.25 : 0.15), lineWidth: 0.5)
+                .stroke(tint.opacity(isDark ? 0.25 : 0.15), lineWidth: MeeshyBorder.hairline)
         }
     }
 
@@ -381,7 +381,7 @@ struct CallSummaryDetailSheet: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 20) {
+            VStack(spacing: MeeshySpacing.xl) {
                 header
                 if onCallBack != nil {
                     callBackButton
@@ -396,7 +396,7 @@ struct CallSummaryDetailSheet: View {
                     }
                 }
             }
-            .padding(20)
+            .padding(MeeshySpacing.xl)
             // iPad/Mac width cap — mirrors FloatingCallPillView's established
             // 560pt ceiling: without it, `callBackButton`/`detailRow`'s Spacer()
             // stretch edge-to-edge on a wide sheet instead of reading as a
@@ -423,33 +423,33 @@ struct CallSummaryDetailSheet: View {
     // MARK: - Header
 
     private var header: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             ZStack {
                 Circle()
-                    .fill(tint.opacity(0.12))
+                    .fill(tint.opacity(MeeshyOpacity.light))
                     .frame(width: 64, height: 64)
                 Image(systemName: mediaGlyph)
-                    .font(MeeshyFont.relative(26, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxxl, weight: .semibold))
                     .foregroundColor(tint)
             }
             .overlay(alignment: .bottomTrailing) {
                 ZStack {
                     Circle().fill(theme.backgroundPrimary).frame(width: 26, height: 26)
                     Image(systemName: directionGlyph)
-                        .font(MeeshyFont.relative(12, weight: .black))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .black))
                         .foregroundColor(tint)
                 }
                 .offset(x: 4, y: 4)
             }
             Text(title)
-                .font(MeeshyFont.relative(20, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
             Text(timestamp.formatted(date: .abbreviated, time: .shortened))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
-        .padding(.top, 8)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     // MARK: - Call back
@@ -460,13 +460,13 @@ struct CallSummaryDetailSheet: View {
             HapticFeedback.medium()
             dismiss()
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: mediaGlyph)
                 Text(callBackTitle).font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, MeeshySpacing.md)
             .adaptiveGlassProminent(in: Capsule(), tint: Color(hex: accentHex))
         }
         .accessibilityLabel(callBackTitle)
@@ -512,7 +512,7 @@ struct CallSummaryDetailSheet: View {
                 qualityRow(quality)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
         .adaptiveGlass(
             in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous),
             tint: tint.opacity(0.14)
@@ -522,7 +522,7 @@ struct CallSummaryDetailSheet: View {
     /// Network-quality row. A per-second quality histogram can render here later
     /// (the metadata already exposes an ordered `NetworkQuality` scale).
     private func qualityRow(_ quality: CallSummaryMetadata.NetworkQuality) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "waveform")
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(Color(hex: accentHex))
@@ -546,7 +546,7 @@ struct CallSummaryDetailSheet: View {
     }
 
     private func detailRow(icon: String, label: String, value: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(Color(hex: accentHex))

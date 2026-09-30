@@ -103,16 +103,16 @@ struct ComposerSceneContextMenu: View {
                 Text(title)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(MeeshyColors.textSecondary(isDark: true))
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
-                    .padding(.bottom, 4)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .padding(.top, MeeshySpacing.md)
+                    .padding(.bottom, MeeshySpacing.xs)
                     .accessibilityAddTraits(.isHeader)
             }
             ForEach(entries) { entree in
                 Button {
                     onSelect(entree)
                 } label: {
-                    HStack(spacing: 12) {
+                    HStack(spacing: MeeshySpacing.md) {
                         Image(systemName: ComposerSceneMenuPaint.symbol(entree))
                             .font(.body.weight(.semibold))
                             .frame(width: 24)
@@ -124,7 +124,7 @@ struct ComposerSceneContextMenu: View {
                     .foregroundStyle(entree.isDestructive
                                      ? MeeshyColors.error
                                      : MeeshyColors.textPrimary(isDark: true))
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, MeeshySpacing.lg)
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
                 }
@@ -135,7 +135,7 @@ struct ComposerSceneContextMenu: View {
                 }
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, MeeshySpacing.xs)
         .frame(width: ComposerSceneMenu.width)
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous),
                        tint: plateauTint.opacity(0.55))

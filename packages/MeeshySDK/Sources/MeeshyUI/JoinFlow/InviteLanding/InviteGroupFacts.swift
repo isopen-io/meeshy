@@ -12,8 +12,8 @@ struct InviteGroupFacts: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 tile(value: stats.totalParticipants, label: InviteLandingCopy.peopleLabel(stats.totalParticipants))
                 tile(value: languageCount, label: InviteLandingCopy.languagesLabel(languageCount))
             }
@@ -30,12 +30,12 @@ struct InviteGroupFacts: View {
     }
 
     private func tile(value: Int, label: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(value.formatted())
-                .font(MeeshyFont.relative(28, weight: .heavy, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.displaySize, weight: .heavy, design: .rounded))
                 .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
             Text(label)
-                .font(MeeshyFont.relative(14, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                 .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -53,7 +53,7 @@ struct InviteGuestTermsCard: View {
     let isDark: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             InviteSectionTitle(text: InviteLandingCopy.termsTitle, isDark: isDark)
             InviteRightRow(label: InviteLandingCopy.rightMessages, allowed: info.guestRights.messages, isDark: isDark)
             InviteRightRow(label: InviteLandingCopy.rightImages, allowed: info.guestRights.images, isDark: isDark)
@@ -62,7 +62,7 @@ struct InviteGuestTermsCard: View {
             Rectangle()
                 .fill(isDark ? MeeshyColors.indigo800.opacity(0.55) : MeeshyColors.indigo100)
                 .frame(height: 1)
-                .padding(.vertical, 2)
+                .padding(.vertical, MeeshySpacing.xxs)
                 .accessibilityHidden(true)
             fact(InviteLandingCopy.askedLabel, InviteLandingCopy.fieldList(info.requestedFields))
             fact(InviteLandingCopy.languagesAcceptedLabel, InviteLandingCopy.languageList(info.allowedLanguages))
@@ -79,7 +79,7 @@ struct InviteGuestTermsCard: View {
     private func fact(_ label: String, _ value: String) -> some View {
         (Text(label).bold().foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
             + Text(verbatim: " \(value)"))
-            .font(MeeshyFont.relative(14))
+            .font(MeeshyFont.relative(MeeshyFont.labelSize))
             .foregroundColor(isDark ? MeeshyColors.indigo200 : MeeshyColors.neutral600)
             .lineSpacing(2)
             .fixedSize(horizontal: false, vertical: true)
@@ -100,7 +100,7 @@ public struct InviteRightRow: View {
     }
 
     public var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: allowed ? "checkmark" : "xmark")
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .heavy))
                 .foregroundColor(allowed ? MeeshyColors.successDeep : MeeshyColors.errorStrong)

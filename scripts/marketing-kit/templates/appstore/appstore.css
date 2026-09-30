@@ -103,6 +103,8 @@
 
 /* Appareil : centré, qui déborde en bas. */
 .as-device { position: absolute; left: 50%; top: var(--device-top); transform-origin: 50% 0; z-index: 1; }
+/* La VRAIE capture d'un écran (#8855) remplit l'écran du cadre, à sa résolution native. */
+.device-screen .ecran-reel { display: block; width: 100%; height: 100%; object-fit: cover; }
 
 /* 🇫🇷 → 🇰🇷 : pilule blanche ancrée au vocal. */
 .as-fleche {

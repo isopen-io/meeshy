@@ -64,7 +64,7 @@ struct ProfileView: View {
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(.white)
                         .padding(.horizontal, MeeshySpacing.lg)
-                        .padding(.vertical, MeeshySpacing.sm + 2)
+                        .padding(.vertical, MeeshySpacing.smPlus)
                         .background(Capsule().fill(MeeshyColors.error.opacity(0.9)))
                         .padding(.bottom, MeeshySpacing.xxl)
                 }
@@ -177,7 +177,7 @@ struct ProfileView: View {
                         Text(isEditing
                              ? String(localized: "profile.save", bundle: .main)
                              : String(localized: "profile.edit", bundle: .main))
-                            .font(MeeshyFont.relative(14, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                             .foregroundColor(Color(hex: accentColor))
                     }
                 }
@@ -243,13 +243,13 @@ struct ProfileView: View {
                 if isEditing {
                     PhotosPicker(selection: $bannerItem, matching: .images) {
                         Label(String(localized: "profile.edit", bundle: .main), systemImage: "photo.fill")
-                            .font(MeeshyFont.relative(11, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                             .foregroundColor(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, MeeshySpacing.smPlus)
+                            .padding(.vertical, MeeshySpacing.xsPlus)
                             .background(Capsule().fill(Color.black.opacity(0.5)))
                     }
-                    .padding(8)
+                    .padding(MeeshySpacing.sm)
                 }
 
                 if isUploadingBanner {
@@ -278,7 +278,7 @@ struct ProfileView: View {
                     let textPrimary = theme.textPrimary
                     PhotosPicker(selection: $avatarItem, matching: .images) {
                         Image(systemName: "pencil.circle.fill")
-                            .font(MeeshyFont.relative(28))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxxl))
                             .foregroundColor(Color(hex: accentColor))
                             .background(Circle().fill(textPrimary.opacity(0.1)))
                     }
@@ -297,18 +297,18 @@ struct ProfileView: View {
             .padding(.bottom, -45)
 
             if !isEditing {
-                VStack(spacing: 4) {
+                VStack(spacing: MeeshySpacing.xs) {
                     Text(user?.displayName ?? user?.username ?? String(localized: "profile.unknown_user", bundle: .main))
-                        .font(MeeshyFont.relative(20, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
                         .foregroundColor(theme.textPrimary)
 
                     if let username = user?.username {
                         Text("@\(username)")
-                            .font(MeeshyFont.relative(14, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                             .foregroundColor(Color(hex: accentColor))
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
             }
         }
     }
@@ -367,16 +367,16 @@ struct ProfileView: View {
             sectionHeader(icon: "envelope.fill", title: String(localized: "profile.section.contact", bundle: .main), color: MeeshyColors.indigo300Hex)
 
             VStack(spacing: 0) {
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     fieldIcon("envelope.fill")
                     
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "profile.email", bundle: .main))
-                            .font(MeeshyFont.relative(11, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                             .foregroundColor(theme.textMuted)
                         
                         Text(user?.email ?? "—")
-                            .font(MeeshyFont.relative(14, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                             .foregroundColor(user?.email != nil ? theme.textPrimary : theme.textMuted)
                     }
                     
@@ -386,15 +386,15 @@ struct ProfileView: View {
                         verificationBadge(verified: user?.emailVerifiedAt != nil)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.smPlus)
 
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     fieldIcon("phone.fill")
                     
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "profile.phone", bundle: .main))
-                            .font(MeeshyFont.relative(11, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                             .foregroundColor(theme.textMuted)
                         
                         Text({
@@ -403,7 +403,7 @@ struct ProfileView: View {
                             }
                             return "—"
                         }())
-                            .font(MeeshyFont.relative(14, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                             .foregroundColor(user?.phoneNumber != nil ? theme.textPrimary : theme.textMuted)
                     }
                     
@@ -413,8 +413,8 @@ struct ProfileView: View {
                         verificationBadge(verified: user?.phoneVerifiedAt != nil)
                     }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.smPlus)
             }
             .background(sectionBackground)
         }
@@ -541,24 +541,24 @@ struct ProfileView: View {
                     fieldIcon("person.2.fill")
 
                     Text(String(localized: "profile.friend_requests", bundle: .main))
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
 
                     if pendingRequestCount > 0 {
                         Text("\(pendingRequestCount)")
-                            .font(MeeshyFont.relative(12, weight: .bold, design: .rounded))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
                             .foregroundColor(.white)
                             .frame(minWidth: 22, minHeight: 22)
                             .background(Circle().fill(MeeshyColors.indigo500))
                     }
 
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
-                .padding(.horizontal, 14)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.md)
                 .background(sectionBackground)
             }
@@ -574,11 +574,11 @@ struct ProfileView: View {
 
             HStack {
                 Text(user?.createdAt.flatMap { parseAndFormatDate($0) } ?? "—")
-                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.vertical, MeeshySpacing.md)
             .background(sectionBackground)
         }
@@ -587,16 +587,16 @@ struct ProfileView: View {
     // MARK: - Components
 
     private func sectionHeader(icon: String, title: String, color: String) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                 .foregroundColor(Color(hex: color))
             Text(title)
-                .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
-        .padding(.leading, 4)
+        .padding(.leading, MeeshySpacing.xs)
     }
 
     private var sectionBackground: some View {
@@ -610,7 +610,7 @@ struct ProfileView: View {
 
     private func fieldIcon(_ name: String) -> some View {
         Image(systemName: name)
-            .font(MeeshyFont.relative(14, weight: .medium))
+            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
             .foregroundColor(Color(hex: accentColor))
             .frame(width: 28, height: 28)
             .background(
@@ -626,57 +626,57 @@ struct ProfileView: View {
         placeholder: String,
         isMultiline: Bool = false
     ) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             fieldIcon(icon)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(title)
-                    .font(MeeshyFont.relative(11, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
                 if isEditing {
                     if isMultiline {
                         TextField(placeholder, text: value, axis: .vertical)
-                            .font(MeeshyFont.relative(14, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(3...6)
                     } else {
                         TextField(placeholder, text: value)
-                            .font(MeeshyFont.relative(14, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                             .foregroundColor(theme.textPrimary)
                     }
                 } else {
                     Text(value.wrappedValue.isEmpty ? placeholder : value.wrappedValue)
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                         .foregroundColor(value.wrappedValue.isEmpty ? theme.textMuted : theme.textPrimary)
                 }
             }
 
             Spacer()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(verbatim: "\(title): \(value.wrappedValue)"))
     }
 
     private func profileInfoRow(icon: String, title: String, value: String) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             fieldIcon(icon)
 
             Text(title)
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
 
             Text(value)
-                .font(MeeshyFont.relative(13, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .lineLimit(1)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     private func languagePickerRow(
@@ -691,17 +691,17 @@ struct ProfileView: View {
             HapticFeedback.light()
             showPicker.wrappedValue = true
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 fieldIcon("globe")
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(title)
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                         .foregroundColor(theme.textPrimary)
 
                     if let subtitle, !code.isEmpty {
                         Text(subtitle)
-                            .font(MeeshyFont.relative(11))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -709,29 +709,29 @@ struct ProfileView: View {
                 Spacer()
 
                 if let info = LanguageData.info(for: code) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Text(info.flag)
-                            .font(MeeshyFont.relative(18))
+                            .font(MeeshyFont.relative(MeeshyFont.subtitleSize))
                         Text(info.nativeName)
-                            .font(MeeshyFont.relative(13, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                             .foregroundColor(theme.textMuted)
                     }
                 } else {
                     Text(required
                          ? String(localized: "profile.language.choose", bundle: .main)
                          : String(localized: "profile.language.none", bundle: .main))
-                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
 
                 if isEditing {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
         }
         .disabled(!isEditing)
     }
@@ -740,21 +740,21 @@ struct ProfileView: View {
         Text(verified
              ? String(localized: "profile.verified", bundle: .main)
              : String(localized: "profile.not_verified", bundle: .main))
-            .font(MeeshyFont.relative(10, weight: .semibold))
+            .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
             .foregroundColor(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
+            .padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(verified ? MeeshyColors.success : MeeshyColors.warning))
     }
 
     private func statCard(value: String, label: String, color: String) -> some View {
-        VStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xsPlus) {
             Text(value)
-                .font(MeeshyFont.relative(22, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundColor(Color(hex: color))
 
             Text(label)
-                .font(MeeshyFont.relative(11, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)

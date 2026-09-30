@@ -76,9 +76,11 @@ const HOOK_NAMES = [
   'useMessageMenu',
   'useAuthorStoryRings',
   'useEphemeralDestruction',
+  'useLivingMessages',
   'useOlderMessages',
   'useReadTracking',
   'useAfterReadConsumption',
+  'useEngagementRevalidation',
   'useThreadOpenScroll',
   'useUnreadBoundary',
   // #7429 — les trois hooks nés du découpage de cet écran ; ceux qu'ils ont

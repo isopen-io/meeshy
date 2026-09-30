@@ -69,7 +69,7 @@ struct RiverTimeHandle: View {
                 .padding(.trailing, RiverTimeHandleMetrics.trackInset + (RiverTimeHandleMetrics.handleWidth - RiverTimeHandleMetrics.trackWidth) / 2)
                 .offset(y: RiverTimeHandleMetrics.handleHeight / 2)
             ForEach(Array(scale.ticks.enumerated()), id: \.offset) { _, tick in
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(tick.label)
                         .font(MeeshyFont.relative(RiverTimeHandleMetrics.tickLabelSize, weight: .semibold))
                         .foregroundColor(ThemeManager.shared.textMuted)
@@ -87,13 +87,13 @@ struct RiverTimeHandle: View {
     // MARK: - Poignée
 
     private func handle(trackHeight: CGFloat) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             if dragFraction != nil {
                 Text(scale.label(atFraction: shownFraction))
                     .font(MeeshyFont.relative(RiverTimeHandleMetrics.labelSize, weight: .bold))
                     .foregroundColor(ThemeManager.shared.textPrimary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(Capsule().fill(MeeshyColors.backgroundSecondary(isDark: isDark).opacity(0.96)))
             }
             Capsule()

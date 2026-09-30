@@ -157,7 +157,7 @@ struct BubbleSwipeContainer<Content: View>: View {
         // adapts to the bubble's intrinsic width.
         ZStack(alignment: indicatorAlignment) {
             swipeIndicator
-                .padding(.horizontal, 8)
+                .padding(.horizontal, MeeshySpacing.sm)
 
             content()
                 .padding(.leading, selectionShift)
@@ -242,10 +242,10 @@ struct BubbleSwipeContainer<Content: View>: View {
         .overlay(alignment: .topLeading) {
             if isSelectionModeActive {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20))
+                    .font(.system(size: MeeshyIconSize.xl))
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.6))
                     .background(Circle().fill(.background).frame(width: 18, height: 18))
-                    .padding(.top, 6)
+                    .padding(.top, MeeshySpacing.xsPlus)
                     .padding(.leading, selectionLeadingCircleInset)
                     .allowsHitTesting(false)
             }
@@ -267,18 +267,18 @@ struct BubbleSwipeContainer<Content: View>: View {
                     // direction, forward (curved arrow forward) for the
                     // opposite. Crossfade transition keeps the swap subtle.
                     Image(systemName: isReplyDir ? "arrowshape.turn.up.left.fill" : "arrowshape.turn.up.right.fill")
-                        .font(MeeshyFont.relative(22, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .semibold))
                         .foregroundStyle(MeeshyColors.brandPrimary)
                         .transition(.scale.combined(with: .opacity))
                 } else {
                     // Under the threshold — day + hour stamp gives the user
                     // context (when the message was sent) while they decide
                     // whether to commit the gesture.
-                    VStack(spacing: 2) {
+                    VStack(spacing: MeeshySpacing.xxs) {
                         Text(swipeStampDay)
-                            .font(MeeshyFont.relative(11, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         Text(swipeStampTime)
-                            .font(MeeshyFont.relative(12, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     }
                     .foregroundColor(.secondary)
                     .transition(.opacity)

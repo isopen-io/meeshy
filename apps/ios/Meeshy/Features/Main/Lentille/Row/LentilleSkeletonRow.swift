@@ -32,7 +32,7 @@ struct LentilleSkeletonRow: View {
                 .frame(width: LentilleMetrics.Avatar.size, height: LentilleMetrics.Avatar.size)
                 .redacted(reason: .placeholder)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(Self.namePlaceholder)
                     .font(LentilleMetrics.Name.font)
                 Text(Self.line2Placeholder)

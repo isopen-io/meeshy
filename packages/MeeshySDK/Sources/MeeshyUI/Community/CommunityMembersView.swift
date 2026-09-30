@@ -103,20 +103,20 @@ public struct CommunityMembersView: View {
     }
 
     private func sectionHeader(role: MemberRole, count: Int) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: role.icon)
-                .font(.system(size: 11))
+                .font(.system(size: MeeshyIconSize.xxs))
             Text("\(role.displayName)s")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(.system(size: MeeshyFont.smallSize, weight: .bold, design: .rounded))
             Text("\(count)")
-                .font(.system(size: 11, weight: .medium))
+                .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .foregroundColor(theme.textSecondary)
         .textCase(.uppercase)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(theme.backgroundSecondary.opacity(0.3))
     }
 }
@@ -136,7 +136,7 @@ struct MemberRow: View {
     private var accentColor: String { DynamicColorGenerator.colorForName(displayName) }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
                 name: displayName,
                 context: .userListItem,
@@ -145,17 +145,17 @@ struct MemberRow: View {
                 presenceState: UserPresence(isOnline: user?.isOnline ?? false).state
             )
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(displayName)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .font(.system(size: MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: member.communityRole.icon)
-                        .font(.system(size: 9))
+                        .font(.system(size: MeeshyIconSize.xxs))
                     Text(member.communityRole.displayName)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: MeeshyFont.footnoteSize, weight: .medium))
                 }
                 .foregroundColor(roleColor)
             }
@@ -182,15 +182,15 @@ struct MemberRow: View {
                     }
                 } label: {
                     Image(systemName: "ellipsis")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                         .foregroundColor(theme.textMuted)
-                        .frame(width: 32, height: 32)
+                        .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                         .contentShape(Circle())
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     private var roleColor: Color {

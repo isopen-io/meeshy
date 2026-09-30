@@ -10,6 +10,7 @@ import ptPassword from './catalog-pt-password';
 import ptAccounts from './catalog-pt-accounts';
 import ptCall from './catalog-pt-call';
 import ptRowActions from './catalog-pt-row-actions';
+import ptEngagement from './catalog-pt-engagement';
 import ptCallShell from './catalog-pt-call-shell';
 import ptCallJoin from './catalog-pt-call-join';
 import ptCallDecline from './catalog-pt-call-decline';
@@ -231,6 +232,7 @@ const pt = {
   ...ptAccounts,
   ...ptCall,
   ...ptRowActions,
+  ...ptEngagement,
   ...ptCallShell,
   ...ptCallJoin,
   ...ptCallDecline,

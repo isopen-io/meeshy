@@ -7,12 +7,21 @@ import MeeshyUI
 /// Ce que l'atelier a chargé pour peindre les médias d'une carte : les pixels
 /// (photo, première image d'une vidéo), l'onde RÉELLE des sons et leur fichier
 /// local — la piste d'une carte animée.
-struct MessageCardLoadedMedia: Sendable {
+nonisolated struct MessageCardLoadedMedia: Sendable {
     let pictures: MessageCardPictures
     let media: [MessageCardMedia]
     let audioFile: URL?
+    /// Les médias VISUELS dont les pixels ne sont pas arrivés — l'atelier le
+    /// dit et offre de réessayer (#8901) : un cadre à sa couleur d'attente,
+    /// muet, se lisait « pas de pièce ».
+    var failed: [String] = []
 
     static let empty = MessageCardLoadedMedia(pictures: .none, media: [], audioFile: nil)
+
+    /// Une photo ou une vidéo sans pixels est en ÉCHEC ; un son n'a pas de pixels à attendre.
+    static func failures(of items: [MessageCardSubjectMedia], painted: Set<String>) -> [String] {
+        items.filter { $0.media.kind != .audio && !painted.contains($0.media.id) }.map(\.media.id)
+    }
 }
 
 /// **LE CHARGEMENT DES MÉDIAS D'UNE CARTE « IMAGINE »** (#8692) — côté
@@ -20,7 +29,8 @@ struct MessageCardLoadedMedia: Sendable {
 /// résout les adresses (`MeeshyConfig`), ce que le SDK ne fait jamais.
 ///
 /// Toujours appelé HORS du MainActor (`Task.detached`). Un média qui ne se
-/// charge pas garde sa couleur d'attente : la carte part quand même, jamais
+/// charge pas garde sa couleur d'attente et est NOMMÉ dans `failed` : l'atelier
+/// le dit, offre de réessayer, et la carte reste enregistrable — jamais
 /// d'écran bloqué sur le réseau.
 nonisolated enum MessageCardMediaLoader {
 
@@ -42,7 +52,10 @@ nonisolated enum MessageCardMediaLoader {
                 media.append(wave.isEmpty ? item.media : item.media.with(samples: wave))
             }
         }
-        return MessageCardLoadedMedia(pictures: MessageCardPictures(images), media: media, audioFile: audioFile)
+        return MessageCardLoadedMedia(
+            pictures: MessageCardPictures(images), media: media, audioFile: audioFile,
+            failed: MessageCardLoadedMedia.failures(of: items, painted: Set(images.keys))
+        )
     }
 
     private static func samplesOrNone(_ file: URL?, count: Int) async -> [Double] {

@@ -269,6 +269,11 @@ struct MeeshyApp: App {
                 .task {
                     ImageDownsamplingConfig.applyGlobal()
                     KeychainManager.shared.migrateToAfterFirstUnlock()
+                    #if DEBUG
+                    // Vitrine App Store (#8855) : session fictive et lien fixé AVANT la
+                    // restauration de l'environnement et de la session — voir `VitrineStage`.
+                    VitrineStage.preparer()
+                    #endif
                     MeeshyConfig.shared.restoreEnvironment()
                     // Miroir de l'environnement pour les extensions (NSE +
                     // partage), qui n'ont pas accès à MeeshyConfig. À poser
@@ -580,6 +585,13 @@ struct MeeshyApp: App {
                         // (no DM sent/received) would leave `clearSessions()`
                         // with no userId to scope its Keychain wipe against.
                         Task { await SessionManager.shared.migrateKeychainIfNeeded() }
+                        #if DEBUG
+                        // Vitrine (#8855) : les vraies bases se remplissent avant le
+                        // préchargement de la liste ; l'écran de la scène s'ouvre une fois
+                        // le voile du lancement parti.
+                        await VitrineStage.remplir()
+                        VitrineStage.ouvrir(apres: launchSplash.$phase)
+                        #endif
                         // Précharge le cache liste — SQLite read instantané,
                         // retourne `.empty` au tout premier install. C'est ce que
                         // le splash attend pour tomber : la liste se montre

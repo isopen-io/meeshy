@@ -471,7 +471,7 @@ public struct MeeshyAvatar: View {
                 .frame(width: context.ringSize, height: context.ringSize)
         case .read:
             Circle()
-                .stroke(Color(hex: resolvedAccent).opacity(0.3), lineWidth: context.ringWidth)
+                .stroke(Color(hex: resolvedAccent).opacity(MeeshyOpacity.medium), lineWidth: context.ringWidth)
                 .frame(width: context.ringSize, height: context.ringSize)
         case .none:
             EmptyView()
@@ -512,7 +512,7 @@ public struct MeeshyAvatar: View {
         let dot = Circle()
             .fill(presence.color)
             .frame(width: context.onlineDotSize, height: context.onlineDotSize)
-            .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
+            .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: MeeshyBorder.strong))
             .onTapGesture {
                 HapticFeedback.light()
                 onOnlineTap?()

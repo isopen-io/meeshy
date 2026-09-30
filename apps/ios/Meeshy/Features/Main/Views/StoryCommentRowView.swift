@@ -80,22 +80,22 @@ struct StoryCommentRowView: View, Equatable {
     /// (user spec 2026-05-28 : « les commentaires ne doivent pas être dans
     /// des box mais alignés et séparés par des ---- uniquement »).
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .top, spacing: MeeshySpacing.smPlus) {
             // Sliver vertical d'accent : identité couleur de l'auteur,
             /// extrait du background pour ne pas avoir à wrapper la row.
             Capsule(style: .continuous)
                 .fill(bubbleColor)
                 .frame(width: 3)
-                .shadow(color: .black.opacity(0.35), radius: 3)
-                .padding(.vertical, 6)
+                .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 3)
+                .padding(.vertical, MeeshySpacing.xsPlus)
 
             avatar
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 headerRow
                 // Le CORPS — texte + média — porte les effets du commentaire, voile
                 // du flou compris (#8582), comme dans la feuille et le fil.
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     if isEditing {
                         editor
                     } else {
@@ -115,7 +115,7 @@ struct StoryCommentRowView: View, Equatable {
                             authorColor: comment.authorColor,
                             sentAt: comment.timestamp
                         )
-                        .padding(.top, 2)
+                        .padding(.top, MeeshySpacing.xxs)
                     }
                 }
                 .commentBody(effects: comment.effects)
@@ -125,7 +125,7 @@ struct StoryCommentRowView: View, Equatable {
                     FeedPostLocationSticker(place: place) {
                         rowFullscreenPlace = BubbleFullscreenPlace(place: place)
                     }
-                    .padding(.top, 2)
+                    .padding(.top, MeeshySpacing.xxs)
                 }
                 actionRow
             }
@@ -136,8 +136,8 @@ struct StoryCommentRowView: View, Equatable {
         // lecteur ne pagine pas sous ce geste : né dans la liste, il revient à la
         // surface défilante (`StoryReaderDragStartZone.yieldsToScrollableSurface`).
         .commentSwipeToReply(onReply: onReply)
-        .padding(.vertical, 8)
-        .padding(.trailing, 12)
+        .padding(.vertical, MeeshySpacing.sm)
+        .padding(.trailing, MeeshySpacing.md)
         .fullScreenCover(item: $rowFullscreenPlace) { item in
             LocationFullscreenView(
                 latitude: item.place.latitude,
@@ -172,30 +172,30 @@ struct StoryCommentRowView: View, Equatable {
                     )
             }
         }
-        .frame(width: 32, height: 32)
+        .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
         .clipShape(Circle())
-        .overlay(Circle().strokeBorder(bubbleColor.opacity(0.55), lineWidth: 1))
+        .overlay(Circle().strokeBorder(bubbleColor.opacity(MeeshyOpacity.strong), lineWidth: 1))
         // Halo de séparation : l'avatar reste détaché même sur une story claire.
         .shadow(color: .black.opacity(0.4), radius: 4, y: 1)
     }
 
     private var headerRow: some View {
         let overlayColor = Self.legibleOverlayColor(for: colorScheme)
-        return HStack(spacing: 6) {
+        return HStack(spacing: MeeshySpacing.xsPlus) {
             Text(comment.author)
-                .font(MeeshyFont.relative(12.5, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundColor(Self.legibleAuthorColor(hex: comment.authorColor))
 
             if hasTranslation {
-                MetaSeparator().font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
+                MetaSeparator().font(MeeshyFont.relative(MeeshyFont.captionSize)).foregroundColor(overlayColor.opacity(MeeshyOpacity.strong))
                 languageSwitcher
             }
 
-            MetaSeparator().font(MeeshyFont.relative(10)).foregroundColor(overlayColor.opacity(0.55))
+            MetaSeparator().font(MeeshyFont.relative(MeeshyFont.captionSize)).foregroundColor(overlayColor.opacity(MeeshyOpacity.strong))
 
             Text(comment.timestamp, style: .relative)
-                .font(MeeshyFont.relative(10))
-                .foregroundColor(overlayColor.opacity(0.75))
+                .font(MeeshyFont.relative(MeeshyFont.captionSize))
+                .foregroundColor(overlayColor.opacity(MeeshyOpacity.heavy))
         }
         // Halo lisibilité (cf. StoryActionButton sidebar) — le header reste net
         // sur n'importe quel fond de story, clair comme foncé. Pas de box.
@@ -203,7 +203,7 @@ struct StoryCommentRowView: View, Equatable {
     }
 
     private var languageSwitcher: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             LanguageFlagChip(code: comment.originalLanguage ?? "",
                              isActive: showOriginal,
                              metrics: .overlay) {
@@ -250,13 +250,13 @@ struct StoryCommentRowView: View, Equatable {
 
     private var actionRow: some View {
         let overlayColor = Self.legibleOverlayColor(for: colorScheme)
-        return HStack(spacing: 16) {
+        return HStack(spacing: MeeshySpacing.lg) {
             Button {
                 withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
                     onToggleLike()
                 }
             } label: {
-                HStack(spacing: 3) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     // Le contour à l'accent de l'auteur — « c'est MOI qui ai
                     // aimé ce commentaire ». Sans lui, un commentaire de story
                     // que j'avais aimé ne se distinguait que par sa teinte, la
@@ -276,8 +276,8 @@ struct StoryCommentRowView: View, Equatable {
                     .scaleEffect(isLiked ? 1.15 : 1.0)
                     if likeCount > 0 {
                         Text("\(likeCount)")
-                            .font(MeeshyFont.relative(11, weight: .semibold))
-                            .foregroundColor(isLiked ? MeeshyColors.error : overlayColor.opacity(0.85))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                            .foregroundColor(isLiked ? MeeshyColors.error : overlayColor.opacity(MeeshyOpacity.intense))
                     }
                 }
                 .contentShape(Rectangle())
@@ -303,13 +303,13 @@ struct StoryCommentRowView: View, Equatable {
             .accessibilityHint(String(localized: "a11y.comment.like.hint", defaultValue: "Aimer ce commentaire", bundle: .main))
 
             Button(action: onReply) {
-                HStack(spacing: 3) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     Image(systemName: "arrowshape.turn.up.left")
-                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                     Text(String(localized: "story.viewer.reply", defaultValue: "Répondre", bundle: .main))
-                        .font(MeeshyFont.relative(10.5, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 }
-                .foregroundColor(overlayColor.opacity(0.88))
+                .foregroundColor(overlayColor.opacity(MeeshyOpacity.intense))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -329,10 +329,10 @@ struct StoryCommentRowView: View, Equatable {
                 loadedReplies: loadedReplies,
                 onEdit: onCommitEdit == nil ? nil : { beginEditing() },
                 glyphSize: 13,
-                glyphColor: overlayColor.opacity(0.88)
+                glyphColor: overlayColor.opacity(MeeshyOpacity.intense)
             )
         }
-        .padding(.top, 2)
+        .padding(.top, MeeshySpacing.xxs)
         // Halo lisibilité sur la rangée d'actions (cœur + Répondre).
         .storyOverlayLegible(isLightText: colorScheme == .dark)
     }
@@ -345,31 +345,31 @@ extension StoryCommentRowView {
     private var editor: some View {
         let textColor = Self.legibleOverlayColor(for: colorScheme)
         let sendable = StoryCommentEditing.draftToSend(draft, original: comment.content) != nil
-        return VStack(alignment: .leading, spacing: 4) {
+        return VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             TextField("", text: $draft, axis: .vertical)
-                .font(MeeshyFont.relative(13.5))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(textColor)
                 .tint(textColor)
                 .lineLimit(1...6)
                 .focused($editorFocused)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.smPlus)
+                .padding(.vertical, MeeshySpacing.sm)
                 .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(textColor.opacity(0.12))
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
+                        .fill(textColor.opacity(MeeshyOpacity.light))
                 )
                 .accessibilityLabel(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
-            HStack(spacing: 16) {
+            HStack(spacing: MeeshySpacing.lg) {
                 Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) {
                     endEditing()
                 }
-                .font(MeeshyFont.relative(11, weight: .semibold))
-                .foregroundColor(textColor.opacity(0.8))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                .foregroundColor(textColor.opacity(MeeshyOpacity.intense))
                 .frame(minHeight: 44)
                 Button(String(localized: "common.save", defaultValue: "Enregistrer", bundle: .main)) {
                     commitEditing()
                 }
-                .font(MeeshyFont.relative(11, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
                 .foregroundColor(textColor.opacity(sendable ? 1 : 0.4))
                 .disabled(!sendable)
                 .frame(minHeight: 44)

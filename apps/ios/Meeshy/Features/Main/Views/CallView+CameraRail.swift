@@ -40,8 +40,8 @@ extension CallView {
     var cameraRail: some View {
         let actions = CallCameraRail.actions(from: currentActionSet)
         if cameraControlsPlacement == .topCenter && !actions.isEmpty {
-            VStack(spacing: 2) {
-                HStack(spacing: 10) {
+            VStack(spacing: MeeshySpacing.xxs) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     ForEach(actions, id: \.self) { action in
                         railActionButton(action)
                     }
@@ -49,8 +49,8 @@ extension CallView {
                 CallZoomRailSlot(placement: .topCenter)
             }
             .background(CallCameraZoomAccessibilityElement())
-            .padding(.vertical, 6)
-            .padding(.horizontal, 10)
+            .padding(.vertical, MeeshySpacing.xsPlus)
+            .padding(.horizontal, MeeshySpacing.smPlus)
             .callChromeGlass(in: Capsule())
             .accessibilityElement(children: .contain)
             .accessibilityLabel(CallControlsCopy.cameraRail)
