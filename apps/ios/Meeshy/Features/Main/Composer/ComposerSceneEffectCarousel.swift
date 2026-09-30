@@ -54,3 +54,34 @@ struct ComposerSceneEffectCarousel<Content: View>: View {
         .accessibilityLabel(Text(ComposerSceneEffectCopy.column))
     }
 }
+
+/// **Le carrousel d'OUVERTURE porte l'entrée ET la sortie de la slide** (#8792)
+/// — deux rangées des puces du SDK, la vue que l'atelier monte : une fermeture
+/// réglée ailleurs que son ouverture serait une seconde porte vers le même
+/// couple.
+struct ComposerSceneTransitionRows: View {
+    let opening: StoryTransitionEffect?
+    let closing: StoryTransitionEffect?
+    let onChoose: (ComposerSceneEffects.Choice) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            row(ComposerSceneEffectCopy.openingRow, selection: opening) { onChoose(.opening($0)) }
+            row(ComposerSceneEffectCopy.closingRow, selection: closing) { onChoose(.closing($0)) }
+        }
+    }
+
+    private func row(_ title: String,
+                     selection: StoryTransitionEffect?,
+                     onSelect: @escaping (StoryTransitionEffect?) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(MeeshyColors.textPrimary(isDark: true).opacity(0.75))
+                .accessibilityHidden(true)
+            OpeningEffectChips(selection: selection, onDarkSurface: true, onSelect: onSelect)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(title))
+    }
+}

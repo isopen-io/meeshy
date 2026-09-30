@@ -313,7 +313,9 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// persistance passe par la même chaîne `granularCanvasSync` — aucun
     /// callback de synchro à câbler par surface.
     @Published public var openingEffect: StoryTransitionEffect?
-    @Published var closingEffect: StoryTransitionEffect?
+    /// `public` en LECTURE (#8792) : le carrousel d'effets de la scène la
+    /// montre ; l'écriture passe par `setSlideTransitions`.
+    @Published public internal(set) var closingEffect: StoryTransitionEffect?
 
     // Per-slide background image transforms (persisted across slide changes)
     struct BackgroundTransform {

@@ -641,7 +641,7 @@ extension MeeshyComposerHost {
                         .frame(width: 1, height: 20)
                         .accessibilityHidden(true)
                     ComposerPublishMenu(entries: entries, armed: armedChoice,
-                                        onChoose: { armedPublishChoice = $0 }) {
+                                        onChoose: { chooseArmedPublish($0) }) {
                         publishChevronLabel
                     }
                     .accessibilityLabel(ComposerPublishMenuCopy.title)

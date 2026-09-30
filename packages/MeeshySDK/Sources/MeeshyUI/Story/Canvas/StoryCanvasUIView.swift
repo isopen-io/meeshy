@@ -123,6 +123,8 @@ public final class StoryCanvasUIView: UIView {
     /// Transport timeline en lecture pendant la preview : bascule la
     /// stratégie vidéo entre seek-en-pause (scrub) et lecture muette calée.
     var timelinePreviewPlaying: Bool = false
+    /// La répétition des transitions en composition (#8792) — `nil` au repos.
+    var transitionRehearsal: StoryCanvasTransitionRehearsalRun?
 
     /// Corner radius (in this view's own coordinate space) applied to the
     /// backing layer so the rounded « card » clips the actual CALayer story

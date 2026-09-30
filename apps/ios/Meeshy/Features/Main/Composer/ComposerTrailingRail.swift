@@ -359,17 +359,28 @@ nonisolated enum ComposerTrailingRailCopy {
     }
 }
 
-/// Les mots des EFFETS de la scène (#8712). Le filtre garde le mot de
-/// l'éditeur d'objet : deux libellés pour une seule grille se contrediraient.
+/// Les mots des EFFETS de la scène (#8712, #8792) : deux familles, deux noms.
 nonisolated enum ComposerSceneEffectCopy {
     static func label(_ effect: ComposerSceneEffect) -> String {
         switch effect {
-        case .filter:
-            return ComposerObjectEditorCopy.media(.filter)
         case .opening:
             return String(localized: "composer.scene.effect.opening",
                           defaultValue: "Effet d'ouverture", bundle: .main)
+        case .visual:
+            return String(localized: "composer.scene.effect.visual",
+                          defaultValue: "Effet visuel", bundle: .main)
         }
+    }
+
+    /// Les deux rangées du carrousel d'ouverture : l'entrée, puis la sortie.
+    static var openingRow: String {
+        String(localized: "composer.scene.effect.openingRow",
+               defaultValue: "Ouverture", bundle: .main)
+    }
+
+    static var closingRow: String {
+        String(localized: "composer.scene.effect.closingRow",
+               defaultValue: "Fermeture", bundle: .main)
     }
 
     static var column: String {
