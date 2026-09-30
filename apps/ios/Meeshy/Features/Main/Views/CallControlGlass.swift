@@ -83,7 +83,20 @@ private struct CallChromeVisibilityModifier: ViewModifier {
     func body(content: Content) -> some View {
         let accepts = acceptsTouches
         let isFadingOut = accepts && !isVisible
-        content
+        // Au terme du fondu, le contenu est RETIRÉ du rendu, pas seulement
+        // rendu transparent : dans un `GlassEffectContainer` (iOS 26) le verre
+        // est composé par le conteneur, qui ignore l'opacité de ses enfants.
+        // La pilule restait donc dessinée après le masquage automatique —
+        // visible mais sourde : le premier toucher sur « Micro » ne faisait
+        // que rallumer le chrome (2026-09-30, simulateur). `hidden()` garde
+        // sa place dans la mise en page : rien ne saute.
+        Group {
+            if accepts {
+                content
+            } else {
+                content.hidden()
+            }
+        }
             .opacity(isVisible ? 1 : 0)
             .simultaneousGesture(
                 TapGesture().onEnded { reportInteraction?(.revive) },

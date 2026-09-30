@@ -123,6 +123,9 @@ extension CallView {
             }
             .padding(.bottom, 80)
         }
+        // L'écran entier : l'aperçu de l'appelant posé derrière (`CallView`,
+        // état `.connecting`) ne se limite pas à la colonne des boutons.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Ended
