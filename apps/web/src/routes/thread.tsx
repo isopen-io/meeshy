@@ -27,6 +27,7 @@ import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-
 import { apiDeps } from '@/lib/api/deps';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
 import { markCaughtUp } from '@/lib/api/receipts';
+import { clearConversationBanners } from '@/lib/notifications/conversation-banners';
 import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
@@ -528,6 +529,8 @@ export default function ThreadScreen() {
       caughtUpToMessageId,
       deps: { ...apiDeps, store: conversationStore, queryClient },
     });
+    /* Le fil lu quitte la barre de notifications, comme sur iOS (#8781). */
+    void clearConversationBanners(markedConversationId);
   }, [queryClient, noteAfterReadSeen]);
   /* (W14 #7372) Le suivi de lecture se suspend de lui-même sous une couche
      modale — visionneuse plein écran comprise, que cet écran ne monte pas :

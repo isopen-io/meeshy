@@ -100,7 +100,7 @@ export function AudienceSheet({
               onClick={() => {
                 if (availability.choosable) onChoose(availability.audience);
               }}
-              className="flex w-full items-center gap-3 px-4 text-left"
+              className="flex w-full items-center gap-3 px-4 text-start"
               style={{ minHeight: 60, color: choosable ? 'var(--color-ios-ink)' : 'var(--color-ios-ink-3)' }}
             >
               <GlyphSvg glyph={AUDIENCE_GLYPH[visibility]} size={22} className="shrink-0" />

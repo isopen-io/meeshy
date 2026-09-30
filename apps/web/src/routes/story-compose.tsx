@@ -79,9 +79,13 @@ import { href, navigate } from '@/routes/route-table';
 import { StudioShell } from '@/routes/story-compose-shell';
 import { AudienceChip, type AudienceSource } from '@/routes/story-compose-audience';
 import { publicationRefusalText, studioAssetsShown, StudioFooterMessage, studioFooterSpeaks, StudioPageAssets, type StudioPlaceRefusalNotice, type StudioPublishFailureNotice } from '@/routes/story-compose-footer';
-import { StudioAnimatedToggle, StudioMoreMenu, StudioPostTextButton, type StudioMenuItem } from '@/routes/story-compose-chrome';
+import { FrameMark, StudioAnimatedToggle, StudioMoreMenu, StudioPostTextButton, StudioTile, type StudioMenuItem } from '@/routes/story-compose-chrome';
 import { StudioRefusal } from '@/routes/story-compose-parts';
-import { StudioLeadingRail, StudioTrailingRail } from '@/routes/story-compose-rail';
+import { StudioLeadingRail } from '@/routes/story-compose-rail';
+import { StudioAddSceneButton } from '@/routes/story-compose-scene-rails';
+import { withBackgroundForward, withOverlayAsBackground } from '@/lib/stories/studio-scene-edit';
+import { useStudioReelAutoSwitch } from '@/routes/use-studio-reel-auto-switch';
+import { useStudioSceneColumns } from '@/routes/use-studio-scene-columns';
 import { StudioScene } from '@/routes/story-compose-scene';
 import { revokePageMedia, studioPlacer } from '@/routes/story-compose-place';
 import { useStudioBackgroundSound } from '@/routes/use-studio-background-sound';
@@ -510,7 +514,7 @@ function StoryStudio({
       visibility: current.visibility,
       language,
       postText: current.postText,
-      promotedFromPost: promoted,
+      promotedFromPost: promoted || reelAuto.autoArmed,
       signal: send.signal,
       onPublished: ({ pageIds, published, total }) => {
         dropPublishedPages(pageIds);
@@ -555,6 +559,8 @@ function StoryStudio({
   }
 
   const reelOffer = useStudioReelOffer({ lang, draft, choice, setChoice, publish: (chosen, promoted) => void publish(chosen, promoted) });
+  /** LA BASCULE POST → RÉEL (#8794) — le chevron la verrouille (`authorChose`). */
+  const reelAuto = useStudioReelAutoSwitch({ lang, draft, entryKind: initialKind, enabled: !retouching, setChoice });
   const publishRef = useRef(publish);
   publishRef.current = publish;
   useEffect(() => {
@@ -617,6 +623,10 @@ function StoryStudio({
     edit,
     select: (id) => setDraft((current) => withSelected(current, id)),
     removeOverlay: () => remove('overlay'),
+    overlayToBackground: () => {
+      ALL_DOORS.filter((door) => door !== 'sound').forEach((door) => forgetUpload(page.id, door));
+      edit(withOverlayAsBackground);
+    },
     closeFrame: () => setFrameOpen(false),
   });
 
@@ -666,6 +676,42 @@ function StoryStudio({
     onTake: (file) => place('visual', file),
     ...(deps.camera !== undefined ? { engine: deps.camera } : {}),
   });
+  const animatedToggle = <StudioAnimatedToggle lang={lang} active={animated} onToggle={toggleAnimated} disabled={publishing} />;
+  const toggleFrame = () => {
+    setEditingId(null);
+    setFrameOpen((open) => !open);
+  };
+  /** LES COLONNES DE LA SCÈNE (#8715, #8794) — options de l'objet touché ou
+   * effets du fond à droite, l'historique en bas ; le carrousel d'effets à la
+   * place de l'audience et de Publier ; le menu d'appui long du fond. */
+  const columns = useStudioSceneColumns({
+    lang,
+    page,
+    kind,
+    locked: publishing,
+    retouching,
+    tool,
+    timeline: { open: timelineOpen, onToggle: animated ? toggleTime : null },
+    history: { onUndo: !timelineOpen && historyRef.current.past.length > 0 ? undo : null, onRedo: !timelineOpen && historyRef.current.future.length > 0 ? redo : null },
+    objects: {
+      ids: stageObjects.map((object) => object.id),
+      nameOf: objectName,
+      actionsOf: objectActions,
+      onDeselect: () => setDraft((current) => withSelected(current, null)),
+    },
+    edit,
+    stageRef,
+    background: {
+      onEdit: toggleFrame,
+      onRetake: quick.retake,
+      onForward: () => {
+        forgetUpload(page.id, 'visual');
+        edit(withBackgroundForward);
+      },
+      onRemove: () => remove('visual'),
+    },
+    hidden: !chrome.trailingRail,
+  });
   /** « Entre ici » / « Sort ici » — la fenêtre de l'objet SÉLECTIONNÉ, à la tête. */
   const moveSelectedEdge = (head: number, law: (timing: StudioTiming, head: number, duration: number) => StudioTiming) => {
     const track = studioTracks(page).find((candidate) => candidate.id === selectedId);
@@ -673,7 +719,6 @@ function StoryStudio({
   };
   const trackLabel = (track: StudioTrack): string =>
     track.kind === 'overlay' ? translate(lang, 'story.studio.timeline.overlay') : (page.texts.find((layer) => layer.id === track.id)?.text.trim() ?? '');
-  const history = historyRef.current;
   const menuItems: readonly StudioMenuItem[] = [
     ...(previewDocument !== null ? [{ id: 'preview', label: translate(lang, 'story.studio.preview'), onSelect: () => setPreviewOpen(true) }] : []),
     ...(draft.pages.length > 1
@@ -697,7 +742,9 @@ function StoryStudio({
       menu={
         retouching ? undefined : (
           <>
-            <StudioAnimatedToggle lang={lang} active={animated} onToggle={toggleAnimated} disabled={publishing} />
+            {!timelineOpen && draft.pages.length < STUDIO_PAGE_MAX ? (
+              <StudioAddSceneButton lang={lang} onAdd={() => edit((current) => withAddedPage(current, language))} disabled={publishing} />
+            ) : null}
             <StudioMoreMenu lang={lang} items={menuItems} disabled={publishing} />
           </>
         )
@@ -727,8 +774,22 @@ function StoryStudio({
           </p>
         ) : null}
 
-        {timelineOpen ? null : (
-          <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} onAddText={addTextAndWrite} sound={!retouching} hidden={!chrome.leadingRail} {...(retouching ? {} : { onImport: importMedia })} />
+        {/* Frise ouverte, les portes cèdent : seul l'ÉCLAIR reste, là où il a
+            ouvert le mode — le geste qui l'éteint demeure à sa place. */}
+        {timelineOpen ? (
+          <div data-story-scene-toggles className="absolute start-2.5 top-1/2 z-10 -translate-y-1/2 p-0.5">
+            {animatedToggle}
+          </div>
+        ) : (
+          <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} onAddText={addTextAndWrite} sound={!retouching} hidden={!chrome.leadingRail} {...(retouching ? {} : { onImport: importMedia })}>
+            {/* L'ÉCLAIR puis le CADRE, après les portes (#8713). */}
+            {retouching ? null : animatedToggle}
+            {page.background !== null ? (
+              <StudioTile label={translate(lang, 'story.studio.tile.frame')} probe="frame" pressed={frameOpen} onPress={toggleFrame} disabled={publishing}>
+                <FrameMark size={20} />
+              </StudioTile>
+            ) : null}
+          </StudioLeadingRail>
         )}
 
         {/* 10 px de RESPIRATION de chaque côté (lot 7, la marge des rails d'iOS) :
@@ -765,8 +826,10 @@ function StoryStudio({
             nameOf: objectName,
             onSelect: (id) => {
               if (id !== editing) setEditingId(null);
+              columns.onSelectObject(id);
               setDraft((current) => withSelected(current, id));
             },
+            ...(columns.onBackgroundMenu !== undefined ? { onBackgroundMenu: columns.onBackgroundMenu } : {}),
             onEdit: startEditing,
             onCommit: commitPoseOf,
             onMenu: (id, point) => setObjectMenu({ id, point }),
@@ -775,28 +838,9 @@ function StoryStudio({
           }}
         />
 
-        {/* LE RAIL DROIT (#8516, `ComposerTrailingRail.tiles`) : annuler,
-            rétablir, Temps, Cadre, nouvelle scène. Frise ouverte, seul Temps
-            reste — le geste qui la RANGE demeure là où il l'a ouverte. */}
-        <StudioTrailingRail
-          lang={lang}
-          locked={publishing}
-          onUndo={!timelineOpen && history.past.length > 0 ? undo : null}
-          onRedo={!timelineOpen && history.future.length > 0 ? redo : null}
-          timeOpen={timelineOpen}
-          onToggleTime={animated ? toggleTime : null}
-          frameOpen={frameOpen}
-          onToggleFrame={
-            !timelineOpen && page.background !== null
-              ? () => {
-                  setEditingId(null);
-                  setFrameOpen((open) => !open);
-                }
-              : null
-          }
-          onAddPage={!timelineOpen && draft.pages.length < STUDIO_PAGE_MAX && !retouching ? () => edit((current) => withAddedPage(current, language)) : null}
-          hidden={!chrome.trailingRail}
-        />
+        {/* LA COLONNE DROITE (#8713, #8714) — options du moment en haut,
+            l'historique toujours en bas. */}
+        {columns.trailing}
       </div>
 
       {/* LE SOCLE — sous la scène, jamais sur elle. Les contrôleurs de l'outil
@@ -924,6 +968,8 @@ function StoryStudio({
               <StudioPostTextFrame lang={lang} value={draft.postText} onChange={(value) => setDraft((current) => withPostText(current, value))} onClose={() => setPostTextOpen(false)} />
             </Suspense>
           </div>
+        ) : columns.carousel !== null ? (
+          <div className="pb-3">{columns.carousel}</div>
         ) : (
           <div data-story-socle-row className={`flex items-center gap-2.5 pb-3 ${chrome.socleRow ? '' : 'hidden'}`}>
             <AudienceChip lang={lang} value={audienceValue} source={audienceSource} open={audienceOpen} onOpen={openAudience} disabled={publishing} />
@@ -948,7 +994,10 @@ function StoryStudio({
               audienceLabelOf={(candidate) => translate(lang, audienceLabelKey(audienceOf(candidate)))}
               layoutsServedFor={(candidate) => layoutIsServed({ publishablePageCount, kind: candidate })}
               onPrimary={reelOffer.requestPublish}
-              onChoose={reelOffer.choose}
+              onChoose={(chosen) => {
+                reelAuto.authorChose();
+                reelOffer.choose(chosen);
+              }}
             />
             ) : null}
           </div>
@@ -956,7 +1005,9 @@ function StoryStudio({
       </footer>
 
       {reelOffer.dialog}
+      {reelAuto.announcement}
       {quick.cameraLayer}
+      {columns.backgroundMenu}
       {audienceOpen ? (
         <Suspense fallback={null}>
           <AudienceSheet

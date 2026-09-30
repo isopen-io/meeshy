@@ -70,7 +70,7 @@ const MENU_PADDING = 8;
  * 42×42, sous ce plancher, exactement comme le bouton de `message-blocks.tsx`
  * qui porte déjà `size-[34px]` pour la même raison.
  *
- * La RÉSERVE du `Link` voisin (`pr-12`, 48 px dans `lens-row.tsx`) est
+ * La RÉSERVE du `Link` voisin (`pe-12`, 48 px dans `lens-row.tsx`) est
  * dimensionnée sur ce débord : 8 (droite) + 34 (bouton) + 5 (débord) = 47 < 48
  * — le `::after` ne mord donc jamais sur le badge de non-lus, dont il volerait
  * sinon le clic (même défaut que le débord de `tap-target-22` corrigé en #5566).
@@ -199,7 +199,7 @@ export function RowActions({
      * bouton le reprend, à `pointer-events: auto`, quand il est réellement
      * actionnable.
      */
-    <div className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2">
+    <div className="pointer-events-none absolute top-1/2 end-2 -translate-y-1/2">
       <button
         ref={buttonRef}
         type="button"
@@ -240,7 +240,7 @@ export function RowActions({
          * restait donc `opacity-0 pointer-events-none` en PERMANENCE sur
          * toute rangée non magnifiée : les actions de rangée n'existaient
          * tout simplement pas au doigt, alors que la place qu'elles occupent
-         * est déjà réservée en permanence (`pr-12` constant, `lens-row.tsx`)
+         * est déjà réservée en permanence (`pe-12` constant, `lens-row.tsx`)
          * — les rendre visibles ne déplace donc rien. La règle vit HORS de
          * tout `@layer` (à la différence des `@utility` voisins) : un style
          * non calqué l'emporte toujours sur un style calqué, quels que soient
@@ -295,7 +295,7 @@ export function RowActions({
                     event.stopPropagation();
                     choose(item.id);
                   }}
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-title font-medium"
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-start text-title font-medium"
                   style={{ color: 'var(--color-ios-ink)', minHeight: 44 }}
                 >
                   {item.glyph === 'videoCamera' ? (

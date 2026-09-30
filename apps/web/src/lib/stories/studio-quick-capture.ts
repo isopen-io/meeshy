@@ -31,34 +31,54 @@ export function quickCaptureOffered({
   return pageBlank && !toolOpen && !timelineOpen && !retouching && !locked && !cameraOpen;
 }
 
-/** `photo` : la caméra s'ouvre ET prend la photo dès qu'elle voit. `arm` : un
- * réel attend du mouvement — elle s'ouvre, rien n'est pris (une image dans un
- * format vidéo serait une faute plus grave qu'un geste de plus). */
-export type QuickCaptureTap = 'photo' | 'arm';
-
-export function quickCaptureTap(kind: PublicationKind): QuickCaptureTap {
-  return kind === 'REEL' ? 'arm' : 'photo';
+/**
+ * **LA PHOTO EN DEUX TEMPS** (#8715, jumelle de #8711 — directive porteur
+ * 2026-09-29 : « le premier tap arme et affiche avec les contrôleurs (flash,
+ * changement d'optique) habituels, second tap n'importe où sur la scène prend
+ * la photo »). Le premier toucher ARME le viseur, quel que soit le format :
+ * rien n'est pris. Elle supplante le « un toucher ouvre et prend » de #8654 —
+ * une photo prise avant que l'auteur voie son cadre et règle son flash est un
+ * cliché qu'il n'a pas composé.
+ *
+ * **Le second toucher, sur le viseur armé** : la photo ne part que d'un
+ * viseur qui VOIT, rien en cours, dans un format qui la sert (un réel filme).
+ */
+export function quickCaptureArmedTap({
+  live,
+  recording,
+  busy,
+  kind,
+}: {
+  readonly live: boolean;
+  readonly recording: boolean;
+  readonly busy: boolean;
+  readonly kind: PublicationKind;
+}): 'take-photo' | 'ignore' {
+  return live && !recording && !busy && kind !== 'REEL' ? 'take-photo' : 'ignore';
 }
 
 /**
- * **UN GESTE, UNE LIGNE, SON ICÔNE** (#8672, retour porteur 2026-09-29) :
- * « L'instruction de taper photo peut avoir l'appareil photo au-devant, et à
- * la ligne une caméra vidéo pour la partie long press pour filmer. » Un réel
- * n'offre que la seconde.
+ * **UN GESTE, UNE LIGNE, SON ICÔNE** (#8672) — la photo a DEUX lignes depuis
+ * #8711 (toucher arme, toucher encore prend), la vidéo une. Un réel n'offre
+ * que la vidéo.
  */
 export type QuickCaptureHintLine = {
-  readonly glyph: 'camera' | 'video';
-  readonly key: Extract<InterfaceCatalogKey, 'story.studio.camera.quick.tapPhoto' | 'story.studio.camera.quick.holdFilm' | 'story.studio.camera.quick.videoOnly'>;
+  readonly glyph: 'viewfinder' | 'camera' | 'video';
+  readonly key: Extract<
+    InterfaceCatalogKey,
+    'story.studio.camera.quick.tapArm' | 'story.studio.camera.quick.tapAgain' | 'story.studio.camera.quick.holdFilm' | 'story.studio.camera.quick.videoOnly'
+  >;
 };
 
 const PHOTO_AND_FILM: readonly QuickCaptureHintLine[] = [
-  { glyph: 'camera', key: 'story.studio.camera.quick.tapPhoto' },
+  { glyph: 'viewfinder', key: 'story.studio.camera.quick.tapArm' },
+  { glyph: 'camera', key: 'story.studio.camera.quick.tapAgain' },
   { glyph: 'video', key: 'story.studio.camera.quick.holdFilm' },
 ];
 const FILM_ONLY: readonly QuickCaptureHintLine[] = [{ glyph: 'video', key: 'story.studio.camera.quick.videoOnly' }];
 
 export function quickCaptureHintLines(kind: PublicationKind): readonly QuickCaptureHintLine[] {
-  return quickCaptureTap(kind) === 'photo' ? PHOTO_AND_FILM : FILM_ONLY;
+  return kind === 'REEL' ? FILM_ONLY : PHOTO_AND_FILM;
 }
 
 /** Relâcher l'appui long : clore la prise, ou — la caméra ne filmait pas

@@ -14,6 +14,9 @@ import {
   NotificationsSkeleton,
 } from './notifications';
 import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
+import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
+
+await loadNotificationRowCatalog('fr');
 
 /**
  * LA CLOCHE DESSINÉE (#6288) — chaque état est un composant PUR, rendu sans
@@ -272,5 +275,80 @@ describe('la rangée « était sur Meeshy récemment »', () => {
 
   test('elle mène au profil de X', () => {
     expect(row(back)).toContain('href="/u/marie"');
+  });
+});
+
+/**
+ * UNE LIGNE QUI NE SE RÉPÈTE PAS ET DIT SON CONTEXTE (#8727, jumelle de #8724) —
+ * la capture porteur : « Belva a réagi ❤️ à votre commentaire » montrait le
+ * commentaire DEUX fois, sans dire le post. Un badge ne disait pas lequel.
+ */
+describe('la rangée dit son contexte, une fois', () => {
+  const occurrences = (html: string, text: string) => html.split(text).length - 1;
+
+  test('réaction à un commentaire : le commentaire UNE fois, le post en pied avec son icône', () => {
+    const html = row(
+      record({
+        type: 'comment_reaction',
+        title: 'Belva Tano a réagi ❤️ à votre commentaire',
+        content: 'Superbe features',
+        actor: { id: 'u-belva', username: 'belva', displayName: 'Belva Tano', avatar: null },
+        context: { postId: 'p1' },
+        metadata: { commentPreview: 'Superbe features', postPreview: 'Le lac au matin', postType: 'POST' },
+      }),
+    );
+    expect(occurrences(html, 'Superbe features')).toBe(1);
+    expect(html).toContain('data-notification-footer="content"');
+    expect(html).toContain('Le lac au matin');
+  });
+
+  test('un badge débloqué se nomme, avec son médaillon et son palier', () => {
+    const html = row(
+      record({
+        type: 'badge_earned',
+        title: 'Badge débloqué',
+        content: 'Badge débloqué : Stories · palier 10',
+        actor: null,
+        context: {},
+        metadata: { axisKey: 'content.story', threshold: 10 },
+      }),
+    );
+    expect(html).toContain('data-notification-milestone');
+    expect(html).toContain('>Stories<');
+    expect(html).toContain('Badge débloqué · palier 10');
+  });
+
+  test('l’ami parrainé : « Écrire » et « Se connecter », HORS du lien — « Écrire » seul entre amis', () => {
+    const invite = record({
+      type: 'badge_earned',
+      title: 'Badge débloqué',
+      content: '',
+      actor: { id: 'u-awa', username: 'awa', displayName: 'Awa', avatar: null },
+      context: {},
+      metadata: { axisKey: 'social.invite_joined', threshold: 1 },
+    });
+    const withActions = (isFriend: boolean, connectRequested = false) =>
+      renderToStaticMarkup(
+        <ul>
+          <NotificationRow
+            notification={invite}
+            language="fr"
+            now={NOW}
+            onOpen={noop}
+            onMarkRead={noop}
+            onDelete={noop}
+            onQuickAction={noop}
+            isFriend={isFriend}
+            connectRequested={connectRequested}
+          />
+        </ul>,
+      );
+    const stranger = withActions(false);
+    expect(stranger).toContain('Awa a rejoint Meeshy grâce à vous');
+    expect(stranger).toContain('data-quick-action="write"');
+    expect(stranger).toContain('data-quick-action="connect"');
+    expect(stranger.indexOf('data-notification-quick-actions')).toBeGreaterThan(stranger.lastIndexOf('</a>'));
+    expect(withActions(true)).not.toContain('data-quick-action="connect"');
+    expect(withActions(false, true)).toContain('Demande envoyée');
   });
 });

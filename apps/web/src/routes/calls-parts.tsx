@@ -71,7 +71,7 @@ export function CallsHeader({ language, edit }: { readonly language: InterfaceLa
         style={{ color: BRAND, outlineColor: BRAND }}
       >
         <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} />
+          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
         </ChromeActionDisc>
       </Link>
       <h1 className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: INK }}>
@@ -196,7 +196,7 @@ export function CallFilterRail({
 function CallsSearchField({ language, search }: { readonly language: InterfaceLanguage; readonly search: CallsSearch }) {
   return (
     <span
-      className="flex min-w-0 flex-1 items-center gap-1.5 rounded-chip pl-2.5"
+      className="flex min-w-0 flex-1 items-center gap-1.5 rounded-chip ps-2.5"
       style={{ height: 32, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)', color: INK_2 }}
     >
       <Glyph name="magnifyingGlass" size={14} />
@@ -288,7 +288,7 @@ export const CallRow = memo(function CallRow({
         params={{ callId: record.callId }}
         aria-label={label}
         data-call-row
-        className="flex min-w-0 flex-1 items-center gap-3.5 py-3 pl-5 pr-2 focus-visible:outline-2 focus-visible:-outline-offset-2"
+        className="flex min-w-0 flex-1 items-center gap-3.5 py-3 ps-5 pe-2 focus-visible:outline-2 focus-visible:-outline-offset-2"
         style={{ minHeight: CALL_ROW_HEIGHT, outlineColor: BRAND }}
       >
         <Avatar initials={initialsOf(name)} color={colorForName(name)} size={44} {...(avatar === null ? {} : { src: avatar })} />
@@ -340,7 +340,7 @@ export const CallRow = memo(function CallRow({
             isGroup: record.conversationType !== 'direct',
           })
         }
-        className="mr-3 grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="me-3 grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: BRAND, outlineColor: BRAND }}
       >
         {record.isVideo ? <CallGlyph name="videoCamera" size={20} /> : <Glyph name="phone" size={20} />}
@@ -351,7 +351,7 @@ export const CallRow = memo(function CallRow({
           data-call-hide
           aria-label={translate(language, 'calls.hide.named', { name })}
           onClick={() => onHide(record.callId)}
-          className="mr-3 grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="me-3 grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ color: MISSED_INK, outlineColor: MISSED_INK }}
         >
           <CallGlyph name="trash" size={20} />

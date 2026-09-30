@@ -145,13 +145,14 @@ final class ComposerSceneColumnsTests: XCTestCase {
         XCTAssertEqual(Set(options.map(\.id)).count, options.count)
     }
 
-    // MARK: - Les effets d'une scène à fond média (#8712)
+    // MARK: - Les effets d'une scène à fond média (#8712, #8792)
 
-    func test_served_fondImage_filtresPuisOuverture() {
-        XCTAssertEqual(ComposerSceneEffects.served(background: .image), [.filter, .opening])
+    func test_served_fondImage_ouvertureEtEffetVisuel_deuxFamilles() {
+        XCTAssertEqual(ComposerSceneEffects.served(background: .image), [.opening, .visual],
+                       "deux familles nettes : l'effet d'ouverture (et sa fermeture) puis l'effet visuel")
     }
 
-    func test_served_fondVideo_sansFiltre() {
+    func test_served_fondVideo_sansEffetVisuel() {
         XCTAssertEqual(ComposerSceneEffects.served(background: .video), [.opening],
                        "le filtre ne se cuit que dans une image : sur une vidéo il serait inerte")
     }
@@ -160,43 +161,84 @@ final class ComposerSceneColumnsTests: XCTestCase {
         XCTAssertEqual(ComposerSceneEffects.served(background: nil), [])
     }
 
+    func test_symbol_deuxFamilles_deuxIcones() {
+        XCTAssertNotEqual(ComposerSceneEffect.opening.symbol, ComposerSceneEffect.visual.symbol)
+    }
+
+    func test_label_deuxFamilles_deuxNoms() {
+        XCTAssertNotEqual(ComposerSceneEffectCopy.label(.opening), ComposerSceneEffectCopy.label(.visual))
+    }
+
     func test_options_sceneAFondMedia_effetsDeHautEnBas_ouvertMarque() {
         let options = ComposerTrailingColumn.options(for: ComposerTrailingColumn.focus(
             railMode: .doors([]), selection: nil,
-            effects: [.filter, .opening], openEffect: .opening))
-        XCTAssertEqual(options, [.sceneEffect(.filter, isOpen: false), .sceneEffect(.opening, isOpen: true)])
+            effects: [.opening, .visual], openEffect: .opening))
+        XCTAssertEqual(options, [.sceneEffect(.opening, isOpen: true), .sceneEffect(.visual, isOpen: false)])
         XCTAssertFalse(options.contains(where: \.isExit), "la scène n'a pas de mode à quitter")
     }
 
     func test_focus_effetOuvertNonServi_nEstPasMarque() {
         XCTAssertEqual(ComposerTrailingColumn.focus(railMode: .doors([]), selection: nil,
-                                                    effects: [.opening], openEffect: .filter),
+                                                    effects: [.opening], openEffect: .visual),
                        .scene(effects: [.opening], open: nil))
     }
 
     func test_focus_objetTouche_remplaceLesEffets() {
         let focus = ComposerTrailingColumn.focus(railMode: .doors([]),
                                                  selection: (sections: [.timing], actions: [.delete]),
-                                                 effects: [.filter], openEffect: .filter)
+                                                 effects: [.visual], openEffect: .visual)
         XCTAssertEqual(focus, .object(sections: [.timing], actions: [.delete]))
     }
 
     func test_toggled_retoucherLEffetOuvert_leReferme() {
-        XCTAssertEqual(ComposerSceneEffects.toggled(.filter, open: nil), .filter)
-        XCTAssertNil(ComposerSceneEffects.toggled(.filter, open: .filter))
-        XCTAssertEqual(ComposerSceneEffects.toggled(.opening, open: .filter), .opening)
+        XCTAssertEqual(ComposerSceneEffects.toggled(.visual, open: nil), .visual)
+        XCTAssertNil(ComposerSceneEffects.toggled(.visual, open: .visual))
+        XCTAssertEqual(ComposerSceneEffects.toggled(.opening, open: .visual), .opening)
     }
 
     func test_carousel_neVitQueSurUneSceneLibre() {
-        XCTAssertEqual(ComposerSceneEffects.carousel(open: .filter, served: [.filter],
-                                                     objectSelected: false, toolIsOpen: false), .filter)
-        XCTAssertNil(ComposerSceneEffects.carousel(open: .filter, served: [.opening],
+        XCTAssertEqual(ComposerSceneEffects.carousel(open: .visual, served: [.visual],
+                                                     objectSelected: false, toolIsOpen: false), .visual)
+        XCTAssertNil(ComposerSceneEffects.carousel(open: .visual, served: [.opening],
                                                    objectSelected: false, toolIsOpen: false),
-                     "un fond devenu vidéo referme le carrousel des filtres")
-        XCTAssertNil(ComposerSceneEffects.carousel(open: .filter, served: [.filter],
+                     "un fond devenu vidéo referme le carrousel des effets visuels")
+        XCTAssertNil(ComposerSceneEffects.carousel(open: .visual, served: [.visual],
                                                    objectSelected: true, toolIsOpen: false))
-        XCTAssertNil(ComposerSceneEffects.carousel(open: .filter, served: [.filter],
+        XCTAssertNil(ComposerSceneEffects.carousel(open: .visual, served: [.visual],
                                                    objectSelected: false, toolIsOpen: true))
+    }
+
+    // MARK: - Choisir un effet REJOUE l'ouverture puis la fermeture (#8792)
+
+    private let courant = ComposerSceneEffects.Transitions(opening: .zoom, closing: .fade)
+
+    func test_transitions_choisirUneOuverture_gardeLaFermeture() {
+        XCTAssertEqual(ComposerSceneEffects.transitions(after: .opening(.slide), from: courant),
+                       .init(opening: .slide, closing: .fade))
+    }
+
+    func test_transitions_choisirUneFermeture_gardeLOuverture() {
+        XCTAssertEqual(ComposerSceneEffects.transitions(after: .closing(.reveal), from: courant),
+                       .init(opening: .zoom, closing: .reveal))
+        XCTAssertEqual(ComposerSceneEffects.transitions(after: .closing(nil), from: courant),
+                       .init(opening: .zoom, closing: nil))
+    }
+
+    func test_transitions_choisirUnEffetVisuel_neToucheAucuneTransition() {
+        XCTAssertEqual(ComposerSceneEffects.transitions(after: .visual("bw"), from: courant), courant)
+    }
+
+    func test_rehearsal_chaqueChoix_rejoueLOuvertureSelectionneePuisLaFermeture() {
+        XCTAssertEqual(ComposerSceneEffects.rehearsal(after: .opening(.slide), from: courant),
+                       StoryTransitionRehearsal(opening: .slide, closing: .fade))
+        XCTAssertEqual(ComposerSceneEffects.rehearsal(after: .visual("bw"), from: courant),
+                       StoryTransitionRehearsal(opening: .zoom, closing: .fade),
+                       "un effet visuel se montre EN SITUATION : la scène rejoue son entrée et sa sortie")
+    }
+
+    func test_rehearsal_aucuneTransition_rienARejouer() {
+        XCTAssertNil(ComposerSceneEffects.rehearsal(after: .visual("bw"),
+                                                    from: .init(opening: nil, closing: nil)))
     }
 
     // MARK: - La scène REMONTE, jamais ne descend (#8712)

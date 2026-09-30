@@ -95,7 +95,7 @@ function RowText({ label, caption, captionId }: { readonly label: string; readon
 function Chevron() {
   return (
     <span aria-hidden="true" className="shrink-0" style={{ color: SECTION_INK_2 }}>
-      <GlyphSvg glyph={SETTINGS_GLYPHS.caretRight} size={12} />
+      <GlyphSvg glyph={SETTINGS_GLYPHS.caretRight} size={12} className="rtl:-scale-x-100" />
     </span>
   );
 }
@@ -110,7 +110,7 @@ export function SettingsHeaderBar({ language }: { readonly language: InterfaceLa
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
         <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} />
+          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
         </ChromeActionDisc>
       </Link>
       <h1 className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: SECTION_INK }}>

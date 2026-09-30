@@ -36,6 +36,7 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         func updateIceServers(_ servers: [IceServer]) { iceServerUpdateCount += 1 }
         func audioLevel() async -> Double? { audioLevelResult }
         func close() { closeCallCount += 1 }
+        func sendControl(_ data: Data) {}
     }
 
     @MainActor

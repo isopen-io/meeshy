@@ -253,7 +253,7 @@ function FeedPostText({
              texte en ligne). La première forme reprenait les 24 pt d'iOS,
              qui n'a pas la même loi de cible : 24 px est le PLANCHER de
              WCAG 2.5.8, pas la règle d'ici (revue-correction #5893). */
-          className="pb-1.5 text-left text-check font-semibold"
+          className="pb-1.5 text-start text-check font-semibold"
           style={{ color: 'var(--color-ios-brand)', minHeight: 44 }}
         >
           {translate(language, expanded ? 'feed.post.see_less' : 'feed.post.see_more')}

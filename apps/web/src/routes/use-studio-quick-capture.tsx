@@ -4,7 +4,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
 import { readFlashIntensity, writeFlashIntensity } from '@/lib/stories/studio-capture-gestures';
-import { quickCaptureHintLines, quickCaptureOffered, quickCaptureTap } from '@/lib/stories/studio-quick-capture';
+import { quickCaptureHintLines, quickCaptureOffered } from '@/lib/stories/studio-quick-capture';
 import type { StudioCameraIntent, StudioHoldDrag } from '@/routes/story-compose-camera';
 import type { StudioSceneCapture } from '@/routes/story-compose-scene';
 
@@ -46,13 +46,20 @@ export function useStudioQuickCapture({
   readonly onTake: (file: File) => void;
   /** Injectable pour les témoins ; la production prend le moteur navigateur. */
   readonly engine?: CameraEngine;
-}): { readonly capture: StudioSceneCapture | null; readonly cameraOpen: boolean; readonly cameraLayer: ReactNode } {
+}): {
+  readonly capture: StudioSceneCapture | null;
+  readonly cameraOpen: boolean;
+  readonly cameraLayer: ReactNode;
+  /** « Reprendre une photo » (#8716) — le viseur ARMÉ sur une scène qui a
+   * déjà un fond : la prise le remplace, la sortie le laisse intact. */
+  readonly retake: () => void;
+} {
   const [intent, setIntent] = useState<StudioCameraIntent | null>(null);
   const [holding, setHolding] = useState(false);
   const [flash, setFlash] = useState(false);
   const [intensity, setIntensity] = useState(() => readFlashIntensity(viewerStorage()));
   const holdDrag = useRef<StudioHoldDrag['current']>(null);
-  const photo = quickCaptureTap(kind) === 'photo';
+  const photo = kind !== 'REEL';
 
   const close = () => {
     setIntent(null);
@@ -63,14 +70,15 @@ export function useStudioQuickCapture({
     quickCaptureOffered({ ...scene, cameraOpen: intent !== null })
       ? {
           hintLines: quickCaptureHintLines(kind),
-          onTap: () => setIntent(photo ? 'photo' : 'arm'),
+          // Le premier toucher ARME le viseur (#8711) : le second, sur lui, prend.
+          onTap: () => setIntent('arm'),
           onHoldStart: () => {
             setHolding(true);
             setIntent('hold');
           },
           onHoldEnd: () => setHolding(false),
           onHoldMove: (dx, dy) => holdDrag.current?.(dx, dy),
-          onPhoto: photo ? () => setIntent('photo') : null,
+          onPhoto: photo ? () => setIntent('arm') : null,
           onFilm: () => setIntent('film'),
         }
       : null;
@@ -101,5 +109,5 @@ export function useStudioQuickCapture({
       </Suspense>
     );
 
-  return { capture, cameraOpen: intent !== null, cameraLayer };
+  return { capture, cameraOpen: intent !== null, cameraLayer, retake: () => setIntent('arm') };
 }

@@ -173,30 +173,39 @@ nonisolated enum ComposerTrailingColumn {
         ComposerSceneCapabilities.controllers.union([.edit])
 }
 
-// MARK: - Les EFFETS d'une scène à fond média (#8712)
+// MARK: - Les EFFETS d'une scène à fond média (#8712, #8792)
 
-/// **Une catégorie d'effets de la scène** — ce qu'un fond image ou vidéo
-/// peut recevoir, et que le LECTEUR rend (loi 6 : aucun effet d'aperçu qui ne
+/// **Une FAMILLE d'effets de la scène** — ce qu'un fond image ou vidéo peut
+/// recevoir, et que le LECTEUR rend (loi 6 : aucun effet d'aperçu qui ne
 /// partirait pas).
 ///
-/// Deux catégories, prises aux briques qui existent de bout en bout :
-/// - `filter` — `StoryFilter` + son intensité (`StoryEffects.filter`), cuits
-///   dans le bitmap du fond par le canvas, la miniature et le lecteur ;
-/// - `opening` — l'effet d'ouverture de la slide (`StoryEffects.opening`),
-///   joué par le lecteur à l'entrée.
+/// > Directive porteur 2026-09-30 : « Dans les effets de scène, il faut
+/// > distinguer effet d'ouverture et effet visuel, les effets visuels doivent
+/// > avoir une miniature visible et lors du choix la scène doit être mise à
+/// > jour en direct en recommençant l'ouverture sélectionnée ainsi que la
+/// > fermeture ! »
+///
+/// Deux familles, deux icônes, deux carrousels, prises aux briques qui existent
+/// de bout en bout :
+/// - `opening` — l'ENTRÉE et la SORTIE de la slide (`StoryEffects.opening` /
+///   `.closing`), jouées par le lecteur (`StoryRenderer.applyOpening` /
+///   `applyClosing`) ;
+/// - `visual` — le LOOK du fond : `StoryFilter` + son intensité
+///   (`StoryEffects.filter`), cuit dans le bitmap du fond par le canvas, la
+///   miniature et le lecteur.
 ///
 /// `ImageEffect` (flou, vignette, grain…) n'y est PAS : il appartient à
 /// l'éditeur d'image, qui le cuit dans un NOUVEAU fichier — la slide n'a
-/// aucun champ qui le porte, et une icône qui le promettrait serait inerte.
+/// aucun champ qui le porte, et une vignette qui le promettrait serait inerte.
 /// Le flou des bandes d'un fond ajusté vit au Cadre (#8414).
 nonisolated enum ComposerSceneEffect: String, CaseIterable, Equatable, Sendable {
-    case filter
     case opening
+    case visual
 
     var symbol: String {
         switch self {
-        case .filter:  return "camera.filters"
         case .opening: return "sparkles.rectangle.stack"
+        case .visual:  return "camera.filters"
         }
     }
 }
@@ -208,12 +217,25 @@ nonisolated enum ComposerSceneEffects {
         case video
     }
 
-    /// **Aucun fond média ⇒ aucune colonne** (loi 4). Le filtre ne se cuit
-    /// que dans une IMAGE : une vidéo de fond n'en rend aucun, donc ne l'offre
-    /// pas.
+    /// Les deux transitions de la slide — ce que la répétition rejoue.
+    struct Transitions: Equatable, Sendable {
+        var opening: StoryTransitionEffect?
+        var closing: StoryTransitionEffect?
+    }
+
+    /// Ce qu'un carrousel vient de choisir.
+    enum Choice: Equatable, Sendable {
+        case opening(StoryTransitionEffect?)
+        case closing(StoryTransitionEffect?)
+        case visual(String?)
+    }
+
+    /// **Aucun fond média ⇒ aucune colonne** (loi 4). L'effet d'ouverture
+    /// d'abord — il vaut pour tout fond ; l'effet visuel ne se cuit que dans une
+    /// IMAGE : une vidéo de fond n'en rend aucun, donc ne l'offre pas.
     static func served(background: Background?) -> [ComposerSceneEffect] {
         switch background {
-        case .image: return [.filter, .opening]
+        case .image: return [.opening, .visual]
         case .video: return [.opening]
         case nil:    return []
         }
@@ -234,6 +256,26 @@ nonisolated enum ComposerSceneEffects {
                          toolIsOpen: Bool) -> ComposerSceneEffect? {
         guard let open, served.contains(open), !objectSelected, !toolIsOpen else { return nil }
         return open
+    }
+
+    /// Les transitions APRÈS un choix : une ouverture garde la fermeture, une
+    /// fermeture garde l'ouverture, un effet visuel ne touche ni l'une ni
+    /// l'autre.
+    static func transitions(after choice: Choice, from current: Transitions) -> Transitions {
+        switch choice {
+        case .opening(let effet): return Transitions(opening: effet, closing: current.closing)
+        case .closing(let effet): return Transitions(opening: current.opening, closing: effet)
+        case .visual:             return current
+        }
+    }
+
+    /// **Chaque choix — visuel OU de transition — rejoue l'ouverture puis la
+    /// fermeture** de la scène : l'effet se voit EN SITUATION, sans quitter le
+    /// carrousel. `nil` ⇒ la slide n'a aucune transition, rien à rejouer.
+    static func rehearsal(after choice: Choice, from current: Transitions) -> StoryTransitionRehearsal? {
+        let apres = transitions(after: choice, from: current)
+        let plan = StoryTransitionRehearsal(opening: apres.opening, closing: apres.closing)
+        return plan.isEmpty ? nil : plan
     }
 }
 

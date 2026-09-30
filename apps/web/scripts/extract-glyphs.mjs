@@ -563,7 +563,7 @@ emit({
  * existent aussi dans d'autres jeux d'ecran : ceux-la ne se chargent jamais
  * avec la cloche, aucun octet n'est donc paye deux fois au meme demarrage.
  */
-const NOTIFICATIONS = ['circle', 'chat-circle', 'heart', 'at', 'thumbs-up', 'user-plus', 'users-three', 'globe', 'gear', 'trash'];
+const NOTIFICATIONS = ['circle', 'chat-circle', 'heart', 'at', 'thumbs-up', 'user-plus', 'users-three', 'globe', 'gear', 'trash', 'circle-dashed'];
 
 emit({
   ids: NOTIFICATIONS,

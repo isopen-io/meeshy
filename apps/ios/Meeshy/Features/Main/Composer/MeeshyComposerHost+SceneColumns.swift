@@ -125,23 +125,51 @@ extension MeeshyComposerHost {
     }
 
     /// **Le carrousel, en bas, à la place de l'audience et de Publier.** Les
-    /// deux contenus sont les briques du SDK qui existaient : la grille de
-    /// filtres (avec son intensité) et les puces d'ouverture.
+    /// contenus sont les briques du SDK : les puces d'entrée et de sortie, et
+    /// la grille des effets visuels dont chaque tuile est le fond COURANT, filtre
+    /// appliqué (`StoryFilterThumbnails`, rendu hors du fil principal).
     func sceneEffectCarousel(_ effet: ComposerSceneEffect) -> some View {
         ComposerSceneEffectCarousel(effect: effet,
                                     plateauTint: tint.color,
                                     onClose: { openSceneEffect = nil }) {
             switch effet {
-            case .filter:
-                StoryFilterGridView(viewModel: viewModel,
-                                    previewImage: viewModel.currentSlideBackgroundImage)
             case .opening:
-                OpeningEffectChips(selection: viewModel.openingEffect,
-                                   onDarkSurface: true) { choix in
-                    viewModel.openingEffect = choix
-                    HapticFeedback.light()
+                ComposerSceneTransitionRows(opening: sceneTransitions.opening,
+                                            closing: sceneTransitions.closing) { choix in
+                    chooseSceneEffect(choix)
                 }
+            case .visual:
+                StoryFilterGridView(viewModel: viewModel,
+                                    previewImage: viewModel.currentSlideBackgroundImage,
+                                    onChoose: { chooseSceneEffect(.visual($0)) })
             }
+        }
+    }
+
+    /// Les transitions de la slide COURANTE, lues sur la slide — pas sur l'état
+    /// global de l'atelier, qui ne suit pas un changement de slide fait au meuble.
+    var sceneTransitions: ComposerSceneEffects.Transitions {
+        let effets = viewModel.currentSlide.effects
+        return ComposerSceneEffects.Transitions(opening: effets.opening, closing: effets.closing)
+    }
+
+    /// **Chaque choix met la scène à jour ET rejoue l'ouverture puis la
+    /// fermeture** (#8792) — sur le canvas de la scène, par le même pont que la
+    /// frise, sans quitter le carrousel.
+    func chooseSceneEffect(_ choix: ComposerSceneEffects.Choice) {
+        let avant = sceneTransitions
+        let apres = ComposerSceneEffects.transitions(after: choix, from: avant)
+        if apres != avant {
+            viewModel.setSlideTransitions(opening: apres.opening, closing: apres.closing)
+        }
+        guard let plan = ComposerSceneEffects.rehearsal(after: choix, from: avant) else { return }
+        // Un tour de boucle APRÈS le choix : le premier effet visuel fait
+        // paraître le curseur d'intensité, la scène se recadre et SwiftUI peut
+        // remonter son canvas — une répétition lancée avant jouerait sur
+        // l'ancien, hors de l'écran (mesuré au simulateur).
+        let pont = viewModel.canvasTimelineBridge
+        DispatchQueue.main.async {
+            pont.rehearseTransitions(opening: plan.opening, closing: plan.closing)
         }
     }
 

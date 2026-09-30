@@ -288,6 +288,23 @@ const dropServiceWorkerScripts = (): Plugin => ({
 });
 
 /**
+ * LES CAPTURES DE `/download` N'ENTRENT PAS DANS LA COQUE (#8801).
+ *
+ * `public/store-shots/` porte ~1,9 Mo de captures d'écran que seule la page
+ * `/download` du WEB affiche : dans l'APK et l'IPA, elles seraient du poids
+ * mort. La page les charge depuis l'origine publique quand `__SHELL__` est
+ * vrai (`routes/download.tsx`).
+ */
+const dropWebOnlyAssets = (): Plugin => ({
+  name: 'meeshy-drop-web-only-assets',
+  apply: 'build',
+  writeBundle(options) {
+    if (options.dir === undefined) return;
+    rmSync(join(options.dir, 'store-shots'), { recursive: true, force: true });
+  },
+});
+
+/**
  * LES SIX FABRIQUES DE FIXTURES — nommées ICI, lues par la règle d'élagage
  * (§ `build.rollupOptions.treeshake`, revue #5815).
  */
@@ -420,7 +437,7 @@ export default defineConfig({
     inlineSchemeBootstrap(),
     inlineInterfaceLanguageBootstrap(),
     prerenderInstitutionalPages(),
-    ...(forCapacitor ? [dropServiceWorkerScripts()] : []),
+    ...(forCapacitor ? [dropServiceWorkerScripts(), dropWebOnlyAssets()] : []),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere
      * elle-meme son cycle de vie, et un service worker par-dessus ferait deux

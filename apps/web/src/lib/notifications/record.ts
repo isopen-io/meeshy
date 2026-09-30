@@ -36,6 +36,7 @@ type ContextStringField =
   | 'parentCommentId'
   | 'friendRequestId'
   | 'callSessionId'
+  | 'postCreatedAt'
   | 'postExpiresAt';
 
 const CONTEXT_STRING_FIELDS: readonly ContextStringField[] = [
@@ -47,6 +48,7 @@ const CONTEXT_STRING_FIELDS: readonly ContextStringField[] = [
   'parentCommentId',
   'friendRequestId',
   'callSessionId',
+  'postCreatedAt',
   'postExpiresAt',
 ];
 
@@ -54,13 +56,48 @@ type ConversationType = NonNullable<NotificationContext['conversationType']>;
 
 const CONVERSATION_TYPES: readonly ConversationType[] = ['direct', 'group', 'public', 'global', 'broadcast'];
 
-type MetadataField = 'postType' | 'contentType' | 'postThumbnailUrl' | 'callType';
+/**
+ * Les champs STRUCTURÉS de `metadata` que la ligne lit (#8724) : les extraits
+ * du commentaire, de son parent et du POST qui le porte, le média d'un contenu
+ * sans texte, et la clé du palier d'engagement — jamais la prose du corps.
+ */
+type MetadataField =
+  | 'postType'
+  | 'contentType'
+  | 'postThumbnailUrl'
+  | 'callType'
+  | 'commentPreview'
+  | 'parentCommentPreview'
+  | 'postPreview'
+  | 'messagePreview'
+  | 'excerpt'
+  | 'mediaType'
+  | 'axisKey'
+  | 'achievementKey';
 
-const METADATA_FIELDS: readonly MetadataField[] = ['postType', 'contentType', 'postThumbnailUrl', 'callType'];
+const METADATA_FIELDS: readonly MetadataField[] = [
+  'postType',
+  'contentType',
+  'postThumbnailUrl',
+  'callType',
+  'commentPreview',
+  'parentCommentPreview',
+  'postPreview',
+  'messagePreview',
+  'excerpt',
+  'mediaType',
+  'axisKey',
+  'achievementKey',
+];
+
+type MetadataNumberField = 'threshold' | 'level';
+
+const METADATA_NUMBER_FIELDS: readonly MetadataNumberField[] = ['threshold', 'level'];
 
 export type NotificationRecordContext = Pick<NotificationContext, ContextStringField | 'conversationType'>;
 
-export type NotificationRecordMetadata = Partial<Readonly<Record<MetadataField, string>>>;
+export type NotificationRecordMetadata = Partial<Readonly<Record<MetadataField, string>>> &
+  Partial<Readonly<Record<MetadataNumberField, number>>>;
 
 export type NotificationRecordActor = Pick<NotificationActor, 'id' | 'username'> & {
   readonly displayName: string | null;
@@ -71,6 +108,8 @@ export type NotificationRecord = {
   readonly id: string;
   readonly type: string;
   readonly title: string | null;
+  /** La ligne de contexte serveur (nom du groupe, cible d'un commentaire) — absente quand vide. */
+  readonly subtitle?: string;
   readonly content: string;
   readonly actor: NotificationRecordActor | null;
   readonly context: NotificationRecordContext;
@@ -95,6 +134,17 @@ function pickStrings<K extends string>(source: Json | null, keys: readonly K[]):
       return value === null ? [] : [[key, value] as const];
     }),
   ) as Partial<Readonly<Record<K, string>>>;
+}
+
+/** Les champs NUMÉRIQUES finis d'un objet — un palier servi en chaîne ou en `NaN` est retiré. */
+function pickNumbers<K extends string>(source: Json | null, keys: readonly K[]): Partial<Readonly<Record<K, number>>> {
+  if (source === null) return {};
+  return Object.fromEntries(
+    keys.flatMap((key) => {
+      const value = source[key];
+      return typeof value === 'number' && Number.isFinite(value) ? [[key, value] as const] : [];
+    }),
+  ) as Partial<Readonly<Record<K, number>>>;
 }
 
 function isoDate(value: unknown): string | null {
@@ -129,14 +179,17 @@ export function decodeNotification(raw: unknown): NotificationRecord | null {
   const createdAt = isoDate(state?.createdAt);
   if (id === null || type === null || state === null || createdAt === null) return null;
 
+  const subtitle = filledString(notification.subtitle);
+  const metadata = objectOf(notification.metadata);
   return {
     id,
     type,
     title: filledString(notification.title),
+    ...(subtitle === null ? {} : { subtitle }),
     content: typeof notification.content === 'string' ? notification.content : '',
     actor: decodeActor(notification.actor),
     context: decodeContext(notification.context),
-    metadata: pickStrings(objectOf(notification.metadata), METADATA_FIELDS),
+    metadata: { ...pickStrings(metadata, METADATA_FIELDS), ...pickNumbers(metadata, METADATA_NUMBER_FIELDS) },
     state: { isRead: state.isRead === true, createdAt },
   };
 }

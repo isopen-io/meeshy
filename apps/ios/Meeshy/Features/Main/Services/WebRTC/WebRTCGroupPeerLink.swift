@@ -51,12 +51,16 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
 
     static let disconnectGrace: Duration = .seconds(3)
     static let maxRestartAttempts = 5
+    /// Le canal de contrôle de l'aperçu (#8795) — même libellé côté web (#8796).
+    nonisolated static let controlChannelLabel = "meeshy-preview-control"
 
     let remoteUserId: String
     private(set) var remoteVideoTrack: Any?
 
     private let isPolite: Bool
     private let receiveOnly: Bool
+    private let opensControlChannel: Bool
+    private var controlChannel: RTCDataChannel?
     private let localVideoTrack: @MainActor () -> RTCVideoTrack?
     private let onEvent: @MainActor (GroupPeerLinkEvent) -> Void
     private let audioTrack: RTCAudioTrack
@@ -80,6 +84,7 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
         self.remoteUserId = configuration.remoteUserId
         self.isPolite = configuration.isPolite
         self.receiveOnly = configuration.receiveOnly
+        self.opensControlChannel = configuration.opensControlChannel
         self.localVideoTrack = localVideoTrack
         self.onEvent = onEvent
         self.sendsVideo = configuration.sendsVideo
@@ -155,12 +160,20 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
         return levels.max()
     }
 
+    func sendControl(_ data: Data) {
+        guard let channel = controlChannel, channel.readyState == .open else { return }
+        channel.sendData(RTCDataBuffer(data: data, isBinary: false))
+    }
+
     func close() {
         restartTask?.cancel()
         restartTask = nil
         tail?.cancel()
         tail = nil
         audioTrack.isEnabled = false
+        controlChannel?.delegate = nil
+        controlChannel?.close()
+        controlChannel = nil
         peerConnection?.close()
         peerConnection = nil
         remoteVideoTrack = nil
@@ -183,6 +196,7 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
     private func makeOffer(iceRestart: Bool) async {
         guard let pc = peerConnection else { return }
         addOffererTransceiversIfNeeded(on: pc)
+        openControlChannelIfNeeded(on: pc)
         makingOffer = true
         defer { makingOffer = false }
         epoch += 1
@@ -264,6 +278,25 @@ final class WebRTCGroupPeerLink: NSObject, GroupPeerLinkProviding {
         videoInit.direction = video == nil ? .recvOnly : .sendRecv
         videoInit.streamIds = ["meeshy-mesh"]
         pc.addTransceiver(of: .video, init: videoInit)?.sender.track = video
+    }
+
+    /// L'appelant ouvre le canal AVANT sa première offre : il doit figurer dans
+    /// la description que l'appelé reçoit (#8795).
+    private func openControlChannelIfNeeded(on pc: RTCPeerConnection) {
+        guard opensControlChannel, controlChannel == nil else { return }
+        let configuration = RTCDataChannelConfiguration()
+        configuration.isOrdered = true
+        guard let channel = pc.dataChannel(forLabel: Self.controlChannelLabel, configuration: configuration) else {
+            Logger.webrtc.warning("[PREVIEW] control channel could not be created")
+            return
+        }
+        adoptControlChannel(channel)
+    }
+
+    private func adoptControlChannel(_ channel: RTCDataChannel) {
+        channel.delegate = self
+        controlChannel = channel
+        if channel.readyState == .open { onEvent(.controlOpened) }
     }
 
     private func attachAnswererTracks(on pc: RTCPeerConnection) {
@@ -433,7 +466,13 @@ extension WebRTCGroupPeerLink: RTCPeerConnectionDelegate {
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {}
 
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {}
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
+        guard dataChannel.label == WebRTCGroupPeerLink.controlChannelLabel else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.peerConnection === peerConnection, self.controlChannel == nil else { return }
+            self.adoptControlChannel(dataChannel)
+        }
+    }
 
     nonisolated private func deliver(_ track: RTCMediaStreamTrack?, from peerConnection: RTCPeerConnection) {
         guard let video = track as? RTCVideoTrack else { return }
@@ -441,6 +480,26 @@ extension WebRTCGroupPeerLink: RTCPeerConnectionDelegate {
             guard let self, self.peerConnection === peerConnection, (self.remoteVideoTrack as? RTCVideoTrack) !== video else { return }
             self.remoteVideoTrack = video
             self.onEvent(.remoteVideo)
+        }
+    }
+}
+
+// MARK: - RTCDataChannelDelegate
+
+extension WebRTCGroupPeerLink: RTCDataChannelDelegate {
+    nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
+        guard dataChannel.readyState == .open else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.controlChannel === dataChannel else { return }
+            self.onEvent(.controlOpened)
+        }
+    }
+
+    nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
+        let data = buffer.data
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.controlChannel === dataChannel else { return }
+            self.onEvent(.control(data))
         }
     }
 }

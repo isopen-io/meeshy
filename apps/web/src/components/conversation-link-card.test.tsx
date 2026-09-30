@@ -9,6 +9,7 @@ import { conversationCardQueryKey } from '@/lib/api/conversation-card';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import type { CardJoinAccount } from '@/lib/links/card-join-account';
 import type { ConversationLinkTarget } from '@/lib/links/conversation-link';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -35,6 +36,8 @@ beforeAll(async () => {
 afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
+
+const BOB: CardJoinAccount = { title: 'Bob Kouassi', handle: '@bob' };
 
 const SHARE: ConversationLinkTarget = { kind: 'share-link', identifier: 'mshy_beta' };
 const DIRECT: ConversationLinkTarget = { kind: 'direct', identifier: 'c-beta' };
@@ -90,6 +93,7 @@ const mount = async (params: {
   readonly replies?: Readonly<Record<string, Reply>>;
   readonly seed?: ConversationCard | null;
   readonly signedIn?: boolean;
+  readonly account?: CardJoinAccount | null;
 }) => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (params.seed !== undefined) client.setQueryData(conversationCardQueryKey(params.target), params.seed);
@@ -107,6 +111,7 @@ const mount = async (params: {
           language="en"
           signedIn={params.signedIn ?? true}
           accountLanguage="fr"
+          account={params.account === undefined ? (params.signedIn === false ? null : BOB) : params.account}
         />
       </QueryClientProvider>,
     );
@@ -147,6 +152,8 @@ describe('ConversationLinkCard — états', () => {
     expect(text).toContain('Alice Martin');
     expect(text).toContain('invites you to join this conversation');
     expect(text.indexOf('Come test the beta with us')).toBeLessThan(text.indexOf('Beta testers'));
+    expect(host.querySelector('[data-invite-message]')?.textContent).toContain('Come test the beta with us');
+    expect(host.querySelector('[data-invite-quote-mark]')).not.toBeNull();
     expect(text).toContain('7 members');
     expect(text).toContain('42 messages');
     expect([...host.querySelectorAll('[data-card-language]')].map((pill) => pill.textContent)).toEqual(['FR', 'EN']);
@@ -181,23 +188,33 @@ describe('ConversationLinkCard — états', () => {
 });
 
 describe('ConversationLinkCard — actions', () => {
-  test('non-membre connecté : « Join » seul, pleine largeur', async () => {
+  test('non-membre connecté : « Join? » puis le compte NOMMÉ (#8727) — lu en phrase entière', async () => {
     const { host } = await mount({ target: SHARE, seed: card() });
-    expect(buttons(host)).toEqual(['Join']);
-    expect(byText(host, 'Join')?.getAttribute('data-full-width')).toBe('true');
+    expect(host.querySelector('[data-join-prompt]')?.textContent).toBe('Join?');
+    expect(buttons(host)).toEqual(['Bob Kouassi']);
+    expect(byText(host, 'Bob Kouassi')?.getAttribute('aria-label')).toBe('Join with the account @bob');
   });
 
-  test('visiteur sans compte, lien qui l’accepte : « Join anonymously » puis « Join »', async () => {
+  test('connecté sans nom connu : « My account »', async () => {
+    const { host } = await mount({ target: SHARE, seed: card(), account: null });
+    expect(buttons(host)).toEqual(['My account']);
+    expect(byText(host, 'My account')?.getAttribute('aria-label')).toBe('Join with my account');
+  });
+
+  test('visiteur sans compte, lien qui l’accepte : « Join? » Anonymous | My account, du même gabarit arrondi', async () => {
     const { host } = await mount({ target: SHARE, seed: card(), signedIn: false });
-    expect(buttons(host)).toEqual(['Join anonymously', 'Join']);
-    expect(byText(host, 'Join anonymously')?.getAttribute('href')).toBe('/chat/mshy_beta');
-    expect(byText(host, 'Join')?.getAttribute('href')).toBe('/login?next=%2Fchat%2Fmshy_beta');
+    expect(host.querySelector('[data-join-prompt]')?.textContent).toBe('Join?');
+    expect(buttons(host)).toEqual(['Anonymous', 'My account']);
+    expect(byText(host, 'Anonymous')?.getAttribute('href')).toBe('/chat/mshy_beta');
+    expect(byText(host, 'Anonymous')?.getAttribute('aria-label')).toBe('Join anonymously');
+    expect(byText(host, 'My account')?.getAttribute('href')).toBe('/login?next=%2Fchat%2Fmshy_beta');
+    expect(byText(host, 'Anonymous')?.className).toBe(byText(host, 'My account')?.className);
   });
 
   test('visiteur sans compte, lien qui exige un compte : « Join » seul', async () => {
     const accountOnly = card({ viewer: { isMember: false, canJoin: true, requiresAccount: true, canJoinAnonymously: false } });
     const { host } = await mount({ target: SHARE, seed: accountOnly, signedIn: false });
-    expect(buttons(host)).toEqual(['Join']);
+    expect(buttons(host)).toEqual(['My account']);
   });
 
   test('membre : « Leave » EN PREMIER, puis « Open » vers le fil', async () => {
@@ -216,7 +233,7 @@ describe('ConversationLinkCard — actions', () => {
       seed: card(),
       replies: { 'POST /api/v1/links/mshy_beta/members': 'pending' },
     });
-    await click(byText(host, 'Join'));
+    await click(byText(host, 'Bob Kouassi'));
     expect(calls().some((call) => call.method === 'POST' && call.path === '/api/v1/links/mshy_beta/members')).toBe(true);
     expect(calls().find((call) => call.method === 'POST')?.body).toEqual({ language: 'fr' });
     expect(buttons(host)).toEqual(['Leave', 'Open']);
@@ -228,8 +245,8 @@ describe('ConversationLinkCard — actions', () => {
       seed: card(),
       replies: { 'POST /api/v1/links/mshy_beta/members': { ok: false, status: 500, error: 'boom' } },
     });
-    await click(byText(host, 'Join'));
-    expect(buttons(host)).toEqual(['Join']);
+    await click(byText(host, 'Bob Kouassi'));
+    expect(buttons(host)).toEqual(['Bob Kouassi']);
     expect(host.querySelector('[role="alert"]')?.textContent).toBe('Could not join. Try again.');
   });
 
@@ -253,7 +270,7 @@ describe('ConversationLinkCard — actions', () => {
     const confirm = [...(dialog?.querySelectorAll('button') ?? [])].find((button) => button.textContent?.trim() === 'Leave');
     await click(confirm);
     expect(calls().some((call) => call.method === 'POST' && call.path === '/api/v1/conversations/c-beta/leave')).toBe(true);
-    expect(buttons(host)).toEqual(['Join']);
+    expect(buttons(host)).toEqual(['Bob Kouassi']);
   });
 });
 
@@ -373,7 +390,7 @@ describe('ConversationLinkCard — les cartes d’une même conversation suivent
       },
     });
     expect(direct().querySelector('[data-conversation-card="private"]')).not.toBeNull();
-    await click(byText(share(), 'Join'));
+    await click(byText(share(), 'My account'));
     await settle();
     expect(direct().querySelector('[data-conversation-card="member"]')).not.toBeNull();
     expect(buttons(direct())).toEqual(['Leave', 'Open']);
@@ -396,7 +413,7 @@ describe('ConversationLinkCard — les cartes d’une même conversation suivent
     const confirm = [...(dialog?.querySelectorAll('button') ?? [])].find((button) => button.textContent?.trim() === 'Leave');
     await click(confirm);
     await settle();
-    expect(buttons(share())).toEqual(['Join']);
+    expect(buttons(share())).toEqual(['My account']);
     expect(share().textContent).toContain('7 members');
     expect(direct().querySelector('[data-conversation-card="private"]')).not.toBeNull();
   });

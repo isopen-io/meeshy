@@ -44,6 +44,7 @@ import frContactCard from './catalog-fr-contact-card';
 import frQuote from './catalog-fr-quote';
 import frCommentRow from './catalog-fr-comment-row';
 import frContactDiscovery from './catalog-fr-contact-discovery';
+import frDownload from './catalog-fr-download';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -1117,11 +1118,7 @@ const fr = {
      est ce que le produit tient : la fiche App Store, qui existe, et le web,
      que meeshy.me sert aujourd'hui. Aucune mention du Play Store tant que la
      coque Android n'est pas publiée. */
-  'download.title': 'Téléchargez Meeshy',
-  'download.body': 'Écrivez dans votre langue, lisez dans la vôtre : Meeshy traduit chaque message au passage.',
-  'download.appStore': 'Télécharger dans l’App Store',
-  'download.web': 'Ouvrir Meeshy dans le navigateur',
-  'download.otherPlatforms': 'Sur Android et sur ordinateur, Meeshy s’utilise directement dans le navigateur.',
+  ...frDownload,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — le panneau de pièces jointes du fil.
      Les libellés et les gestes annoncés reprennent le catalogue d'iOS

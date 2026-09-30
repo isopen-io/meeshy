@@ -116,7 +116,7 @@ export function QuickActions({ title, subtitle, actions, conversationCount }: Qu
             }}
           >
             <Glyph name={action.glyph} size={22} />
-            <span className="flex-1 text-left">{action.label}</span>
+            <span className="flex-1 text-start">{action.label}</span>
           </button>
           <p id={`${action.key}-indice`} className="px-1 text-mini" style={{ color: 'var(--color-ios-ink-3)' }}>
             {action.hint}

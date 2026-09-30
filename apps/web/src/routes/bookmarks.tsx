@@ -86,7 +86,7 @@ export function BookmarksHeader() {
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
-        <Glyph name="caretLeft" size={20} />
+        <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
       </Link>
       <h1 className="min-w-0 flex-1 truncate text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
         {translate(language, 'bookmarks.title')}

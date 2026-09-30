@@ -95,7 +95,7 @@ describe('toucher le vide désélectionne', () => {
 });
 
 describe('« Sortir de la scène » n’existe plus (absent d’iOS, il supprimait le média)', () => {
-  test('le menu du calque d’un POST offre Modifier et Retirer, rien d’autre', async () => {
+  test('le menu du calque d’un POST offre Modifier, Mettre en fond (#8716) et Retirer, rien d’autre', async () => {
     const drafts = createStudioDraftStore(null);
     drafts.set(VIEWER_ID, onePageSnapshot({ texts: [], overlay: { postMediaId: 'pm-ov', fileUrl: '2026/09/u/ov.jpg', mediaType: 'image', aspectRatio: 1 } }));
     const el = mount(harness({ drafts }).deps, 'POST');
@@ -105,7 +105,7 @@ describe('« Sortir de la scène » n’existe plus (absent d’iOS, il supprima
     act(() => layer.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 30 })));
     await flush(() => document.querySelector('[data-story-object-menu]') !== null);
     const actions = [...document.querySelectorAll('[data-story-object-menu] [data-story-object-action]')];
-    expect(actions.map((action) => action.getAttribute('data-story-object-action'))).toEqual(['edit', 'remove']);
+    expect(actions.map((action) => action.getAttribute('data-story-object-action'))).toEqual(['edit', 'set-background', 'remove']);
     expect(document.querySelector('[data-story-object-menu]')?.textContent).not.toContain('Sortir');
   });
 });

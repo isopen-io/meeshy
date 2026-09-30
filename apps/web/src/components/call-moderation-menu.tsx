@@ -52,7 +52,7 @@ function menuPlacement(trigger: HTMLElement | null | undefined, align: 'left' | 
 
 export type CallModerationGlyphs = { readonly more: ReactNode; readonly mute: ReactNode; readonly remove: ReactNode };
 
-const ITEM = 'flex min-h-11 w-full items-center gap-3 rounded-[14px] px-3 text-left text-body font-semibold transition-colors hover:bg-white/10 focus-visible:bg-white/15 motion-reduce:transition-none';
+const ITEM = 'flex min-h-11 w-full items-center gap-3 rounded-[14px] px-3 text-start text-body font-semibold transition-colors hover:bg-white/10 focus-visible:bg-white/15 motion-reduce:transition-none';
 
 export function CallModerationMenu({
   member,

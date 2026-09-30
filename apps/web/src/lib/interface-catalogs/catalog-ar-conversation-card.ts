@@ -28,6 +28,11 @@ const arConversationCard = {
   'conversation.card.join.error': 'تعذّر الانضمام. حاول مرة أخرى.',
   'conversation.card.leave.error': 'تعذّرت المغادرة. حاول مرة أخرى.',
   'conversation.card.a11y': 'محادثة: {title}',
+  'conversation.card.joinPrompt': 'انضمام؟',
+  'conversation.card.joinChoice.anonymous': 'مجهول الهوية',
+  'conversation.card.joinChoice.account': 'حسابي',
+  'conversation.card.a11y.joinWithAccount': 'الانضمام بحسابي',
+  'conversation.card.a11y.joinWithNamedAccount': 'الانضمام بالحساب {account}',
 } satisfies ConversationCardCatalogSlice;
 
 export default arConversationCard;

@@ -30,6 +30,11 @@ const frConversationCard = {
   'conversation.card.join.error': 'Impossible de rejoindre. Réessayez.',
   'conversation.card.leave.error': 'Impossible de quitter. Réessayez.',
   'conversation.card.a11y': 'Conversation : {title}',
+  'conversation.card.joinPrompt': 'Rejoindre ?',
+  'conversation.card.joinChoice.anonymous': 'Anonyme',
+  'conversation.card.joinChoice.account': 'Mon compte',
+  'conversation.card.a11y.joinWithAccount': 'Rejoindre avec mon compte',
+  'conversation.card.a11y.joinWithNamedAccount': 'Rejoindre avec le compte {account}',
 } as const;
 
 export type ConversationCardCatalogSlice = Readonly<Record<keyof typeof frConversationCard, string>>;

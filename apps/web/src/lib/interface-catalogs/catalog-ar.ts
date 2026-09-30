@@ -33,6 +33,7 @@ import arContactCard from './catalog-ar-contact-card';
 import arQuote from './catalog-ar-quote';
 import arCommentRow from './catalog-ar-comment-row';
 import arContactDiscovery from './catalog-ar-contact-discovery';
+import arDownload from './catalog-ar-download';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -1068,11 +1069,7 @@ const ar = {
   'message-detail.load-error': 'تعذر تحميل هذه المعلومات',
   'message-detail.retry': 'إعادة المحاولة',
 
-  'download.title': 'نزّل Meeshy',
-  'download.body': 'اكتب بلغتك واقرأ بلغتك: يترجم Meeshy كل رسالة في الطريق.',
-  'download.appStore': 'التنزيل من App Store',
-  'download.web': 'افتح Meeshy في المتصفح',
-  'download.otherPlatforms': 'على أندرويد وعلى الحاسوب، يعمل Meeshy مباشرة في المتصفح.',
+  ...arDownload,
 
   /* LES SOURCES DU COMPOSEUR (#7280) — miroir de `composer.attach.*` d'iOS. */
   ...arComposerAttach,

@@ -237,7 +237,7 @@ export function FocusStamp({
     <>
       {focusStampLabel({ sentAt, now, timeString, locale })}
       {isMine && delivery !== null ? (
-        <span className="ml-1 inline-flex align-middle">
+        <span className="ms-1 inline-flex align-middle">
           <Check status={delivery} isMine={isMine} {...(sendStartedAt === undefined ? {} : { sendStartedAt })} />
         </span>
       ) : null}

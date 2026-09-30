@@ -103,7 +103,7 @@ function Choice({ label, checked, onPick, id }: { readonly label: string; readon
       role="radio"
       aria-checked={checked}
       onClick={onPick}
-      className="flex min-h-11 w-full items-center gap-3 rounded-card px-3 text-left text-body"
+      className="flex min-h-11 w-full items-center gap-3 rounded-card px-3 text-start text-body"
       style={{ background: checked ? 'rgba(255,255,255,0.16)' : 'transparent', color: '#fff' }}
       data-call-device-option={id}
     >

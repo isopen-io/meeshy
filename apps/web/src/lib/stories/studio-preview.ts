@@ -40,5 +40,7 @@ export function studioPreviewDocument(page: StudioPage): CanvasDocument | null {
       : {}),
     ...(page.sound !== null ? { sound: { source: page.sound.previewUrl, plane: page.sound.plane } } : {}),
     ...(page.duration !== undefined ? { duration: page.duration } : {}),
+    ...(page.opening !== undefined ? { opening: page.opening } : {}),
+    ...(page.closing !== undefined ? { closing: page.closing } : {}),
   });
 }

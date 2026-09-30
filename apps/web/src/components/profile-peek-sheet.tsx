@@ -77,7 +77,7 @@ export function ProfilePeekSheet({ username, onClose }: { readonly username: str
                 }}
               >
                 {translate(language, 'userProfile.peek.openPage')}
-                <GlyphSvg glyph={FEED_GLYPHS.caretRight} size={16} />
+                <GlyphSvg glyph={FEED_GLYPHS.caretRight} size={16} className="rtl:-scale-x-100" />
               </Link>
             </div>
           ) : view.isError ? (

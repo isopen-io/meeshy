@@ -164,7 +164,7 @@ export function ThreadHeader({
           style={{ color: 'var(--accent)' }}
           aria-label={otherUnread > 0 ? `Retour — ${otherUnread} messages non lus ailleurs` : 'Retour'}
         >
-          <Glyph name="caretLeft" size={22} />
+          <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
           <UnreadBadge count={otherUnread} />
         </Link>
 

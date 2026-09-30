@@ -3,10 +3,10 @@ import { describe, expect, test } from 'bun:test';
 import {
   cameraFlashPlan,
   cameraVideoMime,
+  quickCaptureArmedTap,
   quickCaptureHintLines,
   quickCaptureOffered,
   quickCaptureRelease,
-  quickCaptureTap,
 } from './studio-quick-capture';
 
 const offered = (overrides: Partial<Parameters<typeof quickCaptureOffered>[0]> = {}) =>
@@ -33,20 +33,41 @@ describe('quickCaptureOffered — le geste n’existe que sur une scène vide', 
   }
 });
 
-describe("quickCaptureTap / quickCaptureHintLines — un geste, une intention, une ligne chacun (#8672)", () => {
-  test('story et post : le toucher ouvre ET prend la photo', () => {
-    expect(quickCaptureTap('STORY')).toBe('photo');
-    expect(quickCaptureTap('POST')).toBe('photo');
+describe("quickCaptureHintLines — la photo en DEUX temps (#8711, jumelle web #8715)", () => {
+  test('story et post : l’indication dit les deux temps de la photo, puis la vidéo', () => {
+    expect(quickCaptureHintLines('POST')).toEqual(quickCaptureHintLines('STORY'));
     expect(quickCaptureHintLines('STORY')).toEqual([
-      { glyph: 'camera', key: 'story.studio.camera.quick.tapPhoto' },
+      { glyph: 'viewfinder', key: 'story.studio.camera.quick.tapArm' },
+      { glyph: 'camera', key: 'story.studio.camera.quick.tapAgain' },
       { glyph: 'video', key: 'story.studio.camera.quick.holdFilm' },
     ]);
   });
 
-  test('un réel attend du mouvement : le toucher ouvre sans rien prendre', () => {
-    expect(quickCaptureTap('REEL')).toBe('arm');
+  test('un réel attend du mouvement : seule la vidéo est nommée', () => {
     expect(quickCaptureHintLines('REEL')).toEqual([{ glyph: 'video', key: 'story.studio.camera.quick.videoOnly' }]);
   });
+});
+
+describe('quickCaptureArmedTap — le second toucher, n’importe où sur le viseur armé (#8711)', () => {
+  const armed = (overrides: Partial<Parameters<typeof quickCaptureArmedTap>[0]> = {}) =>
+    quickCaptureArmedTap({ live: true, recording: false, busy: false, kind: 'STORY', ...overrides });
+
+  test('viseur vivant, rien en cours, format photo : la photo part', () => {
+    expect(armed()).toBe('take-photo');
+    expect(armed({ kind: 'POST' })).toBe('take-photo');
+  });
+
+  const ignored: readonly (readonly [string, Partial<Parameters<typeof quickCaptureArmedTap>[0]>])[] = [
+    ['un viseur qui ne voit pas encore', { live: false }],
+    ['un film en cours', { recording: true }],
+    ['une prise déjà en cours', { busy: true }],
+    ['un réel, qui ne prend pas de photo', { kind: 'REEL' }],
+  ];
+  for (const [label, overrides] of ignored) {
+    test(`ignoré avec ${label}`, () => {
+      expect(armed(overrides)).toBe('ignore');
+    });
+  }
 });
 
 describe('quickCaptureRelease — relâcher l’appui long', () => {

@@ -2,6 +2,7 @@ import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog, suspendForInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadInviteCatalog } from '@/lib/i18n-invite-catalog';
+import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
 import { createRouter } from '@/lib/router';
 
@@ -75,6 +76,13 @@ const chatJoinScreen = () =>
   Promise.all([import('@/routes/chat-join'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const shareLinkScreen = () =>
   Promise.all([import('@/routes/share-link'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+
+/* LA CLOCHE (#8727) — son chunk ET le catalogue de ce qu'une notification dit
+   (pied de contexte, palier nommé, gestes), en parallèle : la bannière in-app
+   le charge aussi avec son propre chunk, et `translateNotificationRow` lève
+   sur un catalogue non chargé. */
+const notificationsScreen = () =>
+  Promise.all([import('@/routes/notifications'), loadNotificationRowCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
 export const ROUTES = {
   list: { pattern: '/', screen: () => import('@/routes/conversations') },
@@ -310,7 +318,7 @@ export const ROUTES = {
   shareLinks: { pattern: '/links/share', screen: () => import('@/routes/share-links') },
   shareLinkNew: { pattern: '/links/share/new', screen: () => import('@/routes/share-link-new') },
   shareLink: { pattern: '/links/share/$link', screen: shareLinkScreen },
-  notifications: { pattern: '/notifications', screen: () => import('@/routes/notifications') },
+  notifications: { pattern: '/notifications', screen: notificationsScreen },
   calls: { pattern: '/calls', screen: () => import('@/routes/calls') },
   /* LE PAVÉ ET LA FICHE D'UN APPEL (lot 3 — #6454, #6383) — le pavé est
      l'onglet `.keypad` de `ContactsHubView` (iOS), servi comme un écran frère

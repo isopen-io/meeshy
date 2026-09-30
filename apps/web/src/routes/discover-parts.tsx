@@ -76,7 +76,7 @@ export function DiscoverHeader({ language }: { readonly language: InterfaceLangu
         style={{ color: BRAND, outlineColor: BRAND }}
       >
         <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} />
+          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
         </ChromeActionDisc>
       </Link>
       <h1 className="min-w-0 flex-1 truncate text-body font-semibold" style={{ color: INK }}>

@@ -139,7 +139,7 @@ export function PublicationEditSheet({
         />
 
         <p
-          className="text-caption text-right font-medium"
+          className="text-caption text-end font-medium"
           style={{ color: warning ? 'var(--color-warning)' : 'var(--color-ios-ink-3)' }}
         >
           <span aria-hidden>{remaining}</span>
@@ -154,7 +154,7 @@ export function PublicationEditSheet({
                 type="button"
                 data-publication-edit-retry
                 onClick={save}
-                className="ml-2 inline-flex items-center px-1 font-semibold underline"
+                className="ms-2 inline-flex items-center px-1 font-semibold underline"
                 style={{ minHeight: 44, color: 'var(--color-ios-brand)' }}
               >
                 {translate(language, 'feed.retry')}

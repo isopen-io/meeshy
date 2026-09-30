@@ -96,7 +96,7 @@ export default function CallResumeBanner() {
         data-call-resume={request.callId}
         aria-label={translate(language, 'callJoin.resume.named', { name: request.title === '' ? translate(language, 'calls.unknown') : request.title })}
         onClick={() => callActions.join(request)}
-        className="pointer-events-auto flex min-h-11 max-w-full items-center gap-2 rounded-chip py-1.5 pr-1.5 pl-3.5 shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="pointer-events-auto flex min-h-11 max-w-full items-center gap-2 rounded-chip py-1.5 pe-1.5 ps-3.5 shadow-lg focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{
           backgroundColor: 'var(--color-ios-card)',
           color: 'var(--color-ios-ink)',
@@ -107,7 +107,7 @@ export default function CallResumeBanner() {
         <span aria-hidden="true" style={{ color: 'var(--color-success)' }}>
           {request.media === 'video' ? <GlyphSvg glyph={CALLS_GLYPHS.videoCamera} size={16} /> : <Glyph name="phone" size={16} />}
         </span>
-        <span aria-hidden="true" className="grid min-w-0 text-left leading-tight">
+        <span aria-hidden="true" className="grid min-w-0 text-start leading-tight">
           <span data-call-resume-title className="truncate text-check font-semibold" style={{ color: 'var(--color-success)' }}>
             {translate(language, 'callJoin.resume.title')}
           </span>
@@ -119,7 +119,7 @@ export default function CallResumeBanner() {
         </span>
         <span
           aria-hidden="true"
-          className="ml-1 grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold text-white"
+          className="ms-1 grid shrink-0 place-items-center rounded-chip px-3 text-caption font-semibold text-white"
           style={{ height: 32, backgroundColor: 'var(--ios-indigo-600)' }}
         >
           {translate(language, 'callJoin.resume.action')}

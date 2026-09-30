@@ -492,16 +492,16 @@ extension MeeshyComposerHost {
                 // l'espace pour montrer ce que l'écran montre déjà.
                 requestedSceneBand = nil
             },
-            bandOpeningEffect: viewModel.openingEffect,
+            bandOpeningEffect: sceneTransitions.opening,
             // **La bande NE se referme PAS sur un effet d'ouverture**, et c'est
             // la différence avec la couleur juste au-dessus : une couleur se
             // voit sur la scène dès qu'elle est posée, un effet d'ouverture ne
             // se joue qu'à la LECTURE. Refermer laisserait l'auteur sans aucun
             // retour sur ce qu'il vient de choisir ; la rangée reste ouverte,
-            // avec sa puce sélectionnée pour tout témoin.
+            // avec sa puce sélectionnée pour témoin — et la scène REJOUE
+            // l'entrée choisie (#8792), le même chemin que le carrousel.
             onPickBandOpening: { effect in
-                viewModel.openingEffect = effect
-                HapticFeedback.light()
+                chooseSceneEffect(.opening(effect))
             },
             bandFitMode: sceneFitMode,
             bandBackdrop: sceneBackdrop,

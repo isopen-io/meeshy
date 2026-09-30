@@ -91,8 +91,10 @@ describe('le rail droit : des TUILES libellées, et l’historique', () => {
     const el = mount(harness({}).deps);
     // #8516 : le Texte est une porte du couloir GAUCHE (ce qu'on pose) ; le
     // rail droit ne garde que les outils de la scène.
+    // #8713 : le (+) de scène a pris la place de l'éclair, dans la barre haute.
     const tiles = [...el.querySelectorAll('[data-story-studio-rail] [data-story-tile]')];
-    expect(tiles.map((tile) => tile.getAttribute('data-story-option'))).toEqual(['add-text', 'add-page']);
+    expect(tiles.map((tile) => tile.getAttribute('data-story-option'))).toEqual(['add-text']);
+    expect(el.querySelector('[data-story-option="add-page"]')?.closest('[data-story-studio-rail]')).toBeNull();
     expect(tiles.every((tile) => tile.textContent === '' && tile.getAttribute('aria-label') !== null && tile.className.split(' ').includes('glass'))).toBe(true);
   });
 
@@ -277,10 +279,13 @@ describe('le mode Animé (#8415)', () => {
     expect([...el.querySelectorAll('[data-story-studio-rail="trailing"] [data-story-option]')].map((tile) => tile.getAttribute('data-story-option'))).toEqual(['time']);
     expect(el.querySelector('[data-story-object-move]')).toBeNull();
     expect(el.querySelector('[data-story-publish]')).not.toBeNull();
+    // L'éclair reste à sa place, frise ouverte : c'est lui qui éteint Animé.
+    expect(el.querySelector('[data-story-scene-toggles] [data-story-animated]')).not.toBeNull();
+    expect(el.querySelector('[data-story-option="add-page"]')).toBeNull();
     click(el.querySelector('[data-story-animated]'));
     expect(el.querySelector('[data-story-timeline]')).toBeNull();
-    expect(el.querySelector('[data-story-studio-rail="trailing"] [data-story-option="add-page"]')).not.toBeNull();
-    expect(el.querySelector('[data-story-studio-rail="leading"]')).not.toBeNull();
+    expect(el.querySelector('[data-story-option="add-page"]')).not.toBeNull();
+    expect(el.querySelector('[data-story-studio-rail="leading"] [data-story-animated]')).not.toBeNull();
   });
 
   test('la fenêtre réglée à la frise PART dans le document, avec la durée de la scène', async () => {
@@ -412,16 +417,19 @@ describe('lot 6 — la scène se touche sans s’entourer', () => {
     await flush(() => el.querySelector('[data-story-option="frame"]') !== null);
     const row = () => el.querySelector('[data-story-socle-row]')?.className ?? '';
     const chrome = () =>
-      ['[data-story-studio-top]', '[data-story-studio-rail="leading"]', '[data-story-studio-rail="trailing"]'].map((selector) => el.querySelector(selector)?.getAttribute('data-studio-chrome'));
+      ['[data-story-studio-top]', '[data-story-studio-rail="leading"]', '[data-story-trailing-options]'].map((selector) => el.querySelector(selector)?.getAttribute('data-studio-chrome') ?? 'absent');
     expect(chrome()).toEqual(['shown', 'shown', 'shown']);
     expect(row()).not.toContain('hidden');
 
     click(el.querySelector('[data-story-option="frame"]'));
     await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
-    expect(chrome()).toEqual(['hidden', 'hidden', 'hidden']);
+    // Les options de la colonne droite quittent la scène : l'outil porte les siennes.
+    expect(chrome()).toEqual(['hidden', 'hidden', 'absent']);
     expect(el.querySelector('[data-story-studio-top]')?.getAttribute('aria-hidden')).toBe('true');
     expect(el.querySelector('[data-story-studio-rail="leading"]')?.hasAttribute('inert')).toBe(true);
     expect(row().split(' ')).toContain('hidden');
+    // #8713 : annuler reste en bas de la colonne, « même pour les outils ».
+    expect(el.querySelector('[data-story-trailing-foot] [data-story-option="undo"]')?.closest('[inert]')).toBeNull();
     const close = el.querySelector('[data-story-frame-panel] [data-story-tool-close]');
     expect(close?.getAttribute('aria-label')).toBe('Fermer l’outil');
     // La tuile qui l'a ouvert est devenue inerte : le focus entre dans l'outil.

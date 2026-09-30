@@ -120,7 +120,7 @@ function BackToApp({ language, folded }: { readonly language: InterfaceLanguage;
       className={`mx-2 mb-3 flex items-center gap-3 rounded-chip px-3 text-caption focus-visible:outline-2 focus-visible:outline-offset-2 ${folded ? 'justify-center' : ''}`}
       style={{ minHeight: 44, color: INK2, outlineColor: BRAND }}
     >
-      <Glyph name="caretLeft" size={16} />
+      <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
       <span className={folded ? 'sr-only' : 'truncate'}>{libelle}</span>
     </Link>
   );
@@ -196,7 +196,7 @@ export function AdminHeader({
         style={{ color: BRAND, outlineColor: BRAND }}
       >
         <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} />
+          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
         </ChromeActionDisc>
       </Link>
       {titreDansLeContenu ? (
@@ -204,7 +204,7 @@ export function AdminHeader({
           {backLabel ?? title}
         </span>
       ) : (
-        <h1 className="min-w-0 flex-1 truncate text-center text-body font-semibold md:text-left md:text-title" style={{ color: INK }}>
+        <h1 className="min-w-0 flex-1 truncate text-center text-body font-semibold md:text-start md:text-title" style={{ color: INK }}>
           {title}
         </h1>
       )}

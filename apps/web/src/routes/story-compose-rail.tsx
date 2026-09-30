@@ -1,9 +1,11 @@
+import type { ReactNode } from 'react';
+
 import { Glyph } from '@/components/glyph';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { StudioDoor } from '@/lib/stories/studio-page';
-import { chromeFade, FrameMark, RedoMark, StudioTile, TextMark, UndoMark } from '@/routes/story-compose-chrome';
-import { PageMark, StudioDoorButton, TimeMark } from '@/routes/story-compose-parts';
+import { chromeFade, StudioTile, TextMark } from '@/routes/story-compose-chrome';
+import { StudioDoorButton } from '@/routes/story-compose-parts';
 
 /**
  * **LE COULOIR GAUCHE** — ce qu'on POSE sur la scène (les portes), en disques
@@ -22,6 +24,7 @@ export function StudioLeadingRail({
   onImport,
   sound = true,
   hidden = false,
+  children,
 }: {
   readonly lang: InterfaceLanguage;
   readonly locked: boolean;
@@ -35,6 +38,9 @@ export function StudioLeadingRail({
   readonly sound?: boolean;
   /** UN OUTIL OUVERT (#8654) — les portes et leurs (+) cèdent en fondu. */
   readonly hidden?: boolean;
+  /** LES BOUTONS DE SCÈNE après la dernière porte (#8713) — l'éclair, puis le
+   * Cadre (`studioLeadingSceneToggles`). */
+  readonly children?: ReactNode;
 }) {
   return (
     <div
@@ -76,84 +82,7 @@ export function StudioLeadingRail({
           <Glyph name="plus" size={10} className="absolute -end-2 -top-1" />
         </span>
       </StudioTile>
-    </div>
-  );
-}
-
-/**
- * **LE RAIL DROIT** (#8413, #8516, miroir `ComposerTrailingRail.tiles`) — les
- * outils de la SCÈNE, dans l'ordre d'iOS : annuler, rétablir, Temps, Cadre,
- * nouvelle scène. Les actions d'un OBJET n'y sont pas : elles vivent dans son
- * appui long (et son double-tap, et la voie du clavier) ; le Texte est une
- * porte du couloir gauche.
- *
- * Loi 4 tenue tuile par tuile : une tuile sans effet n'est pas montée —
- * « Annuler » / « Rétablir » sans rien à défaire, « Temps » sur une scène
- * statique, « Cadre » sans média de fond, « Scène » au plafond
- * (`STUDIO_PAGE_MAX`). Sans aucune tuile, le rail n'existe pas.
- */
-export function StudioTrailingRail({
-  lang,
-  locked,
-  onUndo,
-  onRedo,
-  timeOpen,
-  onToggleTime,
-  frameOpen,
-  onToggleFrame,
-  onAddPage,
-  hidden = false,
-}: {
-  readonly lang: InterfaceLanguage;
-  readonly locked: boolean;
-  /** `null` sans rien à annuler / rétablir. */
-  readonly onUndo: (() => void) | null;
-  readonly onRedo: (() => void) | null;
-  readonly timeOpen: boolean;
-  /** `null` sur une scène statique. */
-  readonly onToggleTime: (() => void) | null;
-  readonly frameOpen: boolean;
-  /** `null` sans média de fond. */
-  readonly onToggleFrame: (() => void) | null;
-  /** `null` au plafond de scènes. */
-  readonly onAddPage: (() => void) | null;
-  /** UN OUTIL OUVERT (#8654) — le rail et son (+) de scène cèdent en fondu. */
-  readonly hidden?: boolean;
-}) {
-  if (onUndo === null && onRedo === null && onToggleTime === null && onToggleFrame === null && onAddPage === null) return null;
-  return (
-    <div
-      data-story-studio-rail="trailing"
-      {...chromeFade(!hidden)}
-      role="group"
-      aria-label={translate(lang, 'story.studio.rail.scene')}
-      className="absolute end-2.5 bottom-2 z-10 flex max-h-[calc(100%-1rem)] flex-col items-center gap-2 overflow-y-auto p-0.5"
-    >
-      {onUndo !== null ? (
-        <StudioTile label={translate(lang, 'story.studio.undo')} probe="undo" onPress={onUndo} disabled={locked}>
-          <UndoMark size={20} />
-        </StudioTile>
-      ) : null}
-      {onRedo !== null ? (
-        <StudioTile label={translate(lang, 'story.studio.redo')} probe="redo" onPress={onRedo} disabled={locked}>
-          <RedoMark size={20} />
-        </StudioTile>
-      ) : null}
-      {onToggleTime !== null ? (
-        <StudioTile label={translate(lang, 'story.studio.tile.time')} probe="time" pressed={timeOpen} onPress={onToggleTime} disabled={locked}>
-          <TimeMark size={20} />
-        </StudioTile>
-      ) : null}
-      {onToggleFrame !== null ? (
-        <StudioTile label={translate(lang, 'story.studio.tile.frame')} probe="frame" pressed={frameOpen} onPress={onToggleFrame} disabled={locked}>
-          <FrameMark size={20} />
-        </StudioTile>
-      ) : null}
-      {onAddPage !== null ? (
-        <StudioTile label={translate(lang, 'story.studio.tile.page')} hint={translate(lang, 'story.studio.page.add')} probe="add-page" onPress={onAddPage} disabled={locked}>
-          <PageMark size={20} />
-        </StudioTile>
-      ) : null}
+      {children}
     </div>
   );
 }

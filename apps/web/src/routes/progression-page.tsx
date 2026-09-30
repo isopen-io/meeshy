@@ -57,7 +57,7 @@ export function ProgressionPage({
             aria-label="Retour à la progression"
           >
             <GlassBack label="Retour à la progression">
-              <Glyph name="caretLeft" size={22} />
+              <Glyph name="caretLeft" size={22} className="rtl:-scale-x-100" />
             </GlassBack>
           </Link>
           <h1 className="flex-1 truncate text-title font-bold" style={{ color: INK }}>

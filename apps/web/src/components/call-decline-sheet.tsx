@@ -75,7 +75,7 @@ export function CallDeclineSheet({
                 <button
                   type="button"
                   onClick={() => reply(text)}
-                  className="flex min-h-11 w-full items-center rounded-card px-3 text-left text-body"
+                  className="flex min-h-11 w-full items-center rounded-card px-3 text-start text-body"
                   style={{ background: ROW, color: '#fff' }}
                   data-call-decline-reply={key}
                 >
