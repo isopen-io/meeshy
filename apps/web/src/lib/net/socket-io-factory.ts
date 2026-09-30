@@ -40,7 +40,16 @@ export const createSocketIOClient: SocketFactory = ({ base, auth }) => {
     get connected() {
       return socket.connected;
     },
-    connect: () => socket.connect(),
+    /* `connect()` PENDANT LE BACKOFF TENTE TOUT DE SUITE (#8839) —
+       `socket.io-client` l'ignore tant qu'il attend sa prochaine tentative
+       (`if (!this.io._reconnecting) this.io.open()`) : le retour au premier
+       plan ou au réseau attendait jusqu'à 16 s. `disconnect()` annule
+       l'attente, `connect()` rouvre aussitôt — miroir `forceReconnect()` iOS. */
+    connect: () => {
+      if (socket.connected) return;
+      if (socket.io._reconnecting) socket.disconnect();
+      socket.connect();
+    },
     disconnect: () => socket.disconnect(),
     on: (event, handler) => {
       socket.on(event, handler as (...args: readonly unknown[]) => void);
