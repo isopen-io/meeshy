@@ -37,9 +37,9 @@ import { ActionLink } from './link-page-parts';
  * ## Les captures
  *
  * iOS : les captures App Store publiées, dans les sept langues
- * (`public/store-shots/ios/<langue>/`). Android : les vues de la coque web
- * (`public/store-shots/android/<langue>/`, clair et sombre), en français,
- * anglais et arabe ; les autres langues retombent sur l'anglais.
+ * (`public/store-shots/ios/<langue>/`). Android : quatre vues de la coque web
+ * — langue, Meeshy Global, story, amis — en clair et en sombre, dans les sept
+ * langues (`public/store-shots/android/<langue>/`, #8804).
  *
  * Dans la coque, le serveur local ne porte pas ces fichiers (retirés par
  * `dropWebOnlyAssets`, `vite.config.ts`) : les captures s'y chargent depuis
@@ -49,8 +49,6 @@ import { ActionLink } from './link-page-parts';
 export const APP_STORE_URL = 'https://apps.apple.com/app/id6760208591';
 
 const ASSET_ORIGIN = __SHELL__ ? 'https://meeshy.me' : '';
-
-const ANDROID_SHOT_LANGUAGES: readonly InterfaceLanguage[] = ['fr', 'en', 'ar'];
 
 export type DownloadShot = { readonly src: string; readonly alt: InterfaceCatalogKey };
 export type AndroidShot = DownloadShot & { readonly darkSrc: string };
@@ -74,12 +72,11 @@ export function downloadShots(language: InterfaceLanguage): {
   readonly ios: readonly DownloadShot[];
   readonly android: readonly AndroidShot[];
 } {
-  const androidLanguage = ANDROID_SHOT_LANGUAGES.includes(language) ? language : 'en';
   return {
     ios: IOS_ALTS.map((alt, index) => ({ src: `/store-shots/ios/${language}/${index + 1}.webp`, alt })),
     android: ANDROID_ALTS.map((alt, index) => ({
-      src: `/store-shots/android/${androidLanguage}/${index + 1}.light.webp`,
-      darkSrc: `/store-shots/android/${androidLanguage}/${index + 1}.dark.webp`,
+      src: `/store-shots/android/${language}/${index + 1}.light.webp`,
+      darkSrc: `/store-shots/android/${language}/${index + 1}.dark.webp`,
       alt,
     })),
   };
