@@ -47,6 +47,25 @@ describe('swiftDesignTokens', () => {
     expect(tokens().veilOpacity('MeeshyColors.mediaChromeFill')).toBe(0.5);
   });
 
+  test('un voile alias de l’échelle noire translucide (#8879) se résout à son opacité', () => {
+    const scale = swiftDesignTokens({
+      designTokens: DESIGN_TOKENS,
+      colors: `
+public nonisolated struct MeeshyColors {
+    public static let mediaScrim = scrim
+    public static let mediaChromeFill = mediaBackdrop.opacity(0.35)
+    public static let onMediaMuted = onMedia.opacity(0.7)
+    public static let onMedia = Color(hex: "FFFFFF")
+    public static let mediaBackdrop = Color(hex: "000000")
+    public static let scrim = mediaBackdrop.opacity(0.5)
+}
+`,
+    });
+    expect(scale.veilOpacity('MeeshyColors.mediaScrim')).toBe(0.5);
+    expect(scale.veilOpacity('MeeshyColors.mediaChromeFill')).toBe(0.35);
+    expect(scale.veilOpacity('MeeshyColors.onMediaMuted')).toBeNull();
+  });
+
   test('un jeton inconnu ou non numérique rend null, jamais une valeur inventée', () => {
     expect(tokens().value('MeeshyRadius.nope')).toBeNull();
     expect(tokens().value('MeeshyRadius.full')).toBeNull();

@@ -206,8 +206,16 @@
 // `surfaceDarkInput` / `surfaceLightInput` ; deux `Color(hex: MeeshyColors.…Hex)`
 // deviennent le jeton `Color` lui-même, et le contour « j'ai réagi » à la couleur
 // de l'auteur quitte le rail de la story avec le chrome plein écran (#8878).
+//
+// 2026-09-30 (#8879, rouge hérité de dev) — variables inconnues 438 → 439 : la
+// fusion bde781b8 a croisé l'abaissement ci-dessus avec la bande d'en-tête
+// dépliée (#8897), dont le dégradé lit `Color(hex: secondaryColor)`
+// (`ConversationExpandedHeaderBand.swift`) — la SECONDE couleur de la palette
+// de la conversation, dérivée de son accent : un contexte de conversation
+// légitime, que le cliquet ne sait pas nommer parce que le paramètre ne
+// s'appelle pas `colorPalette`.
 const REFERENCE_LITERAL_COLOR_COUNT = 65;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 438;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 439;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
