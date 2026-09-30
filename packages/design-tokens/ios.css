@@ -9,11 +9,11 @@
  * elle a besoin des valeurs iOS. Elle les recopiait à la main — une seconde
  * table, que la charte interdit. Elles sont désormais DÉRIVÉES.
  *
- * CE FICHIER NE REMPLACE PAS tokens.css, qui reste la table de la v3 : les deux
- * assignent les mêmes couleurs à des RÔLES DIFFÉRENTS (design-tokens fait de
- * indigo400 sa primaire, iOS de indigo500 ; les neutres de la v3 sont violacés,
- * ceux d'iOS sont des gris vrais). Unifier ces rôles changerait le rendu de
- * web-v2, ce qu'aucune décision n'a demandé — c'est le reste de #5445.
+ * LES RÔLES DU SDK GAGNENT (#8879, directive porteur 2026-09-30) : là où
+ * tokens.css, dark.css et light.css donnaient à un rôle une autre valeur que
+ * celle-ci, ils POINTENT désormais vers la variable --ios-* correspondante.
+ * Seuls restent des valeurs les rôles qu'iOS n'a pas, ou dont la valeur iOS
+ * tombe sous AA dans l'usage de la table — voir docs/product/charte-visuelle-web.md.
  */
 
 :root,
@@ -52,6 +52,18 @@
   --ios-state-ephemeral: #f97316;
   --ios-state-concealed: #6b7280;
   --ios-state-failed: #ef4444;
+
+  /* Le chrome posé sur un média, et l'encre d'un aplat de marque — hors schéma. */
+  --ios-on-media: #ffffff;
+  --ios-on-media-2: color-mix(in srgb, #ffffff 85%, transparent);
+  --ios-on-media-3: color-mix(in srgb, #ffffff 70%, transparent);
+  --ios-media-fill: color-mix(in srgb, #ffffff 15%, transparent);
+  --ios-media-hairline: color-mix(in srgb, #ffffff 20%, transparent);
+  --ios-media-backdrop: #000000;
+  --ios-scrim-soft: color-mix(in srgb, #000000 30%, transparent);
+  --ios-scrim: color-mix(in srgb, #000000 50%, transparent);
+  --ios-scrim-strong: color-mix(in srgb, #000000 70%, transparent);
+  --ios-on-brand: #ffffff;
 
   /* Les plans et les encres, schéma SOMBRE. */
   --ios-surface: #09090b;
