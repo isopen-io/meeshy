@@ -1,6 +1,6 @@
 import * as z from 'zod/mini';
 
-import type { SessionStorage, SessionStoreApi, SessionUser } from './session';
+import { anonymousSessionsKey, type SessionStorage, type SessionStoreApi, type SessionUser } from './session';
 
 /**
  * PLUSIEURS COMPTES SUR L'APPAREIL (#8286, D-142) — le COFFRE des comptes et
@@ -229,7 +229,8 @@ export function createAccountSwitcher({
  * CE QU'UN COMPTE LAISSE SUR L'APPAREIL, hors session et cache de requêtes
  * (que l'identité suivante purge déjà, `query-client.ts`) : ses brouillons de
  * message et de story, son audience de studio, ses modes de lecture et ses
- * dernières ouvertures. La DÉCONNEXION l'efface ; changer de compte le garde,
+ * dernières ouvertures, et les identités anonymes qu'il tenait (#8816). La
+ * DÉCONNEXION l'efface ; changer de compte le garde,
  * chaque clé portant l'identité (`u_<id>`, `<id>`) : aucun autre compte ne la lit.
  */
 export function purgeAccountLocalData({
@@ -243,7 +244,12 @@ export function purgeAccountLocalData({
 }): void {
   const scope = `u_${userId}`;
   const prefixes = [`meeshy.draft.${scope}.`, `meeshy.reading-mode.${scope}.`, `meeshy.last-opened.${scope}.`, `meeshy.composer-protection.${scope}.`, `meeshy.call-journal.${scope}.`];
-  const exact = new Set([`meeshy.draft.story.${userId}`, `meeshy.studio.audience.${userId}`, `meeshy.call-journal.${scope}`]);
+  const exact = new Set([
+    `meeshy.draft.story.${userId}`,
+    `meeshy.studio.audience.${userId}`,
+    `meeshy.call-journal.${scope}`,
+    anonymousSessionsKey(userId),
+  ]);
   keys
     .filter((key) => exact.has(key) || prefixes.some((prefix) => key.startsWith(prefix)))
     .forEach((key) => {

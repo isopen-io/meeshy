@@ -150,6 +150,15 @@ export type HttpRequest = {
    * hors du crédential courant (`logout()` § `X-Session-Token`). */
   readonly headers?: Readonly<Record<string, string>>;
   /**
+   * REMPLACE le crédential de la session POUR CET APPEL (#8816) — `null` part
+   * nu. La jonction ANONYME d'un compte connecté ne doit porter ni son Bearer
+   * (la porte, en authentification optionnelle, ferait entrer le COMPTE) ni
+   * rien qui le nomme. L'appel n'appartient alors à AUCUNE identité de
+   * session : son 401 ne ferme rien, et sa réponse se résout même si la
+   * session change pendant le vol.
+   */
+  readonly credential?: Credential | null;
+  /**
    * REMPLACE le délai de garde du transport POUR CET APPEL (revue-correction
    * #5668). `DEFAULT_TIMEOUT_MS` est arbitré contre le p95 d'un appel JSON
    * (voir son doc-comment) : il ne dit RIEN d'un téléversement, dont la durée
@@ -335,10 +344,11 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
   async function request<T>(req: HttpRequest): Promise<ApiResult<T>> {
     const url = `${options.base}${req.path}`;
     const locale = options.deviceLocale?.() ?? null;
-    const credential = options.credential?.() ?? null;
-    const presentsIdentity = credential !== null || namesAnIdentity(req.headers);
+    const forced = req.credential !== undefined;
+    const credential = forced ? (req.credential ?? null) : (options.credential?.() ?? null);
+    const presentsIdentity = !forced && (credential !== null || namesAnIdentity(req.headers));
     const issuedUnder = options.identity?.() ?? null;
-    const identityChanged = (): boolean => options.identity !== undefined && options.identity() !== issuedUnder;
+    const identityChanged = (): boolean => !forced && options.identity !== undefined && options.identity() !== issuedUnder;
     /** La charge d'une identité quittée — seulement quand CE transport a
      * présenté le crédential de session : une requête publique ne porte
      * rien de personnel. */
