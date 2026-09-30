@@ -285,6 +285,7 @@ const it = {
   'notifications.category.reactions': 'Reazioni',
   'notifications.category.mentions': 'Menzioni',
   'notifications.category.social': 'Social',
+  'notifications.category.engagement': 'Coinvolgimento',
   'notifications.category.contacts': 'Contatti',
   'notifications.category.groups': 'Gruppi',
   'notifications.category.calls': 'Chiamate',
