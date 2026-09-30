@@ -41,6 +41,7 @@ final class PhotoCaptureProcessingGuardTests: XCTestCase {
             "apps/ios/Meeshy",
             "apps/ios/MeeshyShareExtension",
             "apps/ios/MeeshyNotificationExtension",
+            "apps/ios/MeeshyNotificationContentExtension",
             "apps/ios/MeeshyWidgets",
             "apps/ios/MeeshyBroadcastExtension",
             "packages/MeeshySDK/Sources",

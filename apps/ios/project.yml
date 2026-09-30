@@ -200,6 +200,11 @@ targets:
       # lecture pour l'extension qui choisit la catégorie et l'app qui exécute
       # l'action. Foundation + MeeshySDK ; garde : `NotificationDetailPolicyTests`.
       - path: MeeshyNotificationExtension/NotificationDetailPolicy.swift
+      # #8859 — ce que la notification DÉPLOYÉE montre (lecteur, carte, fiche)
+      # et ce qu'elle ne montre jamais (message protégé). Même mécanique que
+      # la politique ci-dessus : l'extension de contenu n'a pas d'hôte de test.
+      # Foundation + MeeshySDK ; garde : `NotificationExpandedContentTests`.
+      - path: MeeshyNotificationContentExtension/NotificationExpandedContent.swift
       # #8063 — le CONTRAT du partage d'écran (trames, en-tête, socket Unix de
       # l'App Group) : l'extension écrit, l'app lit. Compilé dans les DEUX
       # cibles pour qu'une seule définition tienne les deux bouts du fil, et
@@ -218,6 +223,8 @@ targets:
     dependencies:
       - target: MeeshyWidgets
       - target: MeeshyNotificationExtension
+      # #8859 — la notification DÉPLOYÉE (lecteur de vocal, carte, fiche).
+      - target: MeeshyNotificationContentExtension
       # Ré-embarquée 2026-07-28. Le blocage historique de l'archive de
       # distribution ("No profiles for 'me.meeshy.app.share-extension' were
       # found") est levé : l'App ID `me.meeshy.app.share-extension` existe au
@@ -298,6 +305,33 @@ targets:
       CODE_SIGN_ENTITLEMENTS: MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements
     dependencies:
       # NotificationService.swift imports MeeshySDK (and GRDB transitively).
+      - package: MeeshySDK
+        product: MeeshySDK
+
+  # #8859 — Notification Content Extension : la notification DÉPLOYÉE (appui
+  # long) fait écouter un vocal, explorer une position, lire une carte de
+  # visite — sans ouvrir l'app. Elle ne lit que les clés que la NSE lit déjà et
+  # passe par les MÊMES politiques (compilées ici plutôt que recopiées) : le
+  # second verrou de protection (`NSEAttachmentPolicy`), le détail
+  # (`NotificationDetailPolicy`), la résolution des URLs média
+  # (`NotificationPayloadHelpers`) contre l'origine de confiance
+  # (`NSETrustedOrigin`). Groupe d'app partagé avec l'app et la NSE.
+  MeeshyNotificationContentExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: MeeshyNotificationContentExtension
+      - path: MeeshyNotificationExtension/NSEAttachmentPolicy.swift
+      - path: MeeshyNotificationExtension/NotificationDetailPolicy.swift
+      - path: MeeshyNotificationExtension/NotificationPayloadHelpers.swift
+      - path: MeeshyNotificationExtension/NSETrustedOrigin.swift
+    settings:
+      INFOPLIST_FILE: MeeshyNotificationContentExtension/Info.plist
+      PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.notification-content
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_ENTITLEMENTS: MeeshyNotificationContentExtension/MeeshyNotificationContentExtension.entitlements
+    dependencies:
       - package: MeeshySDK
         product: MeeshySDK
 

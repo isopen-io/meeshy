@@ -122,6 +122,7 @@ final class LegacyRuntimeAsyncFunctionTypeGuardTests: XCTestCase {
     private static let scannedRoots = [
         "apps/ios/Meeshy",
         "apps/ios/MeeshyNotificationExtension",
+        "apps/ios/MeeshyNotificationContentExtension",
         "apps/ios/MeeshyShareExtension",
         "apps/ios/MeeshyWidgets",
         "apps/ios/MeeshyBroadcastExtension",
