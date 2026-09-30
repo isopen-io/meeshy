@@ -486,6 +486,9 @@ final class DependencyContainer {
                     // sans compte : un post vu des deux comptes rendait au
                     // second le brouillon du premier.
                     await MainActor.run { CommentDraftStore.shared.clearAll() }
+                    // #8848 — la création en cours du composer appartient au
+                    // compte sortant, comme son brouillon de story (E9).
+                    ComposerAutosaveStore.shared.deleteAll()
                 }
             }
             .store(in: &cancellables)

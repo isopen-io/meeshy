@@ -38,6 +38,20 @@ struct StoryEditSession: Identifiable {
     let story: StoryItem
     let composer: StoryComposerViewModel
     var id: String { story.id }
+
+    /// **« Modifier » reprend l'édition en cours** (#8848) : l'atelier
+    /// autosauvegarde l'édition sous `editingPostId`, et la session l'ADOPTE
+    /// avant que l'atelier ne s'ouvre — sans quoi chaque réouverture
+    /// réhydratait la publication depuis le serveur et jetait le travail.
+    init(story: StoryItem, composer: StoryComposerViewModel, drafts: StoryDraftStore = .shared) {
+        self.story = story
+        self.composer = composer
+        guard let repris = ComposerEditDraftResumption.draftId(
+            editingPostId: composer.editingPostId ?? story.id,
+            drafts: drafts.listDrafts()
+        ) else { return }
+        composer.adoptDraft(id: repris)
+    }
 }
 
 extension View {
