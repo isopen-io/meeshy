@@ -163,7 +163,7 @@ X-App-Platform: ios
 { "success": true,
   "data": { "floor": "1.3.0",              // null si la porte est désarmée — plus de "" ambigu
             "blocked": true,                // le serveur tranche, le client n'implémente pas la comparaison
-            "storeUrl": "https://apps.apple.com/app/meeshy",
+            "storeUrl": "https://apps.apple.com/app/id6760208591",
             "reason": "below_floor" } }     // below_floor | none
 ```
 
