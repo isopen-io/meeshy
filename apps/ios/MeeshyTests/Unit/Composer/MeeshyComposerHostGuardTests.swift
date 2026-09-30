@@ -1329,8 +1329,9 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
 
         XCTAssertTrue(compacte.contains("onPublishDocument("), "Le bloc lu n'est pas celui de l'envoi du socle.")
         XCTAssertTrue(
-            compacte.contains(compact("if accepted { onDismiss() }")),
-            "La sortie doit être CONDITIONNÉE par l'acceptation du site de montage. Un `onDismiss()` "
+            compacte.contains(compact("if accepted { discardAutosavedDraft(); onDismiss() }")),
+            "La sortie doit être CONDITIONNÉE par l'acceptation du site de montage — et c'est elle, et elle seule, "
+                + "qui efface le brouillon autosauvegardé (#8848). Un `onDismiss()` "
                 + "inconditionnel jetterait ce que l'auteur vient d'écrire sur un envoi que le publieur a "
                 + "refusé — et l'écran se refermerait comme si tout allait bien."
         )
@@ -2501,8 +2502,9 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "La story part sous l'audience choisie AU SOCLE, avec ses personnes nommées."
         )
         XCTAssertTrue(
-            corps.contains("ifaccepted{onDismiss()}"),
-            "La sortie n'est acquise que sur une ACCEPTATION — comme `publishDocument`."
+            corps.contains("ifaccepted{discardAutosavedDraft();onDismiss()}"),
+            "La sortie — et l'effacement du brouillon autosauvegardé (#8848) — n'est acquise que sur une "
+                + "ACCEPTATION, comme `publishDocument`."
         )
     }
 

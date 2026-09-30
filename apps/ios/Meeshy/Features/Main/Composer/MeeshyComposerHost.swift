@@ -750,6 +750,9 @@ struct MeeshyComposerHost: View {
     /// préchargés — trois choses qu'il ne voit pas.
     @StateObject var publishTrigger = ComposerPublishTrigger()
 
+    /// La sauvegarde automatique de la création en cours (#8848).
+    @StateObject var autosave = ComposerAutosaveController()
+
     /// **B2 (#3925) — la section description est-elle DÉPLIÉE ?** Repliée par
     /// défaut (une barre compacte qui ne mange pas le canvas) ; un tap la
     /// déplie sur un champ lié au CONTENU partagé (`documentText`). Vit dans le
@@ -939,7 +942,7 @@ struct MeeshyComposerHost: View {
         // SwiftUI n'honore qu'UNE présentation par vue, et la racine porte déjà
         // la feuille de partage (#4996). Une seconde y serait silencieusement
         // avalée — le mode de panne qui ne rougit nulle part.
-        withSceneCameraViewfinder(backgroundMenuPresented(composerStack))
+        withComposerAutosave(withSceneCameraViewfinder(backgroundMenuPresented(composerStack)))
         .background(tint.color.ignoresSafeArea())
 
         // **La couche d'écriture, AU-DESSUS de tout** (#4124). En overlay du
