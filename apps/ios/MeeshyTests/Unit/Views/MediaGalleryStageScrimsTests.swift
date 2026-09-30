@@ -152,7 +152,7 @@ final class MediaGalleryStageScrimsTests: XCTestCase {
         let scrims = AppSourceGuard.stripComments(
             try String(contentsOf: Self.fichier("ConversationMediaGalleryView+Scrims.swift"),
                        encoding: .utf8))
-        XCTAssertTrue(scrims.contains("FullscreenScrims("),
+        XCTAssertTrue(scrims.contains("StoryReaderScrims(") || scrims.contains("FullscreenScrims("),
                       "le voile de la galerie EST celui du SDK, partagé avec la story — on le monte, on ne le réécrit pas")
         XCTAssertTrue(scrims.contains("MediaStageVeil.showsChrome("),
                       "et il suit le MÊME verdict de chrome que les contrôles qu'il détache")
@@ -192,7 +192,7 @@ final class MediaGalleryStageScrimsTests: XCTestCase {
         let page = AppSourceGuard.stripComments(
             try String(contentsOf: Self.fichier("ConversationMediaGalleryView+ScenePage.swift"),
                        encoding: .utf8))
-        XCTAssertFalse(page.contains("FullscreenScrims("),
+        XCTAssertFalse(page.contains("FullscreenScrims(") || page.contains("StoryReaderScrims("),
                        "le voile n'est pas monté PAR une page : il est une couche du visualiseur, " +
                        "commune aux trois natures")
     }

@@ -34,16 +34,16 @@ const SCENES = {
   ipad: { echelle: 0.8, deviceTop: 320 },
 }
 
-const scene = (appareil) => {
-  const a = APPAREILS[appareil]
+const scene = (appareil, plan = APPAREILS) => {
+  const a = plan[appareil]
   return { width: a.width / a.scale, height: a.height / a.scale }
 }
 
 // Panorama : un ruban et des halos dessinés sur la largeur de TOUTE la séquence, chaque
 // capture en montrant sa tranche — la rangée de l'App Store se lit comme une seule fresque.
-const panorama = (appareil) => {
-  const { width, height } = scene(appareil)
-  const n = APPAREILS[appareil].captures.length
+const panorama = (appareil, plan = APPAREILS) => {
+  const { width, height } = scene(appareil, plan)
+  const n = plan[appareil].captures.length
   const total = width * n
   const onde = (phase, amplitude, milieu) =>
     Array.from({ length: Math.ceil(total / 12) + 1 }, (_, i) => {
@@ -99,30 +99,34 @@ const rangeeDecor = (decor) => decor === 'coeur-langues' || decor === 'drapeaux-
 const documentHtml = ({ lang, corps, largeur, hauteur }) =>
   `<!doctype html><html lang="${lang}" dir="${directionOf(lang)}"><head><meta charset="utf-8"><style>${kitCss()}\n${CSS_APPSTORE}</style></head><body style="width:${largeur}px;height:${hauteur}px">${toString(corps)}<script>${MISE_EN_PAGE}</script></body></html>`
 
-export const captureDe = ({ appareil, rang }) => {
-  const capture = APPAREILS[appareil]?.captures[rang - 1]
+export const captureDe = ({ appareil, rang, plan = APPAREILS }) => {
+  const capture = plan[appareil]?.captures[rang - 1]
   if (!capture) throw new Error(`capture inconnue : ${appareil} n°${rang}`)
   return capture
 }
 
-export const pageCapture = ({ appareil, lang, rang, corps }) => {
-  const capture = captureDe({ appareil, rang })
+// La VRAIE capture d'un écran (#8855) : un PNG natif, posé dans le cadre à la place de l'écran recomposé.
+const imageEcran = (png) => raw(`<img class="ecran-reel" src="data:image/png;base64,${png.toString('base64')}" alt="">`)
+
+export const pageCapture = ({ appareil, lang, rang, corps, plan = APPAREILS, ecranReel }) => {
+  const capture = captureDe({ appareil, rang, plan })
   const ctx = contexte({ lang, theme: capture.theme })
-  const { width, height } = scene(appareil)
+  const { width, height } = scene(appareil, plan)
   const { echelle } = SCENES[appareil]
   const deviceTop = capture.deviceTop ?? SCENES[appareil].deviceTop
   const device = tailleCadre(appareil)
   const decor = capture.decor ? DECORS[capture.decor](ctx, appareil) : ''
   const ton = capture.theme === 'dark' ? 'as-sombre' : 'as-clair'
+  const contenuEcran = ecranReel ? imageEcran(ecranReel) : capture.ecran ? ecran(capture.ecran, ctx) : ''
   const contenu = html`<div class="as-canvas as-${appareil} ${ton}" dir="${ctx.dir}" lang="${lang}" style="width:${width}px;height:${height}px;--pano-x:${-(rang - 1) * width}px;--device-top:${deviceTop}px">
-    ${panorama(appareil)}
+    ${panorama(appareil, plan)}
     <header class="as-head">
       ${rang === 1 ? html`<div class="as-brand">${logo(appareil === 'iphone' ? 30 : 36)}<span>Meeshy</span></div>` : ''}
       ${legende({ lang, cle: capture.legende, corps })}
       ${rangeeDecor(capture.decor) ? decor : ''}
     </header>
     <div class="as-device" style="width:${device.width}px;height:${device.height}px;transform:translateX(-50%) scale(${echelle})">
-      ${cadre(appareil, ecran(capture.ecran, ctx))}
+      ${cadre(appareil, contenuEcran)}
     </div>
     ${rangeeDecor(capture.decor) ? '' : decor}
   </div>`
