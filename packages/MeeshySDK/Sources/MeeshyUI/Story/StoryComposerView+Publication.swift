@@ -250,8 +250,8 @@ extension StoryComposerView {
     /// tant qu'un `applyClosing` n'existe pas (une UI sans effet mentirait).
     /// Les transitions ENTRE clips vivent dans la timeline (TransitionInspector).
     var transitionPicker: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(String(
                     localized: "story.composer.openingTitle",
                     defaultValue: "Ouverture du slide",
@@ -274,7 +274,7 @@ extension StoryComposerView {
             }
             Spacer(minLength: 0)
         }
-        .padding(20)
+        .padding(MeeshySpacing.xl)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 

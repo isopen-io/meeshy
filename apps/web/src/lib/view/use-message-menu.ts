@@ -345,6 +345,23 @@ export function useMessageMenu(params: {
     [selection, copyableTextOf, announce],
   );
 
+  /**
+   * **LE GLISSÉ ET L'ICÔNE « RÉPONDRE » PASSENT PAR LE MENU** (#7559, #8899) —
+   * même loi d'offre (`messageMenuItems` : pas de réponse ni de transfert sur
+   * une vue unique, pas de transfert refusé par `canForward`), même effet
+   * (`onMenuAction`) : « Répondre » arme la citation, « Transférer » arme la
+   * sélection avec ce message coché (D-113), comme le fait iOS au glissé
+   * (`beginSelectionMode(seedingWith:)`). En sélection, rien ne s'offre.
+   */
+  const swipeActionsOf = useCallback(
+    (message: Message): { readonly canReply: boolean; readonly canForward: boolean } | undefined => {
+      if (selection !== null) return undefined;
+      const ids = messageMenuItems(messageMenuContextOf(message, { now: Date.now() })).map((item) => item.id);
+      return { canReply: ids.includes('reply'), canForward: ids.includes('forward') };
+    },
+    [selection],
+  );
+
   /** Les données du menu OUVERT — `undefined` tant qu'aucun message n'est
    * ciblé, ou si le message a disparu du fil entre-temps (fixture rechargée,
    * suppression) : l'hôte n'y monte alors rien.
@@ -407,6 +424,7 @@ export function useMessageMenu(params: {
     setExportFor,
     servedOf,
     starOf,
+    swipeActionsOf,
   };
 }
 

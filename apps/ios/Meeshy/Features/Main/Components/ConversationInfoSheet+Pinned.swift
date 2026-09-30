@@ -30,65 +30,65 @@ extension ConversationInfoSheet {
                         pinnedPreviewRow(msg)
                     }
                     if pinned.count > 2 {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Text(String(format: String(localized: "conversation.info.pinned.see-all", defaultValue: "Voir les %d messages épinglés", bundle: .main), pinned.count))
-                                .font(MeeshyFont.relative(11, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                                 .foregroundColor(accent)
                             Image(systemName: "chevron.forward")
                                 .font(MeeshyFont.relative(9, weight: .bold))
                                 .foregroundColor(accent)
                         }
-                        .padding(.vertical, 6)
+                        .padding(.vertical, MeeshySpacing.xsPlus)
                     }
                 }
-                .padding(.vertical, 4)
-                .padding(.horizontal, 14)
+                .padding(.vertical, MeeshySpacing.xs)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .fill(accent.opacity(isDark ? 0.08 : 0.05))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(accent.opacity(0.12), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                        .strokeBorder(accent.opacity(MeeshyOpacity.light), lineWidth: 1)
                 )
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.bottom, MeeshySpacing.md)
             .opacity(appearAnimation ? 1 : 0)
             .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.04), value: appearAnimation)
         }
     }
 
     func pinnedPreviewRow(_ msg: Message) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "pin.fill")
-                .font(MeeshyFont.relative(10, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                 .foregroundColor(accent)
                 .rotationEffect(.degrees(45))
 
             Text(msg.senderName ?? "?")
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(1)
 
             if !msg.content.isEmpty {
                 Text(msg.content)
-                    .font(MeeshyFont.relative(12))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(1)
             } else if let att = msg.attachments.first {
-                HStack(spacing: 3) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     Image(systemName: attachmentIcon(att.type))
                         .font(MeeshyFont.relative(9))
                     Text(attachmentLabel(att.type))
-                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 }
                 .foregroundColor(theme.textMuted)
             }
 
             Spacer(minLength: 0)
         }
-        .padding(.vertical, 7)
+        .padding(.vertical, MeeshySpacing.xsPlus)
     }
 
     // MARK: - All Pinned Messages Sheet
@@ -101,11 +101,11 @@ extension ConversationInfoSheet {
                         fullPinnedRow(msg)
                         if msg.id != pinnedMessages.last?.id {
                             Divider()
-                                .padding(.horizontal, 20)
+                                .padding(.horizontal, MeeshySpacing.xl)
                         }
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
             }
             .background(theme.backgroundPrimary)
             .navigationTitle(String(localized: "conversation.info.pinned.title", defaultValue: "Messages épinglés", bundle: .main))
@@ -116,10 +116,10 @@ extension ConversationInfoSheet {
                         showAllPinnedMessages = false
                     } label: {
                         Image(systemName: "xmark")
-                            .font(MeeshyFont.relative(10, weight: .bold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
                             .foregroundColor(theme.textMuted)
                             .frame(width: 28, height: 28)
-                            .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                            .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                     }
                     .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                 }
@@ -129,43 +129,43 @@ extension ConversationInfoSheet {
     }
 
     func fullPinnedRow(_ msg: Message) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             ZStack {
                 Circle()
                     .fill(accent.opacity(isDark ? 0.2 : 0.12))
                     .frame(width: 36, height: 36)
 
                 Image(systemName: "pin.fill")
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                     .foregroundColor(accent)
                     .rotationEffect(.degrees(45))
             }
 
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Text(msg.senderName ?? "?")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
                     MetaSeparator()
                         .foregroundColor(theme.textMuted)
 
                     Text(relativeTime(from: msg.createdAt))
-                        .font(MeeshyFont.relative(11, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
 
                 if !msg.content.isEmpty {
                     Text(msg.content)
-                        .font(MeeshyFont.relative(13))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(4)
                 } else if let att = msg.attachments.first {
-                    HStack(spacing: 4) {
+                    HStack(spacing: MeeshySpacing.xs) {
                         Image(systemName: attachmentIcon(att.type))
-                            .font(MeeshyFont.relative(10))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxs))
                         Text(attachmentLabel(att.type))
-                            .font(MeeshyFont.relative(12, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     }
                     .foregroundColor(accent)
                 }
@@ -173,7 +173,7 @@ extension ConversationInfoSheet {
 
             Spacer()
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.md)
     }
 }

@@ -109,14 +109,14 @@ struct SettingsView: View {
             // pendant le quiesce et provoque une navigation orpheline.
             if isLoggingOut {
                 ZStack {
-                    Color.black.opacity(0.45).ignoresSafeArea()
+                    Color.black.opacity(MeeshyOpacity.strong).ignoresSafeArea()
                     VStack(spacing: MeeshySpacing.md + 2) {
                         ProgressView()
                             .progressViewStyle(.circular)
                             .controlSize(.large)
                             .tint(.white)
                         Text(String(localized: "settings.logout.inprogress", bundle: .main))
-                            .font(MeeshyFont.relative(14, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                             .foregroundStyle(.white)
                     }
                     .padding(.horizontal, MeeshySpacing.xxxl)
@@ -225,17 +225,17 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs - 1) {
                     Text(authManager.currentUser?.displayName ?? String(localized: "settings.my_profile", bundle: .main))
-                        .font(MeeshyFont.relative(17, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                     Text("@\(authManager.currentUser?.username ?? "")")
-                        .font(MeeshyFont.relative(13))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         .foregroundColor(theme.textSecondary)
                 }
 
                 Spacer()
 
                 Image(systemName: "chevron.forward")
-                    .font(MeeshyFont.relative(14, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
                     .foregroundColor(theme.textMuted)
             }
             .padding(MeeshySpacing.lg)
@@ -255,7 +255,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "lock.fill", title: String(localized: "settings.privacy.title", bundle: .main), color: MeeshyColors.brandPrimaryHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -268,7 +268,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "shield.fill", title: String(localized: "settings.security.title", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -281,7 +281,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "lock.shield", title: String(localized: "settings.blocked_users", bundle: .main), color: MeeshyColors.errorHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -294,7 +294,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "person.crop.circle.badge.minus", title: String(localized: "settings.delete_account", bundle: .main), color: MeeshyColors.errorHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(MeeshyColors.error.opacity(0.6))
                 }
             }
@@ -320,9 +320,9 @@ struct SettingsView: View {
                         } label: {
                             VStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: pref.icon)
-                                    .font(MeeshyFont.relative(14))
+                                    .font(MeeshyFont.relative(MeeshyIconSize.sm))
                                 Text(themeLabel(for: pref))
-                                    .font(MeeshyFont.relative(9, weight: .medium))
+                                    .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium))
                                     // Un seul segment = une seule ligne, à sa
                                     // largeur idéale : sans `fixedSize`, le
                                     // HStack compressait d'abord ces libellés
@@ -337,7 +337,7 @@ struct SettingsView: View {
                             .padding(.vertical, MeeshySpacing.xs + 2)
                             .background(
                                 RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                                    .fill(theme.preference == pref ? Color(hex: pref.tintColor).opacity(0.15) : Color.clear)
+                                    .fill(theme.preference == pref ? Color(hex: pref.tintColor).opacity(MeeshyOpacity.light) : Color.clear)
                             )
                         }
                         .accessibilityLabel("\(String(localized: "settings.theme", bundle: .main)) \(themeLabel(for: pref))")
@@ -397,10 +397,10 @@ struct SettingsView: View {
                 HStack(spacing: MeeshySpacing.xs) {
                     Text(interfaceLanguageChoice.map(Self.interfaceLanguageLabel)
                          ?? automaticLanguageLabel)
-                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                     Image(systemName: "chevron.up.chevron.down")
-                        .font(MeeshyFont.relative(10, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -452,7 +452,7 @@ struct SettingsView: View {
             }
             Text(String(localized: "settings.interface.reading_modes.subtitle",
                         defaultValue: "Désactivé, les conversations s'ouvrent en Script.", bundle: .main))
-                .font(MeeshyFont.relative(12))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize))
                 .foregroundColor(theme.textSecondary)
                 .padding(.horizontal, MeeshySpacing.md + 2)
                 .padding(.bottom, MeeshySpacing.sm + 2)
@@ -537,7 +537,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "slider.horizontal.3", title: String(localized: "settings.notif.more_options", bundle: .main), color: MeeshyColors.errorHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -556,7 +556,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "internaldrive.fill", title: String(localized: "settings.storage", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -569,7 +569,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "arrow.down.circle.fill", title: String(localized: "settings.media.download.title", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -582,7 +582,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "square.and.arrow.up.fill", title: String(localized: "settings.export_data", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -601,7 +601,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "waveform.circle.fill", title: String(localized: "settings.voice.manage", bundle: .main), color: MeeshyColors.trackingAccentHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -614,7 +614,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "plus.circle.fill", title: String(localized: "settings.voice.create", bundle: .main), color: MeeshyColors.successHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -661,7 +661,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "star.fill", title: String(localized: "settings.tools.starred", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -674,7 +674,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "bookmark.fill", title: String(localized: "settings.tools.bookmarks", defaultValue: "Publications enregistrées", bundle: .main), color: MeeshyColors.indigo400Hex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -687,7 +687,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "chart.bar.fill", title: String(localized: "settings.tools.stats", bundle: .main), color: MeeshyColors.indigo300Hex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -700,7 +700,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "trophy.fill", title: String(localized: "settings.tools.progression", defaultValue: "Progression", bundle: .main), color: MeeshyColors.warningHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -713,7 +713,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "link.badge.plus", title: String(localized: "settings.tools.affiliate", bundle: .main), color: MeeshyColors.successHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -732,7 +732,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "lifepreserver.fill", title: String(localized: "settings.help_center", bundle: .main), color: MeeshyColors.successHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -751,7 +751,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "info.circle.fill", title: String(localized: "settings.about.meeshy", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -764,7 +764,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "doc.text.fill", title: String(localized: "settings.terms", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -777,7 +777,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "hand.raised.fill", title: String(localized: "settings.privacy_policy", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -790,7 +790,7 @@ struct SettingsView: View {
             } label: {
                 settingsRow(icon: "checkmark.seal.fill", title: String(localized: "settings.licenses", bundle: .main), color: MeeshyColors.infoHex) {
                     Image(systemName: "chevron.forward")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -799,7 +799,7 @@ struct SettingsView: View {
 
             settingsRow(icon: "sparkles", title: String(localized: "settings.version", bundle: .main), color: MeeshyColors.warningHex) {
                 Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
-                    .font(MeeshyFont.relative(13, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
         }
@@ -820,10 +820,10 @@ struct SettingsView: View {
         } label: {
             HStack {
                 Image(systemName: "person.2.arrow.trianglehead.counterclockwise")
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                 Text(String(localized: "settings.switchAccount.title",
                             defaultValue: "Changer de compte", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
             }
             .foregroundColor(theme.textPrimary)
             .frame(maxWidth: .infinity)
@@ -833,7 +833,7 @@ struct SettingsView: View {
                     .fill(theme.inputBackground)
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                            .stroke(theme.textMuted.opacity(0.25), lineWidth: 1)
+                            .stroke(theme.textMuted.opacity(MeeshyOpacity.medium), lineWidth: 1)
                     )
             )
         }
@@ -855,19 +855,19 @@ struct SettingsView: View {
             // ci-dessous empêche le double-tap.
             HStack {
                 Image(systemName: "rectangle.portrait.and.arrow.forward")
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                 Text(String(localized: "settings.logout.title", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
             }
             .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)
             .padding(.vertical, MeeshySpacing.md + 2)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                    .fill(MeeshyColors.error.opacity(0.1))
+                    .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
                     .overlay(
                         RoundedRectangle(cornerRadius: MeeshyRadius.lg)
-                            .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
+                            .stroke(MeeshyColors.error.opacity(MeeshyOpacity.medium), lineWidth: 1)
                     )
             )
         }
@@ -898,7 +898,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: icon)
-                    .font(MeeshyFont.relative(12, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     .foregroundColor(Color(hex: color))
                     /* L'ICÔNE EST DÉCORATIVE — relevé au passage en revue
                        accessibilité du 2026-09-13 : sans ce masque, VoiceOver
@@ -909,7 +909,7 @@ struct SettingsView: View {
                        déjà tout ce que l'icône illustre. */
                     .accessibilityHidden(true)
                 Text(title.uppercased())
-                    .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: color))
                     .tracking(1.2)
             }
@@ -937,17 +937,17 @@ struct SettingsView: View {
     ) -> some View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: icon)
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                 .foregroundColor(Color(hex: color))
-                .frame(width: 28, height: 28)
+                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                        .fill(Color(hex: color).opacity(0.12))
+                        .fill(Color(hex: color).opacity(MeeshyOpacity.light))
                 )
                 .accessibilityHidden(true)
 
             Text(title)
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()

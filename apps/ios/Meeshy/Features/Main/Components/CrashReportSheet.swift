@@ -18,7 +18,7 @@ struct CrashReportSheet: View {
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                         } label: {
-                            VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                                 HStack {
                                     kindBadge(report.kind)
                                     Spacer()
@@ -72,8 +72,8 @@ struct CrashReportSheet: View {
         Text(kind.localizedLabel)
             .font(.caption2.weight(.bold))
             .foregroundColor(.white)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
+            .padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(color))
     }
 

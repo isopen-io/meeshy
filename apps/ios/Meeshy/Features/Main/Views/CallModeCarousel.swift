@@ -103,19 +103,19 @@ struct CallModeCarousel<Item: Hashable, Cell: View>: View {
     @State private var centred: Item? = nil
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Text(name(centred ?? selection))
                 .font(.footnote.weight(.semibold))
                 .foregroundColor(.white)
                 .lineLimit(1)
-                .shadow(color: .black.opacity(0.5), radius: 3)
+                .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3)
             if let hint {
                 Text(hint)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(.white.opacity(0.75))
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                    .shadow(color: .black.opacity(0.5), radius: 3)
+                    .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3)
                     .accessibilityHidden(true)
                     .transition(.opacity)
             }
@@ -469,7 +469,7 @@ struct CallModeGlyph: View {
     var body: some View {
         ZStack {
             Circle()
-                .fill(isSelected ? Color.white.opacity(0.95) : Color.black.opacity(0.35))
+                .fill(isSelected ? Color.white.opacity(0.95) : Color.black.opacity(MeeshyOpacity.medium))
             artwork
         }
         .overlay(
@@ -483,7 +483,7 @@ struct CallModeGlyph: View {
         switch art {
         case .symbol(let symbol):
             Image(systemName: symbol)
-                .font(MeeshyFont.relative(22, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .semibold))
                 .foregroundColor(isSelected ? .black : .white)
         case .emoji(let emoji):
             Text(emoji)
@@ -502,23 +502,23 @@ struct CallModeThumbnail: View {
     let symbol: String
     let isSelected: Bool
 
-    private static let shape = RoundedRectangle(cornerRadius: 10, style: .continuous)
+    private static let shape = RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
 
     var body: some View {
         ZStack {
-            Self.shape.fill(Color.white.opacity(0.12))
+            Self.shape.fill(Color.white.opacity(MeeshyOpacity.light))
             if let image {
                 Image(decorative: image, scale: 1)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             } else {
                 Image(systemName: symbol)
-                    .font(MeeshyFont.relative(20, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .semibold))
                     .foregroundColor(.white)
             }
         }
         .clipShape(Self.shape)
-        .overlay(Self.shape.stroke(isSelected ? Color.white : Color.white.opacity(0.3), lineWidth: isSelected ? 3 : 1))
+        .overlay(Self.shape.stroke(isSelected ? Color.white : Color.white.opacity(MeeshyOpacity.medium), lineWidth: isSelected ? 3 : 1))
         .accessibilityHidden(true)
     }
 }
@@ -542,7 +542,7 @@ struct CallModeActionBar: View {
     private static let sideDiameter: CGFloat = 44
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
+        HStack(alignment: .center, spacing: MeeshySpacing.md) {
             CallPillButton(
                 symbol: "xmark",
                 kind: .normal,
@@ -567,7 +567,7 @@ struct CallModeActionBar: View {
                 .disabled(!option.isEnabled)
             }
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, MeeshySpacing.xxl)
     }
 }
 
@@ -600,9 +600,9 @@ struct CallModeRecordingStop: View {
     let onStop: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             TimelineView(.periodic(from: startedAt, by: 1)) { context in
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Circle()
                         .fill(MeeshyColors.error)
                         .frame(width: 8, height: 8)
@@ -610,9 +610,9 @@ struct CallModeRecordingStop: View {
                         .font(.footnote.weight(.semibold).monospacedDigit())
                         .foregroundColor(.white)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(Color.black.opacity(0.45)))
+                .padding(.horizontal, MeeshySpacing.smPlus)
+                .padding(.vertical, MeeshySpacing.xs)
+                .background(Capsule().fill(Color.black.opacity(MeeshyOpacity.strong)))
                 .accessibilityHidden(true)
             }
             Button(action: onStop) {
@@ -620,11 +620,11 @@ struct CallModeRecordingStop: View {
                     Circle()
                         .stroke(Color.white, lineWidth: 4)
                     Circle()
-                        .fill(Color.black.opacity(0.35))
-                        .padding(4)
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color.black.opacity(MeeshyOpacity.medium))
+                        .padding(MeeshySpacing.xs)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous)
                         .fill(MeeshyColors.error)
-                        .frame(width: 28, height: 28)
+                        .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                 }
                 .frame(width: Self.diameter, height: Self.diameter)
                 .contentShape(Circle())

@@ -44,7 +44,7 @@ public struct ProfileCompletionRing: View {
 
             // Percentage text
             Text("\(Int(progress * 100))%")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .font(.system(size: MeeshyFont.titleSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
         }
         .onAppear {
@@ -60,7 +60,7 @@ public struct ProfileCompletionRing: View {
 #if DEBUG
 struct ProfileCompletionRing_Previews: PreviewProvider {
     static var previews: some View {
-        VStack(spacing: 30) {
+        VStack(spacing: MeeshySpacing.xxxl) {
             ProfileCompletionRing(progress: 0.25)
             ProfileCompletionRing(progress: 0.65)
             ProfileCompletionRing(progress: 1.0)

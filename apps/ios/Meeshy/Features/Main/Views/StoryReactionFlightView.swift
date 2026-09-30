@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 
 /// Une réaction en vol : l'emoji quitte sa tuile agrandie et rejoint le cœur.
 nonisolated struct StoryReactionFlight: Equatable, Identifiable {
@@ -32,7 +33,7 @@ struct StoryReactionFlightView: View {
         let from = CGPoint(x: flight.from.midX, y: flight.from.midY)
         let to = CGPoint(x: target.midX, y: target.midY)
         Text(flight.emoji)
-            .font(.system(size: 28))
+            .font(.system(size: MeeshyFont.displaySize))
             .scaleEffect(1.35 + (0.5 - 1.35) * progress)
             .position(
                 x: from.x + (to.x - from.x) * progress,

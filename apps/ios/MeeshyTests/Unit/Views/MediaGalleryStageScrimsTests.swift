@@ -28,7 +28,7 @@ import MeeshyUI
 ///
 /// ## Ce qu'elle a maintenant : le voile de la STORY, tel quel
 ///
-/// `StoryReaderScrims` (#6701) — deux `LinearGradient` pleine largeur, ancrés au
+/// `StoryReaderScrims` (#6701, remonté au SDK sous le nom `FullscreenScrims` au #8878) — deux `LinearGradient` pleine largeur, ancrés au
 /// HAUT et au BAS de l'écran, `.ignoresSafeArea()`, sourds au doigt, muets pour
 /// VoiceOver, et qui SUIVENT le chrome (opacité 1 avec lui, 0 sans lui, au même
 /// ressort). Le composant n'est pas réécrit : c'est celui de la surface de
@@ -71,7 +71,7 @@ final class MediaGalleryStageScrimsTests: XCTestCase {
             Color.white
             SceneCard(layout: carte, thumbHash: nil) { Color.white }
                 .frame(width: carte.sceneFrame.width, height: carte.sceneFrame.height)
-            StoryReaderScrims(topInset: 59, chromeVisible: chromeVisible)
+            FullscreenScrims(topInset: 59, chromeVisible: chromeVisible)
         }
         .frame(width: fenetre.width, height: fenetre.height)
 
@@ -136,11 +136,11 @@ final class MediaGalleryStageScrimsTests: XCTestCase {
 
     // MARK: - Le montage, lu à la source
 
-    /// **La galerie MONTE le voile de la story, et l'alimente du MÊME verdict
-    /// que ses contrôles.**
+    /// **La galerie MONTE le voile du SDK partagé avec la story, et l'alimente du
+    /// MÊME verdict que ses contrôles.**
     ///
     /// Trois choses, qu'aucun pixel ne peut dire :
-    /// 1. le montage existe, et c'est bien `StoryReaderScrims` — pas un dégradé
+    /// 1. le montage existe, et c'est bien `FullscreenScrims` (MeeshyUI, #8878) — pas un dégradé
     ///    voisin réécrit sur place (« partir du fait que le composant est déjà
     ///    fait ») ;
     /// 2. il est alimenté par `MediaStageVeil.showsChrome(...)`, le verdict
@@ -152,8 +152,8 @@ final class MediaGalleryStageScrimsTests: XCTestCase {
         let scrims = AppSourceGuard.stripComments(
             try String(contentsOf: Self.fichier("ConversationMediaGalleryView+Scrims.swift"),
                        encoding: .utf8))
-        XCTAssertTrue(scrims.contains("StoryReaderScrims("),
-                      "le voile de la galerie EST celui de la story — on le monte, on ne le réécrit pas")
+        XCTAssertTrue(scrims.contains("FullscreenScrims("),
+                      "le voile de la galerie EST celui du SDK, partagé avec la story — on le monte, on ne le réécrit pas")
         XCTAssertTrue(scrims.contains("MediaStageVeil.showsChrome("),
                       "et il suit le MÊME verdict de chrome que les contrôles qu'il détache")
 
@@ -192,7 +192,7 @@ final class MediaGalleryStageScrimsTests: XCTestCase {
         let page = AppSourceGuard.stripComments(
             try String(contentsOf: Self.fichier("ConversationMediaGalleryView+ScenePage.swift"),
                        encoding: .utf8))
-        XCTAssertFalse(page.contains("StoryReaderScrims("),
+        XCTAssertFalse(page.contains("FullscreenScrims("),
                        "le voile n'est pas monté PAR une page : il est une couche du visualiseur, " +
                        "commune aux trois natures")
     }

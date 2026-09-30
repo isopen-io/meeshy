@@ -18,17 +18,17 @@ struct SoundExtractionToggle: View {
     let onChange: (Bool) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Toggle(isOn: Binding(get: { isOn }, set: { onChange($0) })) {
                 Text(String(localized: "story.media.soundExtraction.label", defaultValue: "Autoriser la reprise du son", bundle: .module))
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
             }
             .toggleStyle(.switch)
             .tint(MeeshyColors.indigo500)
             .accessibilityHint(String(localized: "story.media.soundExtraction.a11yHint", defaultValue: "D'autres personnes pourront réutiliser la bande-son des vidéos de ce post dans leurs propres publications.", bundle: .module))
 
             Text(String(localized: "story.media.soundExtraction.caption", defaultValue: "D'autres personnes pourront réutiliser la bande-son des vidéos de ce post.", bundle: .module))
-                .font(.system(size: 10))
+                .font(.system(size: MeeshyFont.captionSize))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }

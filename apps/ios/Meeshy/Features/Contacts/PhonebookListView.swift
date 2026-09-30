@@ -40,26 +40,26 @@ struct PhonebookListView: View {
     // MARK: - Header (sync + filters)
 
     private var header: some View {
-        VStack(spacing: 10) {
-            HStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 ContactsSearchField(
                     placeholder: String(localized: "contacts.phonebook.search-placeholder", defaultValue: "Rechercher dans le répertoire", bundle: .main),
                     query: $viewModel.searchQuery
                 )
                 syncButton
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     ForEach(DirectoryFilter.allCases, id: \.self) { filter in
                         filterChip(filter)
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
             }
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, MeeshySpacing.sm)
     }
 
     /// Synchronisation explicite : relit le carnet de l'appareil et le renvoie.
@@ -134,7 +134,7 @@ struct PhonebookListView: View {
                         platformSection
                     }
                 }
-                .padding(.top, 4)
+                .padding(.top, MeeshySpacing.xs)
             }
             .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
             .refreshable { await viewModel.load(forceNetwork: true) }
@@ -146,8 +146,8 @@ struct PhonebookListView: View {
     /// qu'aucune ligne ne se fasse passer pour un contact du carnet.
     @ViewBuilder
     private var platformSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Text(String(localized: "contacts.phonebook.platform-results", defaultValue: "Sur Meeshy, hors de ton répertoire", bundle: .main))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textMuted)
@@ -156,15 +156,15 @@ struct PhonebookListView: View {
                     ProgressView().progressViewStyle(.circular).scaleEffect(0.6)
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
+            .padding(.horizontal, MeeshySpacing.xl)
+            .padding(.top, MeeshySpacing.lg)
 
             if viewModel.platformResults.isEmpty && !viewModel.isSearchingPlatform {
                 Text(String(localized: "contacts.phonebook.platform-none", defaultValue: "Aucun utilisateur ne correspond", bundle: .main))
                     .font(.subheadline)
                     .foregroundColor(theme.textMuted)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.vertical, MeeshySpacing.sm)
             } else {
                 ForEach(viewModel.platformResults) { user in
                     DirectoryPersonRow(

@@ -28,13 +28,13 @@ struct SkeletonProfileHeader: View {
     }
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: MeeshySpacing.xxl) {
             bannerAndAvatar
             identity
             bio
             statsRow
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(String(localized: "skeleton.profile.loading", defaultValue: "Chargement du profil", bundle: .main)))
     }
@@ -65,15 +65,15 @@ struct SkeletonProfileHeader: View {
     }
 
     private var identity: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             SkeletonShape(width: 160, height: 18, cornerRadius: 6)
             SkeletonShape(width: 100, height: 12, cornerRadius: 4)
         }
-        .padding(.top, 8)
+        .padding(.top, MeeshySpacing.sm)
     }
 
     private var bio: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             ForEach(0..<bioLineCount, id: \.self) { idx in
                 SkeletonShape(
                     width: nil,
@@ -87,7 +87,7 @@ struct SkeletonProfileHeader: View {
     }
 
     private var statsRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             ForEach(0..<3, id: \.self) { _ in
                 statCell
             }
@@ -95,15 +95,15 @@ struct SkeletonProfileHeader: View {
     }
 
     private var statCell: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: MeeshySpacing.xsPlus) {
             SkeletonShape(width: 40, height: 20, cornerRadius: 6)
             SkeletonShape(width: 60, height: 10, cornerRadius: 4)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
+        .padding(.vertical, MeeshySpacing.mdPlus)
         .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(placeholderColor.opacity(0.5))
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .fill(placeholderColor.opacity(MeeshyOpacity.strong))
         )
     }
 
@@ -111,14 +111,14 @@ struct SkeletonProfileHeader: View {
 
     private var placeholderColor: Color {
         colorScheme == .dark
-            ? Color.white.opacity(0.06)
-            : Color.black.opacity(0.05)
+            ? Color.white.opacity(MeeshyOpacity.subtle)
+            : Color.black.opacity(MeeshyOpacity.faint)
     }
 
     private var ringColor: Color {
         colorScheme == .dark
-            ? Color.white.opacity(0.08)
-            : Color.black.opacity(0.07)
+            ? Color.white.opacity(MeeshyOpacity.subtle)
+            : Color.black.opacity(MeeshyOpacity.subtle)
     }
 }
 

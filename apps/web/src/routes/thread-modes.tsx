@@ -8,6 +8,7 @@ import { AfterReadWatermark, afterReadReachOf } from '@/components/after-read-wa
 import { Bubble } from '@/components/bubble';
 import { FocalRow } from '@/components/focal-row';
 import { MessageEffectsHost } from '@/components/message-effects-host';
+import { MessageSwipe } from '@/components/message-swipe';
 import { UnfoldStage } from '@/components/unfold-stage';
 import { SummarySkeleton } from '@/components/summary/summary-skeleton';
 import { TypingRosterCell } from '@/components/typing-roster-cell';
@@ -36,6 +37,7 @@ import { isAfterReadMessage } from '@/lib/view/after-read';
 import { destructionPhaseOf } from '@/lib/view/ephemeral-destruction';
 import { resolveEphemeralDeadline } from '@/lib/view/ephemeral-reception';
 import type { ThreadScene } from '@/lib/reading-mode/scene';
+import type { SwipeOutcome } from '@/lib/view/swipe';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 
 /**
@@ -160,6 +162,8 @@ export function ThreadModes({
   selection,
   onRowTap,
   longPress,
+  swipeActionsOf,
+  onSwipeAction,
   onPickLanguage,
   onReact,
   onOpenDetail,
@@ -239,6 +243,10 @@ export function ThreadModes({
   readonly selection?: SelectionState | null;
   readonly onRowTap?: (messageId: string) => void;
   readonly longPress?: ReturnType<typeof useLongPress>;
+  /** Glisser → répondre, ← transférer, et l'icône « Répondre » du pointeur
+   * fin (#7559, #8899) — l'offre et l'effet du MENU (`useMessageMenu`). */
+  readonly swipeActionsOf?: (message: Message) => { readonly canReply: boolean; readonly canForward: boolean } | undefined;
+  readonly onSwipeAction?: (messageId: string, outcome: SwipeOutcome) => void;
   readonly onPickLanguage?: (messageId: string, code: string) => void;
   /** Retire une réaction MIENNE en tapant sa capsule (#5865) — même geste
    * que `onPickLanguage`, une seule loi vers `useMessageMenu.onMenuReact`. */
@@ -579,6 +587,14 @@ export function ThreadModes({
             contentWithheld: rowWithheld,
             phase: revealPhases.get(p.message.id) ?? { phase: 'hidden' },
           });
+          const rowSwipeOffer =
+            rowSelected !== undefined || isSystemMessage(p.message) || onSwipeAction === undefined
+              ? undefined
+              : swipeActionsOf?.(p.message);
+          const rowSwipeActions =
+            rowSwipeOffer === undefined || onSwipeAction === undefined
+              ? undefined
+              : { ...rowSwipeOffer, onAction: (outcome: SwipeOutcome) => onSwipeAction(p.message.id, outcome) };
           return (
             <li
               key={p.message.id}
@@ -702,6 +718,14 @@ export function ThreadModes({
                     })}
                   />
                 ) : null}
+                <MessageSwipe
+                  actions={rowSwipeActions}
+                  flat={usesFlatRow(mode)}
+                  isMine={rowIsMine}
+                  attachments={p.message.attachments}
+                  createdAt={p.message.createdAt}
+                  locale={readerLocale}
+                >
                 <UnfoldStage messageId={p.message.id}>
                   <MessageEffectsHost effectFlags={p.message.effectFlags}>
                     {usesFlatRow(mode) ? (
@@ -760,6 +784,7 @@ export function ThreadModes({
                     )}
                   </MessageEffectsHost>
                 </UnfoldStage>
+                </MessageSwipe>
               </div>
             </li>
           );

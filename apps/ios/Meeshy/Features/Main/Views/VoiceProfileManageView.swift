@@ -99,7 +99,7 @@ struct VoiceProfileManageView: View {
 
     private func profileContent(_ profile: VoiceProfile) -> some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 statusCard(profile)
 
                 infoCard(profile)
@@ -116,65 +116,65 @@ struct VoiceProfileManageView: View {
 
                 if let error = viewModel.error {
                     Text(error)
-                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
-                        .padding(.horizontal, 20)
+                        .padding(.horizontal, MeeshySpacing.xl)
                 }
 
                 Spacer().frame(height: 32)
             }
-            .padding(.top, 8)
+            .padding(.top, MeeshySpacing.sm)
         }
     }
 
     // MARK: - Status Card
 
     private func statusCard(_ profile: VoiceProfile) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             // Glyphe de statut décoratif : le libellé texte adjacent porte le sens →
             // masqué à VoiceOver (évite l'annonce du nom brut du symbole), scale sous
             // Dynamic Type pour rester harmonisé avec le libellé (146i).
             Image(systemName: statusIcon(for: profile.status))
-                .font(MeeshyFont.relative(28))
+                .font(MeeshyFont.relative(MeeshyIconSize.xxxl))
                 .foregroundColor(statusColor(for: profile.status))
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(statusLabel(for: profile.status))
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
 
                 Text(statusDescription(for: profile.status))
-                    .font(MeeshyFont.relative(12))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
                     .foregroundColor(theme.textSecondary)
             }
 
             Spacer()
 
             if let quality = profile.quality {
-                VStack(spacing: 2) {
+                VStack(spacing: MeeshySpacing.xxs) {
                     Text("\(Int(quality * 100))%")
-                        .font(MeeshyFont.relative(18, weight: .bold, design: .monospaced))
+                        .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold, design: .monospaced))
                         .foregroundColor(accent)
                     Text(String(localized: "voice.profile.quality", defaultValue: "Qualité", bundle: .main))
-                        .font(MeeshyFont.relative(10, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
             }
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .combine)
     }
 
     // MARK: - Info Card
 
     private func infoCard(_ profile: VoiceProfile) -> some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             infoRow(label: String(localized: "voice.profile.samples", defaultValue: "Échantillons", bundle: .main), value: "\(profile.sampleCount)")
             infoRow(label: String(localized: "voice.profile.totalDuration", defaultValue: "Durée totale", bundle: .main), value: String(localized: "voice.profile.totalDuration.value", defaultValue: "\(profile.totalDurationSeconds) secondes", bundle: .main))
             infoRow(label: String(localized: "voice.profile.createdAt", defaultValue: "Créé le", bundle: .main), value: profile.createdAt.formatted(date: .abbreviated, time: .shortened))
@@ -182,22 +182,22 @@ struct VoiceProfileManageView: View {
                 infoRow(label: String(localized: "voice.profile.lastUsed", defaultValue: "Dernière utilisation", bundle: .main), value: lastUsed.formatted(date: .abbreviated, time: .shortened))
             }
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     private func infoRow(label: String, value: String) -> some View {
         HStack {
             Text(label)
-                .font(MeeshyFont.relative(14))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize))
                 .foregroundColor(theme.textSecondary)
             Spacer()
             Text(value)
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
     }
@@ -206,12 +206,12 @@ struct VoiceProfileManageView: View {
 
     private var cloningToggle: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(String(localized: "voice.profile.cloningEnabled", defaultValue: "Clonage vocal actif", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                 Text(String(localized: "voice.profile.cloningDescription", defaultValue: "Les traductions audio utiliseront votre voix", bundle: .main))
-                    .font(MeeshyFont.relative(12))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
                     .foregroundColor(theme.textSecondary)
             }
             Spacer()
@@ -224,12 +224,12 @@ struct VoiceProfileManageView: View {
             .labelsHidden()
             .tint(accent)
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .combine)
     }
 
@@ -237,12 +237,12 @@ struct VoiceProfileManageView: View {
 
     private var voicePublicToggle: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(String(localized: "voice.makePublic", defaultValue: "Rendre mon profil vocal public", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                 Text(String(localized: "voice.makePublic.description", defaultValue: "Un échantillon de votre voix sera visible sur votre profil public", bundle: .main))
-                    .font(MeeshyFont.relative(12))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
                     .foregroundColor(theme.textSecondary)
             }
             Spacer()
@@ -255,12 +255,12 @@ struct VoiceProfileManageView: View {
             .labelsHidden()
             .tint(accent)
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .combine)
     }
 
@@ -273,12 +273,12 @@ struct VoiceProfileManageView: View {
     // d'échantillons de calibration reste fonctionnel via « Ajouter ».
     private var samplesSection: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(String(localized: "voice.profile.voiceSamples", defaultValue: "Échantillons vocaux", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                 Text(String(localized: "voice.profile.addSamples.hint", defaultValue: "Ajoutez des échantillons pour affiner votre voix", bundle: .main))
-                    .font(MeeshyFont.relative(12))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
                     .foregroundColor(theme.textSecondary)
             }
             Spacer()
@@ -288,25 +288,25 @@ struct VoiceProfileManageView: View {
                 HapticFeedback.light()
                 showAddSamples = true
             } label: {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "plus")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     Text(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.sm)
                 .adaptiveGlass(in: Capsule(), tint: accent.opacity(0.14), interactive: true)
                 .foregroundColor(accent)
             }
             .accessibilityLabel(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
         }
-        .padding(16)
+        .padding(MeeshySpacing.lg)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                 .fill(theme.backgroundSecondary)
         )
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .combine)
     }
 
@@ -317,21 +317,21 @@ struct VoiceProfileManageView: View {
             HapticFeedback.medium()
             showDeleteConfirmation = true
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "trash.fill")
-                    .font(MeeshyFont.relative(14))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm))
                 Text(String(localized: "voice.profile.deleteProfile", defaultValue: "Supprimer le profil vocal", bundle: .main))
-                    .font(MeeshyFont.relative(15, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
             }
             .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
+            .padding(.vertical, MeeshySpacing.mdPlus)
             .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(MeeshyColors.error.opacity(0.1))
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
             )
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
     // MARK: - Add Samples Sheet
@@ -341,7 +341,7 @@ struct VoiceProfileManageView: View {
             ZStack {
                 theme.backgroundGradient.ignoresSafeArea()
 
-                VStack(spacing: 16) {
+                VStack(spacing: MeeshySpacing.lg) {
                     VoiceRecordingView(
                         accentColor: accentColor,
                         minimumSamples: 1,
@@ -354,7 +354,7 @@ struct VoiceProfileManageView: View {
                         }
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
             }
             // The navigation bar is already on screen for the Close button, but its
             // title slot sat empty while a hand-rolled Text played the title inside
