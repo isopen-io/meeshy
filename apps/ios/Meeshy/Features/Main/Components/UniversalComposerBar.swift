@@ -376,17 +376,22 @@ struct UniversalComposerBar: View {
     @StateObject private var keyboardObserver = KeyboardObserver()
 
     /// Height for the attachment carousel — matches the last known keyboard
-    /// height so swapping keyboard <-> carousel keeps the input row still, but
-    /// never shorter than the panel's own content (taller when the two-row
-    /// recent-media grid is shown, so it can't clip).
+    /// height so swapping keyboard <-> carousel keeps the input row still,
+    /// never shorter than the panel's own content, and never so tall that the
+    /// composer leaves the screen (`ComposerPanelHeightLaw`, #8869).
     var attachmentPanelHeight: CGFloat {
         let keyboard = max(keyboardObserver.lastKnownHeight, 260)
         // iPad / macOS gets a taller floor so the roomy recent-media grid has
-        // breathing room; iPhone (incl. landscape, also .regular width) keeps the
-        // compact two-row floor since its screen is short.
+        // breathing room; iPhone keeps a floor that shows two rows of the grid.
         let recentFloor: CGFloat = DeviceLayout.isPad ? 460 : 324
         let contentFloor: CGFloat = onRecentMediaSelected != nil ? recentFloor : 150
-        let resting = max(keyboard, contentFloor)
+        let resting = ComposerPanelHeightLaw.restingHeight(
+            lastKeyboardHeight: keyboard,
+            contentFloor: contentFloor,
+            windowHeight: DeviceLayout.windowSize.height,
+            safeAreaTop: DeviceLayout.safeAreaTop,
+            safeAreaBottom: DeviceLayout.safeAreaBottom
+        )
         guard isExpandingToLibrary else { return resting }
         return ComposerLibraryHandoff.expandedHeight(
             resting: resting,

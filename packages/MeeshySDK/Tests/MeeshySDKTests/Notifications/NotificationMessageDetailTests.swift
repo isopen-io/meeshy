@@ -209,6 +209,37 @@ final class NotificationMessageDetailTests: XCTestCase {
         XCTAssertEqual(event.bannerPresentation().body, "👤 Awa Diallo")
     }
 
+    /// La forme RÉELLE du fil socket (#8857) : `context.contentDetail`, objet
+    /// imbriqué `NotificationContentDetail`, que la passerelle n'aplatit que
+    /// pour le push.
+    func test_banner_nestedContentDetail_isReadLikeTheFlatPushKeys() throws {
+        let location = try makeEvent(context: """
+        { "conversationType": "direct", "messageType": "text",
+          "contentDetail": { "location": { "latitude": 48.8584, "longitude": 2.2945, "name": "Tour Eiffel", "address": null } } }
+        """)
+        XCTAssertEqual(location.bannerPresentation().body, "📍 Tour Eiffel")
+        XCTAssertEqual(location.messageDetail?.categoryIdentifier, "MEESHY_LOCATION")
+
+        let invite = try makeEvent(context: """
+        { "conversationType": "direct",
+          "contentDetail": { "invite": { "url": "https://meeshy.me/join/abc", "conversationTitle": "Les voisins", "memberCount": 12 } } }
+        """)
+        guard case .invite(let detail) = invite.messageDetail else { return XCTFail("attendu : invitation") }
+        XCTAssertEqual(detail.memberCount, 12)
+
+        let sticker = try makeEvent(context: """
+        { "conversationType": "direct", "messageType": "text", "contentDetail": { "sticker": { "emoji": "🐱" } } }
+        """, content: "🐱 Sticker")
+        XCTAssertEqual(sticker.bannerPresentation().contentSymbol, "face.smiling.inverse")
+
+        let video = try makeEvent(context: """
+        { "conversationType": "direct", "firstAttachmentMimeType": "video/mp4",
+          "contentDetail": { "videoThumbnailUrl": "https://cdn/t.jpg", "storyReply": { "authorId": null } } }
+        """)
+        XCTAssertEqual(video.bannerPresentation().thumbnailURL, "https://cdn/t.jpg")
+        XCTAssertEqual(video.detailFields["storyReply"], "1")
+    }
+
     func test_banner_ordinaryMessage_isUnchanged() throws {
         let event = try makeEvent(context: """
         { "conversationId": "c1", "conversationType": "direct" }
