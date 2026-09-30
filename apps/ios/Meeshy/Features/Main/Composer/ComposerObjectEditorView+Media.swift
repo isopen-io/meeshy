@@ -54,19 +54,6 @@ extension ComposerObjectEditorView {
         viewModel.currentEffects.mediaObjects?.first { $0.id == objectId }
     }
 
-    /// **Demander au FICHIER sa durée**, comme le fait le meuble pour sa bande
-    /// (`mesurerLaSource`). Le modèle ne la porte pas de façon fiable, et c'est
-    /// la seule mesure qui laisse un rognage se DÉFAIRE : sans elle, chaque
-    /// réouverture montrerait une source rétrécie à la fenêtre précédente —
-    /// un rognage qui se referme sur lui-même à chaque visite.
-    func measureMediaSource(url: URL) async {
-        let asset = AVURLAsset(url: url)
-        guard let duree = try? await asset.load(.duration) else { return }
-        let secondes = CMTimeGetSeconds(duree)
-        guard secondes.isFinite, secondes > 0 else { return }
-        mediaSourceDuration = secondes
-    }
-
     @ViewBuilder
     var mediaOptions: some View {
         if let media = mediaObject {
@@ -96,7 +83,7 @@ extension ComposerObjectEditorView {
                     }
                 }
                 section(ComposerObjectEditorCopy.mediaActions, .media(.actions)) {
-                    mediaActionRow(media)
+                    ComposerMediaActionRow(viewModel: viewModel, media: media)
                 }
                 // **⌾ DÉCRIRE** (#4756) — l'atome du SDK, tel quel. Il porte
                 // déjà son étiquette, son invite et son indice VoiceOver dans
@@ -156,85 +143,11 @@ extension ComposerObjectEditorView {
             .waveformSamples ?? []
     }
 
+    /// La bande PARTAGÉE avec la scène (`ComposerMediaTrimBand`, #8847) : le
+    /// fond s'y rogne sous la scène avec la même bande que l'éditeur sert ici.
     private func trimBand(_ source: (url: URL, bounds: MediaTrimBounds,
                                      sourceDuration: Double, isVideo: Bool)) -> some View {
-        // La durée servie est la PLUS GRANDE des deux — celle du modèle et
-        // celle mesurée sur le fichier. Tant que la mesure n'est pas revenue,
-        // la bande travaille sur ce que le modèle sait ; dès qu'elle arrive,
-        // la source reprend sa vraie longueur. Prendre la mesure seule ferait
-        // clignoter la bande à zéro le temps du chargement.
-        let duree = max(mediaSourceDuration, source.sourceDuration)
-        return MediaTrimStrip(
-            content: source.isVideo ? .video(source.url) : .audio,
-            sourceDuration: duree,
-            bounds: MediaTrimRule.resolved(start: source.bounds.start,
-                                           end: source.bounds.end,
-                                           sourceDuration: duree),
-            waveform: trimWaveform,
-            accent: MeeshyColors.brandPrimary,
-            onChange: { bornes in
-                viewModel.setSourceTrim(id: objectId, bounds: bornes, sourceDuration: duree)
-            }
-        )
-        .task(id: source.url) { await measureMediaSource(url: source.url) }
-    }
-
-    /// **`◍ MUET` n'est servi que pour une VIDÉO ; `⟲ PIVOTER` pour les deux.**
-    ///
-    /// Ce n'est pas une symétrie ratée : une image n'a pas de son à couper, et
-    /// un bouton muet posé dessus serait un contrôle sans effet. Une photo
-    /// prise de travers, en revanche, est le cas nominal du pivotement.
-    private func mediaActionRow(_ media: StoryMediaObject) -> some View {
-        HStack(spacing: 10) {
-            if media.kind == .video {
-                mediaAction(symbol: media.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
-                            title: ComposerObjectEditorCopy.mute,
-                            isOn: media.isMuted) {
-                    viewModel.toggleMediaMute(id: objectId)
-                }
-            }
-            mediaAction(symbol: "rotate.left",
-                        title: ComposerObjectEditorCopy.rotate,
-                        isOn: false) {
-                viewModel.rotateMedia(id: objectId)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-
-    private func mediaAction(symbol: String,
-                             title: String,
-                             isOn: Bool,
-                             action: @escaping () -> Void) -> some View {
-        Button {
-            action()
-            HapticFeedback.light()
-        } label: {
-            HStack(spacing: 6) {
-                // **Taille RELATIVE, pas figée** (`FixedFontSizeGuardTests`). Un
-                // glyphe de 13 pt en dur reste à 13 pt quand l'utilisateur
-                // demande le plus grand corps de texte — et il est alors le seul
-                // élément illisible d'une capsule qui, elle, a grandi. Le
-                // préjudice n'est pas esthétique : c'est un contrôle que
-                // quelqu'un ne peut pas lire, précisément celui qui en avait
-                // besoin. Une taille figée ne se justifierait que par un cadre
-                // fixe qui déborderait ; cette capsule s'étire avec son contenu.
-                Image(systemName: symbol).font(MeeshyFont.relative(13, weight: .semibold))
-                Text(title).font(MeeshyFont.relative(12, weight: .semibold))
-            }
-            .foregroundStyle(isOn ? Color.white : Color.white.opacity(0.85))
-            .padding(.horizontal, 14)
-            .frame(height: 40)
-            .background {
-                if isOn {
-                    Capsule().fill(MeeshyColors.brandGradient)
-                } else {
-                    Capsule().fill(Color.white.opacity(0.12))
-                }
-            }
-            .contentShape(Capsule().inset(by: -2))
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+        ComposerMediaTrimBand(viewModel: viewModel, objectId: objectId,
+                              source: source, waveform: trimWaveform)
     }
 }

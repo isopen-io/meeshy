@@ -714,6 +714,9 @@ extension MeeshyComposerHost {
     }
 
     func openObjectEditor(_ id: String, section: ComposerObjectEditorSection? = nil) {
+        // **Le FOND ne s'ouvre plus plein écran** (#8847) : ses outils au rail
+        // droit, leurs contrôles sous la scène — quelle que soit la porte.
+        if backgroundToolsRedirect(id, section: section) { return }
         presentedPortal = nil
         selectedSceneItemId = id
         let famille = viewModel.currentSlide.sceneObject(id: id)?.kind

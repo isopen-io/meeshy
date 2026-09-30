@@ -534,10 +534,12 @@ extension MeeshyComposerHost {
             // `railMode`, qui ne rend plus `.tool` pour un texte — mais le
             // dire ICI aussi tient la loi des DEUX côtés, comme les deux
             // bandes le faisaient avant leur retrait.
-            toolOptions: ComposerFirstView.lowZoneShowsToolOptions(
+            // **Les contrôles de l'outil du FOND prennent la même place** (#8847).
+            toolOptions: sceneBackgroundToolPanel ?? (ComposerFirstView.lowZoneShowsToolOptions(
                 drawing: viewModel.isDrawingActive,
                 textEditing: sceneTextEditing)
-                ? AnyView(MeeshyToolOptionsPanel(viewModel: viewModel)) : nil,
+                ? AnyView(MeeshyToolOptionsPanel(viewModel: viewModel)) : nil),
+            editsBackground: activeBackgroundEdit != nil,
             editingTextId: viewModel.textEditingMode.activeTextId,
             // **Le canvas reçoit de nouveau la frappe** (2026-09-28) : la porte
             // TEXTE y ouvre la saisie en ligne. La requête `@` reste nourrie
@@ -1065,7 +1067,9 @@ extension MeeshyComposerHost {
     /// **Un outil de la SCÈNE occupe-t-il l'écran ?** (#8652) Faux sous toute
     /// autre surface : le document et l'humeur gardent leur socle.
     var sceneToolOwnsScreen: Bool {
-        mountedComposerView == .scene && sceneRailMode.opensTool
+        mountedComposerView == .scene
+            && ComposerToolFocus.toolIsOpen(railOpensTool: sceneRailMode.opensTool,
+                                             editsBackground: activeBackgroundEdit != nil)
     }
 
     /// **L'indication grise de la capture rapide** (#8653) — la MÊME question

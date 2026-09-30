@@ -96,6 +96,48 @@ extension MeeshyComposerHost {
         }
     }
 
+    /// **Viseur ARMÉ : l'appui long, n'importe où sur la scène, FILME** (#8846,
+    /// directive porteur 2026-09-30). Le toucher reste la photo
+    /// (`handleArmedSceneTap`) ; tenir démarre la vidéo dès que la session
+    /// écrit, et la levée l'arrête — la même tenue, le même cadenas et le même
+    /// zoom que l'appui long d'une scène vide, dont elle reprend l'état.
+    func handleArmedSceneHold() {
+        guard sceneHoldStartedAt == nil,
+              ComposerSceneQuickCapture.armedHold(stage: sceneCameraStage,
+                                                  format: selectedFormat) == .startFilming else { return }
+        HapticFeedback.medium()
+        sceneHoldStartedAt = Date()
+        sceneHoldPhase = .holding
+        sceneLockProgress = 0
+        sceneHoldTask?.cancel()
+        sceneHoldTask = Task { @MainActor in
+            guard await sceneCamera.waitUntilCaptureReady(
+                timeout: ComposerSceneQuickCapture.readinessTimeout),
+                  !Task.isCancelled,
+                  sceneHoldStartedAt != nil || sceneHoldPhase == .locked else { return }
+            startSceneFilming()
+        }
+    }
+
+    /// La levée de l'appui long du viseur armé : la loi du cadenas décide —
+    /// tenue, la prise se clôt ; verrouillée, elle continue ; pas encore
+    /// partie, rien n'est pris.
+    func handleArmedSceneHoldEnded() {
+        handleSceneCaptureLongPressEnded()
+    }
+
+    /// **L'appui long de la nappe du viseur armé** (#8846) : il passe avant le
+    /// toucher, qui ne prend la photo que si le doigt part avant le seuil.
+    var armedSceneHoldGesture: some Gesture {
+        LongPressGesture(minimumDuration: ComposerSceneQuickCapture.armedHoldDuration)
+            .sequenced(before: DragGesture(minimumDistance: 0))
+            .onChanged { valeur in
+                guard case .second(true, _) = valeur else { return }
+                handleArmedSceneHold()
+            }
+            .onEnded { _ in handleArmedSceneHoldEnded() }
+    }
+
     /// **Le doigt glisse pendant la prise : à DROITE, il la verrouille.**
     ///
     /// Directive porteur 2026-09-04 : « il faut s'assurer de pouvoir déplacer à
@@ -551,12 +593,22 @@ extension MeeshyComposerHost {
             // gagnent sur leurs propres surfaces ; elle ne prend que le vide.
             // **Le second toucher prend la photo** (#8711) : n'importe où sur
             // la scène, hors des contrôleurs qui gagnent sur leurs surfaces.
+            // **L'appui long y FILME** (#8846) : il a la priorité sur le toucher.
             Color.clear
                 .contentShape(Rectangle())
-                .onTapGesture { handleArmedSceneTap() }
-                .gesture(
+                .gesture(armedSceneHoldGesture.exclusively(
+                    before: TapGesture().onEnded { handleArmedSceneTap() }))
+                .simultaneousGesture(
                     DragGesture(minimumDistance: 12)
                         .onChanged { valeur in
+                            // Pendant l'appui long, le glissé est celui de la
+                            // prise : à droite le cadenas, à la verticale le
+                            // zoom — jamais le rangement du viseur.
+                            if sceneHoldStartedAt != nil {
+                                handleSceneCaptureLongPressChanged(
+                                    CGPoint(x: valeur.translation.width, y: valeur.translation.height))
+                                return
+                            }
                             // **Pendant une prise, le glissé vertical ZOOME**
                             // (#8671) — il ne range pas la caméra au milieu
                             // d'un enregistrement verrouillé.
@@ -567,6 +619,7 @@ extension MeeshyComposerHost {
                         }
                         .onEnded { valeur in
                             endSceneZoomDrag()
+                            guard sceneHoldStartedAt == nil else { return }
                             guard ComposerCaptureHold.verticalDrag(stage: sceneCameraStage) == .dismiss else {
                                 sceneCameraDismissDrag = 0
                                 return

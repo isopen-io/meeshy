@@ -166,6 +166,31 @@ nonisolated enum ComposerSceneQuickCapture {
         return .takePhoto
     }
 
+    /// **L'appui long sur un viseur déjà ARMÉ** (#8846, directive porteur
+    /// 2026-09-30 : « le longpress à partir de la scène doit déclencher la
+    /// capture vidéo après avoir armé l'objectif »).
+    enum ArmedHold: Equatable, Sendable {
+        /// N'importe où sur la scène : la vidéo part, et relâcher l'arrête.
+        case startFilming
+        /// Viseur éteint ou déjà en prise, ou format sans vidéo.
+        case ignore
+    }
+
+    /// **La vidéo part d'un viseur ARMÉ, dans un format qui la sert.** Des
+    /// segments en attente n'y font PAS obstacle, à la différence de la
+    /// photo : une nouvelle prise s'y AJOUTE (vue `4b`), elle n'en efface
+    /// aucun.
+    ///
+    /// Aucune durée maximale n'est imposée ici : le dépôt n'en porte aucune
+    /// pour les vidéos de story, de post ou de réel (même doctrine que l'audio,
+    /// directive produit 2026-07-26 — « aussi longtemps que l'utilisateur le
+    /// souhaite »). La prise dure tant que le doigt reste, ou jusqu'au stop
+    /// d'une prise verrouillée.
+    static func armedHold(stage: ComposerSceneCameraStage, format: ComposerFormat) -> ArmedHold {
+        guard stage == .armed, ComposerSceneCamera.modes(for: format).contains(.video) else { return .ignore }
+        return .startFilming
+    }
+
     /// **Un geste, une ligne, son icône** (#8671, complément porteur
     /// 2026-09-29 : « l'instruction de taper photo peut avoir l'appareil photo
     /// au-devant, et à la ligne une caméra vidéo pour la partie long press »).
@@ -201,4 +226,10 @@ nonisolated enum ComposerSceneQuickCapture {
     /// Au-delà, la caméra ne viendra pas (simulateur, matériel occupé) : le
     /// viseur reste ouvert, et son propre déclencheur prend le relais.
     static let readinessTimeout: TimeInterval = 3
+
+    /// **Le seuil de l'appui long du viseur armé** (#8846) — celui du système
+    /// (`UILongPressGestureRecognizer`, 0,5 s) : assez long pour qu'un toucher
+    /// photo ne parte jamais en vidéo, assez court pour que la prise démarre
+    /// sans que le doigt se demande s'il s'est passé quelque chose.
+    static let armedHoldDuration: TimeInterval = 0.5
 }

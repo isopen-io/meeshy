@@ -98,7 +98,9 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
         let corps = String(code[début.upperBound..<fin.lowerBound])
         XCTAssertTrue(corps.contains("ComposerSceneQuickCapture.armedTap("))
         XCTAssertTrue(corps.contains("takeScenePhoto()"))
-        XCTAssertTrue(code.contains(".onTapGesture{handleArmedSceneTap()}"),
+        // Depuis #8846 le toucher passe APRÈS l'appui long (qui filme), sur
+        // la même nappe.
+        XCTAssertTrue(code.contains("armedSceneHoldGesture.exclusively(before:TapGesture().onEnded{handleArmedSceneTap()})"),
                       "la nappe du viseur ne transmet pas le second toucher")
     }
 
