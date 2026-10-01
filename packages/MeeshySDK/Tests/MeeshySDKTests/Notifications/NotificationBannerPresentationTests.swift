@@ -349,6 +349,23 @@ final class NotificationBannerPresentationTests: XCTestCase {
         XCTAssertEqual(banner.reactionBadge, "🔥")
     }
 
+    func test_messageReaction_whenTheServedSentenceCarriesTheEmoji_noSecondEmoji() throws {
+        let event = try makeEvent("""
+        {
+            "id": "n17", "userId": "u1", "type": "message_reaction",
+            "title": "meeshy sama",
+            "content": "a réagi ❤️ à votre message : « J'attends! »",
+            "actor": { "id": "a1", "displayName": "meeshy sama" },
+            "context": { "conversationType": "direct" },
+            "metadata": { "reactionEmoji": "❤️" }
+        }
+        """)
+
+        let banner = event.bannerPresentation()
+        XCTAssertEqual(banner.body, "a réagi ❤️ à votre message : « J'attends! »")
+        XCTAssertNil(banner.reactionBadge, "#9049 — l'émoji est déjà dans la phrase servie : pas de second ❤️ devant")
+    }
+
     // MARK: - Replis
 
     func test_withoutServerAction_headlineStaysTheActorAlone() throws {

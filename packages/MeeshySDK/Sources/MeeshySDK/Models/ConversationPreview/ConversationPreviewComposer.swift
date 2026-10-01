@@ -120,9 +120,14 @@ public enum ConversationPreviewComposer {
         let isReader = reaction.reactorUserId != nil && reaction.reactorUserId == input.viewerId
         let actor = hasText(reaction.reactorName) ? reaction.reactorName : strings(.authorUnknown)
         let excerpt = reactionExcerpt(reaction, input, strings)
-        let key: ConversationPreviewStringKey = isReader
-            ? (excerpt != nil ? .reactionSelf : .reactionSelfBare)
-            : (excerpt != nil ? .reactionMember : .reactionMemberBare)
+        let key: ConversationPreviewStringKey
+        if isReader {
+            key = excerpt != nil ? .reactionSelf : .reactionSelfBare
+        } else if input.isDirect == true {
+            key = excerpt != nil ? .reactionPeer : .reactionPeerBare
+        } else {
+            key = excerpt != nil ? .reactionMember : .reactionMemberBare
+        }
         let text = strings(key, ["actor": actor, "emoji": reaction.emoji, "excerpt": excerpt ?? ""])
         return ConversationPreview(kind: .reaction, segments: [.label(text)])
     }

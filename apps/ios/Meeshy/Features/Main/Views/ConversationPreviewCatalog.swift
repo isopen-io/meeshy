@@ -33,6 +33,8 @@ nonisolated enum ConversationPreviewCatalog {
         case .draft: return String(localized: "draft", bundle: .main)
         case .reactionMember: return String(localized: "reaction.member", bundle: .main)
         case .reactionMemberBare: return String(localized: "reaction.member.bare", bundle: .main)
+        case .reactionPeer: return String(localized: "reaction.peer", bundle: .main)
+        case .reactionPeerBare: return String(localized: "reaction.peer.bare", bundle: .main)
         case .reactionSelf: return String(localized: "reaction.self", bundle: .main)
         case .reactionSelfBare: return String(localized: "reaction.self.bare", bundle: .main)
         case .callActive: return String(localized: "call.active", bundle: .main)

@@ -519,22 +519,8 @@ export async function createCommentReactionNotification(
 
   if (!reactor) return;
 
-  // Body verbeux (spec user 2026-05-28) : "[reactor] a réagi [emoji] à votre
-  // commentaire sur la story de [story_author]". Le précédent body
-  // ne contenait QUE `reactionEmoji` (e.g. "❤️"), trop sommaire — le
-  // destinataire ne savait pas QUI avait réagi NI sur QUEL commentaire /
-  // QUELLE story.
-  const reactorName = reactor.displayName?.trim()
-    || reactor.username?.trim()
-    || 'Quelqu’un';
   const prism = await deps.resolveRecipientPrism(params.commentAuthorId);
   const lang = prism.lang;
-  const body = notificationString(lang, 'reaction.commentVerbose', {
-    actor: reactorName,
-    emoji: params.reactionEmoji,
-    author: params.postAuthorName,
-    postType: params.postType,
-  });
 
   // Subtitle (rendu sous le title côté iOS — banner riche) : un aperçu du
   // commentaire qui a reçu la réaction. Permet au destinataire de savoir
@@ -548,6 +534,20 @@ export async function createCommentReactionNotification(
   const subtitle = trimmedCommentPreview !== ''
     ? `« ${trimmedCommentPreview} »`
     : undefined;
+
+  // Le CORPS dit ce qui a été visé, jamais la phrase d'action (#9049) : le
+  // titre porte déjà « Alice a réagi ❤️ à votre commentaire », et le répéter
+  // en corps le faisait lire deux fois — sur la liste, le push et la bannière.
+  // L'extrait du commentaire d'abord ; à défaut, le contexte (« Sur le réel de
+  // Bob ») ; en dernier recours la phrase d'action, pour qu'une ligne ne soit
+  // jamais vide.
+  const context = notificationString(lang, 'reaction.commentContext', {
+    author: params.postAuthorName,
+    postType: params.postType,
+  }).trim();
+  const body = subtitle
+    ?? (context !== '' ? context.charAt(0).toLocaleUpperCase(lang) + context.slice(1) : undefined)
+    ?? notificationString(lang, 'reaction.comment', { emoji: params.reactionEmoji });
 
   // Vignette + nature du média du post (#8724) : la ligne montre DE QUOI il
   // s'agit — même source que les quatre bâtisseurs voisins.

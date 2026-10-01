@@ -276,6 +276,15 @@ describe('buildNotificationReactionBadge', () => {
     expect(badge).toBe('🔥');
   });
 
+  it('se tait quand le corps servi porte déjà l’émoji (#9049)', () => {
+    const badge = buildNotificationReactionBadge(
+      notification({ type: NotificationTypeEnum.MESSAGE_REACTION, metadata: { reactionEmoji: '❤️' } }),
+      'meeshy sama',
+      'a réagi ❤️ à votre message : « J’attends! »',
+    );
+    expect(badge).toBeNull();
+  });
+
   it('lit `reactionEmoji` pour les réactions de message', () => {
     const badge = buildNotificationReactionBadge(
       notification({ type: NotificationTypeEnum.MESSAGE_REACTION, metadata: { reactionEmoji: '👍' } }),
