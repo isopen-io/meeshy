@@ -36,6 +36,7 @@ import itCommentRow from './catalog-it-comment-row';
 import itContactDiscovery from './catalog-it-contact-discovery';
 import itDownload from './catalog-it-download';
 import itPhonePrompt from './catalog-it-phone-prompt';
+import itUserProfile from './catalog-it-user-profile';
 
 const it = {
   'announce.messageSent': 'Messaggio inviato',
@@ -240,7 +241,6 @@ const it = {
   ...itCallCaptions,
   ...itCallRecording,
   ...itSignup,
-  'userProfile.self.edit': 'Modifica il mio profilo',
   'report.title': 'Segnala questo account',
   'report.body': 'Scegli il motivo della segnalazione. Il nostro team di moderazione la riceverà.',
   'report.action': 'Segnala',
@@ -657,51 +657,6 @@ const it = {
   'discover.announce.unblockFailed': 'Impossibile sbloccare',
   'discover.announce.offline': 'Offline: non è stato inviato nulla.',
 
-  'userProfile.title': 'Profilo',
-  'userProfile.loading': 'Caricamento del profilo',
-  'userProfile.section.publications': 'PUBBLICAZIONI',
-  'userProfile.section.relation': 'CONNESSIONE',
-  'userProfile.section.conversations': 'CONVERSAZIONI',
-  'userProfile.conversations.empty': 'Nessuna conversazione in comune',
-  'userProfile.conversations.emptyBody': 'Niente vi lega ancora: «Scrivi» apre la prima.',
-  'userProfile.conversations.error': 'Impossibile caricare le conversazioni',
-  'userProfile.conversations.loading': 'Caricamento delle conversazioni',
-  'userProfile.refused.title': 'Questo profilo non è disponibile',
-  'userProfile.refused.body': 'Non esiste, oppure non hai accesso.',
-  'userProfile.throttled.title': 'Troppe richieste',
-  'userProfile.throttled.body': 'Riprova tra un istante.',
-  'userProfile.error.title': 'Impossibile caricare questo profilo',
-  'userProfile.error.body': 'Riprova tra un istante.',
-  'userProfile.offline.body': 'Il profilo apparirà al ritorno della connessione.',
-  'userProfile.posts.empty': 'Nessuna pubblicazione',
-  'userProfile.posts.emptyBody': 'Non c’è ancora nulla di pubblico da leggere.',
-  'userProfile.posts.emptyPosts': 'Nessun post qui',
-  'userProfile.posts.emptyReels': 'Nessun reel qui',
-  'userProfile.posts.emptyFilter': 'Tocca di nuovo il riquadro per rivedere tutto.',
-  'userProfile.posts.error': 'Impossibile caricare le pubblicazioni',
-  'userProfile.posts.loadMore': 'Carica altro',
-  'userProfile.posts.loaded': 'Pubblicazioni aggiunte: {count}',
-  'userProfile.posts.loadedNone': 'Nessuna altra pubblicazione da mostrare',
-  'userProfile.posts.loading': 'Caricamento…',
-  'userProfile.stat.posts': 'Post',
-  'userProfile.stat.reels': 'Reel',
-  'userProfile.stat.stories': 'Storie',
-  'userProfile.stat.filterLabel': 'Filtra su {name}',
-  'userProfile.stat.filterClear': 'Mostra tutto',
-  'userProfile.context.received': '{name} vuole entrare in contatto con te. Accetta per scambiare messaggi.',
-  'userProfile.context.sent': 'Hai inviato una richiesta di connessione a {name}. In attesa di risposta.',
-  'userProfile.action.write': 'Scrivere',
-  'userProfile.action.writeLabel': 'Scrivere a {name}',
-  'userProfile.action.block': 'Bloccare',
-  'userProfile.action.blockLabel': 'Bloccare {name}',
-  'userProfile.blocked.title': 'Hai bloccato questa persona',
-  'userProfile.blocked.body': 'Le sue pubblicazioni e le sue statistiche restano nascoste finché dura il blocco.',
-  'userProfile.signin.title': 'Accedi per entrare in contatto',
-  'userProfile.signin.body': 'Le richieste di connessione e i messaggi richiedono un account.',
-  'userProfile.signin.cta': 'Accedi',
-  'userProfile.announce.blocked': 'Persona bloccata',
-  'userProfile.announce.blockFailed': 'Impossibile bloccare',
-  'userProfile.announce.writeFailed': 'Impossibile aprire la conversazione',
 
   'a11y.floating.rung.discover.requests.one': 'Scopri, {count} richiesta ricevuta',
   'a11y.floating.rung.discover.requests.other': 'Scopri, {count} richieste ricevute',
@@ -1169,6 +1124,7 @@ const it = {
   ...itQuote,
   ...itCommentRow,
   ...itContactDiscovery,
+  ...itUserProfile,
 } satisfies InterfaceCatalog;
 
 export default it;

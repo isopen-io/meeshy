@@ -36,6 +36,7 @@ import enCommentRow from './catalog-en-comment-row';
 import enContactDiscovery from './catalog-en-contact-discovery';
 import enDownload from './catalog-en-download';
 import enPhonePrompt from './catalog-en-phone-prompt';
+import enUserProfile from './catalog-en-user-profile';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -240,7 +241,6 @@ const en = {
   ...enCallCaptions,
   ...enCallRecording,
   ...enSignup,
-  'userProfile.self.edit': 'Edit my profile',
   'report.title': 'Report this account',
   'report.body': 'Choose what prompts your report. Our moderation team will receive it.',
   'report.action': 'Report',
@@ -657,51 +657,6 @@ const en = {
   'discover.announce.unblockFailed': 'Could not unblock',
   'discover.announce.offline': 'Offline: nothing was sent.',
 
-  'userProfile.title': 'Profile',
-  'userProfile.loading': 'Loading profile',
-  'userProfile.section.publications': 'POSTS',
-  'userProfile.section.relation': 'CONNECTION',
-  'userProfile.section.conversations': 'CONVERSATIONS',
-  'userProfile.conversations.empty': 'No conversation in common',
-  'userProfile.conversations.emptyBody': 'Nothing connects you yet — “Write” opens the first one.',
-  'userProfile.conversations.error': 'Could not load the conversations',
-  'userProfile.conversations.loading': 'Loading conversations',
-  'userProfile.refused.title': 'This profile is not available',
-  'userProfile.refused.body': 'It does not exist, or you do not have access to it.',
-  'userProfile.throttled.title': 'Too many requests',
-  'userProfile.throttled.body': 'Try again in a moment.',
-  'userProfile.error.title': 'Could not load this profile',
-  'userProfile.error.body': 'Try again in a moment.',
-  'userProfile.offline.body': 'The profile will appear once you are back online.',
-  'userProfile.posts.empty': 'No posts',
-  'userProfile.posts.emptyBody': 'Nothing public to read yet.',
-  'userProfile.posts.emptyPosts': 'No posts here',
-  'userProfile.posts.emptyReels': 'No reels here',
-  'userProfile.posts.emptyFilter': 'Tap the tile again to see everything.',
-  'userProfile.posts.error': 'Could not load the posts',
-  'userProfile.posts.loadMore': 'Load more',
-  'userProfile.posts.loaded': 'Posts added: {count}',
-  'userProfile.posts.loadedNone': 'No further posts to show',
-  'userProfile.posts.loading': 'Loading…',
-  'userProfile.stat.posts': 'Posts',
-  'userProfile.stat.reels': 'Reels',
-  'userProfile.stat.stories': 'Stories',
-  'userProfile.stat.filterLabel': 'Filter on {name}',
-  'userProfile.stat.filterClear': 'Show all',
-  'userProfile.context.received': '{name} would like to connect with you. Accept to exchange messages.',
-  'userProfile.context.sent': 'You sent a connection request to {name}. Waiting for their answer.',
-  'userProfile.action.write': 'Message',
-  'userProfile.action.writeLabel': 'Message {name}',
-  'userProfile.action.block': 'Block',
-  'userProfile.action.blockLabel': 'Block {name}',
-  'userProfile.blocked.title': 'You blocked this person',
-  'userProfile.blocked.body': 'Their posts and statistics stay hidden while the block lasts.',
-  'userProfile.signin.title': 'Sign in to connect',
-  'userProfile.signin.body': 'Connection requests and messages need an account.',
-  'userProfile.signin.cta': 'Sign in',
-  'userProfile.announce.blocked': 'Person blocked',
-  'userProfile.announce.blockFailed': 'Could not block',
-  'userProfile.announce.writeFailed': 'Could not open the conversation',
 
   'a11y.floating.rung.discover.requests.one': 'Discover, {count} request received',
   'a11y.floating.rung.discover.requests.other': 'Discover, {count} requests received',
@@ -1169,6 +1124,7 @@ const en = {
   ...enQuote,
   ...enCommentRow,
   ...enContactDiscovery,
+  ...enUserProfile,
 } satisfies InterfaceCatalog;
 
 export default en;

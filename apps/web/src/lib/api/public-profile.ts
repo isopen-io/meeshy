@@ -31,13 +31,15 @@ import type { ApiResult, HttpTransport } from './http';
  * **CE QUI EST DÉCODÉ EST CE QUI S'AFFICHE.** La charge servie est déjà
  * projetée par `buildPublicProfile` (ni e-mail, ni téléphone), mais le cache
  * de requêtes de la v2 est persisté sur le disque du navigateur
- * (`query-client.ts`) : ce module n'y laisse entrer que l'identité visible.
- * **La PRÉSENCE en est exclue en particulier** — `isOnline` et `lastActiveAt`
- * ne sont servis qu'à un ami accepté (loi `resolvePresenceVisibility`), et le
- * client ne peint jamais ce qu'on ne lui a pas servi : ne pas les décoder rend
- * impossible d'en fabriquer un point vert par inadvertance. **`expand` ne
- * demande donc JAMAIS `presence`**, et le décodeur ne le lirait pas s'il
- * arrivait. `achievements` et `languages` ne sont pas décodés non plus : aucune
+ * (`query-client.ts`) : ce module n'y laisse entrer que ce que la fiche peint.
+ * **La PRÉSENCE y entre telle que la passerelle l'a SERVIE, jamais au-delà**
+ * (#9063) — `expand=presence` POSE la question, la loi
+ * `resolvePresenceVisibility` y répond seule : ami accepté, soi ou ADMIN+, et
+ * les réglages `showOnlineStatus` / `showLastSeen` de la personne regardée.
+ * Masquée, elle arrive `null` et le décodeur rend `presence: null` — jamais un
+ * « hors ligne » qu'on n'a pas mesuré. Elle voyage À CÔTÉ de l'identité, comme
+ * `relation`, parce qu'elle répond à une autre question : qui la LIT.
+ * `achievements` et `languages` ne sont pas décodés : aucune
  * surface ne les peint, et une donnée décodée sans être peinte n'entre dans le
  * cache persisté que pour l'alourdir.
  *
@@ -119,6 +121,14 @@ export type PublicProfileView = {
    * identifiant de demande n'atteint donc que ses deux parties.
    */
   readonly relationRequestId: string | null;
+  /** `null` = le serveur n'a rien servi (non-ami, présence masquée, passerelle
+   * plus ancienne) : la fiche ne peint alors ni pastille ni date. */
+  readonly presence: ServedPresence | null;
+};
+
+export type ServedPresence = {
+  readonly isOnline: boolean;
+  readonly lastActiveAt: string | null;
 };
 
 /** Le PRÉFIXE de la famille — `friend-actions.ts` l'importe pour patcher
@@ -186,6 +196,15 @@ export function decodeServedRelation(raw: unknown): ServedRelation {
   return SERVED_RELATIONS.find((relation) => relation === raw) ?? 'none';
 }
 
+const servedDate = (value: unknown): string | null =>
+  typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : null;
+
+export function decodeServedPresence(wire: Readonly<Record<string, unknown>>): ServedPresence | null {
+  const lastActiveAt = servedDate(wire.lastActiveAt);
+  if (typeof wire.isOnline !== 'boolean' && lastActiveAt === null) return null;
+  return { isOnline: wire.isOnline === true, lastActiveAt };
+}
+
 export function decodePublicProfileView(raw: unknown): PublicProfileView | null {
   const profile = decodePublicProfile(raw);
   if (profile === null) return null;
@@ -202,12 +221,13 @@ export function decodePublicProfileView(raw: unknown): PublicProfileView | null 
     /* Même idiome, même raison : un identifiant fabriqué enverrait un `PATCH`
        dans le vide. `null` ⇒ le geste n'est pas offert, il n'est pas grisé. */
     relationRequestId: typeof wire.relationRequestId === 'string' ? textOrNull(wire.relationRequestId) : null,
+    presence: decodeServedPresence(wire),
   };
 }
 
-/** L'ordre des jetons est celui que le témoin lit : `expand=stats,relation`,
- * et `presence` n'y entre jamais (§ doc-comment du fichier). */
-const PUBLIC_PROFILE_EXPAND = 'stats,relation';
+/** L'ordre des jetons est celui que le témoin lit. `presence` ne fait que
+ * POSER la question (§ doc-comment du fichier). */
+const PUBLIC_PROFILE_EXPAND = 'stats,relation,presence';
 
 export async function loadPublicProfile(
   params: PublicProfileDeps & { readonly handle: string; readonly signal?: AbortSignal },
