@@ -24,6 +24,8 @@ const deComposerAttach = {
   'composer.location.denied': 'Standort verweigert — in den Einstellungen erlauben',
   'composer.location.unavailable': 'Standort in diesem Browser nicht verfügbar',
   'composer.location.failed': 'Standort nicht gefunden — erneut versuchen',
+  'composer.mic.refused': 'Mikrofon verweigert — in den Einstellungen erlauben',
+  'composer.mic.unavailable': 'Mikrofon auf diesem Gerät nicht verfügbar',
   'composer.openSettings': 'Einstellungen',
   'composer.location.chip': 'ORT',
   'composer.location.unknown': 'Unbekannter Ort',

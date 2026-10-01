@@ -24,6 +24,8 @@ const itComposerAttach = {
   'composer.location.denied': 'Posizione negata — consentila nelle impostazioni',
   'composer.location.unavailable': 'Posizione non disponibile su questo browser',
   'composer.location.failed': 'Posizione non trovata — riprova',
+  'composer.mic.refused': 'Microfono negato — consentilo nelle impostazioni',
+  'composer.mic.unavailable': 'Microfono non disponibile su questo dispositivo',
   'composer.openSettings': 'Impostazioni',
   'composer.location.chip': 'LUOGO',
   'composer.location.unknown': 'Luogo sconosciuto',

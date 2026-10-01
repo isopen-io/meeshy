@@ -27,6 +27,8 @@ const frComposerAttach = {
   'composer.location.denied': 'Position refusée — autorisez-la dans les réglages',
   'composer.location.unavailable': 'Position indisponible sur ce navigateur',
   'composer.location.failed': 'Position introuvable — réessayez',
+  'composer.mic.refused': 'Micro refusé — autorisez-le dans les réglages',
+  'composer.mic.unavailable': 'Micro indisponible sur cet appareil',
   'composer.openSettings': 'Réglages',
   'composer.location.chip': 'LIEU',
   'composer.location.unknown': 'Lieu inconnu',

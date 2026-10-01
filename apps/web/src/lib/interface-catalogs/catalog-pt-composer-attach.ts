@@ -24,6 +24,8 @@ const ptComposerAttach = {
   'composer.location.denied': 'Localização negada — permita nos ajustes',
   'composer.location.unavailable': 'Localização indisponível neste navegador',
   'composer.location.failed': 'Localização não encontrada — tente novamente',
+  'composer.mic.refused': 'Microfone negado — permita-o nos ajustes',
+  'composer.mic.unavailable': 'Microfone indisponível neste dispositivo',
   'composer.openSettings': 'Ajustes',
   'composer.location.chip': 'LOCAL',
   'composer.location.unknown': 'Local desconhecido',
