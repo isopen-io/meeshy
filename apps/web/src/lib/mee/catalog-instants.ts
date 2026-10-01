@@ -618,7 +618,7 @@ const MESSAGES: readonly MeeSticker[] = [
     text: 'Je t’aime',
     pose: { eyes: 'heart', beak: 'open' },
     motion: act({ wl1: ['raiseL', 1.8], wr1: ['raiseR', 1.8], p1: ['beat', 0.9] }),
-    carry: (text) => at(100, 166, `<path d="M0 30 C-70 -10 -40 -52 0 -24 C40 -52 70 -10 0 30 Z" fill="#e11d48" stroke="#fff" stroke-width="3"/>${label(0, -2, text, { size: 13, fill: '#fff', max: 14 })}`, { role: 'p1', s: 0.85 }),
+    carry: (text) => at(100, 166, `<path d="M0 28 C-88 -12 -52 -54 0 -24 C52 -54 88 -12 0 28 Z" fill="#e11d48" stroke="#fff" stroke-width="3"/>${label(0, -4, text, { size: 12, fill: '#fff', max: 14 })}`, { role: 'p1', s: 0.85 }),
   }),
   message({
     id: 'instant-coeur-geant-meo',
@@ -630,7 +630,7 @@ const MESSAGES: readonly MeeSticker[] = [
     pose: { eyes: 'closed', beak: 'kiss' },
     motion: act({ b1: ['leanIn', 2.4], p2: ['rise', 2.4], p1: ['breathe', 2.4] }),
     front: hearts('p2', [[40, 70], [164, 60]], 2.4, '#a78bfa'),
-    carry: (text) => at(100, 166, `<path d="M0 30 C-70 -10 -40 -52 0 -24 C40 -52 70 -10 0 30 Z" fill="#7c3aed" stroke="#fff" stroke-width="3"/>${label(0, -2, text, { size: 12, fill: '#fff', max: 15 })}`, { role: 'p1', s: 0.85 }),
+    carry: (text) => at(100, 166, `<path d="M0 28 C-88 -12 -52 -54 0 -24 C52 -54 88 -12 0 28 Z" fill="#7c3aed" stroke="#fff" stroke-width="3"/>${label(0, -4, text, { size: 10, fill: '#fff', max: 15 })}`, { role: 'p1', s: 0.85 }),
   }),
   message({
     id: 'instant-lettre-mee',
@@ -715,7 +715,7 @@ const MESSAGES: readonly MeeSticker[] = [
     at: 'translate(52 70) scale(.7)',
     motion: act({ p1: ['tow', 6], e1: ['blink', 3] }),
     carry: (text) =>
-      at(40, 36, `${P.plane()}<path d="M-14 0 H-24" stroke="#1c1941" stroke-width="1.4"/><rect x="-154" y="-12" width="130" height="24" rx="3" fill="#fef3c7" stroke="#1c1941" stroke-width="1.6"/>${label(-89, 5, text, { size: 11, max: 20 })}`, { role: 'p1' }),
+      at(16, 36, `<g transform="scale(-1 1)">${P.plane()}</g><path d="M14 0 H24" stroke="#1c1941" stroke-width="1.4"/><rect x="24" y="-12" width="140" height="24" rx="3" fill="#fef3c7" stroke="#1c1941" stroke-width="1.6"/>${label(94, 5, text, { size: 11, max: 20 })}`, { role: 'p1' }),
   }),
   message({
     id: 'instant-banderole-meo',
@@ -728,7 +728,7 @@ const MESSAGES: readonly MeeSticker[] = [
     at: 'translate(52 70) scale(.7)',
     motion: act({ p1: ['tow', 6], wr1: ['waveR', 1.5] }),
     carry: (text) =>
-      at(40, 36, `${P.jet()}<path d="M-30 0 H-40" stroke="#1c1941" stroke-width="1.4"/><rect x="-170" y="-12" width="130" height="24" rx="3" fill="#ede9fe" stroke="#1c1941" stroke-width="1.6"/>${label(-105, 5, text, { size: 11, max: 20 })}`, { role: 'p1', s: 0.8 }),
+      at(26, 36, `<g transform="scale(-.8 .8)">${P.jet()}</g><path d="M26 0 H36" stroke="#1c1941" stroke-width="1.4"/><rect x="36" y="-12" width="134" height="24" rx="3" fill="#ede9fe" stroke="#1c1941" stroke-width="1.6"/>${label(103, 5, text, { size: 11, max: 20 })}`, { role: 'p1' }),
   }),
   message({
     id: 'instant-bonne-nuit-mot',
