@@ -11,6 +11,7 @@ import {
 } from '@/lib/admin/ranking-state';
 
 import { asCount, asRecord, type AdminDeps } from './admin';
+import { decodeNamePreview, type AdminNamePreview } from './admin-name-preview';
 import type { ApiResult } from './http';
 
 /**
@@ -49,6 +50,8 @@ export type AdminRankingConversation = {
   readonly id: string;
   readonly title: string | null;
   readonly type: string | null;
+  /** Les membres qui nomment une conversation sans titre — servis au rang d'administration seulement. */
+  readonly members: AdminNamePreview | null;
 };
 
 export type AdminRankingUserRow = {
@@ -66,6 +69,7 @@ export type AdminRankingConversationRow = {
   readonly title: string | null;
   readonly type: string | null;
   readonly avatar: string | null;
+  readonly members: AdminNamePreview | null;
   readonly count: number;
   readonly lastActivity: string | null;
 };
@@ -136,7 +140,12 @@ function decodeConversation(raw: unknown): AdminRankingConversation | null {
   const conversation = asRecord(raw);
   const id = textOrNull(conversation?.id);
   if (conversation === null || id === null) return null;
-  return { id, title: namedTitle(conversation.title, conversation.identifier), type: textOrNull(conversation.type) };
+  return {
+    id,
+    title: namedTitle(conversation.title, conversation.identifier),
+    type: textOrNull(conversation.type),
+    members: decodeNamePreview(conversation),
+  };
 }
 
 /** Le titre, sauf le repli SERVEUR : `title || identifier || 'Sans titre'` — un identifiant n'est pas un titre. */
@@ -197,6 +206,7 @@ const DECODERS: Readonly<Record<RankingBranch, (raw: Readonly<Record<string, unk
     title: namedTitle(raw.title, raw.identifier),
     type: textOrNull(raw.type),
     avatar: textOrNull(raw.image),
+    members: decodeNamePreview(raw),
     count: asCount(raw.count),
     lastActivity: textOrNull(raw.lastActivity),
   }),

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 
+import { translateAdmin } from '@/lib/i18n-admin-catalog';
 import { adminIdentityFixture } from '@/test-support/admin-assertions';
 import { setupAdminKitTests } from '@/test-support/admin-harness';
 import { mountAdminAt, resetAdminRouter } from '@/test-support/admin-router';
@@ -32,6 +33,7 @@ afterAll(() => {
 const ADMIN = adminIdentityFixture({ role: 'ADMIN' });
 const MODERATOR = adminIdentityFixture({ role: 'MODERATOR' });
 const ECRAN = '[data-scale-load-failed], [data-admin-engagement-scale]';
+const DENIED = '[data-admin-shell] main#contenu p.text-screen';
 
 const nav = (host: Element, href: string) => host.querySelector(`[data-admin-sidebar] [data-admin-nav][href="${href}"]`);
 
@@ -45,12 +47,22 @@ describe('Barème de points — /admin/engagement-scale et /adm/engagement-scale
       resetAdminRouter(mounter);
     });
 
-    test(`sous /${space}, un MODERATOR lit « réservé aux administrateurs », et son retour reste sous /${space}`, async () => {
-      const host = await mountAdminAt(mounter, `/${space}/engagement-scale`, MODERATOR, '[data-admin-scale-denied]');
+    test(`sous /${space}, un MODERATOR lit le refus unique du kit, et son retour reste sous /${space}`, async () => {
+      const host = await mountAdminAt(mounter, `/${space}/engagement-scale`, MODERATOR, DENIED);
 
-      expect(host.querySelector('[data-admin-scale-denied]')?.textContent).toBe('Ce réglage est réservé aux administrateurs.');
+      expect(host.querySelector(DENIED)?.textContent).toBe(translateAdmin('fr', 'admin.denied.title'));
       expect(host.querySelector('[data-admin-engagement-scale]')).toBeNull();
       expect(nav(host, `/${space}/engagement-scale`)).toBeNull();
+      expect(host.querySelector('[data-admin-back]')?.getAttribute('href')).toBe(`/${space}`);
+      resetAdminRouter(mounter);
+    });
+
+    test(`sous /${space}, l’en-tête de page du kit porte le fil « Plateforme › Barème de points »`, async () => {
+      const host = await mountAdminAt(mounter, `/${space}/engagement-scale`, ADMIN, ECRAN);
+
+      expect(host.querySelector('[data-admin-page-header] h1')?.textContent).toBe('Barème de points');
+      expect([...host.querySelectorAll('[data-admin-page-header] nav li')].map((item) => item.textContent)).toEqual(['Plateforme', 'Barème de points']);
+      expect(host.querySelectorAll('h1').length).toBe(1);
       resetAdminRouter(mounter);
     });
   }

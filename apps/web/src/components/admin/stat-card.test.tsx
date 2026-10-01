@@ -120,7 +120,9 @@ describe('AdminStatGrid', () => {
     );
     const classes = host.querySelector('[data-admin-stat-grid]')?.className ?? '';
     expect(classes).toContain('grid-cols-1');
-    expect(classes).toContain('sm:grid-cols-2');
-    expect(classes).toContain('lg:grid-cols-3');
+    /* Des seuils de CONTENU (conteneur), pas de fenêtre : le menu déplié retire 248 px. */
+    expect(classes).toContain('@lg:grid-cols-2');
+    expect(classes).toContain('@4xl:grid-cols-3');
+    expect(classes).not.toMatch(/(^|\s)(sm|lg):grid-cols/);
   });
 });

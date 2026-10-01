@@ -6,7 +6,7 @@ import { adminIdentityFixture, expectNoRawIdentifiers } from '@/test-support/adm
 import { mountAdminAt, resetAdminRouter } from '@/test-support/admin-router';
 import { setupAdminKitTests } from '@/test-support/admin-harness';
 
-import { AdminEntityChip, AdminEntityIdentity, AdminEntityLink, AdminLink, AdminRouteLink, type AdminEntityRef } from './entity-chip';
+import { AdminCardMode, AdminEntityChip, AdminEntityIdentity, AdminEntityLink, AdminLink, AdminRouteLink, type AdminEntityRef } from './entity-chip';
 
 const { mount, mounter } = setupAdminKitTests();
 
@@ -140,5 +140,45 @@ describe('les liens restent dans l’espace courant (D-76)', () => {
     const lien = host.querySelector('[data-admin-directory] a')?.getAttribute('href') ?? '';
     expect(lien.startsWith('/adm/')).toBe(true);
     resetAdminRouter(mounter);
+  });
+});
+
+describe('AdminEntityIdentity — un vrai nom ne se coupe pas sans qu’on puisse le lire en entier', () => {
+  const long: AdminEntityRef = {
+    kind: 'conversation',
+    id: ID,
+    label: 'Association des anciens élèves du lycée Njanda — promotion 2004, section scientifique',
+    secondary: 'Conversation de groupe réservée aux membres fondateurs de l’association',
+  };
+
+  test('dans une cellule de tableau le nom se tronque, et `title` porte le nom ENTIER (nom et secondaire)', async () => {
+    const host = await mount(<AdminEntityIdentity language="fr" entity={long} />);
+    const name = host.querySelector('[data-admin-entity] [title]');
+
+    expect(name?.getAttribute('title')).toBe(long.label);
+    expect(name?.className).toContain('truncate');
+    expect(name?.className).not.toContain('line-clamp');
+    const secondary = [...host.querySelectorAll('[title]')][1];
+    expect(secondary?.getAttribute('title')).toBe(long.secondary);
+  });
+
+  test('dans une CARTE le nom se replie sur deux lignes au lieu de se tronquer', async () => {
+    const host = await mount(
+      <AdminCardMode value>
+        <AdminEntityIdentity language="fr" entity={long} />
+      </AdminCardMode>,
+    );
+    const [name, secondary] = [...host.querySelectorAll('[title]')];
+
+    expect(name?.className).toContain('break-words');
+    expect(name?.className).toContain('line-clamp-2');
+    expect(name?.className).not.toContain('truncate');
+    expect(secondary?.className).toContain('line-clamp-2');
+    expect(name?.textContent).toBe(long.label);
+  });
+
+  test('sans secondaire, aucun deuxième title', async () => {
+    const host = await mount(<AdminEntityIdentity language="fr" entity={{ ...user, secondary: null }} />);
+    expect(host.querySelectorAll('[title]')).toHaveLength(1);
   });
 });

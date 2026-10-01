@@ -63,7 +63,7 @@ export function AdminConfirmSheet({
   const blocked = busy || tooShort;
 
   return (
-    <Sheet title={title} presentation="centered" bodyAs="div" onClose={onCancel}>
+    <Sheet title={title} presentation="centered" bodyAs="div" closeLabel={translateAdmin(language, 'admin.kit.close')} onClose={onCancel}>
       <div data-admin-confirm className="grid gap-4 px-4 pb-4 pt-2">
         <p className="text-body" style={{ color: INK }}>
           {body}

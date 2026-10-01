@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { AdminEntityChip } from '@/components/admin/entity-chip';
 import { AdminMomentText } from '@/components/admin/meta';
+import { AdminLoading } from '@/components/admin/states';
 import { BRAND, EDGE, INK, INK2, SURFACE, TONE_COLOR, toneBackground } from '@/components/admin/tone';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import type { RankingRowView } from '@/lib/admin/ranking-view';
@@ -72,7 +73,7 @@ export function RankingPodium({
       <h2 id="admin-ranking-podium" className="text-title font-semibold" style={{ color: INK }}>
         {translateAdmin(language, 'admin.ranking.podium.title')}
       </h2>
-      <ol className="grid grid-cols-1 gap-3 sm:grid-cols-3 md:gap-4">
+      <ol className="grid grid-cols-1 gap-3 @xl:grid-cols-3 md:gap-4">
         {views.map((view) => (
           <li key={view.key} data-admin-podium={view.rank} className="grid min-w-0 content-start gap-3 rounded-card p-4 md:p-5" style={CARD}>
             <RankMark language={language} rank={view.rank} />
@@ -127,7 +128,7 @@ export function RankingTable({
         {title}
       </h2>
 
-      <div className="hidden overflow-x-auto rounded-card md:block" style={CARD}>
+      <div className="hidden overflow-x-auto rounded-card @3xl:block" style={CARD}>
         <table className="w-full border-collapse text-start">
           <caption className="sr-only">{caption}</caption>
           <thead>
@@ -157,7 +158,7 @@ export function RankingTable({
         </table>
       </div>
 
-      <ul className="grid gap-3 md:hidden" aria-busy={dimmed} style={{ opacity: dimmed ? 0.6 : 1 }}>
+      <ul className="grid gap-3 @3xl:hidden" aria-busy={dimmed} style={{ opacity: dimmed ? 0.6 : 1 }}>
         {views.map((view) => (
           <li key={view.key} data-admin-card={view.key} className="grid gap-3 rounded-card p-4" style={CARD}>
             <span className="flex min-w-0 items-center gap-3">
@@ -208,17 +209,17 @@ const PLACEHOLDER = 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)
 /** Le squelette : trois cartes de podium et six rangées — la forme de ce qui va arriver, jamais un spinner. */
 export function RankingSkeleton({ language }: { readonly language: AdminLanguage }) {
   return (
-    <div data-admin-ranking-skeleton aria-busy="true" aria-label={translateAdmin(language, 'admin.kit.loading')} className="grid gap-4">
-      <div aria-hidden="true" className="grid grid-cols-1 gap-3 sm:grid-cols-3 md:gap-4">
+    <AdminLoading language={language} anchor="ranking-skeleton" className="grid gap-4">
+      <div className="grid grid-cols-1 gap-3 @xl:grid-cols-3 md:gap-4">
         {[0, 1, 2].map((slot) => (
           <div key={slot} className="rounded-card" style={{ height: 152, backgroundColor: PLACEHOLDER }} />
         ))}
       </div>
-      <div aria-hidden="true" className="grid gap-2">
+      <div className="grid gap-2">
         {Array.from({ length: 6 }, (_, slot) => (
           <div key={slot} className="rounded-card" style={{ height: 52, backgroundColor: PLACEHOLDER }} />
         ))}
       </div>
-    </div>
+    </AdminLoading>
   );
 }

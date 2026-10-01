@@ -47,16 +47,17 @@ export type AuditIdFilterKey = 'admin' | 'subject';
 export type AuditListState = ListState<AuditSortKey, AuditFilterKey, AuditIdFilterKey>;
 
 /**
- * **CE QUE LA PASSERELLE ACCEPTE DANS `action`** — des codes `[A-Z_]{2,64}`, vingt
+ * **CE QUE LA PASSERELLE ACCEPTE DANS `action`** — des codes `[A-Z0-9_]{2,64}`, vingt
  * au plus, séparés par des virgules (le motif AJV de `routes/admin/audit-logs.ts`,
- * que `audit-list.test.ts` relit à chaque passage : si la passerelle l'élargit, le
+ * que `audit-list.test.ts` relit à chaque passage : si la passerelle le change, le
  * témoin rougit et ce fichier se relit).
  *
- * Deux codes du vocabulaire portent un CHIFFRE (`ENABLE_2FA`, `DISABLE_2FA`) : les
- * envoyer ferait refuser toute la requête (400). Le filtre ne les envoie donc pas, et
- * sa famille le DIT (`gaps`) — un filtre qui omettrait des lignes en silence mentirait.
+ * Deux codes du vocabulaire portent un CHIFFRE (`ENABLE_2FA`, `DISABLE_2FA` — le geste
+ * de double authentification de #8004) : le motif les admet, sans quoi la requête
+ * entière serait refusée (400). Ce qui dépasse `MAX_ACTION_CODES` n'est pas envoyé, et
+ * la famille le DIT (`gaps`) — un filtre qui omettrait des lignes en silence mentirait.
  */
-export const GATEWAY_ACTION_PATTERN = /^[A-Z_]{2,64}$/;
+export const GATEWAY_ACTION_PATTERN = /^[A-Z0-9_]{2,64}$/;
 export const MAX_ACTION_CODES = 20;
 
 export type AuditFamilyFilter = {

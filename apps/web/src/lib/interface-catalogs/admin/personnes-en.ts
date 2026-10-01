@@ -6,6 +6,7 @@ const f = {
   'admin.people.list.empty': 'No accounts yet.',
   'admin.people.list.emptyFiltered': 'No account matches these filters.',
   'admin.people.filter.phoneVerified': 'Phone verified',
+  'admin.people.filter.role.administration': 'Administration rank (creator and administrators)',
   'admin.people.filter.period': 'Signed up within',
   'admin.people.sort.label': 'Sort by',
   'admin.people.sort.createdAt': 'Sign-up date',

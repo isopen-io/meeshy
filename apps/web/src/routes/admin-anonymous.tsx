@@ -34,12 +34,6 @@ import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, 
  * Le seuil est celui des comptes (`canManageUsers`, section `anonymous`).
  */
 
-const SORT_LABELS = {
-  joinedAt: 'admin.col.joined',
-  lastActiveAt: 'admin.col.lastActive',
-  displayName: 'admin.col.name',
-} as const satisfies Readonly<Record<AnonymousSortKey, 'admin.col.joined' | 'admin.col.lastActive' | 'admin.col.name'>>;
-
 export function AdminAnonymousPanel({
   language,
   deps = apiDeps,
@@ -82,19 +76,6 @@ export function AdminAnonymousPanel({
         { value: 'inactive', label: translateAdmin(language, 'admin.filter.inactive') },
       ],
       onChange: (value) => list.filter('status', value === '' ? null : value),
-    },
-    {
-      /* Le tri des CARTES (< md), où il n'y a pas d'en-tête à cliquer. La présence ne se trie que pour qui la reçoit. */
-      id: 'sort',
-      label: translateAdmin(language, 'admin.people.sort.label'),
-      value: state.sort,
-      options: ANONYMOUS_LIST_SPEC.sortKeys
-        .filter((key) => key !== 'lastActiveAt' || reach.hasAdminRank)
-        .map((key) => ({ value: key, label: translateAdmin(language, SORT_LABELS[key]) })),
-      onChange: (value) => {
-        const key = ANONYMOUS_LIST_SPEC.sortKeys.find((candidate) => candidate === value);
-        if (key !== undefined && key !== state.sort) list.sort(key);
-      },
     },
   ];
 

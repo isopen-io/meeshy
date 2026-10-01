@@ -20,8 +20,11 @@ const SURFACE = 'var(--color-ios-surface)';
 const EDGE = 'var(--color-edge)';
 const BRAND = 'var(--color-ios-brand)';
 
+/** 44 px : la cible tactile minimale (WCAG 2.5.5, § 5 de la feuille de route) — un champ de liste n'y fait pas exception. */
+const CIBLE = 44;
+
 const CHAMP = {
-  minHeight: 40,
+  minHeight: CIBLE,
   backgroundColor: SURFACE,
   border: `1px solid ${EDGE}`,
   color: INK,
@@ -103,7 +106,7 @@ export function AdminResetButton({ language, onReset }: { readonly language: Adm
       data-admin-list-reset
       onClick={onReset}
       className="rounded-chip px-4 text-body font-medium"
-      style={{ minHeight: 40, color: BRAND }}
+      style={{ minHeight: CIBLE, color: BRAND }}
     >
       {translateAdmin(language, 'admin.list.reset')}
     </button>
@@ -153,7 +156,7 @@ export function SortableTh({
         onClick={onSort}
         aria-label={translateAdmin(language, 'admin.list.sortBy', { column: label })}
         className="flex items-center gap-1 rounded-chip px-2 text-caption font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
-        style={{ minHeight: 40, color: actif ? BRAND : INK2, outlineColor: BRAND }}
+        style={{ minHeight: CIBLE, color: actif ? BRAND : INK2, outlineColor: BRAND }}
       >
         <span>{label}</span>
         <span aria-hidden="true" className="tabular-nums">
@@ -192,7 +195,7 @@ export function AdminPager({
   readonly onPage: (page: { readonly offset?: number; readonly limit?: number }) => void;
 }) {
   const bouton = 'rounded-chip px-4 text-body font-semibold disabled:opacity-40';
-  const fond = { minHeight: 40, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK };
+  const fond = { minHeight: CIBLE, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK };
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
       <p className="text-caption tabular-nums" style={{ color: INK2 }} data-admin-list-range>
@@ -202,7 +205,9 @@ export function AdminPager({
           total: String(total),
         })}
       </p>
-      <div className="flex items-center gap-2">
+      {/* `flex-wrap` : à 375 px les trois contrôles (taille de page, précédent, suivant) mesuraient
+          349 px dans une colonne de 343 px — la page débordait. Ils passent à la ligne. */}
+      <div className="flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-2 text-caption" style={{ color: INK2 }}>
           {translateAdmin(language, 'admin.list.pageSize')}
           <select

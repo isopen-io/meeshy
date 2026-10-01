@@ -97,7 +97,7 @@ export function AdminReportsStats({ language, deps }: { readonly language: Admin
         />
       </AdminStatGrid>
       {stats === undefined || stats.total === 0 ? null : (
-        <div className="grid gap-3 md:grid-cols-2 md:gap-4">
+        <div className="grid gap-3 @2xl:grid-cols-2 md:gap-4">
           <AdminShareChart
             language={language}
             id="reasons"

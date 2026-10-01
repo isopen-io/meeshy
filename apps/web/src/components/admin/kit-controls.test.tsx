@@ -6,7 +6,9 @@ import { typeInto } from '@/test-support/act-mount';
 import { createRouter, navigate } from '@/lib/router';
 
 import { AdminFilterChips, AdminListToolbar } from './list-toolbar';
-import { AdminTabs, useAdminTab } from './tabs';
+import { AdminSortControl } from './sort-control';
+import { AdminTabPanel, AdminTabs, adminTabId, adminTabPanelId, useAdminTab } from './tabs';
+import { AdminPager } from '@/routes/admin-table';
 
 const { mount, mounter } = setupAdminKitTests();
 
@@ -67,6 +69,99 @@ describe('AdminListToolbar — ne dessine que ce que la passerelle sert', () => 
     const host = await mount(<AdminListToolbar language="fr" trailing="1 204 comptes" />);
     expect(host.querySelector('[data-admin-toolbar-count]')?.textContent).toBe('1 204 comptes');
     expect(host.querySelector('[data-admin-toolbar]')?.className).toContain('flex-wrap');
+  });
+});
+
+describe('AdminListToolbar — un tri n’est pas un filtre posé', () => {
+  const sort = {
+    id: 'sort',
+    label: 'Trier par',
+    value: 'createdAt',
+    defaultValue: 'createdAt',
+    options: [{ value: 'createdAt', label: 'Inscription' }, { value: 'username', label: 'Pseudonyme' }],
+    onChange: () => undefined,
+  };
+
+  test('une valeur égale à son état de repos ne fait pas apparaître « Réinitialiser » — un bouton qui ne change rien n’a pas à être là', async () => {
+    const host = await mount(<AdminListToolbar language="fr" filters={[sort]} onReset={() => undefined} />);
+    expect(host.querySelector('[data-admin-list-reset]')).toBeNull();
+  });
+
+  test('une valeur DIFFÉRENTE de l’état de repos, elle, le fait apparaître', async () => {
+    const host = await mount(<AdminListToolbar language="fr" filters={[{ ...sort, value: 'username' }]} onReset={() => undefined} />);
+    expect(host.querySelector('[data-admin-list-reset]')).not.toBeNull();
+  });
+
+  test('sans defaultValue, le repos est « vide » comme avant', async () => {
+    const { defaultValue: _repos, ...plain } = sort;
+    const host = await mount(<AdminListToolbar language="fr" filters={[plain]} onReset={() => undefined} />);
+    expect(host.querySelector('[data-admin-list-reset]')).not.toBeNull();
+  });
+});
+
+describe('AdminSortControl — le tri des cartes', () => {
+  const options = [{ value: 'createdAt', label: 'Inscription' }, { value: 'username', label: 'Pseudonyme' }];
+
+  test('un « Trier par » étiqueté, et un bouton d’ordre de 44 px qui dit l’ordre courant', async () => {
+    const host = await mount(<AdminSortControl language="fr" options={options} sort="createdAt" order="desc" onSort={() => undefined} />);
+    expect(host.querySelector('label')?.textContent).toContain('Trier par');
+    expect(host.querySelector<HTMLSelectElement>('[data-admin-sort-select]')?.style.minHeight).toBe('44px');
+    const button = host.querySelector<HTMLButtonElement>('[data-admin-sort-direction]');
+    expect(button?.style.minHeight).toBe('44px');
+    expect(button?.getAttribute('aria-label')).toBe('Inverser l’ordre du tri (actuellement : Décroissant)');
+  });
+
+  test('choisir une AUTRE clé la remonte ; choisir la même ne remonte rien ; le bouton remonte la clé COURANTE (inversion)', async () => {
+    const choix: string[] = [];
+    function Stateful() {
+      const [sort, setSort] = useState('createdAt');
+      return (
+        <AdminSortControl
+          language="fr"
+          options={options}
+          sort={sort}
+          order="asc"
+          onSort={(key) => {
+            choix.push(key);
+            setSort(key);
+          }}
+        />
+      );
+    }
+    const host = await mount(<Stateful />);
+    const select = host.querySelector<HTMLSelectElement>('[data-admin-sort-select]');
+
+    typeInto(select, 'createdAt');
+    typeInto(select, 'username');
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-admin-sort-direction]')?.click());
+
+    expect(choix).toEqual(['username', 'username']);
+  });
+
+  test('sans colonne triable, rien n’est dessiné — un contrôle sans effet est interdit', async () => {
+    const host = await mount(<AdminSortControl language="fr" options={[]} sort="" order="asc" onSort={() => undefined} />);
+    expect(host.querySelector('[data-admin-sort-control]')).toBeNull();
+  });
+
+  test('il se dit dans la langue du lecteur', async () => {
+    const { loadAdminInterfaceCatalog } = await import('@/lib/i18n-admin-catalog');
+    await loadAdminInterfaceCatalog('es');
+    const host = await mount(<AdminSortControl language="es" options={options} sort="createdAt" order="asc" onSort={() => undefined} />);
+    expect(host.querySelector('label')?.textContent).toContain('Ordenar por');
+  });
+});
+
+describe('AdminPager — tient dans 375 px', () => {
+  test('le groupe de contrôles passe à la ligne, et chaque contrôle fait 44 px', async () => {
+    const host = await mount(
+      <AdminPager language="fr" offset={20} limit={20} count={20} total={57} hasMore pageSizes={[20, 50, 100]} onPage={() => undefined} />,
+    );
+    const controls = host.querySelector('[data-admin-page-size]')?.closest('div');
+
+    expect(controls?.className).toContain('flex-wrap');
+    expect(host.querySelector<HTMLSelectElement>('[data-admin-page-size]')?.style.minHeight).toBe('44px');
+    expect(host.querySelector<HTMLButtonElement>('[data-admin-list-prev]')?.style.minHeight).toBe('44px');
+    expect(host.querySelector<HTMLButtonElement>('[data-admin-list-next]')?.style.minHeight).toBe('44px');
   });
 });
 
@@ -157,6 +252,103 @@ describe('AdminTabs — des onglets ARIA', () => {
     expect((roles(host)[0] as HTMLElement).style.borderBottomWidth).toBe('2px');
     expect((roles(host)[0] as HTMLElement).style.borderBottomColor).toBe('var(--color-ios-brand)');
     expect((roles(host)[1] as HTMLElement).style.borderBottomColor).toBe('transparent');
+  });
+});
+
+describe('AdminTabs — le lien onglet ↔ panneau', () => {
+  const tabs = [{ id: 'activity', label: 'Activité' }, { id: 'messages', label: 'Messages' }, { id: 'calls', label: 'Appels' }] as const;
+  type TabId = (typeof tabs)[number]['id'];
+
+  function Linked({ idBase }: { readonly idBase?: string }) {
+    const [active, setActive] = useState<TabId>('activity');
+    return (
+      <div>
+        <AdminTabs label="Statistiques" tabs={tabs} active={active} onChange={setActive} {...(idBase === undefined ? {} : { idBase })} />
+        <AdminTabPanel idBase={idBase ?? 'absent'} tab={active}>
+          <p data-body>{active}</p>
+        </AdminTabPanel>
+      </div>
+    );
+  }
+
+  const roles = (host: Element) => [...host.querySelectorAll<HTMLElement>('[role="tab"]')];
+
+  test('chaque onglet porte un identifiant ET aria-controls vers le panneau de son onglet', async () => {
+    const host = await mount(<Linked idBase="stats" />);
+    expect(roles(host).map((tab) => [tab.id, tab.getAttribute('aria-controls')])).toEqual(
+      tabs.map(({ id }) => [adminTabId('stats', id), adminTabPanelId('stats', id)]),
+    );
+  });
+
+  test('le panneau actif est un tabpanel nommé par SON onglet, et cet onglet existe', async () => {
+    const host = await mount(<Linked idBase="stats" />);
+    const panel = host.querySelector('[role="tabpanel"]');
+    expect(panel?.id).toBe(roles(host)[0]?.getAttribute('aria-controls'));
+    expect(panel?.getAttribute('aria-labelledby')).toBe(roles(host)[0]?.id);
+    expect(host.querySelector(`#${panel?.getAttribute('aria-labelledby')}`)?.getAttribute('role')).toBe('tab');
+  });
+
+  test('changer d’onglet déplace le panneau : son nom et son contenu suivent', async () => {
+    const host = await mount(<Linked idBase="stats" />);
+    await act(async () => roles(host)[2]?.click());
+    const panel = host.querySelector('[role="tabpanel"]');
+    expect(panel?.getAttribute('aria-labelledby')).toBe(adminTabId('stats', 'calls'));
+    expect(panel?.querySelector('[data-body]')?.textContent).toBe('calls');
+    expect(host.querySelectorAll('[role="tabpanel"]').length).toBe(1);
+  });
+
+  test('sans base fournie, l’onglet reçoit quand même une base propre — jamais deux listes aux mêmes identifiants', async () => {
+    const host = await mount(
+      <div>
+        <AdminTabs label="A" tabs={tabs} active="activity" onChange={() => undefined} />
+        <AdminTabs label="B" tabs={tabs} active="activity" onChange={() => undefined} />
+      </div>,
+    );
+    const ids = roles(host).map((tab) => tab.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.every((id) => id !== '' && !id.startsWith('undefined'))).toBe(true);
+  });
+
+  test('une flèche déplace aussi le FOCUS sur l’onglet ouvert — le clavier ne perd pas sa place', async () => {
+    const host = await mount(<Linked idBase="stats" />);
+    roles(host)[0]?.focus();
+    await act(async () => {
+      roles(host)[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+    });
+    expect(document.activeElement?.id).toBe(adminTabId('stats', 'calls'));
+    await act(async () => {
+      roles(host)[2]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true, cancelable: true }));
+    });
+    expect(document.activeElement?.id).toBe(adminTabId('stats', 'activity'));
+  });
+
+  test('l’ancre de recette `data-<anchor>` s’ajoute à `data-admin-tab`, sans la remplacer', async () => {
+    const host = await mount(<AdminTabs label="Fiche" tabs={tabs} active="messages" onChange={() => undefined} idBase="fiche" anchor="admin-user-tab" />);
+    const second = roles(host)[1];
+    expect(second?.getAttribute('data-admin-tab')).toBe('messages');
+    expect(second?.getAttribute('data-admin-user-tab')).toBe('messages');
+  });
+
+  test('l’onglet actif est ramené dans la liste seulement s’il en sort — aucun saut de page sinon', async () => {
+    const scrolled: string[] = [];
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = function scrollIntoViewSpy(this: HTMLElement) {
+      scrolled.push(this.id);
+    };
+    try {
+      const host = await mount(<Linked idBase="stats" />);
+      expect(scrolled).toEqual([]);
+      const strip = host.querySelector<HTMLElement>('[role="tablist"]');
+      Object.defineProperty(strip, 'clientWidth', { configurable: true, value: 100 });
+      for (const tab of roles(host)) {
+        Object.defineProperty(tab, 'offsetLeft', { configurable: true, value: roles(host).indexOf(tab) * 200 });
+        Object.defineProperty(tab, 'offsetWidth', { configurable: true, value: 200 });
+      }
+      await act(async () => roles(host)[2]?.click());
+      expect(scrolled).toEqual([adminTabId('stats', 'calls')]);
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+    }
   });
 });
 

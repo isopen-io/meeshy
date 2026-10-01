@@ -35,7 +35,7 @@ describe('decodeAdminAuditEntry — la forme figée', () => {
       createdAt: '2026-09-30T11:40:00.000Z',
       admin: { id: OBJECT_ID(2), username: 'awa', displayName: 'Awa Diop', avatar: null },
       subject: { id: OBJECT_ID(3), username: 'jean', displayName: 'Jean Martin', avatar: null },
-      target: { type: 'User', id: OBJECT_ID(3), label: 'Jean Martin', secondary: '@jean' },
+      target: { type: 'User', id: OBJECT_ID(3), label: 'Jean Martin', secondary: '@jean', members: null },
       reason: 'Promotion validée par le comité',
       changes: [{ field: 'role', before: 'USER', after: 'MODERATOR' }],
       ipAddress: null,
@@ -102,7 +102,25 @@ describe('decodeAdminAuditEntry — la forme figée', () => {
   test('une cible sans libellé garde label null — jamais l’identifiant en guise de nom', () => {
     const decoded = decodeAdminAuditEntry(servedAuditEntry({ target: { type: 'Conversation', id: OBJECT_ID(9), label: null, secondary: null } }));
 
-    expect(decoded?.target).toEqual({ type: 'Conversation', id: OBJECT_ID(9), label: null, secondary: null });
+    expect(decoded?.target).toEqual({ type: 'Conversation', id: OBJECT_ID(9), label: null, secondary: null, members: null });
+  });
+
+  test('une conversation sans titre garde de quoi se nommer par ses membres — nom et pseudo seulement (#8876)', () => {
+    const decoded = decodeAdminAuditEntry(
+      servedAuditEntry({
+        target: {
+          type: 'Conversation',
+          id: OBJECT_ID(9),
+          label: null,
+          secondary: 'direct',
+          participants: [{ displayName: 'Awa Diop', username: 'awa', avatar: 'https://cdn/awa.png' }],
+          total: 4,
+        },
+      }),
+    );
+
+    expect(decoded?.target.members).toEqual({ participants: [{ displayName: 'Awa Diop', username: 'awa' }], total: 4 });
+    expect(JSON.stringify(decoded)).not.toContain('cdn');
   });
 
   test('une date illisible est null, jamais « Invalid Date »', () => {

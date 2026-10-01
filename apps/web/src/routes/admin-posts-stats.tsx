@@ -61,7 +61,7 @@ function Charts({ language, stats }: { readonly language: AdminLanguage; readonl
   );
 
   return (
-    <div className="grid gap-3 md:gap-4 lg:grid-cols-3">
+    <div className="grid gap-3 md:gap-4 @4xl:grid-cols-3">
       <AdminShareChart
         language={language}
         id="posts-by-type"

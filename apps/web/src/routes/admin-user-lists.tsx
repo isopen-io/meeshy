@@ -380,6 +380,7 @@ export function AdminUserConversationsSection({
       {ouverte === null ? null : (
         <Sheet
           title={nameOf(ouverte, language)}
+          closeLabel={translateAdmin(language, 'admin.kit.close')}
           bodyAs="div"
           onClose={() => setOuverte(null)}
         >

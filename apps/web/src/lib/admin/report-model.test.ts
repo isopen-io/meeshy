@@ -48,6 +48,7 @@ const MESSAGE_ENTITY: NonNullable<AdminReport['reportedEntity']> = {
   isProtected: false,
   deleted: false,
   conversation: { id: OBJECT_ID(5), title: 'Famille' },
+  members: null,
 };
 
 const report = (overrides: Partial<AdminReport> = {}): AdminReport => ({
@@ -82,6 +83,7 @@ const entityOf = (type: string, overrides: Partial<NonNullable<AdminReport['repo
     isProtected: false,
     deleted: false,
     conversation: null,
+    members: null,
     ...overrides,
   },
 });
@@ -227,6 +229,24 @@ describe('reportPersonName / reportedOwnerOf / reportedConversationOf — dire s
     expect(reportedConversationOf(report(), 'fr')).toEqual({ kind: 'conversation', id: OBJECT_ID(5), label: 'Famille' });
     expect(reportedConversationOf(report(entityOf('post')), 'fr')).toBeNull();
     expect(reportedConversationOf(report({ reportedEntity: { ...MESSAGE_ENTITY, conversation: { id: OBJECT_ID(5), title: null } } }), 'fr')?.label).toBe('Conversation sans titre');
+    expect(
+      reportedConversationOf(
+        report({
+          reportedEntity: {
+            ...MESSAGE_ENTITY,
+            conversation: { id: OBJECT_ID(5), title: null },
+            members: {
+              participants: [
+                { displayName: 'Awa Diop', username: 'awa' },
+                { displayName: 'Jean', username: 'jean' },
+              ],
+              total: 2,
+            },
+          },
+        }),
+        'fr',
+      )?.label,
+    ).toBe('Awa Diop et Jean');
   });
 });
 

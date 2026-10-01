@@ -269,24 +269,31 @@ describe('AdminPostsPanel — le bandeau de chiffres', () => {
 describe('AdminPostsPanel — onglets de type, filtres, recherche, pagination dans l’adresse', () => {
   test('les onglets : Toutes, Publications, Stories, Reels, Statuts ; « Toutes » est actif par défaut', async () => {
     const { host } = await ouvrir();
-    const labels = [...host.querySelectorAll('[data-admin-tabs] [role="tab"]')].map((tab) => tab.textContent?.trim());
+    const labels = [...host.querySelectorAll('[data-admin-chips] [data-admin-chip]')].map((chip) => chip.textContent?.trim());
     expect(labels).toEqual(['Toutes', 'Publications', 'Stories', 'Reels', 'Statuts']);
-    expect(host.querySelector('[data-admin-tab="all"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(host.querySelector('[data-admin-chip="all"]')?.getAttribute('aria-pressed')).toBe('true');
   });
 
   test('un onglet pose le filtre de type dans l’adresse et à la passerelle ; « Toutes » le retire', async () => {
     const { host, calls } = await ouvrir();
-    await click(host.querySelector('[data-admin-tab="STORY"]'));
+    await click(host.querySelector('[data-admin-chip="STORY"]'));
     expect(window.location.search).toBe('?type=STORY');
     expect(queryOf(listCalls(calls).at(-1))).toMatchObject({ type: 'STORY' });
-    expect(host.querySelector('[data-admin-tab="STORY"]')?.getAttribute('aria-selected')).toBe('true');
-    await click(host.querySelector('[data-admin-tab="all"]'));
+    expect(host.querySelector('[data-admin-chip="STORY"]')?.getAttribute('aria-pressed')).toBe('true');
+    await click(host.querySelector('[data-admin-chip="all"]'));
     expect(window.location.search).toBe('');
   });
 
   test('l’onglet actif se lit de l’adresse', async () => {
     const { host } = await ouvrir(defaultReply, '/admin/posts?type=REEL');
-    expect(host.querySelector('[data-admin-tab="REEL"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(host.querySelector('[data-admin-chip="REEL"]')?.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  test('un filtre de liste n’est pas un onglet : aucun tablist, un groupe de puces à aria-pressed', async () => {
+    const { host } = await ouvrir();
+    expect(host.querySelector('[role="tablist"]')).toBeNull();
+    expect(host.querySelector('[role="tab"]')).toBeNull();
+    expect(host.querySelector('[role="group"][data-admin-chips]')?.getAttribute('aria-label')).toBe('Type de publication');
   });
 
   test('sans filtre : la première page, rien d’autre que la page et sa taille', async () => {

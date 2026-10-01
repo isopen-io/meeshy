@@ -1,6 +1,7 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 import { asRecord } from './admin';
+import { decodeNamePreview, type AdminNamePreview } from './admin-name-preview';
 import { listOf, readAdmin, rowsOf, servedCount, servedText, type AdminReadParams } from './admin-overview';
 import type { ApiResult } from './http';
 
@@ -183,6 +184,8 @@ export type AdminRankedConversation = {
   readonly id: string;
   readonly title: string | null;
   readonly type: string | null;
+  /** Les membres qui nomment une conversation sans titre — servis au rang d'administration seulement. */
+  readonly members: AdminNamePreview | null;
   readonly count: number;
 };
 
@@ -197,7 +200,7 @@ function decodeRankedConversation(raw: unknown): AdminRankedConversation | null 
 
   const title = servedText(row.title);
   const real = title !== null && title !== servedText(row.identifier) && title !== SERVED_UNTITLED;
-  return { id, title: real ? title : null, type: servedText(row.type), count };
+  return { id, title: real ? title : null, type: servedText(row.type), members: decodeNamePreview(row), count };
 }
 
 function rankingsOf(raw: unknown): readonly unknown[] | null {

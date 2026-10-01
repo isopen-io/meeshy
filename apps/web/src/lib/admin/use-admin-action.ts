@@ -22,18 +22,33 @@ export type AdminGesture<Result> = {
 };
 
 /**
+ * Le code que porte un refus DÉJÀ DIT en mots par l'écran qui l'a reconnu (« cette publication était
+ * déjà retirée », « le créateur est protégé ») : seul un refus ainsi marqué voit son texte affiché.
+ * Le texte brut d'une passerelle, lui, ne l'est jamais.
+ */
+const TRANSLATED_REFUSAL = 'ADMIN_TRANSLATED_REFUSAL';
+
+/**
+ * Un refus que l'écran a reconnu et DIT lui-même, dans la langue du lecteur : `message` est une phrase
+ * traduite par `translateAdmin`, jamais un texte de passerelle.
+ */
+export const translatedRefusal = (message: string): ApiFailure => ({ ok: false, status: 400, error: message, code: TRANSLATED_REFUSAL });
+
+/**
  * **REFUS TRADUITS** (#8876) — un refus se dit en mots, jamais par son code ni
  * par un message d'infrastructure : 403 → « vous n'avez pas le droit » ; 400 →
- * le message servi s'il est une chaîne lisible, sinon « informations
- * invalides » ; 409 → conflit avec l'état courant ; échec réseau (statut 0) →
- * « réessayez » ; tout le reste → le serveur n'a pas pu.
+ * « informations invalides » ; 409 → conflit avec l'état courant ; échec réseau
+ * (statut 0) → « réessayez » ; tout le reste → le serveur n'a pas pu.
+ *
+ * Le texte d'un 400 de la PASSERELLE n'est JAMAIS affiché : elle l'écrit en français
+ * (« Statut invalide ») ou en anglais (les erreurs de validation du schéma), et
+ * l'administration se lit en français, anglais, espagnol et portugais — le servir
+ * ferait lire à un lecteur une langue qui n'est pas la sienne. Un écran qui reconnaît un
+ * refus précis le dit lui-même par {@link translatedRefusal}.
  */
 function refusal(failure: ApiFailure, language: AdminLanguage): string {
   if (failure.status === 403) return translateAdmin(language, 'admin.kit.refused.permission');
-  if (failure.status === 400) {
-    const served = failure.error.trim();
-    return served === '' ? translateAdmin(language, 'admin.kit.refused.invalid') : served;
-  }
+  if (failure.status === 400) return failure.code === TRANSLATED_REFUSAL ? failure.error : translateAdmin(language, 'admin.kit.refused.invalid');
   if (failure.status === 409) return translateAdmin(language, 'admin.kit.refused.conflict');
   if (failure.status === 0) return translateAdmin(language, 'admin.kit.refused.network');
   return translateAdmin(language, 'admin.kit.refused.server');

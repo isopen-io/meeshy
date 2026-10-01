@@ -29,6 +29,7 @@
 @source not '../../**/*.md';
 @import '@meeshy/design-tokens/tokens.css';
 @import './ios.css';
+@import './admin.css';
 @import './glass.css';
 @import './ui.css';
 

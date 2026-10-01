@@ -62,7 +62,7 @@ export function TrackingCharts({ language, link }: { readonly language: AdminLan
         format={count}
         summary={peak === null ? translateAdmin(language, 'admin.tracking.chart.days.quiet') : translateAdmin(language, 'admin.tracking.chart.days.summary', { day: peak.day, count: count(peak.count) })}
       />
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 @4xl:grid-cols-2">
         <AdminBarChart
           language={language}
           id="tracking-countries"

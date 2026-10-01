@@ -64,6 +64,38 @@ describe('la vue d’une ligne — des noms, jamais des identifiants', () => {
     expect(JSON.stringify([named, untitled])).not.toContain('mshy_conv');
   });
 
+  test('une conversation directe se nomme par ses membres quand la passerelle les sert — « Awa et Jean », « Awa, Jean et 3 autres » (R1)', () => {
+    const awa = { displayName: 'Awa Diop', username: 'awa' };
+    const jean = { displayName: null, username: 'jean' };
+    const [direct, group, withoutRank] = viewsOf(
+      [
+        servedConversationRank(1, { title: null, identifier: null, type: 'direct', participants: [awa, jean], total: 2 }),
+        servedConversationRank(2, { title: null, identifier: null, type: 'group', participants: [awa, jean], total: 5 }),
+        servedConversationRank(3, { title: null, identifier: null, type: 'direct' }),
+      ],
+      { entityType: 'conversations', criterion: 'message_count' },
+    );
+
+    expect(direct?.entity).toMatchObject({ label: 'Awa Diop et @jean', secondary: 'Conversation privée' });
+    expect(group?.entity.label).toBe('Awa Diop, @jean et 3 autres');
+    expect(withoutRank?.entity.label).toBe('Conversation sans titre');
+  });
+
+  test('un message nomme sa conversation sans titre par ses membres ; sans le rang d’administration, par « Conversation sans titre »', () => {
+    const [named, plain] = viewsOf(
+      [
+        servedMessageRank(1, {
+          conversation: { id: OBJECT_ID(201), identifier: null, title: null, type: 'direct', participants: [{ displayName: 'Awa Diop', username: 'awa' }], total: 2 },
+        }),
+        servedMessageRank(2, { conversation: { id: OBJECT_ID(202), identifier: null, title: null, type: 'direct' } }),
+      ],
+      { entityType: 'messages', criterion: 'most_reactions' },
+    );
+
+    expect(named?.entity.label).toContain('Awa Diop');
+    expect(plain?.entity.label).toContain('Conversation sans titre');
+  });
+
   test('l’avatar d’une conversation n’est posé que s’il existe ; sinon le glyphe du genre reste', () => {
     const [plain, pictured] = viewsOf(
       [servedConversationRank(1), servedConversationRank(2, { image: 'https://cdn.exemple/c.png' })],

@@ -15,7 +15,7 @@ import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { useAdminList } from '@/lib/admin/use-admin-list';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import { userEntityOf } from '@/lib/admin/user-entity';
-import { ADMIN_ROLES, USER_LIST_SPEC, userListFiltersOf, type UserFilterKey, type UserSortKey } from '@/lib/admin/user-list';
+import { ADMIN_ROLES, ADMINISTRATION_RANK, USER_LIST_SPEC, userListFiltersOf, type UserFilterKey, type UserSortKey } from '@/lib/admin/user-list';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminUserDetailQueryKey } from '@/lib/api/admin-user-detail';
 import { adminUsersQueryKey, loadAdminUsersPage, type AdminUserRow } from '@/lib/api/admin-users';
@@ -137,7 +137,11 @@ export function AdminUsersPanel({
       id: 'role',
       label: translateAdmin(language, 'admin.col.role'),
       value: state.filters.role ?? '',
-      options: [all, ...ADMIN_ROLES.map((role) => ({ value: role, label: interpretRole(role, language).label }))],
+      options: [
+        all,
+        { value: ADMINISTRATION_RANK, label: translateAdmin(language, 'admin.people.filter.role.administration') },
+        ...ADMIN_ROLES.map((role) => ({ value: role, label: interpretRole(role, language).label })),
+      ],
       onChange: filterOf('role'),
     },
     {
@@ -167,20 +171,6 @@ export function AdminUsersPanel({
       ],
       onChange: filterOf('period'),
     },
-    {
-      /* Le tri des CARTES (< md), où il n'y a pas d'en-tête à cliquer — et le seul chemin vers
-         « Prénom » et « Nom », que la passerelle trie mais qu'aucune colonne ne porte. */
-      id: 'sort',
-      label: translateAdmin(language, 'admin.people.sort.label'),
-      value: state.sort,
-      options: USER_LIST_SPEC.sortKeys
-        .filter((key) => key !== 'lastActiveAt' || reach.hasAdminRank)
-        .map((key) => ({ value: key, label: translateAdmin(language, SORT_LABELS[key]) })),
-      onChange: (value) => {
-        const key = USER_LIST_SPEC.sortKeys.find((candidate) => candidate === value);
-        if (key !== undefined && key !== state.sort) list.sort(key);
-      },
-    },
   ];
 
   const total = list.query.data?.total;
@@ -192,6 +182,7 @@ export function AdminUsersPanel({
       header: translateAdmin(language, 'admin.col.member'),
       primary: true,
       sortKey: 'username',
+      sortLabel: translateAdmin(language, 'admin.people.sort.username'),
       cell: (row) => <AdminEntityIdentity language={language} entity={userEntityOf(row, language, moment)} />,
     },
     {
@@ -219,6 +210,7 @@ export function AdminUsersPanel({
       id: 'created',
       header: translateAdmin(language, 'admin.col.created'),
       sortKey: 'createdAt',
+      sortLabel: translateAdmin(language, 'admin.people.sort.createdAt'),
       cell: (row) => <AdminMomentText moment={adminMomentOf(row.createdAt, moment, language)} />,
     },
     {
@@ -257,6 +249,11 @@ export function AdminUsersPanel({
         }
         empty={{ title: translateAdmin(language, 'admin.people.list.empty') }}
         filteredEmpty={{ title: translateAdmin(language, 'admin.people.list.emptyFiltered') }}
+        /* Prénom et Nom : la passerelle les trie, aucune colonne ne les porte — le « Trier par » des cartes est leur seul chemin. */
+        extraSorts={[
+          { value: 'firstName', label: translateAdmin(language, SORT_LABELS.firstName) },
+          { value: 'lastName', label: translateAdmin(language, SORT_LABELS.lastName) },
+        ]}
       />
     </div>
   );

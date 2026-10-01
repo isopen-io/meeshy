@@ -79,7 +79,7 @@ export function AdminMemberRoleSection({
       {...(doitConfirmer ? { saveLabel: translateAdmin(language, 'admin.edit.confirm') } : {})}
       onSave={() => void enregistrer()}
     >
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 @xl:grid-cols-2">
         <Choix
           id="admin-member-role"
           label={translateAdmin(language, 'admin.user.role')}

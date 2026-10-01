@@ -35,14 +35,23 @@ export function AdminBadge({
   );
 }
 
-/** Un `Interpreted` peint : `title` porte l'explication, `data-admin-raw` le code brut (ancre de test, jamais lu à l'œil). */
+/**
+ * Un `Interpreted` peint : `title` porte l'explication pour la souris, un texte visuellement caché la
+ * porte pour le tactile, le clavier et les lecteurs d'écran (un `title` n'est annoncé qu'au survol, et
+ * pas par tous) ; `data-admin-raw` est le code brut (ancre de test, jamais lu à l'œil).
+ */
 export function AdminInterpretedBadge({ value }: { readonly value: Interpreted }) {
   return (
-    <span data-admin-raw={value.raw} {...(value.explain === null ? {} : { title: value.explain })}>
-      <AdminBadge tone={value.tone} {...(value.glyph === undefined ? {} : { glyph: value.glyph })}>
-        {value.label}
-      </AdminBadge>
-    </span>
+    <>
+      <span data-admin-raw={value.raw} {...(value.explain === null ? {} : { title: value.explain })}>
+        <AdminBadge tone={value.tone} {...(value.glyph === undefined ? {} : { glyph: value.glyph })}>
+          {value.label}
+        </AdminBadge>
+      </span>
+      {/* Frère du badge, non son enfant : le badge garde son texte (le mot d'état) et l'explication
+          s'ajoute APRÈS lui pour les technologies d'assistance, sans déplacer rien à l'écran. */}
+      {value.explain === null ? null : <span className="sr-only">. {value.explain}</span>}
+    </>
   );
 }
 

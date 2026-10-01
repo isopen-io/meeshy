@@ -4,36 +4,16 @@ import { ApiError } from '@/lib/api/client';
 import type { AdminSectionId, AdminTarget } from '@/lib/admin/admin-routes';
 import type { AdminListController } from '@/lib/admin/use-admin-list';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { AdminPager, PlainTh, SortableTh, Td } from '@/routes/admin-table';
+import { AdminPager, PlainTh, SortableTh } from '@/routes/admin-table';
 
-import { AdminLink } from './entity-chip';
-import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice } from './states';
-import { BRAND, EDGE, INK, INK2, SURFACE } from './tone';
+import { AdminResponsiveRows, columnPriority, type AdminColumn } from './responsive-rows';
+import { AdminSortControl, type AdminSortOption } from './sort-control';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminLoading } from './states';
+import { BRAND } from './tone';
 
-export type AdminColumn<Row> = {
-  readonly id: string;
-  readonly header: string;
-  readonly cell: (row: Row) => ReactNode;
-  /** Doit appartenir à `spec.sortKeys` : la colonne devient triable (`aria-sort`). Une colonne n'est triable que si la passerelle trie sur ce champ. */
-  readonly sortKey?: string;
-  /** UNE colonne : le NOM, qui porte le lien de 44 px vers la fiche. Sa cellule ne contient donc aucun lien (`AdminEntityIdentity`, pas `AdminEntityChip`). */
-  readonly primary?: true;
-  readonly align?: 'start' | 'end';
-  /** 1 toujours ; 2 (défaut) dans la carte sous `md` ; 3 seulement dès `lg`. */
-  readonly priority?: 1 | 2 | 3;
-};
+export type { AdminColumn };
 
 const SKELETON_ROWS = 6;
-const priorityOf = <Row,>(column: AdminColumn<Row>): 1 | 2 | 3 => column.priority ?? (column.primary === true ? 1 : 2);
-
-function PrimaryCell({ target, children }: { readonly target: AdminTarget | null; readonly children: ReactNode }) {
-  if (target === null) return <div style={{ minHeight: 44 }} className="flex min-w-0 items-center">{children}</div>;
-  return (
-    <AdminLink target={target} className="flex min-w-0 items-center" style={{ minHeight: 44, color: INK }}>
-      {children}
-    </AdminLink>
-  );
-}
 
 /**
  * **LA LISTE D'ENTITÉS** (#8876) — recherche et filtres (`toolbar`), tableau dès
@@ -45,6 +25,12 @@ function PrimaryCell({ target, children }: { readonly target: AdminTarget | null
  * Pendant un changement de tri ou de page, la page précédente reste à l'écran,
  * atténuée (`aria-busy`) : jamais un spinner sur des données déjà là. La colonne
  * primaire porte le lien vers la fiche ; ses cellules voisines sont du contenu.
+ *
+ * **Tableau ou cartes se décide sur la largeur du CONTENU** (`@container`, posé par le cadre de
+ * l'administration et par la colonne principale d'une fiche), jamais sur celle de la fenêtre : le
+ * menu latéral déplié retire 248 px, et à 768 px de fenêtre il ne restait que 456 px au tableau.
+ * Sous le seuil, un « Trier par » (`AdminSortControl`) rend aux cartes les tris que les en-têtes
+ * du tableau portent — `extraSorts` y ajoute les tris que la passerelle sert sans colonne.
  */
 export function AdminEntityList<Row, S extends string, F extends string, I extends string = never>({
   language,
@@ -58,6 +44,7 @@ export function AdminEntityList<Row, S extends string, F extends string, I exten
   empty,
   filteredEmpty,
   pageSizes = [20, 50, 100],
+  extraSorts = [],
 }: {
   readonly language: AdminLanguage;
   readonly section: AdminSectionId;
@@ -70,13 +57,18 @@ export function AdminEntityList<Row, S extends string, F extends string, I exten
   readonly empty: { readonly title: string; readonly hint?: string };
   readonly filteredEmpty: { readonly title: string };
   readonly pageSizes?: readonly number[];
+  /** Des tris que la passerelle sert et qu'aucune colonne ne porte (« Prénom », « Nom ») : ils n'existent que dans le « Trier par » des cartes. */
+  readonly extraSorts?: readonly AdminSortOption[];
 }) {
   const { query, state } = list;
   const data = query.data;
   const filtered = state.q !== '' || Object.keys(state.filters).length > 0 || Object.keys(state.ids).length > 0;
-  const tableColumns = columns.filter((column) => priorityOf(column) <= 3);
-  const cardColumns = columns.filter((column) => priorityOf(column) <= 2);
-  const primary = columns.find((column) => column.primary === true);
+  const sortOptions: readonly AdminSortOption[] = [
+    ...columns
+      .filter((column) => column.sortKey !== undefined)
+      .map((column) => ({ value: column.sortKey ?? '', label: column.sortLabel ?? column.header })),
+    ...extraSorts,
+  ];
 
   const reset = (
     <button
@@ -91,7 +83,7 @@ export function AdminEntityList<Row, S extends string, F extends string, I exten
   );
 
   const header = (column: AdminColumn<Row>) => {
-    const visibility = priorityOf(column) === 3 ? 'hidden lg:table-cell' : '';
+    const visibility = columnPriority(column) === 3 ? 'hidden @5xl:table-cell' : '';
     const align = column.align === 'end' ? 'text-end' : '';
     if (column.sortKey === undefined) {
       return (
@@ -122,11 +114,11 @@ export function AdminEntityList<Row, S extends string, F extends string, I exten
     if (data === undefined) {
       if (query.isPending) {
         return (
-          <div data-admin-list-skeleton aria-busy="true" aria-label={translateAdmin(language, 'admin.kit.loading')} className="grid gap-2">
+          <AdminLoading language={language} anchor="list-skeleton" className="grid gap-2">
             {Array.from({ length: SKELETON_ROWS }, (_, index) => (
-              <div key={index} aria-hidden="true" className="rounded-card" style={{ height: 52, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)' }} />
+              <div key={index} className="rounded-card" style={{ height: 52, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)' }} />
             ))}
-          </div>
+          </AdminLoading>
         );
       }
       const denied = query.error instanceof ApiError && query.error.status === 403;
@@ -144,52 +136,16 @@ export function AdminEntityList<Row, S extends string, F extends string, I exten
     const stale = query.isPlaceholderData;
     return (
       <>
-        <div className="hidden overflow-x-auto rounded-card md:block" style={{ border: `1px solid ${EDGE}`, backgroundColor: SURFACE }}>
-          <table className="w-full border-collapse text-start">
-            <caption className="sr-only">{caption}</caption>
-            <thead>
-              <tr>{tableColumns.map(header)}</tr>
-            </thead>
-            <tbody aria-busy={stale} style={{ opacity: stale ? 0.6 : 1 }}>
-              {data.rows.map((row) => (
-                <tr
-                  key={rowKey(row)}
-                  data-admin-row={rowKey(row)}
-                  className="transition-colors hover:bg-[color-mix(in_srgb,var(--color-ios-ink-3)_6%,transparent)]"
-                  style={{ height: 52 }}
-                >
-                  {tableColumns.map((column) => (
-                    <Td key={column.id} className={`${column.align === 'end' ? 'text-end tabular-nums' : ''} ${priorityOf(column) === 3 ? 'hidden lg:table-cell' : ''}`.trim()}>
-                      {column.primary === true ? <PrimaryCell target={rowTarget(row)}>{column.cell(row)}</PrimaryCell> : column.cell(row)}
-                    </Td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <AdminSortControl
+          language={language}
+          options={sortOptions}
+          sort={state.sort}
+          order={state.order}
+          /* Les clés viennent des colonnes déclarées sur `spec.sortKeys` (contrat de `AdminColumn`) : le retour au type de la spécification est fait ICI, une fois. */
+          onSort={(key) => list.sort(key as S)}
+        />
 
-        <ul className="grid gap-3 md:hidden" aria-busy={stale} style={{ opacity: stale ? 0.6 : 1 }}>
-          {data.rows.map((row) => (
-            <li key={rowKey(row)} data-admin-card={rowKey(row)} className="grid gap-2 rounded-card p-4" style={{ backgroundColor: SURFACE, border: `1px solid ${EDGE}` }}>
-              {primary === undefined ? null : <PrimaryCell target={rowTarget(row)}>{primary.cell(row)}</PrimaryCell>}
-              <dl className="grid gap-2">
-                {cardColumns
-                  .filter((column) => column.primary !== true)
-                  .map((column) => (
-                    <div key={column.id} className="flex items-baseline justify-between gap-3">
-                      <dt className="shrink-0 text-caption" style={{ color: INK2 }}>
-                        {column.header}
-                      </dt>
-                      <dd className="min-w-0 break-words text-end text-body" style={{ color: INK }}>
-                        {column.cell(row)}
-                      </dd>
-                    </div>
-                  ))}
-              </dl>
-            </li>
-          ))}
-        </ul>
+        <AdminResponsiveRows columns={columns} rows={data.rows} rowKey={rowKey} rowTarget={rowTarget} caption={caption} stale={stale} header={header} />
 
         <AdminPager
           language={language}

@@ -44,9 +44,32 @@ import { AdminSkeleton } from './admin-parts';
  * ## L'échéance
  *
  * `<input type="date">` rend `AAAA-MM-JJ` ; la passerelle valide un
- * `datetime()` ISO complet et **refuse une échéance passée**. On convertit
- * donc, et le port refuse déjà le passé avant tout aller-retour.
+ * `datetime()` ISO complet et **refuse une échéance passée**. `new Date('AAAA-MM-JJ')`
+ * lit cette chaîne en MINUIT UTC : choisir « aujourd'hui » donnait toujours une
+ * échéance déjà passée, refusée sans qu'aucune raison ne s'affiche. La date se lit
+ * donc en heure LOCALE — la fin de la journée choisie, « jusqu'au » étant inclusif —,
+ * le champ n'offre que DEMAIN et après (`min`), et une date qui ne l'est pas est refusée
+ * ICI, sous le champ, dans la langue du lecteur, sans aller-retour.
+ *
+ * Le motif et la date saisis ne sont effacés QUE si le bannissement a réussi : un refus
+ * ne fait pas perdre ce qui vient d'être écrit.
  */
+
+const pad = (value: number): string => String(value).padStart(2, '0');
+
+/** `AAAA-MM-JJ` en heure LOCALE — jamais `toISOString()`, qui lit le jour en UTC. */
+const localDateOf = (date: Date): string => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+
+/** Le premier jour qu'une échéance peut désigner : demain, en heure locale. */
+const tomorrowOf = (now: Date): string => localDateOf(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+
+/** La FIN du jour choisi, en heure locale, en ISO complet — `null` pour une date illisible. */
+function endOfLocalDay(value: string): string | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (match === null) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 23, 59, 59, 999);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
 
 const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
@@ -65,6 +88,7 @@ export function AdminUserBanSheet({
   onClose,
   onAnnounce,
   deps = apiDeps,
+  now = () => new Date(),
 }: {
   readonly userId: string;
   readonly language: AdminLanguage;
@@ -72,6 +96,8 @@ export function AdminUserBanSheet({
   readonly onAnnounce: (texte: string) => void;
   /** Le port, injectable : la feuille se mesure sans passerelle. */
   readonly deps?: AdminDeps;
+  /** L'horloge, injectable : « demain » se fixe dans un témoin. */
+  readonly now?: () => Date;
 }) {
   const client = useQueryClient();
   const historique = useQuery(adminUserBansQueryOptions(deps, userId));
@@ -80,7 +106,9 @@ export function AdminUserBanSheet({
   const [focus, setFocus] = useState(false);
   const [jusquAu, setJusquAu] = useState('');
   const [envoi, setEnvoi] = useState(false);
+  const [dateRefusee, setDateRefusee] = useState(false);
 
+  const premierJour = tomorrowOf(now());
   const motifPret = motif.trim().length >= 3;
 
   /**
@@ -91,33 +119,36 @@ export function AdminUserBanSheet({
    * FERMÉE sur des littéraux. Les deux appels employaient de toute façon les
    * mêmes clés : les paramétrer ne servait personne.
    */
-  async function appliquer(action: () => Promise<{ ok: boolean }>) {
-    if (envoi) return;
+  async function appliquer(action: () => Promise<{ ok: boolean }>): Promise<{ ok: boolean }> {
+    if (envoi) return { ok: false };
     setEnvoi(true);
     const resultat = await action();
     setEnvoi(false);
 
     onAnnounce(translateAdmin(language, resultat.ok ? 'admin.ban.done' : 'admin.ban.failed'));
     if (resultat.ok) void client.invalidateQueries({ queryKey: adminUserBansQueryKey(userId) });
+    return resultat;
   }
 
-  const bannir = () =>
-    appliquer(() =>
-      banAdminUser({
-        ...deps,
-        userId,
-        reason: motif,
-        // Absent = permanent. Une date saisie devient un ISO complet, la
-        // passerelle validant un `datetime()`.
-        ...(jusquAu === '' ? {} : { expiresAt: new Date(jusquAu).toISOString() }),
-      }),
-    ).then(() => {
-      setMotif('');
-      setJusquAu('');
-    });
+  async function bannir() {
+    // Absent = permanent. Une date saisie devient la FIN du jour choisi, en heure locale, en
+    // ISO complet : la passerelle valide un `datetime()` et refuse le passé.
+    const expiresAt = jusquAu === '' ? null : endOfLocalDay(jusquAu);
+    if (jusquAu !== '' && (jusquAu < premierJour || expiresAt === null)) {
+      setDateRefusee(true);
+      return;
+    }
+
+    const resultat = await appliquer(() =>
+      banAdminUser({ ...deps, userId, reason: motif, ...(expiresAt === null ? {} : { expiresAt }) }),
+    );
+    if (!resultat.ok) return;
+    setMotif('');
+    setJusquAu('');
+  }
 
   return (
-    <Sheet title={translateAdmin(language, 'admin.ban.title')} presentation="centered" onClose={onClose}>
+    <Sheet title={translateAdmin(language, 'admin.ban.title')} presentation="centered" closeLabel={translateAdmin(language, 'admin.kit.close')} onClose={onClose}>
       <div className="grid gap-4 px-4 pb-6">
         <Field id="admin-ban-reason" label={translateAdmin(language, 'admin.ban.reason')} tint={BRAND} focused={focus}>
           {({ id, describedBy }) => (
@@ -143,11 +174,22 @@ export function AdminUserBanSheet({
           <input
             type="date"
             value={jusquAu}
+            min={premierJour}
             data-admin-ban-until
-            onChange={(event) => setJusquAu(event.currentTarget.value)}
+            aria-invalid={dateRefusee}
+            aria-describedby={dateRefusee ? 'admin-ban-until-error' : undefined}
+            onInput={(event) => {
+              setJusquAu(event.currentTarget.value);
+              setDateRefusee(false);
+            }}
             className="rounded-chip px-4 text-body"
             style={{ minHeight: 44, backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)', color: INK }}
           />
+          {dateRefusee ? (
+            <span id="admin-ban-until-error" role="alert" data-admin-ban-until-error className="text-caption" style={{ color: 'var(--color-danger)' }}>
+              {translateAdmin(language, 'admin.ban.untilPast')}
+            </span>
+          ) : null}
         </label>
 
         <ActionButton tone="danger" disabled={!motifPret || envoi} onClick={() => void bannir()}>

@@ -665,7 +665,8 @@ describe('envoyer par e-mail', () => {
     await mounter.click(confirm(host));
 
     expect(badge(host)).toBe('Prête à l’envoi');
-    expect(host.querySelector('[data-admin-confirm-error]')?.textContent).toContain('doit etre en statut READY');
+    expect(host.querySelector('[data-admin-confirm-error]')?.textContent).toContain('Le geste a été refusé : les informations sont invalides.');
+    expect(host.querySelector('[data-admin-confirm-error]')?.textContent).not.toContain('doit etre en statut READY');
     expect(offered(host)).toEqual(['send', 'publishInApp', 'delete']);
   });
 });
@@ -762,7 +763,8 @@ describe('supprimer', () => {
 
     await mounter.click(confirm(host));
 
-    expect(host.querySelector('[data-admin-confirm-error]')?.textContent).toContain('DRAFT ou READY');
+    expect(host.querySelector('[data-admin-confirm-error]')?.textContent).toContain('Le geste a été refusé : les informations sont invalides.');
+    expect(host.querySelector('[data-admin-confirm-error]')?.textContent).not.toContain('DRAFT ou READY');
     expect(window.location.pathname).toBe(`/admin/broadcasts/${ID}`);
   });
 });
@@ -828,7 +830,8 @@ describe('modifier un brouillon', () => {
 
     await mounter.submit(host);
 
-    expect(host.querySelector('[data-admin-compose-error]')?.textContent).toContain('statut DRAFT');
+    expect(host.querySelector('[data-admin-compose-error]')?.textContent).toContain('Le geste a été refusé : les informations sont invalides.');
+    expect(host.querySelector('[data-admin-compose-error]')?.textContent).not.toContain('statut DRAFT');
     expect(host.querySelector('[data-admin-compose="edit"]')).not.toBeNull();
   });
 });

@@ -150,7 +150,7 @@ export function AdminUserImageSheet({
   const liste = candidates.data?.candidates ?? [];
 
   return (
-    <Sheet title={translateAdmin(language, TITRES[kind])} bodyAs="div" presentation="centered" onClose={onClose}>
+    <Sheet title={translateAdmin(language, TITRES[kind])} bodyAs="div" presentation="centered" closeLabel={translateAdmin(language, 'admin.kit.close')} onClose={onClose}>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6" data-admin-image-sheet={kind}>
         <div className="grid gap-4">
           <figure

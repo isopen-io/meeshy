@@ -184,6 +184,8 @@ const f = {
   'admin.community.conversations.meta': '{type} · Membros: {count}',
   'admin.community.conversations.metaInactive': '{type} · Membros: {count} · Inativa',
   'admin.community.conversations.more': 'As 20 conversas com atividade mais recente, de um total de {total}.',
+  'admin.community.conversations.restricted': 'Esta comunidade tem {count} conversa(s). A lista delas é reservada ao nível de administração.',
+  'admin.community.conversations.seeAll': 'Ver todas as conversas desta comunidade',
   'admin.community.meta.visibility': 'Visibilidade',
   'admin.community.meta.state': 'Estado',
   'admin.community.meta.identifier': 'Identificador público',

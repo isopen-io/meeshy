@@ -74,7 +74,7 @@ describe('decodeAdminRanking — les conversations', () => {
     const { rows } = decodeAdminRanking(servedRanking([servedConversationRank(1, { image: 'https://cdn.exemple/c.png' })]), request);
 
     expect(rows).toEqual([
-      { kind: 'conversations', id: OBJECT_ID(1), title: 'Conversation 1', type: 'group', avatar: 'https://cdn.exemple/c.png', count: 499, lastActivity: null },
+      { kind: 'conversations', id: OBJECT_ID(1), title: 'Conversation 1', type: 'group', avatar: 'https://cdn.exemple/c.png', members: null, count: 499, lastActivity: null },
     ]);
     expect(JSON.stringify(rows)).not.toContain('mshy_conv1');
   });
@@ -89,6 +89,35 @@ describe('decodeAdminRanking — les conversations', () => {
     );
 
     expect(rows.map((row) => (row.kind === 'conversations' ? row.title : 'faux'))).toEqual([null, null]);
+  });
+
+  test('une conversation SANS titre garde de quoi se nommer par ses membres — trois au plus, nom et pseudo seulement (#8876)', () => {
+    const { rows } = decodeAdminRanking(
+      servedRanking([
+        servedConversationRank(5, {
+          title: null,
+          identifier: null,
+          participants: [
+            { displayName: 'Awa Diop', username: 'awa', id: 'SECRET-ID', avatar: 'https://cdn/awa.png' },
+            { displayName: 'Jean', username: 'jean' },
+          ],
+          total: 2,
+        }),
+      ]),
+      request,
+    );
+
+    expect(rows[0]).toMatchObject({
+      title: null,
+      members: {
+        participants: [
+          { displayName: 'Awa Diop', username: 'awa' },
+          { displayName: 'Jean', username: 'jean' },
+        ],
+        total: 2,
+      },
+    });
+    expect(JSON.stringify(rows)).not.toContain('SECRET-ID');
   });
 
   test('« activité récente » sert sa dernière activité', () => {
@@ -113,7 +142,7 @@ describe('decodeAdminRanking — les messages : jamais de texte', () => {
         messageType: 'text',
         createdAt: '2026-09-28T09:30:00.000Z',
         sender: { userId: OBJECT_ID(101), displayName: 'Auteur 1', username: 'auteur1', avatar: null },
-        conversation: { id: OBJECT_ID(201), title: 'Discussion 1', type: 'group' },
+        conversation: { id: OBJECT_ID(201), title: 'Discussion 1', type: 'group', members: null },
         count: 39,
       },
     ]);
@@ -184,7 +213,7 @@ describe('decodeAdminRanking — les liens', () => {
         name: 'Lien 1',
         createdAt: '2026-09-02T08:00:00.000Z',
         creator: { id: OBJECT_ID(101), username: 'hote1', displayName: 'Hôte 1', avatar: null },
-        conversation: { id: OBJECT_ID(201), title: 'Salon 1', type: 'group' },
+        conversation: { id: OBJECT_ID(201), title: 'Salon 1', type: 'group', members: null },
         count: 69,
       },
     ]);

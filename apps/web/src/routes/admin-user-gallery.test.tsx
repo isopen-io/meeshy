@@ -132,6 +132,28 @@ describe('le carrousel d’images d’un membre', () => {
     expect(scene?.textContent).toContain('protégé');
   });
 
+  test('aucune vignette n’efface le contour de focus du clavier ; la vignette ouverte est marquée par un anneau', async () => {
+    const hote = await monter(membre(), MEDIAS);
+    const vignettes = [...hote.querySelectorAll<HTMLElement>('[data-admin-gallery-thumb]')];
+    for (const vignette of vignettes) {
+      expect(vignette.style.outlineStyle).not.toBe('none');
+      expect(vignette.style.outline).not.toContain('none');
+      expect(vignette.className).toContain('focus-visible:outline-2');
+    }
+    expect(vignettes[0]?.style.boxShadow).toContain('var(--color-ios-brand)');
+    expect(vignettes[1]?.style.boxShadow).toBe('none');
+    act(() => vignettes[1]?.click());
+    expect(hote.querySelector<HTMLElement>('[data-admin-gallery-thumb="banner"]')?.style.boxShadow).toContain('var(--color-ios-brand)');
+    expect(hote.querySelector<HTMLElement>('[data-admin-gallery-thumb="avatar"]')?.style.boxShadow).toBe('none');
+  });
+
+  test('une vignette protégée porte le glyphe cadenas du kit, jamais un émoji', async () => {
+    const hote = await monter(membre(), MEDIAS);
+    const protegee = hote.querySelector('[data-admin-gallery-thumb="m3"]');
+    expect(protegee?.querySelector('svg')).not.toBeNull();
+    expect(protegee?.textContent).not.toContain('🔒');
+  });
+
   test('sans photo, bannière ni image, il le dit', async () => {
     const hote = await monter(membre({ avatar: '', banner: '' }), []);
     expect(hote.querySelector('[data-admin-gallery-empty]')).not.toBeNull();

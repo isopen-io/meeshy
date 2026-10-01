@@ -10,6 +10,45 @@ import { BRAND, EDGE, INK, INK2, SURFACE, TONE_COLOR, toneBackground } from './t
 const CARD = { backgroundColor: SURFACE, border: `1px solid ${EDGE}` } as const;
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
 
+/**
+ * **L'ÉTAT DE CHARGEMENT, ANNONCÉ** (#8876) — un squelette est un dessin : sans texte, rien
+ * n'est annoncé. Les placeholders portaient un `aria-label` sur des `div` SANS rôle, que
+ * les lecteurs d'écran ignorent (un nom accessible n'existe que sur un élément qui a un rôle).
+ * La région est un `role="status"` qui dit « Chargement… » dans la langue du lecteur, en texte
+ * visuellement caché, et les blocs dessinés sont masqués aux technologies d'assistance.
+ *
+ * `anchor` pose l'ancre `data-admin-<anchor>` que les témoins cherchent ; `label` remplace
+ * « Chargement… » quand l'écran a une phrase plus précise (« Chargement du lien… »).
+ */
+export function AdminLoading({
+  language,
+  label,
+  anchor,
+  className,
+  children,
+}: {
+  readonly language: AdminLanguage;
+  readonly label?: string;
+  readonly anchor?: string;
+  readonly className?: string;
+  readonly children: ReactNode;
+}) {
+  return (
+    <div
+      role="status"
+      aria-busy="true"
+      data-admin-loading=""
+      {...(anchor === undefined ? {} : { [`data-admin-${anchor}`]: '' })}
+      {...(className === undefined ? {} : { className })}
+    >
+      <span className="sr-only">{label ?? translateAdmin(language, 'admin.kit.loading')}</span>
+      <div aria-hidden="true" className="contents">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 /** L'état VIDE, dessiné — absolu (« rien à traiter ») ou filtré (« aucun résultat ») : c'est l'appelant qui choisit les mots. */
 export function AdminEmptyState({
   title,
@@ -75,14 +114,14 @@ export function AdminErrorState({
 }
 
 /** UN BLOC refusé (403) dans un écran ouvert : le reste de l'écran continue de servir. */
-export function AdminDeniedInline({ language }: { readonly language: AdminLanguage }) {
+export function AdminDeniedInline({ language, message }: { readonly language: AdminLanguage; readonly message?: string }) {
   return (
     <div data-admin-denied-inline className="flex items-center gap-3 rounded-card p-4" style={CARD}>
       <span aria-hidden="true" style={{ color: INK2 }}>
         <AdminGlyph name="lock" size={20} />
       </span>
       <p className="text-caption" style={{ color: INK2 }}>
-        {translateAdmin(language, 'admin.kit.denied')}
+        {message ?? translateAdmin(language, 'admin.kit.denied')}
       </p>
     </div>
   );

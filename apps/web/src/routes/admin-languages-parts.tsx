@@ -39,7 +39,7 @@ function StaticTable<Row>({
 
   return (
     <div data-admin-static-table={id} className="grid gap-3">
-      <div className="hidden overflow-x-auto rounded-card md:block" style={{ border: `1px solid ${EDGE}`, backgroundColor: SURFACE }}>
+      <div className="hidden overflow-x-auto rounded-card @3xl:block" style={{ border: `1px solid ${EDGE}`, backgroundColor: SURFACE }}>
         <table className="w-full border-collapse text-start">
           <caption className="sr-only">{caption}</caption>
           <thead>
@@ -65,7 +65,7 @@ function StaticTable<Row>({
         </table>
       </div>
 
-      <ul className="grid gap-3 md:hidden">
+      <ul className="grid gap-3 @3xl:hidden">
         {rows.map((row) => (
           <li key={rowKey(row)} data-admin-static-card={rowKey(row)} className="grid gap-2 rounded-card p-4" style={{ backgroundColor: SURFACE, border: `1px solid ${EDGE}` }}>
             {first === undefined ? null : (

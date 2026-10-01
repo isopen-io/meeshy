@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { AdminStatCard, AdminStatGrid } from '@/components/admin/stat-card';
 import { AdminInterpretedBadge } from '@/components/admin/badges';
 import { AdminMomentText } from '@/components/admin/meta';
-import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice } from '@/components/admin/states';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminLoading } from '@/components/admin/states';
 import { BRAND, EDGE, INK, INK2, SURFACE, TONE_COLOR } from '@/components/admin/tone';
 import { interpretServiceStatus } from '@/lib/admin/interpret/enums';
 import { formatBytes, formatCount, formatPercent } from '@/lib/admin/interpret/numbers';
@@ -62,7 +62,7 @@ function BreakerItem({ language, breaker, now }: { readonly language: AdminLangu
     <li
       data-admin-breaker={breaker.name}
       data-admin-breaker-state={state.raw}
-      className="grid gap-3 rounded-card p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:p-5"
+      className="grid gap-3 rounded-card p-4 @2xl:grid-cols-[minmax(0,1fr)_auto] @2xl:items-center md:p-5"
       style={{ backgroundColor: SURFACE, border: `1px solid ${open ? TONE_COLOR.danger : EDGE}` }}
     >
       <div className="grid min-w-0 gap-1">
@@ -123,7 +123,7 @@ function HealthBody({ language, monitoring, now }: { readonly language: AdminLan
       </MonitoringSection>
 
       <MonitoringSection id="data" title={t('admin.monitoring.data.title')}>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4">
+        <div className="grid grid-cols-1 gap-3 @xl:grid-cols-2 md:gap-4">
           <ServiceCard
             language={language}
             anchor="database"
@@ -219,11 +219,11 @@ export function MonitoringHealth({ language, deps, now = defaultNow, refreshMs =
   if (monitoring === undefined) {
     if (query.isPending) {
       return (
-        <div data-admin-monitoring-skeleton aria-busy="true" aria-label={translateAdmin(language, 'admin.kit.loading')} className="grid gap-3">
+        <AdminLoading language={language} anchor="monitoring-skeleton" className="grid gap-3">
           {[0, 1, 2].map((slot) => (
-            <div key={slot} aria-hidden="true" className="rounded-card" style={{ height: 112, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)' }} />
+            <div key={slot} className="rounded-card" style={{ height: 112, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)' }} />
           ))}
-        </div>
+        </AdminLoading>
       );
     }
     return query.error instanceof ApiError && query.error.status === 403 ? (

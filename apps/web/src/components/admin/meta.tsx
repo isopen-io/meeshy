@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 
 import type { AdminMoment } from '@/lib/admin/interpret/types';
-import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { currentAdminLanguage, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { copyPlainText } from '@/lib/view/copy-text';
 
 import { AdminGlyph } from './admin-glyph';
@@ -101,7 +101,27 @@ export function AdminTechnicalId({
   );
 }
 
-/** Un instant : `<time>` — le relatif (« il y a 3 min ») lu, l'absolu en infobulle, ou les deux. `null` se dit « — ». */
+/**
+ * **UNE VALEUR ABSENTE** — le tiret se VOIT, et se DIT : un `aria-label` sur un `<span>` sans rôle
+ * n'est pas annoncé, donc « — » se lisait comme rien du tout. Le tiret est masqué aux technologies
+ * d'assistance et remplacé par « Non renseigné » en texte visuellement caché.
+ */
+export function AdminNotProvided({ language = currentAdminLanguage() }: { readonly language?: AdminLanguage }) {
+  return (
+    <span data-admin-not-provided="">
+      <span aria-hidden="true">—</span>
+      <span className="sr-only">{translateAdmin(language, 'admin.value.notProvided')}</span>
+    </span>
+  );
+}
+
+/**
+ * Un instant : `<time>` — le relatif (« il y a 3 min ») lu, l'absolu, ou les deux. `null` se dit « — ».
+ *
+ * L'absolu vivait seulement dans `title`, qu'un écran tactile, le clavier et la plupart des lecteurs
+ * d'écran n'atteignent pas : la variante relative le porte désormais aussi en texte visuellement
+ * caché, et l'infobulle reste pour la souris.
+ */
 export function AdminMomentText({
   moment,
   variant = 'relative',
@@ -109,12 +129,13 @@ export function AdminMomentText({
   readonly moment: AdminMoment | null;
   readonly variant?: 'relative' | 'absolute' | 'both';
 }) {
-  if (moment === null) return <span aria-label="—">—</span>;
+  if (moment === null) return <AdminNotProvided />;
   const text =
     variant === 'absolute' ? moment.absolute : variant === 'both' ? `${moment.absolute} · ${moment.relative}` : moment.relative;
   return (
     <time dateTime={moment.iso} title={moment.absolute}>
       {text}
+      {variant === 'relative' ? <span className="sr-only"> ({moment.absolute})</span> : null}
     </time>
   );
 }

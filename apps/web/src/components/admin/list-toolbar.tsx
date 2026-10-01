@@ -14,6 +14,12 @@ export type AdminToolbarFilter = {
   readonly id: string;
   readonly label: string;
   readonly value: string;
+  /**
+   * La valeur qui vaut « rien n'est posé » (défaut `''`). Un contrôle dont l'état de repos n'est PAS
+   * vide — un tri, qui a toujours une valeur — ne doit pas compter comme un filtre posé : sans cela
+   * « Réinitialiser » s'affichait sur une liste intacte, et ne changeait rien.
+   */
+  readonly defaultValue?: string;
   readonly options: readonly AdminOption[];
   readonly onChange: (value: string) => void;
 };
@@ -41,7 +47,7 @@ export function AdminListToolbar({
   readonly onReset?: () => void;
   readonly trailing?: ReactNode;
 }) {
-  const active = (search?.value.trim() ?? '') !== '' || (filters ?? []).some((filter) => filter.value !== '');
+  const active = (search?.value.trim() ?? '') !== '' || (filters ?? []).some((filter) => filter.value !== (filter.defaultValue ?? ''));
 
   return (
     <div data-admin-toolbar className="flex flex-wrap items-end gap-3">

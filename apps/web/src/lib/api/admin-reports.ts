@@ -1,6 +1,7 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 import { type AdminDeps, asCount, asRecord, asText } from './admin';
+import { decodeNamePreview, type AdminNamePreview } from './admin-name-preview';
 import { adminPageOf, type AdminPage } from './admin-page';
 import type { ApiResult } from './http';
 
@@ -44,6 +45,8 @@ export type AdminReportedEntity = {
   readonly isProtected: boolean;
   readonly deleted: boolean;
   readonly conversation: { readonly id: string; readonly title: string | null } | null;
+  /** Les membres qui nomment la conversation visée quand elle n'a pas de titre — rang d'administration seulement. */
+  readonly members: AdminNamePreview | null;
 };
 
 export type AdminReport = {
@@ -122,6 +125,7 @@ function decodeEntity(raw: unknown): AdminReportedEntity | null {
     deleted: entity.deleted === true,
     conversation:
       conversation === null || typeof conversation.id !== 'string' ? null : { id: conversation.id, title: textOrNull(conversation.title) },
+    members: decodeNamePreview(entity),
   };
 }
 

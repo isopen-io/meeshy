@@ -3,9 +3,8 @@ import type fr from './engagement-scale-fr';
 
 const f = {
   'admin.scale.title': 'Points scale',
-  'admin.scale.denied': 'This setting is reserved for administrators.',
+  'admin.scale.subtitle': 'What each action earns in engagement points, how momentum multiplies them, and where it stops.',
   'admin.scale.loadFailed': 'The scale could not be loaded.',
-  'admin.scale.retry': 'Retry',
   'admin.scale.updated': 'Set on {date} by {by}',
   'admin.scale.defaults': 'Default scale — never set.',
   'admin.scale.operations.title': 'Operations',

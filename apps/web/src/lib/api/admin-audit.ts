@@ -1,6 +1,7 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 import { type AdminDeps, asRecord, asText } from './admin';
+import { decodeNamePreview, type AdminNamePreview } from './admin-name-preview';
 import { adminPageOf, type AdminPage } from './admin-page';
 import type { ApiResult } from './http';
 import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
@@ -47,6 +48,8 @@ export type AdminAuditTarget = {
   /** Le nom résolu ; `null` quand l'élément n'a pas de nom connu — jamais l'identifiant en guise de nom. */
   readonly label: string | null;
   readonly secondary: string | null;
+  /** Les membres qui nomment une conversation sans titre — servis au rang d'administration seulement. */
+  readonly members: AdminNamePreview | null;
 };
 
 export type AdminAuditChange = {
@@ -92,7 +95,13 @@ function decodePerson(raw: unknown): AdminAuditPerson | null {
 function decodeTarget(raw: unknown): AdminAuditTarget | null {
   const target = asRecord(raw);
   if (target === null || typeof target.type !== 'string' || target.type === '' || typeof target.id !== 'string' || target.id === '') return null;
-  return { type: target.type, id: target.id, label: textOrNull(target.label), secondary: textOrNull(target.secondary) };
+  return {
+    type: target.type,
+    id: target.id,
+    label: textOrNull(target.label),
+    secondary: textOrNull(target.secondary),
+    members: decodeNamePreview(target),
+  };
 }
 
 function decodeChange(raw: unknown): AdminAuditChange | null {

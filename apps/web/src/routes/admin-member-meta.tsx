@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from '@/components/admin/meta';
-import { interpretPresence } from '@/lib/admin/interpret/enums';
+import { interpretPresence, interpretRole } from '@/lib/admin/interpret/enums';
 import { countryName, languageName, sentenceCase } from '@/lib/admin/interpret/language';
 import { formatCount, formatPercent } from '@/lib/admin/interpret/numbers';
 import { adminDate, adminMomentOf } from '@/lib/admin/interpret/time';
@@ -45,6 +45,7 @@ export function AdminMemberMeta({
   const hidden = interpretPresence('unknown', language);
   const notProvided = t('admin.value.notProvided');
   const fullName = [membre.firstName, membre.lastName].filter((part) => part !== '').join(' ');
+  const role = interpretRole(membre.role, language);
   const rank = (code: string) => (code === '' ? t('admin.value.noLanguage') : sentenceCase(languageName(code, language), language));
   const signIn = (place: string, device: string): ReactNode => {
     const where = place === '' ? t('admin.people.meta.placeUnknown') : place;
@@ -56,6 +57,7 @@ export function AdminMemberMeta({
     <>
       <AdminMetaPanel title={t('admin.people.meta.identity')}>
         {fullName === '' ? null : <AdminMetaRow anchor="name" label={t('admin.meta.name')} value={fullName} />}
+        <AdminMetaRow anchor="role" label={t('admin.col.role')} value={role.label} explain={role.explain} />
         <AdminMetaRow anchor="systemLanguage" label={t('admin.meta.systemLanguage')} value={rank(membre.systemLanguage)} explain={t('admin.people.meta.prismExplain')} />
         <AdminMetaRow anchor="regionalLanguage" label={t('admin.meta.regionalLanguage')} value={rank(membre.regionalLanguage)} />
         <AdminMetaRow anchor="customLanguage" label={t('admin.meta.customLanguage')} value={rank(membre.customDestinationLanguage)} />

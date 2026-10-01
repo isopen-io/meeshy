@@ -11,7 +11,7 @@ import { adminMomentOf, formatDuration } from '@/lib/admin/interpret/time';
 import { personRef } from '@/lib/admin/post-entities';
 import { mediaKindOf, type MediaKind } from '@/lib/admin/post-phrases';
 import { withPostRemoved } from '@/lib/admin/post-state';
-import { useAdminAction } from '@/lib/admin/use-admin-action';
+import { translatedRefusal, useAdminAction } from '@/lib/admin/use-admin-action';
 import type { AdminDeps } from '@/lib/api/admin';
 import {
   adminPostQueryKey,
@@ -100,7 +100,7 @@ export function PostMediaSection({ language, media }: { readonly language: Admin
   if (media.length === 0) return null;
   return (
     <AdminFicheSection id="media" title={translateAdmin(language, 'admin.posts.section.media')}>
-      <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+      <ul className="grid grid-cols-2 gap-3 @xl:grid-cols-3 @2xl:grid-cols-4">
         {media.map((item, index) => (
           <MediaTile key={item.id} language={language} media={item} index={index} />
         ))}
@@ -219,7 +219,7 @@ export function AdminPostRemoval({
     const done = await action.run({
       call: async (): Promise<ApiResult<RemovalResult>> => {
         const result = await removeAdminPost({ ...deps, postId: fiche.id, reason: motive ?? '' });
-        return !result.ok && result.status === 400 ? { ok: false, status: 400, error: translateAdmin(language, 'admin.posts.remove.already') } : result;
+        return !result.ok && result.status === 400 ? translatedRefusal(translateAdmin(language, 'admin.posts.remove.already')) : result;
       },
       success: 'admin.posts.remove.done',
       optimistic: { key: adminPostQueryKey(fiche.id), apply: (before) => withPostRemoved(before, new Date().toISOString()) },

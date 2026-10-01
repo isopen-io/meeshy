@@ -10,9 +10,8 @@
  */
 const f = {
   'admin.scale.title': 'Barème de points',
-  'admin.scale.denied': 'Ce réglage est réservé aux administrateurs.',
+  'admin.scale.subtitle': 'Ce que chaque geste rapporte en points d’engagement, comment l’élan les multiplie, et jusqu’où.',
   'admin.scale.loadFailed': 'Le barème n’a pas pu être chargé.',
-  'admin.scale.retry': 'Réessayer',
   'admin.scale.updated': 'Réglé le {date} par {by}',
   'admin.scale.defaults': 'Barème par défaut — jamais réglé.',
   'admin.scale.operations.title': 'Opérations',

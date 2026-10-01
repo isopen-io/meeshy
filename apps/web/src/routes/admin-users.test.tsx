@@ -89,7 +89,8 @@ async function open(options: { readonly url?: string; readonly identity?: typeof
 
 const rowOf = (host: ParentNode, id: string) => host.querySelector(`[data-admin-row="${id}"]`);
 const textOf = (element: Element | null) => (element?.textContent ?? '').replace(/\s+/g, ' ').trim();
-const select = (host: ParentNode, id: string) => host.querySelector<HTMLSelectElement>(`[data-admin-filter="${id}"]`);
+const select = (host: ParentNode, id: string) =>
+  host.querySelector<HTMLSelectElement>(id === 'sort' ? '[data-admin-sort-select]' : `[data-admin-filter="${id}"]`);
 const lastUrl = (calls: () => readonly HttpRequest[]) => new URL(calls()[calls().length - 1]?.path ?? '', 'https://x.test');
 
 describe('AdminUsersPanel — des personnes, nommées (#8876)', () => {
@@ -175,10 +176,55 @@ describe('AdminUsersPanel — filtres, tri, recherche (#8876)', () => {
     expect(lastUrl(calls).searchParams.get('offset')).toBe('0');
   });
 
+  test('une liste INTACTE n’offre pas « Réinitialiser » — le tri n’est pas un filtre posé ; un filtre le fait apparaître', async () => {
+    const { host } = await open();
+    expect(host.querySelector('[data-admin-list-reset]')).toBeNull();
+
+    typeInto(select(host, 'role'), 'ADMIN');
+    await mounter.settle();
+    expect(host.querySelector('[data-admin-list-reset]')).not.toBeNull();
+  });
+
   test('les options du rôle sont nommées (Créateur, Administrateur…), jamais des codes', async () => {
     const { host } = await open();
     const options = [...(select(host, 'role')?.querySelectorAll('option') ?? [])].map((option) => option.textContent);
-    expect(options).toEqual(['Tous', 'Créateur', 'Administrateur', 'Modérateur', 'Auditeur', 'Analyste', 'Membre']);
+    expect(options).toEqual([
+      'Tous',
+      'Rang d’administration (créateur et administrateurs)',
+      'Créateur',
+      'Administrateur',
+      'Modérateur',
+      'Auditeur',
+      'Analyste',
+      'Membre',
+    ]);
+  });
+
+  test('« Administrateurs » du tableau de bord : le rang d’administration liste le CRÉATEUR (BIGBOSS), pas zéro compte', async () => {
+    /* La passerelle applique `role=BIGBOSS,ADMIN` : le seul administrateur d'une plateforme jeune est son créateur. */
+    const filtering: RoutedReply = (request) => {
+      if (pathOf(request) !== '/api/v1/admin/users') return undefined;
+      const roles = (new URL(request.path, 'https://x.test').searchParams.get('role') ?? '').split(',').filter((role) => role !== '');
+      const users = roles.length === 0 ? USERS : USERS.filter((user) => roles.includes(user.role as string));
+      return { ok: true, data: { users, pagination: { total: users.length, offset: 0, limit: 20, hasMore: false } } };
+    };
+    const { host, calls } = await open({ url: '/probe?role=ADMINISTRATION', replies: [filtering] });
+
+    expect(select(host, 'role')?.value).toBe('ADMINISTRATION');
+    expect(lastUrl(calls).searchParams.get('role')).toBe('BIGBOSS,ADMIN');
+    expect(rowOf(host, BOB)).not.toBeNull();
+    expect(textOf(rowOf(host, BOB))).toContain('Créateur');
+    expect(rowOf(host, ALICE)).toBeNull();
+    expect(rowOf(host, CLEO)).toBeNull();
+  });
+
+  test('choisir « Rang d’administration » écrit l’adresse sous sa valeur lisible et la requête sous les deux rôles', async () => {
+    const { host, calls } = await open();
+    typeInto(select(host, 'role'), 'ADMINISTRATION');
+    await mounter.settle();
+
+    expect(window.location.search).toContain('role=ADMINISTRATION');
+    expect(lastUrl(calls).searchParams.get('role')).toBe('BIGBOSS,ADMIN');
   });
 
   test('le tableau de bord mène à users?isActive=true et users?role=ADMIN : ces adresses posent le filtre', async () => {
@@ -235,7 +281,7 @@ describe('AdminUsersPanel — filtres, tri, recherche (#8876)', () => {
   test('« Trier par » offre Prénom et Nom, que la passerelle trie mais qu’aucune colonne ne porte', async () => {
     const { host, calls } = await open();
     const options = [...(select(host, 'sort')?.querySelectorAll('option') ?? [])].map((option) => option.textContent);
-    expect(options).toEqual(['Inscription', 'Dernière activité', 'Pseudonyme', 'E-mail', 'Prénom', 'Nom']);
+    expect(options).toEqual(['Pseudonyme', 'E-mail', 'Inscription', 'Dernière activité', 'Prénom', 'Nom']);
     typeInto(select(host, 'sort'), 'lastName');
     await mounter.settle();
     expect(lastUrl(calls).searchParams.get('sortBy')).toBe('lastName');

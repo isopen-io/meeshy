@@ -7,6 +7,7 @@ import type { AdminTarget } from './admin-routes';
 import { interpretServiceStatus } from './interpret/enums';
 import { formatCount, formatPercent } from './interpret/numbers';
 import { adminMomentOf, formatDuration } from './interpret/time';
+import { ADMINISTRATION_RANK } from './user-list';
 
 /**
  * **LES CARTES DU TABLEAU DE BORD** (#8876, § 4) — des fonctions PURES : ce que
@@ -122,7 +123,7 @@ export function platformStats(data: AdminDashboard | null, language: AdminLangua
       label: translateAdmin(language, 'admin.dash.platform.conversations'),
       value: count(data?.newConversations24h),
       caption: translateAdmin(language, 'admin.dash.platform.conversations.caption'),
-      target: section('conversations'),
+      target: section('conversations', { period: '24h', sort: 'createdAt' }),
     },
     {
       anchor: 'platform-communities',
@@ -144,7 +145,7 @@ export function platformStats(data: AdminDashboard | null, language: AdminLangua
       label: translateAdmin(language, 'admin.dash.platform.admins'),
       value: count(data?.adminUsers),
       caption: translateAdmin(language, 'admin.dash.platform.admins.caption'),
-      target: section('users', { role: 'ADMIN' }),
+      target: section('users', { role: ADMINISTRATION_RANK }),
     },
   ];
 }

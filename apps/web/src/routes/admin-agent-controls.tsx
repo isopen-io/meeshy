@@ -269,7 +269,7 @@ export function AgentConversationControl({
   return (
     <AdminFicheSection id="agent" title={translateAdmin(language, 'admin.agentPanel.conversation.title')}>
       <div className="grid gap-4" data-agent-conversation-control={conversationId}>
-        <dl className="grid gap-3 sm:grid-cols-3">
+        <dl className="grid gap-3 @xl:grid-cols-3">
           <AdminMetaRow
             anchor="agent-users"
             label={translateAdmin(language, 'admin.agent.users')}

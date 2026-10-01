@@ -90,7 +90,7 @@ export function AdminDashboardPanel({
         <DashZone id="trends" title={translateAdmin(language, 'admin.dash.zone.trends')} hint={translateAdmin(language, 'admin.dash.zone.trends.hint')}>
           <div className="grid gap-4">
             <VolumeChart {...context} />
-            <div className="grid items-start gap-4 lg:grid-cols-2">
+            <div className="grid items-start gap-4 @4xl:grid-cols-2">
               <HourlyChart {...context} />
               <EngagementChart {...context} />
               <LanguagesChart {...context} />
@@ -102,7 +102,7 @@ export function AdminDashboardPanel({
 
       {moderation || notifications ? (
         <DashZone id="todo" title={translateAdmin(language, 'admin.dash.zone.todo')}>
-          <div className="grid items-start gap-6 lg:grid-cols-2">
+          <div className="grid items-start gap-6 @4xl:grid-cols-2">
             {moderation ? <ModerationBlock {...context} /> : null}
             {notifications ? <BroadcastsBlock {...context} /> : null}
           </div>
@@ -111,7 +111,7 @@ export function AdminDashboardPanel({
 
       {members || analytics ? (
         <DashZone id="people" title={translateAdmin(language, 'admin.dash.zone.people')}>
-          <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid items-start gap-4 @2xl:grid-cols-2 @5xl:grid-cols-3">
             {members ? <MembersBlock {...context} /> : null}
             {analytics ? <RankedConversationsChart {...context} /> : null}
             {analytics ? <RankedMembersChart {...context} /> : null}

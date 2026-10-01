@@ -176,7 +176,27 @@ describe('les classements', () => {
         rankings: [{ id: ID, identifier: 'mshy_famille', title: 'Famille', type: 'group', image: null, count: 120 }],
         entityType: 'conversations',
       }),
-    ).toEqual([{ id: ID, title: 'Famille', type: 'group', count: 120 }]);
+    ).toEqual([{ id: ID, title: 'Famille', type: 'group', members: null, count: 120 }]);
+  });
+
+  test('conversations SANS titre : de quoi se nommer par ses membres quand la passerelle les sert (rang d’administration)', () => {
+    const rows =
+      decodeAdminRankedConversations({
+        rankings: [
+          {
+            id: ID,
+            identifier: 'mshy_abc',
+            title: 'mshy_abc',
+            type: 'direct',
+            participants: [{ displayName: 'Awa Diop', username: 'awa' }],
+            total: 2,
+            count: 5,
+          },
+        ],
+      }) ?? [];
+
+    expect(rows[0]?.members).toEqual({ participants: [{ displayName: 'Awa Diop', username: 'awa' }], total: 2 });
+    expect(rows[0]?.title).toBeNull();
   });
 
   test('un titre qui REPLIE sur l’identifiant public n’est pas un titre : `null`, pour que l’écran dise « sans titre »', () => {

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { AdminStatStrip, type AdminStatStripItem } from '@/components/admin/fiche';
-import { AdminInlineNotice } from '@/components/admin/states';
+import { AdminInlineNotice, AdminLoading } from '@/components/admin/states';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import type { AdminDeps } from '@/lib/api/admin';
 import { ADMIN_STAT_KEYS, adminUserStatsQueryOptions, type AdminStatKey } from '@/lib/api/admin-user-member';
@@ -55,11 +55,11 @@ export function AdminMemberStats({
   if (stats.data === undefined) {
     if (stats.isPending) {
       return (
-        <div data-admin-stat-strip-skeleton aria-busy="true" aria-label={translateAdmin(language, 'admin.kit.loading')} className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <AdminLoading language={language} anchor="stat-strip-skeleton" className="grid grid-cols-2 gap-3 @xl:grid-cols-4">
           {Array.from({ length: SKELETON_CARDS }, (_, index) => (
-            <div key={index} aria-hidden="true" className="rounded-card" style={{ height: 72, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)' }} />
+            <div key={index} className="rounded-card" style={{ height: 72, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)' }} />
           ))}
-        </div>
+        </AdminLoading>
       );
     }
     return (

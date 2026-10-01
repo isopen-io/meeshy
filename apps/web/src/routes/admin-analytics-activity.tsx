@@ -249,7 +249,7 @@ export function AdminActivityTab({ language, deps, now, period }: TabProps) {
       </StatsSection>
 
       <StatsSection id="analytics-trends" title={translateAdmin(language, 'admin.analytics.activity.trends.title')}>
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 @4xl:grid-cols-2">
           <StatsBlock language={language} query={volume}>
             {(block) => <VolumeChart language={language} now={now} block={block} />}
           </StatsBlock>

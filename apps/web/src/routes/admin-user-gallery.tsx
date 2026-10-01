@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { AdminGlyph } from '@/components/admin/admin-glyph';
+import { AdminFicheSection } from '@/components/admin/fiche';
 import { Glyph } from '@/components/glyph';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminUserMediaQueryKey, loadAdminUserMedia } from '@/lib/api/admin-user-media';
@@ -10,7 +12,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { gallerySlidesOf, stepSlide, type GallerySlide } from '@/lib/admin/user-gallery';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
-import { AdminSection, AdminSkeleton } from './admin-parts';
+import { AdminSkeleton } from './admin-parts';
 
 /**
  * **LE CARROUSEL D'IMAGES D'UN MEMBRE** (#7845) — sa photo, sa bannière et
@@ -60,19 +62,19 @@ export function AdminUserGallery({
 
   if (medias.isPending && diapos.length === 0) {
     return (
-      <AdminSection titre={titre}>
+      <AdminFicheSection id="gallery" title={titre}>
         <AdminSkeleton rows={2} />
-      </AdminSection>
+      </AdminFicheSection>
     );
   }
 
   if (diapos.length === 0) {
     return (
-      <AdminSection titre={titre}>
+      <AdminFicheSection id="gallery" title={titre}>
         <p className="text-caption" style={{ color: INK2 }} data-admin-gallery-empty="">
           {translateAdmin(language, 'admin.gallery.empty')}
         </p>
-      </AdminSection>
+      </AdminFicheSection>
     );
   }
 
@@ -82,7 +84,7 @@ export function AdminUserGallery({
   const aller = (pas: number) => setIndex(stepSlide(actuel, pas, diapos.length));
 
   return (
-    <AdminSection titre={titre}>
+    <AdminFicheSection id="gallery" title={titre}>
       <div
         role="region"
         aria-roledescription="carousel"
@@ -137,15 +139,19 @@ export function AdminUserGallery({
                 aria-current={rang === actuel ? 'true' : undefined}
                 data-admin-gallery-thumb={vignette.id}
                 onClick={() => setIndex(rang)}
-                className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-chip"
+                className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+                /* La vignette ouverte est marquée par un ANNEAU (ombre), pas par `outline` : le contour
+                   de focus du clavier reste celui du `:focus-visible` global, jamais effacé en ligne. */
                 style={{
-                  outline: rang === actuel ? '2px solid var(--color-ios-brand)' : 'none',
-                  outlineOffset: 2,
+                  boxShadow: rang === actuel ? '0 0 0 2px var(--color-ios-brand)' : 'none',
+                  outlineColor: 'var(--color-ios-brand)',
                   backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)',
                 }}
               >
                 {vignette.url === null ? (
-                  <span aria-hidden="true">🔒</span>
+                  <span aria-hidden="true" style={{ color: INK2 }}>
+                    <AdminGlyph name="lock" size={20} />
+                  </span>
                 ) : (
                   <img src={attachmentSrc(vignette.url)} alt="" loading="lazy" decoding="async" className="block size-full object-cover" />
                 )}
@@ -154,7 +160,7 @@ export function AdminUserGallery({
           </div>
         ) : null}
       </div>
-    </AdminSection>
+    </AdminFicheSection>
   );
 }
 

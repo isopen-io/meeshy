@@ -1,15 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
+import { useId } from 'react';
 
 import { AdminInterpretedBadge } from '@/components/admin/badges';
-import { AdminEntityChip } from '@/components/admin/entity-chip';
+import { AdminEntityChip, AdminLink } from '@/components/admin/entity-chip';
 import { AdminFiche, AdminFicheSection, AdminIdentityHeader, AdminStatStrip } from '@/components/admin/fiche';
 import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from '@/components/admin/meta';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice } from '@/components/admin/states';
-import { AdminTabs, useAdminTab } from '@/components/admin/tabs';
+import { AdminTabPanel, AdminTabs, useAdminTab } from '@/components/admin/tabs';
 import { BRAND, EDGE, INK2 } from '@/components/admin/tone';
-import { adminGroupOf } from '@/lib/admin/admin-routes';
+import { adminGroupOf, type AdminTarget } from '@/lib/admin/admin-routes';
 import { withoutMembersList } from '@/lib/admin/community-members-list';
 import { communityStateOf, communityVisibilityOf } from '@/lib/admin/community-state';
 import { interpretConversationType, interpretParticipantRole } from '@/lib/admin/interpret/enums';
@@ -62,7 +63,31 @@ function Banner({ language, src }: { readonly language: AdminLanguage; readonly 
   );
 }
 
-function Overview({ language, fiche, now }: { readonly language: AdminLanguage; readonly fiche: AdminCommunityFiche; readonly now: Date }) {
+/**
+ * « Toutes les conversations de CETTE communauté » : la liste des conversations, filtrée par `communityId`.
+ * `null` quand le lecteur n'ouvre pas la section — le chiffre reste du texte, jamais un lien vers un refus.
+ */
+const conversationsOf = (fiche: AdminCommunityFiche): AdminTarget => ({
+  kind: 'section',
+  section: 'conversations',
+  search: { communityId: fiche.id },
+});
+
+function Overview({
+  language,
+  fiche,
+  now,
+  seesConversations,
+  opensConversations,
+}: {
+  readonly language: AdminLanguage;
+  readonly fiche: AdminCommunityFiche;
+  readonly now: Date;
+  /** Le rang d'administration : qui parle à qui est l'inventaire des conversations, réservé à BIGBOSS et ADMIN. */
+  readonly seesConversations: boolean;
+  readonly opensConversations: boolean;
+}) {
+  const allConversations = conversationsOf(fiche);
   return (
     <>
       <AdminFicheSection id="description" title={translateAdmin(language, 'admin.community.section.description')}>
@@ -101,7 +126,11 @@ function Overview({ language, fiche, now }: { readonly language: AdminLanguage; 
       </AdminFicheSection>
 
       <AdminFicheSection id="conversations" title={translateAdmin(language, 'admin.community.section.conversations')}>
-        {fiche.conversations.length === 0 ? (
+        {!seesConversations ? (
+          <p data-admin-conversations-restricted className="text-body" style={{ color: INK2 }}>
+            {translateAdmin(language, 'admin.community.conversations.restricted', { count: formatCount(fiche.conversationCount, language) })}
+          </p>
+        ) : fiche.conversations.length === 0 ? (
           <p className="text-body" style={{ color: INK2 }}>
             {translateAdmin(language, 'admin.community.conversations.empty')}
           </p>
@@ -118,9 +147,21 @@ function Overview({ language, fiche, now }: { readonly language: AdminLanguage; 
             })}
           </ul>
         )}
-        {fiche.conversationCount > CONVERSATIONS_SHOWN ? (
+        {seesConversations && fiche.conversationCount > CONVERSATIONS_SHOWN ? (
           <p className="text-caption" style={{ color: INK2 }}>
-            {translateAdmin(language, 'admin.community.conversations.more', { total: formatCount(fiche.conversationCount, language) })}
+            {opensConversations ? (
+              <AdminLink
+                target={allConversations}
+                anchor="all-conversations"
+                ariaLabel={translateAdmin(language, 'admin.community.conversations.seeAll')}
+                className="inline-flex items-center underline"
+                style={{ minHeight: 44, color: BRAND }}
+              >
+                {translateAdmin(language, 'admin.community.conversations.more', { total: formatCount(fiche.conversationCount, language) })}
+              </AdminLink>
+            ) : (
+              translateAdmin(language, 'admin.community.conversations.more', { total: formatCount(fiche.conversationCount, language) })
+            )}
           </p>
         ) : null}
       </AdminFicheSection>
@@ -180,6 +221,7 @@ export function AdminCommunityPanel({
   const reach = useAdminReach();
   const announcer = useLiveAnnouncer();
   const [tab, setTab] = useAdminTab(TABS, 'overview');
+  const tabsId = useId();
   const [search, setSearch] = useSearch();
   const changeTab = (next: (typeof TABS)[number]) => (next === 'overview' ? setSearch(withoutMembersList(search), true) : setTab(next));
 
@@ -274,7 +316,12 @@ export function AdminCommunityPanel({
             items={[
               { id: 'members', label: translateAdmin(language, 'admin.community.stat.members'), value: formatCount(fiche.activeMemberCount, language), target: members },
               { id: 'left', label: translateAdmin(language, 'admin.community.stat.left'), value: formatCount(fiche.leftMemberCount, language), target: { ...members, search: { tab: 'members', isActive: 'false' } } },
-              { id: 'conversations', label: translateAdmin(language, 'admin.community.stat.conversations'), value: formatCount(fiche.conversationCount, language) },
+              {
+                id: 'conversations',
+                label: translateAdmin(language, 'admin.community.stat.conversations'),
+                value: formatCount(fiche.conversationCount, language),
+                ...(reach.opens('conversations') ? { target: conversationsOf(fiche) } : {}),
+              },
               { id: 'posts', label: translateAdmin(language, 'admin.community.stat.posts'), value: formatCount(fiche.postCount, language) },
             ]}
           />
@@ -282,6 +329,7 @@ export function AdminCommunityPanel({
         aside={<Metadata language={language} fiche={fiche} now={now} onAnnounce={announcer.announce} />}
       >
         <AdminTabs
+          idBase={tabsId}
           label={translateAdmin(language, 'admin.community.tabs.label')}
           tabs={[
             { id: 'overview', label: translateAdmin(language, 'admin.community.tab.overview') },
@@ -290,7 +338,9 @@ export function AdminCommunityPanel({
           active={tab}
           onChange={changeTab}
         />
-        {tab === 'members' ? <AdminCommunityMembers language={language} communityId={fiche.id} deps={deps} now={now} /> : <Overview language={language} fiche={fiche} now={now} />}
+        <AdminTabPanel idBase={tabsId} tab={tab}>
+          {tab === 'members' ? <AdminCommunityMembers language={language} communityId={fiche.id} deps={deps} now={now} /> : <Overview language={language} fiche={fiche} now={now} seesConversations={reach.hasAdminRank} opensConversations={reach.opens('conversations')} />}
+        </AdminTabPanel>
       </AdminFiche>
       <AdminAnnouncement text={announcer.text} />
     </div>

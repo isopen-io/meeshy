@@ -5,7 +5,7 @@ import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-lis
 import { AdminEntityChip, AdminEntityIdentity } from '@/components/admin/entity-chip';
 import { AdminInterpretedBadge } from '@/components/admin/badges';
 import { AdminListToolbar, type AdminToolbarFilter } from '@/components/admin/list-toolbar';
-import { AdminMomentText } from '@/components/admin/meta';
+import { AdminMomentText, AdminNotProvided } from '@/components/admin/meta';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminInlineNotice, AdminOfflineNotice } from '@/components/admin/states';
@@ -167,7 +167,7 @@ export function AdminConversationsPanel({ language, deps = apiDeps, now = defaul
       header: translateAdmin(language, 'admin.conversation.col.community'),
       cell: (row) =>
         row.community === null ? (
-          <span aria-label="—">—</span>
+          <AdminNotProvided language={language} />
         ) : (
           <AdminEntityChip language={language} size="sm" entity={{ kind: 'community', id: row.community.id, label: row.community.name }} />
         ),

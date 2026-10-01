@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { AdminInterpretedBadge } from '@/components/admin/badges';
 import { AdminListToolbar, type AdminToolbarFilter } from '@/components/admin/list-toolbar';
-import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice } from '@/components/admin/states';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminLoading } from '@/components/admin/states';
 import { AdminStatCard, AdminStatGrid } from '@/components/admin/stat-card';
 import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { formatCount } from '@/lib/admin/interpret/numbers';
@@ -173,11 +173,11 @@ export function MonitoringRoutes({ language, deps, now = defaultNow }: Monitorin
     if (usage === undefined) {
       if (query.isPending) {
         return (
-          <div data-admin-monitoring-skeleton aria-busy="true" aria-label={translateAdmin(language, 'admin.kit.loading')} className="grid gap-3">
+          <AdminLoading language={language} anchor="monitoring-skeleton" className="grid gap-3">
             {[0, 1, 2].map((slot) => (
-              <div key={slot} aria-hidden="true" className="rounded-card" style={{ height: 96, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)' }} />
+              <div key={slot} className="rounded-card" style={{ height: 96, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)' }} />
             ))}
-          </div>
+          </AdminLoading>
         );
       }
       return query.error instanceof ApiError && query.error.status === 403 ? (

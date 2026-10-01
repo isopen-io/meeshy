@@ -156,11 +156,14 @@ export function AdminStatCard({
   );
 }
 
-/** La grille des cartes : une colonne sous `sm`, deux dès `sm`, `columns` dès `lg`. */
+/**
+ * La grille des cartes : une colonne sous 32 rem de CONTENU, deux au-delà, `columns` dès 56 rem —
+ * des seuils de conteneur, pas de fenêtre : le menu latéral déplié retire 248 px au contenu.
+ */
 export function AdminStatGrid({ children, columns = 4 }: { readonly children: ReactNode; readonly columns?: 2 | 3 | 4 }) {
-  const lg = columns === 2 ? 'lg:grid-cols-2' : columns === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-4';
+  const wide = columns === 2 ? '@4xl:grid-cols-2' : columns === 3 ? '@4xl:grid-cols-3' : '@4xl:grid-cols-4';
   return (
-    <div data-admin-stat-grid className={`grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4 ${lg}`}>
+    <div data-admin-stat-grid className={`grid grid-cols-1 gap-3 @lg:grid-cols-2 md:gap-4 ${wide}`}>
       {children}
     </div>
   );

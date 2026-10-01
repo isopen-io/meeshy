@@ -4,6 +4,7 @@ import type { AdminDashboard } from '@/lib/api/admin-dashboard';
 import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 
 import { agentStats, healthAlerts, healthStats, moderationStats, nowStats, platformStats, usageStats } from './dashboard-cards';
+import { ADMINISTRATION_RANK } from './user-list';
 
 /**
  * **LES CARTES DU TABLEAU DE BORD, EN MOTS** (#8876, § 4) — libellé, chiffre
@@ -75,11 +76,22 @@ describe('platformStats — huit cartes, chacune vers sa liste filtrée', () => 
       { kind: 'section', section: 'users', search: { isActive: 'true' } },
       { kind: 'section', section: 'anonymous' },
       { kind: 'section', section: 'analytics', search: { tab: 'messages' } },
-      { kind: 'section', section: 'conversations' },
+      { kind: 'section', section: 'conversations', search: { period: '24h', sort: 'createdAt' } },
       { kind: 'section', section: 'communities' },
       { kind: 'section', section: 'shareLinks', search: { isActive: 'true' } },
-      { kind: 'section', section: 'users', search: { role: 'ADMIN' } },
+      { kind: 'section', section: 'users', search: { role: 'ADMINISTRATION' } },
     ]);
+  });
+
+  test('la carte « Administrateurs » compte créateur ET administrateurs : sa cible ouvre le MÊME ensemble (rang d’administration)', () => {
+    expect(byAnchor(cardsOf(), 'platform-admins')?.target).toEqual({ kind: 'section', section: 'users', search: { role: ADMINISTRATION_RANK } });
+    expect(ADMINISTRATION_RANK).toBe('ADMINISTRATION');
+  });
+
+  test('« Nouvelles conversations » compte celles de 24 h : sa cible est la liste des dernières 24 h, la plus récente d’abord', () => {
+    const target = byAnchor(cardsOf(), 'platform-conversations')?.target;
+
+    expect(target).toEqual({ kind: 'section', section: 'conversations', search: { period: '24h', sort: 'createdAt' } });
   });
 
   test('en anglais, tout se dit en anglais', () => {

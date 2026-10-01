@@ -1,9 +1,11 @@
+import { useId } from 'react';
+
 import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
 import { AdminBarChart } from '@/components/admin/charts/bar-chart';
 import { AdminEntityChip } from '@/components/admin/entity-chip';
 import { AdminFicheSection } from '@/components/admin/fiche';
 import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from '@/components/admin/meta';
-import { AdminTabs, useAdminTab } from '@/components/admin/tabs';
+import { AdminTabPanel, AdminTabs, useAdminTab } from '@/components/admin/tabs';
 import { EDGE, INK, INK2 } from '@/components/admin/tone';
 import { ProgressBar } from '@/components/progress-bar';
 import { audienceSentence, breakdownBars } from '@/lib/admin/broadcast-audience';
@@ -84,16 +86,22 @@ function TranslationPanel({ translation }: { readonly translation: AdminBroadcas
 function TranslationTabs({ language, translations }: { readonly language: AdminLanguage; readonly translations: readonly AdminBroadcastTranslation[] }) {
   const ids = translations.map((translation) => translation.language);
   const [active, setActive] = useAdminTab(ids, ids[0] ?? '');
+  const tabsId = useId();
   const current = translations.find((translation) => translation.language === active) ?? translations[0];
   return (
     <>
       <AdminTabs
+        idBase={tabsId}
         label={translateAdmin(language, 'admin.broadcast.translations.tabs')}
         tabs={translations.map((translation) => ({ id: translation.language, label: sentenceCase(languageName(translation.language, language), language) }))}
         active={active}
         onChange={setActive}
       />
-      {current === undefined ? null : <TranslationPanel translation={current} />}
+      {current === undefined ? null : (
+        <AdminTabPanel idBase={tabsId} tab={current.language}>
+          <TranslationPanel translation={current} />
+        </AdminTabPanel>
+      )}
     </>
   );
 }
@@ -136,7 +144,7 @@ function PreviewCharts({ language, preview }: { readonly language: AdminLanguage
   };
 
   return (
-    <div className="grid gap-4 md:grid-cols-2" data-admin-preview>
+    <div className="grid gap-4 @2xl:grid-cols-2" data-admin-preview>
       <AdminBarChart
         language={language}
         id="broadcast-recipients-languages"

@@ -3,9 +3,8 @@ import type fr from './engagement-scale-fr';
 
 const f = {
   'admin.scale.title': 'Tabela de pontos',
-  'admin.scale.denied': 'Esta configuração é reservada aos administradores.',
+  'admin.scale.subtitle': 'O que cada ação rende em pontos de engajamento, como o ímpeto os multiplica e até onde vai.',
   'admin.scale.loadFailed': 'Não foi possível carregar a tabela.',
-  'admin.scale.retry': 'Tentar novamente',
   'admin.scale.updated': 'Definida em {date} por {by}',
   'admin.scale.defaults': 'Tabela padrão — nunca definida.',
   'admin.scale.operations.title': 'Operações',

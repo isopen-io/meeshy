@@ -54,7 +54,7 @@ export function CampaignSection({ language, link }: { readonly language: AdminLa
   const none = translateAdmin(language, 'admin.value.notProvided');
   return (
     <AdminFicheSection id="campaign" title={translateAdmin(language, 'admin.tracking.section.campaign')}>
-      <dl className="grid gap-3 sm:grid-cols-3">
+      <dl className="grid gap-3 @xl:grid-cols-3">
         <AdminMetaRow anchor="campaign" label={translateAdmin(language, 'admin.tracking.utm.campaign')} value={link.campaign ?? none} />
         <AdminMetaRow anchor="source" label={translateAdmin(language, 'admin.tracking.utm.source')} value={link.source ?? none} />
         <AdminMetaRow anchor="medium" label={translateAdmin(language, 'admin.tracking.utm.medium')} value={link.medium ?? none} />
@@ -95,7 +95,7 @@ function RecentTable({ language, clicks, now }: { readonly language: AdminLangua
 
   return (
     <>
-      <div className="hidden overflow-x-auto md:block">
+      <div className="hidden overflow-x-auto @3xl:block">
         <table data-admin-recent-clicks className="w-full border-collapse text-start text-caption">
           <caption className="sr-only">{translateAdmin(language, 'admin.tracking.recent.caption')}</caption>
           <thead>
@@ -128,7 +128,7 @@ function RecentTable({ language, clicks, now }: { readonly language: AdminLangua
           </tbody>
         </table>
       </div>
-      <ul className="grid gap-3 md:hidden">
+      <ul className="grid gap-3 @3xl:hidden">
         {clicks.map((click) => (
           <li key={click.id} data-admin-click-card={click.id} className="grid gap-1 rounded-card p-3" style={{ border: `1px solid ${EDGE}` }}>
             <span className="text-body font-medium" style={{ color: INK }}>

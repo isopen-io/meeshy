@@ -1,4 +1,5 @@
 import type { AdminEntityRef } from '@/components/admin/entity-chip';
+import type { AdminNamePreview } from '@/lib/api/admin-name-preview';
 import type { AdminRankingPerson, AdminRankingRow } from '@/lib/api/admin-ranking';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
@@ -33,6 +34,13 @@ export type RankingViewContext = {
 };
 
 /** Un avatar n'est posé que s'il existe : sans lui, un lien ou une conversation garde le glyphe de son genre. */
+/** Une conversation sans titre se dit par ses membres quand la passerelle les sert (rang d'administration). */
+const namedByMembers = (row: {
+  readonly title: string | null;
+  readonly type: string | null;
+  readonly members: AdminNamePreview | null;
+}) => ({ title: row.title, type: row.type, participants: row.members?.participants, total: row.members?.total });
+
 const withAvatar = (ref: AdminEntityRef, avatar: string | null): AdminEntityRef => (avatar === null ? ref : { ...ref, avatarUrl: avatar });
 
 function creatorRef(creator: AdminRankingPerson | null, language: AdminLanguage): AdminEntityRef | null {
@@ -47,14 +55,14 @@ function creatorRef(creator: AdminRankingPerson | null, language: AdminLanguage)
 }
 
 function conversationRef(
-  row: { readonly title: string | null; readonly type: string | null },
+  row: { readonly title: string | null; readonly type: string | null; readonly members: AdminNamePreview | null },
   id: string,
   language: AdminLanguage,
 ): AdminEntityRef {
   return {
     kind: 'conversation',
     id,
-    label: conversationLabel({ title: row.title, type: row.type }, language),
+    label: conversationLabel(namedByMembers(row), language),
     secondary: row.type === null ? null : interpretConversationType(row.type, language).label,
   };
 }
@@ -80,7 +88,7 @@ function entityRef(row: AdminRankingRow, language: AdminLanguage): AdminEntityRe
           : row.sender.userId === null
             ? guestLabel(row.sender.displayName, language)
             : personLabel(row.sender, language);
-      const conversation = row.conversation === null ? null : conversationLabel(row.conversation, language);
+      const conversation = row.conversation === null ? null : conversationLabel(namedByMembers(row.conversation), language);
       return {
         kind: 'conversation',
         id: row.conversation?.id ?? row.id,
@@ -109,7 +117,7 @@ function entityRef(row: AdminRankingRow, language: AdminLanguage): AdminEntityRe
         kind: 'shareLink',
         id: row.id,
         label: shareLinkLabel({ name: row.name }, language),
-        secondary: row.conversation === null ? null : conversationLabel(row.conversation, language),
+        secondary: row.conversation === null ? null : conversationLabel(namedByMembers(row.conversation), language),
       };
   }
 }

@@ -1,7 +1,9 @@
+import { useId } from 'react';
+
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminOfflineNotice } from '@/components/admin/states';
-import { AdminTabs, useAdminTab } from '@/components/admin/tabs';
+import { AdminTabPanel, AdminTabs, useAdminTab } from '@/components/admin/tabs';
 import { MONITORING_TABS } from '@/lib/admin/monitoring-state';
 import type { AdminDeps } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
@@ -34,7 +36,7 @@ type MonitoringPanelProps = {
 
 export function AdminMonitoringPanel({ language, deps = apiDeps, now = defaultNow, refreshMs }: MonitoringPanelProps) {
   const [tab, setTab] = useAdminTab(MONITORING_TABS, 'health');
-  const tabLabel = translateAdmin(language, tab === 'health' ? 'admin.monitoring.tab.health' : 'admin.monitoring.tab.routes');
+  const tabsId = useId();
 
   return (
     <div className="grid gap-6" data-admin-monitoring>
@@ -46,6 +48,7 @@ export function AdminMonitoringPanel({ language, deps = apiDeps, now = defaultNo
       />
       <AdminOfflineNotice language={language} />
       <AdminTabs
+        idBase={tabsId}
         label={translateAdmin(language, 'admin.monitoring.tabs.label')}
         tabs={[
           { id: 'health', label: translateAdmin(language, 'admin.monitoring.tab.health') },
@@ -54,13 +57,13 @@ export function AdminMonitoringPanel({ language, deps = apiDeps, now = defaultNo
         active={tab}
         onChange={setTab}
       />
-      <div role="tabpanel" aria-label={tabLabel} data-admin-monitoring-panel={tab}>
+      <AdminTabPanel idBase={tabsId} tab={tab} attributes={{ 'data-admin-monitoring-panel': tab }}>
         {tab === 'health' ? (
           <MonitoringHealth language={language} deps={deps} now={now} {...(refreshMs === undefined ? {} : { refreshMs })} />
         ) : (
           <MonitoringRoutes language={language} deps={deps} now={now} />
         )}
-      </div>
+      </AdminTabPanel>
     </div>
   );
 }

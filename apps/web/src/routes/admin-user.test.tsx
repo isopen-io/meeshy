@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { act } from 'react';
 
+import { ADMIN_USER_TABS } from '@/lib/admin/user-tabs';
 import { visibleAdminSections } from '@/lib/admin/sections';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -336,6 +337,26 @@ describe('états dessinés et onglets', () => {
     expect(window.location.search).toBe('?tab=conversations');
     expect(host.querySelector('[data-admin-user-panel="conversations"]')).not.toBeNull();
     expect(host.querySelector('[data-collapsible-toggle="admin-conv"]')).not.toBeNull();
+  });
+
+  test('les onglets de la fiche sont ceux du gabarit commun : contrat d’identifiants, aria-controls, Début/Fin', async () => {
+    const { host } = await open();
+    const tabs = [...host.querySelectorAll<HTMLElement>('[role="tab"]')];
+    expect(tabs.map((tab) => tab.id)).toEqual(ADMIN_USER_TABS.map((onglet) => `admin-user-tab-${onglet}`));
+    expect(tabs.map((tab) => tab.getAttribute('data-admin-user-tab'))).toEqual([...ADMIN_USER_TABS]);
+    expect(tabs.map((tab) => tab.getAttribute('aria-controls'))).toEqual(ADMIN_USER_TABS.map((onglet) => `admin-user-panel-${onglet}`));
+    const panel = host.querySelector('[role="tabpanel"]');
+    expect(panel?.id).toBe('admin-user-panel-profile');
+    expect(panel?.getAttribute('aria-labelledby')).toBe('admin-user-tab-profile');
+    expect(panel?.getAttribute('data-admin-user-panel')).toBe('profile');
+    tabs[0]?.focus();
+    await act(async () => {
+      tabs[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }));
+    });
+    await mounter.settle();
+    expect(window.location.search).toBe(`?tab=${ADMIN_USER_TABS.at(-1)}`);
+    expect(document.activeElement?.id).toBe(`admin-user-tab-${ADMIN_USER_TABS.at(-1)}`);
+    expect(host.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toBe(`admin-user-tab-${ADMIN_USER_TABS.at(-1)}`);
   });
 
   test('le profil porte ses sections éditables : images, identité, contact, sécurité, rôle', async () => {

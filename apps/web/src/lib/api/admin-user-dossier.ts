@@ -2,6 +2,7 @@ import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
 import { type AdminDeps, asCount, asRecord, asText, pageServie } from './admin';
 import type { ApiResult } from './http';
+import { acknowledged, type AdminLinkAck } from './admin-share-links-person';
 import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
 /**
@@ -256,6 +257,32 @@ function decodeSession(brut: unknown): AdminSession | null {
     createdAt: dateOuNull(ligne.createdAt),
     lastActivityAt: dateOuNull(ligne.lastActivityAt),
   };
+}
+
+/**
+ * RÉVOQUER UNE SESSION NOMMÉE — `DELETE /admin/users/:userId/sessions/:sessionId` (exige
+ * `canViewSensitiveData` et le rang sur le membre visé). La passerelle ferme CET appareil et
+ * consigne le geste ; rien de la charge rendue ne sert, la vérité se relit par invalidation.
+ */
+export async function revokeAdminUserSession(params: AdminDeps & { readonly userId: string; readonly sessionId: string }): Promise<ApiResult<AdminLinkAck>> {
+  return acknowledged(
+    await params.transport.request<unknown>({
+      method: 'DELETE',
+      path: adminEndpoints.usersByUserIdSessionsBySessionId(params.userId, params.sessionId),
+    }),
+  );
+}
+
+/**
+ * L'effet IMMÉDIAT de la révocation sur la page de sessions en cache : la ligne s'en va, le total
+ * baisse d'autant. Une charge qui n'a pas la forme d'une page est rendue telle quelle.
+ */
+export function withoutSession(before: unknown, sessionId: string): unknown {
+  const current = asRecord(before);
+  const rows = current?.rows;
+  if (current === null || !Array.isArray(rows)) return before;
+  const kept = rows.filter((row) => asRecord(row)?.id !== sessionId);
+  return { ...current, rows: kept, total: Math.max(0, asCount(current.total) - (rows.length - kept.length)) };
 }
 
 export type AdminSecurityEvent = {

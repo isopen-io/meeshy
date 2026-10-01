@@ -100,8 +100,8 @@ describe('le chargement', () => {
   test('il liste CHAQUE opération, avec son libellé, ses points, son « multiplié » et son plafond', async () => {
     const host = await mountPanel(scaleTransport());
 
-    expect(host.querySelectorAll('[data-scale-operation]').length).toBe(ENGAGEMENT_AXES.length);
-    const reaction = host.querySelector('[data-scale-operation="tool.reaction"]');
+    expect(host.querySelectorAll('tr[data-scale-operation]').length).toBe(ENGAGEMENT_AXES.length);
+    const reaction = host.querySelector('tr[data-scale-operation="tool.reaction"]');
     expect(reaction?.textContent).toContain(engagementAxisLabel('fr', 'tool.reaction'));
     expect(input(host, '[data-scale-points="tool.reaction"]').value).toBe(String(DEFAULT_ENGAGEMENT_SCALE.operations['tool.reaction'].points));
     expect(input(host, '[data-scale-cap="tool.reaction"]').value).toBe('30');
@@ -115,6 +115,78 @@ describe('le chargement', () => {
     const host = await mountPanel(scaleTransport({ getBody: { scale: { operations: {} } } }));
     expect(host.querySelector('[data-scale-load-failed]')).not.toBeNull();
     expect(host.querySelector('[data-admin-engagement-scale]')).toBeNull();
+  });
+
+  test('l’échec est l’état d’erreur du kit, AVEC « Réessayer » qui relit le barème', async () => {
+    let reads = 0;
+    const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+    transport.request = (async (request: HttpRequest): Promise<ApiResult<unknown>> => {
+      if (request.method !== 'GET') return { ok: false, status: 404, error: 'non prévu' };
+      reads += 1;
+      return reads === 1 ? { ok: false, status: 500, error: 'boom' } : { ok: true, data: SERVED };
+    }) as HttpTransport['request'];
+    const host = await mountPanel({ transport, requests: [] });
+
+    expect(host.querySelector('[data-scale-load-failed] [data-admin-error]')?.textContent).toContain(translateAdmin('fr', 'admin.scale.loadFailed'));
+    await mounter.click(host.querySelector('[data-admin-retry]'));
+    await mounter.settle();
+
+    expect(reads).toBe(2);
+    expect(host.querySelector('[data-admin-engagement-scale]')).not.toBeNull();
+    expect(host.querySelector('[data-scale-load-failed]')).toBeNull();
+  });
+});
+
+describe('le barème sur le kit (#8876)', () => {
+  test('chaque champ et chaque bouton fait 44 px ; la case de 24 px est dans une zone d’appui de 44 px', async () => {
+    const host = await mountPanel(scaleTransport());
+    const fields = [...host.querySelectorAll<HTMLInputElement>('input[type="text"]')];
+    expect(fields.length).toBeGreaterThan(ENGAGEMENT_AXES.length);
+    for (const field of fields) expect(field.style.minHeight).toBe('44px');
+    for (const button of host.querySelectorAll<HTMLButtonElement>('button')) expect(button.style.minHeight).toBe('44px');
+
+    const box = input(host, '[data-scale-multiplied="tool.reaction"]');
+    expect(box.style.height).toBe('24px');
+    const zone = box.closest('label');
+    expect(zone?.style.minHeight).toBe('44px');
+    expect(zone?.style.minWidth).toBe('44px');
+  });
+
+  test('l’enregistrement est un aplat de la marque, sans dégradé', async () => {
+    const host = await mountPanel(scaleTransport());
+    const save = host.querySelector<HTMLButtonElement>('[data-scale-save]');
+    expect(save?.style.backgroundColor).toBe('var(--color-ios-brand)');
+    expect(save?.style.cssText).not.toContain('gradient');
+  });
+
+  test('chaque opération est AUSSI une carte (sous le seuil du contenu), avec ses trois champs', async () => {
+    const host = await mountPanel(scaleTransport());
+    const cards = [...host.querySelectorAll('li[data-scale-operation]')];
+    expect(cards.length).toBe(ENGAGEMENT_AXES.length);
+    expect(host.querySelector('table')?.parentElement?.className).toContain('@3xl:block');
+    expect(host.querySelector('ul')?.className).toContain('@3xl:hidden');
+    const reaction = host.querySelector('li[data-scale-operation="tool.reaction"]');
+    expect(reaction?.textContent).toContain(engagementAxisLabel('fr', 'tool.reaction'));
+    expect(reaction?.querySelectorAll('input').length).toBe(3);
+  });
+
+  test('un niveau ajouté est une ligne ET une carte, et se retire par un bouton de 44 px', async () => {
+    const host = await mountPanel(scaleTransport());
+    await mounter.click(host.querySelector('[data-scale-level-add]'));
+    expect(host.querySelector('tr[data-scale-level-row="0"]')).not.toBeNull();
+    expect(host.querySelector('li[data-scale-level-row="0"]')).not.toBeNull();
+    const remove = host.querySelector<HTMLButtonElement>('[data-scale-level-remove="0"]');
+    expect(remove?.style.minHeight).toBe('44px');
+    await mounter.click(remove);
+    expect(host.querySelector('[data-scale-level-row]')).toBeNull();
+    expect(host.querySelector('[data-scale-levels-empty]')).not.toBeNull();
+  });
+
+  test('les trois blocs sont des cartes titrées du kit', async () => {
+    const host = await mountPanel(scaleTransport());
+    for (const id of ['scale-operations', 'scale-multiplier', 'scale-levels']) {
+      expect(host.querySelector(`[data-admin-fiche-section="${id}"] h2`)).not.toBeNull();
+    }
   });
 });
 

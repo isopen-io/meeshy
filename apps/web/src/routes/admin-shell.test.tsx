@@ -133,6 +133,78 @@ describe('le menu latéral d’administration', () => {
     expect(hote.querySelector('[data-admin-drawer]')).toBeNull();
   });
 
+  describe('le focus du tiroir (#8876)', () => {
+    const ouvrir = async () => {
+      const hote = await cadre('ADMIN');
+      const declencheur = hote.querySelector<HTMLButtonElement>('[data-admin-menu-open]');
+      declencheur?.focus();
+      act(() => declencheur?.click());
+      return { hote, declencheur };
+    };
+    const tab = (shiftKey = false) =>
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true }));
+      });
+    const focusables = (hote: HTMLElement) => [...(hote.querySelector('[role="dialog"]')?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? [])];
+
+    test('à l’ouverture, le focus ENTRE dans le tiroir : sur son bouton de fermeture', async () => {
+      const { hote } = await ouvrir();
+      expect(document.activeElement).toBe(hote.querySelector('[data-admin-menu-close]'));
+    });
+
+    test('Tab depuis le dernier élément revient au premier, Maj+Tab depuis le premier va au dernier', async () => {
+      const { hote } = await ouvrir();
+      const items = focusables(hote);
+      expect(items.length).toBeGreaterThan(2);
+      items.at(-1)?.focus();
+      await tab();
+      expect(document.activeElement).toBe(items[0]);
+      await tab(true);
+      expect(document.activeElement).toBe(items.at(-1));
+    });
+
+    test('Tab avance d’un élément à la fois dans le tiroir — le focus ne s’échappe pas vers la page', async () => {
+      const { hote } = await ouvrir();
+      const items = focusables(hote);
+      await tab();
+      expect(document.activeElement).toBe(items[1]);
+      expect(hote.querySelector('[role="dialog"]')?.contains(document.activeElement)).toBe(true);
+    });
+
+    test('un focus tombé hors du tiroir (clic sur le voile) y est ramené par la touche Tab', async () => {
+      const { hote } = await ouvrir();
+      document.body.focus();
+      await tab();
+      expect(hote.querySelector('[role="dialog"]')?.contains(document.activeElement)).toBe(true);
+    });
+
+    test('Échap ferme le tiroir et rend le focus au bouton de menu qui l’a ouvert', async () => {
+      const { hote, declencheur } = await ouvrir();
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+      });
+      expect(hote.querySelector('[data-admin-drawer]')).toBeNull();
+      expect(document.activeElement).toBe(declencheur);
+    });
+
+    test('le bouton de fermeture rend lui aussi le focus au bouton de menu', async () => {
+      const { hote, declencheur } = await ouvrir();
+      act(() => hote.querySelector<HTMLButtonElement>('[data-admin-menu-close]')?.click());
+      expect(document.activeElement).toBe(declencheur);
+    });
+
+    test('suivre un lien du menu amène le focus au TITRE de l’écran, pas au bouton de menu', async () => {
+      const { hote, declencheur } = await ouvrir();
+      act(() => hote.querySelector<HTMLAnchorElement>('[data-admin-drawer] [data-admin-nav="users"]')?.click());
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+      });
+      expect(hote.querySelector('[data-admin-drawer]')).toBeNull();
+      expect(document.activeElement).not.toBe(declencheur);
+      expect(document.activeElement).toBe(hote.querySelector('h1'));
+    });
+  });
+
   /* #8020 — le retour matériel de la coque Android rejoue `history.back()` :
      comme toute couche modale (`useBackDismiss`), le tiroir pose son entrée
      d'historique et se ferme sur `popstate`, au lieu de quitter l'écran. */

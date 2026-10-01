@@ -131,7 +131,7 @@ function FeedbackSection({ language, block }: { readonly language: AdminLanguage
       {block.state === 'ready' && rated === 0 ? (
         <AdminInlineNotice tone="info" text={translateAdmin(language, 'admin.analytics.calls.feedback.empty')} />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 @4xl:grid-cols-2">
           <AdminBarChart
             language={language}
             id="call-ratings"
@@ -287,7 +287,7 @@ function CallsBody({ language, block, period }: { readonly language: AdminLangua
             caption={() => translateAdmin(language, 'admin.analytics.calls.transitions.caption')}
           />
         </AdminStatGrid>
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 @4xl:grid-cols-2">
           <QualityChart language={language} calls={data} state={block.state} retry={block.retry} />
           <CountChart
             language={language}

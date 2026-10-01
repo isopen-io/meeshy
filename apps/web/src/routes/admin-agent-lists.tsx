@@ -338,7 +338,7 @@ export function AgentLogDetailSheet({
   const log = detail.data;
 
   return (
-    <Sheet title={translateAdmin(language, 'admin.agentPanel.detail.title')} bodyAs="div" onClose={onClose}>
+    <Sheet title={translateAdmin(language, 'admin.agentPanel.detail.title')} bodyAs="div" closeLabel={translateAdmin(language, 'admin.kit.close')} onClose={onClose}>
       <div className="grid gap-3 px-4 pb-6" data-agent-log-detail={logId}>
         {log === undefined ? (
           detail.isPending ? (

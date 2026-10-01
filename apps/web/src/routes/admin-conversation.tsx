@@ -245,7 +245,7 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
           />
         </AdminFicheSection>
         {/* La proportion de la fiche du kit (colonne principale + 20 rem de métadonnées), reprise ici pour ce qui suit les membres. */}
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="grid min-w-0 content-start gap-6">
             {reading}
             {agentControl ? <AgentConversationControl conversationId={conversationId} language={language} deps={deps} onAnnounce={announcer.announce} now={now} /> : null}

@@ -12,14 +12,18 @@ const { mount, mounter } = setupAdminKitTests();
 const BIGBOSS = adminIdentityFixture({ role: 'BIGBOSS' });
 
 describe('AdminFiche — la mise en page d’une fiche', () => {
-  test('porte le genre ; colonne principale + colonne latérale dès lg', async () => {
+  test('porte le genre ; colonne principale + colonne latérale dès 56 rem de CONTENU', async () => {
     const host = await mount(
       <AdminFiche kind="user" header={<p data-h>h</p>} stats={<p data-s>s</p>} aside={<p data-a>a</p>}>
         <p data-c>c</p>
       </AdminFiche>,
     );
     expect(host.querySelector('[data-admin-fiche="user"]')).not.toBeNull();
-    expect(host.querySelector('[data-admin-fiche] > div:last-child')?.className).toContain('lg:grid-cols-[minmax(0,1fr)_20rem]');
+    const layout = host.querySelector('[data-admin-fiche] > div:last-child')?.className ?? '';
+    expect(layout).toContain('@4xl:grid-cols-[minmax(0,1fr)_20rem]');
+    expect(layout).not.toContain('lg:grid-cols');
+    /* La colonne principale est elle-même un conteneur : une liste dans une carte choisit d'après SA largeur. */
+    expect(host.querySelector('[data-admin-fiche] > div:last-child > div')?.className).toContain('@container');
     expect(host.querySelector('aside [data-a]')).not.toBeNull();
     expect(host.querySelector('[data-h]')).not.toBeNull();
     expect(host.querySelector('[data-s]')).not.toBeNull();
@@ -77,6 +81,58 @@ describe('AdminStatStrip', () => {
     expect(host.querySelector('[data-admin-stat="messages"] a')).toBeNull();
     expect(host.querySelector('[data-admin-stat="reports"] a')?.getAttribute('href')).toBe('/admin/users');
     expect(host.querySelector('[data-admin-stat="messages"] dt')?.textContent).toBe('Messages envoyés');
+  });
+
+  test('le balisage est VALIDE : chaque dt et chaque dd est l’enfant direct d’un div, lui-même enfant de la dl', async () => {
+    const host = await mount(
+      <AdminStatStrip
+        items={[
+          { id: 'messages', label: 'Messages envoyés', value: '1 204' },
+          { id: 'reports', label: 'Signalements reçus', value: '3', target: { kind: 'section', section: 'users' } },
+        ]}
+      />,
+      BIGBOSS,
+    );
+    const dl = host.querySelector('dl');
+    const terms = [...host.querySelectorAll('dt, dd')];
+
+    expect(terms).toHaveLength(4);
+    for (const term of terms) {
+      expect(term.parentElement?.tagName).toBe('DIV');
+      expect(term.parentElement?.parentElement).toBe(dl);
+    }
+    /* Ni lien ni autre enveloppe entre le `div` et ses `dt`/`dd`. */
+    expect([...(dl?.children ?? [])].every((child) => child.tagName === 'DIV')).toBe(true);
+  });
+
+  test('un chiffre lié : la VALEUR est le lien, étiré sur toute la carte (cible de 44 px) ; sans lien, du texte', async () => {
+    const host = await mount(
+      <AdminStatStrip
+        items={[
+          { id: 'messages', label: 'Messages envoyés', value: '1 204' },
+          { id: 'reports', label: 'Signalements reçus', value: '3', target: { kind: 'section', section: 'users' } },
+        ]}
+      />,
+      BIGBOSS,
+    );
+    const linked = host.querySelector('[data-admin-stat="reports"]');
+
+    expect(linked?.querySelector('dd a')?.textContent).toBe('3');
+    expect(linked?.className).toContain('relative');
+    expect(linked?.querySelector('dd a')?.className).toContain('after:absolute');
+    expect(linked?.querySelector('dd a')?.className).toContain('after:inset-0');
+    expect(linked?.getAttribute('style')).toContain('min-height: 44px');
+    expect(host.querySelector('[data-admin-stat="messages"] dd')?.textContent).toBe('1 204');
+  });
+
+  test('une cible que le lecteur ne peut pas ouvrir devient du texte — jamais un lien vers un refus', async () => {
+    const host = await mount(
+      <AdminStatStrip items={[{ id: 'reports', label: 'Signalements reçus', value: '3', target: { kind: 'section', section: 'users' } }]} />,
+      adminIdentityFixture({ role: 'USER' }),
+    );
+
+    expect(host.querySelector('[data-admin-stat="reports"] a')).toBeNull();
+    expect(host.querySelector('[data-admin-stat="reports"] dd')?.textContent).toBe('3');
   });
 });
 

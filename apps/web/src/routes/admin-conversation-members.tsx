@@ -5,14 +5,14 @@ import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
 import { AdminEntityIdentity } from '@/components/admin/entity-chip';
 import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-list';
 import { AdminListToolbar } from '@/components/admin/list-toolbar';
-import { AdminMomentText } from '@/components/admin/meta';
+import { AdminMomentText, AdminNotProvided } from '@/components/admin/meta';
 import type { AdminTarget } from '@/lib/admin/admin-routes';
 import { NARROW_LIST_FRAME, useLocalAdminList, type LocalListState } from '@/lib/admin/conversation-paged-list';
 import { memberGestures, memberRefOf, participantName, type MemberGestures } from '@/lib/admin/conversation-model';
 import { interpretParticipantRole, interpretPresence } from '@/lib/admin/interpret/enums';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
-import { useAdminAction } from '@/lib/admin/use-admin-action';
+import { translatedRefusal, useAdminAction } from '@/lib/admin/use-admin-action';
 import type { AdminDeps } from '@/lib/api/admin';
 import type { AdminPage } from '@/lib/api/admin-page';
 import {
@@ -117,7 +117,7 @@ function MemberActions({ language, member, gestures, online, chosenRole, onRole,
       </span>
     );
   }
-  if (!gestures.canChangeRole && !gestures.canRemove) return <span aria-label="—">—</span>;
+  if (!gestures.canChangeRole && !gestures.canRemove) return <AdminNotProvided language={language} />;
 
   return (
     <span className="flex flex-wrap items-center gap-2">
@@ -189,11 +189,11 @@ export function ConversationMembers({
   const pageKey = adminConversationMembersKey(conversationId, list.state.offset, list.state.limit);
   const invalidate = [adminConversationFicheKey(conversationId), ADMIN_CONVERSATIONS_ROOT_KEY] as const;
 
-  /** Un 403 `CREATOR_PROTECTED` se dit par sa phrase, en 400 lisible : `useAdminAction` rend alors le message servi. */
+  /** Un 403 `CREATOR_PROTECTED` se dit par sa phrase : un refus traduit, que `useAdminAction` affiche tel quel. */
   const creatorGuarded = async <T,>(call: Promise<ApiResult<T>>): Promise<ApiResult<T>> => {
     const outcome = await call;
     return !outcome.ok && outcome.code === 'CREATOR_PROTECTED'
-      ? { ok: false, status: 400, error: translateAdmin(language, 'admin.conversation.members.creatorRefused') }
+      ? translatedRefusal(translateAdmin(language, 'admin.conversation.members.creatorRefused'))
       : outcome;
   };
 
@@ -271,7 +271,7 @@ export function ConversationMembers({
             <AdminInterpretedBadge value={interpretPresence(row.isOnline ? 'online' : 'offline', language)} />
           </Unbroken>
         ) : (
-          <span aria-label="—">—</span>
+          <AdminNotProvided language={language} />
         ),
     },
     {

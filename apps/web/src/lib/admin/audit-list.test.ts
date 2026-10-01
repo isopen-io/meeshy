@@ -140,26 +140,33 @@ describe('les familles face à ce que la passerelle accepte dans `action`', () =
     }
   });
 
-  test('les deux codes à chiffre (double authentification) ne passent pas le motif : la famille le DIT, elle ne les envoie pas', () => {
+  test('les deux codes à chiffre (double authentification) passent le motif : la famille les ENVOIE, sans trou', () => {
     const { send, gaps } = auditFamilyFilter('security');
 
-    expect(gaps).toEqual(['ENABLE_2FA', 'DISABLE_2FA']);
-    expect(send).not.toContain('ENABLE_2FA');
-    expect(send).not.toContain('DISABLE_2FA');
+    expect(GATEWAY_ACTION_PATTERN.test('ENABLE_2FA')).toBe(true);
+    expect(GATEWAY_ACTION_PATTERN.test('DISABLE_2FA')).toBe(true);
+    expect(send).toContain('ENABLE_2FA');
+    expect(send).toContain('DISABLE_2FA');
     expect(send).toContain('RESET_PASSWORD');
+    expect(gaps).toEqual([]);
   });
 
-  test('aucune autre famille n’a de trou', () => {
+  test('aucune famille n’a de trou tant qu’elle tient dans la borne de vingt codes', () => {
     const gapped = AUDIT_FILTER_FAMILIES.filter((family) => auditFamilyFilter(family).gaps.length > 0);
 
-    expect(gapped).toEqual(['security']);
+    expect(gapped).toEqual([]);
+  });
+
+  test('le motif refuse un code en minuscules ou d’un seul caractère — ce qu’il refuse, la passerelle le refuse', () => {
+    expect(GATEWAY_ACTION_PATTERN.test('code_en_minuscules')).toBe(false);
+    expect(GATEWAY_ACTION_PATTERN.test('A')).toBe(false);
   });
 
   test('le motif que ce module suppose est celui que la passerelle déclare — sinon, il faut relire ce fichier', () => {
     const route = readFileSync(GATEWAY_ROUTE, 'utf8');
-    const declared = /pattern:\s*'(\^\[A-Z_\][^']*)'/.exec(route)?.[1];
+    const declared = /pattern:\s*'(\^\[A-Z0-9_\][^']*)'/.exec(route)?.[1];
 
-    expect(declared).toBe('^[A-Z_]{2,64}(,[A-Z_]{2,64}){0,19}$');
+    expect(declared).toBe('^[A-Z0-9_]{2,64}(,[A-Z0-9_]{2,64}){0,19}$');
     expect(MAX_ACTION_CODES).toBe(20);
   });
 });

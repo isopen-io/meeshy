@@ -173,7 +173,7 @@ export function AuditDetailSheet({
   const subjectIsTarget = entry.subject !== null && entry.target.type === 'User' && entry.target.id === entry.subject.id;
 
   return (
-    <Sheet title={action.label} presentation="centered" bodyAs="div" onClose={onClose}>
+    <Sheet title={action.label} presentation="centered" bodyAs="div" closeLabel={translateAdmin(language, 'admin.kit.close')} onClose={onClose}>
       {/* Un lien de la feuille (« toutes ses actions », une puce vers une fiche) mène AILLEURS : la feuille se ferme avec lui. */}
       <div
         data-admin-audit-detail={entry.id}

@@ -70,9 +70,7 @@ export function AdminShareLinkPanel({ language, shareLinkId, reach, deps = apiDe
   if (link === undefined) {
     if (query.isPending) {
       return (
-        <div aria-busy="true" aria-label={translateAdmin(language, 'admin.shareLink.fiche.loading')} data-admin-share-link-loading>
-          <AdminSkeleton rows={4} />
-        </div>
+        <AdminSkeleton rows={4} language={language} label={translateAdmin(language, 'admin.shareLink.fiche.loading')} anchor="share-link-loading" />
       );
     }
     const status = query.error instanceof ApiError ? query.error.status : 0;

@@ -327,7 +327,7 @@ export function AdminMessagesTab({ language, deps, period }: TabProps) {
                   caption={(data) => translateAdmin(language, 'admin.analytics.messages.attachments.caption', { count: formatCount(data.messagesWithAttachments, language) })}
                 />
               </AdminStatGrid>
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid gap-4 @4xl:grid-cols-2">
                 <TimelineChart language={language} block={block} />
                 <TypesChart language={language} block={block} />
               </div>
@@ -342,7 +342,7 @@ export function AdminMessagesTab({ language, deps, period }: TabProps) {
           {(block) => (
             <>
               <TrendCards language={language} block={block} />
-              <div className="grid gap-4 lg:grid-cols-2">
+              <div className="grid gap-4 @4xl:grid-cols-2">
                 <HoursChart language={language} block={block} />
                 <WeekdaysChart language={language} block={block} />
               </div>

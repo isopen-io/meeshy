@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { AdminGlyph } from '@/components/admin/admin-glyph';
@@ -7,6 +7,7 @@ import { Glyph } from '@/components/glyph';
 import { adminIdentityQueryOptions } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
 import type { AdminBack } from '@/lib/admin/admin-routes';
+import { focusMainHeading, requestMainHeadingFocus, takeMainHeadingFocusRequest, trappedTabTarget } from '@/lib/admin/drawer-focus';
 import {
   activeAdminSectionId,
   adminSpaceOf,
@@ -284,18 +285,51 @@ function AdminDrawer({
   readonly onClose: () => void;
 }) {
   useBackDismiss(onClose);
+  const dialog = useRef<HTMLDivElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const followed = useRef(false);
+
+  useEffect(() => {
+    closeButton.current?.focus();
+    return () => {
+      const trigger = document.querySelector<HTMLElement>('[data-admin-menu-open]');
+      if (!followed.current) {
+        if (trigger?.isConnected) trigger.focus();
+        return;
+      }
+      const screen = document.getElementById('contenu');
+      requestMainHeadingFocus();
+      requestAnimationFrame(() => {
+        if (screen?.isConnected) focusMainHeading();
+      });
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || dialog.current === null) return;
+      const target = trappedTabTarget(dialog.current, document.activeElement, event.shiftKey);
+      if (target === null) return;
+      event.preventDefault();
+      target.focus();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const follow = () => {
+    followed.current = true;
+    onClose();
+  };
+
   return (
     <div className="fixed inset-0 z-40 flex md:hidden" data-admin-drawer>
       <div
+        ref={dialog}
         role="dialog"
         aria-modal="true"
         aria-label={translateAdmin(language, 'admin.shell.menu')}
@@ -308,6 +342,7 @@ function AdminDrawer({
           </p>
           <button
             type="button"
+            ref={closeButton}
             data-admin-menu-close
             aria-label={translateAdmin(language, 'admin.shell.close')}
             onClick={onClose}
@@ -323,7 +358,7 @@ function AdminDrawer({
           space={space}
           active={active}
           folded={false}
-          onNavigate={onClose}
+          onNavigate={follow}
         />
         <BackToApp language={language} folded={false} />
       </div>
@@ -370,6 +405,10 @@ export function AdminScreenFrame({
   const { sections, space, active } = useAdminMenu();
   const [folded, setFolded] = useState(readSidebarFolded);
   const [drawer, setDrawer] = useState(false);
+
+  useEffect(() => {
+    if (takeMainHeadingFocusRequest()) focusMainHeading();
+  }, []);
 
   const basculer = () => {
     const suivant = !folded;
@@ -429,11 +468,11 @@ export function AdminScreenFrame({
         />
         {fills ? (
           <main id="contenu" className="flex min-h-0 flex-1 flex-col px-4 pb-safe md:px-8">
-            <div className="flex min-h-0 w-full flex-1 flex-col pt-4">{children}</div>
+            <div className="@container flex min-h-0 w-full flex-1 flex-col pt-4">{children}</div>
           </main>
         ) : (
           <main id="contenu" className="flex flex-1 flex-col overflow-y-auto px-4 pb-safe md:px-8">
-            <div className="w-full pt-4 pb-24">{children}</div>
+            <div className="@container w-full pt-4 pb-24">{children}</div>
           </main>
         )}
       </div>

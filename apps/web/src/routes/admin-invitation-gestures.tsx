@@ -14,8 +14,11 @@ import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 /**
  * **LE SEUL GESTE D'UNE DEMANDE DE CONTACT : L'ANNULER** (#8876, #6729) — et
  * seulement tant qu'elle est en attente. Passer une demande à « acceptée » n'est
- * PAS offert : la route écrit un statut brut sans créer l'amitié, le geste aurait
- * affiché « acceptée » sur deux membres qui ne sont pas amis (décision § 9.7).
+ * PAS offert, et la passerelle le REFUSE (400, `UpdateInvitationBodySchema` n'admet
+ * que `rejected`) : `FriendRequest.status === 'accepted'` EST l'amitié — elle ouvre
+ * la présence, les publications réservées aux amis, les appels et les paquets Signal.
+ * Le forcer CRÉERAIT une amitié que ni l'un ni l'autre membre n'a consentie (décision
+ * § 9.7). Une demande déjà tranchée répond 409 : ni réouverture, ni second rejet.
  *
  * Le geste passe par `useAdminAction` (effet optimiste sur la fiche, retour arrière
  * si la passerelle refuse, refus traduit, annonce à voix haute, relecture de la

@@ -68,7 +68,7 @@ function PermissionList({ fiche, language }: { readonly fiche: AdminAnonymousOne
       <p className="text-caption" style={{ color: INK2 }}>
         {translateAdmin(language, 'admin.people.anonymous.section.permissions.hint')}
       </p>
-      <ul className="grid gap-2 sm:grid-cols-2" data-admin-permissions>
+      <ul className="grid gap-2 @xl:grid-cols-2" data-admin-permissions>
         {fiche.permissions.map((permission) => (
           <li key={permission.key} data-admin-permission={permission.key} className="flex items-start gap-2 text-body" style={{ color: permission.granted ? INK : INK2 }}>
             <span aria-hidden="true" className="mt-0.5 shrink-0" style={{ color: permission.granted ? TONE_COLOR.success : INK2 }}>

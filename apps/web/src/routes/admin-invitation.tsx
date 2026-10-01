@@ -155,7 +155,7 @@ export function AdminInvitationPanel({ language, invitationId, deps = apiDeps, n
         }
       >
         <AdminFicheSection id="people" title={translateAdmin(language, 'admin.invitation.section.people')}>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 @xl:grid-cols-2">
             <div data-admin-person="sender" className="grid gap-1">
               <span className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
                 {translateAdmin(language, 'admin.invitation.person.sender')}

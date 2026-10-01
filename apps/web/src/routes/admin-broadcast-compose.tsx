@@ -1,6 +1,7 @@
 import { useId, useMemo, useState, type FormEvent } from 'react';
 
-import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
+import { AdminButton } from '@/components/admin/button';
+import { EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { Sheet } from '@/components/sheet';
 import { audienceSentence } from '@/lib/admin/broadcast-audience';
 import {
@@ -29,8 +30,6 @@ import { ChoiceField, SelectField, TextField } from './admin-broadcast-fields';
  * phrase pendant la saisie. Rien ne part en appuyant : on ENREGISTRE un brouillon
  * — l'envoi se décide depuis la fiche, après la préparation.
  */
-const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
-
 const ACTIVITY_KEYS = {
   all: 'admin.broadcast.compose.activity.all',
   active: 'admin.broadcast.compose.activity.active',
@@ -103,7 +102,7 @@ export function BroadcastComposerSheet({
   const edit = mode === 'edit';
 
   return (
-    <Sheet title={translateAdmin(language, edit ? 'admin.broadcast.compose.title.edit' : 'admin.broadcast.compose.title.create')} presentation="fullscreen" bodyAs="div" onClose={onCancel}>
+    <Sheet title={translateAdmin(language, edit ? 'admin.broadcast.compose.title.edit' : 'admin.broadcast.compose.title.create')} presentation="fullscreen" bodyAs="div" closeLabel={translateAdmin(language, 'admin.kit.close')} onClose={onCancel}>
       <form data-admin-compose={mode} noValidate onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto grid w-full max-w-3xl gap-6 px-4 pb-6 pt-2">
@@ -215,26 +214,12 @@ export function BroadcastComposerSheet({
               </p>
             )}
             <div className="flex flex-wrap justify-end gap-3">
-              <button
-                type="button"
-                data-admin-action="cancel"
-                disabled={busy}
-                onClick={onCancel}
-                className={`rounded-chip px-5 text-body font-semibold disabled:opacity-40 ${FOCUS}`}
-                style={{ minHeight: 44, border: `1px solid ${EDGE}`, color: INK, backgroundColor: SURFACE, outlineColor: BRAND }}
-              >
+              <AdminButton data={{ 'data-admin-action': 'cancel' }} disabled={busy} onClick={onCancel}>
                 {t('admin.kit.cancel')}
-              </button>
-              <button
-                type="submit"
-                data-admin-action="save"
-                disabled={busy}
-                aria-busy={busy}
-                className={`rounded-chip px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
-                style={{ minHeight: 44, backgroundColor: BRAND, outlineColor: BRAND }}
-              >
+              </AdminButton>
+              <AdminButton type="submit" tone="primary" data={{ 'data-admin-action': 'save' }} busy={busy}>
                 {busy ? t('admin.broadcast.compose.save.busy') : translateAdmin(language, edit ? 'admin.broadcast.compose.save.edit' : 'admin.broadcast.compose.save.create')}
-              </button>
+              </AdminButton>
             </div>
           </div>
         </div>

@@ -132,7 +132,7 @@ export function UsageTable<Row>({
 
   return (
     <div data-admin-usage-table={anchor}>
-      <div className="hidden overflow-x-auto rounded-card md:block" style={CARD}>
+      <div className="hidden overflow-x-auto rounded-card @3xl:block" style={CARD}>
         <table className="w-full border-collapse text-start">
           <caption className="sr-only">{caption}</caption>
           <thead>
@@ -158,7 +158,7 @@ export function UsageTable<Row>({
         </table>
       </div>
 
-      <ul className="grid gap-3 md:hidden" aria-busy={dimmed} style={{ opacity: dimmed ? 0.6 : 1 }}>
+      <ul className="grid gap-3 @3xl:hidden" aria-busy={dimmed} style={{ opacity: dimmed ? 0.6 : 1 }}>
         {rows.map((row) => (
           <li key={rowKey(row)} data-admin-card={rowKey(row)} className="grid gap-3 rounded-card p-4" style={CARD}>
             {primary === undefined ? null : <div className="min-w-0 break-words text-body font-medium">{primary.cell(row)}</div>}

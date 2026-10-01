@@ -3,9 +3,8 @@ import type fr from './engagement-scale-fr';
 
 const f = {
   'admin.scale.title': 'Baremo de puntos',
-  'admin.scale.denied': 'Este ajuste está reservado a los administradores.',
+  'admin.scale.subtitle': 'Lo que aporta cada acción en puntos de participación, cómo los multiplica el impulso y hasta dónde llega.',
   'admin.scale.loadFailed': 'No se pudo cargar el baremo.',
-  'admin.scale.retry': 'Reintentar',
   'admin.scale.updated': 'Ajustado el {date} por {by}',
   'admin.scale.defaults': 'Baremo por defecto — nunca ajustado.',
   'admin.scale.operations.title': 'Operaciones',

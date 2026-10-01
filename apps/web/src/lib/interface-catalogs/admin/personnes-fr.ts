@@ -9,6 +9,7 @@ const f = {
   'admin.people.list.empty': 'Aucun compte pour le moment.',
   'admin.people.list.emptyFiltered': 'Aucun compte ne correspond à ces filtres.',
   'admin.people.filter.phoneVerified': 'Téléphone vérifié',
+  'admin.people.filter.role.administration': 'Rang d’administration (créateur et administrateurs)',
   'admin.people.filter.period': 'Inscrits depuis',
   'admin.people.sort.label': 'Trier par',
   'admin.people.sort.createdAt': 'Inscription',

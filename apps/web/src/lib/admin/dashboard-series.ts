@@ -136,17 +136,24 @@ export function typesView(
 }
 
 /**
- * Le classement des conversations. Une conversation SANS titre se dit par son
- * type (« Conversation privée ») : c'est le seul nom que la passerelle donne à
- * une conversation directe — elle ne sert pas ses membres dans un classement.
+ * Le classement des conversations. Une conversation SANS titre se dit par ses
+ * membres (« Awa et Jean ») quand la passerelle les sert — au rang d'administration
+ * seulement —, sinon par son type (« Conversation privée »).
  */
+function conversationDatumLabel(row: AdminRankedConversation, language: AdminLanguage): string {
+  if (row.title !== null || row.members !== null) {
+    return conversationLabel({ title: row.title, participants: row.members?.participants, total: row.members?.total }, language);
+  }
+  return row.type === null ? conversationLabel({}, language) : interpretConversationType(row.type, language).label;
+}
+
 export function rankedConversationsView(
   rows: readonly AdminRankedConversation[],
   language: AdminLanguage,
 ): { readonly data: readonly BarDatum[]; readonly summary: string } {
   const data = rows.map((row): BarDatum => ({
     key: row.id,
-    label: row.title === null && row.type !== null ? interpretConversationType(row.type, language).label : conversationLabel({ title: row.title }, language),
+    label: conversationDatumLabel(row, language),
     value: row.count,
     target: { kind: 'entity', entity: 'conversation', id: row.id },
   }));

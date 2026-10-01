@@ -68,7 +68,10 @@ const secondaryOf = (text: string | null): { readonly secondary?: string } => (t
 function namedLabel(target: AdminAuditTarget, language: AdminLanguage): string {
   switch (target.type) {
     case 'Conversation':
-      return conversationLabel({ title: target.label, type: target.secondary }, language);
+      return conversationLabel(
+        { title: target.label, type: target.secondary, participants: target.members?.participants, total: target.members?.total },
+        language,
+      );
     case 'ConversationShareLink':
       return shareLinkLabel({ name: target.label }, language);
     case 'TrackingLink':

@@ -190,10 +190,35 @@ describe('AdminCommunityPanel — équipe, conversations, métadonnées', () => 
     expect(sansTitre?.textContent).toContain('Publique · Membres : 3 · Inactive');
   });
 
-  test('un lecteur sans le rang d’administration voit les conversations en étiquettes, pas en liens', async () => {
+  test('sans le rang d’administration, l’inventaire des conversations n’est PAS dessiné — le chiffre seul, et il le dit', async () => {
     const { host } = await ouvrir([], `/admin/communities/${ID(3)}`, adminIdentityFixture({ role: 'MODERATOR' }));
-    expect(host.querySelector(`[data-admin-conversation="${ID(5)}"]`)?.textContent).toContain('Répétitions');
-    expect(host.querySelector(`[data-admin-conversation="${ID(5)}"] a`)).toBeNull();
+
+    expect(host.querySelector('[data-admin-conversation]')).toBeNull();
+    expect(host.textContent).not.toContain('Répétitions');
+    expect(text(host, '[data-admin-conversations-restricted]')).toContain('2 conversation(s)');
+    expect(text(host, '[data-admin-conversations-restricted]')).toContain('réservée au rang d’administration');
+  });
+
+  test('« Conversations » du bandeau mène à CELLES de la communauté (communityId) — et reste du texte sans la section', async () => {
+    const { host } = await ouvrir();
+    const tile = host.querySelector('[data-admin-stat="conversations"]');
+    expect(tile?.querySelector('a')?.getAttribute('href')).toBe(`/admin/conversations?communityId=${ID(3)}`);
+
+    await click(tile?.querySelector('a') ?? null);
+    expect(window.location.pathname).toBe('/admin/conversations');
+    expect(window.location.search).toBe(`?communityId=${ID(3)}`);
+
+    const moderator = await ouvrir([], `/admin/communities/${ID(3)}`, adminIdentityFixture({ role: 'MODERATOR' }));
+    expect(moderator.host.querySelector('[data-admin-stat="conversations"] a')).toBeNull();
+    expect(text(moderator.host, '[data-admin-stat="conversations"]')).toContain('2');
+  });
+
+  test('la phrase « … sur N » est elle aussi un lien vers la liste filtrée quand il y a plus que ce qui est montré', async () => {
+    const { host } = await ouvrir([fiche({ conversationCount: 31 })]);
+    const more = host.querySelector('[data-admin-link="all-conversations"]');
+
+    expect(more?.getAttribute('href')).toBe(`/admin/conversations?communityId=${ID(3)}`);
+    expect(more?.textContent).toContain('sur 31');
   });
 
   test('les métadonnées sont interprétées : visibilité et état expliqués, dates absolue ET relative', async () => {
@@ -293,6 +318,21 @@ describe('AdminCommunityPanel — les gestes', () => {
     expect(gesture(host, 'makePublic')?.textContent).toBe('Rendre publique');
     expect(gesture(host, 'reactivate')).toBeNull();
     expect(gesture(host, 'makePrivate')).toBeNull();
+  });
+
+  test('un MODÉRATEUR peut désactiver mais pas changer la confidentialité : « Rendre publique » n’est pas dessiné (403 à la passerelle)', async () => {
+    const { host } = await ouvrir([], `/admin/communities/${ID(3)}`, adminIdentityFixture({ role: 'MODERATOR' }));
+
+    expect(gesture(host, 'deactivate')).not.toBeNull();
+    expect(gesture(host, 'makePublic')).toBeNull();
+    expect(gesture(host, 'makePrivate')).toBeNull();
+  });
+
+  test('un ADMIN, lui, voit les deux gestes', async () => {
+    const { host } = await ouvrir([], `/admin/communities/${ID(3)}`, adminIdentityFixture({ role: 'ADMIN' }));
+
+    expect(gesture(host, 'deactivate')).not.toBeNull();
+    expect(gesture(host, 'makePublic')).not.toBeNull();
   });
 
   test('désactivée et publique : « Réactiver » et « Rendre privée »', async () => {

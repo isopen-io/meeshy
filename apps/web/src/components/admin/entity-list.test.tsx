@@ -123,13 +123,47 @@ describe('AdminEntityList — lignes, liens, en-têtes', () => {
     expect(host.querySelectorAll('thead th')[0]?.getAttribute('aria-sort')).toBe('ascending');
   });
 
-  test('la priorité 3 ne s’affiche que dès lg ; les cartes sous md n’ont que priorités 1 et 2', async () => {
+  test('la priorité 3 ne s’affiche que dès 64 rem de CONTENU ; les cartes n’ont que priorités 1 et 2', async () => {
     const host = await ouvrir();
-    expect(host.querySelectorAll('thead th')[2]?.className).toContain('hidden lg:table-cell');
+    expect(host.querySelectorAll('thead th')[2]?.className).toContain('hidden @5xl:table-cell');
     const carte = host.querySelector('[data-admin-card]');
     expect(carte?.querySelector('a')?.getAttribute('href')).toBe(`/admin/users/${IDS[0]}`);
     expect([...(carte?.querySelectorAll('dt') ?? [])].map((dt) => dt.textContent)).toEqual(['Statut']);
     expect(carte?.textContent).not.toContain('il y a 3 jours');
+  });
+});
+
+describe('AdminEntityList — tableau ou cartes, d’après la largeur du CONTENU', () => {
+  test('le tableau et les cartes se partagent sur un seuil de conteneur (48 rem), pas de fenêtre — le menu déplié retire 248 px', async () => {
+    const host = await ouvrir();
+    const tableFrame = host.querySelector('table')?.parentElement;
+    const cards = host.querySelector('[data-admin-card]')?.parentElement;
+
+    expect(tableFrame?.className).toContain('@3xl:block');
+    expect(tableFrame?.className).toContain('hidden');
+    expect(cards?.className).toContain('@3xl:hidden');
+    for (const frame of [tableFrame, cards]) expect(frame?.className).not.toMatch(/(^|\s)md:(block|hidden)/);
+  });
+
+  test('le « Trier par » des cartes est posé AVANT elles, et se retire avec elles', async () => {
+    const host = await ouvrir();
+    const control = host.querySelector('[data-admin-sort-control]');
+    const cards = host.querySelector('[data-admin-card]')?.parentElement;
+
+    expect(control).not.toBeNull();
+    expect(control?.className).toContain('@3xl:hidden');
+    expect(control?.compareDocumentPosition(cards as Node)! & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  test('les cartes posent le MODE CARTE : un nom long s’y replie sur deux lignes au lieu de se tronquer', async () => {
+    const host = await ouvrir();
+    const name = host.querySelector('[data-admin-card] [data-admin-entity] [title]');
+
+    expect(name?.className).toContain('line-clamp-2');
+    expect(name?.className).not.toContain('truncate');
+    const cell = host.querySelector('table [data-admin-entity] [title]');
+    expect(cell?.className).toContain('truncate');
+    expect(cell?.className).not.toContain('line-clamp');
   });
 });
 
@@ -168,8 +202,13 @@ describe('AdminEntityList — la pagination', () => {
 describe('AdminEntityList — les états dessinés', () => {
   test('squelette de six rangées tant que rien n’est arrivé — jamais un spinner', async () => {
     const host = await ouvrir({ handler: () => new Promise(() => undefined) });
-    expect(host.querySelector('[data-admin-list-skeleton]')?.getAttribute('aria-busy')).toBe('true');
-    expect(host.querySelectorAll('[data-admin-list-skeleton] > div')).toHaveLength(6);
+    const skeleton = host.querySelector('[data-admin-list-skeleton]');
+    expect(skeleton?.getAttribute('aria-busy')).toBe('true');
+    /* ANNONCÉ : un `role="status"` qui dit « Chargement… » — l'`aria-label` d'un `div` sans rôle n'est pas lu. */
+    expect(skeleton?.getAttribute('role')).toBe('status');
+    expect(skeleton?.querySelector('.sr-only')?.textContent).toBe('Chargement…');
+    expect(skeleton?.hasAttribute('aria-label')).toBe(false);
+    expect(host.querySelectorAll('[data-admin-list-skeleton] .contents > div')).toHaveLength(6);
   });
 
   test('erreur sans données : « Réessayer » relit et la liste apparaît', async () => {

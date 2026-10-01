@@ -1,10 +1,10 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminOfflineNotice } from '@/components/admin/states';
 import { AdminFilterChips } from '@/components/admin/list-toolbar';
-import { AdminTabs, useAdminTab } from '@/components/admin/tabs';
+import { AdminTabPanel, AdminTabs, useAdminTab } from '@/components/admin/tabs';
 import { ACTIVITY_DEFAULT, ACTIVITY_PERIODS, CALLS_DEFAULT, CALLS_PERIODS, MESSAGES_DEFAULT, MESSAGES_PERIODS } from '@/lib/admin/analytics-windows';
 import type { AdminDeps } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
@@ -84,6 +84,7 @@ export function AdminAnalyticsPanel({
   readonly now?: Date;
 }) {
   const [tab, setTab] = useAdminTab(TABS, 'activity');
+  const tabsId = useId();
   const clock = now ?? new Date();
 
   return (
@@ -95,14 +96,15 @@ export function AdminAnalyticsPanel({
       />
       <AdminOfflineNotice language={language} />
       <AdminTabs
+        idBase={tabsId}
         label={translateAdmin(language, 'admin.analytics.tabs.label')}
         tabs={TABS.map((id) => ({ id, label: translateAdmin(language, `admin.analytics.tab.${id}`) }))}
         active={tab}
         onChange={setTab}
       />
-      <div role="tabpanel" aria-label={translateAdmin(language, `admin.analytics.tab.${tab}`)}>
+      <AdminTabPanel idBase={tabsId} tab={tab}>
         <TabBody tab={tab} language={language} deps={deps} now={clock} />
-      </div>
+      </AdminTabPanel>
     </div>
   );
 }

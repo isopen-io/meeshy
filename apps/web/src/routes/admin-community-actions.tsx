@@ -4,6 +4,7 @@ import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
 import { BRAND, EDGE, INK, SURFACE } from '@/components/admin/tone';
 import { communityGestureOptions, communityGestureWords, withCommunityChange, type CommunityGesture } from '@/lib/admin/community-state';
 import { useAdminAction } from '@/lib/admin/use-admin-action';
+import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminCommunityQueryKey, updateAdminCommunity, type AdminCommunityFiche, type AdminCommunityUpdate } from '@/lib/api/admin-communities-detail';
 import { useOnline } from '@/lib/net/online';
@@ -26,6 +27,7 @@ import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
  * ne se propose pas.
  */
 const MOTIVE_MIN = 10;
+const VISIBILITY_GESTURES: ReadonlySet<string> = new Set(['makePrivate', 'makePublic']);
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
 
 function GestureButton({ gesture, label, disabled, onClick }: { readonly gesture: CommunityGesture; readonly label: string; readonly disabled: boolean; readonly onClick: () => void }) {
@@ -61,6 +63,7 @@ export function AdminCommunityActions({
   readonly onAnnounce: (message: string, tone?: AnnouncementTone) => void;
 }) {
   const online = useOnline();
+  const reach = useAdminReach();
   const [pending, setPending] = useState<CommunityGesture | null>(null);
   const action = useAdminAction<AdminCommunityUpdate>({ language, onAnnounce });
 
@@ -84,9 +87,13 @@ export function AdminCommunityActions({
 
   return (
     <>
-      {communityGestureOptions(fiche).map((gesture) => (
-        <GestureButton key={gesture.id} gesture={gesture} label={communityGestureWords(gesture.id, language).action} disabled={!online} onClick={() => setPending(gesture)} />
-      ))}
+      {communityGestureOptions(fiche)
+        /* Rendre une communauté privée ou publique change QUI peut la lire : la passerelle le réserve au
+           rang d'administration (403 sinon). Désactiver et réactiver restent un geste de modération. */
+        .filter((gesture) => reach.hasAdminRank || !VISIBILITY_GESTURES.has(gesture.id))
+        .map((gesture) => (
+          <GestureButton key={gesture.id} gesture={gesture} label={communityGestureWords(gesture.id, language).action} disabled={!online} onClick={() => setPending(gesture)} />
+        ))}
       {pending === null || words === null ? null : (
         <AdminConfirmSheet
           language={language}

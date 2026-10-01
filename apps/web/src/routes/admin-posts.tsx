@@ -1,12 +1,11 @@
 import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
 import { AdminEntityIdentity } from '@/components/admin/entity-chip';
 import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-list';
-import { AdminListToolbar } from '@/components/admin/list-toolbar';
+import { AdminFilterChips, AdminListToolbar } from '@/components/admin/list-toolbar';
 import { AdminMomentText } from '@/components/admin/meta';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminInlineNotice } from '@/components/admin/states';
-import { AdminTabs } from '@/components/admin/tabs';
 import { BRAND, INK2 } from '@/components/admin/tone';
 import { adminGroupOf } from '@/lib/admin/admin-routes';
 import { interpretPostState, interpretPostType, interpretPostVisibility } from '@/lib/admin/interpret/enums';
@@ -123,7 +122,7 @@ export function AdminPostsPanel({
     },
   ];
 
-  const tabs = POST_TABS.map((tab) => ({ id: tab, label: translateAdmin(language, `admin.posts.tab.${tab}`) }));
+  const typeChips = POST_TABS.map((tab) => ({ value: tab, label: translateAdmin(language, `admin.posts.tab.${tab}`) }));
 
   return (
     <div className="grid gap-6" data-admin-screen="posts">
@@ -135,7 +134,15 @@ export function AdminPostsPanel({
       />
       <AdminPostsStatsBand language={language} deps={deps} period={periodFilter === 'all' ? undefined : periodFilter} enabled={reach.opens('posts')} />
       <div className="grid gap-4">
-        <AdminTabs label={translateAdmin(language, 'admin.posts.tabs.label')} tabs={tabs} active={postTabOf(list.state.filters)} onChange={(tab) => list.filter('type', postTypeOfTab(tab))} />
+        <AdminFilterChips
+          label={translateAdmin(language, 'admin.posts.tabs.label')}
+          options={typeChips}
+          value={postTabOf(list.state.filters)}
+          onChange={(value) => {
+            const tab = POST_TABS.find((candidate) => candidate === value);
+            if (tab !== undefined) list.filter('type', postTypeOfTab(tab));
+          }}
+        />
         {authorId === undefined ? null : (
           <AdminInlineNotice
             tone="info"

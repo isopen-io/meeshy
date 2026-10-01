@@ -57,9 +57,9 @@ export function personInitials(label: string): string {
 export type ConversationNameFields = {
   readonly title?: string | null;
   readonly type?: string | null;
-  readonly participants?: readonly PersonNameFields[] | null;
+  readonly participants?: readonly PersonNameFields[] | null | undefined;
   /** Le nombre total de membres, quand la charge ne sert qu'un aperçu des premiers. */
-  readonly total?: number | null;
+  readonly total?: number | null | undefined;
 };
 
 export function conversationLabel(conversation: ConversationNameFields, language: AdminLanguage): string {

@@ -149,15 +149,34 @@ describe('les classements — des noms, des liens vers les fiches, JAMAIS d’id
   test('conversations : le titre, ou le type quand la passerelle n’en sert pas', () => {
     const view = rankedConversationsView(
       [
-        { id: ID, title: 'Famille', type: 'group', count: 120 },
-        { id: '64f1c2a9e8b7d6c5b4a39282', title: null, type: 'direct', count: 80 },
-        { id: '64f1c2a9e8b7d6c5b4a39283', title: null, type: null, count: 5 },
+        { id: ID, title: 'Famille', type: 'group', members: null, count: 120 },
+        { id: '64f1c2a9e8b7d6c5b4a39282', title: null, type: 'direct', members: null, count: 80 },
+        { id: '64f1c2a9e8b7d6c5b4a39283', title: null, type: null, members: null, count: 5 },
       ],
       'fr',
     );
     expect(view.data.map((datum) => datum.label)).toEqual(['Famille', 'Conversation privée', 'Conversation sans titre']);
     expect(view.data[0]?.target).toEqual({ kind: 'entity', entity: 'conversation', id: ID });
     expect(view.summary).toBe('Famille est en tête : 120');
+  });
+
+  test('conversations : une conversation SANS titre se dit par ses membres quand la passerelle les sert', () => {
+    const members = {
+      participants: [
+        { displayName: 'Awa Diop', username: 'awa' },
+        { displayName: null, username: 'jean' },
+      ],
+      total: 2,
+    };
+    const view = rankedConversationsView(
+      [
+        { id: ID, title: null, type: 'direct', members, count: 80 },
+        { id: '64f1c2a9e8b7d6c5b4a39282', title: null, type: 'direct', members: { ...members, total: 5 }, count: 40 },
+      ],
+      'fr',
+    );
+
+    expect(view.data.map((datum) => datum.label)).toEqual(['Awa Diop et @jean', 'Awa Diop, @jean et 3 autres']);
   });
 
   test('membres : le nom affiché, sinon le prénom et le nom, sinon @pseudo', () => {

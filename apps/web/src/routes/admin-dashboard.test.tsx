@@ -118,9 +118,9 @@ describe('Plateforme — huit cartes, des chiffres formatés', () => {
 
     expect(href('platform-users')).toBe('/admin/users');
     expect(href('platform-active-users')).toBe('/admin/users?isActive=true');
-    expect(href('platform-admins')).toBe('/admin/users?role=ADMIN');
+    expect(href('platform-admins')).toBe('/admin/users?role=ADMINISTRATION');
     expect(href('platform-anonymous')).toBe('/admin/anonymous');
-    expect(href('platform-conversations')).toBe('/admin/conversations');
+    expect(href('platform-conversations')).toBe('/admin/conversations?period=24h&sort=createdAt');
     expect(href('platform-messages')).toBe(opens('analytics') ? '/admin/analytics?tab=messages' : null);
     expect(href('platform-communities')).toBe(opens('communities') ? '/admin/communities' : null);
     expect(href('platform-share-links')).toBe(opens('shareLinks') ? '/admin/share-links?isActive=true' : null);

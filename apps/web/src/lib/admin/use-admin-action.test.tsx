@@ -5,19 +5,19 @@ import type { ApiResult } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
 import { setupAdminKitTests } from '@/test-support/admin-harness';
 
-import { useAdminAction, type AdminGesture } from './use-admin-action';
+import { translatedRefusal, useAdminAction, type AdminGesture } from './use-admin-action';
 
-const { mount, mounter } = setupAdminKitTests({ languages: ['fr'] });
+const { mount, mounter } = setupAdminKitTests({ languages: ['fr', 'en', 'es', 'pt'] });
 
 type Probe = { run: (gesture: AdminGesture<{ readonly id: string }>) => Promise<{ readonly id: string } | null>; state: () => string; reset: () => void };
 
-async function ouvrir() {
+async function ouvrir(language: 'fr' | 'en' | 'es' | 'pt' = 'fr') {
   const annonces: { message: string; tone: string | undefined }[] = [];
   const handle: { current: Probe | null } = { current: null };
 
   function Harness() {
     const action = useAdminAction<{ readonly id: string }>({
-      language: 'fr',
+      language,
       onAnnounce: (message, tone) => annonces.push({ message, tone }),
     });
     handle.current = { run: action.run, state: () => JSON.stringify(action.state), reset: action.reset };
@@ -110,7 +110,7 @@ describe('useAdminAction — instantané, optimiste, réseau, retour arrière', 
   describe('les refus se disent en mots', () => {
     const cas: readonly [string, ApiResult<{ readonly id: string }> | 'throw', string][] = [
       ['403', fail(403, 'Forbidden'), 'Vous n’avez pas le droit d’effectuer ce geste.'],
-      ['400 avec un message servi', fail(400, 'Le motif doit faire au moins 10 caractères.'), 'Le motif doit faire au moins 10 caractères.'],
+      ['400 avec un message servi (jamais affiché : il est dans la langue du serveur)', fail(400, 'Le motif doit faire au moins 10 caractères.'), 'Le geste a été refusé : les informations sont invalides.'],
       ['400 sans message', fail(400, '   '), 'Le geste a été refusé : les informations sont invalides.'],
       ['409', fail(409, 'Conflict'), 'Le geste entre en conflit avec l’état actuel : rechargez puis réessayez.'],
       ['réseau (statut 0)', fail(0, 'Network'), 'Le réseau a échoué : réessayez dans un instant.'],
@@ -130,6 +130,41 @@ describe('useAdminAction — instantané, optimiste, réseau, retour arrière', 
         expect(annonces[0]).toEqual({ message: attendu, tone: 'error' });
       });
     }
+  });
+
+  describe('un 400 ne montre jamais le texte du serveur — la phrase traduite, dans la langue du lecteur', () => {
+    const attendu = {
+      en: 'The action was refused: the information is invalid.',
+      es: 'La acción fue rechazada: la información no es válida.',
+      pt: 'A ação foi recusada: as informações são inválidas.',
+    } as const;
+
+    for (const language of ['en', 'es', 'pt'] as const) {
+      test(language, async () => {
+        const { run, annonces, phase } = await ouvrir(language);
+        await run({ call: async () => fail(400, 'Statut invalide'), success: 'admin.kit.copied' });
+
+        expect(annonces).toHaveLength(1);
+        expect(annonces[0]?.message).not.toContain('Statut invalide');
+        expect(annonces[0]?.message).not.toContain('invalide');
+        expect(annonces[0]?.message).toBe(attendu[language]);
+        expect(phase().message).toBe(attendu[language]);
+      });
+    }
+
+    test('un refus que l’ÉCRAN a reconnu et dit lui-même (translatedRefusal) est affiché tel quel — c’est le seul', async () => {
+      const { run, annonces } = await ouvrir('es');
+      await run({ call: async () => translatedRefusal('Esta publicación ya estaba retirada.'), success: 'admin.kit.copied' });
+
+      expect(annonces[0]?.message).toBe('Esta publicación ya estaba retirada.');
+    });
+
+    test('le texte anglais des erreurs de validation n’est pas servi non plus', async () => {
+      const { run, annonces } = await ouvrir('es');
+      await run({ call: async () => fail(400, 'body/status must be equal to one of the allowed values'), success: 'admin.kit.copied' });
+
+      expect(annonces[0]?.message).not.toContain('allowed values');
+    });
   });
 
   test('reset remet l’état au repos', async () => {

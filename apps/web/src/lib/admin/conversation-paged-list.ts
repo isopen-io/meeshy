@@ -28,14 +28,13 @@ import type { AdminListController } from './use-admin-list';
 export type LocalSort = 'default';
 
 /**
- * LE CADRE D'UNE LISTE POSÉE DANS UNE CARTE DE FICHE. Deux correctifs locaux à un
- * manque du kit, mesurés à 375 px : la pagination (`AdminPager`) garde ses
- * contrôles sur UNE ligne de 349 px, plus large que la carte (343 px − 32 px de
- * marge), et la carte débordait de l'écran ; `min-w-0` retire à la liste le droit
- * d'élargir la colonne, et la classe sur le groupe de contrôles le laisse passer
- * à la ligne.
+ * LE CADRE D'UNE LISTE POSÉE DANS UNE CARTE DE FICHE : `min-w-0` retire à la liste le
+ * droit d'élargir la colonne. La pagination (`AdminPager`) passe elle-même ses
+ * contrôles à la ligne — c'était un correctif local ici (`[&_[data-admin-list-range]+div]:flex-wrap`)
+ * tant que le kit les gardait sur une ligne de 349 px, plus large qu'une carte de 343 px ;
+ * le kit l'a repris pour TOUTES les listes.
  */
-export const NARROW_LIST_FRAME = 'min-w-0 [&_[data-admin-list-range]+div]:flex-wrap';
+export const NARROW_LIST_FRAME = 'min-w-0';
 
 export type LocalListState<F extends string> = ListState<LocalSort, F>;
 

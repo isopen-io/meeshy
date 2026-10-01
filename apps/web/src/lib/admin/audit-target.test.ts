@@ -17,7 +17,13 @@ beforeAll(async () => {
   await loadAdminInterfaceCatalog('fr');
 });
 
-const target = (type: string, label: string | null, secondary: string | null = null): AdminAuditTarget => ({ type, id: OBJECT_ID(9), label, secondary });
+const target = (type: string, label: string | null, secondary: string | null = null): AdminAuditTarget => ({
+  type,
+  id: OBJECT_ID(9),
+  label,
+  secondary,
+  members: null,
+});
 
 const entityOf = (value: AdminAuditTarget) => {
   const display = auditTargetOf(value, 'fr');
@@ -37,6 +43,20 @@ describe('auditTargetOf — chaque genre d’élément se nomme', () => {
 
   test('une conversation : son titre et son type nommé', () => {
     expect(entityOf(target('Conversation', 'Les voisins', 'group'))).toMatchObject({ kind: 'conversation', label: 'Les voisins', secondary: 'Groupe' });
+  });
+
+  test('une conversation SANS titre se nomme par ses membres quand la passerelle les sert — « Awa et Jean », « Awa, Jean et 3 autres »', () => {
+    const members = (total: number) => ({
+      participants: [
+        { displayName: 'Awa Diop', username: 'awa' },
+        { displayName: 'Jean', username: 'jean' },
+      ],
+      total,
+    });
+
+    expect(entityOf({ ...target('Conversation', null, 'direct'), members: members(2) }).label).toBe('Awa Diop et Jean');
+    expect(entityOf({ ...target('Conversation', null, 'group'), members: members(5) }).label).toBe('Awa Diop, Jean et 3 autres');
+    expect(entityOf({ ...target('Conversation', 'Les voisins', 'group'), members: members(5) }).label).toBe('Les voisins');
   });
 
   test('une conversation sans titre connu se dit « Conversation sans titre », jamais son identifiant, et n’est pas dite supprimée', () => {

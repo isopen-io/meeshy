@@ -240,7 +240,20 @@ describe('la période et l’onglet vivent dans l’adresse', () => {
     const tabs = [...host.querySelectorAll('[role="tab"]')].map((node) => node.textContent);
     expect(tabs).toEqual(['Activité', 'Messages', 'Appels']);
     expect(tab(host, 'activity')?.getAttribute('aria-selected')).toBe('true');
-    expect(host.querySelector('[role="tabpanel"]')?.getAttribute('aria-label')).toBe('Activité');
+    const panel = host.querySelector('[role="tabpanel"]');
+    const labelledBy = panel?.getAttribute('aria-labelledby') ?? '';
+    expect(host.querySelector(`#${labelledBy}`)?.textContent).toBe('Activité');
+    expect(host.querySelector(`#${labelledBy}`)?.getAttribute('aria-controls')).toBe(panel?.id);
+    expect(host.querySelectorAll('[role="tabpanel"]')).toHaveLength(1);
+  });
+
+  test('changer d’onglet déplace le panneau : il est nommé par le nouvel onglet', async () => {
+    const host = await openPanel('/probe', statsGateway().deps);
+    await act(async () => tab(host, 'messages')?.click());
+    await mounter.settle();
+    const panel = host.querySelector('[role="tabpanel"]');
+    expect(panel?.getAttribute('aria-labelledby')).toBe(tab(host, 'messages')?.id);
+    expect(tab(host, 'messages')?.getAttribute('aria-controls')).toBe(panel?.id);
   });
 
   test('un seul titre de niveau 1, des sections titrées de niveau 2', async () => {

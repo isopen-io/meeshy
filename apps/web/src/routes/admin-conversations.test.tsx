@@ -129,7 +129,7 @@ describe('la liste — nommée, jamais par identifiant', () => {
 
     const communityCell = (id: string) => host.querySelector(`[data-admin-row="${id}"] td:nth-child(3)`)?.textContent ?? '';
     expect(communityCell(OBJECT_ID(3))).toContain('Lycée Njanda');
-    expect(communityCell(OBJECT_ID(4))).toBe('—');
+    expect(communityCell(OBJECT_ID(4))).toBe('—Non renseigné');
   });
 
   test('l’effectif est formaté, et la pile montre au plus six premiers membres', async () => {
@@ -152,7 +152,7 @@ describe('la liste — nommée, jamais par identifiant', () => {
 
     const last = (id: string) => host.querySelector(`[data-admin-row="${id}"] td:nth-child(7)`)?.textContent ?? '';
     expect(last(OBJECT_ID(2))).toMatch(/5 min/);
-    expect(last(OBJECT_ID(4))).toBe('—');
+    expect(last(OBJECT_ID(4))).toBe('—Non renseigné');
   });
 
   test('chaque rangée ouvre SA fiche, dans l’espace courant', async () => {
@@ -329,5 +329,46 @@ describe('l’accès — fail-closed, au rang d’administration', () => {
 
     expect(host.querySelector('[data-admin-conversations]')).not.toBeNull();
     expect(rowIds(host)).toHaveLength(ROWS.length);
+  });
+});
+
+/**
+ * **LE TRI DES CARTES** (#8876) — sous le seuil du tableau il n'y a plus d'en-tête à cliquer : sans
+ * « Trier par », une liste ne se triait qu'au tableau. Le contrôle est celui du kit (`AdminSortControl`),
+ * il liste les colonnes triables et inverse l'ordre.
+ */
+describe('le tri des cartes — « Trier par » du kit', () => {
+  test('le « Trier par » étiqueté liste les colonnes triables, et choisir une autre clé réécrit la liste', async () => {
+    const { deps } = scripted(() => page(ROWS));
+    const host = await open(deps);
+
+    const control = host.querySelector('[data-admin-sort-control]');
+    expect(control).not.toBeNull();
+    expect(control?.querySelector('label')?.textContent).toContain('Trier par');
+    const select = control?.querySelector<HTMLSelectElement>('[data-admin-sort-select]');
+    expect([...(select?.querySelectorAll('option') ?? [])].map((option) => option.value)).toEqual(['createdAt', 'lastMessageAt']);
+
+    typeInto(select ?? null, 'createdAt');
+    await mounter.settle();
+    expect(window.location.search).toContain('sort=createdAt');
+  });
+
+  test('le bouton inverse l’ordre et dit l’ordre courant', async () => {
+    const { deps } = scripted(() => page(ROWS));
+    const host = await open(deps);
+
+    const direction = host.querySelector<HTMLButtonElement>('[data-admin-sort-direction]');
+    expect(direction?.getAttribute('aria-label')).toContain('actuellement');
+    const before = direction?.getAttribute('data-admin-sort-direction');
+    await mounter.click(direction);
+    await mounter.settle();
+    expect(host.querySelector('[data-admin-sort-direction]')?.getAttribute('data-admin-sort-direction')).not.toBe(before);
+  });
+
+  test('le contrôle se cache dès que le tableau, qui porte les mêmes tris, s’affiche (seuil de conteneur)', async () => {
+    const { deps } = scripted(() => page(ROWS));
+    const host = await open(deps);
+
+    expect(host.querySelector('[data-admin-sort-control]')?.className).toContain('@3xl:hidden');
   });
 });

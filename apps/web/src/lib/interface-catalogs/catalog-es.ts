@@ -503,6 +503,7 @@ const es = {
   'settings.save.error': 'El ajuste no se guardó.',
   'settings.theme.sync_error': 'Tema aplicado en este dispositivo, sin sincronizar.',
   'common.cancel': 'Cancelar',
+  'common.close': 'Cerrar',
 
   'media.video.play': 'Reproducir vídeo',
   'media.video.pause': 'Pausa',

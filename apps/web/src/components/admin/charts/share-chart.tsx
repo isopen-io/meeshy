@@ -1,7 +1,7 @@
 import type { AdminTone } from '@/lib/admin/interpret/types';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
-import { TONE_COLOR } from '../tone';
+import { TONE_MARK } from '../tone';
 import { AdminChartCard, ADMIN_OTHERS_TOKEN, ADMIN_SERIES_TOKENS, seriesColor, type AdminChartState } from './chart-card';
 import { arcPath, foldIntoOthers, stackSegments } from './chart-scale';
 
@@ -49,7 +49,7 @@ export function AdminShareChart({
       ? foldIntoOthers(data, ADMIN_SERIES_TOKENS.length, translateAdmin(language, 'admin.kit.chart.others'))
       : data;
   const colorOf = (key: string, index: number): string => {
-    if (statusTones !== undefined) return TONE_COLOR[statusTones[key] ?? 'neutral'];
+    if (statusTones !== undefined) return TONE_MARK[statusTones[key] ?? 'neutral'];
     return key === 'others' ? `var(${ADMIN_OTHERS_TOKEN})` : seriesColor(index);
   };
   const segments = stackSegments(parts.map((part) => part.value));

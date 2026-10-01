@@ -65,8 +65,31 @@ describe('decodeAdminReport — champ par champ, forme figée', () => {
         isProtected: false,
         deleted: false,
         conversation: { id: OBJECT_ID(5), title: 'Famille' },
+        members: null,
       },
     });
+  });
+
+  test('garde de quoi nommer une conversation sans titre par ses membres — au rang d’administration seulement (#8876)', () => {
+    const decoded = decodeAdminReport(
+      servedReport({
+        reportedEntity: {
+          type: 'message',
+          id: OBJECT_ID(2),
+          label: null,
+          owner: null,
+          excerpt: null,
+          isProtected: false,
+          deleted: false,
+          conversation: { id: OBJECT_ID(5), title: null },
+          participants: [{ displayName: 'Awa Diop', username: 'awa', id: 'SECRET-ID' }],
+          total: 2,
+        },
+      }),
+    );
+
+    expect(decoded?.reportedEntity?.members).toEqual({ participants: [{ displayName: 'Awa Diop', username: 'awa' }], total: 2 });
+    expect(JSON.stringify(decoded)).not.toContain('SECRET-ID');
   });
 
   test('garde les notes du modérateur et l’action consignée', () => {

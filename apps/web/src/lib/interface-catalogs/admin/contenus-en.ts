@@ -180,6 +180,8 @@ const f = {
   'admin.community.conversations.meta': '{type} · Members: {count}',
   'admin.community.conversations.metaInactive': '{type} · Members: {count} · Inactive',
   'admin.community.conversations.more': 'The 20 most recently active conversations, out of {total}.',
+  'admin.community.conversations.restricted': 'This community has {count} conversation(s). Their list is reserved for the administration rank.',
+  'admin.community.conversations.seeAll': 'See all conversations of this community',
   'admin.community.meta.visibility': 'Visibility',
   'admin.community.meta.state': 'State',
   'admin.community.meta.identifier': 'Public identifier',

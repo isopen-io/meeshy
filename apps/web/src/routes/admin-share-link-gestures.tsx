@@ -126,7 +126,7 @@ function RevealedSecretSheet({ language, secret, onClose, onAnnounce }: {
   readonly onAnnounce: (message: string, tone?: AnnouncementTone) => void;
 }) {
   return (
-    <Sheet title={translateAdmin(language, 'admin.shareLink.secret.title')} presentation="centered" bodyAs="div" onClose={onClose}>
+    <Sheet title={translateAdmin(language, 'admin.shareLink.secret.title')} presentation="centered" bodyAs="div" closeLabel={translateAdmin(language, 'admin.kit.close')} onClose={onClose}>
       <div data-admin-secret className="grid gap-4 px-4 pb-4 pt-2">
         <p className="text-body" style={{ color: 'var(--color-ios-ink)' }}>
           {translateAdmin(language, 'admin.shareLink.secret.notice')}

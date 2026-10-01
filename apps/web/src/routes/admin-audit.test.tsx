@@ -275,14 +275,14 @@ describe('tri, filtres et pagination — dans l’adresse, dans la liste blanche
     expect(path).toContain('createdAfter=2026-09-23T12:00:00.000Z');
   });
 
-  test('la famille « Sécurité et accès » DIT ce qu’elle ne remonte pas encore : les deux codes à chiffre', async () => {
+  test('la famille « Sécurité et accès » remonte aussi les deux codes à chiffre (le geste de double authentification), sans avis de trou', async () => {
     const { deps, paths } = scripted(() => page(ROWS));
     const host = await open(deps, '/admin/audit?family=security');
 
-    const notice = host.querySelector('[data-admin-notice="info"]')?.textContent ?? '';
-    expect(notice).toContain('Double authentification activée');
-    expect(notice).toContain('Double authentification désactivée');
-    expect(listPaths(paths)[0]).not.toContain('ENABLE_2FA');
+    const path = listPaths(paths)[0] ?? '';
+    expect(path).toContain('ENABLE_2FA');
+    expect(path).toContain('DISABLE_2FA');
+    expect(host.querySelector('[data-admin-notice="info"]')).toBeNull();
   });
 
   test('une famille sans trou ne dit rien', async () => {

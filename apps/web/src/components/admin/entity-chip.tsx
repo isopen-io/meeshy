@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { createContext, useContext, type CSSProperties, type ReactNode } from 'react';
 
 import { Avatar } from '@/components/avatar';
 import type { UserPresenceStatus } from '@/lib/api/types';
@@ -165,6 +165,13 @@ export function AdminRouteLink({ target, space, children, className, style, anch
   return target.kind === 'section' ? sectionLink(target.section, space, children, attrs) : entityLink(target.entity, target.id, space, children, attrs);
 }
 
+/** Ce lecteur peut-il OUVRIR la cible ? — la même réponse qu'`AdminLink`, pour qui doit dessiner autour (carte entièrement cliquable). */
+export function useAdminTargetOpens(target: AdminTarget | undefined): boolean {
+  const reach = useAdminReach();
+  if (target === undefined) return false;
+  return reach.opens(target.kind === 'section' ? target.section : sectionOfEntity(target.entity));
+}
+
 /**
  * UN LIEN D'ADMINISTRATION (#8876) — vers une section ou la fiche d'une entité,
  * TOUJOURS dans l'espace courant (`/adm` reste `/adm`, D-76).
@@ -233,6 +240,16 @@ const ENTITY_GLYPH: Readonly<Record<AdminEntityKind, AdminGlyphName>> = {
 
 const PEOPLE: readonly AdminEntityKind[] = ['user', 'anonymous'];
 
+/**
+ * LE MODE CARTE — dans une carte de liste (sous le seuil du tableau) un nom long se REPLIE sur deux
+ * lignes ; dans une cellule de tableau il se tronque, la colonne ayant une largeur à tenir. Un
+ * contexte plutôt qu'une prop : la cellule est écrite par chaque écran (`AdminEntityIdentity`
+ * dans `column.cell`), seule la liste sait si elle la pose dans une carte.
+ */
+const CardModeContext = createContext(false);
+
+export const AdminCardMode = CardModeContext.Provider;
+
 function ChipVisual({ entity, size }: { readonly entity: AdminEntityRef; readonly size: number }) {
   if (!PEOPLE.includes(entity.kind) && entity.avatarUrl === undefined) {
     return (
@@ -274,15 +291,18 @@ export function AdminEntityIdentity({
   readonly size?: 'sm' | 'md';
 }) {
   const deleted = entity.deleted === true;
+  const card = useContext(CardModeContext);
+  const fit = card ? 'break-words line-clamp-2' : 'truncate';
   return (
     <span className="flex min-w-0 items-center gap-3" data-admin-entity={entity.kind}>
       <ChipVisual entity={entity} size={size === 'sm' ? 28 : 36} />
       <span className="min-w-0">
-        <span className="block truncate font-medium" style={{ color: INK, textDecoration: deleted ? 'line-through' : 'none' }}>
+        {/* Le nom ENTIER reste lisible : `title` quand il est coupé, deux lignes dans une carte. */}
+        <span title={entity.label} className={`block font-medium ${fit}`} style={{ color: INK, textDecoration: deleted ? 'line-through' : 'none' }}>
           {entity.label}
         </span>
         {entity.secondary === undefined || entity.secondary === null ? null : (
-          <span className="block truncate text-caption" style={{ color: INK2 }}>
+          <span title={entity.secondary} className={`block text-caption ${fit}`} style={{ color: INK2 }}>
             {entity.secondary}
           </span>
         )}

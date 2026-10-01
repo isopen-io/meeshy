@@ -484,7 +484,8 @@ describe('« Nouvelle diffusion » — la feuille de composition', () => {
 
     await mounter.submit(host);
 
-    expect(host.querySelector('[data-admin-compose-error]')?.textContent).toContain('sont requis');
+    expect(host.querySelector('[data-admin-compose-error]')?.textContent).toContain('Le geste a été refusé : les informations sont invalides.');
+    expect(host.querySelector('[data-admin-compose-error]')?.textContent).not.toContain('sont requis');
     expect(host.querySelector('[data-admin-compose]')).not.toBeNull();
     expect(host.querySelector<HTMLInputElement>('[id$="-name"]')?.value).toBe('Lancement');
     expect(window.location.pathname).toBe('/admin/broadcasts');

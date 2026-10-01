@@ -43,7 +43,7 @@ describe('les badges — le mot d’abord, jamais la couleur seule', () => {
     expect(badge?.textContent).toBe('Banni');
     expect(badge?.querySelector('svg')).not.toBeNull();
     const style = badge?.getAttribute('style') ?? '';
-    expect(style).toContain('var(--color-danger)');
+    expect(style).toContain('var(--color-admin-danger-ink)');
     expect(style).not.toMatch(/#[0-9a-f]{3,6}/i);
   });
 
@@ -68,7 +68,21 @@ describe('les badges — le mot d’abord, jamais la couleur seule', () => {
         <AdminRoleBadge language="en" role="MODERATOR" />
       </div>,
     );
-    expect(host.textContent).toBe('ModérateurModerator');
+    expect([...host.querySelectorAll('[data-admin-raw]')].map((badge) => badge.textContent)).toEqual(['Modérateur', 'Moderator']);
+  });
+
+  test('l’EXPLICATION d’un badge est dans le texte accessible, pas seulement dans `title` (tactile, clavier, lecteur d’écran)', async () => {
+    const host = await mount(<AdminInterpretedBadge value={interpretRole('BIGBOSS', 'fr')} />);
+    const hidden = host.querySelector('.sr-only');
+
+    expect(hidden?.textContent).toContain('Tous les droits, y compris les gestes souverains.');
+    expect(hidden?.closest('[data-admin-raw]')).toBeNull();
+    expect(hidden?.previousElementSibling?.getAttribute('data-admin-raw')).toBe('BIGBOSS');
+  });
+
+  test('un état sans explication ne pose aucun texte caché', async () => {
+    const host = await mount(<AdminInterpretedBadge value={interpretReportStatus('pending', 'fr')} />);
+    expect(host.querySelector('.sr-only')).toBeNull();
   });
 
   test('AdminLanguageBadge : le NOM de la langue, jamais « ES »', async () => {
@@ -113,11 +127,16 @@ describe('le panneau de métadonnées', () => {
         </p>
       </div>,
     );
-    expect(host.querySelector('[data-a] time')?.textContent).toBe('il y a 3 minutes');
+    /* Le relatif se lit ; l'ABSOLU suit en texte caché (un `title` n'atteint ni le tactile ni le clavier). */
+    expect(host.querySelector('[data-a] time')?.textContent).toBe('il y a 3 minutes (30 sept. 2026, 14:00)');
+    expect(host.querySelector('[data-a] time > .sr-only')?.textContent).toBe(' (30 sept. 2026, 14:00)');
+    expect(host.querySelector('[data-b] time > .sr-only')).toBeNull();
     expect(host.querySelector('[data-a] time')?.getAttribute('title')).toBe('30 sept. 2026, 14:00');
     expect(host.querySelector('[data-a] time')?.getAttribute('datetime')).toBe('2026-09-30T14:00:00Z');
     expect(host.querySelector('[data-b] time')?.textContent).toBe('30 sept. 2026, 14:00 · il y a 3 minutes');
-    expect(host.querySelector('[data-c]')?.textContent).toBe('—');
+    expect(host.querySelector('[data-c] [aria-hidden="true"]')?.textContent).toBe('—');
+    expect(host.querySelector('[data-c] .sr-only')?.textContent).toBe('Non renseigné');
+    expect(host.querySelector('[data-c] [aria-label]')).toBeNull();
   });
 
   test('AdminTechnicalId : l’identifiant en police mono dans son ancre, copiable, la copie s’ANNONCE', async () => {

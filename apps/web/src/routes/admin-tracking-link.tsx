@@ -64,9 +64,7 @@ export function AdminTrackingLinkPanel({ language, linkId, reach, deps = apiDeps
   if (link === undefined) {
     if (query.isPending) {
       return (
-        <div aria-busy="true" aria-label={translateAdmin(language, 'admin.tracking.fiche.loading')} data-admin-tracking-link-loading>
-          <AdminSkeleton rows={4} />
-        </div>
+        <AdminSkeleton rows={4} language={language} label={translateAdmin(language, 'admin.tracking.fiche.loading')} anchor="tracking-link-loading" />
       );
     }
     const status = query.error instanceof ApiError ? query.error.status : 0;

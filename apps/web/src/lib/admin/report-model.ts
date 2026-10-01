@@ -60,7 +60,7 @@ function entityLabel(type: string, entity: AdminReportedEntity, language: AdminL
     case 'story':
       return postLabel({ type, author: entity.owner }, language);
     case 'conversation':
-      return conversationLabel({ title: entity.label }, language);
+      return conversationLabel({ title: entity.label, participants: entity.members?.participants, total: entity.members?.total }, language);
     default:
       return entity.label ?? kindLabel(type, language);
   }
@@ -182,7 +182,12 @@ export function reportedOwnerOf(report: AdminReport, language: AdminLanguage): R
 export function reportedConversationOf(report: AdminReport, language: AdminLanguage): AdminEntityRef | null {
   const conversation = report.reportedEntity?.conversation ?? null;
   if (report.reportedType !== 'message' || conversation === null) return null;
-  return { kind: 'conversation', id: conversation.id, label: conversationLabel({ title: conversation.title }, language) };
+  const members = report.reportedEntity?.members ?? null;
+  return {
+    kind: 'conversation',
+    id: conversation.id,
+    label: conversationLabel({ title: conversation.title, participants: members?.participants, total: members?.total }, language),
+  };
 }
 
 export type ReportGesture = 'assign' | 'resolve' | 'reject' | 'dismiss' | 'reopen' | 'delete';

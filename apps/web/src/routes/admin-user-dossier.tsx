@@ -2,8 +2,12 @@ import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 
 import { AdminBadge, AdminInterpretedBadge } from '@/components/admin/badges';
-import { AdminEntityChip } from '@/components/admin/entity-chip';
-import { AdminMomentText } from '@/components/admin/meta';
+import { AdminEntityIdentity, type AdminEntityRef } from '@/components/admin/entity-chip';
+import { AdminFicheSection } from '@/components/admin/fiche';
+import { AdminMetaRow, AdminMomentText, AdminNotProvided } from '@/components/admin/meta';
+import { AdminResponsiveRows, type AdminColumn } from '@/components/admin/responsive-rows';
+import { AdminEmptyState } from '@/components/admin/states';
+import type { AdminTarget } from '@/lib/admin/admin-routes';
 import {
   interpretAccountState,
   interpretFriendStatus,
@@ -20,32 +24,29 @@ import { securityEventLabel } from '@/lib/admin/user-dossier-labels';
 import { userEntityOf } from '@/lib/admin/user-entity';
 import type { AdminDeps } from '@/lib/api/admin';
 import {
-  ADMIN_DOSSIER_PAGE_SIZE,
   adminUserActivityQueryKey,
   adminUserCommunitiesQueryKey,
   adminUserReportsFiledQueryKey,
   adminUserReportsReceivedQueryKey,
   adminUserSecurityQueryKey,
-  adminUserSessionsQueryKey,
   adminUserVoiceQueryKey,
   loadAdminUserActivity,
   loadAdminUserCommunities,
   loadAdminUserReportsFiled,
   loadAdminUserReportsReceived,
   loadAdminUserSecurityEvents,
-  loadAdminUserSessions,
   loadAdminUserVoice,
-  type AdminDossierPage,
   type AdminCommunity,
+  type AdminContact,
   type AdminReport,
+  type AdminSecurityEvent,
 } from '@/lib/api/admin-user-dossier';
 import { apiDeps } from '@/lib/api/deps';
-import type { ApiResult } from '@/lib/api/http';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { useOnline } from '@/lib/net/online';
+import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
-import { AdminLine, AdminSection, AdminSkeleton } from './admin-parts';
-import { AdminPager, AdminTable, PlainTh, Td } from './admin-table';
+import { DossierGate, DossierList, servi } from './admin-user-dossier-list';
+import { AdminUserSessionsList } from './admin-user-sessions';
 
 /**
  * **LE DOSSIER D'UN MEMBRE, ONGLET PAR ONGLET** (#7845, #7873, #8876) — contacts,
@@ -66,89 +67,18 @@ import { AdminPager, AdminTable, PlainTh, Td } from './admin-table';
  * l'espace courant) ; un statut, un motif, une gravité, un rôle passent par la
  * bibliothèque d'interprétation — jamais `accepted`, `hate_speech` ou
  * `LOGIN_FAILED` bruts. Aucune couleur n'est écrite en dur : les tons sont ceux du kit.
+ *
+ * ## Les mêmes listes que le reste de l'administration
+ *
+ * Chaque onglet passe par le gabarit commun (`AdminResponsiveRows` : un tableau dès `@3xl`, des
+ * cartes dessous — plus aucun tableau qui défile de côté à 375 px) et par les états du kit
+ * (`DossierGate` : squelette annoncé, 403 = bloc réservé, panne AVEC « Réessayer », vide dessiné).
+ * Un signalement ouvre sa fiche quand la modération est ouverte au lecteur ; une valeur absente se dit
+ * « Non renseigné », jamais un tiret nu. Les sessions ouvertes se révoquent (`AdminUserSessionsList`).
  */
 
 const INK2 = 'var(--color-ios-ink-2)';
 const SOUVERAIN = { gcTime: 0, retry: false } as const;
-
-/** Un échec qui garde son STATUT : un 403 ne se dit pas comme une panne. */
-class LectureRefusee extends Error {
-  readonly status: number;
-  constructor(message: string, status: number) {
-    super(message);
-    this.status = status;
-  }
-}
-
-async function servi<T>(promesse: Promise<ApiResult<T>>): Promise<T> {
-  const resultat = await promesse;
-  if (!resultat.ok) throw new LectureRefusee(resultat.error, resultat.status);
-  return resultat.data;
-}
-
-function Etat({ language, error }: { readonly language: AdminLanguage; readonly error: unknown }) {
-  const online = useOnline();
-  const refuse = error instanceof LectureRefusee && error.status === 403;
-  const cle = refuse ? 'admin.dossier.restricted' : online ? 'admin.convList.unavailable' : 'admin.offline';
-  return (
-    <p className="text-caption" style={{ color: INK2 }} data-admin-absence>
-      {translateAdmin(language, cle)}
-    </p>
-  );
-}
-
-function Vide({ language }: { readonly language: AdminLanguage }) {
-  return (
-    <p className="text-caption" style={{ color: INK2 }} data-admin-dossier-empty>
-      {translateAdmin(language, 'admin.dossier.empty')}
-    </p>
-  );
-}
-
-/** Une liste paginée du dossier : squelette, absence, vide, tableau et pied. */
-function Paginee<T>({
-  language,
-  query,
-  offset,
-  onOffset,
-  entetes,
-  ligne,
-}: {
-  readonly language: AdminLanguage;
-  readonly query: { readonly isPending: boolean; readonly data: AdminDossierPage<T> | undefined; readonly error: unknown };
-  readonly offset: number;
-  readonly onOffset: (offset: number) => void;
-  readonly entetes: readonly string[];
-  readonly ligne: (row: T) => ReactNode;
-}) {
-  if (query.isPending) return <AdminSkeleton rows={3} />;
-  if (query.data === undefined) return <Etat language={language} error={query.error} />;
-  if (query.data.rows.length === 0) return <Vide language={language} />;
-  return (
-    <>
-      <AdminTable>
-        <thead>
-          <tr>
-            {entetes.map((entete) => (
-              <PlainTh key={entete}>{entete}</PlainTh>
-            ))}
-          </tr>
-        </thead>
-        <tbody>{query.data.rows.map(ligne)}</tbody>
-      </AdminTable>
-      <AdminPager
-        language={language}
-        offset={offset}
-        limit={ADMIN_DOSSIER_PAGE_SIZE}
-        count={query.data.rows.length}
-        total={query.data.total}
-        hasMore={query.data.hasMore}
-        pageSizes={[ADMIN_DOSSIER_PAGE_SIZE]}
-        onPage={(demande) => onOffset(Math.max(0, demande.offset ?? 0))}
-      />
-    </>
-  );
-}
 
 function Titre({ children }: { readonly children: ReactNode }) {
   return (
@@ -162,60 +92,70 @@ type TabProps = { readonly userId: string; readonly language: AdminLanguage; rea
 
 const moment = (iso: string | null, now: Date, language: AdminLanguage) => <AdminMomentText moment={adminMomentOf(iso, now, language)} />;
 
+const textOrNotProvided = (text: string, language: AdminLanguage): ReactNode => (text === '' ? <AdminNotProvided language={language} /> : text);
+
+const targetOf = (entity: AdminEntityRef): AdminTarget => ({ kind: 'entity', entity: entity.kind, id: entity.id });
+
+const identityColumn = <Row,>(header: string, entityOf: (row: Row) => AdminEntityRef, language: AdminLanguage): AdminColumn<Row> => ({
+  id: 'identity',
+  header,
+  primary: true,
+  cell: (row) => <AdminEntityIdentity language={language} size="sm" entity={entityOf(row)} />,
+});
+
 export function AdminUserContactsTab({ userId, language, deps = apiDeps, now = () => new Date() }: TabProps) {
   const activite = useQuery({
     queryKey: adminUserActivityQueryKey(userId),
     queryFn: ({ signal }) => servi(loadAdminUserActivity({ ...deps, userId, signal })),
     retry: false,
   });
-
-  if (activite.isPending) return <AdminSkeleton rows={4} />;
-  if (activite.data === undefined) return <Etat language={language} error={activite.error} />;
-  const { contacts, shareLinks, trackingLinks, affiliateTokens } = activite.data;
   const instant = now();
+  const contactEntity = (contact: AdminContact) => userEntityOf(contact.other, language, instant);
+  const columns: readonly AdminColumn<AdminContact>[] = [
+    identityColumn(translateAdmin(language, 'admin.col.member'), contactEntity, language),
+    { id: 'direction', header: translateAdmin(language, 'admin.contacts.direction'), cell: (contact) => translateAdmin(language, contact.direction === 'sent' ? 'admin.contacts.sent' : 'admin.contacts.received') },
+    { id: 'status', header: translateAdmin(language, 'admin.col.status'), cell: (contact) => <AdminInterpretedBadge value={interpretFriendStatus(contact.status, language)} /> },
+    { id: 'date', header: translateAdmin(language, 'admin.people.dossier.contactDate'), cell: (contact) => moment(contact.createdAt, instant, language) },
+  ];
 
   return (
     <div className="grid gap-3" data-admin-contacts>
-      <p className="text-caption" style={{ color: INK2 }}>
-        {translateAdmin(language, 'admin.contacts.links', {
-          share: String(shareLinks),
-          tracking: String(trackingLinks),
-          affiliate: String(affiliateTokens),
-        })}
-      </p>
-      {contacts.length === 0 ? (
-        <Vide language={language} />
-      ) : (
-        <AdminTable>
-          <thead>
-            <tr>
-              <PlainTh>{translateAdmin(language, 'admin.col.member')}</PlainTh>
-              <PlainTh>{translateAdmin(language, 'admin.contacts.direction')}</PlainTh>
-              <PlainTh>{translateAdmin(language, 'admin.col.status')}</PlainTh>
-              <PlainTh>{translateAdmin(language, 'admin.people.dossier.contactDate')}</PlainTh>
-            </tr>
-          </thead>
-          <tbody>
-            {contacts.map((contact) => (
-              <tr key={contact.id} data-admin-contact={contact.id}>
-                <Td>
-                  <AdminEntityChip language={language} size="sm" entity={userEntityOf(contact.other, language, instant)} />
-                </Td>
-                <Td className="text-caption">
-                  {translateAdmin(language, contact.direction === 'sent' ? 'admin.contacts.sent' : 'admin.contacts.received')}
-                </Td>
-                <Td className="text-caption">
-                  <AdminInterpretedBadge value={interpretFriendStatus(contact.status, language)} />
-                </Td>
-                <Td className="whitespace-nowrap text-caption">{moment(contact.createdAt, instant, language)}</Td>
-              </tr>
-            ))}
-          </tbody>
-        </AdminTable>
-      )}
+      <DossierGate language={language} query={activite} rows={4}>
+        {({ contacts, shareLinks, trackingLinks, affiliateTokens }) => (
+          <>
+            <p className="text-caption" style={{ color: INK2 }}>
+              {translateAdmin(language, 'admin.contacts.links', {
+                share: String(shareLinks),
+                tracking: String(trackingLinks),
+                affiliate: String(affiliateTokens),
+              })}
+            </p>
+            {contacts.length === 0 ? (
+              <AdminEmptyState title={translateAdmin(language, 'admin.dossier.empty')} glyph="list" />
+            ) : (
+              <AdminResponsiveRows
+                columns={columns}
+                rows={contacts}
+                rowKey={(contact) => contact.id}
+                rowTarget={(contact) => targetOf(contactEntity(contact))}
+                rowAttributes={(contact) => ({ 'data-admin-contact': contact.id })}
+                caption={translateAdmin(language, 'admin.tab.contacts')}
+              />
+            )}
+          </>
+        )}
+      </DossierGate>
     </div>
   );
 }
+
+const communityEntity = (communaute: AdminCommunity, language: AdminLanguage): AdminEntityRef => ({
+  kind: 'community',
+  id: communaute.id,
+  label: communaute.name,
+  secondary: communaute.isPrivate ? `${communaute.identifier} · ${translateAdmin(language, 'admin.communities.private')}` : communaute.identifier,
+  avatarUrl: communaute.avatar === '' ? null : communaute.avatar,
+});
 
 export function AdminUserCommunitiesTab({ userId, language, deps = apiDeps }: TabProps) {
   const [offset, setOffset] = useState(0);
@@ -224,59 +164,46 @@ export function AdminUserCommunitiesTab({ userId, language, deps = apiDeps }: Ta
     queryFn: ({ signal }) => servi(loadAdminUserCommunities({ ...deps, userId, offset, signal })),
     retry: false,
   });
+  const columns: readonly AdminColumn<AdminCommunity>[] = [
+    identityColumn(translateAdmin(language, 'admin.tab.communities'), (communaute) => communityEntity(communaute, language), language),
+    {
+      id: 'role',
+      header: translateAdmin(language, 'admin.col.role'),
+      cell: (communaute) => (
+        <span className="inline-flex flex-wrap items-center justify-end gap-1">
+          <AdminInterpretedBadge value={interpretParticipantRole(communaute.role, language)} />
+          {communaute.isCreator ? <AdminBadge tone="brand">{translateAdmin(language, 'admin.communities.creator')}</AdminBadge> : null}
+        </span>
+      ),
+    },
+    { id: 'members', header: translateAdmin(language, 'admin.col.members'), align: 'end', cell: (communaute) => formatCount(communaute.memberCount, language) },
+    {
+      id: 'status',
+      header: translateAdmin(language, 'admin.col.status'),
+      cell: (communaute) =>
+        communaute.isActive ? (
+          <AdminInterpretedBadge value={interpretAccountState('active', language)} />
+        ) : (
+          <AdminBadge tone="neutral">{translateAdmin(language, 'admin.people.dossier.memberLeft')}</AdminBadge>
+        ),
+    },
+    { id: 'joined', header: translateAdmin(language, 'admin.col.joined'), cell: (communaute) => adminDate(communaute.joinedAt, language) },
+  ];
 
   return (
     <div data-admin-communities>
-      <Paginee
+      <DossierList
         language={language}
         query={liste}
         offset={offset}
         onOffset={setOffset}
-        entetes={[
-          translateAdmin(language, 'admin.tab.communities'),
-          translateAdmin(language, 'admin.col.role'),
-          translateAdmin(language, 'admin.col.members'),
-          translateAdmin(language, 'admin.col.status'),
-          translateAdmin(language, 'admin.col.joined'),
-        ]}
-        ligne={(communaute) => <LigneCommunaute key={communaute.id} communaute={communaute} language={language} />}
+        columns={columns}
+        rowKey={(communaute) => communaute.id}
+        rowTarget={(communaute) => targetOf(communityEntity(communaute, language))}
+        rowAttributes={(communaute) => ({ 'data-admin-community': communaute.id })}
+        caption={translateAdmin(language, 'admin.tab.communities')}
       />
     </div>
-  );
-}
-
-function LigneCommunaute({ communaute, language }: { readonly communaute: AdminCommunity; readonly language: AdminLanguage }) {
-  return (
-    <tr data-admin-community={communaute.id}>
-      <Td>
-        <AdminEntityChip
-          language={language}
-          size="sm"
-          entity={{
-            kind: 'community',
-            id: communaute.id,
-            label: communaute.name,
-            secondary: communaute.isPrivate ? `${communaute.identifier} · ${translateAdmin(language, 'admin.communities.private')}` : communaute.identifier,
-            avatarUrl: communaute.avatar === '' ? null : communaute.avatar,
-          }}
-        />
-      </Td>
-      <Td className="text-caption">
-        <span className="inline-flex flex-wrap items-center gap-1">
-          <AdminInterpretedBadge value={interpretParticipantRole(communaute.role, language)} />
-          {communaute.isCreator ? <AdminBadge tone="brand">{translateAdmin(language, 'admin.communities.creator')}</AdminBadge> : null}
-        </span>
-      </Td>
-      <Td className="text-caption tabular-nums">{formatCount(communaute.memberCount, language)}</Td>
-      <Td className="text-caption">
-        {communaute.isActive ? (
-          <AdminInterpretedBadge value={interpretAccountState('active', language)} />
-        ) : (
-          <AdminBadge tone="neutral">{translateAdmin(language, 'admin.people.dossier.memberLeft')}</AdminBadge>
-        )}
-      </Td>
-      <Td className="whitespace-nowrap text-caption">{adminDate(communaute.joinedAt, language)}</Td>
-    </tr>
   );
 }
 
@@ -287,159 +214,135 @@ export function AdminUserVoiceTab({ userId, language, deps = apiDeps }: TabProps
     ...SOUVERAIN,
   });
 
-  if (voix.isPending) return <AdminSkeleton rows={3} />;
-  if (voix.data === undefined) return <Etat language={language} error={voix.error} />;
-  const { profile, consents } = voix.data;
-  const consentement = (valeur: string | null) =>
-    valeur === null ? translateAdmin(language, 'admin.people.consent.notGiven') : translateAdmin(language, 'admin.people.consent.givenOn', { date: adminDate(valeur, language) });
-
   return (
-    <div className="grid gap-5 lg:grid-cols-2" data-admin-voice>
-      <AdminSection titre={translateAdmin(language, 'admin.tab.voice')}>
-        {profile === null ? (
-          <p className="text-caption" style={{ color: INK2 }}>
-            {translateAdmin(language, 'admin.voice.none')}
-          </p>
-        ) : (
-          <>
-            <AdminLine label={translateAdmin(language, 'admin.voice.samples')} valeur={formatCount(profile.audioCount, language)} />
-            <AdminLine label={translateAdmin(language, 'admin.voice.duration')} valeur={formatDuration(profile.totalDurationMs, 'ms', language)} />
-            <AdminLine label={translateAdmin(language, 'admin.voice.model')} valeur={profile.model || '—'} />
-            <AdminLine label={translateAdmin(language, 'admin.col.createdOn')} valeur={adminDate(profile.createdAt, language)} />
-          </>
-        )}
-      </AdminSection>
-      <AdminSection titre={translateAdmin(language, 'admin.voice.consents')}>
-        <AdminLine label={translateAdmin(language, 'admin.voice.consentProfile')} valeur={consentement(consents.voiceProfile)} />
-        <AdminLine label={translateAdmin(language, 'admin.voice.consentData')} valeur={consentement(consents.voiceData)} />
-        <AdminLine label={translateAdmin(language, 'admin.voice.consentCloning')} valeur={consentement(consents.voiceCloning)} />
-      </AdminSection>
-      <p className="text-caption lg:col-span-2" style={{ color: INK2 }}>
-        {translateAdmin(language, 'admin.voice.traced')}
-      </p>
+    <div className="grid gap-4" data-admin-voice>
+      <DossierGate language={language} query={voix}>
+        {({ profile, consents }) => {
+          const consentement = (valeur: string | null) =>
+            valeur === null ? translateAdmin(language, 'admin.people.consent.notGiven') : translateAdmin(language, 'admin.people.consent.givenOn', { date: adminDate(valeur, language) });
+          return (
+            <>
+              <div className="grid gap-4 @4xl:grid-cols-2">
+                <AdminFicheSection id="voice-profile" title={translateAdmin(language, 'admin.tab.voice')}>
+                  {profile === null ? (
+                    <p className="text-caption" style={{ color: INK2 }}>
+                      {translateAdmin(language, 'admin.voice.none')}
+                    </p>
+                  ) : (
+                    <dl className="grid gap-3">
+                      <AdminMetaRow label={translateAdmin(language, 'admin.voice.samples')} value={formatCount(profile.audioCount, language)} />
+                      <AdminMetaRow label={translateAdmin(language, 'admin.voice.duration')} value={formatDuration(profile.totalDurationMs, 'ms', language)} />
+                      <AdminMetaRow label={translateAdmin(language, 'admin.voice.model')} value={textOrNotProvided(profile.model, language)} />
+                      <AdminMetaRow label={translateAdmin(language, 'admin.col.createdOn')} value={adminDate(profile.createdAt, language)} />
+                    </dl>
+                  )}
+                </AdminFicheSection>
+                <AdminFicheSection id="voice-consents" title={translateAdmin(language, 'admin.voice.consents')}>
+                  <dl className="grid gap-3">
+                    <AdminMetaRow label={translateAdmin(language, 'admin.voice.consentProfile')} value={consentement(consents.voiceProfile)} />
+                    <AdminMetaRow label={translateAdmin(language, 'admin.voice.consentData')} value={consentement(consents.voiceData)} />
+                    <AdminMetaRow label={translateAdmin(language, 'admin.voice.consentCloning')} value={consentement(consents.voiceCloning)} />
+                  </dl>
+                </AdminFicheSection>
+              </div>
+              <p className="text-caption" style={{ color: INK2 }}>
+                {translateAdmin(language, 'admin.voice.traced')}
+              </p>
+            </>
+          );
+        }}
+      </DossierGate>
     </div>
   );
 }
 
-export function AdminUserSecurityTab({ userId, language, deps = apiDeps, now = () => new Date() }: TabProps) {
-  const [offsetSessions, setOffsetSessions] = useState(0);
+export function AdminUserSecurityTab({
+  userId,
+  language,
+  deps = apiDeps,
+  now = () => new Date(),
+  onAnnounce,
+}: TabProps & { readonly onAnnounce: (message: string, tone?: AnnouncementTone) => void }) {
   const [offsetEvenements, setOffsetEvenements] = useState(0);
   const instant = now();
-  const sessions = useQuery({
-    queryKey: adminUserSessionsQueryKey(userId, offsetSessions),
-    queryFn: ({ signal }) => servi(loadAdminUserSessions({ ...deps, userId, offset: offsetSessions, signal })),
-    ...SOUVERAIN,
-  });
   const evenements = useQuery({
     queryKey: adminUserSecurityQueryKey(userId, offsetEvenements),
     queryFn: ({ signal }) => servi(loadAdminUserSecurityEvents({ ...deps, userId, offset: offsetEvenements, signal })),
     ...SOUVERAIN,
   });
+  const columns: readonly AdminColumn<AdminSecurityEvent>[] = [
+    {
+      id: 'event',
+      header: translateAdmin(language, 'admin.security.event'),
+      primary: true,
+      cell: (evenement) => (
+        <span className="min-w-0 text-start">
+          <span className="block text-caption font-medium">{securityEventLabel(evenement.eventType, language)}</span>
+          {evenement.description === '' ? null : (
+            <span className="block break-words text-caption" style={{ color: INK2 }}>
+              {evenement.description}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    { id: 'severity', header: translateAdmin(language, 'admin.security.severity'), cell: (evenement) => <AdminInterpretedBadge value={interpretSeverity(evenement.severity, language)} /> },
+    { id: 'status', header: translateAdmin(language, 'admin.people.dossier.eventStatus'), cell: (evenement) => <AdminInterpretedBadge value={interpretSecurityStatus(evenement.status, language)} /> },
+    { id: 'ip', header: translateAdmin(language, 'admin.security.ip'), cell: (evenement) => textOrNotProvided(evenement.ipAddress, language) },
+    { id: 'date', header: translateAdmin(language, 'admin.col.date'), cell: (evenement) => moment(evenement.createdAt, instant, language) },
+  ];
 
   return (
     <div className="grid gap-6" data-admin-security>
       <section>
         <Titre>{translateAdmin(language, 'admin.security.sessions')}</Titre>
-        <Paginee
-          language={language}
-          query={sessions}
-          offset={offsetSessions}
-          onOffset={setOffsetSessions}
-          entetes={[
-            translateAdmin(language, 'admin.security.device'),
-            translateAdmin(language, 'admin.security.place'),
-            translateAdmin(language, 'admin.security.ip'),
-            translateAdmin(language, 'admin.col.status'),
-            translateAdmin(language, 'admin.col.lastActive'),
-          ]}
-          ligne={(session) => (
-            <tr key={session.id}>
-              <Td className="max-w-[18rem] break-words text-caption">{session.device}</Td>
-              <Td className="text-caption">{session.place || '—'}</Td>
-              <Td className="text-caption tabular-nums">{session.ipAddress || '—'}</Td>
-              <Td className="text-caption">
-                {session.isValid ? (
-                  <AdminBadge tone="success">{translateAdmin(language, 'admin.security.valid')}</AdminBadge>
-                ) : (
-                  <AdminBadge tone="neutral">{translateAdmin(language, 'admin.security.closed')}</AdminBadge>
-                )}
-              </Td>
-              <Td className="whitespace-nowrap text-caption">{moment(session.lastActivityAt ?? session.createdAt, instant, language)}</Td>
-            </tr>
-          )}
-        />
+        <AdminUserSessionsList userId={userId} language={language} deps={deps} now={instant} onAnnounce={onAnnounce} />
       </section>
       <section>
         <Titre>{translateAdmin(language, 'admin.security.events')}</Titre>
-        <Paginee
+        <DossierList
           language={language}
           query={evenements}
           offset={offsetEvenements}
           onOffset={setOffsetEvenements}
-          entetes={[
-            translateAdmin(language, 'admin.security.event'),
-            translateAdmin(language, 'admin.security.severity'),
-            translateAdmin(language, 'admin.people.dossier.eventStatus'),
-            translateAdmin(language, 'admin.security.ip'),
-            translateAdmin(language, 'admin.col.date'),
-          ]}
-          ligne={(evenement) => (
-            <tr key={evenement.id}>
-              <Td>
-                <span className="block text-caption font-medium">{securityEventLabel(evenement.eventType, language)}</span>
-                {evenement.description === '' ? null : (
-                  <span className="block max-w-[24rem] break-words text-caption" style={{ color: INK2 }}>
-                    {evenement.description}
-                  </span>
-                )}
-              </Td>
-              <Td className="text-caption">
-                <AdminInterpretedBadge value={interpretSeverity(evenement.severity, language)} />
-              </Td>
-              <Td className="text-caption">
-                <AdminInterpretedBadge value={interpretSecurityStatus(evenement.status, language)} />
-              </Td>
-              <Td className="text-caption tabular-nums">{evenement.ipAddress || '—'}</Td>
-              <Td className="whitespace-nowrap text-caption">{moment(evenement.createdAt, instant, language)}</Td>
-            </tr>
-          )}
+          columns={columns}
+          rowKey={(evenement) => evenement.id}
+          caption={translateAdmin(language, 'admin.security.events')}
         />
       </section>
     </div>
   );
 }
 
-function LigneSignalement({
-  report,
-  language,
-  recu,
-  now,
-}: {
-  readonly report: AdminReport;
-  readonly language: AdminLanguage;
-  readonly recu: boolean;
-  readonly now: Date;
-}) {
-  return (
-    <tr>
-      {/* Un signalement REÇU nomme son auteur (texte servi) ; un signalement FAIT dit le genre de ce qu'il vise. */}
-      <Td className="text-caption">
-        {recu ? report.subject || '—' : report.subject === '' ? '—' : interpretReportedEntity(report.subject, language).label}
-      </Td>
-      <Td className="text-caption">{interpretReportType(report.reportType, language).label}</Td>
-      <Td className="max-w-[18rem] break-words text-caption">{report.reason || '—'}</Td>
-      {recu ? (
-        <Td className="max-w-[20rem] break-words text-caption">
-          {report.excerpt ?? <span style={{ color: INK2 }}>{translateAdmin(language, 'admin.reports.withheld')}</span>}
-        </Td>
-      ) : null}
-      <Td className="text-caption">
-        <AdminInterpretedBadge value={interpretReportStatus(report.status, language)} />
-      </Td>
-      <Td className="whitespace-nowrap text-caption">{moment(report.createdAt, now, language)}</Td>
-    </tr>
-  );
-}
+const reportColumns = (language: AdminLanguage, recu: boolean, now: Date): readonly AdminColumn<AdminReport>[] => [
+  {
+    id: 'subject',
+    header: translateAdmin(language, recu ? 'admin.reports.reporter' : 'admin.reports.subject'),
+    primary: true,
+    /* Un signalement REÇU nomme son auteur (texte servi) ; un signalement FAIT dit le genre de ce qu'il vise. */
+    cell: (report) => (
+      <span className="min-w-0 break-words text-start text-caption font-medium">
+        {report.subject === '' ? <AdminNotProvided language={language} /> : recu ? report.subject : interpretReportedEntity(report.subject, language).label}
+      </span>
+    ),
+  },
+  { id: 'type', header: translateAdmin(language, 'admin.col.type'), cell: (report) => interpretReportType(report.reportType, language).label },
+  { id: 'reason', header: translateAdmin(language, 'admin.reports.reason'), cell: (report) => textOrNotProvided(report.reason, language) },
+  ...(recu
+    ? [
+        {
+          id: 'message',
+          header: translateAdmin(language, 'admin.reports.message'),
+          cell: (report: AdminReport) => report.excerpt ?? <span style={{ color: INK2 }}>{translateAdmin(language, 'admin.reports.withheld')}</span>,
+        },
+      ]
+    : []),
+  { id: 'status', header: translateAdmin(language, 'admin.col.status'), cell: (report) => <AdminInterpretedBadge value={interpretReportStatus(report.status, language)} /> },
+  { id: 'date', header: translateAdmin(language, 'admin.col.date'), cell: (report) => moment(report.createdAt, now, language) },
+];
+
+/** Chaque ligne ouvre SA fiche de signalement — seulement si le lecteur peut ouvrir la modération (`AdminLink`). */
+const reportTarget = (report: AdminReport): AdminTarget => ({ kind: 'entity', entity: 'report', id: report.id });
 
 export function AdminUserReportsTab({ userId, language, deps = apiDeps, now = () => new Date() }: TabProps) {
   const [offsetFaits, setOffsetFaits] = useState(0);
@@ -455,37 +358,35 @@ export function AdminUserReportsTab({ userId, language, deps = apiDeps, now = ()
     queryFn: ({ signal }) => servi(loadAdminUserReportsReceived({ ...deps, userId, offset: offsetRecus, signal })),
     ...SOUVERAIN,
   });
-  const colonnes = (recu: boolean) => [
-    translateAdmin(language, recu ? 'admin.reports.reporter' : 'admin.reports.subject'),
-    translateAdmin(language, 'admin.col.type'),
-    translateAdmin(language, 'admin.reports.reason'),
-    ...(recu ? [translateAdmin(language, 'admin.reports.message')] : []),
-    translateAdmin(language, 'admin.col.status'),
-    translateAdmin(language, 'admin.col.date'),
-  ];
 
   return (
     <div className="grid gap-6" data-admin-reports>
       <section>
         <Titre>{translateAdmin(language, 'admin.reports.received')}</Titre>
-        <Paginee
+        <DossierList
           language={language}
           query={recus}
           offset={offsetRecus}
           onOffset={setOffsetRecus}
-          entetes={colonnes(true)}
-          ligne={(report) => <LigneSignalement key={report.id} report={report} language={language} recu now={instant} />}
+          columns={reportColumns(language, true, instant)}
+          rowKey={(report) => report.id}
+          rowTarget={reportTarget}
+          rowAttributes={(report) => ({ 'data-admin-report': report.id })}
+          caption={translateAdmin(language, 'admin.reports.received')}
         />
       </section>
       <section>
         <Titre>{translateAdmin(language, 'admin.reports.filed')}</Titre>
-        <Paginee
+        <DossierList
           language={language}
           query={faits}
           offset={offsetFaits}
           onOffset={setOffsetFaits}
-          entetes={colonnes(false)}
-          ligne={(report) => <LigneSignalement key={report.id} report={report} language={language} recu={false} now={instant} />}
+          columns={reportColumns(language, false, instant)}
+          rowKey={(report) => report.id}
+          rowTarget={reportTarget}
+          rowAttributes={(report) => ({ 'data-admin-report': report.id })}
+          caption={translateAdmin(language, 'admin.reports.filed')}
         />
       </section>
     </div>

@@ -507,6 +507,7 @@ const pt = {
   'settings.save.error': 'O ajuste não foi salvo.',
   'settings.theme.sync_error': 'Tema aplicado neste dispositivo, sem sincronização.',
   'common.cancel': 'Cancelar',
+  'common.close': 'Fechar',
 
   'media.video.play': 'Reproduzir vídeo',
   'media.video.pause': 'Pausar',

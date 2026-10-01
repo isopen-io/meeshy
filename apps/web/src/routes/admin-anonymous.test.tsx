@@ -78,7 +78,8 @@ async function open(options: { readonly url?: string; readonly identity?: typeof
 
 const rowOf = (host: ParentNode, id: string) => host.querySelector(`[data-admin-row="${id}"]`);
 const textOf = (element: Element | null) => (element?.textContent ?? '').replace(/\s+/g, ' ').trim();
-const select = (host: ParentNode, id: string) => host.querySelector<HTMLSelectElement>(`[data-admin-filter="${id}"]`);
+const select = (host: ParentNode, id: string) =>
+  host.querySelector<HTMLSelectElement>(id === 'sort' ? '[data-admin-sort-select]' : `[data-admin-filter="${id}"]`);
 const lastUrl = (calls: () => readonly HttpRequest[]) => new URL(calls()[calls().length - 1]?.path ?? '', 'https://x.test');
 
 describe('AdminAnonymousPanel — des invités, nommés (#8876)', () => {
@@ -193,7 +194,7 @@ describe('AdminAnonymousPanel — filtres, tri, recherche', () => {
   test('« Trier par » propose les trois tris servis, pour les cartes sous md', async () => {
     const { host, calls } = await open();
     const options = [...(select(host, 'sort')?.querySelectorAll('option') ?? [])].map((option) => option.textContent);
-    expect(options).toEqual(['Arrivée', 'Dernière activité', 'Nom']);
+    expect(options).toEqual(['Nom', 'Arrivée', 'Dernière activité']);
     typeInto(select(host, 'sort'), 'displayName');
     await mounter.settle();
     expect(lastUrl(calls).searchParams.get('sortBy')).toBe('displayName');

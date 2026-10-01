@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, useState, type ReactNode } from 'react';
 
+import { AdminButton } from '@/components/admin/button';
 import { Field } from '@/components/field';
 import { adminUserDetailQueryKey, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
@@ -186,7 +187,7 @@ export function MemberSection({
   );
 }
 
-/** Un bouton COMPACT de section — 44 px de haut, jamais étiré sur la largeur d'une carte. */
+/** Un bouton COMPACT de section — le bouton commun de l'administration (`AdminButton`), 44 px, jamais étiré. */
 export function SectionButton({
   type = 'button',
   tone = 'secondary',
@@ -204,24 +205,17 @@ export function SectionButton({
   readonly data?: Readonly<Record<`data-${string}`, string>>;
   readonly children: string;
 }) {
-  const teinte =
-    tone === 'primary'
-      ? { color: 'var(--color-ios-on-brand)', background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))' }
-      : tone === 'danger'
-        ? { color: 'var(--color-danger)', border: '1px solid color-mix(in srgb, var(--color-danger) 40%, transparent)' }
-        : { color: INK, border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)' };
   return (
-    <button
-      {...data}
+    <AdminButton
       type={type}
+      tone={tone}
       disabled={disabled}
-      aria-label={label}
-      onClick={onClick}
-      className="rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed"
-      style={{ ...teinte, minHeight: 44, opacity: disabled ? 0.45 : 1, outlineColor: BRAND }}
+      {...(label === undefined ? {} : { label })}
+      {...(onClick === undefined ? {} : { onClick })}
+      {...(data === undefined ? {} : { data })}
     >
       {children}
-    </button>
+    </AdminButton>
   );
 }
 

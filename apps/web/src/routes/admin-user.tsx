@@ -8,6 +8,7 @@ import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminLink } from '@/components/admin/entity-chip';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminDeniedInline, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminTabPanel } from '@/components/admin/tabs';
 import { accountStateOf } from '@/lib/admin/interpret/enums';
 import { personInitials } from '@/lib/admin/interpret/labels';
 import type { AdminReach } from '@/lib/admin/use-admin-reach';
@@ -44,7 +45,7 @@ import { AdminUserGallery } from './admin-user-gallery';
 import { AdminUserConversationsSection, AdminUserMediaSection } from './admin-user-lists';
 import { AdminUserPasswordSheet } from './admin-user-password-sheet';
 import { AdminUserPreferencesTab } from './admin-user-preferences';
-import { AdminUserTabs } from './admin-user-tabs';
+import { ADMIN_USER_TABS_BASE, AdminUserTabs } from './admin-user-tabs';
 
 /**
  * **LA FICHE D'UN MEMBRE** (#6819, #8005) — `/admin/users/$user` et `/adm/users/$user`,
@@ -160,7 +161,7 @@ export function AdminUserFiche({
       >
         <AdminMemberQuickActions membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
         <AdminUserTabs language={language} actif={onglet} onChange={(suivant) => setSearch(withAdminUserTab(search, suivant), true)} />
-        <div role="tabpanel" id={`admin-user-panel-${onglet}`} aria-labelledby={`admin-user-tab-${onglet}`} data-admin-user-panel={onglet}>
+        <AdminTabPanel idBase={ADMIN_USER_TABS_BASE} tab={onglet} attributes={{ 'data-admin-user-panel': onglet }}>
           {onglet === 'profile' ? (
             <div className="grid gap-6">
               <AdminMemberImagesSection key={`images-${membre.id}`} membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
@@ -198,9 +199,9 @@ export function AdminUserFiche({
           {onglet === 'communities' ? <AdminUserCommunitiesTab userId={membre.id} language={language} deps={deps} /> : null}
           {onglet === 'voice' ? <AdminUserVoiceTab userId={membre.id} language={language} deps={deps} /> : null}
           {onglet === 'preferences' ? <AdminUserPreferencesTab userId={membre.id} language={language} onAnnounce={annonceur.announce} deps={deps} /> : null}
-          {onglet === 'security' ? <AdminUserSecurityTab userId={membre.id} language={language} deps={deps} now={now} /> : null}
+          {onglet === 'security' ? <AdminUserSecurityTab userId={membre.id} language={language} deps={deps} now={now} onAnnounce={annonceur.announce} /> : null}
           {onglet === 'reports' ? <AdminUserReportsTab userId={membre.id} language={language} deps={deps} now={now} /> : null}
-        </div>
+        </AdminTabPanel>
       </AdminFiche>
 
       {motDePasse ? (
