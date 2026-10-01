@@ -81,6 +81,10 @@ struct MessageCardExportSheet: View {
         let truncated: Bool
         let size: CGSize
         let regions: [MessageCardRegion]
+        /// La coupe vient des médias — l'avis le dit (revue #8979).
+        var crowdedByMedia = false
+        /// L'échelle la plus grande que la carte laisse aux médias — le pincement s'y arrête.
+        var mediaScaleLimit = MessageCardScales.range.upperBound
     }
 
     struct ShareFile: Identifiable {
@@ -272,8 +276,10 @@ struct MessageCardExportSheet: View {
                 .foregroundStyle(MeeshyColors.error)
         } else if let failure = MessageCardExportText.mediaFailure(count: loadedMedia.failures(of: subject.media, output: output).count) {
             mediaFailure(failure)
-        } else if ready, rendered?.truncated == true {
-            Text(MessageCardExportText.text("export.card.truncated", "Message long : la fin est coupée sur l’image."))
+        } else if ready, let rendered, rendered.truncated {
+            Text(rendered.crowdedByMedia
+                 ? MessageCardExportText.text("export.card.truncated.media", "Les médias prennent la place : la fin du texte est coupée.")
+                 : MessageCardExportText.text("export.card.truncated", "Message long : la fin est coupée sur l’image."))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -429,7 +435,9 @@ struct MessageCardExportSheet: View {
             png: card.png,
             truncated: card.truncated,
             size: CGSize(width: card.width, height: card.height),
-            regions: card.regions
+            regions: card.regions,
+            crowdedByMedia: card.crowdedByMedia,
+            mediaScaleLimit: card.mediaScaleLimit
         )
         // L'export rapide attend les pixels des médias : il ne part jamais
         // avec leurs couleurs d'attente.

@@ -233,7 +233,8 @@ final class ImagineWorkshopTests: XCTestCase {
                     "export.card.media.failed.one", "export.card.media.failed.other", "export.card.media.retry",
                     "export.card.media.transcript", "export.card.media.timer", "export.card.media.transcriptFont",
                     "export.card.clip.label", "export.card.excerpt.label", "export.card.excerpt.hint",
-                    "export.card.part.transcript", "export.card.hint.pinch", "export.card.scale.hint"]
+                    "export.card.part.transcript", "export.card.hint.pinch", "export.card.scale.hint",
+                    "export.card.truncated.media"]
         keys += MessageCardClipLength.allCases.map { "export.card.clip.\($0.rawValue)" }
         keys += MessageCardAspect.allCases.map { "export.card.aspect.\($0.rawValue)" }
         keys += MessageCardHeaderOrientation.allCases.map { "export.card.header.\($0.rawValue)" }

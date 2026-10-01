@@ -87,7 +87,7 @@ extension MessageCardExportSheet {
         .accessibilityAddTraits(focused ? [.isSelected] : [])
         .modifier(MessageCardScaleAccessibility(
             scalable: scalable,
-            value: format.disposition.scales[region.part],
+            value: min(format.disposition.scales[region.part], scaleLimit(of: region.part)),
             adjust: { factor in rescale(region.part, by: factor) }
         ))
     }
@@ -118,11 +118,17 @@ extension MessageCardExportSheet {
             }
     }
 
-    /// L'échelle d'une partie, multipliée — bornée et aimantée par `MessageCardScales` ;
-    /// la partie devient la partie désignée, et son onglet s'ouvre.
+    /// La borne d'une partie sur CETTE carte : les médias s'arrêtent où le
+    /// texte garderait moins que sa place minimale (revue #8979).
+    func scaleLimit(of part: MessageCardPartID) -> Double {
+        part == .media ? (rendered?.mediaScaleLimit ?? MessageCardScales.range.upperBound) : MessageCardScales.range.upperBound
+    }
+
+    /// L'échelle d'une partie, multipliée — bornée par la carte et aimantée par
+    /// `MessageCardScales` ; la partie devient la partie désignée, et son onglet s'ouvre.
     func rescale(_ part: MessageCardPartID, by factor: Double) {
         let before = format.disposition.scales[part]
-        format.disposition.scales[part] = before * factor
+        format.disposition.scales[part] = format.disposition.scales.pinched(part, by: factor, limit: scaleLimit(of: part))
         if format.disposition.scales[part] != before { HapticFeedback.light() }
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             touched = true
@@ -138,8 +144,9 @@ extension MessageCardExportSheet {
     private func pinchPreview(_ pinch: MessageCardPinch, rendered: Rendered, scale: CGFloat) -> some View {
         if let region = rendered.regions.first(where: { $0.part == pinch.part }),
            let crop = rendered.image.cgImage?.cropping(to: CGRect(x: region.x, y: region.y, width: region.width, height: region.height)) {
-            let current = format.disposition.scales[pinch.part]
-            let target = min(MessageCardScales.range.upperBound, max(MessageCardScales.range.lowerBound, current * Double(pinch.factor)))
+            let limit = scaleLimit(of: pinch.part)
+            let current = min(format.disposition.scales[pinch.part], limit)
+            let target = format.disposition.scales.pinched(pinch.part, by: Double(pinch.factor), limit: limit)
             ZStack(alignment: .topLeading) {
                 Color.black.opacity(MeeshyOpacity.medium)
                 Image(decorative: crop, scale: 1)

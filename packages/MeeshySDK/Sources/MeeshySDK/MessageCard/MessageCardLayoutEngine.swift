@@ -31,6 +31,11 @@ enum MessageCardMetrics {
     static let gutterGap: Double = 28
     static let mediaGap: Double = 40
     static let mediaRadius: Double = 28
+    /// La place MINIMALE du texte, à son plancher : deux lignes de citation, trois de réponse (revue #8979).
+    static let minimumQuoteLines = 2
+    static let minimumReplyLines = 3
+    /// Un pas de réduction qui met toute police à son plancher.
+    static let floorStep = 64
 }
 
 /// La TOILE : sa largeur, sa hauteur fixe éventuelle, ses marges et la colonne d'en-tête.
@@ -143,22 +148,24 @@ struct MessageCardLayoutEngine {
         let hasQuote = quoted != nil
         let budget = canvas.budget
         let showAuthors = input.showAuthors
-        let media = mediaPlan(columnWidth: textWidth, canvasWidth: width, budget: budget)
         let authorLine = MessageCardMetrics.authorLine + MessageCardMetrics.authorGap
         let hasReplyText = MessageCardText.nonBlank(input.reply.text) != nil
         let headerScale = scales[.header]
-        let chrome = Chrome(
-            header: verticalHeader || (title == nil && date == nil)
-                ? 0
-                : ((title == nil ? 0 : MessageCardMetrics.titleLine) + (date == nil ? 0 : MessageCardMetrics.dateLine)) * headerScale + MessageCardMetrics.headerGap,
-            quoteAuthor: showAuthors || input.quotedTime != nil ? (authorLine * scales[.quote]).rounded() : 0,
-            replyAuthor: showAuthors || input.replyTime != nil ? (authorLine * scales[.reply]).rounded() : 0,
-            quoteBubble: geometry.bubbles ? 2 * MessageCardMetrics.bubblePadY : 0,
-            replyBubble: geometry.bubbles && hasReplyText ? 2 * MessageCardMetrics.bubblePadY : 0,
-            link: geometry.block,
-            mediaAbove: media.above.map { $0.height + (hasReplyText ? MessageCardMetrics.mediaGap : 0) } ?? 0,
-            mediaBelow: media.below.map { $0.height + (hasReplyText ? MessageCardMetrics.mediaGap : 0) } ?? 0
-        )
+        let mediaGap = hasReplyText ? MessageCardMetrics.mediaGap : 0
+        let chromeOf: (MessageCardMediaPlan?) -> Chrome = { media in
+            Chrome(
+                header: verticalHeader || (title == nil && date == nil)
+                    ? 0
+                    : ((title == nil ? 0 : MessageCardMetrics.titleLine) + (date == nil ? 0 : MessageCardMetrics.dateLine)) * headerScale + MessageCardMetrics.headerGap,
+                quoteAuthor: showAuthors || input.quotedTime != nil ? (authorLine * scales[.quote]).rounded() : 0,
+                replyAuthor: showAuthors || input.replyTime != nil ? (authorLine * scales[.reply]).rounded() : 0,
+                quoteBubble: geometry.bubbles ? 2 * MessageCardMetrics.bubblePadY : 0,
+                replyBubble: geometry.bubbles && hasReplyText ? 2 * MessageCardMetrics.bubblePadY : 0,
+                link: geometry.block,
+                mediaAbove: media?.above.map { $0.height + mediaGap } ?? 0,
+                mediaBelow: media?.below.map { $0.height + mediaGap } ?? 0
+            )
+        }
 
         // Le pincement règle le corps de départ ET le plancher : une partie
         // agrandie reste plus grande que sa voisine jusqu'au plancher (#8979).
@@ -183,6 +190,30 @@ struct MessageCardLayoutEngine {
         let atFloor: (Sized) -> Bool = {
             $0.replySize <= MessageCardMetrics.replyFloor * replyScale && $0.quoteSize <= MessageCardMetrics.quoteFloor * quoteScale
         }
+
+        // LA PLACE MINIMALE DU TEXTE, à son plancher : les médias, même pincés,
+        // ne la prennent jamais — leur échelle s'arrête avant (revue #8979).
+        let textOnly = chromeOf(nil)
+        let floorSized = sizeAt(MessageCardMetrics.floorStep)
+        var minimal = floorSized
+        minimal.quoteLines = Array(minimal.quoteLines.prefix(MessageCardMetrics.minimumQuoteLines))
+        minimal.replyLines = Array(minimal.replyLines.prefix(MessageCardMetrics.minimumReplyLines))
+        let mediaRoom = budget - contentHeight(minimal, hasQuote: hasQuote, chrome: textOnly) - mediaGap
+        let mediaLimit = mediaScaleLimit(room: mediaRoom, columnWidth: textWidth, canvasWidth: width, budget: budget)
+        let mediaScale = min(scales[.media], mediaLimit)
+
+        // LA TRANSCRIPTION CÈDE D'ABORD — 3 → 2 → 1 → masquée — avant que le
+        // texte ne rapetisse (revue #8979).
+        var transcriptLines = MessageCardAudioMetrics.transcriptLines
+        var media = mediaPlan(columnWidth: textWidth, canvasWidth: width, budget: budget, scale: mediaScale, transcriptLines: transcriptLines)
+        var chrome = chromeOf(media)
+        let natural = sizeAt(0)
+        while transcriptLines > 0 && contentHeight(natural, hasQuote: hasQuote, chrome: chrome) > budget {
+            transcriptLines -= 1
+            media = mediaPlan(columnWidth: textWidth, canvasWidth: width, budget: budget, scale: mediaScale, transcriptLines: transcriptLines)
+            chrome = chromeOf(media)
+        }
+
         var step = 0
         var sized = sizeAt(step)
         while contentHeight(sized, hasQuote: hasQuote, chrome: chrome) > budget && !atFloor(sized) {
@@ -206,6 +237,8 @@ struct MessageCardLayoutEngine {
             sized.replyLines = MessageCardText.truncate(sized.replyLines, count: replyKeep, maxWidth: replyWidth, font: sized.replyFont, measure: measure)
         }
 
+        // La VRAIE cause d'une coupe : le texte seul, au plancher, tiendrait-il ?
+        let crowdedByMedia = truncated && contentHeight(floorSized, hasQuote: hasQuote, chrome: textOnly) <= budget
         let content = contentHeight(sized, hasQuote: hasQuote, chrome: chrome)
         let height: Double
         if let fixed = canvas.fixedHeight {
@@ -333,8 +366,32 @@ struct MessageCardLayoutEngine {
             ops: headerOps + contentOps,
             regions: regions,
             watermark: MessageCardLayout.watermark(handle: input.handle),
-            truncated: truncated
+            truncated: truncated,
+            crowdedByMedia: crowdedByMedia,
+            mediaScaleLimit: mediaLimit
         )
+    }
+
+    /// **L'échelle la plus grande des médias** qui tient dans `room` — la place
+    /// que le texte leur laisse à son minimum. Transcription masquée : elle
+    /// cède d'elle-même. Un bloc qui ne tient même pas réduit de moitié s'y
+    /// arrête ; une carte sans média ne borne rien.
+    private func mediaScaleLimit(room: Double, columnWidth: Double, canvasWidth: Double, budget: Double) -> Double {
+        let range = MessageCardScales.range
+        let height: (Double) -> Double = { scale in
+            let plan = mediaPlan(columnWidth: columnWidth, canvasWidth: canvasWidth, budget: budget, scale: scale, transcriptLines: 0)
+            return (plan.above?.height ?? 0) + (plan.below?.height ?? 0)
+        }
+        let largest = height(range.upperBound)
+        guard largest > 0, largest > room else { return range.upperBound }
+        guard height(range.lowerBound) <= room else { return range.lowerBound }
+        var fits = range.lowerBound
+        var overflows = range.upperBound
+        for _ in 0..<16 {
+            let middle = (fits + overflows) / 2
+            if height(middle) <= room { fits = middle } else { overflows = middle }
+        }
+        return (fits * 100).rounded(.down) / 100
     }
 
     /// Ce que la liaison peint dans son bloc, entre le bas de la citation (`y`) et la réponse.

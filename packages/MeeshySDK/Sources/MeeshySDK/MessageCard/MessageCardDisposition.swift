@@ -160,6 +160,17 @@ public struct MessageCardScales: Equatable, Sendable {
 
     public var isIdentity: Bool { values.isEmpty }
 
+    /// L'échelle que vise un pincement de `factor` sur `part` — depuis
+    /// l'échelle que la carte REND (bornée par `limit`, la place qu'elle laisse
+    /// à la partie) et bornée par elle : le geste ne promet jamais une taille
+    /// que la carte ne peindra pas (revue #8979).
+    public func pinched(_ part: MessageCardPartID, by factor: Double, limit: Double = MessageCardScales.range.upperBound) -> Double {
+        let bound = min(Self.range.upperBound, max(Self.range.lowerBound, limit))
+        let rendered = min(self[part], bound)
+        guard factor.isFinite, factor > 0 else { return rendered }
+        return min(bound, max(Self.range.lowerBound, rendered * factor))
+    }
+
     /// La forme enregistrée : `partie → échelle`, sans les parties à 100 %.
     var stored: [String: Double] {
         Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })

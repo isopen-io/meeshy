@@ -72,9 +72,9 @@ extension MessageCardLayoutEngine {
 
     // MARK: - Transcription
 
-    /// La transcription d'un son, coupée en lignes — `nil` quand elle est
-    /// masquée, absente, ou muette sur l'extrait.
-    func transcriptBlock(for audio: MessageCardMedia, width: Double) -> MessageCardTranscriptBlock? {
+    /// La transcription d'un son, coupée en lignes, `lines` visibles au plus —
+    /// `nil` quand elle est masquée, absente, ou muette sur l'extrait.
+    func transcriptBlock(for audio: MessageCardMedia, width: Double, lines limit: Int) -> MessageCardTranscriptBlock? {
         guard input.disposition.showsTranscript, let transcript = audio.transcript else { return nil }
         let cues = transcript.cues(in: input.clip, soundDuration: audio.duration)
         let typeface = (input.disposition.transcriptTypeface ?? input.template.typeface).typeface
@@ -90,7 +90,7 @@ extension MessageCardLayoutEngine {
             font: font,
             lineHeight: messageCardRound(font.size * MessageCardAudioMetrics.transcriptLeading),
             lines: lines, cues: cues,
-            visible: min(MessageCardAudioMetrics.transcriptLines, lines.count)
+            visible: min(limit, lines.count)
         )
     }
 
