@@ -11,7 +11,7 @@ final class OverlayAudioPlayerDurationTests: XCTestCase {
     func test_timeLabel_trackNotLoaded_showsAttachmentDurationInSeconds() {
         let player = OverlayAudioPlayer()
 
-        let label = player.timeLabel(totalDuration: vocalDurationMs)
+        let label = player.timeLabel(attachmentDurationMs: vocalDurationMs)
 
         XCTAssertEqual(label, "\(LocalizedNumber.duration(seconds: 0)) / \(LocalizedNumber.duration(seconds: 33))")
     }
@@ -19,7 +19,7 @@ final class OverlayAudioPlayerDurationTests: XCTestCase {
     func test_spokenTotalDuration_trackNotLoaded_announcesAttachmentDurationInSeconds() {
         let player = OverlayAudioPlayer()
 
-        let spoken = player.spokenTotalDuration(totalDuration: vocalDurationMs)
+        let spoken = player.spokenTotalDuration(attachmentDurationMs: vocalDurationMs)
 
         XCTAssertEqual(spoken, LocalizedNumber.spokenDuration(seconds: 33))
     }
@@ -28,7 +28,7 @@ final class OverlayAudioPlayerDurationTests: XCTestCase {
         let player = OverlayAudioPlayer()
         player.duration = 40
 
-        let label = player.timeLabel(totalDuration: vocalDurationMs)
+        let label = player.timeLabel(attachmentDurationMs: vocalDurationMs)
 
         XCTAssertEqual(label, "\(LocalizedNumber.duration(seconds: 0)) / \(LocalizedNumber.duration(seconds: 40))")
     }
@@ -36,7 +36,7 @@ final class OverlayAudioPlayerDurationTests: XCTestCase {
     func test_timeLabel_noDurationAnywhere_showsZero() {
         let player = OverlayAudioPlayer()
 
-        let label = player.timeLabel(totalDuration: nil)
+        let label = player.timeLabel(attachmentDurationMs: nil)
 
         XCTAssertEqual(label, "\(LocalizedNumber.duration(seconds: 0)) / \(LocalizedNumber.duration(seconds: 0))")
     }
