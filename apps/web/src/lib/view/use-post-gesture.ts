@@ -14,7 +14,7 @@ import { href, navigate } from '@/routes/route-table';
 
 import { withCommentsAnchor } from './comments-anchor';
 import { copyPlainText } from './copy-text';
-import { sharePublicationLink } from './publication-share';
+import { openPublicationShare } from './publication-share';
 import { useLiveAnnouncer } from './use-live-announcer';
 
 /**
@@ -27,9 +27,11 @@ import { useLiveAnnouncer } from './use-live-announcer';
  * un geste confirmé. L'écran pose `announcement` dans une région
  * `role="status"`.
  *
- * PARTAGER (D-48) — `partagerLien` part DANS le gestionnaire, sans `await`
- * préalable : la feuille du système n'ouvre que pendant l'activation du geste.
- * Le partage n'est COMPTÉ qu'une fois le lien réellement parti.
+ * PARTAGER (#8884) — ouvre la FEUILLE D'ENVOI commune (une ou plusieurs
+ * personnes, un groupe, ou publier en post, story ou réel, avec un message
+ * joint) via `openPublicationShare` ; le partage du système (D-48,
+ * `partagerLien`) vit derrière son « Plus d'options… ». Ouvrir la feuille est
+ * synchrone et sans réseau : rien n'est à annoncer ici, elle parle seule.
  *
  * COMMENTER (#7113) — le TROISIÈME geste de la rangée d'actions, et il vit
  * ici pour la même raison que les deux autres. Il était recopié chez DEUX
@@ -128,12 +130,9 @@ export function usePostGesture(options?: {
     [announce],
   );
 
-  /* Le geste vit dans `publication-share.ts` (site UNIQUE depuis la revue de
-     #7116) : le rail auteur du lecteur de stories le partage avec SA région. */
-  const onShare = useCallback(
-    (postId: string) => void sharePublicationLink({ postId, language: currentInterfaceLanguage(), announce }),
-    [announce],
-  );
+  /* Le geste vit dans `publication-share.ts` (#8884) : il OUVRE la feuille
+     d'envoi commune, dont « Plus d'options… » garde le partage du système. */
+  const onShare = useCallback((postId: string) => openPublicationShare({ postId }), []);
 
   const onComment = useCallback((postId: string) => {
     navigate(withCommentsAnchor(href('post', { post: postId })));

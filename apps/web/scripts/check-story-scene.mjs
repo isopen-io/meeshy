@@ -47,14 +47,15 @@
  *  8. Aucune erreur de page ; clair et sombre rendent les MÊMES mesures (le
  *     lecteur force son canevas sombre, `story.tsx`).
  *  9. LE RAIL AUTEUR COMPLET (#7116) — sur MA story (`/story/st-mienne`,
- *     session semée) : le rail porte EXACTEMENT Vues, Partager, Enregistrer,
- *     Commentaires, dans cet ordre, sans rien de ce qu'un lecteur ferait à la
+ *     session semée) : le rail porte EXACTEMENT Envoyer, Vues, Partager,
+ *     Enregistrer, Commentaires, dans cet ordre, sans rien de ce qu'un lecteur ferait à la
  *     story d'autrui ; « Vues » ouvre la feuille (en-tête « 8 vues », trois
  *     lecteurs, story EN PAUSE, rail hors d'atteinte), Échap ferme LA FEUILLE
  *     — pas le lecteur, défaut mesuré sur le premier jet — et rend le focus
- *     à « Vues » ; « Partager » appelle la feuille du système SYNCHRONEMENT
- *     au clic (la seule preuve qu'elle s'ouvrirait sur Safari, D-48) avec
- *     l'adresse canonique ; « Enregistrer » pose l'anneau à SA place pendant
+ *     à « Vues » ; « Partager » ouvre la feuille d'envoi commune (#8884), dont
+ *     « Plus d'options… » appelle la feuille du système SYNCHRONEMENT au clic
+ *     (la seule preuve qu'elle s'ouvrirait sur Safari, D-48) avec l'adresse
+ *     canonique ; « Enregistrer » pose l'anneau à SA place pendant
  *     que « Partager » reste un bouton, puis LIVRE `meeshy-m4.svg` et le dit
  *     — premier jet mesuré : aucun téléchargement, aucun anneau, aucun mot.
  *     Aucun de ces gestes ne fait avancer la story.
@@ -852,8 +853,8 @@ async function runAuthorRail(colorScheme) {
 
   const rail = await page.$$eval('[data-story-action-rail] [data-story-action]', (els) => els.map((e) => e.getAttribute('data-story-action')));
   check(
-    JSON.stringify(rail) === JSON.stringify(['views', 'share', 'save', 'comments']),
-    `${tag} : le rail de MA story doit porter EXACTEMENT Vues, Partager, Enregistrer, Commentaires — reçu ${JSON.stringify(rail)}`,
+    JSON.stringify(rail) === JSON.stringify(['forward', 'views', 'share', 'save', 'comments']),
+    `${tag} : le rail de MA story doit porter EXACTEMENT Envoyer, Vues, Partager, Enregistrer, Commentaires — reçu ${JSON.stringify(rail)}`,
   );
   const vuesCompte = await page.$eval('[data-story-action="views"] [data-viewer-count]', (el) => el.textContent?.trim() ?? '').catch(() => '');
   check(vuesCompte === '8', `${tag} : « Vues » doit porter le compte SERVI (8) — reçu « ${vuesCompte} »`);
@@ -920,16 +921,26 @@ async function runAuthorRail(colorScheme) {
     await page.waitForSelector('[data-story-action-rail] [data-story-action]', { timeout: 8000 });
   }
 
-  /* ── « Partager » : la feuille du système, DANS le geste ── */
+  /* ── « Partager » : la feuille d'envoi commune (#8884), puis, par « Plus
+        d'options… », la feuille du système DANS le geste (D-48) ── */
   await figer();
+  await page.evaluate(() => document.querySelector('[data-story-action="share"]')?.click());
+  const feuilleEnvoi = await page
+    .waitForSelector('[data-send-sheet-frame]', { timeout: 4000 })
+    .then(() => true)
+    .catch(() => false);
+  check(feuilleEnvoi, `${tag} : « Partager » doit ouvrir la feuille d'envoi commune`);
   const partage = await page.evaluate(() => {
-    document.querySelector('[data-story-action="share"]')?.click();
+    const plus = [...document.querySelectorAll('[data-send-sheet-frame] button')].find((b) => b.textContent?.trim() === 'Plus d’options…');
+    plus?.click();
     return window.__shareCalls.slice();
   });
   check(
     JSON.stringify(partage) === JSON.stringify(['https://meeshy.me/feeds/post/st-mienne']),
-    `${tag} : « Partager » doit ouvrir la feuille du système PENDANT le clic, sur l'adresse canonique (D-48) — ${JSON.stringify(partage)}`,
+    `${tag} : « Plus d'options… » doit ouvrir la feuille du système PENDANT le clic, sur l'adresse canonique (D-48) — ${JSON.stringify(partage)}`,
   );
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('[data-send-sheet-frame]', { state: 'detached', timeout: 4000 }).catch(() => {});
 
   /* ── « Enregistrer » : l'anneau à SA place, puis le fichier livré et dit ── */
   await figer();

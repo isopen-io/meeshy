@@ -9,13 +9,15 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { currentGallerySaver } from '@/lib/gallery/gallery-saver';
 import { saveToGallery } from '@/lib/gallery/save-to-gallery';
 import { browserFileDeliveryHost } from '@/lib/media/file-delivery-host';
+import { openSendSheet } from '@/lib/send/send-sheet-store';
 import { offerStudioSeed } from '@/lib/stories/studio-seed';
 import { performAttachmentReaction } from '@/lib/view/attachment-reaction';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
-import type { MediaViewerPage } from '@/lib/view/media-viewer-actions';
+import type { MediaViewerPage } from '@/lib/view/viewer-page-offers';
 import { href, navigate } from '@/routes/route-table';
 
 import { Glyph, GlyphSvg } from './glyph';
+import { FEED_GLYPHS } from './glyphs-feed';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { GLYPH_SIZE } from './ui-chrome';
 import { ViewerActionRail, type ViewerAction } from './viewer-chrome';
@@ -31,7 +33,9 @@ import { ViewerMenu, ViewerReactionTray } from './viewer-chrome-menu';
  * `+Menu.swift`) ET du chrome commun des plein écrans (#8879,
  * `viewer-chrome.tsx`) : « Enregistrer » DANS le menu « … » de la barre haute
  * (iOS #6145) ; Réagir · Créer avec ce média en rail vertical à droite de la
- * légende, 40 de verre dans 44 de cible. « Répondre… » n'est plus un bouton du
+ * légende, 40 de verre dans 44 de cible. Partager (#8884) s'y pose entre les
+ * deux, au MÊME endroit que dans le rail d'une story : il ouvre la feuille
+ * d'envoi commune (`openSendSheet`), que l'hôte a déjà remplie (`page.share`). « Répondre… » n'est plus un bouton du
  * rail : c'est la capsule de la barre basse, que la visionneuse pose. « Réagir »
  * est une ACTION, pas un ornement : il ouvre la traînée d'émojis, un choix la
  * referme.
@@ -168,6 +172,7 @@ function ActionRail({
       });
   };
 
+  const { share } = page;
   const actions: readonly ViewerAction[] = [
     {
       action: 'react',
@@ -176,6 +181,12 @@ function ActionRail({
       pressed: open,
       onPress: offers.react ? () => setOpen((o) => !o) : undefined,
       buttonRef: reactButton,
+    },
+    {
+      action: 'share',
+      label: translate(language, 'story.action.share'),
+      glyph: <GlyphSvg glyph={FEED_GLYPHS.shareNetwork} size={GLYPH_SIZE.lg} />,
+      onPress: offers.share && share !== undefined ? () => openSendSheet(share) : undefined,
     },
     {
       action: 'compose',

@@ -75,6 +75,7 @@ import { useStoryHiddenTabPause } from '@/lib/view/use-story-hidden-tab-pause';
 import { useStoryPauseWhile } from '@/lib/view/use-story-pause-while';
 import { useStoryKeyboardShortcuts } from '@/lib/view/use-story-keyboard-shortcuts';
 import { useStoryOwnerRail } from '@/lib/view/use-story-owner-rail';
+import { useStorySend } from '@/lib/view/use-story-send';
 import { screenGestureYields } from '@/lib/view/shortcut-scope';
 import { chromeYields } from '@/lib/view/chrome-yields';
 import { sceneYieldOf, writingSceneScale, yieldingScene } from '@/lib/view/scene-yields';
@@ -536,6 +537,9 @@ export default function StoryScreen() {
    */
   const ownerRail = useStoryOwnerRail({ story: currentStory, online, pause, resume, announce, language: interfaceLanguage });
   const viewersOpen = ownerRail.viewers.postId !== null;
+  /* « ENVOYER » (#8884) : la feuille d'envoi commune, ouverte avec la story
+     regardée ; la lecture attend dessous (`useStoryPauseWhile` plus bas). */
+  const storySend = useStorySend(currentStory);
   const profilePeekOpen = useProfilePeekOpen();
   /* LES GESTES COMMUNS DES PLEIN ÉCRANS (#8879, `viewer-chrome-gestures.ts`) :
      glisser vers le BAS ferme — le geste de sortie d'iOS
@@ -577,7 +581,7 @@ export default function StoryScreen() {
     closeViewer,
     showsSound,
     onToggleMute: toggleSound,
-    layerOpen: commentsOpen || viewersOpen || profilePeekOpen,
+    layerOpen: commentsOpen || viewersOpen || profilePeekOpen || storySend.sheetOpen,
   });
 
   /* LE GEL — re-résolu au CHANGEMENT de story, et la seule remontée que le
@@ -622,7 +626,7 @@ export default function StoryScreen() {
      attend de même, et UNE seule condition les réunit : fermer le profil
      ouvert depuis une feuille ne doit pas relancer la story sous elle. */
   const [optionsOpen, setOptionsOpen] = useState(false);
-  useStoryPauseWhile(commentsOpen || viewersOpen || profilePeekOpen || optionsOpen, pause, resume);
+  useStoryPauseWhile(commentsOpen || viewersOpen || profilePeekOpen || optionsOpen || storySend.sheetOpen, pause, resume);
 
   const railHandlers = useMemo<StoryActionRailHandlers>(() => {
     if (currentStory === undefined) return {};
@@ -646,8 +650,11 @@ export default function StoryScreen() {
          la story d'autrui ; `share`/`save` n'y sont que si la story porte un
          média exportable (`useStoryOwnerRail`, loi 4). */
       ...ownerRail.handlers,
+      /* « Envoyer » (`showsForward`, toute story) : la loi le déclarait sans
+         qu'aucun hôte ne remette de gestionnaire (#8884). */
+      ...storySend.handlers,
     };
-  }, [currentStory, showsSound, toggleSound, announce, interfaceLanguage, openComments, ownerRail.handlers]);
+  }, [currentStory, showsSound, toggleSound, announce, interfaceLanguage, openComments, ownerRail.handlers, storySend.handlers]);
 
   /* LE RAIL EST-IL PEINT ? Une seule réponse, lue par le rail ET par la
      légende qui doit lui laisser la place. */

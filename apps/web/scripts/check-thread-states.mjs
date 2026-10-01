@@ -559,9 +559,9 @@ await checkProtectionStates({ browser, BASE, expect });
     /* Le FAIT est la feuille de destinataires — pas un état qui se stabilise :
        `useConversations` sert le cache tout de suite quand il en a, et
        n'attend le réseau que sur un cache vide (cache-first, D-113). */
-    await awaitFact(menuPage.locator('[data-forward-target]').first());
+    await awaitFact(menuPage.locator('[data-send-target]').first());
     expect(
-      (await menuPage.locator('[data-forward-target]').count()) > 0,
+      (await menuPage.locator('[data-send-target]').count()) > 0,
       'valider ouvre la feuille de destinataires, avec au moins une conversation',
     );
   }

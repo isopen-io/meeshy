@@ -168,6 +168,61 @@ export const auditCallComponents = ({ manifest }) => {
   ].filter((violation) => violation !== null);
 };
 
+const ACTIVITY_ELEMENT = /<activity(?=[\s/>])([^>]*?)>([\s\S]*?)<\/activity>/g;
+const INTENT_FILTER_ELEMENT = /<intent-filter(?=[\s/>])[^>]*>([\s\S]*?)<\/intent-filter>/g;
+const ACTION_ELEMENT = /<action(?=[\s/>])([^>]*)>/g;
+const CATEGORY_ELEMENT = /<category(?=[\s/>])([^>]*)>/g;
+const DATA_ELEMENT = /<data(?=[\s/>])([^>]*)>/g;
+
+const namesOf = (body, element) =>
+  [...body.matchAll(element)].map(([, source]) => attributesOf(source).get('android:name')).filter((name) => name !== undefined);
+
+const intentFiltersOf = (activityBody) =>
+  [...activityBody.matchAll(INTENT_FILTER_ELEMENT)].map(([, body]) => ({
+    actions: namesOf(body, ACTION_ELEMENT),
+    categories: namesOf(body, CATEGORY_ELEMENT),
+    mimeTypes: [...body.matchAll(DATA_ELEMENT)]
+      .map(([, source]) => attributesOf(source).get('android:mimeType'))
+      .filter((mimeType) => mimeType !== undefined),
+  }));
+
+/**
+ * Ce que l'activité principale reçoit quand une autre application PARTAGE à
+ * Meeshy (#8884) : `ACTION_SEND` (une image, une vidéo ou un texte) et
+ * `ACTION_SEND_MULTIPLE` (plusieurs images ou vidéos), chacun avec la catégorie
+ * DEFAULT — sans elle, Meeshy n'apparaît pas dans la feuille de partage du
+ * système. Les types sont ceux que la feuille d'envoi sait envoyer
+ * (`MeeshyShareIntentPlugin.java` les copie) ; un type en plus ferait figurer
+ * l'app pour un contenu qu'elle refuserait.
+ */
+export const SHARE_INTENT_FILTERS = [
+  { action: 'android.intent.action.SEND', mimeTypes: ['image/*', 'video/*', 'text/plain'] },
+  { action: 'android.intent.action.SEND_MULTIPLE', mimeTypes: ['image/*', 'video/*'] },
+];
+
+export const auditShareIntentFilters = ({ manifest, required = SHARE_INTENT_FILTERS }) => {
+  const activity = [...manifest.replace(XML_COMMENT, '').matchAll(ACTIVITY_ELEMENT)].find(
+    ([, source]) => attributesOf(source).get('android:name') === '.MainActivity',
+  );
+  if (activity === undefined) return ['.MainActivity — absente du manifeste'];
+  const filters = intentFiltersOf(activity[2]);
+  return required
+    .map(({ action, mimeTypes }) => {
+      const shortAction = action.replace('android.intent.action.', '');
+      const filter = filters.find((candidate) => candidate.actions.includes(action));
+      if (filter === undefined) return `${shortAction} — aucun <intent-filter> sur .MainActivity : Meeshy ne figure pas dans la feuille de partage`;
+      if (!filter.categories.includes('android.intent.category.DEFAULT')) {
+        return `${shortAction} — sans la catégorie DEFAULT : le système ne propose pas Meeshy`;
+      }
+      const missing = mimeTypes.filter((mimeType) => !filter.mimeTypes.includes(mimeType));
+      const extra = filter.mimeTypes.filter((mimeType) => !mimeTypes.includes(mimeType));
+      if (missing.length > 0) return `${shortAction} — type(s) manquant(s) : ${missing.join(', ')}`;
+      if (extra.length > 0) return `${shortAction} — type(s) que le pont ne copie pas : ${extra.join(', ')}`;
+      return null;
+    })
+    .filter((violation) => violation !== null);
+};
+
 const violationLine = ({ permission, count }) =>
   count === 0
     ? `  • ${permission} — manquante (commentée, tools:node="remove" ou android:maxSdkVersion ne comptent pas), ajouter <uses-permission android:name="${permission}" />`
@@ -214,8 +269,18 @@ function main() {
     );
   }
 
+  const shareViolations = auditShareIntentFilters({ manifest });
+  if (shareViolations.length > 0) {
+    throw new Error(
+      [
+        `check-android-manifest: le partage vers Meeshy est en défaut dans ${MANIFEST_PATH} :`,
+        ...shareViolations.map((violation) => `  • ${violation}`),
+      ].join('\n'),
+    );
+  }
+
   console.log(
-    `✓ AndroidManifest.xml de la coque déclare les ${REQUIRED_PERMISSIONS.length} permissions requises (dont ACCESS_NETWORK_STATE, #7844).`,
+    `✓ AndroidManifest.xml de la coque déclare les ${REQUIRED_PERMISSIONS.length} permissions requises (dont ACCESS_NETWORK_STATE, #7844) et reçoit les partages (SEND, SEND_MULTIPLE, #8884).`,
   );
 }
 

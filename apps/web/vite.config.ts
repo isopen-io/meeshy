@@ -15,6 +15,7 @@ import { apiCacheIdentityPlugin } from './src/lib/net/api-cache-identity';
 import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache';
 import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations';
 import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
+import { SHARE_TARGET } from './src/lib/share-incoming/share-target';
 import { SW_RUNTIME_CACHES } from './src/lib/sw-caches';
 
 /**
@@ -260,9 +261,14 @@ const prerenderInstitutionalPages = (): Plugin => {
  *    le worker généré n'en avait AUCUN, pendant que la passerelle composait
  *    déjà toute la charge web (`PushNotificationService`, branche
  *    `platform === 'web'`). Une SEULE ligne l'accroche aux deux régimes :
- *    l'`importScripts` de la variante A, et son retrait de la coque.
+ *    l'`importScripts` de la variante A, et son retrait de la coque ;
+ *  - `sw-share-target.js` reçoit le `POST /share` du système (#8884) : une
+ *    image, une vidéo ou un lien partagé depuis une autre application arrive
+ *    sur la feuille d'envoi. Le `share_target` du manifeste (plus bas) l'y
+ *    adresse ; la coque Android reçoit le même partage par un intent, pas par
+ *    ce worker.
  */
-const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-push.js'] as const;
+const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-push.js', 'sw-share-target.js'] as const;
 
 /**
  * LES SCRIPTS DU SERVICE WORKER N'ENTRENT PAS DANS LA COQUE (#5604,
@@ -493,6 +499,8 @@ export default defineConfig({
                 { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
                 { src: '/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
               ],
+              /* #8884 — Meeshy figure dans la feuille de partage du système. */
+              share_target: SHARE_TARGET,
             },
             workbox: {
               /**
@@ -540,9 +548,10 @@ export default defineConfig({
                * ne croise pas les `/`, donc l'`index.html` de la racine — la
                * coquille de l'application — n'est PAS exclu.
                *
-               * Deux SCRIPTS IMPORTÉS n'y entrent pas non plus (#6702,
-               * étendu #7305) : `sw-legacy-purge.js` et `sw-push.js`, tous
-               * deux chargés par `importScripts` — le navigateur garde déjà
+               * Trois SCRIPTS IMPORTÉS n'y entrent pas non plus (#6702,
+               * étendu #7305, #8884) : `sw-legacy-purge.js`, `sw-push.js` et
+               * `sw-share-target.js`, tous
+               * chargés par `importScripts` — le navigateur garde déjà
                * les scripts importés avec le worker. Les précacher ferait
                * payer leurs octets une seconde fois, à chaque installation,
                * pour une copie que personne ne lit.
@@ -580,6 +589,7 @@ export default defineConfig({
                 '*/index.html',
                 'sw-legacy-purge.js',
                 'sw-push.js',
+                'sw-share-target.js',
                 'assets/*.woff2',
               ],
               /**

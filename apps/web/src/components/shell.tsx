@@ -16,6 +16,7 @@ import { useRoute } from '@/lib/router';
 import { CallLayer } from './call-layer';
 import { loadConversationPreviewHost } from './conversation-preview-chunks';
 import { ProfilePeekHost } from './profile-peek-host';
+import { SendSheetHost } from './send-sheet-host';
 
 /**
  * LA COQUILLE — deliberement mince.
@@ -258,6 +259,10 @@ export default function Shell({ children }: { children: ReactNode }) {
           <ConversationPreviewHost />
         </Suspense>
       ) : null}
+      {/* LA FEUILLE D'ENVOI (#8884) : transfert, partage, publication — toute
+          entrée l'ouvre par `openSendSheet`. L'hôte ne porte que l'abonnement ;
+          la feuille est chargée au premier appel. */}
+      <SendSheetHost />
     </div>
   );
 }

@@ -61,6 +61,28 @@
                 <data android:scheme="meeshy" />
             </intent-filter>
 
+            <!-- #8884 — Meeshy figure dans la feuille de partage d'Android : une
+                 image, une vidéo ou un lien partagé depuis une autre application
+                 arrive sur la feuille d'envoi. MeeshyShareIntentPlugin copie les
+                 contenus (`content://`, illisibles pour la WebView) en fichiers
+                 temporaires et les remet au web (src/lib/share-incoming/native-inbox.ts).
+                 Les types sont ceux que la feuille sait envoyer, et la catégorie
+                 DEFAULT est ce qui fait proposer l'app par le système (garde :
+                 scripts/check-android-manifest.mjs, auditShareIntentFilters). -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="image/*" />
+                <data android:mimeType="video/*" />
+            </intent-filter>
+
         </activity>
 
         <provider

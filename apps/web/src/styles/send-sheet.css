@@ -1,0 +1,129 @@
+/**
+ * LA FEUILLE D'ENVOI (#8884) — la GÉOGRAPHIE du cadre `SendSheetFrame`
+ * (`components/send-sheet-frame.tsx`). La matière n'est PAS ici : la surface
+ * porte `glass-prominent` (le site unique du verre, `glass.css`), le voile
+ * `backdrop:bg-veil`, le rayon `rounded-sheet`. Ce fichier ne dit que OÙ la
+ * feuille se pose et COMMENT elle arrive.
+ *
+ * Chargé avec le chunk de la feuille (`send-sheet-host.tsx` l'importe à la
+ * demande) : il ne pèse rien à la première peinture.
+ *
+ * - Téléphone (≤ 640 px) : feuille par le BAS, pleine largeur, coins du bas
+ *   droits, poignée — le geste d'iOS.
+ * - Au-delà : carte centrée, bornée, les quatre coins de la feuille.
+ * - Le mouvement n'existe que si le navigateur dit `no-preference` : sous
+ *   `prefers-reduced-motion`, la feuille apparaît et disparaît sans glisser.
+ */
+
+.send-sheet {
+  border: 0;
+  padding: 0;
+  color: var(--color-ios-ink);
+  width: 100%;
+  max-width: 100%;
+  max-height: min(92dvh, calc(100dvh - 1rem));
+  margin: auto 0 0;
+  overflow: hidden;
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.send-sheet[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.send-sheet-handle {
+  width: 36px;
+  height: 5px;
+  border-radius: var(--radius-chip);
+  background-color: var(--color-ios-fill-2);
+  margin: 8px auto 0;
+  flex-shrink: 0;
+}
+
+/* La légende grandit avec son texte, jusqu'à six lignes environ, puis défile. */
+.send-sheet-caption {
+  field-sizing: content;
+  min-height: 44px;
+  max-height: 9.5rem;
+  resize: none;
+}
+
+/* La rangée des récents défile À L'HORIZONTALE sans barre visible. */
+.send-sheet-recents {
+  scrollbar-width: none;
+}
+
+@media (min-width: 641px) {
+  .send-sheet {
+    margin: auto;
+    width: min(34rem, calc(100% - 2rem));
+    max-height: min(85dvh, 44rem);
+    border-radius: var(--radius-sheet);
+  }
+
+  .send-sheet-handle {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .send-sheet[open] {
+    animation: send-sheet-rise 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .send-sheet[open]::backdrop {
+    animation: send-sheet-fade 240ms ease-out;
+  }
+
+  .send-sheet[data-leaving] {
+    animation: send-sheet-sink 160ms ease-in forwards;
+  }
+
+  .send-sheet[data-leaving]::backdrop {
+    animation: send-sheet-fade 160ms ease-in reverse forwards;
+  }
+
+  @media (min-width: 641px) {
+    .send-sheet[open] {
+      animation-name: send-sheet-pop;
+    }
+
+    .send-sheet[data-leaving] {
+      animation-name: send-sheet-unpop;
+    }
+  }
+}
+
+@keyframes send-sheet-rise {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes send-sheet-sink {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes send-sheet-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes send-sheet-unpop {
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes send-sheet-fade {
+  from {
+    opacity: 0;
+  }
+}
