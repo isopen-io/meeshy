@@ -152,7 +152,9 @@ enum VitrineStage {
                   quotedMessage: nil,
                   conversationTitle: conversation.title,
                   accentColor: conversation.accentColor,
-                  quick: false
+                  quick: false,
+                  audioPrism: vue.preferredLanguages,
+                  audioOverride: vue.bubbleLanguageSelections[messageId]?.activeDisplayLangCode
               ) else {
             fatalError("Vitrine « imagine » : le message à imaginer manque")
         }

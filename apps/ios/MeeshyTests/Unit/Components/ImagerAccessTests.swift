@@ -115,6 +115,96 @@ final class ImagerAccessTests: XCTestCase {
         XCTAssertFalse(request.quick)
     }
 
+    /// Un vocal part dans la piste que la bulle fait entendre — et une langue
+    /// d'export choisie fait partir SA piste traduite, sinon l'original (#8979).
+    func test_message_aVoiceLeavesInTheTrackTheReaderHears_orInTheExportLanguage() throws {
+        let voice = MeeshyMessageAttachment(
+            id: "snd", mimeType: "audio/mp4", fileUrl: "https://x/fr.m4a", duration: 12_000,
+            transcription: .init(text: "Bonjour à tous.", language: "fr"),
+            audioTranslations: ["en": .init(url: "https://x/en.m4a", transcription: "Hello everyone.", durationMs: 9_000)]
+        )
+        let message = MeeshyMessage(id: "m3", conversationId: "c1", senderId: "u-awa", content: "", originalLanguage: "fr",
+                                    attachments: [voice], senderName: "Awa")
+        let request = try XCTUnwrap(MessageCardExportMenu.request(
+            message: message, translations: [], servedText: nil, viewer: viewer(), handle: "moi",
+            quotedMessage: nil, conversationTitle: nil, accentColor: "#6366F1", quick: false,
+            audioPrism: ["en", "fr"]
+        ))
+        XCTAssertEqual(request.subject.media.first?.fileURL, "https://x/en.m4a", "le Prisme du lecteur sert la piste anglaise")
+        XCTAssertEqual(request.subject.media.first?.media.transcript?.cues.first?.text, "Hello everyone.")
+        XCTAssertEqual(request.subjectIn("fr")?.media.first?.fileURL, "https://x/fr.m4a", "la langue d'origine fait partir l'original")
+        XCTAssertEqual(request.subjectIn("en")?.media.first?.media.duration, 9)
+
+        let flipped = try XCTUnwrap(MessageCardExportMenu.request(
+            message: message, translations: [], servedText: nil, viewer: viewer(), handle: nil,
+            quotedMessage: nil, conversationTitle: nil, accentColor: "#6366F1", quick: false,
+            audioPrism: ["en", "fr"], audioOverride: "fr"
+        ))
+        XCTAssertEqual(flipped.subject.media.first?.fileURL, "https://x/fr.m4a", "la bascule du drapeau vers l'original est respectée")
+    }
+
+    // MARK: - Le vocal CITÉ suit le Prisme (revue #8979)
+
+    private func quotedVoiceMessage() -> MeeshyMessage {
+        let voice = MeeshyMessageAttachment(
+            id: "q-snd", mimeType: "audio/mp4", fileUrl: "https://x/q-fr.m4a", duration: 12_000,
+            transcription: .init(text: "Bonjour à tous.", language: "fr"),
+            audioTranslations: ["en": .init(url: "https://x/q-en.m4a", transcription: "Hello everyone.", durationMs: 9_000)]
+        )
+        return MeeshyMessage(id: "q", conversationId: "c1", senderId: "u-awa", content: "", originalLanguage: "fr", attachments: [voice], senderName: "Awa")
+    }
+
+    private func textReplyToAVoice() -> MeeshyMessage {
+        var reference = ReplyReference(
+            messageId: "q", authorName: "Awa", previewText: "🎤 Message vocal",
+            attachmentType: "audio", attachmentId: "q-snd", attachmentFileUrl: "https://x/q-fr.m4a",
+            attachmentFacts: ReplyReference.QuotedAttachmentFacts(thumbHash: nil, width: nil, height: nil, durationMs: 12_000, fileSize: nil, pageCount: nil, mimeType: "audio/mp4")
+        )
+        reference.quotedAudioTracks = .init(originalLanguage: "fr", urlsByLanguage: ["en": "https://x/q-en.m4a"])
+        var reply = MeeshyMessage(id: "r", conversationId: "c1", senderId: "u-me", content: "Trop bien !", originalLanguage: "fr", senderName: "Moi")
+        reply.replyTo = reference
+        return reply
+    }
+
+    /// Une réponse TEXTE à un vocal : le son de la carte EST le vocal cité. La
+    /// carte et la vidéo portent la piste que la bulle fait entendre — et celle
+    /// de la langue d'export quand on en choisit une.
+    func test_message_aTextReplyToAVoice_theCardAndTheVideoCarryTheServedTrack() throws {
+        let request = try XCTUnwrap(MessageCardExportMenu.request(
+            message: textReplyToAVoice(), translations: [], servedText: nil, viewer: viewer(), handle: "moi",
+            quotedMessage: quotedVoiceMessage(), conversationTitle: nil, accentColor: "#6366F1", quick: false,
+            audioPrism: ["en", "fr"]
+        ))
+        let sound = try XCTUnwrap(request.subject.media.first { $0.media.kind == .audio })
+        XCTAssertEqual(sound.fileURL, "https://x/q-en.m4a", "le Prisme du lecteur sert la piste anglaise du vocal cité")
+        XCTAssertEqual(sound.media.transcript?.cues.first?.text, "Hello everyone.")
+        let english = URL(fileURLWithPath: "/tmp/q-en.m4a")
+        let loaded = MessageCardLoadedMedia(pictures: .none, sounds: [
+            "https://x/q-fr.m4a": MessageCardLoadedSound(samples: [], duration: 12, file: URL(fileURLWithPath: "/tmp/q-fr.m4a")),
+            "https://x/q-en.m4a": MessageCardLoadedSound(samples: [], duration: 9, file: english),
+        ])
+        XCTAssertEqual(loaded.soundFile(of: request.subject.media), english, "la vidéo fait entendre la piste servie")
+        XCTAssertEqual(request.subjectIn("fr")?.media.first?.fileURL, "https://x/q-fr.m4a", "la langue d'export suit le vocal cité")
+        XCTAssertEqual(request.subjectIn("en")?.media.first?.fileURL, "https://x/q-en.m4a")
+
+        let flipped = try XCTUnwrap(MessageCardExportMenu.request(
+            message: textReplyToAVoice(), translations: [], servedText: nil, viewer: viewer(), handle: "moi",
+            quotedMessage: quotedVoiceMessage(), conversationTitle: nil, accentColor: "#6366F1", quick: false,
+            audioPrism: ["en", "fr"], quotedAudioOverride: "fr"
+        ))
+        XCTAssertEqual(flipped.subject.media.first?.fileURL, "https://x/q-fr.m4a", "la bascule du drapeau du vocal cité est respectée")
+    }
+
+    func test_message_aTextReplyToAVoiceOutOfTheWindow_servesTheTrackTheQuoteCarries() throws {
+        let request = try XCTUnwrap(MessageCardExportMenu.request(
+            message: textReplyToAVoice(), translations: [], servedText: nil, viewer: viewer(), handle: "moi",
+            quotedMessage: nil, conversationTitle: nil, accentColor: "#6366F1", quick: false,
+            audioPrism: ["en", "fr"]
+        ))
+        XCTAssertEqual(request.subject.media.first?.fileURL, "https://x/q-en.m4a")
+        XCTAssertNil(request.subject.media.first?.media.transcript, "la citation ne porte pas le texte de la piste")
+    }
+
     func test_message_withNothingToPaint_isNeverImaged() {
         let vide = MeeshyMessage(id: "m2", conversationId: "c1", senderId: "u-x", content: "", originalLanguage: "fr")
         XCTAssertNil(MessageCardExportMenu.request(

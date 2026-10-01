@@ -4271,7 +4271,9 @@ final class CallManager: ObservableObject {
         // vidéo distant (track reçu, `call:media-toggled`).
         let videoUIActive = isVideoUIActive
         let mode = CallAudioSessionPolicy.mode(videoUIActive: videoUIActive, isiOSAppOnMac: false)
-        audioSessionQueue.sync {
+        // #8978 — sur la file audio, sans que l'interface attende : basculer la
+        // caméra figeait l'écran d'appel le temps de reconfigurer la session.
+        audioSessionQueue.async {
             let session = RTCAudioSession.sharedInstance()
             session.lockForConfiguration()
             defer { session.unlockForConfiguration() }
@@ -5533,8 +5535,11 @@ extension CallManager: WebRTCServiceDelegate {
             // on callState == .connected.
             guard case .connected = self.callState else { return }
             self.publishQualitySample(stats: stats, packetLossPercent: packetLossPercent)
-            self.liveVideoQualityLevel = level
-            self.isLinkQualityDegraded = self.degradedLinkTracker.record(level: level)
+            // #8978 — ne republier que ce qui CHANGE : chaque publication recalcule
+            // tout l'écran d'appel, et ce relevé tombe toutes les 5 s.
+            if self.liveVideoQualityLevel != level { self.liveVideoQualityLevel = level }
+            let degraded = self.degradedLinkTracker.record(level: level)
+            if self.isLinkQualityDegraded != degraded { self.isLinkQualityDegraded = degraded }
             MessageSocketManager.shared.emitCallQualityReport(
                 callId: callId,
                 level: Self.connectionQualityLabel(for: level),

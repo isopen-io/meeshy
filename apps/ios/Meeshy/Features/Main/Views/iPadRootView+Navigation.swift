@@ -607,7 +607,7 @@ extension iPadRootView {
         notifications.manager.dismissToast()
 
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
-            notificationPreviewConversation = existing
+            sheetTargets.notificationPreview = existing
             return
         }
         Task { @MainActor in
@@ -619,12 +619,12 @@ extension iPadRootView {
                 }
             }()
             if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
-                notificationPreviewConversation = cached
+                sheetTargets.notificationPreview = cached
                 return
             }
             let currentUserId = AuthManager.shared.currentUser?.id ?? ""
             if let apiConv = try? await ConversationService.shared.getById(conversationId) {
-                notificationPreviewConversation = apiConv.toConversation(currentUserId: currentUserId)
+                sheetTargets.notificationPreview = apiConv.toConversation(currentUserId: currentUserId)
             } else {
                 handleSocketNotificationTap(event)
             }

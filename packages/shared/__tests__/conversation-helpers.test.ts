@@ -352,6 +352,60 @@ describe('generateDefaultConversationTitle', () => {
     expect(generateDefaultConversationTitle(members as any, 'user1')).toBe('John Doe');
   });
 
+  /**
+   * #8970 — l'ordre CANONIQUE du produit est `displayName` → `firstName lastName`
+   * → `username`, celui que les deux clients appliquent : SDK Swift
+   * (`ParticipantModels.swift`, `FriendModels.swift`, `ShareLinkModels.swift`,
+   * `UserDisplayNameCache.swift`) et web Vite
+   * (`apps/web/src/lib/api/conversation-members.ts`). Le SSOT partagé
+   * (`participant-helpers.ts`) délègue explicitement ces deux replis au client.
+   *
+   * Les cas ci-dessus ne PINNENT pas la priorité : chacun n'a qu'une seule des
+   * deux sources. Ceux-ci portent les DEUX à la fois — le seul endroit où
+   * l'ordre se lit.
+   */
+  it('prefers the real name over the username when both exist (single member)', () => {
+    const members = [
+      { id: 'user1', username: 'currentUser' },
+      { id: 'user2', username: 'jdoe123', firstName: 'John', lastName: 'Doe' },
+    ];
+    expect(generateDefaultConversationTitle(members as any, 'user1')).toBe('John Doe');
+  });
+
+  it('prefers the real name over the username when both exist (several members)', () => {
+    const members = [
+      { id: 'user1', username: 'currentUser' },
+      { id: 'user2', username: 'jdoe123', firstName: 'John', lastName: 'Doe' },
+      { id: 'user3', username: 'asmith', firstName: 'Ada', lastName: 'Smith' },
+      { id: 'user4', username: 'zaid', firstName: 'Zaid' },
+    ];
+    expect(generateDefaultConversationTitle(members as any, 'user1')).toBe('John Doe, Ada Smith and 1 other(s)');
+  });
+
+  it('keeps displayName ahead of the real name', () => {
+    const members = [
+      { id: 'user1', username: 'currentUser' },
+      { id: 'user2', displayName: 'Jay', username: 'jdoe123', firstName: 'John', lastName: 'Doe' },
+    ];
+    expect(generateDefaultConversationTitle(members as any, 'user1')).toBe('Jay');
+  });
+
+  it('treats a blank displayName as absent and falls to the real name, not the username', () => {
+    const members = [
+      { id: 'user1', username: 'currentUser' },
+      { id: 'user2', displayName: '   ', username: 'jdoe123', firstName: 'John', lastName: 'Doe' },
+    ];
+    expect(generateDefaultConversationTitle(members as any, 'user1')).toBe('John Doe');
+  });
+
+  it('falls back to the username when the real name is blank on both parts', () => {
+    const members = [
+      { id: 'user1', username: 'currentUser' },
+      { id: 'user2', username: 'jdoe123', firstName: '  ', lastName: '' },
+    ];
+    expect(generateDefaultConversationTitle(members as any, 'user1')).toBe('jdoe123');
+  });
+
   it('should return "Unknown User" for member with no info', () => {
     const members = [
       { id: 'user1', username: 'currentUser' },

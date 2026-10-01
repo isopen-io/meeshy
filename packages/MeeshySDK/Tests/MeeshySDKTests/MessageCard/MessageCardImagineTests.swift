@@ -20,11 +20,12 @@ struct MessageCardImagineTests {
         media: [MessageCardMedia] = [],
         disposition: MessageCardDisposition = .standard,
         replyTime: String? = nil,
-        playhead: Double? = nil
+        clip: MessageCardClip? = nil,
+        time: Double? = nil
     ) -> MessageCardInput {
         MessageCardInput(quoted: quoted, reply: reply, template: MessageCardTemplates.defaultID, handle: "jacques",
                          title: title, date: date, media: media, disposition: disposition,
-                         replyTime: replyTime, playhead: playhead)
+                         replyTime: replyTime, clip: clip, time: time)
     }
 
     private static func layout(_ input: MessageCardInput) -> MessageCardLayout { MessageCardLayout.make(input, measure: measure) }
@@ -107,7 +108,7 @@ struct MessageCardImagineTests {
 
     @Test func media_aStillVideoShowsItsPosterAndAPlayBadge_ananimatedOneDoesNot() {
         #expect(Self.glyphs(Self.layout(Self.input(media: [Self.clip])).ops).map(\.glyph) == [.play])
-        #expect(Self.glyphs(Self.layout(Self.input(media: [Self.clip], playhead: 0.3)).ops).isEmpty)
+        #expect(Self.glyphs(Self.layout(Self.input(media: [Self.clip], time: 3)).ops).isEmpty)
         #expect(Self.media(Self.layout(Self.input(media: [Self.clip])).ops).first?.kind == .video)
     }
 
@@ -142,13 +143,20 @@ struct MessageCardImagineTests {
         #expect(Self.glyphs(ticket.ops).map(\.glyph) == [.note])
     }
 
-    @Test func audio_thePlayheadLightsThePlayedBars() {
+    /// Un vocal de 90 s part en vidéo d'une minute : à t = 30 s, l'horloge dit
+    /// 0:30 — le VRAI temps écoulé —, jamais 0:45 (la moitié du son entier), et
+    /// la moitié des barres de l'extrait est allumée (#8979).
+    @Test func audio_theClockAndTheBarsFollowTheRealElapsedTime() throws {
         let accent = MessageCardTemplates.defaultID.palette.palette.accent
-        let half = Self.bars(Self.layout(Self.input(quoted: nil, media: [Self.voice], playhead: 0.5)).ops)
-        let lit = half.filter { $0.color == accent }.count
-        let dim = half.filter { $0.color != accent }.count
-        #expect(lit == 24 && dim == 24)
-        #expect(Self.texts(Self.layout(Self.input(media: [Self.voice], playhead: 0.5)).ops).contains { $0.text == "0:45" })
+        let plan = try #require(MessageCardMotionPlan.of(.video, media: [Self.voice]))
+        let card = Self.layout(Self.input(quoted: nil, media: [Self.voice], clip: plan.clip, time: 30))
+        let zone = try #require(card.regions.first { $0.part == .media })
+        let bars = Self.bars(card.ops).filter { $0.y >= zone.y }
+        let lit = bars.filter { $0.color == accent }.count
+        #expect(abs(lit - bars.count / 2) <= 1, "\(lit) barres allumées sur \(bars.count)")
+        let clocks = Self.texts(card.ops).map(\.text)
+        #expect(clocks.contains("0:30 / 1:00"), "\(clocks)")
+        #expect(!clocks.contains { $0.hasPrefix("0:45") })
     }
 
     @Test func audio_withoutSamplesTheWaveIsStable() {
@@ -177,8 +185,10 @@ struct MessageCardImagineTests {
         let video = try #require(MessageCardMotionPlan.of(.video, media: [Self.clip]))
         #expect(video.duration == 10 && video.frameCount == 150 && video.scale == 1)
         let sound = try #require(MessageCardMotionPlan.of(.video, media: [Self.voice]))
-        #expect(sound.duration == 60 && sound.fps == 10)
-        #expect(sound.playhead(ofFrame: 0) == 0 && sound.playhead(ofFrame: sound.frameCount - 1) == 1)
+        #expect(sound.duration == 60 && sound.fps == 10 && sound.start == 0)
+        // L'instant d'une image est celui où elle s'affiche — celui qu'on entend.
+        #expect(sound.time(ofFrame: 0) == 0 && sound.time(ofFrame: 300) == 30)
+        #expect(sound.clip == MessageCardClip(start: 0, duration: 60))
         #expect(MessageCardMotionPlan.of(.gif, media: [Self.voice]) == nil)
         #expect(MessageCardMotionPlan.of(.image, media: [Self.clip]) == nil)
     }

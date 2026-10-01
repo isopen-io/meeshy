@@ -61,11 +61,9 @@ type HeaderProps = {
   /** L'appel est rejoint : la puce porte sa durée. */
   readonly joined: boolean;
   readonly prominent: boolean;
-  /** Le détail de la qualité ouvert retient l'écran (#8735). */
-  readonly onHold?: (held: boolean) => void;
 };
 
-export function CallScreenHeader({ call, language, joined, prominent, onHold }: HeaderProps) {
+export function CallScreenHeader({ call, language, joined, prominent }: HeaderProps) {
   const live = call.phase.kind !== 'ended' && call.phase.kind !== 'incoming';
   const ticking = useCallClock(call, live && joined);
   const clock = joined ? ticking : null;
@@ -98,7 +96,7 @@ export function CallScreenHeader({ call, language, joined, prominent, onHold }: 
           />
         ) : null}
       </div>
-      {clock === null ? null : <CallQualityChip title={call.title} clock={clock} quality={call.quality} language={language} prominent={prominent} {...(onHold === undefined ? {} : { onHold })} />}
+      {clock === null ? null : <CallQualityChip title={call.title} clock={clock} quality={call.quality} language={language} prominent={prominent} />}
     </div>
   );
 }

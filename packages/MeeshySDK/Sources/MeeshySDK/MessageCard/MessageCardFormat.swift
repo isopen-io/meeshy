@@ -93,8 +93,9 @@ public struct MessageCardFormat: Equatable, Sendable {
         return toggles
     }
 
-    /// Les réglages nés avec #8692 sont OPTIONNELS à la relecture : un format
-    /// enregistré plus tôt (ou par le web) se relit avec la disposition standard.
+    /// Les réglages nés avec #8692 (et ceux d'un vocal, #8979) sont OPTIONNELS à
+    /// la relecture : un format enregistré plus tôt (ou par le web) se relit avec
+    /// la disposition standard.
     private struct Stored: Codable {
         let template: String
         let showConversationTitle: Bool
@@ -110,6 +111,11 @@ public struct MessageCardFormat: Equatable, Sendable {
         let tilt: String?
         let mediaLayout: String?
         let audioStyle: String?
+        let showsTranscript: Bool?
+        let showsTimer: Bool?
+        let transcriptTypeface: String?
+        let clipLength: Int?
+        let scales: [String: Double]?
     }
 
     public static func parse(_ raw: String?) -> MessageCardFormat? {
@@ -132,7 +138,12 @@ public struct MessageCardFormat: Equatable, Sendable {
                 authorPlacement: stored.authorPlacement.flatMap(MessageCardAuthorPlacement.init(rawValue:)) ?? standard.authorPlacement,
                 tilt: stored.tilt.flatMap(MessageCardTilt.init(rawValue:)) ?? standard.tilt,
                 mediaLayout: stored.mediaLayout.flatMap(MessageCardMediaLayout.init(rawValue:)) ?? standard.mediaLayout,
-                audioStyle: stored.audioStyle.flatMap(MessageCardAudioStyle.init(rawValue:)) ?? standard.audioStyle
+                audioStyle: stored.audioStyle.flatMap(MessageCardAudioStyle.init(rawValue:)) ?? standard.audioStyle,
+                showsTranscript: stored.showsTranscript ?? standard.showsTranscript,
+                showsTimer: stored.showsTimer ?? standard.showsTimer,
+                transcriptTypeface: stored.transcriptTypeface.flatMap(MessageCardTypefaceID.init(rawValue:)),
+                clipLength: stored.clipLength.flatMap(MessageCardClipLength.init(rawValue:)) ?? standard.clipLength,
+                scales: MessageCardScales(stored: stored.scales)
             )
         )
     }
@@ -152,7 +163,12 @@ public struct MessageCardFormat: Equatable, Sendable {
             authorPlacement: disposition.authorPlacement.rawValue,
             tilt: disposition.tilt.rawValue,
             mediaLayout: disposition.mediaLayout.rawValue,
-            audioStyle: disposition.audioStyle.rawValue
+            audioStyle: disposition.audioStyle.rawValue,
+            showsTranscript: disposition.showsTranscript,
+            showsTimer: disposition.showsTimer,
+            transcriptTypeface: disposition.transcriptTypeface?.rawValue,
+            clipLength: disposition.clipLength.rawValue,
+            scales: disposition.scales.isIdentity ? nil : disposition.scales.stored
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys

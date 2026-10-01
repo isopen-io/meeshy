@@ -127,16 +127,6 @@ const startConnectedVideoCall = async (page) => {
   return appears(page, '[data-call-screen="connected"]', 15_000);
 };
 
-/**
- * En vidéo, les commandes s'effacent après 4 s sans geste (#8391) : un toucher
- * sur la scène les rappelle, comme le ferait la personne en appel.
- */
-const wakeChrome = async (page, width, height) => {
-  await page.mouse.move(width / 2, height / 2);
-  await page.mouse.move(width / 2 + 8, height / 2 + 8);
-  await appears(page, '[data-call-chrome="shown"]');
-};
-
 const inViewport = (box, width, height) => box !== null && box.x >= 0 && box.y >= 0 && box.x + box.width <= width + 0.5 && box.y + box.height <= height + 0.5;
 
 const browser = await launchChromium({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--autoplay-policy=no-user-gesture-required'] });
@@ -231,7 +221,7 @@ try {
         check(await vanishes(page, '[data-call-alert="capturing"]'), `${label} : la capture cessée, l'alerte s'efface`);
 
         // ------------------------------------------------ 7. le rapport de fin d'appel
-        await wakeChrome(page, width, height);
+        check(await appears(page, '[data-call-chrome="shown"]'), `${label} : sans toucher sur la scène, les commandes restent pendant tout l'appel (#8988)`);
         await page.getByRole('button', { name: 'Raccrocher' }).click();
         check(await appears(page, '[data-call-screen="ended"]'), `${label} : raccrocher termine l'appel`);
         const [analytics] = await peerReports(page, 'call:analytics');

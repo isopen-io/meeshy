@@ -22,6 +22,10 @@ public nonisolated struct MessageCardImage: Sendable {
     public let truncated: Bool
     /// Les zones touchables de la carte, en pixels de la carte — l'aperçu les pose sur l'image.
     public let regions: [MessageCardRegion]
+    /// La coupe vient des médias : le texte seul tiendrait (revue #8979).
+    public var crowdedByMedia: Bool = false
+    /// L'échelle la plus grande que les médias peuvent prendre — le pincement s'y arrête.
+    public var mediaScaleLimit: Double = MessageCardScales.range.upperBound
 }
 
 /// Les pixels des médias d'une carte, par identifiant de média — chargés par
@@ -56,7 +60,9 @@ public nonisolated enum MessageCardRenderer {
             width: Int(layout.width),
             height: Int(layout.height),
             truncated: layout.truncated,
-            regions: layout.regions
+            regions: layout.regions,
+            crowdedByMedia: layout.crowdedByMedia,
+            mediaScaleLimit: layout.mediaScaleLimit
         )
     }
 

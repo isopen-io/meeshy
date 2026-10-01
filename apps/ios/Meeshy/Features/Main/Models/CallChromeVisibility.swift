@@ -41,14 +41,8 @@ struct CallChromeVisibility: Equatable, Sendable {
         isVideoStage
     }
 
-    static func mayAutoHide(isVideoStage: Bool, isPanelOpen: Bool, isOnMac: Bool, isVoiceOverRunning: Bool) -> Bool {
-        isVideoStage && !isPanelOpen && !isOnMac && !isVoiceOverRunning
-    }
-
     static func isVideoStage(isGroup: Bool, isLocalVideoEnabled: Bool, isDuoVideoActive: Bool, remoteCamerasOn: Int) -> Bool {
         guard isGroup else { return isDuoVideoActive }
         return isLocalVideoEnabled || remoteCamerasOn > 0
     }
-
-    static let autoHideDelayNanoseconds: UInt64 = 4_000_000_000
 }
