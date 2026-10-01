@@ -46,6 +46,16 @@ public nonisolated enum FullscreenChromeMetrics {
     /// Le décalage qui fait jaillir la rangée d'émojis à GAUCHE du bouton qui l'ouvre
     /// (rail de la story, rail du réel).
     public static let reactionStripLeadingOffset: CGFloat = -floatingCellWidth
+
+    /// Le CONTOUR d'une action flottante : le même symbole, agrandi d'autant, derrière le
+    /// glyphe (`StoryActionButton` d'avant #8878, restauré le 2026-10-01).
+    public static let outlineScale: CGFloat = 1.22
+
+    /// Le HALO qui l'accompagne : une ombre de la teinte du contour.
+    public static let outlineGlowRadius: CGFloat = 7
+
+    /// L'opacité de ce halo.
+    public static let outlineGlowOpacity: Double = 0.55
 }
 
 /// **Les glyphes du chrome plein écran — un verbe, un symbole, partout** (#8878).
