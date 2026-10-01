@@ -93,6 +93,10 @@ export const EXEMPT_PATHS = [
     reason: "modèles de carte d'export : la palette de chaque modèle est choisie par l'utilisateur et exportée en image",
   },
   {
+    prefix: 'lib/mee/',
+    reason: "les illustrations de Mee et Meo (#9034) : la palette des PERSONNAGES, peinte dans le SVG du sticker et filmée pour iOS — un dessin, jamais un rôle de chrome",
+  },
+  {
     prefix: 'lib/accent.ts',
     reason: "l'accent d'une conversation est DÉRIVÉ de ses métadonnées (langue, type, thème) — une couleur calculée, jamais un rôle de chrome",
   },
