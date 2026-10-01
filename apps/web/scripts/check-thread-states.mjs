@@ -541,7 +541,18 @@ await checkProtectionStates({ browser, BASE, expect });
      manque au menu » et accusait le produit. Les quatre autres appels de ce
      fichier passent déjà `copy`, `translate`, `reply`, `select` ; celui-ci
      était le seul resté sur l'ancien contrat. */
+  /* « Transférer » ouvre désormais un SOUS-MENU (#9039) : Transférer /
+     Imager la discussion. Le témoin mesure les deux : le sous-menu porte
+     bien « Imager la discussion », et son « Transférer » garde l'effet tranché
+     par #5989. */
   if (await clickMenuItem('forward')) {
+    const forwardPanel = menuPage.locator('.message-menu-list[data-message-menu-forward]');
+    await awaitFact(forwardPanel);
+    expect(
+      (await forwardPanel.locator('[role="menuitem"]').count()) >= 2,
+      '« Transférer » ouvre son sous-menu, avec « Imager la discussion » (#9039)',
+    );
+    await forwardPanel.locator('[role="menuitem"][data-action="forward"]').first().click();
     await awaitFact(menuPage.getByRole('toolbar', { name: 'Sélection de messages' }));
     expect(
       (await menuPage.getByRole('toolbar', { name: 'Sélection de messages' }).count()) === 1,
