@@ -59,7 +59,7 @@ final class BubbleFooterModelTests: XCTestCase {
             name: "Awa", username: nil, role: nil, avatarURL: nil,
             accentColor: "#6366F1", moodEmoji: nil, presence: nil, storyRing: .none
         )
-        XCTAssertFalse(sender.isHere)
+        XCTAssertEqual(sender.isHere, .absent)
     }
 
     func test_make_directNonLastSent_showsTimestamp() {
