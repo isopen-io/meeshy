@@ -102,10 +102,17 @@ export function MessageMenu({
   onExpandReactions,
   onAction,
   onPickLanguage,
+  forwardItems = [],
 }: {
   readonly target: MessageMenuTarget;
   readonly items: readonly MessageMenuItem[];
   readonly choices: readonly TranslationChoice[];
+  /**
+   * LE SOUS-MENU DE « TRANSFÉRER » (#9039, `forwardMenuItems`) — plus d'une
+   * entrée : le tap sur Transférer l'ouvre, comme Traduire ouvre ses
+   * langues ; sinon Transférer agit aussitôt.
+   */
+  readonly forwardItems?: readonly MessageMenuItem[];
   /** LE SUJET DU MENU (revue #5814, défaut majeur 13) — « Actions du
    * message de … : … », composé par l'hôte (`useMessageMenu`, protection
    * D-23 comprise) et posé en `aria-label` du `role="menu"` : un lecteur
@@ -117,13 +124,14 @@ export function MessageMenu({
   readonly onAction: (id: MessageActionId) => void;
   readonly onPickLanguage: (code: string) => void;
 }) {
-  const [panel, setPanel] = useState<'actions' | 'translate'>('actions');
+  const [panel, setPanel] = useState<'actions' | 'translate' | 'forward'>('actions');
   /* LA LANGUE D'INTERFACE, LUE UNE FOIS PAR RENDU (#7555) — `message-actions.ts`
      rend des CLÉS, ce composant les DIT. Même porte que le reste de l'écran
      (`currentInterfaceLanguage()`), jamais une seconde résolution. */
   const language = currentInterfaceLanguage();
   const previewHostRef = useRef<HTMLDivElement | null>(null);
-  const listRows = panel === 'actions' ? items.length : choices.length;
+  const listItems = panel === 'forward' ? forwardItems : items;
+  const listRows = panel === 'translate' ? choices.length : listItems.length;
 
   const computePlacement = (rows: number) => {
     const rect = target.element.getBoundingClientRect();
@@ -266,28 +274,29 @@ export function MessageMenu({
     onClose();
   };
 
-  const onListItemChosen = (item: MessageMenuItem) => {
-    if (item.id === 'translate') {
-      setPanel('translate');
-      roving.setActiveIndex(RAIL_ITEM_COUNT);
-      requestAnimationFrame(() => {
-        const el = roving.itemRefs.current[RAIL_ITEM_COUNT];
-        el?.focus();
-      });
-      return;
-    }
-    onAction(item.id);
-    onClose();
-  };
-
-  const returnToActions = () => {
-    setPanel('actions');
+  const showPanel = (next: 'actions' | 'translate' | 'forward') => {
+    setPanel(next);
     roving.setActiveIndex(RAIL_ITEM_COUNT);
     requestAnimationFrame(() => {
       const el = roving.itemRefs.current[RAIL_ITEM_COUNT];
       el?.focus();
     });
   };
+
+  const onListItemChosen = (item: MessageMenuItem) => {
+    if (item.id === 'translate') {
+      showPanel('translate');
+      return;
+    }
+    if (item.id === 'forward' && panel === 'actions' && forwardItems.length > 1) {
+      showPanel('forward');
+      return;
+    }
+    onAction(item.id);
+    onClose();
+  };
+
+  const returnToActions = () => showPanel('actions');
 
   /**
    * L'ADAPTATEUR CLAVIER — aucun SECOND gestionnaire : `useRovingMenu` reste
@@ -312,7 +321,7 @@ export function MessageMenu({
    * et levait `TypeError` (mesuré en revue ; le rail était inerte au clavier).
    */
   const onClusterKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
-    if (panel === 'translate' && event.key === 'Escape') {
+    if (panel !== 'actions' && event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
       returnToActions();
@@ -477,9 +486,10 @@ export function MessageMenu({
           }}
         />
 
-        {panel === 'actions' ? (
+        {panel !== 'translate' ? (
           <div
             className="message-menu-list"
+            {...(panel === 'forward' ? { 'data-message-menu-forward': '' } : {})}
             style={{
               position: 'fixed',
               top: placement.menuTop,
@@ -488,7 +498,7 @@ export function MessageMenu({
               pointerEvents: 'auto',
             }}
           >
-            {items.map((item, i) => {
+            {listItems.map((item, i) => {
               const index = RAIL_ITEM_COUNT + i;
               return (
                 <button
@@ -506,7 +516,7 @@ export function MessageMenu({
                 >
                   <GlyphSvg glyph={THREAD_MENU_GLYPHS[item.glyph]} size={18} style={{ color: 'var(--accent)' }} />
                   <span className="flex-1">{translate(language, item.labelKey)}</span>
-                  {item.id === 'more' ? (
+                  {item.id === 'more' || (item.id === 'forward' && panel === 'actions' && forwardItems.length > 1) ? (
                     <GlyphSvg
                       glyph={{ viewBox: '0 0 256 256', body: '<path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/>' }}
                       size={14}

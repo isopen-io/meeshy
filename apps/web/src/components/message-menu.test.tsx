@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { useState } from 'react';
 
-import { messageMenuItems, translationChoices } from '@/lib/view/message-actions';
+import { forwardMenuItems, messageMenuItems, translationChoices, type MessageMenuItem } from '@/lib/view/message-actions';
 import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { useLongPress } from '@/lib/view/long-press';
 import { pinToBottom } from '@/lib/view/pin-to-bottom';
@@ -62,7 +62,10 @@ function Harness({
   protectedMessage = false,
   flatRow = false,
   events = {},
+  forwardItems,
 }: {
+  /** Le sous-menu de « Transférer » (#9039) — absent : Transférer agit aussitôt. */
+  readonly forwardItems?: readonly MessageMenuItem[];
   readonly text?: string;
   readonly isMine?: boolean;
   readonly protectedMessage?: boolean;
@@ -105,6 +108,7 @@ function Harness({
           target={target}
           items={items}
           choices={choices}
+          {...(forwardItems === undefined ? {} : { forwardItems })}
           subjectLabel={`Actions du message de Amina Diallo : ${text}`}
           onClose={() => setTarget(null)}
           onReact={(emoji) => events.onReact?.(emoji)}
@@ -699,5 +703,85 @@ describe('MessageMenu — un défilement de l’APPLICATION ne ferme pas le menu
     });
     expect(document.querySelectorAll('[role="menu"]').length).toBe(1);
     scroller.remove();
+  });
+});
+
+/**
+ * #9039 — « TRANSFÉRER » PROPOSE D'IMAGER LA DISCUSSION. Le tap sur
+ * Transférer ouvre son sous-menu (comme Traduire ouvre ses langues) :
+ * Transférer garde son effet, « Imager la discussion » rend l'action qui
+ * ouvre l'atelier d'Imager sur la discussion.
+ */
+describe('MessageMenu — le sous-menu de « Transférer » (#9039)', () => {
+  const open = (el: HTMLDivElement) => {
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+  };
+  const entry = (label: string) =>
+    Array.from(document.querySelectorAll<HTMLButtonElement>('.message-menu-list [role="menuitem"]')).find((b) => b.textContent === label);
+  const forwardItems = forwardMenuItems({ hasText: true, isProtected: false, languageCount: 2, canForward: true });
+
+  test('Transférer ouvre son sous-menu : Transférer · Imager la discussion — et rien ne part encore', () => {
+    const actions: string[] = [];
+    const el = mount({ forwardItems, events: { onAction: (id) => actions.push(id) } });
+    open(el);
+    act(() => {
+      entry('Transférer')!.click();
+    });
+    const labels = Array.from(document.querySelectorAll('.message-menu-list [role="menuitem"]')).map((b) => b.textContent);
+    expect(labels).toEqual(['Transférer', 'Imager la discussion']);
+    expect(actions).toEqual([]);
+  });
+
+  test('« Imager la discussion » rend son action et ferme le menu', () => {
+    const actions: string[] = [];
+    const el = mount({ forwardItems, events: { onAction: (id) => actions.push(id) } });
+    open(el);
+    act(() => {
+      entry('Transférer')!.click();
+    });
+    act(() => {
+      entry('Imager la discussion')!.click();
+    });
+    expect(actions).toEqual(['exportDiscussion']);
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(0);
+  });
+
+  test('Transférer, dans le sous-menu, garde son effet (armer la sélection)', () => {
+    const actions: string[] = [];
+    const el = mount({ forwardItems, events: { onAction: (id) => actions.push(id) } });
+    open(el);
+    act(() => {
+      entry('Transférer')!.click();
+    });
+    act(() => {
+      entry('Transférer')!.click();
+    });
+    expect(actions).toEqual(['forward']);
+  });
+
+  test('Échap dans le sous-menu revient à la liste des actions', () => {
+    const el = mount({ forwardItems });
+    open(el);
+    act(() => {
+      entry('Transférer')!.click();
+    });
+    act(() => {
+      document.querySelector('[role="menu"]')!.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' }));
+    });
+    expect(entry('Imager')).toBeDefined();
+    expect(entry('Imager la discussion')).toBeUndefined();
+  });
+
+  test('sans sous-menu (une seule entrée), Transférer agit aussitôt', () => {
+    const actions: string[] = [];
+    const single = forwardMenuItems({ hasText: true, isProtected: true, languageCount: 2, canForward: true });
+    const el = mount({ forwardItems: single, events: { onAction: (id) => actions.push(id) } });
+    open(el);
+    act(() => {
+      entry('Transférer')!.click();
+    });
+    expect(actions).toEqual(['forward']);
   });
 });

@@ -13,6 +13,7 @@ import { openSendSheet } from '@/lib/send/send-sheet-store';
 import { safeLocalStorage } from '@/lib/storage';
 
 import {
+  forwardMenuItems,
   messageMenuContextOf,
   messageMenuItems,
   translationChoices,
@@ -41,7 +42,8 @@ import { useMessageStar, type MessageStarEntry } from './use-message-star';
  * les COMPOSER derrière une surface stable pour l'hôte.
  */
 
-export type MessageExportRequest = { readonly messageId: string; readonly quick: boolean };
+/** `scope: 'discussion'` (#9039) — la carte de la discussion qui mène à ce message ; absent : la carte du seul message. */
+export type MessageExportRequest = { readonly messageId: string; readonly quick: boolean; readonly scope?: 'message' | 'discussion' };
 
 export type MessageMenuTargetState = { readonly messageId: string; readonly element: HTMLElement; readonly isMine: boolean };
 
@@ -226,6 +228,11 @@ export function useMessageMenu(params: {
         setExportFor({ messageId, quick: id === 'exportQuick' });
         return;
       }
+      if (id === 'exportDiscussion') {
+        focusTakenRef.current = true;
+        setExportFor({ messageId, quick: false, scope: 'discussion' });
+        return;
+      }
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
@@ -342,7 +349,12 @@ export function useMessageMenu(params: {
    * doit PAS fuir par cette étiquette après avoir été retiré de « Copier ».
    */
   const menuData:
-    | { readonly items: readonly MessageMenuItem[]; readonly choices: readonly TranslationChoice[]; readonly subjectLabel: string }
+    | {
+        readonly items: readonly MessageMenuItem[];
+        readonly forwardItems: readonly MessageMenuItem[];
+        readonly choices: readonly TranslationChoice[];
+        readonly subjectLabel: string;
+      }
     | undefined = (() => {
     if (menuTarget === null) return undefined;
     const message = messageOf(menuTarget.messageId);
@@ -359,6 +371,7 @@ export function useMessageMenu(params: {
       text === undefined ? translate(lang, 'message.excerpt.protected') : text.length > 80 ? `${text.slice(0, 80)}…` : text;
     return {
       items: messageMenuItems(ctx),
+      forwardItems: forwardMenuItems(ctx),
       choices: translationChoices({ message, preferredLanguages: readerLanguages, servedLanguage }),
       subjectLabel: translate(lang, 'a11y.message.menu.subject', { author, excerpt }),
     };
