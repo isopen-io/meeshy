@@ -26,21 +26,25 @@ const message = (partial: Partial<Message> = {}): Message =>
     ...partial,
   }) as Message;
 
-describe('emojiOnlyOf — 90 / 60 / 45, jamais au-delà de trois', () => {
-  test('un seul emoji ⇒ {count:1, fontSize:90}', () => {
-    expect(emojiOnlyOf({ content: '👍', attachmentCount: 0, hasPlace: false })).toEqual({ count: 1, fontSize: 90 });
+describe('emojiOnlyOf — ×4 jusqu’à deux, ×3 à trois, ×2 à quatre, la taille d’un emoji dans le texte (17) pour base (#9054)', () => {
+  test('un seul emoji ⇒ ×4 : {count:1, fontSize:68}', () => {
+    expect(emojiOnlyOf({ content: '👍', attachmentCount: 0, hasPlace: false })).toEqual({ count: 1, fontSize: 68 });
   });
 
-  test('un graphème à modificateur compte UN : "👍🏽❤️" ⇒ 2/60', () => {
-    expect(emojiOnlyOf({ content: '👍🏽❤️', attachmentCount: 0, hasPlace: false })).toEqual({ count: 2, fontSize: 60 });
+  test('un graphème à modificateur compte UN : "👍🏽❤️" ⇒ deux, encore ×4', () => {
+    expect(emojiOnlyOf({ content: '👍🏽❤️', attachmentCount: 0, hasPlace: false })).toEqual({ count: 2, fontSize: 68 });
   });
 
-  test('trois emoji ⇒ 3/45', () => {
-    expect(emojiOnlyOf({ content: '🎉🎉🎉', attachmentCount: 0, hasPlace: false })).toEqual({ count: 3, fontSize: 45 });
+  test('trois emoji ⇒ ×3 : 51', () => {
+    expect(emojiOnlyOf({ content: '🎉🎉🎉', attachmentCount: 0, hasPlace: false })).toEqual({ count: 3, fontSize: 51 });
   });
 
-  test('quatre emoji ⇒ null', () => {
-    expect(emojiOnlyOf({ content: '🎉🎉🎉🎉', attachmentCount: 0, hasPlace: false })).toBeNull();
+  test('quatre emoji ⇒ ×2 : 34', () => {
+    expect(emojiOnlyOf({ content: '🎉🎉🎉🎉', attachmentCount: 0, hasPlace: false })).toEqual({ count: 4, fontSize: 34 });
+  });
+
+  test('cinq emoji ⇒ null : la bulle normale', () => {
+    expect(emojiOnlyOf({ content: '🎉🎉🎉🎉🎉', attachmentCount: 0, hasPlace: false })).toBeNull();
   });
 
   test('« ok 👍 » (du texte mêlé) ⇒ null', () => {
@@ -48,7 +52,7 @@ describe('emojiOnlyOf — 90 / 60 / 45, jamais au-delà de trois', () => {
   });
 
   test('les espaces autour sont retirés : " 👍 " ⇒ 1', () => {
-    expect(emojiOnlyOf({ content: ' 👍 ', attachmentCount: 0, hasPlace: false })).toEqual({ count: 1, fontSize: 90 });
+    expect(emojiOnlyOf({ content: ' 👍 ', attachmentCount: 0, hasPlace: false })).toEqual({ count: 1, fontSize: 68 });
   });
 
   test('une chaîne vide ⇒ null', () => {

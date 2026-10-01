@@ -102,7 +102,7 @@ final class BubbleContentMatrixTests: XCTestCase {
 
         XCTAssertTrue(content.isEmojiOnly)
         XCTAssertNotNil(content.reply)
-        XCTAssertEqual(content.text?.emojiFontSize, 45)
+        XCTAssertEqual(content.text?.emojiFontSize, 51)
     }
 
     /// Un emoji-réponse possède bien un quote ET le flag emoji — l'orchestrateur
@@ -114,7 +114,7 @@ final class BubbleContentMatrixTests: XCTestCase {
 
         XCTAssertTrue(content.isEmojiOnly)
         XCTAssertEqual(content.text?.raw, "😍")
-        XCTAssertEqual(content.text?.emojiFontSize, 90)
+        XCTAssertEqual(content.text?.emojiFontSize, 68)
     }
 
     /// Non-régression : un emoji SANS réponse reste emoji-only (rendu libre,

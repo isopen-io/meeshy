@@ -13,10 +13,23 @@ import { metadataOf, type MetadataRecord } from './message-metadata';
 
 /**
  * `EmojiDetector.EmojiOnlyResult.fontSize`
- * (`packages/MeeshySDK/Sources/MeeshyUI/Utilities/EmojiDetector.swift:14-19`).
- * Dérivées, gardées par `scripts/check-curve.mjs`.
+ * (`packages/MeeshySDK/Sources/MeeshyUI/Utilities/EmojiDetector.swift`) — la
+ * taille d'un emoji dans le texte (17), ×4 jusqu'à deux emojis, ×3 à trois,
+ * ×2 à quatre (#9054).
  */
-export const EMOJI_ONLY_FONT_SIZES = { single: 90, double: 60, triple: 45 } as const;
+const EMOJI_INLINE_SIZE = 17;
+export const EMOJI_ONLY_FONT_SIZES = {
+  single: EMOJI_INLINE_SIZE * 4,
+  double: EMOJI_INLINE_SIZE * 4,
+  triple: EMOJI_INLINE_SIZE * 3,
+  quadruple: EMOJI_INLINE_SIZE * 2,
+} as const;
+
+/**
+ * Le glyphe d'un sticker EMOJI — `BubbleSticker.emojiGlyphSize`. Un sticker
+ * garde sa taille : la règle de #9054 ne vise que les messages d'emojis.
+ */
+export const STICKER_EMOJI_GLYPH_SIZE = 90;
 
 const EMOJI_GRAPHEME_PATTERN = /\p{Extended_Pictographic}|\p{Emoji_Presentation}/u;
 
@@ -41,10 +54,17 @@ function isEmojiGrapheme(grapheme: string): boolean {
  */
 const GRAPHEME_SEGMENTER = new Intl.Segmenter('und', { granularity: 'grapheme' });
 
-export type EmojiOnlyResult = { readonly count: 1 | 2 | 3; readonly fontSize: number };
+export type EmojiOnlyResult = { readonly count: 1 | 2 | 3 | 4; readonly fontSize: number };
+
+const EMOJI_ONLY_SIZE_BY_COUNT: Readonly<Record<EmojiOnlyResult['count'], number>> = {
+  1: EMOJI_ONLY_FONT_SIZES.single,
+  2: EMOJI_ONLY_FONT_SIZES.double,
+  3: EMOJI_ONLY_FONT_SIZES.triple,
+  4: EMOJI_ONLY_FONT_SIZES.quadruple,
+};
 
 /**
- * `EmojiDetector.analyze` (`:22-36`) : ≤ 3 GRAPHÈMES (`Intl.Segmenter`, un
+ * `EmojiDetector.analyze` : ≤ 4 GRAPHÈMES (`Intl.Segmenter`, un
  * modificateur de teint ou un `ZWJ` ne compte PAS pour un graphème de plus),
  * tous emoji. `FocalRow.textOrEmojiBlock` (`:612`) : jamais emoji seul si le
  * message a une pièce jointe OU un lieu.
@@ -61,13 +81,12 @@ export function emojiOnlyOf(input: {
   let graphemeCount = 0;
   for (const { segment } of GRAPHEME_SEGMENTER.segment(trimmed)) {
     graphemeCount += 1;
-    if (graphemeCount > 3 || !isEmojiGrapheme(segment)) return null;
+    if (graphemeCount > 4 || !isEmojiGrapheme(segment)) return null;
   }
   if (graphemeCount === 0) return null;
 
-  const count = graphemeCount as 1 | 2 | 3;
-  const fontSize = count === 1 ? EMOJI_ONLY_FONT_SIZES.single : count === 2 ? EMOJI_ONLY_FONT_SIZES.double : EMOJI_ONLY_FONT_SIZES.triple;
-  return { count, fontSize };
+  const count = graphemeCount as 1 | 2 | 3 | 4;
+  return { count, fontSize: EMOJI_ONLY_SIZE_BY_COUNT[count] };
 }
 
 /**

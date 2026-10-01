@@ -322,6 +322,12 @@ extension ConversationView {
             .storyPasteProvided()
             .storyStickerLibraryProvided()
             .stickerNearbyPlacesProvided()
+            // Mee et Meo (#9053) : seule la conversation sait envoyer un film ;
+            // sans cet injecteur, la feuille ne montre pas leurs onglets.
+            .meeStickersProvided { mee in
+                composerState.showStickerPicker = false
+                sendMeeSticker(mee)
+            }
             // « Ma position… » ouvre la carte : adresse, lieu, monument
             // nommé (#7922). Sans ce fournisseur, la puce n'est pas rendue.
             .storyLocationPickerProvided(accentColor: accentColor)

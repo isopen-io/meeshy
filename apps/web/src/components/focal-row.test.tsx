@@ -838,7 +838,7 @@ describe('FocalRow — les états du message (#5936)', () => {
       ],
     });
     expect(html).toContain('data-emoji-only="1"');
-    expect(html).toContain('font-size:45px');
+    expect(html).toContain('font-size:51px');
     expect(html).toContain('🔥🔥🔥');
     expect(html).not.toContain('feu feu feu');
   });

@@ -1,5 +1,6 @@
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// **LE TEXTE D'UN STICKER, POUR QUE SON IMAGE LE PORTE** (#6377, retour
 /// porteur 2026-09-14).
@@ -26,6 +27,9 @@ nonisolated enum StickerAltText {
     /// présent mais muet, ce qui est pire que l'absence, laquelle le laisse
     /// retomber sur ses propres heuristiques.
     static func describe(_ sticker: MessageSticker) -> String? {
+        if let mee = MeeStickerCatalog.sticker(forTemplateID: sticker.templateId) {
+            return mee.title
+        }
         let valeurs = orderedValues(of: sticker)
         if !valeurs.isEmpty { return valeurs.joined(separator: " ") }
         let emoji = (sticker.emoji ?? "").trimmingCharacters(in: .whitespacesAndNewlines)

@@ -8,13 +8,18 @@ public enum EmojiDetector {
         case single
         case double
         case triple
+        case quadruple
         case notEmojiOnly
 
+        /// La taille d'un emoji dans un texte — la base des multiples (#9054).
+        public static let inlineSize: CGFloat = 17
+
+        /// ×4 jusqu'à deux emojis, ×3 à trois, ×2 à quatre (#9054).
         public var fontSize: CGFloat? {
             switch self {
-            case .single: return 90
-            case .double: return 60
-            case .triple: return 45
+            case .single, .double: return Self.inlineSize * 4
+            case .triple: return Self.inlineSize * 3
+            case .quadruple: return Self.inlineSize * 2
             case .notEmojiOnly: return nil
             }
         }
@@ -25,7 +30,7 @@ public enum EmojiDetector {
         guard !trimmed.isEmpty else { return .notEmojiOnly }
 
         let characters = Array(trimmed)
-        guard characters.count <= 3, characters.allSatisfy(\.isEmoji) else {
+        guard characters.count <= 4, characters.allSatisfy(\.isEmoji) else {
             return .notEmojiOnly
         }
 
@@ -33,6 +38,7 @@ public enum EmojiDetector {
         case 1: return .single
         case 2: return .double
         case 3: return .triple
+        case 4: return .quadruple
         default: return .notEmojiOnly
         }
     }

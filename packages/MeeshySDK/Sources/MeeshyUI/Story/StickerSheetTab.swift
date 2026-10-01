@@ -45,6 +45,10 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
     case favorites
     /// Ce qu'il a posé récemment.
     case recents
+    /// Mee, le colibri — ses stickers animés, seul puis à deux (#9053).
+    case mee
+    /// Meo, son compagnon (#9053).
+    case meo
     /// Ce que l'auteur fait sien (directive porteur 2026-09-25 : « une tab
     /// customisée plutôt que dynamique ») : ses propres stickers, puis les
     /// décorations qui se remplissent de SES données — ses mots, son lieu,
@@ -60,6 +64,8 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
         case .search:    return "magnifyingglass"
         case .favorites: return "star.fill"
         case .recents:   return "clock.arrow.circlepath"
+        case .mee:       return "bird.fill"
+        case .meo:       return "bird"
         case .custom:    return "paintbrush.pointed.fill"
         case .smileys:   return "face.smiling"
         }
@@ -73,6 +79,10 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
             return String(localized: "sticker.sheet.tab.favorites", defaultValue: "Favoris", bundle: .module)
         case .recents:
             return String(localized: "sticker.sheet.tab.recents", defaultValue: "Récents", bundle: .module)
+        case .mee:
+            return String(localized: "sticker.sheet.tab.mee", defaultValue: "Mee", bundle: .module)
+        case .meo:
+            return String(localized: "sticker.sheet.tab.meo", defaultValue: "Meo", bundle: .module)
         case .custom:
             return String(localized: "sticker.sheet.tab.custom", defaultValue: "Personnalisés", bundle: .module)
         case .smileys:
@@ -118,9 +128,16 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
             // qui n'appartiendrait à aucun onglet serait invisible, et rien ne
             // le dirait.
             return offered.filter { $0 != .emoji && $0 != .library && !dynamicTabs.contains($0) }
-        case .favorites, .recents:
+        case .favorites, .recents, .mee, .meo:
             return []
         }
+    }
+
+    /// **Les onglets rendus, dans l'ordre** (loi 4). Mee et Meo n'existent que
+    /// si l'hôte sait ENVOYER leur sticker (`meeStickerPick`) — la scène d'une
+    /// story ne sait pas poser un film, et n'y montre donc pas les onglets.
+    public static func offered(hasMee: Bool) -> [StickerSheetTab] {
+        allCases.filter { hasMee || ($0 != .mee && $0 != .meo) }
     }
 
     /// **Toute famille servie appartient à AU MOINS un onglet.**

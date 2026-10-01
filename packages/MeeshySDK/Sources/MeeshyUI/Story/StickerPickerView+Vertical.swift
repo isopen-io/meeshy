@@ -46,6 +46,8 @@ extension StickerPickerView {
                 case .search:    searchTabContent
                 case .favorites: usageSections(usage.favorites, vide: .favorites)
                 case .recents:   usageSections(usage.recents, vide: .recents)
+                case .mee:       meeSections(.mee)
+                case .meo:       meeSections(.meo)
                 case .custom:    paletteSections(for: .custom)
                 case .smileys:   smileySections
                 }
@@ -402,7 +404,7 @@ extension StickerPickerView {
     ///   appartenir à l'un ni à l'autre, il se serait lu comme une onzième
     ///   option.
     @ViewBuilder
-    private func sectionHeader<Accessoire: View>(
+    func sectionHeader<Accessoire: View>(
         icone: String? = nil,
         symbole: String? = nil,
         titre: String,

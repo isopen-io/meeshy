@@ -10,7 +10,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { isMeeTemplate } from '@/lib/mee/template';
 import { coqueCourante } from '@/lib/native-shell';
 import {
-  EMOJI_ONLY_FONT_SIZES,
+  STICKER_EMOJI_GLYPH_SIZE,
   mapsUrlOf,
   type MoodCitation,
   type SharedPlace,
@@ -109,8 +109,8 @@ function StickerPicture({
 const EMOJI_GLYPH_LINE_HEIGHT = 1.1;
 
 /**
- * LE GLYPHE — la POLICE est `EMOJI_ONLY_FONT_SIZES.single` (90,
- * `EmojiOnlyResult.single.fontSize`), CONSTANTE quel que soit `side` (112 en
+ * LE GLYPHE — la POLICE est `STICKER_EMOJI_GLYPH_SIZE` (90,
+ * `BubbleSticker.emojiGlyphSize`), CONSTANTE quel que soit `side` (112 en
  * rangée plate, 160 en bulle — la cote du cas PNG, pas de celui-ci ;
  * revue-correction #5936, défaut majeur 6b).
  *
@@ -131,7 +131,7 @@ function StickerEmojiGlyph({ text, alt }: { readonly text: string; readonly alt:
       role="img"
       aria-label={alt}
       className="inline-block"
-      style={{ fontSize: EMOJI_ONLY_FONT_SIZES.single, lineHeight: EMOJI_GLYPH_LINE_HEIGHT }}
+      style={{ fontSize: STICKER_EMOJI_GLYPH_SIZE, lineHeight: EMOJI_GLYPH_LINE_HEIGHT }}
     >
       {text}
     </span>
