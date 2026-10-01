@@ -26,7 +26,7 @@ export function ConversationStreakMark({
         <Glyph name="flame" size={11} />
         <span>{model.streakDays}</span>
         <span>·</span>
-        <span>{model.totalPoints}</span>
+        <span>{model.totalText}</span>
       </span>
       <span className="sr-only">{model.label}</span>
     </span>

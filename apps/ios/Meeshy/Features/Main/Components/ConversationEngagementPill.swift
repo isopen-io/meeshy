@@ -2,43 +2,45 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - La pastille « 🔥 série · N (M) » (#8906)
+// MARK: - La pastille « 🔥 série · total » (#8906, #9044)
 
-/// Ce que le lecteur a gagné dans une conversation : sa série de jours (la
-/// flamme, tue quand elle est à 0), puis « N (M) » — N points depuis toujours,
-/// M aujourd'hui. Feuille PURE : primitives seulement, portillon `Equatable`.
+/// Ce que le lecteur a gagné dans une conversation : la flamme, sa série de
+/// jours, un point central, puis le total des points depuis toujours, abrégé
+/// (« 1,2 k », « 3 M », `CompactCountLabel`). Sans série EN COURS, rien : ni
+/// flamme ni points. Les points du jour vivent sous l'avatar replié
+/// (`HeaderFlameDecoration`). Feuille PURE : primitives seulement, portillon
+/// `Equatable`.
 struct ConversationEngagementPill: View, Equatable {
     let streakDays: Int
-    let pointsText: String
+    let totalText: String
     let accessibilityText: String
     let accentColor: String
 
-    init(snapshot: ConversationEngagementSnapshot, accentColor: String) {
+    init?(snapshot: ConversationEngagementSnapshot, accentColor: String, locale: Locale = .current) {
+        guard snapshot.streakDays > 0 else { return nil }
         self.streakDays = snapshot.streakDays
-        self.pointsText = snapshot.pointsText
+        self.totalText = CompactCountLabel.text(snapshot.totalPoints, locale: locale)
         self.accessibilityText = Self.accessibilityText(for: snapshot)
         self.accentColor = accentColor
     }
 
     static func == (lhs: ConversationEngagementPill, rhs: ConversationEngagementPill) -> Bool {
         lhs.streakDays == rhs.streakDays
-            && lhs.pointsText == rhs.pointsText
+            && lhs.totalText == rhs.totalText
             && lhs.accessibilityText == rhs.accessibilityText
             && lhs.accentColor == rhs.accentColor
     }
 
     private var accent: Color { Color(hex: accentColor) }
 
+    /// « série · total » — ce que la pastille écrit à côté de la flamme.
+    var text: String { "\(streakDays) · \(totalText)" }
+
     var body: some View {
         HStack(spacing: 3) {
-            if streakDays > 0 {
-                Image(systemName: "flame.fill")
-                    .imageScale(.small)
-                Text(verbatim: "\(streakDays)")
-                Text(verbatim: "·")
-                    .opacity(0.6)
-            }
-            Text(verbatim: pointsText)
+            Image(systemName: "flame.fill")
+                .imageScale(.small)
+            Text(verbatim: text)
         }
         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold, design: .rounded).monospacedDigit())
         .foregroundColor(accent)
@@ -84,28 +86,30 @@ struct ConversationEngagementBadge: View {
     @ObservedObject var store: ConversationEngagementStore = .shared
 
     var body: some View {
-        if let shown = store.displayed(for: conversationId, seed: seed, at: Date()) {
-            ConversationEngagementPill(snapshot: shown, accentColor: accentColor)
-                .equatable()
-                .task(id: seed) { store.seed(seed) }
+        Group {
+            if let shown = store.displayed(for: conversationId, seed: seed, at: Date()),
+               let pill = ConversationEngagementPill(snapshot: shown, accentColor: accentColor) {
+                pill.equatable()
+            }
         }
+        .task(id: seed) { store.seed(seed) }
     }
 }
 
-// MARK: - La série dans la liste « 🔥4 · 120 » (#9025)
+// MARK: - La série dans la liste « 🔥4 · 120 » (#9025, total abrégé #9044)
 
 /// À côté de l'heure de la rangée au repos : la série en jours et le total des
 /// points, en ROUGE, sans capsule (directive porteur 2026-10-01). Se tait tant
 /// qu'aucune série ne court. Feuille PURE, portillon `Equatable`.
 struct ConversationStreakMark: View, Equatable {
     let streakDays: Int
-    let totalPoints: Int
+    let totalText: String
     let accessibilityText: String
 
-    init?(snapshot: ConversationEngagementSnapshot?) {
+    init?(snapshot: ConversationEngagementSnapshot?, locale: Locale = .current) {
         guard let snapshot, snapshot.streakDays > 0 else { return nil }
         self.streakDays = snapshot.streakDays
-        self.totalPoints = snapshot.totalPoints
+        self.totalText = CompactCountLabel.text(snapshot.totalPoints, locale: locale)
         self.accessibilityText = ConversationEngagementPill.accessibilityText(for: snapshot)
     }
 
@@ -115,7 +119,7 @@ struct ConversationStreakMark: View, Equatable {
                 .imageScale(.small)
             Text(verbatim: "\(streakDays)")
             Text(verbatim: "·")
-            Text(verbatim: "\(totalPoints)")
+            Text(verbatim: totalText)
         }
         .font(LentilleMetrics.Time.font.monospacedDigit())
         .foregroundColor(MeeshyColors.error)

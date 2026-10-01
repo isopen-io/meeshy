@@ -59,19 +59,21 @@
   }
 }
 
-/* LE RAIL — capsule, entrée en vague ATTENUÉE (`scale` seul, jamais un
-   décalage de position — les seules propriétés qui n'invalident PAS le
-   layout, même discipline que la Lentille/la scène du fil). */
+/* LE RAIL — SANS CAPSULE (directive porteur 2026-10-01, #9043 — « enlever le
+   cadre comme pour les story ») : la story pose la même rangée NUE sur sa
+   scène (`FullscreenReactionStrip`, `chrome: .none`) ; ici le voile est la
+   scène. Entrée en vague ATTENUÉE (`scale` seul, jamais un décalage de
+   position — les seules propriétés qui n'invalident PAS le layout). */
 .message-menu-rail {
   display: flex;
   align-items: center;
+  /* La bande s'allonge de ×1,4 (#9043, `RAIL_LENGTH_FACTOR`) sans grossir ses
+     tuiles : l'espace gagné se répartit entre elles. */
+  justify-content: space-between;
   /* `gap` posé en STYLE INLINE par `message-menu.tsx` (`RAIL_TILE_GAP`,
      `message-menu-metrics.ts`) — jamais un second `10px` écrit ici. */
-  border-radius: var(--radius-pill, 999px);
   padding: 9px 8px;
-  background-color: var(--color-ios-card);
-  border: 1px solid var(--color-edge);
-  box-shadow: var(--shadow-cast, 0 8px 24px rgba(0, 0, 0, 0.24));
+  color: var(--color-on-media);
   animation: messageMenuRailIn 260ms cubic-bezier(0.32, 1.4, 0.55, 1);
 }
 
@@ -86,21 +88,24 @@
   }
 }
 
-/* LA LISTE D'ACTIONS — même chrome que `RowActions`/`ReadingModeChip`
-   (`app.css`, `rounded-card`+`shadow-cast`), ancrée en HAUT (les nouvelles
-   lignes qui apparaissent en changeant de panneau — le sous-menu Traduire —
-   poussent vers le BAS, jamais vers le haut). */
+/* LA LISTE D'ACTIONS — SANS CADRE (directive porteur 2026-10-01, #9043) : ni
+   carte, ni bordure, ni séparateurs ; les entrées se posent NUES sur le voile,
+   comme le rail d'une story sur sa scène. Le voile étant toujours sombre, le
+   libellé prend l'encre « sur média » et l'ombre portée du texte de la
+   visionneuse (`.viewer-ink-shadow`) ; l'icône garde l'accent. Ancrée en HAUT
+   (les lignes du sous-menu Traduire poussent vers le BAS). */
 .message-menu-list {
-  border-radius: var(--radius-card, 14px);
-  overflow: hidden;
-  background-color: var(--color-ios-card);
-  border: 1px solid var(--color-edge);
-  box-shadow: var(--shadow-cast, 0 8px 24px rgba(0, 0, 0, 0.24));
+  color: var(--color-on-media);
+  text-shadow: 0 1px 2px color-mix(in srgb, var(--ios-media-backdrop) 60%, transparent);
   transform-origin: top;
   animation: messageMenuListIn 260ms cubic-bezier(0.32, 1.4, 0.55, 1);
 }
-.message-menu-list > button + button {
-  border-top: 1px solid var(--color-edge);
+
+/* LA SURFACE DU GLISSEMENT (#9043) — tout le voile : glisser vers le haut y
+   réduit l'aperçu, un toucher y ferme. `touch-action: none` : le doigt pilote
+   la réduction, jamais un défilement du document. */
+.message-menu-drag-surface {
+  touch-action: none;
 }
 
 @keyframes messageMenuListIn {

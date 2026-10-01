@@ -6,13 +6,14 @@ import type { ConversationEngagementSnapshot } from '@meeshy/shared/types/engage
 import { RICH_TEXT_DIRECT } from '@/lib/api/fixtures-rich-text';
 import type { Conversation } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { compactCount } from '@/lib/view/compact-count';
 import { engagementPillModel, localDayOf } from '@/lib/view/engagement-pill';
 
 import { EngagementPill } from './engagement-pill';
 import { ThreadHeader } from './thread-header';
 
 /**
- * « 🔥 4 · 120 (12) » (#8906) — la pastille d'engagement d'une conversation :
+ * « 🔥 4 · 120 » (#8906, #9044) — la pastille d'engagement d'une conversation :
  * ce qu'elle montre, quand elle se tait, ce qu'elle dit à l'oreille, et où
  * elle se pose : l'en-tête du fil. La liste porte la série en rouge à côté
  * de l'heure (`conversation-streak-mark.test.tsx`).
@@ -42,10 +43,10 @@ describe('le modèle de la pastille', () => {
     expect(localDayOf(new Date(2026, 0, 6, 0, 1).getTime())).toBe('2026-01-06');
   });
 
-  test('« N (M) » et la série, avec la phrase entière pour le lecteur d’écran', () => {
+  test('la série et le total, avec la phrase entière pour le lecteur d’écran', () => {
     expect(engagementPillModel(snapshot(), '2026-09-30', 'fr')).toEqual({
       streakDays: 4,
-      points: '120 (12)',
+      totalText: '120',
       label: 'Série de 4 jours, 120 points dont 12 aujourd’hui',
     });
   });
@@ -56,8 +57,16 @@ describe('le modèle de la pastille', () => {
     );
   });
 
-  test('sans série, la phrase ne parle que des points', () => {
-    expect(engagementPillModel(snapshot({ streakDays: 0 }), '2026-09-30', 'fr')?.label).toBe('120 points dont 12 aujourd’hui');
+  test('sans série EN COURS, rien : ni flamme ni points (#9044)', () => {
+    expect(engagementPillModel(snapshot({ streakDays: 0 }), '2026-09-30', 'fr')).toBeNull();
+  });
+
+  test('le total s’abrège dans la langue du lecteur : 1,2 k, 12 k, 2,5 M (#9044)', () => {
+    expect(engagementPillModel(snapshot({ totalPoints: 1_234 }), '2026-09-30', 'fr')?.totalText).toBe(compactCount(1_234, 'fr'));
+    expect(compactCount(1_234, 'en')).toBe('1.2K');
+    expect(compactCount(12_345, 'en')).toBe('12K');
+    expect(compactCount(2_500_000, 'en')).toBe('2.5M');
+    expect(compactCount(999, 'en')).toBe('999');
   });
 
   test('la phrase suit la langue d’interface', () => {
@@ -71,28 +80,27 @@ describe('le modèle de la pastille', () => {
   });
 
   test('passé minuit : M retombe à 0, la série tient encore un jour', () => {
-    expect(engagementPillModel(snapshot(), '2026-10-01', 'fr')).toMatchObject({ points: '120 (0)', streakDays: 4 });
+    expect(engagementPillModel(snapshot(), '2026-10-01', 'fr')).toMatchObject({ totalText: '120', streakDays: 4 });
   });
 
-  test('un jour manqué : la série tombe, le total reste', () => {
-    expect(engagementPillModel(snapshot(), '2026-10-02', 'fr')).toMatchObject({ points: '120 (0)', streakDays: 0 });
+  test('un jour manqué : la série tombe, et la pastille avec elle', () => {
+    expect(engagementPillModel(snapshot(), '2026-10-02', 'fr')).toBeNull();
   });
 });
 
 describe('le rendu de la pastille', () => {
-  test('la flamme et la série quand elle court ; le texte visible est muet, la phrase est lue', () => {
+  test('la flamme, la série, un point central et le total ; le texte visible est muet, la phrase est lue', () => {
     const html = renderToStaticMarkup(<EngagementPill snapshot={snapshot()} language="fr" now={() => NOON_SEPT_30} />);
     expect(html).toContain('data-engagement-streak');
     expect(html).toContain('>4<');
-    expect(html).toContain('120 (12)');
+    expect(html).toContain('>120<');
+    expect(html).not.toContain('(12)');
     expect(html).toContain('aria-hidden="true"');
     expect(html).toContain('<span class="sr-only">Série de 4 jours, 120 points dont 12 aujourd’hui</span>');
   });
 
-  test('sans série, ni flamme ni chiffre de série', () => {
-    const html = renderToStaticMarkup(<EngagementPill snapshot={snapshot({ streakDays: 0 })} language="fr" now={() => NOON_SEPT_30} />);
-    expect(html).not.toContain('data-engagement-streak');
-    expect(html).toContain('120 (12)');
+  test('sans série, aucun nœud', () => {
+    expect(renderToStaticMarkup(<EngagementPill snapshot={snapshot({ streakDays: 0 })} language="fr" now={() => NOON_SEPT_30} />)).toBe('');
   });
 
   test('rien à montrer ⇒ aucun nœud', () => {
@@ -103,10 +111,10 @@ describe('le rendu de la pastille', () => {
   });
 
   test('un instantané d’hier affiche 0 aujourd’hui', () => {
-    expect(renderToStaticMarkup(<EngagementPill snapshot={snapshot()} language="fr" now={() => NOON_OCT_1} />)).toContain('120 (0)');
-    expect(renderToStaticMarkup(<EngagementPill snapshot={snapshot()} language="fr" now={() => NOON_OCT_2} />)).not.toContain(
-      'data-engagement-streak',
+    expect(renderToStaticMarkup(<EngagementPill snapshot={snapshot()} language="fr" now={() => NOON_OCT_1} />)).toContain(
+      'data-engagement-streak="4"',
     );
+    expect(renderToStaticMarkup(<EngagementPill snapshot={snapshot()} language="fr" now={() => NOON_OCT_2} />)).toBe('');
   });
 
   test('dans l’en-tête, elle mène à la Progression', () => {
@@ -138,13 +146,15 @@ describe('l’en-tête du fil porte la pastille', () => {
     viewerEngagement: snapshot({ day: localDayOf(Date.now()) }),
   });
 
-  test('replié comme déplié, UNE pastille, qui mène à la Progression', () => {
-    for (const expanded of [false, true]) {
-      const html = header(withPoints, expanded);
-      expect(html.match(/data-engagement-pill/g)?.length).toBe(1);
-      expect(html).toContain('href="/me/progression"');
-      expect(html).toContain('120 (12)');
-    }
+  test('déplié : UNE pastille « 🔥 série · total », qui mène à la Progression', () => {
+    const html = header(withPoints, true);
+    expect(html.match(/data-engagement-pill/g)?.length).toBe(1);
+    expect(html).toContain('href="/me/progression"');
+    expect(html).toContain('>120<');
+  });
+
+  test('replié : aucune pastille — la flamme du jour sous l’avatar parle seule', () => {
+    expect(header(withPoints, false)).not.toContain('data-engagement-pill');
   });
 
   test('sans point servi : aucune pastille', () => {

@@ -54,4 +54,18 @@ final class AvatarPresenceDotTests: XCTestCase {
         XCTAssertFalse(AvatarPresenceDot.here.localizedLabel.isEmpty)
         XCTAssertNotEqual(AvatarPresenceDot.here.localizedLabel, PresenceState.online.localizedLabel)
     }
+
+    // MARK: - Les transitions du point (#9047)
+
+    func test_transitionKey_changesWhenTheDotChangesNature() {
+        XCTAssertNotEqual(AvatarPresenceDot.here.transitionKey, AvatarPresenceDot.presence(.online).transitionKey,
+                          "passer d'« ici » à « en ligne » remplace le point : l'indigo diminue, le vert rebondit")
+        XCTAssertNotEqual(AvatarPresenceDot.presence(.online).transitionKey, AvatarPresenceDot.presence(.away).transitionKey)
+        XCTAssertEqual(AvatarPresenceDot.here.transitionKey, AvatarPresenceDot.here.transitionKey)
+    }
+
+    func test_arrivalRipple_onlyForHere() {
+        XCTAssertTrue(AvatarPresenceDot.here.arrivesWithRipple, "le point indigo pulse en arrivant")
+        XCTAssertFalse(AvatarPresenceDot.presence(.online).arrivesWithRipple)
+    }
 }

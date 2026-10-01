@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react';
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 
 import { flag, languageName } from '@/lib/languages';
@@ -17,17 +17,19 @@ import {
   type MessageMenuItem,
   type TranslationChoice,
 } from '@/lib/view/message-actions';
+import { revealFloor, revealRestingFactor, revealRise, revealSplit } from '@/lib/view/message-menu-reveal';
 import {
-  MENU_CHROME,
   MENU_GAP,
+  MENU_PADDING_Y,
   MENU_ROW_HEIGHT,
   MENU_WIDTH,
+  menuListHeight,
   PREVIEW_SCALE_FLOOR,
   RAIL_GAP,
   RAIL_HEIGHT,
   RAIL_TILE,
   RAIL_TILE_GAP,
-  RAIL_WIDTH,
+  railBandWidth,
   SIDE_PADDING,
 } from '@/lib/view/message-menu-metrics';
 
@@ -53,6 +55,10 @@ import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
  */
 
 const RAIL_ITEM_COUNT = QUICK_REACTIONS.length + 1; // 6 emojis + « Ajouter ».
+
+/** Un toucher sur le voile reste un toucher en deçà de ce parcours — miroir du
+ * `minimumDistance: 12` du `DragGesture` de `MessageOverlayMenu.swift` (#9043). */
+const TAP_SLOP = 12;
 
 export type MessageMenuTarget = {
   readonly messageId: string;
@@ -136,7 +142,7 @@ export function MessageMenu({
   const computePlacement = (rows: number) => {
     const rect = target.element.getBoundingClientRect();
     const safe = safeAreaInsets();
-    const menuHeight = rows * MENU_ROW_HEIGHT + MENU_CHROME;
+    const menuHeight = menuListHeight(rows);
     return placeMessageMenuCluster({
       anchor: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right, width: rect.width, height: rect.height },
       viewport: { width: window.innerWidth, height: window.innerHeight },
@@ -148,7 +154,7 @@ export function MessageMenu({
       menuGap: MENU_GAP,
       sidePadding: SIDE_PADDING,
       menuWidth: MENU_WIDTH,
-      railWidth: RAIL_WIDTH,
+      railWidth: railBandWidth(window.innerWidth - 2 * SIDE_PADDING),
       previewScaleFloor: PREVIEW_SCALE_FLOOR,
     });
   };
@@ -171,6 +177,17 @@ export function MessageMenu({
     setPlacement(computePlacement(listRows));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel]);
+
+  /**
+   * GLISSER VERS LE HAUT RÉDUIT L'APERÇU (#9043, `lib/view/message-menu-reveal.ts`).
+   * `committedReveal` est l'état GARDÉ au relâchement (`null` : rien de
+   * conclu). Pendant le geste, le rendu n'est PAS rejoué : la surface écrit
+   * l'échelle de l'aperçu et la position de la liste directement sur leurs
+   * nœuds, image par image — puis le relâchement les remet à React.
+   */
+  const [committedReveal, setCommittedReveal] = useState<number | null>(null);
+  const dragRef = useRef<{ readonly id: number; readonly startY: number; factor: number } | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   /**
    * LE FIL QUI SE RÉ-ANCRE TOUT SEUL NE FERME PAS CE MENU (#7242).
@@ -341,14 +358,15 @@ export function MessageMenu({
   if (typeof document === 'undefined') return null;
 
   const railTiles = [...QUICK_REACTIONS, '+'] as const;
-  const railWidthUsed = Math.min(RAIL_WIDTH, window.innerWidth - 2 * SIDE_PADDING);
+  const railWidthUsed = railBandWidth(window.innerWidth - 2 * SIDE_PADDING);
   // UNE mesure par rendu — deux `getBoundingClientRect()` en ligne dans le
   // JSX forçaient deux recalculs de layout pour la même ancre.
   const anchorRect = target.element.getBoundingClientRect();
 
-  // Le VOILE est purement visuel — `useRovingMenu` ferme déjà sur tout
-  // `pointerdown` HORS de `roving.menuRef` (document-level, § roving-menu.ts) ;
-  // un second gestionnaire ici referait la même chose deux fois.
+  // Le VOILE est purement visuel. Depuis #9043, la SURFACE DU GLISSEMENT le
+  // couvre, DANS `roving.menuRef` : un toucher sans glisser y ferme le menu
+  // (`onSurfacePointerUp`) ; `useRovingMenu` ferme toujours sur tout
+  // `pointerdown` hors du cluster (document-level, § roving-menu.ts).
   const accent = accentOf(target.element);
 
   /**
@@ -367,6 +385,52 @@ export function MessageMenu({
    */
   const isFlatRow = target.element.querySelector('[data-reading-mode]') !== null;
 
+  /* LA RÉDUCTION (#9043) — la hauteur VISIBLE de l'aperçu au repos est ce qui
+     se réduit ; ce que la liste perd sous le bas utile, ce qu'il faut dégager. */
+  const shrinkableHeight = anchorRect.height * placement.previewScale;
+  const floor = revealFloor({ hiddenHeight: placement.menuHiddenHeight, shrinkableHeight });
+  const committed = Math.min(1, Math.max(floor, committedReveal ?? revealRestingFactor({ floor, assistiveReveal: false })));
+  const previewTransform = (factor: number) => `scale(${placement.previewScale * factor})`;
+  const listTop = (factor: number) => placement.menuTop - revealRise({ factor, shrinkableHeight });
+  const paintReveal = (factor: number) => {
+    const host = previewHostRef.current;
+    if (host !== null) host.style.transform = previewTransform(factor);
+    const list = listRef.current;
+    if (list !== null) list.style.top = `${listTop(factor)}px`;
+  };
+  const onSurfacePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    dragRef.current = { id: event.pointerId, startY: event.clientY, factor: committed };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+  const onSurfacePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (drag === null || drag.id !== event.pointerId) return;
+    drag.factor = revealSplit({ translation: event.clientY - drag.startY, committed, floor, shrinkableHeight }).factor;
+    paintReveal(drag.factor);
+  };
+  const onSurfacePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (drag === null || drag.id !== event.pointerId) return;
+    dragRef.current = null;
+    /* UN TOUCHER HORS DU MENU FERME — la surface couvre le voile, elle hérite
+       de ce que `useRovingMenu` faisait au `pointerdown` du document. */
+    if (Math.abs(event.clientY - drag.startY) < TAP_SLOP) {
+      onClose();
+      return;
+    }
+    setCommittedReveal(drag.factor);
+  };
+  const onSurfacePointerCancel = () => {
+    dragRef.current = null;
+    paintReveal(committed);
+  };
+  /* LE MENU RESTE ATTEIGNABLE SANS LE GESTE — un focus qui ENTRE dans la liste
+     (clavier, lecteur d'écran) la dégage d'office : l'aperçu se réduit au
+     plancher. */
+  const onListFocus = () => {
+    if (committed > floor) setCommittedReveal(revealRestingFactor({ floor, assistiveReveal: true }));
+  };
+
   return createPortal(
     <div className="message-menu-backdrop" style={accent === undefined ? undefined : ({ '--accent': accent } as CSSProperties)}>
       <div
@@ -378,6 +442,16 @@ export function MessageMenu({
         onKeyDown={onClusterKeyDown}
         style={{ position: 'fixed', inset: 0, pointerEvents: 'none' }}
       >
+        <div
+          aria-hidden
+          data-message-menu-drag-surface
+          className="message-menu-drag-surface"
+          style={{ position: 'fixed', inset: 0, pointerEvents: 'auto' }}
+          onPointerDown={onSurfacePointerDown}
+          onPointerMove={onSurfacePointerMove}
+          onPointerUp={onSurfacePointerUp}
+          onPointerCancel={onSurfacePointerCancel}
+        />
         <div
           role="group"
           aria-label={translate(language, 'message.menu.react')}
@@ -463,7 +537,7 @@ export function MessageMenu({
                pixels ». `height` reste libre : le clone la retrouve seul
                une fois la largeur imposée. */
             width: anchorRect.width,
-            transform: `scale(${placement.previewScale})`,
+            transform: previewTransform(committed),
             transformOrigin: target.isMine ? 'top right' : 'top left',
             pointerEvents: 'none',
             /* L'ÉLÉVATION (revue #5814, défaut majeur 11) — posée sur
@@ -488,13 +562,16 @@ export function MessageMenu({
 
         {panel !== 'translate' ? (
           <div
+            ref={listRef}
             className="message-menu-list"
             {...(panel === 'forward' ? { 'data-message-menu-forward': '' } : {})}
+            onFocus={onListFocus}
             style={{
               position: 'fixed',
-              top: placement.menuTop,
+              top: listTop(committed),
               left: placement.menuLeft,
               width: MENU_WIDTH,
+              paddingBlock: MENU_PADDING_Y,
               pointerEvents: 'auto',
             }}
           >
@@ -511,7 +588,7 @@ export function MessageMenu({
                   data-action={item.id}
                   tabIndex={index === roving.activeIndex ? 0 : -1}
                   className="flex w-full items-center gap-2.5 px-3 text-start text-title font-medium"
-                  style={{ minHeight: MENU_ROW_HEIGHT, color: 'var(--color-ios-ink)' }}
+                  style={{ minHeight: MENU_ROW_HEIGHT }}
                   onClick={() => onListItemChosen(item)}
                 >
                   <GlyphSvg glyph={THREAD_MENU_GLYPHS[item.glyph]} size={18} style={{ color: 'var(--accent)' }} />
@@ -520,7 +597,7 @@ export function MessageMenu({
                     <GlyphSvg
                       glyph={{ viewBox: '0 0 256 256', body: '<path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/>' }}
                       size={14}
-                      style={{ color: 'var(--color-ios-ink-3)' }}
+                      className="opacity-60"
                     />
                   ) : null}
                 </button>
@@ -539,13 +616,16 @@ export function MessageMenu({
           <div
             role="group"
             aria-label={translate(language, 'message.menu.translate')}
+            ref={listRef}
             data-message-menu-languages
             className="message-menu-list"
+            onFocus={onListFocus}
             style={{
               position: 'fixed',
-              top: placement.menuTop,
+              top: listTop(committed),
               left: placement.menuLeft,
               width: MENU_WIDTH,
+              paddingBlock: MENU_PADDING_Y,
               pointerEvents: 'auto',
             }}
           >
@@ -562,7 +642,7 @@ export function MessageMenu({
                   aria-checked={choice.isServed}
                   tabIndex={index === roving.activeIndex ? 0 : -1}
                   className="flex w-full items-center gap-2.5 px-3 text-start text-title font-medium"
-                  style={{ minHeight: MENU_ROW_HEIGHT, color: 'var(--color-ios-ink)' }}
+                  style={{ minHeight: MENU_ROW_HEIGHT }}
                   onClick={() => onTranslateChosen(choice.code)}
                 >
                   <span aria-hidden>{flag(choice.code)}</span>

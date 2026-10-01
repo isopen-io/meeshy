@@ -288,6 +288,22 @@ public struct MeeshyAvatar: View {
     }
 
     @State private var tapScale: CGFloat = 1.0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Le point a changé depuis l'apparition de l'avatar : seul un VRAI
+    /// changement fait onduler « ici » — une liste qui s'affiche ne pulse pas.
+    @State private var presenceChanged = false
+
+    /// Le point sortant DIMINUE ; l'entrant apparaît en REBONDISSANT, un temps
+    /// après, pour qu'on voie l'un céder la place à l'autre (#9047).
+    private var presenceTransition: AnyTransition {
+        guard !reduceMotion else { return .opacity }
+        return .asymmetric(
+            insertion: AnyTransition.scale(scale: 0.2).combined(with: .opacity)
+                .animation(.spring(response: 0.42, dampingFraction: 0.45).delay(0.12)),
+            removal: AnyTransition.scale(scale: 0.1).combined(with: .opacity)
+                .animation(.easeIn(duration: 0.18))
+        )
+    }
     private let isDark: Bool
     private let resolvedAccent: String
     private let resolvedSecondary: String
@@ -397,9 +413,19 @@ public struct MeeshyAvatar: View {
                     .offset(badgeOffset(badgeHalfSize: context.badgeSize / 2))
             } else if let presence = effectivePresence {
                 onlineDot(for: presence)
+                    .overlay {
+                        if presence.arrivesWithRipple && presenceChanged && !reduceMotion {
+                            PresenceArrivalRipple(color: presence.color, diameter: context.onlineDotSize)
+                        }
+                    }
+                    .id(presence.transitionKey)
+                    .transition(presenceTransition)
                     .offset(badgeOffset(badgeHalfSize: context.onlineDotSize / 2))
             }
         }
+        .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.42, dampingFraction: 0.5),
+                   value: effectivePresence?.transitionKey)
+        .adaptiveOnChange(of: effectivePresence?.transitionKey) { _, _ in presenceChanged = true }
         .scaleEffect(tapScale)
 
         let tappable = Group {
@@ -552,3 +578,23 @@ public struct MeeshyAvatar: View {
 
 }
 
+/// L'onde du point « ici » à son arrivée (#9047) : un anneau part du point,
+/// s'élargit et s'éteint, une fois. Transform et opacité seulement.
+private struct PresenceArrivalRipple: View {
+    let color: Color
+    let diameter: CGFloat
+    @State private var spread = false
+
+    var body: some View {
+        Circle()
+            .stroke(color, lineWidth: 2)
+            .frame(width: diameter, height: diameter)
+            .scaleEffect(spread ? 2.6 : 1)
+            .opacity(spread ? 0 : 0.9)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .onAppear {
+                withAnimation(.easeOut(duration: 0.8).delay(0.15)) { spread = true }
+            }
+    }
+}

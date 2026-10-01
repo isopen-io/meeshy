@@ -9,6 +9,7 @@ import type { Conversation } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 import type { StorageLike } from '@/lib/reading-mode/store';
+import { compactCount } from '@/lib/view/compact-count';
 import { localDayOf } from '@/lib/view/engagement-pill';
 import {
   afterFlameDismissed,
@@ -171,7 +172,7 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
 
   test('un snapshot d’hier se relit au jour du lecteur : 0 aujourd’hui', () => {
     const html = renderToStaticMarkup(
-      <HeaderFlame snapshot={snapshot({ day: '2020-01-01' })} replay={0} onDismiss={() => undefined} />,
+      <HeaderFlame snapshot={snapshot({ day: localDayOf(Date.now() - 86_400_000) })} replay={0} onDismiss={() => undefined} />,
     );
     expect(html).toContain('data-header-flame="0"');
   });
@@ -191,6 +192,51 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
     const host = await mounter.mount(<HeaderFlame snapshot={snapshot()} replay={1} onDismiss={() => touched.push('x')} />);
     await mounter.click(host.querySelector<HTMLElement>('[data-header-flame] button'));
     expect(touched).toEqual(['x']);
+  });
+
+  test('sans série en cours, aucune flamme ni aucun point (#9044)', () => {
+    expect(renderToStaticMarkup(<HeaderFlame snapshot={snapshot({ streakDays: 0 })} replay={0} onDismiss={() => undefined} />)).toBe('');
+  });
+
+  test('la flamme sans capsule, des mèches pour brûler, et un compte abrégé (#9044)', () => {
+    const html = renderToStaticMarkup(
+      <HeaderFlame snapshot={snapshot({ todayPoints: 1_234 })} replay={1} onDismiss={() => undefined} language="fr" />,
+    );
+    expect(html.match(/data-flame-tongue/g)?.length).toBe(3);
+    expect(html).toContain(`>${compactCount(1_234, 'fr')}<`);
+    const css = readFileSync(new URL('../styles/header-flame.css', import.meta.url), 'utf8');
+    const mark = css.match(/\.header-flame-mark\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(mark).not.toMatch(/background|box-shadow|border-radius/);
+  });
+
+  test('le compteur est rouge, cerclé de 1 px blanc, quel que soit le thème (#9044)', () => {
+    const css = readFileSync(new URL('../styles/header-flame.css', import.meta.url), 'utf8');
+    const digits = css.match(/\.header-flame-count-digits\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(digits).toContain('color: var(--ios-error)');
+    expect(digits).toContain('-webkit-text-stroke: 2px #fff');
+    expect(digits).toContain('paint-order: stroke fill');
+    expect(css).not.toMatch(/:root\.(dark|light)/);
+  });
+
+  test('la valeur d’avant l’envoi tient jusqu’à ce que la lueur rejoigne la flamme, puis monte (#9044)', async () => {
+    const at = (today: number, replay: number) => (
+      <HeaderFlame snapshot={snapshot({ todayPoints: today })} replay={replay} releaseAfterMs={30} onDismiss={() => undefined} />
+    );
+    const host = await mounter.mount(at(12, 0));
+    await mounter.rerender(host, at(12, 1));
+    await mounter.rerender(host, at(15, 1));
+    expect(host.querySelector('[data-header-flame]')?.getAttribute('data-header-flame')).toBe('12');
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    await mounter.settle();
+    expect(host.querySelector('[data-header-flame]')?.getAttribute('data-header-flame')).toBe('15');
+  });
+
+  test('la flamme se pose JUSTE SOUS le cercle, jamais par-dessus, et ne tourne pas (#9044)', () => {
+    const css = readFileSync(new URL('../styles/header-flame.css', import.meta.url), 'utf8');
+    const seat = css.match(/\.header-flame-seat\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(seat).toMatch(/top:\s*calc\(100% \+ \d+px\)/);
+    expect(seat).not.toContain('-50%, -50%');
+    expect(css).not.toContain('header-flame-orbit');
   });
 
   test('l’effet n’anime que transform et opacity, et se calme en mouvement réduit', () => {

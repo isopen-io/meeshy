@@ -54,7 +54,7 @@ describe('le modèle de la série', () => {
   test('la série et le total des points, avec la phrase entière', () => {
     expect(streakMarkModel(snapshot(), '2026-09-30', 'fr')).toEqual({
       streakDays: 4,
-      totalPoints: 120,
+      totalText: '120',
       label: 'Série de 4 jours, 120 points dont 12 aujourd’hui',
     });
   });

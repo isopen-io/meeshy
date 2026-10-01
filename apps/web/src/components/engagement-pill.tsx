@@ -8,19 +8,20 @@ import { Link } from '@/routes/route-table';
 import { Glyph } from './glyph';
 
 /**
- * LA PASTILLE D'ENGAGEMENT D'UNE CONVERSATION (#8906) — « 🔥 4 · 120 (12) ».
+ * LA PASTILLE D'ENGAGEMENT D'UNE CONVERSATION (#8906, #9044) — « 🔥 4 · 1,2 k ».
  *
- * N = points que cette conversation a rapportés au LECTEUR depuis toujours,
- * M = aujourd'hui, la flamme et la série quand elle court. Posée dans l'en-tête
- * du fil, où elle mène à la Progression. La liste, elle, porte la série en
+ * La flamme, la série en jours, un point central, puis les points que cette
+ * conversation a rapportés au LECTEUR depuis toujours, abrégés. Sans série en
+ * cours, rien. Posée sous le titre de
+ * l'en-tête DÉPLIÉ, où elle mène à la Progression ; replié, c'est la flamme du
+ * jour sous l'avatar (`HeaderFlame`) qui parle. La liste porte la série en
  * rouge à côté de l'heure (`ConversationStreakMark`, 2026-10-01).
  *
  * Le texte visible est masqué au lecteur d'écran, qui lit la phrase entière
- * (« Série de 4 jours, 120 points dont 12 aujourd'hui ») : des chiffres entre
- * parenthèses ne disent rien à l'oreille.
+ * (« Série de 4 jours, 120 points dont 12 aujourd'hui »).
  *
  * Le jour est relu à la MINUTE (`useMinute`, l'horloge partagée) : passé
- * minuit, M retombe à 0 sans attendre le serveur.
+ * minuit, la série tombe — et la pastille avec elle — sans attendre le serveur.
  */
 export function EngagementPill({
   snapshot,
@@ -43,14 +44,10 @@ export function EngagementPill({
   const body = (
     <>
       <span aria-hidden="true" className="flex items-center gap-1 whitespace-nowrap">
-        {model.streakDays > 0 ? (
-          <>
-            <Glyph name="flame" size={12} style={{ color: 'var(--ios-warning)' }} />
-            <span data-engagement-streak>{model.streakDays}</span>
-            <span>·</span>
-          </>
-        ) : null}
-        <span data-engagement-points>{model.points}</span>
+        <Glyph name="flame" size={12} style={{ color: 'var(--ios-warning)' }} />
+        <span data-engagement-streak={model.streakDays}>{model.streakDays}</span>
+        <span>·</span>
+        <span data-engagement-points>{model.totalText}</span>
       </span>
       <span className="sr-only">{model.label}</span>
     </>
