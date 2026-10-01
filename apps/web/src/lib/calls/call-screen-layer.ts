@@ -13,8 +13,8 @@
  *   carrousel centré (deux tapes : photo, appui long : vidéo — #8625), ✕
  *   pour en sortir. Les sous-titres restent.
  *
- * L'auto-masquage (4 s sans geste) ne vaut qu'au repos et dans le menu : on
- * ne retire pas un panneau qu'on lit, ni un mode où l'on choisit.
+ * Aucune couche ne s'efface d'elle-même au bout d'une attente (#8988) : seul
+ * un toucher sur la scène range les commandes (`use-call-chrome.ts`).
  */
 
 export type CallPanelKind = 'react' | 'record' | 'people' | 'journal';
@@ -80,11 +80,10 @@ export type LayerChrome = {
   readonly mode: CallModeKind | null;
   /** Les commandes de ma caméra (rangée de ma vignette ou du haut, capsule du zoom). */
   readonly selfControls: boolean;
-  readonly autoHide: boolean;
 };
 
 export function layerChrome(layer: CallScreenLayer): LayerChrome {
-  if (layer.kind === 'mode') return { header: false, pill: false, rows: false, panel: null, mode: layer.mode, selfControls: false, autoHide: false };
+  if (layer.kind === 'mode') return { header: false, pill: false, rows: false, panel: null, mode: layer.mode, selfControls: false };
   return {
     header: true,
     pill: true,
@@ -92,6 +91,5 @@ export function layerChrome(layer: CallScreenLayer): LayerChrome {
     panel: layer.kind === 'panel' ? layer.panel : null,
     mode: null,
     selfControls: true,
-    autoHide: layer.kind !== 'panel',
   };
 }
