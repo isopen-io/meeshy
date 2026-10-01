@@ -162,15 +162,51 @@ describe('l’en-tête de l’aperçu — le COMPLET, sans chevron retour', () =
     expect(html).not.toContain('Chiffré de bout en bout');
   });
 
-  test('en aperçu : AUCUN retour, et l’identité (nom, sous-titre) avec les actions (recherche) et l’avatar, dans la bande de verre', () => {
+  test('en aperçu : AUCUN retour, et l’identité (nom, sous-titre) avec les actions (appel, agrandir) et l’avatar, dans la bande de verre', () => {
     const html = header(true);
     expect(html).not.toContain('Retour');
     expect(html).not.toContain('href="/"');
     expect(html).toContain('Kwame');
     expect(html).toContain('Chiffré de bout en bout');
-    expect(html).toContain('aria-label="Rechercher dans la conversation"');
+    expect(html).toContain('data-thread-call');
     expect(html).toContain('class="thread-header glass');
     expect(html).toContain('aria-label="Détails de la conversation"');
+  });
+});
+
+describe('l’en-tête de l’aperçu — « agrandir » à la place de la loupe (#9031)', () => {
+  const header = (preview: boolean) =>
+    renderToStaticMarkup(
+      <ThreadHeader
+        title="Kwame"
+        accent="#4455ff"
+        conversation={RICH_TEXT_DIRECT}
+        viewerId="u-viewer"
+        group={false}
+        otherUnread={0}
+        expanded={false}
+        onToggleExpanded={() => undefined}
+        currentRowTitle=""
+        isAuto
+        readingMenuRows={[]}
+        onSelectReadingMode={() => undefined}
+        onResetReadingModeToAuto={() => undefined}
+        {...(preview ? { preview: true } : {})}
+      />,
+    );
+
+  test('en aperçu, la loupe cède la place à la porte vers la conversation complète', () => {
+    const html = header(true);
+    expect(html).not.toContain('aria-label="Rechercher dans la conversation"');
+    expect(html).toContain('data-preview-open-full');
+    expect(html).toContain('aria-label="Ouvrir la conversation"');
+    expect(html).toContain(`href="/c/${RICH_TEXT_DIRECT.id}"`);
+  });
+
+  test('dans le fil, la loupe reste et rien n’ouvre « la conversation complète »', () => {
+    const html = header(false);
+    expect(html).toContain('aria-label="Rechercher dans la conversation"');
+    expect(html).not.toContain('data-preview-open-full');
   });
 });
 
@@ -202,15 +238,14 @@ describe('la feuille de l’aperçu', () => {
       </ConversationPreviewSheet>,
     );
 
-  test('une boîte de dialogue MODALE nommée, qui porte le fil et mène à la conversation complète', async () => {
+  test('une boîte de dialogue MODALE nommée, qui porte le fil ; la porte vers la conversation complète est dans son en-tête', async () => {
     await sheet(() => undefined);
     const dialog = document.querySelector('[data-conversation-preview="c1"]');
     expect(dialog?.getAttribute('role')).toBe('dialog');
     expect(dialog?.getAttribute('aria-modal')).toBe('true');
     expect(dialog?.getAttribute('aria-label')).toBe('Aperçu de la conversation');
     expect(dialog?.querySelector('[data-stub-thread]')).not.toBeNull();
-    const open = dialog?.querySelector('a[href="/c/c1"]');
-    expect(open?.getAttribute('aria-label')).toBe('Ouvrir la conversation');
+    expect(dialog?.querySelector('a[href="/c/c1"]')).toBeNull();
   });
 
   test('toucher HORS de l’aperçu le ferme', async () => {

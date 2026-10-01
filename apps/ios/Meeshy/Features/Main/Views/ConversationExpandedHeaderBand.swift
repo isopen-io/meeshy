@@ -174,8 +174,13 @@ struct ConversationHeaderLayout: Equatable {
     /// L'en-tête est-il posé dans du verre (`adaptiveGlass`) ?
     var isGlassBlock: Bool { glassShape != .none }
     /// L'aperçu seul : la porte vers la conversation complète, qui remplace le
-    /// calque transparent qui volait le défilement.
+    /// calque transparent qui volait le défilement. Elle prend la place de la
+    /// LOUPE (#9031) : l'aperçu ne cherche pas, il s'agrandit.
     let showsOpenFullConversation: Bool
+    /// L'avatar montre l'IDENTITÉ (#9031) — la pile des plus actifs avec leurs
+    /// points de présence, puis l'interlocuteur ou le groupe : en-tête déplié,
+    /// et toujours dans l'aperçu. Sinon, l'avatar seul, sa flamme du jour dessous.
+    let avatarShowsIdentity: Bool
     /// Hors aperçu, la frappe remplace la bande par sa barre compacte (retour +
     /// avatar) ; l'aperçu garde son en-tête — la barre compacte porte un retour.
     let yieldsToTypingBar: Bool
@@ -187,13 +192,15 @@ struct ConversationHeaderLayout: Equatable {
         if previewMode {
             return ConversationHeaderLayout(
                 showsBackButton: false, showsTitle: true, showsActions: true, glassShape: .edgeToEdgeBand,
-                showsOpenFullConversation: true, yieldsToTypingBar: false, measuresBandHeight: true
+                showsOpenFullConversation: true, avatarShowsIdentity: true,
+                yieldsToTypingBar: false, measuresBandHeight: true
             )
         }
         return ConversationHeaderLayout(
             showsBackButton: true, showsTitle: showOptions, showsActions: !showOptions,
             glassShape: showOptions ? .floatingBlock : .none,
-            showsOpenFullConversation: false, yieldsToTypingBar: true, measuresBandHeight: !showOptions
+            showsOpenFullConversation: false, avatarShowsIdentity: showOptions,
+            yieldsToTypingBar: true, measuresBandHeight: !showOptions
         )
     }
 }
@@ -365,4 +372,7 @@ struct ConversationHeaderState {
     var searchQuery = ""
     /// Hauteur MESURÉE de la bande d'en-tête repliée (#7998).
     var bandHeight: CGFloat = 0
+    /// La flamme du jour touchée par le lecteur (#9031) — elle revient au
+    /// prochain dépliement ; retenue par `ConversationHeaderMemory`.
+    var flameDismissed = false
 }

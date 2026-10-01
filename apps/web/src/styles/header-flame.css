@@ -1,0 +1,96 @@
+/*
+ * LA FLAMME DU JOUR SOUS L'AVATAR DE L'EN-TÊTE (#9031) — miroir de
+ * `HeaderFlameDecoration` (iOS). Une lueur tourne autour de l'avatar, la
+ * flamme en fait le tour, grossit sur place et revient. TRANSFORM et OPACITY
+ * seulement : le rejeu à chaque envoi ne coûte que la composition, jamais une
+ * mise en page. Le minutage (62 % de tour, 38 % de pulsation) est celui de
+ * `HeaderFlameOrbit` côté iOS.
+ */
+.header-flame-glow {
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  pointer-events: none;
+  opacity: 0;
+  background: conic-gradient(from 0turn, transparent 0turn, var(--ios-warning) 0.18turn, var(--color-error) 0.32turn, transparent 0.42turn);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  will-change: transform, opacity;
+}
+
+.header-flame-orbit {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+}
+
+.header-flame-seat {
+  position: absolute;
+  left: 0;
+  top: 30px;
+  transform: translate(-50%, -50%);
+}
+
+.header-flame-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  white-space: nowrap;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-error);
+  background: color-mix(in srgb, var(--ios-warning) 18%, var(--color-ios-surface));
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--color-error) 30%, transparent);
+}
+
+.header-flame-playing .header-flame-glow {
+  animation: header-flame-glow 1.5s ease-in-out both;
+}
+
+.header-flame-playing .header-flame-orbit {
+  animation: header-flame-orbit 1.5s ease-in-out both;
+}
+
+.header-flame-playing .header-flame-mark {
+  animation: header-flame-keep 1.5s ease-in-out both;
+}
+
+@keyframes header-flame-glow {
+  0% { opacity: 0; transform: rotate(0turn); }
+  50% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(1.5turn); }
+}
+
+@keyframes header-flame-orbit {
+  0% { transform: rotate(0turn); }
+  62%, 100% { transform: rotate(1turn); }
+}
+
+@keyframes header-flame-keep {
+  0% { transform: rotate(0turn) scale(1); }
+  31% { transform: rotate(-0.5turn) scale(1.2); }
+  62% { transform: rotate(-1turn) scale(1); }
+  81% { transform: rotate(-1turn) scale(1.9); }
+  100% { transform: rotate(-1turn) scale(1); }
+}
+
+@keyframes header-flame-fade {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+/* Mouvement réduit : la lueur s'allume et s'éteint sur place, sans orbite. */
+@media (prefers-reduced-motion: reduce) {
+  .header-flame-playing .header-flame-glow {
+    animation: header-flame-fade 0.6s ease-out both;
+  }
+  .header-flame-playing .header-flame-orbit,
+  .header-flame-playing .header-flame-mark {
+    animation: none;
+  }
+}

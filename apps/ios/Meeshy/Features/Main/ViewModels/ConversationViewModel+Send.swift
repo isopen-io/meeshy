@@ -247,6 +247,7 @@ extension ConversationViewModel {
         // quatre sorties de cette fonction, et un envoi mis en file hors ligne
         // compte tout autant : il partira.
         StreakActivityMark.marquer()
+        HeaderFlameReplay.messageSent(in: conversationId)
 
         // Debounce: a fast double-tap on the send button used to trigger two
         // concurrent `sendMessage` runs, both inserting their own optimistic

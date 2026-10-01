@@ -40,6 +40,7 @@ import { useOptionalRoute } from '@/lib/router';
 import { mergeTimeline, place } from '@/lib/grouping';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useSend } from '@/lib/view/use-send';
+import { useHeaderMemory } from '@/lib/view/use-header-memory';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useOnline } from '@/lib/net/online';
@@ -146,7 +147,6 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
    */
   const conversationId = threadData.conversationId;
   const queryClient = useQueryClient();
-  const [expanded, setExpanded] = useState(false);
   /**
    * LES DÉTAILS DE LA CONVERSATION (#7829) — une feuille de CE fil : le titre
    * de l'en-tête et le menu de chaque avatar d'auteur (#7828) l'ouvrent par la
@@ -263,6 +263,11 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
    */
   const { languages: readerLanguages, locale: readerLocale } = useReaderLanguages();
   const scope = useMemo(() => readingModeScopeOf(viewer), [viewer.id]);
+  /** L'EN-TÊTE DÉPLIÉ ET LA FLAMME MASQUÉE, retenus par conversation (#9031). */
+  const header = useHeaderMemory({ scope, conversationId, preview: preview !== undefined });
+  const expanded = header.expanded;
+  /** Chaque message parti rejoue la flamme du jour sous l'avatar (#9031). */
+  const [flameReplay, setFlameReplay] = useState(0);
 
   /**
    * LA RÉGION LIVE UNIQUE DE L'ÉCRAN (revue #5814, défaut majeur 9) — UN
@@ -453,6 +458,14 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     readerLanguages,
     send,
   });
+  const composeSend = compose.onSend;
+  const sendAndReplayFlame = useCallback(
+    (input: Parameters<typeof composeSend>[0]) => {
+      composeSend(input);
+      setFlameReplay((count) => count + 1);
+    },
+    [composeSend],
+  );
 
   /**
    * LE MENU DU MESSAGE (#5814) — appui long / clic droit / `ContextMenu` sur
@@ -672,7 +685,10 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
         activeMembers={activeMembers}
         otherUnread={otherUnread}
         expanded={expanded}
-        onToggleExpanded={() => setExpanded((v) => !v)}
+        onToggleExpanded={header.toggleExpanded}
+        flameDismissed={header.flameDismissed}
+        onDismissFlame={header.dismissFlame}
+        flameReplay={flameReplay}
         onOpenDetails={openDetails}
         currentRowTitle={reading.currentRow?.title ?? ''}
         isAuto={reading.readingDecision.reason !== 'sticky'}
@@ -893,7 +909,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
         >
           <Composer
             preferred={readerLanguages}
-            onSend={compose.onSend}
+            onSend={sendAndReplayFlame}
             onTextChange={typing.onTextChange}
             draft={compose.initialDraft}
             stickyProtection={compose.stickyProtection}

@@ -1071,6 +1071,7 @@ struct ConversationView: View {
                 // subscriptions, sync-engine gate) are deferred here out of
                 // `init` so the throwaway VMs SwiftUI allocates on every
                 // reconstruction stay free — see ConversationViewModel.start().
+                restoreHeaderMemory()
                 viewModel.start()
                 viewModel.observeSync()
                 await viewModel.loadMessages()
@@ -2174,7 +2175,7 @@ struct ConversationView: View {
                 moodEmoji: headerMoodEmoji
             ) {
                 isTyping = false
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { composerState.showOptions = true }
+                setHeaderExpanded(true)
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
@@ -2282,14 +2283,13 @@ struct ConversationView: View {
     // le plus proche, une érasure de plus. C'est exactement ce qu'un type
     // NOMINAL supprime : son nom se substitue au sous-arbre entier dans le
     // mangled name, donc le démangleur n'a plus à le parcourir.
+    // L'aperçu (#9031) : « agrandir » prend la place de la loupe.
     private var headerButtonsCluster: AnyView {
-        let cluster = ConversationHeaderActionsCluster(
+        AnyView(ConversationHeaderActionsCluster(
             callButtons: { headerCallButtons },
-            searchButton: { expandedHeaderSearchButton },
+            searchButton: { previewMode ? openFullConversationButton : expandedHeaderSearchButton },
             readingModeCluster: { readingModeAffordanceCluster }
-        )
-        guard headerLayout.showsOpenFullConversation else { return AnyView(cluster) }
-        return AnyView(HStack(spacing: 0) { cluster; openFullConversationButton })
+        ))
     }
 
     /// Chip de mode + bouton Aa (§WS-7 travaux 3-4, arbitrage F-086bis) —
