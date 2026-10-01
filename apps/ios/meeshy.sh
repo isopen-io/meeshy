@@ -386,6 +386,61 @@ sync_build_number() {
     log "project.yml et $PROJECT/project.pbxproj mis à jour — pensez à committer ce bump"
 }
 
+# ─── Build number des builds LOCAUX ──────────────────────────────────────────
+#
+# Un build local (`build`, `run`, `device`) porte le numéro de la DERNIÈRE
+# livraison App Store Connect — TestFlight comme Xcode Cloud, qui y publient
+# tous deux. Il le porte en BUILD SETTING passé à xcodebuild, jamais en
+# réécrivant project.yml et le pbxproj : écrire les fichiers suivis laissait
+# chaque worktree sale après un build, bloquait les fast-forward et faisait
+# voyager le bump dans des commits de feature. `build-number --write` reste le
+# geste explicite qui grave la valeur dans le dépôt.
+#
+# App Store Connect n'est interrogé qu'une fois par quart d'heure (cache), et
+# hors ligne on retombe sur le dernier numéro connu, puis sur la valeur
+# committée — un build local n'échoue jamais pour ça.
+BUILD_NUMBER_CACHE="${MEESHY_BUILD_NUMBER_CACHE:-${XDG_CACHE_HOME:-$HOME/Library/Caches}/meeshy/asc-latest-build-$BUNDLE_ID}"
+BUILD_NUMBER_CACHE_TTL=900
+LOCAL_BUILD_NUMBER=""
+BUILD_NUMBER_FLAGS=()
+
+cached_build_number() {
+    [ -f "$BUILD_NUMBER_CACHE" ] || return 1
+    local value
+    value=$(grep -o '^[0-9][0-9]*$' "$BUILD_NUMBER_CACHE" | head -n 1)
+    [ -n "$value" ] || return 1
+    printf '%s' "$value"
+}
+
+build_number_cache_is_fresh() {
+    [ -f "$BUILD_NUMBER_CACHE" ] || return 1
+    local age=$(( $(date +%s) - $(stat -f %m "$BUILD_NUMBER_CACHE") ))
+    [ "$age" -lt "$BUILD_NUMBER_CACHE_TTL" ]
+}
+
+# Pose LOCAL_BUILD_NUMBER et BUILD_NUMBER_FLAGS. Les messages vont sur stderr
+# pour que `build-number --print` ne rende que le numéro.
+resolve_build_number() {
+    local value source
+    if build_number_cache_is_fresh && value=$(cached_build_number); then
+        source="dernier build App Store Connect (cache)"
+    elif value=$(fetch_latest_asc_build); then
+        mkdir -p "$(dirname "$BUILD_NUMBER_CACHE")"
+        printf '%s\n' "$value" > "$BUILD_NUMBER_CACHE"
+        source="dernier build App Store Connect"
+    elif value=$(cached_build_number); then
+        source="dernier numéro connu — App Store Connect injoignable"
+    else
+        value=$(current_build_number)
+        source="valeur committée — App Store Connect injoignable et aucun cache"
+    fi
+
+    LOCAL_BUILD_NUMBER="$value"
+    BUILD_NUMBER_FLAGS=()
+    [ -n "$value" ] && BUILD_NUMBER_FLAGS=("CURRENT_PROJECT_VERSION=$value")
+    ok "Build number ${BOLD}${value:-?}${NC} ($source)" >&2
+}
+
 # ─── Fraîcheur du projet Xcode ───────────────────────────────────────────────
 #
 # `project.yml` est la source de vérité (XcodeGen) ; `project.pbxproj` en est
@@ -408,10 +463,10 @@ sync_build_number() {
 #
 # L'incident du 2026-07-25 (pbxproj réécrit depuis le placeholder « 1 » de
 # project.yml, cf. la section « Build number » ci-dessus) ne peut plus se
-# reproduire : `write_build_number` écrit le numéro dans les DEUX fichiers, et
-# `sync_build_number` s'exécute avant la compilation — donc avant comme après
-# une régénération, project.yml porte la vérité. C'est ce qui rend l'appel à
-# xcodegen sûr ici, et c'est la seule raison pour laquelle il l'est.
+# reproduire : un build local passe `CURRENT_PROJECT_VERSION` à xcodebuild en
+# build setting (`resolve_build_number`), qui prime sur ce que le pbxproj porte
+# — avant comme après une régénération. Et `--write` écrit dans les DEUX
+# fichiers. C'est ce qui rend l'appel à xcodegen sûr ici.
 PROJECT_FRESHNESS_CHECKED=false
 
 # Racines globbées récursivement par project.yml (une par target).
@@ -546,6 +601,7 @@ do_device_deploy_only() {
         -jobs "$ncpu" \
         ONLY_ACTIVE_ARCH=YES \
         DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+        ${BUILD_NUMBER_FLAGS[@]+"${BUILD_NUMBER_FLAGS[@]}"} \
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \
         build >"$build_log" 2>&1
     local build_rc=$?
@@ -851,6 +907,8 @@ do_build() {
         do_clean
     fi
 
+    resolve_build_number
+
     log "Building ${BOLD}$SCHEME${NC} ($CONFIGURATION) for ${BOLD}$DEVICE_NAME${NC}..."
     local build_start
     build_start=$(date +%s)
@@ -885,6 +943,7 @@ do_build() {
         ${BUILD_LOCATION_OVERRIDES[@]+"${BUILD_LOCATION_OVERRIDES[@]}"} \
         "${XCODE_PKG_FLAGS[@]}" \
         "${mac_flags[@]}" \
+        ${BUILD_NUMBER_FLAGS[@]+"${BUILD_NUMBER_FLAGS[@]}"} \
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \
         build >"$build_log" 2>&1
     local status=$?
@@ -2011,7 +2070,7 @@ usage() {
     echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(SDK package suite + 3 app phases; --skip-sdk, --ui)${NC}"
     echo -e "    ${GREEN}setup${NC}        Check/install dev dependencies"
     echo -e "    ${GREEN}device${NC}       Pick a device (simulator or physical) and deploy ${DIM}(interactive)${NC}"
-    echo -e "    ${GREEN}build-number${NC} Align CURRENT_PROJECT_VERSION on the latest App Store Connect build ${DIM}(via andp)${NC}"
+    echo -e "    ${GREEN}build-number${NC} Show the build number local builds inject (latest App Store Connect build) ${DIM}(--print: number only, --write: commit it to project.yml + pbxproj)${NC}"
     echo -e "    ${GREEN}screenshot${NC}   Take simulator screenshot"
     echo ""
     echo -e "  ${BOLD}Platform:${NC}"
@@ -2095,6 +2154,8 @@ while [[ $# -gt 0 ]]; do
         --require-connected) REQUIRE_CONNECTED=true; shift ;;
         --coverage)       COVERAGE=true; shift ;;
         --deep)           DEEP_CLEAN=true; shift ;;
+        --print)          BUILD_NUMBER_MODE="print"; shift ;;
+        --write)          BUILD_NUMBER_MODE="write"; shift ;;
         --iphone)         PLATFORM="iphone"; shift ;;
         --ipad)           PLATFORM="ipad"; shift ;;
         --mac|--macos)    PLATFORM="mac"; shift ;;
@@ -2239,20 +2300,37 @@ case "$COMMAND" in
         ;;
 
     build-number)
-        echo ""
-        echo -e "${BOLD}${CYAN}  Meeshy iOS Build Number${NC}"
-        echo ""
-        sync_build_number
-        echo ""
+        case "${BUILD_NUMBER_MODE:-}" in
+            print)
+                resolve_build_number
+                echo "$LOCAL_BUILD_NUMBER"
+                ;;
+            write)
+                echo ""
+                echo -e "${BOLD}${CYAN}  Meeshy iOS Build Number${NC}"
+                echo ""
+                sync_build_number
+                echo ""
+                ;;
+            *)
+                echo ""
+                echo -e "${BOLD}${CYAN}  Meeshy iOS Build Number${NC}"
+                echo ""
+                resolve_build_number 2>&1
+                log "Les builds locaux l'injectent en build setting ; ${BOLD}--write${NC} le grave dans project.yml et le pbxproj"
+                echo ""
+                ;;
+        esac
         ;;
 
     device)
         echo ""
         echo -e "${BOLD}${CYAN}  Meeshy iOS Device Deploy${NC}"
         echo ""
-        # Avant de compiler : l'app posée sur un appareil réel doit porter le
-        # numéro de build du dernier TestFlight, pas le placeholder XcodeGen.
-        sync_build_number
+        # Avant de compiler : l'app posée sur un appareil réel porte le numéro
+        # de la dernière livraison App Store Connect, injecté sans réécrire le
+        # dépôt (cf. « Build number des builds LOCAUX »).
+        resolve_build_number
         pick_device
 
         if [ "$PICKED_DEVICE_TYPE" = "physical" ]; then
