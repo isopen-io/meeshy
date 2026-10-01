@@ -3,7 +3,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { SERVER_MESSAGE_MAX_LENGTH } from '@/lib/send/paste-route';
 
 import { Composer } from './composer';
 
@@ -37,12 +36,12 @@ describe('Composer — ce qu’on colle part toujours (#9037)', () => {
 
   type Sent = { readonly text: string; readonly attachments: readonly { readonly name: string; readonly file: File }[] };
 
-  const mount = (onSend: (payload: Sent) => void) => {
+  const mount = (onSend: (payload: Sent) => void, maxLength?: number) => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
     act(() => {
-      root.render(<Composer onSend={onSend} />);
+      root.render(<Composer onSend={onSend} {...(maxLength === undefined ? {} : { maxLength })} />);
     });
     return container;
   };
@@ -97,14 +96,24 @@ describe('Composer — ce qu’on colle part toujours (#9037)', () => {
     expect(sent!.attachments.map((a) => a.file)).toEqual([image]);
   });
 
-  test('un texte qui ferait dépasser la limite part en .txt, le champ reste intact', async () => {
+  test('2000 caractères au total : le collé s’insère (le navigateur garde la main)', async () => {
+    const el = mount(() => {});
+    const field = el.querySelector<HTMLTextAreaElement>('textarea')!;
+    typeInto(field, 'Voici le journal :');
+    const event = paste(field, { text: 'L'.repeat(2000 - 'Voici le journal :'.length) });
+    await flush();
+
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  test('2001 caractères au total : le collé part en .txt, le champ reste intact', async () => {
     let sent: Sent | null = null;
     const el = mount((payload) => {
       sent = payload;
     });
     const field = el.querySelector<HTMLTextAreaElement>('textarea')!;
     typeInto(field, 'Voici le journal :');
-    const long = 'L'.repeat(SERVER_MESSAGE_MAX_LENGTH);
+    const long = 'L'.repeat(2001 - 'Voici le journal :'.length);
     const event = paste(field, { text: long });
     await flush();
 
@@ -127,5 +136,14 @@ describe('Composer — ce qu’on colle part toujours (#9037)', () => {
 
     expect(event.defaultPrevented).toBe(false);
     expect(el.querySelector('[role="group"][aria-label="Pièces jointes en attente"]')).toBeNull();
+  });
+
+  test('un hôte qui déclare sa limite (`maxLength`) : le collage la suit — une seule limite pour le compteur et le collage', async () => {
+    const el = mount(() => {}, 10);
+    const field = el.querySelector<HTMLTextAreaElement>('textarea')!;
+    const event = paste(field, { text: 'onze lettre' });
+    await flush();
+
+    expect(event.defaultPrevented).toBe(true);
   });
 });

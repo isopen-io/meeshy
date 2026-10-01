@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
-import { SERVER_MESSAGE_MAX_LENGTH, pastedContentOf, pastedTextFileName, routePastedContent } from './paste-route';
+import { MAX_MESSAGE_LENGTH } from '@meeshy/shared/utils/languages';
+
+import { pastedContentOf, pastedTextFileName, routePastedContent } from './paste-route';
 
 /**
  * #9037 — CE QU'ON COLLE PART TOUJOURS. Un FICHIER collé devient la pièce
@@ -36,22 +38,23 @@ describe('routePastedContent — un fichier collé est une pièce jointe', () =>
   });
 });
 
-describe('routePastedContent — le texte, mesuré contre la limite du serveur', () => {
-  test('la limite est celle que la passerelle accepte (4000)', () => {
-    expect(SERVER_MESSAGE_MAX_LENGTH).toBe(4000);
+describe('routePastedContent — le texte, mesuré contre la limite que les frontends déclarent', () => {
+  test('la limite est la constante partagée des frontends (2000)', () => {
+    expect(MAX_MESSAGE_LENGTH).toBe(2000);
   });
 
   test('un texte qui tient reste au navigateur : il s’insère dans le champ', () => {
     expect(route({ text: 'Bonjour', current: 'x'.repeat(100) })).toEqual({ kind: 'native' });
   });
 
-  test('exactement à la limite, le texte tient encore', () => {
-    expect(route({ text: 'b'.repeat(10), current: 'a'.repeat(SERVER_MESSAGE_MAX_LENGTH - 10) })).toEqual({ kind: 'native' });
+  test('2000 caractères au total : le texte tient encore, il s’insère', () => {
+    expect(route({ text: 'b'.repeat(10), current: 'a'.repeat(1990) })).toEqual({ kind: 'native' });
+    expect(route({ text: 'b'.repeat(2000) })).toEqual({ kind: 'native' });
   });
 
-  test('un caractère au-delà ⇒ un document .txt horodaté qui porte le texte collé, tel quel', async () => {
+  test('2001 caractères ⇒ un document .txt horodaté qui porte le texte collé, tel quel', async () => {
     const pasted = 'b'.repeat(11);
-    const decision = route({ text: pasted, current: 'a'.repeat(SERVER_MESSAGE_MAX_LENGTH - 10) });
+    const decision = route({ text: pasted, current: 'a'.repeat(1990) });
     if (decision.kind !== 'attach') throw new Error('attendu : attach');
     const [file] = decision.files;
     expect(decision.files).toHaveLength(1);
@@ -61,12 +64,12 @@ describe('routePastedContent — le texte, mesuré contre la limite du serveur',
   });
 
   test('la sélection REMPLACÉE ne compte pas : coller sur tout le champ ne mesure que le collé', () => {
-    const current = 'a'.repeat(SERVER_MESSAGE_MAX_LENGTH);
+    const current = 'a'.repeat(2000);
     expect(route({ text: 'court', current, selection: { start: 0, end: current.length } })).toEqual({ kind: 'native' });
   });
 
-  test('un texte seul démesuré, champ vide, part aussi en .txt', () => {
-    expect(route({ text: 'z'.repeat(SERVER_MESSAGE_MAX_LENGTH + 1) }).kind).toBe('attach');
+  test('un texte seul de 2001 caractères, champ vide, part aussi en .txt', () => {
+    expect(route({ text: 'z'.repeat(2001) }).kind).toBe('attach');
   });
 
   test('rien de collé ⇒ le navigateur garde la main', () => {

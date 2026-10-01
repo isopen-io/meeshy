@@ -215,7 +215,9 @@ export const Composer = memo(function Composer({
   onDraftChange?: (report: ComposerDraftReport) => void;
   /** Absent en conversation standard (§1.2 point 2, #6175) — aucun appelant
    * ne le fournit cette itération, faute de source honnête de la limite
-   * serveur (issue gateway compagnon). Le compteur ne se rend QUE si fourni. */
+   * serveur (issue gateway compagnon). Le compteur ne se rend QUE si fourni.
+   * Le collage (#9037) suit la MÊME limite : ce `maxLength` s'il est fourni,
+   * sinon `MAX_MESSAGE_LENGTH` partagé (2000, `lib/send/paste-route.ts`). */
   maxLength?: number;
 }) {
   const [text, setText] = useState(() => draft?.text ?? '');
@@ -933,6 +935,7 @@ export const Composer = memo(function Composer({
                   current: el.value,
                   selection: { start: el.selectionStart, end: el.selectionEnd },
                   now: new Date(),
+                  ...(maxLength === undefined ? {} : { maxLength }),
                 });
                 if (decision.kind === 'native') return;
                 e.preventDefault();

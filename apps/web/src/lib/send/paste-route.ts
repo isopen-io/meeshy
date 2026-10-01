@@ -1,3 +1,5 @@
+import { MAX_MESSAGE_LENGTH } from '@meeshy/shared/utils/languages';
+
 /**
  * **CE QU'ON COLLE PART TOUJOURS** (#9037) — la loi PURE du collage dans le
  * champ du composer de conversation.
@@ -10,15 +12,11 @@
  *    document `.txt` joint, et le champ reste tel qu'il était ;
  *  - tout le reste est laissé au navigateur (`native`).
  *
- * LA LIMITE EST CELLE DU SERVEUR, mesurée dans la passerelle :
- * `MESSAGE_LIMITS.MAX_MESSAGE_LENGTH` (`services/gateway/src/config/
- * message-limits.ts`, défaut 4000) borne `SendMessageBodySchema.content`
- * (REST) et `validateMessageLength` (socket). Le `MAX_MESSAGE_LENGTH = 2000`
- * de `@meeshy/shared/utils/languages` DIVERGE de ce que le serveur accepte et
- * n'est pas lu ici. Les deux comptent en unités UTF-16 (`String.length`, le
- * `.max()` de Zod), comme ce module.
+ * LA LIMITE EST CELLE QUE LES FRONTENDS DÉCLARENT (décision porteur
+ * 2026-10-01) : `MAX_MESSAGE_LENGTH` de `@meeshy/shared/utils/languages`
+ * (2000). La passerelle accepte 4000 (`MESSAGE_LIMITS`), réservés aux envois
+ * API programmatiques. Comptée en unités UTF-16 (`String.length`).
  */
-export const SERVER_MESSAGE_MAX_LENGTH = 4000;
 
 export type PastedContent = { readonly files: readonly File[]; readonly text: string };
 
@@ -66,6 +64,6 @@ export function routePastedContent(input: {
   if (pasted.files.length > 0) return { kind: 'attach', files: pasted.files };
   if (pasted.text === '') return { kind: 'native' };
   const kept = current.length - Math.max(0, selection.end - selection.start);
-  if (kept + pasted.text.length <= (input.maxLength ?? SERVER_MESSAGE_MAX_LENGTH)) return { kind: 'native' };
+  if (kept + pasted.text.length <= (input.maxLength ?? MAX_MESSAGE_LENGTH)) return { kind: 'native' };
   return { kind: 'attach', files: [new File([pasted.text], pastedTextFileName(input.now), { type: 'text/plain;charset=utf-8' })] };
 }
