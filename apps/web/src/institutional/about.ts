@@ -12,6 +12,7 @@ export const PAGE_ABOUT: ContentPage = {
   title: 'À propos de Meeshy',
   hero: "Le réseau social où la langue n'est plus une barrière. Communiquez, apprenez et collaborez sans frontières.",
   description: "Le réseau social où la langue n'est plus une barrière. Communiquez, apprenez et collaborez sans frontières.",
+  mee: { sticker: 'duo-mee-calin', caption: 'Mee et Meo, les mascottes de Meeshy, s’envoient des cœurs dans toutes les langues.' },
   sections: [
     {
       title: "Qu'est-ce que Meeshy ?",
@@ -32,6 +33,24 @@ export const PAGE_ABOUT: ContentPage = {
             '🗣️ Transcription et traduction audio pour briser les barrières orales',
             '📚 Apprentissage naturel des langues en communiquant avec le monde entier',
             '🌐 Promotion active des langues minoritaires africaines, asiatiques et autochtones',
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Mee et Meo, les mascottes de Meeshy',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            'Mee et Meo sont deux colibris jumeaux, rapides comme un message. Mee a une plume en boucle et un cœur rubis ; Meo, une huppe violette et un cœur violet. Retrouvez-les dans les stickers de vos conversations.',
+          ],
+        },
+        {
+          kind: 'mee',
+          views: [
+            { sticker: 'mee-coucou', caption: 'Mee dit bonjour.' },
+            { sticker: 'duo-meo-bisou', caption: 'Meo l’embrasse, Mee s’évanouit.' },
           ],
         },
       ],

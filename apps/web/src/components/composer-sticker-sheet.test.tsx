@@ -11,6 +11,7 @@ import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { ComposerStickerSheet } from './composer-sticker-sheet';
+import type { PickedSticker } from './composer-sticker-sheet';
 
 /**
  * **« MES STICKERS » (#7938)** — chaque témoin compte un EFFET (loi 4) : un
@@ -54,7 +55,7 @@ const sticker = (id: string): StickerDefinition => ({
   lastUsedAt: '2026-09-25T10:00:00.000Z',
 });
 
-type Picked = { readonly stickerId: string; readonly file: File };
+type Picked = PickedSticker;
 
 const mount = (onPick: (picked: Picked) => void = () => {}) =>
   mounter.mount(
@@ -75,7 +76,7 @@ describe('ComposerStickerSheet', () => {
     await mounter.click(host.querySelector('[data-sticker="b"]'));
     await act(settle);
 
-    expect(picked.map((p) => p.stickerId)).toEqual(['b']);
+    expect(picked.map((p) => p.sticker.stickerId)).toEqual(['b']);
     expect(picked[0]?.file.type).toBe('image/png');
     const order = appQueryClient.getQueryData<readonly StickerDefinition[]>(STICKERS_QUERY_KEY)?.map((s) => s.id);
     expect(order).toEqual(['b', 'a']);
@@ -124,5 +125,24 @@ describe('ComposerStickerSheet', () => {
     await act(settle);
 
     expect(host.textContent).toContain('Aucune image dans le presse-papier');
+  });
+
+  test('l’onglet Mee, après « Mes stickers », montre les stickers de Mee — seule puis à deux', async () => {
+    appQueryClient.setQueryData(STICKERS_QUERY_KEY, []);
+    const host = await mount();
+    const tabs = Array.from(host.querySelectorAll('[role="tab"]')).map((tab) => tab.getAttribute('data-sticker-tab'));
+    expect(tabs).toEqual(['mine', 'mee', 'meo', 'instants']);
+
+    await mounter.click(host.querySelector('[data-sticker-tab="mee"]'));
+    await act(async () => {
+      await import('./composer-mee-stickers');
+      await settle();
+      await settle();
+    });
+
+    expect(host.querySelector('[data-sticker-library]')).toBe(null);
+    expect(host.querySelector('[data-mee-sticker="mee-coucou"]')).not.toBe(null);
+    expect(host.querySelector('[data-mee-sticker="duo-mee-bisou"]')).not.toBe(null);
+    expect(host.querySelector('[data-mee-sticker="meo-salut"]')).toBe(null);
   });
 });

@@ -19,6 +19,7 @@ export const PAGE_TERMS: ContentPage = {
   hero: 'Bienvenue sur Meeshy. En utilisant notre service, vous acceptez les conditions suivantes :',
   mention: 'Dernière mise à jour : 23 août 2026',
   description: 'Bienvenue sur Meeshy. En utilisant notre service, vous acceptez les conditions suivantes :',
+  mee: { sticker: 'meo-ok', caption: 'Meo a tout lu. L’essentiel tient en quelques règles claires, juste en dessous.' },
   sections: [
     {
       title: 'Acceptation des Conditions',
