@@ -1,4 +1,4 @@
-import { MEE_DUO, MEO_DUO } from './catalog-duo';
+import { DUO_TWINS } from './catalog-duo';
 import { INSTANTS } from './catalog-instants';
 import { MEE_SOLO } from './catalog-mee';
 import { MEO_SOLO } from './catalog-meo';
@@ -12,7 +12,7 @@ import type { MeeSlots, MeeSticker, MeeTab } from './types';
 
 export { MEE_TEMPLATE_PREFIX };
 
-export const MEE_STICKERS: readonly MeeSticker[] = [...MEE_SOLO, ...MEE_DUO, ...MEO_SOLO, ...MEO_DUO, ...INSTANTS];
+export const MEE_STICKERS: readonly MeeSticker[] = [...MEE_SOLO, ...MEO_SOLO, ...DUO_TWINS, ...INSTANTS];
 
 const BY_ID: ReadonlyMap<string, MeeSticker> = new Map(MEE_STICKERS.map((sticker) => [sticker.id, sticker]));
 

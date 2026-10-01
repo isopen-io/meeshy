@@ -57,25 +57,23 @@ describe('le volume et les ratios', () => {
 
   test('les sentiments couvrent amour, morbide, joie, célébration, rejet, consolation, frustration, seul et à deux', () => {
     const wanted = ['amour', 'morbide', 'joie', 'celebration', 'rejet', 'consolation', 'frustration', 'tristesse', 'colere', 'peur', 'jalousie'] as const;
-    const solo = new Set(MEE_STICKERS.filter((s) => s.section === 'solo').map((s) => s.feeling));
-    const duo = new Set(MEE_STICKERS.filter((s) => s.section === 'duo').map((s) => s.feeling));
+    const solo = new Set(MEE_STICKERS.filter((s) => s.tab === 'mee' || s.tab === 'meo').map((s) => s.feeling));
+    const duo = new Set(meeStickersOfTab('duo').map((s) => s.feeling));
     expect(wanted.filter((f) => !solo.has(f) && f !== 'rejet' && f !== 'consolation')).toEqual([]);
     expect(['amour', 'morbide', 'joie', 'celebration', 'rejet', 'consolation', 'colere', 'jalousie'].filter((f) => !duo.has(f as MeeSticker['feeling']))).toEqual([]);
   });
 });
 
-describe('les onglets Mee et Meo', () => {
-  test('chaque onglet a ses stickers seuls et sa partie à deux', () => {
-    (['mee', 'meo'] as const).forEach((tab) => {
-      const list = meeStickersOfTab(tab);
-      expect(list.filter((s) => s.section === 'solo').length).toBe(30);
-      expect(list.filter((s) => s.section === 'duo').length).toBe(22);
-    });
+describe('l’onglet Mee & Meo', () => {
+  const playedBy = (actor: 'mee' | 'meo') => meeStickersOfTab('duo').filter((s) => s.id.startsWith(`duo-${actor}-`));
+
+  test('les vingt-deux scènes d’origine s’y jouent dans les deux sens', () => {
+    expect(playedBy('mee').length).toBe(22);
+    expect(playedBy('meo').length).toBe(22);
   });
 
-  test('à deux, l’acteur s’inverse ET la scène change : jamais le même sticker d’un onglet à l’autre', () => {
-    const duoOf = (tab: 'mee' | 'meo') => meeStickersOfTab(tab).filter((s) => s.section === 'duo');
-    duoOf('mee').forEach((mine) => {
+  test('à deux, l’acteur s’inverse ET la scène change : jamais le même sticker d’un sens à l’autre', () => {
+    playedBy('mee').forEach((mine) => {
       const twin = findMeeSticker(mine.id.replace('duo-mee-', 'duo-meo-'));
       expect(twin).toBeDefined();
       const a = renderMeeSticker(mine, { uid: 'x' });
@@ -176,7 +174,7 @@ describe('le dessin se lit comme un sticker mignon (#9053)', () => {
   });
 
   test('le bec reste court : sa pointe ne dépasse pas le visage', () => {
-    const beaks = MEE_STICKERS.filter((s) => s.section === 'solo').flatMap((s) =>
+    const beaks = MEE_STICKERS.filter((s) => s.tab === 'mee' || s.tab === 'meo').flatMap((s) =>
       [...s.scene('t', {}).matchAll(/<path d="([^"]+)" fill="url\(#t(?:mee|meo)1k\)"/g)].map((m) => m[1] ?? ''),
     );
     const reach = beaks.flatMap((d) => [...d.matchAll(/(-?[0-9.]+) (-?[0-9.]+)/g)].map((m) => Number(m[1])));

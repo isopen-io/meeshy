@@ -46,8 +46,8 @@ import { imageFilesOf, prepareStickerSource, readClipboardImages } from '@/lib/s
  */
 const MeeStickerPanel = lazy(() => import('./composer-mee-stickers').then((m) => ({ default: m.MeeStickerPanel })));
 
-/** Les onglets de la feuille : la bibliothèque, puis Mee, Meo et les Instants (#9034). */
-const STICKER_TABS = ['mine', 'mee', 'meo', 'instants'] as const;
+/** Les onglets de la feuille : la bibliothèque, puis Mee, Meo, Mee & Meo et les Instants (#9034, #9058). */
+const STICKER_TABS = ['mine', 'mee', 'meo', 'duo', 'instants'] as const;
 type StickerTab = (typeof STICKER_TABS)[number];
 
 /** Ce que la feuille rend à l'hôte : l'image à joindre et le descripteur du champ `sticker`. */
@@ -254,14 +254,21 @@ export function ComposerStickerSheet({
   );
 }
 
-const TAB_KEYS = {
-  mine: 'composer.sticker.title',
-  mee: 'composer.sticker.mee.solo',
-  meo: 'composer.sticker.meo.solo',
-  instants: 'composer.sticker.tab.instants',
-} as const;
-
-const TAB_LABELS: Readonly<Partial<Record<StickerTab, string>>> = { mee: 'Mee', meo: 'Meo' };
+/** Les personnages portent leur NOM, le même dans toutes les langues ; les autres onglets se traduisent. */
+const tabLabel = (tab: StickerTab, language: ReturnType<typeof currentInterfaceLanguage>): string => {
+  switch (tab) {
+    case 'mine':
+      return translate(language, 'composer.sticker.title');
+    case 'instants':
+      return translate(language, 'composer.sticker.tab.instants');
+    case 'mee':
+      return 'Mee';
+    case 'meo':
+      return 'Meo';
+    case 'duo':
+      return 'Mee & Meo';
+  }
+};
 
 /** Les onglets — une liste d'onglets au clavier (flèches, Début, Fin), un seul arrêt de tabulation, cibles de 44 px. */
 function StickerTabBar({
@@ -309,7 +316,7 @@ function StickerTabBar({
               backgroundColor: selected ? 'var(--accent)' : 'var(--color-ios-card)',
             }}
           >
-            {TAB_LABELS[candidate] ?? translate(language, TAB_KEYS[candidate])}
+            {tabLabel(candidate, language)}
           </button>
         );
       })}

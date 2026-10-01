@@ -127,11 +127,12 @@ describe('ComposerStickerSheet', () => {
     expect(host.textContent).toContain('Aucune image dans le presse-papier');
   });
 
-  test('l’onglet Mee, après « Mes stickers », montre les stickers de Mee — seule puis à deux', async () => {
+  test('l’onglet Mee, après « Mes stickers », montre Mee seule — les duos ont leur onglet « Mee & Meo »', async () => {
     appQueryClient.setQueryData(STICKERS_QUERY_KEY, []);
     const host = await mount();
     const tabs = Array.from(host.querySelectorAll('[role="tab"]')).map((tab) => tab.getAttribute('data-sticker-tab'));
-    expect(tabs).toEqual(['mine', 'mee', 'meo', 'instants']);
+    expect(tabs).toEqual(['mine', 'mee', 'meo', 'duo', 'instants']);
+    expect(host.querySelector('[data-sticker-tab="duo"]')?.textContent).toBe('Mee & Meo');
 
     await mounter.click(host.querySelector('[data-sticker-tab="mee"]'));
     await act(async () => {
@@ -142,7 +143,7 @@ describe('ComposerStickerSheet', () => {
 
     expect(host.querySelector('[data-sticker-library]')).toBe(null);
     expect(host.querySelector('[data-mee-sticker="mee-coucou"]')).not.toBe(null);
-    expect(host.querySelector('[data-mee-sticker="duo-mee-bisou"]')).not.toBe(null);
+    expect(host.querySelector('[data-mee-sticker="duo-mee-bisou"]')).toBe(null);
     expect(host.querySelector('[data-mee-sticker="meo-salut"]')).toBe(null);
   });
 });
