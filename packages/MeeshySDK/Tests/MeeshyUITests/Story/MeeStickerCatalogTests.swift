@@ -81,3 +81,17 @@ final class MeeStickerCatalogTests: XCTestCase {
         XCTAssertEqual(StickerSheetTab.sections(of: .meo, offered: toutes), [])
     }
 }
+
+/// **La grille anime sans faire exploser la mémoire** (#9059).
+@MainActor
+final class MeeStickerGridFilmTests: XCTestCase {
+
+    func test_gridCell_decodesAtTheGridCap_notAtTheScreenScale() {
+        XCTAssertEqual(MeeStickerFilmView.decodePixelSize(side: 96, scale: 3, cap: MeeStickerFilmView.gridPixelCap), 180)
+    }
+
+    func test_bubble_decodesAtScreenScale_capedByTheFilm() {
+        XCTAssertEqual(MeeStickerFilmView.decodePixelSize(side: 100, scale: 2, cap: 360), 200)
+        XCTAssertEqual(MeeStickerFilmView.decodePixelSize(side: 160, scale: 3, cap: 360), 360)
+    }
+}

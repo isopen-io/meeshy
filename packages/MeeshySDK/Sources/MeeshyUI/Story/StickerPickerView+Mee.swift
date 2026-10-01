@@ -8,9 +8,8 @@ extension StickerPickerView {
     static let meeCellSide: CGFloat = 96
 
     /// Solo, puis « à deux » — les sections du web, dans son ordre. Les
-    /// vignettes sont FIXES : quarante films animés à la fois coûteraient des
-    /// centaines de mégaoctets pour une grille qu'on parcourt ; le mouvement
-    /// est dans la bulle.
+    /// vignettes sont ANIMÉES (#9059), décodées à `gridPixelCap` hors du fil
+    /// principal ; une case qui quitte l'écran rend son film au cache.
     @ViewBuilder
     func meeSections(_ onglet: StickerSheetTab) -> some View {
         let personnage: MeeSticker.Character = onglet == .meo ? .meo : .mee
@@ -23,7 +22,8 @@ extension StickerPickerView {
                             HapticFeedback.medium()
                             meeStickerPick?(sticker)
                         } label: {
-                            MeeStickerFilmView(sticker: sticker, side: Self.meeCellSide, animates: false)
+                            MeeStickerFilmView(sticker: sticker, side: Self.meeCellSide,
+                                               pixelCap: MeeStickerFilmView.gridPixelCap)
                                 .frame(maxWidth: .infinity)
                                 .contentShape(Rectangle())
                         }

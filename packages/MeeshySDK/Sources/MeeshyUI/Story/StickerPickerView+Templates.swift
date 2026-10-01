@@ -403,6 +403,7 @@ public struct StickerTemplatePreview: View {
     let side: CGFloat
 
     @State private var image: UIImage?
+    @Environment(\.stickerSheetDieCut) private var dieCut
 
     public init(template: StickerTemplate, slots: [String: String], side: CGFloat) {
         self.template = template
@@ -442,7 +443,7 @@ public struct StickerTemplatePreview: View {
         }
         // `id:` sur le CONTENU, pas sur le gabarit seul : changer de lieu doit
         // redessiner les trois vignettes de l'onglet.
-        .task(id: cacheKey) { image = render() }
+        .task(id: "\(cacheKey)|\(dieCut)") { image = render() }
     }
 
     private var cacheKey: String {
@@ -452,11 +453,14 @@ public struct StickerTemplatePreview: View {
 
     @MainActor
     private func render() -> UIImage? {
-        StickerTemplateRenderer.image(
-            templateID: template.id,
-            slots: slots,
-            metrics: StickerTemplateMetrics.preview(side: side),
-            screenScale: UIScreen.main.scale
-        )?.0
+        let metrics = StickerTemplateMetrics.preview(side: side)
+        // La vignette montre ce que l'hôte POSERA : contournée là où le
+        // sticker part avec son contour (conversation, #9060), nue là où il
+        // rejoint une scène de story.
+        return dieCut
+            ? StickerTemplateRenderer.dieCutImage(templateID: template.id, slots: slots,
+                                                  metrics: metrics, screenScale: UIScreen.main.scale)?.0
+            : StickerTemplateRenderer.image(templateID: template.id, slots: slots,
+                                            metrics: metrics, screenScale: UIScreen.main.scale)?.0
     }
 }
