@@ -9,6 +9,8 @@ import { message, minutesAgo } from '@/lib/api/fixtures-base';
 import type { Message } from '@/lib/api/types';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { sendSheetStore, type SendSheetRequest } from '@/lib/send/send-sheet-store';
+
 import { useMessageMenu } from './use-message-menu';
 
 /**
@@ -59,7 +61,10 @@ const viewOnce = (id: string): Message =>
 let container: HTMLDivElement;
 let root: Root;
 
+const openedRequest = (): SendSheetRequest | null => sendSheetStore.getState().request;
+
 afterEach(() => {
+  sendSheetStore.getState().close();
   act(() => root.unmount());
   container.remove();
 });
@@ -121,17 +126,17 @@ describe('« Transférer » depuis le MENU — arme la sélection, n’ouvre auc
     expect(api().selection).toEqual({ ids: ['m1'] });
   });
 
-  test('la feuille de destinataires reste FERMÉE — c’est la barre qui valide', () => {
+  test('la feuille d’envoi reste FERMÉE — c’est la barre qui valide', () => {
     const { api } = mount([ordinary('m1')]);
     act(() => {
       api().onMenuAction('m1', 'forward');
     });
-    expect(api().forwardIds).toBe(null);
+    expect(openedRequest()).toBe(null);
   });
 });
 
 describe('« Transférer » depuis la BARRE — ouvre la feuille, ou refuse avec un motif', () => {
-  test('une sélection ordinaire ouvre la feuille avec les ids, dans l’ordre du fil', () => {
+  test('une sélection ordinaire ouvre la feuille d’envoi avec les messages, dans l’ordre du fil', () => {
     const messages = [ordinary('m1'), ordinary('m2')];
     const { api } = mount(messages);
     act(() => {
@@ -143,7 +148,34 @@ describe('« Transférer » depuis la BARRE — ouvre la feuille, ou refuse avec
     act(() => {
       api().onForwardSelection(placedOf(messages));
     });
-    expect(api().forwardIds).toEqual(['m1', 'm2']);
+    const request = openedRequest();
+    expect(request?.intent).toBe('forward');
+    expect(request?.payload.kind === 'messages' ? request.payload.messages.map((m) => m.id) : null).toEqual(['m1', 'm2']);
+  });
+
+  test('la charge nomme la conversation du fil comme SOURCE du transfert', () => {
+    const messages = [ordinary('m1')];
+    const { api } = mount(messages);
+    act(() => {
+      api().onMenuAction('m1', 'forward');
+    });
+    act(() => {
+      api().onForwardSelection(placedOf(messages));
+    });
+    const request = openedRequest();
+    expect(request?.payload.kind === 'messages' ? request.payload.conversationId : null).toBe('c-a');
+  });
+
+  test('la sélection SE TERMINE à l’ouverture : la barre rend la main au composeur', () => {
+    const messages = [ordinary('m1')];
+    const { api } = mount(messages);
+    act(() => {
+      api().onMenuAction('m1', 'forward');
+    });
+    act(() => {
+      api().onForwardSelection(placedOf(messages));
+    });
+    expect(api().selection).toBe(null);
   });
 
   test('une VUE UNIQUE est REFUSÉE côté client, et le refus DIT pourquoi', () => {
@@ -155,7 +187,8 @@ describe('« Transférer » depuis la BARRE — ouvre la feuille, ou refuse avec
     act(() => {
       api().onForwardSelection(placedOf(messages));
     });
-    expect(api().forwardIds).toBe(null);
+    expect(openedRequest()).toBe(null);
+    expect(api().selection).not.toBe(null);
     expect(announced).toEqual(['Un message à vue unique ne peut pas être transféré']);
   });
 });

@@ -3,12 +3,13 @@ import { useStore } from 'zustand/react';
 
 import { prismFor, served, type Served } from '@/lib/api/prism';
 import { protectionOf } from '@/lib/reading-mode/protection';
-import { forwardAction, reactAction } from '@/lib/api/query';
+import { reactAction } from '@/lib/api/query';
 import { reactionStore } from '@/lib/api/reaction-store';
 import type { Message } from '@/lib/api/types';
 import { readDefaultMessageCardFormat } from '@/lib/export/message-card-format';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { openSendSheet } from '@/lib/send/send-sheet-store';
 import { safeLocalStorage } from '@/lib/storage';
 
 import {
@@ -19,7 +20,7 @@ import {
   type MessageMenuItem,
   type TranslationChoice,
 } from './message-actions';
-import { admitForward } from './forward';
+import { admitForward, forwardRequestOf } from './forward';
 import { useLongPress, type LongPressAnchor } from './long-press';
 import { copyPlainText } from './copy-text';
 import { isMineOf } from './message';
@@ -73,9 +74,6 @@ export function useMessageMenu(params: {
   const [reactionSheetFor, setReactionSheetFor] = useState<string | null>(null);
   /** La carte d'export ouverte — `quick` : « Export rapide », le format par défaut enregistré aussitôt peint. */
   const [exportFor, setExportFor] = useState<MessageExportRequest | null>(null);
-  /** Les ids à transférer, ADMIS — `null` ⇒ la feuille de destinataires est
-   * fermée. Elle n'est jamais ouverte sur une sélection refusée (#5866). */
-  const [forwardIds, setForwardIds] = useState<readonly string[] | null>(null);
   const mine = useStore(reactionStore, (s) => s.mine);
 
   const messageOf = useCallback((id: string) => messages.find((m) => m.id === id), [messages]);
@@ -251,13 +249,10 @@ export function useMessageMenu(params: {
     [announce],
   );
 
-  const onEndSelection = useCallback(() => {
-    setSelection(null);
-    setForwardIds(null);
-  }, []);
+  const onEndSelection = useCallback(() => setSelection(null), []);
 
   /**
-   * LE GESTE DE LA BARRE (#5866) — il ADMET d'abord, il ouvre ensuite.
+   * LE GESTE DE LA BARRE (#5866, #8884) — il ADMET d'abord, il ouvre ensuite.
    *
    * `admitForward` (`view/forward.ts`) rejoue `admitMessageForward`
    * (`forwardAdmission.ts`) : une vue unique est refusée, une source disparue
@@ -267,13 +262,22 @@ export function useMessageMenu(params: {
    *
    * L'ordre est celui du FIL (`orderedIds`), jamais celui des coches : ce qui
    * arrive chez le destinataire se lit comme ce qu'on a sélectionné.
+   *
+   * ADMISE, la sélection débouche sur LA FEUILLE D'ENVOI commune (#8884,
+   * `openSendSheet`) — personnes, groupes, ou publication en story / post /
+   * réel, avec une légende. Ce hook ne monte plus aucune feuille de
+   * destinataires : il REMET la demande (`forwardRequestOf`) et la sélection
+   * SE TERMINE, le geste étant fini du point de vue du fil. Le départ, son
+   * état par destinataire et ses échecs sont l'affaire de la feuille
+   * (`lib/send/`), qui les montre là où le lecteur regarde.
    */
   const onForwardSelection = useCallback(
     (placed: readonly { readonly message: { readonly id: string } }[]) => {
       if (selection === null) return;
       const ids = orderedIds(placed, new Set(selection.ids));
       const candidates = ids.map((id) => messageOf(id)).filter((m): m is Message => m !== undefined);
-      const admission = admitForward(candidates, Date.now());
+      const now = Date.now();
+      const admission = admitForward(candidates, now);
       if (!admission.admitted) {
         const lang = currentInterfaceLanguage();
         announce(
@@ -283,48 +287,10 @@ export function useMessageMenu(params: {
         );
         return;
       }
-      setForwardIds(admission.ids);
-    },
-    [selection, messageOf, announce],
-  );
-
-  const onCloseForward = useCallback(() => setForwardIds(null), []);
-
-  /**
-   * LE DÉPART (#5866) — `forwardAction` remet les messages ENTIERS au
-   * transport (`api/forward.ts`), qui compose un corps SANS `attachmentIds` :
-   * c'est la passerelle qui copie les pièces jointes depuis `forwardedFromId`,
-   * mêmes blobs, aucun ré-upload.
-   *
-   * LA FEUILLE SE FERME ET LA SÉLECTION SE TERMINE AVANT L'ACCUSÉ — le geste
-   * est fini du point de vue du lecteur, et l'issue lui revient par l'annonce
-   * (principe « Optimistic Updates » : le feedback est immédiat, le réseau
-   * confirme après). Un échec ne ressuscite pas la sélection : il le DIT,
-   * avec le motif du serveur, et le fil reste là où le lecteur l'a laissé.
-   */
-  const onForwardTo = useCallback(
-    (targetConversationId: string) => {
-      const ids = forwardIds;
-      if (ids === null) return;
-      const messagesToForward = ids.map((id) => messageOf(id)).filter((m): m is Message => m !== undefined);
-      setForwardIds(null);
       setSelection(null);
-      void forwardAction({ messages: messagesToForward, sourceConversationId: conversationId, targetConversationId }).then(
-        (result) => {
-          const lang = currentInterfaceLanguage();
-          if (!result.ok) {
-            announce(result.error === '' ? translate(lang, 'forward.announce.failed') : result.error);
-            return;
-          }
-          announce(
-            result.count > 1
-              ? translate(lang, 'forward.announce.sentMany', { count: new Intl.NumberFormat(lang).format(result.count) })
-              : translate(lang, 'forward.announce.sent'),
-          );
-        },
-      );
+      openSendSheet(forwardRequestOf({ conversationId, messages: candidates, now }));
     },
-    [forwardIds, messageOf, conversationId, announce],
+    [selection, messageOf, announce, conversationId],
   );
 
   const onCopySelection = useCallback(
@@ -412,10 +378,7 @@ export function useMessageMenu(params: {
     onRowTap,
     onEndSelection,
     onCopySelection,
-    forwardIds,
     onForwardSelection,
-    onForwardTo,
-    onCloseForward,
     detailFor,
     setDetailFor,
     reactionSheetFor,

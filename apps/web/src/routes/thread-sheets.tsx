@@ -1,5 +1,4 @@
 
-import { ForwardSheet } from '@/components/forward-sheet';
 import { messageCardLanguagesOf, messageCardSubjectOf } from '@/lib/export/message-card-subject';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { MessageDetailSheet } from '@/components/message-detail-sheet';
@@ -28,9 +27,6 @@ export type ThreadSheetsMenu = Pick<
   | 'onMenuReact'
   | 'onMenuAction'
   | 'onPickLanguage'
-  | 'forwardIds'
-  | 'onForwardTo'
-  | 'onCloseForward'
   | 'reactionSheetFor'
   | 'setReactionSheetFor'
   | 'detailFor'
@@ -44,8 +40,10 @@ export type ThreadSheetsMenu = Pick<
 /**
  * LES FEUILLES DU MESSAGE (#5814, #5866 ; extrait de `routes/thread.tsx` au
  * lot #7429, découpage sans changer un pixel) — le menu du message (appui
- * long / clic droit / `ContextMenu`), la feuille de destinataires, le rail de
- * réactions et la fiche détail. Miroir `ConversationOverlayState` (iOS,
+ * long / clic droit / `ContextMenu`), le rail de réactions et la fiche détail.
+ * Le TRANSFERT n'a plus de feuille ici (#8884) : la barre de sélection ouvre la
+ * feuille d'envoi commune (`openSendSheet`, montée une fois par le shell).
+ * Miroir `ConversationOverlayState` (iOS,
  * `ConversationView.swift:24` — menu, sélection, feuilles) : la même
  * partition que `useThreadJump` (le saut) et `useThreadReadingMode`
  * (l'orchestration du mode) reprennent côté état, ici côté FEUILLES.
@@ -110,13 +108,6 @@ export function ThreadMessageSheets({
       {/* « ＋ Ajouter une réaction » (rail) et « Plus… » (détails) — deux
           feuilles indépendantes, jamais montées en même temps que le menu
           (celui-ci se referme déjà avant de les ouvrir, `use-message-menu.ts`). */}
-      {/* LA FEUILLE DE DESTINATAIRES (#5866) — montée SEULEMENT quand une
-          sélection ADMISE attend sa cible : c'est ce montage conditionnel qui
-          fait que la requête de liste (`useConversations`, cache-first) n'est
-          jamais lancée par la simple ouverture d'un fil. */}
-      {messageMenu.forwardIds === null ? null : (
-        <ForwardSheet viewerId={viewerId} onPick={messageMenu.onForwardTo} onClose={messageMenu.onCloseForward} />
-      )}
       {((messageId) =>
         messageId === null ? null : (
           <ReactionSheet
