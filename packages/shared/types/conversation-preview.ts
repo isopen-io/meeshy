@@ -144,8 +144,9 @@ export type PreviewProtection = 'expired' | 'view-once' | 'blurred' | 'encrypted
  * anonyme) — c'est EUX qu'un client compare au sien pour « Vous avez réagi » et
  * « à votre message ».
  *
- * Rang de la ligne : règle SERVEUR, servie en `listRankAt` (#7592,
- * `utils/conversation-list-rank.ts`).
+ * Rang de la ligne : règle SERVEUR, servie en `listRankAt` (#9026,
+ * `utils/conversation-list-rank.ts`) — une réaction est une activité qui
+ * remonte la ligne pour tous les participants.
  *
  * `excerpt` suit la MÊME protection que l'aperçu : pour un message réagi
  * protégé, `excerpt` est `null`, `excerptTranslations` est `null` et

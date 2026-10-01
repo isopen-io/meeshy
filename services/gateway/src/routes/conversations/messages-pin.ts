@@ -41,6 +41,7 @@ import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
 import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 import { EngagementService } from '../../services/engagement/EngagementService';
+import { announceConversationActivity } from '../../services/conversations/conversationActivity';
 
 /**
  * Enregistre les routes d'épinglage : pin, unpin, liste des messages épinglés.
@@ -56,6 +57,19 @@ export function registerMessagePinRoutes(
   socketIOHandler: any
 ) {
   const engagement = new EngagementService(prisma);
+
+  // #9026 — épingler ou dépingler est une ACTIVITÉ : la conversation remonte en
+  // tête pour TOUS ses participants (`lastActivityAt` pour le rechargement,
+  // `listRankAt` servi à chacun en direct). Hors du chemin de la réponse.
+  const announcePinActivity = (conversationId: string, actorUserId: string, at: Date): void => {
+    void announceConversationActivity({
+      prisma,
+      io: socketIOHandler ? fastify.socketIOHandler.getManager()?.getIO() ?? null : null,
+      conversationId,
+      at,
+      updatedByUserId: actorUserId,
+    }).catch((error: unknown) => logger.warn('[PIN] conversation activity failed', { conversationId, error }));
+  };
 
   // ============================================================================
   // PIN / UNPIN MESSAGE
@@ -145,6 +159,7 @@ export function registerMessagePinRoutes(
         where: { id: messageId },
         data: { pinnedAt: now, pinnedBy: userId }
       });
+      announcePinActivity(conversationId, userId, now);
 
       if (!message.pinnedAt && !authRequest.authContext.isAnonymous && userId) {
         void engagement
@@ -259,6 +274,7 @@ export function registerMessagePinRoutes(
         where: { id: messageId },
         data: { pinnedAt: null, pinnedBy: null }
       });
+      announcePinActivity(conversationId, userId, new Date());
 
       logger.info(`[UNPIN] User ${userId} unpinned message ${messageId} in conversation ${conversationId}`);
 
