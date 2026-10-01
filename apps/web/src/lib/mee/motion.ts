@@ -103,6 +103,7 @@ export const PRIMS = {
   burst: { kf: `0%,10%{${T('translate(0,0) scale(.2) rotate(0deg)')};opacity:0}15%{opacity:1}100%{${T('translate(var(--dx),var(--dy)) scale(1) rotate(var(--r))')};opacity:0}`, ease: 'ease-out' },
   ring: { kf: `0%{${T('scale(.1)')};opacity:1}70%{opacity:.8}100%{${T('scale(1.6)')};opacity:0}`, ease: 'ease-out' },
   orbit: { kf: `from{${T('rotate(0deg)')}}to{${T('rotate(360deg)')}}`, ease: 'linear' },
+  shut: { kf: `0%,30%{${T('scaleX(.06)')}}42%{${T('scaleX(1.04)')}}48%,100%{${T('scaleX(1)')}}`, origin: '0% 50%', ease: 'ease-in' },
   slam: { kf: `0%,25%{${T('scaleX(1)')}}40%,100%{${T('scaleX(.06)')}}`, origin: '0% 50%', ease: 'ease-in' },
   lid: { kf: `0%,30%,100%{${T('translate(0,0) rotate(0deg)')}}45%,85%{${T('translate(-12px,-26px) rotate(-28deg)')}}` },
   sip: { kf: `0%,100%{${T('rotate(0deg) translate(0,0)')}}35%,65%{${T('rotate(-38deg) translate(-10px,-12px)')}}`, origin: '50% 100%' },
