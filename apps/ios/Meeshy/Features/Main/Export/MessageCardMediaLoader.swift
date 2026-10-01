@@ -40,16 +40,34 @@ nonisolated struct MessageCardLoadedMedia: Sendable {
         }
     }
 
-    /// Le fichier local de la piste qui sonnera sous la carte animée.
+    /// Le fichier local du son PEINT — le premier son de la carte —, ou `nil` :
+    /// jamais la voix d'un autre son sous sa transcription (revue #8979).
     func soundFile(of items: [MessageCardSubjectMedia]) -> URL? {
-        items.lazy.filter { $0.media.kind == .audio }.compactMap { sounds[$0.fileURL]?.file }.first
+        items.first { $0.media.kind == .audio }.flatMap { sounds[$0.fileURL]?.file }
     }
 
-    /// Ce qu'il reste à charger : les visuels sans pixels, les sons pas encore lus.
+    /// Ce qu'il reste à charger : les visuels sans pixels, les sons sans
+    /// fichier — pas encore lus, ou en ÉCHEC : « Réessayer » les relit (revue #8979).
     func missing(_ items: [MessageCardSubjectMedia]) -> [MessageCardSubjectMedia] {
         items.filter { item in
-            item.media.kind == .audio ? sounds[item.fileURL] == nil : pictures.images[item.media.id] == nil
+            item.media.kind == .audio ? sounds[item.fileURL]?.file == nil : pictures.images[item.media.id] == nil
         }
+    }
+
+    /// Les pièces en ÉCHEC pour ce que l'atelier va produire : une photo ou
+    /// une vidéo sans pixels ; en VIDÉO, le son peint dont le fichier n'a pas
+    /// pu se lire — la vidéo partirait muette. L'atelier le dit et offre de
+    /// réessayer, jamais une « Animation enregistrée » sans voix (revue #8979).
+    func failures(of items: [MessageCardSubjectMedia], output: MessageCardOutput) -> [String] {
+        guard output == .video, let sound = items.first(where: { $0.media.kind == .audio }),
+              let read = sounds[sound.fileURL], read.file == nil else { return failed }
+        return failed + [sound.media.id]
+    }
+
+    /// Une vidéo peut-elle partir avec sa voix ? Le son peint doit être LÀ —
+    /// un son encore en chemin la retient, sans avis.
+    func hearsThePaintedSound(of items: [MessageCardSubjectMedia]) -> Bool {
+        !items.contains { $0.media.kind == .audio } || soundFile(of: items) != nil
     }
 
     /// Ce qui vient d'être chargé, ajouté à ce qui l'était — les échecs relus sur `items`.

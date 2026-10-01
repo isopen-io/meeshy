@@ -270,7 +270,7 @@ struct MessageCardExportSheet: View {
             Text(notice)
                 .font(.footnote)
                 .foregroundStyle(MeeshyColors.error)
-        } else if let failure = MessageCardExportText.mediaFailure(count: loadedMedia.failed.count) {
+        } else if let failure = MessageCardExportText.mediaFailure(count: loadedMedia.failures(of: subject.media, output: output).count) {
             mediaFailure(failure)
         } else if ready, rendered?.truncated == true {
             Text(MessageCardExportText.text("export.card.truncated", "Message long : la fin est coupée sur l’image."))
