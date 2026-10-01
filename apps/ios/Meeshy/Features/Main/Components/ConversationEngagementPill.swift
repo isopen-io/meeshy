@@ -40,13 +40,13 @@ struct ConversationEngagementPill: View, Equatable {
             }
             Text(verbatim: pointsText)
         }
-        .font(MeeshyFont.relative(10, weight: .bold, design: .rounded).monospacedDigit())
+        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold, design: .rounded).monospacedDigit())
         .foregroundColor(accent)
         .lineLimit(1)
         .fixedSize()
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
-        .background(Capsule(style: .continuous).fill(accent.opacity(0.16)))
+        .padding(.horizontal, MeeshySpacing.xsPlus)
+        .padding(.vertical, MeeshySpacing.xxs)
+        .background(Capsule(style: .continuous).fill(accent.opacity(MeeshyOpacity.light)))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
     }

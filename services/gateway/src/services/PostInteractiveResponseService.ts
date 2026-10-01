@@ -17,6 +17,8 @@
 import { PrismaClient, PostInteractiveResponse } from '@meeshy/shared/prisma/client';
 import { assertValidObjectId } from '../utils/object-id.js';
 import { ValidationError } from '../errors/custom-errors.js';
+import { EngagementService } from './engagement/EngagementService';
+import { creditPostEngagement, type PostEngagementRecorder } from './posts/postEngagementCredits';
 
 export interface PostInteractiveResponseData {
   readonly id: string;
@@ -79,7 +81,10 @@ function assertHasResponseValue(options: SubmitPostInteractiveResponseOptions): 
 }
 
 export class PostInteractiveResponseService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly engagement: PostEngagementRecorder = new EngagementService(prisma),
+  ) {}
 
   async submitResponse(
     options: SubmitPostInteractiveResponseOptions,
@@ -96,7 +101,7 @@ export class PostInteractiveResponseService {
 
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { id: true, deletedAt: true },
+      select: { id: true, deletedAt: true, authorId: true },
     });
 
     if (!post) {
@@ -106,6 +111,11 @@ export class PostInteractiveResponseService {
     if (post.deletedAt) {
       throw new Error('Post has been deleted');
     }
+
+    const previous = await this.prisma.postInteractiveResponse.findUnique({
+      where: { post_object_user_response_unique: { postId, objectId, userId } },
+      select: { id: true },
+    });
 
     // Une personne a AU PLUS une réponse par sticker : un nouveau vote
     // REMPLACE le précédent (upsert sur la clé unique
@@ -128,6 +138,20 @@ export class PostInteractiveResponseService {
         text: text ?? null,
       },
     });
+
+    // `tool.poll_answered` (#8959) — la PREMIÈRE réponse à ce sticker, jamais
+    // un changement de vote. La cible `postId:objectId` porte en plus l'unicité
+    // « une fois par objet » du barème : une réponse retirée puis reposée, ou
+    // deux premières réponses concurrentes, ne créditent qu'une fois.
+    if (!previous) {
+      creditPostEngagement(
+        this.prisma,
+        userId,
+        'tool.poll_answered',
+        { targetId: `${postId}:${objectId}`, targetOwnerId: post.authorId },
+        this.engagement,
+      );
+    }
 
     return this.mapResponseToData(response);
   }

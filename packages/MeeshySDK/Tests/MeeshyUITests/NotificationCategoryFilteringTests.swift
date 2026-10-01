@@ -8,9 +8,6 @@ import XCTest
 /// d'une famille consommable (message, réaction, mention, commentaire) ne
 /// s'affiche plus ; une catégorie se demande à la PASSERELLE, page après page,
 /// au lieu de trier les trente lignes déjà chargées.
-///
-/// `@MainActor` : `NotificationCategory` vit dans MeeshyUI, isolé sur le
-/// MainActor par défaut (son libellé lit `Bundle.module`, isolé lui aussi).
 @MainActor
 final class NotificationCategoryFilteringTests: XCTestCase {
 

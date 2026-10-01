@@ -1,9 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { ENGAGEMENT_AXES, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { DEFAULT_ENGAGEMENT_SCALE, type EngagementScaleDocument } from '@meeshy/shared/types/engagement-scale';
-import { engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 
 import { adminMoment } from '@/lib/admin/format';
 import {
@@ -13,7 +11,6 @@ import {
   withAddedLevelCap,
   withLevelCap,
   withMultiplier,
-  withOperation,
   withoutLevelCap,
   type MultiplierField,
   type ScaleDraft,
@@ -28,25 +25,22 @@ import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-cata
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { AdminAnnouncement, AdminSkeleton } from '@/routes/admin-parts';
 import { AdminTable, PlainTh, Td } from '@/routes/admin-table';
+import { LabeledNumber, NumberField, scaleTokens } from '@/routes/admin-engagement-scale-fields';
+import { OperationsSections } from '@/routes/admin-engagement-scale-operations';
+import { AbuseSection, LinkVisitSection, StreakBonusSection } from '@/routes/admin-engagement-scale-rules';
 
 /**
- * LE BARÈME DE POINTS (#8906) — chaque opération (axe d'engagement) avec ses
- * points, son « multiplié », son plafond journalier par conversation ; les
- * règles du multiplicateur ; le plafond par niveau.
+ * LE BARÈME DE POINTS (#8906, #8959) — chaque opération de la plateforme,
+ * rangée par domaine, avec ses points (par variante), son « multiplié » et son
+ * plafond ; la règle des liens ; les bonus de constance ; les garde-fous des
+ * gros poids ; les règles du multiplicateur et le plafond par niveau.
  *
  * Le brouillon est validé ICI par la loi partagée avant tout `PUT`
  * (`scaleOfDraft` → `parseEngagementScale`) : un barème invalide ne part pas.
  * Un refus serveur est montré tel qu'il est dit.
  */
 
-const INK = 'var(--color-ios-ink)';
-const INK2 = 'var(--color-ios-ink-2)';
-const SURFACE = 'var(--color-ios-surface)';
-const EDGE = 'var(--color-edge)';
-const BRAND = 'var(--color-ios-brand)';
-
-const FIELD = { minHeight: 40, backgroundColor: SURFACE, border: `1px solid ${EDGE}`, color: INK } as const;
-const FIELD_CLASS = 'w-24 rounded-chip px-3 text-body tabular-nums';
+const { INK, INK2, EDGE, BRAND } = scaleTokens;
 
 const MULTIPLIER_LABELS: Readonly<Record<MultiplierField, AdminPlainCatalogKey>> = {
   windowDays: 'admin.scale.field.windowDays',
@@ -57,95 +51,6 @@ const MULTIPLIER_LABELS: Readonly<Record<MultiplierField, AdminPlainCatalogKey>>
   highBadgesForStanding: 'admin.scale.field.highBadgesForStanding',
   maxFactor: 'admin.scale.field.maxFactor',
 };
-
-function NumberField({
-  value,
-  label,
-  placeholder,
-  onChange,
-  data,
-}: {
-  readonly value: string;
-  readonly label: string;
-  readonly placeholder?: string;
-  readonly onChange: (value: string) => void;
-  readonly data: Readonly<Record<string, string>>;
-}) {
-  return (
-    <input
-      type="text"
-      inputMode="decimal"
-      value={value}
-      aria-label={label}
-      {...(placeholder === undefined ? {} : { placeholder })}
-      onInput={(event) => onChange(event.currentTarget.value)}
-      className={FIELD_CLASS}
-      style={FIELD}
-      {...data}
-    />
-  );
-}
-
-function OperationsTable({
-  language,
-  draft,
-  onChange,
-}: {
-  readonly language: InterfaceLanguage;
-  readonly draft: ScaleDraft;
-  readonly onChange: (axis: EngagementAxisKey, patch: Partial<ScaleDraft['operations'][EngagementAxisKey]>) => void;
-}) {
-  return (
-    <AdminTable>
-      <thead>
-        <tr>
-          <PlainTh>{translateAdmin(language, 'admin.scale.col.operation')}</PlainTh>
-          <PlainTh>{translateAdmin(language, 'admin.scale.col.points')}</PlainTh>
-          <PlainTh>{translateAdmin(language, 'admin.scale.col.multiplied')}</PlainTh>
-          <PlainTh>{translateAdmin(language, 'admin.scale.col.cap')}</PlainTh>
-        </tr>
-      </thead>
-      <tbody>
-        {ENGAGEMENT_AXES.map((axis) => {
-          const operation = engagementAxisLabel(language, axis);
-          const rule = draft.operations[axis];
-          return (
-            <tr key={axis} data-scale-operation={axis}>
-              <Td>{operation}</Td>
-              <Td>
-                <NumberField
-                  value={rule.points}
-                  label={translateAdmin(language, 'admin.scale.pointsFor', { operation })}
-                  onChange={(points) => onChange(axis, { points })}
-                  data={{ 'data-scale-points': axis }}
-                />
-              </Td>
-              <Td>
-                <input
-                  type="checkbox"
-                  checked={rule.multiplied}
-                  aria-label={translateAdmin(language, 'admin.scale.multipliedFor', { operation })}
-                  onChange={(event) => onChange(axis, { multiplied: event.currentTarget.checked })}
-                  data-scale-multiplied={axis}
-                  style={{ minHeight: 24, minWidth: 24, accentColor: BRAND }}
-                />
-              </Td>
-              <Td>
-                <NumberField
-                  value={rule.dailyCap}
-                  label={translateAdmin(language, 'admin.scale.capFor', { operation })}
-                  placeholder={translateAdmin(language, 'admin.scale.cap.none')}
-                  onChange={(dailyCap) => onChange(axis, { dailyCap })}
-                  data={{ 'data-scale-cap': axis }}
-                />
-              </Td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </AdminTable>
-  );
-}
 
 function LevelCapsTable({
   language,
@@ -285,8 +190,14 @@ function ScaleEditor({
         <h2 id="scale-operations" className="text-body font-semibold" style={{ color: INK }}>
           {translateAdmin(language, 'admin.scale.operations.title')}
         </h2>
-        <OperationsTable language={language} draft={draft} onChange={(axis, patch) => setDraft(withOperation(draft, axis, patch))} />
+        <OperationsSections language={language} draft={draft} onDraft={setDraft} />
       </section>
+
+      <LinkVisitSection language={language} draft={draft} onDraft={setDraft} />
+
+      <StreakBonusSection language={language} draft={draft} onDraft={setDraft} />
+
+      <AbuseSection language={language} draft={draft} onDraft={setDraft} />
 
       <section aria-labelledby="scale-multiplier" className="grid gap-3">
         <h2 id="scale-multiplier" className="text-body font-semibold" style={{ color: INK }}>
@@ -294,15 +205,14 @@ function ScaleEditor({
         </h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {MULTIPLIER_FIELDS.map((field) => (
-            <label key={field} className="flex items-center justify-between gap-3 text-body" style={{ color: INK }}>
-              <span>{translateAdmin(language, MULTIPLIER_LABELS[field])}</span>
+            <LabeledNumber key={field} label={translateAdmin(language, MULTIPLIER_LABELS[field])}>
               <NumberField
                 value={draft.multiplier[field]}
                 label={translateAdmin(language, MULTIPLIER_LABELS[field])}
                 onChange={(value) => setDraft(withMultiplier(draft, field, value))}
                 data={{ 'data-scale-multiplier': field }}
               />
-            </label>
+            </LabeledNumber>
           ))}
         </div>
       </section>

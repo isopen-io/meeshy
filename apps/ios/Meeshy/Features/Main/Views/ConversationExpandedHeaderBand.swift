@@ -133,7 +133,7 @@ struct ConversationHeaderGlass: View {
             Color.clear.adaptiveGlass(in: RoundedRectangle(cornerRadius: Self.blockRadius))
                 .overlay(
                     RoundedRectangle(cornerRadius: Self.blockRadius)
-                        .stroke(rim(startPoint: .leading, endPoint: .trailing), lineWidth: 1)
+                        .stroke(rim(startPoint: .leading, endPoint: .trailing), lineWidth: MeeshyBorder.regular)
                 )
                 .shadow(color: Color(hex: accentColor).opacity(MeeshyOpacity.light), radius: 8, y: 2)
                 .transition(.scale(scale: 0.1, anchor: .trailing).combined(with: .opacity))

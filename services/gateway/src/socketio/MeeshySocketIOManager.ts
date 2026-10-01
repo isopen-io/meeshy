@@ -110,6 +110,7 @@ import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPaylo
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
 import { attachSocketIORedisAdapter, type SocketIORedisAdapterHandle } from './redis-adapter';
+import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -238,6 +239,7 @@ export class MeeshySocketIOManager {
   }
 
   private prisma: PrismaClient;
+  private readonly translationRequestEngagement = lazyTranslationRequestEngagement(() => this.prisma);
   private translationService: MessageTranslationService;
   private maintenanceService: MaintenanceService;
   private statusService: StatusService;
@@ -2104,6 +2106,12 @@ export class MeeshySocketIOManager {
         socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
         return;
       }
+      const creditRequest = () => creditTranslationRequest({
+        engagement: this.translationRequestEngagement,
+        requester: { userId, isAnonymous: connectedUser?.isAnonymous ?? false },
+        conversationId: message.conversationId,
+        onError: (error) => logger.warn('[REQUEST_TRANSLATION] tool.translation_request credit failed', { error }),
+      });
 
       // Récupérer la traduction (depuis le cache ou la base de données)
       const translation = await this.translationService.getTranslation(messageId, targetLanguage);
@@ -2128,6 +2136,7 @@ export class MeeshySocketIOManager {
         }));
 
         this.stats.translations_sent++;
+        creditRequest();
 
       } else {
         // No cached translation — trigger on-demand translation via ZMQ
@@ -2143,6 +2152,7 @@ export class MeeshySocketIOManager {
           });
 
           logger.info(`🔄 On-demand translation requested for message ${messageId} -> ${targetLanguage}`);
+          creditRequest();
         } catch (translationError) {
           logger.error(`❌ On-demand translation failed: ${translationError}`);
           socket.emit(SERVER_EVENTS.ERROR, {

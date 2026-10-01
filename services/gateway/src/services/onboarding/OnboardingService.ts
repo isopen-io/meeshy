@@ -199,13 +199,14 @@ export class OnboardingService {
     const protectedRegime = ageClass !== 'adult';
     const emailVerified = user.emailVerifiedAt !== null;
     const globalConversationId = await this.globalConversationId();
+    const storyDefaultVisibility = protectedRegime ? 'friends' : 'public';
     const [prefilledSteps, suggestions, pendingFriendRequests, stepRewards] = await Promise.all([
       this.prefilledSteps(user.id, globalConversationId, emailVerified),
       window === 'open' && globalConversationId
         ? this.suggestions({ user, ageClass, globalConversationId, now })
         : Promise.resolve([]),
       this.prisma.friendRequest.count({ where: { senderId: user.id, status: 'pending' } }),
-      this.stepRewards(user.id, user.engagementScore ?? 0, now),
+      this.stepRewards(user.id, user.engagementScore ?? 0, storyDefaultVisibility, now),
     ]);
     return {
       eligible: window === 'open',
@@ -214,7 +215,7 @@ export class OnboardingService {
       prefilledSteps,
       globalConversationId,
       protectedRegime,
-      storyDefaultVisibility: protectedRegime ? 'friends' : 'public',
+      storyDefaultVisibility,
       suggestions,
       emailVerified,
       canPublishStory: mayPublish(resolveAccountActivation(user, now)),
@@ -228,7 +229,12 @@ export class OnboardingService {
    * touchés sur la fenêtre de l'élan et les paliers qui font l'assise — deux
    * lectures indexées (`[userId]`, `[userId, milestoneType]`).
    */
-  private async stepRewards(userId: string, engagementScore: number, now: Date): Promise<OnboardingStepRewards> {
+  private async stepRewards(
+    userId: string,
+    engagementScore: number,
+    storyVisibility: 'public' | 'friends',
+    now: Date,
+  ): Promise<OnboardingStepRewards> {
     const scale = await engagementScaleServiceFor(this.prisma).current();
     const [counters, milestones] = await Promise.all([
       this.prisma.engagementCounter.findMany({
@@ -240,7 +246,7 @@ export class OnboardingService {
         select: { milestoneType: true, milestoneKey: true },
       }),
     ]);
-    return onboardingStepRewards({ scale, counters, milestones, engagementScore, now });
+    return onboardingStepRewards({ scale, counters, milestones, engagementScore, now, storyVisibility });
   }
 
   private async closeExpired(userId: string, now: Date): Promise<Date> {

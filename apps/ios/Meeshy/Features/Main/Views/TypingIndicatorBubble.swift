@@ -101,7 +101,7 @@ struct TypingIndicatorBubble: View {
                 // horizontal de rangée) — aucune capsule, aucun bord.
                 .padding(.horizontal, FocalMetrics.Row.paddingHorizontal)
             } else {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     // Le visage AVANT le libellé : « qui écrit » se lit d'un
                     // coup d'œil, sans lire le nom. La capsule du mode bulles
                     // ne le portait pas — seule la rangée plate en avait un, et
@@ -114,15 +114,15 @@ struct TypingIndicatorBubble: View {
                             // padding (pas de frame figée), donc elle grandit proprement ;
                             // les 3 points restent des `Circle` décoratifs de 5pt.
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                            .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.7))
+                            .foregroundColor(isDark ? accent.opacity(MeeshyOpacity.intense) : accent.opacity(MeeshyOpacity.heavy))
                             .lineLimit(1)
                     }
                     pulsingDots(accent: accent)
                 }
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.sm)
-                .background(Capsule().fill(isDark ? Color.white.opacity(0.07) : Color.black.opacity(0.05)))
-                .overlay(Capsule().strokeBorder(accent.opacity(isDark ? 0.25 : 0.18), lineWidth: 1))
+                .background(Capsule().fill(MeeshyColors.surfaceFill(isDark: isDark)))
+                .overlay(Capsule().strokeBorder(accent.opacity(isDark ? 0.25 : 0.18), lineWidth: MeeshyBorder.regular))
             }
             Spacer(minLength: 0)
         }

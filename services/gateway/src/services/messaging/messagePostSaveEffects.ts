@@ -1,7 +1,9 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 import type { EngagementActivityOptions } from '../engagement/EngagementService';
 import { memberSignature } from '../engagement/memberSignature';
+import { sharedPlaceFromMetadata } from '../location/sharedPlace';
 import { conversationStatsService } from '../ConversationStatsService';
 import {
   conversationMessageStatsService,
@@ -55,6 +57,44 @@ export interface PostSaveMessage extends TranslatableMessage {
    * `metadata.sticker`, jamais comme pièce jointe.
    */
   readonly hasSticker: boolean;
+  /**
+   * La source d'un TRANSFERT, telle qu'`admitMessageForward` l'a admise
+   * (#8959 `tool.forward`). Optionnelle : les routes de lien de partage ne
+   * transfèrent jamais.
+   */
+  readonly forwardedFromId?: string | null;
+  /**
+   * `metadata.location` valide (`parseSharedPlace`) — un lieu FIXE partagé
+   * (#8959 `tool.location`, variante `static`). Le partage EN DIRECT n'est pas
+   * un message : il se crédite au départ de la session (`LocationHandler`).
+   */
+  readonly hasLocation?: boolean;
+  /**
+   * Le message CITÉ, tel que l'`include` de l'écriture l'a chargé — son auteur
+   * (`Participant.userId`, `null` pour un anonyme). Absent ⇒ pas de citation
+   * lisible (#8959 `tool.quote_reply` ne crédite pas).
+   */
+  readonly quoted?: { readonly authorUserId: string | null } | null;
+}
+
+/**
+ * Les champs d'outil de `PostSaveMessage` lus sur le message PERSISTÉ : la
+ * source admise d'un transfert, et un lieu fixe valide sous `metadata`.
+ */
+export function postSaveToolFields(message: {
+  readonly forwardedFromId?: string | null;
+  readonly metadata?: unknown;
+  readonly replyTo?: { readonly sender?: { readonly userId?: string | null } | null } | null;
+}): {
+  readonly forwardedFromId: string | null;
+  readonly hasLocation: boolean;
+  readonly quoted: { readonly authorUserId: string | null } | null;
+} {
+  return {
+    forwardedFromId: message.forwardedFromId ?? null,
+    hasLocation: sharedPlaceFromMetadata(message.metadata) !== null,
+    quoted: message.replyTo ? { authorUserId: message.replyTo.sender?.userId ?? null } : null,
+  };
 }
 
 /**
@@ -74,7 +114,19 @@ export interface PostSaveTranslationQueue {
   }): Promise<unknown>;
 }
 
-export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translation' | 'stats' | 'messageStats' | 'engagement' | 'contentEngagement' | 'stickerEngagement' | 'attachmentEngagement';
+export type PostSaveEffect =
+  | 'lastMessageAt'
+  | 'firstMessageSentAt'
+  | 'translation'
+  | 'stats'
+  | 'messageStats'
+  | 'engagement'
+  | 'contentEngagement'
+  | 'stickerEngagement'
+  | 'attachmentEngagement'
+  | 'quoteEngagement'
+  | 'forwardEngagement'
+  | 'locationEngagement';
 
 /**
  * Ce que les axes d'engagement branchés sur le commit d'un message demandent,
@@ -93,7 +145,7 @@ export type PostSaveEffect = 'lastMessageAt' | 'firstMessageSentAt' | 'translati
  * applique le plafond journalier par conversation et fait avancer « N (M) 🔥 ».
  */
 export interface PostSaveEngagementService {
-  recordActivity(userId: string, axisKey: EngagementAxisKey, options?: EngagementActivityOptions): Promise<void>;
+  recordActivity(userId: string, operationKey: EngagementOperationKey, options?: EngagementActivityOptions): Promise<void>;
   recordConversationActivity(
     userId: string,
     axisKey: EngagementAxisKey,
@@ -406,6 +458,56 @@ export function runMessagePostSaveEffects(params: {
         engagementService.recordActivity(senderUserId, 'tool.attachment', { conversationId: message.conversationId })
       )
       .catch(report('attachmentEngagement'));
+  }
+
+  if (engagementService && message.senderUserId) {
+    creditMessagingTools({ engagementService, message, senderUserId: message.senderUserId, report });
+  }
+}
+
+/**
+ * Les OUTILS de messagerie qu'un envoi exerce (#8959) : citer, transférer,
+ * partager un lieu fixe. Chacun s'ajoute aux axes de contenu, jamais à leur
+ * place, et porte la conversation — c'est elle qui applique le plafond du jour.
+ *
+ * La citation nomme l'AUTEUR du message cité (`targetOwnerId`), lu dans
+ * l'`include` de l'écriture — aucune lecture de plus : se citer soi-même ne
+ * rapporte rien, et c'est le moteur qui le refuse. Un message cité illisible
+ * (disparu) ne crédite pas.
+ */
+function creditMessagingTools(params: {
+  engagementService: PostSaveEngagementService;
+  message: PostSaveMessage;
+  senderUserId: string;
+  report: (effect: PostSaveEffect) => (error: unknown) => void;
+}): void {
+  const { engagementService, message, senderUserId, report } = params;
+  const conversationId = message.conversationId;
+  const quoted = message.quoted;
+
+  if (message.replyToId && quoted) {
+    void Promise.resolve()
+      .then(() =>
+        engagementService.recordActivity(senderUserId, 'tool.quote_reply', {
+          conversationId,
+          targetOwnerId: quoted.authorUserId,
+        })
+      )
+      .catch(report('quoteEngagement'));
+  }
+
+  if (message.forwardedFromId) {
+    void Promise.resolve()
+      .then(() => engagementService.recordActivity(senderUserId, 'tool.forward', { conversationId }))
+      .catch(report('forwardEngagement'));
+  }
+
+  if (message.hasLocation) {
+    void Promise.resolve()
+      .then(() =>
+        engagementService.recordActivity(senderUserId, 'tool.location', { conversationId, variant: 'static' })
+      )
+      .catch(report('locationEngagement'));
   }
 }
 
