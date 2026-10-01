@@ -55,7 +55,7 @@ struct MessageCardExportSheet: View {
     @State var failed = false
     @State var busy = false
     @State var notice: String?
-    @State var shareFile: ShareFile?
+    @State var sharePayload: MessageCardSharePayload?
     @State var quickSent = false
     @State var loaded = false
     @State var tab: MessageCardExportTab = .styles
@@ -85,11 +85,6 @@ struct MessageCardExportSheet: View {
         var crowdedByMedia = false
         /// L'échelle la plus grande que la carte laisse aux médias — le pincement s'y arrête.
         var mediaScaleLimit = MessageCardScales.range.upperBound
-    }
-
-    struct ShareFile: Identifiable {
-        let url: URL
-        var id: String { url.path }
     }
 
     private static let popularCount = 8
@@ -171,9 +166,9 @@ struct MessageCardExportSheet: View {
                 onClose: { galleryOpen = false }
             )
         }
-        .sheet(item: $shareFile) { file in
-            ShareSheet(activityItems: [file.url]) { completed in
-                shareFile = nil
+        .sheet(item: $sharePayload) { payload in
+            ShareSheet(activityItems: payload.activityItems) { completed in
+                sharePayload = nil
                 finish(completed ? .shared : .cancelled)
             }
         }
