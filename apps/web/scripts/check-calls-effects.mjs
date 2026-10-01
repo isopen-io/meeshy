@@ -138,9 +138,6 @@ const peerReceives = async (page) => {
 };
 
 const openActions = async (page) => {
-  const { width, height } = page.viewportSize();
-  await page.mouse.move(width / 2, height / 3);
-  await page.mouse.move(width / 2 + 8, height / 3 + 8);
   await appears(page, '[data-call-chrome="shown"]');
   const more = page.locator('[data-call-more]');
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();

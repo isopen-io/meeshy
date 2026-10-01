@@ -35,9 +35,8 @@
  *     micro » s'affiche ; je peux le rouvrir ;
  *  7. aucun verre dans un verre, aucune erreur de page ;
  *  8. en vidéo : ma vignette en coin est à ×2, SANS capsule de zoom (#8576) ; un toucher
- *     sur la scène efface l'en-tête et la pilule, un second les rend ; un
- *     panneau ouvert ne s'efface pas tout seul (l'auto-masquage ne vaut qu'au
- *     repos et dans le menu) ; « Capturer » suit « Enregistrer » ; les
+ *     sur la scène efface l'en-tête et la pilule, un second les rend ; rien
+ *     ne s'efface tout seul, pas même un panneau ouvert (#8988) ; « Capturer » suit « Enregistrer » ; les
  *     commandes de MA caméra (Caméra · Effets · Écran et le cran du zoom,
  *     #8441, 44 px) sont une rangée
  *     en bas de ma vignette, et le (…) ne les double pas (#8626) ; toucher ma
@@ -46,10 +45,11 @@
  *     capsule du zoom se pose sur le bord ; un toucher les efface avec le
  *     reste ; « Effets » de la rangée entre dans le MODE : en-tête, pilule et
  *     rangée partent, le carrousel se centre en bas ; ✕ en sort ;
- *  9. au DOIGT (320 × 568) : effacé par l'attente, `(…)` reste sous le doigt,
- *     et UN toucher agit et rend les commandes (#8735) ; un glissé, qui
- *     réarme l'attente (#8736), fait défiler CHAQUE rangée débordante
- *     et les carrousels des deux modes (`scrollLeft` mesuré) ; un pincement à
+ *  9. au DOIGT (320 × 568) : sans geste, rien ne s'efface (#8988) ; un
+ *     toucher sur la scène range les commandes, le suivant les rend — même
+ *     posé là où était `(…)`, qui, rangé, n'agit pas ; un glissé fait défiler
+ *     CHAQUE rangée débordante sans rien ranger (#8736), et les carrousels
+ *     des deux modes (`scrollLeft` mesuré) ; un pincement à
  *     deux doigts sur ma vignette la passe à ×3, un pincement serré à ×1 ; la
  *     taille est retenue pour l'appel.
  *
@@ -156,9 +156,6 @@ const panelFrame = async (page, label) => {
 const focused = (page, selector) => page.evaluate((target) => document.activeElement?.matches(target) === true, selector);
 
 const openActions = async (page) => {
-  const { width, height } = page.viewportSize();
-  await page.mouse.move(width / 2, height / 3);
-  await page.mouse.move(width / 2 + 8, height / 3 + 8);
   await appears(page, '[data-call-chrome="shown"]');
   const more = page.locator('[data-call-more]');
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
@@ -468,7 +465,7 @@ try {
 
       await page.click('[data-call-control="react"]');
       await appears(page, '[data-call-react-panel]');
-      check(!(await appears(page, '[data-call-chrome="hidden"]', 5200)), 'vidéo : un panneau ouvert ne s’efface pas tout seul');
+      check(!(await appears(page, '[data-call-chrome="hidden"]', 5200)), 'vidéo : rien ne s’efface tout seul, pas même un panneau ouvert (#8988)');
       await page.click('[data-panel-close]');
       check(await gone(page, '[data-call-react-panel]'), 'vidéo : ✕ ferme le panneau');
 
@@ -478,6 +475,10 @@ try {
       check(faded.done, `vidéo : l’en-tête, la pilule et la rangée de ma vignette s’effacent (${JSON.stringify(faded.seen)})`);
       await capture(page, 'controles-toucher-efface-dark');
       check(await tapStage(page, true), 'vidéo : un second toucher rend tout');
+      check(await tapStage(page, false), 'vidéo : un clic sur la scène les range à nouveau');
+      check(await until(page, () => !document.querySelector('[data-call-screen]')?.contains(document.activeElement)), 'vidéo : le clic sur la scène, qui n’est pas focalisable, emporte le focus HORS de l’écran d’appel');
+      await page.keyboard.press('Shift');
+      check(await appears(page, '[data-call-chrome="shown"]', 2000), 'vidéo : rangées, une touche les rend — même pressée hors de l’écran d’appel (#8988)');
 
       await page.click('[data-call-corner]');
       check(await appears(page, '[data-call-self-controls="top"]'), 'plein écran : toucher ma vignette met mon image en plein écran, ses commandes en haut au centre');
@@ -552,24 +553,23 @@ try {
     const cdp = await context.newCDPSession(page);
     try {
       check(await startVideo(page), 'doigt : l’appel vidéo se connecte à 320 × 568');
-      check(await appears(page, '[data-call-chrome-state="resting"]', 7000), 'doigt : sans geste, les commandes s’effacent d’elles-mêmes');
-      const underFinger = await page.evaluate(() => {
-        const more = document.querySelector('[data-call-more]');
-        if (more === null) return false;
-        const box = more.getBoundingClientRect();
-        return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)?.closest('[data-call-more]') === more;
-      });
-      check(underFinger, 'doigt : effacé par l’attente, (…) reste sous le doigt (#8735)');
-      const layerBefore = await page.getAttribute('[data-call-screen]', 'data-call-layer');
+      check(!(await appears(page, '[data-call-chrome="hidden"]', 5200)), 'doigt : sans geste, rien ne s’efface — les commandes restent (#8988)');
       await page.tap('[data-call-more]');
+      check(await until(page, () => document.querySelector('[data-call-screen]')?.getAttribute('data-call-layer') === 'idle'), 'doigt : (…) replie les actions');
+      const more = await page.locator('[data-call-more]').boundingBox();
+      const { width: narrow, height: tall } = page.viewportSize();
+      await page.touchscreen.tap(narrow * 0.3, tall * 0.45);
+      check(await appears(page, '[data-call-chrome="hidden"]', 2000), 'doigt : un toucher sur la scène range les commandes (#8988)');
+      check(await until(page, () => getComputedStyle(document.querySelector('[data-call-controls]')).visibility === 'hidden', undefined, 2000), 'doigt : rangées, les commandes ne captent plus le doigt une fois leur fondu fini (#8735)');
+      await page.touchscreen.tap(more.x + more.width / 2, more.y + more.height / 2);
       const layerAfter = await page.getAttribute('[data-call-screen]', 'data-call-layer');
-      check((await appears(page, '[data-call-chrome="shown"]', 2000)) && layerAfter !== layerBefore, `doigt : UN toucher sur (…) effacé agit ET rend les commandes (#8735 — ${layerBefore} → ${layerAfter})`);
+      check((await appears(page, '[data-call-chrome="shown"]', 2000)) && layerAfter === 'idle', `doigt : le toucher suivant les rend — même posé là où était (…), qui, rangé, n’agit pas (#8988 — ${layerAfter})`);
       await openActions(page);
       const rows = await dragEach(page, cdp, '[data-call-row] [data-call-row-scroll]');
       const overflowing = rows.filter((row) => row.moved !== null);
       check(overflowing.length >= 1, `doigt : au moins une rangée déborde à 320 (${JSON.stringify(rows)})`);
       check(overflowing.every((row) => row.moved > 4), `doigt : un glissé fait défiler CHAQUE rangée qui déborde (${JSON.stringify(rows)})`);
-      check((await page.getAttribute('[data-call-screen]', 'data-call-chrome')) === 'shown', 'doigt : faire défiler les rangées réarme l’attente — elles ne s’effacent pas sous le doigt (#8736)');
+      check((await page.getAttribute('[data-call-screen]', 'data-call-chrome')) === 'shown', 'doigt : faire défiler les rangées ne les range pas (#8736)');
       await capture(page, 'controles-doigt-rangees-dark-320x568');
 
       await page.click('[data-call-control="effects"]');

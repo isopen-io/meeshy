@@ -4,7 +4,7 @@ import { callLayout, type CallLayout } from './call-view';
 /**
  * **LES COMMANDES DE L'APPEL EN « C ADAPTÉ »** (#8391) — les règles de la vue,
  * sans DOM : ce que la pilule de verre porte, ce que le `(…)` en sort, où ça
- * sort, et quand tout s'efface pendant une vidéo.
+ * sort, et ce qui range tout pendant une vidéo.
  *
  * La pilule est la MÊME en audio, vidéo et groupe : `(…)` · Micro · Sortie ·
  * Fin. Les actions qu'elle cache se rangent en deux familles, et l'ordre de
@@ -70,7 +70,7 @@ export function callControlSet(context: ControlsContext): CallControlSet {
 export const flipOffered = (devices: readonly Pick<MediaDeviceInfo, 'kind'>[]): boolean => devices.filter((device) => device.kind === 'videoinput').length !== 1;
 
 /**
- * La scène est-elle VIDÉO ? Seule une scène vidéo efface ses commandes : en
+ * La scène est-elle VIDÉO ? Seule une scène vidéo range ses commandes : en
  * audio, il n'y a rien à dégager.
  */
 export function isVideoScene(call: Pick<ActiveCall, 'members' | 'cameraOn' | 'remoteStreams' | 'isGroup' | 'phase'>): boolean {
@@ -81,42 +81,18 @@ export function isVideoScene(call: Pick<ActiveCall, 'members' | 'cameraOn' | 're
   return call.cameraOn || Object.values(call.members).some((member) => member.cameraOn || member.screenSharing);
 }
 
-/** Le délai sans geste après lequel une vidéo efface pilule, rails et en-tête. */
-export const CHROME_IDLE_MS = 4000;
-
 /**
- * Les commandes s'effacent-elles ? Seulement sur une scène vidéo, après
- * `CHROME_IDLE_MS` sans geste, jamais quand le focus CLAVIER est dans les
- * commandes (on ne retire pas le sol sous les pieds de qui tabule), jamais
- * sous `prefers-reduced-motion` (rien n'apparaît ni ne disparaît de lui-même).
+ * Ce que montrent les commandes d'une vidéo (#8550, #8988) : `shown`, ou
+ * `dismissed` — rangées d'un toucher. Toucher la scène les range ou les rend,
+ * TOUTES ; le clavier les rend toujours. Rien d'autre ne les range, ni
+ * l'attente ni la souris (directive porteur du 2026-10-01 : « On cache les
+ * contrôleurs quand on touche l'écran et on les remet quand on retouche »).
  */
-export function chromeHidden(state: { readonly videoScene: boolean; readonly idleMs: number; readonly keyboardInside: boolean; readonly reducedMotion: boolean }): boolean {
-  return state.videoScene && !state.keyboardInside && !state.reducedMotion && state.idleMs >= CHROME_IDLE_MS;
-}
+export type ChromeVisibility = 'shown' | 'dismissed';
 
-/**
- * Ce que montrent les commandes d'une vidéo (#8550) : `shown`, `resting`
- * (effacées par l'attente) ou `dismissed` (rangées d'un toucher). Toucher la
- * scène les efface ou les rend, TOUTES ; bouger la souris ne rend que ce que
- * l'attente a effacé — sans quoi la souris qui a cliqué les ferait revenir au
- * pixel suivant ; le clavier rend toujours.
- */
-export type ChromeVisibility = 'shown' | 'resting' | 'dismissed';
-
-export type ChromeCue = 'tap' | 'stir' | 'key' | 'rest';
+export type ChromeCue = 'tap' | 'key';
 
 export function chromeAfter(current: ChromeVisibility, cue: ChromeCue): ChromeVisibility {
-  if (cue === 'tap') return current === 'shown' ? 'dismissed' : 'shown';
   if (cue === 'key') return 'shown';
-  if (cue === 'stir') return current === 'resting' ? 'shown' : current;
-  return current === 'shown' ? 'resting' : current;
+  return current === 'shown' ? 'dismissed' : 'shown';
 }
-
-/**
- * Les commandes répondent-elles au doigt (#8735) ? Montrées, oui ; effacées
- * par l'ATTENTE aussi — le doigt qui revient vers un bouton qu'il sait là ne
- * doit pas taper deux fois : ce toucher agit ET les rend. Seules les commandes
- * qu'un toucher sur la scène a RANGÉES laissent passer le doigt à la vidéo
- * (une fois leur fondu fini : un bouton encore visible répond toujours).
- */
-export const chromeInteractive = (visibility: ChromeVisibility): boolean => visibility !== 'dismissed';
