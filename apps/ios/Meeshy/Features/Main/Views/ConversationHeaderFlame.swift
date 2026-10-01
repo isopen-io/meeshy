@@ -17,6 +17,11 @@ protocol ConversationHeaderMemoryProviding: AnyObject {
 }
 
 final class ConversationHeaderMemory: ConversationHeaderMemoryProviding {
+    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466) → double libération au
+    // démontage (abrt « pointer being freed was not allocated », #9046).
+    // Garde : MainActorDeinitSourceGuardTests.
+    nonisolated deinit {}
+
     static let shared = ConversationHeaderMemory()
 
     static let expandedKey = "meeshy.conversationHeader.expanded"
