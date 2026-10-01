@@ -652,7 +652,7 @@ struct ConversationView: View {
     private var bodyWithSheets: AnyView {
         AnyView(
         bodyWithCovers
-            .fullScreenCover(isPresented: $headerState.showStoryViewerFromHeader) {
+            .conversationCover(isPresented: $headerState.showStoryViewerFromHeader) {
                 StoryViewerContainer(
                     viewModel: storyViewModel,
                     userId: headerState.storyUserIdForHeader,
@@ -675,7 +675,7 @@ struct ConversationView: View {
                 // (tray in-chat), fallback cover standard sinon (avatar header).
                 .zoomTransitionDestination(sourceID: headerState.storyUserIdForHeader ?? "", in: zoomNamespace)
             }
-            .fullScreenCover(isPresented: $overlayState.showStoryViewer) {
+            .conversationCover(isPresented: $overlayState.showStoryViewer) {
                 StoryViewerContainer(
                     viewModel: storyViewModel,
                     userId: overlayState.storyViewerUserId,
@@ -823,7 +823,7 @@ struct ConversationView: View {
             // primitives que la bulle (`BubbleStandardLayout`,
             // `.fullScreenCover(item: $fullscreenPlace)`), présentées ICI
             // parce que la rangée vit dans une cellule de collection.
-            .fullScreenCover(item: $focalFullscreenPlace) { item in
+            .conversationCover(item: $focalFullscreenPlace) { item in
                 LocationFullscreenView(
                     latitude: item.place.latitude,
                     longitude: item.place.longitude,
@@ -851,7 +851,7 @@ struct ConversationView: View {
             // Le montage du MEUBLE, lui, reste dans la porte : le poser ici
             // recopierait son envoi, sa reprise hors-ligne et sa sortie — et
             // ce lot livre justement un SECOND déclencheur du même chemin.
-            .fullScreenCover(item: $composerState.composeMediaTarget) { cible in
+            .conversationCover(item: $composerState.composeMediaTarget) { cible in
                 MediaComposerDoor(
                     // L'INTENTION naît dans la porte, pas ici : un second site
                     // qui la construirait serait un second contrat à tenir
@@ -867,7 +867,7 @@ struct ConversationView: View {
                 viewModel: viewModel, scrollState: $scrollState,
                 composerState: $composerState, accentColor: accentColor,
                 onReply: { triggerReply(for: $0) }))
-            .fullScreenCover(item: $composerState.previewMedia) { media in
+            .conversationCover(item: $composerState.previewMedia) { media in
                 switch media.type {
                 case "video":
                     VideoFullscreenPlayer(urlString: media.url.absoluteString, speed: .x1_0)

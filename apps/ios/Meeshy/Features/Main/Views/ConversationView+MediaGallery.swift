@@ -55,7 +55,7 @@ struct ConversationMediaGalleryLayer: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        content.fullScreenCover(item: $scrollState.galleryStartAttachment,
+        content.conversationCover(item: $scrollState.galleryStartAttachment,
                                 onDismiss: handleGalleryDismiss) { startAttachment in
             // Un vocal (cité, #8230) a son propre plein écran ; la galerie ne
             // sait rendre que l'image et la vidéo.

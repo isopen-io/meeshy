@@ -24,6 +24,8 @@ protocol ConversationViewingReporting: AnyObject {
     func setForeground(_ isForeground: Bool)
     func screenAppeared(_ conversationId: String)
     func screenDisappeared(_ conversationId: String)
+    func coverBegan()
+    func coverEnded()
 }
 
 @MainActor
@@ -41,6 +43,7 @@ final class ConversationViewingReporter: ConversationViewingReporting {
     private(set) var isForeground: Bool
     private var openings: [String: Int] = [:]
     private var visibleScreens: [String: Int] = [:]
+    private var covers = 0
 
     /// `connection` : l'état de connexion du socket ; chaque passage à `true`
     /// ré-annonce la conversation affichée. `reconnections` : chaque nouvelle
@@ -129,8 +132,22 @@ final class ConversationViewingReporter: ConversationViewingReporting {
         transition(from: before)
     }
 
+    /// Un plein écran présenté depuis la conversation la couvre ; comptés,
+    /// car une visionneuse peut en présenter une autre.
+    func coverBegan() {
+        let before = announced
+        covers += 1
+        transition(from: before)
+    }
+
+    func coverEnded() {
+        let before = announced
+        covers = max(covers - 1, 0)
+        transition(from: before)
+    }
+
     private var announced: String? {
-        guard isForeground, let current = viewingConversationId, (visibleScreens[current] ?? 1) > 0 else { return nil }
+        guard isForeground, covers == 0, let current = viewingConversationId, (visibleScreens[current] ?? 1) > 0 else { return nil }
         return current
     }
 
