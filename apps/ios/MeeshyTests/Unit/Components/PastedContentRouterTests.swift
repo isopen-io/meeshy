@@ -4,55 +4,55 @@ import MeeshySDK
 @testable import Meeshy
 
 /// **Ce qu'on colle part toujours** (#9037) : l'OBJET collé devient une pièce
-/// jointe, jamais son chemin ; un texte qui ferait dépasser la limite du
-/// serveur devient un document `.txt`, et le champ reste intact.
+/// jointe, jamais son chemin ; un texte qui ferait dépasser la limite d'un
+/// message (2000, comme les frontends) devient un document `.txt`, et le champ reste intact.
 final class PastedContentRouterTests: XCTestCase {
 
-    // MARK: - La limite : UNE source, celle du serveur
+    // MARK: - La limite : UNE source, celle des frontends (`@meeshy/shared`)
 
-    func test_maxMessageLength_mirrorsTheGatewayLimit() {
-        XCTAssertEqual(MessageLimits.maxMessageLength, 4000)
+    func test_maxMessageLength_mirrorsTheSharedFrontendLimit() {
+        XCTAssertEqual(MessageLimits.maxMessageLength, 2000, "MAX_MESSAGE_LENGTH de @meeshy/shared — décision porteur 2026-10-01")
     }
 
     func test_length_countsUTF16UnitsLikeTheGateway() {
         XCTAssertEqual(PastedContentRouter.length("é"), 1)
-        XCTAssertEqual(PastedContentRouter.length("👍"), 2, "le serveur compte `content.length` en unités UTF-16")
+        XCTAssertEqual(PastedContentRouter.length("👍"), 2, "JavaScript compte `content.length` en unités UTF-16")
     }
 
     // MARK: - Texte
 
     func test_decide_textThatFits_insertsText() {
-        let decision = PastedContentRouter.decide(.text(String(repeating: "a", count: 100)), currentLength: 10, limit: 4000)
+        let decision = PastedContentRouter.decide(.text(String(repeating: "a", count: 100)), currentLength: 10, limit: MessageLimits.maxMessageLength)
         XCTAssertEqual(decision, .insertText)
     }
 
-    func test_decide_textReachingExactlyTheLimit_insertsText() {
-        let decision = PastedContentRouter.decide(.text(String(repeating: "a", count: 3990)), currentLength: 10, limit: 4000)
+    func test_decide_textOf2000IntoAnEmptyField_insertsText() {
+        let decision = PastedContentRouter.decide(.text(String(repeating: "a", count: 2000)), currentLength: 0, limit: MessageLimits.maxMessageLength)
         XCTAssertEqual(decision, .insertText)
     }
 
-    func test_decide_textOneUnitPastTheLimit_attachesText() {
-        let decision = PastedContentRouter.decide(.text(String(repeating: "a", count: 3991)), currentLength: 10, limit: 4000)
+    func test_decide_textOf2001IntoAnEmptyField_attachesText() {
+        let decision = PastedContentRouter.decide(.text(String(repeating: "a", count: 2001)), currentLength: 0, limit: MessageLimits.maxMessageLength)
         XCTAssertEqual(decision, .attachText)
     }
 
-    func test_decide_textAloneLongerThanTheLimit_attachesText() {
-        let decision = PastedContentRouter.decide(.text(String(repeating: "a", count: 5000)), currentLength: 0, limit: 4000)
+    func test_decide_textOneUnitPastTheLimitWithWhatIsTyped_attachesText() {
+        let decision = PastedContentRouter.decide(.text(String(repeating: "a", count: 1991)), currentLength: 10, limit: MessageLimits.maxMessageLength)
         XCTAssertEqual(decision, .attachText)
     }
 
     func test_decide_textReplacingASelection_countsWhatRemains() {
-        let decision = PastedContentRouter.decide(.text(String(repeating: "a", count: 1000)), currentLength: 3900, replacedLength: 900, limit: 4000)
+        let decision = PastedContentRouter.decide(.text(String(repeating: "a", count: 1000)), currentLength: 1900, replacedLength: 900, limit: MessageLimits.maxMessageLength)
         XCTAssertEqual(decision, .insertText, "la sélection remplacée libère sa place")
     }
 
     // MARK: - Médias et documents
 
     func test_decide_media_attachesMediaWhateverTheLength() {
-        XCTAssertEqual(PastedContentRouter.decide(.media(.image), currentLength: 0, limit: 4000), .attachMedia(.image))
-        XCTAssertEqual(PastedContentRouter.decide(.media(.video), currentLength: 3999, limit: 4000), .attachMedia(.video))
-        XCTAssertEqual(PastedContentRouter.decide(.media(.audio), currentLength: 0, limit: 4000), .attachMedia(.audio))
-        XCTAssertEqual(PastedContentRouter.decide(.media(.file), currentLength: 0, limit: 4000), .attachMedia(.file))
+        XCTAssertEqual(PastedContentRouter.decide(.media(.image), currentLength: 0, limit: 2000), .attachMedia(.image))
+        XCTAssertEqual(PastedContentRouter.decide(.media(.video), currentLength: 1999, limit: 2000), .attachMedia(.video))
+        XCTAssertEqual(PastedContentRouter.decide(.media(.audio), currentLength: 0, limit: 2000), .attachMedia(.audio))
+        XCTAssertEqual(PastedContentRouter.decide(.media(.file), currentLength: 0, limit: 2000), .attachMedia(.file))
     }
 
     // MARK: - Classement des types collés
