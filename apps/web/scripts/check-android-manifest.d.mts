@@ -27,3 +27,9 @@ export declare function auditCallComponents(
 export declare function formatViolations(
   options: Readonly<{ readonly manifestPath: string; readonly violations: readonly PermissionViolation[] }>,
 ): string;
+
+export declare const SHARE_INTENT_FILTERS: readonly Readonly<{ readonly action: string; readonly mimeTypes: readonly string[] }>[];
+
+export declare function auditShareIntentFilters(
+  options: Readonly<{ readonly manifest: string; readonly required?: typeof SHARE_INTENT_FILTERS }>,
+): readonly string[];
