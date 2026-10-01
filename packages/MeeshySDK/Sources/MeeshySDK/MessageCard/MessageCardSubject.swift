@@ -34,6 +34,12 @@ public struct MessageCardSubjectMedia: Equatable, Sendable {
 /// hors de la bulle. Une pièce floutée ou à vue unique rend le message
 /// entier inexportable : la protection d'une pièce protège son message. Le
 /// message CITÉ apporte aussi ses médias, après ceux de la réponse (#8901).
+///
+/// UN SON PART DANS SA PISTE SERVIE (#8979) : la piste traduite que
+/// l'application désigne (`audioLanguages`, résolue par le Prisme du lecteur
+/// ou la langue d'export), sinon l'original — son fichier, sa durée ET sa
+/// transcription voyagent ensemble. Une transcription dans une langue
+/// au-dessus d'une voix dans une autre serait pire qu'une transcription absente.
 public struct MessageCardSubject: Equatable, Sendable {
     public let quoted: MessageCardPart?
     public let reply: MessageCardPart
@@ -72,11 +78,13 @@ public struct MessageCardSubject: Equatable, Sendable {
     }
 
     /// Les pièces qu'une carte peut peindre — photo, vidéo, son, dans l'ordre du message.
-    public static func paintableMedia(of message: MeeshyMessage) -> [MessageCardSubjectMedia] {
-        paintableMedia(of: message.attachments)
+    /// - Parameter audioLanguages: la langue de la piste SERVIE de chaque son, par
+    ///   identifiant de pièce — absente : l'original.
+    public static func paintableMedia(of message: MeeshyMessage, audioLanguages: [String: String] = [:]) -> [MessageCardSubjectMedia] {
+        paintableMedia(of: message.attachments, audioLanguages: audioLanguages)
     }
 
-    static func paintableMedia(of attachments: [MeeshyMessageAttachment]) -> [MessageCardSubjectMedia] {
+    static func paintableMedia(of attachments: [MeeshyMessageAttachment], audioLanguages: [String: String] = [:]) -> [MessageCardSubjectMedia] {
         attachments.compactMap { attachment in
             guard !attachment.isEncrypted, !attachment.isBlurred, !attachment.isViewOnce else { return nil }
             let kind: MessageCardMediaKind
@@ -89,18 +97,26 @@ public struct MessageCardSubject: Equatable, Sendable {
             let file = MessageCardText.nonBlank(attachment.fileUrl) ?? MessageCardText.nonBlank(attachment.thumbnailUrl)
             guard let file else { return nil }
             let aspect = aspect(width: attachment.width, height: attachment.height)
+            let served = kind == .audio ? servedTrack(of: attachment, in: audioLanguages[attachment.id]) : nil
             return MessageCardSubjectMedia(
                 media: MessageCardMedia(
                     id: attachment.id.isEmpty ? file : attachment.id,
                     kind: kind,
                     aspect: aspect,
-                    duration: attachment.duration.map { Double($0) / 1000 },
-                    name: kind == .audio ? (attachment.title ?? attachment.originalName) : nil
+                    duration: (served.map(\.durationMs) ?? attachment.duration).map { Double($0) / 1000 },
+                    name: kind == .audio ? (attachment.title ?? attachment.originalName) : nil,
+                    transcript: kind == .audio ? (served.flatMap(MessageCardTranscript.init) ?? MessageCardTranscript(attachment.transcription)) : nil
                 ),
-                fileURL: file,
+                fileURL: served.flatMap { MessageCardText.nonBlank($0.url) } ?? file,
                 posterURL: kind == .video ? attachment.thumbnailUrl : nil
             )
         }
+    }
+
+    /// La piste traduite d'un son dans `language` — `nil` : l'original sert.
+    private static func servedTrack(of attachment: MeeshyMessageAttachment, in language: String?) -> MeeshyMessageAttachment.EmbeddedAudioTranslation? {
+        guard let language = language?.lowercased() else { return nil }
+        return attachment.audioTranslations?.first { $0.key.lowercased() == language && MessageCardText.nonBlank($0.value.url) != nil }?.value
     }
 
     private static func aspect(width: Int?, height: Int?) -> Double {
@@ -115,6 +131,7 @@ public struct MessageCardSubject: Equatable, Sendable {
     ///   - quotedAt: l'heure du message cité, quand l'appelant l'a sous la main.
     ///   - quotedMessage: le message cité RÉEL quand il est en mémoire — il apporte
     ///     toutes ses pièces peignables ; sinon la citation apporte la sienne.
+    ///   - audioLanguages: la piste SERVIE de chaque son (#8979), par identifiant de pièce.
     public static func of(
         message: MeeshyMessage,
         servedText: String?,
@@ -123,6 +140,7 @@ public struct MessageCardSubject: Equatable, Sendable {
         language: String? = nil,
         quotedAt: Date? = nil,
         quotedMessage: MeeshyMessage? = nil,
+        audioLanguages: [String: String] = [:],
         now: Date
     ) -> MessageCardSubject? {
         guard isExportable(message, now: now) else { return nil }
@@ -134,7 +152,7 @@ public struct MessageCardSubject: Equatable, Sendable {
         } else {
             chosen = servedText ?? message.content
         }
-        let media = paintableMedia(of: message)
+        let media = paintableMedia(of: message, audioLanguages: audioLanguages)
         let text = MessageCardText.nonBlank(chosen)
         guard text != nil || !media.isEmpty else { return nil }
         let isViewer = message.isMe || message.senderId == viewer.id
@@ -178,9 +196,10 @@ public struct MessageCardSubject: Equatable, Sendable {
     /// **L'arbre de réponses** (#8709) : une réponse emporte sa RACINE en
     /// citation (`quoting`), dans le texte que le Prisme sert au lecteur. Une
     /// racine protégée ou vide ne se cite pas — la réponse part seule.
-    public static func of(comment: FeedComment, viewer: Viewer, showOriginal: Bool = false, quoting root: FeedComment? = nil) -> MessageCardSubject? {
+    public static func of(comment: FeedComment, viewer: Viewer, showOriginal: Bool = false, quoting root: FeedComment? = nil,
+                          audioLanguages: [String: String] = [:]) -> MessageCardSubject? {
         guard !comment.effects.flags.hasLifecycleEffect else { return nil }
-        let media = paintableMedia(of: comment)
+        let media = paintableMedia(of: comment, audioLanguages: audioLanguages)
         let text = MessageCardText.nonBlank(showOriginal ? comment.content : comment.displayContent)
         guard text != nil || !media.isEmpty else { return nil }
         let quoted = root.flatMap { quote(comment: $0, viewer: viewer) }
@@ -207,7 +226,7 @@ public struct MessageCardSubject: Equatable, Sendable {
         )
     }
 
-    public static func paintableMedia(of comment: FeedComment) -> [MessageCardSubjectMedia] {
+    public static func paintableMedia(of comment: FeedComment, audioLanguages: [String: String] = [:]) -> [MessageCardSubjectMedia] {
         comment.media.compactMap { item in
             let kind: MessageCardMediaKind
             switch item.type {
@@ -217,14 +236,19 @@ public struct MessageCardSubject: Equatable, Sendable {
             case .document: return nil
             }
             guard let file = MessageCardText.nonBlank(item.url) ?? MessageCardText.nonBlank(item.thumbnailUrl) else { return nil }
+            let language = kind == .audio ? audioLanguages[item.id]?.lowercased() : nil
+            let served = language.flatMap { language in
+                item.translatedAudios.first { $0.targetLanguage.lowercased() == language && MessageCardText.nonBlank($0.url) != nil }
+            }
             return MessageCardSubjectMedia(
                 media: MessageCardMedia(
                     id: item.id, kind: kind,
                     aspect: aspect(width: item.width, height: item.height),
-                    duration: item.duration.map { Double($0) },
-                    name: kind == .audio ? item.fileName : nil
+                    duration: served.flatMap { $0.durationMs > 0 ? Double($0.durationMs) / 1000 : nil } ?? item.duration.map { Double($0) },
+                    name: kind == .audio ? item.fileName : nil,
+                    transcript: kind == .audio ? (served.flatMap(MessageCardTranscript.init) ?? MessageCardTranscript(item.transcription)) : nil
                 ),
-                fileURL: file,
+                fileURL: served?.url ?? file,
                 posterURL: kind == .video ? item.thumbnailUrl : nil
             )
         }
