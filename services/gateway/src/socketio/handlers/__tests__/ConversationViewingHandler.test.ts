@@ -86,7 +86,23 @@ function makeWorld({
     return { socket: socket as any, direct };
   };
 
-  return { handler, emissions, connect };
+  /** Un socket ouvert dont l'authentification n'a pas encore abouti (#9047). */
+  const arrive = (socketId: string, rooms: readonly string[] = []) => {
+    const direct: Array<{ event: string; data: unknown }> = [];
+    const socket = {
+      id: socketId,
+      rooms: new Set([socketId, ...rooms.map(id => `conversation:${id}`)]),
+      emit: (event: string, data: unknown) => direct.push({ event, data }),
+    };
+    const authenticate = (userId: string) => {
+      connectedUsers.set(userId, { id: userId, socketId, isAnonymous: false, language: 'fr' });
+      socketToUser.set(socketId, userId);
+      userSockets.set(userId, new Set([...(userSockets.get(userId) ?? []), socketId]));
+    };
+    return { socket: socket as any, direct, authenticate };
+  };
+
+  return { handler, emissions, connect, arrive };
 }
 
 const startsFor = (emissions: readonly Emission[]) =>
@@ -311,5 +327,63 @@ describe('ConversationViewingHandler — se (re)connecter', () => {
     await handler.emitRoomSnapshots(laptop.socket);
 
     expect(snapshots(laptop.direct)).toEqual([]);
+  });
+});
+
+describe('ConversationViewingHandler — ouvrir AVANT la fin de l’authentification (#9047)', () => {
+  it('une ouverture reçue avant l’authentification est annoncée dès qu’elle aboutit', async () => {
+    const { handler, emissions, arrive } = makeWorld();
+    const alice = arrive('s-alice', [CONV]);
+
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+    expect(startsFor(emissions)).toEqual([]);
+
+    alice.authenticate(ALICE);
+    await handler.afterAuthentication(alice.socket);
+
+    expect(startsFor(emissions).map(e => e.data)).toEqual([{ userId: ALICE, conversationId: CONV }]);
+  });
+
+  it('une fermeture reçue entre-temps annule l’ouverture en attente', async () => {
+    const { handler, emissions, arrive } = makeWorld();
+    const alice = arrive('s-alice', [CONV]);
+
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+    await handler.handleStop(alice.socket, { conversationId: CONV });
+    alice.authenticate(ALICE);
+    await handler.afterAuthentication(alice.socket);
+
+    expect(startsFor(emissions)).toEqual([]);
+  });
+
+  it('passer en arrière-plan, ou se déconnecter, avant l’authentification oublie l’attente', async () => {
+    const { handler, emissions, arrive } = makeWorld();
+    const phone = arrive('s-phone', [CONV]);
+    await handler.handleStart(phone.socket, { conversationId: CONV });
+    await handler.handleAppState(phone.socket, { foreground: false });
+    phone.authenticate(ALICE);
+    await handler.afterAuthentication(phone.socket);
+
+    const laptop = arrive('s-laptop', [CONV]);
+    await handler.handleStart(laptop.socket, { conversationId: CONV });
+    await handler.handleSocketDisconnecting('s-laptop');
+    laptop.authenticate(BOB);
+    await handler.afterAuthentication(laptop.socket);
+
+    expect(startsFor(emissions)).toEqual([]);
+  });
+
+  it('après l’authentification, l’arrivant reçoit aussi qui est déjà là', async () => {
+    const { handler, connect, arrive } = makeWorld();
+    const bob = connect(BOB, 's-bob');
+    await handler.handleStart(bob.socket, { conversationId: CONV });
+    const alice = arrive('s-alice', [CONV]);
+    alice.authenticate(ALICE);
+
+    await handler.afterAuthentication(alice.socket);
+
+    expect(alice.direct.filter(d => d.event === SERVER_EVENTS.VIEWING_SNAPSHOT).map(d => d.data)).toEqual([
+      { conversationId: CONV, userIds: [BOB] },
+    ]);
   });
 });
