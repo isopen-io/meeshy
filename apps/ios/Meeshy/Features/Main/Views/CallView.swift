@@ -37,7 +37,6 @@ struct CallView: View {
     @State var showControls = true
     /// #8735 — les touchers du chrome : chacun réarme le masquage automatique,
     /// et aucun masquage ne tombe sous un doigt posé.
-    @State var chromeTouches = CallChromeTouches()
     @State var showTranscript = false
     @State var showOriginalText = false
     @State var showEffectsToolbar = false
