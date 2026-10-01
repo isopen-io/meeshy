@@ -7,6 +7,8 @@ import { Link } from '@/routes/route-table';
 
 import { Glyph } from './glyph';
 
+import '@/styles/header-flame.css';
+
 /**
  * LA PASTILLE D'ENGAGEMENT D'UNE CONVERSATION (#8906, #9044) — « 🔥 4 · 1,2 k ».
  *
@@ -16,6 +18,10 @@ import { Glyph } from './glyph';
  * l'en-tête DÉPLIÉ, où elle mène à la Progression ; replié, c'est la flamme du
  * jour sous l'avatar (`HeaderFlame`) qui parle. La liste porte la série en
  * rouge à côté de l'heure (`ConversationStreakMark`, 2026-10-01).
+ *
+ * Même rendu que la flamme sous l'avatar replié, sans capsule ni fond : la
+ * flamme, puis « série · total » en chiffres rouges cerclés de blanc
+ * (`.header-flame-count-digits`, `styles/header-flame.css`).
  *
  * Le texte visible est masqué au lecteur d'écran, qui lit la phrase entière
  * (« Série de 4 jours, 120 points dont 12 aujourd'hui »).
@@ -43,26 +49,25 @@ export function EngagementPill({
 
   const body = (
     <>
-      <span aria-hidden="true" className="flex items-center gap-1 whitespace-nowrap">
-        <Glyph name="flame" size={12} style={{ color: 'var(--ios-warning)' }} />
-        <span data-engagement-streak={model.streakDays}>{model.streakDays}</span>
-        <span>·</span>
-        <span data-engagement-points>{model.totalText}</span>
+      <span aria-hidden="true" className="flex items-center gap-0.5 whitespace-nowrap">
+        <Glyph name="flameFill" size={13} style={{ color: 'var(--ios-warning)' }} />
+        <span className="header-flame-count-digits">
+          <span data-engagement-streak={model.streakDays}>{model.streakDays}</span>
+          <span> · </span>
+          <span data-engagement-points>{model.totalText}</span>
+        </span>
       </span>
       <span className="sr-only">{model.label}</span>
     </>
   );
-  const className = 'inline-flex shrink-0 items-center rounded-chip px-1.5 text-check font-semibold tabular-nums';
-  const style = { backgroundColor: 'color-mix(in srgb, var(--ios-warning) 16%, transparent)', color: 'var(--color-ios-ink)' };
+  const className = 'inline-flex shrink-0 items-center text-check tabular-nums';
 
   return opensProgression ? (
     <Link to="progression" data-engagement-pill className="inline-flex min-h-11 shrink-0 items-center">
-      <span className={className} style={style}>
-        {body}
-      </span>
+      <span className={className}>{body}</span>
     </Link>
   ) : (
-    <span data-engagement-pill className={className} style={style}>
+    <span data-engagement-pill className={className}>
       {body}
     </span>
   );

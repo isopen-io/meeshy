@@ -269,10 +269,26 @@ private struct HeaderFlameBurner: View, Animatable {
     }
 }
 
+/// La flamme du jour, immobile : le même dégradé que celle qui brûle sous
+/// l'avatar, pour la pastille de l'en-tête déplié (#9044).
+struct HeaderFlameGlyph: View, Equatable {
+    var size: CGFloat = MeeshyIconSize.xs
+
+    var body: some View {
+        Image(systemName: "flame.fill")
+            .font(MeeshyFont.relative(size, weight: .bold))
+            .foregroundStyle(
+                LinearGradient(colors: [.yellow, MeeshyColors.warning, MeeshyColors.error],
+                               startPoint: .top, endPoint: .bottom)
+            )
+            .accessibilityHidden(true)
+    }
+}
+
 /// Le compte du jour, sans fond : chiffres ROUGES cerclés de 1 pt blanc, en
 /// clair comme en sombre (directive porteur 2026-10-01).
 /// Feuille `Equatable` ; le chiffre défile vers sa nouvelle valeur.
-private struct HeaderFlameCount: View, Equatable {
+struct HeaderFlameCount: View, Equatable {
     let text: String
 
     private static let outline: [CGSize] = stride(from: 0, to: 360, by: 30).map { degrees in
