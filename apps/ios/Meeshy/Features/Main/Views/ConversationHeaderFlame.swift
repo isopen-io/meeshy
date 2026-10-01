@@ -269,26 +269,25 @@ private struct HeaderFlameBurner: View, Animatable {
     }
 }
 
-/// Le compte du jour, sans fond : chiffres ROUGES cerclés de 2 pt gris
-/// anthracite, en clair comme en sombre (directive porteur 2026-10-01).
+/// Le compte du jour, sans fond : chiffres ROUGES cerclés de 1 pt blanc, en
+/// clair comme en sombre (directive porteur 2026-10-01).
 /// Feuille `Equatable` ; le chiffre défile vers sa nouvelle valeur.
 private struct HeaderFlameCount: View, Equatable {
     let text: String
 
-    static let anthracite = Color(red: 0.22, green: 0.24, blue: 0.26)
     private static let outline: [CGSize] = stride(from: 0, to: 360, by: 30).map { degrees in
         let radians = Double(degrees) * .pi / 180
-        return CGSize(width: 2 * cos(radians), height: 2 * sin(radians))
+        return CGSize(width: cos(radians), height: sin(radians))
     }
 
     var body: some View {
         ZStack {
             ForEach(Self.outline.indices, id: \.self) { index in
-                digits.foregroundColor(Self.anthracite).offset(Self.outline[index])
+                digits.foregroundColor(.white).offset(Self.outline[index])
             }
             digits.foregroundColor(MeeshyColors.error)
         }
-        .padding(2)
+        .padding(1)
         .animation(.spring(response: 0.4, dampingFraction: 0.7), value: text)
         .accessibilityHidden(true)
     }
