@@ -8,6 +8,7 @@ import { loadInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import {
   EXTENDED_REACTIONS,
   QUICK_REACTIONS,
+  forwardMenuItems,
   messageDetailExposureOf,
   messageMenuContextOf,
   messageMenuItems,
@@ -332,5 +333,36 @@ describe('messageDetailExposureOf — la feuille « Plus… » ne fait pas fuir 
   test('à vue unique, scellée ou déjà ouverte : rien non plus', () => {
     expect(messageDetailExposureOf({ ...base, isViewOnce: true }, { now: 1000 })).toBe(false);
     expect(messageDetailExposureOf({ ...base, isViewOnce: true, viewOnceCount: 1 }, { now: 1000 })).toBe(false);
+  });
+});
+
+/**
+ * #9039 — « TRANSFÉRER » PROPOSE D'IMAGER LA DISCUSSION. Le sous-menu de
+ * Transférer garde le transfert (armer la sélection) et ajoute « Imager la
+ * discussion », sous la garde d'« Imager » : ce qui ne se copie pas ne se
+ * peint pas.
+ */
+describe('forwardMenuItems — le sous-menu de « Transférer » (#9039)', () => {
+  test('un message imageable ⇒ transférer, puis imager la discussion', () => {
+    expect(forwardMenuItems(ctx()).map((i) => [i.id, i.labelKey, i.glyph])).toEqual([
+      ['forward', 'message.menu.forward', 'arrowBendUpRight'],
+      ['exportDiscussion', 'message.menu.exportDiscussion', 'imageSquare'],
+    ]);
+  });
+
+  test('un message fait d’un seul média s’image aussi en discussion', () => {
+    expect(forwardMenuItems(ctx({ hasText: false, hasImageableMedia: true })).map((i) => i.id)).toEqual(['forward', 'exportDiscussion']);
+  });
+
+  test('un message protégé (flouté, éphémère) se transfère mais ne s’image pas', () => {
+    expect(forwardMenuItems(ctx({ isProtected: true })).map((i) => i.id)).toEqual(['forward']);
+  });
+
+  test('« Imager la discussion » se dit dans les sept langues, jamais par sa clé', async () => {
+    for (const language of ['fr', 'en', 'es', 'pt', 'it', 'de', 'ar'] as const) {
+      await loadInterfaceCatalog(language);
+      expect(translate(language, 'message.menu.exportDiscussion')).not.toBe('message.menu.exportDiscussion');
+    }
+    expect(translate('fr', 'message.menu.exportDiscussion')).toBe('Imager la discussion');
   });
 });

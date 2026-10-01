@@ -5,7 +5,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { Attachment } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
-import { NO_MEDIA_OFFERS, type MediaPageOffers, type MediaViewerPage } from '@/lib/view/media-viewer-actions';
+import { closeSendSheet, sendSheetStore, type SendSheetRequest } from '@/lib/send/send-sheet-store';
+import { NO_MEDIA_OFFERS, type MediaPageOffers, type MediaViewerPage } from '@/lib/view/viewer-page-offers';
 
 import MediaViewer from './media-viewer';
 
@@ -52,6 +53,7 @@ let root: Root;
 
 afterEach(() => {
   act(() => {
+    closeSendSheet();
     root.unmount();
   });
   container.remove();
@@ -90,12 +92,13 @@ async function settle(): Promise<void> {
   });
 }
 
-const pageOf = (attachment: Attachment, offers: MediaPageOffers, onReply?: () => void): MediaViewerPage => ({
+const pageOf = (attachment: Attachment, offers: MediaPageOffers, onReply?: () => void, share?: SendSheetRequest): MediaViewerPage => ({
   attachment,
   messageId: '65f0a1b2c3d4e5f6a7b8c9d0',
   conversationId: 'c-a',
   offers,
   ...(onReply === undefined ? {} : { onReply }),
+  ...(share === undefined ? {} : { share }),
 });
 
 describe('MediaViewer — la page se suit par son identité', () => {
@@ -123,7 +126,7 @@ describe('MediaViewer — la page se suit par son identité', () => {
 });
 
 describe('MediaViewer — les actions de la page (#6303)', () => {
-  const ALL: MediaPageOffers = { save: true, react: true, reply: true, compose: true };
+  const ALL: MediaPageOffers = { save: true, react: true, reply: true, compose: true, share: false };
 
   test('une page qui offre tout : Enregistrer dans « … » en haut, Réagir · Créer en rail, Répondre en capsule', async () => {
     const items = photos(['a']);
@@ -195,5 +198,107 @@ describe('MediaViewer — les actions de la page (#6303)', () => {
     });
     expect(dialog().querySelector('[data-viewer-bottom-bar]')?.getAttribute('data-chrome-yields')).toBe('shown');
     expect(dialog().querySelector('[data-viewer-top-bar]')?.getAttribute('data-chrome-yields')).toBe('shown');
+  });
+});
+
+describe('MediaViewer — « Partager » ouvre la feuille d’envoi commune (#8884)', () => {
+  const REQUEST: SendSheetRequest = {
+    intent: 'share',
+    payload: { kind: 'attachment', conversationId: 'c-a', messageId: 'm-a', attachmentId: 'a', mime: 'image/jpeg', previewUrl: '/uploads/a.jpg', mine: true, protected: false },
+  };
+  const SHARE: MediaPageOffers = { ...NO_MEDIA_OFFERS, share: true };
+
+  const press = (): void => {
+    act(() => {
+      dialog().querySelector<HTMLButtonElement>('[data-viewer-action="share"]')!.click();
+    });
+  };
+
+  test('le bouton s’appelle « Partager », sa place est le rail entre Réagir et Créer, et il remet la demande de l’hôte à la feuille', async () => {
+    const items = photos(['a']);
+    mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, { ...SHARE, react: true, compose: true }, undefined, REQUEST) });
+    await settle();
+    expect(Array.from(dialog().querySelectorAll('[data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'))).toEqual([
+      'react',
+      'share',
+      'compose',
+    ]);
+    expect(dialog().querySelector('[data-viewer-action="share"]')?.getAttribute('aria-label')).toBe('Partager');
+    press();
+    expect(sendSheetStore.getState().request).toBe(REQUEST);
+  });
+
+  test('un tap sur « Partager » ne bascule pas le plateau en plein cadre', async () => {
+    const items = photos(['a']);
+    mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, SHARE, undefined, REQUEST) });
+    await settle();
+    press();
+    expect(dialog().querySelector('[data-viewer-bottom-bar]')?.getAttribute('data-chrome-yields')).toBe('shown');
+  });
+
+  test('une page qui n’offre pas le partage (pièce protégée, hôte sans feuille) n’a pas le bouton', async () => {
+    const items = photos(['a']);
+    mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, { ...NO_MEDIA_OFFERS, react: true }, undefined, REQUEST) });
+    await settle();
+    expect(dialog().querySelector('[data-viewer-action="share"]')).toBeNull();
+  });
+
+  test('l’offre sans demande à remettre n’existe pas : un bouton sans effet n’est pas rendu (loi 4)', async () => {
+    const items = photos(['a']);
+    mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, SHARE) });
+    await settle();
+    expect(dialog().querySelector('[data-viewer-action="share"]')).toBeNull();
+  });
+
+  test('un hôte qui répond null (page sans message connu) ne retombe pas sur le partage nu', async () => {
+    mount({ items: photos(['a']), startIndex: 0, actionsAt: () => null });
+    await settle();
+    expect(dialog().querySelector('[data-viewer-action="share"]')).toBeNull();
+  });
+
+  test('sans hôte d’actions NI demande explicite, rien ne se partage : une pièce révélée pour la vue unique n’a plus ses drapeaux, elle ne doit pas sortir', async () => {
+    mount({ items: photos(['a']), startIndex: 0 });
+    await settle();
+    expect(dialog().querySelector('[data-viewer-action="share"]')).toBeNull();
+  });
+
+  test('un hôte qui sait son média public le demande (`shareMedia`) : il se partage comme un média nu — ni réaction, ni citation', async () => {
+    mount({ items: photos(['a', 'b']), startIndex: 0, shareMedia: true });
+    await settle();
+    expect(Array.from(dialog().querySelectorAll('[data-viewer-action]')).map((el) => el.getAttribute('data-viewer-action'))).toEqual(['share']);
+    expect(dialog().querySelector('[data-viewer-reply]')).toBeNull();
+    press();
+    expect(sendSheetStore.getState().request?.payload).toMatchObject({ kind: 'media', name: 'a.jpg', mime: 'image/jpeg' });
+  });
+
+  test('même demandé, un média nu protégé (vue unique) n’offre rien', async () => {
+    const hidden = { ...photo('a'), isViewOnce: true } as Attachment;
+    mount({ items: [hidden], startIndex: 0, shareMedia: true });
+    await settle();
+    expect(dialog().querySelector('[data-viewer-action="share"]')).toBeNull();
+  });
+
+  test('la feuille par-dessus rend la main : #root cesse d’être inerte le temps de la feuille, puis l’est de nouveau', async () => {
+    const items = photos(['a']);
+    mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, SHARE, undefined, REQUEST) });
+    await settle();
+    const root = document.getElementById('root')!;
+    expect(root.hasAttribute('inert')).toBe(true);
+    press();
+    expect(root.hasAttribute('inert')).toBe(false);
+    act(() => closeSendSheet());
+    expect(root.hasAttribute('inert')).toBe(true);
+  });
+
+  test('fermer la visionneuse pendant que la feuille est ouverte ne laisse pas #root inerte', async () => {
+    const items = photos(['a']);
+    mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, SHARE, undefined, REQUEST) });
+    await settle();
+    press();
+    act(() => {
+      root.unmount();
+    });
+    expect(document.getElementById('root')?.hasAttribute('inert')).toBe(false);
+    root = createRoot(container);
   });
 });

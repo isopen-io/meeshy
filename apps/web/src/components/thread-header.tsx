@@ -20,7 +20,13 @@ import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { Link } from '@/routes/route-table';
 import { useIsHere } from '@/lib/view/use-conversation-viewing';
 import { useConversationEngagement } from '@/lib/view/use-conversation-engagement';
+import { headerFlameShown } from '@/lib/view/header-memory';
+import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { EngagementPill } from './engagement-pill';
+import { GlyphSvg } from './glyph';
+import { MEDIA_GLYPHS } from './glyphs-media';
+import { HeaderFlame } from './header-flame';
 
 /**
  * L'EN-TÊTE DU FIL — extrait de `routes/thread.tsx` (revue #5814, défaut
@@ -51,6 +57,9 @@ export function ThreadHeader({
   onSelectReadingMode,
   onResetReadingModeToAuto,
   preview = false,
+  flameDismissed = false,
+  onDismissFlame,
+  flameReplay = 0,
 }: {
   /**
    * L'EN-TÊTE DE L'APERÇU TIRÉ DEPUIS LA BANNIÈRE (#8821, directive porteur
@@ -61,6 +70,15 @@ export function ThreadHeader({
    * qu'on déplie ; l'avatar y ouvre les détails.
    */
   readonly preview?: boolean;
+  /**
+   * LA FLAMME DU JOUR SOUS L'AVATAR REPLIÉ (#9031) — masquée par le lecteur
+   * (`flameDismissed`, retenue par conversation), rejouée à chaque envoi
+   * (`flameReplay` compte les messages partis). Sans `onDismissFlame`, l'hôte
+   * ne la propose pas.
+   */
+  readonly flameDismissed?: boolean;
+  readonly onDismissFlame?: (() => void) | undefined;
+  readonly flameReplay?: number;
   readonly title: string;
   readonly accent: string;
   readonly conversation: Conversation;
@@ -111,6 +129,13 @@ export function ThreadHeader({
   /* « N (M) 🔥 » (#8906) — ce que cette conversation a rapporté au lecteur ;
      dans la grappe d'actions repliée, sous le titre déplié. */
   const engagement = useConversationEngagement(conversation);
+  const showsFlame =
+    onDismissFlame !== undefined &&
+    headerFlameShown({ expanded, preview, dismissed: flameDismissed, hasEngagement: (engagement?.totalPoints ?? 0) > 0 });
+  /* LA PRÉSENCE DES PLUS ACTIFS (#9031) — vert, orange ou gris comme partout,
+     l'indigo « ici » primant (`ActiveMembersStack`). */
+  const memberPresence = (memberId: string) =>
+    presenceOf(conversation.participants.find((p) => (p.userId ?? p.user?.id ?? p.id) === memberId));
   /* LE MENU D'APPUI LONG DE L'IDENTITÉ DE L'EN-TÊTE — celui d'un avatar
      d'auteur (#7828) : le pair (profil, story) en direct, et les détails de la
      conversation partout où l'hôte sait les ouvrir. */
@@ -239,7 +264,6 @@ export function ThreadHeader({
              c'est le titre qui prend la place, pas un espaceur. */
           <div className={`thread-header-actions flex ${preview ? 'shrink-0' : 'flex-1'} items-center gap-2`}>
             {preview ? null : <span className="flex-1" />}
-            <EngagementPill snapshot={engagement} opensProgression />
             {/* LE CHIP DE MODE — SOUS DRAPEAU UNIQUEMENT (D-20, miroir
                 `ConversationView.swift:2391-2430`) : `apiConfig.readingModesEnabled`
                 est un paramètre de CONSTRUCTION, figé au déploiement — quand il
@@ -270,25 +294,50 @@ export function ThreadHeader({
             {conversation.type === 'direct' || conversation.type === 'group' ? (
               <ThreadCallButton conversationId={conversation.id} title={title} avatar={photo ?? null} group={group} liveCallHint={(conversation as ListConversation).activeCall ?? null} />
             ) : null}
-            <button
-              type="button"
-              className={CHROME_ACTION_HIT_CLASS}
-              style={{ color: 'var(--accent)' }}
-              aria-label="Rechercher dans la conversation"
-            >
-              <ChromeActionDisc>
-                <Glyph name="magnifyingGlass" size={13} />
-              </ChromeActionDisc>
-            </button>
+            {/* EN APERÇU, « AGRANDIR » PREND LA PLACE DE LA LOUPE (#9031) :
+                l'aperçu ne cherche pas, il ouvre la conversation complète. */}
+            {preview ? (
+              <Link
+                to="thread"
+                params={{ conversation: conversation.id }}
+                className={CHROME_ACTION_HIT_CLASS}
+                style={{ color: 'var(--accent)' }}
+                aria-label={translateNotificationRow(currentInterfaceLanguage(), 'notifications.preview.open')}
+                data-preview-open-full
+              >
+                <ChromeActionDisc>
+                  <GlyphSvg glyph={MEDIA_GLYPHS.arrowsOutSimple} size={13} />
+                </ChromeActionDisc>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className={CHROME_ACTION_HIT_CLASS}
+                style={{ color: 'var(--accent)' }}
+                aria-label="Rechercher dans la conversation"
+              >
+                <ChromeActionDisc>
+                  <Glyph name="magnifyingGlass" size={13} />
+                </ChromeActionDisc>
+              </button>
+            )}
           </div>
         ) : null}
 
-        {/* Pas en APERÇU : à 390 px, la pile des trois actifs écrasait le
-            titre à une lettre — l'identité d'abord, l'avatar dit déjà le groupe. */}
-        {expanded && !preview && group && activeMembers !== undefined ? (
-          <ActiveMembersStack members={activeMembers} accent={accent} storyRingOf={storyRingOf} onOpenDetails={onOpenDetails} />
+        {/* EN APERÇU AUSSI (#9031, demande porteur 2026-10-01) : la pile des
+            plus actifs, chacun avec son point, puis l'avatar du groupe. Le
+            titre tronque ; son nom entier reste dans les détails. */}
+        {(expanded || preview) && group && activeMembers !== undefined ? (
+          <ActiveMembersStack
+            members={activeMembers}
+            accent={accent}
+            storyRingOf={storyRingOf}
+            onOpenDetails={onOpenDetails}
+            presenceOf={memberPresence}
+          />
         ) : null}
 
+        <div className="relative shrink-0">
         <AvatarMenuTrigger entries={identityMenu} name={title} onOpenDetails={onOpenDetails}>
           {/* En APERÇU (#8821), l'en-tête n'a rien à déplier : l'avatar y
               ouvre les détails de la conversation, la porte que le titre
@@ -313,6 +362,10 @@ export function ThreadHeader({
             />
           </button>
         </AvatarMenuTrigger>
+        {showsFlame && onDismissFlame !== undefined ? (
+          <HeaderFlame snapshot={engagement} replay={flameReplay} onDismiss={onDismissFlame} />
+        ) : null}
+        </div>
       </div>
       {/*
         LE BANDEAU DE COUPURE A QUITTÉ CET EN-TÊTE (#6080) — remplacé par la

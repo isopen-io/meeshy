@@ -10,6 +10,7 @@ const deEngagement = {
   'engagement.pill.points.other': '{total} Punkte, davon {today} heute',
   'engagement.pill.join': '{streak}, {points}',
   'engagement.pill.open': 'Meinen Fortschritt öffnen',
+  'engagement.flame.label': '{count} Punkte heute — tippen, um die Flamme auszublenden',
 } as const;
 
 export default deEngagement;

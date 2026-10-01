@@ -47,6 +47,9 @@ export interface ConversationViewingHandlerDependencies {
 
 type SocketViewing = { readonly userId: string; readonly conversationIds: ReadonlySet<string> };
 
+/** Ouvertures retenues au plus par socket en attente d'authentification (#9047). */
+export const MAX_PENDING_OPENINGS = 3;
+
 export class ConversationViewingHandler {
   private readonly io: ViewingIO;
   private readonly prisma: PrismaClient;
@@ -56,6 +59,15 @@ export class ConversationViewingHandler {
   private readonly userSockets: Map<string, Set<string>>;
   private readonly bySocket = new Map<string, SocketViewing>();
   private readonly byConversation = new Map<string, Map<string, Set<string>>>();
+  /**
+   * Les ouvertures reçues AVANT la fin de l'authentification du socket (#9047).
+   * iOS émet `viewing:start` dès la connexion — au démarrage, au retour au
+   * premier plan, à chaque reconnexion — pendant que la passerelle attend
+   * encore cinq lectures avant d'inscrire le socket : l'ouverture tombait en
+   * silence et le pair ne voyait jamais le point « ici ». Elle attend ici, et
+   * `afterAuthentication` la rejoue.
+   */
+  private readonly pendingBySocket = new Map<string, ReadonlySet<string>>();
   private readonly rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ConversationViewingHandlerDependencies) {
@@ -72,7 +84,10 @@ export class ConversationViewingHandler {
     if (!validation.success) return;
 
     const userIdOrToken = this.socketToUser.get(socket.id);
-    if (!userIdOrToken) return;
+    if (!userIdOrToken) {
+      this.holdUntilAuthenticated(socket.id, validation.data.conversationId);
+      return;
+    }
     const allowed = await this.rateLimiter.checkLimit(userIdOrToken, SOCKET_RATE_LIMITS.CONVERSATION_VIEWING);
     if (!allowed) return;
 
@@ -105,13 +120,28 @@ export class ConversationViewingHandler {
   async handleStop(socket: Socket, data: unknown): Promise<void> {
     const validation = validateSocketEvent(SocketViewingSchema, data);
     if (!validation.success) return;
+    this.release(socket.id, validation.data.conversationId);
     const conversationId = await this.normalize(validation.data.conversationId);
     await this.retract(socket.id, [conversationId]);
   }
 
   async handleAppState(socket: Socket, data: { foreground?: boolean } | undefined): Promise<void> {
     if (data?.foreground !== false) return;
+    this.pendingBySocket.delete(socket.id);
     await this.retractAll(socket.id);
+  }
+
+  /**
+   * Le socket vient d'être inscrit : on annonce les ouvertures qu'il avait
+   * envoyées trop tôt, puis on lui redit qui est déjà là.
+   */
+  async afterAuthentication(socket: Socket): Promise<void> {
+    const pending = this.pendingBySocket.get(socket.id) ?? new Set<string>();
+    this.pendingBySocket.delete(socket.id);
+    for (const conversationId of pending) {
+      await this.handleStart(socket, { conversationId });
+    }
+    await this.emitRoomSnapshots(socket);
   }
 
   /**
@@ -137,7 +167,29 @@ export class ConversationViewingHandler {
   }
 
   async handleSocketDisconnecting(socketId: string): Promise<void> {
+    this.pendingBySocket.delete(socketId);
     await this.retractAll(socketId);
+  }
+
+  /**
+   * Bornée : un socket non authentifié ne doit pas pouvoir faire grossir la
+   * mémoire de la passerelle. Un écran n'affiche qu'une conversation à la
+   * fois ; seules les dernières ouvertures comptent.
+   */
+  private holdUntilAuthenticated(socketId: string, conversationId: string): void {
+    const previous = [...(this.pendingBySocket.get(socketId) ?? [])].filter(id => id !== conversationId);
+    this.pendingBySocket.set(socketId, new Set([...previous, conversationId].slice(-MAX_PENDING_OPENINGS)));
+  }
+
+  private release(socketId: string, conversationId: string): void {
+    const pending = this.pendingBySocket.get(socketId);
+    if (!pending) return;
+    const remaining = [...pending].filter(id => id !== conversationId);
+    if (remaining.length === 0) {
+      this.pendingBySocket.delete(socketId);
+      return;
+    }
+    this.pendingBySocket.set(socketId, new Set(remaining));
   }
 
   private async retractAll(socketId: string): Promise<void> {

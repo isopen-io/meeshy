@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import '@/styles/avatar.css';
 
@@ -240,28 +240,12 @@ export function Avatar({
           }}
         />
       ) : null}
-      {showsDot && humeur === undefined ? (
-        /* `data-presence` — L'ANCRE de la pastille (revue #5935). Les gates
-           navigateur la comptaient par le NOMBRE d'enfants de `.avatar-root`
-           (« 2 = dégradé + pastille ») : l'anneau de story et le badge
-           d'humeur annoncés par D-32 §4 en auraient fait 3 ou 4, et le gate
-           serait passé au ROUGE en disant « présence absente » — un témoin
-           qui ment sur la cause est pire qu'un témoin absent. L'attribut PORTE
-           en plus l'ÉTAT servi (`online`/`away`/`idle`), donc « point VERT »
-           se mesure vraiment plutôt que « un enfant de plus ». */
-        <span
-          data-presence={here ? 'here' : presence}
-          className="absolute rounded-chip"
-          style={{
-            width: dot,
-            height: dot,
-            left: offset,
-            top: offset,
-            backgroundColor: dotColor,
-            boxShadow: '0 0 0 2px var(--ios-surface)',
-          }}
-          aria-hidden
-        />
+      {humeur === undefined ? (
+        /* `data-presence` — L'ANCRE de la pastille (revue #5935) : elle porte
+           l'ÉTAT servi (`here`/`online`/`away`/`idle`), donc « point VERT » se
+           mesure vraiment plutôt que « un enfant de plus ». Le point change en
+           se montrant (#9047) : `PresenceDot`. */
+        <PresenceDot state={showsDot ? (here ? 'here' : presence) : undefined} color={dotColor} size={dot} offset={offset} />
       ) : null}
       {humeur === undefined ? null : (
         /* `data-mood` porte l'ÉTAT servi, comme `data-presence` et
@@ -355,5 +339,76 @@ export function Avatar({
     >
       {corps}
     </Link>
+  );
+}
+
+/** Le temps que met le point sortant à diminuer (`presence-dot-shrink`, `avatar.css`). */
+const PRESENCE_LEAVE_MS = 220;
+
+type ShownDot = { readonly state: string; readonly color: string };
+
+/**
+ * **LE POINT DE PRÉSENCE CHANGE EN SE MONTRANT** (#9047) — miroir de
+ * `MeeshyAvatar` (iOS). Le point sortant DIMINUE ; l'entrant apparaît en
+ * REBONDISSANT, et l'indigo « ici » pulse en arrivant (une onde qui part de
+ * lui). Au premier rendu, rien ne bouge : une liste ne sautille pas. CSS sur
+ * `transform`/`opacity` seulement.
+ */
+function PresenceDot({
+  state,
+  color,
+  size,
+  offset,
+}: {
+  readonly state: string | undefined;
+  readonly color: string;
+  readonly size: number;
+  readonly offset: number;
+}) {
+  const shown = useRef<ShownDot | null>(null);
+  const settled = useRef(false);
+  const rendered = useRef(state);
+  const changed = useRef(false);
+  const [leaving, setLeaving] = useState<ShownDot | null>(null);
+  if (rendered.current !== state) {
+    rendered.current = state;
+    changed.current = true;
+  }
+
+  useEffect(() => {
+    const before = shown.current;
+    shown.current = state === undefined ? null : { state, color };
+    if (!settled.current) {
+      settled.current = true;
+      return undefined;
+    }
+    if (before === null || before.state === state) return undefined;
+    setLeaving(before);
+    const timer = setTimeout(() => setLeaving(null), PRESENCE_LEAVE_MS);
+    return () => clearTimeout(timer);
+  }, [state, color]);
+
+  const box: CSSProperties = { width: size, height: size, left: offset, top: offset, boxShadow: '0 0 0 2px var(--ios-surface)' };
+  const enters = changed.current ? ' presence-dot-enter' : '';
+  return (
+    <>
+      {leaving === null ? null : (
+        <span
+          data-presence-leaving={leaving.state}
+          className="presence-dot presence-dot-leave absolute rounded-chip"
+          style={{ ...box, backgroundColor: leaving.color }}
+          aria-hidden
+        />
+      )}
+      {state === undefined ? null : (
+        <span
+          key={state}
+          data-presence={state}
+          className={`presence-dot absolute rounded-chip${enters}${state === 'here' ? ' presence-dot-here' : ''}`}
+          style={{ ...box, backgroundColor: color, color }}
+          aria-hidden
+        />
+      )}
+    </>
   );
 }

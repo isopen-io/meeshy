@@ -4,6 +4,7 @@ import type { MessageCardCatalogSlice } from './catalog-fr-message-card';
 const itMessageCard = {
   'message.menu.export': 'Crea immagine',
   'message.menu.exportQuick': 'Immagine rapida',
+  'message.menu.exportDiscussion': 'Crea immagine della conversazione',
   'message.menu.compose': 'Componi',
   'comments.action.image': 'Crea immagine',
 } satisfies MessageCardCatalogSlice;

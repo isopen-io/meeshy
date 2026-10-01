@@ -105,13 +105,12 @@ extension MessageCardExportSheet {
         guard ready, !busy, let rendered else { return }
         guard output == .image else { return animate(to: .share) }
         notice = nil
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(MessageCardSubject.fileName(at: Date()))
-        do {
-            try rendered.png.write(to: url, options: .atomic)
-            shareFile = ShareFile(url: url)
-        } catch {
+        // L'IMAGE, jamais le chemin d'un fichier temporaire (#9038).
+        guard let payload = MessageCardSharePayload.image(png: rendered.png) else {
             notice = MessageCardExportText.text("export.announce.failed", "Impossible de créer l’image")
+            return
         }
+        sharePayload = payload
     }
 
     /// Peint la carte image par image, hors du MainActor, puis l'enregistre ou la
@@ -163,7 +162,7 @@ extension MessageCardExportSheet {
         switch destination {
         case .share:
             busy = false
-            shareFile = ShareFile(url: url)
+            sharePayload = .file(url)
         case .gallery:
             let saved: Bool
             if output == .gif, let data = try? Data(contentsOf: url) {

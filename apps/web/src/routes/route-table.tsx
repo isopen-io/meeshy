@@ -509,6 +509,12 @@ export const ROUTES = {
      Déclaré AUSSI dans `session-guard.ts`. */
   adminEngagementScale: { pattern: '/admin/engagement-scale', screen: adminEngagementScaleScreen },
   admEngagementScale: { pattern: '/adm/engagement-scale', screen: adminEngagementScaleScreen },
+  /* LE PARTAGE VENU D'UNE AUTRE APPLICATION (#8884) — l'adresse du
+     `share_target` de la PWA (`lib/share-incoming/share-target.ts`) : le worker
+     y redirige après avoir rangé le `POST` du système, la page ouvre la feuille
+     d'envoi. PUBLIQUE pour la garde, exprès : elle met elle-même le partage en
+     attente derrière la connexion (`?next=`). Adresse NEUVE, aucun legacy. */
+  share: { pattern: '/share', screen: () => import('@/routes/share-incoming') },
 } as const;
 
 /**

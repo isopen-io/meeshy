@@ -384,14 +384,15 @@ export interface ConversationUpdatedEventData {
    *
    * L'événement de réaction ne porte AUCUNE clé du groupe d'aperçu — ni
    * `lastMessageId` ni `lastMessageAt`. La remontée est une règle SERVEUR
-   * (#7592) : voir `listRankAt`.
+   * (#9026) : voir `listRankAt`.
    */
   readonly lastReaction?: ConversationLastReaction | null;
   /**
-   * Rang de la ligne pour CE destinataire (#7592), chaîne ISO — le même que
-   * `GET /conversations` sert et sur lequel il trie. Posé UNIQUEMENT dans
-   * l'émission adressée à l'auteur du message réagi (sa ligne remonte, ou
-   * redescend au retrait) ; clé ABSENTE = ne pas réordonner.
+   * Rang de la ligne (#9026), chaîne ISO — max(`lastMessageAt`,
+   * `lastActivityAt`), le même pour TOUS les participants, celui que
+   * `GET /conversations` sert et sur lequel il trie. Posé dans l'émission de
+   * CHAQUE participant quand une activité survient (réaction, appel, épingle) :
+   * la ligne remonte en tête. Clé ABSENTE = ne pas réordonner.
    */
   readonly listRankAt?: string | null;
   /** Appel en cours (#7545). Clé ABSENTE = inchangé ; `null` = plus d'appel. */

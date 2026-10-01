@@ -10,6 +10,7 @@ const arEngagement = {
   'engagement.pill.points.other': '{total} نقاط، منها {today} اليوم',
   'engagement.pill.join': '{streak}، {points}',
   'engagement.pill.open': 'فتح تقدّمي',
+  'engagement.flame.label': '{count} نقطة اليوم — المس لإخفاء الشعلة',
 } as const;
 
 export default arEngagement;

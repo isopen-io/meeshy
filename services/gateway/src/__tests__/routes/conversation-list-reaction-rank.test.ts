@@ -1,11 +1,11 @@
 /**
- * **UNE RÉACTION À MON MESSAGE REMONTE MA LIGNE — PAR LE SERVEUR** (#7592).
+ * **TOUTE ACTIVITÉ REMONTE LA LIGNE — POUR TOUS, PAR LE SERVEUR** (#9026).
  *
  * Recette #7549 : B réagit 👍 au message de A ; `GET /conversations` (A) rendait
- * l'ordre inchangé, la conversation A↔B restant sous une conversation dont le
- * dernier message était plus ancien que la réaction. Le contrat #7545 laissait
- * la remontée aux clients ; la directive du 2026-09-23 la rend au serveur, qui
- * trie sur le rang du lecteur et le SERT (`listRankAt`).
+ * l'ordre inchangé. #7592 avait rendu la remontée au serveur, mais pour le seul
+ * AUTEUR réagi ; la directive porteur du 2026-10-01 l'étend à TOUS les
+ * participants et à toute activité (réaction, appel, épingle) : rang =
+ * max(`lastMessageAt`, `lastActivityAt`), trié et SERVI (`listRankAt`).
  *
  * Route COMPLÈTE (`app.inject`), schéma de réponse réel : un champ que le
  * schéma ne déclare pas serait retiré par `fast-json-stringify`.
@@ -53,6 +53,7 @@ type Row = {
   lastMessageAt: Date | null;
   lastReactionAt?: Date | null;
   lastReactionTargetKey?: string | null;
+  lastActivityAt?: Date | null;
   updatedAt: Date;
 };
 
@@ -86,13 +87,14 @@ function compare(value: unknown, filter: unknown): boolean {
   const ops = filter as Record<string, unknown>;
   const ms = value instanceof Date ? value.getTime() : null;
   if ('in' in ops) return (ops.in as unknown[]).includes(value);
+  if ('not' in ops && ops.not === null) return value !== null && value !== undefined;
   if ('lt' in ops) return ms !== null && ms < (ops.lt as Date).getTime();
   if ('gte' in ops) return ms !== null && ms >= (ops.gte as Date).getTime();
   if ('gt' in ops) return ms !== null && ms > (ops.gt as Date).getTime();
   return true;
 }
 
-const FIELDS = new Set(['id', 'lastMessageAt', 'lastReactionAt', 'lastReactionTargetKey', 'updatedAt']);
+const FIELDS = new Set(['id', 'lastMessageAt', 'lastReactionAt', 'lastReactionTargetKey', 'lastActivityAt', 'updatedAt']);
 
 function matches(row: Record<string, unknown>, where: Where | undefined): boolean {
   if (!where) return true;
@@ -162,7 +164,18 @@ async function list(rows: Row[], query = ''): Promise<Array<{ id: string; listRa
 
 const other = (): Row => ({ id: OTHER_CONV, lastMessageAt: OTHER_MESSAGE_AT, updatedAt: OTHER_MESSAGE_AT });
 const quiet = (): Row => ({ id: QUIET_CONV, lastMessageAt: QUIET_MESSAGE_AT, updatedAt: QUIET_MESSAGE_AT });
-const direct = (targetKey: string): Row => ({
+/** B a réagi au message de A : #7592 a écrit la dernière réaction, #9026 l'activité. */
+const direct = (): Row => ({
+  id: DIRECT_CONV,
+  lastMessageAt: DIRECT_MESSAGE_AT,
+  lastReactionAt: REACTION_AT,
+  lastReactionTargetKey: THIRD,
+  lastActivityAt: REACTION_AT,
+  updatedAt: REACTION_AT,
+});
+
+/** Une réaction écrite AVANT #9026 : colonnes #7592 seules, aucune activité. */
+const legacyReaction = (targetKey: string): Row => ({
   id: DIRECT_CONV,
   lastMessageAt: DIRECT_MESSAGE_AT,
   lastReactionAt: REACTION_AT,
@@ -170,30 +183,30 @@ const direct = (targetKey: string): Row => ({
   updatedAt: REACTION_AT,
 });
 
-describe('GET /conversations — le rang du lecteur (#7592)', () => {
-  it('une réaction à MON message fait passer ma conversation au-dessus, et le rang est servi', async () => {
-    const data = await list([other(), direct(VIEWER), quiet()]);
+describe('GET /conversations — le rang de TOUS les participants (#9026)', () => {
+  it('une activité (réaction entre tiers comprise) fait passer la conversation au-dessus, et le rang est servi', async () => {
+    const data = await list([other(), direct(), quiet()]);
 
     expect(data.map((c) => c.id)).toEqual([DIRECT_CONV, OTHER_CONV, QUIET_CONV]);
     expect(data[0]?.listRankAt).toBe(REACTION_AT.toISOString());
     expect(data[1]?.listRankAt).toBe(OTHER_MESSAGE_AT.toISOString());
   });
 
-  it("une réaction entre tiers s'affiche sans réordonner", async () => {
-    const data = await list([other(), direct(THIRD), quiet()]);
+  it('une réaction antérieure à #9026 (sans lastActivityAt) ne réordonne plus, même à MON message', async () => {
+    const data = await list([other(), legacyReaction(VIEWER), quiet()]);
 
     expect(data.map((c) => c.id)).toEqual([OTHER_CONV, DIRECT_CONV, QUIET_CONV]);
     expect(data[1]?.listRankAt).toBe(DIRECT_MESSAGE_AT.toISOString());
   });
 
   it('la page 1 de taille 1 est la conversation remontée', async () => {
-    const data = await list([other(), direct(VIEWER), quiet()], '?limit=1');
+    const data = await list([other(), direct(), quiet()], '?limit=1');
 
     expect(data.map((c) => c.id)).toEqual([DIRECT_CONV]);
   });
 
   it("l'offset pagine sur le rang, sans doublon ni trou", async () => {
-    const rows = [other(), direct(VIEWER), quiet()];
+    const rows = [other(), direct(), quiet()];
     const pages = [
       await list(rows, '?limit=1&offset=0'),
       await list(rows, '?limit=1&offset=1'),
@@ -204,25 +217,33 @@ describe('GET /conversations — le rang du lecteur (#7592)', () => {
   });
 
   it('le curseur `before` sur la ligne remontée rend la suite par rang, sans la resservir', async () => {
-    const data = await list([other(), direct(VIEWER), quiet()], `?before=${DIRECT_CONV}`);
+    const data = await list([other(), direct(), quiet()], `?before=${DIRECT_CONV}`);
 
     expect(data.map((c) => c.id)).toEqual([OTHER_CONV, QUIET_CONV]);
   });
 
   it('le curseur `before` sur la ligne suivante ne ressert pas la ligne remontée', async () => {
-    const data = await list([other(), direct(VIEWER), quiet()], `?before=${OTHER_CONV}`);
+    const data = await list([other(), direct(), quiet()], `?before=${OTHER_CONV}`);
 
     expect(data.map((c) => c.id)).toEqual([QUIET_CONV]);
   });
 
-  it('une page delta sert le rang du lecteur', async () => {
-    const data = await list([other(), direct(VIEWER)], '?updatedSince=2026-09-23T12:00:00.000Z');
+  it('une page delta sert le rang', async () => {
+    const data = await list([other(), direct()], '?updatedSince=2026-09-23T12:00:00.000Z');
 
     const reacted = data.find((c) => c.id === DIRECT_CONV);
     expect(reacted?.listRankAt).toBe(REACTION_AT.toISOString());
   });
 
-  it('un document antérieur à #7592 (champs de réaction ABSENTS) garde son rang de dernier message', async () => {
+  it('une activité PLUS ANCIENNE que le dernier message ne recule pas la ligne', async () => {
+    const stale: Row = { ...other(), lastActivityAt: QUIET_MESSAGE_AT };
+    const data = await list([stale, legacyReaction(THIRD), quiet()]);
+
+    expect(data.map((c) => c.id)).toEqual([OTHER_CONV, DIRECT_CONV, QUIET_CONV]);
+    expect(data[0]?.listRankAt).toBe(OTHER_MESSAGE_AT.toISOString());
+  });
+
+  it("un document antérieur (champs d'activité ABSENTS) garde son rang de dernier message", async () => {
     const data = await list([other(), quiet()], `?before=${OTHER_CONV}`);
 
     expect(data.map((c) => c.id)).toEqual([QUIET_CONV]);

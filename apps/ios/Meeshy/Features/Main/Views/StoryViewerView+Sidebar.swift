@@ -232,6 +232,31 @@ struct StoryActionSidebarView: View {
 
     private var railPlan: StoryActionRailPlan { frozenRailPlan ?? liveRailPlan }
 
+    /// Les gestes du lecteur que la passerelle ne sert pas sur une story (commentaire,
+    /// envoi, republication) — mémoire de session, `StoryViewerParticipation.swift`.
+    @ObservedObject private var participationStore = StoryViewerParticipationStore.shared
+
+    /// **Le contour de chaque action** (directive porteur 2026-10-01) — le son ouvert,
+    /// le cœur posé, et l'anneau du cœur sur chaque geste déjà fait. `nil` ⇒ aucun.
+    private func outlineTint(_ action: StoryRailEmphasisAction) -> Color? {
+        let contour = StoryRailContour.resolve(
+            action,
+            live: StoryRailContour.Live(soundOn: !isGlobalMuted,
+                                        reactionBarOpen: showEmojiStrip,
+                                        commentsOpen: showCommentsOverlay,
+                                        languagesOpen: showLanguageOptions || showFullLanguagePicker),
+            participation: participationStore.participation(for: currentStory?.id,
+                                                            hasReacted: storyCurrentUserHasReacted)
+        )
+        switch contour {
+        case .none: return nil
+        case .live: return MeeshyColors.indigo400
+        case .participated:
+            guard let accentColor = currentGroup?.avatarColor else { return MeeshyColors.error }
+            return Color(hex: accentColor)
+        }
+    }
+
     /// Quick pop on the heart button that confirms the reaction landed —
     /// ticked at the ARRIVAL of the reaction flight (`StoryReactionFlightView.onArrived`),
     /// not at send time.
@@ -496,7 +521,7 @@ struct StoryActionSidebarView: View {
                         ? String(localized: "story.viewer.action.mute", defaultValue: "Muet", bundle: .main)
                         : String(localized: "story.viewer.action.sound", defaultValue: "Son", bundle: .main),
                     isActive: !isGlobalMuted,
-                    activeTint: MeeshyColors.indigo400
+                    outlineTint: outlineTint(.sound)
                 ) {
                     // VoiceOver active un Button par son ACTION d'accessibilité,
                     // il ne synthétise pas de `TapGesture` — laisser ce closure
@@ -521,12 +546,20 @@ struct StoryActionSidebarView: View {
             if railPlan.showsReact {
                 let reactLabel = String(localized: "story.viewer.action.react", defaultValue: "Réagir", bundle: .main)
                 let reactIsActive = showEmojiStrip || storyCurrentUserHasReacted
+                // LE CŒUR, pas l'émoji « + » (directive porteur 2026-10-01 : « le cœur
+                // et non réaction, car on ne voit pas ») : un glyphe qu'on lit, blanc,
+                // et c'est son CONTOUR qui dit l'état — l'avatar de l'auteur une fois
+                // la réaction posée, l'indigo tant que la barre est ouverte.
                 FullscreenActionButton.react(
                     label: reactLabel,
                     hint: StoryActionButton.hint(label: reactLabel, isActive: reactIsActive),
                     caption: storyReactionCount > 0 ? "\(storyReactionCount)" : reactLabel,
                     accessibilityValue: storyReactionCount > 0 ? LocalizedNumber.exact(storyReactionCount) : nil,
-                    isOpen: reactIsActive
+                    systemImage: FullscreenChromeSymbol.likeActive,
+                    badgeSystemImage: nil,
+                    isOpen: reactIsActive,
+                    activeTint: nil,
+                    outlineTint: outlineTint(.react)
                 ) {
                     // Tap simple = la barre s'ouvre (directive user 2026-08-20).
                     // L'émoji part au tap sur une tuile de la barre — plus de
@@ -619,7 +652,8 @@ struct StoryActionSidebarView: View {
             // envoyer uniquement » pour le non-auteur).
             StoryActionButton(
                 icon: "paperplane.fill",
-                label: storyShareCount > 0 ? "\(storyShareCount)" : String(localized: "story.viewer.action.send", defaultValue: "Envoyer", bundle: .main)
+                label: storyShareCount > 0 ? "\(storyShareCount)" : String(localized: "story.viewer.action.send", defaultValue: "Envoyer", bundle: .main),
+                outlineTint: outlineTint(.forward)
             ) {
                 HapticFeedback.light()
                 pauseTimer()
@@ -647,7 +681,8 @@ struct StoryActionSidebarView: View {
             if railPlan.showsRepost {
                 StoryActionButton(
                     icon: "arrow.2.squarepath",
-                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : String(localized: "story.viewer.action.repost", defaultValue: "Republier", bundle: .main)
+                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : String(localized: "story.viewer.action.repost", defaultValue: "Republier", bundle: .main),
+                    outlineTint: outlineTint(.repost)
                 ) {
                     // Republication : ouvre le COMPOSEUR prérempli au lieu de
                     // republier d'un tap côté serveur.
@@ -803,7 +838,7 @@ struct StoryActionSidebarView: View {
                     icon: FullscreenChromeSymbol.comments,
                     label: "\(storyCommentCount)",
                     isActive: showCommentsOverlay,
-                    activeTint: MeeshyColors.indigo400
+                    outlineTint: outlineTint(.comments)
                 ) {
                     HapticFeedback.light()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -827,7 +862,7 @@ struct StoryActionSidebarView: View {
                     icon: "textformat.abc",
                     label: String(localized: "story.viewer.action.translations", defaultValue: "Traductions", bundle: .main),
                     isActive: showLanguageOptions || showFullLanguagePicker,
-                    activeTint: MeeshyColors.indigo400,
+                    outlineTint: outlineTint(.translations),
                     handlesTapViaGesture: true
                 ) {
                     HapticFeedback.light()

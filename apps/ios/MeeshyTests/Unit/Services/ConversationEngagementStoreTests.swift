@@ -195,4 +195,29 @@ final class ConversationEngagementStoreTests: XCTestCase {
         XCTAssertTrue(text.contains("5"))
         XCTAssertFalse(text.contains("3"))
     }
+
+    // MARK: - La série dans la liste (#9025)
+
+    func test_streakMark_runningStreak_showsDaysAndTotalPoints() {
+        let mark = ConversationStreakMark(snapshot: snapshot(total: 120, today: 12, streak: 4))
+        XCTAssertEqual(mark?.streakDays, 4)
+        XCTAssertEqual(mark?.totalText, "120")
+    }
+
+    func test_streakMark_noStreak_isNil() {
+        XCTAssertNil(ConversationStreakMark(snapshot: snapshot(streak: 0)))
+        XCTAssertNil(ConversationStreakMark(snapshot: nil))
+    }
+
+    func test_streakMark_accessibilityText_saysStreakAndPoints() {
+        let text = ConversationStreakMark(snapshot: snapshot(total: 120, today: 12, streak: 4))?.accessibilityText ?? ""
+        XCTAssertTrue(text.contains("4"))
+        XCTAssertTrue(text.contains("120"))
+    }
+
+    func test_streakMark_brokenStreak_displayedForToday_isNil() {
+        let h = makeSUT()
+        let shown = h.sut.displayed(for: "conv-a", seed: snapshot(streak: 4, day: "2026-09-28"), at: noon(30, in: h.calendar))
+        XCTAssertNil(ConversationStreakMark(snapshot: shown))
+    }
 }

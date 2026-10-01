@@ -55,6 +55,7 @@ extension UniversalComposerBar {
                 // La sélection est lue à partir d'iOS 18 pour la barre de
                 // format (#7849, `UniversalComposerBar+Format.swift`).
                 composerTextFieldBase
+                    .background { composerPasteInterceptor }
                     .focused($isFocused)
                     .foregroundColor(textColor)
                     .padding(.leading, (resolvedShowVoice && !isFocused) ? 2 : 16)

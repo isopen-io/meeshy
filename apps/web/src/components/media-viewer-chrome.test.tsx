@@ -6,7 +6,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import type { Attachment } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { MediaCarrier } from '@/lib/view/media';
-import { NO_MEDIA_OFFERS, type MediaPageOffers, type MediaViewerPage } from '@/lib/view/media-viewer-actions';
+import { NO_MEDIA_OFFERS, type MediaPageOffers, type MediaViewerPage } from '@/lib/view/viewer-page-offers';
 
 import MediaViewer from './media-viewer';
 
@@ -41,7 +41,7 @@ const carrier: MediaCarrier = {
   caption: { text: 'Le port au coucher du soleil', language: 'fr', translated: false },
 };
 
-const ALL: MediaPageOffers = { save: true, react: true, reply: true, compose: true };
+const ALL: MediaPageOffers = { save: true, react: true, reply: true, compose: true, share: false };
 
 const pageOf = (attachment: Attachment, offers: MediaPageOffers, onReply?: () => void): MediaViewerPage => ({
   attachment,

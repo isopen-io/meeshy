@@ -1,6 +1,13 @@
 import { lazy, useContext } from 'react';
 
 import type { Attachment, Message } from '@/lib/api/types';
+import {
+  attachmentSendRequest,
+  mediaPageOffers,
+  NO_MEDIA_OFFERS,
+  type MediaViewerCapabilities,
+  type MediaViewerPage,
+} from '@/lib/view/viewer-page-offers';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 
 import { carrierOfMessage } from './media-hub-viewer-host';
@@ -10,6 +17,9 @@ import MediaViewer from './media-viewer';
    hors du fil, ce chunk-ci n'a pas à le tirer. La `Suspense` de l'hôte le couvre. */
 const ThreadMediaViewer = lazy(() => import('./thread-media-viewer'));
 
+/** Hors du fil, la citation ne tient ni le composeur, ni la porte de fichier, ni la réaction : elle sait PARTAGER (#8884). */
+const SHARE_ONLY: MediaViewerCapabilities = { ...NO_MEDIA_OFFERS, share: true };
+
 /**
  * LE PLEIN ÉCRAN D'UNE PIÈCE CITÉE (#8233) — chunk À LA DEMANDE, chargé au
  * toucher de l'aperçu d'une citation, comme la visionneuse l'est au toucher
@@ -18,8 +28,9 @@ const ThreadMediaViewer = lazy(() => import('./thread-media-viewer'));
  * Dans le fil (`ThreadMediaContext` prêté), c'est la visionneuse de TOUTE la
  * conversation, ouverte sur la pièce citée, avec ses actions — le même
  * plateau qu'au toucher de la tuile elle-même (iOS : `onMediaTap`). Hors du
- * fil, la visionneuse seule sur cette pièce. Dans les deux cas, la pièce vient
- * de la citation, jamais d'une recherche dans les messages chargés : elle
+ * fil, la visionneuse seule sur cette pièce, qui sait la PARTAGER (#8884) :
+ * sans lecteur connu, `mine` est faux — le transfert, jamais la copie serveur.
+ * Dans les deux cas, la pièce vient de la citation, jamais d'une recherche dans les messages chargés : elle
  * s'ouvre même quand le message cité est hors de la fenêtre.
  */
 export default function QuoteMediaViewer({
@@ -48,9 +59,20 @@ export default function QuoteMediaViewer({
       />
     );
   }
+  const page = (): MediaViewerPage => {
+    const offers = mediaPageOffers({ attachment, message: quote, capabilities: SHARE_ONLY });
+    return {
+      attachment,
+      messageId: quote.id,
+      conversationId: quote.conversationId,
+      offers,
+      ...(offers.share ? { share: attachmentSendRequest({ attachment, message: quote, mine: false }) } : {}),
+    };
+  };
   return (
     <MediaViewer
       items={[attachment]}
+      actionsAt={page}
       startIndex={0}
       onClose={onClose}
       languages={languages}

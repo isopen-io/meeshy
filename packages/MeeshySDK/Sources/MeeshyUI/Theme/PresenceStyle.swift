@@ -78,6 +78,21 @@ public enum AvatarPresenceDot: Equatable, Sendable {
         }
     }
 
+    /// L'identité du point pour ses transitions (#9047) : quand elle change, le
+    /// point sortant diminue et le point entrant apparaît en rebondissant.
+    public var transitionKey: String {
+        switch self {
+        case .here: return "here"
+        case .presence(let state): return "presence.\(state.rawValue)"
+        }
+    }
+
+    /// Le point indigo « ici » pulse en arrivant (#9047) — une onde qui part
+    /// de lui et s'éteint ; les autres points ne font que rebondir.
+    public var arrivesWithRipple: Bool {
+        self == .here
+    }
+
     /// Être dans la conversation est une activité en cours : il pulse comme `online`.
     public var pulses: Bool {
         switch self {

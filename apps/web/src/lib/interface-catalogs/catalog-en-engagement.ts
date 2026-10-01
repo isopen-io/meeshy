@@ -10,6 +10,7 @@ const enEngagement = {
   'engagement.pill.points.other': '{total} points, {today} today',
   'engagement.pill.join': '{streak}, {points}',
   'engagement.pill.open': 'Open my progress',
+  'engagement.flame.label': '{count} points today — tap to hide the flame',
 } as const;
 
 export default enEngagement;

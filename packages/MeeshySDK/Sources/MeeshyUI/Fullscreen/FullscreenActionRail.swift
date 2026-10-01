@@ -33,12 +33,19 @@ public struct FullscreenActionButton: View {
     private let badgeSystemImage: String?
     private let isActive: Bool
     private let activeTint: Color?
+    private let outlineTint: Color?
     private let handlesTapViaGesture: Bool
     private let action: () -> Void
 
     /// `handlesTapViaGesture` : pour la cellule qui porte AUSSI un geste séquencé de
     /// l'hôte (appui long → glisser) — un `Button` consommerait le toucher et la
     /// séquence ne s'armerait jamais. Le tap bref reste servi, VoiceOver aussi.
+    ///
+    /// `outlineTint` : le CONTOUR et le HALO d'une action flottante (directive porteur
+    /// 2026-10-01) — le même symbole agrandi derrière le glyphe, dans cette teinte, et
+    /// une ombre colorée. C'est l'effet du rail de la story d'avant #8878 : le son
+    /// ouvert, le cœur posé, et chaque geste déjà fait (commenté, envoyé, republié).
+    /// `nil` : aucun contour. Le glyphe garde son encre — le contour l'entoure.
     public init(systemImage: String,
                 label: String,
                 hint: String? = nil,
@@ -48,6 +55,7 @@ public struct FullscreenActionButton: View {
                 badgeSystemImage: String? = nil,
                 isActive: Bool = false,
                 activeTint: Color? = nil,
+                outlineTint: Color? = nil,
                 handlesTapViaGesture: Bool = false,
                 action: @escaping () -> Void) {
         self.systemImage = systemImage
@@ -59,6 +67,7 @@ public struct FullscreenActionButton: View {
         self.badgeSystemImage = badgeSystemImage
         self.isActive = isActive
         self.activeTint = activeTint
+        self.outlineTint = outlineTint
         self.handlesTapViaGesture = handlesTapViaGesture
         self.action = action
     }
@@ -96,12 +105,23 @@ public struct FullscreenActionButton: View {
 
     private var floatingCell: some View {
         VStack(spacing: MeeshySpacing.xxs) {
-            Image(systemName: systemImage)
-                .font(.system(size: FullscreenChromeMetrics.floatingGlyphSize, weight: .semibold))
-                .modifier(FullscreenChromeInk(tone: .adaptive, activeTint: isActive ? activeTint : nil))
-                .overlay(alignment: .topTrailing) { floatingBadge }
-                .adaptiveSymbolBounce(value: isActive)
-                .modifier(FullscreenChromeHalo())
+            ZStack {
+                if let outlineTint {
+                    Image(systemName: systemImage)
+                        .font(.system(size: FullscreenChromeMetrics.floatingGlyphSize, weight: .semibold))
+                        .foregroundStyle(outlineTint)
+                        .scaleEffect(FullscreenChromeMetrics.outlineScale)
+                        .accessibilityHidden(true)
+                }
+                Image(systemName: systemImage)
+                    .font(.system(size: FullscreenChromeMetrics.floatingGlyphSize, weight: .semibold))
+                    .modifier(FullscreenChromeInk(tone: .adaptive, activeTint: isActive ? activeTint : nil))
+                    .overlay(alignment: .topTrailing) { floatingBadge }
+            }
+            .adaptiveSymbolBounce(value: FullscreenActionEmphasis(isActive: isActive, isOutlined: outlineTint != nil))
+            .shadow(color: (outlineTint ?? .clear).opacity(FullscreenChromeMetrics.outlineGlowOpacity),
+                    radius: outlineTint == nil ? 0 : FullscreenChromeMetrics.outlineGlowRadius)
+            .modifier(FullscreenChromeHalo())
             if style.showsCaption(caption), let caption {
                 Text(caption)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
@@ -125,6 +145,19 @@ public struct FullscreenActionButton: View {
                 .offset(x: MeeshySpacing.xsPlus, y: -MeeshySpacing.xs)
                 .accessibilityHidden(true)
         }
+    }
+}
+
+/// **Ce qui fait rebondir une action flottante** : son état actif ET son contour. Le
+/// son allumé, le cœur posé, un commentaire laissé — chacun change cette valeur, et
+/// `symbolEffect(.bounce, value:)` ne joue qu'à ce changement, jamais au montage.
+public nonisolated struct FullscreenActionEmphasis: Equatable, Sendable {
+    public let isActive: Bool
+    public let isOutlined: Bool
+
+    public init(isActive: Bool, isOutlined: Bool) {
+        self.isActive = isActive
+        self.isOutlined = isOutlined
     }
 }
 

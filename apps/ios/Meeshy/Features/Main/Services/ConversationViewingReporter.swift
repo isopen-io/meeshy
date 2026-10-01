@@ -12,7 +12,8 @@ import MeeshySDK
 @MainActor
 protocol ConversationViewingReporting: AnyObject {
     func conversationOpened(_ conversationId: String)
-    func conversationClosed(_ conversationId: String)
+    @discardableResult
+    func conversationClosed(_ conversationId: String) -> Bool
     func setForeground(_ isForeground: Bool)
 }
 
@@ -75,13 +76,21 @@ final class ConversationViewingReporter: ConversationViewingReporting {
     /// différé, parfois APRÈS l'ouverture de la suivante — ou d'une nouvelle
     /// instance de la MÊME conversation. Elle ne retire la présence que quand
     /// plus aucun écran de cette conversation n'est ouvert.
-    func conversationClosed(_ conversationId: String) {
+    ///
+    /// Rend `true` quand c'était le DERNIER écran de cette conversation :
+    /// l'appelant peut alors quitter sa room (#9047). Quitter plus tôt — dans
+    /// le `deinit`, sans compter — retirait le socket de la room et la
+    /// présence côté serveur alors qu'un écran rouvert l'affichait encore.
+    @discardableResult
+    func conversationClosed(_ conversationId: String) -> Bool {
         let remaining = (openings[conversationId] ?? 0) - 1
         openings[conversationId] = remaining > 0 ? remaining : nil
-        guard remaining <= 0, viewingConversationId == conversationId else { return }
+        guard remaining <= 0 else { return false }
+        guard viewingConversationId == conversationId else { return true }
         viewingConversationId = nil
-        guard isForeground else { return }
+        guard isForeground else { return true }
         emitter.emitViewingStop(conversationId: conversationId)
+        return true
     }
 
     func setForeground(_ isForeground: Bool) {

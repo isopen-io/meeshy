@@ -69,7 +69,8 @@ function emitToConversationRoom(
  *  3. every participant's conversation LIST → `conversation:updated` carrying
  *     `lastReaction` (#7545). A reaction changes no field of the last-message
  *     preview, but it IS what happened last: the row says « Alice a réagi ❤️ »
- *     and, for the author of the reacted message only, climbs the list
+ *     and climbs the list for EVERY participant (#9026, which replaces the
+ *     author-only rule of #7592)
  *     (`emitConversationActivityUpdate`).
  *
  * `ReactionHandler` (the socket transport) covered both. The four REST reaction
@@ -114,7 +115,6 @@ export async function broadcastReactionMutation(params: {
     conversationId,
     updatedByUserId: params.updatedByUserId,
     reaction: true,
-    reactedMessageId: messageId,
     onError,
   }).catch((error: unknown) => onError?.(error));
 

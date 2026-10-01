@@ -78,6 +78,7 @@ public class MainActivity extends BridgeActivity {
         // #5819).
         registerPlugin(MeeshySharePlugin.class);
         registerPlugin(MeeshyLinksPlugin.class);
+        registerPlugin(MeeshyShareIntentPlugin.class);
         registerPlugin(MeeshyCallPlugin.class);
         registerPlugin(MeeshyContactsPlugin.class);
         registerPlugin(MeeshyNotificationSettingsPlugin.class);

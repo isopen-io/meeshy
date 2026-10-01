@@ -423,14 +423,13 @@ extension UniversalComposerBar {
 
     // MARK: - Clipboard Content Handling
 
-    func handleClipboardCheck(_ newText: String) {
-        // Collage d'une URL `file://` → pièce jointe, pas du texte. Delta
-        // HONNÊTE, distinct de l'expression historique ci-dessous (qui compte
-        // le double de la croissance réelle et dont le seuil ne doit pas
-        // bouger) : seule une INSERTION assez grande pour contenir
-        // « file:// » déclenche la détection — un utilisateur qui tape ces
-        // caractères un par un n'a jamais une insertion de cette taille.
-        let insertedCount = newText.count - text.count
+    /// `previous` : le texte d'AVANT l'écriture — dans `onChange`, `text` vaut déjà `newText`.
+    func handleClipboardCheck(_ newText: String, previous: String) {
+        // Collage d'une URL `file://` → pièce jointe, pas du texte : seule
+        // une INSERTION assez grande pour contenir « file:// » déclenche la
+        // détection — un utilisateur qui tape ces caractères un par un n'a
+        // jamais une insertion de cette taille.
+        let insertedCount = newText.count - previous.count
         if insertedCount >= "file://".count, newText.contains("file://") {
             let (cleaned, urls) = FileURLPasteDetector.detect(in: newText)
             if !urls.isEmpty {
@@ -448,22 +447,26 @@ extension UniversalComposerBar {
             }
         }
 
-        // Detect if a paste of 2000+ chars just happened
-        let delta = newText.count - (text.count - (newText.count - text.count))
-        if newText.count > 2000 && delta > 500 {
-            // Likely a paste — create clipboard content
-            let clip = ClipboardContent(text: newText)
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                clipboardContent = clip
-            }
-            // Clear the text field since it's now an attachment
-            DispatchQueue.main.async {
-                text = ""
-            }
-            onClipboardContent?(clip)
-            HapticFeedback.medium()
+        // **Le filet de la limite d'un message** (#9037). L'intercepteur du
+        // champ (`ComposerPasteInterceptor`) décide AVANT l'insertion ; si la
+        // vue de texte ne lui a pas été trouvée, un collage massif arrive
+        // ici. Ce qui ferait dépasser la limite part en `.txt` et le champ
+        // retrouve son texte d'avant — jamais un texte perdu, jamais un
+        // message refusé. Une frappe n'insère jamais 500 unités d'un coup.
+        guard let onIngest,
+              PastedContentRouter.length(newText) > pasteLimit,
+              let run = PastedContentRouter.insertion(from: previous, to: newText),
+              PastedContentRouter.length(run.inserted) >= Self.pasteInsertionFloor,
+              let ingest = try? PastedTextFile.write(run.inserted) else { return }
+        DispatchQueue.main.async {
+            text = run.restored
         }
+        onIngest([ingest])
+        HapticFeedback.medium()
     }
+
+    /// En deçà, une écriture est une frappe, une dictée ou une correction.
+    static var pasteInsertionFloor: Int { 500 }
 
     func clipboardContentPreview(_ clip: ClipboardContent) -> some View {
         HStack(spacing: MeeshySpacing.smPlus) {

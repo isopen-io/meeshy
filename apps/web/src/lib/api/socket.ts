@@ -50,6 +50,7 @@ import {
   applyNotificationNew,
   applyNotificationRead,
   applyNotificationReadBulk,
+  notificationIdOf,
 } from './notifications-realtime';
 import {
   applyConversationUnreadUpdated,
@@ -766,7 +767,14 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   };
   const onNotificationRead = (payload: unknown): void => applyNotificationRead(deps.queryClient, payload);
   const onNotificationReadBulk = (payload: unknown): void => applyNotificationReadBulk(deps.queryClient, payload);
-  const onNotificationDeleted = (payload: unknown): void => applyNotificationDeleted(deps.queryClient, payload);
+  /* Un id supprimé qui revient est une notification RÉÉCRITE (édition :
+     `notification:deleted` puis `notification:new`, même identité) — la
+     mémoire de dédoublonnage l'oublie pour la laisser reprendre sa place. */
+  const onNotificationDeleted = (payload: unknown): void => {
+    const id = notificationIdOf(payload);
+    if (id !== null) seenNotifications.delete(id);
+    applyNotificationDeleted(deps.queryClient, payload);
+  };
   const onNotificationDeletedBulk = (payload: unknown): void => applyNotificationDeletedBulk(deps.queryClient, payload);
   const onNotificationCounts = (payload: unknown): void => applyNotificationCounts(deps.queryClient, payload);
 

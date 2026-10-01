@@ -10,6 +10,7 @@ const esEngagement = {
   'engagement.pill.points.other': '{total} puntos, {today} hoy',
   'engagement.pill.join': '{streak}, {points}',
   'engagement.pill.open': 'Abrir mi progreso',
+  'engagement.flame.label': '{count} puntos hoy — toca para ocultar la llama',
 } as const;
 
 export default esEngagement;

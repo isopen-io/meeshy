@@ -24,6 +24,7 @@ export const PAGE_FAQ: ContentPage = {
   hero: 'Les questions qui reviennent le plus souvent, avec des réponses courtes.',
   description:
     'Questions fréquentes sur Meeshy : traduction automatique, langues, messages vocaux, confidentialité, compte et facturation.',
+  mee: { sticker: 'meo-quoi', caption: 'Une question ? Meo aussi en avait. Les réponses sont ici.' },
   sections: [
     {
       title: 'La traduction',
@@ -167,6 +168,32 @@ export const PAGE_FAQ: ContentPage = {
         {
           kind: 'encadre',
           rows: [{ text: 'support@meeshy.me', href: 'mailto:support@meeshy.me' }],
+        },
+      ],
+    },
+    {
+      title: 'Mee et Meo',
+      blocks: [
+        {
+          kind: 'cartes',
+          cards: [
+            {
+              title: 'Qui sont Mee et Meo ?',
+              body: 'Les deux mascottes de Meeshy : des colibris jumeaux. Mee porte une plume en boucle et un cœur rubis, Meo une huppe violette et un cœur violet.',
+            },
+            {
+              title: 'Où trouver leurs stickers ?',
+              body: 'Dans une conversation, ouvrez le tiroir des pièces jointes et touchez « Sticker » : les onglets Mee, Meo et Instants suivent « Mes stickers ».',
+            },
+            {
+              title: 'Pourquoi un sticker « à deux » change-t-il d’un onglet à l’autre ?',
+              body: 'Parce que ce n’est pas le même qui fait le geste. Dans l’onglet Mee, c’est Mee qui embrasse et Meo qui rougit ; dans l’onglet Meo, Meo embrasse et Mee s’évanouit.',
+            },
+            {
+              title: 'Les stickers sont-ils animés partout ?',
+              body: 'Ils sont animés sur meeshy.me ; l’application iPhone affiche pour l’instant leur image fixe. Si vous réduisez les animations sur votre appareil, ils restent immobiles.',
+            },
+          ],
         },
       ],
     },

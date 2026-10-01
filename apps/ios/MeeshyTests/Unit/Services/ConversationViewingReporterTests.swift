@@ -98,6 +98,45 @@ final class ConversationViewingReporterTests: XCTestCase {
         XCTAssertEqual(sut.viewingConversationId, "conv-a")
     }
 
+    // MARK: - Quitter la room : seulement au dernier écran (#9047)
+
+    func test_conversationClosed_lastScreen_tellsToLeaveTheRoom() {
+        let (sut, _, _) = makeSUT()
+        sut.conversationOpened("conv-a")
+
+        XCTAssertTrue(sut.conversationClosed("conv-a"))
+    }
+
+    func test_conversationClosed_staleInstanceOfSameConversation_keepsTheRoom() {
+        let (sut, _, _) = makeSUT()
+        sut.conversationOpened("conv-a")
+        sut.conversationOpened("conv-a")
+
+        XCTAssertFalse(sut.conversationClosed("conv-a"),
+                       "un ancien écran qui se démonte après la réouverture ne doit pas faire quitter la room")
+    }
+
+    func test_conversationClosed_afterAnotherConversationOpened_stillLeavesItsRoom() {
+        let (sut, _, _) = makeSUT()
+        sut.conversationOpened("conv-a")
+        sut.conversationOpened("conv-b")
+
+        XCTAssertTrue(sut.conversationClosed("conv-a"))
+    }
+
+    func test_socketHandlerDeinit_leavesTheRoomOnlyWhenTheReporterSaysSo() throws {
+        let source = AppSourceGuard.stripComments(try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Main/ViewModels/ConversationSocketHandler.swift"),
+            encoding: .utf8))
+        let deinitBody = try XCTUnwrap(source.range(of: "deinit {").map { source[$0.upperBound...] })
+        let body = String(deinitBody.prefix(1200))
+        XCTAssertFalse(body.contains("leaveRoom()"), "le départ immédiat effaçait la présence d'un écran rouvert")
+        XCTAssertTrue(body.contains("if ConversationViewingReporter.shared.conversationClosed(id)"))
+    }
+
     func test_setForeground_false_stopsThenTrue_restarts() {
         let (sut, emitter, _) = makeSUT()
         sut.conversationOpened("conv-a")

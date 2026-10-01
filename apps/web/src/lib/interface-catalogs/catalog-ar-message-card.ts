@@ -4,6 +4,7 @@ import type { MessageCardCatalogSlice } from './catalog-fr-message-card';
 const arMessageCard = {
   'message.menu.export': 'تحويل إلى صورة',
   'message.menu.exportQuick': 'صورة سريعة',
+  'message.menu.exportDiscussion': 'تحويل المحادثة إلى صورة',
   'message.menu.compose': 'إنشاء',
   'comments.action.image': 'تحويل إلى صورة',
 } satisfies MessageCardCatalogSlice;

@@ -37,3 +37,55 @@
   margin: calc(-1 * max(0px, (44px - var(--avatar-size, 44px)) / 2));
   border-radius: inherit;
 }
+
+/*
+ * LE POINT DE PRÉSENCE CHANGE EN SE MONTRANT (#9047) — miroir de
+ * `MeeshyAvatar` (iOS). Le point sortant DIMINUE ; l'entrant apparaît en
+ * REBONDISSANT un instant après ; l'indigo « ici » pulse en arrivant (une onde
+ * part de lui et s'éteint). TRANSFORM et OPACITY seulement.
+ */
+.presence-dot-enter {
+  animation: presence-dot-bounce 0.5s ease-out 0.12s both;
+}
+
+.presence-dot-leave {
+  animation: presence-dot-shrink 0.22s ease-in both;
+}
+
+.presence-dot-here.presence-dot-enter::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid currentColor;
+  pointer-events: none;
+  animation: presence-dot-ripple 0.8s ease-out 0.2s both;
+}
+
+@keyframes presence-dot-bounce {
+  0% { opacity: 0; transform: scale(0.2); }
+  55% { opacity: 1; transform: scale(1.3); }
+  78% { transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes presence-dot-shrink {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.1); }
+}
+
+@keyframes presence-dot-ripple {
+  0% { opacity: 0.9; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.6); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .presence-dot-enter,
+  .presence-dot-here.presence-dot-enter::after {
+    animation: none;
+  }
+  .presence-dot-leave {
+    animation: none;
+    opacity: 0;
+  }
+}

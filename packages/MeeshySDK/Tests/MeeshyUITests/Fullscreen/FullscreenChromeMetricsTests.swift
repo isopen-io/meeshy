@@ -70,6 +70,21 @@ struct FullscreenChromeMetricsTests {
         #expect(FullscreenScrims.opacity(chromeVisible: false) == 0)
     }
 
+    @Test("Le contour d'une action flottante garde les valeurs du rail de la story d'avant #8878")
+    func test_outline_keepsStoryRailValues() {
+        #expect(FullscreenChromeMetrics.outlineScale == 1.22)
+        #expect(FullscreenChromeMetrics.outlineGlowRadius == 7)
+        #expect(FullscreenChromeMetrics.outlineGlowOpacity == 0.55)
+    }
+
+    @Test("Le rebond suit l'état ET le contour : poser un contour est un changement")
+    func test_emphasis_changesWithOutline() {
+        let idle = FullscreenActionEmphasis(isActive: false, isOutlined: false)
+        #expect(idle != FullscreenActionEmphasis(isActive: false, isOutlined: true))
+        #expect(idle != FullscreenActionEmphasis(isActive: true, isOutlined: false))
+        #expect(idle == FullscreenActionEmphasis(isActive: false, isOutlined: false))
+    }
+
     @Test("Seule une action flottante écrit sa légende, et jamais une légende vide")
     func test_actionStyle_caption() {
         #expect(FullscreenActionStyle.floating.showsCaption("Répondre"))

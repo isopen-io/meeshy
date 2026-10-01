@@ -6,6 +6,7 @@ import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { FileDeliveryHost } from '@/lib/media/file-delivery-host';
 import type { StoryPlaybackStory } from '@/lib/stories/playback';
+import { closeSendSheet, sendSheetStore } from '@/lib/send/send-sheet-store';
 import * as storySaveStore from '@/lib/stories/save-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -14,7 +15,7 @@ import { useStoryOwnerRail, type StoryOwnerRail } from './use-story-owner-rail';
 /**
  * `useStoryOwnerRail` (#7116) — l'hôte du plan AUTEUR, mesuré par son API
  * publique. Les lois qu'il COMPOSE (`storyDownloadableMedia`, `downloadFile`,
- * `fileDeliveryPortal`, `storySaveStore`, `sharePublicationLink`) ont chacune
+ * `fileDeliveryPortal`, `storySaveStore`, `openSendSheet`) ont chacune
  * leurs témoins.
  *
  * **REVUE** — les vecteurs que le premier jet ne pouvait pas passer :
@@ -119,6 +120,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   globals.fetch = originalFetch;
+  closeSendSheet();
   probe?.unmount();
   probe = undefined;
   for (const id of ['st-a', 'st-b', 'st-texte']) storySaveStore.cancel(id);
@@ -156,18 +158,17 @@ describe('useStoryOwnerRail — ce que le plan auteur OFFRE', () => {
   });
 
   test('un hôte SANS porte de livraison DE FICHIER (coque Android) ⇒ Vues + Partager, jamais Enregistrer (revue #7116, défaut 2)', () => {
-    /* `share` ne lit jamais `host` — il partage un LIEN par
-       `sharePublicationLink` → `portailDuNavigateur()`, où la coque Android a
-       `MeeshySharePlugin` (#7710) même sans porte de fichier. Le retirer avec
-       `save` aurait caché un bouton qui, lui, aurait un effet — loi 4 lue à
-       l'envers. */
+    /* `share` ne lit jamais `host` — il ouvre la feuille d'envoi, dont « Plus
+       d'options… » porte `MeeshySharePlugin` (#7710) même sans porte de
+       fichier. Le retirer avec `save` aurait caché un bouton qui, lui, aurait
+       un effet — loi 4 lue à l'envers. */
     probe = mountProbe({});
     probe.render(storyOf('st-a'));
     expect(Object.keys(probe.rail().handlers).sort()).toEqual(['share', 'views']);
   });
 });
 
-describe('useStoryOwnerRail — « Vues » et « Partager » mettent la lecture EN PAUSE', () => {
+describe('useStoryOwnerRail — « Vues » met la lecture EN PAUSE ; « Partager » ouvre la feuille d’envoi (#8884)', () => {
   test('ouvrir « Vues » met en pause et ouvre la feuille de CETTE story ; fermer reprend', () => {
     probe = mountProbe();
     probe.render(storyOf('st-a'));
@@ -178,13 +179,26 @@ describe('useStoryOwnerRail — « Vues » et « Partager » mettent la lecture 
     expect(probe.resumes).toEqual(['resume']);
   });
 
-  test('« Partager » met en pause AVANT la feuille du système et reprend quand elle se referme (iOS `:744-755`)', async () => {
+  test('« Partager » ouvre la feuille d’envoi COMMUNE avec la story, publiée en STORY, et son lien pour « Plus d’options… »', async () => {
     probe = mountProbe();
     probe.render(storyOf('st-a'));
-    act(() => probe?.rail().handlers.share?.());
-    expect(probe.pauses).toEqual(['pause']);
-    await settle();
-    expect(probe.resumes).toEqual(['resume']);
+    await act(async () => {
+      probe?.rail().handlers.share?.();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    });
+    const request = sendSheetStore.getState().request;
+    expect(request?.payload).toMatchObject({ kind: 'publication', postId: 'st-a', postType: 'STORY' });
+    expect(request?.moreOptions).toEqual({ url: 'https://meeshy.me/feeds/post/st-a' });
+  });
+
+  test('la pause de la lecture sous la feuille est celle du lecteur (`useStorySend.sheetOpen`) : le rail ne met pas en pause deux fois', async () => {
+    probe = mountProbe();
+    probe.render(storyOf('st-a'));
+    await act(async () => {
+      probe?.rail().handlers.share?.();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    });
+    expect(probe.pauses).toEqual([]);
   });
 });
 

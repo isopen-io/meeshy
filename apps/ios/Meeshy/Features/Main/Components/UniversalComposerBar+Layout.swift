@@ -355,7 +355,7 @@ extension UniversalComposerBar {
         .adaptiveOnChange(of: textAnalyzer.languageOverride?.code) { _, _ in
             applyDetectedLanguage(force: true)
         }
-        .adaptiveOnChange(of: text) { _, newValue in
+        .adaptiveOnChange(of: text) { oldValue, newValue in
             caretFollowsWrite(newValue)
             onAnyInteraction?()
             notifyContentChange()
@@ -391,8 +391,8 @@ extension UniversalComposerBar {
                     showAttachOptions = false
                 }
             }
-            // Clipboard content: auto-create when pasting 2000+ chars
-            handleClipboardCheck(newValue)
+            // Collage : fichier `file://` → pièce jointe ; au-delà de la limite → `.txt` (#9037)
+            handleClipboardCheck(newValue, previous: oldValue)
         }
         .adaptiveOnChange(of: textBinding?.wrappedValue) { _, newValue in
             guard let newValue, newValue != text else { return }
