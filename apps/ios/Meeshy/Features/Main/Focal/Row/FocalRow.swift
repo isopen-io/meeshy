@@ -660,13 +660,15 @@ struct FocalRow: View {
             .accessibilityLabel(BubbleSticker.accessibilityLabel(for: sticker))
     }
 
-    /// « emoji-only conserve 90/60/quarante-cinq pt » (critère §7) : `emojiFontSize`
-    /// vient de `content.text.emojiFontSize`, jamais recalculé ici.
+    /// L'emoji seul prend la taille de `content.text.emojiFontSize` (×4 / ×3 /
+    /// ×2, #9054), jamais recalculée ici — et à la taille EXACTE
+    /// (`MeeshyFont.emoji`) : `relative` la plafonnait à 34 pt.
     /// Rendu du texte ORIGINAL (`raw`), jamais traduit — même règle que
     /// `BubbleStandardLayout.emojiOnlyContent` (lu, jamais modifié).
     private var emojiBlock: some View {
         Text(content.text?.raw ?? "")
-            .font(MeeshyFont.relative(content.text?.emojiFontSize ?? FocalMetrics.Text.size))
+            .font(content.text?.emojiFontSize.map(MeeshyFont.emoji)
+                  ?? MeeshyFont.relative(FocalMetrics.Text.size))
             .fixedSize(horizontal: false, vertical: true)
             .padding(.leading, indent)
     }

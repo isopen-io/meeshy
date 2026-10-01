@@ -163,6 +163,18 @@ public extension MeeshyFont {
     }
 }
 
+public extension MeeshyFont {
+    /// **Un emoji seul, à la taille EXACTE demandée** (#9054).
+    ///
+    /// `relative(_:)` range toute taille ≥ 31 pt sous `.largeTitle` (34 pt) :
+    /// les 90 / 60 / 45 d'un message d'emojis sortaient donc tous à 34, et
+    /// leurs multiples aussi. L'emoji seul est déjà un affichage géant ; il ne
+    /// suit pas Dynamic Type au-delà de ce que sa taille porte.
+    nonisolated static func emoji(_ size: CGFloat) -> Font {
+        Font.system(size: size)
+    }
+}
+
 // MARK: - Accessibility identifiers (UI / E2E test hooks)
 
 /// Stable accessibility identifiers shared by the app and UI tests — the single

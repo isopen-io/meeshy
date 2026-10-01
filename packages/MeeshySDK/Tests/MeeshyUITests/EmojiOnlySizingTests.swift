@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import MeeshyUI
 
 /// **Un message d'emojis seuls grossit selon leur nombre** (#9054) : la taille
@@ -27,5 +28,18 @@ final class EmojiOnlySizingTests: XCTestCase {
 
     func test_analyze_mixedText_isANormalBubble() {
         XCTAssertEqual(EmojiDetector.analyze("ok 👍"), .notEmojiOnly)
+    }
+}
+
+/// **La taille demandée est la taille PEINTE.** `MeeshyFont.relative` range
+/// toute taille ≥ 31 pt sous `.largeTitle` (34 pt) : 90, 60 et 45 sortaient
+/// tous à 34, et les multiples de #9054 l'auraient été aussi.
+@MainActor
+final class EmojiOnlyFontTests: XCTestCase {
+
+    func test_emojiFont_keepsEachMultipleDistinct() {
+        XCTAssertNotEqual(MeeshyFont.emoji(68), MeeshyFont.emoji(51))
+        XCTAssertNotEqual(MeeshyFont.emoji(51), MeeshyFont.emoji(34))
+        XCTAssertEqual(MeeshyFont.emoji(68), Font.system(size: 68))
     }
 }
