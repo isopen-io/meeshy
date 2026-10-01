@@ -39,7 +39,8 @@ struct CommentMoreMenu: View {
             accentColor: accentColor,
             viewer: viewer,
             handle: viewer.username,
-            quoting: quoted
+            quoting: quoted,
+            audioPrism: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved
         )
     }
 

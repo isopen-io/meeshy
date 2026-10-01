@@ -10,9 +10,12 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { ENGAGEMENT_AXIS_WEIGHTS } from '@meeshy/shared/types/engagement';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
 import { getSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
+import { DEFAULT_ENGAGEMENT_SCALE } from '@meeshy/shared/types/engagement-scale';
+import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
+
+const poidsParDefaut = (axisKey: EngagementAxisKey): number => DEFAULT_ENGAGEMENT_SCALE.operations[axisKey].points;
 
 jest.mock('../../../../services/notifications/notification-service-registry');
 jest.mock('../../../../services/notifications/NotificationService');
@@ -37,6 +40,7 @@ function makePrisma(recentAxes: string[], milestones: Array<{ milestoneType: str
     },
     engagementConversationCredit: { create: jest.fn().mockResolvedValue({}) },
     engagementScaleConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+    engagementQuota: { upsert: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn().mockResolvedValue({ count: 1 }), updateMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue(null) },
     conversationEngagement: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
     user: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn().mockResolvedValue({}) },
     $runCommandRaw: runCommandRaw,
@@ -59,7 +63,7 @@ describe('l\'élan multiplie les points crédités', () => {
 
     await new EngagementService(prisma).recordActivity('u-1', 'content.text_message');
 
-    const poids = ENGAGEMENT_AXIS_WEIGHTS['content.text_message'];
+    const poids = poidsParDefaut('content.text_message');
     expect((upsert.mock.calls[0][0] as { create: { points: number } }).create.points).toBe(poids);
     expect(pointsDuScore(runCommandRaw)).toBe(poids);
   });
@@ -75,7 +79,7 @@ describe('l\'élan multiplie les points crédités', () => {
 
     await new EngagementService(prisma).recordActivity('u-2', 'tool.sticker');
 
-    const attendu = ENGAGEMENT_AXIS_WEIGHTS['tool.sticker'] * 4;
+    const attendu = poidsParDefaut('tool.sticker') * 4;
     expect((upsert.mock.calls[0][0] as { create: { points: number } }).create.points).toBe(attendu);
     expect(pointsDuScore(runCommandRaw)).toBe(attendu);
   });
@@ -88,7 +92,7 @@ describe('l\'élan multiplie les points crédités', () => {
 
     await new EngagementService(prisma).recordActivity('u-3', 'comment.text');
 
-    expect(pointsDuScore(runCommandRaw)).toBe(ENGAGEMENT_AXIS_WEIGHTS['comment.text'] * 2);
+    expect(pointsDuScore(runCommandRaw)).toBe(poidsParDefaut('comment.text') * 2);
   });
 
   it('ajoute le cran d\'assise à partir de dix succès', async () => {
@@ -99,10 +103,10 @@ describe('l\'élan multiplie les points crédités', () => {
     }));
     const { prisma, runCommandRaw } = makePrisma(['content.post'], succes);
 
-    await new EngagementService(prisma).recordActivity('u-4', 'content.story');
+    await new EngagementService(prisma).recordActivity('u-4', 'content.audio_message');
 
     // une seule famille (×1) + assise (+1) = ×2
-    expect(pointsDuScore(runCommandRaw)).toBe(ENGAGEMENT_AXIS_WEIGHTS['content.story'] * 2);
+    expect(pointsDuScore(runCommandRaw)).toBe(poidsParDefaut('content.audio_message') * 2);
   });
 
   it('compte comme « haut badge » un palier ≥ 100, jamais un palier bas', async () => {
@@ -113,10 +117,10 @@ describe('l\'élan multiplie les points crédités', () => {
     }));
     const { prisma, runCommandRaw } = makePrisma(['content.post'], basPaliers);
 
-    await new EngagementService(prisma).recordActivity('u-5', 'content.story');
+    await new EngagementService(prisma).recordActivity('u-5', 'content.audio_message');
 
     // Neuf badges, aucun ≥ 100 : pas d'assise.
-    expect(pointsDuScore(runCommandRaw)).toBe(ENGAGEMENT_AXIS_WEIGHTS['content.story']);
+    expect(pointsDuScore(runCommandRaw)).toBe(poidsParDefaut('content.audio_message'));
   });
 
   it('plafonne à ×5 : les quatre familles ET l\'assise', async () => {
@@ -130,9 +134,9 @@ describe('l\'élan multiplie les points crédités', () => {
       hautsBadges,
     );
 
-    await new EngagementService(prisma).recordActivity('u-6', 'content.reel');
+    await new EngagementService(prisma).recordActivity('u-6', 'content.audio_message');
 
-    expect(pointsDuScore(runCommandRaw)).toBe(ENGAGEMENT_AXIS_WEIGHTS['content.reel'] * 5);
+    expect(pointsDuScore(runCommandRaw)).toBe(poidsParDefaut('content.audio_message') * 5);
   });
 
   it('crédite le compteur et le score du MÊME montant — l\'invariant Σ(points)', async () => {
@@ -154,9 +158,9 @@ describe('l\'élan multiplie les points crédités', () => {
       'tool.sticker',
     ]);
 
-    await new EngagementService(prisma).recordActivity('u-8', 'content.reel');
+    await new EngagementService(prisma).recordActivity('u-8', 'content.audio_message');
 
-    // Un badge « cinquante réels » doit vouloir dire cinquante réels, même à ×5.
+    // Un badge « cinquante vocaux » doit vouloir dire cinquante vocaux, même à ×5.
     const args = upsert.mock.calls[0][0] as {
       create: { count: number };
       update: { count: { increment: number } };

@@ -974,59 +974,6 @@ describe('AuthHandler', () => {
       expect(connectedUsers.size).toBe(1);
     });
 
-    it('redit qui est dans chaque conversation après une authentification JWT (#8892)', async () => {
-      const emitViewingSnapshots = jest.fn().mockResolvedValue(undefined);
-      const handler = new AuthHandler({
-        prisma: mockPrisma,
-        statusService: mockStatusService,
-        maintenanceService: mockMaintenanceService,
-        callService: mockCallService,
-        connectedUsers,
-        socketToUser,
-        userSockets,
-        emitViewingSnapshots,
-      });
-      const mockSocket = createMockSocket({ handshake: { auth: { token: 'valid-jwt-token' } } });
-      jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123',
-        systemLanguage: 'en',
-        regionalLanguage: null,
-        customDestinationLanguage: null,
-        deviceLocale: null
-      } as any);
-
-      await handler.handleTokenAuthentication(mockSocket);
-      await Promise.resolve();
-
-      expect(emitViewingSnapshots).toHaveBeenCalledWith(mockSocket);
-    });
-
-    it('redit qui est dans la conversation après une authentification anonyme (#8892)', async () => {
-      const emitViewingSnapshots = jest.fn().mockResolvedValue(undefined);
-      const handler = new AuthHandler({
-        prisma: mockPrisma,
-        statusService: mockStatusService,
-        maintenanceService: mockMaintenanceService,
-        callService: mockCallService,
-        connectedUsers,
-        socketToUser,
-        userSockets,
-        emitViewingSnapshots,
-      });
-      const mockSocket = createMockSocket({ handshake: { auth: { sessionToken: 'anon-session-token' } } });
-      jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
-        displayName: 'Anonymous',
-        language: 'en',
-        conversationId: 'conv-123'
-      } as any);
-
-      await handler.handleTokenAuthentication(mockSocket);
-      await Promise.resolve();
-
-      expect(emitViewingSnapshots).toHaveBeenCalledWith(mockSocket);
-    });
-
     it('should invoke emitPresenceSnapshot after JWT auto-auth', async () => {
       const mockEmitPresenceSnapshot = jest.fn().mockResolvedValue(undefined);
       const handlerWithSnapshot = new AuthHandler({

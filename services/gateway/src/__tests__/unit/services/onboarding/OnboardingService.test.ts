@@ -457,9 +457,9 @@ describe('OnboardingService.getState — demandes en attente (#7910)', () => {
 });
 
 describe('OnboardingService.getState — les points à l’élan courant (#7908)', () => {
-  it('compte neuf, aucun élan : le barème nu (14 · 10 · 7)', async () => {
+  it('compte neuf, aucun élan : le barème nu (8 · 80 · 7), la story à sa visibilité publique par défaut', async () => {
     const state = await new OnboardingService(makePrisma()).getState(VIEWER, NOW);
-    expect(state?.stepRewards).toEqual({ global: 14, story: 10, friendship: 7 });
+    expect(state?.stepRewards).toEqual({ global: 8, story: 80, friendship: 7 });
   });
 
   it('actif dans deux familles cette semaine : chaque axe crédite à l’élan de SA famille ajoutée', async () => {
@@ -473,16 +473,16 @@ describe('OnboardingService.getState — les points à l’élan courant (#7908)
     });
     const state = await new OnboardingService(prisma).getState(VIEWER, NOW);
     // content + social actives (le commentaire est hors fenêtre) :
-    // global = texte 9 × 2 (content) + conversation 5 × 3 (+conversation) = 33
-    // story  = story 9 × 2 (content) + outil 1 × 3 (+tool) = 21
+    // global = texte 3 × 2 (content) + conversation 5 × 3 (+conversation) = 21
+    // story  = story publique 79 × 2 (content) + outil 1 × 3 (+tool) = 161
     // amitié = 7 × 2 (social déjà active) = 14
-    expect(state?.stepRewards).toEqual({ global: 33, story: 21, friendship: 14 });
+    expect(state?.stepRewards).toEqual({ global: 21, story: 161, friendship: 14 });
   });
 
   it('l’assise permanente (dix succès) ajoute un cran à chaque geste', async () => {
     const milestones = Array.from({ length: 10 }, (_, n) => ({ milestoneType: 'achievement', milestoneKey: `a:${n}` }));
     const state = await new OnboardingService(makePrisma({ milestones })).getState(VIEWER, NOW);
-    expect(state?.stepRewards).toEqual({ global: 28, story: 20, friendship: 14 });
+    expect(state?.stepRewards).toEqual({ global: 16, story: 160, friendship: 14 });
   });
 });
 

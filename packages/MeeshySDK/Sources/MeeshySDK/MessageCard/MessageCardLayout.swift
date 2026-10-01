@@ -50,13 +50,18 @@ public struct MessageCardInput: Equatable, Sendable {
     /// L'heure de chaque message, déjà formatée — `nil` : non affichée.
     public let quotedTime: String?
     public let replyTime: String?
-    /// La tête de lecture d'une carte ANIMÉE (0…1) — `nil` pour une image fixe.
-    public let playhead: Double?
+    /// L'EXTRAIT du son (ou de la vidéo) que la carte montre : ses barres, son
+    /// minuteur, sa transcription (#8979) — `nil` : le média entier.
+    public let clip: MessageCardClip?
+    /// L'instant d'une carte ANIMÉE, en secondes depuis le début de l'extrait —
+    /// le VRAI temps écoulé, celui qu'on entend (#8979) ; `nil` pour une image fixe.
+    public let time: Double?
 
     public init(quoted: MessageCardPart?, reply: MessageCardPart, template: MessageCardTemplateID, handle: String?,
                 title: String? = nil, date: String? = nil, showAuthors: Bool = true,
                 media: [MessageCardMedia] = [], disposition: MessageCardDisposition = .standard,
-                quotedTime: String? = nil, replyTime: String? = nil, playhead: Double? = nil) {
+                quotedTime: String? = nil, replyTime: String? = nil,
+                clip: MessageCardClip? = nil, time: Double? = nil) {
         self.quoted = quoted
         self.reply = reply
         self.template = template
@@ -68,14 +73,22 @@ public struct MessageCardInput: Equatable, Sendable {
         self.disposition = disposition
         self.quotedTime = MessageCardText.nonBlank(quotedTime)
         self.replyTime = MessageCardText.nonBlank(replyTime)
-        self.playhead = playhead.map { min(1, max(0, $0)) }
+        self.clip = clip
+        self.time = time.flatMap { $0.isFinite ? max(0, $0) : nil }
     }
 
     /// La même carte, à un autre instant de son animation.
-    public func at(playhead: Double?) -> MessageCardInput {
+    public func at(time: Double?) -> MessageCardInput {
         MessageCardInput(quoted: quoted, reply: reply, template: template, handle: handle, title: title, date: date,
                          showAuthors: showAuthors, media: media, disposition: disposition,
-                         quotedTime: quotedTime, replyTime: replyTime, playhead: playhead)
+                         quotedTime: quotedTime, replyTime: replyTime, clip: clip, time: time)
+    }
+
+    /// La même carte, sur un autre extrait de son média.
+    public func clipped(to clip: MessageCardClip?) -> MessageCardInput {
+        MessageCardInput(quoted: quoted, reply: reply, template: template, handle: handle, title: title, date: date,
+                         showAuthors: showAuthors, media: media, disposition: disposition,
+                         quotedTime: quotedTime, replyTime: replyTime, clip: clip, time: time)
     }
 }
 
@@ -173,10 +186,11 @@ public enum MessageCardOp: Equatable, Sendable {
 }
 
 /// Les PARTIES d'une carte qu'un geste peut désigner sur l'aperçu : l'en-tête,
-/// la citation, la liaison, la réponse, ses médias — et le fond, partout
-/// ailleurs. Le filigrane n'en est pas une : il signe toujours la carte.
+/// la citation, la liaison, la réponse, ses médias, la transcription d'un
+/// vocal (#8979) — et le fond, partout ailleurs. Le filigrane n'en est pas
+/// une : il signe toujours la carte.
 public enum MessageCardPartID: String, CaseIterable, Sendable {
-    case header, quote, link, reply, media, background
+    case header, quote, link, reply, media, transcript, background
 }
 
 /// La zone d'une partie, en pixels de la carte.

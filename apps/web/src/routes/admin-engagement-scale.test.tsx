@@ -1,27 +1,35 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
-import { ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
 import { DEFAULT_ENGAGEMENT_SCALE, type EngagementScale } from '@meeshy/shared/types/engagement-scale';
-import { engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 
 import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
 import type { AdminPermissions } from '@/lib/admin/sections';
-import { draftOf, scaleOfDraft, withAddedLevelCap, withOperation } from '@/lib/admin/engagement-scale-form';
+import {
+  draftOf,
+  scaleOfDraft,
+  withAddedLevelCap,
+  withAddedStreakBonus,
+  withOperation,
+  withVariant,
+} from '@/lib/admin/engagement-scale-form';
 import { loadAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import AdminScreen from './admin';
+import { EDITABLE_OPERATION_COUNT } from './admin-engagement-scale-operations';
 import { AdminEngagementScalePanel } from './admin-engagement-scale-parts';
 
 /**
- * LE BARÈME DE POINTS (#8906) — l'écran d'administration charge le barème,
- * liste CHAQUE opération, édite, refuse localement un barème invalide et
- * envoie `{ scale }` en `PUT` ; la tuile n'est offerte qu'au rang ADMIN.
+ * LE BARÈME DE POINTS (#8906, #8959) — l'écran d'administration charge le
+ * barème, liste CHAQUE opération par domaine (points par variante, plafond et
+ * portée), la règle des liens, les bonus de constance et les garde-fous ;
+ * édite, refuse localement un barème invalide et envoie `{ scale }` en `PUT` ;
+ * la tuile n'est offerte qu'au rang ADMIN.
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -86,7 +94,7 @@ describe('le brouillon — la loi partagée en aller-retour', () => {
 
   test('un plafond vide veut dire « aucun » ; un point vide est invalide', () => {
     const draft = draftOf(DEFAULT_ENGAGEMENT_SCALE);
-    expect(scaleOfDraft(withOperation(draft, 'tool.reaction', { dailyCap: '' }))?.operations['tool.reaction'].dailyCapPerConversation).toBeNull();
+    expect(scaleOfDraft(withOperation(draft, 'tool.reaction', { cap: '' }))?.operations['tool.reaction'].cap).toBeNull();
     expect(scaleOfDraft(withOperation(draft, 'tool.reaction', { points: '' }))).toBeNull();
   });
 
@@ -94,21 +102,50 @@ describe('le brouillon — la loi partagée en aller-retour', () => {
     const scale = scaleOfDraft(withAddedLevelCap(draftOf(DEFAULT_ENGAGEMENT_SCALE)));
     expect(scale?.multiplier.levelCaps).toEqual([{ minLevel: 0, maxFactor: DEFAULT_ENGAGEMENT_SCALE.multiplier.maxFactor }]);
   });
+
+  test('une variante éditée ne touche que sa visibilité', () => {
+    const scale = scaleOfDraft(withVariant(draftOf(DEFAULT_ENGAGEMENT_SCALE), 'content.post', 'friends', '40'));
+    expect(scale?.operations['content.post'].variantPoints).toEqual({ public: 99, community: 69, friends: 40, other: 0 });
+  });
+
+  test('un palier de constance ajouté double le dernier et reste valide', () => {
+    const scale = scaleOfDraft(withAddedStreakBonus(draftOf(DEFAULT_ENGAGEMENT_SCALE)));
+    expect(scale?.streakBonuses.at(-1)).toEqual({ days: 200, points: 0 });
+  });
 });
 
 describe('le chargement', () => {
   test('il liste CHAQUE opération, avec son libellé, ses points, son « multiplié » et son plafond', async () => {
     const host = await mountPanel(scaleTransport());
 
-    expect(host.querySelectorAll('[data-scale-operation]').length).toBe(ENGAGEMENT_AXES.length);
+    expect(host.querySelectorAll('[data-scale-operation]').length).toBe(EDITABLE_OPERATION_COUNT);
     const reaction = host.querySelector('[data-scale-operation="tool.reaction"]');
-    expect(reaction?.textContent).toContain(engagementAxisLabel('fr', 'tool.reaction'));
-    expect(input(host, '[data-scale-points="tool.reaction"]').value).toBe(String(DEFAULT_ENGAGEMENT_SCALE.operations['tool.reaction'].points));
+    expect(reaction?.textContent).toContain(translateAdmin('fr', 'admin.scale.op.tool.reaction'));
+    expect(reaction?.textContent).toContain(translateAdmin('fr', 'admin.scale.scope.conversation-day'));
+    expect(input(host, '[data-scale-points="tool.reaction"]').value).toBe('2');
     expect(input(host, '[data-scale-cap="tool.reaction"]').value).toBe('30');
-    expect(input(host, '[data-scale-cap="content.post"]').value).toBe('');
+    expect(input(host, '[data-scale-cap="content.post"]').value).toBe('50');
     expect(input(host, '[data-scale-multiplied="tool.reaction"]').checked).toBe(true);
+    expect(host.querySelector('[data-scale-cap-fixed="profile.avatar"]')?.textContent).toBe(translateAdmin('fr', 'admin.scale.cap.perAccount'));
+    expect(host.querySelector('[data-scale-points="content.post"]')).toBeNull();
+    expect(input(host, '[data-scale-variant="content.post:public"]').value).toBe('99');
+    expect(input(host, '[data-scale-points="content.reel"]').value).toBe('199');
     expect(input(host, '[data-scale-multiplier="maxFactor"]').value).toBe('5');
     expect(host.querySelector('[data-scale-updated]')?.textContent).toBe(translateAdmin('fr', 'admin.scale.defaults'));
+  });
+
+  test('les opérations se rangent par domaine, les progressives ont leur propre section', async () => {
+    const host = await mountPanel(scaleTransport());
+
+    expect(host.querySelector('[data-scale-domain="messaging"] [data-scale-operation="tool.reaction"]')).not.toBeNull();
+    expect(host.querySelector('[data-scale-domain="profile"] [data-scale-operation="profile.two_factor"]')).not.toBeNull();
+    expect(host.querySelector('[data-scale-operation="social.link_visit"]')).toBeNull();
+    expect(host.querySelector('[data-scale-operation="streak.bonus"]')).toBeNull();
+    expect(input(host, '[data-scale-link="firstTier"]').value).toBe('10');
+    expect(input(host, '[data-scale-link="maxPoints"]').value).toBe('20');
+    expect(input(host, '[data-scale-streak-days="1"]').value).toBe('30');
+    expect(input(host, '[data-scale-streak-points="2"]').value).toBe('100');
+    expect(input(host, '[data-scale-abuse="heavyPoints"]').value).toBe(String(DEFAULT_ENGAGEMENT_SCALE.abuse.heavyPoints));
   });
 
   test('un barème servi illisible n’est pas édité : l’écran le dit', async () => {
@@ -131,17 +168,36 @@ describe('l’édition et l’enregistrement', () => {
 
     const [put] = puts(spy);
     const body = put?.body as { readonly scale: EngagementScale } | undefined;
-    expect(body?.scale.operations['tool.reaction']).toEqual({ points: 3, multiplied: true, dailyCapPerConversation: null });
+    expect(body?.scale.operations['tool.reaction']).toEqual({ points: 3, multiplied: true, cap: null, variantPoints: {} });
     expect(body?.scale.operations['tool.attachment'].multiplied).toBe(false);
     expect(body?.scale.multiplier.maxFactor).toBe(4);
     expect(host.querySelector('[data-admin-announcement]')?.textContent).toBe(translateAdmin('fr', 'admin.scale.saved'));
+  });
+
+  test('les variantes, la règle des liens, la constance et les garde-fous partent dans le PUT', async () => {
+    const spy = scaleTransport();
+    const host = await mountPanel(spy);
+
+    mounter.type(host, '[data-scale-variant="content.story:friends"]', '25');
+    mounter.type(host, '[data-scale-link="dailyCapPerCreator"]', '');
+    mounter.type(host, '[data-scale-link="stepPerDoubling"]', '3');
+    await mounter.click(host.querySelector('[data-scale-streak-remove="0"]'));
+    mounter.type(host, '[data-scale-abuse="unverifiedMaxPoints"]', '5');
+    await mounter.submit(host);
+
+    const body = puts(spy)[0]?.body as { readonly scale: EngagementScale } | undefined;
+    expect(body?.scale.operations['content.story'].variantPoints.friends).toBe(25);
+    expect(body?.scale.linkVisits.dailyCapPerCreator).toBeNull();
+    expect(body?.scale.linkVisits.stepPerDoubling).toBe(3);
+    expect(body?.scale.streakBonuses.map((bonus) => bonus.days)).toEqual([30, 100]);
+    expect(body?.scale.abuse.unverifiedMaxPoints).toBe(5);
   });
 
   test('un barème invalide est BLOQUÉ : aucun PUT, l’erreur est dite', async () => {
     const spy = scaleTransport();
     const host = await mountPanel(spy);
 
-    mounter.type(host, '[data-scale-points="content.post"]', '-1');
+    mounter.type(host, '[data-scale-points="tool.reaction"]', '-1');
     await mounter.submit(host);
 
     expect(puts(spy)).toEqual([]);

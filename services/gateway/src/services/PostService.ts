@@ -23,7 +23,6 @@ import { MediaService } from './MediaService';
 import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage';
 import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { EngagementService } from './engagement/EngagementService';
 import { ZMQSingleton } from './ZmqSingleton';
 import { authorSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
@@ -34,6 +33,7 @@ import { storyTranslatableTexts } from './posts/storyEffectsV3';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { applyPostRemovalEffects } from './posts/postRemovalEffects';
+import { creditPostEngagement, creditStoryViewed } from './posts/postEngagementCredits';
 import { retractReactionNotifications } from './notifications/retractReactionNotifications';
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
@@ -1616,6 +1616,7 @@ export class PostService {
       data: { bookmarkCount: { increment: 1 } },
       select: { bookmarkCount: true },
     });
+    creditPostEngagement(this.prisma, userId, 'tool.post_bookmark', { targetId: postId, targetOwnerId: post.authorId });
 
     return { success: true, bookmarkCount: updated.bookmarkCount };
   }
@@ -1665,7 +1666,7 @@ export class PostService {
   ): Promise<{ shared: boolean; shareCount: number; shortUrl: string; token: string; reused: boolean } | null> {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, deletedAt: NOT_DELETED },
-      select: { id: true, shareCount: true, type: true },
+      select: { id: true, shareCount: true, type: true, authorId: true },
     });
     if (!post) return null;
 
@@ -1720,9 +1721,7 @@ export class PostService {
       // `reused: true` : elles réutilisent un lien déjà émis, et les créditer
       // ferait gagner des points en pressant « Partager » en boucle. Un axe
       // d'engagement qui se farme ne mesure plus rien.
-      new EngagementService(this.prisma)
-        .recordActivity(userId, 'social.share')
-        .catch((err: unknown) => log.warn('engagement social.share failed', { err }));
+      creditPostEngagement(this.prisma, userId, 'social.share', { targetId: postId, targetOwnerId: post.authorId });
       return { shared: true, shareCount: created.shareCount, token: created.link.token, shortUrl: `${baseUrl}${created.link.shortUrl}`, reused: false };
     } catch (err) {
       if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'P2002') {
@@ -1916,6 +1915,7 @@ export class PostService {
       const isNewView = target.authorId === userId
         ? false
         : await this.creditPostView(postId, userId, safeDuration);
+      creditStoryViewed(this.prisma, { viewerId: userId, story: target, isNewView, durationMs: safeDuration });
 
       const rootId = target.originalRepostOfId ?? target.repostOfId;
       if (rootId && rootId !== postId) {
@@ -2551,6 +2551,7 @@ export class PostService {
           await this.orphanCleanup.untrackBatch(orphanRowIds);
         }
 
+        creditPostEngagement(this.prisma, userId, 'social.repost', { targetId: postId, targetOwnerId: original.authorId });
         return finalRepost;
       } catch (err) {
         // Inline (best-effort) compensation. Same as before — fast-path
@@ -2593,6 +2594,7 @@ export class PostService {
       where: { id: postId },
       data: { repostCount: { increment: 1 } },
     });
+    creditPostEngagement(this.prisma, userId, 'social.repost', { targetId: postId, targetOwnerId: original.authorId });
 
     return repost;
   }

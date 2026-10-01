@@ -23,7 +23,14 @@ import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
-  enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn() }) },
+  enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }) },
+}));
+
+jest.mock('../../../services/engagement/EngagementService', () => ({
+  EngagementService: jest.fn().mockImplementation(() => ({
+    recordActivity: jest.fn(async () => undefined),
+    recordLinkVisit: jest.fn(async () => 0),
+  })),
 }));
 jest.mock('../../../utils/sanitize', () => ({
   SecuritySanitizer: { sanitizeText: jest.fn((s: string) => s) },

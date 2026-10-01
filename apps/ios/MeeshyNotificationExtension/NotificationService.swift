@@ -103,7 +103,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             || (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } == true
         if isEncryptedPush, !didDecrypt,
            let locKey = userInfo["notificationLocKey"] as? String, !locKey.isEmpty {
-            let localized = NSLocalizedString(locKey, comment: "")
+            let localized = NSLocalizedString(locKey, bundle: InterfaceLanguageResolver.bundle(), comment: "")
             if localized != locKey {
                 bestAttemptContent.body = localized
             }

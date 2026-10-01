@@ -15,6 +15,8 @@ import { retractCommentNotifications } from './posts/retractCommentNotifications
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
 import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
+import { EngagementService } from './engagement/EngagementService';
+import { creditPostEngagement, type PostEngagementRecorder } from './posts/postEngagementCredits';
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
 
@@ -26,6 +28,8 @@ export class PostCommentService {
     // Source UNIQUE du mapping `metadata.trackingLinks` partagée avec
     // messages/posts/stories. Injectable pour les tests ; défaut = même prisma.
     trackingLinkService?: TrackingLinkService,
+    // Crédit `tool.comment_like` (#8959) du like REST — voir `likeComment`.
+    private readonly engagement: PostEngagementRecorder = new EngagementService(prisma),
   ) {
     this.trackingLinkService = trackingLinkService ?? new TrackingLinkService(prisma);
   }
@@ -668,7 +672,7 @@ export class PostCommentService {
   async likeComment(commentId: string, userId: string, emoji: string = '❤️') {
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
-      select: { id: true },
+      select: { id: true, authorId: true },
     });
     if (!comment) return null;
 
@@ -723,6 +727,12 @@ export class PostCommentService {
       create: { commentId, userId, emoji },
       update: {},
     });
+    // `tool.comment_like` (#8959) — seulement quand CET emoji n'était pas déjà
+    // posé : reconfirmer (ou passer en repli derrière le socket, qui l'a déjà
+    // écrit et crédité) ne recrédite pas.
+    if (!alreadyHasThisEmoji) {
+      creditPostEngagement(this.prisma, userId, 'tool.comment_like', { targetId: commentId, targetOwnerId: comment.authorId }, this.engagement);
+    }
     return this.syncCommentLikeCounters(commentId);
   }
 

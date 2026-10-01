@@ -1,9 +1,10 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { act, useRef } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterAll, beforeAll, describe, expect, jest, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { chromeInteractive } from './call-controls';
-import { tapTogglesChrome } from './use-call-chrome';
+import { tapTogglesChrome, useCallChrome } from './use-call-chrome';
 
 /**
  * QUEL TOUCHER EFFACE LES COMMANDES (#8550) — un toucher sur la scène, oui ;
@@ -110,14 +111,104 @@ describe('tapTogglesChrome', () => {
 });
 
 /**
- * UN BOUTON VISIBLE RÉPOND (#8735) — effacées par l'attente (`resting`), les
- * commandes restent sous le doigt : le toucher agit ET les rend. Seul ce
- * qu'un toucher sur la scène a rangé (`dismissed`) laisse passer le doigt.
+ * UN TOUCHER RANGE, LE SUIVANT REND — ET RIEN D'AUTRE (#8988, directive
+ * porteur du 2026-10-01 : « On cache les contrôleurs quand on touche l'écran
+ * et on les remet quand on retouche »). Aucune attente ne range les commandes
+ * d'une vidéo ; le clavier les rend toujours, d'où que vienne la touche — un
+ * clic sur la scène, qui n'est pas focalisable, emporte le focus HORS de
+ * l'écran d'appel, sur le `<dialog>` qui le porte (mesuré dans Chromium).
  */
-describe('chromeInteractive', () => {
-  test('montrées ou effacées par l’attente, elles répondent ; rangées d’un toucher, non', () => {
-    expect(chromeInteractive('shown')).toBe(true);
-    expect(chromeInteractive('resting')).toBe(true);
-    expect(chromeInteractive('dismissed')).toBe(false);
+describe('useCallChrome', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(() => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  function Screen({ videoScene }: { readonly videoScene: boolean }) {
+    const root = useRef<HTMLDivElement>(null);
+    const visibility = useCallChrome({ videoScene, root });
+    return (
+      <div ref={root} data-visibility={visibility}>
+        <div data-stage="" />
+        <button type="button" data-micro="">
+          Micro
+        </button>
+      </div>
+    );
+  }
+
+  const mount = (videoScene = true) => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => root.render(<Screen videoScene={videoScene} />));
+    const visibility = () => host.querySelector('[data-visibility]')?.getAttribute('data-visibility');
+    const tap = (selector: string) => act(() => (host.querySelector(selector) as HTMLElement | null)?.click());
+    const done = () => {
+      act(() => root.unmount());
+      host.remove();
+    };
+    return { host, visibility, tap, done };
+  };
+
+  test('aucune attente ne range les commandes d’une vidéo — ni 4 s, ni une heure (#8988)', () => {
+    jest.useFakeTimers();
+    try {
+      const view = mount();
+      act(() => jest.advanceTimersByTime(4_100));
+      expect(view.visibility()).toBe('shown');
+      act(() => jest.advanceTimersByTime(60 * 60 * 1000));
+      expect(view.visibility()).toBe('shown');
+      view.done();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('un toucher sur la scène range les commandes, le suivant les rend (#8988)', () => {
+    const view = mount();
+    view.tap('[data-stage]');
+    expect(view.visibility()).toBe('dismissed');
+    view.tap('[data-stage]');
+    expect(view.visibility()).toBe('shown');
+    view.done();
+  });
+
+  test('un toucher sur un bouton agit sans rien ranger', () => {
+    const view = mount();
+    view.tap('[data-micro]');
+    expect(view.visibility()).toBe('shown');
+    view.done();
+  });
+
+  test('rangées, une touche les rend — même pressée hors de l’écran d’appel, sur ce qui le porte, où le clic sur la scène a emporté le focus (#8988)', () => {
+    const view = mount();
+    view.tap('[data-stage]');
+    act(() => void view.host.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })));
+    expect(view.visibility()).toBe('shown');
+    view.done();
+  });
+
+  test('rangées, le focus qui entre dans l’écran d’appel les rend', () => {
+    const view = mount();
+    view.tap('[data-stage]');
+    act(() => void view.host.querySelector('[data-micro]')?.dispatchEvent(new FocusEvent('focusin', { bubbles: true })));
+    expect(view.visibility()).toBe('shown');
+    view.done();
+  });
+
+  test('en audio, un toucher sur la scène ne range rien', () => {
+    const view = mount(false);
+    view.tap('[data-stage]');
+    expect(view.visibility()).toBe('shown');
+    view.done();
   });
 });

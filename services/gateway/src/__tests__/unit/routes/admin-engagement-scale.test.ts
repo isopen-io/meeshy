@@ -73,7 +73,7 @@ const tuned = {
   ...DEFAULT_ENGAGEMENT_SCALE,
   operations: {
     ...DEFAULT_ENGAGEMENT_SCALE.operations,
-    'tool.reaction': { points: 2, multiplied: false, dailyCapPerConversation: 10 },
+    'tool.reaction': { points: 2, multiplied: false, cap: 10, variantPoints: {} },
   },
   multiplier: { ...DEFAULT_ENGAGEMENT_SCALE.multiplier, maxFactor: 3, levelCaps: [{ minLevel: 0, maxFactor: 2 }] },
 };

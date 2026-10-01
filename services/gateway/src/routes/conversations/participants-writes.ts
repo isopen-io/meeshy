@@ -27,6 +27,7 @@ import { appliquerDroitsDeParticipant } from './participant-rights-core';
 import { registerParticipantPatchRoute } from './participant-patch';
 import { repondreAuRefus } from './utils/participant-geste-reponse';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
+import { EngagementService } from '../../services/engagement/EngagementService';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantWriteRoutes' });
 
 /**
@@ -106,10 +107,14 @@ export function normalizeParticipantBatch(
  * il ne fusionne pas — la route unifiée est un autre lot (#4176).
  */
 
+/** Ce que l'admission demande au moteur d'engagement (#8959) — un double en test. */
+export type ParticipantInviteEngagement = Pick<EngagementService, 'recordActivity'>;
+
 export function registerParticipantWriteRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
-  requiredAuth: any
+  requiredAuth: any,
+  engagement: ParticipantInviteEngagement = new EngagementService(prisma)
 ) {
   /**
    * L'adresse UNIQUE où un participant se change — `PATCH
@@ -462,6 +467,15 @@ export function registerParticipantWriteRoutes(
           joinMethod: 'invited' as const,
         }).catch((err: unknown) => logger.error('Notification error joined', err as Error));
       }
+    }
+
+    // `social.conversation_invite` (#8959) : faire entrer quelqu'un rapporte à
+    // celui qui l'a fait entrer, une fois par personne et par conversation —
+    // la cible `conversation:personne` porte cette unicité dans le moteur.
+    if (currentUserId && currentUserId !== userId) {
+      engagement
+        .recordActivity(currentUserId, 'social.conversation_invite', { targetId: `${conversationId}:${userId}` })
+        .catch((err: unknown) => logger.warn('engagement social.conversation_invite failed', { err }));
     }
 
     return { userId, outcome: entry.outcome === 'rejoin' ? 'rejoin' : 'new', participantId: joinedParticipantId };

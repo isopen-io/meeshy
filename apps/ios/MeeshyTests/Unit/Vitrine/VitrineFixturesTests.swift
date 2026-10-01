@@ -13,7 +13,7 @@ final class VitrineFixturesTests: XCTestCase {
 
     func test_decoder_kitSample_readsEveryDomain() throws {
         let f = try VitrineFixtures.decoder(Data(contentsOf: echantillon))
-        XCTAssertEqual(f.version, 1)
+        XCTAssertEqual(f.version, 2)
         XCTAssertEqual(f.lang, "fr")
         XCTAssertEqual(f.lecteur.username, "lea.mtn")
         XCTAssertEqual(f.lecteur.systemLanguage, "fr")
@@ -36,7 +36,7 @@ final class VitrineFixturesTests: XCTestCase {
         let global = try XCTUnwrap(f.conversations.first { $0.type == "global" })
         XCTAssertEqual(global.lastMessageOriginalLanguage, "ko")
         XCTAssertNotNil(global.lastMessageTranslations?["fr"], "Aperçu de liste sans Prisme.")
-        XCTAssertEqual(f.conversations.first { $0.title == "Pizza Night 🍕" }?.unreadCount, 9)
+        XCTAssertEqual(f.conversations.first { $0.title == "Lisboa ✈️" }?.unreadCount, 4)
         for direct in f.conversations where direct.type == "direct" {
             XCTAssertEqual(direct.participants?.count, 2, "Conversation directe sans ses deux membres.")
         }
@@ -45,12 +45,41 @@ final class VitrineFixturesTests: XCTestCase {
         XCTAssertEqual(f.lienInvitation.name, "Lisboa ✈️")
     }
 
-    func test_decoder_unknownVersion_throwsVersionInconnue() throws {
+    /// Des fixtures du lot 1 oubliées dans le conteneur : la vitrine refuse plutôt que d'ouvrir un écran vide.
+    func test_decoder_previousVersion_throwsVersionInconnue() throws {
         var brut = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: echantillon)) as? [String: Any])
-        brut["version"] = 2
+        brut["version"] = 1
         let data = try JSONSerialization.data(withJSONObject: brut)
         XCTAssertThrowsError(try VitrineFixtures.decoder(data)) { erreur in
-            XCTAssertEqual(erreur as? VitrineFixturesErreur, .versionInconnue(2))
+            XCTAssertEqual(erreur as? VitrineFixturesErreur, .versionInconnue(1))
         }
+    }
+
+    /// Le lot 2 : le vocal et sa piste dans la langue du lecteur, les destinations, le fil et les médias.
+    func test_decoder_kitSample_readsTheConversationsOfLot2() throws {
+        let f = try VitrineFixtures.decoder(Data(contentsOf: echantillon))
+        let amour = try XCTUnwrap(f.scenes["amour"])
+        let vocal = try XCTUnwrap(f.messages[amour.conversationId]?.first { $0.id == amour.messageId })
+        let piece = try XCTUnwrap(vocal.attachments?.first { $0.id == amour.attachmentId })
+        XCTAssertEqual(piece.transcription?.language, "ko")
+        let piste = try XCTUnwrap(piece.translations?["fr"], "Vocal sans piste dans la langue de la lectrice.")
+        XCTAssertGreaterThan(piste.segments?.count ?? 0, 3, "Piste sans karaoké.")
+        XCTAssertTrue(f.medias.contains { $0.genre == .audio && $0.url == piste.url })
+        XCTAssertEqual(f.modesDeLecture[amour.conversationId], "bubbles")
+        XCTAssertNotNil(f.scenes["groupe"]?.messageId)
+        XCTAssertNotNil(f.scenes["imagine"]?.messageId)
+        XCTAssertEqual(f.destination(.global)?.conversationId, f.conversations.first { $0.type == "global" }?.id)
+        XCTAssertEqual(f.posts.count, 2)
+        XCTAssertTrue(f.medias.contains { $0.genre == .image && $0.fichier == "osaka-coucher.jpg" })
+    }
+
+    /// `toConversation` pose `e2ee` sur toute conversation directe : un cadenas sur un écran traduit
+    /// est hors champ (spec § 2), la vitrine sert ses conversations sans mode de chiffrement.
+    func test_conversationsServies_carryNoEncryptionLock() throws {
+        let f = try VitrineFixtures.decoder(Data(contentsOf: echantillon))
+        let servies = f.conversationsServies()
+        XCTAssertEqual(servies.count, f.conversations.count)
+        XCTAssertTrue(servies.contains { $0.type == .direct })
+        XCTAssertTrue(servies.allSatisfy { $0.encryptionMode == nil })
     }
 }

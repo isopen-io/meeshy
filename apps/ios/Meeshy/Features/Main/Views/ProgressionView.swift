@@ -74,7 +74,12 @@ struct ProgressionView: View {
                 Spacer()
             }
         }
-        .task { await viewModel.load() }
+        .task {
+            await viewModel.load()
+            #if DEBUG
+            if viewModel.progress != nil { VitrineRendu.shared.signaler(.progression) }
+            #endif
+        }
         .fullScreenCover(item: $reveal) { palier in
             // `.consultation` et NON `.celebration` (#5831) : on arrive ici
             // DEPUIS le tableau de bord, où la célébration voudrait « mener »

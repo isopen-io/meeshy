@@ -10,9 +10,12 @@ import Foundation
 ///     -meeshy_selected_environment custom -meeshy_custom_host http://127.0.0.1:9
 /// ```
 nonisolated enum VitrineScene: String, CaseIterable, Sendable {
+    case amour
+    case groupe
     case global
-    case progression
     case lien
+    case progression
+    case imagine
 
     /// La scène « lien » montre ce que voit un invité SANS compte.
     var ouvreUneSession: Bool { self != .lien }
@@ -35,6 +38,9 @@ nonisolated enum VitrineLaunch {
     }
 
     static var fichierFixtures: URL { dossier.appendingPathComponent("fixtures.json") }
+
+    /// Là où le script de capture dépose les photos et les vocaux.
+    static var dossierMedias: URL { dossier.appendingPathComponent("medias", isDirectory: true) }
 
     static var marqueurPret: URL { dossier.appendingPathComponent("pret.txt") }
 }

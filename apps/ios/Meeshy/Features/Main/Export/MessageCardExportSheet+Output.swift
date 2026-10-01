@@ -109,16 +109,18 @@ extension MessageCardExportSheet {
         }
     }
 
-    /// Peint la carte image par image, hors du MainActor, puis l'enregistre ou la partage.
+    /// Peint la carte image par image, hors du MainActor, puis l'enregistre ou la
+    /// partage — sur la durée et le passage choisis, avec la piste que sert la
+    /// langue d'export (#8979).
     private func animate(to destination: Destination) {
-        guard let plan = MessageCardMotionPlan.of(output, media: currentMedia) else { return }
+        guard let plan = motionPlan else { return }
         busy = true
         notice = nil
         motion.value = 0
         let input = input(for: format)
         let pictures = loadedMedia.pictures
-        let audioFile = loadedMedia.audioFile
-        let video = request.subject.media.first { $0.media.kind == .video }
+        let audioFile = loadedMedia.soundFile(of: subject.media)
+        let video = subject.media.first { $0.media.kind == .video }
         let box = motion
         let progress: @Sendable (Double) -> Void = { value in
             Task { @MainActor in box.value = value }

@@ -1,3 +1,4 @@
+import MeeshySDK
 @preconcurrency import UserNotifications
 
 /// **Les actions qu'appelle le DÉTAIL d'un message** (#8858).
@@ -12,7 +13,11 @@
 /// sans quoi le geste s'exécuterait en arrière-plan sans rien montrer.
 enum NotificationDetailCategories {
 
-    static func categories(reply: UNNotificationAction, markRead: UNNotificationAction) -> [UNNotificationCategory] {
+    static func categories(
+        reply: UNNotificationAction,
+        markRead: UNNotificationAction,
+        bundle: Bundle = InterfaceLanguageResolver.bundle()
+    ) -> [UNNotificationCategory] {
         [
             // #8859 — un vocal garde les gestes d'un message : l'écoute vit
             // dans la notification déployée, pas dans un bouton.
@@ -27,7 +32,7 @@ enum NotificationDetailCategories {
                 actions: [
                     UNNotificationAction(
                         identifier: MeeshyNotificationAction.openInMaps.rawValue,
-                        title: String(localized: "notifications.action.openInMaps", defaultValue: "Ouvrir dans Plans"),
+                        title: String(localized: "notifications.action.openInMaps", defaultValue: "Ouvrir dans Plans", bundle: bundle),
                         options: [.foreground]
                     ),
                     reply,
@@ -40,7 +45,7 @@ enum NotificationDetailCategories {
                 actions: [
                     UNNotificationAction(
                         identifier: MeeshyNotificationAction.addContact.rawValue,
-                        title: String(localized: "notifications.action.addContact", defaultValue: "Ajouter aux contacts"),
+                        title: String(localized: "notifications.action.addContact", defaultValue: "Ajouter aux contacts", bundle: bundle),
                         options: [.foreground]
                     ),
                     reply,
@@ -53,7 +58,7 @@ enum NotificationDetailCategories {
                 actions: [
                     UNNotificationAction(
                         identifier: MeeshyNotificationAction.joinInvite.rawValue,
-                        title: String(localized: "notifications.action.join", defaultValue: "Rejoindre"),
+                        title: String(localized: "notifications.action.join", defaultValue: "Rejoindre", bundle: bundle),
                         options: [.foreground]
                     ),
                     reply,

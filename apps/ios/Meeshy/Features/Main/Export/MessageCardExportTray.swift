@@ -22,14 +22,23 @@ struct MessageCardExportTray: View {
     let hasTitle: Bool
     /// Le pseudo des auteurs est connu : « pseudo au lieu du nom » s'offre.
     let hasHandles: Bool
-    /// Les médias du contenu — « Médias » ne propose que ce qui a un effet.
-    let mediaKinds: [MessageCardMediaKind]
+    /// Les médias du contenu, tels qu'on les peint — « Médias » ne propose que ce qui a un effet.
+    let media: [MessageCardMedia]
+    /// Ce que « Sauvegarder » produira — la durée et le passage n'existent qu'en vidéo (#8979).
+    let output: MessageCardOutput
+    let plan: MessageCardMotionPlan?
     let languages: [String]
     @Binding var exportLanguage: String?
     let thumbs: MessageCardThumbSource
     let onTab: (MessageCardExportTab) -> Void
     let onGallery: () -> Void
+    /// Le passage glissé sur l'onde : son nouveau point de départ, en secondes.
+    let onExcerptStart: (Double) -> Void
 
+    /// Le plateau prend sa hauteur IDÉALE : ses rangées défilent à l'horizontale,
+    /// donc se laisseraient écraser à la verticale, et un panneau haut (un vocal
+    /// en vidéo : durée et passage) débordait sur les boutons. C'est l'aperçu,
+    /// lui, qui cède la place (#8979).
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             tabBar
@@ -38,6 +47,7 @@ struct MessageCardExportTray: View {
                 .animation(.spring(response: 0.35, dampingFraction: 0.85), value: tab)
         }
         .padding(.vertical, MeeshySpacing.md)
+        .fixedSize(horizontal: false, vertical: true)
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 

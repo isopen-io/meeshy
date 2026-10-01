@@ -18,9 +18,10 @@ struct MessageCardMotionSource: Sendable {
 /// peinte image par image par le MÊME moteur (`MessageCardRenderer.frame`) :
 ///
 /// - une VIDÉO jointe se joue dans son cadre — chaque image de la carte reçoit
-///   l'image de la vidéo au même instant ;
-/// - un SON fait avancer la tête de lecture de sa représentation (les barres
-///   jouées s'allument), et sa piste est posée sous la vidéo.
+///   l'image de la vidéo au même instant de l'EXTRAIT choisi ;
+/// - un SON fait avancer sa représentation au VRAI temps écoulé (les barres
+///   jouées s'allument, le minuteur compte, le spectre danse, la phrase dite
+///   se surligne), et sa piste — coupée à l'extrait — est posée sous la vidéo (#8979).
 ///
 /// Un GIF est écrit par ImageIO, une vidéo par `AVAssetWriter` (H.264), puis
 /// assemblée avec sa piste par `AVAssetExportSession`. Toujours appelé HORS du
@@ -59,7 +60,7 @@ nonisolated enum MessageCardMotionExporter {
         case .video:
             let silent = try await writeVideo(input: input, pictures: pictures, plan: plan, pixels: pixels, generator: generator, videoID: source.videoID, progress: progress)
             guard let track = source.audioFile ?? source.videoFile else { return silent }
-            return try await mux(video: silent, soundFrom: track)
+            return try await mux(video: silent, soundFrom: track, startingAt: plan.start)
         case .image:
             throw Failure.unsupported
         }
@@ -67,7 +68,7 @@ nonisolated enum MessageCardMotionExporter {
 
     // MARK: - Images
 
-    /// L'image `index` de la carte : la tête de lecture avance, la vidéo donne son image du même instant.
+    /// L'image `index` de la carte, à l'instant où elle s'affiche : la vidéo donne son image du même instant de l'extrait.
     private static func frame(
         _ index: Int,
         input: MessageCardInput,
@@ -80,13 +81,13 @@ nonisolated enum MessageCardMotionExporter {
         try Task.checkCancellation()
         var painted = pictures
         if let generator, let videoID {
-            let time = CMTime(seconds: plan.time(ofFrame: index), preferredTimescale: 600)
+            let time = CMTime(seconds: plan.start + plan.time(ofFrame: index), preferredTimescale: 600)
             nonisolated(unsafe) let sequentialGenerator = generator
             if let still = try? await sequentialGenerator.image(at: time).image {
                 painted = pictures.replacing(videoID, with: still)
             }
         }
-        let moment = input.at(playhead: plan.playhead(ofFrame: index))
+        let moment = input.at(time: plan.time(ofFrame: index))
         let rendered = autoreleasepool {
             MessageCardRenderer.frame(moment, pictures: painted, pixelWidth: pixels.width, pixelHeight: pixels.height)
         }
@@ -209,9 +210,10 @@ nonisolated enum MessageCardMotionExporter {
 
     // MARK: - Piste son
 
-    /// Pose la piste son de `soundFrom` sous la vidéo muette, sur la durée de la vidéo.
-    /// Sans piste son (une vidéo muette), la vidéo muette est la réponse juste.
-    private static func mux(video: URL, soundFrom source: URL) async throws -> URL {
+    /// Pose la piste son de `soundFrom` sous la vidéo muette — à partir de `start`,
+    /// sur la durée de la vidéo. Sans piste son (une vidéo muette), la vidéo
+    /// muette est la réponse juste.
+    private static func mux(video: URL, soundFrom source: URL, startingAt start: Double) async throws -> URL {
         let composition = AVMutableComposition()
         let videoAsset = AVURLAsset(url: video)
         let soundAsset = AVURLAsset(url: source)
@@ -226,7 +228,10 @@ nonisolated enum MessageCardMotionExporter {
             return video
         }
         let soundLength = try await soundAsset.load(.duration)
-        try soundTrack.insertTimeRange(CMTimeRange(start: .zero, duration: CMTimeMinimum(length, soundLength)), of: sound, at: .zero)
+        let from = CMTimeMinimum(CMTime(seconds: max(0, start), preferredTimescale: 600), soundLength)
+        let heard = CMTimeMinimum(length, CMTimeSubtract(soundLength, from))
+        guard heard > .zero else { return video }
+        try soundTrack.insertTimeRange(CMTimeRange(start: from, duration: heard), of: sound, at: .zero)
         guard let session = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality) else {
             throw Failure.mux(nil)
         }

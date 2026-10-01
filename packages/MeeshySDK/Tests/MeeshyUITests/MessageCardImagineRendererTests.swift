@@ -11,7 +11,7 @@ struct MessageCardImagineRendererTests {
 
     private static let orbite = MessageCardTemplateID(palette: .aurore, typeface: .rond, link: .orbite)
 
-    private static func input(media: [MessageCardMedia] = [], disposition: MessageCardDisposition = .standard, playhead: Double? = nil) -> MessageCardInput {
+    private static func input(media: [MessageCardMedia] = [], disposition: MessageCardDisposition = .standard, time: Double? = nil) -> MessageCardInput {
         MessageCardInput(
             quoted: MessageCardPart(author: "Awa", text: "On se retrouve où ce soir ?"),
             reply: MessageCardPart(author: "Jacques", text: "Chez Lina, à 20 h !"),
@@ -19,7 +19,7 @@ struct MessageCardImagineRendererTests {
             handle: "jacques",
             media: media,
             disposition: disposition,
-            playhead: playhead
+            time: time
         )
     }
 
@@ -91,7 +91,7 @@ struct MessageCardImagineRendererTests {
         let size = MessageCardRenderer.size(of: input)
         #expect(size.width == 1080 && size.height == 1350)
         let pixels = plan.pixelSize(width: Double(size.width), height: Double(size.height))
-        let frame = try #require(MessageCardRenderer.frame(input.at(playhead: plan.playhead(ofFrame: 3)), pictures: .none, pixelWidth: pixels.width, pixelHeight: pixels.height))
+        let frame = try #require(MessageCardRenderer.frame(input.clipped(to: plan.clip).at(time: plan.time(ofFrame: 3)), pictures: .none, pixelWidth: pixels.width, pixelHeight: pixels.height))
         #expect(frame.width == pixels.width && frame.height == pixels.height)
     }
 

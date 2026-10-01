@@ -86,7 +86,7 @@ struct NotificationAudioCard: View {
                     .background(pill)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(String(localized: "notification.expanded.playbackRate", defaultValue: "Playback speed")))
+            .accessibilityLabel(Text(String(localized: "notification.expanded.playbackRate", defaultValue: "Playback speed", bundle: InterfaceLanguageResolver.bundle())))
             .accessibilityValue(Text(NotificationPlaybackRate.label(for: player.rate)))
         }
         .padding(.horizontal, geometry.inset)
@@ -147,7 +147,7 @@ struct NotificationProgressTrack: View {
         }
         .frame(height: height)
         .accessibilityElement()
-        .accessibilityLabel(Text(String(localized: "notification.expanded.progress", defaultValue: "Playback progress")))
+        .accessibilityLabel(Text(String(localized: "notification.expanded.progress", defaultValue: "Playback progress", bundle: InterfaceLanguageResolver.bundle())))
         .accessibilityValue(Text(verbatim: "\(elapsed) / \(total)"))
         .accessibilityAdjustableAction { direction in
             let step = direction == .increment ? 0.1 : -0.1
@@ -169,7 +169,7 @@ struct NotificationLocationCard: View {
 
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(place.name ?? String(localized: "notification.expanded.sharedLocation", defaultValue: "Shared location"))
+                    Text(place.name ?? String(localized: "notification.expanded.sharedLocation", defaultValue: "Shared location", bundle: InterfaceLanguageResolver.bundle()))
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                     if let address = place.address {
@@ -182,7 +182,7 @@ struct NotificationLocationCard: View {
                 .accessibilityElement(children: .combine)
                 Spacer(minLength: 8)
                 Button(action: openInMaps) {
-                    Label(String(localized: "notification.expanded.openInMaps", defaultValue: "Open in Maps"), systemImage: "map.fill")
+                    Label(String(localized: "notification.expanded.openInMaps", defaultValue: "Open in Maps", bundle: InterfaceLanguageResolver.bundle()), systemImage: "map.fill")
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 12)
                         .frame(minHeight: 44)
@@ -242,7 +242,7 @@ struct NotificationContactCardView: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(String(localized: "notification.expanded.contactCard", defaultValue: "Contact card"))
+                Text(String(localized: "notification.expanded.contactCard", defaultValue: "Contact card", bundle: InterfaceLanguageResolver.bundle()))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)

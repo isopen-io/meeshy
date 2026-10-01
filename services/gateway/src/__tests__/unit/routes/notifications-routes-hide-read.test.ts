@@ -49,11 +49,6 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  notificationSchema: { type: 'object' },
-  errorResponseSchema: { type: 'object' },
-}));
-
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { notificationRoutes } from '../../../routes/notifications';
