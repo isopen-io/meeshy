@@ -253,7 +253,7 @@ export function registerConversationListRoute(
       if (curseur.genre === 'refus') {
         return sendBadRequest(reply, 'Unknown pagination cursor', { code: 'INVALID_CURSOR' });
       }
-      // La borne du curseur porte sur le RANG du lecteur (#7592) : elle est posée
+      // La borne du curseur porte sur le RANG de la ligne (#9026) : elle est posée
       // par `loadRankedConversationPage`, pas sur `whereClause`.
 
       // Filtre delta-sync. DEUX consommateurs, qui doivent rester d'accord sur
@@ -306,15 +306,14 @@ export function registerConversationListRoute(
       // de la couleur d'accent). Le `select` est extrait dans `core-selects.ts`
       // pour porter un type Prisma nommé (#3679).
       //
-      // L'ORDRE est le RANG du lecteur (#7592) — une réaction à SON message
-      // remonte sa ligne ; une page delta garde `updatedAt asc`. Les raisons des
+      // L'ORDRE est le RANG de la ligne (#9026) — toute activité (réaction,
+      // appel, épingle) la remonte pour tous ; une page delta garde `updatedAt asc`. Les raisons des
       // deux ordres et la fusion des deux flux vivent dans `utils/list-rank.ts`.
       const conversations: ConversationListRow[] = await loadRankedConversationPage({
         prisma,
         readRows: ({ where, orderBy, skip, take }) =>
           prisma.conversation.findMany({ where, orderBy, skip, take, select: conversationListQuerySelect(userId) }),
         where: whereClause,
-        viewerKey: userId,
         curseur,
         deltaOrder: isDeltaPage,
         limit,
@@ -876,9 +875,9 @@ export function registerConversationListRoute(
             };
           })(),
           unreadCount,
-          // #7592 — le rang de CE lecteur, la clé du tri ci-dessus : les
+          // #9026 — le rang de la ligne, la clé du tri ci-dessus : les
           // clients trient dessus au lieu de le recalculer.
-          listRankAt: listRankFromColumns(conversation, userId)?.toISOString() ?? null,
+          listRankAt: listRankFromColumns(conversation)?.toISOString() ?? null,
           lastReaction: activityByConversation.get(conversation.id)?.lastReaction ?? null,
           activeCall: activityByConversation.get(conversation.id)?.activeCall ?? null,
           // Le pont ✦ (G-123). ABSENT — jamais `null`, jamais un objet vide —
