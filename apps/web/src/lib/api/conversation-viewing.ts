@@ -19,6 +19,11 @@ import type { SocketClient } from '@/lib/net/socket';
  * l'en-tête lisent — la passerelle diffuse dans la room, et chaque socket est
  * dans toutes ses rooms.
  *
+ * COUVERT (#9052) : une visionneuse plein écran posée par-dessus le fil ne le
+ * démonte pas, mais l'utilisateur n'y est plus. Tant qu'une couverture est
+ * tenue (`coverConversationViewing`), les conversations tenues sont retirées ;
+ * la dernière couverture levée les ré-annonce.
+ *
  * Une coupure VIDE le magasin : ce que la passerelle a retiré pendant qu'on
  * n'écoutait pas ne doit pas survivre en point violet.
  */
@@ -89,7 +94,10 @@ type ViewingTransport = {
 };
 
 let holders: ReadonlyMap<string, number> = new Map();
+let coverings = 0;
 let transport: ViewingTransport | null = null;
+
+const isCovered = (): boolean => coverings > 0;
 
 const withCount = (conversationId: string, count: number): ReadonlyMap<string, number> => {
   const next = new Map(holders);
@@ -103,7 +111,7 @@ const withCount = (conversationId: string, count: number): ReadonlyMap<string, n
 export function acquireConversationViewing(conversationId: string): () => void {
   const count = holders.get(conversationId) ?? 0;
   holders = withCount(conversationId, count + 1);
-  if (count === 0) transport?.announce(conversationId);
+  if (count === 0 && !isCovered()) transport?.announce(conversationId);
 
   let released = false;
   return () => {
@@ -111,7 +119,22 @@ export function acquireConversationViewing(conversationId: string): () => void {
     released = true;
     const current = holders.get(conversationId) ?? 0;
     holders = withCount(conversationId, current - 1);
-    if (current === 1) transport?.withdraw(conversationId);
+    if (current === 1 && !isCovered()) transport?.withdraw(conversationId);
+  };
+}
+
+/** Une vue plein écran couvre le fil tant qu'elle est montée ; rend la
+ * levée, idempotente. */
+export function coverConversationViewing(): () => void {
+  coverings += 1;
+  if (coverings === 1) for (const conversationId of holders.keys()) transport?.withdraw(conversationId);
+
+  let lifted = false;
+  return () => {
+    if (lifted) return;
+    lifted = true;
+    coverings -= 1;
+    if (coverings === 0) for (const conversationId of holders.keys()) transport?.announce(conversationId);
   };
 }
 
@@ -139,7 +162,7 @@ export function bindConversationViewing(params: {
   const { socket, visibility, store, viewerId } = params;
   let authenticated = socket.connected;
 
-  const canAnnounce = (): boolean => authenticated && visibility.visibilityState() === 'visible';
+  const canAnnounce = (): boolean => authenticated && !isCovered() && visibility.visibilityState() === 'visible';
   const emit = (event: typeof CLIENT_EVENTS.VIEWING_START | typeof CLIENT_EVENTS.VIEWING_STOP, conversationId: string): void => {
     const body: ViewingActionData = { conversationId };
     socket.emit(event, body);

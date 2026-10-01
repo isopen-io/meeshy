@@ -9,12 +9,21 @@ import MeeshySDK
 /// l'app est au premier plan ; `viewing:stop` quand il se ferme ou que l'app
 /// passe en arrière-plan. Le serveur oublie tout à la déconnexion : chaque
 /// (re)connexion ré-émet `viewing:start` pour la conversation affichée.
+///
+/// L'écran VISIBLE (#9052) : une galerie, une visionneuse, une story ou un
+/// écran poussé par-dessus la conversation ne démontent pas son modèle, mais
+/// l'utilisateur n'y est plus. L'écran rapporte `onAppear` / `onDisappear` ;
+/// tant qu'aucune instance de la conversation n'est visible, rien n'est
+/// annoncé. Une conversation dont l'écran n'a encore rien rapporté compte
+/// comme visible.
 @MainActor
 protocol ConversationViewingReporting: AnyObject {
     func conversationOpened(_ conversationId: String)
     @discardableResult
     func conversationClosed(_ conversationId: String) -> Bool
     func setForeground(_ isForeground: Bool)
+    func screenAppeared(_ conversationId: String)
+    func screenDisappeared(_ conversationId: String)
 }
 
 @MainActor
@@ -31,6 +40,7 @@ final class ConversationViewingReporter: ConversationViewingReporting {
     private(set) var viewingConversationId: String?
     private(set) var isForeground: Bool
     private var openings: [String: Int] = [:]
+    private var visibleScreens: [String: Int] = [:]
 
     /// `connection` : l'état de connexion du socket ; chaque passage à `true`
     /// ré-annonce la conversation affichée. `reconnections` : chaque nouvelle
@@ -64,12 +74,10 @@ final class ConversationViewingReporter: ConversationViewingReporting {
     /// un second `start` ne rediffuse rien.
     func conversationOpened(_ conversationId: String) {
         guard !conversationId.isEmpty else { return }
+        let before = announced
         openings[conversationId, default: 0] += 1
-        if let previous = viewingConversationId, previous != conversationId, isForeground {
-            emitter.emitViewingStop(conversationId: previous)
-        }
         viewingConversationId = conversationId
-        announceCurrent()
+        transition(from: before, reannounce: true)
     }
 
     /// Nommée et comptée : la fermeture d'un écran arrive par un `deinit`
@@ -86,26 +94,58 @@ final class ConversationViewingReporter: ConversationViewingReporting {
         let remaining = (openings[conversationId] ?? 0) - 1
         openings[conversationId] = remaining > 0 ? remaining : nil
         guard remaining <= 0 else { return false }
-        guard viewingConversationId == conversationId else { return true }
-        viewingConversationId = nil
-        guard isForeground else { return true }
-        emitter.emitViewingStop(conversationId: conversationId)
+        let before = announced
+        visibleScreens[conversationId] = nil
+        if viewingConversationId == conversationId { viewingConversationId = nil }
+        transition(from: before)
         return true
     }
 
     func setForeground(_ isForeground: Bool) {
         guard self.isForeground != isForeground else { return }
+        let before = announced
         self.isForeground = isForeground
-        guard let current = viewingConversationId else { return }
-        if isForeground {
-            emitter.emitViewingStart(conversationId: current)
-        } else {
-            emitter.emitViewingStop(conversationId: current)
+        transition(from: before)
+    }
+
+    /// L'écran revient au premier plan de la navigation : retour d'une
+    /// couverture plein écran, d'un écran poussé, ou d'une autre conversation
+    /// empilée dessus — c'est elle qu'on regarde désormais. Une première
+    /// apparition, avant l'ouverture du handler, ne fait que compter :
+    /// `conversationOpened` annoncera.
+    func screenAppeared(_ conversationId: String) {
+        guard !conversationId.isEmpty else { return }
+        let before = announced
+        visibleScreens[conversationId] = (visibleScreens[conversationId] ?? 0) + 1
+        if openings[conversationId] != nil { viewingConversationId = conversationId }
+        transition(from: before)
+    }
+
+    /// Comptée par instance : une conversation poussée par-dessus elle-même
+    /// reste visible quand l'ancienne instance disparaît.
+    func screenDisappeared(_ conversationId: String) {
+        let before = announced
+        visibleScreens[conversationId] = max((visibleScreens[conversationId] ?? 1) - 1, 0)
+        transition(from: before)
+    }
+
+    private var announced: String? {
+        guard isForeground, let current = viewingConversationId, (visibleScreens[current] ?? 1) > 0 else { return nil }
+        return current
+    }
+
+    private func transition(from before: String?, reannounce: Bool = false) {
+        let after = announced
+        if let before, before != after {
+            emitter.emitViewingStop(conversationId: before)
+        }
+        if let after, after != before || reannounce {
+            emitter.emitViewingStart(conversationId: after)
         }
     }
 
     private func announceCurrent() {
-        guard isForeground, let current = viewingConversationId else { return }
+        guard let current = announced else { return }
         emitter.emitViewingStart(conversationId: current)
     }
 }

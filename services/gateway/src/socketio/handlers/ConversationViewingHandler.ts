@@ -68,6 +68,14 @@ export class ConversationViewingHandler {
    * `afterAuthentication` la rejoue.
    */
   private readonly pendingBySocket = new Map<string, ReadonlySet<string>>();
+  /**
+   * Les gestes d'UN socket s'appliquent dans l'ordre où il les a envoyés
+   * (#9052). `viewing:start` attend plusieurs lectures ; un `viewing:stop`
+   * (image ouverte) ou une déconnexion arrivés pendant ce temps le
+   * précédaient, puis le `start` réinscrivait un lecteur parti — voire un
+   * socket mort, à jamais « ici ».
+   */
+  private readonly queueBySocket = new Map<string, Promise<void>>();
   private readonly rateLimiter = getSocketRateLimiter();
 
   constructor(deps: ConversationViewingHandlerDependencies) {
@@ -79,7 +87,52 @@ export class ConversationViewingHandler {
     this.userSockets = deps.userSockets;
   }
 
-  async handleStart(socket: Socket, data: unknown): Promise<void> {
+  handleStart(socket: Socket, data: unknown): Promise<void> {
+    return this.inOrder(socket.id, () => this.start(socket, data));
+  }
+
+  handleStop(socket: Socket, data: unknown): Promise<void> {
+    return this.inOrder(socket.id, () => this.stop(socket, data));
+  }
+
+  handleAppState(socket: Socket, data: { foreground?: boolean } | undefined): Promise<void> {
+    return this.inOrder(socket.id, () => this.appState(socket, data));
+  }
+
+  /**
+   * Le socket vient d'être inscrit : on annonce les ouvertures qu'il avait
+   * envoyées trop tôt, puis on lui redit qui est déjà là.
+   */
+  afterAuthentication(socket: Socket): Promise<void> {
+    return this.inOrder(socket.id, async () => {
+      const pending = this.pendingBySocket.get(socket.id) ?? new Set<string>();
+      this.pendingBySocket.delete(socket.id);
+      for (const conversationId of pending) {
+        await this.start(socket, { conversationId });
+      }
+      await this.emitRoomSnapshots(socket);
+    });
+  }
+
+  handleSocketDisconnecting(socketId: string): Promise<void> {
+    return this.inOrder(socketId, async () => {
+      this.pendingBySocket.delete(socketId);
+      await this.retractAll(socketId);
+    });
+  }
+
+  private inOrder(socketId: string, task: () => Promise<void>): Promise<void> {
+    const previous = this.queueBySocket.get(socketId) ?? Promise.resolve();
+    const run = previous.then(task);
+    const settled = run.catch(() => undefined);
+    this.queueBySocket.set(socketId, settled);
+    void settled.then(() => {
+      if (this.queueBySocket.get(socketId) === settled) this.queueBySocket.delete(socketId);
+    });
+    return run;
+  }
+
+  private async start(socket: Socket, data: unknown): Promise<void> {
     const validation = validateSocketEvent(SocketViewingSchema, data);
     if (!validation.success) return;
 
@@ -117,7 +170,7 @@ export class ConversationViewingHandler {
     this.broadcast(SERVER_EVENTS.VIEWING_START, { userId, conversationId }, blockRelated);
   }
 
-  async handleStop(socket: Socket, data: unknown): Promise<void> {
+  private async stop(socket: Socket, data: unknown): Promise<void> {
     const validation = validateSocketEvent(SocketViewingSchema, data);
     if (!validation.success) return;
     this.release(socket.id, validation.data.conversationId);
@@ -125,23 +178,10 @@ export class ConversationViewingHandler {
     await this.retract(socket.id, [conversationId]);
   }
 
-  async handleAppState(socket: Socket, data: { foreground?: boolean } | undefined): Promise<void> {
+  private async appState(socket: Socket, data: { foreground?: boolean } | undefined): Promise<void> {
     if (data?.foreground !== false) return;
     this.pendingBySocket.delete(socket.id);
     await this.retractAll(socket.id);
-  }
-
-  /**
-   * Le socket vient d'être inscrit : on annonce les ouvertures qu'il avait
-   * envoyées trop tôt, puis on lui redit qui est déjà là.
-   */
-  async afterAuthentication(socket: Socket): Promise<void> {
-    const pending = this.pendingBySocket.get(socket.id) ?? new Set<string>();
-    this.pendingBySocket.delete(socket.id);
-    for (const conversationId of pending) {
-      await this.handleStart(socket, { conversationId });
-    }
-    await this.emitRoomSnapshots(socket);
   }
 
   /**
@@ -164,11 +204,6 @@ export class ConversationViewingHandler {
       const userIds = this.viewersOf(conversationId).filter(id => id !== userId && !blockRelated.has(id));
       if (userIds.length > 0) socket.emit(SERVER_EVENTS.VIEWING_SNAPSHOT, { conversationId, userIds });
     }
-  }
-
-  async handleSocketDisconnecting(socketId: string): Promise<void> {
-    this.pendingBySocket.delete(socketId);
-    await this.retractAll(socketId);
   }
 
   /**

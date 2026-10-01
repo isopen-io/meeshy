@@ -403,3 +403,51 @@ describe('ConversationViewingHandler — ouvrir AVANT la fin de l’authentifica
     );
   });
 });
+
+describe('ConversationViewingHandler — l’ordre des gestes est celui du client (#9052)', () => {
+  const snapshotOf = (direct: ReadonlyArray<{ event: string; data: unknown }>) =>
+    direct.filter(d => d.event === SERVER_EVENTS.VIEWING_SNAPSHOT).map(d => d.data);
+
+  it('un viewing:stop reçu pendant que le viewing:start se résout laisse le lecteur parti', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    const bob = connect(BOB, 's-bob');
+
+    const opening = handler.handleStart(alice.socket, { conversationId: CONV });
+    const leaving = handler.handleStop(alice.socket, { conversationId: CONV });
+    await Promise.all([opening, leaving]);
+    await handler.handleStart(bob.socket, { conversationId: CONV });
+
+    expect(snapshotOf(bob.direct)).toEqual([{ conversationId: CONV, userIds: [] }]);
+    expect(startsFor(emissions).filter(e => (e.data as { userId: string }).userId === ALICE)).toHaveLength(
+      stopsFor(emissions).filter(e => (e.data as { userId: string }).userId === ALICE).length,
+    );
+  });
+
+  it('une déconnexion pendant que le viewing:start se résout ne laisse aucun fantôme', async () => {
+    const { handler, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    const bob = connect(BOB, 's-bob');
+
+    const opening = handler.handleStart(alice.socket, { conversationId: CONV });
+    const gone = handler.handleSocketDisconnecting('s-alice');
+    await Promise.all([opening, gone]);
+    await handler.handleStart(bob.socket, { conversationId: CONV });
+
+    expect(snapshotOf(bob.direct)).toEqual([{ conversationId: CONV, userIds: [] }]);
+  });
+
+  it('fermer puis rouvrir aussitôt l’image rend la présence', async () => {
+    const { handler, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    const bob = connect(BOB, 's-bob');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    const covered = handler.handleStop(alice.socket, { conversationId: CONV });
+    const back = handler.handleStart(alice.socket, { conversationId: CONV });
+    await Promise.all([covered, back]);
+    await handler.handleStart(bob.socket, { conversationId: CONV });
+
+    expect(snapshotOf(bob.direct)).toEqual([{ conversationId: CONV, userIds: [ALICE] }]);
+  });
+});

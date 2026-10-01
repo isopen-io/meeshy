@@ -33,6 +33,7 @@ struct GuestConversationContainer: View {
                 anonymousSession: context,
                 showsOwnConnectionBanner: true
             )
+            .reportsConversationViewing(context.conversationId)
         } else {
             // Une entrée DÉLIBÉRÉE a déjà vu la page d'invitation (#7795) et y a
             // choisi l'anonymat : le formulaire s'ouvre directement.
