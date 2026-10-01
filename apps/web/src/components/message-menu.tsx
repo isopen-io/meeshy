@@ -29,7 +29,7 @@ import {
   RAIL_HEIGHT,
   RAIL_TILE,
   RAIL_TILE_GAP,
-  RAIL_WIDTH,
+  railBandWidth,
   SIDE_PADDING,
 } from '@/lib/view/message-menu-metrics';
 
@@ -154,7 +154,7 @@ export function MessageMenu({
       menuGap: MENU_GAP,
       sidePadding: SIDE_PADDING,
       menuWidth: MENU_WIDTH,
-      railWidth: RAIL_WIDTH,
+      railWidth: railBandWidth(window.innerWidth - 2 * SIDE_PADDING),
       previewScaleFloor: PREVIEW_SCALE_FLOOR,
     });
   };
@@ -358,7 +358,7 @@ export function MessageMenu({
   if (typeof document === 'undefined') return null;
 
   const railTiles = [...QUICK_REACTIONS, '+'] as const;
-  const railWidthUsed = Math.min(RAIL_WIDTH, window.innerWidth - 2 * SIDE_PADDING);
+  const railWidthUsed = railBandWidth(window.innerWidth - 2 * SIDE_PADDING);
   // UNE mesure par rendu — deux `getBoundingClientRect()` en ligne dans le
   // JSX forçaient deux recalculs de layout pour la même ancre.
   const anchorRect = target.element.getBoundingClientRect();

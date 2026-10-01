@@ -33,7 +33,7 @@ struct MessageActionsMenu: View {
                 row(action)
             }
         }
-        .padding(.vertical, MeeshySpacing.xsPlus * Self.lengthFactor)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .frame(width: Self.menuWidth)
         .accessibilityElement(children: .contain)
     }
@@ -72,26 +72,21 @@ struct MessageActionsMenu: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// La hauteur d'une rangée AVANT l'allongement — celle du menu système.
-    static let referenceRowHeight: CGFloat = 44
-    /// **La zone du menu s'allonge de ×1,4** (directive porteur 2026-10-01,
-    /// #9043). Un seul facteur, appliqué à la hauteur de référence des
-    /// rangées ET à leur rembourrage : la zone ENTIÈRE grandit, pas seulement
-    /// ses lignes. Miroir web : `MENU_LENGTH_FACTOR`.
-    static let lengthFactor: CGFloat = 1.4
-    static let rowHeight: CGFloat = referenceRowHeight * lengthFactor
+    /// La hauteur d'une rangée — celle du menu système. Elle est PRÉSERVÉE
+    /// (directive porteur 2026-10-01, #9043) : seule la bande d'emojis
+    /// s'allonge (`MessageOverlayMenu.emojiBandLengthFactor`).
+    static let rowHeight: CGFloat = 44
     static let menuWidth: CGFloat = 240
 
     /// Taille déterministe pour un nombre d'actions donné — utilisée par le
     /// conteneur de l'overlay pour positionner le menu sans PreferenceKey.
     /// La hauteur de référence est scalée par `UIFontMetrics` pour rester
-    /// cohérente avec le rendu Dynamic Type (`@ScaledMetric` côté vue), puis la
-    /// zone entière est allongée de `lengthFactor`.
+    /// cohérente avec le rendu Dynamic Type (`@ScaledMetric` côté vue).
     static func estimatedSize(actionCount: Int) -> CGSize {
         let count = max(1, actionCount)
-        let scaledRow = UIFontMetrics.default.scaledValue(for: referenceRowHeight)
+        let scaledRow = UIFontMetrics.default.scaledValue(for: rowHeight)
         // +20 : rembourrage vertical de référence (6+6) + marge d'arrondi.
-        return CGSize(width: menuWidth, height: (CGFloat(count) * scaledRow + 20) * lengthFactor)
+        return CGSize(width: menuWidth, height: CGFloat(count) * scaledRow + 20)
     }
 
     private func symbol(_ a: PrimaryAction) -> String {

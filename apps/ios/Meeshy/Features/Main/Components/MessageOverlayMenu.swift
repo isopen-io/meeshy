@@ -270,7 +270,7 @@ struct MessageOverlayMenu: View {
             let nlSidePadding: CGFloat = 16
             let nlMenuWidth: CGFloat = MessageActionsMenu.menuWidth
             let nlMenuHeight: CGFloat = MessageActionsMenu.estimatedSize(actionCount: primaryActions.count).height
-            let nlEmojiWidth: CGFloat = 300
+            let nlEmojiWidth: CGFloat = Self.emojiBandWidth(available: geometry.size.width - 2 * nlSidePadding)
             let nlAvailTop = safeTop + 12
             let nlAvailBottom = screenH - safeBottom - 12
             let nlAvailable = max(160, nlAvailBottom - nlAvailTop)
@@ -348,7 +348,7 @@ struct MessageOverlayMenu: View {
                         // sans frame source).
                         HStack(spacing: 0) {
                             if message.isMe { Spacer(minLength: 0) }
-                            emojiQuickBar
+                            emojiQuickBar(width: Self.emojiBandWidth(available: geometry.size.width - 2 * MeeshySpacing.mdPlus))
                             if !message.isMe { Spacer(minLength: 0) }
                         }
                         .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -471,7 +471,7 @@ struct MessageOverlayMenu: View {
                     .allowsHitTesting(false)
 
                     // Barre de réactions AU-DESSUS de la bulle (native-lean).
-                    emojiQuickBar
+                    emojiQuickBar(width: nlEmojiWidth)
                         .position(
                             x: nlEmojiX,
                             y: isVisible ? nlEmojiY : bubbleRect.minY
@@ -507,7 +507,19 @@ struct MessageOverlayMenu: View {
 
     // MARK: - Emoji Quick Bar (EmojiReactionPicker — shared component)
 
-    private var emojiQuickBar: some View {
+    /// La largeur de la bande AVANT l'allongement.
+    static let emojiBandReferenceWidth: CGFloat = 280
+    /// **La bande d'emojis s'allonge de ×1,4** (directive porteur 2026-10-01,
+    /// #9043) — la bande, pas les emojis : leur taille ne change pas, la
+    /// bande en montre davantage. Bornée à la largeur disponible. Miroir web :
+    /// `RAIL_LENGTH_FACTOR`.
+    static let emojiBandLengthFactor: CGFloat = 1.4
+
+    static func emojiBandWidth(available: CGFloat) -> CGFloat {
+        min(emojiBandReferenceWidth * emojiBandLengthFactor, max(0, available))
+    }
+
+    private func emojiQuickBar(width: CGFloat) -> some View {
         // Shared `EmojiReactionPicker` (MeeshyUI) — meme call-site que le
         // strip inline du long-press (`ConversationView+MessageRow`) pour
         // garder les deux surfaces visuellement identiques (padding interne,
@@ -542,7 +554,7 @@ struct MessageOverlayMenu: View {
                 dismiss()
             }
         )
-        .frame(maxWidth: 280)
+        .frame(maxWidth: width)
         .onAppear {
             if cachedTopEmojis == nil {
                 cachedTopEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: Self.defaultEmojis)

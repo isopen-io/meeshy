@@ -1,25 +1,33 @@
 import XCTest
 @testable import Meeshy
 
-/// #9043 — le menu d'appui long d'un message : ×1,4 en longueur, et un
-/// glissement vers le haut qui réduit l'aperçu pour dégager le menu coupé.
+/// #9043 — le menu d'appui long d'un message : la BANDE d'emojis s'allonge de
+/// ×1,4 (les emojis et les lignes du menu gardent leur taille), et un
+/// glissement vers le haut réduit l'aperçu pour dégager le menu coupé.
 @MainActor
 final class MessageOverlayRevealLawTests: XCTestCase {
 
-    // MARK: - La longueur du menu (×1,4)
+    // MARK: - La bande d'emojis (×1,4), le menu préservé
 
-    func test_lengthFactor_porteurDirective_isOnePointFour() {
-        XCTAssertEqual(MessageActionsMenu.lengthFactor, 1.4)
+    func test_emojiBandLengthFactor_porteurDirective_isOnePointFour() {
+        XCTAssertEqual(MessageOverlayMenu.emojiBandLengthFactor, 1.4)
     }
 
-    func test_rowHeight_referenceTimesLengthFactor_isSixtyOnePointSix() {
-        XCTAssertEqual(MessageActionsMenu.referenceRowHeight, 44)
-        XCTAssertEqual(MessageActionsMenu.rowHeight, 44 * 1.4, accuracy: 0.0001)
+    func test_emojiBandWidth_roomAvailable_isReferenceTimesOnePointFour() {
+        XCTAssertEqual(MessageOverlayMenu.emojiBandWidth(available: 1000), 280 * 1.4, accuracy: 0.0001)
     }
 
-    func test_estimatedSize_fiveActions_isReferenceHeightTimesOnePointFour() {
+    func test_emojiBandWidth_narrowScreen_isBoundedByAvailableWidth() {
+        XCTAssertEqual(MessageOverlayMenu.emojiBandWidth(available: 361), 361)
+    }
+
+    func test_rowHeight_porteurDirective_isPreservedAtFortyFour() {
+        XCTAssertEqual(MessageActionsMenu.rowHeight, 44)
+    }
+
+    func test_estimatedSize_fiveActions_keepsTheSystemMenuHeight() {
         let size = MessageActionsMenu.estimatedSize(actionCount: 5)
-        XCTAssertEqual(size.height, (5 * 44 + 20) * 1.4, accuracy: 0.0001)
+        XCTAssertEqual(size.height, 5 * 44 + 20, accuracy: 0.0001)
         XCTAssertEqual(size.width, MessageActionsMenu.menuWidth)
     }
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { MENU_CHROME, MENU_LENGTH_FACTOR, MENU_ROW_HEIGHT, MENU_ROW_REFERENCE_HEIGHT, menuListHeight } from './message-menu-metrics';
+import { MENU_CHROME, MENU_ROW_HEIGHT, RAIL_LENGTH_FACTOR, RAIL_WIDTH, menuListHeight, railBandWidth } from './message-menu-metrics';
 import {
   REVEAL_MINIMUM_FACTOR,
   revealFloor,
@@ -10,22 +10,29 @@ import {
 } from './message-menu-reveal';
 
 /**
- * #9043 — miroir de `MessageOverlayRevealLawTests.swift` : la zone du menu
- * s'allonge de ×1,4, et glisser vers le haut réduit l'aperçu pour dégager le
- * menu coupé.
+ * #9043 — miroir de `MessageOverlayRevealLawTests.swift` : la BANDE d'emojis
+ * s'allonge de ×1,4 (tuiles et entrées du menu gardent leur taille), et
+ * glisser vers le haut réduit l'aperçu pour dégager le menu coupé.
  */
-describe('la longueur du menu (×1,4)', () => {
+describe('la bande d’emojis (×1,4), le menu préservé', () => {
   test('le facteur de la directive est 1,4', () => {
-    expect(MENU_LENGTH_FACTOR).toBe(1.4);
+    expect(RAIL_LENGTH_FACTOR).toBe(1.4);
   });
 
-  test('une entrée mesure la hauteur de référence × 1,4', () => {
-    expect(MENU_ROW_REFERENCE_HEIGHT).toBe(44);
-    expect(MENU_ROW_HEIGHT).toBeCloseTo(61.6, 6);
+  test('avec la place, la bande mesure sa largeur de référence × 1,4', () => {
+    expect(railBandWidth(1000)).toBeCloseTo(RAIL_WIDTH * 1.4, 6);
   });
 
-  test('la zone de cinq entrées est la hauteur de référence entière × 1,4', () => {
-    expect(menuListHeight(5)).toBeCloseTo((5 * 44 + MENU_CHROME) * 1.4, 6);
+  test('sur un écran étroit, la bande s’arrête à la largeur disponible', () => {
+    expect(railBandWidth(343)).toBe(343);
+  });
+
+  test('une entrée du menu garde la hauteur du menu système', () => {
+    expect(MENU_ROW_HEIGHT).toBe(44);
+  });
+
+  test('la zone de cinq entrées garde sa hauteur', () => {
+    expect(menuListHeight(5)).toBe(5 * 44 + MENU_CHROME);
   });
 });
 

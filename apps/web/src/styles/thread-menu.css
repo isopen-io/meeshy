@@ -67,6 +67,9 @@
 .message-menu-rail {
   display: flex;
   align-items: center;
+  /* La bande s'allonge de ×1,4 (#9043, `RAIL_LENGTH_FACTOR`) sans grossir ses
+     tuiles : l'espace gagné se répartit entre elles. */
+  justify-content: space-between;
   /* `gap` posé en STYLE INLINE par `message-menu.tsx` (`RAIL_TILE_GAP`,
      `message-menu-metrics.ts`) — jamais un second `10px` écrit ici. */
   padding: 9px 8px;
