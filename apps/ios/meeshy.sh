@@ -412,9 +412,15 @@ cached_build_number() {
     printf '%s' "$value"
 }
 
+# `stat -f %m` est la syntaxe BSD (macOS) ; GNU (le runner Linux qui joue le
+# témoin) lit `-f` comme « système de fichiers » et échoue.
+file_mtime() {
+    if [ "$(uname -s)" = "Darwin" ]; then stat -f %m "$1"; else stat -c %Y "$1"; fi
+}
+
 build_number_cache_is_fresh() {
     [ -f "$BUILD_NUMBER_CACHE" ] || return 1
-    local age=$(( $(date +%s) - $(stat -f %m "$BUILD_NUMBER_CACHE") ))
+    local age=$(( $(date +%s) - $(file_mtime "$BUILD_NUMBER_CACHE") ))
     [ "$age" -lt "$BUILD_NUMBER_CACHE_TTL" ]
 }
 
