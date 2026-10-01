@@ -33,7 +33,10 @@
  *   exposé sur l'instance : l'instance que `/maintenance/status-metrics`
  *   construit pour elle-même ne reçoit aucune mise à jour, et servir ses zéros
  *   serait un faux zéro. `null` dit « inconnu », et l'écran ne dessine pas la
- *   carte.
+ *   carte. `server.ts` décore l'instance vivante (`statusService`, celle que
+ *   reçoivent la présence REST et Socket.IO) : sans cette décoration la carte ne
+ *   pouvait jamais s'afficher, et `admin-monitoring-status-service.test.ts` garde
+ *   les deux moitiés — la route qui la lit, et le serveur qui la pose.
  * - `translator` est `null` sans gestionnaire Socket.IO : la traduction n'a
  *   alors aucune statistique à lire.
  */

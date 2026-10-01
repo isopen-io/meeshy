@@ -389,7 +389,7 @@ export interface ResetPasswordDTO {
  */
 export interface UserFilters {
   search?: string;  // username, email, nom, prenom
-  role?: string;
+  role?: string | readonly string[];  // un rôle, ou plusieurs (OU) — « le rang d'administration » = BIGBOSS + ADMIN
   isActive?: boolean;
   emailVerified?: boolean;
   phoneVerified?: boolean;

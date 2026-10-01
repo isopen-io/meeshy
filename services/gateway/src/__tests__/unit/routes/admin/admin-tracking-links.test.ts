@@ -212,7 +212,7 @@ describe('GET /admin/tracking-links — la liste', () => {
   beforeEach(() => jest.clearAllMocks());
 
   it('sert une ligne nommée, dont la forme est figée', async () => {
-    const app = await buildApp(makePrisma());
+    const app = await buildApp(makePrisma(), 'ADMIN');
     const body = JSON.parse((await list(app)).body);
 
     expect(body.pagination).toEqual({ total: 1, limit: 20, offset: 0, hasMore: false });
@@ -258,7 +258,7 @@ describe('GET /admin/tracking-links — la liste', () => {
       linkRow({ id: 'l1', targetType: 'CONVERSATION', targetId: CONVERSATION }),
       linkRow({ id: 'l2', targetType: 'PROFILE', targetId: AWA }),
     ]);
-    const app = await buildApp(prisma);
+    const app = await buildApp(prisma, 'ADMIN');
     const data = JSON.parse((await list(app)).body).data;
 
     expect(data[0].target).toEqual({ type: 'CONVERSATION', id: CONVERSATION, label: 'Famille' });
@@ -278,7 +278,7 @@ describe('GET /admin/tracking-links — la liste', () => {
 
   it('résout les noms par lot — une requête par genre, jamais une par ligne', async () => {
     const prisma = makePrisma([linkRow(), linkRow({ id: 'l2' }), linkRow({ id: 'l3' })]);
-    const app = await buildApp(prisma);
+    const app = await buildApp(prisma, 'ADMIN');
     await list(app);
 
     expect(prisma.user.findMany).toHaveBeenCalledTimes(1);
@@ -320,7 +320,6 @@ describe('GET /admin/tracking-links — la liste', () => {
           OR: [
             { name: { contains: 'affi', mode: 'insensitive' } },
             { token: { contains: 'affi', mode: 'insensitive' } },
-            { originalUrl: { contains: 'affi', mode: 'insensitive' } },
             { campaign: { contains: 'affi', mode: 'insensitive' } },
           ],
         },

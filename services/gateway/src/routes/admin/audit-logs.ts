@@ -47,6 +47,7 @@ import {
   reponsesEnErreur,
 } from './oversight-schemas';
 import { adminViewer } from './oversight-viewer';
+import { namePreviewSchema } from './conversation-name-preview';
 
 /** Les genres de cible que le journal nomme — la liste FERMÉE du filtre `entity`. */
 const AUDIT_ENTITIES = [
@@ -119,7 +120,7 @@ function buildWhere(query: AuditQuery): Prisma.AdminAuditLogWhereInput {
 
 const targetSchema = {
   type: 'object',
-  properties: { type: chaine, id: chaine, label: chaineNulle, secondary: chaineNulle },
+  properties: { type: chaine, id: chaine, label: chaineNulle, secondary: chaineNulle, ...namePreviewSchema },
 } as const;
 
 const changeSchema = {
@@ -164,7 +165,7 @@ export function registerAuditLogRoutes(fastify: FastifyInstance): void {
             limit: { type: 'string', description: `Pagination limit (défaut ${DEFAULT_LIMIT}, max ${MAX_LIMIT})` },
             action: {
               type: 'string',
-              pattern: '^[A-Z_]{2,64}(,[A-Z_]{2,64}){0,19}$',
+              pattern: '^[A-Z0-9_]{2,64}(,[A-Z0-9_]{2,64}){0,19}$',
               description: "Codes d'action séparés par des virgules",
             },
             entity: { type: 'string', enum: [...AUDIT_ENTITIES], description: 'Genre de la cible' },
@@ -210,7 +211,9 @@ export function registerAuditLogRoutes(fastify: FastifyInstance): void {
           ...rows.map((row) => row.userId),
           ...rows.filter((row) => row.entity === 'User').map((row) => row.entityId),
         ]);
-        const targets = await resolveAuditTargets(fastify.prisma, rows, people);
+        const targets = await resolveAuditTargets(fastify.prisma, rows, people, {
+          canSeeConversationMembers: viewer.hasAdminRank,
+        });
 
         const data = rows.map((row) => {
           const named = targets.get(targetKey(row.entity, row.entityId));
@@ -227,6 +230,7 @@ export function registerAuditLogRoutes(fastify: FastifyInstance): void {
               id: row.entityId,
               label: named?.label ?? null,
               secondary: named?.secondary ?? null,
+              ...(named?.participants === undefined ? {} : { participants: named.participants, total: named.total }),
             },
             reason: readAuditReason(row.metadata),
             changes: readAuditChanges(row.changes, { canSeeContacts: canSeeSensitive }),

@@ -34,6 +34,8 @@ jest.mock('../../../utils/sanitize', () => ({
 import { registerCoreRoutes } from '../../../routes/communities/core';
 import { registerMembershipRoutes } from '../../../routes/communities/membership';
 import { registerSearchRoutes } from '../../../routes/communities/search';
+import { registerMemberRoutes } from '../../../routes/communities/members';
+import { registerSettingsRoutes } from '../../../routes/communities/settings';
 
 const USER = '507f1f77bcf86cd799430011';
 const ALIVE = '507f1f77bcf86cd799430021';
@@ -76,6 +78,7 @@ function makePrisma() {
     community: {
       findFirst: jest.fn<any>(async (args: { where?: Row }) => CORPUS.find((row) => matches(row, args.where)) ?? null),
       findUnique: jest.fn<any>(async () => null),
+      update: jest.fn<any>().mockResolvedValue({}),
       findMany: jest.fn<any>(async (args: { where?: Row }) => CORPUS.filter((row) => matches(row, args.where))),
       count: jest.fn<any>(async (args: { where?: Row }) => CORPUS.filter((row) => matches(row, args.where)).length),
     },
@@ -94,7 +97,12 @@ function makePrisma() {
       create: jest.fn<any>().mockResolvedValue({}),
       update: jest.fn<any>().mockResolvedValue({}),
     },
-    conversation: { findMany: jest.fn<any>().mockResolvedValue([]), count: jest.fn<any>().mockResolvedValue(0) },
+    conversation: {
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      count: jest.fn<any>().mockResolvedValue(0),
+      update: jest.fn<any>().mockResolvedValue({}),
+    },
     user: { findMany: jest.fn<any>().mockResolvedValue([]), findFirst: jest.fn<any>().mockResolvedValue(null) },
   } as any;
 }
@@ -195,6 +203,82 @@ describe('GET /communities/mine — mes communautés', () => {
     const body = JSON.parse((await app.inject({ method: 'GET', url: '/communities/mine' })).body);
 
     expect(body.data.map((row: Row) => row.name)).toEqual(['Active']);
+    await app.close();
+  });
+});
+
+/**
+ * Le geste « désactiver » promet « plus personne ne la rejoint » (`communities-oversight.ts`) et la
+ * spécification (§ 9.8) ne le livre qu'avec l'application de `isActive`. Rejoindre ET lire étaient
+ * couverts ; il restait les six autres portes qui lisaient la communauté sans regarder la colonne :
+ * inviter, ajouter un membre, lister les membres, lister les conversations, y rattacher une
+ * conversation, et modifier les réglages. Le geste de clôture (quitter, retirer, supprimer) reste ouvert.
+ */
+describe('communauté désactivée — les six autres portes répondent 404 et n’écrivent rien', () => {
+  const invitee = '507f1f77bcf86cd799430033';
+  const conversationId = '507f1f77bcf86cd799430044';
+
+  const doors: ReadonlyArray<{
+    readonly name: string;
+    readonly register: (app: FastifyInstance) => Promise<void> | void;
+    readonly request: (id: string) => { method: 'GET' | 'POST' | 'PUT'; url: string; payload?: unknown };
+    readonly writes: ReadonlyArray<readonly [string, string]>;
+  }> = [
+    {
+      name: 'POST /communities/:id/invite',
+      register: registerMembershipRoutes,
+      request: (id) => ({ method: 'POST', url: `/communities/${id}/invite`, payload: { userId: invitee } }),
+      writes: [['communityMember', 'create'], ['communityMember', 'update']],
+    },
+    {
+      name: 'POST /communities/:id/members',
+      register: registerMemberRoutes,
+      request: (id) => ({ method: 'POST', url: `/communities/${id}/members`, payload: { userId: invitee } }),
+      writes: [['communityMember', 'create'], ['communityMember', 'update']],
+    },
+    {
+      name: 'GET /communities/:id/members',
+      register: registerMemberRoutes,
+      request: (id) => ({ method: 'GET', url: `/communities/${id}/members` }),
+      writes: [],
+    },
+    {
+      name: 'GET /communities/:id/conversations',
+      register: registerCoreRoutes,
+      request: (id) => ({ method: 'GET', url: `/communities/${id}/conversations` }),
+      writes: [],
+    },
+    {
+      name: 'POST /communities/:id/conversations/:conversationId',
+      register: registerCoreRoutes,
+      request: (id) => ({ method: 'POST', url: `/communities/${id}/conversations/${conversationId}`, payload: {} }),
+      writes: [['conversation', 'update']],
+    },
+    {
+      name: 'PUT /communities/:id',
+      register: registerSettingsRoutes,
+      request: (id) => ({ method: 'PUT', url: `/communities/${id}`, payload: { name: 'Renommée' } }),
+      writes: [['community', 'update']],
+    },
+  ];
+
+  it.each(doors)('$name — 404 pour une désactivée, aucune écriture', async ({ register, request, writes }) => {
+    const app = await build(register);
+    const prisma = (app as any).prisma;
+    const res = await app.inject(request(DEACTIVATED) as any);
+
+    expect(res.statusCode).toBe(404);
+    for (const [model, method] of writes) expect(prisma[model][method]).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each(doors)('$name — la requête de lecture exige isActive: true', async ({ register, request }) => {
+    const app = await build(register);
+    const prisma = (app as any).prisma;
+    await app.inject(request(ALIVE) as any);
+
+    const where = prisma.community.findFirst.mock.calls[0]?.[0]?.where;
+    expect(where).toMatchObject({ id: ALIVE, isActive: true });
     await app.close();
   });
 });

@@ -9,7 +9,7 @@
  * ici.
  */
 import type { FastifyRequest } from 'fastify';
-import type { UserRoleEnum } from '@meeshy/shared/types';
+import { UserRoleEnum } from '@meeshy/shared/types';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { permissionsService, type AdminPermissions } from '../../services/admin/permissions.service';
 
@@ -17,7 +17,17 @@ export type AdminViewer = {
   readonly id: string;
   readonly role: UserRoleEnum;
   readonly can: (permission: keyof AdminPermissions) => boolean;
+  /**
+   * Le RANG d'administration — BIGBOSS ou ADMIN, le même prédicat que
+   * `requireAdminRank()`. L'inventaire des conversations (titres, membres, volumes)
+   * est réservé à ce rang (directive 2026-09-16) : une fiche servie à un rôle plus
+   * bas ne le rouvre pas par un détour.
+   */
+  readonly hasAdminRank: boolean;
 };
+
+export const hasAdministrationRank = (role: UserRoleEnum): boolean =>
+  role === UserRoleEnum.BIGBOSS || role === UserRoleEnum.ADMIN;
 
 export function adminViewer(request: FastifyRequest): AdminViewer {
   const user = (request as UnifiedAuthRequest).authContext.registeredUser;
@@ -26,5 +36,6 @@ export function adminViewer(request: FastifyRequest): AdminViewer {
     id: user.id,
     role,
     can: (permission) => permissionsService.hasPermission(role, permission),
+    hasAdminRank: hasAdministrationRank(role),
   };
 }

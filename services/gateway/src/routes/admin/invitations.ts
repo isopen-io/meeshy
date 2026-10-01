@@ -4,7 +4,7 @@ import { logError } from '../../utils/logger';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import { validateQuery, validateBody, validateParams } from '../../validation/helpers.js';
 import { InvitationsListQuerySchema, InvitationIdParamSchema, UpdateInvitationBodySchema } from '../../validation/admin-schemas.js';
-import { sendSuccess, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
+import { sendSuccess, sendNotFound, sendBadRequest, sendConflict, sendInternalError } from '../../utils/response.js';
 import { requirePermission, withAudit } from '../../middleware/authorize';
 
 // Middleware pour vérifier les permissions admin
@@ -258,7 +258,11 @@ export async function invitationRoutes(fastify: FastifyInstance) {
 
   /**
    * PATCH /api/admin/invitations/:id
-   * Modifier le statut d'une invitation (admin action)
+   * Rejeter une demande de contact EN ATTENTE (le seul geste d'administration).
+   *
+   * `accepted` est refusé en 400 : ce statut EST l'amitié, et la console ne peut pas en
+   * créer une que ni l'un ni l'autre membre n'a consentie. Une demande déjà tranchée
+   * (acceptée ou rejetée) répond 409 — pas de réouverture, pas de second rejet.
    */
   fastify.patch('/:id', {
     onRequest: [fastify.authenticate, requireAdmin],
@@ -269,7 +273,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
       const { status } = request.body as { status: string };
 
       /* istanbul ignore next -- Zod z.enum enforces valid status; guard unreachable */
-      if (!['pending', 'accepted', 'rejected'].includes(status)) {
+      if (status !== 'rejected') {
         return sendBadRequest(reply, 'Statut invalide');
       }
 
@@ -281,6 +285,11 @@ export async function invitationRoutes(fastify: FastifyInstance) {
       });
       if (!before) {
         return sendNotFound(reply, 'Invitation non trouvée');
+      }
+      if (before.status !== 'pending') {
+        return sendConflict(reply, 'Seule une demande en attente peut être rejetée', {
+          code: 'INVITATION_NOT_PENDING',
+        });
       }
 
       const invitation = await fastify.prisma.friendRequest.update({
@@ -312,10 +321,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         changes: { status: { before: before.status, after: invitation.status } },
       });
 
-      // Note: Le modèle Friend n'existe pas dans le schéma Prisma actuel
-      // La logique d'amitié est gérée uniquement via FriendRequest avec status 'accepted'
-
-      return sendSuccess(reply, invitation, { message: `Invitation ${status === 'accepted' ? 'acceptée' : status === 'rejected' ? 'rejetée' : 'mise à jour'}` });
+      return sendSuccess(reply, invitation, { message: 'Invitation rejetée' });
     } catch (error) {
       logError(fastify.log, 'Update invitation error:', error);
       return sendInternalError(reply, 'Erreur lors de la mise à jour de l\'invitation');

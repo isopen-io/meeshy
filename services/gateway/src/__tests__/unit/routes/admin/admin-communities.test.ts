@@ -134,7 +134,7 @@ describe('communautés — qui a le droit', () => {
     expect((await detail(app)).statusCode).toBe(200);
     expect((await members(app)).statusCode).toBe(200);
     expect((await app.inject({ method: 'GET', url: '/communities' })).statusCode).toBe(200);
-    expect((await patch(app, { isPrivate: true, reason: 'Décision de modération' })).statusCode).toBe(200);
+    expect((await patch(app, { isActive: false, reason: 'Décision de modération' })).statusCode).toBe(200);
     await app.close();
   });
 
@@ -240,6 +240,92 @@ describe('GET /admin/communities/:communityId — la fiche', () => {
     const app = await buildApp(makePrisma(null));
     expect((await detail(app)).statusCode).toBe(404);
     expect((await detail(app, 'pas-un-objectid')).statusCode).toBe(400);
+    await app.close();
+  });
+});
+
+describe('le rang d’administration — ce que MODERATOR ne reçoit pas', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const REASON = 'Contenu contraire aux règles';
+
+  it('MODERATOR reçoit conversations: [] et le chiffre, sans que l’inventaire soit lu', async () => {
+    const prisma = withStaff(makePrisma());
+    const app = await buildApp(prisma, 'MODERATOR');
+    const { data } = JSON.parse((await detail(app)).body);
+
+    expect(data.conversations).toEqual([]);
+    expect(data.conversationCount).toBe(3);
+    expect(prisma.conversation.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each(['ADMIN', 'BIGBOSS'])('%s reçoit les titres des conversations', async (role) => {
+    const app = await buildApp(withStaff(makePrisma()), role);
+    const { data } = JSON.parse((await detail(app)).body);
+
+    expect(data.conversations.map((c: Row) => c.title)).toEqual(['Promo 2004']);
+    expect(data.conversationCount).toBe(3);
+    await app.close();
+  });
+
+  it('la réponse du PATCH ne rouvre pas l’inventaire non plus', async () => {
+    const prisma = withStaff(makePrisma());
+    const app = await buildApp(prisma, 'MODERATOR');
+    const res = await patch(app, { isActive: false, reason: REASON });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body).data.conversations).toEqual([]);
+    expect(prisma.conversation.findMany).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('MODERATOR ne rend pas une communauté privée ou publique : 403, rien n’est écrit ni tracé', async () => {
+    const prisma = withStaff(makePrisma());
+    const app = await buildApp(prisma, 'MODERATOR');
+    const res = await patch(app, { isPrivate: true, reason: REASON });
+
+    expect(res.statusCode).toBe(403);
+    expect(prisma.community.update).not.toHaveBeenCalled();
+    expect(prisma.adminAuditLog.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('un PATCH de MODERATOR qui mêle activation et confidentialité est refusé en entier', async () => {
+    const prisma = withStaff(makePrisma());
+    const app = await buildApp(prisma, 'MODERATOR');
+    const res = await patch(app, { isActive: false, isPrivate: true, reason: REASON });
+
+    expect(res.statusCode).toBe(403);
+    expect(prisma.community.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('MODERATOR peut désactiver : c’est un geste de modération', async () => {
+    const prisma = withStaff(makePrisma());
+    const app = await buildApp(prisma, 'MODERATOR');
+
+    expect((await patch(app, { isActive: false, reason: REASON })).statusCode).toBe(200);
+    expect(prisma.community.update.mock.calls[0][0].data).toEqual({ isActive: false, deletedAt: expect.any(Date) });
+    await app.close();
+  });
+
+  it('MODERATOR qui redemande l’état déjà posé de la confidentialité n’est pas refusé', async () => {
+    const prisma = withStaff(makePrisma());
+    const app = await buildApp(prisma, 'MODERATOR');
+
+    expect((await patch(app, { isPrivate: false, reason: REASON })).statusCode).toBe(200);
+    expect(prisma.community.update).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it.each(['ADMIN', 'BIGBOSS'])('%s change la confidentialité : 200, écrit et trace', async (role) => {
+    const prisma = withStaff(makePrisma());
+    const app = await buildApp(prisma, role);
+
+    expect((await patch(app, { isPrivate: true, reason: REASON })).statusCode).toBe(200);
+    expect(prisma.community.update.mock.calls[0][0].data).toEqual({ isPrivate: true });
+    expect(prisma.adminAuditLog.create).toHaveBeenCalledTimes(1);
     await app.close();
   });
 });

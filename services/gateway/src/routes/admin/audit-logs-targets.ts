@@ -17,6 +17,7 @@
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { distinctObjectIds, personLabel, type AdminPersonRef } from './oversight-people';
+import { loadConversationNamePreviews, servedNamePreview, type ConversationNamePreview } from './conversation-name-preview';
 
 export type AuditTarget = {
   readonly type: string;
@@ -26,7 +27,13 @@ export type AuditTarget = {
 };
 
 type TargetRef = { readonly entity: string; readonly entityId: string };
-type Named = { readonly label: string | null; readonly secondary: string | null };
+type Named = {
+  readonly label: string | null;
+  readonly secondary: string | null;
+  /** Trois membres actifs au plus et l'effectif — de quoi nommer une conversation SANS titre, au rang d'administration seulement. */
+  readonly participants?: ConversationNamePreview['participants'];
+  readonly total?: number;
+};
 
 const NAMELESS: Named = { label: null, secondary: null };
 
@@ -58,7 +65,8 @@ function nameOf(people: ReadonlyMap<string, AdminPersonRef>, id: string): Named 
 export async function resolveAuditTargets(
   prisma: PrismaClient,
   refs: readonly TargetRef[],
-  people: ReadonlyMap<string, AdminPersonRef>
+  people: ReadonlyMap<string, AdminPersonRef>,
+  options: { readonly canSeeConversationMembers: boolean }
 ): Promise<ReadonlyMap<string, Named>> {
   const conversationIds = idsOf(refs, 'Conversation');
   const communityIds = idsOf(refs, 'Community');
@@ -132,13 +140,19 @@ export async function resolveAuditTargets(
     ),
   ]);
 
+  const previews = await loadConversationNamePreviews(prisma, [...conversations.values()], {
+    allowed: options.canSeeConversationMembers,
+  });
+
   const nameFor = ({ entity, entityId }: TargetRef): Named => {
     switch (entity) {
       case 'User':
         return nameOf(people, entityId);
       case 'Conversation': {
         const row = conversations.get(entityId);
-        return row ? { label: clean(row.title), secondary: clean(row.type) } : NAMELESS;
+        return row
+          ? { label: clean(row.title), secondary: clean(row.type), ...servedNamePreview(previews.get(row.id)) }
+          : NAMELESS;
       }
       case 'Community': {
         const row = communities.get(entityId);

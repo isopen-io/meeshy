@@ -8,6 +8,13 @@ import { sendSuccess, sendBadRequest, sendInternalError } from '../../utils/resp
 import { permissionsService } from '../../services/admin/permissions.service';
 import type { UserRoleEnum } from '@meeshy/shared/types';
 import { requirePermission } from '../../middleware/authorize';
+import { trackingUrlHost } from './tracking-link-url';
+import { adminViewer } from './oversight-viewer';
+import {
+  loadConversationNamePreviews,
+  servedNamePreview,
+  type ConversationNamePreview,
+} from './conversation-name-preview';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
 
 // `requireAdmin` était une garde LOCALE : elle rejouait une liste de rôles en dur
@@ -91,16 +98,26 @@ function buildUserRankings(
   });
 }
 
-async function fetchConvoDetails(fastify: FastifyInstance, convoIds: string[]): Promise<Map<string, ConvoInfo>> {
+// #8876 (R1) — une conversation SANS titre se nomme par ses membres. `canSeeMembers` (le rang
+// d'administration) gouverne l'aperçu : qui parle à qui est l'inventaire des conversations. Sans
+// ce rang la carte est vide et les lignes ne portent ni `participants` ni `total`.
+type ConvoDetails = ConvoInfo & { preview?: ConversationNamePreview };
+
+async function fetchConvoDetails(
+  fastify: FastifyInstance,
+  convoIds: string[],
+  canSeeMembers: boolean
+): Promise<Map<string, ConvoDetails>> {
   if (convoIds.length === 0) return new Map();
   const convos = await fastify.prisma.conversation.findMany({
     where: { id: { in: convoIds } },
     select: { id: true, identifier: true, title: true, type: true, avatar: true }
   });
-  return new Map(convos.map(c => [c.id, c]));
+  const previews = await loadConversationNamePreviews(fastify.prisma, convos, { allowed: canSeeMembers });
+  return new Map(convos.map(c => [c.id, { ...c, preview: previews.get(c.id) }]));
 }
 
-function buildConvoRankings(sorted: Array<[string, number]>, convoMap: Map<string, ConvoInfo>) {
+function buildConvoRankings(sorted: Array<[string, number]>, convoMap: Map<string, ConvoDetails>) {
   return sorted.map(([convoId, count]) => {
     const convo = convoMap.get(convoId);
     return {
@@ -109,6 +126,7 @@ function buildConvoRankings(sorted: Array<[string, number]>, convoMap: Map<strin
       title: convo?.title || convo?.identifier || 'Sans titre',
       type: convo?.type,
       image: convo?.avatar,
+      ...servedNamePreview(convo?.preview),
       count
     };
   });
@@ -562,7 +580,13 @@ async function rankUsers(fastify: FastifyInstance, criterion: string, startDate:
 // RANK CONVERSATIONS
 // ═══════════════════════════════════════════════════════════════════
 
-async function rankConversations(fastify: FastifyInstance, criterion: string, startDate: Date | null, limit: number) {
+async function rankConversations(
+  fastify: FastifyInstance,
+  criterion: string,
+  startDate: Date | null,
+  limit: number,
+  canSeeMembers: boolean
+) {
   switch (criterion) {
     case 'message_count':
     case 'messages': {
@@ -574,7 +598,7 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
         take: limit
       });
       const convoIds = topConvos.map(c => c.conversationId);
-      const convoMap = await fetchConvoDetails(fastify, convoIds);
+      const convoMap = await fetchConvoDetails(fastify, convoIds, canSeeMembers);
       return buildConvoRankings(
         topConvos.map(c => [c.conversationId, c._count.id] as [string, number]),
         convoMap
@@ -591,7 +615,7 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
         take: limit
       });
       const convoIds = topConvos.map(c => c.conversationId);
-      const convoMap = await fetchConvoDetails(fastify, convoIds);
+      const convoMap = await fetchConvoDetails(fastify, convoIds, canSeeMembers);
       return buildConvoRankings(
         topConvos.map(c => [c.conversationId, c._count.id] as [string, number]),
         convoMap
@@ -611,7 +635,7 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
         }
       }
       const sorted = sortAndLimit(convoCounts, limit);
-      const convoMap = await fetchConvoDetails(fastify, sorted.map(([id]) => id));
+      const convoMap = await fetchConvoDetails(fastify, sorted.map(([id]) => id), canSeeMembers);
       return buildConvoRankings(sorted, convoMap);
     }
 
@@ -628,7 +652,7 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
         take: limit
       });
       const convoIds = topConvos.map(c => c.conversationId);
-      const convoMap = await fetchConvoDetails(fastify, convoIds);
+      const convoMap = await fetchConvoDetails(fastify, convoIds, canSeeMembers);
       return buildConvoRankings(
         topConvos.map(c => [c.conversationId, c._count.id] as [string, number]),
         convoMap
@@ -644,7 +668,7 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
         take: limit
       });
       const convoIds = topConvos.map(c => c.conversationId);
-      const convoMap = await fetchConvoDetails(fastify, convoIds);
+      const convoMap = await fetchConvoDetails(fastify, convoIds, canSeeMembers);
       return buildConvoRankings(
         topConvos.map(c => [c.conversationId, c._count.id] as [string, number]),
         convoMap
@@ -658,12 +682,14 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
         orderBy: { lastMessageAt: 'desc' },
         take: limit
       });
+      const previews = await loadConversationNamePreviews(fastify.prisma, convos, { allowed: canSeeMembers });
       return convos.map(c => ({
         id: c.id,
         identifier: c.identifier,
         title: c.title || c.identifier || 'Sans titre',
         type: c.type,
         image: c.avatar,
+        ...servedNamePreview(previews.get(c.id)),
         count: 0,
         lastActivity: c.lastMessageAt?.toISOString()
       }));
@@ -678,7 +704,13 @@ async function rankConversations(fastify: FastifyInstance, criterion: string, st
 // RANK MESSAGES
 // ═══════════════════════════════════════════════════════════════════
 
-async function rankMessages(fastify: FastifyInstance, criterion: string, startDate: Date | null, limit: number) {
+async function rankMessages(
+  fastify: FastifyInstance,
+  criterion: string,
+  startDate: Date | null,
+  limit: number,
+  canSeeMembers: boolean
+) {
   const dateFilter = dateWhere(startDate);
 
   async function fetchAndBuildMessageRankings(
@@ -711,6 +743,11 @@ async function rankMessages(fastify: FastifyInstance, criterion: string, startDa
         })
     );
     const msgMap = new Map(messages.map(m => [m.id, m]));
+    const previews = await loadConversationNamePreviews(
+      fastify.prisma,
+      messages.flatMap(m => (m.conversation ? [m.conversation] : [])),
+      { allowed: canSeeMembers }
+    );
     return entries.map(e => {
       const msg = msgMap.get(e.messageId);
       return {
@@ -718,7 +755,9 @@ async function rankMessages(fastify: FastifyInstance, criterion: string, startDa
         messageType: msg?.messageType,
         createdAt: msg?.createdAt?.toISOString(),
         sender: msg?.sender ? { ...msg.sender, username: msg.sender.user?.username } : undefined,
-        conversation: msg?.conversation,
+        conversation: msg?.conversation
+          ? { ...msg.conversation, ...servedNamePreview(previews.get(msg.conversation.id)) }
+          : msg?.conversation,
         count: e.count
       };
     });
@@ -775,6 +814,8 @@ async function rankMessages(fastify: FastifyInstance, criterion: string, startDa
 // RANK LINKS
 // ═══════════════════════════════════════════════════════════════════
 
+// #8876 — `originalUrl` est lue pour en tirer l'ORIGINE et rien d'autre : une invitation collée
+// dans un message devient `…/chat/<linkId>`, une clé de jointure. Le web ne lit que l'hôte.
 async function rankLinks(fastify: FastifyInstance, criterion: string, startDate: Date | null, limit: number) {
   switch (criterion) {
     case 'tracking_links_most_visited':
@@ -798,7 +839,7 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
       return links.map(l => ({
         id: l.id,
         token: l.token,
-        originalUrl: l.originalUrl,
+        originalUrl: trackingUrlHost(l.originalUrl),
         totalClicks: l.totalClicks,
         uniqueClicks: l.uniqueClicks,
         createdAt: l.createdAt?.toISOString(),
@@ -827,7 +868,7 @@ async function rankLinks(fastify: FastifyInstance, criterion: string, startDate:
       return links.map(l => ({
         id: l.id,
         token: l.token,
-        originalUrl: l.originalUrl,
+        originalUrl: trackingUrlHost(l.originalUrl),
         totalClicks: l.totalClicks,
         uniqueClicks: l.uniqueClicks,
         createdAt: l.createdAt?.toISOString(),
@@ -923,6 +964,7 @@ export async function systemRankingsRoutes(fastify: FastifyInstance) {
       // qui n'ont plus le droit de voir `lastActivity` sur un classement.
       const viewerRole = (request as UnifiedAuthRequest).authContext!.registeredUser!.role as UserRoleEnum;
       const canSeePresence = permissionsService.canViewPresence(viewerRole);
+      const canSeeMembers = adminViewer(request).hasAdminRank;
 
       const { entityType = 'users', criterion = 'messages_sent', period = '30d', limit = '50' } = request.query as RankingQuery;
       const limitNum = Math.min(Math.max(1, parseInt(limit || '50', 10) || 50), 100);
@@ -935,10 +977,10 @@ export async function systemRankingsRoutes(fastify: FastifyInstance) {
           rankings = await rankUsers(fastify, criterion || 'messages_sent', startDate, limitNum, canSeePresence);
           break;
         case 'conversations':
-          rankings = await rankConversations(fastify, criterion || 'message_count', startDate, limitNum);
+          rankings = await rankConversations(fastify, criterion || 'message_count', startDate, limitNum, canSeeMembers);
           break;
         case 'messages':
-          rankings = await rankMessages(fastify, criterion || 'most_reactions', startDate, limitNum);
+          rankings = await rankMessages(fastify, criterion || 'most_reactions', startDate, limitNum, canSeeMembers);
           break;
         case 'links':
           rankings = await rankLinks(fastify, criterion || 'tracking_links_most_visited', startDate, limitNum);

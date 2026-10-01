@@ -8,6 +8,7 @@
  * voient ; un schéma ouvert aurait laissé partir toute colonne future.
  */
 import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
+import { namePreviewSchema } from './conversation-name-preview';
 import {
   booleen,
   chaine,
@@ -36,6 +37,7 @@ const reportedEntitySchema = {
       nullable: true,
       properties: { id: chaine, title: chaineNulle },
     },
+    ...namePreviewSchema,
   },
 } as const;
 

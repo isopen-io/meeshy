@@ -14,7 +14,7 @@ import { requirePermission, withAudit } from '../../middleware/authorize';
 import { signaler, limiteursDeSignalement } from '../reports';
 import { dateDeRetrait, depreciee } from '../../utils/deprecation';
 import { apiPath } from '@meeshy/shared/api/prefix';
-import { enrichReports } from './reports-enrichment';
+import { enrichReports, enrichmentFor } from './reports-enrichment';
 import {
   reportArraySuccess,
   reportOneSuccess,
@@ -183,9 +183,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
         result.reports.length
       );
 
-      const reports = await enrichReports(fastify.prisma, result.reports, {
-        canSeeExcerpt: viewer.can('canModerateContent'),
-      });
+      const reports = await enrichReports(fastify.prisma, result.reports, enrichmentFor(viewer));
 
       return sendSuccess(reply, { reports, pagination: paginationMeta });
     } catch (error) {
@@ -235,7 +233,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(
         reply,
-        await enrichReports(fastify.prisma, reports, { canSeeExcerpt: adminViewer(request).can('canModerateContent') })
+        await enrichReports(fastify.prisma, reports, enrichmentFor(adminViewer(request)))
       );
     } catch (error) {
       logError(fastify.log, 'Get recent reports error:', error);
@@ -266,9 +264,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Signalement non trouve');
       }
 
-      const [served] = await enrichReports(fastify.prisma, [report], {
-        canSeeExcerpt: adminViewer(request).can('canModerateContent'),
-      });
+      const [served] = await enrichReports(fastify.prisma, [report], enrichmentFor(adminViewer(request)));
 
       return sendSuccess(reply, served);
     } catch (error) {
@@ -410,9 +406,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       const { reports, total } = await reportService.getReportsForEntity(type, id, offset, limit);
 
-      const served = await enrichReports(fastify.prisma, reports, {
-        canSeeExcerpt: adminViewer(request).can('canModerateContent'),
-      });
+      const served = await enrichReports(fastify.prisma, reports, enrichmentFor(adminViewer(request)));
 
       return sendPaginatedSuccess(reply, served, buildPaginationMeta(total, offset, limit, reports.length));
     } catch (error) {
@@ -478,7 +472,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       return sendSuccess(
         reply,
-        await enrichReports(fastify.prisma, reports, { canSeeExcerpt: adminViewer(request).can('canModerateContent') })
+        await enrichReports(fastify.prisma, reports, enrichmentFor(adminViewer(request)))
       );
     } catch (error) {
       logError(fastify.log, 'Get moderator reports error:', error);

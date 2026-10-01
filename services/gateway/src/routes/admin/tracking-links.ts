@@ -30,6 +30,20 @@
  * Le créateur, la conversation et la cible sont nommés par lot — une requête par
  * genre, jamais une par ligne. Un lien externe n'a pas de cible (`null`) ; une
  * cible disparue est servie avec `label: null`.
+ *
+ * Le titre d'une conversation (colonne « conversation » et cible CONVERSATION) n'est
+ * servi qu'au rang d'administration, BIGBOSS ou ADMIN : l'inventaire des conversations
+ * leur est réservé, et AUDIT lit les campagnes sans en apprendre davantage. Les autres
+ * rôles reçoivent `title: null` / `label: null`, jamais un titre masqué par le client.
+ *
+ * ## L'adresse d'origine
+ *
+ * `TrackingLinkService` crée un lien pour chaque adresse brute d'un message : une
+ * invitation collée dans une conversation privée devient `…/chat/<linkId>`, et `linkId`
+ * ouvre la conversation sans créance. `originalUrl` est donc servie par
+ * `redactTrackingUrl` — origine et chemin, ni requête, ni fragment, la clé d'un
+ * `/chat|join|l/<clé>` remplacée — et la recherche ne porte plus sur elle, sans quoi
+ * chaque caractère deviendrait un oracle sur une adresse qu'on ne sert pas.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
@@ -53,6 +67,7 @@ import {
   reponsesEnErreur,
 } from './oversight-schemas';
 import { adminViewer } from './oversight-viewer';
+import { redactTrackingUrl } from './tracking-link-url';
 
 const TARGET_TYPES = ['POST', 'REEL', 'STORY', 'STATUS', 'CONVERSATION', 'PROFILE', 'EXTERNAL'] as const;
 const POST_TARGET_TYPES: ReadonlySet<string> = new Set(['POST', 'REEL', 'STORY', 'STATUS']);
@@ -127,7 +142,6 @@ function buildWhere(query: ListQuery): Prisma.TrackingLinkWhereInput {
             OR: [
               { name: { contains: search, mode: 'insensitive' as const } },
               { token: { contains: search, mode: 'insensitive' as const } },
-              { originalUrl: { contains: search, mode: 'insensitive' as const } },
               { campaign: { contains: search, mode: 'insensitive' as const } },
             ],
           },
@@ -151,13 +165,25 @@ type Named = {
   readonly conversations: ReadonlyMap<string, string | null>;
 };
 
-/** Les noms de toute une page, en trois requêtes au plus — comptes, publications, conversations. */
-async function loadNames(prisma: PrismaClient, rows: readonly LinkRow[]): Promise<Named> {
+/**
+ * Les noms de toute une page, en trois requêtes au plus — comptes, publications, conversations.
+ *
+ * Les titres de conversation ne sont lus que pour le RANG d'administration : l'inventaire
+ * des conversations est réservé à BIGBOSS et ADMIN (directive 2026-09-16), et AUDIT, qui lit
+ * les campagnes, ne doit pas l'apprendre de la colonne « conversation » d'un lien de suivi.
+ */
+async function loadNames(
+  prisma: PrismaClient,
+  rows: readonly LinkRow[],
+  options: { readonly conversationTitles: boolean }
+): Promise<Named> {
   const postIds = targetIds(rows, (type) => POST_TARGET_TYPES.has(type));
-  const conversationIds = distinctObjectIds([
-    ...targetIds(rows, (type) => type === 'CONVERSATION'),
-    ...rows.map((row) => row.conversationId),
-  ]);
+  const conversationIds = options.conversationTitles
+    ? distinctObjectIds([
+        ...targetIds(rows, (type) => type === 'CONVERSATION'),
+        ...rows.map((row) => row.conversationId),
+      ])
+    : [];
 
   const [people, posts, conversations] = await Promise.all([
     loadAdminPeople(prisma, [...rows.map((row) => row.createdBy), ...targetIds(rows, (type) => type === 'PROFILE')]),
@@ -209,7 +235,7 @@ function serveRow(row: LinkRow, names: Named) {
     campaign: clean(row.campaign),
     source: clean(row.source),
     medium: clean(row.medium),
-    originalUrl: row.originalUrl,
+    originalUrl: redactTrackingUrl(row.originalUrl),
     shortUrl: row.shortUrl,
     targetType: row.targetType,
     target: serveTarget(row, names),
@@ -339,7 +365,7 @@ export function registerTrackingLinkAdminRoutes(fastify: FastifyInstance): void 
           properties: {
             offset: { type: 'string' },
             limit: { type: 'string' },
-            search: { type: 'string', maxLength: 100, description: 'Nom, jeton, URL ou campagne' },
+            search: { type: 'string', maxLength: 100, description: 'Nom, jeton ou campagne' },
             isActive: { type: 'string', enum: ['true', 'false'] },
             targetType: { type: 'string', enum: [...TARGET_TYPES] },
             createdBy: { type: 'string', pattern: OBJECT_ID_PATTERN },
@@ -371,7 +397,9 @@ export function registerTrackingLinkAdminRoutes(fastify: FastifyInstance): void 
           fastify.prisma.trackingLink.count({ where }),
         ]);
 
-        const names = await loadNames(fastify.prisma, rows);
+        const names = await loadNames(fastify.prisma, rows, {
+          conversationTitles: adminViewer(request).hasAdminRank,
+        });
         return sendPaginatedSuccess(
           reply,
           rows.map((row) => serveRow(row, names)),
@@ -405,7 +433,7 @@ export function registerTrackingLinkAdminRoutes(fastify: FastifyInstance): void 
         if (!row) return sendNotFound(reply, 'Lien de suivi introuvable');
 
         const [names, stats, recentClicks, byRedirectStatus] = await Promise.all([
-          loadNames(fastify.prisma, [row]),
+          loadNames(fastify.prisma, [row], { conversationTitles: adminViewer(request).hasAdminRank }),
           service.getTrackingLinkStats(row.token),
           fastify.prisma.trackingLinkClick.findMany({
             where: { trackingLinkId: row.id },

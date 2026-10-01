@@ -26,6 +26,15 @@
  * l'état demandé) ne produit ni écriture ni trace : le journal dit ce qui s'est
  * passé, pas ce qu'on a demandé.
  *
+ * ## Le rang d'administration (BIGBOSS, ADMIN) et ce que MODERATOR ne reçoit pas
+ *
+ * MODERATOR gère les communautés, il n'inventorie pas les conversations : la liste des
+ * conversations de la communauté (titres, identifiants, activité, tailles) n'est servie
+ * qu'au rang d'administration — la fiche rend `conversations: []` aux autres et garde
+ * `conversationCount`, un chiffre. Rendre une communauté privée ou publique change qui
+ * peut la lire : ce geste est réservé au même rang (403 sinon, avant toute écriture).
+ * Désactiver et réactiver restent ouverts à MODERATOR, c'est un geste de modération.
+ *
  * ## Ce qui ne part pas
  *
  * Un membre n'est servi que par son identité publique (`A`) : jamais sa
@@ -35,11 +44,13 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import { requirePermission, withAudit } from '../../middleware/authorize';
+import { adminViewer } from './oversight-viewer';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
 import { validatePagination } from '../../utils/pagination';
 import { logError } from '../../utils/logger';
 import {
   sendBadRequest,
+  sendForbidden,
   sendInternalError,
   sendNotFound,
   sendPaginatedSuccess,
@@ -90,7 +101,7 @@ const MEMBER_SELECT = {
 
 const staffRank = (role: string): number => STAFF_ROLES.indexOf(role as (typeof STAFF_ROLES)[number]);
 
-async function loadFiche(prisma: PrismaClient, id: string) {
+async function loadFiche(prisma: PrismaClient, id: string, options: { readonly withConversations: boolean }) {
   const row = await prisma.community.findUnique({ where: { id }, select: FICHE_SELECT });
   if (!row) return null;
 
@@ -99,20 +110,22 @@ async function loadFiche(prisma: PrismaClient, id: string) {
     prisma.communityMember.count({ where: { communityId: id, isActive: false } }),
     prisma.conversation.count({ where: { communityId: id } }),
     prisma.post.count({ where: { communityId: id, deletedAt: null } }),
-    prisma.conversation.findMany({
-      where: { communityId: id },
-      select: {
-        id: true,
-        title: true,
-        identifier: true,
-        type: true,
-        isActive: true,
-        lastMessageAt: true,
-        _count: { select: conversationActiveMemberCountSelect },
-      },
-      orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
-      take: CONVERSATION_LIMIT,
-    }),
+    options.withConversations
+      ? prisma.conversation.findMany({
+          where: { communityId: id },
+          select: {
+            id: true,
+            title: true,
+            identifier: true,
+            type: true,
+            isActive: true,
+            lastMessageAt: true,
+            _count: { select: conversationActiveMemberCountSelect },
+          },
+          orderBy: [{ lastMessageAt: 'desc' }, { id: 'desc' }],
+          take: CONVERSATION_LIMIT,
+        })
+      : Promise.resolve([]),
     prisma.communityMember.findMany({
       where: { communityId: id, isActive: true, role: { in: [...STAFF_ROLES] } },
       select: { role: true, joinedAt: true, user: { select: ADMIN_PERSON_SELECT } },
@@ -229,7 +242,9 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const { communityId } = request.params as { communityId: string };
-        const fiche = await loadFiche(fastify.prisma, communityId);
+        const fiche = await loadFiche(fastify.prisma, communityId, {
+          withConversations: adminViewer(request).hasAdminRank,
+        });
         if (!fiche) return sendNotFound(reply, 'Communauté introuvable');
         return sendSuccess(reply, fiche);
       } catch (error) {
@@ -317,7 +332,7 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
       onRequest: guards,
       schema: {
         description:
-          "Désactive / réactive une communauté, ou la rend privée / publique. Motif écrit (10 caractères minimum), tracé. Désactiver la retire des lectures publiques ; ses conversations restent. canAccessAdmin + canManageCommunities. #8876.",
+          "Désactive / réactive une communauté, ou la rend privée / publique. Motif écrit (10 caractères minimum), tracé. Désactiver la retire des lectures publiques ; ses conversations restent. canAccessAdmin + canManageCommunities ; changer la confidentialité exige en plus le rang d'administration (403 sinon). #8876.",
         tags: ['admin'],
         summary: 'Update a community (admin)',
         security: [{ bearerAuth: [] }],
@@ -346,12 +361,17 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
           return sendBadRequest(reply, 'Aucun changement demandé : isActive ou isPrivate est requis');
         }
 
-        const current = await loadFiche(fastify.prisma, communityId);
+        const viewer = adminViewer(request);
+        const withConversations = viewer.hasAdminRank;
+        const current = await loadFiche(fastify.prisma, communityId, { withConversations });
         if (!current) return sendNotFound(reply, 'Communauté introuvable');
 
         const activeChanged = isActive !== undefined && isActive !== current.isActive;
         const privacyChanged = isPrivate !== undefined && isPrivate !== current.isPrivate;
         if (!activeChanged && !privacyChanged) return sendSuccess(reply, current);
+        if (privacyChanged && !viewer.hasAdminRank) {
+          return sendForbidden(reply, "Rendre une communauté privée ou publique exige le rang d'administration");
+        }
 
         await fastify.prisma.community.update({
           where: { id: communityId },
@@ -373,7 +393,7 @@ export function registerCommunityOversightRoutes(fastify: FastifyInstance): void
           },
         });
 
-        const updated = await loadFiche(fastify.prisma, communityId);
+        const updated = await loadFiche(fastify.prisma, communityId, { withConversations });
         return sendSuccess(reply, updated ?? current);
       } catch (error) {
         logError(fastify.log, 'Update admin community error:', error);

@@ -30,6 +30,12 @@ import {
 } from '../../services/messaging/withOrphanedSenderRepair';
 import { messageContentIsProtected, messageContentProtectionSelect } from './media-protection';
 import {
+  loadConversationNamePreviews,
+  servedNamePreview,
+  type ConversationNamePreview,
+} from './conversation-name-preview';
+import type { AdminViewer } from './oversight-viewer';
+import {
   ADMIN_PERSON_SELECT,
   distinctObjectIds,
   loadAdminPeople,
@@ -51,6 +57,14 @@ export type ReportedEntity = {
   readonly isProtected: boolean;
   readonly deleted: boolean;
   readonly conversation: { readonly id: string; readonly title: string | null } | null;
+  /**
+   * De quoi nommer la conversation visée quand elle n'a pas de titre — la conversation
+   * signalée elle-même, ou celle où se trouve le message signalé : trois membres actifs au
+   * plus (`participants`) et l'effectif actif (`total`). Présents seulement pour le rang
+   * d'administration (`canSeeConversationMembers`) : qui parle à qui est l'inventaire.
+   */
+  readonly participants?: ConversationNamePreview['participants'];
+  readonly total?: number;
 };
 
 type RawReport = {
@@ -66,7 +80,7 @@ export type EnrichedReport<Row extends RawReport> = Row & {
   readonly reportedEntity: ReportedEntity | null;
 };
 
-type Resolved = Omit<ReportedEntity, 'type' | 'id'>;
+type Resolved = Omit<ReportedEntity, 'type' | 'id' | 'participants' | 'total'> & { readonly conversationId?: string };
 
 const UNKNOWN: Resolved = {
   label: null,
@@ -124,10 +138,21 @@ function messageOwner(sender: {
   );
 }
 
+export type EnrichmentOptions = {
+  readonly canSeeExcerpt: boolean;
+  readonly canSeeConversationMembers: boolean;
+};
+
+/** Ce que ce lecteur reçoit : l'extrait selon `canModerateContent`, les membres selon le rang d'administration. */
+export const enrichmentFor = (viewer: AdminViewer): EnrichmentOptions => ({
+  canSeeExcerpt: viewer.can('canModerateContent'),
+  canSeeConversationMembers: viewer.hasAdminRank,
+});
+
 export async function enrichReports<Row extends RawReport>(
   prisma: PrismaClient,
   reports: readonly Row[],
-  options: { readonly canSeeExcerpt: boolean }
+  options: EnrichmentOptions
 ): Promise<EnrichedReport<Row>[]> {
   if (reports.length === 0) return [];
 
@@ -248,11 +273,12 @@ export async function enrichReports<Row extends RawReport>(
         isProtected,
         deleted,
         conversation: { id: row.conversationId, title: titleOf(row.conversationId) },
+        conversationId: row.conversationId,
       };
     }
     if (type === 'conversation') {
       const row = conversations.get(id);
-      return row ? { ...UNKNOWN, label: clean(row.title) } : GONE;
+      return row ? { ...UNKNOWN, label: clean(row.title), conversationId: row.id } : GONE;
     }
     if (type === 'community') {
       const row = communities.get(id);
@@ -286,17 +312,41 @@ export async function enrichReports<Row extends RawReport>(
     return UNKNOWN;
   };
 
-  return reports.map((report) => ({
-    ...report,
-    reporter: report.reporterId ? (people.get(report.reporterId) ?? null) : null,
-    moderator: report.moderatorId ? (people.get(report.moderatorId) ?? null) : null,
-    reportedEntity:
-      report.reportedType && report.reportedEntityId
-        ? {
-            type: report.reportedType,
-            id: report.reportedEntityId,
-            ...resolve(report.reportedType, report.reportedEntityId),
-          }
-        : null,
-  }));
+  const resolvedByReport = reports.map((report) =>
+    report.reportedType && report.reportedEntityId ? resolve(report.reportedType, report.reportedEntityId) : null
+  );
+
+  const previews = await loadConversationNamePreviews(
+    prisma,
+    resolvedByReport.flatMap((resolved) =>
+      resolved?.conversationId === undefined
+        ? []
+        : [{ id: resolved.conversationId, title: titleOf(resolved.conversationId) }]
+    ),
+    { allowed: options.canSeeConversationMembers }
+  );
+
+  return reports.map((report, index) => {
+    const resolved = resolvedByReport[index];
+    if (!report.reportedType || !report.reportedEntityId || !resolved) {
+      return {
+        ...report,
+        reporter: report.reporterId ? (people.get(report.reporterId) ?? null) : null,
+        moderator: report.moderatorId ? (people.get(report.moderatorId) ?? null) : null,
+        reportedEntity: null,
+      };
+    }
+    const { conversationId, ...entity } = resolved;
+    return {
+      ...report,
+      reporter: report.reporterId ? (people.get(report.reporterId) ?? null) : null,
+      moderator: report.moderatorId ? (people.get(report.moderatorId) ?? null) : null,
+      reportedEntity: {
+        type: report.reportedType,
+        id: report.reportedEntityId,
+        ...entity,
+        ...(conversationId === undefined ? {} : servedNamePreview(previews.get(conversationId))),
+      },
+    };
+  });
 }

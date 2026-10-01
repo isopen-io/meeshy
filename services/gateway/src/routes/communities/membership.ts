@@ -423,8 +423,11 @@ export async function registerMembershipRoutes(fastify: FastifyInstance) {
 
       const userId = authContext.userId;
 
-      const community = await fastify.prisma.community.findFirst({
-        where: { id },
+      // #8876 — une communauté DÉSACTIVÉE par l'administration ne reçoit plus personne ni aucun réglage :
+      // elle n'existe plus pour ce geste (404), comme pour les lecteurs publics. Quitter, changer un rôle,
+      // retirer un membre et supprimer restent ouverts : les propriétaires peuvent la clore.
+const community = await fastify.prisma.community.findFirst({
+        where: { id, isActive: true },
         select: {
           id: true,
           isPrivate: true,

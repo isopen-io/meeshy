@@ -96,6 +96,18 @@ describe('UserManagementService.getUsers', () => {
     expect(callWhere.role).toBe('ADMIN');
   });
 
+  it('filters by a LIST of roles with an `in` clause — the administration rank is BIGBOSS and ADMIN', async () => {
+    const findMany = jest.fn().mockResolvedValue([]);
+    const count = jest.fn().mockResolvedValue(0);
+    const svc = makeService(makePrisma({ findMany, count }));
+
+    await svc.getUsers({ role: ['BIGBOSS', 'ADMIN'] }, { offset: 0, limit: 10 });
+
+    const callWhere = (findMany.mock.calls[0] as any[])[0].where;
+    expect(callWhere.role).toEqual({ in: ['BIGBOSS', 'ADMIN'] });
+    expect(((count.mock.calls[0] as any[])[0]).where.role).toEqual({ in: ['BIGBOSS', 'ADMIN'] });
+  });
+
   it('filters isActive: true', async () => {
     const findMany = jest.fn().mockResolvedValue([]);
     const count = jest.fn().mockResolvedValue(0);

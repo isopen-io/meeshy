@@ -236,6 +236,18 @@ describe('GET /admin/audit-logs — les filtres deviennent un where', () => {
     await app.close();
   });
 
+  it('accepte les codes à chiffre ENABLE_2FA et DISABLE_2FA — le geste de double authentification se filtre', async () => {
+    const prisma = makePrisma();
+    const app = await buildApp(prisma);
+    const res = await get(app, '?action=ENABLE_2FA,DISABLE_2FA');
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.adminAuditLog.findMany.mock.calls[0][0].where).toEqual({
+      AND: [{ action: { in: ['ENABLE_2FA', 'DISABLE_2FA'] } }],
+    });
+    await app.close();
+  });
+
   it('sans filtre, le where est vide', async () => {
     const prisma = makePrisma();
     const app = await buildApp(prisma);
@@ -331,6 +343,50 @@ describe('GET /admin/audit-logs — les vrais noms', () => {
     expect(select.identifier).toBeUndefined();
     expect(res.body).not.toMatch(/linkId|identifier/);
     await app.close();
+  });
+});
+
+describe('GET /admin/audit-logs — une conversation sans titre se nomme par ses membres', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  function directConversationPrisma() {
+    const prisma = makePrisma([auditRow({ entity: 'Conversation', entityId: CONVERSATION })]);
+    prisma.conversation.findMany.mockImplementation(async (args: { select?: Row }) =>
+      args.select?.participants !== undefined
+        ? [
+            {
+              id: CONVERSATION,
+              participants: [
+                { displayName: 'Awa Diop', user: { username: 'awa', displayName: 'Awa Diop' } },
+                { displayName: 'Jean', user: { username: 'jean', displayName: null } },
+              ],
+              _count: { participants: 5 },
+            },
+          ]
+        : [{ id: CONVERSATION, title: null, type: 'direct' }]
+    );
+    return prisma;
+  }
+
+  it('BIGBOSS (rang d’administration) reçoit participants et total sur la cible', async () => {
+    const row = await firstRow(directConversationPrisma(), 'BIGBOSS');
+
+    expect(row.target).toMatchObject({ type: 'Conversation', label: null, secondary: 'direct', total: 5 });
+    expect(row.target.participants).toEqual([
+      { displayName: 'Awa Diop', username: 'awa' },
+      { displayName: 'Jean', username: 'jean' },
+    ]);
+  });
+
+  it('AUDIT lit le journal mais pas qui parle à qui : aucune clé, aucune requête de membres', async () => {
+    const prisma = directConversationPrisma();
+    const row = await firstRow(prisma, 'AUDIT');
+
+    expect(row.target).not.toHaveProperty('participants');
+    expect(row.target).not.toHaveProperty('total');
+    expect(
+      prisma.conversation.findMany.mock.calls.filter(([args]: [{ select?: Row }]) => args.select?.participants !== undefined)
+    ).toHaveLength(0);
   });
 });
 

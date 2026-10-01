@@ -123,7 +123,7 @@ export class UserManagementService {
     }
 
     if (filters.role) {
-      where.role = filters.role;
+      where.role = typeof filters.role === 'string' ? filters.role : { in: [...filters.role] };
     }
 
     if (filters.isActive !== undefined) {
