@@ -98,6 +98,7 @@ const myPublicView = (): PublicProfileView => ({
   isSelf: true,
   blockedByViewer: false,
   relationRequestId: null,
+  presence: null,
 });
 
 type Reply = { readonly status: number; readonly body: unknown };

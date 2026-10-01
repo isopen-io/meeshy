@@ -9,6 +9,7 @@ final class UserProfileViewModelTests: XCTestCase {
 
     private var mockAuthManager: MockAuthManager!
     private var mockBlockService: MockBlockService!
+    private var mockUserService: MockUserService!
 
     // MARK: - Lifecycle
 
@@ -16,11 +17,13 @@ final class UserProfileViewModelTests: XCTestCase {
         try await super.setUp()
         mockAuthManager = MockAuthManager()
         mockBlockService = MockBlockService()
+        mockUserService = MockUserService()
     }
 
     override func tearDown() async throws {
         mockAuthManager = nil
         mockBlockService = nil
+        mockUserService = nil
         try await super.tearDown()
     }
 
@@ -38,7 +41,8 @@ final class UserProfileViewModelTests: XCTestCase {
         return UserProfileViewModel(
             user: profileUser,
             authManager: mockAuthManager,
-            blockService: mockBlockService
+            blockService: mockBlockService,
+            userService: mockUserService
         )
     }
 
@@ -172,6 +176,18 @@ final class UserProfileViewModelTests: XCTestCase {
         await sut.loadFullProfile()
 
         XCTAssertNil(sut.fullUser)
+    }
+
+    /// #9063 — la fiche d'un AMI date sa présence : le chargement POSE la
+    /// question de la présence, la passerelle seule décide d'y répondre.
+    func test_loadFullProfile_coldCache_requestsStatsAndPresence() async {
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+        let sut = makeSUT(userId: "presence-target-\(UUID().uuidString)")
+
+        await sut.loadFullProfile()
+
+        XCTAssertEqual(mockUserService.getProfileHandleCallCount, 1)
+        XCTAssertEqual(mockUserService.lastGetProfileExpand, [.stats, .presence])
     }
 
     // MARK: - loadUserStats Tests

@@ -285,7 +285,12 @@ public struct UserProfileSheet: View {
     private func fetchAndCacheProfile(_ idOrUsername: String) async {
         defer { internalIsLoading = false }
         do {
-            let fetchedUser = try await UserService.shared.getProfile(idOrUsername: idOrUsername)
+            // `presence` POSE la question (#9063) : la passerelle ne sert
+            // `isOnline` / `lastActiveAt` qu'à un ami accepté, sous les réglages
+            // de la personne regardée — sans elle, le profil chargé écrasait
+            // jusqu'à la présence qu'apportait l'hôte, et « vu il y a » ne
+            // s'affichait jamais.
+            let fetchedUser = try await UserService.shared.getProfile(handle: idOrUsername, expand: [.presence]).user
             internalFullUser = fetchedUser
             UserDisplayNameCache.shared.trackFromUser(fetchedUser)
             // `MeeshyUser.id` is non-optional — save under the resolved id.

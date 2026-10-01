@@ -36,6 +36,7 @@ import deCommentRow from './catalog-de-comment-row';
 import deContactDiscovery from './catalog-de-contact-discovery';
 import deDownload from './catalog-de-download';
 import dePhonePrompt from './catalog-de-phone-prompt';
+import deUserProfile from './catalog-de-user-profile';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -240,7 +241,6 @@ const de = {
   ...deCallCaptions,
   ...deCallRecording,
   ...deSignup,
-  'userProfile.self.edit': 'Mein Profil bearbeiten',
   'report.title': 'Dieses Konto melden',
   'report.body': 'Wählen Sie den Grund für Ihre Meldung. Unser Moderationsteam erhält sie.',
   'report.action': 'Melden',
@@ -657,51 +657,6 @@ const de = {
   'discover.announce.unblockFailed': 'Entsperren fehlgeschlagen',
   'discover.announce.offline': 'Offline: Es wurde nichts gesendet.',
 
-  'userProfile.title': 'Profil',
-  'userProfile.loading': 'Profil wird geladen',
-  'userProfile.section.publications': 'BEITRÄGE',
-  'userProfile.section.relation': 'VERBINDUNG',
-  'userProfile.section.conversations': 'UNTERHALTUNGEN',
-  'userProfile.conversations.empty': 'Keine gemeinsame Unterhaltung',
-  'userProfile.conversations.emptyBody': 'Noch verbindet euch nichts – „Schreiben“ eröffnet die erste.',
-  'userProfile.conversations.error': 'Unterhaltungen konnten nicht geladen werden',
-  'userProfile.conversations.loading': 'Unterhaltungen werden geladen',
-  'userProfile.refused.title': 'Dieses Profil ist nicht verfügbar',
-  'userProfile.refused.body': 'Es existiert nicht, oder Sie haben keinen Zugriff darauf.',
-  'userProfile.throttled.title': 'Zu viele Anfragen',
-  'userProfile.throttled.body': 'Versuchen Sie es gleich noch einmal.',
-  'userProfile.error.title': 'Dieses Profil konnte nicht geladen werden',
-  'userProfile.error.body': 'Versuchen Sie es gleich noch einmal.',
-  'userProfile.offline.body': 'Das Profil erscheint, sobald Sie wieder online sind.',
-  'userProfile.posts.empty': 'Keine Beiträge',
-  'userProfile.posts.emptyBody': 'Noch nichts Öffentliches zu lesen.',
-  'userProfile.posts.emptyPosts': 'Hier keine Beiträge',
-  'userProfile.posts.emptyReels': 'Hier keine Reels',
-  'userProfile.posts.emptyFilter': 'Tippe erneut auf die Kachel, um alles zu sehen.',
-  'userProfile.posts.error': 'Die Beiträge konnten nicht geladen werden',
-  'userProfile.posts.loadMore': 'Mehr laden',
-  'userProfile.posts.loaded': 'Hinzugefügte Beiträge: {count}',
-  'userProfile.posts.loadedNone': 'Keine weiteren Beiträge vorhanden',
-  'userProfile.posts.loading': 'Wird geladen…',
-  'userProfile.stat.posts': 'Beiträge',
-  'userProfile.stat.reels': 'Reels',
-  'userProfile.stat.stories': 'Storys',
-  'userProfile.stat.filterLabel': 'Nach {name} filtern',
-  'userProfile.stat.filterClear': 'Alle anzeigen',
-  'userProfile.context.received': '{name} möchte sich mit Ihnen verbinden. Nehmen Sie an, um Nachrichten auszutauschen.',
-  'userProfile.context.sent': 'Sie haben {name} eine Verbindungsanfrage gesendet. Warten auf Antwort.',
-  'userProfile.action.write': 'Schreiben',
-  'userProfile.action.writeLabel': '{name} schreiben',
-  'userProfile.action.block': 'Blockieren',
-  'userProfile.action.blockLabel': '{name} blockieren',
-  'userProfile.blocked.title': 'Sie haben diese Person blockiert',
-  'userProfile.blocked.body': 'Ihre Beiträge und Statistiken bleiben verborgen, solange die Blockierung besteht.',
-  'userProfile.signin.title': 'Melden Sie sich an, um sich zu verbinden',
-  'userProfile.signin.body': 'Verbindungsanfragen und Nachrichten erfordern ein Konto.',
-  'userProfile.signin.cta': 'Anmelden',
-  'userProfile.announce.blocked': 'Person blockiert',
-  'userProfile.announce.blockFailed': 'Blockieren nicht möglich',
-  'userProfile.announce.writeFailed': 'Die Unterhaltung konnte nicht geöffnet werden',
 
   'a11y.floating.rung.discover.requests.one': 'Entdecken, {count} Anfrage erhalten',
   'a11y.floating.rung.discover.requests.other': 'Entdecken, {count} Anfragen erhalten',
@@ -1169,6 +1124,7 @@ const de = {
   ...deQuote,
   ...deCommentRow,
   ...deContactDiscovery,
+  ...deUserProfile,
 } satisfies InterfaceCatalog;
 
 export default de;

@@ -57,8 +57,8 @@ import {
  * ses compteurs PUBLICS disent. L'audience est quelqu'un qui vient de lire une
  * `@mention` dans un message et touche le nom.
  *
- * **UN ALLER-RETOUR POUR L'IDENTITÉ, LES COMPTEURS ET LA RELATION** —
- * `?expand=stats,relation` (`lib/api/public-profile.ts`). La liste des
+ * **UN ALLER-RETOUR POUR L’IDENTITÉ, LES COMPTEURS, LA RELATION ET LA PRÉSENCE** —
+ * `?expand=stats,relation,presence` (`lib/api/public-profile.ts`). La liste des
  * publications en DÉPEND : `authorId` est un `User.id`, jamais un pseudo
  * (`PostFeedService.ts:869`), et elle est donc gardée par `enabled` plutôt que
  * lancée sur un identifiant fabriqué depuis l'adresse.
@@ -131,6 +131,7 @@ export function UserProfileView({ username }: { readonly username: string }) {
     person,
     name,
     accent,
+    presence,
     relation,
     actions,
     signedIn,
@@ -275,7 +276,12 @@ export function UserProfileView({ username }: { readonly username: string }) {
         {person !== undefined ? (
           <div className="mx-auto grid w-full max-w-xl gap-6 pb-12 pt-2">
             {online ? null : <ProfileOfflineBanner language={language} />}
-            <ProfileHero profile={person} name={name} accent={accent} />
+            <ProfileHero
+              profile={person}
+              name={name}
+              accent={accent}
+              presence={presence}
+            />
             {relation.kind === 'blocked' ? (
               <ProfileBlockedCard language={language} name={name} online={online} busy={busy} onAction={onAction} />
             ) : (
