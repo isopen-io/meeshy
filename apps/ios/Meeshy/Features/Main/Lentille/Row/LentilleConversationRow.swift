@@ -347,16 +347,19 @@ struct LentilleConversationRow: View {
                         onShowParticipants: magnification.onShowParticipants
                     )
                 }
-                // Ce que le lecteur a gagné ici (#8906) — sur la seule rangée
-                // élue : l'hôte observe le magasin, jamais une rangée au repos.
-                ConversationEngagementBadge(
-                    conversationId: conversation.id,
-                    seed: conversation.viewerEngagement,
-                    accentColor: conversation.accentColor
-                )
             }
 
             Spacer(minLength: 0)
+
+            // La série « 🔥4 · 120 » en rouge, juste avant l'heure (#9025) —
+            // masquée sur la rangée en focus pour le moment (directive porteur
+            // 2026-10-01), où la pastille « N (M) » ne se pose plus non plus.
+            if magnification == nil {
+                ConversationStreakMarkHost(
+                    conversationId: conversation.id,
+                    seed: conversation.viewerEngagement
+                )
+            }
 
             // Le glyphe d'outbox a quitté cette ligne en amont (amendement
             // L09 : « l'outbox continue de renvoyer, sans affordance de
