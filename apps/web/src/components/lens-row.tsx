@@ -22,7 +22,7 @@ import { Glyph } from './glyph';
 import { LensJoinCallButton, LensPreviewLine } from './lens-preview-line';
 import { LensTime } from './lens-time';
 import { UnreadBadge } from './unread-badge';
-import { EngagementPill } from './engagement-pill';
+import { ConversationStreakMark } from './conversation-streak-mark';
 import { RowActions } from './row-actions';
 
 /**
@@ -363,7 +363,6 @@ function LensRowImpl({
             {flags.isArchived ? (
               <Glyph name="archive" size={12} title="Archivée" style={{ color: 'var(--color-ios-ink-3)' }} />
             ) : null}
-            {status.magnified ? <EngagementPill snapshot={engagement} {...(now === undefined ? {} : { now })} /> : null}
           </span>
 
           {/* `items-center`, PLUS `items-baseline` (#6080) : la ligne porte
@@ -521,6 +520,7 @@ function LensRowImpl({
               (`shortRelativeTime`), vivante à la minute (`minuteClock`), et
               fondue avec le reste du CHROME sous sourdine (`chromeFade`).
             */}
+            {status.magnified ? null : <ConversationStreakMark snapshot={engagement} now={now} />}
             {at === undefined ? null : (
               <span style={{ opacity: chromeFade }}>
                 <LensTime at={at} />

@@ -12,8 +12,8 @@ import { Glyph } from './glyph';
  *
  * N = points que cette conversation a rapportés au LECTEUR depuis toujours,
  * M = aujourd'hui, la flamme et la série quand elle court. Posée dans l'en-tête
- * du fil (où elle mène à la Progression) et sur la rangée ÉLUE de la liste
- * (où elle n'est que lue : la rangée entière est déjà un lien).
+ * du fil, où elle mène à la Progression. La liste, elle, porte la série en
+ * rouge à côté de l'heure (`ConversationStreakMark`, 2026-10-01).
  *
  * Le texte visible est masqué au lecteur d'écran, qui lit la phrase entière
  * (« Série de 4 jours, 120 points dont 12 aujourd'hui ») : des chiffres entre
