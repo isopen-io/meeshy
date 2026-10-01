@@ -6,6 +6,7 @@ import type { VisibilitySource } from './app-state-presence';
 import {
   acquireConversationViewing,
   bindConversationViewing,
+  coverConversationViewing,
   createViewingStore,
   herePeersOf,
   isHereIn,
@@ -92,6 +93,12 @@ function open(conversationId: string): () => void {
   return release;
 }
 
+function cover(): () => void {
+  const uncover = coverConversationViewing();
+  cleanups = [...cleanups, uncover];
+  return uncover;
+}
+
 const sent = (emitted: readonly Emitted[]) =>
   emitted.filter((e) => e.event === CLIENT_EVENTS.VIEWING_START || e.event === CLIENT_EVENTS.VIEWING_STOP);
 
@@ -144,6 +151,84 @@ describe('s’annoncer — l’écran de la conversation ouvert', () => {
 
     fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
     expect(sent(emitted)).toEqual([{ event: CLIENT_EVENTS.VIEWING_START, payload: { conversationId: CONV } }]);
+  });
+});
+
+describe('couvert — une visionneuse plein écran par-dessus le fil (#9052)', () => {
+  const START = { event: CLIENT_EVENTS.VIEWING_START, payload: { conversationId: CONV } };
+  const STOP = { event: CLIENT_EVENTS.VIEWING_STOP, payload: { conversationId: CONV } };
+
+  test('ouvrir une image retire la présence, la refermer la rend', () => {
+    const { emitted } = setup();
+    open(CONV);
+    const uncover = cover();
+    uncover();
+
+    expect(sent(emitted)).toEqual([START, STOP, START]);
+  });
+
+  test('deux couvertures empilées ne rendent la présence qu’à la dernière fermée', () => {
+    const { emitted } = setup();
+    open(CONV);
+    const first = cover();
+    const second = cover();
+    first();
+    expect(sent(emitted)).toEqual([START, STOP]);
+
+    second();
+    expect(sent(emitted)).toEqual([START, STOP, START]);
+  });
+
+  test('un fil ouvert SOUS une couverture ne s’annonce qu’à sa fermeture', () => {
+    const { emitted } = setup();
+    const uncover = cover();
+    open(CONV);
+    expect(sent(emitted)).toEqual([]);
+
+    uncover();
+    expect(sent(emitted)).toEqual([START]);
+  });
+
+  test('quitter le fil pendant la couverture ne renvoie pas de second viewing:stop', () => {
+    const { emitted } = setup();
+    const release = open(CONV);
+    const uncover = cover();
+    release();
+    uncover();
+
+    expect(sent(emitted)).toEqual([START, STOP]);
+  });
+
+  test('une reconnexion pendant la couverture ne ré-annonce rien', () => {
+    const { emitted, fire } = setup();
+    open(CONV);
+    cover();
+    fire('disconnect');
+    fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+    expect(sent(emitted)).toEqual([START, STOP]);
+  });
+
+  test('le retour au premier plan pendant la couverture ne ré-annonce rien', () => {
+    const { emitted, visibility } = setup();
+    open(CONV);
+    cover();
+    visibility.set('hidden');
+    visibility.set('visible');
+
+    expect(sent(emitted)).toEqual([START, STOP]);
+  });
+
+  test('la levée est idempotente', () => {
+    const { emitted } = setup();
+    open(CONV);
+    const first = cover();
+    const second = cover();
+    first();
+    first();
+    expect(sent(emitted)).toEqual([START, STOP]);
+    second();
+    expect(sent(emitted)).toEqual([START, STOP, START]);
   });
 });
 

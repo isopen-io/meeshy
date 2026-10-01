@@ -365,6 +365,7 @@ struct iPadRootView: View {
                 forcedReadingMode: router.pendingForcedReadingMode,
                 landsOnMessage: router.landsOnMessage(in: conversation.id)
             )
+            .reportsConversationViewing(conversation.id)
             .id(conversation.id)
             .navigationBarHidden(true)
             .onAppear {

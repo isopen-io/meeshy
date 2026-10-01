@@ -38,6 +38,7 @@ struct RootRouteDestination: View {
             // pour A survit et `.task` ne se relance pas : le contenu
             // restait sur A. `.id` force le teardown (flush du
             // brouillon de A via onDisappear) + une vue neuve pour B.
+            .reportsConversationViewing(conv.id)
             .id(conv.id)
             .navigationBarHidden(true)
             .onAppear {

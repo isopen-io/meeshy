@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo } from 'react';
 import { useStore } from 'zustand/react';
 
-import { acquireConversationViewing, herePeersOf, isHereIn, viewingStore, type ViewingState } from '@/lib/api/conversation-viewing';
+import { acquireConversationViewing, coverConversationViewing, herePeersOf, isHereIn, viewingStore, type ViewingState } from '@/lib/api/conversation-viewing';
 import { peerOf } from '@/lib/view/conversation';
 
 /**
@@ -14,6 +14,12 @@ export function useConversationViewing(conversationId: string | undefined): void
     () => (conversationId === undefined || conversationId === '' ? undefined : acquireConversationViewing(conversationId)),
     [conversationId],
   );
+}
+
+/** Une vue plein écran (visionneuse) couvre le fil tant qu'elle est montée :
+ * l'utilisateur n'est plus « dans la conversation » (#9052). */
+export function useConversationViewingCover(): void {
+  useEffect(() => coverConversationViewing(), []);
 }
 
 /** Ce pair a-t-il CETTE conversation ouverte ? Un booléen primitif : l'en-tête

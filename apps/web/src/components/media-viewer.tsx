@@ -29,6 +29,7 @@ import { safeAreaInsets } from '@/lib/view/safe-area';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { SCENE_OPENING_EASING, SCENE_OPENING_MS, takeSceneOpening } from '@/lib/view/scene-opening';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { useConversationViewingCover } from '@/lib/view/use-conversation-viewing';
 import { useSendSheetOpen } from '@/lib/view/use-send-sheet-open';
 import { lateralSeek } from '@/lib/view/media-transport';
 import { useAttachmentOpenReport } from '@/lib/view/use-attachment-open-report';
@@ -599,6 +600,7 @@ export default function MediaViewer({
   const trackRef = useRef<HTMLDivElement | null>(null);
 
   useBackDismiss(onClose);
+  useConversationViewingCover();
 
   const [transportSlot, setTransportSlot] = useState<HTMLElement | null>(null);
   const [notice, announce] = useNotice();

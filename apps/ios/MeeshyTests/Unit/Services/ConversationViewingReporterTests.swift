@@ -199,4 +199,182 @@ final class ConversationViewingReporterTests: XCTestCase {
         await fulfillment(of: [reannounced], timeout: 1)
         XCTAssertEqual(emitter.calls, [.start("conv-a"), .start("conv-a")])
     }
+
+    // MARK: - L'écran couvert ou quitté (#9052)
+
+    func test_screenDisappeared_coveredByTheGallery_stopsThenReappearing_restarts() {
+        let (sut, emitter, _) = makeSUT()
+        sut.screenAppeared("conv-a")
+        sut.conversationOpened("conv-a")
+
+        sut.screenDisappeared("conv-a")
+        sut.screenAppeared("conv-a")
+
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .stop("conv-a"), .start("conv-a")])
+    }
+
+    func test_screenDisappeared_thenHandlerClosed_doesNotStopTwice() {
+        let (sut, emitter, _) = makeSUT()
+        sut.conversationOpened("conv-a")
+        sut.screenAppeared("conv-a")
+
+        sut.screenDisappeared("conv-a")
+        sut.conversationClosed("conv-a")
+
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .stop("conv-a")])
+    }
+
+    func test_sameConversationPushedOverItself_oldScreenDisappearing_keepsViewing() {
+        let (sut, emitter, _) = makeSUT()
+        sut.screenAppeared("conv-a")
+        sut.conversationOpened("conv-a")
+        sut.screenAppeared("conv-a")
+        sut.conversationOpened("conv-a")
+
+        sut.screenDisappeared("conv-a")
+
+        XCTAssertFalse(emitter.calls.contains(.stop("conv-a")))
+    }
+
+    func test_backFromAnotherConversation_reannouncesTheOneUnderneath() {
+        let (sut, emitter, _) = makeSUT()
+        sut.screenAppeared("conv-a")
+        sut.conversationOpened("conv-a")
+        sut.screenAppeared("conv-b")
+        sut.screenDisappeared("conv-a")
+        sut.conversationOpened("conv-b")
+
+        sut.screenDisappeared("conv-b")
+        sut.screenAppeared("conv-a")
+
+        XCTAssertEqual(emitter.calls.suffix(2), [.stop("conv-b"), .start("conv-a")])
+        XCTAssertEqual(sut.viewingConversationId, "conv-a")
+    }
+
+    func test_foregroundReturn_whileCovered_emitsNothing() {
+        let (sut, emitter, _) = makeSUT()
+        sut.conversationOpened("conv-a")
+        sut.screenAppeared("conv-a")
+        sut.screenDisappeared("conv-a")
+
+        sut.setForeground(false)
+        sut.setForeground(true)
+
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .stop("conv-a")])
+    }
+
+    func test_reconnect_whileCovered_emitsNothing() async {
+        let (sut, emitter, connection) = makeSUT()
+        sut.conversationOpened("conv-a")
+        sut.screenAppeared("conv-a")
+        sut.screenDisappeared("conv-a")
+        let nothing = expectation(description: "no emission while covered")
+        nothing.isInverted = true
+        emitter.onCall = { _ in nothing.fulfill() }
+
+        connection.send(true)
+
+        await fulfillment(of: [nothing], timeout: 0.3)
+    }
+
+    func test_conversationHosts_reportTheScreenVisibility() throws {
+        let views = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views")
+        for host in ["RootLayers/RootRouteDestination.swift", "iPadRootView.swift", "GuestConversationContainer.swift"] {
+            let source = AppSourceGuard.stripComments(try String(contentsOf: views.appendingPathComponent(host), encoding: .utf8))
+            XCTAssertTrue(source.contains(".reportsConversationViewing("), "\(host) ne rapporte pas la visibilité de la conversation")
+        }
+    }
+
+    // MARK: - La couverture plein écran (#9052) : un `fullScreenCover` ne
+    // déclenche pas `onDisappear` sur l'écran recouvert — le contenu présenté
+    // se déclare lui-même.
+
+    func test_coverBegan_overTheConversation_stops_andCoverEnded_restarts() {
+        let (sut, emitter, _) = makeSUT()
+        sut.screenAppeared("conv-a")
+        sut.conversationOpened("conv-a")
+
+        sut.coverBegan()
+        sut.coverEnded()
+
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .stop("conv-a"), .start("conv-a")])
+    }
+
+    func test_nestedCovers_restartOnlyWhenTheLastOneEnds() {
+        let (sut, emitter, _) = makeSUT()
+        sut.conversationOpened("conv-a")
+        sut.coverBegan()
+        sut.coverBegan()
+
+        sut.coverEnded()
+
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .stop("conv-a")])
+        sut.coverEnded()
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .stop("conv-a"), .start("conv-a")])
+    }
+
+    func test_coverEnded_withoutBegan_neverGoesBelowZero() {
+        let (sut, emitter, _) = makeSUT()
+        sut.coverEnded()
+        sut.conversationOpened("conv-a")
+
+        sut.coverBegan()
+
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .stop("conv-a")])
+    }
+
+    func test_conversationOpened_whileCovered_announcesNothing_untilTheCoverEnds() {
+        let (sut, emitter, _) = makeSUT()
+        sut.coverBegan()
+
+        sut.conversationOpened("conv-a")
+
+        XCTAssertEqual(emitter.calls, [])
+        sut.coverEnded()
+        XCTAssertEqual(emitter.calls, [.start("conv-a")])
+    }
+
+    func test_reconnect_underACover_emitsNothing() async {
+        let (sut, emitter, connection) = makeSUT()
+        sut.conversationOpened("conv-a")
+        sut.coverBegan()
+        let nothing = expectation(description: "no emission while covered")
+        nothing.isInverted = true
+        emitter.onCall = { _ in nothing.fulfill() }
+
+        connection.send(true)
+
+        await fulfillment(of: [nothing], timeout: 0.3)
+    }
+
+    /// Chaque plein écran présenté depuis la conversation passe par
+    /// `.conversationCover` : un `fullScreenCover` brut de plus laisserait le
+    /// point « ici » allumé derrière une visionneuse.
+    func test_everyConversationCover_declaresItself() throws {
+        let views = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views")
+        let hosts = try FileManager.default.contentsOfDirectory(atPath: views.path)
+            .filter { $0.hasPrefix("ConversationView") && $0.hasSuffix(".swift") }
+        XCTAssertGreaterThan(hosts.count, 3)
+        var covers = 0
+        for host in hosts {
+            let source = AppSourceGuard.stripComments(try String(contentsOf: views.appendingPathComponent(host), encoding: .utf8))
+            XCTAssertFalse(source.contains(".fullScreenCover("), "\(host) présente un plein écran sans .conversationCover")
+            covers += source.components(separatedBy: ".conversationCover(").count - 1
+        }
+        XCTAssertGreaterThanOrEqual(covers, 12)
+    }
+
+    func test_screenAppeared_beforeTheHandlerOpens_announcesNothing() {
+        let (sut, emitter, _) = makeSUT()
+
+        sut.screenAppeared("conv-a")
+
+        XCTAssertEqual(emitter.calls, [])
+    }
 }
