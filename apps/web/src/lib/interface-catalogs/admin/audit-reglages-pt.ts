@@ -44,6 +44,7 @@ const f = {
   'admin.audit.family.agent': 'Agente',
   'admin.audit.family.reports': 'Denúncias',
   'admin.audit.family.communities': 'Comunidades',
+  'admin.audit.family.settings': 'Configurações',
 
   // ── Audit log: kinds of item ───────────────────────────────────────────────
   'admin.audit.target.User': 'Conta',
@@ -162,6 +163,8 @@ const f = {
   'admin.audit.action.ADMIN_REPORT_DELETED.explain': 'Uma denúncia foi removida da fila de moderação.',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED': 'Denúncia assumida',
   'admin.audit.action.ADMIN_REPORT_ASSIGNED.explain': 'Uma denúncia foi atribuída a um moderador.',
+  'admin.audit.action.UPDATE_ENGAGEMENT_SCALE': 'Tabela de pontos alterada',
+  'admin.audit.action.UPDATE_ENGAGEMENT_SCALE.explain': 'Um administrador alterou a tabela de pontos de engajamento: pontos por operação, multiplicador e limites.',
 
   // ── Audit log: the detail sheet ────────────────────────────────────────────
   'admin.audit.detail.action': 'Ação',

@@ -22,6 +22,8 @@ import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
 import { assertValidObjectId } from '../utils/object-id.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
+import { EngagementService, type EngagementActivityOptions } from './engagement/EngagementService.js';
 
 const logger = enhancedLogger.child({ module: 'ReactionService' });
 
@@ -68,12 +70,25 @@ export interface AddReactionResult {
   unchanged: boolean;
 }
 
+/** Ce qu'une réaction posée demande à l'engagement, et rien de plus. */
+export interface ReactionEngagementCredit {
+  recordActivity(userId: string, axisKey: EngagementAxisKey, options?: EngagementActivityOptions): Promise<void>;
+}
+
 export class ReactionService {
   private validateMessageId(messageId: string): void {
     assertValidObjectId(messageId, 'message');
   }
 
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly engagement: ReactionEngagementCredit | null;
+
+  /**
+   * `engagement` absent ⇒ le producteur partagé des compteurs ; `null` ⇒ aucun
+   * crédit (un appelant qui ne veut pas d'effet d'engagement).
+   */
+  constructor(private readonly prisma: PrismaClient, engagement?: ReactionEngagementCredit | null) {
+    this.engagement = engagement === undefined ? new EngagementService(prisma) : engagement;
+  }
 
   async addReaction(options: AddReactionOptions): Promise<AddReactionResult | null> {
     const { messageId, participantId, emoji } = options;
@@ -203,7 +218,31 @@ export class ReactionService {
       }),
     });
 
+    this.creditReactor(
+      message.conversation.participants.find((p) => p.id === participantId)?.userId ?? null,
+      message.conversationId,
+    );
+
     return { reaction: this.mapReactionToData(reaction), unchanged: false };
+  }
+
+  /**
+   * L'axe « réaction » (#8906) — crédité au RÉACTEUR, une fois par réaction
+   * réellement posée (jamais sur un `unchanged`, jamais au retrait), dans la
+   * conversation du message : c'est elle qui plafonne le geste par jour, contre
+   * le va-et-vient réagir / retirer / réagir. Ici plutôt qu'aux transports :
+   * les quatre (socket, deux routes REST, agent) convergent sur `addReaction`.
+   * Un participant ANONYME n'a pas de `User.id`, donc pas de compteur.
+   * Hors du chemin de la réponse : un crédit en panne ne défait pas la réaction.
+   */
+  private creditReactor(reactorUserId: string | null, conversationId: string): void {
+    const engagement = this.engagement;
+    if (!engagement || !reactorUserId) return;
+    void Promise.resolve()
+      .then(() => engagement.recordActivity(reactorUserId, 'tool.reaction', { conversationId }))
+      .catch((error: unknown) => {
+        logger.warn('tool.reaction engagement credit failed', { conversationId, error });
+      });
   }
 
   /**

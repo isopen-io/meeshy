@@ -172,16 +172,16 @@ extension StoryCardView {
             VStack {
                 Spacer()
                 Text(transcription)
-                    .font(MeeshyFont.relative(14, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.vertical, MeeshySpacing.sm)
                     .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(Color.black.opacity(0.55))
+                        RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                            .fill(MeeshyColors.mediaScrim)
                     )
-                    .padding(.horizontal, 20)
+                    .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.bottom, captionBottomInset(geometry: geometry))
             }
             .allowsHitTesting(false)
@@ -225,27 +225,27 @@ extension StoryCardView {
     }
 
     func backgroundAudioBadge(audio: StoryBackgroundAudioEntry) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: "music.note")
                 .font(MeeshyFont.relative(11, weight: .semibold))
             Text(audio.title)
-                .font(MeeshyFont.relative(12, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
             if let uploader = audio.uploaderName {
                 Text("· \(uploader)")
-                    .font(MeeshyFont.relative(11))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .opacity(0.7)
                     .lineLimit(1)
             }
         }
         .foregroundColor(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
-                .overlay(Capsule().fill(Color.black.opacity(0.35)))
+                .overlay(Capsule().fill(MeeshyColors.mediaChromeFill))
         )
     }
 

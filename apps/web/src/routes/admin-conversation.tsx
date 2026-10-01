@@ -146,7 +146,7 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
             <AdminLink
               target={listTarget}
               anchor="back-to-list"
-              className="inline-flex items-center rounded-chip px-5 text-body font-semibold text-white"
+              className="inline-flex items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
               style={{ minHeight: 44, backgroundColor: 'var(--color-ios-brand)' }}
             >
               {translateAdmin(language, 'admin.conversation.fiche.back')}
@@ -222,7 +222,7 @@ export function AdminConversationPanel({ language, conversationId, deps = apiDep
                 data-admin-action="configure"
                 disabled={!online}
                 onClick={() => setConfiguring(true)}
-                className="inline-flex items-center gap-2 rounded-chip px-5 text-body font-semibold text-white disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2"
+                className="inline-flex items-center gap-2 rounded-chip px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={{ minHeight: 44, backgroundColor: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
               >
                 {translateAdmin(language, 'admin.conversation.fiche.configure')}

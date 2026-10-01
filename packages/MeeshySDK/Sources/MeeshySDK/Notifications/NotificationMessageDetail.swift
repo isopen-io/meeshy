@@ -95,18 +95,6 @@ public enum NotificationMessageDetail: Equatable, Sendable {
         }
     }
 
-    // MARK: Pictogramme
-
-    /// SF Symbol de la case typée de la bannière in-app.
-    public var symbolName: String {
-        switch self {
-        case .location: return "mappin.and.ellipse"
-        case .contact: return "person.crop.circle.fill"
-        case .invite: return "envelope.open.fill"
-        case .link: return "link"
-        }
-    }
-
     // MARK: Corps
 
     /// Les libellés que la composition ne peut pas inventer : chaque hôte les

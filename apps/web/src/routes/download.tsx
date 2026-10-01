@@ -124,16 +124,22 @@ function AppleLogo() {
 function GooglePlayLogo() {
   return (
     <svg aria-hidden="true" viewBox="0 0 24 24" width="24" height="24">
+      {/* harmony-exempt: logo Google Play, couleurs de la marque tierce */}
       <path fill="#4285F4" d="M3.61 1.81 13.4 12 3.61 22.19C3.24 22 3 21.6 3 21.1V2.9c0-.5.24-.9.61-1.09Z" />
+      {/* harmony-exempt: logo Google Play */}
       <path fill="#34A853" d="M3.61 1.81c.36-.19.82-.18 1.27.08l11.72 6.73L13.4 12Z" />
+      {/* harmony-exempt: logo Google Play */}
       <path fill="#EA4335" d="M3.61 22.19 13.4 12l3.2 3.38-11.72 6.73c-.45.26-.91.27-1.27.08Z" />
+      {/* harmony-exempt: logo Google Play */}
       <path fill="#FBBC04" d="m16.6 8.62 3.8 2.18c.9.52.9 1.88 0 2.4l-3.8 2.18L13.4 12Z" />
     </svg>
   );
 }
 
 const BADGE_CLASS =
+  // harmony-exempt: badge de magasin, noir et blanc imposés par Apple et Google
   'inline-flex h-[52px] items-center gap-2.5 rounded-xl px-4 text-start text-white outline-offset-2 focus-visible:outline-2';
+// harmony-exempt: badge de magasin, noir et gris imposés par Apple et Google
 const BADGE_STYLE = { background: '#000', border: '1px solid #a6a6a6', outlineColor: 'var(--color-ios-brand)' };
 
 function BadgeText({ caption, name }: { readonly caption: string; readonly name: string }) {

@@ -27,14 +27,14 @@ struct MediaAccessibilityPanel: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             MediaAltTextField(kind: .alt, text: altText, onCommit: onAltCommitted)
             MediaAltTextField(kind: .caption, text: captionText, onCommit: onCaptionCommitted)
         }
-            .padding(10)
+            .padding(MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(colorScheme == .dark ? Color.white.opacity(0.05) : MeeshyColors.indigo950.opacity(0.04))
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
+                    .fill(colorScheme == .dark ? Color.white.opacity(MeeshyOpacity.faint) : MeeshyColors.indigo950.opacity(MeeshyOpacity.faint))
             )
     }
 }

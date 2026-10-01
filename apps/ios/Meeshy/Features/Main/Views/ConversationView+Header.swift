@@ -86,6 +86,29 @@ extension ConversationView {
     // `readingModeAffordanceCluster` dans ConversationView.swift, même
     // débordement de pile au décodage de mangled name, 2026-08-17).
     var headerCallButtons: AnyView {
+        AnyView(HStack(spacing: MeeshySpacing.xs) {
+            headerEngagementBadge
+            headerCallButtonsOnly
+        }
+        .task(id: liveConversation?.id) {
+            await ConversationEngagementStore.shared.revalidate(liveConversation?.id ?? "")
+        })
+    }
+
+    // MARK: - « 🔥 série · N (M) » (#8906)
+
+    /// Ce que le lecteur a gagné dans CETTE conversation. Elle se lit avec les
+    /// actions (en-tête replié, aperçu) ou sous le titre (en-tête déplié, qui ne
+    /// porte aucune action) — jamais aux deux endroits à la fois.
+    var headerEngagementBadge: some View {
+        ConversationEngagementBadge(
+            conversationId: liveConversation?.id ?? "",
+            seed: liveConversation?.viewerEngagement,
+            accentColor: accentColor
+        )
+    }
+
+    private var headerCallButtonsOnly: AnyView {
         // #3585 — un groupe s'appelle depuis le MÊME bouton qu'un contact : la
         // poignée de l'appel est la conversation, son nom le titre du groupe.
         if conversation?.type == .group, let groupId = conversation?.id, !groupId.isEmpty {
@@ -145,35 +168,40 @@ extension ConversationView {
         // au-dessus dans le même en-tête.
         let isEncrypted = liveConversation?.encryptionMode != nil
         let hasTags = conversationSection != nil || !(liveConversation?.tags.isEmpty ?? true) || isEncrypted
+        let showsEngagement = !headerLayout.showsActions
         if hasTags {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
+                    if showsEngagement {
+                        headerEngagementBadge
+                    }
+
                     // Lock icon (encryption only, no text)
                     if isEncrypted {
                         Image(systemName: "lock.fill")
-                            .font(MeeshyFont.relative(9, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                             .foregroundColor(theme.success)
                             .accessibilityLabel(String(localized: "conversation.encrypted", defaultValue: "Conversation chiffrée", bundle: .main))
                     }
 
                     // Category tag
                     if let section = conversationSection {
-                        HStack(spacing: 2) {
+                        HStack(spacing: MeeshySpacing.xxs) {
                             Image(systemName: section.icon)
                                 .font(MeeshyFont.relative(7, weight: .bold))
                                 .accessibilityHidden(true)
                             Text(section.name)
-                                .font(MeeshyFont.relative(8, weight: .bold))
+                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
                         }
                         .foregroundColor(Color(hex: section.color))
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
+                        .padding(.horizontal, MeeshySpacing.xs)
+                        .padding(.vertical, MeeshySpacing.xxs)
                         .background(
                             Capsule()
-                                .fill(Color(hex: section.color).opacity(0.2))
+                                .fill(Color(hex: section.color).opacity(MeeshyOpacity.light))
                                 .overlay(
                                     Capsule()
-                                        .stroke(Color(hex: section.color).opacity(0.3), lineWidth: 0.5)
+                                        .stroke(Color(hex: section.color).opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
                                 )
                         )
                     }
@@ -181,22 +209,24 @@ extension ConversationView {
                     if let conv = liveConversation {
                         ForEach(conv.tags) { tag in
                             Text(tag.name)
-                                .font(MeeshyFont.relative(8, weight: .semibold))
+                                .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
                                 .foregroundColor(Color(hex: tag.color))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 2)
+                                .padding(.horizontal, MeeshySpacing.xs)
+                                .padding(.vertical, MeeshySpacing.xxs)
                                 .background(
                                     Capsule()
-                                        .fill(Color(hex: tag.color).opacity(0.12))
+                                        .fill(Color(hex: tag.color).opacity(MeeshyOpacity.light))
                                         .overlay(
                                             Capsule()
-                                                .stroke(Color(hex: tag.color).opacity(0.25), lineWidth: 0.5)
+                                                .stroke(Color(hex: tag.color).opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
                                         )
                                 )
                         }
                     }
                 }
             }
+        } else if showsEngagement {
+            headerEngagementBadge
         }
     }
 
@@ -319,22 +349,22 @@ private struct HeaderCallButtonsView: View {
             }
             HapticFeedback.medium()
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Circle()
                     .fill(MeeshyColors.success)
                     .frame(width: 7, height: 7)
                 Image(systemName: "phone.fill")
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                 Text(callManager.formattedDuration)
-                    .font(MeeshyFont.relative(11, weight: .semibold, design: .monospaced))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
             }
             .foregroundColor(MeeshyColors.success)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
-                    .fill(MeeshyColors.success.opacity(0.15))
-                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(0.3), lineWidth: 0.5))
+                    .fill(MeeshyColors.success.opacity(MeeshyOpacity.light))
+                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
             )
         }
         .accessibilityLabel(String(localized: "call.header.return", defaultValue: "Appel en cours, toucher pour revenir", bundle: .main))
@@ -360,22 +390,22 @@ private struct HeaderCallButtonsView: View {
             )
             HapticFeedback.medium()
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Circle()
                     .fill(MeeshyColors.success)
                     .frame(width: 7, height: 7)
                 Image(systemName: "phone.fill")
-                    .font(MeeshyFont.relative(10, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
                 Text(String(localized: "call.header.rejoin", defaultValue: "Rejoindre", bundle: .main))
-                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
             }
             .foregroundColor(MeeshyColors.success)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(
                 Capsule()
-                    .fill(MeeshyColors.success.opacity(0.15))
-                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(0.3), lineWidth: 0.5))
+                    .fill(MeeshyColors.success.opacity(MeeshyOpacity.light))
+                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline))
             )
         }
         .accessibilityLabel(String(localized: "call.header.rejoin.a11y", defaultValue: "Appel en cours, toucher pour rejoindre", bundle: .main))
@@ -439,7 +469,7 @@ private struct HeaderCallButtonsView: View {
 
     private func callGlyph(_ systemName: String) -> some View {
         Image(systemName: systemName)
-            .font(MeeshyFont.relative(13, weight: .semibold))
+            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
             .foregroundStyle(
                 LinearGradient(
                     colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
@@ -455,7 +485,7 @@ private struct HeaderCallButtonsView: View {
             // 44, minHeight: 44)` drew the visible circle at 44pt instead of
             // 28pt, even though both buttons declared identical numbers.
             // expandedHeaderSearchButton already has the correct order.
-            .frame(width: 28, height: 28)
+            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.4), interactive: true)
             .meeshyTapTarget()
     }
@@ -482,8 +512,17 @@ private struct ConversationHeaderAvatarView: View {
 
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var statusViewModel: StatusViewModel
+    /// Signal débouncé de `PresenceManager` (jamais le manager lui-même) :
+    /// l'arrivée ou le départ d'un pair (#8892) repeint les points de l'en-tête.
+    @ObservedObject private var presencePulse: PresenceRefreshSignal = PresenceManager.shared.refreshSignal
 
     private var isDirect: Bool { conversation?.type == .direct }
+
+    /// Le pair a l'écran de CETTE conversation ouvert (#8892).
+    private func isHere(_ userId: String?) -> Bool {
+        guard let userId, let conversationId = conversation?.id else { return false }
+        return PresenceManager.shared.isHere(userId: userId, conversationId: conversationId)
+    }
 
     private func memberStoryState(for userId: String) -> StoryRingState {
         storyViewModel.storyRingState(forUserId: userId)
@@ -589,6 +628,7 @@ private struct ConversationHeaderAvatarView: View {
                     storyState: memberStoryState(for: userId),
                     moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
                     presenceState: PresenceManager.shared.presenceState(for: userId),
+                    isHere: isHere(userId),
                     onTap: {
                         HapticFeedback.light()
                         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -603,7 +643,7 @@ private struct ConversationHeaderAvatarView: View {
                     contextMenuItems: directContextMenu
                 )
             } else {
-                HStack(spacing: 4) {
+                HStack(spacing: MeeshySpacing.xs) {
                     // Stacked active member avatars
                     if !topActiveMembers.isEmpty {
                         HStack(spacing: -6) {
@@ -617,6 +657,7 @@ private struct ConversationHeaderAvatarView: View {
                                     storyState: storyState,
                                     moodEmoji: statusViewModel.statusForUser(userId: member.id)?.moodEmoji,
                                     presenceState: PresenceManager.shared.presenceState(for: member.id),
+                                    isHere: isHere(member.viewingKey),
                                     onTap: { openMember(member, storyState: storyState) },
                                     onMoodTap: statusViewModel.moodTapHandler(for: member.id),
                                     contextMenuItems: memberContextMenu(for: member, storyState: storyState)
@@ -652,6 +693,7 @@ private struct ConversationHeaderAvatarView: View {
                 storyState: collapsedStoryState,
                 moodEmoji: headerMoodEmoji,
                 presenceState: headerPresenceState,
+                isHere: isDirect && isHere(conversation?.participantUserId),
                 onTap: {
                     HapticFeedback.light()
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
@@ -678,10 +720,10 @@ private struct HeaderOpenFullGlyph: View {
 
     var body: some View {
         Image(systemName: "arrow.up.left.and.arrow.down.right")
-            .font(MeeshyFont.relative(12, weight: .semibold))
+            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
             .foregroundStyle(Color(hex: accentColor))
-            .frame(width: 28, height: 28)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
+            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
             .meeshyTapTarget()
     }
 }

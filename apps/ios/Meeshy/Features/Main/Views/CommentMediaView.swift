@@ -19,12 +19,12 @@ struct CommentAttachmentsTray: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if let place {
                     placeChip(place)
                 }
                 ForEach(attachments) { attachment in
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Image(systemName: attachment.type.glyph)
                             .font(.caption)
                             .foregroundColor(Color(hex: attachment.thumbnailColor))
@@ -40,16 +40,16 @@ struct CommentAttachmentsTray: View {
                                 .font(.caption2.weight(.bold))
                                 .foregroundColor(theme.textMuted)
                                 .frame(width: 18, height: 18)
-                                .background(Circle().fill(theme.textMuted.opacity(0.15)))
+                                .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
                         }
                         .accessibilityHidden(true)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, MeeshySpacing.smPlus)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .background(
                         Capsule()
                             .fill(theme.inputBackground)
-                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
+                            .overlay(Capsule().stroke(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
                     )
                     .foregroundColor(theme.textPrimary)
                     .accessibilityElement(children: .combine)
@@ -58,8 +58,8 @@ struct CommentAttachmentsTray: View {
                     }
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.sm)
         }
     }
 
@@ -73,7 +73,7 @@ struct CommentAttachmentsTray: View {
 
     /// Même gabarit de chip que les pièces jointes ci-dessus, pour un lieu.
     private func placeChip(_ place: SharedPlace) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Image(systemName: "location.fill")
                 .font(.caption)
                 .foregroundColor(MeeshyColors.success)
@@ -92,16 +92,16 @@ struct CommentAttachmentsTray: View {
                     .font(.caption2.weight(.bold))
                     .foregroundColor(theme.textMuted)
                     .frame(width: 18, height: 18)
-                    .background(Circle().fill(theme.textMuted.opacity(0.15)))
+                    .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
             }
             .accessibilityHidden(true)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
             Capsule()
                 .fill(theme.inputBackground)
-                .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: 0.5))
+                .overlay(Capsule().stroke(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
         )
         .foregroundColor(theme.textPrimary)
         .accessibilityElement(children: .combine)

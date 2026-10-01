@@ -82,15 +82,15 @@ public struct LocationMessageView: View {
     }
 
     private var locationInfoBar: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             VStack(alignment: .leading, spacing: 1) {
                 Text(infoLines.title ?? String(localized: "location.shared", defaultValue: "Position partagée", bundle: .module))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
                     .foregroundColor(.primary)
                     .lineLimit(1)
                 if let subtitle = infoLines.subtitle {
                     Text(subtitle)
-                        .font(.system(size: 10))
+                        .font(.system(size: MeeshyFont.captionSize))
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
@@ -107,7 +107,7 @@ public struct LocationMessageView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "location.fullscreen.openInMaps", defaultValue: "Ouvrir dans Plans", bundle: .module))
         }
-        .padding(.leading, 10)
+        .padding(.leading, MeeshySpacing.smPlus)
     }
 
     private func openInMaps() {

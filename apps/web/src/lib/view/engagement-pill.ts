@@ -1,0 +1,61 @@
+import {
+  conversationEngagementForDay,
+  formatConversationPoints,
+  type ConversationEngagementSnapshot,
+} from '@meeshy/shared/types/engagement-scale';
+
+import { translate } from '@/lib/i18n-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
+
+/**
+ * LA PASTILLE « 🔥 4 · 120 (12) » (#8906) — ce qu'elle MONTRE, loi pure.
+ *
+ * Toujours relue au JOUR du lecteur (`conversationEngagementForDay`) : un
+ * instantané d'hier affiche 0 aujourd'hui après minuit, et une série dont le
+ * dernier geste date d'avant-hier tombe — sans attendre un événement serveur.
+ * Aucun instantané, ou zéro point depuis toujours ⇒ rien (`null`).
+ */
+export type EngagementPillModel = {
+  /** Série en jours ; 0 ⇒ la flamme et la série ne se rendent pas. */
+  readonly streakDays: number;
+  /** « N (M) », le texte demandé par le porteur (`formatConversationPoints`). */
+  readonly points: string;
+  /** Le nom accessible, en mots, dans la langue d'interface. */
+  readonly label: string;
+};
+
+const pad = (value: number): string => String(value).padStart(2, '0');
+
+/** Le jour civil LOCAL (`YYYY-MM-DD`) d'un instant — le fuseau du lecteur, jamais UTC. */
+export function localDayOf(epochMs: number): string {
+  const date = new Date(epochMs);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+export function engagementPillModel(
+  snapshot: ConversationEngagementSnapshot | undefined,
+  today: string,
+  language: InterfaceLanguage,
+): EngagementPillModel | null {
+  if (snapshot === undefined || snapshot.totalPoints <= 0) return null;
+  const shown = conversationEngagementForDay(snapshot, today);
+  const total = String(shown.totalPoints);
+  const todayPoints = String(shown.todayPoints);
+  const points = translate(
+    language,
+    shown.totalPoints === 1 ? 'engagement.pill.points.one' : 'engagement.pill.points.other',
+    { total, today: todayPoints },
+  );
+  const label =
+    shown.streakDays > 0
+      ? translate(language, 'engagement.pill.join', {
+          streak: translate(
+            language,
+            shown.streakDays === 1 ? 'engagement.pill.streak.one' : 'engagement.pill.streak.other',
+            { count: String(shown.streakDays) },
+          ),
+          points,
+        })
+      : points;
+  return { streakDays: shown.streakDays, points: formatConversationPoints(shown), label };
+}

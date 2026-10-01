@@ -29,6 +29,7 @@ const FRAGMENT_PREFIXES: Readonly<Record<string, readonly string[]>> = {
   'audit-reglages': ['admin.audit.', 'admin.settings.'],
   personnes: ['admin.people.'],
   'conversations-agent': ['admin.conversation.', 'admin.agentPanel.'],
+  'engagement-scale': ['admin.scale.'],
 };
 
 const IDS = Object.keys(FRAGMENT_PREFIXES);
@@ -46,8 +47,8 @@ async function base(language: AdminLanguage): Promise<Fragment> {
 const startsWithAny = (key: string, prefixes: readonly string[]): boolean => prefixes.some((prefix) => key.startsWith(prefix));
 
 describe('les fragments du catalogue d’administration', () => {
-  test('la table des préfixes couvre les onze fragments de la spécification', () => {
-    expect(IDS).toHaveLength(11);
+  test('la table des préfixes couvre les onze fragments de la spécification et le barème de points (#8906)', () => {
+    expect(IDS).toHaveLength(12);
   });
 
   for (const id of IDS) {

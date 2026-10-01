@@ -136,8 +136,8 @@ struct CallRecordingOverlay: View, Equatable {
     }
 
     private var consentCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
+            HStack(spacing: MeeshySpacing.sm) {
                 recordingDot
                 Text(CallRecordingCopy.ask(name: requesterName, kind: kind))
                     .font(.subheadline.weight(.semibold))
@@ -145,16 +145,16 @@ struct CallRecordingOverlay: View, Equatable {
             }
             Text(CallRecordingCopy.askDetail(kind: kind))
                 .font(.footnote)
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(MeeshyColors.mediaChromeSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 10) {
-                answerButton(CallRecordingCopy.refuse, accepted: false, tint: .white.opacity(0.18))
+            HStack(spacing: MeeshySpacing.smPlus) {
+                answerButton(CallRecordingCopy.refuse, accepted: false, tint: .white.opacity(MeeshyOpacity.light))
                 answerButton(CallRecordingCopy.accept, accepted: true, tint: MeeshyColors.indigo500)
             }
         }
-        .padding(16)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .padding(.horizontal, 16)
+        .padding(MeeshySpacing.lg)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
+        .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
     }
@@ -174,7 +174,7 @@ struct CallRecordingOverlay: View, Equatable {
     }
 
     private func statusPill(text: String, stopLabel: String) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             recordingDot
             Text(text)
                 .font(.footnote.weight(.medium))
@@ -191,13 +191,13 @@ struct CallRecordingOverlay: View, Equatable {
             .buttonStyle(.plain)
             .accessibilityLabel(stopLabel)
         }
-        .padding(.leading, 14)
+        .padding(.leading, MeeshySpacing.mdPlus)
         .background(.ultraThinMaterial, in: Capsule())
         .accessibilityElement(children: .contain)
     }
 
     private func noticePill(_ notice: CallRecordingNotice) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Text(CallRecordingCopy.notice(notice))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(.white)
@@ -205,14 +205,14 @@ struct CallRecordingOverlay: View, Equatable {
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(CallRecordingCopy.close)
         }
-        .padding(.leading, 14)
+        .padding(.leading, MeeshySpacing.mdPlus)
         .background(.ultraThinMaterial, in: Capsule())
         .task(id: notice) {
             try? await Task.sleep(nanoseconds: 4_000_000_000)

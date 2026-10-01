@@ -84,7 +84,7 @@ const arStudioChrome = {
   'story.studio.camera.shutter.photo': 'التقاط صورة',
   'story.studio.camera.shutter.start': 'بدء التسجيل',
   'story.studio.camera.shutter.stop': 'إيقاف التسجيل',
-  'story.studio.camera.hint.photo': 'المس الشاشة: صورة · اضغط مطولًا على الزر: فيديو',
+  'story.studio.camera.hint.photo': 'المس الشاشة: صورة · اضغط عليها مطولًا: فيديو',
   'story.studio.camera.hint.video': 'المس للتصوير · المس مجددًا للوضع',
   'story.studio.camera.unavailable': 'الكاميرا غير متاحة. اسمح بها في إعدادات المتصفح.',
   'story.studio.camera.recording': 'جارٍ التسجيل',
@@ -116,6 +116,9 @@ const arStudioChrome = {
   'story.studio.background.menu.retake': 'إعادة التقاط صورة',
   'story.studio.background.menu.forward': 'نقل إلى الواجهة',
   'story.studio.background.menu.remove': 'إزالة الخلفية',
+  'story.studio.background.tools': 'أدوات الخلفية',
+  'story.studio.background.tools.describe': 'وصف',
+  'story.studio.background.tools.leave': 'العودة إلى المشهد',
   'story.studio.reelSwitch.announcement': 'تم التحويل إلى ريل',
 } satisfies StudioChromeCatalogSlice;
 

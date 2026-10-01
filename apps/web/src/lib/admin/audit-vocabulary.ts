@@ -36,6 +36,7 @@ export const AUDIT_FAMILIES = [
   'agent',
   'reports',
   'communities',
+  'settings',
 ] as const;
 
 export type AuditFamily = (typeof AUDIT_FAMILIES)[number];
@@ -112,6 +113,8 @@ export const AUDIT_ACTIONS = {
   ADMIN_REPORT_UPDATED: entry('reports', 'flag', 'neutral'),
   ADMIN_REPORT_DELETED: entry('reports', 'trash', 'danger'),
   ADMIN_REPORT_ASSIGNED: entry('reports', 'user', 'info'),
+  // ── Réglages de la plateforme ──────────────────────────────────────────────
+  UPDATE_ENGAGEMENT_SCALE: entry('settings', 'flame', 'warning'),
 } as const satisfies Readonly<Record<string, ActionEntry>>;
 
 export type AuditActionCode = keyof typeof AUDIT_ACTIONS;

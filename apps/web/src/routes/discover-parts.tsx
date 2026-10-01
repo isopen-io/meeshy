@@ -197,7 +197,7 @@ export function DiscoverTabBar({
                 <span
                   aria-hidden="true"
                   data-discover-tab-count={count}
-                  className="grid shrink-0 place-items-center rounded-chip font-bold text-white tabular-nums"
+                  className="grid shrink-0 place-items-center rounded-chip font-bold text-ios-on-brand tabular-nums"
                   style={{ minWidth: 18, height: 18, paddingInline: 5, fontSize: 11, lineHeight: 1, backgroundColor: BRAND_FILL }}
                 >
                   {unreadBadgeText(count)}
@@ -292,10 +292,10 @@ export function RespondButtons({
         data-request-accept
         aria-label={translate(language, 'discover.connection.acceptLabel', { name })}
         onClick={onAccept}
-        className={`grid size-11 place-items-center rounded-full text-white ${FOCUS}`}
+        className={`grid size-11 place-items-center rounded-full text-ios-on-brand ${FOCUS}`}
         style={{
           backgroundImage:
-            'linear-gradient(135deg, color-mix(in srgb, var(--color-success) 78%, black), color-mix(in srgb, var(--color-success) 58%, black))',
+            'linear-gradient(135deg, color-mix(in srgb, var(--color-success) 78%, var(--color-media-backdrop)), color-mix(in srgb, var(--color-success) 58%, var(--color-media-backdrop)))',
           outlineColor: BRAND,
         }}
       >
@@ -373,7 +373,7 @@ export function ConnectionAction({
           className={`grid shrink-0 place-items-center rounded-chip ${FOCUS}`}
           style={{ minHeight: 44, outlineColor: BRAND }}
         >
-          <span className="flex h-[30px] items-center gap-1 rounded-chip px-3 text-caption font-semibold text-white" style={{ backgroundColor: BRAND_FILL }}>
+          <span className="flex h-[30px] items-center gap-1 rounded-chip px-3 text-caption font-semibold text-ios-on-brand" style={{ backgroundColor: BRAND_FILL }}>
             <DiscoverGlyph name="userPlus" size={12} />
             {translate(language, 'discover.connection.add')}
           </span>
@@ -544,7 +544,7 @@ export function RequestFilterRail({
               className={`grid h-[30px] place-items-center rounded-chip px-3.5 text-caption font-semibold ${pressed ? '' : BRAND_INK}`}
               style={
                 pressed
-                  ? { color: 'white', backgroundColor: BRAND_FILL }
+                  ? { color: 'var(--color-ios-on-brand)', backgroundColor: BRAND_FILL }
                   : { boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--ios-indigo-600) 35%, transparent)' }
               }
             >
@@ -622,7 +622,7 @@ export function InviteCard({
           onInput={(event) => onEmailChange(event.currentTarget.value)}
           aria-invalid={status === 'invalid' || status === 'conflict'}
           {...(feedback === null ? {} : { 'aria-describedby': feedbackId })}
-          className="w-0 min-w-0 flex-1 rounded-[10px] px-3 text-body focus-visible:outline-2"
+          className="w-0 min-w-0 flex-1 rounded-tile px-3 text-body focus-visible:outline-2"
           style={{ minHeight: 44, color: INK, backgroundColor: FIELD_FILL, outlineColor: BRAND }}
         />
         <button
@@ -630,7 +630,7 @@ export function InviteCard({
           data-discover-invite-send
           disabled={email.trim() === '' || status === 'sending'}
           aria-label={translate(language, 'discover.invite.sendLabel')}
-          className={`grid shrink-0 place-items-center rounded-chip px-4 text-caption font-semibold text-white disabled:opacity-60 ${FOCUS}`}
+          className={`grid shrink-0 place-items-center rounded-chip px-4 text-caption font-semibold text-ios-on-brand disabled:opacity-60 ${FOCUS}`}
           style={{ minHeight: 44, backgroundColor: BRAND_FILL, outlineColor: BRAND }}
         >
           {translate(language, status === 'sending' ? 'discover.invite.sending' : 'discover.invite.send')}
@@ -752,7 +752,7 @@ export function DiscoverError({ language, online, onRetry }: { readonly language
         type="button"
         data-discover-retry
         onClick={onRetry}
-        className={`grid place-items-center rounded-chip px-5 text-body font-semibold text-white ${FOCUS}`}
+        className={`grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand ${FOCUS}`}
         style={{ backgroundColor: BRAND_FILL, minHeight: 44, outlineColor: BRAND }}
       >
         {translate(language, 'discover.retry')}

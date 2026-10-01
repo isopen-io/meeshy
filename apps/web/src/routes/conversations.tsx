@@ -19,6 +19,9 @@ import { refreshListAction, rowAction, useConversations } from '@/lib/api/query'
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
 import { useTypistNames } from '@/lib/api/use-typists';
+import { peerHereIn, useHerePeers } from '@/lib/view/use-conversation-viewing';
+import { effectiveEngagementOf } from '@/lib/api/conversation-engagement';
+import { useLiveEngagements } from '@/lib/view/use-conversation-engagement';
 import { resolveViewer } from '@/lib/api/viewer';
 import { conversationStore, effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
 import { applyFilter, emptinessOf, FILTER_LABELS, LIST_FILTERS, orderConversations, type ListFilter } from '@/lib/lens/filters';
@@ -133,7 +136,7 @@ function ListError({ online, onRetry }: { readonly online: boolean; readonly onR
       <button
         type="button"
         onClick={onRetry}
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
         style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
       >
         Réessayer
@@ -347,6 +350,9 @@ export default function ConversationsScreen() {
    * change se re-rend.
    */
   const typists = useTypistNames(viewer.id ?? '');
+  /** Les pairs qui ont leur conversation OUVERTE (#8892) — même distribution que `typists`. */
+  const herePeers = useHerePeers(viewer.id ?? '');
+  const liveEngagements = useLiveEngagements();
   /**
    * LE CORPUS DU RAIL — une seule prop, partagée par les DEUX géographies
    * (grande et épinglée) pour qu'elles ne puissent PAS diverger.
@@ -540,7 +546,7 @@ export default function ConversationsScreen() {
                       className="rounded-chip px-3 py-1.5 text-title font-medium whitespace-nowrap transition-colors"
                       style={
                         active
-                          ? { backgroundColor: 'var(--color-ios-brand)', color: 'white' }
+                          ? { backgroundColor: 'var(--color-ios-brand)', color: 'var(--color-ios-on-brand)' }
                           : {
                               backgroundColor: 'var(--color-ios-card)',
                               color: 'var(--color-ios-ink-2)',
@@ -596,6 +602,8 @@ export default function ConversationsScreen() {
                 unreadCount={effectiveUnreadOf(c, overrides)}
                 onRowAction={rowAction}
                 typists={typists[c.id]}
+                peerHere={peerHereIn(herePeers, c, viewer.id ?? '')}
+                engagement={effectiveEngagementOf({ byConversation: liveEngagements }, c)}
                 status={{
                   /**
                    * L'APLATISSEMENT AU REPOS (#5694, écart 2) —
@@ -701,7 +709,7 @@ export default function ConversationsScreen() {
                 setSearch('');
                 setFilter('all');
               }}
-              className="rounded-chip px-5 text-body font-semibold text-white"
+              className="rounded-chip px-5 text-body font-semibold text-ios-on-brand"
               style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
             >
               Tout afficher

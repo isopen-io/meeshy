@@ -24,7 +24,7 @@ struct EmailCodeEntry: View {
     }
 
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: MeeshySpacing.xl) {
             proofBanner
             codeField
             errorView
@@ -47,11 +47,11 @@ struct EmailCodeEntry: View {
     @ViewBuilder
     private var proofBanner: some View {
         if viewModel.addressProvenElsewhere {
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .top, spacing: MeeshySpacing.smPlus) {
                 Image(systemName: "checkmark.seal.fill")
                     .font(.title3)
                     .foregroundStyle(MeeshyColors.success)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(String(localized: "emailVerification.provenElsewhere.title", defaultValue: "Adresse confirmée ✓"))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(theme.textPrimary)
@@ -62,10 +62,10 @@ struct EmailCodeEntry: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(14)
+            .padding(MeeshySpacing.mdPlus)
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(MeeshyColors.success.opacity(0.1))
+                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                    .fill(MeeshyColors.success.opacity(MeeshyOpacity.subtle))
             )
             .transition(.opacity.combined(with: .move(edge: .top)))
             .accessibilityElement(children: .combine)
@@ -84,17 +84,17 @@ struct EmailCodeEntry: View {
         .textContentType(.oneTimeCode)
         .font(.system(.title, design: .monospaced).weight(.semibold))
         .multilineTextAlignment(.center)
-        .padding(.vertical, 14)
-        .padding(.horizontal, 24)
+        .padding(.vertical, MeeshySpacing.mdPlus)
+        .padding(.horizontal, MeeshySpacing.xxl)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(theme.inputBackground)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(isCodeComplete ? MeeshyColors.indigo500 : theme.inputBorder, lineWidth: 1.5)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                .stroke(isCodeComplete ? MeeshyColors.indigo500 : theme.inputBorder, lineWidth: MeeshyBorder.emphasis)
         )
-        .padding(.horizontal, 32)
+        .padding(.horizontal, MeeshySpacing.xxxl)
         .adaptiveOnChange(of: code) { _, newValue in
             let filtered = newValue.filter(\.isNumber)
             let limited = String(filtered.prefix(6))
@@ -124,18 +124,18 @@ struct EmailCodeEntry: View {
     @ViewBuilder
     private var errorView: some View {
         if let errorMessage = viewModel.error {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.subheadline)
                 Text(errorMessage)
                     .font(.subheadline.weight(.medium))
             }
             .foregroundStyle(MeeshyColors.error)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(MeeshyColors.error.opacity(0.1))
+                RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                    .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
             )
             .transition(.opacity.combined(with: .move(edge: .top)))
             // Glyphe d'alerte décoratif + message fusionnés en un seul élément :
@@ -150,7 +150,7 @@ struct EmailCodeEntry: View {
         Button {
             Task { await viewModel.verifyCode(code) }
         } label: {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 if viewModel.isVerifying {
                     ProgressView()
                         .controlSize(.small)
@@ -162,17 +162,17 @@ struct EmailCodeEntry: View {
             .font(.headline)
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
+            .padding(.vertical, MeeshySpacing.lg)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(isCodeComplete && !viewModel.isVerifying
                           ? AnyShapeStyle(MeeshyColors.brandGradient)
-                          : AnyShapeStyle(MeeshyColors.indigo500.opacity(0.3)))
+                          : AnyShapeStyle(MeeshyColors.indigo500.opacity(MeeshyOpacity.medium)))
             )
         }
         .disabled(!isCodeComplete || viewModel.isVerifying || viewModel.verificationSuccess)
         .accessibilityIdentifier("emailVerification.submit")
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MeeshySpacing.sm)
         // Pendant la vérification le label se réduit à un spinner (aucun texte) →
         // VoiceOver lirait un bouton anonyme. Label stable et explicite dans les
         // deux états.

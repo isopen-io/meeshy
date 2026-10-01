@@ -4,6 +4,7 @@ import { useStore } from 'zustand/react';
 
 import { LanguageSheet } from '@/components/language-sheet';
 import { apiDeps } from '@/lib/api/deps';
+import { appProfileActionDeps } from '@/lib/api/profile-action-deps';
 import { friendRequestsQueryOptions, pendingRequestsOf } from '@/lib/api/friend-requests';
 import {
   myProfileQueryOptions,
@@ -16,7 +17,6 @@ import {
   performImageUpdate,
   performProfileEdit,
   type ImageUpdateOutcome,
-  type ProfileActionDeps,
   type ProfileEditOutcome,
 } from '@/lib/api/profile-actions';
 import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
@@ -68,12 +68,7 @@ import {
  */
 
 
-const actionDeps = (): ProfileActionDeps => ({
-  ...apiDeps,
-  queryClient: appQueryClient,
-  session: sessionStore,
-  isOnline: () => navigator.onLine,
-});
+const actionDeps = appProfileActionDeps;
 
 const FIELD_LABELS = {
   displayName: 'profile.display_name',

@@ -186,6 +186,7 @@ final class ConversationSocketHandler {
         // avant la garde d'idempotence de `loadMessages` (#4943).
         armSocketSubscriptions()
         messageSocket.joinConversation(conversationId)
+        ConversationViewingReporter.shared.conversationOpened(conversationId)
         NotificationToastManager.shared.onConversationOpened(conversationId)
         NotificationCoordinator.shared.markConversationRead(conversationId)
     }
@@ -214,6 +215,7 @@ final class ConversationSocketHandler {
                 // d'entrer — et toutes ses notifications se remettaient à
                 // s'afficher par-dessus le fil qu'on lisait.
                 NotificationToastManager.shared.onConversationClosed(id)
+                ConversationViewingReporter.shared.conversationClosed(id)
             }
             if isEmittingTyping {
                 MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
@@ -746,22 +748,30 @@ final class ConversationSocketHandler {
         // **L'échéance SERVIE d'un éphémère** (`message:countdown-started`,
         // contrat du fil #7451 point 5).
         //
-        // Elle ne REMPLACE pas l'échéance locale : les deux concourent, et
-        // `EphemeralDeadline.resolve` retient la plus PROCHE. Poser la valeur
-        // servie sur `expiresAt` suffit donc — elle ne peut que raccourcir la
-        // vie du message, jamais l'allonger, ce qui est la seule direction
-        // qu'une protection ait le droit de prendre.
+        // Chez un destinataire elle ne REMPLACE pas l'échéance locale : les
+        // deux concourent, et `EphemeralDeadline.resolve` retient la plus
+        // PROCHE. Chez l'EXPÉDITEUR, dont l'envoi ne compte pas comme une
+        // réception, elle est la SEULE horloge (#8905) : `max D(u)`, qui recule
+        // à chaque destinataire qui reçoit plus tard — d'où le remplacement.
         //
-        // C'est aussi ce qui donne une horloge à l'EXPÉDITEUR, dont l'envoi ne
-        // compte pas comme une réception : tant que cet événement n'est pas
-        // arrivé, il lit « en attente de réception ».
+        // Gravée en base : le fil relit GRDB, et une valeur posée en mémoire
+        // seule s'effaçait à la première écriture de la conversation.
         socketManager.messageCountdownStarted
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, let delegate = self.delegate else { return }
-                guard let index = delegate.messageIndex(for: event.messageId) else { return }
-                delegate.messages[index].expiresAt = event.expiresAt
+                guard let self else { return }
+                if let delegate = self.delegate, let index = delegate.messageIndex(for: event.messageId) {
+                    delegate.messages[index].expiresAt = event.expiresAt
+                }
+                guard let persistence = self.persistence else { return }
+                Task {
+                    do {
+                        try await persistence.applyServedEphemeralDeadline(messageId: event.messageId, expiresAt: event.expiresAt)
+                    } catch {
+                        Logger.messages.warning("[ConversationSocket] servedEphemeralDeadline failed \(event.messageId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
             }
             .store(in: &cancellables)
 

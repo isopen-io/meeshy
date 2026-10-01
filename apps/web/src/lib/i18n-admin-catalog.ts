@@ -1,6 +1,6 @@
 /**
  * **L'ADMINISTRATION PARLE QUATRE LANGUES** (directive porteur 2026-09-30,
- * `decisions.md` D-159) : français, anglais, espagnol, portugais — « c'est
+ * `decisions.md` D-162) : français, anglais, espagnol, portugais — « c'est
  * tout ». Une langue d'interface hors de ces quatre (allemand, italien, arabe)
  * lit l'administration en ANGLAIS : textes ET formats (dates, nombres, noms de
  * langue), `lang="en" dir="ltr"` à la racine de l'espace. Il n'existe plus de

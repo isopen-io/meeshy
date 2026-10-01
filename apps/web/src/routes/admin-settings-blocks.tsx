@@ -74,7 +74,7 @@ export function DashboardBlock({
           disabled={!online || running}
           aria-busy={running}
           onClick={() => void recompute()}
-          className={`inline-flex items-center gap-2 rounded-chip px-5 text-body font-semibold text-white disabled:opacity-40 ${FOCUS}`}
+          className={`inline-flex items-center gap-2 rounded-chip px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
           style={{ minHeight: 44, backgroundColor: BRAND, outlineColor: BRAND }}
         >
           <AdminGlyph name="arrowClockwise" size={16} />

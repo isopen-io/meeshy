@@ -159,7 +159,7 @@ public struct SelectiveCachePurgeView: View {
     public init() {}
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
             ForEach(CacheDataKind.allCases, id: \.self) { kind in
                 kindSection(kind)
             }
@@ -187,23 +187,23 @@ public struct SelectiveCachePurgeView: View {
     // MARK: - Section par type
 
     private func kindSection(_ kind: CacheDataKind) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Button {
                 HapticFeedback.light()
                 viewModel.toggleKind(kind)
             } label: {
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: Self.icon(for: kind))
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     Text(Self.label(for: kind).uppercased())
-                        .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                         .tracking(1.2)
                     Spacer()
                     Text(Self.formatBytes(viewModel.report?.bytes(for: kind) ?? 0))
-                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 }
                 .foregroundColor(Color(hex: accentColor))
-                .padding(.leading, 4)
+                .padding(.leading, MeeshySpacing.xs)
             }
             .accessibilityHint(String(
                 localized: "settings.cache.purge.kind.hint",
@@ -231,23 +231,23 @@ public struct SelectiveCachePurgeView: View {
                 HapticFeedback.light()
                 viewModel.toggle(id)
             } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: MeeshySpacing.md) {
                     Image(systemName: viewModel.isSelected(id) ? "checkmark.square.fill" : "square")
-                        .font(MeeshyFont.relative(16, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                         .foregroundColor(viewModel.isSelected(id) ? Color(hex: accentColor) : theme.textMuted)
 
                     Text(Self.label(for: domain))
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
 
                     Text(Self.formatBytes(bytes))
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(bytes > 0 ? theme.textPrimary : theme.textMuted)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.smPlus)
                 .contentShape(Rectangle())
             }
             .accessibilityElement(children: .combine)
@@ -256,24 +256,24 @@ public struct SelectiveCachePurgeView: View {
         case .unavailable(let limitation):
             // Case grisée : on affiche la RAISON. Pas de taille — elle serait
             // inventée, puisque rien n'est mesurable pour cette case.
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: MeeshySpacing.md) {
                 Image(systemName: "minus.square")
-                    .font(MeeshyFont.relative(16, weight: .medium))
-                    .foregroundColor(theme.textMuted.opacity(0.5))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
+                    .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.strong))
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(Self.label(for: domain))
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                     Text(Self.explanation(for: limitation))
-                        .font(MeeshyFont.relative(11, weight: .regular))
-                        .foregroundColor(theme.textMuted.opacity(0.8))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
+                        .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.intense))
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .accessibilityElement(children: .combine)
 
         case .none:
@@ -287,38 +287,38 @@ public struct SelectiveCachePurgeView: View {
     private var unattributedSection: some View {
         let bytes = viewModel.report?.unattributedBytes ?? 0
         if bytes > 0 {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "questionmark.folder")
-                        .font(MeeshyFont.relative(12, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                     Text(String(localized: "settings.cache.purge.unattributed.title",
                                 defaultValue: "Non attribué", bundle: .module).uppercased())
-                        .font(MeeshyFont.relative(11, weight: .bold, design: .rounded))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                         .tracking(1.2)
                 }
-                .foregroundColor(Color(hex: MeeshyColors.neutral500Hex))
-                .padding(.leading, 4)
+                .foregroundColor(MeeshyColors.neutral500)
+                .padding(.leading, MeeshySpacing.xs)
 
                 Button {
                     HapticFeedback.light()
                     viewModel.includeUnattributed.toggle()
                 } label: {
-                    HStack(spacing: 12) {
+                    HStack(spacing: MeeshySpacing.md) {
                         Image(systemName: viewModel.includeUnattributed ? "checkmark.square.fill" : "square")
-                            .font(MeeshyFont.relative(16, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .medium))
                             .foregroundColor(viewModel.includeUnattributed ? Color(hex: accentColor) : theme.textMuted)
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(String(localized: "settings.cache.purge.unattributed.label",
                                         defaultValue: "Médias orphelins", bundle: .module))
-                                .font(MeeshyFont.relative(14, weight: .medium))
+                                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
                                 .foregroundColor(theme.textPrimary)
                             Text(String(
                                 localized: "settings.cache.purge.unattributed.description",
                                 defaultValue: "Fichiers encore sur l'appareil dont la publication, la story ou la conversation d'origine n'est plus en cache. Impossible de les rattacher à un domaine.",
                                 bundle: .module
                             ))
-                                .font(MeeshyFont.relative(11, weight: .regular))
+                                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
                                 .foregroundColor(theme.textMuted)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -326,11 +326,11 @@ public struct SelectiveCachePurgeView: View {
                         Spacer()
 
                         Text(Self.formatBytes(bytes))
-                            .font(MeeshyFont.relative(13, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, MeeshySpacing.mdPlus)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                     .contentShape(Rectangle())
                 }
                 .background(sectionBackground(tint: MeeshyColors.neutral500Hex))
@@ -342,14 +342,14 @@ public struct SelectiveCachePurgeView: View {
     // MARK: - Action
 
     private var purgeButton: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.smPlus) {
             Button {
                 HapticFeedback.medium()
                 viewModel.toggleAll()
             } label: {
                 Text(String(localized: "settings.cache.purge.selectAll",
                             defaultValue: "Tout sélectionner", bundle: .module))
-                    .font(MeeshyFont.relative(13, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
 
@@ -357,21 +357,21 @@ public struct SelectiveCachePurgeView: View {
                 HapticFeedback.medium()
                 showConfirm = true
             } label: {
-                HStack(spacing: 8) {
+                HStack(spacing: MeeshySpacing.sm) {
                     if viewModel.isPurging {
                         ProgressView().scaleEffect(0.7)
                     } else {
                         Image(systemName: "trash.fill")
-                            .font(MeeshyFont.relative(14, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                     }
                     Text(purgeButtonTitle)
-                        .font(MeeshyFont.relative(14, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
                 }
                 .foregroundColor(viewModel.hasSelection ? MeeshyColors.error : theme.textMuted)
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
+                .padding(.vertical, MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
                         .fill(MeeshyColors.error.opacity(viewModel.hasSelection ? 0.12 : 0.04))
                 )
             }
@@ -407,10 +407,10 @@ public struct SelectiveCachePurgeView: View {
     // MARK: - Habillage
 
     private func sectionBackground(tint: String) -> some View {
-        RoundedRectangle(cornerRadius: 16)
+        RoundedRectangle(cornerRadius: MeeshyRadius.lg)
             .fill(theme.surfaceGradient(tint: tint))
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: MeeshyRadius.lg)
                     .stroke(theme.border(tint: tint), lineWidth: 1)
             )
     }

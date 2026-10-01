@@ -23,21 +23,21 @@ public struct VideoEditorModeSwitcher: View, Equatable {
     }
 
     public var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             segment(for: .simple, label: "Simple", systemImage: "square.split.2x1")
             segment(for: .pro, label: "Pro", systemImage: "slider.horizontal.below.rectangle")
         }
-        .padding(4)
+        .padding(MeeshySpacing.xs)
         .fixedSize(horizontal: true, vertical: false)
         .background(
             Capsule().fill(
                 isDark
-                    ? MeeshyColors.indigo900.opacity(0.55)
-                    : MeeshyColors.indigo100.opacity(0.85)
+                    ? MeeshyColors.indigo900.opacity(MeeshyOpacity.strong)
+                    : MeeshyColors.indigo100.opacity(MeeshyOpacity.intense)
             )
         )
         .overlay(
-            Capsule().strokeBorder(MeeshyColors.indigo400.opacity(0.25), lineWidth: 0.5)
+            Capsule().strokeBorder(MeeshyColors.indigo400.opacity(MeeshyOpacity.medium), lineWidth: MeeshyBorder.hairline)
         )
         .animation(.spring(response: 0.32, dampingFraction: 0.72), value: mode)
         .accessibilityElement(children: .contain)
@@ -50,14 +50,14 @@ public struct VideoEditorModeSwitcher: View, Equatable {
             guard target != mode else { return }
             onSelect(target)
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                 Text(label)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .frame(minWidth: 72)
             .foregroundStyle(foreground(isActive: isActive))
             .background(

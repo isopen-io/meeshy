@@ -21,14 +21,14 @@ export type { AdminRoute };
  *
  * La liste part de la barre latérale du legacy
  * (`apps/web/components/admin/AdminLayout.tsx`, onze entrées), rangée depuis
- * #8876 en sept groupes et dix-huit sections (`docs/superpowers/specs/
+ * #8876 en sept groupes et dix-neuf sections (`docs/superpowers/specs/
  * 2026-09-30-admin-vue-de-dieu-design.md`, § 1).
  *
  * ## Une section que l'administration ne sert pas encore est MASQUÉE (#6702, #8876)
  *
  * Le legacy est décommissionné (directive porteur 2026-09-15) : la v2 sert tout
  * `meeshy.me`. Une section dont `ready` est faux n'est ni au menu, ni au hub,
- * ni en lien d'entité : ce serait un contrôle qui ment (loi 4). Les dix-huit
+ * ni en lien d'entité : ce serait un contrôle qui ment (loi 4). Les dix-neuf
  * sections sont servies depuis l'intégration du chantier #8876 ; le drapeau
  * reste la porte d'une section qu'on livrerait écran par écran.
  *
@@ -78,7 +78,7 @@ export type AdminPermissions = {
 export type AdminPermissionKey = keyof AdminPermissions;
 
 /**
- * Les clés de catalogue des dix-huit sections — une UNION littérale, jamais
+ * Les clés de catalogue des dix-neuf sections — une UNION littérale, jamais
  * `string`.
  *
  * `translate` est générique sur sa clé : il exige un troisième argument dès
@@ -165,7 +165,7 @@ const section = (id: AdminSectionId, facts: SectionFacts): AdminSection => ({
 });
 
 /**
- * Les dix-huit sections, dans l'ordre des sept groupes (#8876). La permission
+ * Les dix-neuf sections, dans l'ordre des sept groupes (#8876). La permission
  * est celle de la route QUE LA SECTION OUVRE — une tuile ne promet jamais plus
  * que sa garde serveur (#6843).
  */
@@ -195,6 +195,10 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
      la tuile porte le seuil de ce qu'elle OUVRE. Et aucun `adminRankOnly` —
      sa garde serveur est une permission, pas un rang. */
   section('agent', { permission: 'canManageAgent', glyph: 'robot', ready: true }),
+  /* LE BARÈME DE POINTS (#8906) — ce que chaque geste rapporte. La passerelle
+     le réserve à ADMIN et BIGBOSS (`requireAdminRank()`) : `adminRankOnly`, sous
+     l'accès à l'espace — un MODERATOR ne verrait qu'un refus. */
+  section('engagementScale', { permission: 'canAccessAdmin', glyph: 'flame', ready: true, adminRankOnly: true }),
   section('settings', { permission: 'canAccessAdmin', glyph: 'gear', ready: true }),
 ];
 

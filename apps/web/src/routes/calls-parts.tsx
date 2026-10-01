@@ -152,7 +152,7 @@ export function CallFilterRail({
               className={`grid place-items-center rounded-chip px-3.5 text-caption font-semibold ${pressed ? '' : BRAND_INK}`}
               style={
                 pressed
-                  ? { height: 30, color: 'white', backgroundColor: 'var(--ios-indigo-600)' }
+                  ? { height: 30, color: 'var(--color-ios-on-brand)', backgroundColor: 'var(--ios-indigo-600)' }
                   : { height: 30, boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--ios-indigo-600) 35%, transparent)' }
               }
             >
@@ -175,7 +175,7 @@ export function CallFilterRail({
             className="grid place-items-center rounded-full"
             style={
               video.pressed
-                ? { width: 30, height: 30, color: 'white', backgroundColor: 'var(--ios-indigo-600)' }
+                ? { width: 30, height: 30, color: 'var(--color-ios-on-brand)', backgroundColor: 'var(--ios-indigo-600)' }
                 : { width: 30, height: 30, boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--ios-indigo-600) 35%, transparent)' }
             }
           >
@@ -424,7 +424,7 @@ export function CallsClearAll({
           type="button"
           data-calls-clear="confirm"
           onClick={onConfirm}
-          className={`${action} text-white`}
+          className={`${action} text-ios-on-brand`}
           style={{ minHeight: 44, backgroundColor: MISSED_INK, outlineColor: MISSED_INK }}
         >
           {translate(language, 'calls.clearAll.confirmAction')}
@@ -477,7 +477,7 @@ export function CallsError({
         type="button"
         data-calls-retry
         onClick={onRetry}
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ backgroundColor: 'var(--ios-indigo-600)', minHeight: 44, outlineColor: BRAND }}
       >
         {translate(language, 'calls.retry')}

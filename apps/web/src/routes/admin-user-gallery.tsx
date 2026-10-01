@@ -118,7 +118,7 @@ export function AdminUserGallery({
           ) : null}
           <figcaption
             className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-2 px-3 py-2 text-caption"
-            style={{ backgroundColor: 'color-mix(in srgb, black 45%, transparent)', color: 'white' }}
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-media-backdrop) 45%, transparent)', color: 'var(--color-on-media)' }}
           >
             <span className="truncate">{libelleDe(diapo, language)}</span>
             <span className="shrink-0 tabular-nums" aria-live="polite">
@@ -166,7 +166,7 @@ function BoutonPas({ libelle, cote, onClick }: { readonly libelle: string; reado
       data-admin-gallery-step={cote === 'start' ? 'previous' : 'next'}
       onClick={onClick}
       className={`absolute top-1/2 grid size-11 -translate-y-1/2 place-items-center rounded-full ${cote === 'start' ? 'start-2' : 'end-2'}`}
-      style={{ backgroundColor: 'color-mix(in srgb, black 45%, transparent)', color: 'white' }}
+      style={{ backgroundColor: 'color-mix(in srgb, var(--color-media-backdrop) 45%, transparent)', color: 'var(--color-on-media)' }}
     >
       <span className="grid place-items-center">
         <span className="grid place-items-center" style={cote === 'end' ? { transform: 'scaleX(-1)' } : {}}>

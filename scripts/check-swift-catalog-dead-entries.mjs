@@ -351,7 +351,15 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // appelant est la console d'administration WEB, comme leurs voisines
 // `AdminEndpoint` ; iOS n'a pas d'écran d'administration. Valeur MESURÉE le
 // 2026-09-30.
-const BASELINE_DEAD_ENTRIES = 285;
+// 285 -> 286 (#8906, fusion de `dev` dans la vue de Dieu, 2026-09-30) :
+// `AdminEndpoint.engagementScale` — le barème de points se règle depuis
+// l'administration WEB (`/admin/engagement-scale`) ; iOS n'a pas d'écran
+// d'administration du barème. Sa jumelle lecteur,
+// `ConversationsEndpoint.byIdEngagement`, est appelée par
+// `ConversationService.engagement(conversationId:)`. Les deux cliquets se
+// lisent ici sur le résultat de la fusion (chacun 279 de son côté : 285 et
+// 280), jamais sur l'un des deux parents. Valeur MESURÉE le 2026-09-30.
+const BASELINE_DEAD_ENTRIES = 286;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

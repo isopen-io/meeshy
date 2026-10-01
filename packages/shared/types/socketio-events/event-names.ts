@@ -114,6 +114,18 @@ export const SERVER_EVENTS = {
   MESSAGE_RESTORED_FOR_ME: 'message:restored-for-me',
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
+  /** Un pair a ouvert la conversation (#8892) — `ViewingEvent`. */
+  VIEWING_START: 'viewing:start',
+  /** Un pair a quitté la conversation, ou l'a mise en arrière-plan (#8892). */
+  VIEWING_STOP: 'viewing:stop',
+  /** Réponse au seul émetteur d'un `viewing:start` : les pairs déjà présents. */
+  VIEWING_SNAPSHOT: 'viewing:snapshot',
+  /**
+   * Les points et la série qu'une conversation a rapportés à son LECTEUR ont
+   * changé (#8906) — `ConversationEngagementSnapshot`, émis dans la room
+   * `user:<id>` du seul crédité, jamais dans la room de la conversation.
+   */
+  ENGAGEMENT_CONVERSATION_UPDATED: 'engagement:conversation-updated',
   USER_STATUS: 'user:status',
   /**
    * Snapshot émis à l'authentification socket : liste des userIds actuellement
@@ -600,6 +612,9 @@ export const CLIENT_EVENTS = {
   CONVERSATION_LEAVE: 'conversation:leave',
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
+  /** L'écran de la conversation est ouvert et au premier plan (#8892). */
+  VIEWING_START: 'viewing:start',
+  VIEWING_STOP: 'viewing:stop',
   // `USER_STATUS: 'user:status'` a été retiré d'ici (cycle 60) : c'est un
   // événement SERVEUR→client (`SERVER_EVENTS.USER_STATUS`, écouté par
   // `presence.service.ts`, `websocket.service.ts`, iOS `PresenceManager`), et

@@ -92,6 +92,9 @@ export type AccountVault = {
   /** Le compte ACTIF entre (ou reste) dans la liste. `keepsSession` absent
    * garde le choix déjà fait, et vaut `true` pour un compte neuf. */
   noteActive(user: SessionUser, keepsSession?: boolean): void;
+  /** L'identité d'un compte DÉJÀ listé change (photo, nom confirmés, #8886) :
+   * sa ligne suit, sans le faire remonter ni toucher à ses jetons. */
+  refreshUser(user: SessionUser): void;
   /** Range les jetons du compte qu'on QUITTE. */
   stash(userId: string, session: PreservedSession): void;
   /** Reprend les jetons d'un compte, s'ils sont encore valables — et les
@@ -132,6 +135,7 @@ export function createAccountVault({ storage, now }: { readonly storage: Session
       };
       writeAccounts(storage, [entry, ...accounts.filter((account) => account.user.id !== user.id)]);
     },
+    refreshUser: (user) => update(user.id, (account) => ({ ...account, user: projectUser(user) })),
     stash: (userId, session) => update(userId, (account) => ({ ...account, session })),
     take: (userId) => {
       const session = readAccounts(storage).find((account) => account.user.id === userId)?.session ?? null;
@@ -189,6 +193,7 @@ export function createAccountSwitcher({
     if (current.status !== 'authenticated') return;
     const known = vault.list().find((account) => account.user.id === current.user.id);
     if (known === undefined) vault.noteActive(current.user);
+    else vault.refreshUser(current.user);
     const held: PreservedSession = { token: current.token, sessionToken: current.sessionToken, expiresAt: current.expiresAt };
     if (known?.keepsSession ?? true) vault.stash(current.user.id, held);
     else endServerSession(held);

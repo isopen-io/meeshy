@@ -39,9 +39,9 @@ type CallButtonProps = {
 };
 
 const TONE_STYLE: Readonly<Record<Exclude<CallButtonTone, 'glass'>, { readonly background: string; readonly color: string }>> = {
-  bare: { background: 'transparent', color: 'white' },
-  active: { background: 'white', color: 'var(--ios-indigo-950)' },
-  danger: { background: 'var(--ios-error-strong)', color: 'white' },
+  bare: { background: 'transparent', color: 'var(--color-on-media)' },
+  active: { background: 'var(--color-on-media)', color: 'var(--ios-indigo-950)' },
+  danger: { background: 'var(--ios-error-strong)', color: 'var(--color-ios-on-brand)' },
 };
 
 export function CallButton({ label, glyph, onPress, tone = 'bare', prominent = false, pressed, expanded, controls, popup = false, disabled = false, caption, size = 48, data = {} }: CallButtonProps) {
@@ -69,7 +69,7 @@ export function CallButton({ label, glyph, onPress, tone = 'bare', prominent = f
       <span className={round} style={roundStyle}>
         {glyph}
       </span>
-      <span aria-hidden className="max-w-[4.5rem] truncate text-mini text-white">
+      <span aria-hidden className="max-w-[4.5rem] truncate text-mini text-on-media">
         {caption}
       </span>
     </button>

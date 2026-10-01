@@ -75,7 +75,7 @@ function GestureButton({
       data-admin-action={anchor}
       disabled={disabled}
       onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-chip px-4 text-body font-semibold disabled:opacity-40 ${primary ? 'text-white' : ''} ${FOCUS}`}
+      className={`inline-flex items-center gap-2 rounded-chip px-4 text-body font-semibold disabled:opacity-40 ${primary ? 'text-ios-on-brand' : ''} ${FOCUS}`}
       style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)', ...style }}
     >
       <AdminGlyph name={glyph} size={16} />

@@ -27,9 +27,9 @@ const patternOf = (key: string): string => {
   return route[1].pattern;
 };
 
-describe('la table des dix-huit sections', () => {
-  test('dix-huit sections, dix fiches', () => {
-    expect(ADMIN_SECTION_TABLE).toHaveLength(18);
+describe('la table des dix-neuf sections', () => {
+  test('dix-neuf sections, dix fiches', () => {
+    expect(ADMIN_SECTION_TABLE).toHaveLength(19);
     expect(ADMIN_FICHES).toHaveLength(10);
   });
 
@@ -80,11 +80,14 @@ describe('les résolveurs', () => {
     expect(adminGroupOf('dashboard')).toBe('overview');
     expect(adminGroupOf('reports')).toBe('moderation');
     expect(adminGroupOf('languages')).toBe('platform');
+    expect(adminGroupOf('engagementScale')).toBe('platform');
   });
 
   test('adminSectionOfRouteKey : liste ou fiche, dans l’un ou l’autre espace — sinon null', () => {
     expect(adminSectionOfRouteKey('admReport')).toBe('reports');
     expect(adminSectionOfRouteKey('adminReports')).toBe('reports');
+    expect(adminSectionOfRouteKey('adminEngagementScale')).toBe('engagementScale');
+    expect(adminSectionOfRouteKey('admEngagementScale')).toBe('engagementScale');
     expect(adminSectionOfRouteKey('list')).toBeNull();
   });
 });

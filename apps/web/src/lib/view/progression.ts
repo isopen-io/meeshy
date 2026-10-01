@@ -41,7 +41,9 @@ export type ProgressionGlyph =
   | 'shareNetwork'
   | 'userPlus'
   | 'handshake'
-  | 'paperPlaneTilt';
+  | 'paperPlaneTilt'
+  | 'heart'
+  | 'paperclip';
 
 /**
  * Les MOTS viennent du catalogue partagé (`@meeshy/shared/utils/engagement-labels`),
@@ -65,9 +67,12 @@ export const AXIS_GLYPHS: Record<EngagementAxisKey, ProgressionGlyph> = {
   'conversation.private': 'user',
   'conversation.public': 'globe',
   'conversation.community': 'usersThree',
+  'conversation.group_created': 'usersThree',
   'tool.sticker': 'smiley',
   'tool.in_app_edit': 'magicWand',
   'tool.direct_publish': 'paperPlaneTilt',
+  'tool.reaction': 'heart',
+  'tool.attachment': 'paperclip',
   'social.tracked_link': 'linkSimple',
   'social.share': 'shareNetwork',
   'social.invite_joined': 'userPlus',

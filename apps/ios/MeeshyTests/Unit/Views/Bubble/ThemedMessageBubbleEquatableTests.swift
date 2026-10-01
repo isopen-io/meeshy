@@ -35,6 +35,12 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
         XCTAssertNotEqual(a, b)
     }
 
+    func test_senderIsHereChange_invalidates() {
+        let a = makeBubble(senderIsHere: false)
+        let b = makeBubble(senderIsHere: true)
+        XCTAssertNotEqual(a, b)
+    }
+
     func test_senderMoodEmojiChange_invalidates() {
         let a = makeBubble(senderMoodEmoji: nil)
         let b = makeBubble(senderMoodEmoji: "🔥")
@@ -334,6 +340,7 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
         updatedAt: Date = Date(timeIntervalSince1970: 0),
         isDirect: Bool = false,
         presenceState: PresenceState = .offline,
+        senderIsHere: Bool = false,
         senderMoodEmoji: String? = nil,
         senderStoryRingState: StoryRingState = .none,
         isLastInGroup: Bool = true,
@@ -354,6 +361,7 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
             isDark: false,
             showAvatar: showAvatar,
             presenceState: presenceState,
+            senderIsHere: senderIsHere,
             senderMoodEmoji: senderMoodEmoji,
             senderStoryRingState: senderStoryRingState,
             allAudioItems: allAudioItems,

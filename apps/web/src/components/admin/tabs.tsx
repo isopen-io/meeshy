@@ -11,7 +11,7 @@ export type AdminTabDefinition<T extends string> = { readonly id: T; readonly la
  * tabulation (celui qui est actif : la tabulation traverse la liste d'un coup,
  * les flèches la parcourent), Début/Fin. L'administration se lit toujours de
  * gauche à droite (`dir="ltr"` à la racine, quelle que soit la langue
- * d'interface — D-159) : la flèche droite avance, sans jamais consulter le
+ * d'interface — D-162) : la flèche droite avance, sans jamais consulter le
  * sens du document, qu'une interface arabe retourne autour d'elle.
  * Activation automatique : un onglet qui prend le focus est ouvert.
  *

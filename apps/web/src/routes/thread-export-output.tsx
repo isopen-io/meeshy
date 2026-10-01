@@ -16,7 +16,8 @@ import { Pill } from './thread-export-controls';
  * `useCardSources` va chercher, UNE fois par atelier, les images des médias
  * de la carte (image, image d'attente d'une vidéo) : l'aperçu se peint d'abord
  * sans elles (un cadre neutre à leur place), puis se repeint quand elles
- * arrivent — jamais une attente blanche.
+ * arrivent — jamais une attente blanche. Celles qui n'arrivent pas sont
+ * NOMMÉES, et `MediaFailure` le dit avec « Réessayer ».
  *
  * `OutputPicker` offre, avant d'enregistrer, ce que le contenu permet :
  * Image · GIF · Vidéo pour une vidéo, Image · Vidéo pour un audio.
@@ -38,10 +39,19 @@ export const defaultSourcesLoader: SourcesLoader = async (items) => {
   });
 };
 
-/** Les sources par rang, et leur VERSION — elle entre dans la clé de l'aperçu et des vignettes. */
-export function useCardSources(items: readonly MessageCardMediaItem[], load: SourcesLoader): { readonly sources: readonly (CardSource | null)[]; readonly version: number; readonly loading: boolean } {
-  const [state, setState] = useState<{ readonly sources: readonly (CardSource | null)[]; readonly version: number }>({ sources: [], version: 0 });
+/**
+ * Les sources par rang, et leur VERSION — elle entre dans la clé de l'aperçu et
+ * des vignettes. `failed` nomme les médias VISUELS dont les pixels ne sont pas
+ * arrivés (un chargeur qui échoue en bloc les nomme tous) ; `retry` relance le
+ * chargement (#8901) : un cadre vide muet se lisait « pas de pièce ».
+ */
+export function useCardSources(
+  items: readonly MessageCardMediaItem[],
+  load: SourcesLoader,
+): { readonly sources: readonly (CardSource | null)[]; readonly version: number; readonly loading: boolean; readonly failed: readonly string[]; readonly retry: () => void } {
+  const [state, setState] = useState<{ readonly sources: readonly (CardSource | null)[]; readonly version: number; readonly failed: readonly string[] }>({ sources: [], version: 0, failed: [] });
   const [loading, setLoading] = useState(items.length > 0);
+  const [attempt, setAttempt] = useState(0);
   const ids = items.map((item) => item.id).join('|');
   useEffect(() => {
     if (items.length === 0) {
@@ -58,9 +68,13 @@ export function useCardSources(items: readonly MessageCardMediaItem[], load: Sou
           loaded.dispose();
           return;
         }
-        setState((current) => ({ sources: loaded.sources, version: current.version + 1 }));
+        setState((current) => ({ sources: loaded.sources, version: current.version + 1, failed: loaded.failed }));
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (!live) return;
+        const visual = items.filter((item) => item.card.kind !== 'audio').map((item) => item.id);
+        setState((current) => ({ sources: [], version: current.version + 1, failed: visual }));
+      })
       .finally(() => {
         if (live) setLoading(false);
       });
@@ -69,8 +83,28 @@ export function useCardSources(items: readonly MessageCardMediaItem[], load: Sou
       dispose?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ids]);
-  return { ...state, loading };
+  }, [ids, attempt]);
+  return { ...state, loading, retry: () => setAttempt((current) => current + 1) };
+}
+
+/** « Un média n'a pas pu se charger » + « Réessayer » — jamais un cadre vide muet (#8901). */
+export function MediaFailure({ language, count, onRetry }: { readonly language: InterfaceLanguage; readonly count: number; readonly onRetry: () => void }) {
+  if (count === 0) return null;
+  const message = count === 1 ? translateExportCard(language, 'export.card.media.failed.one') : translateExportCard(language, 'export.card.media.failed.other', { count: String(count) });
+  return (
+    <div role="alert" data-export-media-failed="" className="relative flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-6 pb-1 text-center text-caption">
+      <span style={{ color: 'var(--color-error)' }}>{message}</span>
+      <button
+        type="button"
+        data-export-media-retry=""
+        onClick={onRetry}
+        className="rounded-full px-3 font-semibold underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}
+      >
+        {translateExportCard(language, 'export.card.media.retry')}
+      </button>
+    </div>
+  );
 }
 
 const OUTPUT_LABEL = {

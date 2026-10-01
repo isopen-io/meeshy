@@ -25,11 +25,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ENGAGEMENT_AXES, ENGAGEMENT_AXIS_FAMILIES, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { computeMeeshMintPlan, MEESH_MINT_COST } from '@meeshy/shared/utils/meesh';
-import {
-  computeEngagementElan,
-  elanInputsFromRows,
-  ELAN_WINDOW_DAYS,
-} from '@meeshy/shared/utils/engagement-elan';
+import { elanUnderScaleFromRows } from '@meeshy/shared/types/engagement-scale';
+import { engagementScaleServiceFor } from '../../services/engagement/EngagementScaleService';
 import { engagementAxisFamily, isEngagementAxisKey, maxEngagementMilestonesPerUser } from '@meeshy/shared/types/engagement';
 import { ACHIEVEMENT_FAMILIES } from '@meeshy/shared/types/achievement-families';
 import { AchievementReachService } from '../../services/achievements/AchievementReachService';
@@ -200,7 +197,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
         // fermer un écran de consultation.
         await new GlobalAchievements(fastify.prisma).sweep(userId).catch(() => undefined);
 
-        const [user, counters, milestones, frappes, totauxMeesh, reach] = await Promise.all([
+        const [user, counters, milestones, frappes, totauxMeesh, reach, scale] = await Promise.all([
           fastify.prisma.user.findUnique({ where: { id: userId }, select: USER_ENGAGEMENT_SELECT }),
           // `take` borné, jamais retiré (#4165 critère 4) — même si le
           // maximum THÉORIQUE tient déjà sous la borne : au plus
@@ -250,6 +247,10 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
           // du plugin : la plus grande conversation du produit ne bouge pas
           // plus vite. Lue EN MÊME TEMPS que le reste, jamais après.
           reachService.load(),
+          // Le barème de l'administration (#8906) : l'élan AFFICHÉ est celui
+          // que le crédit appliquera, fenêtre, seuils et plafond par niveau
+          // compris — jamais les constantes d'avant le barème.
+          engagementScaleServiceFor(fastify.prisma).current(),
         ]);
 
         if (!user) {
@@ -268,13 +269,13 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
         // déjà lues, jamais relu : la route paierait deux fois la même
         // information. Même LOI que le crédit (`computeEngagementElan`), donc le
         // chiffre affiché est celui qui sera appliqué.
-        const elan = computeEngagementElan(
-          elanInputsFromRows({
-            counters,
-            milestones,
-            familyOf: (axisKey) => (isEngagementAxisKey(axisKey) ? engagementAxisFamily(axisKey) : null),
-          }),
-        );
+        const elan = elanUnderScaleFromRows({
+          rules: scale.multiplier,
+          counters,
+          milestones,
+          familyOf: (axisKey) => (isEngagementAxisKey(axisKey) ? engagementAxisFamily(axisKey) : null),
+          engagementScore: streakUser.engagementScore ?? 0,
+        });
 
         const plan = computeMeeshMintPlan(
           counters.map((c: { axisKey: string; count: number; points: number }) => ({
@@ -308,7 +309,7 @@ export async function meEngagementRoutes(fastify: FastifyInstance) {
             activeFamilyCount: elan.activeFamilyCount,
             activeFamilies: elan.activeFamilies,
             hasStanding: elan.hasStanding,
-            windowDays: ELAN_WINDOW_DAYS,
+            windowDays: scale.multiplier.windowDays,
           },
           meesh: {
             balance: totauxMeesh.balance,

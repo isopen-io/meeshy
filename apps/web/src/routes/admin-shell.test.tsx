@@ -83,12 +83,18 @@ describe('le menu latéral d’administration', () => {
 
     expect(entrees(menu ?? hote)).toEqual(visibleAdminSections(MATRICE, 'ADMIN').map((section) => section.id));
     expect(entrees(menu ?? hote)).toContain('anonymous');
+    expect(entrees(menu ?? hote)).toContain('engagementScale');
     expect(hote.querySelector('[data-contenu]')?.textContent).toBe('contenu');
   });
 
   test('un MODERATOR n’y voit pas les conversations, que la passerelle lui refuserait', async () => {
     const menu = (await cadre('MODERATOR')).querySelector('[data-admin-sidebar]');
     expect(entrees(menu ?? document)).not.toContain('conversations');
+  });
+
+  test('un MODERATOR n’y voit pas le barème de points, réservé au rang d’administration (#8906)', async () => {
+    const menu = (await cadre('MODERATOR')).querySelector('[data-admin-sidebar]');
+    expect(entrees(menu ?? document)).not.toContain('engagementScale');
   });
 
   test('se replie en rail d’icônes, et s’en souvient', async () => {

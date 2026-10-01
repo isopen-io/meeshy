@@ -52,7 +52,7 @@ function menuPlacement(trigger: HTMLElement | null | undefined, align: 'left' | 
 
 export type CallModerationGlyphs = { readonly more: ReactNode; readonly mute: ReactNode; readonly remove: ReactNode };
 
-const ITEM = 'flex min-h-11 w-full items-center gap-3 rounded-[14px] px-3 text-start text-body font-semibold transition-colors hover:bg-white/10 focus-visible:bg-white/15 motion-reduce:transition-none';
+const ITEM = 'flex min-h-11 w-full items-center gap-3 rounded-field px-3 text-start text-body font-semibold transition-colors hover:bg-media-fill focus-visible:bg-media-fill motion-reduce:transition-none';
 
 export function CallModerationMenu({
   member,
@@ -126,7 +126,7 @@ export function CallModerationMenu({
           setPlacement(menuPlacement(trigger(), align));
           setOpen((value) => !value);
         }}
-        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} grid size-11 shrink-0 place-items-center rounded-full text-white transition-transform active:scale-95 motion-reduce:transition-none`}
+        className={`${prominent ? 'glass-call-prominent' : 'glass-call'} grid size-11 shrink-0 place-items-center rounded-full text-on-media transition-transform active:scale-95 motion-reduce:transition-none`}
         data-call-moderate={member.userId}
       >
         {glyphs.more}
@@ -138,7 +138,7 @@ export function CallModerationMenu({
           role="menu"
           aria-label={t(language, 'callControls.moderate.menu', { name: member.name })}
           onKeyDown={onMenuKey}
-          className="glass-call-prominent fixed z-[225] flex w-56 flex-col gap-0.5 rounded-[20px] p-1.5 text-white"
+          className="glass-call-prominent fixed z-[225] flex w-56 flex-col gap-0.5 rounded-hero p-1.5 text-on-media"
           style={placement}
           data-call-moderation-menu={member.userId}
         >
@@ -166,7 +166,7 @@ export function CallModerationMenu({
             type="button"
             role="menuitem"
             className={ITEM}
-            style={{ color: '#fca5a5' }}
+            style={{ color: 'var(--ios-error)' }}
             onClick={() => {
               setOpen(false);
               setConfirming(true);
@@ -184,7 +184,7 @@ export function CallModerationMenu({
       {confirming ? <BackLayer key="confirm" onClose={close} /> : null}
       {confirming && typeof document !== 'undefined' ? createPortal(
         <div className="fixed inset-0 z-[230] grid place-items-center p-4" data-call-remove-confirm={member.userId}>
-          <button type="button" aria-label={t(language, 'callControls.cancel')} tabIndex={-1} onClick={close} className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.55)' }} />
+          <button type="button" aria-label={t(language, 'callControls.cancel')} tabIndex={-1} onClick={close} className="absolute inset-0" style={{ background: 'var(--color-scrim)' }} />
           <div
             ref={dialog}
             role="alertdialog"
@@ -195,16 +195,16 @@ export function CallModerationMenu({
               event.stopPropagation();
               close();
             }}
-            className="glass-call-prominent relative flex w-full max-w-sm flex-col gap-3 rounded-[28px] p-5 text-white"
+            className="glass-call-prominent relative flex w-full max-w-sm flex-col gap-3 rounded-sheet p-5 text-on-media"
           >
             <h2 id={titleId} className="text-body font-semibold">
               {t(language, 'callControls.remove.confirm', { name: member.name })}
             </h2>
-            <p className="text-mini" style={{ color: 'rgba(255,255,255,0.78)' }}>
+            <p className="text-mini" style={{ color: 'var(--color-on-media-3)' }}>
               {t(language, 'callControls.remove.detail', { name: member.name })}
             </p>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={close} className="min-h-11 rounded-full px-4 text-body font-semibold" style={{ background: 'rgba(255,255,255,0.14)' }} data-call-remove-cancel="">
+              <button type="button" onClick={close} className="min-h-11 rounded-full px-4 text-body font-semibold" style={{ background: 'var(--color-media-fill)' }} data-call-remove-cancel="">
                 {t(language, 'callControls.cancel')}
               </button>
               <button

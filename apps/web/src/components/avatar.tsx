@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 
 import '@/styles/avatar.css';
 
-import { PRESENCE_HEX, presenceTone } from '@meeshy/shared/utils/user-presence';
+import { PRESENCE_HERE_HEX, PRESENCE_HEX, presenceTone } from '@meeshy/shared/utils/user-presence';
 
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { UserPresenceStatus } from '@/lib/api/types';
@@ -41,6 +41,7 @@ export function Avatar({
   color,
   size,
   presence,
+  here = false,
   name,
   opacity,
   src,
@@ -54,6 +55,13 @@ export function Avatar({
   color: string;
   size: number;
   presence?: UserPresenceStatus;
+  /**
+   * LE PAIR A CETTE CONVERSATION OUVERTE (#8892) — la pastille passe à la
+   * couleur primaire (`PRESENCE_HERE_HEX`) et se rend même quand la présence
+   * globale est masquée : être là est une ACTIVITÉ, servie par la room comme
+   * la frappe (`api/conversation-viewing.ts`).
+   */
+  here?: boolean;
   name?: string;
   /**
    * Le fondu de SOURDINE, appliqué ICI plutôt qu'en enveloppant l'avatar
@@ -172,7 +180,8 @@ export function Avatar({
   // 0.8536 = (1 + cos(pi/4)) / 2 — le point a 45 deg sur le cercle, en fraction
   // du diametre. On retranche la moitie de la pastille pour la CENTRER dessus.
   const offset = size * 0.8536 - dot / 2;
-  const showsDot = presence !== undefined && presence !== 'offline';
+  const showsDot = here || (presence !== undefined && presence !== 'offline');
+  const dotColor = here || presence === undefined ? PRESENCE_HERE_HEX : PRESENCE_HEX[presenceTone(presence)];
 
   /* Une humeur VIDE n'est pas une humeur : `withMoods` la filtre déjà en
      amont, mais un appelant direct la laisserait passer et peindrait une
@@ -195,7 +204,7 @@ export function Avatar({
       <span
         className="grid size-full place-items-center rounded-chip font-semibold text-ios-surface"
         style={{
-          background: `linear-gradient(135deg, ${color}, color-mix(in oklch, ${color} 68%, white))`,
+          background: `linear-gradient(135deg, ${color}, color-mix(in oklch, ${color} 68%, var(--color-ios-on-brand)))`,
           fontSize: size * 0.38,
         }}
         aria-hidden={name === undefined || showsImage}
@@ -241,14 +250,14 @@ export function Avatar({
            en plus l'ÉTAT servi (`online`/`away`/`idle`), donc « point VERT »
            se mesure vraiment plutôt que « un enfant de plus ». */
         <span
-          data-presence={presence}
+          data-presence={here ? 'here' : presence}
           className="absolute rounded-chip"
           style={{
             width: dot,
             height: dot,
             left: offset,
             top: offset,
-            backgroundColor: PRESENCE_HEX[presenceTone(presence)],
+            backgroundColor: dotColor,
             boxShadow: '0 0 0 2px var(--ios-surface)',
           }}
           aria-hidden

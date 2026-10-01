@@ -64,7 +64,7 @@ export function AdminErrorState({
         type="button"
         data-admin-retry
         onClick={onRetry}
-        className={`inline-flex items-center gap-2 rounded-chip px-5 text-body font-semibold text-white ${FOCUS}`}
+        className={`inline-flex items-center gap-2 rounded-chip px-5 text-body font-semibold text-ios-on-brand ${FOCUS}`}
         style={{ minHeight: 44, backgroundColor: BRAND, outlineColor: BRAND }}
       >
         <AdminGlyph name="arrowClockwise" size={16} />

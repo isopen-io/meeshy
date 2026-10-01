@@ -35,8 +35,8 @@ const INK = 'var(--color-ios-ink)';
 const INK_2 = 'var(--color-ios-ink-2)';
 const TITLE_CLASS = 'text-check font-extrabold uppercase tracking-[0.1em]';
 const SUB_TITLE_CLASS = 'text-chip font-extrabold uppercase tracking-[0.08em]';
-const CARD_CLASS = 'grid gap-3 rounded-[20px] p-4';
-const ACTIVE_GRADIENT = 'linear-gradient(135deg, var(--ios-indigo-600) 0%, var(--ios-indigo-700) 45%, color-mix(in srgb, var(--ios-purple-600) 75%, black) 100%)';
+const CARD_CLASS = 'grid gap-3 rounded-hero p-4';
+const ACTIVE_GRADIENT = 'linear-gradient(135deg, var(--ios-indigo-600) 0%, var(--ios-indigo-700) 45%, color-mix(in srgb, var(--ios-purple-600) 75%, var(--color-media-backdrop)) 100%)';
 const INACTIVE_GRADIENT = 'linear-gradient(135deg, var(--ios-neutral-600), var(--ios-neutral-500))';
 const PILL_BUTTON = 'flex items-center justify-center gap-2 rounded-chip px-3 text-caption font-extrabold whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 sm:text-body';
 
@@ -100,7 +100,7 @@ export function InviteLinkCard({
     <section
       data-share-link-hero
       aria-label={translateInvite(language, 'linkDetail.title')}
-      className="grid gap-3.5 rounded-[28px] p-5 text-white"
+      className="grid gap-3.5 rounded-[28px] p-5 text-ios-on-brand"
       style={{
         /* Le dégradé est une IMAGE : la couleur pleine sous lui est la teinte la
            plus claire qu'il traverse, celle que mesurent les contrôles de
@@ -113,8 +113,8 @@ export function InviteLinkCard({
       <div className="flex items-center gap-3.5">
         <span
           aria-hidden="true"
-          className="grid size-14 shrink-0 place-items-center rounded-[16px] text-thread font-extrabold"
-          style={{ border: '2px solid rgb(255 255 255 / 0.55)', backgroundColor: 'rgb(30 27 75 / 0.45)' }}
+          className="grid size-14 shrink-0 place-items-center rounded-card text-thread font-extrabold"
+          style={{ border: '2px solid var(--color-on-media-3)', backgroundColor: 'color-mix(in srgb, var(--ios-indigo-950) 45%, transparent)' }}
         >
           {initialsOf(group)}
         </span>
@@ -129,12 +129,12 @@ export function InviteLinkCard({
         <span
           data-share-link-status
           className="shrink-0 rounded-chip px-2.5 py-1 text-chip font-extrabold uppercase"
-          style={link.isActive ? { backgroundColor: 'var(--color-success)', color: 'var(--color-on-status)' } : { backgroundColor: 'rgb(0 0 0 / 0.35)' }}
+          style={link.isActive ? { backgroundColor: 'var(--color-success)', color: 'var(--color-on-status)' } : { backgroundColor: 'var(--color-scrim-soft)' }}
         >
           {translate(language, link.isActive ? 'links.status.active' : 'links.status.inactive')}
         </span>
       </div>
-      <p className="flex min-w-0 items-center gap-2.5 rounded-[14px] px-3.5 py-3" style={{ backgroundColor: 'rgb(30 27 75 / 0.32)' }}>
+      <p className="flex min-w-0 items-center gap-2.5 rounded-field px-3.5 py-3" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-indigo-950) 32%, transparent)' }}>
         <span aria-hidden="true" className="shrink-0">
           <Glyph name="linkSimple" size={18} />
         </span>
@@ -158,7 +158,7 @@ export function InviteLinkCard({
           data-share-link-action="share"
           onClick={onShare}
           className={PILL_BUTTON}
-          style={{ minHeight: 48, backgroundColor: 'white', color: 'var(--ios-indigo-700)', outlineColor: 'white' }}
+          style={{ minHeight: 48, backgroundColor: 'var(--color-ios-on-brand)', color: 'var(--ios-indigo-700)', outlineColor: 'var(--color-ios-on-brand)' }}
         >
           <span aria-hidden="true">
             <LinksGlyph name="export" size={18} />
@@ -170,7 +170,7 @@ export function InviteLinkCard({
           data-share-link-action="copy"
           onClick={onCopy}
           className={PILL_BUTTON}
-          style={{ minHeight: 48, backgroundColor: 'rgb(30 27 75 / 0.38)', color: 'white', outlineColor: 'white' }}
+          style={{ minHeight: 48, backgroundColor: 'color-mix(in srgb, var(--ios-indigo-950) 38%, transparent)', color: 'var(--color-ios-on-brand)', outlineColor: 'var(--color-ios-on-brand)' }}
         >
           <span aria-hidden="true">{copied ? <Glyph name="check" size={18} /> : <LinksGlyph name="copy" size={18} />}</span>
           {translateInvite(language, copied ? 'linkDetail.card.copied' : 'linkDetail.card.copy')}
@@ -210,7 +210,7 @@ export function LinkStatTiles({ language, stats }: { readonly language: Interfac
             <li
               key={key}
               data-share-link-stat={key}
-              className="grid gap-0.5 rounded-[18px] px-3 py-3.5"
+              className="grid gap-0.5 rounded-bubble px-3 py-3.5"
               style={
                 highlighted
                   ? { backgroundColor: 'color-mix(in srgb, var(--ios-indigo-500) 12%, var(--color-ios-card))', border: '1.5px solid color-mix(in srgb, var(--ios-indigo-400) 45%, transparent)' }
@@ -386,7 +386,7 @@ export function ConfigurationCard({ language, link, policy }: { readonly languag
         <a
           href="#link-edit"
           data-share-link-edit-anchor
-          className={`grid place-items-center rounded-[10px] px-2 text-body font-bold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
+          className={`grid place-items-center rounded-tile px-2 text-body font-bold focus-visible:outline-2 ${SECTION_BRAND_INK}`}
           style={{ minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
         >
           {translateInvite(language, 'linkDetail.config.edit')}

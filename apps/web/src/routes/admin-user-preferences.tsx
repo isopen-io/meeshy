@@ -223,7 +223,7 @@ function Controle({
       >
         <span
           aria-hidden="true"
-          className="absolute top-0.5 size-6 rounded-full bg-white transition-all"
+          className="absolute top-0.5 size-6 rounded-full bg-ios-on-brand transition-all"
           style={{ insetInlineStart: valeur ? 'calc(100% - 1.625rem)' : '0.125rem' }}
         />
       </button>

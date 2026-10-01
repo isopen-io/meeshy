@@ -24,6 +24,7 @@ const itComposerAttach = {
   'composer.location.denied': 'Posizione negata — consentila nelle impostazioni',
   'composer.location.unavailable': 'Posizione non disponibile su questo browser',
   'composer.location.failed': 'Posizione non trovata — riprova',
+  'composer.openSettings': 'Impostazioni',
   'composer.location.chip': 'LUOGO',
   'composer.location.unknown': 'Luogo sconosciuto',
   'composer.location.remove': 'Rimuovi la posizione',

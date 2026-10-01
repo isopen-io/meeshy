@@ -158,7 +158,7 @@ export function AdminBroadcastsPanel({ language, deps = apiDeps, now = defaultNo
             data-admin-action="new"
             disabled={!online}
             onClick={compose}
-            className="inline-flex items-center gap-2 rounded-chip px-5 text-body font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40"
+            className="inline-flex items-center gap-2 rounded-chip px-5 text-body font-semibold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40"
             style={{ minHeight: 44, backgroundColor: BRAND, outlineColor: BRAND }}
           >
             <AdminGlyph name="plus" size={16} />

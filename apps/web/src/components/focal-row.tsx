@@ -29,6 +29,7 @@ import {
 import { useFocusFrame } from '@/lib/view/use-focus-frame';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
+import { hereKeyOf } from '@/lib/view/use-conversation-viewing';
 import { AuthorAvatar } from './author-avatar';
 import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
@@ -676,7 +677,7 @@ export const FocalRow = memo(function FocalRow({
                 height: AVATAR_SIZE,
                 border: `1.5px solid ${selected ? 'var(--accent)' : 'var(--color-ios-ink-3)'}`,
                 backgroundColor: selected ? 'var(--accent)' : 'transparent',
-                color: 'white',
+                color: 'var(--color-ios-on-brand)',
               }}
             >
               {selected ? '✓' : null}
@@ -685,6 +686,7 @@ export const FocalRow = memo(function FocalRow({
           </button>
         ) : head ? (
           <AuthorAvatar
+            {...(isMine ? {} : { authorId: hereKeyOf(message.sender) })}
             initials={initialsOf(senderAvatarName)}
             color="var(--accent)"
             size={AVATAR_SIZE}

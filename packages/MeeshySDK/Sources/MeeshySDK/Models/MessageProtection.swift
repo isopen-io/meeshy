@@ -30,6 +30,11 @@ public enum MessageProtectionSymbols {
     /// Flou — **l'ŒIL** (« et l'œil représente le flou »). Barré, comme au
     /// composeur : c'est ce qui le distingue d'un œil de lecture.
     public static let blurred = "eye.slash"
+    /// Éphémère ÉCHU — le minuteur, le glyphe `timer` de la ligne web
+    /// (`lens-preview-line.tsx`). Un ÉTAT, pas une protection qu'on choisit :
+    /// il n'entre pas dans `all`. `timer.badge.xmark`, qu'il remplace,
+    /// n'existe pas — la ligne peignait une vignette vide (#8924).
+    public static let expired = "timer"
 
     /// Variante pleine, pour un état ACTIF.
     public static let ephemeralFilled = "flame.fill"

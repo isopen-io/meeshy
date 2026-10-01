@@ -50,18 +50,18 @@ function Leading({ notification, banner, accent }: { readonly notification: Noti
   if (banner.milestone !== null) return <MilestoneMedallion glyph={milestoneGlyph(banner.milestone)} accent={accent} />;
   const avatar = notification.actor?.avatar ?? null;
   return (
-    <span className="relative shrink-0" style={{ filter: 'drop-shadow(0 2px 4px rgb(0 0 0 / 0.18))' }}>
+    <span className="relative shrink-0" style={{ filter: 'drop-shadow(0 2px 4px var(--color-scrim-soft))' }}>
       <Avatar initials={initialsOf(notification.actor?.displayName ?? banner.headline)} color={accent} size={44} {...(avatar === null ? {} : { src: avatar })} />
       <span
         data-banner-type-badge
         aria-hidden="true"
-        className="absolute grid place-items-center rounded-full text-white"
+        className="absolute grid place-items-center rounded-full text-ios-on-brand"
         style={{
           right: -3,
           bottom: -3,
           width: 20,
           height: 20,
-          backgroundImage: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 78%, black))`,
+          backgroundImage: `linear-gradient(135deg, ${accent}, color-mix(in srgb, ${accent} 78%, var(--color-media-backdrop)))`,
           boxShadow: '0 0 0 2px var(--color-ios-surface)',
         }}
       >
@@ -248,7 +248,7 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
           transform: dragY === 0 ? undefined : `translateY(${dragY}px)`,
           opacity: dragY === 0 ? 1 : Math.max(0.35, 1 + dragY / 120),
           backgroundImage: `linear-gradient(180deg, color-mix(in srgb, ${accent} 10%, transparent), transparent 70%)`,
-          boxShadow: `0 16px 36px -10px rgb(0 0 0 / 0.38), 0 2px 6px color-mix(in srgb, ${accent} 26%, transparent)`,
+          boxShadow: `0 16px 36px -10px var(--color-scrim), 0 2px 6px color-mix(in srgb, ${accent} 26%, transparent)`,
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -270,10 +270,10 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
           style={{
             borderRadius: CARD_RADIUS,
             padding: 1,
-            backgroundImage: `linear-gradient(180deg, rgb(255 255 255 / 0.7), color-mix(in srgb, ${accent} 40%, transparent))`,
-            WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)',
+            backgroundImage: `linear-gradient(180deg, var(--color-on-media-3), color-mix(in srgb, ${accent} 40%, transparent))`,
+            WebkitMask: 'linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)', // harmony-exempt: masque alpha technique, la couleur ne se voit pas
             WebkitMaskComposite: 'xor',
-            mask: 'linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)',
+            mask: 'linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0)', // harmony-exempt: masque alpha technique, la couleur ne se voit pas
           }}
         />
         {target === null ? (

@@ -307,7 +307,7 @@ internal struct _InlineRenderer: View {
                 .foregroundColor(.white)
                 .offset(x: 2 * playButtonScale)
         case .needsDownload:
-            VStack(spacing: 2) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "arrow.down.to.line")
                     .font(.system(size: 22 * playButtonScale, weight: .bold))
                     .foregroundColor(.white)
@@ -318,7 +318,7 @@ internal struct _InlineRenderer: View {
                 }
             }
         case .downloading(let progress):
-            VStack(spacing: 2) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "arrow.down.to.line")
                     .font(.system(size: 16 * playButtonScale, weight: .bold))
                     .foregroundColor(.white.opacity(0.6))
@@ -492,7 +492,7 @@ internal struct _InlineRenderer: View {
     private func scheduleControlsHide() {
         guard Self.autoHidesControls(surfaceTapAction: surfaceTapAction) else { return }
         controlsTimer?.invalidate()
-        controlsTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { _ in
+        controlsTimer = Timer.scheduledTimer(withTimeInterval: FullscreenChromeMetrics.autoHideDelay, repeats: false) { _ in
             Task { @MainActor in
                 withAnimation { showControls = false }
             }
@@ -777,21 +777,21 @@ internal struct _FullscreenRenderer: View {
                 HStack {
                     authorChip(author)
                         .padding(.top, 56)
-                        .padding(.leading, 16)
+                        .padding(.leading, MeeshySpacing.lg)
                     Spacer()
                 }
             }
             Spacer()
             if let caption = player.caption, !caption.isEmpty {
                 Text(caption)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.vertical, MeeshySpacing.smPlus)
                     .background(.ultraThinMaterial)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                    .padding(.horizontal, 16)
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+                    .padding(.horizontal, MeeshySpacing.lg)
                     .padding(.bottom, 140)
                     .lineLimit(4)
             }
@@ -804,7 +804,7 @@ internal struct _FullscreenRenderer: View {
             author.onTap?()
             HapticFeedback.light()
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 if let avatarUrl = author.avatarUrl, !avatarUrl.isEmpty {
                     // CachedAvatarImage : échec silencieux (initiales + accent
                     // du player), zéro bouton retry sur un chip 24pt — l'avatar
@@ -817,11 +817,11 @@ internal struct _FullscreenRenderer: View {
                     )
                 }
                 Text(author.displayName)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
                     .foregroundColor(.white)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.sm)
+            .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(.ultraThinMaterial.opacity(0.7)))
         }
     }
@@ -890,7 +890,7 @@ internal struct _FullscreenRenderer: View {
                 .ignoresSafeArea()
             }
 
-            VStack(spacing: 16) {
+            VStack(spacing: MeeshySpacing.lg) {
                 Button {
                     HapticFeedback.light()
                     // #3895 : `.ready` + `loadFailed` retries the SAME
@@ -918,7 +918,7 @@ internal struct _FullscreenRenderer: View {
                 }())
 
                 Text(downloadOverlayMessage)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: MeeshyFont.labelSize, weight: .medium))
                     .foregroundColor(.white.opacity(0.85))
                     .shadow(color: .black.opacity(0.6), radius: 4)
                     .multilineTextAlignment(.center)
@@ -928,13 +928,13 @@ internal struct _FullscreenRenderer: View {
                     HapticFeedback.light()
                 } label: {
                     Text(String(localized: "media.video.close", defaultValue: "Fermer", bundle: .module))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
                         .foregroundColor(.white.opacity(0.7))
                         .padding(.horizontal, 18)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, MeeshySpacing.sm)
                         .background(Capsule().fill(Color.white.opacity(0.12)))
                 }
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
             }
         }
     }
@@ -1046,7 +1046,7 @@ internal struct _FullscreenRenderer: View {
 
     private func scheduleControlsHide() {
         controlsTimer?.invalidate()
-        controlsTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { _ in
+        controlsTimer = Timer.scheduledTimer(withTimeInterval: FullscreenChromeMetrics.autoHideDelay, repeats: false) { _ in
             Task { @MainActor in
                 withAnimation { showControls = false }
             }

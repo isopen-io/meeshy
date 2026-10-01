@@ -10,6 +10,7 @@ import { createError } from './errors.js';
 import { OBJECT_ID_REGEX } from './object-id.js';
 import { AuthSchemas } from './auth-schemas.js';
 import { notificationTypeEnum } from './notification-type-enum.js';
+import { isProfileImageReference } from './profile-image-reference.js';
 import {
   PASSWORD_MIN_LENGTH,
   USERNAME_PATTERN,
@@ -334,28 +335,7 @@ export const updateUserProfileSchema = z.object({
   voicePublic: z.boolean().optional(),
 }).strict();
 
-/**
- * UNE RÉFÉRENCE D'IMAGE DE PROFIL — ce qu'une photo ou une bannière peut
- * désigner (#8217) :
- *
- * - une adresse `http(s)://` ;
- * - un chemin d'API (`/api/…`) ;
- * - le chemin de stockage RELATIF qu'un téléversement rend
- *   (`2026/09/<id>/avatar_….png`, `UploadProcessor.getAttachmentPath`) — que
- *   le web pose tel quel après `POST /attachments/upload`, et qu'on refusait
- *   en 400 « Invalid image format » à chaque changement de photo.
- *
- * Jamais une donnée `data:` (le base64 n'est pas une adresse), ni un autre
- * schéma, ni un chemin protocole-relatif (`//hôte/…`), ni une remontée de
- * dossier.
- */
-const STORAGE_PATH = /^[A-Za-z0-9][A-Za-z0-9._~\-/]*$/;
-
-export function isProfileImageReference(value: string): boolean {
-  if (value.startsWith('http://') || value.startsWith('https://')) return true;
-  if (value.startsWith('/api/')) return true;
-  return STORAGE_PATH.test(value) && !value.split('/').includes('..');
-}
+export { isProfileImageReference };
 
 /**
  * Schéma de validation pour l'upload d'avatar

@@ -163,7 +163,7 @@ describe('StudioCamera — la capture rapide', () => {
     await settle();
     expect(journal).toEqual(['open:environment', 'live']);
     expect(taken).toEqual([]);
-    expect(host.querySelector('[data-story-camera-hint]')?.textContent).toBe('Toucher l’écran : photo · maintenir le déclencheur : vidéo');
+    expect(host.querySelector('[data-story-camera-hint]')?.textContent).toBe('Toucher l’écran : photo · le maintenir : vidéo');
     await act(async () => host.querySelector<HTMLElement>('[data-story-camera-preview]')?.click());
     await settle();
     expect(journal).toEqual(['open:environment', 'live', 'photo:1', 'release']);
@@ -482,5 +482,103 @@ describe('StudioCamera — le curseur de verre du flash (#8672)', () => {
     await act(async () => shutter(host)?.click());
     await settle();
     expect(color).toBe('rgb(102, 102, 102)');
+  });
+});
+
+/** VISEUR ARMÉ : L'APPUI LONG N'IMPORTE OÙ SUR LUI FILME (#8849, jumelle web de
+ * #8846) — toucher = photo, tenir = vidéo, relâcher = arrêt, glisser = cadenas
+ * puis zoom : la même tenue que l'appui long d'une scène vide. */
+describe('StudioCamera — le viseur armé, tenu, filme (#8849)', () => {
+  const view = (host: ParentNode) => host.querySelector<HTMLVideoElement>('[data-story-camera-preview]');
+  const armed = () => {
+    const layer = document.querySelector<HTMLElement>('[data-story-camera]');
+    if (layer !== null) layer.setPointerCapture = () => undefined;
+  };
+  const press = (target: Element | null, type: string, x = 200, y = 500) =>
+    target?.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0, pointerId: 7, clientX: x, clientY: y }));
+  const hold = () => new Promise((resolve) => setTimeout(resolve, 420));
+
+  test('tenir le viseur armé démarre la vidéo ; relâcher la clôt et la pose — aucune photo', async () => {
+    const { engine, journal } = fakeEngine();
+    const taken: File[] = [];
+    const host = await mounter.mount(camera({ engine, intent: 'arm', taken }));
+    await settle();
+    armed();
+    await act(async () => {
+      press(view(host), 'pointerdown');
+      await hold();
+    });
+    await settle();
+    expect(journal).toContain('record');
+    expect(host.querySelector('[data-story-camera-recording]')).not.toBeNull();
+    await act(async () => {
+      press(view(host), 'pointerup');
+      view(host)?.click();
+    });
+    await settle();
+    expect(journal.slice(-2)).toEqual(['stop', 'release']);
+    expect(journal.some((entry) => entry.startsWith('photo:'))).toBe(false);
+    expect(taken.map((file) => file.type)).toEqual(['video/mp4']);
+  });
+
+  test('un toucher bref sur le viseur armé reste la photo', async () => {
+    const { engine, journal } = fakeEngine();
+    const taken: File[] = [];
+    const host = await mounter.mount(camera({ engine, intent: 'arm', taken }));
+    await settle();
+    armed();
+    await act(async () => {
+      press(view(host), 'pointerdown');
+      press(view(host), 'pointerup');
+      view(host)?.click();
+    });
+    await settle();
+    expect(journal).not.toContain('record');
+    expect(taken.map((file) => file.type)).toEqual(['image/jpeg']);
+  });
+
+  test('un réel : tenir le viseur armé filme aussi', async () => {
+    const { engine, journal } = fakeEngine();
+    const host = await mounter.mount(camera({ engine, intent: 'arm', kind: 'REEL' }));
+    await settle();
+    armed();
+    await act(async () => {
+      press(view(host), 'pointerdown');
+      await hold();
+    });
+    await settle();
+    expect(journal).toContain('record');
+  });
+
+  test('tenu, le doigt glisse jusqu’au cadenas : relâcher ne clôt pas, le film continue', async () => {
+    const { engine, journal } = fakeEngine();
+    const host = await mounter.mount(camera({ engine, intent: 'arm' }));
+    await settle();
+    armed();
+    await act(async () => {
+      press(view(host), 'pointerdown');
+      await hold();
+    });
+    await settle();
+    await act(async () => {
+      press(view(host), 'pointermove', 80, 500);
+      press(view(host), 'pointerup', 80, 500);
+    });
+    await settle();
+    expect(host.querySelector('[data-story-camera-recording]')?.getAttribute('data-story-camera-recording')).toBe('locked');
+    expect(journal).not.toContain('stop');
+  });
+
+  test('tenir un contrôle du viseur (le flash) ne filme pas', async () => {
+    const { engine, journal } = fakeEngine();
+    const host = await mounter.mount(camera({ engine, intent: 'arm' }));
+    await settle();
+    armed();
+    await act(async () => {
+      press(host.querySelector('[data-story-camera-flash]'), 'pointerdown');
+      await hold();
+    });
+    await settle();
+    expect(journal).not.toContain('record');
   });
 });

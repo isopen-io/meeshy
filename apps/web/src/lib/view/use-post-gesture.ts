@@ -6,6 +6,7 @@ import { PostRepostConfirm } from '@/components/post-repost-confirm';
 import { deletePostAction, editPostAction, pinPostAction, postGestureAction, repostAction, reportPostAction } from '@/lib/api/query';
 import type { EditPostOutcome } from '@/lib/api/publication-actions';
 import { sessionStore } from '@/lib/api/session';
+import { draftStore } from '@/lib/send/draft-store';
 import type { PostToggleKind } from '@/lib/feed/interactions';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -172,6 +173,7 @@ export function usePostGesture(options?: {
     const say = (key: MenuNotice) => announce(translate(currentInterfaceLanguage(), key));
     return {
       viewerId,
+      editDrafts: draftStore,
       onCopyText: (text: string) => {
         void copyPlainText(text).then((outcome) => say(outcome === 'copied' ? 'feed.post.copied' : 'feed.post.copy_failed'));
       },

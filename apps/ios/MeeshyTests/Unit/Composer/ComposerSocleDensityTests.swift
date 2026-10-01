@@ -114,7 +114,8 @@ final class ComposerSocleDensityTests: XCTestCase {
                 return XCTFail("`\(ancre)` introuvable — la garde ne mesurerait rien.")
             }
             XCTAssertTrue(
-                bloc.contains("minWidth: 44, minHeight: 44"),
+                bloc.contains("minWidth: 44, minHeight: 44")
+                    || bloc.contains("minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget"),
                 "\(ancre) doit garder un plancher de 44 pt : réduit à son icône, un contrôle sans plancher "
                     + "devient une cible de 20 pt."
             )

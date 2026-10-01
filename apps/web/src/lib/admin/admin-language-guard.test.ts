@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'bun:test';
 
 /**
- * **AUCUN CODE D'ADMINISTRATION NE LIT LA LANGUE D'INTERFACE BRUTE** (D-159).
+ * **AUCUN CODE D'ADMINISTRATION NE LIT LA LANGUE D'INTERFACE BRUTE** (D-162).
  *
  * L'administration parle quatre langues (fr, en, es, pt) ; une interface
  * allemande, italienne ou arabe la lit en anglais. La règle est UNE fonction

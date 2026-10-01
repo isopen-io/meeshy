@@ -13,7 +13,7 @@ import { AdminScreenFrame } from './admin-shell';
 
 /**
  * **L'ADMINISTRATION PARLE QUATRE LANGUES — ET LES AUTRES LA LISENT EN ANGLAIS**
- * (directive porteur 2026-09-30, `decisions.md` D-159).
+ * (directive porteur 2026-09-30, `decisions.md` D-162).
  *
  * Ces témoins montent le VRAI routeur, sur une VRAIE fiche, avec une langue
  * d'interface posée sur le document comme le fait `setInterfaceLanguage` : c'est

@@ -9,17 +9,17 @@ extension CallView {
         if let mode = layer.activeMode {
             ZStack(alignment: .bottom) {
                 modeStage(mode)
-                LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .center, endPoint: .bottom)
+                LinearGradient(colors: [.clear, .black.opacity(MeeshyOpacity.heavy)], startPoint: .center, endPoint: .bottom)
                     .ignoresSafeArea()
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
-                VStack(spacing: 14) {
+                VStack(spacing: MeeshySpacing.mdPlus) {
                     if mode == .effects {
                         effectsCompanions
                     }
                     if showTranscript {
                         captionsBand(hasOwnGlass: true, opensJournal: false)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, MeeshySpacing.lg)
                     }
                     modeControls(mode)
                 }

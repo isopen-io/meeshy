@@ -24,10 +24,8 @@ import { isPreviewWithheld, resolvePreviewProtection } from './utils/last-messag
 import { projectListLastMessageBody } from './utils/list-last-message-body';
 import { loadViewOnceConsumptions, viewOnceConsumptionKey } from '../../services/messaging/readViewOnceConsumption';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import {
-  conversationListResponseSchema,
-  errorResponseSchema
-} from '@meeshy/shared/types/api-schemas';
+import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { conversationListWithEngagementResponseSchema, loadViewerEngagementsOrEmpty } from './engagement';
 import { loadConversationTombstones } from './utils/delta-tombstones';
 import { sendUnauthorized, sendInternalError, sendBadRequest } from '../../utils/response';
 import { resolveListCursor } from './list-cursor';
@@ -86,7 +84,7 @@ export function registerConversationListRoute(
       // `!options.allowAnonymous`. Le déclarer encore décrirait un corps que
       // rien n'émet.
       response: {
-        200: conversationListResponseSchema,
+        200: conversationListWithEngagementResponseSchema,
         // #6857 — la route ÉMET désormais un 400 : le `pattern` du curseur
         // `before` est appliqué par Fastify avant le handler. Le déclarer suit
         // la règle que le commentaire du 403 ci-dessus énonce à l'envers — on
@@ -456,7 +454,7 @@ export function registerConversationListRoute(
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      const [totalCount, unreadCountMap, readCursorBoundaries] = await Promise.all([
+      const [totalCount, unreadCountMap, readCursorBoundaries, viewerEngagementByConversation] = await Promise.all([
         // Count (if requested) - skip when using cursor pagination
         (!beforeCursor && (includeCount || offset === 0))
           ? prisma.conversation.count({ where: whereClause })
@@ -475,6 +473,10 @@ export function registerConversationListRoute(
         currentUserParticipantIdMap.size > 0
           ? loadReadCursorBoundaries(prisma, [...currentUserParticipantIdMap.values()])
           : Promise.resolve(new Map<string, ReadCursorBoundary>()),
+
+        // « N (M) 🔥 » du lecteur (#8906) — UNE lecture groupée pour la page.
+        // Un invité anonyme n'a pas de compte, donc pas d'état d'engagement.
+        loadViewerEngagementsOrEmpty(prisma, isAnonymousViewer ? undefined : userId, conversationIds),
       ]);
 
       // Par CONVERSATION plutôt que par participant — c'est la clé que la
@@ -891,7 +893,11 @@ export function registerConversationListRoute(
           // séparateur (D-L3). ABSENTE sans curseur, jamais fabriquée (REV-4).
           ...projectReadCursorBoundary(readCursorByConversation.get(conversation.id)),
           currentUserRole: currentUserRoleMap.get(conversation.id) || null,
-          currentUserJoinedAt: currentUserJoinedAtMap.get(conversation.id) || null
+          currentUserJoinedAt: currentUserJoinedAtMap.get(conversation.id) || null,
+          // ABSENT tant que le lecteur n'a rien crédité ici (#8906).
+          ...(viewerEngagementByConversation.has(conversation.id)
+            ? { viewerEngagement: viewerEngagementByConversation.get(conversation.id) }
+            : {})
         };
       });
 

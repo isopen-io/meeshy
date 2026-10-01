@@ -108,7 +108,7 @@ export function ConversationPreviewSheet({
   };
 
   const disc = 'grid size-11 shrink-0 place-items-center rounded-full focus-visible:outline-2';
-  const discStyle: CSSProperties = { color: '#fff', outlineColor: 'var(--color-ios-brand)' };
+  const discStyle: CSSProperties = { color: 'var(--color-ios-on-brand)', outlineColor: 'var(--color-ios-brand)' };
   const discFace = (child: ReactNode) => (
     <span className="glass grid size-8 place-items-center rounded-full" style={{ color: 'var(--color-ios-ink)' }}>
       {child}
@@ -129,7 +129,7 @@ export function ConversationPreviewSheet({
         aria-hidden="true"
         className="absolute inset-0"
         style={{
-          backgroundColor: 'rgb(0 0 0 / 0.45)',
+          backgroundColor: 'var(--color-scrim)',
           backdropFilter: 'blur(6px)',
           WebkitBackdropFilter: 'blur(6px)',
           opacity: dragY === 0 ? 1 : Math.max(0.3, 1 - dragY / 400),
@@ -170,7 +170,7 @@ export function ConversationPreviewSheet({
               setDragY(0);
             }}
           >
-            <span className="rounded-full" style={{ width: 40, height: 5, backgroundColor: 'rgb(255 255 255 / 0.85)' }} />
+            <span className="rounded-full" style={{ width: 40, height: 5, backgroundColor: 'var(--color-on-media-2)' }} />
           </div>
           <Link
             to="thread"
@@ -198,7 +198,7 @@ export function ConversationPreviewSheet({
               borderTopLeftRadius: CORNER,
               borderTopRightRadius: CORNER,
               backgroundColor: 'var(--color-ios-surface)',
-              boxShadow: '0 -12px 40px -12px rgb(0 0 0 / 0.45)',
+              boxShadow: '0 -12px 40px -12px var(--color-scrim)',
             } as CSSProperties
           }
         >

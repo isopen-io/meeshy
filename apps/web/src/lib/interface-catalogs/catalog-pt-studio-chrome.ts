@@ -84,7 +84,7 @@ const ptStudioChrome = {
   'story.studio.camera.shutter.photo': 'Tirar uma foto',
   'story.studio.camera.shutter.start': 'Iniciar a gravação',
   'story.studio.camera.shutter.stop': 'Parar a gravação',
-  'story.studio.camera.hint.photo': 'Tocar a tela: foto · manter o disparador: vídeo',
+  'story.studio.camera.hint.photo': 'Tocar a tela: foto · mantê-la pressionada: vídeo',
   'story.studio.camera.hint.video': 'Toque para filmar · toque de novo para colocar',
   'story.studio.camera.unavailable': 'A câmera não está disponível. Permita-a nas configurações do navegador.',
   'story.studio.camera.recording': 'Gravando',
@@ -116,6 +116,9 @@ const ptStudioChrome = {
   'story.studio.background.menu.retake': 'Tirar outra foto',
   'story.studio.background.menu.forward': 'Trazer para a frente',
   'story.studio.background.menu.remove': 'Remover o fundo',
+  'story.studio.background.tools': 'Ferramentas do fundo',
+  'story.studio.background.tools.describe': 'Descrever',
+  'story.studio.background.tools.leave': 'Voltar à cena',
   'story.studio.reelSwitch.announcement': 'Mudou para reel',
 } satisfies StudioChromeCatalogSlice;
 

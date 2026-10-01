@@ -33,7 +33,7 @@ const reelsScreen = () => import('@/routes/reels');
    que TOUT lecteur téléchargerait sinon (`i18n-admin-catalog.ts`).
 
    La langue chargée est celle de l'ADMINISTRATION (`currentAdminLanguage`,
-   fr · en · es · pt — les autres interfaces la lisent en anglais, D-159), pas
+   fr · en · es · pt — les autres interfaces la lisent en anglais, D-162), pas
    celle de l'interface ; et `loadAdminInterfaceCatalog` charge avec elle le
    catalogue commun de cette langue, que le cadre lit aussi. */
 const adminScreen = () =>
@@ -109,6 +109,8 @@ const adminLanguagesScreen = () =>
   Promise.all([import('@/routes/admin-languages'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminSettingsScreen = () =>
   Promise.all([import('@/routes/admin-settings'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const adminEngagementScaleScreen = () =>
+  Promise.all([import('@/routes/admin-engagement-scale'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 /* L'ACCUEIL POST-INSCRIPTION (#7729) — son chunk ET son catalogue
    (`onboarding.*`), en parallèle, comme l'administration : un compte ne voit
    ce parcours qu'une fois, aucun autre lecteur n'en paie les octets, et
@@ -503,6 +505,10 @@ export const ROUTES = {
   admLanguages: { pattern: '/adm/languages', screen: adminLanguagesScreen },
   adminSettings: { pattern: '/admin/settings', screen: adminSettingsScreen },
   admSettings: { pattern: '/adm/settings', screen: adminSettingsScreen },
+  /* LE BARÈME DE POINTS (#8906) — littéral à deux segments, comme l'agent.
+     Déclaré AUSSI dans `session-guard.ts`. */
+  adminEngagementScale: { pattern: '/admin/engagement-scale', screen: adminEngagementScaleScreen },
+  admEngagementScale: { pattern: '/adm/engagement-scale', screen: adminEngagementScaleScreen },
 } as const;
 
 /**
@@ -524,7 +530,7 @@ export function NotFound() {
         <p className="text-screen font-bold">{translate(langue, 'notFound.title')}</p>
         <a
           href="/"
-          className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+          className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
           style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
         >
           {translate(langue, 'pending.back')}

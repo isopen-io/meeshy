@@ -4,7 +4,7 @@ import { loadAdminInterfaceCatalog, type AdminInterfaceCatalog } from '@/lib/i18
 
 /**
  * **LES CATALOGUES D'ADMINISTRATION ESPAGNOL ET PORTUGAIS DISENT QUELQUE CHOSE**
- * (#8876, `decisions.md` D-159).
+ * (#8876, `decisions.md` D-162).
  *
  * La parité des clés et des paramètres (`i18n-admin-catalog.test.ts`) prouve que
  * chaque langue a la MÊME forme ; elle ne prouve pas qu'elle est TRADUITE. Une
@@ -23,7 +23,7 @@ import { loadAdminInterfaceCatalog, type AdminInterfaceCatalog } from '@/lib/i18
  * jamais rougir sur un emprunt légitime (Reel, Story, Gateway, Redis, Android,
  * Tablet, WAV…), qu'un test n'a pas à interdire.
  *
- * Le portugais est le portugais du BRÉSIL (D-159) : « você », « tela »,
+ * Le portugais est le portugais du BRÉSIL (D-162) : « você », « tela »,
  * « arquivo », « senha ». Les marques du portugais d'Europe sont interdites, pour
  * qu'une page ne mélange pas « Configurações » et « Definições ».
  */

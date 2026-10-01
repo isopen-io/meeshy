@@ -22,7 +22,7 @@ struct ComposerSceneEffectCarousel<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             HStack {
                 Label(ComposerSceneEffectCopy.label(effect), systemImage: effect.symbol)
                     .font(.subheadline.weight(.semibold))
@@ -42,12 +42,12 @@ struct ComposerSceneEffectCarousel<Content: View>: View {
             }
             content()
         }
-        .padding(.leading, 14)
-        .padding([.trailing, .bottom], 10)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+        .padding(.leading, MeeshySpacing.mdPlus)
+        .padding([.trailing, .bottom], MeeshySpacing.smPlus)
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous),
                        tint: plateauTint.opacity(0.55))
         .padding(.horizontal, ComposerRailGeometry.outerMargin)
-        .padding(.bottom, 6)
+        .padding(.bottom, MeeshySpacing.xsPlus)
         .environment(\.colorScheme, .dark)
         .transition(.move(edge: .bottom).combined(with: .opacity))
         .accessibilityElement(children: .contain)
@@ -65,7 +65,7 @@ struct ComposerSceneTransitionRows: View {
     let onChoose: (ComposerSceneEffects.Choice) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             row(ComposerSceneEffectCopy.openingRow, selection: opening) { onChoose(.opening($0)) }
             row(ComposerSceneEffectCopy.closingRow, selection: closing) { onChoose(.closing($0)) }
         }
@@ -74,7 +74,7 @@ struct ComposerSceneTransitionRows: View {
     private func row(_ title: String,
                      selection: StoryTransitionEffect?,
                      onSelect: @escaping (StoryTransitionEffect?) -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: true).opacity(0.75))

@@ -90,7 +90,7 @@ describe('le catalogue d’administration est chargé par CHAQUE route qui en a 
   });
 
   /**
-   * **ET IL LE CHARGE DANS LA LANGUE DE L'ADMINISTRATION** (D-159). Un chargeur
+   * **ET IL LE CHARGE DANS LA LANGUE DE L'ADMINISTRATION** (D-162). Un chargeur
    * qui lirait `currentInterfaceLanguage()` chargerait — pour une interface
    * allemande — un catalogue qu'`adminLanguageOf` remplace par l'anglais : il
    * marcherait, par la défense en profondeur du chargeur, mais dirait le
