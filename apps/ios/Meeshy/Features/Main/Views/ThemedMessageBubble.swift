@@ -131,7 +131,7 @@ struct ThemedMessageBubble: View {
     var presenceState: PresenceState? = nil
     /// L'auteur a l'écran de CETTE conversation ouvert (#8892) — résolu par
     /// l'hôte, jamais lu ici sur `PresenceManager`.
-    var senderIsHere: Bool = false
+    var senderIsHere: ConversationHere = .absent
     var senderMoodEmoji: String? = nil
     var senderStoryRingState: StoryRingState = .none
     var onViewStory: (() -> Void)? = nil

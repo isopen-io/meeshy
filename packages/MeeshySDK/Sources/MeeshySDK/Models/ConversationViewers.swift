@@ -6,11 +6,48 @@ import Foundation
 /// Indexé par conversation : chaque socket est dans TOUTES ses rooms, la liste
 /// apprend donc qui est dans chaque conversation sans l'avoir ouverte. Valeur
 /// immuable — chaque événement rend un nouvel état.
+/// Ce qu'un avatar dit d'une personne dans UNE conversation (#8892, #9061) :
+/// absente, ICI (l'écran ouvert), ou ici ET active — elle regarde, écoute ou
+/// agit, et son point pulse. Un littéral booléen vaut « ici » ou « absente ».
+public enum ConversationHere: Equatable, Sendable, ExpressibleByBooleanLiteral {
+    case absent
+    case here
+    case active
+
+    public init(booleanLiteral value: Bool) {
+        self = value ? .here : .absent
+    }
+
+    public var isHere: Bool { self != .absent }
+    public var isActive: Bool { self == .active }
+}
+
+/// Qui est ici, et qui y est actif, dans UNE conversation — lu une fois par
+/// configuration de cellule et remis aux rangées en valeur.
+public struct ConversationHereRoster: Equatable, Sendable {
+    public let here: Set<String>
+    public let active: Set<String>
+
+    public init(here: Set<String> = [], active: Set<String> = []) {
+        self.here = here
+        self.active = active
+    }
+
+    public subscript(userId: String) -> ConversationHere {
+        guard here.contains(userId) else { return .absent }
+        return active.contains(userId) ? .active : .here
+    }
+}
+
 public struct ConversationViewers: Equatable, Sendable {
     public let usersByConversation: [String: Set<String>]
+    /// Les pairs ICI qui regardent, écoutent ou agissent en ce moment (#9061) —
+    /// `viewing:activity`. L'app les éteint quand l'activité se tait.
+    public let activeByConversation: [String: Set<String>]
 
-    public init(usersByConversation: [String: Set<String>] = [:]) {
+    public init(usersByConversation: [String: Set<String>] = [:], activeByConversation: [String: Set<String>] = [:]) {
         self.usersByConversation = usersByConversation.filter { !$0.value.isEmpty }
+        self.activeByConversation = activeByConversation.filter { !$0.value.isEmpty }
     }
 
     public func isHere(userId: String, conversationId: String) -> Bool {
@@ -21,23 +58,54 @@ public struct ConversationViewers: Equatable, Sendable {
         usersByConversation[conversationId] ?? []
     }
 
+    public func isActive(userId: String, conversationId: String) -> Bool {
+        activeByConversation[conversationId]?.contains(userId) ?? false
+    }
+
+    public func activeUsers(in conversationId: String) -> Set<String> {
+        activeByConversation[conversationId] ?? []
+    }
+
+    public func here(userId: String, conversationId: String) -> ConversationHere {
+        roster(in: conversationId)[userId]
+    }
+
+    public func roster(in conversationId: String) -> ConversationHereRoster {
+        ConversationHereRoster(here: users(in: conversationId), active: activeUsers(in: conversationId))
+    }
+
     public func applying(_ event: ConversationViewingEvent) -> ConversationViewers {
         switch event {
         case .arrived(let change):
             return replacing(change.conversationId, with: users(in: change.conversationId).union([change.userId]))
         case .left(let change):
             return replacing(change.conversationId, with: users(in: change.conversationId).subtracting([change.userId]))
+                .resting(userId: change.userId, conversationId: change.conversationId)
         case .snapshot(let snapshot):
             return replacing(snapshot.conversationId, with: Set(snapshot.userIds))
+        case .active(let change):
+            return stirring(userId: change.userId, conversationId: change.conversationId)
         case .sessionStarted:
             return ConversationViewers()
         }
     }
 
+    public func stirring(userId: String, conversationId: String) -> ConversationViewers {
+        var next = activeByConversation
+        next[conversationId] = activeUsers(in: conversationId).union([userId])
+        return ConversationViewers(usersByConversation: usersByConversation, activeByConversation: next)
+    }
+
+    public func resting(userId: String, conversationId: String) -> ConversationViewers {
+        var next = activeByConversation
+        next[conversationId] = activeUsers(in: conversationId).subtracting([userId])
+        return ConversationViewers(usersByConversation: usersByConversation, activeByConversation: next)
+    }
+
     private func replacing(_ conversationId: String, with users: Set<String>) -> ConversationViewers {
         var next = usersByConversation
         next[conversationId] = users
-        return ConversationViewers(usersByConversation: next)
+        return ConversationViewers(usersByConversation: next, activeByConversation: activeByConversation)
     }
 }
 
