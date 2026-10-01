@@ -11,7 +11,7 @@ import { browserFileDeliveryHost, hasFileDeliveryDoor, type FileDeliveryHost } f
 import type { StoryPlaybackStory } from '@/lib/stories/playback';
 import * as storySaveStore from '@/lib/stories/save-store';
 
-import { sharePublicationLink } from './publication-share';
+import { openStorySendSheet } from './open-story-send';
 import { useCommentsSheetHost, type CommentsSheetHost } from './use-comments-sheet-host';
 
 /**
@@ -171,19 +171,19 @@ export function useStoryOwnerRail(params: {
   );
 
   const handlers = useMemo<StoryOwnerRail['handlers']>(() => {
-    if (storyId === undefined) return {};
+    if (story === undefined) return {};
+    const storyId = story.id;
     /* La feuille « Vues » met la lecture en pause (effet ci-dessus) — iOS :
        `pauseTimer(); showViewersSheet = true`, `StoryViewerView+Sidebar.swift:683-692`. */
     const views = () => viewers.open(storyId);
     if (exportMedia === null) return { views };
-    /* La feuille de partage du système est MODALE, comme celle d'iOS
-       (`pauseTimer(); showExportShareSheet = true`, `:744-755`) : la story
-       n'avance pas dessous, et reprend quand elle se ferme. INDÉPENDANT de
-       `hasFileDeliveryDoor` — voir le commentaire d'`exportMedia` ci-dessus. */
-    const share = () => {
-      pause();
-      void sharePublicationLink({ postId: storyId, language, announce }).finally(resume);
-    };
+    /* « Partager » ouvre la feuille d'envoi COMMUNE (#8884) — une personne,
+       plusieurs, un groupe, ou une publication ; « Plus d'options… » y garde
+       la feuille du système (`MeeshySharePlugin` sur la coque Android). Le
+       lecteur met la lecture en attente sous elle (`useStorySend.sheetOpen`,
+       D-11 : une seule pause, celle du lecteur — pas de pause ici).
+       INDÉPENDANT de `hasFileDeliveryDoor` — voir le commentaire d'`exportMedia`. */
+    const share = () => void openStorySendSheet(story);
     /* `save` seul lit la porte FICHIER — l'hôte qui ne sait pas livrer de
        fichier (coque Android aujourd'hui, #7116 défaut 2) n'offre pas un
        bouton inerte : #7788 porte `MeeshySharePlugin.saveFile`. */
@@ -202,7 +202,7 @@ export function useStoryOwnerRail(params: {
         void runStoryExport({ job, url, mediaId: exportMedia.id, host }).then((key) => announce(translate(language, key)));
       },
     };
-  }, [storyId, exportMedia, host, online, language, announce, pause, resume, viewers.open]);
+  }, [story, exportMedia, host, online, language, announce, viewers.open]);
 
   const cancelSave = useCallback(() => {
     if (storyId !== undefined) storySaveStore.cancel(storyId);

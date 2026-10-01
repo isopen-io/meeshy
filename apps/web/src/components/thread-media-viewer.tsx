@@ -7,7 +7,7 @@ import { apiDeps } from '@/lib/api/deps';
 import type { Attachment, Message } from '@/lib/api/types';
 import { browserFileDeliveryHost, hasFileDeliveryDoor } from '@/lib/media/file-delivery-host';
 import type { MediaCarrier } from '@/lib/view/media';
-import { mediaPageOffers, type MediaViewerCapabilities } from '@/lib/view/media-viewer-actions';
+import { attachmentSendRequest, mediaPageOffers, type MediaViewerCapabilities } from '@/lib/view/viewer-page-offers';
 import { isMineOf } from '@/lib/view/message';
 import { threadMediaEntriesOf } from '@/lib/view/thread-media-list';
 import { useMediaHubIndex } from '@/lib/view/use-media-hub-index';
@@ -27,7 +27,7 @@ import { revealedAttachment } from './view-once-opened';
  * l'approche du DÉBUT (les plus anciens), l'hôte demande la page d'index
  * suivante — la visionneuse suit sa page par identité.
  *
- * Les quatre actions (Enregistrer, Réagir, Répondre, Créer avec ce média) sont
+ * Les cinq actions (Enregistrer, Réagir, Répondre, Partager, Créer avec ce média) sont
  * décidées page par page par `mediaPageOffers`, sur la pièce ORIGINALE.
  */
 const NO_LIFTED_IDS: ReadonlySet<string> = new Set();
@@ -83,7 +83,7 @@ export default function ThreadMediaViewer({
     [entries, openedId, opened.id, liftedIds],
   );
   const capabilities = useMemo<MediaViewerCapabilities>(
-    () => ({ save: hasFileDeliveryDoor(browserFileDeliveryHost()), react: true, reply: true, compose: true }),
+    () => ({ save: hasFileDeliveryDoor(browserFileDeliveryHost()), react: true, reply: true, compose: true, share: true }),
     [],
   );
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = index.query;
@@ -117,6 +117,9 @@ export default function ThreadMediaViewer({
           messageId: entry.message.id,
           conversationId: entry.message.conversationId,
           offers,
+          ...(offers.share
+            ? { share: attachmentSendRequest({ attachment: entry.attachment, message: entry.message, mine: isMineOf(entry.message, viewerId) }) }
+            : {}),
           onReply: () => {
             onClose();
             onReplyToMedia(entry.message.id, entry.attachment.id);

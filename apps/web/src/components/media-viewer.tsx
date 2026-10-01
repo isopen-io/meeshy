@@ -14,7 +14,7 @@ import { initialsOf } from '@/lib/view/conversation';
 import { nextFocusIndex } from '@/lib/view/focus-trap';
 import { useLongPress } from '@/lib/view/long-press';
 import { electDescription, type MediaCarrier } from '@/lib/view/media';
-import type { MediaViewerPage } from '@/lib/view/media-viewer-actions';
+import { standaloneSharePage, type MediaViewerPage } from '@/lib/view/viewer-page-offers';
 import {
   CARDED_STAGE,
   DOUBLE_TAP_SCALE,
@@ -29,6 +29,7 @@ import { safeAreaInsets } from '@/lib/view/safe-area';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { SCENE_OPENING_EASING, SCENE_OPENING_MS, takeSceneOpening } from '@/lib/view/scene-opening';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { useSendSheetOpen } from '@/lib/view/use-send-sheet-open';
 import { lateralSeek } from '@/lib/view/media-transport';
 import { useAttachmentOpenReport } from '@/lib/view/use-attachment-open-report';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
@@ -152,6 +153,13 @@ export type MediaViewerProps = {
    * fait que rendre.
    */
   readonly actionsAt?: (index: number) => MediaViewerPage | null;
+  /**
+   * UN MÉDIA NU QUE L'HÔTE SAIT PUBLIC (#8884) — l'image d'un commentaire, le
+   * média d'une publication : « Partager » seul, sans message (ni réaction ni
+   * citation). Explicite, JAMAIS déduit : voir le commentaire de `page`.
+   * Ignoré quand `actionsAt` est posé.
+   */
+  readonly shareMedia?: boolean;
   /**
    * OÙ SE POSE LA COUCHE (#8103) — `document.body` par défaut. Ouverte depuis
    * une feuille (`<dialog>` en `showModal()`), elle doit vivre DANS ce
@@ -561,6 +569,7 @@ export default function MediaViewer({
   isMineAt,
   onNearStart,
   actionsAt,
+  shareMedia,
   container,
 }: MediaViewerProps) {
   /* LA PAGE SE SUIT PAR SON IDENTITÉ (#6303), miroir `GalleryPagePinning`
@@ -603,6 +612,21 @@ export default function MediaViewer({
   // viewport, que `fullStageBox` retranche pour recentrer une page scène
   // sur le viewport ENTIER (revue-correction #6902).
   const topCorridorHeight = STAGE.topCorridorHeight + insets.top;
+
+  /* LA FEUILLE D'ENVOI (#8884) est montée par la coquille, DANS `#root` : tant
+     que la visionneuse le tient inerte, « Partager » ouvrirait une feuille
+     qu'aucun doigt ni aucune touche n'atteint. Elle lève l'inertie le temps de
+     la feuille (modale elle-même : le reste est inerte par `showModal`) et la
+     rétablit à sa fermeture. DÉCLARÉ AVANT l'effet d'ouverture : au démontage,
+     les nettoyages courent dans l'ordre — celui-ci remet l'inertie, celui de
+     l'ouverture la retire, et `#root` ne reste jamais inerte derrière nous. */
+  const sendSheetOpen = useSendSheetOpen();
+  useEffect(() => {
+    if (!sendSheetOpen) return;
+    const root = document.getElementById('root');
+    root?.removeAttribute('inert');
+    return () => root?.setAttribute('inert', '');
+  }, [sendSheetOpen]);
 
   // #root INERT le temps de l'ouverture — même dispositif que le clone du
   // menu de message (`message-menu.tsx:380-391`), porté ICI au NIVEAU DE LA
@@ -729,7 +753,14 @@ export default function MediaViewer({
      double tap est aussi deux taps (la bascule plein cadre s'annule) : c'est
      l'état zoomé de la page COURANTE qui compte. */
   const chromeHidden = presentation.kind === 'full' || (zoomedId !== null && zoomedId === current?.id);
-  const page = actionsAt?.(index) ?? null;
+  /* « PARTAGER » D'UN MÉDIA NU (#8884) — l'image d'un commentaire, le média
+     d'une publication, sans message à citer ni à réagir : l'hôte qui SAIT son
+     média public le demande (`shareMedia`). JAMAIS par défaut : les visionneuses
+     de messages protégés reçoivent des pièces RÉVÉLÉES (drapeaux levés,
+     `revealedAttachment`) — un repli implicite les ferait sortir. Un hôte qui
+     répond `actionsAt` → `null` a dit qu'il ne sait pas : on ne lui invente rien. */
+  const page =
+    actionsAt !== undefined ? actionsAt(index) : shareMedia === true && current !== undefined ? standaloneSharePage(current) : null;
 
   if (current === undefined) return null;
 
@@ -895,7 +926,7 @@ export default function MediaViewer({
         hidden={chromeHidden}
         probe={{ 'data-viewer-footer': '' }}
         {...(footer !== undefined ? { caption: footer } : {})}
-        {...(page !== null && (page.offers.react || page.offers.compose)
+        {...(page !== null && (page.offers.react || page.offers.compose || page.offers.share)
           ? {
               rail: (
                 <Suspense fallback={null}>

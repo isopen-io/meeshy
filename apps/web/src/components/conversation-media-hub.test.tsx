@@ -7,6 +7,7 @@ import { setAttachmentReactionEmitter, type AttachmentReactionRequest } from '@/
 import { mediaHubPath, mediaHubQueryKey } from '@/lib/api/conversation-media-hub';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
+import { closeSendSheet, sendSheetStore } from '@/lib/send/send-sheet-store';
 import { takeStudioSeed } from '@/lib/stories/studio-seed';
 import { href } from '@/routes/route-table';
 import type { ConversationsDeps } from '@/lib/api/conversations';
@@ -273,6 +274,21 @@ describe('les actions de la visionneuse ouverte depuis l’écran (#8180)', () =
   afterEach(() => {
     appQueryClient.clear();
     setAttachmentReactionEmitter(null);
+    act(() => closeSendSheet());
+  });
+
+  test('Partager vise la PIÈCE regardée par ses identifiants, dans SA conversation (#8884)', async () => {
+    await openFirst([photoMessage('m2'), photoMessage('m1')]);
+    await until(() => $('[data-viewer-action="share"]') !== null);
+    click($('[data-viewer-action="share"]'));
+    expect(sendSheetStore.getState().request?.intent).toBe('share');
+    expect(sendSheetStore.getState().request?.payload).toMatchObject({
+      kind: 'attachment',
+      conversationId: 'c1',
+      messageId: 'm2',
+      attachmentId: 'a-m2',
+      protected: false,
+    });
   });
 
   test('Enregistrer, Réagir et Créer avec ce média sont offerts ; Répondre ne l’est pas', async () => {

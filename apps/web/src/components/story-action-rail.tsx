@@ -108,7 +108,7 @@ const GLYPH_OF: Partial<Readonly<Record<StoryActionRailButton, RailGlyphs>>> = {
   sound: { idle: MEDIA_TRANSPORT_GLYPHS.speakerSlash, active: MEDIA_TRANSPORT_GLYPHS.speakerHigh },
   react: { idle: FEED_GLYPHS.heart, active: FEED_GLYPHS.heartFill },
   reply: { idle: THREAD_STATES_GLYPHS.arrowBendUpLeft },
-  forward: { idle: FEED_GLYPHS.shareNetwork },
+  forward: { idle: THREAD_STATES_GLYPHS.arrowBendUpRight },
   repost: { idle: FEED_GLYPHS.arrowsClockwise },
   views: { idle: GLYPHS.eye },
   share: { idle: FEED_GLYPHS.shareNetwork },

@@ -1,6 +1,9 @@
 import { Suspense, useMemo } from 'react';
 
 import type { FeedCardModel } from '@/lib/feed/card-model';
+import { publicationShareUrl } from '@/lib/feed/share-url';
+import type { SendSheetRequest } from '@/lib/send/send-sheet-store';
+import { sharePage } from '@/lib/view/viewer-page-offers';
 import { preloadable } from '@/lib/view/preloadable';
 
 import type { MediaViewerProps } from './media-viewer';
@@ -26,6 +29,28 @@ const MediaViewer = sceneViewer.Component;
 /** Le doigt posé sur une scène du fil précharge la visionneuse (#8598) : au
  * relâcher, elle s'ouvre au premier rendu, jamais après un `Suspense` vide. */
 export const preloadSceneViewer = sceneViewer.preload;
+
+/**
+ * « PARTAGER » D'UNE SCÈNE (#8884) — c'est la PUBLICATION qui part : une page
+ * de scène n'est pas un fichier (`SCENE_MIME`, aucun octet à envoyer), et
+ * l'hôte connaît le post. Un réel reste un réel (`isReel`), tout autre post un
+ * POST. L'adresse canonique accompagne la demande pour « Plus d'options… ».
+ */
+function publicationRequest(model: Pick<FeedCardModel, 'id' | 'isReel' | 'text'>, thumbUrl: string | undefined): SendSheetRequest {
+  const url = publicationShareUrl(model.id);
+  const text = model.text?.full.trim() ?? '';
+  return {
+    intent: 'share',
+    payload: {
+      kind: 'publication',
+      postId: model.id,
+      postType: model.isReel ? 'REEL' : 'POST',
+      url,
+      preview: { kind: 'publication', ...(text === '' ? {} : { text }), ...(thumbUrl === undefined ? {} : { thumbUrl }) },
+    },
+    moreOptions: { url },
+  };
+}
 
 export type SceneFullscreenGalleryProps = {
   readonly request: SceneGalleryRequest | null;
@@ -61,11 +86,11 @@ export function SceneFullscreenGallery({ request, models, preferredLanguages, on
       sentAt: found.createdAt,
       caption: null,
     };
-    return { lot, carrier };
+    return { lot, carrier, found };
   }, [models, postId]);
 
   if (request === null || composed === undefined) return null;
-  const { lot, carrier } = composed;
+  const { lot, carrier, found } = composed;
 
   return (
     <Suspense fallback={null}>
@@ -77,6 +102,10 @@ export function SceneFullscreenGallery({ request, models, preferredLanguages, on
         languages={preferredLanguages}
         fallbackLanguage={preferredLanguages[0] ?? 'fr'}
         carrier={carrier}
+        actionsAt={(index) => {
+          const page = lot.items[index];
+          return page === undefined ? null : sharePage(page, publicationRequest(found, page.thumbnailUrl));
+        }}
       />
     </Suspense>
   );

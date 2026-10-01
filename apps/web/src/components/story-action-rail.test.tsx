@@ -79,6 +79,14 @@ describe('le rail rend la loi, et rien qu’elle', () => {
     expect(actions(host)).toEqual(['sound', 'react', 'reply', 'forward', 'repost', 'comments', 'translations']);
   });
 
+  test('« Envoyer » et « Partager » ne portent pas le même dessin : sur MA story les deux sont là (#8884)', async () => {
+    const host = await monter({ plan: resolveStoryActionRailPlan(inputs({ isOwnStory: true })), language: 'fr', handlers: TOUS });
+    const drawing = (action: string): string => host.querySelector(`[data-story-action="${action}"] svg`)?.innerHTML ?? '';
+    expect(drawing('forward')).not.toBe('');
+    expect(drawing('share')).not.toBe('');
+    expect(drawing('forward')).not.toBe(drawing('share'));
+  });
+
   test('CONTRE-ÉPREUVE — un bouton dont la loi dit `false` n’est pas dans le DOM', async () => {
     const host = await monter({
       plan: resolveStoryActionRailPlan(inputs({ isOwnStory: true })),
