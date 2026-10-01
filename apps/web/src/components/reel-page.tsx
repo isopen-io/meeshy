@@ -6,6 +6,8 @@ import { MEDIA_TRANSPORT_GLYPHS } from './glyphs-media-transport';
 import { MediaUnavailable } from './media-unavailable';
 import { ReelPoster } from './reel-poster';
 import { GLYPH_SIZE } from './ui-chrome';
+import { usePublicationParticipation } from '@/lib/view/publication-participation';
+
 import { VIEWER_GLASS, ViewerActionRail, ViewerBottomBar, ViewerIdentity, type ViewerAction } from './viewer-chrome';
 import { carrierMediaIdentity } from '@/lib/canvas/carrier';
 import { sceneHasAudibleBackgroundVideo, sceneHasControllableSound } from '@/lib/canvas/background-sound';
@@ -264,10 +266,16 @@ function reelActions({
   onShare,
   onComment,
   onRepost,
+  commented,
 }: Pick<ReelPageProps, 'model' | 'soundOn' | 'language' | 'onToggleSound' | 'onGesture' | 'onShare' | 'onComment' | 'onRepost'> & {
   readonly playable: boolean;
+  /** Le lecteur a commenté ce réel pendant la session (`usePublicationParticipation`). */
+  readonly commented: boolean;
 }): readonly ViewerAction[] {
   const { liked, bookmarked, reposted } = model.viewer;
+  /* L'ANNEAU DU GESTE FAIT, dans la couleur de l'auteur — `ReelActionRail.swift`
+     (`outline`, `accentHex: reel.authorColor`) ; directive porteur 2026-10-01. */
+  const ringed = (done: boolean): string | undefined => (done ? model.author.accentColor : undefined);
   return [
     {
       action: 'like',
@@ -276,6 +284,8 @@ function reelActions({
       pressed: liked,
       count: model.stats.likeCount,
       ink: liked ? 'var(--ios-error)' : undefined,
+      glow: liked ? 'var(--ios-error)' : undefined,
+      contour: ringed(liked),
       onPress: () => onGesture(model.id, 'like'),
       probe: { 'data-reel-gesture': 'like' },
     },
@@ -284,6 +294,7 @@ function reelActions({
       label: translate(language, 'feed.post.action.comment'),
       glyph: railGlyph('chatCircle'),
       count: model.stats.commentCount,
+      contour: ringed(commented),
       onPress: onComment === undefined ? undefined : () => onComment(model.id),
       probe: { 'data-reel-gesture': 'comment' },
     },
@@ -293,6 +304,7 @@ function reelActions({
       glyph: railGlyph(bookmarked ? 'bookmarkFill' : 'bookmark'),
       pressed: bookmarked,
       count: model.stats.bookmarkCount,
+      contour: ringed(bookmarked),
       onPress: () => onGesture(model.id, 'bookmark'),
       probe: { 'data-reel-gesture': 'bookmark' },
     },
@@ -306,6 +318,7 @@ function reelActions({
       pressed: reposted,
       count: model.stats.repostCount,
       ink: reposted ? 'var(--color-ok)' : undefined,
+      contour: ringed(reposted),
       onPress: onRepost === undefined ? undefined : () => onRepost(model.id),
       probe: { 'data-reel-gesture': 'repost' },
     },
@@ -321,6 +334,7 @@ function reelActions({
       action: 'sound',
       label: translate(language, soundOn ? 'reels.sound.off' : 'reels.sound.on'),
       glyph: railGlyph(soundOn ? 'speakerHigh' : 'speakerSlash'),
+      glow: soundOn ? 'var(--ios-indigo-400)' : undefined,
       onPress: playable ? onToggleSound : undefined,
       probe: { 'data-reel-gesture': 'sound' },
     },
@@ -345,6 +359,7 @@ export function ReelPage(props: ReelPageProps) {
    * seconde règle (`sceneHasAudibleBackgroundVideo`).
    */
   const [soundUnavailable, setSoundUnavailable] = useState<ProtectedMediaUnavailableReason | null>(null);
+  const participation = usePublicationParticipation(model.id);
   const sceneSound =
     stage.kind === 'scene' &&
     (soundUnavailable === null
@@ -436,6 +451,7 @@ export function ReelPage(props: ReelPageProps) {
                 onShare: props.onShare,
                 ...(props.onComment !== undefined ? { onComment: props.onComment } : {}),
                 ...(props.onRepost !== undefined ? { onRepost: props.onRepost } : {}),
+                commented: participation.has('commented'),
               })}
             />
           }

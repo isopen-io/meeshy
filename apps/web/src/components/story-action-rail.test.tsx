@@ -450,3 +450,46 @@ describe('l’anneau d’export remplace « Enregistrer », jamais « Partager �
     expect(host.querySelector('button[data-story-save-cancel]') === null).toBe(true);
   });
 });
+
+/**
+ * LES EFFETS DU RAIL DE LA STORY (directive porteur 2026-10-01) — le son, le
+ * cœur, et l'anneau du cœur sur chaque geste déjà fait. Miroir du
+ * `StoryActionButton` d'iOS d'avant #8878 : le son ouvert rayonne d'indigo, le
+ * cœur posé rayonne de rouge et prend l'anneau de l'auteur, et chaque action
+ * déjà faite porte ce même anneau.
+ */
+describe('les effets du rail', () => {
+  const disc = (host: HTMLElement, action: string): Element | null =>
+    host.querySelector(`[data-story-action="${action}"] [data-viewer-disc]`);
+
+  test('le son OUVERT rayonne ; coupé, il s’éteint', async () => {
+    const host = await monter({ plan: resolveStoryActionRailPlan(inputs()), language: 'fr', handlers: TOUS, pressed: { sound: false } });
+    expect(disc(host, 'sound')?.hasAttribute('data-viewer-glow')).toBe(true);
+    await act(async () => root?.render(<StoryActionRail plan={resolveStoryActionRailPlan(inputs())} language="fr" handlers={TOUS} pressed={{ sound: true }} />));
+    expect(disc(host, 'sound')?.hasAttribute('data-viewer-glow')).toBe(false);
+  });
+
+  test('le cœur POSÉ rayonne et porte l’anneau de l’auteur', async () => {
+    const host = await monter({
+      plan: resolveStoryActionRailPlan(inputs()),
+      language: 'fr',
+      handlers: TOUS,
+      pressed: { react: true },
+      accent: 'rgb(255, 45, 85)',
+    });
+    expect(disc(host, 'react')?.hasAttribute('data-viewer-glow')).toBe(true);
+    expect(disc(host, 'react')?.querySelector<HTMLElement>('[data-viewer-contour]')?.style.boxShadow).toContain('rgb(255, 45, 85)');
+  });
+
+  test('l’anneau du cœur passe sur CHAQUE geste déjà fait — commenté, envoyé — et sur eux seuls', async () => {
+    const host = await monter({
+      plan: resolveStoryActionRailPlan(inputs()),
+      language: 'fr',
+      handlers: TOUS,
+      participated: { comments: true, forward: true },
+      accent: 'rgb(255, 45, 85)',
+    });
+    const ringed = actions(host).filter((action) => disc(host, action)?.querySelector('[data-viewer-contour]') !== null);
+    expect(ringed).toEqual(['forward', 'comments']);
+  });
+});

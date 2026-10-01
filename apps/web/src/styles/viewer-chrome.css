@@ -71,3 +71,32 @@
 .viewer-ink-muted {
   color: color-mix(in srgb, var(--ios-on-media) 75%, transparent);
 }
+
+/* LES EFFETS DU RAIL (directive porteur 2026-10-01) — ce que le rail de la
+   story montrait avant le chrome commun, et qu'il avait perdu : le HALO d'une
+   action allumée (son ouvert, cœur posé), l'ANNEAU d'un geste déjà fait, et le
+   REBOND au changement d'état (`StoryActionButton` d'avant #8878 : contour
+   d'accent, ombre colorée à 55 % de rayon 7, `symbolEffect(.bounce)`).
+   `prefers-reduced-motion` fige le rebond par la règle générale d'`app.css`. */
+.viewer-disc-halo {
+  opacity: 0.55;
+}
+
+.viewer-disc-pop {
+  animation: viewer-disc-pop 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes viewer-disc-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.22);
+  }
+  70% {
+    transform: scale(0.94);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
