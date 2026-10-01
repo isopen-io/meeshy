@@ -43,6 +43,10 @@ extension ConversationView {
             secondaryColor: secondaryColor,
             headerMoodEmoji: headerMoodEmoji,
             headerPresenceState: headerPresenceState,
+            showsIdentity: headerLayout.avatarShowsIdentity,
+            isPreview: previewMode,
+            onSetExpanded: { setHeaderExpanded($0) },
+            onDismissFlame: { dismissHeaderFlame() },
             onNavigateToDM: { userId, name in
                 Task { await self.navigateToDM(with: userId, name: name) }
             },
@@ -78,6 +82,42 @@ extension ConversationView {
         .accessibilityLabel(String(localized: "conversation.preview.openFull", defaultValue: "Ouvrir la conversation", bundle: .main))
         .accessibilityIdentifier("conversation.preview.openFull"))
     }
+
+    // MARK: - La mémoire de l'en-tête (#9031)
+
+    /// Déplie ou replie l'en-tête par le GESTE du lecteur, et le retient pour
+    /// cette conversation. Déplier ramène aussi la flamme du jour qu'il avait
+    /// touchée (`HeaderFlameVisibility`). Les replis automatiques (frappe, menu
+    /// d'appui long) ne passent pas ici : ils ne disent rien de sa préférence.
+    func setHeaderExpanded(_ expanded: Bool) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            composerState.showOptions = expanded
+        }
+        guard !previewMode, let conversationId = conversation?.id else { return }
+        headerMemory.setExpanded(expanded, for: conversationId)
+        let dismissed = HeaderFlameVisibility.dismissed(afterHeaderExpanded: expanded, wasDismissed: headerState.flameDismissed)
+        guard dismissed != headerState.flameDismissed else { return }
+        headerState.flameDismissed = dismissed
+        headerMemory.setFlameDismissed(dismissed, for: conversationId)
+    }
+
+    /// Relit ce que l'en-tête de cette conversation avait retenu. L'aperçu tiré
+    /// d'une bannière a sa propre disposition et ne lit rien.
+    func restoreHeaderMemory() {
+        guard !previewMode, let conversationId = conversation?.id else { return }
+        composerState.showOptions = headerMemory.isExpanded(conversationId)
+        headerState.flameDismissed = headerMemory.isFlameDismissed(conversationId)
+    }
+
+    func dismissHeaderFlame() {
+        HapticFeedback.light()
+        headerState.flameDismissed = true
+        guard let conversationId = conversation?.id else { return }
+        headerMemory.setFlameDismissed(true, for: conversationId)
+    }
+
+    var headerMemory: ConversationHeaderMemoryProviding { ConversationHeaderMemory.shared }
+
 
     // MARK: - Header Call Buttons (audio + video)
 
@@ -506,6 +546,13 @@ private struct ConversationHeaderAvatarView: View {
     let secondaryColor: String
     let headerMoodEmoji: String?
     let headerPresenceState: PresenceState
+    /// L'IDENTITÉ — pile des plus actifs puis interlocuteur ou groupe — plutôt
+    /// que l'avatar replié (`ConversationHeaderLayout.avatarShowsIdentity`).
+    let showsIdentity: Bool
+    /// Dans l'aperçu, l'avatar ouvre les détails : il n'y a rien à replier.
+    let isPreview: Bool
+    var onSetExpanded: (Bool) -> Void
+    var onDismissFlame: () -> Void
     var onNavigateToDM: (String, String) -> Void
     var onViewProfile: (() -> Void)?
     var onViewMemberProfile: (ProfileSheetUser) -> Void
@@ -615,9 +662,21 @@ private struct ConversationHeaderAvatarView: View {
         return avatarContextMenu(for: userId, name: conversation?.name ?? "Contact")
     }
 
+    /// Le toucher de l'identité : dans le fil il replie l'en-tête, dans
+    /// l'aperçu il ouvre les détails de la conversation (comme le web).
+    private func identityTap() {
+        HapticFeedback.light()
+        if isPreview {
+            composerState.showConversationInfo = true
+        } else {
+            onSetExpanded(false)
+        }
+    }
+
     var body: some View {
-        if composerState.showOptions {
-            // Expanded: participant avatar(s) — tap collapses band
+        if showsIdentity {
+            // Identity: participant avatar(s) — tap collapses band (fil) or
+            // opens details (aperçu, #9031)
             if isDirect, let userId = conversation?.participantUserId {
                 MeeshyAvatar(
                     name: conversation?.name ?? "?",
@@ -629,12 +688,7 @@ private struct ConversationHeaderAvatarView: View {
                     moodEmoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
                     presenceState: PresenceManager.shared.presenceState(for: userId),
                     isHere: isHere(userId),
-                    onTap: {
-                        HapticFeedback.light()
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                            composerState.showOptions = false
-                        }
-                    },
+                    onTap: identityTap,
                     onViewStory: {
                         headerState.storyUserIdForHeader = userId
                         headerState.showStoryViewerFromHeader = true
@@ -673,12 +727,7 @@ private struct ConversationHeaderAvatarView: View {
                         accentColor: accentColor,
                         secondaryColor: secondaryColor,
                         avatarURL: conversation?.avatar,
-                        onTap: {
-                            HapticFeedback.light()
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                                composerState.showOptions = false
-                            }
-                        }
+                        onTap: identityTap
                     )
                 }
             }
@@ -696,9 +745,7 @@ private struct ConversationHeaderAvatarView: View {
                 isHere: isDirect && isHere(conversation?.participantUserId),
                 onTap: {
                     HapticFeedback.light()
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        composerState.showOptions = true
-                    }
+                    onSetExpanded(true)
                 },
                 onViewStory: isDirect ? {
                     if let userId = conversation?.participantUserId {
@@ -709,6 +756,15 @@ private struct ConversationHeaderAvatarView: View {
                 onMoodTap: isDirect ? statusViewModel.moodTapHandler(for: conversation?.participantUserId ?? "", repliesInline: true) : nil,
                 contextMenuItems: directContextMenu
             )
+            // La flamme du jour, sous l'avatar replié (#9031).
+            .modifier(HeaderFlameDecoration(
+                conversationId: conversation?.id ?? "",
+                seed: conversation?.viewerEngagement,
+                headerExpanded: showsIdentity,
+                dismissed: headerState.flameDismissed,
+                avatarDiameter: 44,
+                onDismiss: onDismissFlame
+            ))
         }
     }
 }
