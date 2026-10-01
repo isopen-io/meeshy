@@ -214,7 +214,7 @@ describe('l’offre du glissé est celle du menu', () => {
       api().onMenuAction('m1', 'forward');
     });
     expect(api().selection).toEqual({ ids: ['m1'] });
-    expect(api().forwardIds).toBeNull();
+    expect(openedRequest()).toBe(null);
     expect(api().swipeActionsOf(ordinary('m2'))).toBeUndefined();
   });
 });
