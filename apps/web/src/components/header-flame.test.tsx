@@ -164,13 +164,14 @@ describe('useHeaderMemory — le geste du lecteur est retenu', () => {
 });
 
 describe('HeaderFlame — « 🔥 M » et son effet', () => {
-  test('elle dit les points du jour, en mots pour le lecteur d’écran', () => {
+  test('la série et les points du jour, en mots pour le lecteur d’écran', () => {
     const html = renderToStaticMarkup(<HeaderFlame snapshot={snapshot()} replay={0} onDismiss={() => undefined} />);
     expect(html).toContain('data-header-flame="12"');
-    expect(html).toContain('aria-label="12 points aujourd’hui — toucher pour masquer la flamme"');
+    expect(html).toContain('data-header-flame-streak="4"');
+    expect(html).toContain('aria-label="Série de 4 jours, 120 points dont 12 aujourd’hui"');
   });
 
-  test('un snapshot d’hier se relit au jour du lecteur : 0 aujourd’hui', () => {
+  test('un snapshot d’hier se relit au jour du lecteur : la série tient, 0 aujourd’hui', () => {
     const html = renderToStaticMarkup(
       <HeaderFlame snapshot={snapshot({ day: localDayOf(Date.now() - 86_400_000) })} replay={0} onDismiss={() => undefined} />,
     );
