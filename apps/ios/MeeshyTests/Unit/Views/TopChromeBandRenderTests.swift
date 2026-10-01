@@ -445,7 +445,9 @@ final class TopChromeBandRenderTests: XCTestCase {
         )
     }
 
-    func test_laBarreResteRemontee_pendantLaFenetreDeGrace() throws {
+    /// La croix ferme le lecteur sur le champ (#8983) : la fenêtre de grâce de 5 s est celle d'une
+    /// file épuisée, jamais d'un geste de fermeture.
+    func test_laCroix_retireLaBarreSurLeChamp() throws {
         let (coord, _) = coordinateur(actif: true, conversation: "conv-A")
         let journal = Journal()
         let rendu = try monterLaBarre(coord: coord, conversationCourante: nil, journal: journal)
@@ -453,6 +455,23 @@ final class TopChromeBandRenderTests: XCTestCase {
         XCTAssertNotNil(journal.recus.last ?? nil, "Préalable : la barre doit d'abord remonter.")
 
         coord.close()
+
+        XCTAssertTrue(
+            rendu.attendre(borne: 1) { (journal.recus.last ?? nil) == nil },
+            "Après la croix, la barre doit disparaître sur le champ ; elle est restée affichée " +
+            "(\(String(describing: journal.recus.last ?? nil))), comme pendant la grâce d'une file épuisée."
+        )
+    }
+
+    func test_laBarreResteRemontee_pendantLaFenetreDeGrace() throws {
+        let (coord, moteur) = coordinateur(actif: true, conversation: "conv-A")
+        let journal = Journal()
+        let rendu = try monterLaBarre(coord: coord, conversationCourante: nil, journal: journal)
+        rendu.attendre(borne: 3) { !journal.recus.isEmpty }
+        XCTAssertNotNil(journal.recus.last ?? nil, "Préalable : la barre doit d'abord remonter.")
+
+        // La file s'épuise d'elle-même : la seule fin qui garde la barre (#8983).
+        moteur.simulateFinishPlayback()
         // Attente BORNÉE, et assumée : on mesure ici qu'il ne se passe RIEN
         // pendant la fenêtre de grâce. Une borne trop courte ne peut que rendre
         // le témoin indulgent, jamais instable — l'inverse d'un pari sur la

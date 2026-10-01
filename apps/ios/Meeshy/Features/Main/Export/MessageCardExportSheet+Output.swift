@@ -75,9 +75,14 @@ extension MessageCardExportSheet {
                 .buttonStyle(.plain)
                 .adaptiveGlass(in: Capsule(), interactive: true)
             }
-            .disabled(!ready || busy)
-            .opacity(ready && !busy ? 1 : 0.6)
+            .disabled(!canSave || busy)
+            .opacity(canSave && !busy ? 1 : 0.6)
         }
+    }
+
+    /// La carte est peinte — et, pour une vidéo, sa voix est là : jamais une vidéo muette (revue #8979).
+    var canSave: Bool {
+        ready && (output != .video || loadedMedia.hearsThePaintedSound(of: subject.media))
     }
 
     enum Destination { case gallery, share }
@@ -109,16 +114,18 @@ extension MessageCardExportSheet {
         }
     }
 
-    /// Peint la carte image par image, hors du MainActor, puis l'enregistre ou la partage.
+    /// Peint la carte image par image, hors du MainActor, puis l'enregistre ou la
+    /// partage — sur la durée et le passage choisis, avec la piste que sert la
+    /// langue d'export (#8979).
     private func animate(to destination: Destination) {
-        guard let plan = MessageCardMotionPlan.of(output, media: currentMedia) else { return }
+        guard let plan = motionPlan, canSave else { return }
         busy = true
         notice = nil
         motion.value = 0
         let input = input(for: format)
         let pictures = loadedMedia.pictures
-        let audioFile = loadedMedia.audioFile
-        let video = request.subject.media.first { $0.media.kind == .video }
+        let audioFile = loadedMedia.soundFile(of: subject.media)
+        let video = subject.media.first { $0.media.kind == .video }
         let box = motion
         let progress: @Sendable (Double) -> Void = { value in
             Task { @MainActor in box.value = value }

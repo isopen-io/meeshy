@@ -1,5 +1,140 @@
 # @meeshy/translator
 
+## 1.77.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - le lecteur de la notification déployée tient sur un seul axe (#8859)
+  - le fetch du magasin de série est @concurrent — plus de métadonnée de type étendue qui plante iOS 16/17 (#8182)
+  - l'extension de contenu lie UserNotificationsUI dans son exécutable, la notification déployée n'est plus vide (#8859)
+  - le barème lit le blanc de la charte, le plumage du colibri est déclaré illustration — le gate d'harmonie repasse au vert (#8879)
+  - TypingIndicatorBubble n'est plus déclaré deux fois — la fusion de #8920 avait gardé la copie de MessageListViewController à côté de son extraction ; les jetons de #8877 passent dans le fichier extrait — run test
+  - catalogue de la notification déployée en pt-BR, libellés avec valeur par défaut (#8859)
+  - un seul crédit par personne ou par ensemble de membres
+  - le (x) de la colonne se choisit par table ; les gates navigateur suivent les outils du fond (#8849)
+  - la création rouverte reprend son format, l'édition d'une publication se sauvegarde seule (#8849)
+  - la notification déployée fait écouter un vocal, explorer une position et lire une carte de visite (#8859)
+  - éditer le fond ouvre les outils de droite en focus, plus l'ancien panneau Cadre (#8849)
+  - le viseur armé, tenu, filme — toucher photo, tenir vidéo, glisser cadenas et zoom (#8849)
+  - la ligne d'un éphémère échu peint le minuteur, plus une vignette vide — timer.badge.xmark n'existe pas (#8924) — run test
+  - l'expéditeur attend la réception, puis suit l'échéance servie (#8905)
+  - dev recompile sous Xcode 26.1.1 — les médias chargés d'une carte sont une donnée sans acteur
+  - le cliquet d'accent reprend la référence de dev, qui a soldé son rouge (#8879)
+  - le fil relit « N (M) 🔥 » à l'ouverture ; la pastille iOS nomme sa couleur accentColor
+  - copier un lien de partage ou d'invitation retombe sur execCommand quand le presse-papier refuse (#8937)
+  - les gardes de parité suivent l'alias du voile média, et le cliquet d'accent reprend le rouge hérité de dev (#8879)
+  - la pastille relit l'état serveur à l'ouverture d'une conversation
+  - le gate de design laisse story-compose.tsx au chantier du composer (#8879)
+  - les visionneuses plein écran partagent un chrome commun — fermer, réagir, répondre, gestes (#8879)
+  - la palette du SDK devient la seule source des couleurs du web, gardée par check-design-harmony (#8879)
+  - Mee devient un colibri, en aquarelle, glyphe et réaliste (#8908)
+  - rend à dev ce que la fusion de #8903 a perdu — la case de bannière conditionnelle (le SDK recompile) et le verre bord à bord de l'aperçu — run test (#8897, #8898)
+  - pastille « 🔥 série · N (M) » dans l'en-tête et la rangée magnifiée, écran admin « Barème de points »
+  - la vitrine ne remplace jamais une vraie session, n'accepte que l'hôte mort du port 9, et ses témoins gardent les champs optionnels affichés (Refs #8855)
+  - le point indigo passe sur les auteurs, et une reconnexion repart d'un état vide (#8892)
+  - une adresse relative se résout contre la base du document, jamais contre location.origin (#8901) — run test
+  - pastille « 🔥 série · N (M) » dans l'en-tête et la rangée focale, mise à jour live
+  - un éphémère échu disparaît vraiment — ni cache persisté, ni rangée morte, ni décompte qui repart au rechargement (#8900)
+  - rend leur libellé accentHex aux deux appels voisins que le renommage avait touchés — run test (#8898)
+  - qui est déjà là se voit à l'arrivée, et le point indigo passe sur les auteurs (#8892)
+  - l'identité ne voyage que vers la passerelle — une pièce d'un autre hôte se charge sans jeton ni pré-vol refusé (#8901) — run test
+  - Mee, la mascotte, ouvre l'écran Progression — elle compte, invite à frapper et célèbre (#8907)
+  - la galerie remonte le voile de la story, et deux gardes suivent la cible 44 pt dans sa forme jeton (#8878, #8877)
+  - le verre de l'en-tête reçoit l'accent sous son nom admis — cliquet des couleurs conforme — run test (#8898)
+  - le plafond d'une page institutionnelle passe de 10 à 10,5 Ko, à confirmer par le porteur (#8877)
+  - la citation apporte son média ; un média qui ne se charge pas le dit et se réessaie (#8901) — run test
+  - un média qui ne se charge pas le dit et se réessaie ; la citation apporte son média ; une pièce chiffrée n'est jamais peinte (#8901)
+  - le cliquet est inscrit au pbxproj et les gardes de parité web lisent les jetons MeeshyUI (#8877)
+  - glisser → répondre, ← transférer, et l'icône Répondre au pointeur fin (#7559, #8899)
+  - un éphémère mort ne renaît plus en message ordinaire depuis le cache (#7552) — run test
+  - l'en-tête de l'aperçu est une bande de verre bord à bord, arête basse droite — run test (#8898)
+  - la bannière in-app ne pose une case que pour une vraie vignette ou un contenu social — le type n'est dit qu'une fois, par la pastille (#8897)
+  - « Plus tard » porte arrow.forward — la garde RTL de dev repasse au vert — run test
+  - la relecture du lot — compteur lu par VoiceOver, cible sans trou, accent neutre et clé de carte (#8877, #8878)
+  - un seul chrome pour tous les visualiseurs — fermer, menu, réagir, répondre (#8878)
+  - toutes les vues suivent la charte visuelle (#8877)
+  - l'élan suit la règle partagée, les Meesh frappées portent leurs dates, et le lien montre l'adresse publique (Refs #8855)
+  - inscrire les fichiers de « est dans la conversation » au projet (#8892)
+  - le pair qui a la conversation ouverte porte le point couleur primaire (#8892)
+  - la scène se prépare, se remplit, s'ouvre après le voile et signale qu'elle est prête — lien servi sans passerelle, bandeau réseau hors champ (Refs #8855)
+  - les fixtures remplissent les vraies bases — liste par le point réconcilié, messages et traductions, progression, mode de lecture (Refs #8855)
+  - contrat « est dans la conversation » — viewing:start/stop/snapshot et couleur primaire du point (#8892)
+  - session fictive posée ou retirée, et refus de tout vrai serveur (Refs #8855)
+  - l'app lit la scène demandée et décode les fixtures du kit avec son décodeur de production (Refs #8855)
+  - la fiche de contact se présente sur la fenêtre que résout DeviceLayout, pas sur une marche de scènes maison (#8858) — run test
+  - ma nouvelle photo se montre partout où l'on me voit — conversations, membres, comptes de l'appareil
+  - les littéraux de valeur identique deviennent des jetons MeeshyUI (#8877)
+  - le kit habille les vraies captures — fond, titre, cadre — et dresse la planche contact (Refs #8855)
+  - le script capture chaque scène sur les simulateurs dédiés, serveur injoignable, après le signal « prêt » (Refs #8855)
+  - le kit exporte le contenu de la vitrine au format exact de la passerelle (Refs #8855)
+  - deux simulateurs dédiés et des lanceurs de tests iOS ciblés (Refs #8855)
+  - le vocabulaire de la charte visuelle — échelles et couleurs MeeshyUI complétées, charte § 2–5 (#8877)
+  - micro ou position refusés dans la coque Android mènent aux réglages de l'app (#8882)
+  - la photo et la bannière téléversées sont posées, et ma fiche publique les montre aussitôt
+  - une carte de visite sans nom garde la catégorie Contacts que la passerelle déclare (#8858) — run test
+  - la bannière in-app lit le détail là où la passerelle le pose — context.contentDetail imbriqué (#8858) — run test
+  - PhoneChangeFlowModel déclare une deinit non isolée — pas de double libération sur iOS 26.1
+  - le panneau (+) s'ouvre à la hauteur du clavier, bornée, et sa grille montre les 40 médias récents
+  - les catégories du détail s'enregistrent dans le Set attendu ; banc de capture de la bannière in-app (#8858)
+  - la NSE attache la carte d'une position et la vignette d'une vidéo, compose le corps du détail ; Plans, Contacts et Rejoindre deviennent des actions (#8858)
+  - la bannière d'un message dit son contenu — position, contact, invitation, lien, sticker, vignette, réponse à une story
+  - la création en cours se sauvegarde seule et revient après un kill — run test (#8848)
+  - un lecteur unique du détail notifié — position, contact, invitation, lien — et la bannière in-app qui le rend (#8858)
+  - viseur armé, l'appui long filme ; le fond s'édite par les outils de droite en focus — run test
+  - le voile de l'aperçu de bannière est inventorié au verre, et la garde d'encoche ne scanne plus les fichiers de test — dev redevient vert (Refs #8821)
+  - chercher ses contacts propose d'abord d'ajouter son numéro, en disant pourquoi
+  - le numéro dit à quoi il sert sous le champ, et « Plus tard → » le laisse de côté depuis la ligne du libellé
+  - témoin inscrit au pbxproj, clé morte retirée, glyphe après HeaderCallButtonsView — la suite iOS repasse (#8822) run test
+  - « Ajoutez votre numéro » là où l'on cherche des gens, par le parcours SMS existant
+  - « Plus tard → » sur la ligne du libellé, et ce que le numéro ouvre se lit d'emblée
+  - la porte de l'aperçu ne teinte qu'à l'accent de la conversation — le cliquet des couleurs en dur revient à 441 (#8822)
+  - le retour au premier plan rebranche le temps réel sans attendre le backoff (#8839)
+  - le plafond de story_reader suit le menu (…) du lecteur — dev redevient vert
+  - l'aperçu tiré de la bannière défile sous l'en-tête complet en verre, sans chevron (#8822)
+  - la vitrine App Store raconte l'amour, le rire et le débat entre langues, avec de vraies photos et des vocaux traduits (Refs #8825)
+  - l'aperçu s'ouvre à la souris, ses états n'ont aucun chevron, l'identité tient à 390 px (#8821)
+  - l'extrait du post d'une notification sociale descend le Prisme du destinataire
+  - « Enregistrer » dans le menu (…) du lecteur, pour tout lecteur
+  - modernise concurrency sleep in InviteGroupCard and update quality review
+  - un compte connecté rejoint un lien en « Anonyme » sans perdre sa session (#8816)
+  - tirer la bannière vers le bas ouvre l'aperçu de la conversation — le fil défile sous son en-tête complet en verre, sans chevron (#8821)
+  - les captures Android existent dans les sept langues
+  - l'app se lit de droite à gauche en arabe
+  - la couche d'appel et la bannière vivent hors de #root — une visionneuse ouverte ne les rend plus inertes (#8727)
+  - voie du clavier vers le menu du fond, garde des encodeurs, budgets remesurés, gate du studio à la nouvelle géographie (#8715, #8794)
+  - la porte de mise à jour mène à la vraie fiche App Store — apps.apple.com/app/meeshy rendait 404
+  - la carte propose « Rejoindre ? » Anonyme / le compte nommé, et cite le message d'invitation ; catalogue des notifications à part (#8727)
+  - colonne droite (effets du fond ou options de l'objet touché, historique en bas), carrousel d'effets à la place du socle avec miniatures et répétition, (+) de scène en barre haute, éclair puis Cadre après les portes, menus d'appui long du fond et du calque, bascule post → réel (#8715, #8794)
+  - l'appel s'affiche par-dessus tout plein écran, interrompt la lecture et gèle la story (#8727)
+  - la bannière in-app descend en relief et ne dit son aperçu qu'une fois (#8727)
+  - la ligne dit le post, nomme le badge et propose Écrire / Se connecter à l'ami parrainé (#8727)
+  - transitions d'ouverture/fermeture au document, mise en fond, bascule en réel, miniatures bornées et menus de scène — règles pures (#8715, #8794)
+  - la ligne de la cloche ne répète rien et dit son contexte — règle pure (#8727)
+  - la photo en deux temps — le premier toucher arme le viseur, le second n'importe où sur lui prend (#8715)
+  - règles pures des rails de la scène et des transitions d'ouverture/fermeture (#8715, #8794)
+  - copier un message n'annonce « copié » qu'une fois le texte dans le presse-papier, avec repli, web et coque Android (#8809)
+  - la bascule automatique va vers le RÉEL (correction porteur) et le choix au chevron la verrouille ; garde deinit des vignettes — run test (#8793, #8792)
+  - les glyphes Micro et Caméra de l'aperçu suivent Dynamic Type, bornés à leur cercle — aucune taille de police figée neuve (Refs #8795) run test
+  - la page montre l'app sur iOS et Android — badges App Store et Google Play, captures des deux plateformes, liens institutionnels
+  - la répétition part au premier tick et un tour après le choix — le premier effet visuel rejoue aussi (#8792) — run test
+  - l'appelant choisit, contact par contact, ce que l'appelé voit et entend avant de décrocher — micro coupé et caméra activée par défaut (Refs #8795) run test
+  - effets de scène en deux familles, vignettes réelles et répétition des transitions ; bascule post → story — run test (#8792, #8793)
+  - une mention validée pose le curseur en fin de texte, jamais au milieu du pseudo (Closes #8791) run test
+  - un brouillon tapé en milieu de mot s'écrit quand la page est masquée ou fermée, coque Android et web comme iOS (#8790)
+  - l'écran d'appel suit enfin l'appel — plus de cycle SwiftUI, pilule vraiment masquée, réponse en double sans raccrocher, aperçu plein écran (Refs #8772) run test
+  - ouvrir une conversation retire ses bannières de la barre de notifications, web et coque Android comme iOS (#8781)
+  - le déclenchement manuel construit la ref demandée — plus de 409 « branch dev »
+  - l'appel vidéo ne fait plus déborder la pile de l'iPhone, et la rangée de statistiques ne trappe plus au rendu asynchrone (Refs #8772)
+  - le gate des utilitaires protège les apostrophes comme Tailwind — dev redevient vert
+  - la pilule d'appel perd la classe before:content-[''] qu'aucune feuille ne sert — dev repasse au vert
+  - le barème réglé par l'administration gouverne chaque crédit, par conversation et en temps réel
+  - « est dans la conversation » — registre par socket, annonce et retrait temps réel (#8892)
+  - un aperçu se coupe par point de code, jamais au milieu d'un emoji
+  - barème d'engagement réglable et état « N (M) 🔥 » par conversation
+  - la loi de la mascotte — événement et moment (#8907)
+
 ## 1.76.0
 
 ### Minor Changes

@@ -2,25 +2,20 @@ import MapKit
 import MeeshySDK
 import SwiftUI
 
-/// Les mesures partagées par la vue et le contrôleur : le bouton natif de
-/// lecture est posé par le SYSTÈME à `NotificationExpandedLayout.playButtonFrame`,
-/// et la vue lui réserve exactement cette place.
+/// Les mesures partagées par la vue et le contrôleur. Le lecteur suit
+/// `NotificationPlayerGeometry` : le bouton natif est posé par le SYSTÈME au
+/// cadre qu'elle calcule, et la vue dessine sa pastille autour.
 enum NotificationExpandedLayout {
-    static let inset: CGFloat = 16
-    static let playButtonSide: CGFloat = 44
-    static let audioHeight: CGFloat = 76
+    static let player = NotificationPlayerGeometry.standard
+    static let inset: CGFloat = player.inset
     static let locationMapHeight: CGFloat = 190
     static let locationHeight: CGFloat = 262
     static let contactHeight: CGFloat = 132
     static let accent = Color(red: 0x63 / 255, green: 0x66 / 255, blue: 0xF1 / 255)
 
-    static var playButtonFrame: CGRect {
-        CGRect(x: inset, y: (audioHeight - playButtonSide) / 2, width: playButtonSide, height: playButtonSide)
-    }
-
     static func height(for content: NotificationExpandedContent) -> CGFloat {
         switch content {
-        case .audio: return audioHeight
+        case .audio: return player.height
         case .location: return locationHeight
         case .contact: return contactHeight
         }
@@ -33,12 +28,13 @@ enum NotificationExpandedLayout {
 struct NotificationExpandedRoot: View {
     let content: NotificationExpandedContent
     let player: NotificationAudioPlayer?
+    let togglePlayback: () -> Void
     let openInMaps: (URL) -> Void
 
     var body: some View {
         switch content {
         case .audio:
-            if let player { NotificationAudioCard(player: player) }
+            if let player { NotificationAudioCard(player: player, togglePlayback: togglePlayback) }
         case .location(let place):
             NotificationLocationCard(place: place) {
                 if let url = place.mapsURL { openInMaps(url) }
@@ -51,45 +47,112 @@ struct NotificationExpandedRoot: View {
 
 // MARK: - Vocal
 
+/// Une rangée, un axe : pastille de lecture · ligne de progression · pastille
+/// de vitesse, toutes centrées sur `axisY`. Les deux pastilles ont le même
+/// gabarit et la même teinte d'accent, comme la puce de vitesse des bulles
+/// audio (`AudioPlayerView`).
 struct NotificationAudioCard: View {
     @ObservedObject var player: NotificationAudioPlayer
+    let togglePlayback: () -> Void
+    private let geometry = NotificationExpandedLayout.player
+    private let accent = NotificationExpandedLayout.accent
 
     var body: some View {
         HStack(spacing: 12) {
-            // La place du bouton NATIF (`mediaPlayPauseButtonType`), que le
-            // système dessine par-dessus cette vue.
-            Color.clear
-                .frame(width: NotificationExpandedLayout.playButtonSide, height: NotificationExpandedLayout.playButtonSide)
+            // La pastille du bouton NATIF (`mediaPlayPauseButtonType`) : le
+            // système dessine son glyphe au centre, à `nativeButtonFrame`. Le
+            // glyphe est fin, la cible ne l'est pas : toute la pastille (44 pt)
+            // joue et met en pause, et le contrôleur en informe le système.
+            Button(action: togglePlayback) { pill }
+                .buttonStyle(.plain)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 6) {
-                ProgressView(value: NotificationPlaybackRate.progress(elapsed: player.elapsed, duration: player.duration))
-                    .tint(NotificationExpandedLayout.accent)
-                    .accessibilityLabel(Text(String(localized: "notification.expanded.progress", defaultValue: "Playback progress")))
-                    .accessibilityValue(Text(NotificationPlaybackRate.clock(seconds: player.elapsed)))
-                HStack {
-                    Text(NotificationPlaybackRate.clock(seconds: player.elapsed))
-                    Spacer()
-                    Text(NotificationPlaybackRate.clock(seconds: player.duration))
-                }
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .accessibilityHidden(true)
-            }
+            NotificationProgressTrack(
+                progress: NotificationPlaybackRate.progress(elapsed: player.elapsed, duration: player.duration),
+                elapsed: NotificationPlaybackRate.clock(seconds: player.elapsed),
+                total: NotificationPlaybackRate.clock(seconds: player.duration),
+                height: geometry.pillSide,
+                accent: accent,
+                seek: player.seek(toFraction:)
+            )
 
             Button(action: player.cycleRate) {
                 Text(NotificationPlaybackRate.label(for: player.rate))
-                    .font(.subheadline.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(NotificationExpandedLayout.accent)
-                    .frame(minWidth: 44, minHeight: 44)
-                    .background(NotificationExpandedLayout.accent.opacity(0.12), in: Capsule())
+                    .font(.footnote.weight(.bold).monospacedDigit())
+                    .foregroundStyle(accent)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+                    .frame(width: geometry.pillSide, height: geometry.pillSide)
+                    .background(pill)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(String(localized: "notification.expanded.playbackRate", defaultValue: "Playback speed")))
+            .accessibilityLabel(Text(String(localized: "notification.expanded.playbackRate", defaultValue: "Playback speed", bundle: InterfaceLanguageResolver.bundle())))
             .accessibilityValue(Text(NotificationPlaybackRate.label(for: player.rate)))
         }
-        .padding(.horizontal, NotificationExpandedLayout.inset)
-        .frame(height: NotificationExpandedLayout.audioHeight)
+        .padding(.horizontal, geometry.inset)
+        .frame(height: geometry.height)
+    }
+
+    private var pill: some View {
+        Circle()
+            .fill(accent.opacity(0.14))
+            .frame(width: geometry.pillSide, height: geometry.pillSide)
+    }
+}
+
+/// La ligne de progression, centrée sur l'axe de la rangée : partie jouée et
+/// bouton à l'accent, temps en petit SOUS la ligne, alignés à ses bords. On
+/// glisse le bouton (ou on touche la ligne) pour se déplacer dans le vocal.
+struct NotificationProgressTrack: View {
+    let progress: Double
+    let elapsed: String
+    let total: String
+    let height: CGFloat
+    let accent: Color
+    let seek: (Double) -> Void
+
+    private let lineHeight: CGFloat = 4
+    private let knobSide: CGFloat = 14
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = proxy.size.width
+            let played = width * progress
+            ZStack(alignment: .leading) {
+                Capsule().fill(accent.opacity(0.18)).frame(height: lineHeight)
+                Capsule().fill(accent).frame(width: max(lineHeight, played), height: lineHeight)
+                Circle()
+                    .fill(accent)
+                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
+                    .frame(width: knobSide, height: knobSide)
+                    .shadow(color: accent.opacity(0.35), radius: 3, y: 1)
+                    .offset(x: min(max(0, played - knobSide / 2), width - knobSide))
+            }
+            .frame(width: width, height: height)
+            .contentShape(Rectangle())
+            .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                seek(NotificationPlayerGeometry.seekFraction(x: value.location.x, trackWidth: width))
+            })
+            .overlay(alignment: .bottom) {
+                HStack {
+                    Text(elapsed)
+                    Spacer()
+                    Text(total)
+                }
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .offset(y: 2)
+                .accessibilityHidden(true)
+            }
+        }
+        .frame(height: height)
+        .accessibilityElement()
+        .accessibilityLabel(Text(String(localized: "notification.expanded.progress", defaultValue: "Playback progress", bundle: InterfaceLanguageResolver.bundle())))
+        .accessibilityValue(Text(verbatim: "\(elapsed) / \(total)"))
+        .accessibilityAdjustableAction { direction in
+            let step = direction == .increment ? 0.1 : -0.1
+            seek(min(1, max(0, progress + step)))
+        }
     }
 }
 
@@ -106,7 +169,7 @@ struct NotificationLocationCard: View {
 
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(place.name ?? String(localized: "notification.expanded.sharedLocation", defaultValue: "Shared location"))
+                    Text(place.name ?? String(localized: "notification.expanded.sharedLocation", defaultValue: "Shared location", bundle: InterfaceLanguageResolver.bundle()))
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                     if let address = place.address {
@@ -119,7 +182,7 @@ struct NotificationLocationCard: View {
                 .accessibilityElement(children: .combine)
                 Spacer(minLength: 8)
                 Button(action: openInMaps) {
-                    Label(String(localized: "notification.expanded.openInMaps", defaultValue: "Open in Maps"), systemImage: "map.fill")
+                    Label(String(localized: "notification.expanded.openInMaps", defaultValue: "Open in Maps", bundle: InterfaceLanguageResolver.bundle()), systemImage: "map.fill")
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 12)
                         .frame(minHeight: 44)
@@ -179,7 +242,7 @@ struct NotificationContactCardView: View {
                 .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(String(localized: "notification.expanded.contactCard", defaultValue: "Contact card"))
+                Text(String(localized: "notification.expanded.contactCard", defaultValue: "Contact card", bundle: InterfaceLanguageResolver.bundle()))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)

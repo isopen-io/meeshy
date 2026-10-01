@@ -22,6 +22,8 @@ import { SecuritySanitizer } from '../../utils/sanitize.js';
 import { communityConversationSchema, flattenCommunityCounts } from './serialization';
 import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
 import { CerclesAchievements } from '../../services/achievements/CerclesAchievements';
+import { EngagementService } from '../../services/engagement/EngagementService';
+import type { CommunityEngagementOptions } from './types';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
@@ -31,7 +33,11 @@ const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 // (déjà paginée) reste le chemin pour la liste exhaustive d'UNE conversation.
 const COMMUNITY_CONVERSATION_PARTICIPANTS_DISPLAY_CAP = 100;
 
-export async function registerCoreRoutes(fastify: FastifyInstance) {
+export async function registerCoreRoutes(
+  fastify: FastifyInstance,
+  options: CommunityEngagementOptions = {}
+) {
+  const engagement = options.engagement ?? new EngagementService(fastify.prisma);
   // Route pour verifier la disponibilite d'un identifiant de communaute
   fastify.get('/communities/check-identifier/:identifier', {
     onRequest: [fastify.authenticate],
@@ -497,6 +503,11 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         userId,
         communityId: community.id,
       }).catch(() => undefined);
+
+      // `social.community_created` (#8959) — la communauté est écrite.
+      engagement
+        .recordActivity(userId, 'social.community_created', { targetId: community.id })
+        .catch((err: unknown) => logger.warn('engagement social.community_created failed', { err }));
 
       return sendSuccess(reply, flattenCommunityCounts(community), { statusCode: 201 });
     } catch (error) {

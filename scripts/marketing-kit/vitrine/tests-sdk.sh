@@ -10,7 +10,12 @@ for cache in "$HOME"/Library/Developer/Xcode/DerivedData/Meeshy-*/SourcePackages
   [ -d "$cache/checkouts/GRDB.swift" ] && PKG=(-clonedSourcePackagesDirPath "$cache")
 done
 ONLY=()
-for classe in "$@"; do ONLY+=("-only-testing:MeeshySDKTests/$classe"); done
+for classe in "$@"; do
+  case "$classe" in
+    */*) ONLY+=("-only-testing:$classe") ;;
+    *) ONLY+=("-only-testing:MeeshySDKTests/$classe") ;;
+  esac
+done
 cd "$RACINE/packages/MeeshySDK"
 xcodebuild test -scheme MeeshySDK-Package -destination "platform=iOS Simulator,id=$UDID" \
   -derivedDataPath "$DD" ${PKG[@]+"${PKG[@]}"} "${ONLY[@]}" 2>&1 \

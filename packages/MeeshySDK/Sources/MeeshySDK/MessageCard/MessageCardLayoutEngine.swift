@@ -31,6 +31,11 @@ enum MessageCardMetrics {
     static let gutterGap: Double = 28
     static let mediaGap: Double = 40
     static let mediaRadius: Double = 28
+    /// La place MINIMALE du texte, à son plancher : deux lignes de citation, trois de réponse (revue #8979).
+    static let minimumQuoteLines = 2
+    static let minimumReplyLines = 3
+    /// Un pas de réduction qui met toute police à son plancher.
+    static let floorStep = 64
 }
 
 /// La TOILE : sa largeur, sa hauteur fixe éventuelle, ses marges et la colonne d'en-tête.
@@ -128,6 +133,7 @@ struct MessageCardLayoutEngine {
 
     func layout() -> MessageCardLayout {
         let disposition = input.disposition
+        let scales = disposition.scales
         let geometry = MessageCardLinkGeometry.of(input.template.link)
         let title = MessageCardText.nonBlank(input.title)
         let date = MessageCardText.nonBlank(input.date)
@@ -142,26 +148,33 @@ struct MessageCardLayoutEngine {
         let hasQuote = quoted != nil
         let budget = canvas.budget
         let showAuthors = input.showAuthors
-        let media = MessageCardMediaPlan.of(input.media, layout: disposition.mediaLayout, audioStyle: disposition.audioStyle, width: textWidth, budget: budget)
         let authorLine = MessageCardMetrics.authorLine + MessageCardMetrics.authorGap
         let hasReplyText = MessageCardText.nonBlank(input.reply.text) != nil
-        let chrome = Chrome(
-            header: verticalHeader || (title == nil && date == nil)
-                ? 0
-                : (title == nil ? 0 : MessageCardMetrics.titleLine) + (date == nil ? 0 : MessageCardMetrics.dateLine) + MessageCardMetrics.headerGap,
-            quoteAuthor: showAuthors || input.quotedTime != nil ? authorLine : 0,
-            replyAuthor: showAuthors || input.replyTime != nil ? authorLine : 0,
-            quoteBubble: geometry.bubbles ? 2 * MessageCardMetrics.bubblePadY : 0,
-            replyBubble: geometry.bubbles && hasReplyText ? 2 * MessageCardMetrics.bubblePadY : 0,
-            link: geometry.block,
-            mediaAbove: media.above.map { $0.height + (hasReplyText ? MessageCardMetrics.mediaGap : 0) } ?? 0,
-            mediaBelow: media.below.map { $0.height + (hasReplyText ? MessageCardMetrics.mediaGap : 0) } ?? 0
-        )
+        let headerScale = scales[.header]
+        let mediaGap = hasReplyText ? MessageCardMetrics.mediaGap : 0
+        let chromeOf: (MessageCardMediaPlan?) -> Chrome = { media in
+            Chrome(
+                header: verticalHeader || (title == nil && date == nil)
+                    ? 0
+                    : ((title == nil ? 0 : MessageCardMetrics.titleLine) + (date == nil ? 0 : MessageCardMetrics.dateLine)) * headerScale + MessageCardMetrics.headerGap,
+                quoteAuthor: showAuthors || input.quotedTime != nil ? (authorLine * scales[.quote]).rounded() : 0,
+                replyAuthor: showAuthors || input.replyTime != nil ? (authorLine * scales[.reply]).rounded() : 0,
+                quoteBubble: geometry.bubbles ? 2 * MessageCardMetrics.bubblePadY : 0,
+                replyBubble: geometry.bubbles && hasReplyText ? 2 * MessageCardMetrics.bubblePadY : 0,
+                link: geometry.block,
+                mediaAbove: media?.above.map { $0.height + mediaGap } ?? 0,
+                mediaBelow: media?.below.map { $0.height + mediaGap } ?? 0
+            )
+        }
 
+        // Le pincement règle le corps de départ ET le plancher : une partie
+        // agrandie reste plus grande que sa voisine jusqu'au plancher (#8979).
+        let replyScale = typeface.replyScale * scales[.reply]
+        let quoteScale = scales[.quote]
         let sizeAt: (Int) -> Sized = { step in
             let factor = pow(MessageCardMetrics.shrink, Double(step))
-            let replySize = max(MessageCardMetrics.replyFloor * typeface.replyScale, MessageCardMetrics.replyStart * typeface.replyScale * factor)
-            let quoteSize = max(MessageCardMetrics.quoteFloor, MessageCardMetrics.quoteStart * factor)
+            let replySize = max(MessageCardMetrics.replyFloor * replyScale, MessageCardMetrics.replyStart * replyScale * factor)
+            let quoteSize = max(MessageCardMetrics.quoteFloor * quoteScale, MessageCardMetrics.quoteStart * quoteScale * factor)
             let replyFont = MessageCardFont(face: typeface.replyFace, size: replySize)
             let quoteFont = MessageCardFont(face: typeface.quoteFace, size: quoteSize)
             return Sized(
@@ -175,8 +188,32 @@ struct MessageCardLayoutEngine {
         }
 
         let atFloor: (Sized) -> Bool = {
-            $0.replySize <= MessageCardMetrics.replyFloor * typeface.replyScale && $0.quoteSize <= MessageCardMetrics.quoteFloor
+            $0.replySize <= MessageCardMetrics.replyFloor * replyScale && $0.quoteSize <= MessageCardMetrics.quoteFloor * quoteScale
         }
+
+        // LA PLACE MINIMALE DU TEXTE, à son plancher : les médias, même pincés,
+        // ne la prennent jamais — leur échelle s'arrête avant (revue #8979).
+        let textOnly = chromeOf(nil)
+        let floorSized = sizeAt(MessageCardMetrics.floorStep)
+        var minimal = floorSized
+        minimal.quoteLines = Array(minimal.quoteLines.prefix(MessageCardMetrics.minimumQuoteLines))
+        minimal.replyLines = Array(minimal.replyLines.prefix(MessageCardMetrics.minimumReplyLines))
+        let mediaRoom = budget - contentHeight(minimal, hasQuote: hasQuote, chrome: textOnly) - mediaGap
+        let mediaLimit = mediaScaleLimit(room: mediaRoom, columnWidth: textWidth, canvasWidth: width, budget: budget)
+        let mediaScale = min(scales[.media], mediaLimit)
+
+        // LA TRANSCRIPTION CÈDE D'ABORD — 3 → 2 → 1 → masquée — avant que le
+        // texte ne rapetisse (revue #8979).
+        var transcriptLines = MessageCardAudioMetrics.transcriptLines
+        var media = mediaPlan(columnWidth: textWidth, canvasWidth: width, budget: budget, scale: mediaScale, transcriptLines: transcriptLines)
+        var chrome = chromeOf(media)
+        let natural = sizeAt(0)
+        while transcriptLines > 0 && contentHeight(natural, hasQuote: hasQuote, chrome: chrome) > budget {
+            transcriptLines -= 1
+            media = mediaPlan(columnWidth: textWidth, canvasWidth: width, budget: budget, scale: mediaScale, transcriptLines: transcriptLines)
+            chrome = chromeOf(media)
+        }
+
         var step = 0
         var sized = sizeAt(step)
         while contentHeight(sized, hasQuote: hasQuote, chrome: chrome) > budget && !atFloor(sized) {
@@ -200,6 +237,8 @@ struct MessageCardLayoutEngine {
             sized.replyLines = MessageCardText.truncate(sized.replyLines, count: replyKeep, maxWidth: replyWidth, font: sized.replyFont, measure: measure)
         }
 
+        // La VRAIE cause d'une coupe : le texte seul, au plancher, tiendrait-il ?
+        let crowdedByMedia = truncated && contentHeight(floorSized, hasQuote: hasQuote, chrome: textOnly) <= budget
         let content = contentHeight(sized, hasQuote: hasQuote, chrome: chrome)
         let height: Double
         if let fixed = canvas.fixedHeight {
@@ -227,6 +266,14 @@ struct MessageCardLayoutEngine {
         let region: (MessageCardPartID, Double, Double) -> Void = { part, top, bottom in
             regions.append(MessageCardRegion(part: part, x: canvas.left, y: top, width: textWidth, height: bottom - top))
         }
+        // Le bloc de médias a sa propre largeur (agrandi, il déborde dans les
+        // marges) ; sa transcription, la colonne du texte.
+        let mediaRegions: (MessageCardMediaBlock, Double) -> Void = { block, top in
+            regions.append(MessageCardRegion(part: .media, x: canvas.left + block.x, y: top, width: block.width, height: block.mediaHeight))
+            if let transcript = block.transcript {
+                region(.transcript, top + block.transcriptTop, top + block.transcriptTop + transcript.height)
+            }
+        }
 
         var headerOps: [MessageCardOp] = []
         if verticalHeader {
@@ -236,16 +283,16 @@ struct MessageCardLayoutEngine {
             let headerTop = painter.y
             if let title {
                 let direction = MessageCardText.direction(of: title)
-                let font = MessageCardFont(face: .system(800), size: MessageCardMetrics.titleSize)
+                let font = MessageCardFont(face: .system(800), size: MessageCardMetrics.titleSize * headerScale)
                 let line = MessageCardText.truncate(MessageCardText.wrap(title, maxWidth: textWidth, font: font, measure: measure), count: 1, maxWidth: textWidth, font: font, measure: measure).first ?? title
-                painter.text(line, x: painter.start(rtl: direction == .rtl, inset: 0), baseline: painter.y + MessageCardMetrics.titleSize, font: font, color: palette.replyInk, direction: direction)
-                painter.y += MessageCardMetrics.titleLine
+                painter.text(line, x: painter.start(rtl: direction == .rtl, inset: 0), baseline: painter.y + font.size, font: font, color: palette.replyInk, direction: direction)
+                painter.y += MessageCardMetrics.titleLine * headerScale
             }
             if let date {
                 let direction = MessageCardText.direction(of: date)
-                let font = MessageCardFont(face: .system(500), size: MessageCardMetrics.dateSize)
-                painter.text(date, x: painter.start(rtl: direction == .rtl, inset: 0), baseline: painter.y + MessageCardMetrics.dateSize, font: font, color: palette.quoteInk, direction: direction)
-                painter.y += MessageCardMetrics.dateLine
+                let font = MessageCardFont(face: .system(500), size: MessageCardMetrics.dateSize * headerScale)
+                painter.text(date, x: painter.start(rtl: direction == .rtl, inset: 0), baseline: painter.y + font.size, font: font, color: palette.quoteInk, direction: direction)
+                painter.y += MessageCardMetrics.dateLine * headerScale
             }
             region(.header, headerTop, painter.y)
             painter.y += MessageCardMetrics.headerGap
@@ -262,7 +309,8 @@ struct MessageCardLayoutEngine {
                 font: sized.quoteFont,
                 ink: palette.quoteInk,
                 inset: geometry.quoteBar ? MessageCardMetrics.quoteIndent : 0,
-                bubble: geometry.bubbles ? MessageCardBubbleStyle(offset: 0, color: palette.quotePanel) : nil
+                bubble: geometry.bubbles ? MessageCardBubbleStyle(offset: 0, color: palette.quotePanel) : nil,
+                nameScale: quoteScale
             ))
             if geometry.quoteBar {
                 painter.ops.append(.bar(MessageCardRectOp(
@@ -282,7 +330,7 @@ struct MessageCardLayoutEngine {
 
         if let above = media.above {
             painter.ops.append(contentsOf: mediaOps(above, x: canvas.left, y: painter.y, width: textWidth))
-            region(.media, painter.y, painter.y + above.height)
+            mediaRegions(above, painter.y)
             painter.y += chrome.mediaAbove
         }
 
@@ -293,7 +341,8 @@ struct MessageCardLayoutEngine {
                 font: sized.replyFont,
                 ink: palette.replyInk,
                 inset: 0,
-                bubble: geometry.bubbles && hasReplyText ? MessageCardBubbleStyle(offset: MessageCardMetrics.bubbleOffset, color: palette.replyPanel) : nil
+                bubble: geometry.bubbles && hasReplyText ? MessageCardBubbleStyle(offset: MessageCardMetrics.bubbleOffset, color: palette.replyPanel) : nil,
+                nameScale: scales[.reply]
             ))
             region(.reply, reply.top, painter.y)
         }
@@ -301,7 +350,7 @@ struct MessageCardLayoutEngine {
         if let below = media.below {
             if hasReplyText { painter.y += MessageCardMetrics.mediaGap }
             painter.ops.append(contentsOf: mediaOps(below, x: canvas.left, y: painter.y, width: textWidth))
-            region(.media, painter.y, painter.y + below.height)
+            mediaRegions(below, painter.y)
             painter.y += below.height
         }
 
@@ -317,8 +366,32 @@ struct MessageCardLayoutEngine {
             ops: headerOps + contentOps,
             regions: regions,
             watermark: MessageCardLayout.watermark(handle: input.handle),
-            truncated: truncated
+            truncated: truncated,
+            crowdedByMedia: crowdedByMedia,
+            mediaScaleLimit: mediaLimit
         )
+    }
+
+    /// **L'échelle la plus grande des médias** qui tient dans `room` — la place
+    /// que le texte leur laisse à son minimum. Transcription masquée : elle
+    /// cède d'elle-même. Un bloc qui ne tient même pas réduit de moitié s'y
+    /// arrête ; une carte sans média ne borne rien.
+    private func mediaScaleLimit(room: Double, columnWidth: Double, canvasWidth: Double, budget: Double) -> Double {
+        let range = MessageCardScales.range
+        let height: (Double) -> Double = { scale in
+            let plan = mediaPlan(columnWidth: columnWidth, canvasWidth: canvasWidth, budget: budget, scale: scale, transcriptLines: 0)
+            return (plan.above?.height ?? 0) + (plan.below?.height ?? 0)
+        }
+        let largest = height(range.upperBound)
+        guard largest > 0, largest > room else { return range.upperBound }
+        guard height(range.lowerBound) <= room else { return range.lowerBound }
+        var fits = range.lowerBound
+        var overflows = range.upperBound
+        for _ in 0..<16 {
+            let middle = (fits + overflows) / 2
+            if height(middle) <= room { fits = middle } else { overflows = middle }
+        }
+        return (fits * 100).rounded(.down) / 100
     }
 
     /// Ce que la liaison peint dans son bloc, entre le bas de la citation (`y`) et la réponse.
@@ -368,6 +441,8 @@ struct MessageCardBlockStyle {
     let ink: MessageCardColor
     let inset: Double
     let bubble: MessageCardBubbleStyle?
+    /// L'échelle de la ligne du nom — celle de son bloc, réglée au pincement (#8979).
+    var nameScale: Double = 1
 }
 
 /// Le curseur vertical et les opérations accumulées.
@@ -383,8 +458,6 @@ struct MessageCardPainter {
     let measure: MessageCardMeasure
     var ops: [MessageCardOp] = []
 
-    private static let authorFont = MessageCardFont(face: .system(600), size: MessageCardMetrics.authorSize)
-    private static let timeFont = MessageCardFont(face: .system(500), size: MessageCardMetrics.timeSize)
 
     func start(rtl: Bool, inset: Double) -> Double {
         rtl ? right - inset : left + inset
@@ -399,32 +472,35 @@ struct MessageCardPainter {
 
     /// La ligne du nom (et de l'heure) : au-dessus du texte, le nom au début et
     /// l'heure au bout ; en signature, « — Nom · 14:32 » au bout de la ligne.
-    private mutating func nameLine(_ name: String, time: String?, from start: Double, to end: Double, rtl: Bool) {
+    /// Elle suit l'échelle de son bloc (#8979).
+    private mutating func nameLine(_ name: String, time: String?, from start: Double, to end: Double, rtl: Bool, scale: Double) {
         let named = showAuthors ? name : nil
         guard named != nil || time != nil else { return }
-        let baseline = y + MessageCardMetrics.authorSize
+        let authorFont = MessageCardFont(face: .system(600), size: MessageCardMetrics.authorSize * scale)
+        let timeFont = MessageCardFont(face: .system(500), size: MessageCardMetrics.timeSize * scale)
+        let baseline = y + authorFont.size
         switch placement {
         case .above:
             if let named {
                 ops.append(.text(MessageCardTextOp(
-                    text: named, x: start, y: baseline, font: Self.authorFont, color: authorInk,
+                    text: named, x: start, y: baseline, font: authorFont, color: authorInk,
                     align: rtl ? .right : .left, direction: MessageCardText.direction(of: named)
                 )))
             }
             if let time {
                 ops.append(.text(MessageCardTextOp(
-                    text: time, x: end, y: baseline, font: Self.timeFont, color: timeInk,
+                    text: time, x: end, y: baseline, font: timeFont, color: timeInk,
                     align: rtl ? .left : .right, direction: .ltr
                 )))
             }
         case .after:
             let signature = [named.map { "— \($0)" }, time].compactMap { $0 }.joined(separator: " · ")
             ops.append(.text(MessageCardTextOp(
-                text: signature, x: end, y: baseline, font: Self.authorFont, color: authorInk,
+                text: signature, x: end, y: baseline, font: authorFont, color: authorInk,
                 align: rtl ? .left : .right, direction: MessageCardText.direction(of: signature)
             )))
         }
-        y += MessageCardMetrics.authorLine + MessageCardMetrics.authorGap
+        y += ((MessageCardMetrics.authorLine + MessageCardMetrics.authorGap) * scale).rounded()
     }
 
     /// Un bloc : son nom, ses lignes — et, pour la liaison « bulles », la bulle qui les porte.
@@ -443,12 +519,12 @@ struct MessageCardPainter {
             endX = rtl ? left : right
         }
         if style.bubble != nil { y += MessageCardMetrics.bubblePadY }
-        if placement == .above { nameLine(part.author, time: time, from: startX, to: endX, rtl: rtl) }
+        if placement == .above { nameLine(part.author, time: time, from: startX, to: endX, rtl: rtl, scale: style.nameScale) }
         for line in lines {
             text(line, x: startX, baseline: y + messageCardRound(style.size), font: style.font, color: style.ink, direction: direction)
             y += style.lineHeight
         }
-        if placement == .after { nameLine(part.author, time: time, from: startX, to: endX, rtl: rtl) }
+        if placement == .after { nameLine(part.author, time: time, from: startX, to: endX, rtl: rtl, scale: style.nameScale) }
         if let bubble = style.bubble {
             y += MessageCardMetrics.bubblePadY
             let x = rtl ? right - bubble.offset - bubbleWidth : left + bubble.offset

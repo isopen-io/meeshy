@@ -11,7 +11,14 @@ import Fastify, { FastifyInstance } from 'fastify';
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 jest.mock('../../../utils/logger-enhanced', () => ({
-  enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn() }) },
+  enhancedLogger: { child: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }) },
+}));
+
+jest.mock('../../../services/engagement/EngagementService', () => ({
+  EngagementService: jest.fn().mockImplementation(() => ({
+    recordActivity: jest.fn(async () => undefined),
+    recordLinkVisit: jest.fn(async () => 0),
+  })),
 }));
 
 jest.mock('../../../utils/sanitize', () => ({

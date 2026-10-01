@@ -23,14 +23,16 @@
  */
 
 import {
-  ENGAGEMENT_AXES,
   ENGAGEMENT_AXIS_FAMILIES,
   type EngagementAxisFamily,
-  ENGAGEMENT_AXIS_WEIGHTS,
   LEVEL_THRESHOLDS,
-  isEngagementAxisKey,
-  type EngagementAxisKey,
 } from './engagement.js';
+import {
+  ENGAGEMENT_OPERATIONS,
+  ENGAGEMENT_OPERATION_CATALOG,
+  isEngagementOperationKey,
+  type EngagementOperationKey,
+} from './engagement-operations.js';
 
 /** Plafond DUR du multiplicateur, quel que soit le barème — l'administration règle en dessous. */
 export const ENGAGEMENT_SCALE_FACTOR_CEILING = 10;
@@ -38,6 +40,8 @@ export const ENGAGEMENT_SCALE_FACTOR_CEILING = 10;
 export const ENGAGEMENT_SCALE_POINTS_CEILING = 1000;
 /** Plafond DUR de la fenêtre glissante de l'élan. */
 export const ENGAGEMENT_SCALE_WINDOW_CEILING_DAYS = 90;
+/** Plafond DUR d'un plafond d'actions. */
+export const ENGAGEMENT_SCALE_CAP_CEILING = 100_000;
 
 export type EngagementOperationRule = {
   /** Points de base d'une action, avant multiplicateur. `0` = l'opération ne rapporte rien. */
@@ -45,10 +49,18 @@ export type EngagementOperationRule = {
   /** `true` ⇒ les points sont multipliés par l'élan ; `false` ⇒ toujours crédités tels quels. */
   readonly multiplied: boolean;
   /**
-   * Nombre maximal d'actions créditées par (utilisateur, conversation, jour civil).
-   * `null` = sans plafond. Sans effet sur une opération hors conversation (post, story…).
+   * Nombre maximal d'actions créditées dans la PORTÉE de l'opération
+   * (`ENGAGEMENT_OPERATION_CATALOG[key].capScope` : par conversation et par
+   * jour, par jour, par cible). `null` = sans plafond. Sans effet sur une
+   * opération sans portée ou unique (par cible, par compte).
    */
-  readonly dailyCapPerConversation: number | null;
+  readonly cap: number | null;
+  /**
+   * Les points de chaque VARIANTE déclarée par le catalogue (visibilité d'un
+   * post ou d'une story, position en direct ou statique). Une variante absente
+   * crédite `points`.
+   */
+  readonly variantPoints: Readonly<Record<string, number>>;
 };
 
 /** Plafond du multiplicateur à partir d'un niveau (le RANG, `levelOfScore`). */
@@ -80,9 +92,49 @@ export type EngagementMultiplierRules = {
   readonly levelCaps: readonly EngagementLevelFactorCap[];
 };
 
+/**
+ * LA RÈGLE PROGRESSIVE DES VISITES DE LIEN (arbitrage porteur, 2026-09-30) :
+ * une visite vaut `basePoints` ; chaque fois que le nombre de visites double
+ * au-delà de `firstTier`, chaque visite suivante vaut `stepPerDoubling` de
+ * plus, jusqu'à `maxPoints`. Une visite ne compte qu'une fois par visiteur,
+ * par lien et par `dedupHours`, jamais celle du créateur.
+ */
+export type EngagementLinkVisitRules = {
+  readonly basePoints: number;
+  readonly firstTier: number;
+  readonly stepPerDoubling: number;
+  readonly maxPoints: number;
+  readonly dedupHours: number;
+  /** Visites créditées au plus par créateur et par jour — un robot ne pompe pas un lien. `null` = aucun. */
+  readonly dailyCapPerCreator: number | null;
+};
+
+/** Un bonus de constance : `points` quand la série de jours actifs atteint `days`. */
+export type EngagementStreakBonus = {
+  readonly days: number;
+  readonly points: number;
+};
+
+/**
+ * LES GARDE-FOUS DES GROS POIDS. Une opération dont les points de base
+ * atteignent `heavyPoints` (post, story, reel aux défauts) :
+ * - ne crédite qu'une fois par contenu ;
+ * - rend ses points si le contenu est supprimé dans les `clawbackHours` ;
+ * - est bornée à `unverifiedMaxPoints` pour un compte sans e-mail ni
+ *   téléphone vérifié — une ferme de comptes jetables ne publie pas à 199.
+ */
+export type EngagementAbuseRules = {
+  readonly heavyPoints: number;
+  readonly clawbackHours: number;
+  readonly unverifiedMaxPoints: number;
+};
+
 export type EngagementScale = {
-  readonly operations: Readonly<Record<EngagementAxisKey, EngagementOperationRule>>;
+  readonly operations: Readonly<Record<EngagementOperationKey, EngagementOperationRule>>;
   readonly multiplier: EngagementMultiplierRules;
+  readonly linkVisits: EngagementLinkVisitRules;
+  readonly streakBonuses: readonly EngagementStreakBonus[];
+  readonly abuse: EngagementAbuseRules;
 };
 
 /**
@@ -95,27 +147,43 @@ export type EngagementScaleDocument = {
   readonly updatedBy: string | null;
 };
 
-/** Plafond journalier par défaut des opérations qu'un geste répété peut pomper. */
-export const DEFAULT_REACTION_DAILY_CAP = 30;
-export const DEFAULT_ATTACHMENT_DAILY_CAP = 50;
-
-const DEFAULT_DAILY_CAPS: Partial<Record<EngagementAxisKey, number>> = {
-  'tool.reaction': DEFAULT_REACTION_DAILY_CAP,
-  'tool.attachment': DEFAULT_ATTACHMENT_DAILY_CAP,
+export const DEFAULT_LINK_VISIT_RULES: EngagementLinkVisitRules = {
+  basePoints: 2,
+  firstTier: 10,
+  stepPerDoubling: 2,
+  maxPoints: 20,
+  dedupHours: 24,
+  dailyCapPerCreator: 200,
 };
 
-/** Les défauts : les constantes que le code créditait avant le barème — rien ne change tant que personne ne règle. */
+export const DEFAULT_STREAK_BONUSES: readonly EngagementStreakBonus[] = [
+  { days: 7, points: 10 },
+  { days: 30, points: 30 },
+  { days: 100, points: 100 },
+];
+
+export const DEFAULT_ABUSE_RULES: EngagementAbuseRules = {
+  heavyPoints: 50,
+  clawbackHours: 24,
+  unverifiedMaxPoints: 10,
+};
+
+function defaultRule(key: EngagementOperationKey): EngagementOperationRule {
+  const { defaults } = ENGAGEMENT_OPERATION_CATALOG[key];
+  return {
+    points: defaults.points,
+    multiplied: defaults.multiplied,
+    cap: defaults.cap,
+    variantPoints: defaults.variantPoints ?? {},
+  };
+}
+
+/** Les défauts fixés par le porteur (2026-09-30) — ce que crédite un barème jamais réglé. */
 export const DEFAULT_ENGAGEMENT_SCALE: EngagementScale = {
-  operations: Object.fromEntries(
-    ENGAGEMENT_AXES.map((axisKey) => [
-      axisKey,
-      {
-        points: ENGAGEMENT_AXIS_WEIGHTS[axisKey],
-        multiplied: true,
-        dailyCapPerConversation: DEFAULT_DAILY_CAPS[axisKey] ?? null,
-      },
-    ]),
-  ) as Record<EngagementAxisKey, EngagementOperationRule>,
+  operations: Object.fromEntries(ENGAGEMENT_OPERATIONS.map((key) => [key, defaultRule(key)])) as Record<
+    EngagementOperationKey,
+    EngagementOperationRule
+  >,
   multiplier: {
     windowDays: 7,
     stepPerExtraFamily: 1,
@@ -126,6 +194,9 @@ export const DEFAULT_ENGAGEMENT_SCALE: EngagementScale = {
     maxFactor: 5,
     levelCaps: [],
   },
+  linkVisits: DEFAULT_LINK_VISIT_RULES,
+  streakBonuses: DEFAULT_STREAK_BONUSES,
+  abuse: DEFAULT_ABUSE_RULES,
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -137,13 +208,35 @@ const isIntIn = (value: unknown, min: number, max: number): value is number =>
 const isNumberIn = (value: unknown, min: number, max: number): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
 
-function parseOperationRule(value: unknown): EngagementOperationRule | null {
+const isCap = (value: unknown): value is number | null =>
+  value === null || isIntIn(value, 0, ENGAGEMENT_SCALE_CAP_CEILING);
+
+function parseVariantPoints(key: EngagementOperationKey, value: unknown): Readonly<Record<string, number>> | null {
+  const declared = ENGAGEMENT_OPERATION_CATALOG[key].variants;
+  if (value === undefined) return defaultRule(key).variantPoints;
   if (!isRecord(value)) return null;
-  const { points, multiplied, dailyCapPerConversation } = value;
+  const entries = Object.entries(value);
+  if (!entries.every(([variant, points]) => declared.includes(variant) && isIntIn(points, 0, ENGAGEMENT_SCALE_POINTS_CEILING))) {
+    return null;
+  }
+  return { ...defaultRule(key).variantPoints, ...Object.fromEntries(entries) } as Record<string, number>;
+}
+
+/**
+ * Une règle d'opération. `dailyCapPerConversation` est le nom qu'avait le
+ * plafond avant le catalogue des opérations : un barème réglé sous l'ancien
+ * contrat se relit tel quel.
+ */
+function parseOperationRule(key: EngagementOperationKey, value: unknown): EngagementOperationRule | null {
+  if (!isRecord(value)) return null;
+  const { points, multiplied } = value;
+  const cap = value.cap !== undefined ? value.cap : value.dailyCapPerConversation ?? null;
   if (!isIntIn(points, 0, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
   if (typeof multiplied !== 'boolean') return null;
-  if (dailyCapPerConversation !== null && !isIntIn(dailyCapPerConversation, 0, 100_000)) return null;
-  return { points, multiplied, dailyCapPerConversation };
+  if (!isCap(cap)) return null;
+  const variantPoints = parseVariantPoints(key, value.variantPoints);
+  if (variantPoints === null) return null;
+  return { points, multiplied, cap, variantPoints };
 }
 
 function parseLevelCaps(value: unknown, maxFactor: number): readonly EngagementLevelFactorCap[] | null {
@@ -192,31 +285,78 @@ function parseMultiplier(value: unknown): EngagementMultiplierRules | null {
   };
 }
 
+function parseLinkVisits(value: unknown): EngagementLinkVisitRules | null {
+  if (value === undefined) return DEFAULT_LINK_VISIT_RULES;
+  if (!isRecord(value)) return null;
+  const { basePoints, firstTier, stepPerDoubling, maxPoints, dedupHours, dailyCapPerCreator } = value;
+  if (!isIntIn(basePoints, 0, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
+  if (!isIntIn(firstTier, 1, ENGAGEMENT_SCALE_CAP_CEILING)) return null;
+  if (!isIntIn(stepPerDoubling, 0, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
+  if (!isIntIn(maxPoints, basePoints, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
+  if (!isIntIn(dedupHours, 1, 24 * 30)) return null;
+  if (!isCap(dailyCapPerCreator)) return null;
+  return { basePoints, firstTier, stepPerDoubling, maxPoints, dedupHours, dailyCapPerCreator };
+}
+
+function parseStreakBonuses(value: unknown): readonly EngagementStreakBonus[] | null {
+  if (value === undefined) return DEFAULT_STREAK_BONUSES;
+  if (!Array.isArray(value)) return null;
+  const bonuses: EngagementStreakBonus[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry)) return null;
+    if (!isIntIn(entry.days, 1, 10_000)) return null;
+    if (!isIntIn(entry.points, 0, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
+    bonuses.push({ days: entry.days, points: entry.points });
+  }
+  if (new Set(bonuses.map((bonus) => bonus.days)).size !== bonuses.length) return null;
+  return [...bonuses].sort((a, b) => a.days - b.days);
+}
+
+function parseAbuse(value: unknown): EngagementAbuseRules | null {
+  if (value === undefined) return DEFAULT_ABUSE_RULES;
+  if (!isRecord(value)) return null;
+  const { heavyPoints, clawbackHours, unverifiedMaxPoints } = value;
+  if (!isIntIn(heavyPoints, 1, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
+  if (!isIntIn(clawbackHours, 0, 24 * 30)) return null;
+  if (!isIntIn(unverifiedMaxPoints, 0, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
+  return { heavyPoints, clawbackHours, unverifiedMaxPoints };
+}
+
 /**
  * Lit un barème — celui qu'envoie l'administration, ou celui stocké en base.
  *
- * FAIL-CLOSED à la forme : une règle hors bornes, un axe inconnu, un plafond de
- * niveau au-dessus du plafond global ⇒ `null`, jamais un barème à moitié lu.
- * TOLÉRANT au catalogue : un axe du catalogue ABSENT (ajouté au code après le
- * réglage) prend sa règle par défaut — sinon ajouter un axe ferait tomber le
- * barème entier au premier déploiement.
+ * FAIL-CLOSED à la forme : une règle hors bornes, une opération inconnue, une
+ * variante non déclarée, un plafond de niveau au-dessus du plafond global ⇒
+ * `null`, jamais un barème à moitié lu.
+ * TOLÉRANT au catalogue : une opération ou une section ABSENTE (ajoutée au
+ * code après le réglage) prend sa valeur par défaut — sinon ajouter une
+ * opération ferait tomber le barème entier au premier déploiement.
  */
 export function parseEngagementScale(value: unknown): EngagementScale | null {
   if (!isRecord(value) || !isRecord(value.operations)) return null;
   const multiplier = parseMultiplier(value.multiplier);
-  if (multiplier === null) return null;
+  const linkVisits = parseLinkVisits(value.linkVisits);
+  const streakBonuses = parseStreakBonuses(value.streakBonuses);
+  const abuse = parseAbuse(value.abuse);
+  if (multiplier === null || linkVisits === null || streakBonuses === null || abuse === null) return null;
 
-  const operations: Partial<Record<EngagementAxisKey, EngagementOperationRule>> = {};
-  for (const [axisKey, raw] of Object.entries(value.operations)) {
-    if (!isEngagementAxisKey(axisKey)) return null;
-    const rule = parseOperationRule(raw);
+  const operations: Partial<Record<EngagementOperationKey, EngagementOperationRule>> = {};
+  for (const [key, raw] of Object.entries(value.operations)) {
+    if (!isEngagementOperationKey(key)) return null;
+    const rule = parseOperationRule(key, raw);
     if (rule === null) return null;
-    operations[axisKey] = rule;
+    operations[key] = rule;
   }
-  for (const axisKey of ENGAGEMENT_AXES) {
-    operations[axisKey] ??= DEFAULT_ENGAGEMENT_SCALE.operations[axisKey];
+  for (const key of ENGAGEMENT_OPERATIONS) {
+    operations[key] ??= DEFAULT_ENGAGEMENT_SCALE.operations[key];
   }
-  return { operations: operations as Record<EngagementAxisKey, EngagementOperationRule>, multiplier };
+  return {
+    operations: operations as Record<EngagementOperationKey, EngagementOperationRule>,
+    multiplier,
+    linkVisits,
+    streakBonuses,
+    abuse,
+  };
 }
 
 /** Le NIVEAU d'un score — le rang du dernier palier `LEVEL_THRESHOLDS` atteint (0 sous le premier). */
@@ -312,11 +452,38 @@ export function elanUnderScaleFromRows(params: {
   return { ...elan, activeFamilies: [...families], activeFamilyCount: families.size };
 }
 
-/** Les points qu'UNE action de cet axe crédite sous ce barème et à ce multiplicateur — entier, jamais négatif. */
-export function pointsForOperation(scale: EngagementScale, axisKey: EngagementAxisKey, factor: number): number {
-  const rule = scale.operations[axisKey];
-  const multiplied = rule.multiplied ? rule.points * factor : rule.points;
+/** Les points de BASE d'une action, avant élan : ceux de sa variante quand elle en déclare une. */
+export function basePointsForOperation(scale: EngagementScale, key: EngagementOperationKey, variant?: string): number {
+  const rule = scale.operations[key];
+  return variant !== undefined && variant in rule.variantPoints ? rule.variantPoints[variant] ?? rule.points : rule.points;
+}
+
+/** Les points qu'UNE action de cette opération crédite sous ce barème et à ce multiplicateur — entier, jamais négatif. */
+export function pointsForOperation(
+  scale: EngagementScale,
+  key: EngagementOperationKey,
+  factor: number,
+  variant?: string,
+): number {
+  const base = basePointsForOperation(scale, key, variant);
+  const multiplied = scale.operations[key].multiplied ? base * factor : base;
   return Math.max(0, Math.round(multiplied));
+}
+
+/**
+ * Ce que vaut la `visitNumber`-ième visite unique d'un lien :
+ * `base` jusqu'au premier palier, puis `step` de plus à chaque doublement,
+ * jamais au-delà de `maxPoints`.
+ */
+export function linkVisitPoints(rules: EngagementLinkVisitRules, visitNumber: number): number {
+  if (visitNumber <= rules.firstTier) return rules.basePoints;
+  const doublings = Math.ceil(Math.log2(visitNumber / rules.firstTier));
+  return Math.min(rules.maxPoints, rules.basePoints + rules.stepPerDoubling * doublings);
+}
+
+/** Le bonus de constance dû quand la série passe de `previous` à `next` jours — la somme des paliers franchis. */
+export function streakBonusPoints(bonuses: readonly EngagementStreakBonus[], previous: number, next: number): number {
+  return bonuses.filter((bonus) => bonus.days > previous && bonus.days <= next).reduce((sum, bonus) => sum + bonus.points, 0);
 }
 
 /**

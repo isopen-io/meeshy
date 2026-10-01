@@ -12,6 +12,8 @@ import { PrismaClient, PostReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { assertValidObjectId } from '../utils/object-id.js';
+import { EngagementService } from './engagement/EngagementService';
+import { creditPostEngagement, type PostEngagementRecorder } from './posts/postEngagementCredits';
 
 export interface PostReactionAggregation {
   readonly emoji: string;
@@ -79,7 +81,15 @@ export class PostReactionService {
     assertValidObjectId(postId, 'post');
   }
 
-  constructor(private readonly prisma: PrismaClient) {}
+  /**
+   * `engagement` : le crédit `tool.post_reaction` (#8959) du réacteur. REST
+   * (`PostService.likePost`) et socket (`PostReactionHandler`) passent tous
+   * deux par `addReaction` — le crédit est posé ici, une fois pour les deux.
+   */
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly engagement: PostEngagementRecorder = new EngagementService(prisma),
+  ) {}
 
   async addReaction(options: AddPostReactionOptions): Promise<AddPostReactionResult | null> {
     const { postId, userId, emoji } = options;
@@ -97,7 +107,7 @@ export class PostReactionService {
 
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { id: true, deletedAt: true }
+      select: { id: true, deletedAt: true, authorId: true }
     });
 
     if (!post) {
@@ -147,6 +157,7 @@ export class PostReactionService {
       });
 
       await this.updatePostReactionSummary(postId);
+      creditPostEngagement(this.prisma, userId, 'tool.post_reaction', { targetId: postId, targetOwnerId: post.authorId }, this.engagement);
 
       return { ...this.mapReactionToData(reaction), unchanged: false };
     } catch (err: unknown) {

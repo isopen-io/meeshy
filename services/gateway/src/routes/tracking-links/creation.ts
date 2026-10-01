@@ -221,7 +221,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         conversationId: body.conversationId,
         messageId: body.messageId,
         expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
-        customToken: body.customToken
+        customToken: body.customToken,
+        creditCreator: true
       });
 
       return sendSuccess(reply, {

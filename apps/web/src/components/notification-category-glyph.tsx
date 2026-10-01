@@ -18,6 +18,7 @@ const CATEGORY_GLYPHS: Readonly<Record<NotificationCategory, CategoryGlyph>> = {
   reactions: { set: 'ecran', name: 'heart' },
   mentions: { set: 'ecran', name: 'at' },
   social: { set: 'ecran', name: 'thumbsUp' },
+  engagement: { set: 'socle', name: 'trophy' },
   contacts: { set: 'ecran', name: 'userPlus' },
   groups: { set: 'ecran', name: 'usersThree' },
   calls: { set: 'socle', name: 'phone' },

@@ -274,6 +274,7 @@ const fr = {
   'notifications.category.reactions': 'Réactions',
   'notifications.category.mentions': 'Mentions',
   'notifications.category.social': 'Social',
+  'notifications.category.engagement': 'Engagements',
   'notifications.category.contacts': 'Contacts',
   'notifications.category.groups': 'Groupes',
   'notifications.category.calls': 'Appels',

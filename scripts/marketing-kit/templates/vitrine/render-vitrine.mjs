@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // Habille les VRAIES captures de la vitrine (#8855) : fond, titre, cadre — et la planche contact.
 //   node scripts/marketing-kit/templates/vitrine/render-vitrine.mjs --lang fr --appareil iphone,ipad --planche
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { basename, dirname, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { chromium } from '@playwright/test'
@@ -21,8 +21,18 @@ export const cheminFinal = ({ appareil, lang, rang }) => {
   return resolve(SORTIE_FINALE, appStoreLocale(lang), `${a.prefixe}_${String(rang).padStart(2, '0')}_${a.captures[rang - 1].scene}.png`)
 }
 
+// Les captures qu'un plan précédent a rangées là (le lot 1 avait trois scènes, dans un autre ordre) :
+// un envoi qui lirait le dossier les publierait à côté du jeu courant.
+export const perimees = (noms, { appareil, lang }) => {
+  const a = VITRINE[appareil]
+  const attendues = new Set(a.captures.map((_, i) => basename(cheminFinal({ appareil, lang, rang: i + 1 }))))
+  return noms.filter((nom) => nom.startsWith(`${a.prefixe}_`) && !attendues.has(nom))
+}
+
 const habiller = async (browser, { lang, appareil }) => {
   const a = VITRINE[appareil]
+  const dossier = resolve(SORTIE_FINALE, appStoreLocale(lang))
+  if (existsSync(dossier)) for (const nom of perimees(readdirSync(dossier), { appareil, lang })) rmSync(resolve(dossier, nom))
   const corps = await corpsDeSerie(browser, { appareil, lang, plan: VITRINE })
   for (const [i, capture] of a.captures.entries()) {
     const brut = cheminBrut({ appareil, lang, scene: capture.scene })

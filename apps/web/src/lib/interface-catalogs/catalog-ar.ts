@@ -285,6 +285,7 @@ const ar = {
   'notifications.category.reactions': 'التفاعلات',
   'notifications.category.mentions': 'الإشارات',
   'notifications.category.social': 'اجتماعي',
+  'notifications.category.engagement': 'التفاعل',
   'notifications.category.contacts': 'جهات الاتصال',
   'notifications.category.groups': 'المجموعات',
   'notifications.category.calls': 'المكالمات',

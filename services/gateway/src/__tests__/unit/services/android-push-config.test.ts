@@ -63,3 +63,27 @@ describe('androidNotificationConfig — une notification corrigée remplace SA b
     expect(androidNotificationConfig({ ...banner, data: { notificationId: '' } })).not.toHaveProperty('tag');
   });
 });
+
+describe('androidNotificationConfig — la vignette d’une vidéo s’affiche dans la bannière de la coque (#8860)', () => {
+  const video = (thumbnailUrl: string, extra: Record<string, string> = {}) => ({
+    ...banner,
+    data: { notificationId: 'n-1', thumbnailUrl, ...extra },
+  });
+
+  it('a video thumbnail travels as the system banner image', () => {
+    expect(androidNotificationConfig(video('https://gate.meeshy.me/api/v1/attachments/file/t.jpg')).imageUrl).toBe(
+      'https://gate.meeshy.me/api/v1/attachments/file/t.jpg',
+    );
+  });
+
+  it('only an https address is an image — a storage key or another scheme is dropped', () => {
+    expect(androidNotificationConfig(video('2026/09/t.jpg'))).not.toHaveProperty('imageUrl');
+    expect(androidNotificationConfig(video('http://gate.meeshy.me/t.jpg'))).not.toHaveProperty('imageUrl');
+  });
+
+  it('a protected message never shows an image, even if a thumbnail slipped into data', () => {
+    expect(
+      androidNotificationConfig(video('https://gate.meeshy.me/t.jpg', { notificationLocKey: 'notification.viewOnce' })),
+    ).not.toHaveProperty('imageUrl');
+  });
+});

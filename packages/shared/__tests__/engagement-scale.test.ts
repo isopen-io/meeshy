@@ -2,7 +2,7 @@
  * Le barème réglable et l'état « N (M) 🔥 » d'une conversation (#8906).
  */
 import { describe, it, expect } from 'vitest';
-import { ENGAGEMENT_AXES, ENGAGEMENT_AXIS_WEIGHTS } from '../types/engagement.js';
+import { ENGAGEMENT_OPERATIONS, ENGAGEMENT_OPERATION_CATALOG } from '../types/engagement-operations.js';
 import {
   DEFAULT_ENGAGEMENT_SCALE,
   conversationEngagementForDay,
@@ -12,8 +12,10 @@ import {
   formatConversationPoints,
   isConversationEngagementSnapshot,
   levelOfScore,
+  linkVisitPoints,
   parseEngagementScale,
   pointsForOperation,
+  streakBonusPoints,
   type ConversationEngagementSnapshot,
   type EngagementScale,
 } from '../types/engagement-scale.js';
@@ -34,17 +36,33 @@ const snapshot = (patch: Partial<ConversationEngagementSnapshot> = {}): Conversa
 });
 
 describe('les défauts du barème', () => {
-  it('créditent exactement les poids d’axe du code, multipliés', () => {
-    for (const axisKey of ENGAGEMENT_AXES) {
-      expect(DEFAULT_ENGAGEMENT_SCALE.operations[axisKey].points).toBe(ENGAGEMENT_AXIS_WEIGHTS[axisKey]);
-      expect(DEFAULT_ENGAGEMENT_SCALE.operations[axisKey].multiplied).toBe(true);
+  it('reprennent le défaut que le catalogue déclare pour chaque opération', () => {
+    for (const key of ENGAGEMENT_OPERATIONS) {
+      const { defaults } = ENGAGEMENT_OPERATION_CATALOG[key];
+      expect(DEFAULT_ENGAGEMENT_SCALE.operations[key].points).toBe(defaults.points);
+      expect(DEFAULT_ENGAGEMENT_SCALE.operations[key].multiplied).toBe(defaults.multiplied);
+      expect(DEFAULT_ENGAGEMENT_SCALE.operations[key].cap).toBe(defaults.cap);
     }
   });
 
-  it('plafonnent les réactions et les pièces jointes par conversation et par jour', () => {
-    expect(DEFAULT_ENGAGEMENT_SCALE.operations['tool.reaction'].dailyCapPerConversation).toBeGreaterThan(0);
-    expect(DEFAULT_ENGAGEMENT_SCALE.operations['tool.attachment'].dailyCapPerConversation).toBeGreaterThan(0);
-    expect(DEFAULT_ENGAGEMENT_SCALE.operations['content.text_message'].dailyCapPerConversation).toBeNull();
+  it('suivent la liste remplie par le porteur', () => {
+    const ops = DEFAULT_ENGAGEMENT_SCALE.operations;
+    expect(ops['content.text_message']).toMatchObject({ points: 3, cap: 300 });
+    expect(ops['content.audio_message']).toMatchObject({ points: 5, cap: 500 });
+    expect(ops['tool.reaction']).toMatchObject({ points: 2, cap: 30 });
+    expect(ops['content.reel']).toMatchObject({ points: 199, cap: 10 });
+    expect(ops['content.post'].variantPoints).toEqual({ public: 99, community: 69, friends: 49, other: 0 });
+    expect(ops['content.story'].variantPoints).toEqual({ public: 79, community: 39, friends: 19, other: 0 });
+    expect(ops['tool.location'].variantPoints).toEqual({ live: 2, static: 1 });
+    expect(ops['profile.two_factor']).toMatchObject({ points: 15, multiplied: false });
+  });
+
+  it('ne multiplient jamais une opération unique par compte', () => {
+    for (const key of ENGAGEMENT_OPERATIONS) {
+      if (ENGAGEMENT_OPERATION_CATALOG[key].frequency === 'per-account') {
+        expect(DEFAULT_ENGAGEMENT_SCALE.operations[key].multiplied).toBe(false);
+      }
+    }
   });
 
   it('rendent le même multiplicateur que l’élan historique', () => {
@@ -85,10 +103,10 @@ describe('parseEngagementScale', () => {
     const ops = DEFAULT_ENGAGEMENT_SCALE.operations;
     expect(parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, operations: { ...ops, 'content.nope': ops['tool.sticker'] } })).toBeNull();
     expect(
-      parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, operations: { ...ops, 'tool.sticker': { points: -1, multiplied: true, dailyCapPerConversation: null } } }),
+      parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, operations: { ...ops, 'tool.sticker': { points: -1, multiplied: true, cap: null } } }),
     ).toBeNull();
     expect(
-      parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, operations: { ...ops, 'tool.sticker': { points: 1_000_000, multiplied: true, dailyCapPerConversation: null } } }),
+      parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, operations: { ...ops, 'tool.sticker': { points: 1_000_000, multiplied: true, cap: null } } }),
     ).toBeNull();
   });
 
@@ -104,6 +122,28 @@ describe('parseEngagementScale', () => {
       withRules({ levelCaps: [{ minLevel: 3, maxFactor: 4 }, { minLevel: 0, maxFactor: 2 }] }),
     );
     expect(parsed?.multiplier.levelCaps.map((cap) => cap.minLevel)).toEqual([0, 3]);
+  });
+
+  it('relit un barème réglé sous l’ancien contrat, dont le plafond s’appelait dailyCapPerConversation', () => {
+    const parsed = parseEngagementScale({
+      operations: { 'tool.reaction': { points: 4, multiplied: true, dailyCapPerConversation: 12 } },
+      multiplier: DEFAULT_ENGAGEMENT_SCALE.multiplier,
+    });
+    expect(parsed?.operations['tool.reaction']).toEqual({ points: 4, multiplied: true, cap: 12, variantPoints: {} });
+    expect(parsed?.linkVisits).toEqual(DEFAULT_ENGAGEMENT_SCALE.linkVisits);
+    expect(parsed?.abuse).toEqual(DEFAULT_ENGAGEMENT_SCALE.abuse);
+  });
+
+  it('refuse une variante que le catalogue ne déclare pas', () => {
+    const ops = DEFAULT_ENGAGEMENT_SCALE.operations;
+    const post = { ...ops['content.post'], variantPoints: { secret: 5 } };
+    expect(parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, operations: { ...ops, 'content.post': post } })).toBeNull();
+  });
+
+  it('refuse une règle de lien dont la valeur maximale est sous la valeur de départ', () => {
+    expect(
+      parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, linkVisits: { ...DEFAULT_ENGAGEMENT_SCALE.linkVisits, maxPoints: 1 } }),
+    ).toBeNull();
   });
 
   it('refuse ce qui n’est pas un objet', () => {
@@ -146,11 +186,39 @@ describe('pointsForOperation', () => {
       ...DEFAULT_ENGAGEMENT_SCALE,
       operations: {
         ...DEFAULT_ENGAGEMENT_SCALE.operations,
-        'tool.reaction': { points: 2, multiplied: false, dailyCapPerConversation: 10 },
+        'tool.reaction': { points: 2, multiplied: false, cap: 10, variantPoints: {} },
       },
     };
-    expect(pointsForOperation(scale, 'content.text_message', 3)).toBe(27);
+    expect(pointsForOperation(scale, 'content.text_message', 3)).toBe(9);
     expect(pointsForOperation(scale, 'tool.reaction', 3)).toBe(2);
+  });
+
+  it('crédite les points de la variante', () => {
+    expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'content.post', 1, 'public')).toBe(99);
+    expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'content.post', 2, 'friends')).toBe(98);
+    expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'content.post', 5, 'other')).toBe(0);
+    expect(pointsForOperation(DEFAULT_ENGAGEMENT_SCALE, 'tool.location', 1, 'live')).toBe(2);
+  });
+});
+
+describe('la règle progressive des visites de lien', () => {
+  const rules = DEFAULT_ENGAGEMENT_SCALE.linkVisits;
+
+  it('vaut 2 jusqu’au premier palier, puis +2 à chaque doublement, jamais plus de 20', () => {
+    expect([1, 10, 11, 20, 21, 40, 41, 80, 81, 160].map((n) => linkVisitPoints(rules, n))).toEqual([
+      2, 2, 4, 4, 6, 6, 8, 8, 10, 10,
+    ]);
+    expect(linkVisitPoints(rules, 1_000_000)).toBe(20);
+  });
+});
+
+describe('les bonus de constance', () => {
+  it('paient chaque palier franchi, une fois', () => {
+    const bonuses = DEFAULT_ENGAGEMENT_SCALE.streakBonuses;
+    expect(streakBonusPoints(bonuses, 6, 7)).toBe(10);
+    expect(streakBonusPoints(bonuses, 7, 8)).toBe(0);
+    expect(streakBonusPoints(bonuses, 29, 30)).toBe(30);
+    expect(streakBonusPoints(bonuses, 99, 100)).toBe(100);
   });
 });
 

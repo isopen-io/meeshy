@@ -1,16 +1,56 @@
 import { describe, expect, test } from 'bun:test'
+import { existsSync } from 'node:fs'
 import { LEGENDES } from '../textes/legendes.mjs'
 import { VITRINE } from '../templates/vitrine/plan.mjs'
-import { HOTE_INJOIGNABLE, TAILLES_NATIVES, argumentsDeLancement, attendreLeSignal, cheminBrut } from '../vitrine/capturer.mjs'
+import { DUREE_MIN_VOCAL_MS, HOTE_INJOIGNABLE, TAILLES_NATIVES, argumentsDeLancement, attendreLeSignal, cheminBrut, fixturesMesurees, montreUnFil, sourceDuMedia, veilleMontree, vocalTropCourt } from '../vitrine/capturer.mjs'
+import { exporterVitrine } from '../vitrine/fixtures.mjs'
 
 describe('capture des vrais écrans (#8855)', () => {
-  test('lot 1 : Global, Progression et le lien, sur iPhone et iPad', () => {
+  test('lot 2 : six scènes, dans l’ordre du storyboard, sur iPhone et iPad', () => {
     for (const appareil of ['iphone', 'ipad']) {
-      expect(VITRINE[appareil].captures.map((c) => c.scene)).toEqual(['global', 'progression', 'lien'])
+      expect(VITRINE[appareil].captures.map((c) => c.scene)).toEqual(['amour', 'groupe', 'global', 'lien', 'progression', 'imagine'])
+      expect(VITRINE[appareil].captures.map((c) => c.legende)).toEqual(['L1', 'L2', 'L3', 'L10', 'L7', 'L13'])
       for (const c of VITRINE[appareil].captures) expect(LEGENDES[c.legende]).toBeDefined()
     }
     expect([VITRINE.iphone.width, VITRINE.iphone.height]).toEqual([1320, 2868])
     expect([VITRINE.ipad.width, VITRINE.ipad.height]).toEqual([2064, 2752])
+  })
+
+  test('les vocaux portent la durée MESURÉE de leur piste, karaoké compris', () => {
+    const f = fixturesMesurees({ lang: 'fr', maintenant: new Date('2026-09-30T12:00:00.000Z'), mesurer: () => ({ dureeMs: 4321, taille: 999 }) })
+    const vocal = f.messages[f.scenes.amour.conversationId].find((m) => m.id === f.scenes.amour.messageId)
+    const piece = vocal.attachments[0]
+    expect(piece.duration).toBe(4321)
+    expect(piece.fileSize).toBe(999)
+    expect(piece.translations.fr.durationMs).toBe(4321)
+    expect(piece.translations.fr.segments.at(-1).endMs).toBe(4321)
+  })
+
+  test('un fil qui traverserait minuit est refusé : la liste et les bulles se couperaient en « Hier » et « Aujourd’hui »', () => {
+    const nuit = new Date(2026, 9, 1, 0, 21)
+    const veille = veilleMontree(exporterVitrine({ lang: 'fr', maintenant: nuit }), nuit)
+    expect(veille?.getDate()).toBe(30)
+    const journee = new Date(2026, 9, 1, 15, 0)
+    expect(veilleMontree(exporterVitrine({ lang: 'fr', maintenant: journee }), journee)).toBeNull()
+  })
+
+  test('une piste jouée trop courte pour tenir jusqu’à la photo est refusée en nommant sa langue', () => {
+    const maintenant = new Date('2026-09-30T12:00:00.000Z')
+    const court = fixturesMesurees({ lang: 'es', maintenant, mesurer: () => ({ dureeMs: 3350, taille: 1 }) })
+    expect(vocalTropCourt(court, 'es')).toEqual({ lang: 'es', dureeMs: 3350 })
+    const long = fixturesMesurees({ lang: 'es', maintenant, mesurer: () => ({ dureeMs: DUREE_MIN_VOCAL_MS, taille: 1 }) })
+    expect(vocalTropCourt(long, 'es')).toBeNull()
+  })
+
+  test('seules les scènes de conversation montrent un fil daté', () => {
+    expect(['amour', 'groupe', 'global', 'imagine'].every(montreUnFil)).toBe(true)
+    expect(['lien', 'progression'].some(montreUnFil)).toBe(false)
+  })
+
+  test('chaque média a sa source sur le Mac : la photo du kit ou le vocal synthétisé', () => {
+    const f = exporterVitrine({ lang: 'fr', maintenant: new Date('2026-09-30T12:00:00.000Z') })
+    for (const media of f.medias.filter((m) => m.genre === 'image')) expect(existsSync(sourceDuMedia(media))).toBe(true)
+    for (const media of f.medias.filter((m) => m.genre === 'audio')) expect(sourceDuMedia(media)).toMatch(/out\/vitrine\/voix\/[0-9a-f]{16}\.m4a$/)
   })
 
   test('les captures natives ont déjà la taille App Store', () => {

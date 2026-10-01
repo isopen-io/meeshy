@@ -1,14 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { ENGAGEMENT_AXES, type EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { DEFAULT_ENGAGEMENT_SCALE, type EngagementScaleDocument } from '@meeshy/shared/types/engagement-scale';
-import { engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 
 import { AdminButton } from '@/components/admin/button';
 import { AdminFicheSection } from '@/components/admin/fiche';
 import { AdminResponsiveRows, type AdminColumn } from '@/components/admin/responsive-rows';
 import { AdminErrorState } from '@/components/admin/states';
+import { INK2 } from '@/components/admin/tone';
 import { adminMoment } from '@/lib/admin/format';
 import {
   MULTIPLIER_FIELDS,
@@ -17,7 +16,6 @@ import {
   withAddedLevelCap,
   withLevelCap,
   withMultiplier,
-  withOperation,
   withoutLevelCap,
   type MultiplierField,
   type ScaleDraft,
@@ -29,26 +27,22 @@ import {
   saveEngagementScale,
 } from '@/lib/api/admin-engagement-scale';
 import { translateAdmin, type AdminLanguage, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
+import { LabeledNumber, NumberField } from '@/routes/admin-engagement-scale-fields';
+import { OperationsSections } from '@/routes/admin-engagement-scale-operations';
+import { AbuseSection, LinkVisitSection, StreakBonusSection } from '@/routes/admin-engagement-scale-rules';
 import { AdminAnnouncement, AdminSkeleton } from '@/routes/admin-parts';
 
 /**
- * LE BARÈME DE POINTS (#8906) — chaque opération (axe d'engagement) avec ses
- * points, son « multiplié », son plafond journalier par conversation ; les
- * règles du multiplicateur ; le plafond par niveau.
+ * LE BARÈME DE POINTS (#8906, #8959) — chaque opération de la plateforme,
+ * rangée par domaine, avec ses points (par variante), son « multiplié » et son
+ * plafond ; la règle des liens ; les bonus de constance ; les garde-fous des
+ * gros poids ; les règles du multiplicateur et le plafond par niveau.
  *
  * Le brouillon est validé ICI par la loi partagée avant tout `PUT`
  * (`scaleOfDraft` → `parseEngagementScale`) : un barème invalide ne part pas.
- * Un refus serveur est montré tel qu'il est dit.
+ * Un refus serveur est montré tel qu'il est dit. Chaque bloc est une carte
+ * titrée du kit ; les listes se plient en cartes sous le seuil du contenu.
  */
-
-const INK = 'var(--color-ios-ink)';
-const INK2 = 'var(--color-ios-ink-2)';
-const SURFACE = 'var(--color-ios-surface)';
-const EDGE = 'var(--color-edge)';
-const BRAND = 'var(--color-ios-brand)';
-
-const FIELD = { minHeight: 44, backgroundColor: SURFACE, border: `1px solid ${EDGE}`, color: INK } as const;
-const FIELD_CLASS = 'w-24 rounded-chip px-3 text-body tabular-nums';
 
 const MULTIPLIER_LABELS: Readonly<Record<MultiplierField, AdminPlainCatalogKey>> = {
   windowDays: 'admin.scale.field.windowDays',
@@ -59,105 +53,6 @@ const MULTIPLIER_LABELS: Readonly<Record<MultiplierField, AdminPlainCatalogKey>>
   highBadgesForStanding: 'admin.scale.field.highBadgesForStanding',
   maxFactor: 'admin.scale.field.maxFactor',
 };
-
-function NumberField({
-  value,
-  label,
-  placeholder,
-  onChange,
-  data,
-}: {
-  readonly value: string;
-  readonly label: string;
-  readonly placeholder?: string;
-  readonly onChange: (value: string) => void;
-  readonly data: Readonly<Record<string, string>>;
-}) {
-  return (
-    <input
-      type="text"
-      inputMode="decimal"
-      value={value}
-      aria-label={label}
-      {...(placeholder === undefined ? {} : { placeholder })}
-      onInput={(event) => onChange(event.currentTarget.value)}
-      className={FIELD_CLASS}
-      style={FIELD}
-      {...data}
-    />
-  );
-}
-
-function OperationsTable({
-  language,
-  draft,
-  onChange,
-}: {
-  readonly language: AdminLanguage;
-  readonly draft: ScaleDraft;
-  readonly onChange: (axis: EngagementAxisKey, patch: Partial<ScaleDraft['operations'][EngagementAxisKey]>) => void;
-}) {
-  const columns: readonly AdminColumn<EngagementAxisKey>[] = [
-    {
-      id: 'operation',
-      header: translateAdmin(language, 'admin.scale.col.operation'),
-      primary: true,
-      cell: (axis) => <span className="min-w-0 break-words text-start text-body font-medium">{engagementAxisLabel(language, axis)}</span>,
-    },
-    {
-      id: 'points',
-      header: translateAdmin(language, 'admin.scale.col.points'),
-      cell: (axis) => (
-        <NumberField
-          value={draft.operations[axis].points}
-          label={translateAdmin(language, 'admin.scale.pointsFor', { operation: engagementAxisLabel(language, axis) })}
-          onChange={(points) => onChange(axis, { points })}
-          data={{ 'data-scale-points': axis }}
-        />
-      ),
-    },
-    {
-      id: 'multiplied',
-      header: translateAdmin(language, 'admin.scale.col.multiplied'),
-      cell: (axis) => (
-        /* La case fait 24 px ; sa zone d'appui, le libellé qui l'enveloppe, en fait 44. */
-        <label className="inline-flex items-center justify-center" style={{ minHeight: 44, minWidth: 44 }}>
-          <input
-            type="checkbox"
-            checked={draft.operations[axis].multiplied}
-            aria-label={translateAdmin(language, 'admin.scale.multipliedFor', { operation: engagementAxisLabel(language, axis) })}
-            onChange={(event) => onChange(axis, { multiplied: event.currentTarget.checked })}
-            data-scale-multiplied={axis}
-            style={{ height: 24, width: 24, accentColor: BRAND }}
-          />
-        </label>
-      ),
-    },
-    {
-      id: 'cap',
-      header: translateAdmin(language, 'admin.scale.col.cap'),
-      cell: (axis) => (
-        <NumberField
-          value={draft.operations[axis].dailyCap}
-          label={translateAdmin(language, 'admin.scale.capFor', { operation: engagementAxisLabel(language, axis) })}
-          placeholder={translateAdmin(language, 'admin.scale.cap.none')}
-          onChange={(dailyCap) => onChange(axis, { dailyCap })}
-          data={{ 'data-scale-cap': axis }}
-        />
-      ),
-    },
-  ];
-
-  return (
-    <AdminResponsiveRows
-      columns={columns}
-      rows={ENGAGEMENT_AXES}
-      rowKey={(axis) => axis}
-      rowAttributes={(axis) => ({ 'data-scale-operation': axis })}
-      caption={translateAdmin(language, 'admin.scale.operations.title')}
-    />
-  );
-}
 
 type LevelRow = { readonly cap: ScaleDraft['levelCaps'][number]; readonly index: number };
 
@@ -292,21 +187,26 @@ function ScaleEditor({
       </p>
 
       <AdminFicheSection id="scale-operations" title={translateAdmin(language, 'admin.scale.operations.title')}>
-        <OperationsTable language={language} draft={draft} onChange={(axis, patch) => setDraft(withOperation(draft, axis, patch))} />
+        <OperationsSections language={language} draft={draft} onDraft={setDraft} />
       </AdminFicheSection>
+
+      <LinkVisitSection language={language} draft={draft} onDraft={setDraft} />
+
+      <StreakBonusSection language={language} draft={draft} onDraft={setDraft} />
+
+      <AbuseSection language={language} draft={draft} onDraft={setDraft} />
 
       <AdminFicheSection id="scale-multiplier" title={translateAdmin(language, 'admin.scale.multiplier.title')}>
         <div className="grid gap-3 @2xl:grid-cols-2">
           {MULTIPLIER_FIELDS.map((field) => (
-            <label key={field} className="flex items-center justify-between gap-3 text-body" style={{ color: INK }}>
-              <span className="min-w-0 break-words">{translateAdmin(language, MULTIPLIER_LABELS[field])}</span>
+            <LabeledNumber key={field} label={translateAdmin(language, MULTIPLIER_LABELS[field])}>
               <NumberField
                 value={draft.multiplier[field]}
                 label={translateAdmin(language, MULTIPLIER_LABELS[field])}
                 onChange={(value) => setDraft(withMultiplier(draft, field, value))}
                 data={{ 'data-scale-multiplier': field }}
               />
-            </label>
+            </LabeledNumber>
           ))}
         </div>
       </AdminFicheSection>

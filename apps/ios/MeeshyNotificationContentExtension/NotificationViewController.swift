@@ -55,7 +55,7 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
         return .default
     }
 
-    var mediaPlayPauseButtonFrame: CGRect { NotificationExpandedLayout.playButtonFrame }
+    var mediaPlayPauseButtonFrame: CGRect { NotificationExpandedLayout.player.nativeButtonFrame }
 
     var mediaPlayPauseButtonTintColor: UIColor { UIColor(NotificationExpandedLayout.accent) }
 
@@ -79,8 +79,24 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
             player.onFinish = { [weak self] in self?.extensionContext?.mediaPlayingPaused() }
             self.player = player
         }
-        return NotificationExpandedRoot(content: content, player: player) { [weak self] url in
-            self?.extensionContext?.open(url, completionHandler: nil)
+        return NotificationExpandedRoot(
+            content: content,
+            player: player,
+            togglePlayback: { [weak self] in self?.togglePlayback() },
+            openInMaps: { [weak self] url in self?.extensionContext?.open(url, completionHandler: nil) }
+        )
+    }
+
+    /// La pastille entière joue ou met en pause ; le système en est informé
+    /// pour que son bouton natif affiche le bon glyphe.
+    private func togglePlayback() {
+        guard let player else { return }
+        if player.isPlaying {
+            player.pause()
+            extensionContext?.mediaPlayingPaused()
+        } else {
+            player.play()
+            extensionContext?.mediaPlayingStarted()
         }
     }
 

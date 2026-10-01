@@ -564,45 +564,77 @@ export function canEditMessage(
   return { canEdit: true };
 }
 
+/** Ce que {@link generateDefaultConversationTitle} lit d'un membre pour le nommer. */
+type TitleMember = {
+  id?: string;
+  displayName?: string;
+  username?: string;
+  firstName?: string;
+  lastName?: string;
+};
+
 /**
- * Génère un titre par défaut pour une conversation sans titre
+ * Nom d'un membre dans l'ordre CANONIQUE du produit : `displayName` →
+ * `firstName lastName` → `username` → repli. Une chaîne blanche vaut absence.
+ *
+ * Cet ordre n'est pas un choix local : c'est celui que les DEUX clients
+ * appliquent — SDK Swift (`ParticipantModels.swift`, `FriendModels.swift`,
+ * `ShareLinkModels.swift`, `Cache/UserDisplayNameCache.swift`, tous
+ * `displayName ?? [firstName, lastName] ?? username`) et web Vite
+ * (`apps/web/src/lib/api/conversation-members.ts`) — et celui que le SSOT
+ * partagé délègue explicitement au client (`participant-helpers.ts`,
+ * `resolveParticipantDisplayName` : « Ne couvre QUE le niveau `displayName` …
+ * Les fallbacks `firstName lastName` / `username` restent la responsabilité du
+ * client »).
+ *
+ * Ce titre-ci était le SEUL site du produit à placer `username` AVANT le nom
+ * réel (#8970) : un membre ayant un prénom et un nom mais pas de `displayName`
+ * intitulait la conversation `@jdoe123` là où chaque bulle de la même
+ * conversation affiche « John Doe ». La coalescence était de surcroît écrite
+ * DEUX fois — un membre seul, puis plusieurs — donc deux ordres à maintenir
+ * pour une seule règle. Elle ne l'est plus qu'ici.
+ */
+const resolveMemberName = (member: TitleMember): string => {
+  const fullName = [member.firstName, member.lastName]
+    .filter((part): part is string => !!part && part.trim().length > 0)
+    .map((part) => part.trim())
+    .join(' ');
+  return member.displayName?.trim() || fullName || member.username?.trim() || 'Unknown User';
+};
+
+/**
+ * Génère un titre par défaut pour une conversation sans titre.
+ *
+ * Chaque membre est nommé par {@link resolveMemberName} — appelants côté
+ * gateway : `services/conversationCard.ts`, `routes/conversations/core-detail.ts`,
+ * `core-list.ts` et `search.ts`. Tous doivent passer `firstName`/`lastName` ET
+ * les charger dans leur `select` Prisma, sans quoi le nom réel n'atteint jamais
+ * cette fonction et le titre retombe sur `@username` (#8970, défaut 2 : c'était
+ * le cas de `search.ts`). Le garde
+ * `services/gateway/src/__tests__/unit/services/default-title-callers.test.ts`
+ * le vérifie sur les sources.
  */
 export function generateDefaultConversationTitle(
-  members: Array<{ id?: string; displayName?: string; username?: string; firstName?: string; lastName?: string }>,
+  members: Array<TitleMember>,
   currentUserId: string
 ): string {
   const otherMembers = members.filter((m) => m.id !== currentUserId);
-  
+
   if (otherMembers.length === 0) {
     return 'Conversation';
   }
-  
+
   if (otherMembers.length === 1) {
     const member = otherMembers[0];
-    if (member) {
-      const fullName = [member.firstName, member.lastName]
-        .filter((p): p is string => !!p && p.trim().length > 0)
-        .map(p => p.trim())
-        .join(' ');
-      return member.displayName?.trim() || member.username?.trim() || fullName || 'Unknown User';
-    }
-    return 'Unknown User';
+    return member ? resolveMemberName(member) : 'Unknown User';
   }
-  
-  const resolveName = (m: { displayName?: string; username?: string; firstName?: string; lastName?: string }): string => {
-    const fullName = [m.firstName, m.lastName]
-      .filter((p): p is string => !!p && p.trim().length > 0)
-      .map(p => p.trim())
-      .join(' ');
-    return m.displayName?.trim() || m.username?.trim() || fullName || 'Unknown User';
-  };
 
   if (otherMembers.length === 2) {
-    return otherMembers.map(resolveName).join(', ');
+    return otherMembers.map(resolveMemberName).join(', ');
   }
 
   // 3+ membres
-  const firstTwo = otherMembers.slice(0, 2).map(resolveName);
+  const firstTwo = otherMembers.slice(0, 2).map(resolveMemberName);
   return `${firstTwo.join(', ')} and ${otherMembers.length - 2} other(s)`;
 }
 

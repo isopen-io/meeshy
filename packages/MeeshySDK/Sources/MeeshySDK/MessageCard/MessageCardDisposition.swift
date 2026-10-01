@@ -80,15 +80,111 @@ public enum MessageCardMediaLayout: String, CaseIterable, Sendable {
 }
 
 /// Comment un son se représente sur une image — au même titre que les liaisons.
+/// L'onde et le spectre se DISTINGUENT au premier regard (#8979) : l'une est une
+/// enveloppe, l'autre un égaliseur.
 public enum MessageCardAudioStyle: String, CaseIterable, Sendable {
-    /// Une onde : des barres dont la hauteur suit le volume.
+    /// Une onde : une enveloppe fine et dense, en miroir autour d'une ligne ; la partie jouée en couleur.
     case wave
     /// Une pastille : le bouton de lecture, une onde fine et la durée.
     case pill
-    /// Un spectre : des barres en miroir autour d'une ligne.
+    /// Un spectre : un égaliseur — une vingtaine de barres posées sur une ligne
+    /// de base, chacune sous son repère de crête ; animé, il danse avec le son.
     case spectrum
     /// Une fiche : le nom du fichier et sa durée, sous une icône de note.
     case ticket
+}
+
+/// La durée d'une vidéo tirée d'un son (#8979) — 15 s, 30 s ou une minute,
+/// toujours bornée par le son lui-même.
+public enum MessageCardClipLength: Int, CaseIterable, Sendable {
+    case fifteenSeconds = 15
+    case thirtySeconds = 30
+    case oneMinute = 60
+
+    public var seconds: Double { Double(rawValue) }
+
+    /// La durée qu'elle donne à un son de `soundDuration` secondes — `nil` : son de durée inconnue.
+    public func bounded(by soundDuration: Double?) -> Double {
+        guard let soundDuration, soundDuration.isFinite, soundDuration > 0 else { return seconds }
+        return min(seconds, soundDuration)
+    }
+
+    /// Les durées qu'un son OFFRE — loi 4, un choix n'existe que s'il change la
+    /// vidéo : celles qui coupent le son, puis la première qui le prend en
+    /// entier. Un son plus court que 15 s n'offre rien : il part en entier.
+    public static func offered(forSoundDuration soundDuration: Double?) -> [MessageCardClipLength] {
+        guard let soundDuration, soundDuration.isFinite, soundDuration > 0 else { return allCases }
+        let cutting = allCases.filter { $0.seconds < soundDuration }
+        let whole = allCases.first { $0.seconds >= soundDuration }
+        let offered = cutting + (whole.map { [$0] } ?? [])
+        return offered.count > 1 ? offered : []
+    }
+
+    /// La durée qu'un choix désigne PARMI celles offertes — un choix enregistré
+    /// plus long que le son se lit sur celle qui le prend en entier.
+    public func selected(among offered: [MessageCardClipLength], soundDuration: Double?) -> MessageCardClipLength? {
+        let effective = bounded(by: soundDuration)
+        return offered.first { $0.bounded(by: soundDuration) == effective }
+    }
+}
+
+/// **L'ÉCHELLE DE CHAQUE PARTIE** (#8979) — un pincement sur l'aperçu agrandit
+/// ou réduit la partie qu'il touche : l'en-tête, la citation, la réponse (et la
+/// ligne de son nom), les médias, la transcription. Bornée de moitié au double ;
+/// tout près de 100 %, elle s'y AIMANTE — revenir à la taille d'origine ne
+/// demande pas un doigt d'horloger.
+public struct MessageCardScales: Equatable, Sendable {
+    public static let range: ClosedRange<Double> = 0.5...2
+    /// L'aimant autour de 100 %.
+    public static let snap: Double = 0.04
+    /// Les parties qu'un pincement règle — la liaison et le fond n'ont pas de taille à eux.
+    public static let parts: [MessageCardPartID] = [.header, .quote, .reply, .media, .transcript]
+
+    private var values: [MessageCardPartID: Double]
+
+    public init(_ values: [MessageCardPartID: Double] = [:]) {
+        self.values = [:]
+        for (part, value) in values { self[part] = value }
+    }
+
+    public static let identity = MessageCardScales()
+
+    public subscript(part: MessageCardPartID) -> Double {
+        get { values[part] ?? 1 }
+        set {
+            guard Self.parts.contains(part), newValue.isFinite else { return }
+            let clamped = min(Self.range.upperBound, max(Self.range.lowerBound, newValue))
+            values[part] = abs(clamped - 1) <= Self.snap ? nil : clamped
+        }
+    }
+
+    public var isIdentity: Bool { values.isEmpty }
+
+    /// L'échelle que vise un pincement de `factor` sur `part` — depuis
+    /// l'échelle que la carte REND (bornée par `limit`, la place qu'elle laisse
+    /// à la partie) et bornée par elle : le geste ne promet jamais une taille
+    /// que la carte ne peindra pas (revue #8979).
+    public func pinched(_ part: MessageCardPartID, by factor: Double, limit: Double = MessageCardScales.range.upperBound) -> Double {
+        let bound = min(Self.range.upperBound, max(Self.range.lowerBound, limit))
+        let rendered = min(self[part], bound)
+        guard factor.isFinite, factor > 0 else { return rendered }
+        return min(bound, max(Self.range.lowerBound, rendered * factor))
+    }
+
+    /// La forme enregistrée : `partie → échelle`, sans les parties à 100 %.
+    var stored: [String: Double] {
+        Dictionary(uniqueKeysWithValues: values.map { ($0.key.rawValue, $0.value) })
+    }
+
+    /// Relit la forme enregistrée — une partie inconnue ou une valeur abîmée est ignorée.
+    init(stored: [String: Double]?) {
+        var scales = MessageCardScales()
+        for (key, value) in stored ?? [:] {
+            guard let part = MessageCardPartID(rawValue: key) else { continue }
+            scales[part] = value
+        }
+        self = scales
+    }
 }
 
 /// Les choix de disposition, portés ensemble par le format et par l'entrée de la mise en page.
@@ -99,6 +195,16 @@ public struct MessageCardDisposition: Equatable, Sendable {
     public var tilt: MessageCardTilt
     public var mediaLayout: MessageCardMediaLayout
     public var audioStyle: MessageCardAudioStyle
+    /// La transcription d'un vocal, sous sa représentation (#8979) — montrée par défaut.
+    public var showsTranscript: Bool
+    /// Le minuteur d'un vocal — « 0:12 / 0:45 » en vidéo, sa durée sur une image (#8979).
+    public var showsTimer: Bool
+    /// La police de la transcription — `nil` : celle du template.
+    public var transcriptTypeface: MessageCardTypefaceID?
+    /// La durée d'une vidéo tirée d'un son (#8979).
+    public var clipLength: MessageCardClipLength
+    /// L'échelle de chaque partie, réglée au pincement (#8979).
+    public var scales: MessageCardScales
 
     public init(
         aspect: MessageCardAspect = .auto,
@@ -106,7 +212,12 @@ public struct MessageCardDisposition: Equatable, Sendable {
         authorPlacement: MessageCardAuthorPlacement = .above,
         tilt: MessageCardTilt = .none,
         mediaLayout: MessageCardMediaLayout = .above,
-        audioStyle: MessageCardAudioStyle = .wave
+        audioStyle: MessageCardAudioStyle = .wave,
+        showsTranscript: Bool = true,
+        showsTimer: Bool = true,
+        transcriptTypeface: MessageCardTypefaceID? = nil,
+        clipLength: MessageCardClipLength = .oneMinute,
+        scales: MessageCardScales = .identity
     ) {
         self.aspect = aspect
         self.headerOrientation = headerOrientation
@@ -114,6 +225,11 @@ public struct MessageCardDisposition: Equatable, Sendable {
         self.tilt = tilt
         self.mediaLayout = mediaLayout
         self.audioStyle = audioStyle
+        self.showsTranscript = showsTranscript
+        self.showsTimer = showsTimer
+        self.transcriptTypeface = transcriptTypeface
+        self.clipLength = clipLength
+        self.scales = scales
     }
 
     /// La carte d'avant #8692 : adaptative, en-tête en ligne, noms au-dessus, droite.

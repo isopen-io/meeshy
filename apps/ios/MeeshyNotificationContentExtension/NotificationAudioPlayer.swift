@@ -14,6 +14,7 @@ protocol NotificationAudioPlayerProviding: AnyObject {
     func play()
     func pause()
     func cycleRate()
+    func seek(toFraction fraction: Double)
     func stop()
 }
 
@@ -39,6 +40,7 @@ final class NotificationAudioPlayer: ObservableObject, NotificationAudioPlayerPr
     private let scopedURL: URL?
     private var timeObserver: Any?
     private var endObserver: NSObjectProtocol?
+    private var reachedEnd = false
 
     init(url: URL, declaredDurationMs: Int?) {
         scopedURL = url.isFileURL && url.startAccessingSecurityScopedResource() ? url : nil
@@ -51,7 +53,12 @@ final class NotificationAudioPlayer: ObservableObject, NotificationAudioPlayerPr
         logger.info("play at \(self.elapsed, privacy: .public)")
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
         try? AVAudioSession.sharedInstance().setActive(true)
-        if let item = player.currentItem, item.currentTime() >= item.duration, item.duration.isNumeric {
+        // Rejouer un vocal ÉCOUTÉ repart du début. L'état est tenu ici plutôt
+        // que déduit de `currentTime() >= duration`, qui ne tombe pas juste à
+        // la fin d'un flux (mesuré : la relecture restait bloquée à 0:04).
+        if reachedEnd {
+            reachedEnd = false
+            elapsed = 0
             player.seek(to: .zero)
         }
         player.playImmediately(atRate: rate)
@@ -67,6 +74,15 @@ final class NotificationAudioPlayer: ObservableObject, NotificationAudioPlayerPr
     func cycleRate() {
         rate = NotificationPlaybackRate.next(after: rate)
         if isPlaying { player.rate = rate }
+    }
+
+    /// Le bouton de la ligne de progression : on glisse, la lecture suit.
+    func seek(toFraction fraction: Double) {
+        guard duration > 0 else { return }
+        let target = duration * min(1, max(0, fraction))
+        reachedEnd = false
+        elapsed = target
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
     }
 
     func stop() {
@@ -101,6 +117,7 @@ final class NotificationAudioPlayer: ObservableObject, NotificationAudioPlayerPr
 
     private func finish() {
         logger.info("finished")
+        reachedEnd = true
         isPlaying = false
         elapsed = duration
         onFinish?()

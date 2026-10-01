@@ -28,9 +28,14 @@ final class VitrineSourceGuardTests: XCTestCase {
         let fichiers = [
             "apps/ios/Meeshy/MeeshyApp.swift",
             "apps/ios/Meeshy/Features/Main/Components/SyncPill.swift",
+            "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift",
+            "apps/ios/Meeshy/Features/Main/Views/ProgressionView.swift",
+            "apps/ios/Meeshy/Features/Main/Views/FeedPostCard.swift",
+            "apps/ios/Meeshy/Features/Main/Export/MessageCardExportSheet.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Services/ShareLinkService.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine+Vitrine.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Configuration/MeeshyConfig.swift",
+            "packages/MeeshySDK/Sources/MeeshyUI/JoinFlow/JoinFlowViewModel.swift",
         ]
         for chemin in fichiers {
             var pile: [Bool] = []
@@ -42,7 +47,7 @@ final class VitrineSourceGuardTests: XCTestCase {
                 if ligne.hasPrefix("#if") { pile.append(ligne == "#if DEBUG"); continue }
                 if ligne.hasPrefix("#else") || ligne.hasPrefix("#elseif") { if !pile.isEmpty { pile[pile.count - 1] = false }; continue }
                 if ligne.hasPrefix("#endif") { _ = pile.popLast(); continue }
-                guard ["Vitrine", "debugLinkInfoOverride", "debugWebOriginOverride"].contains(where: { ligne.contains($0) }) else { continue }
+                guard ["Vitrine", "debugLinkInfoOverride", "debugWebOriginOverride", "debugOnPreviewShown"].contains(where: { ligne.contains($0) }) else { continue }
                 references += 1
                 XCTAssertTrue(pile.contains(true), "\(chemin) : « \(ligne) » vit hors d'un bloc #if DEBUG")
             }

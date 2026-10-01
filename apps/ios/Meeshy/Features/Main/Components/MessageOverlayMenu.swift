@@ -891,7 +891,7 @@ private struct PreviewAudioPlayer: View {
                 .accessibilityLabel(player.isPlaying
                     ? String(localized: "media.pauseAudio", defaultValue: "Mettre en pause", bundle: .main)
                     : String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main))
-                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.spokenTotalDuration(totalDuration: attachment.duration)))
+                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.spokenTotalDuration(attachmentDurationMs: attachment.duration)))
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
@@ -899,7 +899,7 @@ private struct PreviewAudioPlayer: View {
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
-                    Text(player.timeLabel(totalDuration: attachment.duration))
+                    Text(player.timeLabel(attachmentDurationMs: attachment.duration))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .monospacedDigit()
@@ -1097,7 +1097,7 @@ private struct PreviewVideoPlayer: View {
 
                 Spacer()
 
-                Text(player.timeLabel(totalDuration: attachment.duration))
+                Text(player.timeLabel(attachmentDurationMs: attachment.duration))
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .monospacedDigit()

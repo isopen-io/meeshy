@@ -112,4 +112,14 @@ export const LEGENDES = {
     pt: 'O debate esquenta. Todo mundo acompanha.',
     ar: 'النقاش يحتدم. والكل يتابع.',
   },
+  // #8855 — Imagine : un message devient une image, lue dans la langue de qui la reçoit.
+  L13: {
+    fr: 'Un message. Une image. Sa langue.',
+    en: 'One message. One image. Their language.',
+    es: 'Un mensaje. Una imagen. Su idioma.',
+    de: 'Eine Nachricht. Ein Bild. Ihre Sprache.',
+    it: 'Un messaggio. Una foto. La loro lingua.',
+    pt: 'Mensagem vira imagem. Na língua deles.',
+    ar: 'رسالة واحدة. صورة واحدة. بلغتهم.',
+  },
 }

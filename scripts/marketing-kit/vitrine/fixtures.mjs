@@ -3,15 +3,22 @@
 // ses vraies bases. Une seule source : les textes du kit.
 import { createHash } from 'node:crypto'
 import { KIT_LANGS } from '../lib/locales.mjs'
+import { CREDITS } from '../lib/photos.mjs'
 import { DEMO, lecteurDe, partenaireDe, profilDe } from '../textes/demo.mjs'
+import { photoMedia, segmenter, vocalMedia } from './medias.mjs'
 
-export const VERSION_FIXTURES = 1
+export const VERSION_FIXTURES = 2
 
 // Un identifiant stable au format ObjectId : une même graine donne toujours le même identifiant.
 export const oid = (graine) => createHash('sha1').update(graine).digest('hex').slice(0, 24)
 
 export const ID_GLOBAL = oid('conv:global')
+export const ID_DEBAT = oid('conv:debat')
 export const LIEN_LISBOA = 'lisboa-2026'
+export const idAmour = (lang) => oid(`conv:amour:${lecteurDe(lang).pseudo}`)
+
+// Faute de mesure (témoins, échantillon iOS), un vocal dure 9 s.
+export const MESURE_PAR_DEFAUT = { dureeMs: 9000, taille: 36_000 }
 
 // Les paliers du catalogue d'engagement (`EngagementCatalog.swift`, miroir de `packages/shared/types/engagement.ts`).
 const PALIERS = { badge: [1, 10, 50, 100, 500], streak: [3, 7, 14, 30, 60, 100], level: [10, 50, 150, 400, 1000, 2500] }
@@ -100,6 +107,136 @@ const messagesGlobal = (maintenant) =>
     return { ...commun, content: ligne.text, originalLanguage: ligne.lang, messageType: 'text', translations: traductions(id, ligne) }
   })
 
+// Une pièce jointe telle que la passerelle la sert, sous l'URL relative de son média.
+const piece = ({ media, messageId, auteur, maintenant, minutes }) => ({
+  id: oid(`att:${messageId}:${media.fichier}`),
+  messageId,
+  fileName: media.fichier,
+  originalName: media.fichier,
+  mimeType: media.genre === 'image' ? 'image/jpeg' : 'audio/mp4',
+  fileSize: media.taille,
+  fileUrl: media.url,
+  ...(media.genre === 'image' ? { width: media.width, height: media.height } : {}),
+  uploadedBy: idUtilisateur(auteur),
+  createdAt: iso(maintenant, minutes),
+})
+
+// « 🔥 8 » (kit) → le résumé de réactions que sert la passerelle.
+const reactionsDe = (texte) => {
+  if (!texte) return {}
+  const [emoji, nombre] = texte.split(' ')
+  return { reactionSummary: { [emoji]: Number(nombre) }, reactionCount: Number(nombre) }
+}
+
+// Un message écrit — texte, photos, réactions —, par un membre dans SA langue.
+const ecrit = ({ conversationId, graine, profil, maintenant, minutes, contenu, photos = [], reactions }) => {
+  const id = oid(`msg:${conversationId}:${graine}`)
+  const pieces = photos.map((photo) => piece({ media: photoMedia(photo), messageId: id, auteur: profil, maintenant, minutes }))
+  return {
+    id,
+    conversationId,
+    senderId: idParticipant(conversationId, profil),
+    createdAt: iso(maintenant, minutes),
+    sender: expediteur(conversationId, profil),
+    content: contenu.text,
+    originalLanguage: contenu.lang,
+    messageType: pieces.length ? 'image' : 'text',
+    translations: traductions(id, contenu),
+    ...(pieces.length ? { attachments: pieces } : {}),
+    ...reactionsDe(reactions),
+  }
+}
+
+const mien = (parLangue, lang) => ({ lang, text: parLangue[lang], translations: {} })
+
+// Les langues vers lesquelles la passerelle traduit pour le lecteur : la sienne, puis sa langue
+// régionale quand le kit la parle.
+const languesDuLecteur = (lecteur) => [...new Set([lecteur.lang, lecteur.regional])].filter((l) => KIT_LANGS.includes(l))
+
+// Le vocal du partenaire : l'original, et une piste par langue du lecteur.
+const mediasDuVocal = (lang) => {
+  const partenaire = partenaireDe(lang)
+  const original = DEMO.amour.vocalRecu[partenaire.lang]
+  const cle = (l) => `vocal-${partenaire.pseudo}-${l}`
+  return {
+    original: vocalMedia({ cle: cle(original.lang), texte: original.text, lang: original.lang }),
+    pistes: languesDuLecteur(lecteurDe(lang))
+      .filter((l) => l !== original.lang)
+      .map((l) => vocalMedia({ cle: cle(l), texte: original.translations[l], lang: l })),
+  }
+}
+
+const vocal = ({ lang, maintenant, mesures, minutes }) => {
+  const conversationId = idAmour(lang)
+  const partenaire = partenaireDe(lang)
+  const original = DEMO.amour.vocalRecu[partenaire.lang]
+  const id = oid(`msg:${conversationId}:amour.vocal.recu`)
+  const { original: son, pistes } = mediasDuVocal(lang)
+  const mesure = (media) => mesures[media.url] ?? MESURE_PAR_DEFAUT
+  const duree = mesure(son).dureeMs
+  return {
+    id,
+    conversationId,
+    senderId: idParticipant(conversationId, partenaire),
+    createdAt: iso(maintenant, minutes),
+    sender: expediteur(conversationId, partenaire),
+    content: '',
+    originalLanguage: original.lang,
+    messageType: 'audio',
+    attachments: [{
+      ...piece({ media: { ...son, taille: mesure(son).taille }, messageId: id, auteur: partenaire, maintenant, minutes }),
+      duration: duree,
+      transcription: { text: original.text, language: original.lang, confidence: 0.97, durationMs: duree, segments: segmenter(original.text, duree) },
+      translations: Object.fromEntries(pistes.map((p) => {
+        const d = mesure(p).dureeMs
+        return [p.lang, { type: 'audio', url: p.url, transcription: p.texte, durationMs: d, format: 'm4a', cloned: true, quality: 0.93, ttsModel: 'chatterbox', segments: segmenter(p.texte, d) }]
+      })),
+    }],
+  }
+}
+
+// La conversation du couple (scènes 1 et 9), en Bulles : deux photos, et le vocal qui vient d'arriver.
+const messagesAmour = (lang, maintenant, mesures) => {
+  const conversationId = idAmour(lang)
+  const lecteur = lecteurDe(lang)
+  const partenaire = partenaireDe(lang)
+  const A = DEMO.amour
+  const lui = (replique, graine, minutes, photos) => ecrit({ conversationId, graine, profil: partenaire, maintenant, minutes, contenu: replique[partenaire.lang], photos })
+  const moi = (parLangue, graine, minutes) => ecrit({ conversationId, graine, profil: lecteur, maintenant, minutes, contenu: mien(parLangue, lang) })
+  return [
+    lui(A.pense, 'amour.pense', 185, [A.photos.dejeuner]),
+    moi(A.miens.vueDemandee, 'amour.vue-demandee', 180),
+    lui(A.vue, 'amour.vue', 42, [A.photos.vue[partenaire.lang]]),
+    moi(A.miens.manque, 'amour.manque', 40),
+    lui(A.jours, 'amour.jours', 38),
+    vocal({ lang, maintenant, mesures, minutes: 2 }),
+  ]
+}
+
+const repliquesDebat = () => [...DEMO.debat.messages, DEMO.debat.patateDouce]
+
+// « Pizza Night » (scène 2), en Script : chacun écrit dans sa langue ; un lecteur hors du groupe y prend parti.
+const messagesDebat = (lang, maintenant) => {
+  const lecteur = lecteurDe(lang)
+  const ecrits = repliquesDebat().map((m, i) => ecrit({
+    conversationId: ID_DEBAT, graine: m.id, profil: profilDe(m.auteur), maintenant, minutes: 70 - i * 9,
+    contenu: m, photos: [...(m.photos ?? []), ...(m.photosLong ?? [])], reactions: m.reactions,
+  }))
+  if (DEMO.debat.membres.includes(lecteur.pseudo)) return ecrits
+  return [...ecrits, ecrit({ conversationId: ID_DEBAT, graine: 'debat.mien', profil: lecteur, maintenant, minutes: 12, contenu: mien(DEMO.debat.mien, lang) })]
+}
+
+// Le message que la scène 2 rouvre sur son original : celui d'un AUTRE membre, dans une AUTRE langue,
+// parmi les dernières répliques — celles que l'écran de l'iPhone montre.
+const CANDIDATS_ORIGINAL = ['debat.quitte', 'debat.popcorn', 'debat.patate-douce']
+
+const messageOriginal = (lang) => {
+  const lecteur = lecteurDe(lang)
+  const replique = CANDIDATS_ORIGINAL.map((id) => repliquesDebat().find((m) => m.id === id))
+    .find((m) => m.auteur !== lecteur.pseudo && m.lang !== lang)
+  return oid(`msg:${ID_DEBAT}:${replique.id}`)
+}
+
 // Le dernier message d'une ligne de liste, servi par le Prisme (`lastMessageTranslations`).
 const derniere = (conversationId, profil, contenu, maintenant, minutes) => ({
   lastMessage: {
@@ -113,6 +250,22 @@ const derniere = (conversationId, profil, contenu, maintenant, minutes) => ({
   lastMessageTranslations: contenu.translations,
   lastMessageOriginalLanguage: contenu.lang,
   lastMessageAt: iso(maintenant, minutes),
+})
+
+// La ligne d'une conversation dont le fil est exporté : son DERNIER message, tel qu'il est servi.
+const ligneDe = (message) => ({
+  lastMessage: {
+    id: message.id,
+    content: message.content,
+    senderId: message.senderId,
+    createdAt: message.createdAt,
+    messageType: message.messageType,
+    sender: message.sender,
+    ...(message.attachments ? { attachments: message.attachments.map(({ transcription, translations, ...reste }) => reste) } : {}),
+  },
+  lastMessageTranslations: Object.fromEntries((message.translations ?? []).map((t) => [t.targetLanguage, t.translatedContent])),
+  lastMessageOriginalLanguage: message.originalLanguage,
+  lastMessageAt: message.createdAt,
 })
 
 // L'aperçu d'une conversation directe : une réplique du kit qui se lit en tête-à-tête — jamais un
@@ -136,44 +289,41 @@ const apercuDe = (profil) => {
 
 const CORRESPONDANTS = Object.keys(APERCUS_DIRECTS)
 
-const conversations = (lang, maintenant) => {
+const conversations = (lang, maintenant, fils) => {
   const lecteur = lecteurDe(lang)
   const partenaire = partenaireDe(lang)
   const taille = (pseudos) => new Set([lecteur.pseudo, ...pseudos]).size
-  const direct = (cle, profil, contenu, minutes, unreadCount = 0) => {
-    const id = oid(`conv:${cle}`)
-    return {
-      id,
-      type: 'direct',
-      memberCount: 2,
-      unreadCount,
-      isMember: true,
-      createdAt: iso(maintenant, 40 * JOUR),
-      updatedAt: iso(maintenant, minutes),
-      participants: [participant(id, lecteur, maintenant), participant(id, profil, maintenant)],
-      ...derniere(id, profil, contenu, maintenant, minutes),
-    }
-  }
-  const groupe = ({ cle, titre, contenu, minutes, memberCount, unreadCount }) => {
-    const id = oid(`conv:${cle}`)
-    return {
-      id,
-      type: 'group',
-      title: titre,
-      memberCount,
-      unreadCount,
-      isMember: true,
-      createdAt: iso(maintenant, 60 * JOUR),
-      updatedAt: iso(maintenant, minutes),
-      ...derniere(id, profilDe(contenu.auteur), contenu, maintenant, minutes),
-    }
-  }
+  const direct = ({ id, profil, ligne, unreadCount = 0 }) => ({
+    id,
+    type: 'direct',
+    memberCount: 2,
+    unreadCount,
+    isMember: true,
+    createdAt: iso(maintenant, 40 * JOUR),
+    updatedAt: ligne.lastMessageAt,
+    participants: [participant(id, lecteur, maintenant), participant(id, profil, maintenant)],
+    ...ligne,
+  })
+  const groupe = ({ id, titre, ligne, memberCount, unreadCount }) => ({
+    id,
+    type: 'group',
+    title: titre,
+    memberCount,
+    unreadCount,
+    isMember: true,
+    createdAt: iso(maintenant, 60 * JOUR),
+    updatedAt: ligne.lastMessageAt,
+    ...ligne,
+  })
+  const idDrole = oid('conv:drole')
+  const idNova = oid('conv:nova')
+  const decalage = DEMO.groupe.find((m) => m.id === 'nova.decalage')
   const dernierGlobal = DEMO.global.at(-1)
   return [
-    direct(`amour:${lecteur.pseudo}`, partenaire, DEMO.amour.vocalReaction[partenaire.lang], 2, 1),
-    groupe({ cle: 'debat', titre: DEMO.debat.titre, contenu: DEMO.debat.messages[0], minutes: 30, memberCount: taille(DEMO.debat.membres), unreadCount: 9 }),
-    groupe({ cle: 'drole', titre: DEMO.drole.titre, contenu: DEMO.drole.valise, minutes: 95, memberCount: taille(DEMO.drole.membres), unreadCount: 4 }),
-    groupe({ cle: 'nova', titre: DEMO.lienInvitation.groupe, contenu: DEMO.groupe.find((m) => m.id === 'nova.decalage'), minutes: 160, memberCount: 12, unreadCount: 3 }),
+    direct({ id: idAmour(lang), profil: partenaire, ligne: ligneDe(fils[idAmour(lang)].at(-1)) }),
+    groupe({ id: ID_DEBAT, titre: DEMO.debat.titre, ligne: ligneDe(fils[ID_DEBAT].at(-1)), memberCount: taille(DEMO.debat.membres), unreadCount: 0 }),
+    groupe({ id: idDrole, titre: DEMO.drole.titre, ligne: derniere(idDrole, profilDe(DEMO.drole.valise.auteur), DEMO.drole.valise, maintenant, 95), memberCount: taille(DEMO.drole.membres), unreadCount: 4 }),
+    groupe({ id: idNova, titre: DEMO.lienInvitation.groupe, ligne: derniere(idNova, profilDe(decalage.auteur), decalage, maintenant, 160), memberCount: 12, unreadCount: 3 }),
     {
       id: ID_GLOBAL,
       type: 'global',
@@ -188,9 +338,61 @@ const conversations = (lang, maintenant) => {
     },
     ...CORRESPONDANTS.filter((pseudo) => pseudo !== lecteur.pseudo && pseudo !== partenaire.pseudo).map((pseudo, i) => {
       const profil = profilDe(pseudo)
-      return direct(`dm:${[lecteur.pseudo, pseudo].sort().join(':')}`, profil, apercuDe(profil), 200 + i * 45)
+      const id = oid(`conv:dm:${[lecteur.pseudo, pseudo].sort().join(':')}`)
+      return direct({ id, profil, ligne: derniere(id, profil, apercuDe(profil), maintenant, 200 + i * 45) })
     }),
   ]
+}
+
+// Le fil (`GET /posts/feed`, #8922) : les posts du kit, du plus récent au plus ancien.
+const posts = (maintenant) =>
+  DEMO.posts.map((p, i) => {
+    const media = p.photo ? [photoMedia(p.photo)] : []
+    return {
+      id: oid(`post:${p.id}`),
+      type: 'POST',
+      visibility: 'PUBLIC',
+      content: p.text,
+      originalLanguage: p.lang,
+      createdAt: iso(maintenant, 55 + i * 130),
+      updatedAt: iso(maintenant, 55 + i * 130),
+      author: identite(profilDe(p.auteur)),
+      likeCount: p.likes,
+      commentCount: p.commentaires,
+      repostCount: 0,
+      viewCount: p.likes * 8,
+      bookmarkCount: 0,
+      shareCount: 0,
+      reactionSummary: { '❤️': p.likes },
+      media: media.map((m, j) => ({
+        id: oid(`post-media:${p.id}:${j}`), fileName: m.fichier, originalName: m.fichier, mimeType: 'image/jpeg',
+        fileSize: m.taille, fileUrl: m.url, width: m.width, height: m.height, order: j,
+      })),
+      translations: Object.fromEntries(Object.entries(p.translations).map(([cible, text]) => [cible, { text }])),
+    }
+  })
+
+const photoDuFichier = (fichier) => Object.keys(CREDITS).find((nom) => CREDITS[nom].fichier === fichier)
+
+// Tout ce que les messages et les posts désignent : le script de capture le dépose, l'app le range.
+const mediasDe = ({ lang, fils, lesPosts }) => {
+  const images = [
+    ...Object.values(fils).flat().flatMap((m) => m.attachments ?? []).filter((a) => a.mimeType === 'image/jpeg'),
+    ...lesPosts.flatMap((p) => p.media),
+  ]
+  const { original, pistes } = mediasDuVocal(lang)
+  return [...new Set(images.map((a) => a.fileName))].map((fichier) => photoMedia(photoDuFichier(fichier))).concat([original, ...pistes])
+}
+
+// Ce que chaque scène ouvre (spec § 3) : sa conversation, et le message ou la pièce qu'elle met en avant.
+const scenes = (lang, fils) => {
+  const leVocal = fils[idAmour(lang)].at(-1)
+  return {
+    global: { conversationId: ID_GLOBAL },
+    amour: { conversationId: idAmour(lang), messageId: leVocal.id, attachmentId: leVocal.attachments[0].id },
+    groupe: { conversationId: ID_DEBAT, messageId: messageOriginal(lang) },
+    imagine: { conversationId: idAmour(lang), messageId: oid(`msg:${idAmour(lang)}:amour.vue`) },
+  }
 }
 
 const COMPTEURS = [
@@ -262,16 +464,25 @@ const lienInvitation = (lang, maintenant) => {
   }
 }
 
-export const exporterVitrine = ({ lang, maintenant }) => {
+export const exporterVitrine = ({ lang, maintenant, mesures = {} }) => {
   if (!KIT_LANGS.includes(lang)) throw new Error(`langue hors kit : ${lang}`)
+  const fils = {
+    [ID_GLOBAL]: messagesGlobal(maintenant),
+    [idAmour(lang)]: messagesAmour(lang, maintenant, mesures),
+    [ID_DEBAT]: messagesDebat(lang, maintenant),
+  }
+  const lesPosts = posts(maintenant)
   return {
     version: VERSION_FIXTURES,
     lang,
     lecteur: utilisateur(lecteurDe(lang), maintenant),
-    conversations: conversations(lang, maintenant),
-    messages: { [ID_GLOBAL]: messagesGlobal(maintenant) },
+    conversations: conversations(lang, maintenant, fils),
+    messages: fils,
     progression: progression(maintenant),
     lienInvitation: lienInvitation(lang, maintenant),
-    modesDeLecture: { [ID_GLOBAL]: 'script' },
+    modesDeLecture: { [ID_GLOBAL]: 'script', [ID_DEBAT]: 'script', [idAmour(lang)]: 'bubbles' },
+    medias: mediasDe({ lang, fils, lesPosts }),
+    posts: lesPosts,
+    scenes: scenes(lang, fils),
   }
 }

@@ -28,6 +28,7 @@ final class ImagineWorkshopTests: XCTestCase {
     func test_touchingAPart_opensTheTabThatSetsIt() {
         XCTAssertEqual(MessageCardExportTab.of(.header), .frame)
         XCTAssertEqual(MessageCardExportTab.of(.media), .media)
+        XCTAssertEqual(MessageCardExportTab.of(.transcript), .media, "la transcription se règle dans « Médias »")
         XCTAssertEqual(MessageCardExportTab.of(.background), .palette)
         XCTAssertEqual(MessageCardExportTab.of(.link), .link)
     }
@@ -59,6 +60,112 @@ final class ImagineWorkshopTests: XCTestCase {
         XCTAssertEqual(MessageCardTrayOffer.mediaLayouts([.image, .video]), [.above, .below, .mosaic, .backdrop])
         XCTAssertEqual(MessageCardTrayOffer.audioStyles([.audio]), MessageCardAudioStyle.allCases)
         XCTAssertTrue(MessageCardTrayOffer.audioStyles([.image]).isEmpty)
+    }
+
+    // MARK: - Un vocal (#8979)
+
+    private static let transcript = MessageCardTranscript(text: "Bonjour à tous. On se voit demain.")
+    private static func voice(_ duration: Double?, transcript: MessageCardTranscript? = ImagineWorkshopTests.transcript, samples: [Double] = []) -> MessageCardMedia {
+        MessageCardMedia(id: "a1", kind: .audio, duration: duration, samples: samples, transcript: transcript)
+    }
+
+    func test_media_theTranscriptAndTheTimerAreOfferedOnlyForASound_theFontOnlyForAShownTranscript() {
+        let spoken = [Self.voice(30)]
+        XCTAssertTrue(MessageCardTrayOffer.offersTranscript(spoken))
+        XCTAssertTrue(MessageCardTrayOffer.offersTimer(spoken))
+        XCTAssertEqual(MessageCardTrayOffer.transcriptTypefaces(.initial, media: spoken), MessageCardTypefaceID.allCases,
+                       "la police de la transcription reprend le catalogue de l'onglet « Police »")
+        var hidden = MessageCardFormat.initial
+        hidden.disposition.showsTranscript = false
+        XCTAssertTrue(MessageCardTrayOffer.transcriptTypefaces(hidden, media: spoken).isEmpty)
+
+        let silent = [Self.voice(30, transcript: nil)]
+        XCTAssertFalse(MessageCardTrayOffer.offersTranscript(silent), "un son sans transcription n'a rien à montrer")
+        XCTAssertTrue(MessageCardTrayOffer.transcriptTypefaces(.initial, media: silent).isEmpty)
+        XCTAssertFalse(MessageCardTrayOffer.offersTimer([MessageCardMedia(id: "p", kind: .image)]))
+    }
+
+    func test_media_theVideoLengthIsOfferedOnlyForAVideoDrawnFromALongSound() {
+        XCTAssertTrue(MessageCardTrayOffer.clipLengths(output: .image, media: [Self.voice(90)]).isEmpty, "une image n'a pas de durée")
+        XCTAssertEqual(MessageCardTrayOffer.clipLengths(output: .video, media: [Self.voice(90)]), [.fifteenSeconds, .thirtySeconds, .oneMinute])
+        XCTAssertEqual(MessageCardTrayOffer.clipLengths(output: .video, media: [Self.voice(20)]), [.fifteenSeconds, .thirtySeconds])
+        XCTAssertTrue(MessageCardTrayOffer.clipLengths(output: .video, media: [Self.voice(9)]).isEmpty, "un son court part en entier")
+        let clip = MessageCardMedia(id: "v", kind: .video, duration: 40)
+        XCTAssertTrue(MessageCardTrayOffer.clipLengths(output: .video, media: [clip, Self.voice(90)]).isEmpty, "une vidéo jointe fixe sa durée")
+    }
+
+    func test_media_thePassageIsChosenOnlyWhenTheMediaOutlastsTheExcerpt() throws {
+        let long = [Self.voice(90)]
+        let plan = MessageCardMotionPlan.of(.video, media: long, length: .thirtySeconds, start: 70)
+        let excerpt = try XCTUnwrap(MessageCardTrayOffer.excerpt(plan: plan, media: long))
+        XCTAssertEqual(excerpt.total, 90)
+        XCTAssertEqual(excerpt.window, MessageCardClip(start: 60, duration: 30))
+        XCTAssertEqual(excerpt.levels(12).count, 12)
+
+        let short = [Self.voice(20)]
+        XCTAssertNil(MessageCardTrayOffer.excerpt(plan: MessageCardMotionPlan.of(.video, media: short), media: short), "un son plus court que la vidéo part en entier")
+        XCTAssertNil(MessageCardTrayOffer.excerpt(plan: nil, media: long), "une image fixe n'a pas de passage")
+
+        let clip = [MessageCardMedia(id: "v", kind: .video, duration: 40)]
+        let gif = try XCTUnwrap(MessageCardTrayOffer.excerpt(plan: MessageCardMotionPlan.of(.gif, media: clip, start: 10), media: clip))
+        XCTAssertEqual(gif.window, MessageCardClip(start: 10, duration: 6))
+        XCTAssertEqual(Set(gif.levels(8)).count, 1, "une vidéo montre une règle, pas une onde inventée")
+    }
+
+    // MARK: - Chaque piste garde son onde (#8979)
+
+    private static func sound(_ id: String, url: String, duration: Double? = nil) -> MessageCardSubjectMedia {
+        MessageCardSubjectMedia(media: MessageCardMedia(id: id, kind: .audio, duration: duration), fileURL: url)
+    }
+
+    func test_loadedMedia_eachSoundKeepsTheWaveAndTheDurationOfItsOwnTrack() {
+        let loaded = MessageCardLoadedMedia(pictures: .none, sounds: [
+            "https://x/fr.m4a": MessageCardLoadedSound(samples: [0.2, 0.4], duration: 12, file: nil),
+            "https://x/en.m4a": MessageCardLoadedSound(samples: [1, 0.5, 0.25], duration: 9, file: URL(fileURLWithPath: "/tmp/en.m4a")),
+        ])
+        let english = [Self.sound("a1", url: "https://x/en.m4a")]
+        XCTAssertEqual(loaded.media(of: english).first?.samples, [1, 0.5, 0.25])
+        XCTAssertEqual(loaded.media(of: english).first?.duration, 9, "la durée lue dans le fichier, quand le message ne la disait pas")
+        XCTAssertEqual(loaded.soundFile(of: english), URL(fileURLWithPath: "/tmp/en.m4a"))
+        XCTAssertEqual(loaded.media(of: [Self.sound("a1", url: "https://x/fr.m4a", duration: 14)]).first?.duration, 14, "la durée du message prime")
+        let spanish = [Self.sound("a1", url: "https://x/es.m4a")]
+        XCTAssertEqual(loaded.missing(spanish).map(\.fileURL), ["https://x/es.m4a"], "une autre piste se charge à son tour")
+        XCTAssertTrue(loaded.missing(english).isEmpty)
+    }
+
+    /// « Réessayer » relit un son dont le fichier n'est pas arrivé (revue #8979).
+    func test_loadedMedia_aSoundThatFailedIsLoadedAgain() {
+        let failed = MessageCardLoadedMedia(pictures: .none, sounds: [
+            "https://x/fr.m4a": MessageCardLoadedSound(samples: [], duration: nil, file: nil),
+        ])
+        XCTAssertEqual(failed.missing([Self.sound("a1", url: "https://x/fr.m4a")]).map(\.fileURL), ["https://x/fr.m4a"])
+    }
+
+    /// En VIDÉO, un son qui n'a pas pu se lire est un ÉCHEC — l'atelier le dit
+    /// et offre de réessayer ; une image n'en a pas besoin. Un son encore en
+    /// chemin retient la vidéo, sans avis (revue #8979).
+    func test_loadedMedia_aSilentSoundFailsTheVideo_neverTheImage() {
+        let items = [Self.sound("a1", url: "https://x/fr.m4a")]
+        let failed = MessageCardLoadedMedia(pictures: .none, sounds: ["https://x/fr.m4a": MessageCardLoadedSound(samples: [], duration: nil, file: nil)])
+        XCTAssertEqual(failed.failures(of: items, output: .video), ["a1"])
+        XCTAssertEqual(failed.failures(of: items, output: .image), [])
+        XCTAssertFalse(failed.hearsThePaintedSound(of: items), "jamais une « Animation enregistrée » muette")
+        let loading = MessageCardLoadedMedia.empty
+        XCTAssertEqual(loading.failures(of: items, output: .video), [], "un son en chemin n'est pas un échec")
+        XCTAssertFalse(loading.hearsThePaintedSound(of: items))
+        let heard = MessageCardLoadedMedia(pictures: .none, sounds: ["https://x/fr.m4a": MessageCardLoadedSound(samples: [], duration: 9, file: URL(fileURLWithPath: "/tmp/fr.m4a"))])
+        XCTAssertTrue(heard.hearsThePaintedSound(of: items))
+        XCTAssertTrue(MessageCardLoadedMedia.empty.hearsThePaintedSound(of: [MessageCardSubjectMedia(media: MessageCardMedia(id: "p", kind: .image), fileURL: "https://x/p")]))
+    }
+
+    /// La vidéo fait entendre le son PEINT — le premier —, jamais un autre qui serait arrivé, lui (revue #8979).
+    func test_loadedMedia_theVideoHearsThePaintedSound_orNothing() {
+        let loaded = MessageCardLoadedMedia(pictures: .none, sounds: [
+            "https://x/a.m4a": MessageCardLoadedSound(samples: [], duration: nil, file: nil),
+            "https://x/b.m4a": MessageCardLoadedSound(samples: [], duration: 9, file: URL(fileURLWithPath: "/tmp/b.m4a")),
+        ])
+        let items = [Self.sound("a", url: "https://x/a.m4a"), Self.sound("b", url: "https://x/b.m4a")]
+        XCTAssertNil(loaded.soundFile(of: items), "la transcription du premier son au-dessus de la voix du second : jamais")
     }
 
     func test_output_aVideoOffersGifAndVideo_aSoundOnlyVideo() {
@@ -123,7 +230,12 @@ final class ImagineWorkshopTests: XCTestCase {
                     "export.card.option.times", "export.card.option.handles", "export.card.output.label",
                     "export.card.motion.running", "export.announce.galleryMotion", "export.announce.sharedMotion",
                     "export.announce.motionFailed", "export.card.names.above", "export.card.names.after",
-                    "export.card.media.failed.one", "export.card.media.failed.other", "export.card.media.retry"]
+                    "export.card.media.failed.one", "export.card.media.failed.other", "export.card.media.retry",
+                    "export.card.media.transcript", "export.card.media.timer", "export.card.media.transcriptFont",
+                    "export.card.clip.label", "export.card.excerpt.label", "export.card.excerpt.hint",
+                    "export.card.part.transcript", "export.card.hint.pinch", "export.card.scale.hint",
+                    "export.card.truncated.media"]
+        keys += MessageCardClipLength.allCases.map { "export.card.clip.\($0.rawValue)" }
         keys += MessageCardAspect.allCases.map { "export.card.aspect.\($0.rawValue)" }
         keys += MessageCardHeaderOrientation.allCases.map { "export.card.header.\($0.rawValue)" }
         keys += MessageCardTilt.allCases.map { "export.card.tilt.\($0.rawValue)" }
