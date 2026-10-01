@@ -154,3 +154,33 @@ describe('les stickers dynamiques', () => {
     });
   });
 });
+
+describe('le dessin se lit comme un sticker mignon (#9053)', () => {
+  const sticker = MEE_STICKERS[0] as MeeSticker;
+  const svg = renderMeeSticker(sticker, { uid: 'cut', animated: false });
+
+  test('la scène entière est découpée par un contour blanc et posée sur une ombre', () => {
+    const cut = svg.match(/<filter id="([^"]+)"[^>]*>(.*?)<\/filter>/);
+    expect(cut).not.toBeNull();
+    expect(cut?.[2]).toContain('operator="dilate"');
+    expect(cut?.[2]).toContain('flood-color="#ffffff"');
+    expect(svg).toContain(`<g filter="url(#${cut?.[1]})">`);
+  });
+
+  test('la boîte de vue loge le contour qui déborde de la scène', () => {
+    const [x, y, w, h] = (svg.match(/viewBox="([^"]+)"/)?.[1] ?? '').split(' ').map(Number);
+    expect(x).toBeLessThan(0);
+    expect(y).toBeLessThan(0);
+    expect((x ?? 0) + (w ?? 0)).toBeGreaterThan(200);
+    expect((y ?? 0) + (h ?? 0)).toBeGreaterThan(200);
+  });
+
+  test('le bec reste court : sa pointe ne dépasse pas le visage', () => {
+    const beaks = MEE_STICKERS.filter((s) => s.section === 'solo').flatMap((s) =>
+      [...s.scene('t', {}).matchAll(/<path d="([^"]+)" fill="url\(#t(?:mee|meo)1k\)"/g)].map((m) => m[1] ?? ''),
+    );
+    const reach = beaks.flatMap((d) => [...d.matchAll(/(-?[0-9.]+) (-?[0-9.]+)/g)].map((m) => Number(m[1])));
+    expect(beaks.length).toBeGreaterThanOrEqual(60);
+    expect(Math.max(...reach)).toBeLessThanOrEqual(92);
+  });
+});

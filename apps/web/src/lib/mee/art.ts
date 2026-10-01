@@ -65,6 +65,7 @@ export type BirdPose = {
 type Palette = {
   readonly a: string;
   readonly b: string;
+  readonly line: string;
   readonly belly: string;
   readonly wing: string;
   readonly wing2: string;
@@ -72,44 +73,46 @@ type Palette = {
   readonly heartA: string;
   readonly heartB: string;
   readonly crest: string;
-  readonly cheek: string | null;
+  readonly cheek: string;
   readonly lashes: boolean;
   readonly flares: boolean;
 };
 
 export const MEE_PALETTES: Readonly<Record<MeeCharacter, Palette>> = {
   mee: {
-    a: '#6ee7b7',
-    b: '#0d9488',
+    a: '#7ff0c8',
+    b: '#14b8a6',
+    line: '#0f766e',
     belly: '#f0fdfa',
-    wing: '#ccfbf1',
-    wing2: '#5eead4',
-    tail: '#115e59',
+    wing: '#e6fff7',
+    wing2: '#7de8d2',
+    tail: '#0f766e',
     heartA: '#fb7185',
-    heartB: '#be123c',
-    crest: '#e11d48',
-    cheek: '#fb7185',
+    heartB: '#e11d48',
+    crest: '#f43f5e',
+    cheek: '#ff7a9a',
     lashes: true,
     flares: false,
   },
   meo: {
-    a: '#34d399',
-    b: '#065f46',
+    a: '#5ee6a8',
+    b: '#0d9b6c',
+    line: '#065f46',
     belly: '#ecfdf5',
-    wing: '#d1fae5',
-    wing2: '#6ee7b7',
-    tail: '#b45309',
+    wing: '#e3fcef',
+    wing2: '#86efac',
+    tail: '#d97706',
     heartA: '#a78bfa',
-    heartB: '#5b21b6',
-    crest: '#6d28d9',
-    cheek: null,
+    heartB: '#6d28d9',
+    crest: '#7c3aed',
+    cheek: '#ff8fa8',
     lashes: false,
     flares: true,
   },
 };
 
 export const INK = '#1c1941';
-const BEAK = '#312e81';
+const BEAK_LINE = '#b45309';
 
 /** Échappe une valeur avant de l'écrire dans une chaîne SVG — texte comme attribut. */
 export function escapeSvg(value: string): string {
@@ -142,7 +145,7 @@ function eye(kind: MeeEyes, x: number, y: number, i: number): string {
     `<path d="M${x - 9} ${y - 12 + (i === 0 ? -inner : inner)} L${x + 9} ${y - 12 + (i === 0 ? inner : -inner)}" stroke="${INK}" stroke-width="3" stroke-linecap="round"/>`;
   switch (kind) {
     case 'open':
-      return `<ellipse cx="${x}" cy="${y}" rx="8.5" ry="10" fill="${INK}"/><circle cx="${x + 3}" cy="${y - 4}" r="3.4" fill="#fff"/><circle cx="${x - 2.5}" cy="${y + 3.5}" r="1.4" fill="#fff"/>`;
+      return `<ellipse cx="${x}" cy="${y}" rx="9" ry="10.5" fill="${INK}"/><ellipse cx="${x}" cy="${y + 5}" rx="6" ry="4" fill="#4c4a8a" opacity=".55"/><circle cx="${x + 3}" cy="${y - 4}" r="3.8" fill="#fff"/><circle cx="${x - 3}" cy="${y + 3.8}" r="1.7" fill="#fff"/>`;
     case 'joy':
       return `<path d="M${x - 8} ${y + 2} q8 -11 16 0" fill="none" stroke="${INK}" stroke-width="4.5" stroke-linecap="round"/>`;
     case 'wink':
@@ -183,24 +186,37 @@ function eyes(kind: MeeEyes): string {
   return eye(kind, EYE_X[0], EYE_Y, 0) + eye(kind, EYE_X[1], EYE_Y, 1);
 }
 
-function beak(kind: MeeBeak): string {
+/**
+ * LE BEC — court et arrondi, posé sous les yeux et tourné vers la droite : un
+ * petit bec de poussin plutôt qu'une aiguille de colibri. Il ne dépasse pas
+ * le visage, si bien que la bouche se lit d'un coup d'œil, même en vignette.
+ */
+const UPPER = 'M65.5 84.5 Q61 88.5 65 92 L87.5 90.6 Q90.5 89 86.5 88 Z';
+const LOWER = 'M66 96.5 Q63.5 99.5 67 101.5 L82.5 98 Q85 96.5 81.5 96 Z';
+const CLOSED = 'M65.5 85 Q60.5 91 65.5 97.5 L86.5 93 Q90.5 91.3 86.5 89.6 Z';
+
+function beak(kind: MeeBeak, fill: string): string {
+  const shape = (d: string) => `<path d="${d}" fill="${fill}" stroke="${BEAK_LINE}" stroke-width="1.6" stroke-linejoin="round"/>`;
+  const shine = '<path d="M68 86.8 Q75 86 81 88" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" opacity=".7"/>';
+  const seam = (d: string) => `<path d="${d}" fill="none" stroke="${BEAK_LINE}" stroke-width="1.5" stroke-linecap="round"/>`;
+  const mouth = (inner: string) => `<path d="M64.5 91 L87 90.2 Q85 97 81.5 97.5 L66.5 100.5 Q63 96 64.5 91 Z" fill="#9f1239"/>${inner}${shape(UPPER)}${shape(LOWER)}${shine}`;
   switch (kind) {
     case 'smile':
-      return `<path d="M72 84 L130 99 L72 92 Z" fill="${BEAK}"/><path d="M66 95 q5 6 11 3" fill="none" stroke="${BEAK}" stroke-width="2.5" stroke-linecap="round"/>`;
-    case 'open':
-      return `<path d="M72 82 L128 92 L74 88 Z" fill="${BEAK}"/><path d="M74 91 L122 104 L72 97 Z" fill="${BEAK}"/><path d="M74 89 L94 95 L74 94 Z" fill="#fb7185"/>`;
-    case 'kiss':
-      return `<path d="M72 84 L108 90 L72 93 Z" fill="${BEAK}"/><circle cx="110" cy="90" r="3" fill="#fb7185"/>`;
-    case 'frown':
-      return `<path d="M72 85 L126 101 L72 92 Z" fill="${BEAK}"/><path d="M64 100 q6 -6 12 -1" fill="none" stroke="${BEAK}" stroke-width="2.5" stroke-linecap="round"/>`;
+      return `${shape(CLOSED)}${seam('M63.8 90.6 Q75 94 87 90.9')}${shine}`;
     case 'flat':
-      return `<path d="M72 84 L128 97 L72 92 Z" fill="${BEAK}"/><path d="M64 97 h12" stroke="${BEAK}" stroke-width="2.5" stroke-linecap="round"/>`;
+      return `${shape(CLOSED)}${seam('M64 91.5 L87.5 91.3')}${shine}`;
+    case 'frown':
+      return `${shape('M65.5 86 Q60.5 92 65.5 98 L85.5 96 Q89.5 94.5 85.5 92 Z')}${seam('M64 92.8 Q75 90.6 86.5 94')}${shine}`;
+    case 'kiss':
+      return `${shape('M66 86 Q61.5 91 66 96 L81 92.5 Q84 91.2 81 89.6 Z')}${seam('M64.5 91.2 L82 91.2')}<path d="${heartPath(89, 87, 3.4)}" fill="#fb7185"/>`;
     case 'o':
-      return `<path d="M72 83 L112 90 L72 91 Z" fill="${BEAK}"/><ellipse cx="70" cy="98" rx="4" ry="5" fill="${BEAK}"/>`;
+      return `<ellipse cx="73" cy="97.5" rx="5" ry="5.8" fill="#9f1239"/><ellipse cx="73" cy="99.5" rx="2.8" ry="2.2" fill="#fb7185"/>${shape(UPPER)}${shine}`;
+    case 'open':
+      return mouth('<ellipse cx="74" cy="97.5" rx="6" ry="2.6" fill="#fb7185"/>');
     case 'grit':
-      return `<path d="M72 82 L126 92 L74 88 Z" fill="${BEAK}"/><path d="M74 92 L120 103 L72 97 Z" fill="${BEAK}"/><path d="M78 91 l4 3 4 -2 4 3 4 -2 4 3 4 -2" fill="none" stroke="#fff" stroke-width="1.6"/>`;
+      return mouth('<path d="M65.5 92 L86.5 91.2 L84.5 95.2 L67 96.6 Z" fill="#fff"/><path d="M71 92 v4 M76.5 91.8 v3.8 M82 91.6 v3.4" stroke="#d1d5db" stroke-width="1.1"/>');
     case 'tongue':
-      return `<path d="M72 82 L126 91 L74 88 Z" fill="${BEAK}"/><path d="M74 91 L116 101 L72 97 Z" fill="${BEAK}"/><path d="M90 96 q6 12 12 4 q-2 -6 -12 -4 z" fill="#fb7185"/>`;
+      return mouth('<path d="M70 96 Q71 107 77 106 Q82 105 80 95.5 Z" fill="#fb7185" stroke="#e11d48" stroke-width="1.2"/><path d="M75 97.5 v5" stroke="#e11d48" stroke-width="1" stroke-linecap="round"/>');
   }
 }
 
@@ -247,14 +263,19 @@ function accessory(kind: MeeAccessory, p: Palette): string {
 
 function crest(c: MeeCharacter, p: Palette): string {
   return c === 'mee'
-    ? `<path d="M66 43 C58 28 74 16 84 24 C91 30 84 40 77 35" fill="none" stroke="${p.crest}" stroke-width="6" stroke-linecap="round"/>`
-    : `<path d="M64 44 C60 32 48 30 36 34 C46 36 52 40 54 47 Z" fill="${p.crest}"/><path d="M70 42 C68 26 56 18 42 20 C53 26 58 34 60 44 Z" fill="${p.crest}"/><path d="M77 42 C77 28 69 16 58 13 C66 22 68 32 68 43 Z" fill="${p.crest}"/>`;
+    ? `<path d="M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35" fill="none" stroke="${p.line}" stroke-width="9.5" stroke-linecap="round"/><path d="M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35" fill="none" stroke="${p.crest}" stroke-width="6" stroke-linecap="round"/><circle cx="72" cy="24" r="1.6" fill="#fff" opacity=".75"/>`
+    : `<g fill="${p.crest}" stroke="${p.heartB}" stroke-width="2" stroke-linejoin="round"><path d="M62 45 C58 35 48 31 38 34 C46 37 51 41 53 48 Z"/><path d="M69 43 C68 29 58 20 45 21 C55 27 59 34 60 45 Z"/><path d="M76 43 C77 30 70 18 60 14 C66 23 68 32 67 44 Z"/></g>`;
 }
 
 /**
  * UN COLIBRI. `n` numérote le personnage dans la scène (1 ou 2) : il suffixe
  * les classes de rôle et les identifiants de dégradé, qui doivent rester
  * uniques dans le document (`uid` vient de l'hôte).
+ *
+ * Le dessin cherche le MIGNON : un corps rond cerné d'un trait doux de sa
+ * propre teinte, un reflet sur le dessus de la tête, de grands yeux brillants,
+ * des joues roses et un bec court. Le contour blanc de sticker n'est pas ici :
+ * il découpe la scène ENTIÈRE (`render.ts`), accessoires compris.
  */
 export function bird(c: MeeCharacter, pose: BirdPose, n: 1 | 2, uid: string): string {
   const p = MEE_PALETTES[c];
@@ -266,15 +287,15 @@ export function bird(c: MeeCharacter, pose: BirdPose, n: 1 | 2, uid: string): st
   const eyeKind = pose.eyes ?? 'open';
   const lashes =
     p.lashes && (eyeKind === 'open' || eyeKind === 'sad' || eyeKind === 'teary' || eyeKind === 'wide')
-      ? `<path d="M51 66 l-4 -4 M48.5 69.5 l-5 -2 M89 66 l4 -4 M91.5 69.5 l5 -2" stroke="${INK}" stroke-width="2.2" stroke-linecap="round"/>`
+      ? `<path d="M50.5 67 l-4.5 -3.5 M48.5 71 l-5 -1.2 M89.5 67 l4.5 -3.5 M91.5 71 l5 -1.2" stroke="${INK}" stroke-width="2.2" stroke-linecap="round"/>`
       : '';
   const flares = p.flares
-    ? `<path d="M61 106 Q49 109 40 117 Q52 114 62 112 Z" fill="${p.heartB}"/><path d="M79 106 Q91 109 100 117 Q88 114 78 112 Z" fill="${p.heartB}"/>`
+    ? `<path d="M61 107 Q50 110 42 117 Q53 115 62 112 Z" fill="${p.heartB}"/><path d="M79 107 Q90 110 98 117 Q87 115 78 112 Z" fill="${p.heartB}"/>`
     : '';
-  const cheeks = p.cheek
-    ? `<ellipse cx="44" cy="88" rx="7" ry="4.5" fill="${p.cheek}" opacity=".55"/><ellipse cx="96" cy="88" rx="7" ry="4.5" fill="${p.cheek}" opacity=".55"/>`
-    : '';
-  return `<defs><linearGradient id="${id}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.a}"/><stop offset="1" stop-color="${p.b}"/></linearGradient><linearGradient id="${id}w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.wing}"/><stop offset="1" stop-color="${p.wing2}"/></linearGradient><linearGradient id="${id}h" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${p.heartA}"/><stop offset="1" stop-color="${p.heartB}"/></linearGradient></defs><g class="wl${n}"><ellipse cx="26" cy="70" rx="13" ry="24" transform="rotate(-34 26 70)" fill="url(#${id}w)"/><path d="M20 58 q2 14 8 26" stroke="${p.wing2}" stroke-width="2" fill="none"/></g><path d="M60 112 l-10 17 11 -5 7 9 5 -21 z" fill="${p.tail}"/>${crest(c, p)}<circle cx="70" cy="80" r="40" fill="url(#${id}b)"/><ellipse cx="70" cy="104" rx="25" ry="14" fill="${p.belly}" opacity=".95"/>${flares}<path d="${heartPath(70, 109, 9)}" fill="url(#${id}h)"/><circle cx="65" cy="106" r="1.6" fill="#fff" opacity=".9"/>${neck}${cheeks}<g class="e${n}">${eyes(eyeKind)}${lashes}</g>${beak(pose.beak ?? 'smile')}${face}${head}<g class="wr${n}"><ellipse cx="114" cy="70" rx="13" ry="24" transform="rotate(34 114 70)" fill="url(#${id}w)"/><path d="M120 58 q-2 14 -8 26" stroke="${p.wing2}" stroke-width="2" fill="none"/></g>`;
+  const cheeks = `<ellipse cx="45" cy="88" rx="7.5" ry="4.8" fill="${p.cheek}" opacity=".85"/><ellipse cx="98" cy="86" rx="7" ry="4.6" fill="${p.cheek}" opacity=".85"/>`;
+  const wing = (cx: number, rot: number, vein: string) =>
+    `<ellipse cx="${cx}" cy="70" rx="13" ry="24" transform="rotate(${rot} ${cx} 70)" fill="url(#${id}w)" stroke="${p.line}" stroke-width="2.2" stroke-opacity=".55"/><path d="${vein}" stroke="${p.wing2}" stroke-width="2" stroke-linecap="round" fill="none"/>`;
+  return `<defs><radialGradient id="${id}b" cx=".38" cy=".3" r=".8"><stop offset="0" stop-color="${p.a}"/><stop offset="1" stop-color="${p.b}"/></radialGradient><linearGradient id="${id}w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${p.wing}"/><stop offset="1" stop-color="${p.wing2}"/></linearGradient><linearGradient id="${id}h" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${p.heartA}"/><stop offset="1" stop-color="${p.heartB}"/></linearGradient><linearGradient id="${id}k" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fde68a"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs><g class="wl${n}">${wing(26, -34, 'M21 60 q2 12 7 22')}</g><path d="M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z" fill="${p.tail}" stroke="${p.line}" stroke-width="1.8" stroke-linejoin="round"/>${crest(c, p)}<circle cx="70" cy="80" r="40" fill="url(#${id}b)" stroke="${p.line}" stroke-width="2.4"/><ellipse cx="55" cy="55" rx="13" ry="7.5" transform="rotate(-28 55 55)" fill="#fff" opacity=".38"/><circle cx="76" cy="47.5" r="2.6" fill="#fff" opacity=".55"/><ellipse cx="70" cy="103" rx="26" ry="16" fill="${p.belly}" opacity=".96"/>${flares}<path d="${heartPath(70, 110, 8)}" fill="url(#${id}h)"/><circle cx="66" cy="107" r="1.5" fill="#fff" opacity=".9"/>${neck}${cheeks}<g class="e${n}">${eyes(eyeKind)}${lashes}</g>${beak(pose.beak ?? 'smile', `url(#${id}k)`)}${face}${head}<g class="wr${n}">${wing(114, 34, 'M119 60 q-2 12 -7 22')}</g>`;
 }
 
 /** Position d'un personnage SEUL dans la scène de 200 × 200. */
