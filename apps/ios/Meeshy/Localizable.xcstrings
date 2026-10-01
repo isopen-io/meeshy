@@ -221828,6 +221828,53 @@
         }
       }
     },
+    "export.card.truncated.media": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "الوسائط تأخذ المساحة: نهاية النص مقطوعة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Medien brauchen den Platz: Das Ende des Textes ist abgeschnitten."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The media take up the space: the end of the text is cut."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los medios ocupan el espacio: el final del texto está cortado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les médias prennent la place : la fin du texte est coupée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "I contenuti multimediali occupano lo spazio: la fine del testo è tagliata."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "As mídias ocupam o espaço: o final do texto foi cortado."
+          }
+        }
+      }
+    },
     "export.card.motion.running": {
       "extractionState": "manual",
       "localizations": {

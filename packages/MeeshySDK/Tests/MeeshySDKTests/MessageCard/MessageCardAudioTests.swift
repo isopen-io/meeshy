@@ -111,6 +111,86 @@ struct MessageCardAudioTests {
         #expect(missing.media.transcript?.cues.first?.text == "Bonjour à tous.")
     }
 
+    /// Une piste traduite servie SANS texte ne montre jamais la transcription de
+    /// l'original : une transcription française sous une voix anglaise (revue #8979).
+    @Test func transcript_aServedTrackWithoutTextShowsNone_neverTheOriginals() throws {
+        let english = try Self.sound(of: Self.quotedVoiceMessage(transcribed: false), quoting: nil, audioLanguages: ["q-snd": "en"])
+        #expect(english.fileURL == "https://x/q-en.m4a")
+        #expect(english.media.transcript == nil)
+    }
+
+    /// Un son de commentaire servi dans une piste sans durée déclarée laisse
+    /// son FICHIER la dire — jamais la durée de l'original (revue #8979).
+    @Test func comment_aServedTrackWithoutDurationOrText_takesNothingFromTheOriginal() throws {
+        let item = FeedMedia(
+            id: "m", type: .audio, url: "https://x/c-fr.m4a", duration: 12,
+            transcription: MessageTranscription(attachmentId: "m", text: "Bonjour à tous.", language: "fr"),
+            translatedAudios: [MessageTranslatedAudio(id: "t", attachmentId: "m", targetLanguage: "en", url: "https://x/c-en.m4a",
+                                                      transcription: "", durationMs: 0, format: "m4a", cloned: false, quality: 1, ttsModel: "tts")]
+        )
+        let comment = FeedComment(id: "c1", author: "Awa", content: "", originalLanguage: "fr", media: [item])
+        let viewer = MessageCardSubject.Viewer(id: "u-me", displayName: "Moi")
+        let served = try #require(MessageCardSubject.of(comment: comment, viewer: viewer, audioLanguages: ["m": "en"])?.media.first)
+        #expect(served.fileURL == "https://x/c-en.m4a")
+        #expect(served.media.duration == nil)
+        #expect(served.media.transcript == nil)
+    }
+
+    // MARK: - Le vocal CITÉ suit le Prisme (revue #8979)
+
+    /// Un vocal français, et sa piste anglaise.
+    private static func quotedVoice(transcribed: Bool = true) -> MeeshyMessageAttachment {
+        MeeshyMessageAttachment(
+            id: "q-snd", mimeType: "audio/mp4", fileUrl: "https://x/q-fr.m4a", duration: 12_000,
+            transcription: .init(text: "Bonjour à tous.", language: "fr", segments: [.init(text: "Bonjour à tous.", startTime: 0, endTime: 2)]),
+            audioTranslations: ["en": .init(url: "https://x/q-en.m4a", transcription: transcribed ? "Hello everyone." : nil, durationMs: 9_000,
+                                            segments: transcribed ? [.init(text: "Hello everyone.", startTime: 0, endTime: 1.8)] : nil)]
+        )
+    }
+
+    /// Une réponse TEXTE à ce vocal ; la citation porte ses pistes (hors fenêtre).
+    private static func textReplyToAVoice() -> MeeshyMessage {
+        var reference = ReplyReference(
+            messageId: "q", authorName: "Awa", previewText: "🎤 Message vocal",
+            attachmentType: "audio", attachmentId: "q-snd", attachmentFileUrl: "https://x/q-fr.m4a",
+            attachmentFacts: ReplyReference.QuotedAttachmentFacts(thumbHash: nil, width: nil, height: nil, durationMs: 12_000, fileSize: nil, pageCount: nil, mimeType: "audio/mp4")
+        )
+        reference.quotedAudioTracks = .init(originalLanguage: "fr", urlsByLanguage: ["en": "https://x/q-en.m4a"])
+        var reply = MeeshyMessage(id: "r", conversationId: "c", senderId: "u-me", content: "Trop bien !", originalLanguage: "fr", senderName: "Moi")
+        reply.replyTo = reference
+        return reply
+    }
+
+    private static func quotedVoiceMessage(transcribed: Bool = true) -> MeeshyMessage {
+        MeeshyMessage(id: "q", conversationId: "c", senderId: "u-awa", content: "", originalLanguage: "fr", attachments: [quotedVoice(transcribed: transcribed)], senderName: "Awa")
+    }
+
+    private static func sound(of message: MeeshyMessage, quoting quoted: MeeshyMessage?, audioLanguages: [String: String]) throws -> MessageCardSubjectMedia {
+        let viewer = MessageCardSubject.Viewer(id: "u-me", displayName: "Moi")
+        let subject = try #require(MessageCardSubject.of(message: message, servedText: nil, translations: [:], viewer: viewer,
+                                                         quotedMessage: quoted, audioLanguages: audioLanguages, now: Date(timeIntervalSince1970: 0)))
+        return try #require(subject.media.first { $0.media.kind == .audio })
+    }
+
+    @Test func quoted_aTextReplyToAVoice_servesTheQuotedVoiceInItsServedTrack() throws {
+        let english = try Self.sound(of: Self.textReplyToAVoice(), quoting: Self.quotedVoiceMessage(), audioLanguages: ["q-snd": "en"])
+        #expect(english.fileURL == "https://x/q-en.m4a", "le son de la carte EST le vocal cité, servi comme la bulle le sert")
+        #expect(english.media.transcript?.cues.map(\.text) == ["Hello everyone."])
+        #expect(english.media.duration == 9)
+        let original = try Self.sound(of: Self.textReplyToAVoice(), quoting: Self.quotedVoiceMessage(), audioLanguages: [:])
+        #expect(original.fileURL == "https://x/q-fr.m4a")
+    }
+
+    @Test func quoted_outOfWindow_theQuotedVoiceServesTheTrackItsQuoteCarries() throws {
+        let english = try Self.sound(of: Self.textReplyToAVoice(), quoting: nil, audioLanguages: ["q-snd": "en"])
+        #expect(english.fileURL == "https://x/q-en.m4a")
+        #expect(english.media.transcript == nil, "la citation ne porte pas le texte de la piste : rien plutôt qu'une autre langue")
+        #expect(english.media.duration == nil, "la durée de la piste traduite se lira dans son fichier")
+        let original = try Self.sound(of: Self.textReplyToAVoice(), quoting: nil, audioLanguages: [:])
+        #expect(original.fileURL == "https://x/q-fr.m4a")
+        #expect(original.media.duration == 12)
+    }
+
     // MARK: - Transcription
 
     @Test func transcript_anImageShowsTheFirstLinesUnderTheSound_andCanBeHidden() throws {

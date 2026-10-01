@@ -214,6 +214,11 @@ public struct MessageCardLayout: Equatable, Sendable {
     public let watermark: String
     /// Vrai quand, au plancher des polices, un texte a dû être coupé.
     public let truncated: Bool
+    /// Vrai quand la coupe vient des MÉDIAS : le texte seul tiendrait (revue #8979).
+    public var crowdedByMedia: Bool = false
+    /// L'échelle la plus grande que les médias peuvent prendre en laissant au
+    /// texte sa place minimale — le pincement s'y arrête (revue #8979).
+    public var mediaScaleLimit: Double = MessageCardScales.range.upperBound
 
     public static let cardWidth: Double = 1080
     public static let minHeight: Double = 1080
@@ -242,7 +247,8 @@ public struct MessageCardLayout: Equatable, Sendable {
             width: width, height: height,
             backdrop: backdrop,
             ops: ops.map { Self.legible($0, floor: floor) },
-            regions: regions, watermark: watermark, truncated: truncated
+            regions: regions, watermark: watermark, truncated: truncated,
+            crowdedByMedia: crowdedByMedia, mediaScaleLimit: mediaScaleLimit
         )
     }
 

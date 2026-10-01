@@ -16,6 +16,9 @@ struct MessageCardMediaBlock {
     /// au pincement déborde dans les marges, un bloc réduit se centre (#8979).
     let x: Double
     let width: Double
+    /// L'échelle EFFECTIVE du bloc — celle du pincement, bornée à ce qui laisse
+    /// sa place minimale au texte (revue #8979).
+    let scale: Double
     let slots: [MessageCardMediaSlot]
     let audio: MessageCardMedia?
     let audioStyle: MessageCardAudioStyle
@@ -30,8 +33,10 @@ struct MessageCardMediaBlock {
 }
 
 /// **OÙ VONT LES MÉDIAS** (#8692) — au-dessus ou au-dessous de la réponse, en
-/// mosaïque, ou la première image en fond. Aucun média ne dépasse
-/// `visualShare` du budget : le texte garde toujours de quoi se lire.
+/// mosaïque, ou la première image en fond. À l'échelle 1, un visuel ne dépasse
+/// pas `visualShare` du budget ; agrandi au pincement, le bloc ne prend JAMAIS
+/// la place minimale du texte — le moteur borne son échelle (`mediaScaleLimit`,
+/// revue #8979) : le texte garde toujours de quoi se lire.
 struct MessageCardMediaPlan {
     let above: MessageCardMediaBlock?
     let below: MessageCardMediaBlock?
@@ -80,17 +85,18 @@ struct MessageCardMediaPlan {
 
 extension MessageCardLayoutEngine {
 
-    /// Le plan des médias de la carte, à l'échelle choisie au pincement (#8979).
-    func mediaPlan(columnWidth width: Double, canvasWidth: Double, budget: Double) -> MessageCardMediaPlan {
+    /// Le plan des médias de la carte, à l'échelle `scale` et avec au plus
+    /// `transcriptLines` lignes de transcription (0 : masquée) — le moteur
+    /// règle les deux pour que la carte tienne (revue #8979).
+    func mediaPlan(columnWidth width: Double, canvasWidth: Double, budget: Double, scale: Double, transcriptLines: Int) -> MessageCardMediaPlan {
         let disposition = input.disposition
-        let scale = disposition.scales[.media]
         let blockWidth = min(canvasWidth - 2 * MessageCardMediaPlan.bleed, (width * scale).rounded())
         let offset = ((width - blockWidth) / 2).rounded()
         let visuals = input.media.filter { $0.kind.isVisual }
         let audio = input.media.first { $0.kind == .audio }
         let cap = max(160, budget * MessageCardMediaPlan.visualShare) * scale
         let block: ([MessageCardMediaSlot]) -> MessageCardMediaBlock? = { slots in
-            mediaBlock(slots: slots, audio: audio, x: offset, width: blockWidth, columnWidth: width, scale: scale)
+            mediaBlock(slots: slots, audio: audio, x: offset, width: blockWidth, columnWidth: width, scale: scale, transcriptLines: transcriptLines)
         }
         switch disposition.mediaLayout {
         case .backdrop:
@@ -108,16 +114,17 @@ extension MessageCardLayoutEngine {
         }
     }
 
-    private func mediaBlock(slots: [MessageCardMediaSlot], audio: MessageCardMedia?, x: Double, width: Double, columnWidth: Double, scale: Double) -> MessageCardMediaBlock? {
+    private func mediaBlock(slots: [MessageCardMediaSlot], audio: MessageCardMedia?, x: Double, width: Double, columnWidth: Double,
+                            scale: Double, transcriptLines: Int) -> MessageCardMediaBlock? {
         guard !slots.isEmpty || audio != nil else { return nil }
         let style = input.disposition.audioStyle
         let visualHeight = slots.map { $0.y + $0.height }.max() ?? 0
         let audioTop = visualHeight > 0 && audio != nil ? visualHeight + MessageCardMediaPlan.gap * 1.5 : visualHeight
         let audioHeight = audio == nil ? 0 : (MessageCardMediaPlan.audioHeight(style, timer: input.disposition.showsTimer) * scale).rounded()
-        let transcript = audio.flatMap { transcriptBlock(for: $0, width: columnWidth) }
+        let transcript = transcriptLines > 0 ? audio.flatMap { transcriptBlock(for: $0, width: columnWidth, lines: transcriptLines) } : nil
         let transcriptTop = audioTop + audioHeight + (transcript == nil ? 0 : MessageCardAudioMetrics.transcriptGap)
         return MessageCardMediaBlock(
-            x: x, width: width, slots: slots, audio: audio, audioStyle: style,
+            x: x, width: width, scale: scale, slots: slots, audio: audio, audioStyle: style,
             audioTop: audioTop, audioHeight: audioHeight,
             transcript: transcript, transcriptTop: transcriptTop,
             height: transcript.map { transcriptTop + $0.height } ?? audioTop + audioHeight
@@ -157,8 +164,7 @@ extension MessageCardLayoutEngine {
             return painted
         }
         if let audio = block.audio {
-            let scale = input.disposition.scales[.media]
-            ops.append(contentsOf: audioOps(audio, style: block.audioStyle, x: left, y: y + block.audioTop, width: block.width, height: block.audioHeight, scale: scale))
+            ops.append(contentsOf: audioOps(audio, style: block.audioStyle, x: left, y: y + block.audioTop, width: block.width, height: block.audioHeight, scale: block.scale))
         }
         if let transcript = block.transcript {
             ops.append(contentsOf: transcriptOps(transcript, x: x, y: y + block.transcriptTop, width: width))

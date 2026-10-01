@@ -39,7 +39,10 @@ public struct MessageCardSubjectMedia: Equatable, Sendable {
 /// l'application désigne (`audioLanguages`, résolue par le Prisme du lecteur
 /// ou la langue d'export), sinon l'original — son fichier, sa durée ET sa
 /// transcription voyagent ensemble. Une transcription dans une langue
-/// au-dessus d'une voix dans une autre serait pire qu'une transcription absente.
+/// au-dessus d'une voix dans une autre serait pire qu'une transcription absente :
+/// une piste servie SANS texte ne montre rien, jamais le texte de l'original,
+/// et sans durée déclarée elle laisse son fichier la dire. Le vocal CITÉ suit
+/// la même loi — une réponse texte à un vocal, c'est ce vocal qu'on entend.
 public struct MessageCardSubject: Equatable, Sendable {
     public let quoted: MessageCardPart?
     public let reply: MessageCardPart
@@ -105,7 +108,7 @@ public struct MessageCardSubject: Equatable, Sendable {
                     aspect: aspect,
                     duration: (served.map(\.durationMs) ?? attachment.duration).map { Double($0) / 1000 },
                     name: kind == .audio ? (attachment.title ?? attachment.originalName) : nil,
-                    transcript: kind == .audio ? (served.flatMap(MessageCardTranscript.init) ?? MessageCardTranscript(attachment.transcription)) : nil
+                    transcript: kind == .audio ? (served.map(MessageCardTranscript.init) ?? MessageCardTranscript(attachment.transcription)) : nil
                 ),
                 fileURL: served.flatMap { MessageCardText.nonBlank($0.url) } ?? file,
                 posterURL: kind == .video ? attachment.thumbnailUrl : nil
@@ -166,7 +169,7 @@ public struct MessageCardSubject: Equatable, Sendable {
             reply: reply,
             sentAt: message.createdAt,
             quotedAt: message.replyTo == nil ? nil : quotedAt,
-            media: media + quotedMedia(message.replyTo, quotedMessage: quotedMessage, now: now).filter { quoted in
+            media: media + quotedMedia(message.replyTo, quotedMessage: quotedMessage, audioLanguages: audioLanguages, now: now).filter { quoted in
                 !media.contains { $0.media.id == quoted.media.id }
             }
         )
@@ -178,15 +181,23 @@ public struct MessageCardSubject: Equatable, Sendable {
     /// supprimée, échue ⇒ rien) ; le message cité RÉEL, quand il est en
     /// mémoire, apporte toutes ses pièces sous SES gardes (`isExportable`,
     /// `paintableMedia`) ; sinon la citation apporte la pièce qu'elle décrit.
-    static func quotedMedia(_ reference: ReplyReference?, quotedMessage: MeeshyMessage?, now: Date) -> [MessageCardSubjectMedia] {
+    ///
+    /// Un vocal cité part dans SA piste servie (`audioLanguages`, par pièce —
+    /// revue #8979). Hors de la fenêtre, la citation porte les ADRESSES de ses
+    /// pistes (`quotedAudioTracks`), ni leur texte ni leur durée : la piste
+    /// servie part alors sans transcription, et son fichier dira sa durée.
+    static func quotedMedia(_ reference: ReplyReference?, quotedMessage: MeeshyMessage?, audioLanguages: [String: String] = [:], now: Date) -> [MessageCardSubjectMedia] {
         guard let reference, !reference.isStoryReply, reference.moodEmoji == nil,
               !reference.quotedMediaIsProtected, !reference.isQuotedMessageDeleted else { return [] }
         if let expiresAt = reference.quotedExpiresAt, expiresAt <= now { return [] }
         if let quotedMessage, quotedMessage.id == reference.messageId {
-            return isExportable(quotedMessage, now: now) ? paintableMedia(of: quotedMessage) : []
+            return isExportable(quotedMessage, now: now) ? paintableMedia(of: quotedMessage, audioLanguages: audioLanguages) : []
         }
-        guard let attachment = reference.quotedAttachment else { return [] }
-        return paintableMedia(of: [attachment])
+        guard var attachment = reference.quotedAttachment else { return [] }
+        if attachment.type == .audio, let tracks = reference.quotedAudioTracks {
+            attachment.audioTranslations = tracks.urlsByLanguage.mapValues { MeeshyMessageAttachment.EmbeddedAudioTranslation(url: $0) }
+        }
+        return paintableMedia(of: [attachment], audioLanguages: audioLanguages)
     }
 
     /// **Un COMMENTAIRE devient une carte** (#8692) — le texte servi par le
@@ -244,9 +255,9 @@ public struct MessageCardSubject: Equatable, Sendable {
                 media: MessageCardMedia(
                     id: item.id, kind: kind,
                     aspect: aspect(width: item.width, height: item.height),
-                    duration: served.flatMap { $0.durationMs > 0 ? Double($0.durationMs) / 1000 : nil } ?? item.duration.map { Double($0) },
+                    duration: served.map { $0.durationMs > 0 ? Double($0.durationMs) / 1000 : nil } ?? item.duration.map { Double($0) },
                     name: kind == .audio ? item.fileName : nil,
-                    transcript: kind == .audio ? (served.flatMap(MessageCardTranscript.init) ?? MessageCardTranscript(item.transcription)) : nil
+                    transcript: kind == .audio ? (served.map(MessageCardTranscript.init) ?? MessageCardTranscript(item.transcription)) : nil
                 ),
                 fileURL: served?.url ?? file,
                 posterURL: kind == .video ? item.thumbnailUrl : nil

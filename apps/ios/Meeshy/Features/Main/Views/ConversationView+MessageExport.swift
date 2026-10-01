@@ -25,7 +25,8 @@ extension ConversationView {
             accentColor: accentColor,
             quick: quick,
             audioPrism: viewModel.preferredLanguages,
-            audioOverride: viewModel.bubbleLanguageSelections[message.id]?.activeDisplayLangCode
+            audioOverride: viewModel.bubbleLanguageSelections[message.id]?.activeDisplayLangCode,
+            quotedAudioOverride: message.replyTo.flatMap { viewModel.bubbleLanguageSelections[$0.messageId]?.activeDisplayLangCode }
         ) else {
             FeedbackToastManager.shared.showError(
                 String(localized: "export.announce.failed", defaultValue: "Impossible de créer l’image", bundle: .main)

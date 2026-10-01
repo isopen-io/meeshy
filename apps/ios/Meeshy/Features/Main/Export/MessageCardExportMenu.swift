@@ -39,14 +39,19 @@ enum MessageCardExportMenu {
     ///
     /// Un son part dans sa piste SERVIE (#8979) : celle que la bulle fait entendre au lecteur
     /// (`audioPrism`, `audioOverride` — la bascule du drapeau), ou celle de la langue d'export.
+    /// Le vocal CITÉ suit la même loi, avec la bascule de SON drapeau (`quotedAudioOverride`).
     static func request(message: Message, translations: [MessageTranslation], servedText: String?, viewer: MessageCardSubject.Viewer, handle: String?, quotedMessage: Message?, conversationTitle: String?, accentColor: String, quick: Bool,
-                        audioPrism: [String] = [], audioOverride: String? = nil) -> MessageCardExportRequest? {
+                        audioPrism: [String] = [], audioOverride: String? = nil, quotedAudioOverride: String? = nil) -> MessageCardExportRequest? {
         let texts = Dictionary(translations.map { ($0.targetLanguage.lowercased(), $0.translatedContent) }, uniquingKeysWith: { first, _ in first })
         let quotedAt = quotedMessage?.createdAt
+        let served: (String?) -> [String: String] = { language in
+            servedAudioLanguages(of: message, quotedMessage: quotedMessage, exportLanguage: language,
+                                 prism: audioPrism, override: audioOverride, quotedOverride: quotedAudioOverride)
+        }
         guard let subject = MessageCardSubject.of(
             message: message, servedText: servedText, translations: texts, viewer: viewer,
             quotedAt: quotedAt, quotedMessage: quotedMessage,
-            audioLanguages: servedAudioLanguages(of: message, exportLanguage: nil, prism: audioPrism, override: audioOverride),
+            audioLanguages: served(nil),
             now: Date()
         ) else { return nil }
         return MessageCardExportRequest(
@@ -56,7 +61,7 @@ enum MessageCardExportMenu {
                 MessageCardSubject.of(
                     message: message, servedText: servedText, translations: texts,
                     viewer: viewer, language: language, quotedAt: quotedAt, quotedMessage: quotedMessage,
-                    audioLanguages: servedAudioLanguages(of: message, exportLanguage: language, prism: audioPrism, override: audioOverride),
+                    audioLanguages: served(language),
                     now: Date()
                 )
             },
@@ -67,20 +72,46 @@ enum MessageCardExportMenu {
         )
     }
 
-    /// **La piste SERVIE de chaque son du message** (#8979), par identifiant de
+    /// **La piste SERVIE de chaque son de la carte** (#8979), par identifiant de
     /// pièce — la loi de la bulle (`AudioTrackLanguageResolver`) : une langue
     /// d'export désigne sa piste traduite (l'original sinon) ; « comme je le
     /// lis » rejoue la bascule du drapeau, puis le Prisme du lecteur. Un son
     /// absent de la table part dans son original.
-    static func servedAudioLanguages(of message: Message, exportLanguage: String?, prism: [String], override: String?) -> [String: String] {
-        let served = message.attachments.compactMap { attachment -> (String, String)? in
+    ///
+    /// Le vocal CITÉ en fait partie (revue #8979) — une réponse texte à un
+    /// vocal, c'est ce vocal que la carte fait entendre : en mémoire, avec la
+    /// bascule de SON drapeau (`ConversationViewModel+QuotedAudio`) ; hors de
+    /// la fenêtre, depuis les pistes que la citation porte, sur le seul Prisme.
+    static func servedAudioLanguages(of message: Message, quotedMessage: Message? = nil, exportLanguage: String?,
+                                     prism: [String], override: String?, quotedOverride: String? = nil) -> [String: String] {
+        var served = servedTracks(of: message.attachments, originalLanguage: message.originalLanguage, override: exportLanguage ?? override, prism: prism)
+        guard let reference = message.replyTo else { return served }
+        if let quotedMessage, quotedMessage.id == reference.messageId {
+            let quoted = servedTracks(of: quotedMessage.attachments, originalLanguage: quotedMessage.originalLanguage,
+                                      override: exportLanguage ?? quotedOverride, prism: prism)
+            return served.merging(quoted) { own, _ in own }
+        }
+        guard let attachment = reference.quotedAttachment, attachment.type == .audio,
+              let tracks = reference.quotedAudioTracks, !tracks.urlsByLanguage.isEmpty,
+              let language = AudioTrackLanguageResolver.resolve(
+                  manualOverride: exportLanguage,
+                  originalLanguage: tracks.originalLanguage ?? "",
+                  preferredLanguages: prism,
+                  availableLanguages: Array(tracks.urlsByLanguage.keys)
+              ) else { return served }
+        served[attachment.id] = served[attachment.id] ?? language
+        return served
+    }
+
+    private static func servedTracks(of attachments: [MessageAttachment], originalLanguage: String, override: String?, prism: [String]) -> [String: String] {
+        let served = attachments.compactMap { attachment -> (String, String)? in
             let available = (attachment.audioTranslations ?? [:])
                 .filter { !$0.value.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
                 .map(\.key)
             guard attachment.type == .audio, !available.isEmpty,
                   let language = AudioTrackLanguageResolver.resolve(
-                      manualOverride: exportLanguage ?? override,
-                      originalLanguage: message.originalLanguage,
+                      manualOverride: override,
+                      originalLanguage: originalLanguage,
                       preferredLanguages: prism,
                       availableLanguages: available
                   ) else { return nil }

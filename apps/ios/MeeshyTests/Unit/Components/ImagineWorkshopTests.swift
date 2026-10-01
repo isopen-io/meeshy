@@ -133,6 +133,41 @@ final class ImagineWorkshopTests: XCTestCase {
         XCTAssertTrue(loaded.missing(english).isEmpty)
     }
 
+    /// « Réessayer » relit un son dont le fichier n'est pas arrivé (revue #8979).
+    func test_loadedMedia_aSoundThatFailedIsLoadedAgain() {
+        let failed = MessageCardLoadedMedia(pictures: .none, sounds: [
+            "https://x/fr.m4a": MessageCardLoadedSound(samples: [], duration: nil, file: nil),
+        ])
+        XCTAssertEqual(failed.missing([Self.sound("a1", url: "https://x/fr.m4a")]).map(\.fileURL), ["https://x/fr.m4a"])
+    }
+
+    /// En VIDÉO, un son qui n'a pas pu se lire est un ÉCHEC — l'atelier le dit
+    /// et offre de réessayer ; une image n'en a pas besoin. Un son encore en
+    /// chemin retient la vidéo, sans avis (revue #8979).
+    func test_loadedMedia_aSilentSoundFailsTheVideo_neverTheImage() {
+        let items = [Self.sound("a1", url: "https://x/fr.m4a")]
+        let failed = MessageCardLoadedMedia(pictures: .none, sounds: ["https://x/fr.m4a": MessageCardLoadedSound(samples: [], duration: nil, file: nil)])
+        XCTAssertEqual(failed.failures(of: items, output: .video), ["a1"])
+        XCTAssertEqual(failed.failures(of: items, output: .image), [])
+        XCTAssertFalse(failed.hearsThePaintedSound(of: items), "jamais une « Animation enregistrée » muette")
+        let loading = MessageCardLoadedMedia.empty
+        XCTAssertEqual(loading.failures(of: items, output: .video), [], "un son en chemin n'est pas un échec")
+        XCTAssertFalse(loading.hearsThePaintedSound(of: items))
+        let heard = MessageCardLoadedMedia(pictures: .none, sounds: ["https://x/fr.m4a": MessageCardLoadedSound(samples: [], duration: 9, file: URL(fileURLWithPath: "/tmp/fr.m4a"))])
+        XCTAssertTrue(heard.hearsThePaintedSound(of: items))
+        XCTAssertTrue(MessageCardLoadedMedia.empty.hearsThePaintedSound(of: [MessageCardSubjectMedia(media: MessageCardMedia(id: "p", kind: .image), fileURL: "https://x/p")]))
+    }
+
+    /// La vidéo fait entendre le son PEINT — le premier —, jamais un autre qui serait arrivé, lui (revue #8979).
+    func test_loadedMedia_theVideoHearsThePaintedSound_orNothing() {
+        let loaded = MessageCardLoadedMedia(pictures: .none, sounds: [
+            "https://x/a.m4a": MessageCardLoadedSound(samples: [], duration: nil, file: nil),
+            "https://x/b.m4a": MessageCardLoadedSound(samples: [], duration: 9, file: URL(fileURLWithPath: "/tmp/b.m4a")),
+        ])
+        let items = [Self.sound("a", url: "https://x/a.m4a"), Self.sound("b", url: "https://x/b.m4a")]
+        XCTAssertNil(loaded.soundFile(of: items), "la transcription du premier son au-dessus de la voix du second : jamais")
+    }
+
     func test_output_aVideoOffersGifAndVideo_aSoundOnlyVideo() {
         XCTAssertEqual(MessageCardOutput.offered(for: [.video]), [.image, .gif, .video])
         XCTAssertEqual(MessageCardOutput.offered(for: [.audio]), [.image, .video])
@@ -198,7 +233,8 @@ final class ImagineWorkshopTests: XCTestCase {
                     "export.card.media.failed.one", "export.card.media.failed.other", "export.card.media.retry",
                     "export.card.media.transcript", "export.card.media.timer", "export.card.media.transcriptFont",
                     "export.card.clip.label", "export.card.excerpt.label", "export.card.excerpt.hint",
-                    "export.card.part.transcript", "export.card.hint.pinch", "export.card.scale.hint"]
+                    "export.card.part.transcript", "export.card.hint.pinch", "export.card.scale.hint",
+                    "export.card.truncated.media"]
         keys += MessageCardClipLength.allCases.map { "export.card.clip.\($0.rawValue)" }
         keys += MessageCardAspect.allCases.map { "export.card.aspect.\($0.rawValue)" }
         keys += MessageCardHeaderOrientation.allCases.map { "export.card.header.\($0.rawValue)" }
