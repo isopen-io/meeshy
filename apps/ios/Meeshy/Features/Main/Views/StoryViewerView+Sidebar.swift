@@ -251,7 +251,9 @@ struct StoryActionSidebarView: View {
         switch contour {
         case .none: return nil
         case .live: return MeeshyColors.indigo400
-        case .participated: return currentGroup.map { Color(hex: $0.avatarColor) } ?? MeeshyColors.error
+        case .participated:
+            guard let accentColor = currentGroup?.avatarColor else { return MeeshyColors.error }
+            return Color(hex: accentColor)
         }
     }
 
