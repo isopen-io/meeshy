@@ -115,6 +115,34 @@ final class ImagerAccessTests: XCTestCase {
         XCTAssertFalse(request.quick)
     }
 
+    /// Un vocal part dans la piste que la bulle fait entendre — et une langue
+    /// d'export choisie fait partir SA piste traduite, sinon l'original (#8979).
+    func test_message_aVoiceLeavesInTheTrackTheReaderHears_orInTheExportLanguage() throws {
+        let voice = MeeshyMessageAttachment(
+            id: "snd", mimeType: "audio/mp4", fileUrl: "https://x/fr.m4a", duration: 12_000,
+            transcription: .init(text: "Bonjour à tous.", language: "fr"),
+            audioTranslations: ["en": .init(url: "https://x/en.m4a", transcription: "Hello everyone.", durationMs: 9_000)]
+        )
+        let message = MeeshyMessage(id: "m3", conversationId: "c1", senderId: "u-awa", content: "", originalLanguage: "fr",
+                                    attachments: [voice], senderName: "Awa")
+        let request = try XCTUnwrap(MessageCardExportMenu.request(
+            message: message, translations: [], servedText: nil, viewer: viewer(), handle: "moi",
+            quotedMessage: nil, conversationTitle: nil, accentColor: "#6366F1", quick: false,
+            audioPrism: ["en", "fr"]
+        ))
+        XCTAssertEqual(request.subject.media.first?.fileURL, "https://x/en.m4a", "le Prisme du lecteur sert la piste anglaise")
+        XCTAssertEqual(request.subject.media.first?.media.transcript?.cues.first?.text, "Hello everyone.")
+        XCTAssertEqual(request.subjectIn("fr")?.media.first?.fileURL, "https://x/fr.m4a", "la langue d'origine fait partir l'original")
+        XCTAssertEqual(request.subjectIn("en")?.media.first?.media.duration, 9)
+
+        let flipped = try XCTUnwrap(MessageCardExportMenu.request(
+            message: message, translations: [], servedText: nil, viewer: viewer(), handle: nil,
+            quotedMessage: nil, conversationTitle: nil, accentColor: "#6366F1", quick: false,
+            audioPrism: ["en", "fr"], audioOverride: "fr"
+        ))
+        XCTAssertEqual(flipped.subject.media.first?.fileURL, "https://x/fr.m4a", "la bascule du drapeau vers l'original est respectée")
+    }
+
     func test_message_withNothingToPaint_isNeverImaged() {
         let vide = MeeshyMessage(id: "m2", conversationId: "c1", senderId: "u-x", content: "", originalLanguage: "fr")
         XCTAssertNil(MessageCardExportMenu.request(
