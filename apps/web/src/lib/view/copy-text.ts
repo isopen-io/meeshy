@@ -4,6 +4,9 @@
  * qui se referme avant d'écrire peut le perdre. Le repli historique (une zone
  * de texte hors écran, sélectionnée, `execCommand('copy')`) couvre ces cas.
  * L'issue se DIT toujours : un geste sans effet ne se tait pas.
+ *
+ * La zone vit là où vit le focus (#8986) : une `<dialog>` modale rend inerte
+ * tout ce qui est hors d'elle, et une zone posée dans `body` n'y copierait rien.
  */
 export type CopyTextOutcome = 'copied' | 'failed';
 
@@ -22,7 +25,7 @@ function legacyCopyInDocument(text: string): boolean {
   field.style.position = 'fixed';
   field.style.insetInlineStart = '-9999px';
   field.style.opacity = '0';
-  document.body.appendChild(field);
+  (previous?.closest('dialog') ?? document.body).appendChild(field);
   field.select();
   try {
     return document.execCommand('copy');

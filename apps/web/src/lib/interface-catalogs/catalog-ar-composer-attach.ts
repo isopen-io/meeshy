@@ -24,6 +24,8 @@ const arComposerAttach = {
   'composer.location.denied': 'تم رفض الموقع — اسمح به من الإعدادات',
   'composer.location.unavailable': 'الموقع غير متاح في هذا المتصفح',
   'composer.location.failed': 'تعذّر تحديد الموقع — أعد المحاولة',
+  'composer.mic.refused': 'تم رفض الميكروفون — اسمح به من الإعدادات',
+  'composer.mic.unavailable': 'الميكروفون غير متاح على هذا الجهاز',
   'composer.openSettings': 'الإعدادات',
   'composer.location.chip': 'موقع',
   'composer.location.unknown': 'مكان غير معروف',

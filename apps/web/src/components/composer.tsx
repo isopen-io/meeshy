@@ -422,12 +422,12 @@ export const Composer = memo(function Composer({
                l'APPLICATION, pas du navigateur — la copie « réglages du
                navigateur » envoyait le lecteur au mauvais endroit sur deux
                des trois plateformes). */
-            message: 'Micro refusé — autorisez-le dans les réglages',
+            message: translate(uiLanguage, 'composer.mic.refused'),
             ...refusalExit(() => recorder.start()),
             onDismiss: recorder.reset,
           }
         : recorder.state.status === 'unsupported'
-          ? { message: 'Micro indisponible sur ce navigateur', onDismiss: recorder.reset }
+          ? { message: translate(uiLanguage, 'composer.mic.unavailable'), onDismiss: recorder.reset }
           : null);
 
   const showAbove = pending.length > 0 || notice !== null || locator.place !== null;

@@ -24,6 +24,8 @@ const enComposerAttach = {
   'composer.location.denied': 'Location denied — allow it in settings',
   'composer.location.unavailable': 'Location unavailable in this browser',
   'composer.location.failed': 'Location not found — try again',
+  'composer.mic.refused': 'Microphone denied — allow it in settings',
+  'composer.mic.unavailable': 'Microphone unavailable on this device',
   'composer.openSettings': 'Settings',
   'composer.location.chip': 'PLACE',
   'composer.location.unknown': 'Unknown place',

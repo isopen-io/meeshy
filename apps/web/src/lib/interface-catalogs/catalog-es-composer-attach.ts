@@ -24,6 +24,8 @@ const esComposerAttach = {
   'composer.location.denied': 'Ubicación denegada: permítela en los ajustes',
   'composer.location.unavailable': 'Ubicación no disponible en este navegador',
   'composer.location.failed': 'Ubicación no encontrada: inténtalo de nuevo',
+  'composer.mic.refused': 'Micrófono denegado — permítelo en los ajustes',
+  'composer.mic.unavailable': 'Micrófono no disponible en este dispositivo',
   'composer.openSettings': 'Ajustes',
   'composer.location.chip': 'LUGAR',
   'composer.location.unknown': 'Lugar desconocido',
