@@ -172,7 +172,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         var avatarData: Data?
         nonisolated(unsafe) var messageAttachment: UNNotificationAttachment?
 
-        // Un push de REMPLACEMENT (édition) annule la bannière d'avant AVANT de
+        // Un push de REMPLACEMENT (édition, réaction changée) annule la bannière d'avant AVANT de
         // s'afficher : le `contentHandler` n'est appelé qu'au `notify` du
         // groupe, donc après ce retrait confirmé.
         group.enter()

@@ -122,4 +122,122 @@ final class NotificationReplacementTests: XCTestCase {
         let replacement = try XCTUnwrap(NotificationReplacement(userInfo: replacementUserInfo()))
         XCTAssertEqual(replacement.identifiersToRemove(from: [], excluding: "incoming"), [])
     }
+
+    // MARK: - Réactions : même acteur, même sujet, même type
+
+    private let reactorId = "64a000000000000000000002"
+
+    private func reactionUserInfo(
+        type: String = "message_reaction",
+        senderId: String = "64a000000000000000000002",
+        messageId: String = "",
+        postId: String = "",
+        commentId: String = "",
+        flagged: Bool = true
+    ) -> [AnyHashable: Any] {
+        var info: [AnyHashable: Any] = [
+            "notificationId": "64d0000000000000000000aa",
+            "type": type,
+            "senderId": senderId,
+            "messageId": messageId,
+            "postId": postId,
+            "commentId": commentId,
+        ]
+        if flagged { info[NotificationReplacement.actorSubjectUserInfoKey] = "true" }
+        return info
+    }
+
+    func test_actorSubjectUserInfoKey_matchesTheGatewayContract() {
+        XCTAssertEqual(NotificationReplacement.actorSubjectUserInfoKey, "replacesActorSubject")
+    }
+
+    func test_init_reactionWithoutTheFlag_isNil() {
+        XCTAssertNil(NotificationReplacement(userInfo: reactionUserInfo(messageId: messageId, flagged: false)))
+    }
+
+    func test_init_reactionFlaggedWithoutSenderOrSubject_isNil() {
+        XCTAssertNil(NotificationReplacement(userInfo: reactionUserInfo(senderId: "", messageId: messageId)))
+        XCTAssertNil(NotificationReplacement(userInfo: reactionUserInfo()))
+    }
+
+    /// ❤️ puis 😂 sur le même message : la bannière d'avant (autre identité,
+    /// même acteur, même message, même type) est remplacée.
+    func test_covers_previousReactionOfTheSameActorOnTheSameMessage_isTrue() throws {
+        let replacement = try XCTUnwrap(NotificationReplacement(userInfo: reactionUserInfo(messageId: messageId)))
+        XCTAssertTrue(replacement.covers([
+            "notificationId": "64d0000000000000000000bb",
+            "type": "message_reaction",
+            "senderId": reactorId,
+            "messageId": messageId,
+        ]))
+    }
+
+    func test_covers_reactionOfAnotherActorOnTheSameMessage_isFalse() throws {
+        let replacement = try XCTUnwrap(NotificationReplacement(userInfo: reactionUserInfo(messageId: messageId)))
+        XCTAssertFalse(replacement.covers([
+            "notificationId": "64d0000000000000000000bb",
+            "type": "message_reaction",
+            "senderId": "64a0000000000000000000ff",
+            "messageId": messageId,
+        ]))
+    }
+
+    func test_covers_reactionOfTheSameActorOnAnotherMessage_isFalse() throws {
+        let replacement = try XCTUnwrap(NotificationReplacement(userInfo: reactionUserInfo(messageId: messageId)))
+        XCTAssertFalse(replacement.covers([
+            "type": "message_reaction",
+            "senderId": reactorId,
+            "messageId": "507f1f77bcf86cd7994390ff",
+        ]))
+    }
+
+    /// Le même auteur qui RÉPOND au message n'est pas une réaction : seul le
+    /// même type est remplacé.
+    func test_covers_otherTypeOfTheSameActorOnTheSameMessage_isFalse() throws {
+        let replacement = try XCTUnwrap(NotificationReplacement(userInfo: reactionUserInfo(messageId: messageId)))
+        XCTAssertFalse(replacement.covers([
+            "type": "message_reply",
+            "senderId": reactorId,
+            "messageId": messageId,
+        ]))
+    }
+
+    /// Réagir à un COMMENTAIRE ne remplace ni la réaction à un autre
+    /// commentaire, ni celle au POST qui le porte : le sujet est le
+    /// commentaire d'abord, le post seulement à défaut.
+    func test_covers_commentReaction_isJudgedOnTheComment() throws {
+        let replacement = try XCTUnwrap(NotificationReplacement(userInfo: reactionUserInfo(
+            type: "comment_like", postId: "64b000000000000000000001", commentId: "64c000000000000000000001"
+        )))
+        XCTAssertTrue(replacement.covers([
+            "type": "comment_like", "senderId": reactorId,
+            "postId": "64b000000000000000000001", "commentId": "64c000000000000000000001",
+        ]))
+        XCTAssertFalse(replacement.covers([
+            "type": "comment_like", "senderId": reactorId,
+            "postId": "64b000000000000000000001", "commentId": "64c0000000000000000000ff",
+        ]))
+        XCTAssertFalse(replacement.covers([
+            "type": "post_like", "senderId": reactorId, "postId": "64b000000000000000000001",
+        ]))
+    }
+
+    func test_covers_storyReactionOfTheSameActorOnTheSameStory_isTrue() throws {
+        let replacement = try XCTUnwrap(NotificationReplacement(userInfo: reactionUserInfo(
+            type: "story_reaction", postId: "64b000000000000000000001"
+        )))
+        XCTAssertTrue(replacement.covers([
+            "type": "story_reaction", "senderId": reactorId, "postId": "64b000000000000000000001", "commentId": "",
+        ]))
+    }
+
+    func test_identifiersToRemove_reaction_selectsOnlyThePreviousReactionOfThatActor() throws {
+        let replacement = try XCTUnwrap(NotificationReplacement(userInfo: reactionUserInfo(messageId: messageId)))
+        let delivered: [(id: String, userInfo: [AnyHashable: Any])] = [
+            (id: "old-heart", userInfo: ["type": "message_reaction", "senderId": reactorId, "messageId": messageId]),
+            (id: "other-actor", userInfo: ["type": "message_reaction", "senderId": "64a0000000000000000000ff", "messageId": messageId]),
+            (id: "the-message", userInfo: ["type": "new_message", "senderId": reactorId, "messageId": messageId]),
+        ]
+        XCTAssertEqual(replacement.identifiersToRemove(from: delivered, excluding: "incoming"), ["old-heart"])
+    }
 }

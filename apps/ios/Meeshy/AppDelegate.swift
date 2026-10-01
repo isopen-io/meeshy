@@ -704,7 +704,7 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
             activeConversationId: MessageSocketManager.shared.activeConversationId
         )
 
-        // Un push de REMPLACEMENT (édition) annule la bannière d'avant AVANT
+        // Un push de REMPLACEMENT (édition, réaction changée) annule la bannière d'avant AVANT
         // que la version d'après soit présentée — même règle que la NSE, pour
         // le cas où elle n'a pas tourné (expirée, push non mutable).
         guard let replacement = NotificationReplacement(userInfo: userInfo) else {
