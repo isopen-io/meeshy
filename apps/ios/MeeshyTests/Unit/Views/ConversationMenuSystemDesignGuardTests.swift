@@ -321,17 +321,21 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
     // press que le menu des conversations), tout en CONSERVANT la barre de
     // réactions emoji rapides et l'aperçu de bulle (`MessageOverlayMenu`).
 
-    /// La liste d'actions du menu message rend le design système : conteneur
-    /// `adaptiveGlass` (Liquid Glass iOS 26 / fallback material), rows avec
+    /// La liste d'actions du menu message garde les rows du design système —
     /// highlight au press (`MenuRowHighlightButtonStyle`, partagé avec le menu
-    /// conversation) et métriques Dynamic Type — jamais `.buttonStyle(.plain)`.
+    /// conversation) et métriques Dynamic Type, jamais `.buttonStyle(.plain)` —
+    /// mais **plus de conteneur** : directive porteur 2026-10-01 (#9043),
+    /// « enlever le cadre comme pour les story ». Le voile de l'overlay est son
+    /// fond, comme la scène est celui de la rangée d'émojis d'une story
+    /// (`FullscreenReactionStrip`, `chrome: .none`) ; la carte de verre du
+    /// 2026-07-14 est supplantée.
     func test_messageActionsMenu_rendersSystemDesign_likeConversationMenu() throws {
         let menuSource = try source("Meeshy/Features/Main/Components/MessageActionsMenu.swift")
 
-        XCTAssertTrue(
-            menuSource.contains(".adaptiveGlass(in: RoundedRectangle"),
-            "MessageActionsMenu doit appliquer .adaptiveGlass sur son conteneur " +
-            "(Liquid Glass iOS 26 réel + fallback), comme le menu conversation."
+        XCTAssertFalse(
+            menuSource.contains(".adaptiveGlass("),
+            "MessageActionsMenu se pose NU sur le voile (#9043) : aucun conteneur " +
+            "de verre, comme la rangée d'émojis d'une story."
         )
         XCTAssertTrue(
             menuSource.contains("MenuRowHighlightButtonStyle"),
@@ -370,6 +374,11 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
         XCTAssertTrue(
             overlaySource.contains("MessageActionsMenu("),
             "MessageOverlayMenu doit composer la liste d'actions restylée MessageActionsMenu."
+        )
+        XCTAssertTrue(
+            overlaySource.contains("chrome: .none"),
+            "La barre d'émojis de l'appui long se pose nue sur le voile, comme " +
+            "celle d'une story (#9043) — aucune capsule autour."
         )
     }
 
