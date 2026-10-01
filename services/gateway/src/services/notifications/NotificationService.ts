@@ -53,7 +53,7 @@ import { filterMutedRecipients } from './mutedRecipients';
 import { computeConversationUnreadBadge } from './conversationUnreadBadge';
 import { retractedNotificationOf, type RetractedNotification } from './retractedNotifications';
 import { sendNotificationRevocationPushes } from './notificationRevocationPush';
-import { reproducedPushData } from './reproducedNotificationPush';
+import { actorSubjectReplacementPushField, pushReachedADevice, reproducedPushData, staleBannerOf } from './reproducedNotificationPush';
 import { visibleNotificationsWhere } from './visibleNotificationsWhere';
 import type { ServerEmitIOWithRooms } from '../../socketio/serverEmit';
 import { PushNotificationService } from '../PushNotificationService';
@@ -141,13 +141,15 @@ function pickMetadataString(metadata: unknown, key: string): string {
 
 /**
  * Ce qu'il faut pour remplacer une bannière réécrite : la ligne RELUE (seule
- * source du texte d'après) et le cadrage déjà composé pour le socket, pour que
- * la bannière et le toast in-app disent exactement la même chose.
+ * source du texte d'après), le cadrage déjà composé pour le socket (bannière et
+ * toast in-app disent la même chose), et la bannière d'avant (`stale`), révoquée
+ * en REPLI si le remplacement n'atteint aucun appareil.
  */
 type ReproducedNotificationPush = {
   readonly row: Record<string, unknown>;
   readonly title: string;
   readonly subtitle?: string;
+  readonly stale: RetractedNotification;
 };
 
 /**
@@ -1058,9 +1060,9 @@ export class NotificationService {
                 senderDisplayName: params.actor?.displayName || '',
                 senderAvatar: params.actor?.avatar || '',
                 imageURL: params.actor?.avatar || '',
-                // Phase B — reactions. Emoji used so the iOS extension can format
-                // the body as "<sender> a réagi <emoji> à votre message" while the
-                // INSendMessageIntent path still renders the reactor's avatar.
+                // Réactions : l'emoji compose le corps ; le push remplace la bannière
+                // du même acteur sur le même sujet (❤️ → 😂 n'en laisse qu'une).
+                ...actorSubjectReplacementPushField(params.type),
                 reactionEmoji: (params.metadata && 'reactionEmoji' in params.metadata
                   ? String(params.metadata.reactionEmoji ?? '')
                   : ''),
@@ -3251,13 +3253,14 @@ export class NotificationService {
    * intermédiaire qui l'exige, puisqu'un client qui décrémente son badge en le
    * recevant doit pouvoir se recaler.
    *
-   * SUR L'APPAREIL, le même couple, dans le même ordre : un push de CONTRÔLE
-   * `notification_revoked` retire la bannière portant le texte d'avant, puis un
-   * push NOMINAL affiche celui d'après (`pushReproducedNotifications`). Sans le
-   * second, un destinataire dont l'app est tuée perdrait la bannière sans rien
-   * recevoir à la place — le socket n'atteint que les clients présents. Les
-   * trois éditions y passent : message (`reproduceEditedMessageNotifications`),
-   * post et commentaire (`reproduceEditedSubjectNotifications`).
+   * SUR L'APPAREIL, UN seul push : le NOMINAL portant le texte d'après, qui
+   * nomme lui-même la bannière qu'il annule (`replacesNotificationId`,
+   * `reproducedPushData`). Une révocation silencieuse séparée n'avait aucun
+   * ordre garanti par APNs — livrée après, elle effaçait la version d'après ;
+   * jamais livrée (app tuée), elle laissait celle d'avant à côté. Elle ne part
+   * plus que pour une ligne DISPARUE, ou en repli d'un remplacement qui n'a
+   * atteint aucun appareil (`pushReproducedNotifications`). Les trois éditions
+   * y passent : message, post et commentaire.
    */
   async announceNotificationsReproduced(
     reproduced: readonly { readonly id: string; readonly userId: string }[]
@@ -3278,13 +3281,14 @@ export class NotificationService {
       await this.emitBestEffort(SERVER_EVENTS.NOTIFICATION_DELETED, userId, () => {
         this.io!.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId: id });
       });
-      // La bannière déjà livrée porte le texte D'AVANT : elle est révoquée que
-      // la ligne existe encore ou non — et, quand la ligne existe encore, un
-      // push NOMINAL la remplace par le texte D'APRÈS (voir plus bas).
-      revoked.push(
-        retractedNotificationOf({ id, userId, type: row?.type, context: row?.context, delivery: row?.delivery })
-      );
-      if (!row) continue;
+      // La bannière déjà livrée porte le texte D'AVANT. Ligne disparue : rien ne
+      // la remplacera, la révocation part. Ligne présente : le remplacement
+      // l'annule lui-même, la révocation n'en est que le repli.
+      const stale = staleBannerOf(id, userId, row);
+      if (!row) {
+        revoked.push(stale);
+        continue;
+      }
 
       const formatted = this.formatNotification(row);
       const { title, subtitle } = buildPushHeader({
@@ -3314,15 +3318,9 @@ export class NotificationService {
         )
       );
 
-      replacements.push({ row, title, subtitle: socketPayload.subtitle });
+      replacements.push({ row, title, subtitle: socketPayload.subtitle, stale });
     }
 
-    // L'ORDRE est la règle, pas un détail d'ordonnancement : les deux charges
-    // nomment la MÊME notification, et les clients indexent leur bannière par
-    // cette identité (`notificationId` sur le web et Android, `collapseId` /
-    // `threadId` sur iOS). Une révocation qui arriverait APRÈS le remplacement
-    // effacerait la version à jour et laisserait le destinataire sans rien.
-    // La file d'appareil garantit cet ordre sans faire attendre l'appelant.
     this.revokeDeliveredPushes(revoked);
     this.queueDeviceWork(() => this.pushReproducedNotifications(replacements));
 
@@ -3336,16 +3334,17 @@ export class NotificationService {
    * envoyée ET envoyer la nouvelle version », la moitié APPAREIL de ce que le
    * socket vient de faire pour les clients présents.
    *
-   * Du CONTENU, donc le chemin nominal : ni `silent`, ni `bypassDnd`. Le push
-   * de révocation qui le précède est un signal de CONTRÔLE et contourne les
-   * préférences (il RETIRE) ; celui-ci AFFICHE, et se soumet donc à DND, à
-   * `pushEnabled` et aux préférences de livraison comme un contenu neuf.
+   * Du CONTENU, donc le chemin nominal : ni `silent`, ni `bypassDnd` — il se
+   * soumet à DND, à `pushEnabled` et aux préférences de livraison comme un
+   * contenu neuf. Quand il n'atteint AUCUN appareil (bloqué, sans jeton, en
+   * panne), la bannière d'avant resterait avec son texte périmé : la révocation
+   * de CONTRÔLE part alors en repli, APRÈS lui — il n'a rien posé qu'elle
+   * puisse effacer.
    *
    * En SÉRIE, sur la file d'appareil, et jamais attendu par l'appelant :
-   * l'édition d'un post réécrit une audience entière par lots de 200
-   * (`reproduceEditedSubjectNotifications`), et le geste qui l'a demandée ne
-   * doit pas payer APNs. Un envoi qui lève n'emporte pas les suivants — et
-   * surtout pas la révocation, déjà partie.
+   * l'édition d'un post réécrit une audience entière par lots de 200, et le
+   * geste qui l'a demandée ne doit pas payer APNs. Un envoi qui lève n'emporte
+   * pas les suivants.
    */
   private async pushReproducedNotifications(
     replacements: readonly ReproducedNotificationPush[]
@@ -3353,18 +3352,18 @@ export class NotificationService {
     if (!this.pushService) return;
 
     for (const replacement of replacements) {
-      try {
-        await this.pushReproducedNotification(replacement);
-      } catch (error) {
+      const delivered = await this.pushReproducedNotification(replacement).catch((error) => {
         notificationLogger.warn('reproduced notification push failed — rewrite already durable', {
           notificationId: replacement.row.id,
           error: error instanceof Error ? error.message : String(error),
         });
-      }
+        return false;
+      });
+      if (!delivered) await sendNotificationRevocationPushes({ pushService: this.pushService, revoked: [replacement.stale] });
     }
   }
 
-  private async pushReproducedNotification(replacement: ReproducedNotificationPush): Promise<void> {
+  private async pushReproducedNotification(replacement: ReproducedNotificationPush): Promise<boolean> {
     const { row, title, subtitle } = replacement;
     const userId = row.userId as string;
 
@@ -3406,9 +3405,8 @@ export class NotificationService {
         ...(showPreview && subtitle ? { subtitle } : {}),
         body,
         ...(link ? { link } : {}),
-        // La bannière d'AVANT vient d'être révoquée ; celle-ci prend sa place
-        // sous la même identité, et se replie sur la coalescence native si la
-        // révocation n'a pas atteint l'appareil.
+        // `data.replacesNotificationId` annule la bannière d'AVANT ; la
+        // coalescence native sur la même identité en est le second filet.
         collapseId: row.id as string,
         ...(conversationId ? { threadId: conversationId } : {}),
         ...(category ? { category } : {}),
@@ -3421,6 +3419,7 @@ export class NotificationService {
     // désormais une bannière : sans ce flip, son RETRAIT ultérieur ne la
     // révoquerait pas — la garde `pushSent` la croirait jamais poussée.
     await this.markPushDelivered(row.id as string, results);
+    return pushReachedADevice(results);
   }
 
   /**
@@ -3432,8 +3431,7 @@ export class NotificationService {
    * faux si un seul des deux chemins de push le posait.
    */
   private async markPushDelivered(notificationId: string, results: unknown): Promise<void> {
-    const delivered = Array.isArray(results) && results.some((result) => (result as { success?: boolean })?.success);
-    if (!delivered) return;
+    if (!pushReachedADevice(results)) return;
     try {
       // RE-LIRE delivery juste avant d'écrire : un autre writer (digest
       // email quotidien) a pu poser emailSent:true entre-temps — le

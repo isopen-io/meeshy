@@ -210,6 +210,15 @@ export type StoryActionRailProps = {
    * ne se pose qu'autour d'un bouton RENDU.
    */
   readonly anchored?: { readonly action: StoryActionRailButton; readonly node: ReactNode };
+  /**
+   * **LES GESTES DÉJÀ FAITS** (directive porteur 2026-10-01) — chaque bouton
+   * vrai porte l'ANNEAU du cœur : commenté, envoyé, republié. Le cœur le prend
+   * de lui-même quand `pressed.react` est vrai. Lu par l'hôte dans
+   * `storyRailParticipated` (`lib/view/publication-participation.ts`).
+   */
+  readonly participated?: Partial<Record<StoryActionRailButton, boolean>>;
+  /** La couleur de l'anneau — celle de l'avatar de l'auteur (`STORY_PARTICIPATION_ACCENT` par défaut). */
+  readonly accent?: string;
 };
 
 /**
@@ -337,6 +346,22 @@ function SaveProgressRing({
   );
 }
 
+/**
+ * **LE HALO D'UNE ACTION ALLUMÉE** (directive porteur 2026-10-01) — les deux
+ * effets que le rail de la story avait avant le chrome commun : le son OUVERT
+ * rayonne d'indigo (`activeGlow: indigo400`), le cœur POSÉ du rouge qu'il porte
+ * déjà (`--ios-error`). Les autres boutons n'ont pas d'état « allumé » : leur
+ * effet est l'ANNEAU, quand le geste a été fait.
+ */
+const glowOf = (action: StoryActionRailButton, showsActive: boolean): string | undefined => {
+  if (!showsActive) return undefined;
+  if (action === 'sound') return 'var(--ios-indigo-400)';
+  return action === 'react' ? 'var(--ios-error)' : undefined;
+};
+
+/** L'anneau par défaut : la couleur de l'avatar quand l'hôte n'en remet pas d'autre (`ViewerIdentity`). */
+export const STORY_PARTICIPATION_ACCENT = 'var(--color-ios-brand)';
+
 const probeOf = (action: StoryActionRailButton): ViewerProbe =>
   /* LA PRISE HISTORIQUE DU SON SURVIT À SON DÉMÉNAGEMENT (#4508) : le bouton a
      quitté la ligne auteur pour la tête du rail, et c'est la MÊME commande —
@@ -354,6 +379,8 @@ export function StoryActionRail({
   onCancelSave,
   badges,
   anchored,
+  participated,
+  accent = STORY_PARTICIPATION_ACCENT,
 }: StoryActionRailProps) {
   /* La loi d'abord, le gestionnaire ensuite — dans CET ordre, pour qu'un
      bouton sans gestionnaire ne soit pas seulement invisible mais ABSENT du
@@ -387,6 +414,8 @@ export function StoryActionRail({
       badge: badges?.[action],
       /* Le cœur POSÉ prend le rouge du SDK HORS SCHÉMA (`--ios-error`), comme celui des Réels : même geste, même teinte — `--color-error` tombe à #c81e1e en clair, sous 3:1 sur le verre sombre. */
       ink: action === 'react' && isPressed === true ? 'var(--ios-error)' : undefined,
+      glow: glowOf(action, showsActive),
+      contour: participated?.[action] === true || (action === 'react' && isPressed === true) ? accent : undefined,
       probe: probeOf(action),
       override:
         ring && saving !== null && saving !== undefined ? <SaveProgressRing job={saving} onCancel={onCancelSave} language={language} /> : undefined,

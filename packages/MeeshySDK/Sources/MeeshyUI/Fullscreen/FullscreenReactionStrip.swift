@@ -53,23 +53,33 @@ public extension FullscreenActionButton {
     /// **« Réagir »** — l'émoji et son « + » (directive porteur #6084 : « un bouton
     /// réagir (emoji +) »). Le tap OUVRE la rangée ; il ne pose jamais d'émoji à
     /// l'aveugle. Ouverte, l'action se teinte `indigo400`.
+    ///
+    /// La story garde son CŒUR (directive porteur 2026-10-01 : « le cœur et non
+    /// réaction, car on ne voit pas ») : elle passe `systemImage: likeActive`, sans
+    /// badge, sans teinte — le contour (`outlineTint`) dit l'état, autour d'un glyphe
+    /// qui reste lisible. Les autres surfaces gardent l'émoji et son « + ».
     static func react(label: String,
                       hint: String? = nil,
                       style: FullscreenActionStyle = .floating,
                       caption: String? = nil,
                       accessibilityValue: String? = nil,
+                      systemImage: String = FullscreenChromeSymbol.react,
+                      badgeSystemImage: String? = FullscreenChromeSymbol.reactBadge,
                       isOpen: Bool,
+                      activeTint: Color? = MeeshyColors.indigo400,
+                      outlineTint: Color? = nil,
                       handlesTapViaGesture: Bool = false,
                       action: @escaping () -> Void) -> FullscreenActionButton {
-        FullscreenActionButton(systemImage: FullscreenChromeSymbol.react,
+        FullscreenActionButton(systemImage: systemImage,
                                label: label,
                                hint: hint,
                                style: style,
                                caption: caption,
                                accessibilityValue: accessibilityValue,
-                               badgeSystemImage: FullscreenChromeSymbol.reactBadge,
+                               badgeSystemImage: badgeSystemImage,
                                isActive: isOpen,
-                               activeTint: MeeshyColors.indigo400,
+                               activeTint: activeTint,
+                               outlineTint: outlineTint,
                                handlesTapViaGesture: handlesTapViaGesture,
                                action: action)
     }

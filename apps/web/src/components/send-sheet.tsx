@@ -12,6 +12,7 @@ import {
 } from '@/lib/send/send-sheet-plan';
 import { createSendRun, failedKeysOf, type SendRun, type SendRunState, type SendSheetPorts } from '@/lib/send/send-sheet-run';
 import type { SendSheetRequest } from '@/lib/send/send-sheet-store';
+import { portailDuNavigateur } from '@/lib/view/invitation';
 
 import { GlyphSvg } from './glyph';
 import { SEND_SHEET_GLYPHS } from './glyphs-send-sheet';
@@ -64,12 +65,16 @@ export type SendSheetPlatform = {
   readonly copy?: (text: string) => Promise<void>;
 };
 
+/** Le portail des invitations (#9023) : `navigator.share`, sinon le pont
+ * `MeeshyShare` de la coque Android ; la copie avec son repli `execCommand`. */
 function browserPlatform(): SendSheetPlatform {
-  if (typeof navigator === 'undefined') return {};
-  const share = typeof navigator.share === 'function' ? { share: (data: ShareData) => navigator.share(data) } : {};
-  const clipboard = navigator.clipboard as Clipboard | undefined;
-  const copy = typeof clipboard?.writeText === 'function' ? { copy: (text: string) => clipboard.writeText(text) } : {};
-  return { ...share, ...copy };
+  const { share, copier } = portailDuNavigateur();
+  return {
+    ...(share === undefined
+      ? {}
+      : { share: (data: ShareData) => share({ title: data.title ?? '', text: data.text ?? '', url: data.url ?? '' }) }),
+    ...(copier === undefined ? {} : { copy: copier }),
+  };
 }
 
 /** La signature d'IMPLÉMENTATION de `translateSendSheet` : la clé est calculée

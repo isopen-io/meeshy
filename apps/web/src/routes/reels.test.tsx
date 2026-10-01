@@ -149,6 +149,38 @@ describe('ReelPage — commenter et repartager depuis le rail (#6484)', () => {
 });
 
 /**
+ * LES EFFETS DU RAIL (directive porteur 2026-10-01) — le réel partage le rail
+ * de la story : le cœur posé rayonne et prend l'anneau de l'auteur, le son
+ * ouvert rayonne, et chaque geste déjà fait (enregistré, repartagé, commenté)
+ * porte l'anneau. `ReelActionRail.swift` le dessinait déjà (`outline`,
+ * `accentHex: reel.authorColor`) ; le web ne le dessinait pas.
+ */
+describe('ReelPage — les effets du rail', () => {
+  const button = (html: string, gesture: string): string =>
+    new RegExp(`data-reel-gesture="${gesture}"[\\s\\S]*?</button>`).exec(html)?.[0] ?? '';
+
+  test('aimé ⇒ halo et anneau ; pas aimé ⇒ ni l’un ni l’autre', () => {
+    const liked = page({ ...REEL_SUNSET_EN, isLikedByMe: true });
+    expect(button(liked, 'like')).toContain('data-viewer-glow');
+    expect(button(liked, 'like')).toContain('data-viewer-contour');
+    const idle = page({ ...REEL_SUNSET_EN, isLikedByMe: false });
+    expect(button(idle, 'like')).not.toContain('data-viewer-contour');
+  });
+
+  test('enregistré et repartagé portent l’anneau du geste fait', () => {
+    const html = page({ ...REEL_SUNSET_EN, isRepostedByMe: true }, { onComment: () => undefined, onRepost: () => undefined });
+    expect(button(html, 'bookmark')).toContain('data-viewer-contour');
+    expect(button(html, 'repost')).toContain('data-viewer-contour');
+    expect(button(html, 'share')).not.toContain('data-viewer-contour');
+  });
+
+  test('le son ouvert rayonne ; coupé, il s’éteint', () => {
+    expect(button(page(REEL_STUDIO, { soundOn: true }), 'sound')).toContain('data-viewer-glow');
+    expect(button(page(REEL_STUDIO, { soundOn: false }), 'sound')).not.toContain('data-viewer-glow');
+  });
+});
+
+/**
  * #8601 — QUAND ON COMMENTE, LE CHROME DU RÉEL CÈDE LA PLACE. La feuille de
  * commentaires s'ouvrait sous un bouton retour, une identité, une légende et
  * un rail toujours peints (le pager n'était qu'`inert`) : la loi unique

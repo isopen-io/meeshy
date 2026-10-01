@@ -31,10 +31,15 @@ final class StoryInteractionService {
     nonisolated deinit {}
 
     private let api: APIClientProviding
+    /// Le rail de la story pose l'anneau du cœur sur « Commentaires » quand le lecteur
+    /// a commenté (directive porteur 2026-10-01) ; la passerelle ne le sert pas.
+    private let participation: StoryViewerParticipationRecording
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "story.interaction")
 
-    init(api: APIClientProviding = APIClient.shared) {
+    init(api: APIClientProviding = APIClient.shared,
+         participation: StoryViewerParticipationRecording? = nil) {
         self.api = api
+        self.participation = participation ?? StoryViewerParticipationStore.shared
     }
 
     /// Requests a server-side translation of the story (title + slide
@@ -81,6 +86,9 @@ final class StoryInteractionService {
         location: SharedPlace? = nil,
         clientMutationId: String? = nil
     ) async throws {
+        // Noté AU DÉPART, comme la ligne optimiste que l'appelant vient d'insérer : un
+        // POST échoué part en outbox (`sendComment`), le commentaire reste celui du lecteur.
+        participation.note(.commented, storyId: storyId)
         let body = StoryCommentBody(
             content: content,
             originalLanguage: originalLanguage,

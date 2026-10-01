@@ -4,19 +4,18 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { ConversationEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
 
 import { RICH_TEXT_DIRECT } from '@/lib/api/fixtures-rich-text';
-import type { ConversationFlags } from '@/lib/api/preferences';
 import type { Conversation } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { engagementPillModel, localDayOf } from '@/lib/view/engagement-pill';
 
 import { EngagementPill } from './engagement-pill';
-import { LensRow } from './lens-row';
 import { ThreadHeader } from './thread-header';
 
 /**
  * « 🔥 4 · 120 (12) » (#8906) — la pastille d'engagement d'une conversation :
  * ce qu'elle montre, quand elle se tait, ce qu'elle dit à l'oreille, et où
- * elle se pose (en-tête du fil, rangée élue de la liste).
+ * elle se pose : l'en-tête du fil. La liste porte la série en rouge à côté
+ * de l'heure (`conversation-streak-mark.test.tsx`).
  */
 
 beforeAll(async () => {
@@ -113,41 +112,6 @@ describe('le rendu de la pastille', () => {
   test('dans l’en-tête, elle mène à la Progression', () => {
     const html = renderToStaticMarkup(<EngagementPill snapshot={snapshot()} opensProgression language="fr" now={() => NOON_SEPT_30} />);
     expect(html).toContain('href="/me/progression"');
-  });
-});
-
-const FLAGS: ConversationFlags = { isPinned: false, isMuted: false, isArchived: false };
-const LANGUAGES: readonly string[] = ['fr'];
-
-describe('la rangée ÉLUE de la liste porte la pastille', () => {
-  const row = (magnified: boolean, engagement: ConversationEngagementSnapshot | undefined) =>
-    renderToStaticMarkup(
-      <LensRow
-        conversation={RICH_TEXT_DIRECT}
-        languages={LANGUAGES}
-        viewerId="u-viewer"
-        flags={FLAGS}
-        unreadCount={0}
-        onRowAction={() => {}}
-        status={{ magnified, alpha: 1, scale: 1, breathing: 0 }}
-        engagement={engagement}
-        now={() => NOON_SEPT_30}
-      />,
-    );
-
-  test('élue : la pastille est dans le supplément, sans lien propre (la rangée en est déjà un)', () => {
-    const html = row(true, snapshot());
-    expect(html).toContain('data-engagement-pill');
-    expect(html).toContain('120 (12)');
-    expect(html).not.toContain('href="/me/progression"');
-  });
-
-  test('au repos : aucune pastille', () => {
-    expect(row(false, snapshot())).not.toContain('data-engagement-pill');
-  });
-
-  test('élue sans point : aucune pastille', () => {
-    expect(row(true, undefined)).not.toContain('data-engagement-pill');
   });
 });
 

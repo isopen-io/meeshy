@@ -52,10 +52,11 @@ export type ListConversation = Conversation & {
   readonly lastReaction?: ConversationLastReaction;
   readonly activeCall?: ConversationActiveCall;
   /**
-   * LE RANG DE CETTE LIGNE POUR CE LECTEUR, SERVI par la passerelle (#7592) :
-   * max(`lastMessageAt`, la dernière réaction à MON message). `GET
-   * /conversations` le sert sur chaque ligne ; `conversation:updated` ne le
-   * porte que chez l'auteur du message réagi. Clé absente = ne pas réordonner.
+   * LE RANG DE CETTE LIGNE, SERVI par la passerelle (#9026) :
+   * max(`lastMessageAt`, `lastActivityAt` — réaction, appel, épingle), le même
+   * pour tous les participants. `GET /conversations` le sert sur chaque ligne ;
+   * `conversation:updated` le porte chez CHAQUE participant quand une activité
+   * survient. Clé absente = ne pas réordonner.
    */
   readonly listRankAt?: string;
 };
@@ -63,7 +64,7 @@ export type ListConversation = Conversation & {
 type WithListRank = { readonly listRankAt?: string | null };
 
 /**
- * LE RANG DE TRI D'UNE LIGNE (#7592) — le rang SERVI, jamais recalculé ici,
+ * LE RANG DE TRI D'UNE LIGNE (#9026) — le rang SERVI, jamais recalculé ici,
  * et au moins `lastMessageAt` : un message arrivé après la réaction fait
  * toujours remonter la ligne (contrat #7592, « le rang d'une ligne est
  * toujours au moins `lastMessageAt` »). Sans rang servi, `lastMessageAt`.

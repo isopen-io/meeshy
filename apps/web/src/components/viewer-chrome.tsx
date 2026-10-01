@@ -1,4 +1,4 @@
-import type { ReactNode, Ref } from 'react';
+import { useState, type ReactNode, type Ref } from 'react';
 
 import { yieldingChrome } from '@/lib/view/chrome-yields';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
@@ -134,6 +134,10 @@ export type ViewerAction = {
   readonly ink?: string | undefined;
   /** Une capsule posée sur le disque (code langue), `aria-hidden`. */
   readonly badge?: string | null | undefined;
+  /** L'action est ALLUMÉE (son ouvert, cœur posé) : un halo de cette couleur autour du disque. */
+  readonly glow?: string | undefined;
+  /** Le lecteur a déjà FAIT ce geste (aimé, commenté, envoyé, republié) : l'anneau du cœur, dans cette couleur. */
+  readonly contour?: string | undefined;
   /** Remplace le bouton ENTIER à sa place dans le rail (l'anneau d'un export en cours). */
   readonly override?: ReactNode;
   readonly buttonRef?: Ref<HTMLButtonElement>;
@@ -143,7 +147,40 @@ export type ViewerAction = {
 const shownCount = (value: number | null | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
 
+/**
+ * **LE REBOND SUIT UN CHANGEMENT D'ÉTAT, JAMAIS UN MONTAGE** — miroir de
+ * `adaptiveSymbolBounce(value:)` d'iOS, qui ne joue qu'au changement de sa
+ * valeur. Le compteur sert de clé au disque : chaque bascule remonte le disque
+ * et rejoue l'animation, la première peinture n'en joue aucune. L'état se
+ * corrige PENDANT le rendu (motif React « ajuster l'état sur une prop »), sans
+ * effet ni rendu de rattrapage.
+ */
+function usePops(lit: boolean): number {
+  const [seen, setSeen] = useState({ lit, pops: 0 });
+  if (seen.lit !== lit) {
+    const next = { lit, pops: seen.pops + 1 };
+    setSeen(next);
+    return next.pops;
+  }
+  return seen.pops;
+}
+
+/** L'anneau et le halo — deux couches `aria-hidden` sous le glyphe : un décor ne parle pas au lecteur d'écran. */
+function DiscEffects({ glow, contour }: { readonly glow: string | undefined; readonly contour: string | undefined }) {
+  return (
+    <>
+      {glow === undefined ? null : (
+        <span data-viewer-halo="" aria-hidden="true" className="viewer-disc-halo pointer-events-none absolute inset-0 rounded-full" style={{ boxShadow: `0 0 14px 3px ${glow}` }} />
+      )}
+      {contour === undefined ? null : (
+        <span data-viewer-contour="" aria-hidden="true" className="pointer-events-none absolute -inset-0.5 rounded-full" style={{ boxShadow: `0 0 0 2px ${contour}` }} />
+      )}
+    </>
+  );
+}
+
 export function ViewerActionButton({ item }: { readonly item: ViewerAction }) {
+  const pops = usePops(item.glow !== undefined || item.contour !== undefined);
   if (item.onPress === undefined) return null;
   const count = shownCount(item.count);
   const onPress = item.onPress;
@@ -166,10 +203,14 @@ export function ViewerActionButton({ item }: { readonly item: ViewerAction }) {
     >
       <span className="grid size-11 place-items-center">
         <span
+          key={pops}
           data-viewer-disc=""
-          className={`${VIEWER_GLASS} viewer-disc relative grid place-items-center rounded-full`}
+          {...(item.glow === undefined ? {} : { 'data-viewer-glow': '' })}
+          {...(pops === 0 ? {} : { 'data-viewer-pop': '' })}
+          className={`${VIEWER_GLASS} viewer-disc relative grid place-items-center rounded-full${pops === 0 ? '' : ' viewer-disc-pop'}`}
           style={{ ...(item.ink === undefined ? {} : { color: item.ink }), ...(item.busy === true ? { opacity: 0.5 } : {}) }}
         >
+          <DiscEffects glow={item.glow} contour={item.contour} />
           {item.glyph}
           {item.badge === undefined || item.badge === null ? null : (
             <span

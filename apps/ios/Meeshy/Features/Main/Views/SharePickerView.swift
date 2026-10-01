@@ -359,6 +359,7 @@ struct SharePickerView: View {
         if let handler = onShareToConversation {
             handler(conv, sharedContent)
             viewModel.markSent(conv.id)
+            noteSharedStory()
             HapticFeedback.success()
             return
         }
@@ -375,6 +376,7 @@ struct SharePickerView: View {
                 forwardedMessageId: forwardedMessageId
             )
             if success {
+                noteSharedStory()
                 HapticFeedback.success()
             } else {
                 HapticFeedback.error()
@@ -395,6 +397,13 @@ struct SharePickerView: View {
             let link = resolvedStoryLink ?? "https://meeshy.me/story/\(item.id)"
             return String(format: String(localized: "share.story.shareText", defaultValue: "🔗 Story de %1$@ : %2$@", bundle: .main), authorName, link)
         }
+    }
+
+    /// Une story ENVOYÉE allume l'anneau du cœur sur « Envoyer » dans son lecteur
+    /// (directive porteur 2026-10-01) — la passerelle ne sert pas ce geste.
+    private func noteSharedStory() {
+        guard case .story(let item, _) = sharedContent else { return }
+        StoryViewerParticipationStore.shared.note(.sent, storyId: item.id)
     }
 
     private var forwardedMessageId: String? {
