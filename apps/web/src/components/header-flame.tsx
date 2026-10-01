@@ -2,10 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 
 import { conversationEngagementForDay, type ConversationEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
 
-import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { compactCount } from '@/lib/view/compact-count';
-import { localDayOf } from '@/lib/view/engagement-pill';
+import { engagementPillModel, localDayOf } from '@/lib/view/engagement-pill';
 import { useMinute } from '@/lib/view/use-minute';
 
 import { Glyph } from './glyph';
@@ -24,8 +23,9 @@ const TONGUES = [0, 1, 2] as const;
 /**
  * **LA FLAMME DU JOUR SOUS L'AVATAR DE L'EN-TÊTE** (#9031, #9044) — miroir de
  * `HeaderFlameDecoration` (iOS). « 🔥 M » : les points que la conversation a
- * rapportés au lecteur AUJOURD'HUI, abrégés et relus au jour du lecteur
- * (minuit les remet à 0 sans attendre le serveur). Elle ne se montre que
+ * rapportés au lecteur AUJOURD'HUI, précédés de la série en jours (« 🔥 3 · 42 »), abrégés et relus au jour du lecteur
+ * (minuit les remet à 0 sans attendre le serveur). L'en-tête déplié porte la
+ * même série et, à la place de M, le TOTAL gagné dans la conversation. Elle ne se montre que
  * tant qu'une série COURT. Posée JUSTE SOUS le cercle de l'avatar, sans le
  * toucher, sans capsule : la flamme et son compte détouré.
  *
@@ -56,9 +56,10 @@ export function HeaderFlame({
   readonly releaseAfterMs?: number;
 }) {
   const minute = useMinute();
-  const shownDay =
-    snapshot === undefined ? undefined : conversationEngagementForDay(snapshot, localDayOf(now === undefined ? minute * 60_000 : now()));
-  const today = shownDay?.todayPoints ?? 0;
+  const interfaceLanguage = language ?? currentInterfaceLanguage();
+  const model = engagementPillModel(snapshot, localDayOf(now === undefined ? minute * 60_000 : now()), interfaceLanguage);
+  const today =
+    snapshot === undefined ? 0 : conversationEngagementForDay(snapshot, localDayOf(now === undefined ? minute * 60_000 : now())).todayPoints;
   const latest = useRef(today);
   latest.current = today;
   const [held, setHeld] = useState<number | null>(null);
@@ -70,10 +71,10 @@ export function HeaderFlame({
     return () => clearTimeout(timer);
   }, [replay, releaseAfterMs]);
 
-  if (snapshot === undefined || snapshot.totalPoints <= 0 || (shownDay?.streakDays ?? 0) <= 0) return null;
+  if (model === null) return null;
   const shown = held ?? today;
-  const interfaceLanguage = language ?? currentInterfaceLanguage();
-  const label = translate(interfaceLanguage, 'engagement.flame.label', { count: String(shown) });
+  const streakDays = model.streakDays;
+  const label = model.label;
 
   return (
     <span
@@ -93,6 +94,9 @@ export function HeaderFlame({
                 <Glyph name="flameFill" size={6} style={{ color: 'var(--color-error)' }} />
               </span>
             ))}
+          </span>
+          <span aria-hidden="true" data-header-flame-streak={streakDays} className="header-flame-count-digits">
+            {`${streakDays} ·`}
           </span>
           <span key={shown} aria-hidden="true" className={`header-flame-count-digits${replay > 0 ? ' header-flame-count' : ''}`}>
             {compactCount(shown, interfaceLanguage)}

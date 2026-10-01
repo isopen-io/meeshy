@@ -333,7 +333,7 @@ struct HeaderFlameDecoration: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase: CGFloat = 1
     @State private var isPlaying = false
-    /// Le compte d'AVANT l'envoi, tenu jusqu'à ce que la lueur ait rejoint la flamme.
+    /// Les points du jour d'AVANT l'envoi, tenus jusqu'à ce que la flamme se soit allumée.
     @State private var heldPoints: Int?
     /// Le rejeu en cours : un envoi qui en relance un autre reprend la main.
     @State private var replayCount = 0
@@ -379,17 +379,14 @@ struct HeaderFlameDecoration: ViewModifier {
         Button(action: onDismiss) {
             HStack(alignment: .center, spacing: 2) {
                 HeaderFlameBurner(phase: phase, animates: isPlaying && !reduceMotion)
+                HeaderFlameCount(text: "\(shown.streakDays) ·")
                 HeaderFlameCount(text: CompactCountLabel.text(heldPoints ?? shown.todayPoints))
                     .equatable()
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(String(
-            localized: "conversation.header.flame.a11y",
-            defaultValue: "Points du jour : \(shown.todayPoints)",
-            bundle: .main
-        ))
+        .accessibilityLabel(ConversationEngagementPill.accessibilityText(for: shown))
         .accessibilityHint(String(
             localized: "conversation.header.flame.hint",
             defaultValue: "Masque la flamme jusqu'au prochain dépliement de l'en-tête",
