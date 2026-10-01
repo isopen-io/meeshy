@@ -36,6 +36,13 @@ export function setupAdminKitTests(options: { readonly languages?: readonly Admi
 
   afterAll(async () => {
     delete globals.IS_REACT_ACT_ENVIRONMENT;
+    /* Le planificateur de React peut encore tenir des effets passifs du
+       dernier montage (une réponse réseau tardive) : les laisser s'exécuter
+       TANT QUE `window` existe. Sans cette vidange, ils tombaient après la
+       libération de happy-dom (« window.event » sur undefined), une erreur
+       « entre deux tests » qui rougit la suite au hasard de l'ordonnancement. */
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     await releaseHappyDomIfRegistered();
   });
 
