@@ -47,6 +47,9 @@ export interface ConversationViewingHandlerDependencies {
 
 type SocketViewing = { readonly userId: string; readonly conversationIds: ReadonlySet<string> };
 
+/** Ouvertures retenues au plus par socket en attente d'authentification (#9047). */
+export const MAX_PENDING_OPENINGS = 3;
+
 export class ConversationViewingHandler {
   private readonly io: ViewingIO;
   private readonly prisma: PrismaClient;
@@ -168,8 +171,14 @@ export class ConversationViewingHandler {
     await this.retractAll(socketId);
   }
 
+  /**
+   * Bornée : un socket non authentifié ne doit pas pouvoir faire grossir la
+   * mémoire de la passerelle. Un écran n'affiche qu'une conversation à la
+   * fois ; seules les dernières ouvertures comptent.
+   */
   private holdUntilAuthenticated(socketId: string, conversationId: string): void {
-    this.pendingBySocket.set(socketId, new Set([...(this.pendingBySocket.get(socketId) ?? []), conversationId]));
+    const previous = [...(this.pendingBySocket.get(socketId) ?? [])].filter(id => id !== conversationId);
+    this.pendingBySocket.set(socketId, new Set([...previous, conversationId].slice(-MAX_PENDING_OPENINGS)));
   }
 
   private release(socketId: string, conversationId: string): void {

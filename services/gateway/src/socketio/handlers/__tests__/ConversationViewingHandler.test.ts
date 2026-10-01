@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, jest } from '@jest/globals';
 
-import { ConversationViewingHandler } from '../ConversationViewingHandler';
+import { ConversationViewingHandler, MAX_PENDING_OPENINGS } from '../ConversationViewingHandler';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 const CONV = '507f1f77bcf86cd799439011';
@@ -385,5 +385,21 @@ describe('ConversationViewingHandler — ouvrir AVANT la fin de l’authentifica
     expect(alice.direct.filter(d => d.event === SERVER_EVENTS.VIEWING_SNAPSHOT).map(d => d.data)).toEqual([
       { conversationId: CONV, userIds: [BOB] },
     ]);
+  });
+
+  it('un socket non authentifié ne retient que ses dernières ouvertures — la mémoire reste bornée', async () => {
+    const conversations = Array.from({ length: 50 }, (_, index) => `507f1f77bcf86cd7994${String(index).padStart(5, '0')}`);
+    const { handler, emissions, arrive } = makeWorld({
+      participants: conversations.map(conversationId => ({ userId: ALICE, conversationId })),
+    });
+    const alice = arrive('s-alice', conversations);
+
+    for (const conversationId of conversations) await handler.handleStart(alice.socket, { conversationId });
+    alice.authenticate(ALICE);
+    await handler.afterAuthentication(alice.socket);
+
+    expect(startsFor(emissions).map(e => (e.data as { conversationId: string }).conversationId)).toEqual(
+      conversations.slice(-MAX_PENDING_OPENINGS),
+    );
   });
 });
