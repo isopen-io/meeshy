@@ -487,6 +487,34 @@ final class TopChromeBandRenderTests: XCTestCase {
         )
     }
 
+    /// La croix ferme AUSSI pendant la grâce d'une file épuisée — le « parfois 5 s » du porteur
+    /// (#8983), filmé au simulateur le 2026-10-01 après la fin d'un vocal. `activeContext` y vaut
+    /// déjà `nil` : `close()` le remettait à `nil`, la barre n'observait aucun changement et
+    /// attendait la fin de la grâce.
+    func test_laCroix_pendantLaGraceDUneFileEpuisee_retireLaBarreSurLeChamp() throws {
+        let (coord, moteur) = coordinateur(actif: true, conversation: "conv-A")
+        let journal = Journal()
+        let rendu = try monterLaBarre(coord: coord, conversationCourante: nil, journal: journal)
+        rendu.attendre(borne: 3) { !journal.recus.isEmpty }
+        XCTAssertNotNil(journal.recus.last ?? nil, "Préalable : la barre doit d'abord remonter.")
+
+        moteur.simulateFinishPlayback()
+        XCTAssertTrue(
+            rendu.settle(borne: 2) { coord.activeContext == nil && coord.derniereFin == .epuisee },
+            "Préalable : la file doit s'épuiser."
+        )
+        rendu.capture()
+        XCTAssertNotNil(journal.recus.last ?? nil, "Préalable : la grâce garde la barre après la fin de la file.")
+
+        coord.close()
+
+        XCTAssertTrue(
+            rendu.attendre(borne: 1) { (journal.recus.last ?? nil) == nil },
+            "Pendant la grâce d'une file épuisée, la croix doit retirer la barre sur le champ ; elle est " +
+            "restée affichée (\(String(describing: journal.recus.last ?? nil))) jusqu'à la fin de la grâce."
+        )
+    }
+
     // MARK: - DÉFAUT 5 — l'ordre de peinture face à un volet plein bord
 
     /// La bande est devenue un `.overlay` du `VStack` : elle se peint APRÈS tout

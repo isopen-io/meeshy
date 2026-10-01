@@ -86,6 +86,11 @@ struct CallPresentationLayer: ViewModifier {
     /// valeur AFFICHÉE — quelques fois par lecture.
     @State private var audioBarContext: ActiveAudioContext?
 
+    /// L'encart haut que les barres franchissent en sortant par le haut (#9048).
+    @State private var topInset: CGFloat = 0
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func body(content: Content) -> some View {
         // Compression de frame, PAS augmentation de safe area : la bannière
         // d'appel est le premier élément d'un VStack au-dessus du contenu,
@@ -102,23 +107,67 @@ struct CallPresentationLayer: ViewModifier {
         // bannière d'appel : quand un appel est actif, `FloatingCallPillView`
         // occupe le haut et le mini-lecteur (s'il joue quelque chose) se pose
         // juste en dessous — l'appel prime toujours visuellement sur la
-        // lecture audio, jamais l'inverse. Les deux ont un corps vide
-        // (`EmptyView`) quand ils n'ont rien à montrer, donc aucune empreinte
-        // fantôme dans le VStack (même garantie que `FloatingCallPillView`
-        // seule avant ce changement).
+        // lecture audio, jamais l'inverse. Quand ils n'ont rien à montrer, la
+        // pilule a un corps vide et le mini-lecteur une ancre de hauteur nulle :
+        // aucune empreinte fantôme dans le VStack.
+        //
+        // `callIsActive` vient du prédicat de la pilule elle-même, jamais de
+        // `callState.isActive` : la pilule se masque aussi en plein écran et
+        // pendant le PiP système, et une bande sans sa barre serait un ruban
+        // indigo posé sur rien.
         let callManager = calls.manager
+        let pillShowing = callManager.map {
+            FloatingCallPillView.isShowingPill(
+                displayMode: $0.displayMode,
+                callState: $0.callState,
+                isSystemPiPActive: $0.isSystemPiPActive
+            )
+        } ?? false
         VStack(spacing: 0) {
+            // La BANDE DU HAUT (#6579) — le site UNIQUE qui peint la zone
+            // status-bar au-dessus de la barre active. Montée ICI parce que ce
+            // conteneur est le seul endroit que les DEUX racines partagent
+            // (`RootViewLayers` iPhone, `iPadRootViewLayers` iPad) : posée dans
+            // l'une, elle aurait manqué l'autre. Les deux barres ne peignent plus
+            // leur propre débord — une peinture portée par chaque barre est
+            // présente chez l'une et absente chez l'autre, ce qui ÉTAIT le défaut.
+            //
+            // Sur une rangée de tête de hauteur nulle (#9048), et plus sur la pile
+            // entière : son RANG la place au-dessus du contenu mais sous la barre
+            // qui sort par le haut, dont elle masquerait sinon le contenu à la
+            // traversée de l'encart (`TopChromeBarMotion`).
+            Color.clear.frame(height: 0)
+                .modifier(TopChromeBand(callIsActive: pillShowing, audio: audioBarContext))
+                .zIndex(TopChromeBarMotion.bandLayer)
             if let callManager {
-                FloatingCallPillView(callManager: callManager)
+                FloatingCallPillView(callManager: callManager, isLastBar: audioBarContext == nil, topInset: topInset)
             }
             MiniAudioPlayerBar(
                 coordinatorForTesting: miniPlayerCoordinator,
                 onTapBody: miniPlayerOnTapBody,
                 currentConversationId: miniPlayerCurrentConversationId,
-                onDisplayedContextChange: { audioBarContext = $0 }
+                onDisplayedContextChange: { audioBarContext = $0 },
+                isLastBar: !pillShowing,
+                topInset: topInset
             )
             content
         }
+            // L'encart haut, MESURÉ : le haut de la pile en coordonnées de la
+            // fenêtre. Le lire sur la fenêtre pendant le rendu (`DeviceLayout`)
+            // provoque un cycle AttributeGraph qui fige la barre (#8772, #9048).
+            .background {
+                GeometryReader { geo in
+                    Color.clear.preference(key: TopChromeInsetKey.self, value: geo.frame(in: .global).minY)
+                }
+            }
+            .onPreferenceChange(TopChromeInsetKey.self) { topInset = $0 }
+            // #9048 — la pilule entre et sort au gré de l'état de l'APPEL, qu'aucun
+            // `withAnimation` n'enveloppe : son ressort se pose donc ici, sur la pile
+            // ENTIÈRE — bande comprise — pour que la bande et le contenu de l'app la
+            // suivent au lieu de sauter. Une bascule faite sous `disablesAnimations` —
+            // l'aller-retour du plein écran, qui joue son propre morph — reste
+            // instantanée.
+            .animation(TopChromeBarMotion.animation(reduceMotion: reduceMotion), value: pillShowing)
             .onAppear {
                 incomingCallGate.arm()
                 // #8725 — la vue d'appel plein écran vit dans sa propre
@@ -130,28 +179,6 @@ struct CallPresentationLayer: ViewModifier {
                 CallDebugIncomingTrigger.arm()
                 #endif
             }
-            // La BANDE DU HAUT (#6579) — le site UNIQUE qui peint la zone
-            // status-bar au-dessus de la barre active. Montée ICI parce que ce
-            // conteneur est le seul endroit que les DEUX racines partagent
-            // (`RootViewLayers` iPhone, `iPadRootViewLayers` iPad) : posée dans
-            // l'une, elle aurait manqué l'autre. Les deux barres ne peignent plus
-            // leur propre débord — une peinture portée par chaque barre est
-            // présente chez l'une et absente chez l'autre, ce qui ÉTAIT le défaut.
-            //
-            // `callIsActive` vient du prédicat de la pilule elle-même, jamais de
-            // `callState.isActive` : la pilule se masque aussi en plein écran et
-            // pendant le PiP système, et une bande sans sa barre serait un ruban
-            // indigo posé sur rien.
-            .modifier(TopChromeBand(
-                callIsActive: callManager.map {
-                    FloatingCallPillView.isShowingPill(
-                        displayMode: $0.displayMode,
-                        callState: $0.callState,
-                        isSystemPiPActive: $0.isSystemPiPActive
-                    )
-                } ?? false,
-                audio: audioBarContext
-            ))
             // C1 — ancre du PiP système pour les modes RÉDUITS. L'unique ancre
             // vivait dans `CallView`, donc dans la présentation plein écran : réduire
             // l'appel la démonte, `pipConfiguredSource` est `weak` et passe

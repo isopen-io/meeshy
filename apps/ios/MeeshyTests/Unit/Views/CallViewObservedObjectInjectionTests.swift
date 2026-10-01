@@ -129,7 +129,7 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     func test_callPresentationLayer_injectsOwnCallManagerIntoPillAndBubble() throws {
         let source = try source(of: "Views/RootLayers/CallPresentationLayer.swift")
         XCTAssertTrue(
-            source.contains("FloatingCallPillView(callManager: callManager)"),
+            source.contains("FloatingCallPillView(callManager: callManager"),
             "`CallPresentationLayer` must pass its own `callManager` into FloatingCallPillView."
         )
         XCTAssertTrue(
