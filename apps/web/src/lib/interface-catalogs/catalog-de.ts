@@ -504,6 +504,7 @@ const de = {
   'settings.save.error': 'Die Einstellung wurde nicht gespeichert.',
   'settings.theme.sync_error': 'Design auf diesem Gerät übernommen, nicht synchronisiert.',
   'common.cancel': 'Abbrechen',
+  'common.close': 'Schließen',
 
   'media.video.play': 'Video abspielen',
   'media.video.pause': 'Pausieren',

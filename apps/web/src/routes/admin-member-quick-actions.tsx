@@ -8,8 +8,7 @@ import {
   type AdminContactChannel,
 } from '@/lib/api/admin-user-verifications';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { withContactProof } from './admin-member-contact';
 import { GLASS_CARD_CLASS, GLASS_CARD_EDGE, INK2, SectionButton, useMemberWrite } from './admin-member-parts';
@@ -52,7 +51,7 @@ export function AdminMemberQuickActions({
   deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
   readonly deps?: AdminDeps;
 }) {

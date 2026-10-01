@@ -43,15 +43,21 @@ describe('decodeAdminAnonymousPage', () => {
         lastActiveAt: '2026-09-20T10:00:00.000Z',
         joinedAt: '2026-09-19T10:00:00.000Z',
         leftAt: null,
-        conversation: { id: 'c1', title: 'Le club', identifier: 'mshy_club' },
+        conversation: { id: 'c1', title: 'Le club', type: '' },
         messageCount: 12,
       },
     ]);
   });
 
-  test('une ligne sans identifiant est écartée, un nom manquant se dit', () => {
-    const page = decodeAdminAnonymousPage({ anonymousUsers: [{ displayName: 'x' }, ligne({ displayName: '' })] }, 0);
-    expect(page.rows.map((r) => r.displayName)).toEqual(['—']);
+  test('une ligne sans identifiant est écartée ; un nom manquant reste VIDE — aucun libellé fabriqué', () => {
+    const page = decodeAdminAnonymousPage({ anonymousUsers: [{ displayName: 'x' }, ligne({ displayName: '  ' })] }, 0);
+    expect(page.rows.map((r) => r.displayName)).toEqual(['']);
+  });
+
+  test('l’identifiant PUBLIC de la conversation n’est jamais gardé — son titre et son type seulement', () => {
+    const [row] = decodeAdminAnonymousPage({ anonymousUsers: [ligne({ conversation: { id: 'c1', identifier: 'mshy_club', title: null, type: 'group' } })] }, 0).rows;
+    expect(row?.conversation).toEqual({ id: 'c1', title: '', type: 'group' });
+    expect(JSON.stringify(row)).not.toContain('mshy_club');
   });
 
   test('hasMore se recalcule quand la passerelle ne le dit pas', () => {
@@ -73,8 +79,20 @@ describe('decodeAdminAnonymousOne', () => {
     const fiche = decodeAdminAnonymousOne(
       ligne({ shareLink: { id: 'l1', name: 'Invitation salon', isActive: false, expiresAt: null, createdAt: '2026-09-01T00:00:00Z' } }),
     );
-    expect(fiche?.shareLink).toEqual({ name: 'Invitation salon', isActive: false });
+    expect(fiche?.shareLink).toEqual({ id: 'l1', name: 'Invitation salon', isActive: false, expiresAt: null });
     expect(decodeAdminAnonymousOne(ligne())?.shareLink).toBeNull();
+  });
+
+  test('l’échéance du lien servie est gardée ; ni son identifiant public ni ses clés de jointure ne le sont', () => {
+    const fiche = decodeAdminAnonymousOne(
+      ligne({ shareLink: { id: 'l1', name: ' Salon ', isActive: true, expiresAt: '2026-12-01T12:00:00.000Z', linkId: 'mshy_secret', identifier: 'mshy_join' } }),
+    );
+    expect(fiche?.shareLink).toEqual({ id: 'l1', name: 'Salon', isActive: true, expiresAt: '2026-12-01T12:00:00.000Z' });
+    expect(JSON.stringify(fiche)).not.toContain('mshy_');
+  });
+
+  test('la fiche garde le type de la conversation, que la liste ne sert pas', () => {
+    expect(decodeAdminAnonymousOne(ligne({ conversation: { id: 'c1', title: 'Le club', type: 'public' } }))?.conversation).toEqual({ id: 'c1', title: 'Le club', type: 'public' });
   });
 
   test('une charge sans identifiant ne produit pas de fiche', () => {

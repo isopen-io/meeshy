@@ -93,6 +93,8 @@ export async function registerMembershipRoutes(
         where: {
           userId,
           isActive: true,
+          // #8876 — « mes communautés » ne montre pas celles que l'administration a désactivées.
+          community: { isActive: true },
           ...(roleFilter && roleFilter.length > 0 ? { role: { in: roleFilter } } : {})
         },
         include: {
@@ -180,7 +182,8 @@ export async function registerMembershipRoutes(
       const userId = authContext.userId;
 
       const community = await fastify.prisma.community.findFirst({
-        where: { id },
+        // #8876 — on ne rejoint pas une communauté désactivée par l'administration.
+        where: { id, isActive: true },
         select: { id: true, isPrivate: true, createdBy: true }
       });
 
@@ -432,8 +435,11 @@ export async function registerMembershipRoutes(
 
       const userId = authContext.userId;
 
+      // #8876 — une communauté DÉSACTIVÉE par l'administration ne reçoit plus personne ni aucun réglage :
+      // elle n'existe plus pour ce geste (404), comme pour les lecteurs publics. Quitter, changer un rôle,
+      // retirer un membre et supprimer restent ouverts : les propriétaires peuvent la clore.
       const community = await fastify.prisma.community.findFirst({
-        where: { id },
+        where: { id, isActive: true },
         select: {
           id: true,
           isPrivate: true,

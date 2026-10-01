@@ -236,8 +236,9 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
 
-      // Sanitize selon le role
-      const sanitizedUser = sanitizationService.sanitizeUser(user, viewerRole);
+      // Sanitize selon le role — la FICHE demande en plus le bloc de métadonnées
+      // de compte (#8876), servi aux seuls rôles qui voient les données sensibles.
+      const sanitizedUser = sanitizationService.sanitizeUser(user, viewerRole, { withAdminMetadata: true });
 
       // Log d'audit
       await userAuditService.logViewUser(

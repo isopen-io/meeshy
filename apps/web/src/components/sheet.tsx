@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 
 import { Glyph } from './glyph';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 /**
@@ -43,10 +45,18 @@ export function Sheet({
   bodyAs = 'ul',
   presentation = 'fullscreen',
   accessory,
+  closeLabel,
   onClose,
   children,
 }: {
   title: string;
+  /**
+   * Le NOM ACCESSIBLE du bouton de fermeture. Par défaut, « Fermer » dans la langue
+   * d'interface ; un hôte qui lit une AUTRE langue que celle-là — l'administration, servie
+   * en anglais aux interfaces allemande, italienne et arabe — passe la sienne : sans cela
+   * le lecteur d'écran annonçait « Fermer » en français sur une feuille anglaise.
+   */
+  closeLabel?: string;
   searchLabel?: string;
   searchPlaceholder?: string;
   search?: string;
@@ -151,7 +161,7 @@ export function Sheet({
             onClick={() => ref.current?.close()}
             className="grid place-items-center rounded-chip"
             style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
-            aria-label="Fermer"
+            aria-label={closeLabel ?? translate(currentInterfaceLanguage(), 'common.close')}
           >
             <Glyph name="x" size={20} />
           </button>

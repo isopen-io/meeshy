@@ -61,7 +61,9 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-id';
 import { requireAdminRank, requirePermission } from '../../middleware/authorize';
+import { registerConversationFicheRoute } from './conversation-fiche';
 import { validatePagination } from '../../utils/pagination';
 import { sendPaginatedSuccess, sendInternalError } from '../../utils/response';
 import { conversationActiveMemberCountSelect } from '../conversations/utils/active-member-count';
@@ -74,12 +76,17 @@ type Tri = (typeof TRIS)[number];
 const PARTICIPANTS_SERVIS = 6;
 
 export function registerConversationsSovereignRoute(fastify: FastifyInstance): void {
+  // #8876 — la FICHE d'une conversation (verbe neuf sur un chemin existant), mêmes
+  // gardes que cette liste : elle ne rouvre pas ce que la liste garde fermé.
+  registerConversationFicheRoute(fastify);
+
   fastify.get<{
     Querystring: {
       offset?: string;
       limit?: string;
       type?: string;
       isActive?: string;
+      communityId?: string;
       search?: string;
       sort?: string;
       order?: string;
@@ -119,6 +126,7 @@ export function registerConversationsSovereignRoute(fastify: FastifyInstance): v
           limit: { type: 'string', description: 'Pagination limit (max 100)' },
           type: { type: 'string', description: 'Filtre sur le type de conversation' },
           isActive: { type: 'string', description: '"true" / "false" — filtre sur l\'activité' },
+          communityId: { type: 'string', pattern: OBJECT_ID_PATTERN, description: 'Filtre sur la communauté (#8876)' },
           search: { type: 'string', description: 'Recherche sur le TITRE et l\'IDENTIFIANT, jamais sur le contenu' },
           sort: { type: 'string', enum: [...TRIS], description: 'lastMessageAt (défaut) ou createdAt' },
           order: { type: 'string', enum: ['asc', 'desc'], description: 'desc (défaut) ou asc — #7873' },
@@ -143,7 +151,13 @@ export function registerConversationsSovereignRoute(fastify: FastifyInstance): v
                   type: { type: 'string', nullable: true },
                   avatar: { type: 'string', nullable: true },
                   isActive: { type: 'boolean', nullable: true },
+                  closedAt: { type: 'string', format: 'date-time', nullable: true },
                   communityId: { type: 'string', nullable: true },
+                  community: {
+                    type: 'object',
+                    nullable: true,
+                    properties: { id: { type: 'string' }, name: { type: 'string' } }
+                  },
                   memberCount: { type: 'number' },
                   createdAt: { type: 'string', format: 'date-time', nullable: true },
                   lastMessageAt: { type: 'string', format: 'date-time', nullable: true },
@@ -190,6 +204,7 @@ export function registerConversationsSovereignRoute(fastify: FastifyInstance): v
         limit,
         type,
         isActive,
+        communityId,
         search,
         sort,
         order,
@@ -200,6 +215,7 @@ export function registerConversationsSovereignRoute(fastify: FastifyInstance): v
         limit?: string;
         type?: string;
         isActive?: string;
+        communityId?: string;
         search?: string;
         sort?: string;
         order?: string;
@@ -224,6 +240,7 @@ export function registerConversationsSovereignRoute(fastify: FastifyInstance): v
       if (type !== undefined && type !== '') clauses.push({ type });
       if (isActive === 'true') clauses.push({ isActive: true });
       if (isActive === 'false') clauses.push({ isActive: false });
+      if (communityId) clauses.push({ communityId });
 
       const recherche = (search ?? '').trim();
       if (recherche !== '') {
@@ -266,7 +283,10 @@ export function registerConversationsSovereignRoute(fastify: FastifyInstance): v
             type: true,
             avatar: true,
             isActive: true,
+            closedAt: true,
             communityId: true,
+            // #8876 — la communauté est NOMMÉE : « Famille · Lycée Njanda », pas un identifiant.
+            community: { select: { id: true, name: true } },
             createdAt: true,
             lastMessageAt: true,
             // La colonne `memberCount` est MORTE : le compte vient d'ici, et

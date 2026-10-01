@@ -2174,6 +2174,11 @@ model AdminAuditLog {
   @@index([userId])
   @@index([action])
   @@index([createdAt])
+  /// Le journal d'audit se lit par cible (#8876) : « tout ce qui a touché cette
+  /// conversation / ce lien / cette communauté ». Sans cet index la requête
+  /// `{ entity, entityId }` balaie la collection. L'index de production se crée
+  /// à la main (voir la note de livraison du lot).
+  @@index([entity, entityId])
 }
 
 /// Bannissement durable d'un utilisateur (#3719) — la SUSPENSION (`User.isActive`)

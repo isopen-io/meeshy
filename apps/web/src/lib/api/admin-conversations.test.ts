@@ -3,11 +3,12 @@ import { describe, expect, test } from 'bun:test';
 import {
   ADMIN_SOUVERAIN_PREFIXE,
   adminConversationMessagesQueryKey,
+  ADMIN_CONVERSATIONS_ROOT_KEY,
   adminConversationsQueryKey,
-  decodeAdminInstanceConversations,
+  decodeAdminInstanceConversation,
   decodeAdminSovereignThread,
   estClefSouveraine,
-  loadAdminInstanceConversations,
+  loadAdminConversationList,
   loadAdminSovereignThread,
 } from './admin-conversations';
 import type { HttpTransport } from './http';
@@ -64,36 +65,64 @@ function transportQuiRend(charge: unknown, vu: { path?: string }): HttpTransport
  */
 const servie = (enveloppe: unknown) => pageServie(resultatServi(enveloppe));
 
-describe('decodeAdminInstanceConversations — l\'inventaire', () => {
-  test('lit la pagination À CÔTÉ de `data`, jamais dedans', () => {
-    const page = decodeAdminInstanceConversations(servie(
-      {
-        data: [{ id: 'c1', title: 'Équipe', type: 'group', memberCount: 4 }],
-        pagination: { total: 42, offset: 0, limit: 20, hasMore: true },
-      }),
-      0,
-    );
+const OBJECT_ID = 'b'.repeat(24);
 
-    expect(page.total).toBe(42);
-    expect(page.hasMore).toBe(true);
-    expect(page.conversations.length).toBe(1);
-  });
-
+describe('decodeAdminInstanceConversation — une ligne de l\'inventaire', () => {
   test('un direct sans titre rend `null`, jamais une chaîne vide', () => {
-    const page = decodeAdminInstanceConversations(servie({ data: [{ id: 'c2', title: '', type: 'direct' }] }), 0);
-    expect(page.conversations[0]?.title).toBe(null);
+    expect(decodeAdminInstanceConversation({ id: 'c2', title: '', type: 'direct' })?.title).toBe(null);
   });
 
   test('écarte une ligne sans identifiant plutôt que d\'inventer une clé', () => {
-    const page = decodeAdminInstanceConversations(servie({ data: [{ title: 'sans id' }, { id: 'c3' }] }), 0);
-    expect(page.conversations.length).toBe(1);
-    expect(page.conversations[0]?.id).toBe('c3');
+    expect(decodeAdminInstanceConversation({ title: 'sans id' })).toBe(null);
+    expect(decodeAdminInstanceConversation({ id: 'c3' })?.id).toBe('c3');
   });
 
-  test('sans `pagination`, déduit `hasMore` du décompte plutôt que de le supposer faux', () => {
-    const page = decodeAdminInstanceConversations(servie({ data: [{ id: 'c4' }] }), 0);
-    expect(page.total).toBe(1);
-    expect(page.hasMore).toBe(false);
+  test('forme FIGÉE : communauté nommée, fermeture, image, aperçu des membres — et rien d\'autre', () => {
+    expect(
+      decodeAdminInstanceConversation({
+        id: 'c1',
+        identifier: 'mshy_atelier',
+        title: 'Atelier',
+        type: 'group',
+        avatar: 'https://cdn.test/a.png',
+        isActive: false,
+        closedAt: '2026-09-01T10:00:00.000Z',
+        communityId: OBJECT_ID,
+        community: { id: OBJECT_ID, name: 'Lycée Njanda', identifier: 'lycee-njanda' },
+        memberCount: 4,
+        createdAt: '2026-08-01T10:00:00.000Z',
+        lastMessageAt: '2026-09-29T10:00:00.000Z',
+        secret: 'jamais',
+        participants: [
+          { id: 'p1', userId: 'u1', type: 'user', displayName: 'Awa Diop', avatar: null, role: 'CREATOR', joinedAt: '2026-08-01T10:00:00.000Z', isActive: true, isOnline: true },
+          { id: 'p2', userId: null, type: 'anonymous', displayName: 'Invité', avatar: '', role: 'member', joinedAt: null, isActive: true },
+          { userId: 'u9', displayName: 'sans ligne de participation' },
+        ],
+      }),
+    ).toEqual({
+      id: 'c1',
+      identifier: 'mshy_atelier',
+      title: 'Atelier',
+      type: 'group',
+      avatar: 'https://cdn.test/a.png',
+      isActive: false,
+      closedAt: '2026-09-01T10:00:00.000Z',
+      community: { id: OBJECT_ID, name: 'Lycée Njanda' },
+      memberCount: 4,
+      createdAt: '2026-08-01T10:00:00.000Z',
+      lastMessageAt: '2026-09-29T10:00:00.000Z',
+      participants: [
+        { id: 'p1', userId: 'u1', kind: 'user', displayName: 'Awa Diop', avatar: null, role: 'creator', joinedAt: '2026-08-01T10:00:00.000Z' },
+        { id: 'p2', userId: null, kind: 'anonymous', displayName: 'Invité', avatar: null, role: 'member', joinedAt: null },
+      ],
+    });
+  });
+
+  test('sans communauté ni fermeture : `null`, jamais un objet vide', () => {
+    const row = decodeAdminInstanceConversation({ id: 'c4', community: null, closedAt: null });
+    expect(row?.community).toBe(null);
+    expect(row?.closedAt).toBe(null);
+    expect(row?.isActive).toBe(true);
   });
 });
 
@@ -311,37 +340,34 @@ describe('la pagination SERVIE atteint le bouton', () => {
 
   test('l’inventaire : même chemin, même verdict', async () => {
     const vu: { path?: string } = {};
-    const resultat = await loadAdminInstanceConversations({
+    const resultat = await loadAdminConversationList({
       source: 'gateway',
       transport: transportQuiRend(
         { data: [{ id: 'c1' }], pagination: { total: 42, offset: 0, limit: 20, hasMore: true } },
         vu,
       ),
-      offset: 0,
+      query: new URLSearchParams({ offset: '0' }),
     } as never);
 
     expect(resultat.ok).toBe(true);
     if (!resultat.ok) return;
     expect(resultat.data.total).toBe(42);
     expect(resultat.data.hasMore).toBe(true);
+    expect(resultat.data.rows.map((row) => row.id)).toEqual(['c1']);
   });
 });
 
-describe('loadAdminInstanceConversations — tri, ordre, filtres et taille de page (#7873)', () => {
-  test('transmet ce que la liste demande, et rien de vide', async () => {
+describe('loadAdminConversationList — la requête composée par la liste (#7873, #8876)', () => {
+  test('part telle quelle sur l’adresse du catalogue, sans rien ajouter', async () => {
     const vu: { path?: string } = {};
-    await loadAdminInstanceConversations({
+    await loadAdminConversationList({
       source: 'gateway',
       transport: transportQuiRend({ data: [], pagination: { total: 0 } }, vu),
-      offset: 50,
-      limit: 50,
-      search: '',
-      sort: 'createdAt',
-      order: 'asc',
-      filters: { type: 'group', isActive: 'false' },
+      query: new URLSearchParams({ offset: '50', limit: '50', sort: 'createdAt', order: 'asc', type: 'group', isActive: 'false', search: 'Famille' }),
     } as never);
 
     const adresse = new URL(vu.path ?? '', 'https://x.test');
+    expect(adresse.pathname).toBe('/api/v1/admin/conversations');
     expect(Object.fromEntries(adresse.searchParams)).toEqual({
       offset: '50',
       limit: '50',
@@ -349,6 +375,24 @@ describe('loadAdminInstanceConversations — tri, ordre, filtres et taille de pa
       order: 'asc',
       type: 'group',
       isActive: 'false',
+      search: 'Famille',
     });
+  });
+
+  test('un refus de la passerelle remonte tel quel, jamais une page vide', async () => {
+    const transport = (() => {
+      throw new Error('appel positionnel non utilisé');
+    }) as unknown as HttpTransport;
+    transport.request = (async () => ({ ok: false, status: 403, error: 'Accès refusé' })) as HttpTransport['request'];
+
+    const resultat = await loadAdminConversationList({ source: 'gateway', transport, query: new URLSearchParams() } as never);
+
+    expect(resultat).toEqual({ ok: false, status: 403, error: 'Accès refusé' });
+  });
+});
+
+describe('la racine des listes invalide toutes les pages', () => {
+  test('la clé d’une liste en descend', () => {
+    expect(adminConversationsQueryKey('offset=20').slice(0, 2)).toEqual([...ADMIN_CONVERSATIONS_ROOT_KEY]);
   });
 });

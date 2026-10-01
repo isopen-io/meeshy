@@ -2,6 +2,7 @@ import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { act, type ReactElement } from 'react';
 
+import { MEMBER_EXTRAS } from '@/lib/admin/member-fixture';
 import { adminUserDetailQueryKey, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -14,7 +15,6 @@ import { pathOf, routedTransport, type RoutedReply } from '@/test-support/routed
 import { AdminMemberContactSection } from './admin-member-contact';
 import { AdminMemberIdentitySection } from './admin-member-identity';
 import { AdminMemberRoleSection } from './admin-member-role';
-import { AdminMemberSecuritySection } from './admin-member-security';
 
 /**
  * **LA FICHE D'UN MEMBRE S'ÉDITE EN PLACE, SECTION PAR SECTION** (#8289).
@@ -76,6 +76,7 @@ const membre = (surcharge: Partial<AdminUserDetail> = {}): AdminUserDetail => ({
   lastActiveAt: null,
   createdAt: null,
   updatedAt: null,
+  ...MEMBER_EXTRAS,
   ...surcharge,
 });
 
@@ -189,14 +190,13 @@ describe('contact — l’état vérifié se LIT, et se renvoie', () => {
     expect(host.querySelector('[data-admin-contact-state="email"]')?.textContent).toBe('Vérification envoyée');
   });
 
-  test('« Marquer vérifié » pose la preuve et le membre servi remplace le détail', async () => {
+  test('poser ou retirer la preuve n’est plus ici : c’est un geste sensible, confirmé, dans la section Sécurité (#8004)', async () => {
     const m = membre();
-    const { host, calls } = await monter((deps) => <AdminMemberContactSection membre={m} language="fr" onAnnounce={() => {}} deps={deps} />, avecPreuves(m));
+    const { host } = await monter((deps) => <AdminMemberContactSection membre={m} language="fr" onAnnounce={() => {}} deps={deps} />, avecPreuves(m));
 
-    await mounter.click(host.querySelector<HTMLButtonElement>('[data-admin-contact-verify="email"]'));
-
-    expect(calls().find((req) => req.method === 'PATCH')?.body).toEqual({ emailVerified: true });
-    expect(appQueryClient.getQueryData<AdminUserDetail>(adminUserDetailQueryKey('u-alice'))?.emailVerifiedAt).toBe('2026-09-27T10:00:00.000Z');
+    expect(host.querySelector('[data-admin-contact-verify]')).toBeNull();
+    expect(host.textContent).not.toContain('Marquer vérifié');
+    expect(host.textContent).not.toContain('Retirer la vérification');
   });
 
   test('tant que l’adresse est en brouillon, ses gestes de preuve attendent', async () => {
@@ -210,49 +210,8 @@ describe('contact — l’état vérifié se LIT, et se renvoie', () => {
   });
 });
 
-describe('sécurité — le second facteur', () => {
-  const securite = (reponse: ApiResult<unknown>): RoutedReply => (req) =>
-    req.method === 'PATCH' && pathOf(req) === '/api/v1/admin/users/u-alice/security' ? reponse : undefined;
-
-  const monterSecurite = (m: AdminUserDetail, ...repondeurs: readonly RoutedReply[]) =>
-    monter(
-      (deps) => (
-        <AdminMemberSecuritySection membre={m} language="fr" sessions={2} onAnnounce={() => {}} onOpenPassword={() => {}} onOpenSessions={() => {}} deps={deps} />
-      ),
-      ...repondeurs,
-    );
-
-  test('sans téléphone, armer n’est pas offert — et la raison est dite', async () => {
-    const { host } = await monterSecurite(membre());
-    const bascule = host.querySelector<HTMLButtonElement>('#admin-member-two-factor');
-
-    expect(bascule?.disabled).toBe(true);
-    expect(host.textContent).toContain('Renseignez un téléphone pour activer le second facteur.');
-    expect(host.querySelector('[data-admin-sessions-count]')?.textContent).toBe('2');
-  });
-
-  test('avec un téléphone, armer part sur …/security ; une application jamais appairée se dit', async () => {
-    const { host, calls } = await monterSecurite(
-      membre({ phoneNumber: '+33612345678' }),
-      securite({ ok: false, status: 409, error: 'x', code: 'TWO_FACTOR_NOT_ENROLLED' }),
-    );
-
-    await mounter.click(host.querySelector<HTMLButtonElement>('#admin-member-two-factor'));
-
-    expect(calls().find((req) => req.method === 'PATCH')?.body).toEqual({ twoFactorEnabled: true });
-    expect(etat(host, 'security')).toBe('Le membre doit d’abord appairer une application d’authentification.');
-  });
-
-  test('un second facteur armé se désarme même sans téléphone — c’est la récupération d’un appareil perdu', async () => {
-    const m = membre({ twoFactorEnabled: true, twoFactorEnabledAt: '2026-09-01T00:00:00.000Z' });
-    const { host, calls } = await monterSecurite(m, securite({ ok: true, data: servi({ ...m, twoFactorEnabledAt: null, twoFactorEnabled: false }) }));
-
-    await mounter.click(host.querySelector<HTMLButtonElement>('#admin-member-two-factor'));
-
-    expect(calls().find((req) => req.method === 'PATCH')?.body).toEqual({ twoFactorEnabled: false });
-    expect(appQueryClient.getQueryData<AdminUserDetail>(adminUserDetailQueryKey('u-alice'))?.twoFactorEnabled).toBe(false);
-  });
-});
+/* La section Sécurité — déverrouiller, double authentification, preuves, consentements — a son
+   propre fichier de témoins (`admin-member-security.test.tsx`, #8004). */
 
 describe('rôle et statut — la confirmation ne protège que ce qui le mérite', () => {
   test('changer le rôle avertit, demande « Confirmer », puis n’envoie que le rôle', async () => {

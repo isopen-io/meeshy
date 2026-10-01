@@ -55,7 +55,6 @@ const fr = {
   'announce.messageProtected': 'Message protégé',
   'announce.selectionCap': 'Maximum {count} messages',
   'announce.nothingToCopy': 'Rien à copier',
-
   'message.author.self': 'Vous',
   'message.excerpt.protected': 'contenu protégé',
   'a11y.message.menu.subject': 'Actions du message de {author} : {excerpt}',
@@ -502,6 +501,7 @@ const fr = {
   'settings.save.error': "Le réglage n'a pas été enregistré.",
   'settings.theme.sync_error': 'Thème appliqué sur cet appareil, sans synchronisation.',
   'common.cancel': 'Annuler',
+  'common.close': 'Fermer',
 
   'media.video.play': 'Lire la vidéo',
   'media.video.pause': 'Pause',

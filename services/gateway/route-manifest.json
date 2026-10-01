@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 605,
+  "routeCount": 615,
   "routes": [
     {
       "method": "DELETE",
@@ -1469,6 +1469,20 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/audit-logs",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/broadcasts",
       "module": "broadcastRoutes",
       "mountPrefix": "/api/v1/admin/broadcasts",
@@ -1511,7 +1525,50 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/communities/:communityId",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/communities/:communityId/members",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/conversations",
+      "module": "userAdminRoutes",
+      "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/conversations/:conversationId",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
       "securityLevel": "inconnu",
@@ -1752,6 +1809,21 @@
     },
     {
       "method": "GET",
+      "path": "/api/v1/admin/monitoring",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
       "path": "/api/v1/admin/posts",
       "module": "adminPostRoutes",
       "mountPrefix": "/api/v1/admin",
@@ -1908,6 +1980,48 @@
       "method": "GET",
       "path": "/api/v1/admin/share-links",
       "module": "registerContentRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/share-links/:id",
+      "module": "registerContentRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/tracking-links",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/admin/tracking-links/:linkId",
+      "module": "adminOversightRoutes",
       "mountPrefix": "/api/v1/admin",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
@@ -4850,6 +4964,20 @@
     },
     {
       "method": "PATCH",
+      "path": "/api/v1/admin/communities/:communityId",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PATCH",
       "path": "/api/v1/admin/conversations/:conversationId",
       "module": "userAdminRoutes",
       "mountPrefix": "/api/v1",
@@ -4917,6 +5045,21 @@
         "S5"
       ],
       "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": true
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/v1/admin/tracking-links/:linkId",
+      "module": "adminOversightRoutes",
+      "mountPrefix": "/api/v1/admin",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5",
+        "S6"
+      ],
+      "securityBasisKey": "admin-rank",
       "hierarchyGated": false,
       "adminPrefixed": true
     },

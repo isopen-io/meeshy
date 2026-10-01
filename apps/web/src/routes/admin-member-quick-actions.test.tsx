@@ -2,6 +2,7 @@ import { QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import { act } from 'react';
 
+import { MEMBER_EXTRAS } from '@/lib/admin/member-fixture';
 import { adminUserDetailQueryKey, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -73,6 +74,7 @@ const membre = (surcharge: Partial<AdminUserDetail> = {}): AdminUserDetail => ({
   lastActiveAt: null,
   createdAt: null,
   updatedAt: null,
+  ...MEMBER_EXTRAS,
   ...surcharge,
 });
 
