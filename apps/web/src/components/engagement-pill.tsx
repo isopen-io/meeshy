@@ -8,10 +8,11 @@ import { Link } from '@/routes/route-table';
 import { Glyph } from './glyph';
 
 /**
- * LA PASTILLE D'ENGAGEMENT D'UNE CONVERSATION (#8906, #9044) — « 🔥 4 · 120 ».
+ * LA PASTILLE D'ENGAGEMENT D'UNE CONVERSATION (#8906, #9044) — « 🔥 4 · 1,2 k ».
  *
  * La flamme, la série en jours, un point central, puis les points que cette
- * conversation a rapportés au LECTEUR depuis toujours. Posée sous le titre de
+ * conversation a rapportés au LECTEUR depuis toujours, abrégés. Sans série en
+ * cours, rien. Posée sous le titre de
  * l'en-tête DÉPLIÉ, où elle mène à la Progression ; replié, c'est la flamme du
  * jour sous l'avatar (`HeaderFlame`) qui parle. La liste porte la série en
  * rouge à côté de l'heure (`ConversationStreakMark`, 2026-10-01).
@@ -20,7 +21,7 @@ import { Glyph } from './glyph';
  * (« Série de 4 jours, 120 points dont 12 aujourd'hui »).
  *
  * Le jour est relu à la MINUTE (`useMinute`, l'horloge partagée) : passé
- * minuit, la série tombe sans attendre le serveur.
+ * minuit, la série tombe — et la pastille avec elle — sans attendre le serveur.
  */
 export function EngagementPill({
   snapshot,
@@ -46,7 +47,7 @@ export function EngagementPill({
         <Glyph name="flame" size={12} style={{ color: 'var(--ios-warning)' }} />
         <span data-engagement-streak={model.streakDays}>{model.streakDays}</span>
         <span>·</span>
-        <span data-engagement-points>{model.totalPoints}</span>
+        <span data-engagement-points>{model.totalText}</span>
       </span>
       <span className="sr-only">{model.label}</span>
     </>

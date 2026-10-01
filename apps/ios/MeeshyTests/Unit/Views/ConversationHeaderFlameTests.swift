@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 // MARK: - L'en-tête de l'aperçu et la flamme du jour (#9031)
@@ -62,7 +63,7 @@ final class ConversationHeaderFlameTests: XCTestCase {
         XCTAssertFalse(HeaderFlameVisibility.dismissed(afterHeaderExpanded: false, wasDismissed: false))
     }
 
-    // MARK: - La lueur rejoint la flamme (#9044)
+    // MARK: - La lueur rejoint la flamme, qui s'allume (#9044)
 
     func test_glowHead_startsAndEndsUnderTheAvatar_whereTheFlameSits() {
         XCTAssertEqual(HeaderFlameOrbit.glowHead(at: 0).degrees, 90, accuracy: 0.001)
@@ -81,16 +82,38 @@ final class ConversationHeaderFlameTests: XCTestCase {
         XCTAssertEqual(HeaderFlameOrbit.glowOpacity(at: 0.9), 0, accuracy: 0.001)
     }
 
-    func test_flameScale_staysStillDuringTheTurn_thenGrowsWhenTheGlowArrives() {
-        XCTAssertEqual(HeaderFlameOrbit.flameScale(at: 0), 1, accuracy: 0.001)
-        XCTAssertEqual(HeaderFlameOrbit.flameScale(at: HeaderFlameOrbit.orbitShare / 2), 1, accuracy: 0.001,
-                       "la pastille ne tourne plus : seule la lueur fait le tour")
-        XCTAssertEqual(HeaderFlameOrbit.flameScale(at: HeaderFlameOrbit.valueRelease), HeaderFlameOrbit.peakScale, accuracy: 0.001)
-        XCTAssertEqual(HeaderFlameOrbit.flameScale(at: 1), 1, accuracy: 0.001)
+    func test_flame_isDimWhileTheGlowTurns_andLightsUpWhenItArrives() {
+        XCTAssertEqual(HeaderFlameOrbit.flameOpacity(at: 0), 1, accuracy: 0.001)
+        XCTAssertLessThan(HeaderFlameOrbit.flameOpacity(at: HeaderFlameOrbit.orbitShare * 0.6), 0.5)
+        XCTAssertEqual(HeaderFlameOrbit.flameOpacity(at: HeaderFlameOrbit.orbitShare), 1, accuracy: 0.001)
+        XCTAssertEqual(HeaderFlameOrbit.flameOpacity(at: 1), 1, accuracy: 0.001)
     }
 
-    func test_valueRelease_happensAtTheHeightOfTheGrowth() {
-        XCTAssertGreaterThan(HeaderFlameOrbit.valueRelease, HeaderFlameOrbit.orbitShare)
+    func test_flame_staysStillDuringTheTurn_thenBurnsAndGrowsOnArrival() {
+        let midTurn = HeaderFlameOrbit.orbitShare / 2
+        XCTAssertEqual(HeaderFlameOrbit.flameScale(at: midTurn), 1, accuracy: 0.001,
+                       "la flamme ne tourne pas et ne grossit pas tant que la lueur fait le tour")
+        XCTAssertEqual(HeaderFlameOrbit.burn(at: midTurn), .still)
+        let midIgnition = (HeaderFlameOrbit.orbitShare + HeaderFlameOrbit.ignitionEnd) / 2
+        XCTAssertGreaterThan(HeaderFlameOrbit.flameScale(at: midIgnition), 1.4)
+        XCTAssertNotEqual(HeaderFlameOrbit.burn(at: midIgnition + 0.03), .still, "la flamme vacille en brûlant")
+        XCTAssertEqual(HeaderFlameOrbit.flameScale(at: 1), 1, accuracy: 0.001)
+        XCTAssertEqual(HeaderFlameOrbit.burn(at: 1), .still)
+    }
+
+    func test_tongues_riseFromTheFlameWhileItBurns_andAreGoneAtRest() {
+        for index in 0..<HeaderFlameOrbit.tongueCount {
+            XCTAssertEqual(HeaderFlameOrbit.tongue(index, at: HeaderFlameOrbit.orbitShare / 2).opacity, 0, accuracy: 0.001)
+            XCTAssertEqual(HeaderFlameOrbit.tongue(index, at: 1).opacity, 0, accuracy: 0.001)
+        }
+        let rising = (0..<HeaderFlameOrbit.tongueCount).map {
+            HeaderFlameOrbit.tongue($0, at: (HeaderFlameOrbit.orbitShare + HeaderFlameOrbit.ignitionEnd) / 2)
+        }
+        XCTAssertTrue(rising.contains { $0.opacity > 0.3 && $0.rise > 0 }, "des mèches montent de la flamme qui brûle")
+    }
+
+    func test_valueRelease_comesAfterTheFlameHasCaught() {
+        XCTAssertGreaterThan(HeaderFlameOrbit.valueRelease, (HeaderFlameOrbit.orbitShare + HeaderFlameOrbit.ignitionEnd) / 2)
         XCTAssertLessThan(HeaderFlameOrbit.valueRelease, 1)
     }
 
@@ -99,7 +122,18 @@ final class ConversationHeaderFlameTests: XCTestCase {
         XCTAssertEqual(HeaderFlameOrbit.glowHead(at: 2), HeaderFlameOrbit.glowHead(at: 1))
     }
 
-    // MARK: - La pastille « 🔥 série · total » ne vit que dans l'en-tête déplié (#9044)
+    // MARK: - Rien sans série en cours, et les totaux abrégés (#9044)
+
+    private func engagement(total: Int = 120, today: Int = 12, streak: Int = 4) -> ConversationEngagementSnapshot {
+        ConversationEngagementSnapshot(conversationId: "c", totalPoints: total, todayPoints: today,
+                                       streakDays: streak, day: "2026-10-01")
+    }
+
+    func test_headerFlame_withoutARunningStreak_showsNothing() {
+        XCTAssertTrue(HeaderFlameVisibility.hasRunningStreak(engagement()))
+        XCTAssertFalse(HeaderFlameVisibility.hasRunningStreak(engagement(streak: 0)))
+        XCTAssertFalse(HeaderFlameVisibility.hasRunningStreak(nil))
+    }
 
     func test_headerCallButtons_doNotCarryTheEngagementPill() throws {
         let source = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
@@ -110,12 +144,21 @@ final class ConversationHeaderFlameTests: XCTestCase {
     }
 
     func test_engagementPill_showsStreakDotTotal_withoutTodayInParentheses() {
-        let pill = ConversationEngagementPill(
-            snapshot: ConversationEngagementSnapshot(conversationId: "c", totalPoints: 120, todayPoints: 12,
-                                                     streakDays: 4, day: "2026-10-01"),
-            accentColor: "FF0000"
-        )
-        XCTAssertEqual(pill.text, "4 · 120")
+        let pill = ConversationEngagementPill(snapshot: engagement(), accentColor: "FF0000")
+        XCTAssertEqual(pill?.text, "4 · 120")
+    }
+
+    func test_engagementPill_withoutARunningStreak_isAbsent() {
+        XCTAssertNil(ConversationEngagementPill(snapshot: engagement(streak: 0), accentColor: "FF0000"))
+    }
+
+    func test_totals_areAbbreviated_inTheReadersLocale() {
+        let english = Locale(identifier: "en_US")
+        let pill = ConversationEngagementPill(snapshot: engagement(total: 1_234), accentColor: "FF0000", locale: english)
+        XCTAssertEqual(pill?.text, "4 · \(CompactCountLabel.text(1_234, locale: english))")
+        XCTAssertEqual(CompactCountLabel.text(1_234, locale: english), "1.2K")
+        let mark = ConversationStreakMark(snapshot: engagement(total: 2_500_000), locale: english)
+        XCTAssertEqual(mark?.totalText, "2.5M")
     }
 
     // MARK: - La mémoire, par conversation

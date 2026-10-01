@@ -171,7 +171,7 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
 
   test('un snapshot d’hier se relit au jour du lecteur : 0 aujourd’hui', () => {
     const html = renderToStaticMarkup(
-      <HeaderFlame snapshot={snapshot({ day: '2020-01-01' })} replay={0} onDismiss={() => undefined} />,
+      <HeaderFlame snapshot={snapshot({ day: localDayOf(Date.now() - 86_400_000) })} replay={0} onDismiss={() => undefined} />,
     );
     expect(html).toContain('data-header-flame="0"');
   });
@@ -191,6 +191,29 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
     const host = await mounter.mount(<HeaderFlame snapshot={snapshot()} replay={1} onDismiss={() => touched.push('x')} />);
     await mounter.click(host.querySelector<HTMLElement>('[data-header-flame] button'));
     expect(touched).toEqual(['x']);
+  });
+
+  test('sans série en cours, aucune flamme ni aucun point (#9044)', () => {
+    expect(renderToStaticMarkup(<HeaderFlame snapshot={snapshot({ streakDays: 0 })} replay={0} onDismiss={() => undefined} />)).toBe('');
+  });
+
+  test('la flamme sans capsule, des mèches pour brûler, et un compte abrégé (#9044)', () => {
+    const html = renderToStaticMarkup(
+      <HeaderFlame snapshot={snapshot({ todayPoints: 1_234 })} replay={1} onDismiss={() => undefined} language="en" />,
+    );
+    expect(html.match(/data-flame-tongue/g)?.length).toBe(3);
+    expect(html).toContain('>1.2K<');
+    const css = readFileSync(new URL('../styles/header-flame.css', import.meta.url), 'utf8');
+    const mark = css.match(/\.header-flame-mark\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(mark).not.toMatch(/background|box-shadow|border-radius/);
+  });
+
+  test('le compteur est détouré : blanc sur noir en sombre, noir autour de l’anthracite en clair (#9044)', () => {
+    const css = readFileSync(new URL('../styles/header-flame.css', import.meta.url), 'utf8');
+    const light = css.match(/\.header-flame-count-digits\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(light).toContain('-webkit-text-stroke');
+    expect(light).toContain('var(--flame-count-stroke)');
+    expect(css).toMatch(/\.dark[^{]*\{[^}]*--flame-count-stroke:\s*#fff/);
   });
 
   test('la valeur d’avant l’envoi tient jusqu’à ce que la lueur rejoigne la flamme, puis monte (#9044)', async () => {

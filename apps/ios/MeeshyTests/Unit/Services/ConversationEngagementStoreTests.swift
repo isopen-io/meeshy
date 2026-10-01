@@ -201,7 +201,7 @@ final class ConversationEngagementStoreTests: XCTestCase {
     func test_streakMark_runningStreak_showsDaysAndTotalPoints() {
         let mark = ConversationStreakMark(snapshot: snapshot(total: 120, today: 12, streak: 4))
         XCTAssertEqual(mark?.streakDays, 4)
-        XCTAssertEqual(mark?.totalPoints, 120)
+        XCTAssertEqual(mark?.totalText, "120")
     }
 
     func test_streakMark_noStreak_isNil() {
