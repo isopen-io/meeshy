@@ -26,6 +26,16 @@ public final class ConversationAudioCoordinator: ObservableObject {
     nonisolated deinit {}
     public static let shared = ConversationAudioCoordinator()
 
+    /// Pourquoi la lecture s'est arrêtée (#8983) : la croix ferme le lecteur sur le champ, une file
+    /// épuisée le laisse le temps d'un fondu. Les deux écrivent `activeContext = nil` ; seule cette
+    /// raison les distingue, et elle est posée AVANT ce `nil`.
+    public enum FinDeLecture: Equatable, Sendable {
+        case fermee
+        case epuisee
+    }
+
+    public private(set) var derniereFin: FinDeLecture?
+
     // MARK: - Published State
 
     @Published public private(set) var activeContext: ActiveAudioContext?
@@ -474,6 +484,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
         queue = []
         queueCount = 0
         history = []
+        derniereFin = .fermee
         activeContext = nil
     }
 
@@ -537,6 +548,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
             return
         }
         guard let head = queue.first else {
+            derniereFin = .epuisee
             activeContext = nil
             return
         }
@@ -566,6 +578,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
         if queue.isEmpty {
             // Stop engine explicitly — without this, audio continues after the mini-player vanishes.
             engine.stop()
+            derniereFin = .epuisee
             activeContext = nil
             endAdvanceBackgroundTask()
         } else {

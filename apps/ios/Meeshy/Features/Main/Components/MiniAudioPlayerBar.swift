@@ -144,9 +144,17 @@ struct MiniAudioPlayerBar: View {
 
     private func handleContextChange(_ newValue: ActiveAudioContext?) {
         if newValue == nil {
+            graceTask?.cancel()
+            graceTask = nil
+            // La croix ferme sur le champ (#8983) : seule une file épuisée garde la barre le
+            // temps d'un fondu.
+            guard coordinator.derniereFin == .epuisee else {
+                graceContext = nil
+                lastObservedContext = nil
+                return
+            }
             // Fin de queue : capture le dernier contexte pour le fade.
             graceContext = lastObservedContext
-            graceTask?.cancel()
             graceTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: Constants.graceDurationNanos)
                 if !Task.isCancelled { graceContext = nil }
@@ -242,6 +250,9 @@ struct MiniAudioPlayerBar: View {
                         .font(.caption.weight(.bold))
                         .foregroundColor(MiniAudioPlayerBarStyle.secondaryForeground)
                         .frame(width: 44, height: 44)
+                        // Tout le cadre se touche (#8983) : sa partie transparente tombait sur
+                        // le corps de la barre, qui ouvre la conversation au lieu de fermer.
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "mini_player.close", defaultValue: "Fermer le lecteur", bundle: .main))
