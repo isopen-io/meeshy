@@ -63,14 +63,14 @@
 .header-flame-tongue-2 { --tongue-x: 0px; --tongue-delay: 1.18s; }
 
 /* Rouge (`--ios-error`, le `MeeshyColors.error` d'iOS, le même dans les deux
-   thèmes) cerclé de 2 px gris anthracite, en clair comme en sombre (porteur
-   2026-10-01). `paint-order` peint le trait SOUS le remplissage : 4 px de
-   trait centré = 2 px visibles autour du chiffre. */
+   thèmes) cerclé de 1 px blanc, en clair comme en sombre (porteur
+   2026-10-01). `paint-order` peint le trait SOUS le remplissage : 2 px de
+   trait centré = 1 px visible autour du chiffre. */
 .header-flame-count-digits {
   display: inline-block;
   font-weight: 800;
   color: var(--ios-error);
-  -webkit-text-stroke: 4px #383e42;
+  -webkit-text-stroke: 2px #fff;
   paint-order: stroke fill;
 }
 
