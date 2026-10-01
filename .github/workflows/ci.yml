@@ -639,12 +639,6 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
-      - name: DIAGNOSTIC TEMPORAIRE gate effets d'appel (a retirer)
-        run: |
-          cd apps/web
-          node scripts/check-calls-effects.mjs 2>&1 | grep -v '^  ok' || true
-          npx playwright --version
-
       # CHAQUE GATE RAPPORTE SON VERDICT, PAS SEULEMENT LE PREMIER (#6137).
       # GitHub arrête un travail à la première étape rouge : les dix gates
       # ci-dessous étant indépendants (chacun lève son propre serveur statique
