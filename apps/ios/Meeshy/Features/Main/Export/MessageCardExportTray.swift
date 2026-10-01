@@ -35,6 +35,10 @@ struct MessageCardExportTray: View {
     /// Le passage glissé sur l'onde : son nouveau point de départ, en secondes.
     let onExcerptStart: (Double) -> Void
 
+    /// Le plateau prend sa hauteur IDÉALE : ses rangées défilent à l'horizontale,
+    /// donc se laisseraient écraser à la verticale, et un panneau haut (un vocal
+    /// en vidéo : durée et passage) débordait sur les boutons. C'est l'aperçu,
+    /// lui, qui cède la place (#8979).
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             tabBar
@@ -43,6 +47,7 @@ struct MessageCardExportTray: View {
                 .animation(.spring(response: 0.35, dampingFraction: 0.85), value: tab)
         }
         .padding(.vertical, MeeshySpacing.md)
+        .fixedSize(horizontal: false, vertical: true)
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 

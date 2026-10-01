@@ -253,7 +253,7 @@ struct MessageCardExportSheet: View {
     @ViewBuilder
     private var hint: some View {
         if !touched && rendered != nil {
-            Label(MessageCardExportText.text("export.card.hint.pinch", "Touchez une partie pour la régler, pincez-la pour la redimensionner"), systemImage: "hand.tap")
+            Label(MessageCardExportText.text("export.card.hint.pinch", "Touchez pour régler, pincez pour redimensionner"), systemImage: "hand.tap")
                 .font(.footnote.weight(.semibold))
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.vertical, MeeshySpacing.sm)

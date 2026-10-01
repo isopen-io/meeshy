@@ -221740,43 +221740,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المس جزءًا لضبطه، واقرصه لتغيير حجمه"
+            "value": "المس للضبط، واقرص لتغيير الحجم"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tippe auf einen Teil, um ihn anzupassen, und zieh ihn mit zwei Fingern, um seine Größe zu ändern"
+            "value": "Tippen zum Anpassen, mit zwei Fingern skalieren"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tap a part to adjust it, pinch it to resize it"
+            "value": "Tap to adjust, pinch to resize"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toca una parte para ajustarla, pellízcala para cambiar su tamaño"
+            "value": "Toca para ajustar, pellizca para redimensionar"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Touchez une partie pour la régler, pincez-la pour la redimensionner"
+            "value": "Touchez pour régler, pincez pour redimensionner"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tocca una parte per regolarla, pizzicala per ridimensionarla"
+            "value": "Tocca per regolare, pizzica per ridimensionare"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Toque em uma parte para ajustá-la, faça pinça para redimensioná-la"
+            "value": "Toque para ajustar, faça pinça para redimensionar"
           }
         }
       }
