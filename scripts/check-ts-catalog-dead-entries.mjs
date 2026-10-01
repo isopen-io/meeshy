@@ -368,7 +368,13 @@ export const callersIn = (contents, nsNames) => {
 // les lise (statistiques, langues, signalements, liens, diffusions, anonymes,
 // communautés, publications, classement…). 45 sous la valeur d'avant le chantier
 // (331), là où la dette annoncée n'était que de 6. Valeur MESURÉE le 2026-09-30.
-const BASELINE_DEAD_ENTRIES = 286;
+// 286 → 285 (#8876, 2026-09-30) : la revue de la vue de Dieu. La fiche d'un
+// membre révoque une session précise par
+// `adminEndpoints.usersByUserIdSessionsBySessionId`
+// (`lib/api/admin-user-dossier.ts`) — une entrée servie de longue date par la
+// passerelle, sans lecteur jusque-là, a enfin son appelant. Valeur MESURÉE le
+// 2026-09-30.
+const BASELINE_DEAD_ENTRIES = 285;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
