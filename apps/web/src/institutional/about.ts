@@ -12,6 +12,7 @@ export const PAGE_ABOUT: ContentPage = {
   title: 'À propos de Meeshy',
   hero: "Le réseau social où la langue n'est plus une barrière. Communiquez, apprenez et collaborez sans frontières.",
   description: "Le réseau social où la langue n'est plus une barrière. Communiquez, apprenez et collaborez sans frontières.",
+  mee: { sticker: 'duo-mee-calin', caption: 'Voici Mee et Meo, les deux colibris de Meeshy. Ils s’envoient des cœurs dans toutes les langues, et vous les retrouvez dans vos stickers.' },
   sections: [
     {
       title: "Qu'est-ce que Meeshy ?",
@@ -32,6 +33,28 @@ export const PAGE_ABOUT: ContentPage = {
             '🗣️ Transcription et traduction audio pour briser les barrières orales',
             '📚 Apprentissage naturel des langues en communiquant avec le monde entier',
             '🌐 Promotion active des langues minoritaires africaines, asiatiques et autochtones',
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Mee et Meo, les mascottes de Meeshy',
+      blocks: [
+        {
+          kind: 'paragraphes',
+          body: [
+            'Mee est un colibri : le plus petit des oiseaux, et celui qui bat des ailes le plus vite. Comme un message sur Meeshy, il traverse les distances en un clin d’œil. On la reconnaît à sa plume en boucle sur la tête et à son cœur rubis sur la poitrine.',
+            'Meo est son jumeau. Huppe violette en trois plumes, cœur violet, queue rousse : il est le plus taquin des deux. Ensemble, ils se font des câlins, se boudent, se consolent et fêtent tout ce qui mérite de l’être.',
+            'Vous les retrouvez dans la feuille de stickers de chaque conversation : Mee et Meo seuls, puis à deux — et le geste change selon celui qui le fait. Les Instants écrivent votre lieu, l’heure, la météo ou un mot doux sur le sticker, au moment où vous l’envoyez.',
+          ],
+        },
+        {
+          kind: 'mee',
+          views: [
+            { sticker: 'mee-coucou', caption: 'Mee dit bonjour à tout le monde, dans toutes les langues.' },
+            { sticker: 'meo-serenade', caption: 'Meo joue une sérénade à qui veut l’entendre.' },
+            { sticker: 'duo-meo-bisou', caption: 'Quand Meo l’embrasse, Mee s’évanouit de bonheur.' },
+            { sticker: 'instant-bonjour', caption: 'Les Instants écrivent l’heure, le lieu ou un message.' },
           ],
         },
       ],

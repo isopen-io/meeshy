@@ -13,8 +13,10 @@
  * de regarder la page.
  */
 import { BRAND_LOGO_PATH } from '../lib/brand';
+import { findMeeSticker } from '../lib/mee/catalog';
+import { renderMeeSticker } from '../lib/mee/render';
 import { BrandSignature } from './brand-signature';
-import type { Block, Card, FramedRow, ContentPage, Section } from './type';
+import type { Block, Card, FramedRow, ContentPage, MeeView, Section } from './type';
 
 /**
  * LE RENDU DES CINQ PAGES INSTITUTIONNELLES.
@@ -73,6 +75,36 @@ function FramedRowView({ row }: { row: FramedRow }) {
 }
 
 /**
+ * MEE DANS LA PAGE (#9034) — le SVG du sticker, son animation comprise : une
+ * balise `<style>` dans le SVG, sous `prefers-reduced-motion`, aucun script.
+ * Le dessin est décoratif (`aria-hidden`) : la légende porte le sens.
+ */
+function MeeFigure({ view, size, lead }: { view: MeeView; size: number; lead?: boolean }) {
+  const sticker = findMeeSticker(view.sticker);
+  if (sticker === undefined) return null;
+  return (
+    <figure
+      data-mee-view={sticker.id}
+      className="rounded-card p-4"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        margin: 0,
+        backgroundColor: lead === true ? 'color-mix(in srgb, var(--color-ios-brand) 8%, transparent)' : 'var(--color-ios-card)',
+      }}
+    >
+      <span
+        aria-hidden="true"
+        style={{ display: 'block', flex: 'none', width: size, height: size }}
+        dangerouslySetInnerHTML={{ __html: renderMeeSticker(sticker, { uid: `page-${sticker.id}` }) }}
+      />
+      <figcaption className={lead === true ? 'font-medium' : undefined}>{view.caption}</figcaption>
+    </figure>
+  );
+}
+
+/**
  * Le `switch` est EXHAUSTIF et sans `default` — repris de l'ancienne refonte,
  * avec sa raison : un sixième genre ajouté au type somme ne compilera pas tant
  * qu'il n'est pas rendu. Un `default` qui rendrait `null` transformerait cette
@@ -120,6 +152,14 @@ function RenderedBlock({ block }: { block: Block }) {
             <FramedRowView key={row.text} row={row} />
           ))}
         </ul>
+      );
+    case 'mee':
+      return (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {block.views.map((view) => (
+            <MeeFigure key={view.sticker} view={view} size={96} />
+          ))}
+        </div>
       );
   }
 }
@@ -181,6 +221,11 @@ export function InstitutionalPage({ page, version }: { page: ContentPage; versio
           <p className="mt-2 text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
             {page.mention}
           </p>
+        ) : null}
+        {page.mee ? (
+          <div className="mt-6">
+            <MeeFigure view={page.mee} size={132} lead />
+          </div>
         ) : null}
 
         {page.sections.map((section) => (
