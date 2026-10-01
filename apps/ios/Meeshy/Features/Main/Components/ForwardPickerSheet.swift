@@ -41,6 +41,10 @@ struct ForwardPickerSheet: View {
     ///
     /// `nil` = l'hôte n'a rien branché, et l'entrée est ABSENTE (loi 4).
     var onCompose: (() -> Void)? = nil
+    /// **« Imager la discussion »** (#9039) — la feuille se referme et l'hôte
+    /// ouvre l'atelier « Imagine » sur la discussion qui mène au message.
+    /// `nil` = l'entrée est ABSENTE (loi 4).
+    var onImageDiscussion: (() -> Void)? = nil
     let onDismiss: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -359,7 +363,7 @@ struct ForwardPickerSheet: View {
 
     @ViewBuilder
     private var publicationSection: some View {
-        if !publicationTargets.isEmpty || offersCompose {
+        if !publicationTargets.isEmpty || offersCompose || onImageDiscussion != nil {
             VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 Text(String(localized: "forward.publish-section", defaultValue: "Publier", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
@@ -395,6 +399,10 @@ struct ForwardPickerSheet: View {
 
                         if offersCompose {
                             composeEntry
+                        }
+
+                        if onImageDiscussion != nil {
+                            imageDiscussionEntry
                         }
 
                         if isPublishing {
@@ -457,6 +465,27 @@ struct ForwardPickerSheet: View {
                 Capsule().fill(Color(hex: accentColor).opacity(MeeshyOpacity.light))
             )
             .contentShape(Capsule())
+        }
+        .disabled(isPublishing)
+    }
+
+    /// **« Imager la discussion »** (#9039) — même geste que « Composer » : la
+    /// feuille se referme d'abord, l'atelier s'ouvre une fois qu'elle est partie
+    /// (`MessageCardExportPresenter` attend la fin de la fermeture).
+    private var imageDiscussionEntry: some View {
+        Button {
+            dismiss()
+            onImageDiscussion?()
+        } label: {
+            Label(MessageCardDiscussion.menuLabel, systemImage: MessageCardExportMenu.imageSymbol)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                .foregroundColor(Color(hex: accentColor))
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
+                .background(
+                    Capsule().fill(Color(hex: accentColor).opacity(MeeshyOpacity.light))
+                )
+                .contentShape(Capsule())
         }
         .disabled(isPublishing)
     }

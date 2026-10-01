@@ -790,26 +790,7 @@ struct ConversationView: View {
                 composerState.pendingComposeTarget = nil
                 composerState.composeMediaTarget = attendue
             }) { msgToForward in
-                ForwardPickerSheet(
-                    message: msgToForward,
-                    additionalMessages: composerState.forwardAdditionalMessages,
-                    sourceConversationId: conversation?.id ?? "",
-                    accentColor: accentColor,
-                    onOpenConversation: { router.navigateToConversation($0) },
-                    // Loi 6 — SECOND point d'entrée du MÊME chemin, jamais une
-                    // dixième porte : la feuille se referme et rend la main,
-                    // l'hôte pose le même état que l'appui long. Elle ne monte
-                    // pas le meuble, ce qui en ferait un second contrat d'envoi.
-                    onCompose: { composerState.pendingComposeTarget = ComposerSeedTarget(message: msgToForward) },
-                    onDismiss: { composerState.forwardMessage = nil }
-                )
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    // ForwardPickerSheet reads `@EnvironmentObject StatusViewModel`
-                    // internally — .sheet does not reliably inherit the parent's
-                    // environment across this boundary (documented crash pattern,
-                    // see docs/lessons on @EnvironmentObject-across-sheet).
-                    .environmentObject(statusViewModel)
+                forwardPicker(for: msgToForward)
             }
             // Flou du fond quand l'overlay d'appui-long est ouvert — appliqué
             // AVANT `.overlay` pour ne flouter que la conversation, jamais le
