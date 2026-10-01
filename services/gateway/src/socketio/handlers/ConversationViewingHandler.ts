@@ -124,11 +124,12 @@ export class ConversationViewingHandler {
   private inOrder(socketId: string, task: () => Promise<void>): Promise<void> {
     const previous = this.queueBySocket.get(socketId) ?? Promise.resolve();
     const run = previous.then(task);
-    const settled = run.catch(() => undefined);
+    const settled: Promise<void> = run
+      .catch(() => undefined)
+      .then(() => {
+        if (this.queueBySocket.get(socketId) === settled) this.queueBySocket.delete(socketId);
+      });
     this.queueBySocket.set(socketId, settled);
-    void settled.then(() => {
-      if (this.queueBySocket.get(socketId) === settled) this.queueBySocket.delete(socketId);
-    });
     return run;
   }
 
