@@ -5,11 +5,9 @@ import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
-import { Link } from '@/routes/route-table';
 
 import { GlyphSvg } from './glyph';
 import { GLYPHS } from './glyphs';
-import { MEDIA_GLYPHS } from './glyphs-media';
 
 /**
  * **LA FEUILLE DE L'APERÇU D'UNE CONVERSATION** (#8821, jumelle de la
@@ -19,8 +17,9 @@ import { MEDIA_GLYPHS } from './glyphs-media';
  * verre, sans chevron retour) par-dessus l'écran courant, qu'on ne quitte pas.
  *
  * Elle se ferme par le geste INVERSE (la poignée tirée vers le bas), en
- * touchant hors d'elle, par la croix, Échap ou le retour arrière ; la flèche
- * d'angle ouvre la conversation complète.
+ * touchant hors d'elle, par la croix, Échap ou le retour arrière ; « agrandir »,
+ * dans l'en-tête du fil à la place de la loupe (#9031), ouvre la conversation
+ * complète.
  *
  * POSÉE SUR `document.body`, et `#root` rendu INERTE tant qu'elle vit : le
  * clavier ne s'échappe pas vers l'écran recouvert. Pas de `<dialog>` modal :
@@ -172,15 +171,9 @@ export function ConversationPreviewSheet({
           >
             <span className="rounded-full" style={{ width: 40, height: 5, backgroundColor: 'var(--color-on-media-2)' }} />
           </div>
-          <Link
-            to="thread"
-            params={{ conversation: conversationId }}
-            aria-label={translateNotificationRow(language, 'notifications.preview.open')}
-            className={disc}
-            style={discStyle}
-          >
-            {discFace(<GlyphSvg glyph={MEDIA_GLYPHS.arrowsOutSimple} size={14} />)}
-          </Link>
+          {/* « Agrandir » vit dans l'en-tête du fil, à la place de la loupe
+              (#9031) ; ce gabarit garde la poignée centrée. */}
+          <span aria-hidden="true" className="size-11 shrink-0" />
         </div>
         {/*
           LE CORPS — le fil y est monté tel quel. `--safe-top: 0px` : la

@@ -65,6 +65,7 @@ const HOOK_NAMES = [
   'useReaderLanguages',
   'useLiveAnnouncer',
   'useSend',
+  'useHeaderMemory',
   'useThreadData',
   'useVirtualizer',
   'useThreadScene',

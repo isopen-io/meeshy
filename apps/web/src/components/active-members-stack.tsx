@@ -3,6 +3,7 @@ import { useContext } from 'react';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
+import type { UserPresenceStatus } from '@/lib/api/types';
 import { initialsOf } from '@/lib/view/conversation';
 import type { ActiveMember } from '@/lib/view/top-active-members';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
@@ -34,8 +35,11 @@ export function ActiveMembersStack({
   accent,
   storyRingOf,
   onOpenDetails,
+  presenceOf,
 }: {
   readonly members: readonly ActiveMember[];
+  /** La présence SERVIE de chaque membre (#9031) — vert, orange, gris ; « ici » (indigo) prime. */
+  readonly presenceOf?: ((memberId: string) => UserPresenceStatus) | undefined;
   readonly accent: string;
   readonly storyRingOf?: StoryRingOf | undefined;
   readonly onOpenDetails?: (() => void) | undefined;
@@ -63,6 +67,7 @@ export function ActiveMembersStack({
                 size={SIZE}
                 name={member.name}
                 here={herePeers.includes(member.id)}
+                {...(presenceOf === undefined ? {} : { presence: presenceOf(member.id) })}
                 {...(member.avatar === undefined ? {} : { src: member.avatar })}
                 {...(member.username === undefined ? {} : { profileUsername: member.username })}
                 {...(ring === undefined ? {} : { storyRing: ring })}
