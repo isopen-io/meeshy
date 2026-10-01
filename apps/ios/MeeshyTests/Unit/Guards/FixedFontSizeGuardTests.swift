@@ -145,6 +145,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/MessageDetailSentimentTab.swift",
         "Features/Main/Components/MessageEffectModifiers.swift",
         "Features/Main/Components/MessageOverlayMenu.swift",
+        // RELOCALISATION pure (#9043) : le lecteur vidéo de l'aperçu d'appui
+        // long (son glyphe « play » dans un disque fixe de 52 pt) a quitté
+        // `MessageOverlayMenu.swift` pour son propre fichier. La POPULATION ne
+        // bouge pas — seul le NOM change ; l'hôte d'origine en garde d'autres.
+        "Features/Main/Components/MessageOverlayPreviewVideoPlayer.swift",
         "Features/Main/Components/NearbyDiscoverabilityControl.swift",
         "Features/Main/Components/StatusBubbleOverlay.swift",
         // **Les parties du découpage héritent de la dette de leur type — et les

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
@@ -783,5 +784,81 @@ describe('MessageMenu — le sous-menu de « Transférer » (#9039)', () => {
       entry('Transférer')!.click();
     });
     expect(actions).toEqual(['forward']);
+  });
+});
+
+/**
+ * #9043 — SANS CADRE, COMME LA STORY, ET GLISSER VERS LE HAUT RÉDUIT L'APERÇU.
+ * Un message LONG (1 500 px) pousse la liste sous le bas de l'écran : on
+ * impose cette géométrie à l'ancre, `happy-dom` ne mesurant rien.
+ */
+describe('MessageMenu — sans cadre, et l’aperçu se réduit au glissement (#9043)', () => {
+  const surface = (): HTMLElement => document.querySelector('[data-message-menu-drag-surface]')!;
+  const list = (): HTMLElement => document.querySelector('.message-menu-list')!;
+  const previewScale = (): number =>
+    Number(/scale\(([0-9.]+)\)/.exec(document.querySelector<HTMLElement>('[data-message-menu-preview-host]')!.style.transform)![1]);
+  const listTop = (): number => Number.parseFloat(list().style.top);
+  const pointer = (type: string, clientY: number) =>
+    act(() => {
+      surface().dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 7, clientY }));
+    });
+
+  const openLong = (): void => {
+    const el = mount();
+    const rect = { top: 120, bottom: 1620, left: 20, right: 370, width: 350, height: 1500, x: 20, y: 120 };
+    row(el).getBoundingClientRect = () => ({ ...rect, toJSON: () => rect }) as DOMRect;
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+  };
+
+  test('la liste et le rail se posent NUS sur le voile : ni fond, ni bordure, ni ombre', () => {
+    const css = readFileSync(new URL('../styles/thread-menu.css', import.meta.url), 'utf8');
+    const rule = (selector: string): string => new RegExp(`\\n${selector.replace('.', '\\.')} \\{([^}]*)\\}`).exec(css)![1]!;
+    for (const selector of ['.message-menu-list', '.message-menu-rail']) {
+      expect(rule(selector)).not.toMatch(/background|border|box-shadow/);
+    }
+  });
+
+  test('glisser vers le haut réduit l’aperçu ET remonte la liste d’autant, image par image', () => {
+    openLong();
+    const scale0 = previewScale();
+    const top0 = listTop();
+    pointer('pointerdown', 600);
+    pointer('pointermove', 540);
+    expect(previewScale()).toBeLessThan(scale0);
+    expect(listTop()).toBeCloseTo(top0 - 60, 3);
+  });
+
+  test('relâcher GARDE l’état atteint ; redescendre rend la taille', () => {
+    openLong();
+    const scale0 = previewScale();
+    const top0 = listTop();
+    pointer('pointerdown', 600);
+    pointer('pointermove', 540);
+    pointer('pointerup', 540);
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(1);
+    expect(listTop()).toBeCloseTo(top0 - 60, 3);
+    pointer('pointerdown', 540);
+    pointer('pointermove', 900);
+    pointer('pointerup', 900);
+    expect(previewScale()).toBeCloseTo(scale0, 6);
+    expect(listTop()).toBeCloseTo(top0, 3);
+  });
+
+  test('un toucher sur le voile, sans glisser, ferme toujours le menu', () => {
+    openLong();
+    pointer('pointerdown', 300);
+    pointer('pointerup', 302);
+    expect(document.querySelectorAll('[role="menu"]').length).toBe(0);
+  });
+
+  test('sans le geste : un focus qui entre dans la liste la dégage d’office', () => {
+    openLong();
+    const top0 = listTop();
+    act(() => {
+      list().querySelector<HTMLButtonElement>('[role="menuitem"]')!.focus();
+    });
+    expect(listTop()).toBeLessThan(top0);
   });
 });
