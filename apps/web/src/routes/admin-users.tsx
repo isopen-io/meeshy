@@ -1,327 +1,309 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { PRESENCE_HEX } from '@meeshy/shared/utils/user-presence';
-
-import { Avatar } from '@/components/avatar';
-import { adminIdentityQueryOptions, adminUsersQueryKey, loadAdminUsers, type AdminUserRow } from '@/lib/api/admin';
+import { AdminBadge, AdminInterpretedBadge, AdminRoleBadge } from '@/components/admin/badges';
+import { AdminEntityIdentity } from '@/components/admin/entity-chip';
+import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-list';
+import { AdminListToolbar, type AdminToolbarFilter } from '@/components/admin/list-toolbar';
+import { AdminMomentText } from '@/components/admin/meta';
+import { AdminPageHeader } from '@/components/admin/page-header';
+import { AdminSectionScreen } from '@/components/admin/section-screen';
+import { AdminOfflineNotice } from '@/components/admin/states';
+import { accountStateOf, interpretPresence, interpretRole } from '@/lib/admin/interpret/enums';
+import { formatCount } from '@/lib/admin/interpret/numbers';
+import { adminMomentOf } from '@/lib/admin/interpret/time';
+import { useAdminList } from '@/lib/admin/use-admin-list';
+import { useAdminReach } from '@/lib/admin/use-admin-reach';
+import { userEntityOf } from '@/lib/admin/user-entity';
+import { ADMIN_ROLES, ADMINISTRATION_RANK, USER_LIST_SPEC, userListFiltersOf, type UserFilterKey, type UserSortKey } from '@/lib/admin/user-list';
+import type { AdminDeps } from '@/lib/api/admin';
 import { adminUserDetailQueryKey } from '@/lib/api/admin-user-detail';
+import { adminUsersQueryKey, loadAdminUsersPage, type AdminUserRow } from '@/lib/api/admin-users';
 import { apiDeps } from '@/lib/api/deps';
-import { adminMoment } from '@/lib/admin/format';
-import { toggleSort, withFilter, withPage, type ListState } from '@/lib/admin/list-state';
-import { visibleAdminSections } from '@/lib/admin/sections';
-import { useAdminListState } from '@/lib/admin/use-list-state';
-import { ADMIN_ROLES, USER_LIST_SPEC } from '@/lib/admin/user-list';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useRoute } from '@/lib/router';
-import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
-import { AdminAnnouncement, AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
-import { AdminUserCreateSheet } from '@/routes/admin-user-create-sheet';
-import { SectionButton } from '@/routes/admin-member-parts';
-import {
-  AdminFilterBar,
-  AdminPager,
-  AdminResetButton,
-  AdminSearchField,
-  AdminSelect,
-  AdminTable,
-  PlainTh,
-  SortableTh,
-  Td,
-} from '@/routes/admin-table';
-/** `Link` vient de la TABLE, pas du module générique : `to` n'accepte qu'une clé réelle. */
-import { Link, href, navigate } from '@/routes/route-table';
+
+import { SectionButton } from './admin-member-parts';
+import { AdminAnnouncement } from './admin-parts';
+import { AdminUserCreateSheet } from './admin-user-create-sheet';
+import { href, navigate } from './route-table';
 
 /**
- * **LES COMPTES** (#6432, #7873) — la section d'administration la plus
- * consultée, en TABLEAU : tri par colonne, filtres par rôle, état,
- * vérification et double authentification, taille de page. Tout l'état vit
- * dans l'adresse (`list-state.ts`) : un lien partagé, un retour depuis une
- * fiche ou un rechargement rendent la liste telle qu'on l'a laissée.
+ * **LES COMPTES** (#6432, #7873, #8876) — la section d'administration la plus
+ * consultée, sur le kit : un membre se reconnaît à son VRAI nom, son `@pseudo`,
+ * sa photo et sa pastille de présence (calculée par la règle partagée, jamais
+ * peinte en dur) ; son rôle et son état se disent en mots ; sa sécurité
+ * aussi (e-mail vérifié, téléphone vérifié, double authentification).
  *
- * ## La garde est la MÊME que celle du hub
+ * Tout l'état vit dans l'adresse (`list-state.ts`) : un lien partagé, un retour
+ * depuis une fiche ou un rechargement rendent la liste telle qu'on l'a laissée.
  *
- * `canManageUsers` est relue ici, pas héritée d'une navigation : on entre sur
- * cette adresse par un lien profond aussi bien que par le menu, et une garde
- * posée seulement à l'étage du dessus ne garde que l'escalier.
+ * ## `staleTime` de 5 minutes, et pourquoi
+ *
+ * Chaque lecture de cette liste écrit une trace d'audit (`VIEW_USER_LIST`) côté
+ * passerelle : la relire à chaque retour depuis une fiche remplirait le journal
+ * de lectures identiques. Le cache en mémoire fait le travail.
  */
 
-const INK = 'var(--color-ios-ink)';
-const INK2 = 'var(--color-ios-ink-2)';
+const USERS_STALE_MS = 5 * 60_000;
 
-type UserListState = ListState<(typeof USER_LIST_SPEC.sortKeys)[number], keyof typeof USER_LIST_SPEC.filters>;
+const SECURITY_LABELS = {
+  emailVerified: 'admin.people.security.emailVerified',
+  emailUnverified: 'admin.people.security.emailUnverified',
+  phoneVerified: 'admin.people.security.phoneVerified',
+  twoFactor: 'admin.people.security.twoFactor',
+} as const;
 
-/**
- * LA LIGNE OUVRE LA FICHE (#6819) — `cible` vaut `admUser` ou `adminUser`
- * selon l'espace d'où l'on parcourt la liste (D-76). Le lien porte le nom,
- * cible tactile réelle, et non la rangée entière : une rangée cliquable n'est
- * ni un lien pour le lecteur d'écran, ni un élément qu'on atteint au clavier.
- */
-function UserRow({
-  compte,
-  language,
-  cible,
-}: {
-  readonly compte: AdminUserRow;
-  readonly language: InterfaceLanguage;
-  readonly cible: 'adminUser' | 'admUser';
-}) {
-  const photo = participantAvatarOf({ avatar: compte.avatar });
+/** La sécurité d'un compte DITE EN MOTS — jamais une icône seule, jamais la couleur seule. */
+function SecurityWords({ row, language }: { readonly row: AdminUserRow; readonly language: AdminLanguage }) {
   return (
-    <tr data-admin-user={compte.id}>
-      <Td>
-        <Link to={cible} params={{ user: compte.id }} className="flex min-w-0 items-center gap-3" style={{ minHeight: 44 }}>
-          <span className="relative shrink-0">
-            <Avatar
-              initials={initialsOf(compte.displayName)}
-              color="var(--color-ios-brand)"
-              size={36}
-              name={compte.displayName}
-              {...(photo === undefined ? {} : { src: photo })}
-            />
-            {compte.isOnline ? (
-              <span
-                aria-hidden="true"
-                className="absolute -right-0.5 -bottom-0.5 size-3 rounded-full"
-                style={{ backgroundColor: PRESENCE_HEX.success, border: '2px solid var(--color-ios-surface)' }}
-              />
-            ) : null}
-          </span>
-          <span className="min-w-0">
-            <span className="block truncate font-medium">{compte.displayName}</span>
-            <span className="block truncate text-caption" style={{ color: INK2 }}>
-              @{compte.username}
-            </span>
-          </span>
-        </Link>
-      </Td>
-      <Td className="max-w-[16rem] truncate">{compte.email}</Td>
-      <Td>
-        <span
-          className="rounded-chip px-2 py-0.5 text-caption"
-          style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 14%, transparent)', color: INK2 }}
-        >
-          {compte.role}
-        </span>
-      </Td>
-      <Td className="text-caption">
-        {compte.isActive ? (
-          <span style={{ color: 'var(--color-success)' }}>{translateAdmin(language, 'admin.filter.active')}</span>
-        ) : (
-          <span style={{ color: 'var(--color-danger)' }}>{translateAdmin(language, 'admin.users.inactive')}</span>
-        )}
-        {compte.twoFactorEnabled ? <span className="ms-2" title={translateAdmin(language, 'admin.filter.twoFactor')}>🔐</span> : null}
-      </Td>
-      <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(compte.createdAt, language)}</Td>
-      <Td className="whitespace-nowrap text-caption tabular-nums">{adminMoment(compte.lastActiveAt, language)}</Td>
-    </tr>
-  );
-}
-
-function Filtres({
-  language,
-  state,
-  write,
-  draft,
-  setDraft,
-}: {
-  readonly language: InterfaceLanguage;
-  readonly state: UserListState;
-  readonly write: (state: UserListState) => void;
-  readonly draft: string;
-  readonly setDraft: (value: string) => void;
-}) {
-  const tous = { value: '', label: translateAdmin(language, 'admin.list.all') };
-  const ouiNon = [tous, { value: 'true', label: translateAdmin(language, 'admin.list.yes') }, { value: 'false', label: translateAdmin(language, 'admin.list.no') }];
-  const filtre = (cle: keyof typeof USER_LIST_SPEC.filters) => (valeur: string) => write(withFilter(state, cle, valeur, USER_LIST_SPEC));
-  const actif = Object.keys(state.filters).length > 0 || state.q !== '';
-
-  return (
-    <AdminFilterBar>
-      <AdminSearchField label={translateAdmin(language, 'admin.users.search')} value={draft} onChange={setDraft} anchor="admin-users-search" />
-      <AdminSelect
-        label={translateAdmin(language, 'admin.col.role')}
-        value={state.filters.role ?? ''}
-        options={[tous, ...ADMIN_ROLES.map((role) => ({ value: role, label: role }))]}
-        onChange={filtre('role')}
-        anchor="admin-filter-role"
-      />
-      <AdminSelect
-        label={translateAdmin(language, 'admin.col.status')}
-        value={state.filters.isActive ?? ''}
-        options={[
-          tous,
-          { value: 'true', label: translateAdmin(language, 'admin.filter.active') },
-          { value: 'false', label: translateAdmin(language, 'admin.filter.inactive') },
-        ]}
-        onChange={filtre('isActive')}
-        anchor="admin-filter-active"
-      />
-      <AdminSelect
-        label={translateAdmin(language, 'admin.filter.emailVerified')}
-        value={state.filters.emailVerified ?? ''}
-        options={ouiNon}
-        onChange={filtre('emailVerified')}
-        anchor="admin-filter-email"
-      />
-      <AdminSelect
-        label={translateAdmin(language, 'admin.filter.twoFactor')}
-        value={state.filters.twoFactorEnabled ?? ''}
-        options={ouiNon}
-        onChange={filtre('twoFactorEnabled')}
-        anchor="admin-filter-2fa"
-      />
-      {actif ? (
-        <AdminResetButton
-          language={language}
-          onReset={() => {
-            setDraft('');
-            write({ ...state, filters: {}, q: '', offset: 0 });
-          }}
-        />
+    <span data-admin-security-words className="flex flex-wrap justify-end gap-1 md:justify-start">
+      {row.emailVerified ? (
+        <AdminBadge tone="success" glyph="checkCircle">
+          {translateAdmin(language, SECURITY_LABELS.emailVerified)}
+        </AdminBadge>
+      ) : (
+        <AdminBadge tone="neutral">{translateAdmin(language, SECURITY_LABELS.emailUnverified)}</AdminBadge>
+      )}
+      {row.phoneVerified ? (
+        <AdminBadge tone="success" glyph="checkCircle">
+          {translateAdmin(language, SECURITY_LABELS.phoneVerified)}
+        </AdminBadge>
       ) : null}
-    </AdminFilterBar>
+      {row.twoFactorEnabled ? (
+        <AdminBadge tone="info" glyph="shieldCheck">
+          {translateAdmin(language, SECURITY_LABELS.twoFactor)}
+        </AdminBadge>
+      ) : null}
+    </span>
   );
 }
 
-export default function AdminUsersScreen() {
-  const language = currentInterfaceLanguage();
-  const { state, write, draft, setDraft, address } = useAdminListState(USER_LIST_SPEC);
+const SORT_LABELS = {
+  createdAt: 'admin.people.sort.createdAt',
+  lastActiveAt: 'admin.people.sort.lastActiveAt',
+  username: 'admin.people.sort.username',
+  email: 'admin.people.sort.email',
+  firstName: 'admin.people.sort.firstName',
+  lastName: 'admin.people.sort.lastName',
+} as const satisfies Readonly<Record<UserSortKey, string>>;
 
-  const { key } = useRoute();
-  /** On reste dans l'espace d'où l'on vient (D-76). */
-  const cible = key === 'admUsers' ? ('admUser' as const) : ('adminUser' as const);
-
-  const identite = useQuery(adminIdentityQueryOptions(apiDeps));
-  const autorise = visibleAdminSections(identite.data?.permissions ?? null).some((s) => s.id === 'users');
-
-  const [creation, setCreation] = useState(false);
-  const annonceur = useLiveAnnouncer();
-  const client = useQueryClient();
-
-  const liste = useQuery({
-    queryKey: adminUsersQueryKey(address),
-    queryFn: async ({ signal }) => {
-      const resultat = await loadAdminUsers({
-        ...apiDeps,
+/**
+ * LE PANNEAU DES COMPTES — la liste, sa barre et ses états. Exporté avec ses
+ * dépendances injectables (`deps`) et son horloge (`now`) : les témoins le montent
+ * sans passerelle et sans dépendre de l'heure réelle.
+ */
+export function AdminUsersPanel({
+  language,
+  deps = apiDeps,
+  now = () => new Date(),
+}: {
+  readonly language: AdminLanguage;
+  readonly deps?: AdminDeps;
+  readonly now?: () => Date;
+}) {
+  const reach = useAdminReach();
+  const list = useAdminList<AdminUserRow, UserSortKey, UserFilterKey>({
+    spec: USER_LIST_SPEC,
+    queryKey: adminUsersQueryKey,
+    enabled: reach.opens('users'),
+    staleTime: USERS_STALE_MS,
+    load: (state, signal) =>
+      loadAdminUsersPage({
+        ...deps,
         offset: state.offset,
         limit: state.limit,
         search: state.q,
         sortBy: state.sort,
         sortOrder: state.order,
-        filters: state.filters,
+        filters: userListFiltersOf(state.filters, now()),
         signal,
-      });
-      if (!resultat.ok) throw new Error(resultat.error);
-      return resultat.data;
-    },
-    enabled: autorise,
-    placeholderData: (precedent) => precedent,
-    retry: false,
+      }),
   });
 
-  const titre = translateAdmin(language, 'admin.nav.users');
+  const { state } = list;
+  const moment = now();
+  const all = { value: '', label: translateAdmin(language, 'admin.list.all') };
+  const yesNo = [
+    all,
+    { value: 'true', label: translateAdmin(language, 'admin.list.yes') },
+    { value: 'false', label: translateAdmin(language, 'admin.list.no') },
+  ];
+  const filterOf = (key: UserFilterKey) => (value: string) => list.filter(key, value === '' ? null : value);
 
-  if (identite.isPending) {
-    return (
-      <AdminScreenFrame language={language} title={titre} back="admin">
-        <AdminSkeleton rows={5} />
-      </AdminScreenFrame>
-    );
-  }
+  const filters: readonly AdminToolbarFilter[] = [
+    {
+      id: 'role',
+      label: translateAdmin(language, 'admin.col.role'),
+      value: state.filters.role ?? '',
+      options: [
+        all,
+        { value: ADMINISTRATION_RANK, label: translateAdmin(language, 'admin.people.filter.role.administration') },
+        ...ADMIN_ROLES.map((role) => ({ value: role, label: interpretRole(role, language).label })),
+      ],
+      onChange: filterOf('role'),
+    },
+    {
+      id: 'isActive',
+      label: translateAdmin(language, 'admin.col.status'),
+      value: state.filters.isActive ?? '',
+      options: [
+        all,
+        { value: 'true', label: translateAdmin(language, 'admin.filter.active') },
+        { value: 'false', label: translateAdmin(language, 'admin.filter.inactive') },
+      ],
+      onChange: filterOf('isActive'),
+    },
+    { id: 'emailVerified', label: translateAdmin(language, 'admin.filter.emailVerified'), value: state.filters.emailVerified ?? '', options: yesNo, onChange: filterOf('emailVerified') },
+    { id: 'phoneVerified', label: translateAdmin(language, 'admin.people.filter.phoneVerified'), value: state.filters.phoneVerified ?? '', options: yesNo, onChange: filterOf('phoneVerified') },
+    { id: 'twoFactorEnabled', label: translateAdmin(language, 'admin.filter.twoFactor'), value: state.filters.twoFactorEnabled ?? '', options: yesNo, onChange: filterOf('twoFactorEnabled') },
+    {
+      id: 'period',
+      label: translateAdmin(language, 'admin.people.filter.period'),
+      value: state.filters.period ?? '',
+      options: [
+        all,
+        { value: '24h', label: translateAdmin(language, 'admin.kit.period.24h') },
+        { value: '7d', label: translateAdmin(language, 'admin.kit.period.7d') },
+        { value: '30d', label: translateAdmin(language, 'admin.kit.period.30d') },
+        { value: '90d', label: translateAdmin(language, 'admin.kit.period.90d') },
+      ],
+      onChange: filterOf('period'),
+    },
+  ];
 
-  if (!autorise) {
-    return (
-      <AdminScreenFrame language={language} title={titre} back="admin">
-        <AdminDenied language={language} />
-      </AdminScreenFrame>
-    );
-  }
+  const total = list.query.data?.total;
+  const hidden = interpretPresence('unknown', language);
 
-  const page = liste.data;
-  const trier = (colonne: UserListState['sort']) => () => write(toggleSort(state, colonne, USER_LIST_SPEC));
-  const entete = (colonne: UserListState['sort'], libelle: string) => (
-    <SortableTh language={language} label={libelle} column={colonne} sort={state.sort} order={state.order} onSort={trier(colonne)} />
-  );
+  const columns: readonly AdminColumn<AdminUserRow>[] = [
+    {
+      id: 'member',
+      header: translateAdmin(language, 'admin.col.member'),
+      primary: true,
+      sortKey: 'username',
+      sortLabel: translateAdmin(language, 'admin.people.sort.username'),
+      cell: (row) => <AdminEntityIdentity language={language} entity={userEntityOf(row, language, moment)} />,
+    },
+    {
+      id: 'email',
+      header: translateAdmin(language, 'admin.col.email'),
+      sortKey: 'email',
+      cell: (row) => (row.email === '' ? '—' : <span className="break-all">{row.email}</span>),
+    },
+    {
+      id: 'role',
+      header: translateAdmin(language, 'admin.col.role'),
+      cell: (row) => <AdminRoleBadge language={language} role={row.role} />,
+    },
+    {
+      id: 'state',
+      header: translateAdmin(language, 'admin.col.status'),
+      cell: (row) => <AdminInterpretedBadge value={accountStateOf(row, moment, language)} />,
+    },
+    {
+      id: 'security',
+      header: translateAdmin(language, 'admin.people.col.security'),
+      cell: (row) => <SecurityWords row={row} language={language} />,
+    },
+    {
+      id: 'created',
+      header: translateAdmin(language, 'admin.col.created'),
+      sortKey: 'createdAt',
+      sortLabel: translateAdmin(language, 'admin.people.sort.createdAt'),
+      cell: (row) => <AdminMomentText moment={adminMomentOf(row.createdAt, moment, language)} />,
+    },
+    {
+      id: 'lastActive',
+      header: translateAdmin(language, 'admin.col.lastActive'),
+      priority: 3,
+      ...(reach.hasAdminRank ? { sortKey: 'lastActiveAt' } : {}),
+      cell: (row) =>
+        row.lastActiveAt === null ? (
+          <span title={hidden.explain ?? undefined}>{hidden.label}</span>
+        ) : (
+          <AdminMomentText moment={adminMomentOf(row.lastActiveAt, moment, language)} />
+        ),
+    },
+  ];
 
   return (
-    <AdminScreenFrame
-      language={language}
-      title={titre}
-      back="admin"
-      heading="content"
-      backLabel={titre}
-      /* CRÉER UN COMPTE (#8217) — en haut à droite de l'en-tête (#8289) ; le
-         compte créé s'ouvre aussitôt dans sa fiche. */
-      actions={
-        <SectionButton tone="primary" data={{ 'data-admin-create-open': '' }} onClick={() => setCreation(true)}>
-          {translateAdmin(language, 'admin.create.open')}
-        </SectionButton>
-      }
-    >
-      <h1 className="pb-3 text-title font-bold" style={{ color: INK }} data-admin-page-title="">
-        {titre}
-      </h1>
-      <Filtres language={language} state={state} write={write} draft={draft} setDraft={setDraft} />
-
-      {liste.isPending ? (
-        <AdminSkeleton rows={6} />
-      ) : page === undefined ? (
-        <p className="text-caption" style={{ color: INK2 }}>
-          {translateAdmin(language, 'admin.users.unavailable')}
-        </p>
-      ) : page.users.length === 0 ? (
-        <p className="text-caption" style={{ color: INK2 }}>
-          {translateAdmin(language, 'admin.users.empty')}
-        </p>
-      ) : (
-        <>
-          <AdminTable>
-            <thead>
-              <tr>
-                {entete('username', translateAdmin(language, 'admin.col.member'))}
-                {entete('email', translateAdmin(language, 'admin.col.email'))}
-                <PlainTh>{translateAdmin(language, 'admin.col.role')}</PlainTh>
-                <PlainTh>{translateAdmin(language, 'admin.col.status')}</PlainTh>
-                {entete('createdAt', translateAdmin(language, 'admin.col.created'))}
-                {entete('lastActiveAt', translateAdmin(language, 'admin.col.lastActive'))}
-              </tr>
-            </thead>
-            <tbody style={{ opacity: liste.isPlaceholderData ? 0.6 : 1 }}>
-              {page.users.map((compte) => (
-                <UserRow key={compte.id} compte={compte} language={language} cible={cible} />
-              ))}
-            </tbody>
-          </AdminTable>
-          <AdminPager
+    <div className="grid gap-4" data-admin-users-panel>
+      <AdminOfflineNotice language={language} />
+      <AdminEntityList
+        language={language}
+        section="users"
+        list={list}
+        columns={columns}
+        rowKey={(row) => row.id}
+        rowTarget={(row) => ({ kind: 'entity', entity: 'user', id: row.id })}
+        caption={translateAdmin(language, 'admin.people.list.caption')}
+        toolbar={
+          <AdminListToolbar
             language={language}
-            offset={state.offset}
-            limit={state.limit}
-            count={page.users.length}
-            total={page.total}
-            hasMore={page.hasMore}
-            pageSizes={USER_LIST_SPEC.pageSizes}
-            onPage={(demande) => write(withPage(state, demande, USER_LIST_SPEC))}
+            search={{ label: translateAdmin(language, 'admin.users.search'), value: list.draft, onChange: list.setDraft }}
+            filters={filters}
+            onReset={list.reset}
+            trailing={total === undefined ? undefined : translateAdmin(language, 'admin.users.count', { count: formatCount(total, language) })}
           />
-        </>
-      )}
+        }
+        empty={{ title: translateAdmin(language, 'admin.people.list.empty') }}
+        filteredEmpty={{ title: translateAdmin(language, 'admin.people.list.emptyFiltered') }}
+        /* Prénom et Nom : la passerelle les trie, aucune colonne ne les porte — le « Trier par » des cartes est leur seul chemin. */
+        extraSorts={[
+          { value: 'firstName', label: translateAdmin(language, SORT_LABELS.firstName) },
+          { value: 'lastName', label: translateAdmin(language, SORT_LABELS.lastName) },
+        ]}
+      />
+    </div>
+  );
+}
 
-      {creation ? (
-        <AdminUserCreateSheet
-          language={language}
-          onClose={() => setCreation(false)}
-          onAnnounce={annonceur.announce}
-          onCreated={(membre) => {
-            setCreation(false);
-            client.setQueryData(adminUserDetailQueryKey(membre.id), membre);
-            void client.invalidateQueries({ queryKey: ['admin', 'users'] });
-            navigate(href(cible, { user: membre.id }));
-          }}
-        />
-      ) : null}
-      <AdminAnnouncement text={annonceur.text} />
-    </AdminScreenFrame>
+export default function AdminUsersScreen() {
+  const language = currentAdminLanguage();
+  suspendForAdminInterfaceCatalog(language);
+  const { key } = useRoute();
+  /** On reste dans l'espace d'où l'on vient (D-76). */
+  const cible = key === 'admUsers' ? ('admUser' as const) : ('adminUser' as const);
+  const [creation, setCreation] = useState(false);
+  const announcer = useLiveAnnouncer();
+  const client = useQueryClient();
+  const title = translateAdmin(language, 'admin.nav.users');
+
+  return (
+    <AdminSectionScreen section="users" language={language} title={title}>
+      {() => (
+        <div className="grid gap-6">
+          <AdminPageHeader
+            language={language}
+            title={title}
+            subtitle={translateAdmin(language, 'admin.nav.users.hint')}
+            crumbs={[{ label: translateAdmin(language, 'admin.group.people') }, { label: title }]}
+            actions={
+              /* CRÉER UN COMPTE (#8217) — en haut à droite de l'en-tête (#8289) ; le compte créé
+                 s'ouvre aussitôt dans sa fiche. */
+              <SectionButton tone="primary" data={{ 'data-admin-create-open': '' }} onClick={() => setCreation(true)}>
+                {translateAdmin(language, 'admin.create.open')}
+              </SectionButton>
+            }
+          />
+          <AdminUsersPanel language={language} />
+          {creation ? (
+            <AdminUserCreateSheet
+              language={language}
+              onClose={() => setCreation(false)}
+              onAnnounce={announcer.announce}
+              onCreated={(membre) => {
+                setCreation(false);
+                client.setQueryData(adminUserDetailQueryKey(membre.id), membre);
+                void client.invalidateQueries({ queryKey: ['admin', 'users'] });
+                navigate(href(cible, { user: membre.id }));
+              }}
+            />
+          ) : null}
+          <AdminAnnouncement text={announcer.text} />
+        </div>
+      )}
+    </AdminSectionScreen>
   );
 }

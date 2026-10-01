@@ -7,11 +7,11 @@ import {
   type EngagementOperationKey,
 } from '@meeshy/shared/types/engagement-operations';
 
+import { AdminResponsiveRows, type AdminColumn } from '@/components/admin/responsive-rows';
+import { BRAND, INK, INK2 } from '@/components/admin/tone';
 import { withOperation, withVariant, type ScaleDraft } from '@/lib/admin/engagement-scale-form';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
-import { AdminTable, PlainTh, Td } from '@/routes/admin-table';
-import { NumberField, scaleTokens } from '@/routes/admin-engagement-scale-fields';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { NumberField } from '@/routes/admin-engagement-scale-fields';
 
 /**
  * LES OPÉRATIONS DU BARÈME (#8959), rangées par DOMAINE comme la liste du
@@ -21,6 +21,10 @@ import { NumberField, scaleTokens } from '@/routes/admin-engagement-scale-fields
  * de plafond à régler : la ligne le dit. Les deux opérations progressives (la
  * visite de lien, le bonus de constance) se règlent dans leurs propres
  * sections.
+ *
+ * Chaque domaine est un tableau dès `@3xl` et des cartes dessous (le gabarit
+ * commun du kit, `AdminResponsiveRows`) ; chaque champ y fait 44 px et la case
+ * « multiplié » de 24 px s'appuie dans une zone de 44 px.
  */
 
 const EDITABLE_OPERATIONS = ENGAGEMENT_OPERATIONS.filter(
@@ -41,25 +45,21 @@ const VARIANT_LABELS = {
 
 const isVariantKey = (variant: string): variant is keyof typeof VARIANT_LABELS => variant in VARIANT_LABELS;
 
-const variantLabel = (language: InterfaceLanguage, variant: string): string =>
+const variantLabel = (language: AdminLanguage, variant: string): string =>
   isVariantKey(variant) ? translateAdmin(language, VARIANT_LABELS[variant]) : variant;
 
-export const operationLabel = (language: InterfaceLanguage, key: EngagementOperationKey): string =>
+export const operationLabel = (language: AdminLanguage, key: EngagementOperationKey): string =>
   translateAdmin(language, `admin.scale.op.${key}`);
 
-function CapCell({
-  language,
-  draft,
-  operationKey,
-  operation,
-  onDraft,
-}: {
-  readonly language: InterfaceLanguage;
+type DraftProps = {
+  readonly language: AdminLanguage;
   readonly draft: ScaleDraft;
-  readonly operationKey: EngagementOperationKey;
-  readonly operation: string;
   readonly onDraft: (next: ScaleDraft) => void;
-}) {
+};
+
+type OperationProps = DraftProps & { readonly operationKey: EngagementOperationKey; readonly operation: string };
+
+function CapCell({ language, draft, operationKey, operation, onDraft }: OperationProps) {
   const definition = ENGAGEMENT_OPERATION_CATALOG[operationKey];
   if (definition.frequency === 'per-target') return <span data-scale-cap-fixed={operationKey}>{translateAdmin(language, 'admin.scale.cap.perTarget')}</span>;
   if (definition.frequency === 'per-account') return <span data-scale-cap-fixed={operationKey}>{translateAdmin(language, 'admin.scale.cap.perAccount')}</span>;
@@ -68,7 +68,7 @@ function CapCell({
   }
   const scope = definition.capScope;
   return (
-    <span className="inline-flex items-center gap-2">
+    <span className="inline-flex flex-wrap items-center justify-end gap-2">
       <NumberField
         value={draft.operations[operationKey].cap}
         label={translateAdmin(language, 'admin.scale.capFor', { operation })}
@@ -77,7 +77,7 @@ function CapCell({
         data={{ 'data-scale-cap': operationKey }}
       />
       {scope === 'none' ? null : (
-        <span className="text-caption" style={{ color: scaleTokens.INK2 }}>
+        <span className="text-caption" style={{ color: INK2 }}>
           {translateAdmin(language, `admin.scale.scope.${scope}`)}
         </span>
       )}
@@ -85,19 +85,7 @@ function CapCell({
   );
 }
 
-function PointsCell({
-  language,
-  draft,
-  operationKey,
-  operation,
-  onDraft,
-}: {
-  readonly language: InterfaceLanguage;
-  readonly draft: ScaleDraft;
-  readonly operationKey: EngagementOperationKey;
-  readonly operation: string;
-  readonly onDraft: (next: ScaleDraft) => void;
-}) {
+function PointsCell({ language, draft, operationKey, operation, onDraft }: OperationProps) {
   const rule = draft.operations[operationKey];
   const variants = ENGAGEMENT_OPERATION_CATALOG[operationKey].variants;
   if (variants.length === 0) {
@@ -115,8 +103,8 @@ function PointsCell({
       {variants.map((variant) => {
         const name = variantLabel(language, variant);
         return (
-          <label key={variant} className="flex items-center justify-between gap-2 text-caption" style={{ color: scaleTokens.INK2 }}>
-            <span>{name}</span>
+          <label key={variant} className="flex items-center justify-between gap-2 text-caption" style={{ color: INK2 }}>
+            <span className="min-w-0 break-words">{name}</span>
             <NumberField
               value={rule.variants[variant] ?? ''}
               label={translateAdmin(language, 'admin.scale.variantFor', { variant: name, operation })}
@@ -130,80 +118,77 @@ function PointsCell({
   );
 }
 
-function DomainTable({
-  language,
-  domain,
-  draft,
-  onDraft,
-}: {
-  readonly language: InterfaceLanguage;
-  readonly domain: EngagementOperationDomain;
-  readonly draft: ScaleDraft;
-  readonly onDraft: (next: ScaleDraft) => void;
-}) {
+function MultipliedCell({ language, draft, operationKey, operation, onDraft }: OperationProps) {
+  return (
+    /* La case fait 24 px ; sa zone d'appui, le libellé qui l'enveloppe, en fait 44. */
+    <label className="inline-flex items-center justify-center" style={{ minHeight: 44, minWidth: 44 }}>
+      <input
+        type="checkbox"
+        checked={draft.operations[operationKey].multiplied}
+        aria-label={translateAdmin(language, 'admin.scale.multipliedFor', { operation })}
+        onChange={(event) => onDraft(withOperation(draft, operationKey, { multiplied: event.currentTarget.checked }))}
+        data-scale-multiplied={operationKey}
+        style={{ height: 24, width: 24, accentColor: BRAND }}
+      />
+    </label>
+  );
+}
+
+function DomainRows({ language, domain, draft, onDraft }: DraftProps & { readonly domain: EngagementOperationDomain }) {
   const operations = operationsOf(domain);
   if (operations.length === 0) return null;
   const headingId = `scale-domain-${domain}`;
+  const title = translateAdmin(language, `admin.scale.domain.${domain}`);
+  const cell = (key: EngagementOperationKey) => ({ language, draft, onDraft, operationKey: key, operation: operationLabel(language, key) });
+  const columns: readonly AdminColumn<EngagementOperationKey>[] = [
+    {
+      id: 'operation',
+      header: translateAdmin(language, 'admin.scale.col.operation'),
+      primary: true,
+      cell: (key) => <span className="min-w-0 break-words text-start text-body font-medium">{operationLabel(language, key)}</span>,
+    },
+    {
+      id: 'frequency',
+      header: translateAdmin(language, 'admin.scale.col.frequency'),
+      cell: (key) => translateAdmin(language, `admin.scale.freq.${ENGAGEMENT_OPERATION_CATALOG[key].frequency}`),
+    },
+    {
+      id: 'points',
+      header: translateAdmin(language, 'admin.scale.col.points'),
+      cell: (key) => <PointsCell {...cell(key)} />,
+    },
+    {
+      id: 'multiplied',
+      header: translateAdmin(language, 'admin.scale.col.multiplied'),
+      cell: (key) => <MultipliedCell {...cell(key)} />,
+    },
+    {
+      id: 'cap',
+      header: translateAdmin(language, 'admin.scale.col.cap'),
+      cell: (key) => <CapCell {...cell(key)} />,
+    },
+  ];
   return (
     <section aria-labelledby={headingId} className="grid gap-2" data-scale-domain={domain}>
-      <h3 id={headingId} className="text-body font-semibold" style={{ color: scaleTokens.INK }}>
-        {translateAdmin(language, `admin.scale.domain.${domain}`)}
+      <h3 id={headingId} className="text-body font-semibold" style={{ color: INK }}>
+        {title}
       </h3>
-      <AdminTable>
-        <thead>
-          <tr>
-            <PlainTh>{translateAdmin(language, 'admin.scale.col.operation')}</PlainTh>
-            <PlainTh>{translateAdmin(language, 'admin.scale.col.frequency')}</PlainTh>
-            <PlainTh>{translateAdmin(language, 'admin.scale.col.points')}</PlainTh>
-            <PlainTh>{translateAdmin(language, 'admin.scale.col.multiplied')}</PlainTh>
-            <PlainTh>{translateAdmin(language, 'admin.scale.col.cap')}</PlainTh>
-          </tr>
-        </thead>
-        <tbody>
-          {operations.map((key) => {
-            const operation = operationLabel(language, key);
-            return (
-              <tr key={key} data-scale-operation={key}>
-                <Td>{operation}</Td>
-                <Td>{translateAdmin(language, `admin.scale.freq.${ENGAGEMENT_OPERATION_CATALOG[key].frequency}`)}</Td>
-                <Td>
-                  <PointsCell language={language} draft={draft} operationKey={key} operation={operation} onDraft={onDraft} />
-                </Td>
-                <Td>
-                  <input
-                    type="checkbox"
-                    checked={draft.operations[key].multiplied}
-                    aria-label={translateAdmin(language, 'admin.scale.multipliedFor', { operation })}
-                    onChange={(event) => onDraft(withOperation(draft, key, { multiplied: event.currentTarget.checked }))}
-                    data-scale-multiplied={key}
-                    style={{ minHeight: 24, minWidth: 24, accentColor: scaleTokens.BRAND }}
-                  />
-                </Td>
-                <Td>
-                  <CapCell language={language} draft={draft} operationKey={key} operation={operation} onDraft={onDraft} />
-                </Td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </AdminTable>
+      <AdminResponsiveRows
+        columns={columns}
+        rows={operations}
+        rowKey={(key) => key}
+        rowAttributes={(key) => ({ 'data-scale-operation': key })}
+        caption={title}
+      />
     </section>
   );
 }
 
-export function OperationsSections({
-  language,
-  draft,
-  onDraft,
-}: {
-  readonly language: InterfaceLanguage;
-  readonly draft: ScaleDraft;
-  readonly onDraft: (next: ScaleDraft) => void;
-}) {
+export function OperationsSections({ language, draft, onDraft }: DraftProps) {
   return (
     <div className="grid gap-5">
       {ENGAGEMENT_OPERATION_DOMAINS.map((domain) => (
-        <DomainTable key={domain} language={language} domain={domain} draft={draft} onDraft={onDraft} />
+        <DomainRows key={domain} language={language} domain={domain} draft={draft} onDraft={onDraft} />
       ))}
     </div>
   );

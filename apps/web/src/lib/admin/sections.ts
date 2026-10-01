@@ -1,3 +1,15 @@
+import type { AdminGlyphName } from '@/components/glyphs-admin';
+
+import {
+  adminGroupOf,
+  adminRouteOf,
+  type AdminGroupId,
+  type AdminRoute,
+  type AdminSectionId,
+} from './admin-routes';
+
+export type { AdminRoute };
+
 /**
  * LES SECTIONS D'ADMINISTRATION, ET QUI LES VOIT (#6432).
  *
@@ -7,18 +19,18 @@
  *
  * ## Ce que ce module reprend
  *
- * La liste est le MIROIR MESURÉ de la barre latérale du legacy
- * (`apps/web/components/admin/AdminLayout.tsx`, onze entrées) : même ordre,
- * mêmes permissions.
+ * La liste part de la barre latérale du legacy
+ * (`apps/web/components/admin/AdminLayout.tsx`, onze entrées), rangée depuis
+ * #8876 en sept groupes et dix-neuf sections (`docs/superpowers/specs/
+ * 2026-09-30-admin-vue-de-dieu-design.md`, § 1).
  *
- * ## Une section que la v2 ne sert pas est MASQUÉE (#6702)
+ * ## Une section que l'administration ne sert pas encore est MASQUÉE (#6702, #8876)
  *
  * Le legacy est décommissionné (directive porteur 2026-09-15) : la v2 sert tout
- * `meeshy.me`. Les neuf sections qu'il était seul à servir n'ont plus aucune
- * adresse où mener. Leur tuile n'est donc pas offerte — ni vers un ailleurs qui
- * n'existe plus, ni vers un écran d'attente : ce seraient neuf contrôles qui
- * mentent (loi 4). `route: null` le dit ; porter une section, c'est lui donner
- * sa route dans `route-table.tsx`, puis ici.
+ * `meeshy.me`. Une section dont `ready` est faux n'est ni au menu, ni au hub,
+ * ni en lien d'entité : ce serait un contrôle qui ment (loi 4). Les dix-neuf
+ * sections sont servies depuis l'intégration du chantier #8876 ; le drapeau
+ * reste la porte d'une section qu'on livrerait écran par écran.
  *
  * ## Pourquoi la permission décide, et jamais le rôle
  *
@@ -66,45 +78,30 @@ export type AdminPermissions = {
 export type AdminPermissionKey = keyof AdminPermissions;
 
 /**
- * Les clés de catalogue des onze sections — une UNION littérale, jamais
+ * Les clés de catalogue des dix-neuf sections — une UNION littérale, jamais
  * `string`.
  *
  * `translate` est générique sur sa clé : il exige un troisième argument dès
  * que la chaîne du catalogue porte un `{paramètre}`. Typer `labelKey` en
  * `string` élargit donc la clé à TOUT le catalogue, y compris ses entrées
  * paramétrées — et le site d'appel se voit réclamer des paramètres qu'aucune
- * de ces onze chaînes n'a. L'union rend la contrainte exacte.
+ * de ces chaînes n'a. L'union rend la contrainte exacte : chaque clé écrite ici
+ * doit exister dans le catalogue, sinon `translateAdmin` ne compile plus.
  */
-export type AdminSectionLabelKey =
-  | 'admin.nav.dashboard'
-  | 'admin.nav.users'
-  | 'admin.nav.anonymous'
-  | 'admin.nav.conversations'
-  | 'admin.nav.moderation'
-  | 'admin.nav.audit'
-  | 'admin.nav.analytics'
-  | 'admin.nav.trackingLinks'
-  | 'admin.nav.ranking'
-  | 'admin.nav.broadcasts'
-  | 'admin.nav.settings'
-  | 'admin.nav.agent'
-  | 'admin.nav.engagementScale'
-  | 'admin.nav.monitoring';
+export type AdminSectionLabelKey = `admin.nav.${AdminSectionId}`;
 
-/**
- * Les routes de la v2 qu'une section ouvre — des CLÉS de `ROUTES`
- * (`route-table.tsx`), jamais une adresse écrite à la main : `<Link to>` ne
- * compile que sur une route qui existe, et la tuile ne peut plus viser un autre
- * écran que le sien.
- */
-export type AdminRoute = 'admin' | 'adminUsers' | 'adminAnonymous' | 'adminConversations' | 'adminAgent' | 'adminEngagementScale';
+/** Une ligne qui dit ce qu'on fait dans la section — le hub la pose sous le libellé. */
+export type AdminSectionHintKey = `admin.nav.${AdminSectionId}.hint`;
+
+export type AdminGroupLabelKey = `admin.group.${AdminGroupId}`;
 
 export type AdminSection = {
-  readonly id: string;
+  readonly id: AdminSectionId;
+  readonly group: AdminGroupId;
   /** Clé du catalogue d'interface — jamais un libellé en dur. */
   readonly labelKey: AdminSectionLabelKey;
-  /** La route que la v2 sert pour cette section, ou `null` : non portée, donc masquée. */
-  readonly route: AdminRoute | null;
+  /** La clé de LISTE de la section dans l'espace `/admin` ; `routeInSpace` la traduit dans l'espace courant. */
+  readonly route: AdminRoute;
   readonly permission: AdminPermissionKey;
   /**
    * **RÉSERVÉE AU RANG D'ADMINISTRATION** (#6862) — une section dont la route
@@ -126,50 +123,83 @@ export type AdminSection = {
    * ne projette pas `role`, délibérément).
    */
   readonly adminRankOnly?: boolean;
-  readonly glyph: string;
+  /**
+   * **LA SECTION EST-ELLE SERVIE ?** (#8876) — `false` tant que son écran n'est
+   * pas livré : ni menu, ni tuile, ni lien d'entité ne mènent alors à elle
+   * (loi 4). Toutes les sections du registre sont servies.
+   */
+  readonly ready: boolean;
+  readonly glyph: AdminGlyphName;
 };
 
-/** Une section que la v2 SERT — la seule forme qu'un écran reçoit. */
-export type ServedAdminSection = AdminSection & { readonly route: AdminRoute };
+/** Une section que l'administration SERT — la seule forme qu'un écran reçoit. */
+export type ServedAdminSection = AdminSection;
 
-/** Les onze sections, dans l'ordre du legacy ; `route: null` ⇒ masquée. */
+export type AdminGroup = { readonly id: AdminGroupId; readonly labelKey: AdminGroupLabelKey };
+
+/** Les sept groupes du menu, dans l'ordre où ils se lisent. */
+export const ADMIN_GROUPS: readonly AdminGroup[] = [
+  { id: 'overview', labelKey: 'admin.group.overview' },
+  { id: 'people', labelKey: 'admin.group.people' },
+  { id: 'exchanges', labelKey: 'admin.group.exchanges' },
+  { id: 'content', labelKey: 'admin.group.content' },
+  { id: 'moderation', labelKey: 'admin.group.moderation' },
+  { id: 'growth', labelKey: 'admin.group.growth' },
+  { id: 'platform', labelKey: 'admin.group.platform' },
+];
+
+type SectionFacts = {
+  readonly permission: AdminPermissionKey;
+  readonly glyph: AdminGlyphName;
+  readonly ready: boolean;
+  readonly adminRankOnly?: true;
+};
+
+/** Le groupe et la route d'une section viennent de la table (`admin-routes.ts`) : jamais écrits deux fois. */
+const section = (id: AdminSectionId, facts: SectionFacts): AdminSection => ({
+  id,
+  group: adminGroupOf(id),
+  labelKey: `admin.nav.${id}`,
+  route: adminRouteOf(id),
+  ...facts,
+});
+
+/**
+ * Les dix-neuf sections, dans l'ordre des sept groupes (#8876). La permission
+ * est celle de la route QUE LA SECTION OUVRE — une tuile ne promet jamais plus
+ * que sa garde serveur (#6843).
+ */
 export const ADMIN_SECTIONS: readonly AdminSection[] = [
-  { id: 'dashboard', labelKey: 'admin.nav.dashboard', route: 'admin', permission: 'canAccessAdmin', glyph: '📊' },
-  { id: 'users', labelKey: 'admin.nav.users', route: 'adminUsers', permission: 'canManageUsers', glyph: '👥' },
+  section('dashboard', { permission: 'canAccessAdmin', glyph: 'squaresFour', ready: true }),
+  section('users', { permission: 'canManageUsers', glyph: 'users', ready: true }),
   /* LES ANONYMES (#7873) — les participants entrés par un lien sans compte.
      Même seuil que les comptes : ce sont des personnes, et leur fiche mène à
      la conversation qu'elles ont rejointe. */
-  { id: 'anonymous', labelKey: 'admin.nav.anonymous', route: 'adminAnonymous', permission: 'canManageUsers', glyph: '🕶️' },
-  {
-    id: 'conversations',
-    labelKey: 'admin.nav.conversations',
-    route: 'adminConversations',
-    permission: 'canManageConversations',
-    adminRankOnly: true,
-    glyph: '💬',
-  },
-  { id: 'moderation', labelKey: 'admin.nav.moderation', route: null, permission: 'canModerateContent', glyph: '🛡️' },
-  { id: 'audit', labelKey: 'admin.nav.audit', route: null, permission: 'canViewAuditLogs', glyph: '📜' },
-  { id: 'analytics', labelKey: 'admin.nav.analytics', route: null, permission: 'canViewAnalytics', glyph: '📈' },
-  { id: 'trackingLinks', labelKey: 'admin.nav.trackingLinks', route: null, permission: 'canViewAnalytics', glyph: '🔗' },
-  { id: 'ranking', labelKey: 'admin.nav.ranking', route: null, permission: 'canViewAnalytics', glyph: '🏆' },
-  { id: 'broadcasts', labelKey: 'admin.nav.broadcasts', route: null, permission: 'canManageNotifications', glyph: '📣' },
-  { id: 'settings', labelKey: 'admin.nav.settings', route: null, permission: 'canManageTranslations', glyph: '⚙️' },
+  section('anonymous', { permission: 'canManageUsers', glyph: 'detective', ready: true }),
+  /* LES DEMANDES DE CONTACT — ce que la passerelle sert sous « invitations »
+     sont des demandes d'AMITIÉ entre membres, pas des invitations par e-mail. */
+  section('invitations', { permission: 'canManageUsers', glyph: 'handshake', ready: true }),
+  section('conversations', { permission: 'canManageConversations', glyph: 'chats', ready: true, adminRankOnly: true }),
+  section('communities', { permission: 'canManageGroups', glyph: 'usersThree', ready: true }),
+  section('shareLinks', { permission: 'canManageConversations', glyph: 'linkSimple', ready: true }),
+  section('posts', { permission: 'canModerateContent', glyph: 'newspaper', ready: true }),
+  section('reports', { permission: 'canModerateContent', glyph: 'flag', ready: true }),
+  section('audit', { permission: 'canViewAuditLogs', glyph: 'scroll', ready: true }),
+  section('analytics', { permission: 'canViewAnalytics', glyph: 'chartLine', ready: true }),
+  section('ranking', { permission: 'canViewAnalytics', glyph: 'trophy', ready: true }),
+  section('trackingLinks', { permission: 'canViewAnalytics', glyph: 'target', ready: true }),
+  section('broadcasts', { permission: 'canManageNotifications', glyph: 'megaphone', ready: true }),
+  section('monitoring', { permission: 'canViewAnalytics', glyph: 'heartbeat', ready: true, adminRankOnly: true }),
+  section('languages', { permission: 'canViewAnalytics', glyph: 'translate', ready: true }),
   /* LE PILOTAGE DE L'AGENT (#6733) — `canManageAgent`, jamais `canAccessAdmin` :
      la tuile porte le seuil de ce qu'elle OUVRE. Et aucun `adminRankOnly` —
      sa garde serveur est une permission, pas un rang. */
-  { id: 'agent', labelKey: 'admin.nav.agent', route: 'adminAgent', permission: 'canManageAgent', glyph: '🤖' },
-  { id: 'monitoring', labelKey: 'admin.nav.monitoring', route: null, permission: 'canAccessAdmin', glyph: '💓' },
+  section('agent', { permission: 'canManageAgent', glyph: 'robot', ready: true }),
   /* LE BARÈME DE POINTS (#8906) — ce que chaque geste rapporte. La passerelle
-     le réserve à ADMIN et BIGBOSS : `adminRankOnly`, sous l'accès à l'espace. */
-  {
-    id: 'engagementScale',
-    labelKey: 'admin.nav.engagementScale',
-    route: 'adminEngagementScale',
-    permission: 'canAccessAdmin',
-    adminRankOnly: true,
-    glyph: '🔥',
-  },
+     le réserve à ADMIN et BIGBOSS (`requireAdminRank()`) : `adminRankOnly`, sous
+     l'accès à l'espace — un MODERATOR ne verrait qu'un refus. */
+  section('engagementScale', { permission: 'canAccessAdmin', glyph: 'flame', ready: true, adminRankOnly: true }),
+  section('settings', { permission: 'canAccessAdmin', glyph: 'gear', ready: true }),
 ];
 
 /**
@@ -194,19 +224,21 @@ export function visibleAdminSections(
    * puis la retirerait, ce qu'un lecteur lit comme un droit qu'on lui reprend.
    */
   role?: string | null,
+  /** Le registre lu : celui de l'application, ou un registre SYNTHÉTIQUE qu'un témoin passe pour ne dépendre d'aucun drapeau. */
+  registry: readonly AdminSection[] = ADMIN_SECTIONS,
 ): readonly ServedAdminSection[] {
   if (!canEnterAdmin(permissions)) return [];
 
-  const rangAdministration = RANGS_ADMINISTRATION.has(role ?? '');
+  const rangAdministration = hasAdministrationRank(role);
 
-  return ADMIN_SECTIONS.filter(
-    (section): section is ServedAdminSection =>
-      section.route !== null &&
-      permissions?.[section.permission] === true &&
+  return registry.filter(
+    (candidate) =>
+      candidate.ready &&
+      permissions?.[candidate.permission] === true &&
       // Une section de ce genre mène à une route qui exige AUSSI le rang :
       // l'offrir à un MODERATOR, qui porte pourtant la permission, le
       // conduirait à un écran qui ne peut lui rendre que des 403.
-      (section.adminRankOnly !== true || rangAdministration),
+      (candidate.adminRankOnly !== true || rangAdministration),
   );
 }
 
@@ -221,6 +253,11 @@ export function visibleAdminSections(
  * `canManageConversations` sans avoir le rang).
  */
 const RANGS_ADMINISTRATION: ReadonlySet<string> = new Set(['BIGBOSS', 'ADMIN']);
+
+/** Le rôle SERVI est-il de rang d'administration ? — le même prédicat pour le menu, le hub et les blocs d'écran. */
+export function hasAdministrationRank(role: string | null | undefined): boolean {
+  return RANGS_ADMINISTRATION.has(role ?? '');
+}
 
 /**
  * **LA PORTE DE L'ESPACE, et elle seule** — ce que l'écran `/admin`, la rangée

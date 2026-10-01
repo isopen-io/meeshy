@@ -1,0 +1,30 @@
+/* LES ENCRES DE TON DE L'ADMINISTRATION (#8876).
+ *
+ * Un badge d'état écrit son mot DANS la couleur de son ton, sur ce même ton à 14 % — un
+ * texte de 12 px qui doit atteindre 4,5:1 (WCAG 1.4.3). Les jetons de ton hérités ne le
+ * font pas partout en CLAIR : `--ios-info` (#60a5fa) n'a pas de variante claire et mesure
+ * 2,3:1, l'indigo de marque 3,8:1, le vert de succès 4,49:1 sur sa teinte. Ils restent la
+ * SOURCE des teintes (`toneBackground`) ; ces six jetons sont l'encre du TEXTE.
+ *
+ * Ils vivent ici, jamais dans `ios.css` (généré depuis Swift, qui est la source) : c'est un
+ * choix de l'administration, pas de la charte. `tone-contrast.test.ts` mesure chacun contre
+ * sa teinte, sur la surface ET sur la carte, dans les deux schémas.
+ *
+ * Le sombre garde les jetons existants (tous au-dessus de 5,9:1) ; le clair les approfondit.
+ */
+:root,
+:root.dark {
+  --color-admin-brand-ink: var(--ios-indigo-400);
+  --color-admin-success-ink: var(--ios-success);
+  --color-admin-warning-ink: var(--ios-warning);
+  --color-admin-danger-ink: var(--ios-error);
+  --color-admin-info-ink: var(--ios-info);
+}
+
+:root.light {
+  --color-admin-brand-ink: var(--ios-indigo-700);
+  --color-admin-success-ink: #046c4e;
+  --color-admin-warning-ink: #9a4507;
+  --color-admin-danger-ink: #b91c1c;
+  --color-admin-info-ink: #1d4ed8;
+}

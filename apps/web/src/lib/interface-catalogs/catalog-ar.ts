@@ -502,6 +502,7 @@ const ar = {
   'settings.save.error': 'لم يُحفظ الإعداد.',
   'settings.theme.sync_error': 'طُبّق المظهر على هذا الجهاز دون مزامنة.',
   'common.cancel': 'إلغاء',
+  'common.close': 'إغلاق',
 
   'media.video.play': 'تشغيل الفيديو',
   'media.video.pause': 'إيقاف مؤقت',

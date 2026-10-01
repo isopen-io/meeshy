@@ -104,6 +104,24 @@ describe('escapeForCss — le sélecteur que Tailwind émet réellement', () => 
     const emitted = '.after\\:content-\\[\\"→\\"\\]:after{--tw-content:"→";content:var(--tw-content)}';
     expect(emitted.includes(`.${escapeForCss('after:content-["→"]')}`)).toBe(true);
   });
+
+  test('l’arobase des requêtes de conteneur se protège : `@container` et `@xl:grid-cols-4` ont leur règle', () => {
+    const emitted =
+      '.\\@container{container-type:inline-size}.\\@xl\\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}';
+    expect(emitted.includes(`.${escapeForCss('@container')}`)).toBe(true);
+    expect(emitted.includes(`.${escapeForCss('@xl:grid-cols-4')}`)).toBe(true);
+  });
+
+  test('une valeur arbitraire sous variante de conteneur : `@2xl:grid-cols-[minmax(0,1fr)_auto]`', () => {
+    const emitted = '.\\@2xl\\:grid-cols-\\[minmax\\(0\\,1fr\\)_auto\\]{grid-template-columns:minmax(0,1fr) auto}';
+    expect(emitted.includes(`.${escapeForCss('@2xl:grid-cols-[minmax(0,1fr)_auto]')}`)).toBe(true);
+  });
+
+  test('une variante de conteneur INEXISTANTE reste morte : l’échappement ne rend pas le gate complaisant', () => {
+    const emitted = '.\\@xl\\:grid-cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}';
+    expect(emitted.includes(`.${escapeForCss('@xxl:grid-cols-4')}`)).toBe(false);
+    expect(emitted.includes(`.${escapeForCss('@xl:grid-cols-5')}`)).toBe(false);
+  });
 });
 
 describe('findRuleBody — le corps de la règle compilée pour une classe', () => {

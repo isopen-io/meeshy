@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react';
 
 import { Sheet } from '@/components/sheet';
+import { interpretConversationType } from '@/lib/admin/interpret/enums';
+import { conversationLabel } from '@/lib/admin/interpret/labels';
 import type { AdminDeps } from '@/lib/api/admin';
 import {
   MOTIF_LONGUEUR_MINIMALE,
@@ -14,9 +16,8 @@ import {
 import type { AdminConversation } from '@/lib/api/admin-user-conversations';
 import { apiDeps } from '@/lib/api/deps';
 import type { ApiFailure } from '@/lib/api/http';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
 import { ActionButton } from '@/routes/link-page-parts';
 
 /**
@@ -197,9 +198,14 @@ export function AdminConversationSettingsSheet({
   deps = apiDeps,
 }: {
   readonly conversation: AdminConversation;
-  /** Le membre DONT on consulte la fiche — celui dont le rôle se règle ici. */
-  readonly userId: string;
-  readonly language: InterfaceLanguage;
+  /**
+   * Le membre DONT on consulte la fiche — celui dont le rôle se règle ici.
+   * Absent sur la fiche d'une CONVERSATION : aucun membre n'y est administré
+   * (`conversation.membership` est alors `null`), et la feuille ne propose ni
+   * rôle ni retrait.
+   */
+  readonly userId?: string;
+  readonly language: AdminLanguage;
   readonly onClose: () => void;
   readonly onAnnounce: (texte: string) => void;
   /** Appelé après toute écriture réussie : l'hôte invalide sa liste. */
@@ -209,6 +215,7 @@ export function AdminConversationSettingsSheet({
   const t = (cle: AdminPlainCatalogKey) => translateAdmin(language, cle);
   const [brouillon, setBrouillon] = useState<Brouillon>(() => brouillonDe(conversation));
   const roleServi = conversation.membership?.role ?? '';
+  const memberId = userId ?? conversation.membership?.userId ?? '';
   const [role, setRole] = useState(roleServi);
   const [motif, setMotif] = useState('');
   const [confirme, setConfirme] = useState<'save' | 'remove' | null>(null);
@@ -250,7 +257,7 @@ export function AdminConversationSettingsSheet({
       }
     }
     if (roleChange && estRoleMembre(role)) {
-      const resultat = await setAdminConversationMemberRole({ ...deps, conversationId: conversation.id, userId, role, reason: motif });
+      const resultat = await setAdminConversationMemberRole({ ...deps, conversationId: conversation.id, userId: memberId, role, reason: motif });
       if (!resultat.ok) {
         setEnvoi(false);
         onChanged();
@@ -271,7 +278,7 @@ export function AdminConversationSettingsSheet({
       return;
     }
     setEnvoi(true);
-    const resultat = await removeAdminConversationMember({ ...deps, conversationId: conversation.id, userId, reason: motif });
+    const resultat = await removeAdminConversationMember({ ...deps, conversationId: conversation.id, userId: memberId, reason: motif });
     setEnvoi(false);
     if (!resultat.ok) {
       echec(resultat);
@@ -296,11 +303,20 @@ export function AdminConversationSettingsSheet({
   );
 
   return (
-    <Sheet title={t('admin.convSettings.title')} bodyAs="div" presentation="centered" onClose={onClose}>
+    <Sheet title={t('admin.convSettings.title')} bodyAs="div" presentation="centered" closeLabel={t('admin.kit.close')} onClose={onClose}>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6" data-admin-conv-settings={conversation.id}>
         <div className="grid gap-4">
           <p className="truncate text-caption" style={{ color: INK2 }}>
-            {conversation.title ?? conversation.identifier ?? conversation.id} · {conversation.type}
+            {conversationLabel(
+              {
+                title: conversation.title,
+                type: conversation.type,
+                participants: conversation.participants.map((participant) => ({ displayName: participant.displayName })),
+                total: conversation.memberCount,
+              },
+              language,
+            )}{' '}
+            · {interpretConversationType(conversation.type, language).label}
           </p>
 
           {texte('title', 'admin.convSettings.titleField')}

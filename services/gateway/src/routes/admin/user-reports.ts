@@ -275,7 +275,29 @@ export function registerUserReportsRoutes(fastify: FastifyInstance): void {
         messages.map((m) => [m.id, canSeeReportedContent ? m : { ...m, content: null }])
       );
 
-      const data = reports.map((r) => ({ ...r, message: messageMap.get(r.reportedEntityId) ?? null }));
+      // #8876 — la conversation est NOMMÉE : « Message dans Famille », pas « dans
+      // 66e… ». Un seul lot pour la page, et un titre est une métadonnée — AUDIT
+      // la garde, comme le reste de la ligne (jamais le `content`).
+      const conversationIds = [...new Set(messages.map((m) => m.conversationId))];
+      const conversations = conversationIds.length > 0
+        ? await fastify.prisma.conversation.findMany({
+            where: { id: { in: conversationIds } },
+            select: { id: true, title: true },
+            take: conversationIds.length
+          })
+        : [];
+      const titleByConversation = new Map(conversations.map((c) => [c.id, c.title?.trim() || null]));
+
+      const data = reports.map((r) => {
+        const message = messageMap.get(r.reportedEntityId) ?? null;
+        return {
+          ...r,
+          message,
+          conversation: message
+            ? { id: message.conversationId, title: titleByConversation.get(message.conversationId) ?? null }
+            : null
+        };
+      });
 
       return sendPaginatedSuccess(reply, data, {
         total,

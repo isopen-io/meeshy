@@ -504,6 +504,7 @@ const en = {
   'settings.save.error': 'The setting was not saved.',
   'settings.theme.sync_error': 'Theme applied on this device, not synced.',
   'common.cancel': 'Cancel',
+  'common.close': 'Close',
 
   'media.video.play': 'Play video',
   'media.video.pause': 'Pause',

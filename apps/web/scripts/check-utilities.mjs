@@ -144,8 +144,12 @@ export const usedClasses = (files) => {
  * Le nom tel que Tailwind l'écrit dans le sélecteur. Les apostrophes et
  * guillemets s'y protègent aussi (`before:content-['']` sort en
  * `.before\:content-\[\'\'\]`) : sans eux, une classe bien servie passait pour morte.
+ * Il en va de même de l'arobase des requêtes de CONTENEUR (`@container`,
+ * `@xl:grid-cols-4` sortent en `.\@container`, `.\@xl\:grid-cols-4`) : sans
+ * lui, l'administration, première à les employer, voyait seize classes
+ * vivantes passer pour mortes.
  */
-export const escapeForCss = (name) => name.replace(/[.[\]/%#(),!:'"]/g, (c) => `\\${c}`);
+export const escapeForCss = (name) => name.replace(/[.[\]/%#(),!:'"@]/g, (c) => `\\${c}`);
 
 /** Le corps `{ ... }` de la règle `.name{...}` dans `css`, ou `null` si absente. */
 export const findRuleBody = (css, name) => {

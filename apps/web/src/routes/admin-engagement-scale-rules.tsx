@@ -1,5 +1,9 @@
 import type { ReactNode } from 'react';
 
+import { AdminButton } from '@/components/admin/button';
+import { AdminFicheSection } from '@/components/admin/fiche';
+import { AdminResponsiveRows, type AdminColumn } from '@/components/admin/responsive-rows';
+import { INK2 } from '@/components/admin/tone';
 import {
   ABUSE_FIELDS,
   LINK_VISIT_FIELDS,
@@ -12,19 +16,18 @@ import {
   type LinkVisitField,
   type ScaleDraft,
 } from '@/lib/admin/engagement-scale-form';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
-import { AdminTable, PlainTh, Td } from '@/routes/admin-table';
-import { LabeledNumber, NumberField, scaleTokens } from '@/routes/admin-engagement-scale-fields';
+import { translateAdmin, type AdminLanguage, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
+import { LabeledNumber, NumberField } from '@/routes/admin-engagement-scale-fields';
 
 /**
  * LES RÈGLES TRANSVERSES DU BARÈME (#8959) — la visite de lien progressive, les
  * bonus de constance et les garde-fous des gros poids. Chacune se règle ici et
- * s'applique partout où la passerelle crédite.
+ * s'applique partout où la passerelle crédite. Chacune est un bloc titré du kit
+ * (`AdminFicheSection`), comme les opérations, le multiplicateur et les niveaux.
  */
 
 type DraftProps = {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly draft: ScaleDraft;
   readonly onDraft: (next: ScaleDraft) => void;
 };
@@ -56,17 +59,14 @@ function RuleSection({
   readonly children: ReactNode;
 }) {
   return (
-    <section aria-labelledby={id} className="grid gap-3">
-      <h2 id={id} className="text-body font-semibold" style={{ color: scaleTokens.INK }}>
-        {title}
-      </h2>
+    <AdminFicheSection id={id} title={title}>
       {intro === undefined ? null : (
-        <p className="text-caption" style={{ color: scaleTokens.INK2 }}>
+        <p className="text-caption" style={{ color: INK2 }}>
           {intro}
         </p>
       )}
       {children}
-    </section>
+    </AdminFicheSection>
   );
 }
 
@@ -77,7 +77,7 @@ export function LinkVisitSection({ language, draft, onDraft }: DraftProps) {
       title={translateAdmin(language, 'admin.scale.links.title')}
       intro={translateAdmin(language, 'admin.scale.links.intro')}
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 @2xl:grid-cols-2">
         {LINK_VISIT_FIELDS.map((field) => {
           const label = translateAdmin(language, LINK_VISIT_LABELS[field]);
           return (
@@ -97,69 +97,67 @@ export function LinkVisitSection({ language, draft, onDraft }: DraftProps) {
   );
 }
 
+type StreakRow = { readonly bonus: ScaleDraft['streakBonuses'][number]; readonly index: number };
+
 export function StreakBonusSection({ language, draft, onDraft }: DraftProps) {
+  const rows: readonly StreakRow[] = draft.streakBonuses.map((bonus, index) => ({ bonus, index }));
+  const columns: readonly AdminColumn<StreakRow>[] = [
+    {
+      id: 'days',
+      header: translateAdmin(language, 'admin.scale.streak.col.days'),
+      primary: true,
+      cell: ({ bonus, index }) => (
+        <NumberField
+          value={bonus.days}
+          label={translateAdmin(language, 'admin.scale.streak.daysFor', { row: String(index + 1) })}
+          onChange={(days) => onDraft(withStreakBonus(draft, index, { days }))}
+          data={{ 'data-scale-streak-days': String(index) }}
+        />
+      ),
+    },
+    {
+      id: 'points',
+      header: translateAdmin(language, 'admin.scale.streak.col.points'),
+      cell: ({ bonus, index }) => (
+        <NumberField
+          value={bonus.points}
+          label={translateAdmin(language, 'admin.scale.streak.pointsFor', { row: String(index + 1) })}
+          onChange={(points) => onDraft(withStreakBonus(draft, index, { points }))}
+          data={{ 'data-scale-streak-points': String(index) }}
+        />
+      ),
+    },
+    {
+      id: 'remove',
+      header: translateAdmin(language, 'admin.col.actions'),
+      cell: ({ bonus, index }) => (
+        <AdminButton tone="danger" data={{ 'data-scale-streak-remove': String(index) }} onClick={() => onDraft(withoutStreakBonus(draft, index))}>
+          {translateAdmin(language, 'admin.scale.streak.remove', { days: bonus.days })}
+        </AdminButton>
+      ),
+    },
+  ];
+
   return (
     <RuleSection id="scale-streak" title={translateAdmin(language, 'admin.scale.streak.title')}>
-      {draft.streakBonuses.length === 0 ? (
-        <p className="text-caption" style={{ color: scaleTokens.INK2 }} data-scale-streak-empty>
+      {rows.length === 0 ? (
+        <p className="text-caption" style={{ color: INK2 }} data-scale-streak-empty>
           {translateAdmin(language, 'admin.scale.streak.empty')}
         </p>
       ) : (
-        <AdminTable>
-          <thead>
-            <tr>
-              <PlainTh>{translateAdmin(language, 'admin.scale.streak.col.days')}</PlainTh>
-              <PlainTh>{translateAdmin(language, 'admin.scale.streak.col.points')}</PlainTh>
-              <PlainTh />
-            </tr>
-          </thead>
-          <tbody>
-            {draft.streakBonuses.map((bonus, index) => {
-              const row = String(index + 1);
-              return (
-                <tr key={index} data-scale-streak-row={index}>
-                  <Td>
-                    <NumberField
-                      value={bonus.days}
-                      label={translateAdmin(language, 'admin.scale.streak.daysFor', { row })}
-                      onChange={(days) => onDraft(withStreakBonus(draft, index, { days }))}
-                      data={{ 'data-scale-streak-days': String(index) }}
-                    />
-                  </Td>
-                  <Td>
-                    <NumberField
-                      value={bonus.points}
-                      label={translateAdmin(language, 'admin.scale.streak.pointsFor', { row })}
-                      onChange={(points) => onDraft(withStreakBonus(draft, index, { points }))}
-                      data={{ 'data-scale-streak-points': String(index) }}
-                    />
-                  </Td>
-                  <Td>
-                    <button
-                      type="button"
-                      onClick={() => onDraft(withoutStreakBonus(draft, index))}
-                      data-scale-streak-remove={index}
-                      className="rounded-chip px-3 text-body"
-                      style={{ minHeight: 40, color: 'var(--color-error)' }}
-                    >
-                      {translateAdmin(language, 'admin.scale.streak.remove', { days: bonus.days })}
-                    </button>
-                  </Td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </AdminTable>
+        <AdminResponsiveRows
+          columns={columns}
+          rows={rows}
+          rowKey={({ index }) => String(index)}
+          rowAttributes={({ index }) => ({ 'data-scale-streak-row': String(index) })}
+          caption={translateAdmin(language, 'admin.scale.streak.title')}
+        />
       )}
-      <button
-        type="button"
-        onClick={() => onDraft(withAddedStreakBonus(draft))}
-        data-scale-streak-add
-        className="w-fit rounded-chip px-4 text-body font-medium"
-        style={{ minHeight: 40, color: scaleTokens.BRAND, border: `1px solid ${scaleTokens.EDGE}` }}
-      >
-        {translateAdmin(language, 'admin.scale.streak.add')}
-      </button>
+      <div>
+        <AdminButton data={{ 'data-scale-streak-add': '' }} onClick={() => onDraft(withAddedStreakBonus(draft))}>
+          {translateAdmin(language, 'admin.scale.streak.add')}
+        </AdminButton>
+      </div>
     </RuleSection>
   );
 }
@@ -171,7 +169,7 @@ export function AbuseSection({ language, draft, onDraft }: DraftProps) {
       title={translateAdmin(language, 'admin.scale.abuse.title')}
       intro={translateAdmin(language, 'admin.scale.abuse.intro')}
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 @2xl:grid-cols-2">
         {ABUSE_FIELDS.map((field) => {
           const label = translateAdmin(language, ABUSE_LABELS[field]);
           return (

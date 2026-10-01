@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { interpretRole } from '@/lib/admin/interpret/enums';
 import { ADMIN_ROLES } from '@/lib/admin/user-list';
 import { roleDraftOf, roleEditOf, sectionIsDirty, type RoleDraft } from '@/lib/admin/member-sections';
 import { sensitiveChangesOf } from '@/lib/admin/user-edit-guard';
@@ -7,8 +8,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { updateAdminUser } from '@/lib/api/admin-user-actions';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { Bascule, Choix, MemberSection, SectionButton, Texte, useFieldFocus, useMemberWrite } from './admin-member-parts';
 
@@ -29,7 +29,7 @@ export function AdminMemberRoleSection({
   deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
   readonly onOpenBan: () => void;
   readonly deps?: AdminDeps;
@@ -79,12 +79,12 @@ export function AdminMemberRoleSection({
       {...(doitConfirmer ? { saveLabel: translateAdmin(language, 'admin.edit.confirm') } : {})}
       onSave={() => void enregistrer()}
     >
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-4 @xl:grid-cols-2">
         <Choix
           id="admin-member-role"
           label={translateAdmin(language, 'admin.user.role')}
           valeur={draft.role}
-          options={ADMIN_ROLES.map((role) => ({ value: role, label: role }))}
+          options={ADMIN_ROLES.map((role) => ({ value: role, label: interpretRole(role, language).label }))}
           onValeur={(role) => poser({ role })}
         />
         <div className="self-end">

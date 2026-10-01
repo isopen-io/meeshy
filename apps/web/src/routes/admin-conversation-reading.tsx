@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
+import { AdminEmptyState, AdminErrorState } from '@/components/admin/states';
 import {
   ADMIN_MESSAGES_PAGE_SIZE,
   adminConversationMessagesQueryKey,
@@ -12,8 +13,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
 import type { Viewer } from '@/lib/api/viewer';
 import { place } from '@/lib/grouping';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useThreadScene } from '@/lib/reading-mode/scene';
 import { AdminSkeleton } from '@/routes/admin-parts';
 import { ThreadModes } from '@/routes/thread-modes';
@@ -72,6 +72,23 @@ import { ThreadModes } from '@/routes/thread-modes';
 
 const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
+const BRAND = 'var(--color-ios-brand)';
+const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
+
+/**
+ * LA HAUTEUR DU FIL SUR UNE FICHE — bornée, sinon le virtualiseur monterait
+ * toutes les rangées en silence. Le fil est un panneau qui défile DANS la fiche :
+ * le reste de la page (chiffres, membres, métadonnées) défile autour.
+ */
+const BOUNDED_HEIGHT = 'min(75vh, 52rem)';
+
+const PAGER_BUTTON = {
+  minHeight: 44,
+  backgroundColor: 'var(--color-ios-surface)',
+  border: '1px solid var(--color-edge)',
+  color: INK,
+  outlineColor: BRAND,
+} as const;
 
 /**
  * LE MODE DE LECTURE DE L'ADMINISTRATION — `focal`, le mode PAR DÉFAUT du
@@ -97,10 +114,11 @@ export function AdminConversationReading({
   readerLocale,
   viewer,
   deps = apiDeps,
+  layout = 'fill',
 }: {
   readonly conversationId: string;
   /** La langue de l'INTERFACE d'administration (motif, boutons) — jamais celle du contenu. */
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   /**
    * **LE PRISME DE QUI** — et donc s'il y a quelque chose à ANNONCER.
    *
@@ -142,6 +160,13 @@ export function AdminConversationReading({
    * travers le chemin qu'un administrateur emprunte.
    */
   readonly deps?: AdminDeps;
+  /**
+   * OÙ LE FIL S'ASSOIT. `fill` (défaut) : l'hôte borne la hauteur (la fenêtre de
+   * lecture de la fiche d'un membre). `bounded` : l'hôte est une PAGE qui défile
+   * — la fiche d'une conversation —, et le fil se borne lui-même. Additif : aucun
+   * appelant existant n'a à changer.
+   */
+  readonly layout?: 'fill' | 'bounded';
 }) {
   const [saisie, setSaisie] = useState('');
   /** Le motif VALIDÉ — figé une fois la lecture demandée. */
@@ -242,9 +267,9 @@ export function AdminConversationReading({
 
   if (motif === null) {
     return (
-      <div className="grid gap-2" data-admin-reading-gate>
-        <label className="grid gap-1 pb-2">
-          <span className="text-caption" style={{ color: INK2 }}>
+      <div className="grid gap-3" data-admin-reading-gate>
+        <label className="grid gap-1">
+          <span className="text-caption font-medium" style={{ color: INK2 }}>
             {translateAdmin(language, 'admin.convDetail.reasonLabel')}
           </span>
           <textarea
@@ -256,12 +281,11 @@ export function AdminConversationReading({
                `input` sur un champ texte, mais l'équivalence repose sur son
                suivi de valeur, que happy-dom ne satisfait pas. Un champ câblé
                `onChange` se monte, s'affiche, se remplit à l'œil — et ne
-               rapporte JAMAIS rien à son hôte sous témoin. C'est ce qu'il
-               portait, hérité de l'écran qu'il remplace, et aucun témoin
-               n'existait pour le dire. */
+               rapporte JAMAIS rien à son hôte sous témoin. */
             onInput={(event) => setSaisie(event.currentTarget.value)}
-            className="rounded-card px-4 py-2 text-body"
-            style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)', color: INK }}
+            onChange={() => undefined}
+            className={`rounded-card px-4 py-3 text-body ${FOCUS}`}
+            style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)', color: INK, outlineColor: BRAND }}
           />
           <span className="text-caption" style={{ color: INK2 }}>
             {translateAdmin(language, 'admin.convDetail.reasonHint')}
@@ -272,8 +296,8 @@ export function AdminConversationReading({
           data-admin-reason-submit
           disabled={!motifSuffisant}
           onClick={() => setMotif(saisie.trim())}
-          className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
-          style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
+          className={`w-fit rounded-chip px-5 text-body font-semibold text-ios-on-brand disabled:opacity-40 ${FOCUS}`}
+          style={{ minHeight: 44, backgroundColor: BRAND, outlineColor: BRAND }}
         >
           {translateAdmin(language, 'admin.convDetail.read')}
         </button>
@@ -283,24 +307,22 @@ export function AdminConversationReading({
 
   if (page.isPending) return <AdminSkeleton rows={6} />;
 
-  if (page.data === undefined) {
-    return (
-      <p className="text-caption" style={{ color: INK2 }}>
-        {translateAdmin(language, 'admin.convList.unavailable')}
-      </p>
-    );
-  }
+  if (page.data === undefined) return <AdminErrorState language={language} onRetry={() => void page.refetch()} />;
 
   if (placed.length === 0) {
     return (
-      <p className="text-caption" style={{ color: INK2 }} data-admin-reading-empty>
-        {translateAdmin(language, 'admin.convDetail.empty')}
-      </p>
+      <div data-admin-reading-empty>
+        <AdminEmptyState glyph="chats" title={translateAdmin(language, 'admin.convDetail.empty')} />
+      </div>
     );
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col" data-admin-reading={conversationId}>
+    <div
+      className="flex min-h-0 flex-1 flex-col"
+      data-admin-reading={conversationId}
+      {...(layout === 'bounded' ? { style: { height: BOUNDED_HEIGHT } } : {})}
+    >
       {/* LE PRISME D'UN AUTRE, DIT À VOIX HAUTE — un administrateur qui lit
           dans les langues de quelqu'un d'autre doit le savoir, sinon il prend
           la traduction d'un tiers pour ce qu'il lirait lui-même. Le bandeau ne
@@ -343,8 +365,8 @@ export function AdminConversationReading({
           data-admin-messages-prev
           disabled={offset === 0}
           onClick={() => setOffset((valeur) => Math.max(0, valeur - ADMIN_MESSAGES_PAGE_SIZE))}
-          className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
-          style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
+          className={`rounded-chip px-4 text-body font-semibold disabled:opacity-40 ${FOCUS}`}
+          style={PAGER_BUTTON}
         >
           {translateAdmin(language, 'admin.users.previous')}
         </button>
@@ -353,8 +375,8 @@ export function AdminConversationReading({
           data-admin-messages-next
           disabled={!page.data.hasMore}
           onClick={() => setOffset((valeur) => valeur + ADMIN_MESSAGES_PAGE_SIZE)}
-          className="rounded-chip px-4 text-body font-semibold disabled:opacity-40"
-          style={{ minHeight: 44, backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 16%, transparent)', color: INK }}
+          className={`rounded-chip px-4 text-body font-semibold disabled:opacity-40 ${FOCUS}`}
+          style={PAGER_BUTTON}
         >
           {translateAdmin(language, 'admin.users.next')}
         </button>

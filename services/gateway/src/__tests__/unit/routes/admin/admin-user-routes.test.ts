@@ -246,7 +246,7 @@ describe('GET /admin/users', () => {
       url: '/admin/users?search=foo&role=USER&sortBy=username&sortOrder=asc'
     });
     expect(mockUMS.getUsers).toHaveBeenCalledWith(
-      expect.objectContaining({ search: 'foo', role: 'USER', sortBy: 'username', sortOrder: 'asc' }),
+      expect.objectContaining({ search: 'foo', role: ['USER'], sortBy: 'username', sortOrder: 'asc' }),
       expect.any(Object)
     );
   });

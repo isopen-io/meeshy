@@ -91,9 +91,6 @@ function verifierMotif(reason: string): MotifVerifie {
 
 const cheminConversation = (conversationId: string) => adminEndpoints.conversationsByConversationId(conversationId);
 
-const cheminParticipant = (conversationId: string, userId: string) =>
-  `${cheminConversation(conversationId)}/participants/${encodeURIComponent(userId)}`;
-
 /** Les champs PRÉSENTÉS — une valeur `undefined` n'existe pas en JSON. */
 export function conversationEditFieldsOf(edit: AdminConversationEdit): readonly (keyof AdminConversationEdit)[] {
   return (Object.keys(edit) as (keyof AdminConversationEdit)[]).filter((champ) => edit[champ] !== undefined);
@@ -146,7 +143,7 @@ export async function setAdminConversationMemberRole(
 
   const result = await params.transport.request<unknown>({
     method: 'PATCH',
-    path: cheminParticipant(params.conversationId, params.userId),
+    path: adminEndpoints.conversationsByConversationIdParticipantsByUserId(params.conversationId, params.userId),
     body: { role: params.role, reason: motif.motif },
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
@@ -178,7 +175,7 @@ export async function removeAdminConversationMember(
 
   const result = await params.transport.request<unknown>({
     method: 'POST',
-    path: `${cheminParticipant(params.conversationId, params.userId)}/remove`,
+    path: adminEndpoints.conversationsByConversationIdParticipantsByUserIdRemove(params.conversationId, params.userId),
     body: { reason: motif.motif },
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });

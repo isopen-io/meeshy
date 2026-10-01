@@ -1,10 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
+import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { Glyph } from '@/components/glyph';
 import { adminIdentityQueryOptions } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
+import type { AdminBack } from '@/lib/admin/admin-routes';
+import { focusMainHeading, requestMainHeadingFocus, takeMainHeadingFocusRequest, trappedTabTarget } from '@/lib/admin/drawer-focus';
 import {
   activeAdminSectionId,
   adminSpaceOf,
@@ -13,10 +16,9 @@ import {
   writeSidebarFolded,
   type AdminSpace,
 } from '@/lib/admin/admin-space';
-import { visibleAdminSections, type ServedAdminSection } from '@/lib/admin/sections';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
+import { ADMIN_GROUPS, visibleAdminSections, type ServedAdminSection } from '@/lib/admin/sections';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useOptionalRoute } from '@/lib/router';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { Link } from '@/routes/route-table';
@@ -47,9 +49,8 @@ const BRAND = 'var(--color-ios-brand)';
 const INK = 'var(--color-ios-ink)';
 const INK2 = 'var(--color-ios-ink-2)';
 const SURFACE = 'var(--color-ios-surface)';
+const INK3 = 'var(--color-ios-ink-3)';
 const EDGE = 'var(--color-edge)';
-
-type Back = 'list' | 'admin' | 'adminUsers' | 'admUsers' | 'adminAnonymous' | 'admAnonymous';
 
 function MenuGlyph() {
   return (
@@ -59,6 +60,54 @@ function MenuGlyph() {
   );
 }
 
+function AdminNavItem({
+  language,
+  section,
+  space,
+  active,
+  folded,
+  onNavigate,
+}: {
+  readonly language: AdminLanguage;
+  readonly section: ServedAdminSection;
+  readonly space: AdminSpace;
+  readonly active: string | null;
+  readonly folded: boolean;
+  readonly onNavigate?: () => void;
+}) {
+  const libelle = translateAdmin(language, section.labelKey);
+  const actif = section.id === active;
+  return (
+    <li>
+      <Link
+        to={routeInSpace(section.route, space)}
+        data-admin-nav={section.id}
+        aria-current={actif ? 'page' : undefined}
+        title={folded ? libelle : undefined}
+        {...(onNavigate === undefined ? {} : { onClick: onNavigate })}
+        className={`flex items-center gap-3 rounded-chip px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2 ${folded ? 'justify-center' : ''}`}
+        style={{
+          minHeight: 44,
+          outlineColor: BRAND,
+          color: actif ? BRAND : INK,
+          fontWeight: actif ? 600 : 500,
+          backgroundColor: actif ? 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' : 'transparent',
+        }}
+      >
+        <span aria-hidden="true" className="shrink-0">
+          <AdminGlyph name={section.glyph} size={18} />
+        </span>
+        <span className={folded ? 'sr-only' : 'min-w-0 flex-1 truncate'}>{libelle}</span>
+      </Link>
+    </li>
+  );
+}
+
+/**
+ * LE MENU GROUPÉ (#8876) — sept groupes titrés, dans l'ordre où ils se lisent ;
+ * un groupe sans section visible n'est pas rendu. Replié en rail d'icônes, le
+ * titre cède la place à un séparateur : les groupes restent lisibles sans mot.
+ */
 function AdminNav({
   language,
   sections,
@@ -67,50 +116,48 @@ function AdminNav({
   folded,
   onNavigate,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly sections: readonly ServedAdminSection[];
   readonly space: AdminSpace;
   readonly active: string | null;
   readonly folded: boolean;
   readonly onNavigate?: () => void;
 }) {
+  const groupes = ADMIN_GROUPS.map((groupe) => ({ groupe, entrees: sections.filter((section) => section.group === groupe.id) })).filter(
+    ({ entrees }) => entrees.length > 0,
+  );
+
   return (
     <nav aria-label={translateAdmin(language, 'admin.shell.menu')} className="min-h-0 flex-1 overflow-y-auto px-2">
-      <ul className="grid gap-1">
-        {sections.map((section) => {
-          const libelle = translateAdmin(language, section.labelKey);
-          const actif = section.id === active;
-          return (
-            <li key={section.id}>
-              <Link
-                to={routeInSpace(section.route, space)}
-                data-admin-nav={section.id}
-                aria-current={actif ? 'page' : undefined}
-                title={folded ? libelle : undefined}
-                {...(onNavigate === undefined ? {} : { onClick: onNavigate })}
-                className={`flex items-center gap-3 rounded-chip px-3 text-body focus-visible:outline-2 focus-visible:outline-offset-2 ${folded ? 'justify-center' : ''}`}
-                style={{
-                  minHeight: 44,
-                  outlineColor: BRAND,
-                  color: actif ? BRAND : INK,
-                  fontWeight: actif ? 600 : 500,
-                  backgroundColor: actif ? 'color-mix(in srgb, var(--color-ios-brand) 12%, transparent)' : 'transparent',
-                }}
-              >
-                <span aria-hidden="true" className="shrink-0 text-body">
-                  {section.glyph}
-                </span>
-                <span className={folded ? 'sr-only' : 'min-w-0 flex-1 truncate'}>{libelle}</span>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+      {groupes.map(({ groupe, entrees }, index) => (
+        <div key={groupe.id} data-admin-nav-group={groupe.id} role="group" aria-label={translateAdmin(language, groupe.labelKey)}>
+          {folded ? (
+            index === 0 ? null : <hr aria-hidden="true" className="mx-3 my-2" style={{ border: 0, borderTop: `1px solid ${EDGE}` }} />
+          ) : (
+            <p aria-hidden="true" className="px-3 pb-1 pt-4 text-caption font-semibold uppercase" style={{ color: INK3 }}>
+              {translateAdmin(language, groupe.labelKey)}
+            </p>
+          )}
+          <ul className="grid gap-1">
+            {entrees.map((section) => (
+              <AdminNavItem
+                key={section.id}
+                language={language}
+                section={section}
+                space={space}
+                active={active}
+                folded={folded}
+                {...(onNavigate === undefined ? {} : { onNavigate })}
+              />
+            ))}
+          </ul>
+        </div>
+      ))}
     </nav>
   );
 }
 
-function BackToApp({ language, folded }: { readonly language: InterfaceLanguage; readonly folded: boolean }) {
+function BackToApp({ language, folded }: { readonly language: AdminLanguage; readonly folded: boolean }) {
   const libelle = translateAdmin(language, 'admin.shell.backToApp');
   return (
     <Link
@@ -120,7 +167,7 @@ function BackToApp({ language, folded }: { readonly language: InterfaceLanguage;
       className={`mx-2 mb-3 flex items-center gap-3 rounded-chip px-3 text-caption focus-visible:outline-2 focus-visible:outline-offset-2 ${folded ? 'justify-center' : ''}`}
       style={{ minHeight: 44, color: INK2, outlineColor: BRAND }}
     >
-      <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
+      <Glyph name="caretLeft" size={16} />
       <span className={folded ? 'sr-only' : 'truncate'}>{libelle}</span>
     </Link>
   );
@@ -153,13 +200,13 @@ export function AdminHeader({
   backLabel,
   actions,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly title: string;
   /**
    * Un écran de DÉTAIL revient à la liste d'où l'on vient, et dans l'ESPACE
    * d'où l'on vient (#6819, D-76). Le menu latéral couvre le reste.
    */
-  readonly back: Back;
+  readonly back: AdminBack;
   readonly onMenu?: () => void;
   readonly heading?: AdminHeading;
   /** Le libellé posé à droite du chevron de retour quand le titre vit dans le contenu. */
@@ -172,7 +219,6 @@ export function AdminHeader({
     <header
       className="flex shrink-0 items-center gap-1 px-2 md:px-6"
       style={{ height: ADMIN_HEADER_HEIGHT, borderBottom: `1px solid ${EDGE}` }}
-      lang={language}
     >
       {onMenu === undefined ? null : (
         <button
@@ -196,7 +242,7 @@ export function AdminHeader({
         style={{ color: BRAND, outlineColor: BRAND }}
       >
         <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
+          <Glyph name="caretLeft" size={16} />
         </ChromeActionDisc>
       </Link>
       {titreDansLeContenu ? (
@@ -232,25 +278,58 @@ function AdminDrawer({
   active,
   onClose,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly sections: readonly ServedAdminSection[];
   readonly space: AdminSpace;
   readonly active: string | null;
   readonly onClose: () => void;
 }) {
   useBackDismiss(onClose);
+  const dialog = useRef<HTMLDivElement>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const followed = useRef(false);
+
+  useEffect(() => {
+    closeButton.current?.focus();
+    return () => {
+      const trigger = document.querySelector<HTMLElement>('[data-admin-menu-open]');
+      if (!followed.current) {
+        if (trigger?.isConnected) trigger.focus();
+        return;
+      }
+      const screen = document.getElementById('contenu');
+      requestMainHeadingFocus();
+      requestAnimationFrame(() => {
+        if (screen?.isConnected) focusMainHeading();
+      });
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab' || dialog.current === null) return;
+      const target = trappedTabTarget(dialog.current, document.activeElement, event.shiftKey);
+      if (target === null) return;
+      event.preventDefault();
+      target.focus();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  const follow = () => {
+    followed.current = true;
+    onClose();
+  };
+
   return (
     <div className="fixed inset-0 z-40 flex md:hidden" data-admin-drawer>
       <div
+        ref={dialog}
         role="dialog"
         aria-modal="true"
         aria-label={translateAdmin(language, 'admin.shell.menu')}
@@ -263,6 +342,7 @@ function AdminDrawer({
           </p>
           <button
             type="button"
+            ref={closeButton}
             data-admin-menu-close
             aria-label={translateAdmin(language, 'admin.shell.close')}
             onClick={onClose}
@@ -278,7 +358,7 @@ function AdminDrawer({
           space={space}
           active={active}
           folded={false}
-          onNavigate={onClose}
+          onNavigate={follow}
         />
         <BackToApp language={language} folded={false} />
       </div>
@@ -304,9 +384,9 @@ export function AdminScreenFrame({
   actions,
   children,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly title: string;
-  readonly back: Back;
+  readonly back: AdminBack;
   /** Voir `AdminHeading` — `'content'` : l'écran pose son `<h1>` lui-même. */
   readonly heading?: AdminHeading;
   readonly backLabel?: string;
@@ -326,6 +406,10 @@ export function AdminScreenFrame({
   const [folded, setFolded] = useState(readSidebarFolded);
   const [drawer, setDrawer] = useState(false);
 
+  useEffect(() => {
+    if (takeMainHeadingFocusRequest()) focusMainHeading();
+  }, []);
+
   const basculer = () => {
     const suivant = !folded;
     setFolded(suivant);
@@ -333,7 +417,7 @@ export function AdminScreenFrame({
   };
 
   return (
-    <div className="flex h-dvh overflow-hidden pt-safe" data-admin-shell>
+    <div className="flex h-dvh overflow-hidden pt-safe" data-admin-shell lang={language} dir="ltr">
       <aside
         data-admin-sidebar
         data-folded={folded ? 'true' : 'false'}
@@ -384,11 +468,11 @@ export function AdminScreenFrame({
         />
         {fills ? (
           <main id="contenu" className="flex min-h-0 flex-1 flex-col px-4 pb-safe md:px-8">
-            <div className="flex min-h-0 w-full flex-1 flex-col pt-4">{children}</div>
+            <div className="@container flex min-h-0 w-full flex-1 flex-col pt-4">{children}</div>
           </main>
         ) : (
           <main id="contenu" className="flex flex-1 flex-col overflow-y-auto px-4 pb-safe md:px-8">
-            <div className="w-full pt-4 pb-24">{children}</div>
+            <div className="@container w-full pt-4 pb-24">{children}</div>
           </main>
         )}
       </div>

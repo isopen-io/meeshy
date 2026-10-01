@@ -14,9 +14,8 @@ import {
 import { apiDeps } from '@/lib/api/deps';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { ProfileImageKind } from '@/lib/api/profile';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
 import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
 import { ActionButton } from '@/routes/link-page-parts';
 
@@ -70,7 +69,7 @@ export function AdminUserImageSheet({
 }: {
   readonly membre: AdminUserDetail;
   readonly kind: ProfileImageKind;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onClose: () => void;
   readonly onSaved: (membre: AdminUserDetail, kind: ProfileImageKind) => void;
   readonly onAnnounce: (texte: string) => void;
@@ -151,7 +150,7 @@ export function AdminUserImageSheet({
   const liste = candidates.data?.candidates ?? [];
 
   return (
-    <Sheet title={translateAdmin(language, TITRES[kind])} bodyAs="div" presentation="centered" onClose={onClose}>
+    <Sheet title={translateAdmin(language, TITRES[kind])} bodyAs="div" presentation="centered" closeLabel={translateAdmin(language, 'admin.kit.close')} onClose={onClose}>
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6" data-admin-image-sheet={kind}>
         <div className="grid gap-4">
           <figure

@@ -73,6 +73,12 @@ export class ReportService {
 
     if (filters.moderatorId) {
       where.moderatorId = filters.moderatorId;
+    } else if (filters.unassigned) {
+      where.moderatorId = null;
+    }
+
+    if (filters.reportedEntityId) {
+      where.reportedEntityId = filters.reportedEntityId;
     }
 
     if (filters.createdAfter || filters.createdBefore) {

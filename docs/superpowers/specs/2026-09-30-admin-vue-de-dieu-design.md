@@ -3,6 +3,7 @@
 > Chantier #8876 · milestone #101 « L'administration vit dans la v2, réécrite sur son design system » · 2026-09-30
 > Application : `apps/web` (Vite + Preact + Capacitor), passerelle `services/gateway`, catalogues générés `packages/shared/api/endpoints`.
 > Ce document est un BROUILLON DE CONCEPTION tracké : l'état de chaque tâche vit dans son issue GitHub, jamais ici.
+> **AMENDEMENT du 2026-09-30 (directive porteur, `apps/web/decisions.md` D-162) : l'administration est servie en QUATRE langues — français, anglais, espagnol, portugais, « c'est tout ».** Partout où ce document écrit « sept langues », lire « quatre » ; une langue d'interface hors de ces quatre (allemand, italien, arabe) lit l'administration en anglais — textes et formats —, `lang="en" dir="ltr"` à la racine. Les fragments et catalogues `de`, `it`, `ar` n'existent plus et ne s'écrivent plus.
 
 ## 0. Cadre
 
@@ -50,7 +51,7 @@ Le menu latéral et le hub rangent les sections en groupes titrés. Un groupe do
 | 4 | `content` | Contenus | `admin.group.content` | Publications (publications, stories, reels, statuts) |
 | 5 | `moderation` | Modération | `admin.group.moderation` | Signalements · Journal d'audit |
 | 6 | `growth` | Croissance | `admin.group.growth` | Statistiques · Classement · Liens de suivi · Diffusions |
-| 7 | `platform` | Plateforme | `admin.group.platform` | Supervision · Langues et traductions · Agent · Réglages |
+| 7 | `platform` | Plateforme | `admin.group.platform` | Supervision · Langues et traductions · Agent · Barème de points · Réglages |
 
 Raisons des affinages par rapport à la proposition d'origine :
 - **Les « invitations » servies sont des DEMANDES D'AMITIÉ** (`FriendRequest`), pas des invitations par e-mail : elles vont dans *Personnes*, sous leur vrai nom « Demandes de contact ».
@@ -82,6 +83,7 @@ Chaque ligne est une entrée de `ADMIN_SECTIONS` (`apps/web/src/lib/admin/sectio
 | `monitoring` | platform | `admin.nav.monitoring` Supervision | `heartbeat` | `canViewAnalytics` | **oui** | `adminMonitoring` · `admMonitoring` | — (`?tab=`) | `/admin/monitoring` | `admin-monitoring.tsx` | classement-supervision |
 | `languages` | platform | `admin.nav.languages` Langues et traductions | `translate` | `canViewAnalytics` | — | `adminLanguages` · `admLanguages` | — | `/admin/languages` | `admin-languages.tsx` | statistiques |
 | `agent` | platform | `admin.nav.agent` Agent | `robot` | `canManageAgent` | — | `adminAgent` · `admAgent` | — | `/admin/agent` | `admin-agent.tsx` | conversations-agent |
+| `engagementScale` | platform | `admin.nav.engagementScale` Barème de points | `flame` | `canAccessAdmin` | **oui** | `adminEngagementScale` · `admEngagementScale` | — | `/admin/engagement-scale` | `admin-engagement-scale.tsx` | hors lots (#8906, livré sur `dev`, rangé ici à la synchronisation) |
 | `settings` | platform | `admin.nav.settings` Réglages | `gear` | `canAccessAdmin` | — | `adminSettings` · `admSettings` | — | `/admin/settings` | `admin-settings.tsx` | audit-reglages |
 
 Tous les écrans vivent dans `apps/web/src/routes/`. `admin.nav.moderation` disparaît (le groupe « Modération » a sa clé `admin.group.moderation`, la section s'appelle « Signalements »). Chaque section a aussi `admin.nav.<id>.hint` : une ligne qui dit ce qu'on y fait (hub).
@@ -160,6 +162,9 @@ Pour que les lots travaillent en parallèle sans jamais éditer un fichier parta
 | `apps/web/src/components/admin/charts/share-chart.tsx` | `AdminShareChart` |
 | `apps/web/src/components/admin/charts/timeline-chart.tsx` | `AdminTimelineChart` |
 | `apps/web/src/components/admin/entity-list.tsx` | `AdminEntityList`, `type AdminColumn` |
+| `apps/web/src/components/admin/responsive-rows.tsx` | `AdminResponsiveRows` (tableau dès `@3xl`, cartes dessous — le gabarit commun des listes et des onglets de dossier), `type AdminColumn` |
+| `apps/web/src/components/admin/sort-control.tsx` | `AdminSortControl` (le « Trier par » des cartes) |
+| `apps/web/src/components/admin/button.tsx` | `AdminButton` (primaire en aplat de la marque, secondaire, danger ; 44 px) |
 | `apps/web/src/components/admin/list-toolbar.tsx` | `AdminListToolbar`, `AdminFilterChips` |
 | `apps/web/src/components/admin/fiche.tsx` | `AdminFiche`, `AdminIdentityHeader`, `AdminStatStrip`, `AdminFicheSection` |
 | `apps/web/src/components/admin/meta.tsx` | `AdminMetaPanel`, `AdminMetaRow`, `AdminTechnicalId`, `AdminMomentText` |
@@ -167,7 +172,7 @@ Pour que les lots travaillent en parallèle sans jamais éditer un fichier parta
 | `apps/web/src/components/admin/badges.tsx` | `AdminBadge`, `AdminInterpretedBadge`, `AdminRoleBadge`, `AdminLanguageBadge` |
 | `apps/web/src/components/admin/confirm-sheet.tsx` | `AdminConfirmSheet` |
 | `apps/web/src/components/admin/states.tsx` | `AdminEmptyState`, `AdminErrorState`, `AdminDeniedInline`, `AdminOfflineNotice`, `AdminInlineNotice` |
-| `apps/web/src/components/admin/tabs.tsx` | `AdminTabs` |
+| `apps/web/src/components/admin/tabs.tsx` | `AdminTabs`, `AdminTabPanel`, `adminTabId`, `adminTabPanelId`, `useAdminTab` (onglet ↔ panneau reliés par `aria-controls` / `aria-labelledby`) |
 | `apps/web/src/components/admin/section-screen.tsx` | `AdminSectionScreen` |
 | `apps/web/src/components/admin/section-directory.tsx` | `AdminSectionDirectory` (tuiles groupées du hub) |
 | `apps/web/src/components/admin/stub-screen.tsx` | `AdminStubScreen` (supprimé à l'intégration) |
@@ -180,7 +185,7 @@ Pour que les lots travaillent en parallèle sans jamais éditer un fichier parta
 | `apps/web/src/lib/admin/interpret/*.ts` | bibliothèque d'interprétation § 3 |
 | `apps/web/src/test-support/admin-assertions.ts` | `expectNoRawIdentifiers`, `adminIdentityFixture` |
 
-`admin-parts.tsx`, `admin-table.tsx`, `admin-shell.tsx` restent et continuent d'exporter leurs pièces (écrans existants intacts) ; `AdminLine`/`AdminSection` restent pour les écrans non migrés ; les lots personnes et conversations-agent migrent leurs écrans vers le kit.
+`admin-parts.tsx`, `admin-table.tsx`, `admin-shell.tsx` restent et continuent d'exporter leurs pièces (écrans existants intacts) ; `AdminLine`/`AdminSection` ont été retirés (plus aucun appelant : le dossier d'un membre et la galerie passent par `AdminFicheSection` + `AdminMetaRow`) ; les lots personnes et conversations-agent migrent leurs écrans vers le kit.
 
 ### 2.3 Signatures (TypeScript strict, `type` pour les données, props en objets)
 
@@ -782,7 +787,7 @@ cd packages/shared && npx prisma generate --generator client
 
 ### 7.2 La fondation (fichiers partagés : elle seule les édite)
 
-Elle livre, en TDD : la table des routes et des entités (§ 1.4), le registre groupé et les drapeaux (§ 1.2, § 1.5), toutes les routes dans les deux espaces (`route-table.tsx`, chargeurs reconnus par `admin-catalog-loading.test.ts`), `session-guard.ts` (`RouteKey` + `PRIVATE_ROUTES` + boucle du témoin), `admin-space.ts` dérivé, un écran d'attente par route neuve (fichier que le lot remplacera), le kit (§ 2), la bibliothèque d'interprétation (§ 3), le jeu de glyphes, le menu groupé et le hub (§ 2.8, § 2.9), la règle de persistance (§ 2.10), les déplacements de décodeurs (`loadAdminUsers`/`decodeAdminUsers`/clé → `lib/api/admin-users.ts` ; `loadAdminDashboard`/`decodeAdminDashboard`/clé → `lib/api/admin-dashboard.ts`), l'infrastructure des FRAGMENTS de catalogue, le plafond provisoire du poids, l'entrée D-157 de `apps/web/decisions.md`.
+Elle livre, en TDD : la table des routes et des entités (§ 1.4), le registre groupé et les drapeaux (§ 1.2, § 1.5), toutes les routes dans les deux espaces (`route-table.tsx`, chargeurs reconnus par `admin-catalog-loading.test.ts`), `session-guard.ts` (`RouteKey` + `PRIVATE_ROUTES` + boucle du témoin), `admin-space.ts` dérivé, un écran d'attente par route neuve (fichier que le lot remplacera), le kit (§ 2), la bibliothèque d'interprétation (§ 3), le jeu de glyphes, le menu groupé et le hub (§ 2.8, § 2.9), la règle de persistance (§ 2.10), les déplacements de décodeurs (`loadAdminUsers`/`decodeAdminUsers`/clé → `lib/api/admin-users.ts` ; `loadAdminDashboard`/`decodeAdminDashboard`/clé → `lib/api/admin-dashboard.ts`), l'infrastructure des FRAGMENTS de catalogue, le plafond provisoire du poids, l'entrée D-160 de `apps/web/decisions.md`.
 
 **Fragments de catalogue** — `apps/web/src/lib/interface-catalogs/admin/` :
 - `fragment.ts` : `export type AdminCatalogFragment<F> = Readonly<Record<keyof F, string>>;`
@@ -847,7 +852,20 @@ Après chaque fusion : `bun run type-check`, tests du lot. À la fin : `bun test
 
 ## 8. Hors périmètre — à ouvrir en issues de suivi (milestone #101 ou suivant)
 
-Appels : liste et fiche d'appels (métadonnées seules) · Statistiques de notifications (agrégats) · Vues globales des événements de sécurité et des bannissements · Sons (liste, mise en sourdine DMCA) · Restauration d'une publication retirée · Modération des commentaires · Exclusion d'un participant anonyme · Demandes de suppression de compte · Jetons de notification d'un membre · Parrainages et invitations par e-mail · Noms des membres pilotés dans les listes de l'agent · Audit des remises à zéro de l'agent et de la déconnexion forcée avant de les exposer · Découpage du catalogue d'administration par groupe si une langue dépasse 25 Ko gzip.
+Appels : liste et fiche d'appels (métadonnées seules) · Statistiques de notifications (agrégats) · Vues globales des événements de sécurité et des bannissements · Sons (liste, mise en sourdine DMCA) · Restauration d'une publication retirée · Modération des commentaires · Exclusion d'un participant anonyme · Demandes de suppression de compte · Jetons de notification d'un membre · Parrainages et invitations par e-mail · Noms des membres pilotés dans les listes de l'agent · Audit de la déconnexion forcée avant de l'exposer · Découpage du catalogue d'administration par groupe si une langue dépasse 25 Ko gzip.
+
+**Réglage de l'agent — la passerelle sert ces routes (`/admin/agent/*`), l'administration ne les dessine pas encore** (revue #8876 ; issues du milestone #101) :
+
+| Surface | Routes | Issue |
+|---|---|---|
+| Configuration d'une conversation, rôles, planning, résumé, messages | `/configs/:conversationId` (GET, PUT, DELETE) et `/roles`, `/summary`, `/schedule`, `/messages` | #9000 |
+| Configuration globale et fournisseur de modèle | `/global-config`, `/llm` | #9001 |
+| Sujets (liste, création, édition, suppression, essai) | `/topics`, `/topics/:id`, `/topics/:id/test` | #9002 |
+| File de remise | `/delivery-queue`, `/delivery-queue/:id` | #9003 |
+| Rôles et archétypes par membre | `/roles/:conversationId/:userId/assign|unlock`, `/archetypes` | #9004 |
+| Remises à zéro (avec audit AVANT exposition) | `/reset/conversation/:conversationId`, `/reset/user/:userId`, `/reset` | #9005 |
+
+Déjà dessinés : statistiques, liste des configurations, direct, « déclencher », « arrêter », journaux de scan.
 
 ## 9. Décisions prises dans cette spécification
 
@@ -857,7 +875,7 @@ Appels : liste et fiche d'appels (métadonnées seules) · Statistiques de notif
 4. *Réglages* = votre accès + recalcul des compteurs + préférence du menu : aucune « configuration de plateforme » tant qu'aucune ressource ne la sert.
 5. Les données d'administration ne sont plus persistées sur le disque (sauf la matrice de permissions du lecteur) ; cache-first en mémoire.
 6. Les lectures de listes qui écrivent une trace (`VIEW_USER_LIST`) ont un staleTime de 5 min ; le tableau de bord en consomme une (derniers inscrits).
-7. Demandes de contact : seul « Annuler la demande » est offert ; forcer « acceptée » n'est pas dessiné (la route n'en crée pas l'amitié).
+7. Demandes de contact : seul « Annuler la demande » est offert, et la passerelle ne l'admet que sur une demande EN ATTENTE (409 sinon) ; forcer « acceptée » n'est pas dessiné ET est refusé par la route (400), parce que `FriendRequest.status = accepted` EST l'amitié — elle ouvre la présence, les publications réservées aux amis, les appels et les paquets Signal — et que la console la créerait sans le consentement d'aucun des deux membres.
 8. Communautés : le geste « Désactiver » n'est livré qu'avec l'application de `isActive` par les lecteurs publics (lot passerelle).
 9. Classement des messages sans texte (la passerelle retire `content`) ; liens de partage sans identifiant.
 10. Journal d'audit : détail en feuille, sans route ; IP et navigateur seulement pour qui a `canViewSensitiveData`.

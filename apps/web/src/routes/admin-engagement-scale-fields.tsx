@@ -1,23 +1,19 @@
 import type { ReactNode } from 'react';
 
+import { EDGE, INK, SURFACE } from '@/components/admin/tone';
+
 /**
  * Les champs du barème (#8906) — un nombre se TAPE : le champ garde le texte,
- * la loi partagée le relit à l'enregistrement.
+ * la loi partagée le relit à l'enregistrement. Les jetons sont ceux du kit
+ * d'administration (`components/admin/tone`), jamais une seconde table ; chaque
+ * champ fait 44 px, la cible tactile minimale.
  */
 
-export const scaleTokens = {
-  INK: 'var(--color-ios-ink)',
-  INK2: 'var(--color-ios-ink-2)',
-  SURFACE: 'var(--color-ios-surface)',
-  EDGE: 'var(--color-edge)',
-  BRAND: 'var(--color-ios-brand)',
-} as const;
-
 const FIELD = {
-  minHeight: 40,
-  backgroundColor: scaleTokens.SURFACE,
-  border: `1px solid ${scaleTokens.EDGE}`,
-  color: scaleTokens.INK,
+  minHeight: 44,
+  backgroundColor: SURFACE,
+  border: `1px solid ${EDGE}`,
+  color: INK,
 } as const;
 const FIELD_CLASS = 'w-24 rounded-chip px-3 text-body tabular-nums';
 
@@ -49,7 +45,7 @@ export function NumberField({
   );
 }
 
-/** Un réglage nommé, son champ à droite. */
+/** Un réglage nommé, son champ à l'autre bout de la ligne. */
 export function LabeledNumber({
   label,
   children,
@@ -58,8 +54,8 @@ export function LabeledNumber({
   readonly children: ReactNode;
 }) {
   return (
-    <label className="flex items-center justify-between gap-3 text-body" style={{ color: scaleTokens.INK }}>
-      <span>{label}</span>
+    <label className="flex items-center justify-between gap-3 text-body" style={{ color: INK }}>
+      <span className="min-w-0 break-words">{label}</span>
       {children}
     </label>
   );

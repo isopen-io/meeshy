@@ -174,23 +174,26 @@ export async function registerCoreRoutes(
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Build where clause with optional search
+      //
+      // #8876 — une communauté DÉSACTIVÉE par l'administration (`isActive:
+      // false`) n'est plus listée : sans cette clause le geste d'administration
+      // écrirait une colonne que personne ne lit.
       const whereClause: any = {
         OR: [
           { createdBy: userId },
           { members: { some: { userId: userId } } }
-        ]
+        ],
+        AND: [{ isActive: true }]
       };
 
       // Add search filter if provided (search by name or identifier)
       if (search && search.length >= 2) {
-        whereClause.AND = [
-          {
-            OR: [
-              { name: { contains: search, mode: 'insensitive' } },
-              { identifier: { contains: search, mode: 'insensitive' } }
-            ]
-          }
-        ];
+        whereClause.AND.push({
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { identifier: { contains: search, mode: 'insensitive' } }
+          ]
+        });
       }
 
       const [communities, totalCount] = await Promise.all([
@@ -302,7 +305,8 @@ export async function registerCoreRoutes(
 
       // Chercher d'abord par ID, puis par identifier si pas trouve
       let community = await fastify.prisma.community.findFirst({
-        where: { id },
+        // #8876 — une communauté désactivée n'existe plus pour un lecteur public.
+        where: { id, isActive: true },
         include: {
           creator: {
             select: {
@@ -337,7 +341,7 @@ export async function registerCoreRoutes(
       // Si pas trouve par ID, essayer par identifier
       if (!community) {
         community = await fastify.prisma.community.findFirst({
-          where: { identifier: id },
+          where: { identifier: id, isActive: true },
           include: {
             creator: {
               select: {
@@ -600,8 +604,9 @@ export async function registerCoreRoutes(
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Verifier l'acces a la communaute
-      const community = await fastify.prisma.community.findFirst({
-        where: { id },
+      // #8876 — communauté désactivée par l'administration : 404, comme pour les lecteurs publics.
+const community = await fastify.prisma.community.findFirst({
+        where: { id, isActive: true },
         select: {
           createdBy: true,
           isPrivate: true,
@@ -748,8 +753,9 @@ export async function registerCoreRoutes(
       const userId = authContext.userId;
 
       // Verify community exists and user is admin/creator
-      const community = await fastify.prisma.community.findFirst({
-        where: { id },
+      // #8876 — communauté désactivée par l'administration : 404, comme pour les lecteurs publics.
+const community = await fastify.prisma.community.findFirst({
+        where: { id, isActive: true },
         select: {
           id: true,
           createdBy: true,

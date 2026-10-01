@@ -504,6 +504,7 @@ const it = {
   'settings.save.error': "L'impostazione non è stata salvata.",
   'settings.theme.sync_error': 'Tema applicato su questo dispositivo, non sincronizzato.',
   'common.cancel': 'Annulla',
+  'common.close': 'Chiudi',
 
   'media.video.play': 'Riproduci video',
   'media.video.pause': 'Metti in pausa',

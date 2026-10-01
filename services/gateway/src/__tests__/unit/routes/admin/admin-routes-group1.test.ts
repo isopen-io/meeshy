@@ -603,7 +603,7 @@ describe('Admin anonymous-users routes', () => {
 // ---------------------------------------------------------------------------
 
 describe('Admin invitation routes', () => {
-  const mockPrisma: any = {
+  const mockPrisma: any = { adminAuditLog: { create: jest.fn<any>().mockResolvedValue({}) }, // #8876 : les gestes sont tracés
     friendRequest: {
       findMany: jest.fn<any>(),
       findUnique: jest.fn<any>(),
@@ -634,7 +634,7 @@ describe('Admin invitation routes', () => {
     mockPrisma.friendRequest.findMany.mockResolvedValue([]);
     mockPrisma.friendRequest.count.mockResolvedValue(0);
     mockPrisma.friendRequest.groupBy.mockResolvedValue([]);
-    mockPrisma.friendRequest.findUnique.mockResolvedValue(null);
+    mockPrisma.friendRequest.findUnique.mockResolvedValue({ id: VALID_MONGO_ID, status: 'pending', senderId: 's', receiverId: 'r' }); // #8876 : PATCH lit l'état d'avant
     mockPrisma.friendRequest.update.mockResolvedValue({});
     mockPrisma.friendRequest.aggregateRaw.mockResolvedValue([]);
   });
@@ -992,15 +992,7 @@ describe('Admin invitation routes', () => {
       await modApp.close();
     });
 
-    it('returns 200 when status set to accepted', async () => {
-      const updatedInv = {
-        id: VALID_MONGO_ID,
-        status: 'accepted',
-        sender: { id: '507f1f77bcf86cd799439013', username: 'alice', displayName: 'Alice' },
-        receiver: { id: '507f1f77bcf86cd799439014', username: 'bob', displayName: 'Bob' },
-      };
-      mockPrisma.friendRequest.update.mockResolvedValue(updatedInv);
-
+    it('refuses 400 to set accepted — that status IS the friendship, and neither member consented', async () => {
       app = buildInvApp('ADMIN');
       await app.ready();
 
@@ -1009,10 +1001,8 @@ describe('Admin invitation routes', () => {
         url: `/${VALID_MONGO_ID}`,
         payload: { status: 'accepted' }
       });
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
-      expect(body.success).toBe(true);
-      expect(body.message).toContain('acceptée');
+      expect(response.statusCode).toBe(400);
+      expect(mockPrisma.friendRequest.update).not.toHaveBeenCalled();
     });
 
     it('returns 200 when status set to rejected', async () => {
@@ -1037,15 +1027,7 @@ describe('Admin invitation routes', () => {
       expect(body.message).toContain('rejetée');
     });
 
-    it('returns 200 when status set to pending', async () => {
-      const updatedInv = {
-        id: VALID_MONGO_ID,
-        status: 'pending',
-        sender: { id: '507f1f77bcf86cd799439013', username: 'alice', displayName: 'Alice' },
-        receiver: { id: '507f1f77bcf86cd799439014', username: 'bob', displayName: 'Bob' },
-      };
-      mockPrisma.friendRequest.update.mockResolvedValue(updatedInv);
-
+    it('refuses 400 to reopen a request as pending — and writes nothing', async () => {
       app = buildInvApp('ADMIN');
       await app.ready();
 
@@ -1054,9 +1036,23 @@ describe('Admin invitation routes', () => {
         url: `/${VALID_MONGO_ID}`,
         payload: { status: 'pending' }
       });
-      expect(response.statusCode).toBe(200);
-      const body = JSON.parse(response.body);
-      expect(body.message).toContain('mise à jour');
+      expect(response.statusCode).toBe(400);
+      expect(mockPrisma.friendRequest.update).not.toHaveBeenCalled();
+    });
+
+    it.each(['accepted', 'rejected'])('answers 409 when the request is already %s — no second decision', async (settled) => {
+      mockPrisma.friendRequest.findUnique.mockResolvedValue({ id: VALID_MONGO_ID, status: settled, senderId: 's', receiverId: 'r' });
+      app = buildInvApp('ADMIN');
+      await app.ready();
+
+      const response = await app.inject({
+        method: 'PATCH',
+        url: `/${VALID_MONGO_ID}`,
+        payload: { status: 'rejected' }
+      });
+      expect(response.statusCode).toBe(409);
+      expect(JSON.parse(response.body).code).toBe('INVITATION_NOT_PENDING');
+      expect(mockPrisma.friendRequest.update).not.toHaveBeenCalled();
     });
 
     it('returns 400 when status is "cancelled" (invalid per UpdateInvitationBodySchema)', async () => {
@@ -1098,7 +1094,7 @@ describe('Admin invitation routes', () => {
       const response = await app.inject({
         method: 'PATCH',
         url: '/bad-id',
-        payload: { status: 'accepted' }
+        payload: { status: 'rejected' }
       });
       expect(response.statusCode).toBe(400);
     });
@@ -1112,7 +1108,7 @@ describe('Admin invitation routes', () => {
       const response = await app.inject({
         method: 'PATCH',
         url: `/${VALID_MONGO_ID}`,
-        payload: { status: 'accepted' }
+        payload: { status: 'rejected' }
       });
       expect(response.statusCode).toBe(500);
     });

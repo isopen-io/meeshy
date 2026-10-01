@@ -3,6 +3,11 @@ import { useState } from 'react';
 
 import { DEFAULT_ENGAGEMENT_SCALE, type EngagementScaleDocument } from '@meeshy/shared/types/engagement-scale';
 
+import { AdminButton } from '@/components/admin/button';
+import { AdminFicheSection } from '@/components/admin/fiche';
+import { AdminResponsiveRows, type AdminColumn } from '@/components/admin/responsive-rows';
+import { AdminErrorState } from '@/components/admin/states';
+import { INK2 } from '@/components/admin/tone';
 import { adminMoment } from '@/lib/admin/format';
 import {
   MULTIPLIER_FIELDS,
@@ -21,13 +26,11 @@ import {
   loadEngagementScale,
   saveEngagementScale,
 } from '@/lib/api/admin-engagement-scale';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
-import { AdminAnnouncement, AdminSkeleton } from '@/routes/admin-parts';
-import { AdminTable, PlainTh, Td } from '@/routes/admin-table';
-import { LabeledNumber, NumberField, scaleTokens } from '@/routes/admin-engagement-scale-fields';
+import { translateAdmin, type AdminLanguage, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
+import { LabeledNumber, NumberField } from '@/routes/admin-engagement-scale-fields';
 import { OperationsSections } from '@/routes/admin-engagement-scale-operations';
 import { AbuseSection, LinkVisitSection, StreakBonusSection } from '@/routes/admin-engagement-scale-rules';
+import { AdminAnnouncement, AdminSkeleton } from '@/routes/admin-parts';
 
 /**
  * LE BARÈME DE POINTS (#8906, #8959) — chaque opération de la plateforme,
@@ -37,10 +40,9 @@ import { AbuseSection, LinkVisitSection, StreakBonusSection } from '@/routes/adm
  *
  * Le brouillon est validé ICI par la loi partagée avant tout `PUT`
  * (`scaleOfDraft` → `parseEngagementScale`) : un barème invalide ne part pas.
- * Un refus serveur est montré tel qu'il est dit.
+ * Un refus serveur est montré tel qu'il est dit. Chaque bloc est une carte
+ * titrée du kit ; les listes se plient en cartes sous le seuil du contenu.
  */
-
-const { INK, INK2, EDGE, BRAND } = scaleTokens;
 
 const MULTIPLIER_LABELS: Readonly<Record<MultiplierField, AdminPlainCatalogKey>> = {
   windowDays: 'admin.scale.field.windowDays',
@@ -52,77 +54,75 @@ const MULTIPLIER_LABELS: Readonly<Record<MultiplierField, AdminPlainCatalogKey>>
   maxFactor: 'admin.scale.field.maxFactor',
 };
 
+type LevelRow = { readonly cap: ScaleDraft['levelCaps'][number]; readonly index: number };
+
 function LevelCapsTable({
   language,
   draft,
   onDraft,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly draft: ScaleDraft;
   readonly onDraft: (next: ScaleDraft) => void;
 }) {
+  const rows: readonly LevelRow[] = draft.levelCaps.map((cap, index) => ({ cap, index }));
+  const columns: readonly AdminColumn<LevelRow>[] = [
+    {
+      id: 'minLevel',
+      header: translateAdmin(language, 'admin.scale.col.minLevel'),
+      primary: true,
+      cell: ({ cap, index }) => (
+        <NumberField
+          value={cap.minLevel}
+          label={translateAdmin(language, 'admin.scale.minLevelFor', { row: String(index + 1) })}
+          onChange={(minLevel) => onDraft(withLevelCap(draft, index, { minLevel }))}
+          data={{ 'data-scale-level-min': String(index) }}
+        />
+      ),
+    },
+    {
+      id: 'maxFactor',
+      header: translateAdmin(language, 'admin.scale.col.maxFactor'),
+      cell: ({ cap, index }) => (
+        <NumberField
+          value={cap.maxFactor}
+          label={translateAdmin(language, 'admin.scale.maxFactorFor', { row: String(index + 1) })}
+          onChange={(maxFactor) => onDraft(withLevelCap(draft, index, { maxFactor }))}
+          data={{ 'data-scale-level-factor': String(index) }}
+        />
+      ),
+    },
+    {
+      id: 'remove',
+      header: translateAdmin(language, 'admin.col.actions'),
+      cell: ({ cap, index }) => (
+        <AdminButton tone="danger" data={{ 'data-scale-level-remove': String(index) }} onClick={() => onDraft(withoutLevelCap(draft, index))}>
+          {translateAdmin(language, 'admin.scale.levels.remove', { level: cap.minLevel })}
+        </AdminButton>
+      ),
+    },
+  ];
+
   return (
     <div className="grid gap-3">
-      {draft.levelCaps.length === 0 ? (
+      {rows.length === 0 ? (
         <p className="text-caption" style={{ color: INK2 }} data-scale-levels-empty>
           {translateAdmin(language, 'admin.scale.levels.empty')}
         </p>
       ) : (
-        <AdminTable>
-          <thead>
-            <tr>
-              <PlainTh>{translateAdmin(language, 'admin.scale.col.minLevel')}</PlainTh>
-              <PlainTh>{translateAdmin(language, 'admin.scale.col.maxFactor')}</PlainTh>
-              <PlainTh />
-            </tr>
-          </thead>
-          <tbody>
-            {draft.levelCaps.map((cap, index) => {
-              const row = String(index + 1);
-              return (
-                <tr key={index} data-scale-level-row={index}>
-                  <Td>
-                    <NumberField
-                      value={cap.minLevel}
-                      label={translateAdmin(language, 'admin.scale.minLevelFor', { row })}
-                      onChange={(minLevel) => onDraft(withLevelCap(draft, index, { minLevel }))}
-                      data={{ 'data-scale-level-min': String(index) }}
-                    />
-                  </Td>
-                  <Td>
-                    <NumberField
-                      value={cap.maxFactor}
-                      label={translateAdmin(language, 'admin.scale.maxFactorFor', { row })}
-                      onChange={(maxFactor) => onDraft(withLevelCap(draft, index, { maxFactor }))}
-                      data={{ 'data-scale-level-factor': String(index) }}
-                    />
-                  </Td>
-                  <Td>
-                    <button
-                      type="button"
-                      onClick={() => onDraft(withoutLevelCap(draft, index))}
-                      data-scale-level-remove={index}
-                      className="rounded-chip px-3 text-body"
-                      style={{ minHeight: 40, color: 'var(--color-error)' }}
-                    >
-                      {translateAdmin(language, 'admin.scale.levels.remove', { level: cap.minLevel })}
-                    </button>
-                  </Td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </AdminTable>
+        <AdminResponsiveRows
+          columns={columns}
+          rows={rows}
+          rowKey={({ index }) => String(index)}
+          rowAttributes={({ index }) => ({ 'data-scale-level-row': String(index) })}
+          caption={translateAdmin(language, 'admin.scale.levels.title')}
+        />
       )}
-      <button
-        type="button"
-        onClick={() => onDraft(withAddedLevelCap(draft))}
-        data-scale-level-add
-        className="w-fit rounded-chip px-4 text-body font-medium"
-        style={{ minHeight: 40, color: BRAND, border: `1px solid ${EDGE}` }}
-      >
-        {translateAdmin(language, 'admin.scale.levels.add')}
-      </button>
+      <div>
+        <AdminButton data={{ 'data-scale-level-add': '' }} onClick={() => onDraft(withAddedLevelCap(draft))}>
+          {translateAdmin(language, 'admin.scale.levels.add')}
+        </AdminButton>
+      </div>
     </div>
   );
 }
@@ -132,7 +132,7 @@ function ScaleEditor({
   deps,
   document,
 }: {
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly deps: AdminDeps;
   readonly document: EngagementScaleDocument;
 }) {
@@ -170,7 +170,7 @@ function ScaleEditor({
 
   return (
     <form
-      className="grid gap-6"
+      className="grid gap-4"
       data-admin-engagement-scale
       onSubmit={(event) => {
         event.preventDefault();
@@ -186,12 +186,9 @@ function ScaleEditor({
             })}
       </p>
 
-      <section aria-labelledby="scale-operations" className="grid gap-3">
-        <h2 id="scale-operations" className="text-body font-semibold" style={{ color: INK }}>
-          {translateAdmin(language, 'admin.scale.operations.title')}
-        </h2>
+      <AdminFicheSection id="scale-operations" title={translateAdmin(language, 'admin.scale.operations.title')}>
         <OperationsSections language={language} draft={draft} onDraft={setDraft} />
-      </section>
+      </AdminFicheSection>
 
       <LinkVisitSection language={language} draft={draft} onDraft={setDraft} />
 
@@ -199,11 +196,8 @@ function ScaleEditor({
 
       <AbuseSection language={language} draft={draft} onDraft={setDraft} />
 
-      <section aria-labelledby="scale-multiplier" className="grid gap-3">
-        <h2 id="scale-multiplier" className="text-body font-semibold" style={{ color: INK }}>
-          {translateAdmin(language, 'admin.scale.multiplier.title')}
-        </h2>
-        <div className="grid gap-3 sm:grid-cols-2">
+      <AdminFicheSection id="scale-multiplier" title={translateAdmin(language, 'admin.scale.multiplier.title')}>
+        <div className="grid gap-3 @2xl:grid-cols-2">
           {MULTIPLIER_FIELDS.map((field) => (
             <LabeledNumber key={field} label={translateAdmin(language, MULTIPLIER_LABELS[field])}>
               <NumberField
@@ -215,40 +209,25 @@ function ScaleEditor({
             </LabeledNumber>
           ))}
         </div>
-      </section>
+      </AdminFicheSection>
 
-      <section aria-labelledby="scale-levels" className="grid gap-3">
-        <h2 id="scale-levels" className="text-body font-semibold" style={{ color: INK }}>
-          {translateAdmin(language, 'admin.scale.levels.title')}
-        </h2>
+      <AdminFicheSection id="scale-levels" title={translateAdmin(language, 'admin.scale.levels.title')}>
         <LevelCapsTable language={language} draft={draft} onDraft={setDraft} />
-      </section>
+      </AdminFicheSection>
 
       {error === '' ? null : (
-        <p role="alert" className="text-caption font-medium" style={{ color: 'var(--color-error)' }} data-scale-error>
+        <p role="alert" className="text-caption font-medium" style={{ color: 'var(--color-danger)' }} data-scale-error>
           {error}
         </p>
       )}
 
       <div className="flex flex-wrap items-center gap-3 pb-8">
-        <button
-          type="submit"
-          disabled={saving}
-          data-scale-save
-          className="rounded-chip px-5 text-body font-semibold"
-          style={{ minHeight: 44, backgroundColor: BRAND, color: 'var(--ios-on-brand)', opacity: saving ? 0.6 : 1 }}
-        >
+        <AdminButton type="submit" tone="primary" busy={saving} data={{ 'data-scale-save': '' }}>
           {translateAdmin(language, saving ? 'admin.scale.saving' : 'admin.scale.save')}
-        </button>
-        <button
-          type="button"
-          onClick={reset}
-          data-scale-reset
-          className="rounded-chip px-4 text-body font-medium"
-          style={{ minHeight: 44, color: BRAND }}
-        >
+        </AdminButton>
+        <AdminButton data={{ 'data-scale-reset': '' }} onClick={reset}>
           {translateAdmin(language, 'admin.scale.reset')}
-        </button>
+        </AdminButton>
       </div>
 
       <AdminAnnouncement text={announcement} />
@@ -256,7 +235,7 @@ function ScaleEditor({
   );
 }
 
-export function AdminEngagementScalePanel({ language, deps }: { readonly language: InterfaceLanguage; readonly deps: AdminDeps }) {
+export function AdminEngagementScalePanel({ language, deps }: { readonly language: AdminLanguage; readonly deps: AdminDeps }) {
   const query = useQuery({
     queryKey: ADMIN_ENGAGEMENT_SCALE_QUERY_KEY,
     queryFn: async ({ signal }) => {
@@ -270,18 +249,8 @@ export function AdminEngagementScalePanel({ language, deps }: { readonly languag
   if (query.data !== undefined) return <ScaleEditor language={language} deps={deps} document={query.data} />;
   if (query.isPending) return <AdminSkeleton rows={6} />;
   return (
-    <div className="grid gap-3" data-scale-load-failed>
-      <p className="text-caption" style={{ color: INK2 }}>
-        {translateAdmin(language, 'admin.scale.loadFailed')}
-      </p>
-      <button
-        type="button"
-        onClick={() => void query.refetch()}
-        className="w-fit rounded-chip px-4 text-body font-medium"
-        style={{ minHeight: 40, color: BRAND }}
-      >
-        {translateAdmin(language, 'admin.scale.retry')}
-      </button>
+    <div data-scale-load-failed>
+      <AdminErrorState language={language} message={translateAdmin(language, 'admin.scale.loadFailed')} onRetry={() => void query.refetch()} />
     </div>
   );
 }

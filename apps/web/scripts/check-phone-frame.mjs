@@ -75,6 +75,9 @@ const EXEMPLES = {
   token: 'jeton-du-temoin',
   user: 'membre-inconnu',
   participant: 'participant-inconnu',
+  broadcast: 'diffusion-inconnue',
+  invitation: 'demande-inconnue',
+  report: 'signalement-inconnu',
 };
 
 const concretise = (pattern) =>
