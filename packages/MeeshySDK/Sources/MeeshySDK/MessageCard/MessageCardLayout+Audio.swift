@@ -95,16 +95,22 @@ extension MessageCardLayoutEngine {
     }
 
     /// **Le karaoké** : sur une image, les premières lignes ; en vidéo, la
-    /// phrase en cours SURLIGNÉE et les lignes qui défilent pour la garder en tête.
+    /// phrase en cours SURLIGNÉE et les lignes qui défilent pour la garder en
+    /// vue — sous la ligne qui vient d'être dite, quand elle tient dans le reste.
     func transcriptOps(_ block: MessageCardTranscriptBlock, x: Double, y: Double, width: Double) -> [MessageCardOp] {
         let now = input.time.map { (input.clip?.start ?? 0) + $0 }
         let active = now.flatMap { AudioTranscriptCue.activeIndex(in: block.cues, at: $0) }
         let reached = now.flatMap { time in block.cues.lastIndex { ($0.start ?? .infinity) <= time } }
-        let anchor = (active ?? reached).flatMap { cue in block.lines.firstIndex { $0.cue == cue } } ?? 0
-        let first = min(anchor, block.lines.count - block.visible)
+        let current = active ?? reached
+        let anchor = current.flatMap { cue in block.lines.firstIndex { $0.cue == cue } } ?? 0
+        let spoken = current.map { cue in block.lines.filter { $0.cue == cue }.count } ?? 0
+        let context = anchor > 0 && spoken < block.visible ? 1 : 0
+        let first = max(0, min(anchor - context, block.lines.count - block.visible))
         var shown = Array(block.lines[first..<(first + block.visible)])
         if input.time == nil && block.lines.count > block.visible {
+            // « …de partir… » plutôt que « …de partir.… » : l'ellipse remplace le point qu'elle suit.
             let cut = MessageCardText.truncate(block.lines.map(\.text), count: block.visible, maxWidth: width, font: block.font, measure: measure)
+                .map { $0.hasSuffix(".…") ? String($0.dropLast(2)) + "…" : $0 }
             shown = zip(shown, cut).map { MessageCardTranscriptBlock.Line(text: $1, cue: $0.cue) }
         }
         var ops: [MessageCardOp] = []
@@ -209,7 +215,7 @@ extension MessageCardLayoutEngine {
             let left = x + step * Double(band) + (step - barWidth) / 2
             let barHeight = max(4 * scale, level * tallest)
             ops.append(.bar(MessageCardRectOp(x: left, y: baseline - barHeight, width: barWidth, height: barHeight,
-                                              radius: min(barWidth / 2, 6 * scale), color: palette.accent.withAlpha(0.88))))
+                                              radius: min(barWidth / 2, 6 * scale), color: palette.accent)))
             let peak = max(level, crest) * tallest
             ops.append(.bar(MessageCardRectOp(x: left, y: baseline - peak - headroom + capHeight / 2, width: barWidth, height: capHeight,
                                               radius: capHeight / 2, color: palette.replyInk)))
@@ -302,7 +308,7 @@ enum MessageCardSpectrum {
         let offset = (Double(band) - Double(bands - 1) / 2) / Double(bands) * spread
         let local = sample(at: position + offset, in: samples)
         let tilt = 1 - 0.38 * Double(band) / Double(max(1, bands - 1))
-        let raw = (0.5 * energy(at: position, in: samples) + 0.5 * local) * gain(band) * tilt * 1.7
+        let raw = (0.45 * energy(at: position, in: samples) + 0.55 * local) * gain(band) * tilt * 1.35
         return min(1, max(0.06, raw))
     }
 

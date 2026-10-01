@@ -122,6 +122,7 @@ struct MessageCardAudioTests {
         #expect(lines.count == MessageCardAudioMetrics.transcriptLines)
         #expect(lines.first?.text.hasPrefix("Bonjour") == true)
         #expect(lines.last?.text.hasSuffix("…") == true, "la suite est coupée : \(lines.map(\.text))")
+        #expect(lines.last?.text.hasSuffix(".…") == false, "l'ellipse remplace le point qu'elle suit")
         #expect(Self.panels(card.ops).isEmpty, "rien n'est surligné sur une image")
 
         var hidden = MessageCardDisposition.standard
