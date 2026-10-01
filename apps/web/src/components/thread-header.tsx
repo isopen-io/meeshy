@@ -264,7 +264,6 @@ export function ThreadHeader({
              c'est le titre qui prend la place, pas un espaceur. */
           <div className={`thread-header-actions flex ${preview ? 'shrink-0' : 'flex-1'} items-center gap-2`}>
             {preview ? null : <span className="flex-1" />}
-            <EngagementPill snapshot={engagement} opensProgression />
             {/* LE CHIP DE MODE — SOUS DRAPEAU UNIQUEMENT (D-20, miroir
                 `ConversationView.swift:2391-2430`) : `apiConfig.readingModesEnabled`
                 est un paramètre de CONSTRUCTION, figé au déploiement — quand il

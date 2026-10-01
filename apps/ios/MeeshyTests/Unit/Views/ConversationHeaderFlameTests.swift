@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import MeeshySDK
 @testable import Meeshy
 
 // MARK: - L'en-tête de l'aperçu et la flamme du jour (#9031)
@@ -61,39 +62,60 @@ final class ConversationHeaderFlameTests: XCTestCase {
         XCTAssertFalse(HeaderFlameVisibility.dismissed(afterHeaderExpanded: false, wasDismissed: false))
     }
 
-    // MARK: - La trajectoire
+    // MARK: - La lueur rejoint la flamme (#9044)
 
-    func test_pose_atRestBeforeAndAfter_staysInPlaceAtNaturalSize() {
-        for progress in [CGFloat(0), 1] {
-            let pose = HeaderFlameOrbit.pose(at: progress, radius: 28)
-            XCTAssertEqual(pose.offset.width, 0, accuracy: 0.001)
-            XCTAssertEqual(pose.offset.height, 0, accuracy: 0.001)
-            XCTAssertEqual(pose.scale, 1, accuracy: 0.001)
-        }
+    func test_glowHead_startsAndEndsUnderTheAvatar_whereTheFlameSits() {
+        XCTAssertEqual(HeaderFlameOrbit.glowHead(at: 0).degrees, 90, accuracy: 0.001)
+        XCTAssertEqual(HeaderFlameOrbit.glowHead(at: HeaderFlameOrbit.orbitShare).degrees, 450, accuracy: 0.001,
+                       "la lueur fait UN tour et finit sous l'avatar, sur la flamme")
     }
 
-    func test_pose_halfwayThroughTheTurn_isAboveTheAvatar() {
-        let pose = HeaderFlameOrbit.pose(at: HeaderFlameOrbit.orbitShare / 2, radius: 28)
-        XCTAssertEqual(pose.offset.width, 0, accuracy: 0.001)
-        XCTAssertEqual(pose.offset.height, -56, accuracy: 0.001, "à mi-tour, la flamme passe au-dessus de l'avatar")
+    func test_glowHead_halfwayThroughTheTurn_isAboveTheAvatar() {
+        XCTAssertEqual(HeaderFlameOrbit.glowHead(at: HeaderFlameOrbit.orbitShare / 2).degrees, 270, accuracy: 0.001)
     }
 
-    func test_pose_duringThePulse_growsInPlace() {
-        let middleOfPulse = HeaderFlameOrbit.orbitShare + (1 - HeaderFlameOrbit.orbitShare) / 2
-        let pose = HeaderFlameOrbit.pose(at: middleOfPulse, radius: 28)
-        XCTAssertEqual(pose.offset, .zero)
-        XCTAssertEqual(pose.scale, HeaderFlameOrbit.peakScale, accuracy: 0.001)
+    func test_glowLength_collapsesIntoTheFlameOnArrival() {
+        XCTAssertEqual(HeaderFlameOrbit.glowLength(at: 0), 0, accuracy: 0.001)
+        XCTAssertGreaterThan(HeaderFlameOrbit.glowLength(at: HeaderFlameOrbit.orbitShare / 2), 0.2)
+        XCTAssertEqual(HeaderFlameOrbit.glowLength(at: HeaderFlameOrbit.orbitShare), 0, accuracy: 0.001)
+        XCTAssertEqual(HeaderFlameOrbit.glowOpacity(at: 0.9), 0, accuracy: 0.001)
     }
 
-    func test_glow_isOffAtRestAndBrightestMidway() {
-        XCTAssertEqual(HeaderFlameOrbit.glowOpacity(at: 0), 0, accuracy: 0.001)
-        XCTAssertEqual(HeaderFlameOrbit.glowOpacity(at: 1), 0, accuracy: 0.001)
-        XCTAssertEqual(HeaderFlameOrbit.glowOpacity(at: 0.5), 1, accuracy: 0.001)
+    func test_flameScale_staysStillDuringTheTurn_thenGrowsWhenTheGlowArrives() {
+        XCTAssertEqual(HeaderFlameOrbit.flameScale(at: 0), 1, accuracy: 0.001)
+        XCTAssertEqual(HeaderFlameOrbit.flameScale(at: HeaderFlameOrbit.orbitShare / 2), 1, accuracy: 0.001,
+                       "la pastille ne tourne plus : seule la lueur fait le tour")
+        XCTAssertEqual(HeaderFlameOrbit.flameScale(at: HeaderFlameOrbit.valueRelease), HeaderFlameOrbit.peakScale, accuracy: 0.001)
+        XCTAssertEqual(HeaderFlameOrbit.flameScale(at: 1), 1, accuracy: 0.001)
     }
 
-    func test_pose_outOfRangeProgress_isClamped() {
-        XCTAssertEqual(HeaderFlameOrbit.pose(at: -1, radius: 28), HeaderFlameOrbit.pose(at: 0, radius: 28))
-        XCTAssertEqual(HeaderFlameOrbit.pose(at: 2, radius: 28), HeaderFlameOrbit.pose(at: 1, radius: 28))
+    func test_valueRelease_happensAtTheHeightOfTheGrowth() {
+        XCTAssertGreaterThan(HeaderFlameOrbit.valueRelease, HeaderFlameOrbit.orbitShare)
+        XCTAssertLessThan(HeaderFlameOrbit.valueRelease, 1)
+    }
+
+    func test_law_outOfRangeProgress_isClamped() {
+        XCTAssertEqual(HeaderFlameOrbit.flameScale(at: -1), HeaderFlameOrbit.flameScale(at: 0))
+        XCTAssertEqual(HeaderFlameOrbit.glowHead(at: 2), HeaderFlameOrbit.glowHead(at: 1))
+    }
+
+    // MARK: - La pastille « 🔥 série · total » ne vit que dans l'en-tête déplié (#9044)
+
+    func test_headerCallButtons_doNotCarryTheEngagementPill() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
+        let cluster = try XCTUnwrap(source.range(of: "var headerCallButtons: AnyView {"))
+        let end = try XCTUnwrap(source.range(of: "var headerEngagementBadge", range: cluster.upperBound..<source.endIndex))
+        XCTAssertFalse(source[cluster.upperBound..<end.lowerBound].contains("headerEngagementBadge"),
+                       "repliée ou en aperçu, la pastille ne s'affiche pas")
+    }
+
+    func test_engagementPill_showsStreakDotTotal_withoutTodayInParentheses() {
+        let pill = ConversationEngagementPill(
+            snapshot: ConversationEngagementSnapshot(conversationId: "c", totalPoints: 120, todayPoints: 12,
+                                                     streakDays: 4, day: "2026-10-01"),
+            accentColor: "FF0000"
+        )
+        XCTAssertEqual(pill.text, "4 · 120")
     }
 
     // MARK: - La mémoire, par conversation

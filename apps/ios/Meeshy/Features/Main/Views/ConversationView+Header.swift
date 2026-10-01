@@ -126,20 +126,17 @@ extension ConversationView {
     // `readingModeAffordanceCluster` dans ConversationView.swift, même
     // débordement de pile au décodage de mangled name, 2026-08-17).
     var headerCallButtons: AnyView {
-        AnyView(HStack(spacing: MeeshySpacing.xs) {
-            headerEngagementBadge
-            headerCallButtonsOnly
-        }
+        AnyView(headerCallButtonsOnly
         .task(id: liveConversation?.id) {
             await ConversationEngagementStore.shared.revalidate(liveConversation?.id ?? "")
         })
     }
 
-    // MARK: - « 🔥 série · N (M) » (#8906)
+    // MARK: - « 🔥 série · total » (#8906, #9044)
 
-    /// Ce que le lecteur a gagné dans CETTE conversation. Elle se lit avec les
-    /// actions (en-tête replié, aperçu) ou sous le titre (en-tête déplié, qui ne
-    /// porte aucune action) — jamais aux deux endroits à la fois.
+    /// Ce que le lecteur a gagné dans CETTE conversation. Elle ne se lit que
+    /// sous le titre de l'en-tête DÉPLIÉ : replié ou en aperçu, c'est la flamme
+    /// du jour sous l'avatar qui parle.
     var headerEngagementBadge: some View {
         ConversationEngagementBadge(
             conversationId: liveConversation?.id ?? "",

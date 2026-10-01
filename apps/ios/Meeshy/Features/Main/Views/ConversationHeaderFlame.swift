@@ -73,49 +73,52 @@ nonisolated enum HeaderFlameVisibility {
     }
 }
 
-// MARK: - La trajectoire de la flamme (#9031)
+// MARK: - La lueur qui rejoint la flamme (#9031, #9044)
 
-/// Loi PURE de l'effet, phase `0 → 1` : la flamme quitte sa place sous
-/// l'avatar, en fait le tour, puis grossit sur place avant d'y revenir. La
-/// lueur tourne autour de l'avatar pendant ce temps et s'éteint au retour.
+/// Loi PURE de l'effet, phase `0 → 1` : une lueur part de sous l'avatar, en
+/// fait le tour et revient s'éteindre dans la flamme, qui grossit sur place
+/// puis reprend sa taille ; au plus fort de la croissance, le compte du jour
+/// passe à sa nouvelle valeur. La flamme ne bouge pas de sa place.
 ///
 /// Tout se rend en TRANSFORMATIONS et en OPACITÉ (aucune mise en page) : le
 /// rejeu à chaque envoi ne coûte que la composition.
 nonisolated enum HeaderFlameOrbit {
-    /// Part de la phase consacrée au tour de l'avatar ; le reste est la pulsation.
-    static let orbitShare: CGFloat = 0.62
-    static let peakScale: CGFloat = 1.9
-    static let glowTurns: Double = 1.5
-    static let duration: Double = 1.5
+    /// Part de la phase consacrée au tour de la lueur ; le reste est la croissance.
+    static let orbitShare: CGFloat = 0.6
+    static let peakScale: CGFloat = 1.7
+    /// Longueur maximale de la traîne, en fraction du cercle.
+    static let maxGlowLength: CGFloat = 0.32
+    static let duration: Double = 1.6
 
-    struct Pose: Equatable {
-        let offset: CGSize
-        let scale: CGFloat
+    /// L'instant où le compte du jour prend sa nouvelle valeur : le sommet de la croissance.
+    static var valueRelease: CGFloat { orbitShare + (1 - orbitShare) / 2 }
+
+    /// La tête de la lueur : sous l'avatar (90°) au départ, un tour complet, et
+    /// de retour sous l'avatar — sur la flamme — à l'arrivée.
+    static func glowHead(at progress: CGFloat) -> Angle {
+        let turn = min(clamped(progress) / orbitShare, 1)
+        let eased = turn * turn * (3 - 2 * turn)
+        return .degrees(90 + Double(eased) * 360)
     }
 
-    /// `radius` : distance du centre de l'avatar au centre de la flamme au repos
-    /// (posée sous l'avatar). Le décalage est relatif à cette place de repos.
-    static func pose(at progress: CGFloat, radius: CGFloat) -> Pose {
+    /// La traîne naît de rien, s'étire à mi-tour, et rentre dans la flamme.
+    static func glowLength(at progress: CGFloat) -> CGFloat {
         let phase = clamped(progress)
-        guard phase < orbitShare else {
-            let pulse = (phase - orbitShare) / (1 - orbitShare)
-            return Pose(offset: .zero, scale: 1 + (peakScale - 1) * sin(pulse * .pi))
-        }
-        let turn = phase / orbitShare
-        let eased = turn * turn * (3 - 2 * turn)
-        let angle = CGFloat.pi / 2 + eased * 2 * .pi
-        return Pose(
-            offset: CGSize(width: radius * cos(angle), height: radius * sin(angle) - radius),
-            scale: 1 + 0.2 * sin(turn * .pi)
-        )
+        guard phase < orbitShare else { return 0 }
+        return maxGlowLength * sin(phase / orbitShare * .pi)
     }
 
     static func glowOpacity(at progress: CGFloat) -> Double {
-        Double(sin(clamped(progress) * .pi))
+        let phase = clamped(progress)
+        guard phase < orbitShare else { return 0 }
+        return min(1, Double(sin(phase / orbitShare * .pi)) * 3)
     }
 
-    static func glowRotation(at progress: CGFloat) -> Angle {
-        .degrees(Double(clamped(progress)) * 360 * glowTurns)
+    static func flameScale(at progress: CGFloat) -> CGFloat {
+        let phase = clamped(progress)
+        guard phase > orbitShare else { return 1 }
+        let pulse = (phase - orbitShare) / (1 - orbitShare)
+        return 1 + (peakScale - 1) * sin(pulse * .pi)
     }
 
     private static func clamped(_ value: CGFloat) -> CGFloat {
@@ -137,28 +140,26 @@ enum HeaderFlameReplay {
     }
 }
 
-// MARK: - La flamme et sa lueur, posées sur l'avatar replié (#9031)
+// MARK: - La flamme et sa lueur, posées sur l'avatar replié (#9031, #9044)
 
-private struct HeaderFlameOrbitEffect: GeometryEffect {
-    var radius: CGFloat
-    var orbits: Bool
+private struct HeaderFlamePulseEffect: GeometryEffect {
     var animatableData: CGFloat
+    let grows: Bool
 
     func effectValue(size: CGSize) -> ProjectionTransform {
-        guard orbits else { return ProjectionTransform(.identity) }
-        let pose = HeaderFlameOrbit.pose(at: animatableData, radius: radius)
-        let anchor = CGAffineTransform(translationX: -size.width / 2, y: -size.height / 2)
-        let scaled = anchor
-            .concatenating(CGAffineTransform(scaleX: pose.scale, y: pose.scale))
-            .concatenating(CGAffineTransform(translationX: size.width / 2 + pose.offset.width,
-                                             y: size.height / 2 + pose.offset.height))
-        return ProjectionTransform(scaled)
+        guard grows else { return ProjectionTransform(.identity) }
+        let scale = HeaderFlameOrbit.flameScale(at: animatableData)
+        let transform = CGAffineTransform(translationX: -size.width / 2, y: -size.height / 2)
+            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+            .concatenating(CGAffineTransform(translationX: size.width / 2, y: size.height / 2))
+        return ProjectionTransform(transform)
     }
 }
 
 private struct HeaderFlameGlow: View, Animatable {
     var phase: CGFloat
     let diameter: CGFloat
+    let reduceMotion: Bool
 
     var animatableData: CGFloat {
         get { phase }
@@ -166,23 +167,26 @@ private struct HeaderFlameGlow: View, Animatable {
     }
 
     var body: some View {
+        let length = reduceMotion ? 1 : HeaderFlameOrbit.glowLength(at: phase)
+        let span = Angle.degrees(Double(length) * 360)
         Circle()
-            .trim(from: 0, to: 0.42)
+            .trim(from: 0, to: length)
             .stroke(
                 AngularGradient(colors: [.clear, MeeshyColors.warning, MeeshyColors.error, .yellow],
-                                center: .center),
+                                center: .center, startAngle: .zero, endAngle: span),
                 style: StrokeStyle(lineWidth: 3, lineCap: .round)
             )
             .frame(width: diameter, height: diameter)
             .shadow(color: MeeshyColors.error.opacity(0.6), radius: 4)
-            .rotationEffect(HeaderFlameOrbit.glowRotation(at: phase))
-            .opacity(HeaderFlameOrbit.glowOpacity(at: phase))
+            .rotationEffect(reduceMotion ? .zero : HeaderFlameOrbit.glowHead(at: phase) - span)
+            .opacity(reduceMotion ? Double(sin(min(max(phase, 0), 1) * .pi)) : HeaderFlameOrbit.glowOpacity(at: phase))
             .allowsHitTesting(false)
             .accessibilityHidden(true)
     }
 }
 
-/// Le compte du jour sous l'avatar : « 🔥 M ». Feuille pure, `Equatable`.
+/// Le compte du jour sous l'avatar : « 🔥 M ». Feuille pure, `Equatable` ; le
+/// chiffre défile vers sa nouvelle valeur.
 private struct HeaderFlameMark: View, Equatable {
     let todayPoints: Int
 
@@ -197,6 +201,8 @@ private struct HeaderFlameMark: View, Equatable {
             Text(verbatim: "\(todayPoints)")
                 .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundColor(MeeshyColors.error)
+                .contentTransition(.numericText())
+                .animation(.spring(response: 0.4, dampingFraction: 0.7), value: todayPoints)
         }
         .lineLimit(1)
         .fixedSize()
@@ -206,9 +212,10 @@ private struct HeaderFlameMark: View, Equatable {
     }
 }
 
-/// Pose la flamme du jour sous l'avatar et sa lueur autour. L'hôte décide
-/// QUAND elle se montre (`HeaderFlameVisibility`) ; ce modificateur porte le
-/// rendu, l'effet et son rejeu.
+/// Pose la flamme du jour JUSTE SOUS le cercle de l'avatar (jamais par-dessus)
+/// et la lueur autour. L'hôte décide QUAND elle se montre
+/// (`HeaderFlameVisibility`) ; ce modificateur porte le rendu, l'effet et son
+/// rejeu.
 struct HeaderFlameDecoration: ViewModifier {
     let conversationId: String
     let seed: ConversationEngagementSnapshot?
@@ -221,8 +228,12 @@ struct HeaderFlameDecoration: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var phase: CGFloat = 1
     @State private var isPlaying = false
+    /// Le compte d'AVANT l'envoi, tenu jusqu'à ce que la lueur ait rejoint la flamme.
+    @State private var heldPoints: Int?
+    /// Le rejeu en cours : un envoi qui en relance un autre reprend la main.
+    @State private var replayCount = 0
 
-    private var restRadius: CGFloat { avatarDiameter / 2 + 6 }
+    private static let gapUnderAvatar: CGFloat = 2
 
     func body(content: Content) -> some View {
         let snapshot = store.displayed(for: conversationId, seed: seed, at: Date())
@@ -232,19 +243,18 @@ struct HeaderFlameDecoration: ViewModifier {
         return content
             .overlay {
                 if shown != nil && isPlaying {
-                    HeaderFlameGlow(phase: phase, diameter: avatarDiameter + 8)
+                    HeaderFlameGlow(phase: phase, diameter: avatarDiameter + 8, reduceMotion: reduceMotion)
                 }
             }
             .overlay(alignment: .bottom) {
                 if let shown {
                     Button(action: onDismiss) {
-                        HeaderFlameMark(todayPoints: shown.todayPoints)
+                        HeaderFlameMark(todayPoints: heldPoints ?? shown.todayPoints)
                             .equatable()
-                            .modifier(HeaderFlameOrbitEffect(radius: restRadius, orbits: !reduceMotion,
-                                                             animatableData: phase))
+                            .modifier(HeaderFlamePulseEffect(animatableData: phase, grows: !reduceMotion))
                     }
                     .buttonStyle(.plain)
-                    .offset(y: 12)
+                    .alignmentGuide(.bottom) { $0[.top] - Self.gapUnderAvatar }
                     .transition(.scale(scale: 0.4).combined(with: .opacity))
                     .accessibilityLabel(String(
                         localized: "conversation.header.flame.a11y",
@@ -262,19 +272,27 @@ struct HeaderFlameDecoration: ViewModifier {
             .animation(.spring(response: 0.35, dampingFraction: 0.75), value: shown != nil)
             .task(id: seed) { store.seed(seed) }
             .onReceive(HeaderFlameReplay.sent.receive(on: DispatchQueue.main)) { sentIn in
-                guard sentIn == conversationId, shown != nil else { return }
-                replay()
+                guard sentIn == conversationId, let shown else { return }
+                replay(holding: shown.todayPoints)
             }
     }
 
-    private func replay() {
+    private func replay(holding current: Int) {
+        heldPoints = heldPoints ?? current
+        replayCount += 1
+        let replay = replayCount
         phase = 0
         isPlaying = true
         let duration = reduceMotion ? 0.6 : HeaderFlameOrbit.duration
+        let release = duration * Double(HeaderFlameOrbit.valueRelease)
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(16))
-            withAnimation(.easeInOut(duration: duration)) { phase = 1 }
-            try? await Task.sleep(for: .seconds(duration))
+            withAnimation(.linear(duration: duration)) { phase = 1 }
+            try? await Task.sleep(for: .seconds(release))
+            guard replay == replayCount else { return }
+            heldPoints = nil
+            try? await Task.sleep(for: .seconds(duration - release))
+            guard replay == replayCount else { return }
             isPlaying = false
         }
     }

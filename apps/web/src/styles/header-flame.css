@@ -1,10 +1,12 @@
 /*
- * LA FLAMME DU JOUR SOUS L'AVATAR DE L'EN-TÊTE (#9031) — miroir de
- * `HeaderFlameDecoration` (iOS). Une lueur tourne autour de l'avatar, la
- * flamme en fait le tour, grossit sur place et revient. TRANSFORM et OPACITY
- * seulement : le rejeu à chaque envoi ne coûte que la composition, jamais une
- * mise en page. Le minutage (62 % de tour, 38 % de pulsation) est celui de
- * `HeaderFlameOrbit` côté iOS.
+ * LA FLAMME DU JOUR SOUS L'AVATAR DE L'EN-TÊTE (#9031, #9044) — miroir de
+ * `HeaderFlameDecoration` (iOS). La flamme se pose JUSTE SOUS le cercle et ne
+ * bouge pas : c'est une LUEUR qui part de sous l'avatar, en fait le tour et
+ * rejoint la flamme, qui grossit puis reprend sa taille ; le compte du jour
+ * monte au plus fort de la croissance (`FLAME_VALUE_RELEASE_MS`). TRANSFORM et
+ * OPACITY seulement : le rejeu à chaque envoi ne coûte que la composition,
+ * jamais une mise en page. Le minutage (60 % de tour, 40 % de croissance) est
+ * celui de `HeaderFlameOrbit` côté iOS.
  */
 .header-flame-glow {
   position: absolute;
@@ -12,25 +14,18 @@
   border-radius: 9999px;
   pointer-events: none;
   opacity: 0;
-  background: conic-gradient(from 0turn, transparent 0turn, var(--ios-warning) 0.18turn, var(--color-error) 0.32turn, transparent 0.42turn);
+  /* Une traîne dont la TÊTE est en haut (0turn) : la rotation la promène. */
+  background: conic-gradient(from 0turn, transparent 0turn, transparent 0.68turn, var(--ios-warning) 0.9turn, var(--color-error) 0.97turn, #fde047 1turn);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
   mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
   will-change: transform, opacity;
 }
 
-.header-flame-orbit {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 0;
-  height: 0;
-}
-
 .header-flame-seat {
   position: absolute;
-  left: 0;
-  top: 30px;
-  transform: translate(-50%, -50%);
+  left: 50%;
+  top: calc(100% + 2px);
+  transform: translateX(-50%);
 }
 
 .header-flame-mark {
@@ -48,35 +43,37 @@
   box-shadow: 0 1px 4px color-mix(in srgb, var(--color-error) 30%, transparent);
 }
 
-.header-flame-playing .header-flame-glow {
-  animation: header-flame-glow 1.5s ease-in-out both;
+.header-flame-count {
+  display: inline-block;
+  animation: header-flame-tick 0.35s ease-out both;
 }
 
-.header-flame-playing .header-flame-orbit {
-  animation: header-flame-orbit 1.5s ease-in-out both;
+.header-flame-playing .header-flame-glow {
+  animation: header-flame-glow 1.6s ease-in-out both;
 }
 
 .header-flame-playing .header-flame-mark {
-  animation: header-flame-keep 1.5s ease-in-out both;
+  animation: header-flame-grow 1.6s ease-in-out both;
 }
 
+/* La tête part de sous l'avatar (0.5turn), fait un tour, et s'éteint dans la flamme. */
 @keyframes header-flame-glow {
-  0% { opacity: 0; transform: rotate(0turn); }
-  50% { opacity: 1; }
+  0% { opacity: 0; transform: rotate(0.5turn); }
+  10% { opacity: 1; }
+  52% { opacity: 1; }
+  60% { opacity: 0; transform: rotate(1.5turn); }
   100% { opacity: 0; transform: rotate(1.5turn); }
 }
 
-@keyframes header-flame-orbit {
-  0% { transform: rotate(0turn); }
-  62%, 100% { transform: rotate(1turn); }
+@keyframes header-flame-grow {
+  0%, 60% { transform: scale(1); }
+  80% { transform: scale(1.7); }
+  100% { transform: scale(1); }
 }
 
-@keyframes header-flame-keep {
-  0% { transform: rotate(0turn) scale(1); }
-  31% { transform: rotate(-0.5turn) scale(1.2); }
-  62% { transform: rotate(-1turn) scale(1); }
-  81% { transform: rotate(-1turn) scale(1.9); }
-  100% { transform: rotate(-1turn) scale(1); }
+@keyframes header-flame-tick {
+  0% { opacity: 0; transform: translateY(45%); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes header-flame-fade {
@@ -84,13 +81,13 @@
   50% { opacity: 1; }
 }
 
-/* Mouvement réduit : la lueur s'allume et s'éteint sur place, sans orbite. */
+/* Mouvement réduit : la lueur s'allume et s'éteint sur place, sans tour ni croissance. */
 @media (prefers-reduced-motion: reduce) {
   .header-flame-playing .header-flame-glow {
     animation: header-flame-fade 0.6s ease-out both;
   }
-  .header-flame-playing .header-flame-orbit,
-  .header-flame-playing .header-flame-mark {
+  .header-flame-playing .header-flame-mark,
+  .header-flame-count {
     animation: none;
   }
 }

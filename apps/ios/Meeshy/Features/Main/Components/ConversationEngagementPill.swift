@@ -2,43 +2,42 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - La pastille « 🔥 série · N (M) » (#8906)
+// MARK: - La pastille « 🔥 série · total » (#8906, #9044)
 
-/// Ce que le lecteur a gagné dans une conversation : sa série de jours (la
-/// flamme, tue quand elle est à 0), puis « N (M) » — N points depuis toujours,
-/// M aujourd'hui. Feuille PURE : primitives seulement, portillon `Equatable`.
+/// Ce que le lecteur a gagné dans une conversation : la flamme, sa série de
+/// jours, un point central, puis le total des points depuis toujours. Les
+/// points du jour vivent sous l'avatar replié (`HeaderFlameDecoration`), pas
+/// ici. Feuille PURE : primitives seulement, portillon `Equatable`.
 struct ConversationEngagementPill: View, Equatable {
     let streakDays: Int
-    let pointsText: String
+    let totalPoints: Int
     let accessibilityText: String
     let accentColor: String
 
     init(snapshot: ConversationEngagementSnapshot, accentColor: String) {
         self.streakDays = snapshot.streakDays
-        self.pointsText = snapshot.pointsText
+        self.totalPoints = snapshot.totalPoints
         self.accessibilityText = Self.accessibilityText(for: snapshot)
         self.accentColor = accentColor
     }
 
     static func == (lhs: ConversationEngagementPill, rhs: ConversationEngagementPill) -> Bool {
         lhs.streakDays == rhs.streakDays
-            && lhs.pointsText == rhs.pointsText
+            && lhs.totalPoints == rhs.totalPoints
             && lhs.accessibilityText == rhs.accessibilityText
             && lhs.accentColor == rhs.accentColor
     }
 
     private var accent: Color { Color(hex: accentColor) }
 
+    /// « série · total » — ce que la pastille écrit à côté de la flamme.
+    var text: String { "\(streakDays) · \(totalPoints)" }
+
     var body: some View {
         HStack(spacing: 3) {
-            if streakDays > 0 {
-                Image(systemName: "flame.fill")
-                    .imageScale(.small)
-                Text(verbatim: "\(streakDays)")
-                Text(verbatim: "·")
-                    .opacity(0.6)
-            }
-            Text(verbatim: pointsText)
+            Image(systemName: "flame.fill")
+                .imageScale(.small)
+            Text(verbatim: text)
         }
         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold, design: .rounded).monospacedDigit())
         .foregroundColor(accent)

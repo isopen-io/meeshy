@@ -193,6 +193,27 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
     expect(touched).toEqual(['x']);
   });
 
+  test('la valeur d’avant l’envoi tient jusqu’à ce que la lueur rejoigne la flamme, puis monte (#9044)', async () => {
+    const at = (today: number, replay: number) => (
+      <HeaderFlame snapshot={snapshot({ todayPoints: today })} replay={replay} releaseAfterMs={30} onDismiss={() => undefined} />
+    );
+    const host = await mounter.mount(at(12, 0));
+    await mounter.rerender(host, at(12, 1));
+    await mounter.rerender(host, at(15, 1));
+    expect(host.querySelector('[data-header-flame]')?.getAttribute('data-header-flame')).toBe('12');
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    await mounter.settle();
+    expect(host.querySelector('[data-header-flame]')?.getAttribute('data-header-flame')).toBe('15');
+  });
+
+  test('la flamme se pose JUSTE SOUS le cercle, jamais par-dessus, et ne tourne pas (#9044)', () => {
+    const css = readFileSync(new URL('../styles/header-flame.css', import.meta.url), 'utf8');
+    const seat = css.match(/\.header-flame-seat\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(seat).toMatch(/top:\s*calc\(100% \+ \d+px\)/);
+    expect(seat).not.toContain('-50%, -50%');
+    expect(css).not.toContain('header-flame-orbit');
+  });
+
   test('l’effet n’anime que transform et opacity, et se calme en mouvement réduit', () => {
     const css = readFileSync(new URL('../styles/header-flame.css', import.meta.url), 'utf8');
     const keyframes = [...css.matchAll(/@keyframes[^{]+\{([\s\S]*?)\n\}/g)].map((match) => match[1] ?? '');
