@@ -6,6 +6,11 @@ import Foundation
 /// SwiftUI. C'est ce qui autorise la règle ci-dessous à être éprouvée sans
 /// monter d'écran, et le composant qui la consomme à rester une présentation.
 ///
+/// Il vit dans le CŒUR du SDK (#8979) : la carte « Imagine » d'un vocal
+/// (`MessageCardTranscript`, loi pure sans SwiftUI) allume sa phrase en cours
+/// avec la MÊME règle que le lecteur du son de contenu — deux règles justes qui
+/// disent la même chose divergeraient en silence le jour où l'une évolue.
+///
 /// `start` et `end` sont OPTIONNELS parce que la matière l'est : une
 /// transcription saisie à la main (« Rédiger », « Coller ») n'a aucun minutage,
 /// et une reconnaissance sur appareil peut rendre des segments partiellement
@@ -81,7 +86,7 @@ extension AudioTranscriptCue {
     /// La phrase hérite du DÉBUT du premier segment et de la FIN du dernier :
     /// elle reste donc active pendant toute sa durée parlée, ce qui est
     /// exactement ce qu'un lecteur suit.
-    static func phrases(from cues: [AudioTranscriptCue],
+    public static func phrases(from cues: [AudioTranscriptCue],
                         maxCharacters: Int = 48) -> [AudioTranscriptCue] {
         guard !cues.isEmpty else { return [] }
         var resultat: [AudioTranscriptCue] = []

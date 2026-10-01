@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
-import { callControlSet, chromeAfter, chromeHidden, CHROME_IDLE_MS, flipOffered, isVideoScene } from './call-controls';
+import { callControlSet, chromeAfter, flipOffered, isVideoScene } from './call-controls';
 import type { ActiveCall, CallMember } from './call-store';
 
 /**
  * LES COMMANDES DE L'APPEL EN « C ADAPTÉ » (#8391) — ce que `(…)` sort, où
- * ça sort, et quand une vidéo efface ses commandes.
+ * ça sort, et ce qui range les commandes d'une vidéo.
  */
 
 const member = (overrides: Partial<CallMember> = {}): CallMember => ({ userId: 'u-a', name: 'Amina', avatar: null, micMuted: false, cameraOn: false, screenSharing: false, weakNetwork: false, capturing: false, link: 'connected', ...overrides });
@@ -118,51 +118,18 @@ describe('la scène vidéo', () => {
   });
 });
 
-describe('le masquage automatique', () => {
-  const state = (overrides: Partial<Parameters<typeof chromeHidden>[0]> = {}) => ({ videoScene: true, idleMs: CHROME_IDLE_MS, keyboardInside: false, reducedMotion: false, ...overrides });
-
-  test('une vidéo efface ses commandes après 4 s sans geste', () => {
-    expect(CHROME_IDLE_MS).toBe(4000);
-    expect(chromeHidden(state())).toBe(true);
-    expect(chromeHidden(state({ idleMs: CHROME_IDLE_MS - 1 }))).toBe(false);
-  });
-
-  test('jamais en audio', () => {
-    expect(chromeHidden(state({ videoScene: false, idleMs: 60_000 }))).toBe(false);
-  });
-
-  test('jamais avec le focus clavier dans les commandes', () => {
-    expect(chromeHidden(state({ keyboardInside: true, idleMs: 60_000 }))).toBe(false);
-  });
-
-  test('jamais sous prefers-reduced-motion', () => {
-    expect(chromeHidden(state({ reducedMotion: true, idleMs: 60_000 }))).toBe(false);
-  });
-});
-
-describe('toucher la scène efface ou rend TOUTES les commandes (#8550)', () => {
-  test('un toucher efface des commandes visibles, un second les rend', () => {
+/* UN TOUCHER RANGE, LE SUIVANT REND (#8550, #8988) — et seul le clavier rend
+   aussi : aucune attente, aucun mouvement ne range les commandes (directive
+   porteur du 2026-10-01). La minuterie vit dans le DOM : son absence se prouve
+   en avançant l'horloge (`use-call-chrome.test.tsx`, `call-screen.test.tsx`). */
+describe('toucher la scène range ou rend TOUTES les commandes (#8550, #8988)', () => {
+  test('un toucher range des commandes visibles, le suivant les rend', () => {
     expect(chromeAfter('shown', 'tap')).toBe('dismissed');
     expect(chromeAfter('dismissed', 'tap')).toBe('shown');
   });
 
-  test('un toucher rend aussi des commandes effacées par l’attente', () => {
-    expect(chromeAfter('resting', 'tap')).toBe('shown');
-  });
-
-  test('bouger la souris rend ce que l’attente a effacé, jamais ce qu’un toucher a rangé', () => {
-    expect(chromeAfter('resting', 'stir')).toBe('shown');
-    expect(chromeAfter('dismissed', 'stir')).toBe('dismissed');
-    expect(chromeAfter('shown', 'stir')).toBe('shown');
-  });
-
-  test('le clavier rend toujours les commandes', () => {
+  test('le clavier rend toujours les commandes, et n’en range jamais', () => {
     expect(chromeAfter('dismissed', 'key')).toBe('shown');
-    expect(chromeAfter('resting', 'key')).toBe('shown');
-  });
-
-  test('l’attente n’efface que des commandes visibles', () => {
-    expect(chromeAfter('shown', 'rest')).toBe('resting');
-    expect(chromeAfter('dismissed', 'rest')).toBe('dismissed');
+    expect(chromeAfter('shown', 'key')).toBe('shown');
   });
 });

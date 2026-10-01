@@ -49,20 +49,6 @@ extension CallView {
         // permanence, et en UN seul endroit : le bouton « Écran » vit avec les
         // commandes de ma caméra (vignette, haut de l'écran ou (…), #8626).
         .background(screenSharePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
-        // §7.3 — auto-hide after 4s of no interaction, in duo AND group
-        // video. Re-arms whenever showControls flips to true (a reveal tap),
-        // the (…) / a panel is used, AND on every touch of the chrome (#8735:
-        // a pressed button, a scrolled row); never under a finger, never
-        // while a panel is open, on Mac, under VoiceOver or without video.
-        .task(id: AutoHideKey(isVisible: showControls, layer: layer, interactionRevision: chromeTouches.revision)) {
-            guard showControls, mayAutoHideNow else { return }
-            try? await Task.sleep(nanoseconds: CallChromeVisibility.autoHideDelayNanoseconds)
-            guard !Task.isCancelled, mayAutoHideNow else { return }
-            withAnimation(.easeInOut(duration: CallChromeVisibility.fadeDuration)) {
-                showControls = false
-                isCameraMenuUnfolded = false
-            }
-        }
         // §7.1 — populate the camera list when video turns on so the « mon
         // image » actions can decide flip vs device picker (Continuity/USB).
         .task(id: callManager.isVideoEnabled) {
@@ -72,7 +58,6 @@ extension CallView {
         .onDisappear {
             showControls = true
             layer = .idle
-            chromeTouches = chromeTouches.released()
         }
         .adaptiveOnChange(of: currentActionSet) { _, actions in
             let reconciled = layer.reconciled(with: actions)
@@ -129,8 +114,9 @@ extension CallView {
             // audio call to video unilaterally — its stream must render even
             // while the local camera stays off.
             if callManager.isVideoUIActive {
-                // §7.3 — tap the primary video to toggle the controls
-                // (auto-hide UX). The PiP (on top) keeps its own swap tap.
+                // #8978 — tap the primary video to hide the controls, tap again to
+                // bring them back; nothing hides them on a timer. The PiP (on top)
+                // keeps its own swap tap.
                 videoCallLayout
                     .contentShape(Rectangle())
                     .onTapGesture { toggleControls() }
@@ -143,10 +129,9 @@ extension CallView {
                         ? String(localized: "call.video.hideControls", defaultValue: "Masquer les contrôles", bundle: .main)
                         : String(localized: "call.video.showControls", defaultValue: "Afficher les contrôles", bundle: .main))
                     .accessibilityAddTraits(.isButton)
-                    // Controls never auto-hide during VoiceOver (shouldAutoHideControls
-                    // returns false) — this tap element has no meaningful purpose then,
-                    // so hide it from the accessibility tree to avoid confusing VoiceOver.
-                    .accessibilityHidden(!shouldAutoHideControls)
+                    // Under VoiceOver the controls stay put — this tap element has no
+                    // meaningful purpose then, so it leaves the accessibility tree.
+                    .accessibilityHidden(!exposesTheTapToggle)
             }
 
             VStack(spacing: MeeshySpacing.md) {
@@ -290,31 +275,17 @@ extension CallView {
             .accessibilityHidden(true)
     }
 
-    /// §7.3 — controls auto-hide only on a video stage (duo or group, #8550),
-    /// never on Mac (no touch to recall them), never while a panel is open,
-    /// and never while VoiceOver is running. The rule is
-    /// `CallChromeVisibility.mayAutoHide`.
-    private var shouldAutoHideControls: Bool {
-        CallChromeVisibility.mayAutoHide(
-            isVideoStage: isVideoStage, isPanelOpen: showEffectsToolbar || !layer.mayAutoHide,
-            isOnMac: ProcessInfo.processInfo.isiOSAppOnMac, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning
-        )
-    }
-
-    /// #8735 — la même règle, jamais sous un doigt posé.
-    private var mayAutoHideNow: Bool {
-        CallChromeVisibility.mayAutoHide(
-            isVideoStage: isVideoStage, isPanelOpen: showEffectsToolbar || !layer.mayAutoHide,
-            isOnMac: ProcessInfo.processInfo.isiOSAppOnMac, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning,
-            isTouching: chromeTouches.isTouching
-        )
+    /// #8978 — la bascule au toucher n'existe que sur une scène vidéo, et pas sous VoiceOver,
+    /// où les contrôles restent en place.
+    private var exposesTheTapToggle: Bool {
+        CallChromeVisibility.mayToggleByTap(isVideoStage: isVideoStage) && !UIAccessibility.isVoiceOverRunning
     }
 
     /// #8735 — la porte UNIQUE par laquelle un contrôle dit qu'il est touché
-    /// (`callChromeInteraction`) : chaque toucher réarme le compte à rebours ;
-    /// celui reçu pendant le fondu de disparition rallume le chrome.
+    /// (`callChromeInteraction`). Seul compte le toucher reçu pendant le fondu
+    /// de disparition, qui rallume le chrome : un appui n'écrit aucun état de
+    /// la racine, il recalculerait tout l'écran d'appel (#8978).
     func noteChromeInteraction(_ interaction: CallChromeInteraction) {
-        chromeTouches = chromeTouches.noting(interaction)
         guard interaction.revealsChrome, !showControls else { return }
         withAnimation(.easeInOut(duration: CallChromeVisibility.fadeDuration)) { showControls = true }
     }

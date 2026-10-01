@@ -524,17 +524,6 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
-  test('un sous-menu ouvert retient l’écran : il ne s’efface pas de lui-même', async () => {
-    jest.useFakeTimers();
-    const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
-    view.press('[data-call-more]');
-    view.press('[data-call-control="capture"]');
-    act(() => jest.advanceTimersByTime(8000));
-    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
-    view.done();
-    jest.useRealTimers();
-  });
-
   test('ranger les actions referme le panneau ouvert', () => {
     const view = mount({ members: { 'u-peer': member() } });
     view.press('[data-call-more]');
@@ -547,21 +536,9 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
-  test('en vidéo, les commandes s’effacent après 4 s sans geste ; toucher la scène les rend', () => {
-    jest.useFakeTimers();
-    const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
-    const chrome = () => view.find('[data-call-screen]')?.getAttribute('data-call-chrome');
-    expect(chrome()).toBe('shown');
-    act(() => jest.advanceTimersByTime(4100));
-    expect(chrome()).toBe('hidden');
-    act(() => (view.find('[data-call-stage-surface]') as HTMLElement | null)?.click());
-    expect(chrome()).toBe('shown');
-    view.done();
-    jest.useRealTimers();
-  });
+  const tapStage = (view: ReturnType<typeof mount>) => act(() => (view.find('[data-call-stage-surface]') as HTMLElement | null)?.click());
 
   test('les sous-titres ne s’effacent pas avec les commandes — même sortis du cadre d’une pilule de groupe', async () => {
-    jest.useFakeTimers();
     const view = mount({ isGroup: true, cameraOn: true, members: peers, captionsMode: 'translated' });
     view.press('[data-call-more]');
     await act(async () => {
@@ -569,26 +546,14 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     });
     const panel = () => view.find('[data-call-captions-panel]');
     expect(panel()?.getAttribute('data-call-captions-surface')).toBe('inset');
-    act(() => jest.advanceTimersByTime(4100));
+    tapStage(view);
     await act(async () => {});
     expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
     expect(panel()).not.toBeNull();
     expect(panel()?.closest('[aria-hidden="true"]')).toBeNull();
     expect(panel()?.getAttribute('data-call-captions-surface')).toBe('glass');
     view.done();
-    jest.useRealTimers();
   });
-
-  test('en audio, jamais', () => {
-    jest.useFakeTimers();
-    const view = mount({ members: { 'u-peer': member() } });
-    act(() => jest.advanceTimersByTime(60_000));
-    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
-    view.done();
-    jest.useRealTimers();
-  });
-
-  const tapStage = (view: ReturnType<typeof mount>) => act(() => (view.find('[data-call-stage-surface]') as HTMLElement | null)?.click());
 
   test('toucher la scène efface TOUTES les commandes — en-tête, pilule, pastilles — et un second toucher les rend (#8550)', () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member({ micMuted: true }) } });
@@ -620,21 +585,6 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
-  test('effacées par l’attente, bouger la souris les rend', () => {
-    jest.useFakeTimers();
-    const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
-    act(() => jest.advanceTimersByTime(4100));
-    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('hidden');
-    act(() => view.find('[data-call-screen]')?.dispatchEvent(new Event('pointermove', { bubbles: true })));
-    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome')).toBe('shown');
-    view.done();
-    jest.useRealTimers();
-  });
-
-  /* UN BOUTON VISIBLE RÉPOND AU PREMIER TOUCHER (#8735). Le fondu posait
-     `pointer-events-none` à l'instant où l'opacité COMMENÇAIT à baisser : un
-     bouton encore bien visible laissait passer le doigt à la vidéo, qui ne
-     faisait que rendre les commandes — il fallait toucher deux fois. */
   const onFakeClock = (run: () => void) => {
     jest.useFakeTimers();
     try {
@@ -648,32 +598,42 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
 
   const controlsClasses = (view: ReturnType<typeof mount>) => (view.find('[data-call-controls]') as HTMLElement | null)?.className.split(' ') ?? [];
 
-  test('effacées par l’attente, les commandes restent sous le doigt : un toucher agit et les rend (#8735)', () =>
+  /* AUCUNE MINUTERIE (#8988, directive porteur du 2026-10-01) : les commandes
+     d'une vidéo ne disparaissent plus d'elles-mêmes — un toucher sur la scène
+     les range, le suivant les rend. */
+  test('en vidéo, aucune attente n’efface les commandes : ni au repos, ni le menu ouvert (#8988)', () =>
     onFakeClock(() => {
       const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
-      act(() => jest.advanceTimersByTime(4100));
-      expect(chromeOf(view)).toBe('hidden');
-      expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome-state')).toBe('resting');
-      expect(controlsClasses(view)).toContain('opacity-0');
-      expect(controlsClasses(view)).not.toContain('pointer-events-none');
-      expect(controlsClasses(view)).not.toContain('invisible');
-      expect(view.find('[data-call-controls]')?.getAttribute('aria-hidden')).toBeNull();
-      const more = view.find('[data-call-more]') as HTMLElement;
-      act(() => {
-        more.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-        more.dispatchEvent(new Event('pointerup', { bubbles: true }));
-        more.click();
-      });
+      act(() => jest.advanceTimersByTime(60_000));
       expect(chromeOf(view)).toBe('shown');
-      expect(view.find('[data-call-screen]')?.getAttribute('data-call-layer')).toBe('menu');
+      view.press('[data-call-more]');
+      act(() => jest.advanceTimersByTime(60_000));
+      expect(chromeOf(view)).toBe('shown');
+      expect(controlsClasses(view)).toContain('opacity-100');
       view.done();
     }));
 
+  /* Le clic sur la scène, qui n'est pas focalisable, emporte le focus HORS de
+     l'écran, sur le `<dialog>` qui le porte (mesuré dans Chromium) : l'hôte du
+     témoin en tient lieu. */
+  test('rangées d’un toucher, une touche les rend — même pressée hors de l’écran, sur ce qui le porte (#8988)', () => {
+    const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
+    tapStage(view);
+    expect(chromeOf(view)).toBe('hidden');
+    act(() => void view.host.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })));
+    expect(chromeOf(view)).toBe('shown');
+    view.done();
+  });
+
+  /* UN BOUTON VISIBLE RÉPOND AU PREMIER TOUCHER (#8735). Le fondu posait
+     `pointer-events-none` à l'instant où l'opacité COMMENÇAIT à baisser : un
+     bouton encore bien visible laissait passer le doigt à la vidéo, qui ne
+     faisait que rendre les commandes — il fallait toucher deux fois. */
   test('rangées d’un toucher sur la scène, elles laissent passer le doigt — une fois leur fondu fini, jamais pendant (#8735)', () => {
     const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
     expect(controlsClasses(view)).toContain('transition-opacity');
     tapStage(view);
-    expect(view.find('[data-call-screen]')?.getAttribute('data-call-chrome-state')).toBe('dismissed');
+    expect(chromeOf(view)).toBe('hidden');
     expect(controlsClasses(view)).toContain('invisible');
     expect(controlsClasses(view)).toContain('transition-[opacity,visibility]');
     expect(controlsClasses(view)).not.toContain('pointer-events-none');
@@ -681,58 +641,6 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     expect(controlsClasses(view)).not.toContain('invisible');
     view.done();
   });
-
-  /* L'ATTENTE SE RÉARME AU DOIGT (#8735, #8736). Au doigt, un glissé ne rend
-     plus de `pointermove` (le navigateur annule le pointeur et fait défiler) :
-     la rangée qu'on faisait défiler s'effaçait sous le doigt. */
-  test('le menu ouvert, faire défiler une rangée réarme l’attente : il ne s’efface pas sous le doigt (#8736)', () =>
-    onFakeClock(() => {
-      const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
-      view.press('[data-call-more]');
-      act(() => jest.advanceTimersByTime(3000));
-      act(() => void view.find('[data-call-row="call"] [data-call-row-scroll]')?.dispatchEvent(new Event('scroll')));
-      act(() => jest.advanceTimersByTime(3000));
-      expect(chromeOf(view)).toBe('shown');
-      act(() => jest.advanceTimersByTime(1100));
-      expect(chromeOf(view)).toBe('hidden');
-      view.done();
-    }));
-
-  test('un doigt posé retient les commandes tant qu’il ne s’est pas levé (#8736)', () =>
-    onFakeClock(() => {
-      const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
-      view.press('[data-call-more]');
-      const row = view.find('[data-call-row="call"] [data-call-row-scroll]') as HTMLElement;
-      act(() => void row.dispatchEvent(new Event('pointerdown', { bubbles: true })));
-      act(() => jest.advanceTimersByTime(9000));
-      expect(chromeOf(view)).toBe('shown');
-      act(() => void row.dispatchEvent(new Event('pointercancel', { bubbles: true })));
-      act(() => jest.advanceTimersByTime(4100));
-      expect(chromeOf(view)).toBe('hidden');
-      view.done();
-    }));
-
-  test('la feuille « Sortie » ouverte retient l’écran : elle ne s’efface pas sous qui la lit (#8735)', () =>
-    onFakeClock(() => {
-      const view = mount({ cameraOn: true, members: { 'u-peer': member() } });
-      view.press('[data-call-devices-open]');
-      act(() => jest.advanceTimersByTime(8000));
-      expect(chromeOf(view)).toBe('shown');
-      view.done();
-    }));
-
-  test('le détail de la qualité ouvert retient l’écran ; refermé, l’attente reprend (#8735)', () =>
-    onFakeClock(() => {
-      const quality = { level: 'good', packetLoss: 0, rtt: 40, jitter: 3, audioKbps: 32, videoKbps: 600, survival: 'sending' } as const;
-      const view = mount({ cameraOn: true, quality, members: { 'u-peer': member() } });
-      view.press('[data-call-chip]');
-      act(() => jest.advanceTimersByTime(8000));
-      expect(chromeOf(view)).toBe('shown');
-      view.press('[data-call-chip]');
-      act(() => jest.advanceTimersByTime(4100));
-      expect(chromeOf(view)).toBe('hidden');
-      view.done();
-    }));
 
   /* LE GLISSÉ NE REBONDIT PAS (#8736) : `overscroll-x-contain` laisse
      l'élasticité locale d'une piste, dont la fin d'animation termine le

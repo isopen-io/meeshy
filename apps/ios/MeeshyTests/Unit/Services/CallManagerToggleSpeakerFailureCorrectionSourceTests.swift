@@ -139,4 +139,26 @@ final class CallManagerToggleSpeakerFailureCorrectionSourceTests: XCTestCase {
             "applySpeakerRoute must return its tracked outcome so toggleSpeaker() can act on it."
         )
     }
+
+    /// #8978 — basculer la caméra ne bloque plus le fil principal sur la session audio : le mode
+    /// `.videoChat`/`.voiceChat` s'applique sur la file audio, sans que l'interface l'attende. Un
+    /// `audioSessionQueue.sync` ici figeait l'écran d'appel le temps de reconfigurer la session.
+    func test_videoModeUpdate_neverWaitsForTheAudioSessionOnTheMainThread() {
+        guard let fn = body(
+            source(for: "CallManager.swift"),
+            from: "private func updateAudioSessionModeForCurrentVideoState() {",
+            to: "fileprivate func applySpeakerRoute() -> Bool {"
+        ) else { return }
+        XCTAssertFalse(fn.contains("audioSessionQueue.sync"), "the video mode update must never block the main thread")
+        XCTAssertTrue(fn.contains("audioSessionQueue.async {"))
+    }
+
+    /// #8978 — la qualité du lien ne se republie que si elle CHANGE : chaque publication recalcule
+    /// tout l'écran d'appel, et ce relevé tombe toutes les 5 s même quand rien ne bouge.
+    func test_linkQuality_republishesOnlyOnChange() {
+        let manager = source(for: "CallManager.swift")
+        XCTAssertFalse(manager.contains("self.liveVideoQualityLevel = level\n"), "unconditional quality publish")
+        XCTAssertTrue(manager.contains("if self.liveVideoQualityLevel != level { self.liveVideoQualityLevel = level }"))
+        XCTAssertTrue(manager.contains("if self.isLinkQualityDegraded != degraded { self.isLinkQualityDegraded = degraded }"))
+    }
 }

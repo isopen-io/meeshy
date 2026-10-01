@@ -22,6 +22,7 @@
 		00E6C8A6BC1081108D73C4CE /* CallSignalIndicatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200FFFACECA3894B8F5C003F /* CallSignalIndicatorTests.swift */; };
 		013A999127115153D408D956 /* CallQualityIndicatorPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF6C2EBB3483ED23C1F79C1F /* CallQualityIndicatorPolicyTests.swift */; };
 		0144F7E928489285CF4875AA /* ComposerSoundColumnTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A6F0E1507AF7F2C21BB7767 /* ComposerSoundColumnTests.swift */; };
+		014B7294646CC474EAB01EC8 /* MessageCardExcerptStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = B542461304BB030451F80418 /* MessageCardExcerptStrip.swift */; };
 		015639F4ABBDBB5E69223C73 /* SharePendingSendConsumerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45748BA9D4C4EDE85874051B /* SharePendingSendConsumerTests.swift */; };
 		0163FFDEF8DF3708D6BB1756 /* Conversation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 557EAD05D8CBA0599309810A /* Conversation.swift */; };
 		0165AEB1D9CFB9FB0898EE5B /* BubbleDeliveryCheckLabelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A762CCD7A12D18D76BFA219 /* BubbleDeliveryCheckLabelTests.swift */; };
@@ -94,6 +95,7 @@
 		08A985C9728F1ECDBC348A52 /* SignupViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BC9466F3F314BB1B32F3BC8 /* SignupViewModelTests.swift */; };
 		08AE1C753C4631FEB1E57178 /* StoryVisibilityPreferenceStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ECA6ADD776243B65BB333B4 /* StoryVisibilityPreferenceStore.swift */; };
 		08C9B05668195BBDD7A12E52 /* StoryPublishSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F09A678F3376308398D0AE25 /* StoryPublishSourceGuardTests.swift */; };
+		08D50D2328C834EB87B41A71 /* MessageCardExportSheet+Stage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88D7DF8F0CE3C05D4FE15E05 /* MessageCardExportSheet+Stage.swift */; };
 		08D609BBF49A5446E685D148 /* ConversationFilterLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98DC19EADCCC47553410B9B7 /* ConversationFilterLabel.swift */; };
 		0910C41781933D8FDAD61939 /* BubbleViewOnceViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D1C54A03EADE481BF219F22 /* BubbleViewOnceViews.swift */; };
 		091BE0C43EDCBAB00620CDE7 /* NotificationPresentationResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1949B6507EF612C02DB666 /* NotificationPresentationResolver.swift */; };
@@ -1202,6 +1204,7 @@
 		746A36B380D91187B82502D3 /* SecurityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C67E48E9A95CEA659C16EC96 /* SecurityView.swift */; };
 		747E5BA44C66EC18436F318C /* CallCameraMirrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF9C40F3AB0A48664A38B267 /* CallCameraMirrorTests.swift */; };
 		74C179CE8410C6127FB61889 /* ConversationListView+PeerSignals.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65DB908A5BCFD82BA5E7C136 /* ConversationListView+PeerSignals.swift */; };
+		74D3C50CC7E27E595D0A4C26 /* iPadRootSheetTargets.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC8CD028DE3A1F0691E25942 /* iPadRootSheetTargets.swift */; };
 		74E2A29E0CAD6844008FC5B4 /* LocallyHiddenMessagesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90D46E931BC529CDB77411E0 /* LocallyHiddenMessagesStore.swift */; };
 		74E9B7DC3DC1E636791588FD /* StoryViewModel+Viewing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55EE2E47C373C6540910513C /* StoryViewModel+Viewing.swift */; };
 		7500629594A9BAB2959B25AB /* TextPostCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF585165D595DDCE8F5952A6 /* TextPostCell.swift */; };
@@ -4150,6 +4153,7 @@
 		88B26DF865596600027CD3F9 /* KeypadTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeypadTab.swift; sourceTree = "<group>"; };
 		88CC543BCB5C686912794E13 /* StoryNotificationTargetViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryNotificationTargetViewModelTests.swift; sourceTree = "<group>"; };
 		88CE393FAD36BADB94F7FA37 /* LocalCameraVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCameraVideoView.swift; sourceTree = "<group>"; };
+		88D7DF8F0CE3C05D4FE15E05 /* MessageCardExportSheet+Stage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageCardExportSheet+Stage.swift"; sourceTree = "<group>"; };
 		890162C628438564D1A416BE /* ImpressionBatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImpressionBatcher.swift; sourceTree = "<group>"; };
 		8917B51249A8ACD1A6C57D1E /* ComposerFormatAvailabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerFormatAvailabilityTests.swift; sourceTree = "<group>"; };
 		8925239EF7490BAF428580E7 /* MessageOverlayMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageOverlayMenu.swift; sourceTree = "<group>"; };
@@ -4574,6 +4578,7 @@
 		B4E1EA071278A53E20C98A9A /* ScrollTimePillStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrollTimePillStateTests.swift; sourceTree = "<group>"; };
 		B512194E10E24E2E25E75DE2 /* ThemedMessageBubbleEquatableTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemedMessageBubbleEquatableTests.swift; sourceTree = "<group>"; };
 		B53E3460FBE73AE43896DCC3 /* ConversationView+Sticker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationView+Sticker.swift"; sourceTree = "<group>"; };
+		B542461304BB030451F80418 /* MessageCardExcerptStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCardExcerptStrip.swift; sourceTree = "<group>"; };
 		B5667C58AF6F6381266D003E /* ConversationMediaGalleryView+Rules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationMediaGalleryView+Rules.swift"; sourceTree = "<group>"; };
 		B583B7C265BE8E0AE8939089 /* CallView+Controls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallView+Controls.swift"; sourceTree = "<group>"; };
 		B5923F90E7026D55CF7D2F31 /* ComposerBackgroundMenuTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerBackgroundMenuTests.swift; sourceTree = "<group>"; };
@@ -4918,6 +4923,7 @@
 		DC34A12FF59563B953D612AA /* FullscreenGallerySoundScopeGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullscreenGallerySoundScopeGuardTests.swift; sourceTree = "<group>"; };
 		DC5625A3FFF7FFD71902EC57 /* BubbleSecondaryContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleSecondaryContent.swift; sourceTree = "<group>"; };
 		DC806A085948A69ACA059A4B /* SyncPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPill.swift; sourceTree = "<group>"; };
+		DC8CD028DE3A1F0691E25942 /* iPadRootSheetTargets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iPadRootSheetTargets.swift; sourceTree = "<group>"; };
 		DCC48AD227138F11EA88D009 /* ComposerSceneMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerSceneMenu.swift; sourceTree = "<group>"; };
 		DCF1E582B7B5A4E4B53ED105 /* RecentMediaStripHeadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentMediaStripHeadTests.swift; sourceTree = "<group>"; };
 		DD04554E079BCF486746DF23 /* ThemedBackButtonTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemedBackButtonTests.swift; sourceTree = "<group>"; };
@@ -7112,11 +7118,13 @@
 		5EE561EBC4AC1A9860E77A97 /* Export */ = {
 			isa = PBXGroup;
 			children = (
+				B542461304BB030451F80418 /* MessageCardExcerptStrip.swift */,
 				8BEECA8C20BBFEB75FC5B151 /* MessageCardExportGallery.swift */,
 				308A383D467CE15C68302018 /* MessageCardExportMenu.swift */,
 				E8A83F73CD64987106D6056C /* MessageCardExportPresenter.swift */,
 				89557B8BAE780EE13671E59B /* MessageCardExportSheet.swift */,
 				56D4DCCDC817F5EE72C1CCFD /* MessageCardExportSheet+Output.swift */,
+				88D7DF8F0CE3C05D4FE15E05 /* MessageCardExportSheet+Stage.swift */,
 				2947F8E7973B63A1BCDEC45E /* MessageCardExportText.swift */,
 				2CAC276976EFD8EEB28D0D2B /* MessageCardExportTray.swift */,
 				A91E36062F852F28E6103F6B /* MessageCardExportTray+Imagine.swift */,
@@ -7562,6 +7570,7 @@
 				2F1E0B44CEEB8E6D31EA8BAB /* HashtagResultsView.swift */,
 				A3B15D54F4340ADC471EF388 /* IncomingCallView.swift */,
 				E095CB1D12A239A62C7EFEBC /* Indirect.swift */,
+				DC8CD028DE3A1F0691E25942 /* iPadRootSheetTargets.swift */,
 				388155F36EE8CE2C486EB5E9 /* iPadRootView.swift */,
 				2459C9439C3ECBA9783BCF63 /* iPadRootView+Navigation.swift */,
 				0657278C679C2B31B12E21BD /* iPadRootView+Overlays.swift */,
@@ -9974,10 +9983,12 @@
 				415A5B20D2089FAF45FCB6AB /* MessageAccessibilityLabelComposer.swift in Sources */,
 				7C2970BA6A204EDE37202704 /* MessageActionResolver.swift in Sources */,
 				EC9E9E3DA6C7C40BE3A57C0D /* MessageActionsMenu.swift in Sources */,
+				014B7294646CC474EAB01EC8 /* MessageCardExcerptStrip.swift in Sources */,
 				B55FADEA812DA7CD94092C4C /* MessageCardExportGallery.swift in Sources */,
 				90AB90299FE7FB02DAA5C354 /* MessageCardExportMenu.swift in Sources */,
 				11D31806798CBF72BCF8EA7D /* MessageCardExportPresenter.swift in Sources */,
 				C748D55E0B4D94D8901321B2 /* MessageCardExportSheet+Output.swift in Sources */,
+				08D50D2328C834EB87B41A71 /* MessageCardExportSheet+Stage.swift in Sources */,
 				2FCB262EE5018F4FE2F657C1 /* MessageCardExportSheet.swift in Sources */,
 				F4BFFE8CD408EABC93526F19 /* MessageCardExportText.swift in Sources */,
 				8E2285EDB0ACAD6C2239B8BA /* MessageCardExportTray+Imagine.swift in Sources */,
@@ -10448,6 +10459,7 @@
 				6665E627ACBCF0B900FAE0FF /* WidgetActionFlusher.swift in Sources */,
 				C69381F1E70852FAFA3D7863 /* WidgetDataManager.swift in Sources */,
 				E0A7AC42BDE5ECF5E6A715BD /* WidgetPreviewView.swift in Sources */,
+				74D3C50CC7E27E595D0A4C26 /* iPadRootSheetTargets.swift in Sources */,
 				7F218DCA32F9DD7BA37318F9 /* iPadRootView+Navigation.swift in Sources */,
 				CB8A23A6332C56ED769E7628 /* iPadRootView+Overlays.swift in Sources */,
 				D80C5E90A3DEBBFBEF2F263F /* iPadRootView+Panels.swift in Sources */,
