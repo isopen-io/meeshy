@@ -191,6 +191,10 @@ public extension SocketNotificationEvent {
         // (« a réagi 🔥 à votre story ») : le rendre une seconde fois en pastille
         // ferait dire deux fois la même chose à deux endroits de la même carte.
         if let action = nonBlank(subtitle), action.contains(emoji) { return nil }
+        // Même règle pour le CORPS (#9049) : une réaction de message arrive
+        // avec « a réagi ❤️ à votre message : « … » » — la pastille devant
+        // faisait lire « ❤️  a réagi ❤️ … ».
+        if let body = bannerBody, body.contains(emoji) { return nil }
         return emoji
     }
 

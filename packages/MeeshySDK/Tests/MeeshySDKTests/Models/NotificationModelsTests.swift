@@ -378,6 +378,28 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertTrue(notification.formattedBody?.contains("82.123.45.67") ?? false)
     }
 
+    /// #9049 — une réaction de message se lit « meeshy sama » / « a réagi ❤️ à
+    /// votre message : « J'attends! » » : l'acteur en titre, la phrase servie
+    /// en corps, l'émoji UNE fois.
+    func test_messageReaction_titleIsTheActor_bodyIsTheServedSentence() throws {
+        let json = """
+        {
+            "id": "notif-reaction",
+            "userId": "user1",
+            "type": "message_reaction",
+            "content": "a réagi ❤️ à votre message : « J'attends! »",
+            "actor": { "id": "a1", "username": "meeshysama", "displayName": "meeshy sama" },
+            "metadata": { "reactionEmoji": "❤️" },
+            "state": {"isRead":false,"createdAt":"2026-10-01T14:18:00.000Z"}
+        }
+        """.data(using: .utf8)!
+
+        let notification = try JSONDecoder().decode(APINotification.self, from: json)
+
+        XCTAssertEqual(notification.formattedTitle, "meeshy sama")
+        XCTAssertEqual(notification.formattedBody, "a réagi ❤️ à votre message : « J'attends! »")
+    }
+
     func testLoginNewDeviceNotificationFallbackTitle() throws {
         let json = """
         {

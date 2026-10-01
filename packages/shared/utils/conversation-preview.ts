@@ -182,6 +182,11 @@ export type ConversationPreviewInput = {
   readonly draft?: string | null;
   readonly lastReaction?: ConversationLastReaction | null;
   readonly lastMessage?: ConversationPreviewMessage | null;
+  /**
+   * Discussion DIRECTE (#9049) : le titre de la ligne nomme déjà le pair — sa
+   * réaction se dit « a réagi ❤️ à « … » », sans répéter son nom.
+   */
+  readonly isDirect?: boolean;
 };
 
 type Str = (key: ConversationPreviewStringKey, params?: Readonly<Record<string, string | number>>) => string;
@@ -283,7 +288,9 @@ function reactionLine(reaction: ConversationLastReaction, input: ConversationPre
   const excerpt = reactionExcerpt(reaction, input, str);
   const key: ConversationPreviewStringKey = isSelf
     ? excerpt ? 'reaction.self' : 'reaction.self.bare'
-    : excerpt ? 'reaction.member' : 'reaction.member.bare';
+    : input.isDirect === true
+      ? excerpt ? 'reaction.peer' : 'reaction.peer.bare'
+      : excerpt ? 'reaction.member' : 'reaction.member.bare';
   return preview({
     kind: 'reaction',
     segments: [label(str(key, { actor, emoji: reaction.emoji, excerpt: excerpt ?? '' }))],

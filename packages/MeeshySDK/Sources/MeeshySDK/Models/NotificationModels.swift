@@ -610,8 +610,9 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
         case .messageReply, .reply, .legacyStoryReply:
             return "Reponse de \(actorName)"
         case .messageReaction, .reaction, .legacyMessageReaction:
-            let emoji = metadata?.reactionEmoji ?? metadata?.emoji ?? content ?? "heart.fill"
-            return "\(actorName) a reagi \(emoji) a votre message"
+            // L'acteur seul (#9049) : la phrase « a réagi ❤️ à votre message :
+            // « … » » est le CORPS servi — la répéter ici la ferait lire deux fois.
+            return actorName
         case .userMentioned, .mention, .legacyMention:
             return "\(actorName) vous a mentionne"
         case .friendRequest, .contactRequest, .legacyFriendRequest:
@@ -750,8 +751,9 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
     public var formattedBody: String? {
         switch notificationType {
         case .messageReaction, .reaction, .legacyMessageReaction:
-            // What message was reacted to.
-            return metadata?.messagePreview
+            // La phrase SERVIE (#9049) — « a réagi ❤️ à votre message : « … » » —
+            // à défaut l'extrait du message.
+            return Self.firstNonEmpty(content, metadata?.messagePreview)
         case .newMessage, .legacyNewMessage, .messageReply, .userMentioned, .mention, .legacyMention, .reply, .legacyStoryReply:
             // `content` already embeds attachment details (durée audio, taille,
             // dimensions) built server-side; fall back to the raw preview.
