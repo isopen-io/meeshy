@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 // MARK: - La mise en forme de la sélection (#7849)
@@ -30,6 +31,19 @@ extension UniversalComposerBar {
             TextField("", text: $text, axis: .vertical)
         }
     }
+
+    /// **Ce qu'on colle part toujours** (#9037) : l'objet collé devient pièce
+    /// jointe, un texte trop long un `.txt`. Seulement chez un hôte qui reçoit
+    /// les pièces (`onIngest`) — sinon le collage reste celui du système.
+    @ViewBuilder
+    var composerPasteInterceptor: some View {
+        if let onIngest {
+            ComposerPasteInterceptor(limit: pasteLimit, onIngest: onIngest)
+        }
+    }
+
+    /// La limite du mode, sinon celle d'un message (`MessageLimits`, 2000 comme `@meeshy/shared`).
+    var pasteLimit: Int { resolvedMaxLength ?? MessageLimits.maxMessageLength }
 
     /// Ce que le champ écrit arrive avec la sélection qu'il vient de poser.
     var typedText: Binding<String> {
