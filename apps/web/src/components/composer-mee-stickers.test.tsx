@@ -2,6 +2,8 @@ import { act } from 'react';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { meeStickersOfTab } from '@/lib/mee/catalog';
+import { MEE_INTENTS } from '@/lib/mee/types';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -38,16 +40,29 @@ const fakeRasterize = async (svg: string) => {
 };
 const now = () => new Date('2026-10-01T08:05:00');
 
-const mount = (tab: 'mee' | 'meo' | 'instants', onPick: (picked: MeePicked) => void) =>
+const mount = (tab: 'mee' | 'meo' | 'duo' | 'instants', onPick: (picked: MeePicked) => void) =>
   mounter.mount(<MeeStickerPanel tab={tab} language="fr" onPick={onPick} rasterize={fakeRasterize} now={now} />);
 
 describe('MeeStickerPanel', () => {
-  test('l’onglet Meo montre Meo seul puis la partie à deux où Meo fait le geste', async () => {
+  test('l’onglet Meo range Meo seul par intention : un titre, une phrase qui dit quand l’employer, la grille', async () => {
     const host = await mount('meo', () => {});
-    const sections = Array.from(host.querySelectorAll('[data-mee-section]')).map((s) => s.getAttribute('data-mee-section'));
-    expect(sections).toEqual(['solo', 'duo']);
-    expect(host.querySelectorAll('[data-mee-sticker]').length).toBe(52);
+    const sections = Array.from(host.querySelectorAll('[data-mee-section]'));
+    expect(sections.map((s) => s.getAttribute('data-mee-section'))).toEqual([...MEE_INTENTS]);
+    expect(host.querySelectorAll('[data-mee-sticker]').length).toBe(meeStickersOfTab('meo').length);
+    expect(host.querySelector('[data-mee-sticker^="duo-"]')).toBe(null);
+
+    const hello = host.querySelector('[data-mee-section="bonjour"]');
+    expect(hello?.querySelector('h3')?.textContent).toBe('Bonjour, merci');
+    expect(hello?.querySelector('[data-mee-hint]')?.textContent).toContain('Pour saluer');
+    expect(hello?.querySelector('[data-mee-sticker="meo-salut"] svg')?.innerHTML).toContain('<style>');
+  });
+
+  test('l’onglet Mee & Meo réunit les duos, dans les deux sens', async () => {
+    const host = await mount('duo', () => {});
+    expect(host.querySelector('[data-mee-sticker="duo-mee-bisou"]')).not.toBe(null);
     expect(host.querySelector('[data-mee-sticker="duo-meo-bisou"] svg')?.getAttribute('class')).toContain('mee-s-pick-duo-meo-bisou');
+    expect(host.querySelector('[data-mee-sticker="mee-coucou"]')).toBe(null);
+    expect(host.querySelectorAll('[data-mee-sticker]').length).toBe(meeStickersOfTab('duo').length);
   });
 
   test('choisir un sticker remet son image fixe et son gabarit `mee.<id>`', async () => {

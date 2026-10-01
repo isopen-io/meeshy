@@ -159,6 +159,18 @@ export const P = {
   guitar: () => `<path d="M-10 14 a10 10 0 1 1 12 -14 l14 -16 4 4 -16 14 a10 10 0 1 1 -14 12 z" fill="#d97706" stroke="#92400e" stroke-width="1.6"/><circle cx="-4" cy="6" r="3" fill="#78350f"/>`,
   bubble: () => `<circle r="7" fill="#e0f2fe" opacity=".75" stroke="#7dd3fc" stroke-width="1.2"/><circle cx="-2" cy="-2" r="1.6" fill="#fff"/>`,
   snowman: () => `<circle cy="10" r="14" fill="#fff" stroke="#cbd5e1" stroke-width="1.6"/><circle cy="-12" r="10" fill="#fff" stroke="#cbd5e1" stroke-width="1.6"/><path d="M0 -12 l9 2 -9 2 z" fill="#f97316"/><circle cx="-3" cy="-15" r="1.4" fill="${INK}"/><circle cx="3" cy="-15" r="1.4" fill="${INK}"/>`,
+  check: () => `<circle r="15" fill="#22c55e" stroke="#15803d" stroke-width="2"/><path d="M-7 0 L-2 6 L8 -6" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>`,
+  spider: () =>
+    `<path d="M0 -60 V-8" stroke="#94a3b8" stroke-width="1.4"/><path d="M-6 -2 l-9 -6 M-6 2 l-10 2 M-6 5 l-8 8 M6 -2 l9 -6 M6 2 l10 2 M6 5 l8 8" stroke="${INK}" stroke-width="2.2" stroke-linecap="round"/><circle cy="2" r="8" fill="${INK}"/><circle cx="-3" cy="0" r="2.2" fill="#fff"/><circle cx="3" cy="0" r="2.2" fill="#fff"/><circle cx="-3" cy="0.6" r="1" fill="${INK}"/><circle cx="3" cy="0.6" r="1" fill="${INK}"/>`,
+  battery: () => `<rect x="-12" y="-18" width="24" height="38" rx="4" fill="#fff" stroke="${INK}" stroke-width="2.4"/><rect x="-5" y="-23" width="10" height="5" rx="1.5" fill="${INK}"/>`,
+  batteryLevel: () => `<rect x="-8" y="-14" width="16" height="30" rx="2" fill="#ef4444"/>`,
+  bowl: () =>
+    `<path d="M-22 -4 h44 q-2 20 -22 22 q-20 -2 -22 -22 z" fill="#fde68a" stroke="#b45309" stroke-width="2"/><ellipse cy="-4" rx="22" ry="4" fill="#fb923c" stroke="#b45309" stroke-width="1.6"/><path d="M8 -6 L22 -24" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>`,
+  clover: () =>
+    [0, 90, 180, 270].map((r) => `<path d="${heartPath(0, -7, 7)}" transform="rotate(${r})" fill="#22c55e" stroke="#fff" stroke-width="1.2"/>`).join('') +
+    `<path d="M0 0 q4 10 10 14" fill="none" stroke="#15803d" stroke-width="2.4" stroke-linecap="round"/>`,
+  thought: () =>
+    `<circle cx="-22" cy="22" r="3.5" fill="#fff" stroke="${INK}" stroke-width="1.6"/><circle cx="-14" cy="13" r="5" fill="#fff" stroke="${INK}" stroke-width="1.6"/><ellipse rx="22" ry="16" fill="#fff" stroke="${INK}" stroke-width="2"/>`,
   sunglassesProp: () => `<path d="M-20 -4 h40 v4 q-2 9 -9 9 h-3 q-7 0 -8 -8 q-1 8 -8 8 h-3 q-7 0 -9 -9 z" fill="${INK}"/>`,
 };
 

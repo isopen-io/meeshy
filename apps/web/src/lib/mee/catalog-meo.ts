@@ -276,6 +276,7 @@ export const MEO_SOLO: readonly MeeSticker[] = [
     id: 'meo-ok',
     title: 'OK',
     feeling: 'joie',
+    intent: 'bonjour',
     emoji: '👌',
     pose: { eyes: 'wink', beak: 'smile' },
     back: ground,
