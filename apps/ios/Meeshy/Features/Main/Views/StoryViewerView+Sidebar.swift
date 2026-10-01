@@ -609,6 +609,14 @@ struct StoryActionSidebarView: View {
                         .frame(width: reactionStripWidth)
                         .fixedSize(horizontal: false, vertical: true)
                         .simultaneousGesture(reactionStripDragGesture)
+                        .background(
+                            GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: StoryReactionStripFrameKey.self,
+                                    value: proxy.frame(in: .global)
+                                )
+                            }
+                        )
                         .transition(.asymmetric(
                             insertion: .scale(scale: 0.8, anchor: .trailing).combined(with: .opacity),
                             removal: .opacity

@@ -85,6 +85,32 @@ final class StoryReactionStripGestureTests: XCTestCase {
         )
     }
 
+    // MARK: - 1 bis · La loi du point de départ (#9062)
+
+    /// **Un glissé NÉ sur la barre n'est jamais une pagination**, quelle que
+    /// soit sa vitesse. La loi de direction ci-dessus dépend de l'ORDRE dans
+    /// lequel SwiftUI livre deux `onChanged` simultanés : sur un swipe rapide,
+    /// le lecteur pouvait arrêter son axe avant que la barre n'ait revendiqué.
+    /// Le point de départ, lui, est connu du lecteur dès son premier tick.
+    func test_unGlisseNeSurLaBarre_neDevientJamaisHorizontalPourLeLecteur() {
+        let barre = CGRect(x: 40, y: 400, width: 280, height: 56)
+        XCTAssertTrue(StoryReactionStripGesture.yieldsHorizontalAxis(
+            stripFrame: barre, dragStart: CGPoint(x: 200, y: 420)))
+        XCTAssertTrue(StoryReactionStripGesture.yieldsHorizontalAxis(
+            stripFrame: barre, dragStart: CGPoint(x: 41, y: 455)),
+                      "Le bord de la barre lui appartient encore.")
+    }
+
+    func test_unGlisseNeHorsDeLaBarre_resteAuLecteur() {
+        let barre = CGRect(x: 40, y: 400, width: 280, height: 56)
+        XCTAssertFalse(StoryReactionStripGesture.yieldsHorizontalAxis(
+            stripFrame: barre, dragStart: CGPoint(x: 200, y: 200)),
+                       "Né sur la story, au-dessus de la barre ouverte, le glissé pagine toujours.")
+        XCTAssertFalse(StoryReactionStripGesture.yieldsHorizontalAxis(
+            stripFrame: nil, dragStart: CGPoint(x: 200, y: 420)),
+                       "Barre fermée (aucun cadre publié) : rien n'est cédé.")
+    }
+
     // MARK: - 2 · Le site — la barre de la story
 
     /// Non-vacuité : le site existe là où les gardes regardent.
@@ -179,6 +205,42 @@ final class StoryReactionStripGestureTests: XCTestCase {
             "Sans cette sortie anticipée, le drag parent — monté en `.simultaneousGesture`, "
                 + "donc impossible à subordonner par priorité — continue de paginer sous le doigt."
         )
+    }
+
+    /// La cession au point de départ est lue À LA DÉCISION D'AXE : c'est le
+    /// seul instant où le lecteur choisit l'horizontal, donc le seul où la
+    /// course entre les deux `onChanged` peut être perdue.
+    func test_leLecteur_consulteLeCadreDeLaBarreAvantDArreterLHorizontal() throws {
+        let code = try contentSource()
+        guard let corps = corps("var unifiedDragGesture: some Gesture {", dans: code) else {
+            return XCTFail("`unifiedDragGesture` introuvable — la garde ne mesurerait rien.")
+        }
+        let plat = compact(corps)
+        guard let consultation = plat.range(of: "StoryReactionStripGesture.yieldsHorizontalAxis("),
+              let axe = plat.range(of: "gestureAxis=1") else {
+            return XCTFail("Le lecteur doit consulter `yieldsHorizontalAxis(` avant de poser `gestureAxis = 1`.")
+        }
+        XCTAssertLessThan(consultation.lowerBound, axe.lowerBound,
+                          "La consultation doit PRÉCÉDER l'arrêt de l'axe horizontal.")
+        XCTAssertTrue(plat.contains("stripFrame:reactionStripFrame"),
+                      "Le cadre consulté est celui que publie la barre.")
+        XCTAssertTrue(plat.contains("dragStart:value.startLocation"),
+                      "Le critère est le POINT DE DÉPART, en `.global` comme le drag parent.")
+    }
+
+    func test_laBarre_publieSonCadreGlobal() throws {
+        let code = try sidebarSource()
+        guard let site = pickerCallSite(in: code) else { return XCTFail("site introuvable") }
+        let plat = compact(site)
+        guard let publication = plat.range(of: "key:StoryReactionStripFrameKey.self"),
+              let decalage = plat.range(of: ".offset(x:FullscreenChromeMetrics.reactionStripLeadingOffset)") else {
+            return XCTFail("La barre doit publier `StoryReactionStripFrameKey`.")
+        }
+        XCTAssertTrue(plat.contains("proxy.frame(in:.global)"),
+                      "Même espace que `value.startLocation` du drag parent.")
+        XCTAssertLessThan(publication.lowerBound, decalage.lowerBound,
+                          "Mesuré AVANT `.offset` : posé après, le cadre serait celui de la place "
+                              + "d'origine, pas celle où le doigt voit la barre.")
     }
 
     /// **Le drapeau doit pouvoir se DÉCOLLER.** SwiftUI ne délivre pas

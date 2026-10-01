@@ -342,6 +342,8 @@ struct StoryViewerView: View {
     /// selon `StoryReactionStripGesture`, lu par `unifiedDragGesture`, purgé par
     /// `resetGestureTracking()` et à la fermeture de la barre.
     @State var reactionStripOwnsDrag: Bool = false // internal for cross-file extension access
+    /// Cadre `.global` de la barre ouverte (`StoryReactionStripFrameKey`, #9062).
+    @State var reactionStripFrame: CGRect? // internal for cross-file extension access
     @State var composerOwnsDrag: Bool = false // #8431 — le glissé né sur le composeur
     /// Bord SUPÉRIEUR (coordonnées `.global`) de la surface scrollable ouverte,
     /// remonté par `StoryReaderScrollableSurfaceTopKey`. `nil` = aucune surface
@@ -751,8 +753,12 @@ struct StoryViewerView: View {
         // Filet du drapeau de revendication : la barre refermée, plus personne
         // ne peut le retirer. Le `UIScrollView` de la rangée peut priver la
         // barre de son `onEnded` — un drapeau collé gèlerait la navigation.
+        .onPreferenceChange(StoryReactionStripFrameKey.self) { reactionStripFrame = $0 }
         .adaptiveOnChange(of: showEmojiStrip) { _, isOpen in
-            if !isOpen { reactionStripOwnsDrag = false }
+            if !isOpen {
+                reactionStripOwnsDrag = false
+                reactionStripFrame = nil
+            }
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
             // **La légende se replie à CHAQUE changement de story.** Laissée
