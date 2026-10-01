@@ -588,7 +588,7 @@ export function MessageMenu({
                   data-action={item.id}
                   tabIndex={index === roving.activeIndex ? 0 : -1}
                   className="flex w-full items-center gap-2.5 px-3 text-start text-title font-medium"
-                  style={{ minHeight: MENU_ROW_HEIGHT }}
+                  style={{ minHeight: MENU_ROW_HEIGHT, color: 'var(--color-ios-ink)' }}
                   onClick={() => onListItemChosen(item)}
                 >
                   <GlyphSvg glyph={THREAD_MENU_GLYPHS[item.glyph]} size={18} style={{ color: 'var(--accent)' }} />
@@ -597,7 +597,7 @@ export function MessageMenu({
                     <GlyphSvg
                       glyph={{ viewBox: '0 0 256 256', body: '<path d="M181.66,133.66l-80,80a8,8,0,0,1-11.32-11.32L164.69,128,90.34,53.66a8,8,0,0,1,11.32-11.32l80,80A8,8,0,0,1,181.66,133.66Z"/>' }}
                       size={14}
-                      className="opacity-60"
+                      style={{ color: 'var(--color-ios-ink-3)' }}
                     />
                   ) : null}
                 </button>
@@ -642,7 +642,7 @@ export function MessageMenu({
                   aria-checked={choice.isServed}
                   tabIndex={index === roving.activeIndex ? 0 : -1}
                   className="flex w-full items-center gap-2.5 px-3 text-start text-title font-medium"
-                  style={{ minHeight: MENU_ROW_HEIGHT }}
+                  style={{ minHeight: MENU_ROW_HEIGHT, color: 'var(--color-ios-ink)' }}
                   onClick={() => onTranslateChosen(choice.code)}
                 >
                   <span aria-hidden>{flag(choice.code)}</span>

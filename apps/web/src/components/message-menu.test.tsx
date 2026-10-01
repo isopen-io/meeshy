@@ -792,7 +792,7 @@ describe('MessageMenu — le sous-menu de « Transférer » (#9039)', () => {
  * Un message LONG (1 500 px) pousse la liste sous le bas de l'écran : on
  * impose cette géométrie à l'ancre, `happy-dom` ne mesurant rien.
  */
-describe('MessageMenu — sans cadre, et l’aperçu se réduit au glissement (#9043)', () => {
+describe('MessageMenu — le rail sans cadre, la liste dans sa carte, et l’aperçu se réduit au glissement (#9043)', () => {
   const surface = (): HTMLElement => document.querySelector('[data-message-menu-drag-surface]')!;
   const list = (): HTMLElement => document.querySelector('.message-menu-list')!;
   const previewScale = (): number =>
@@ -812,12 +812,20 @@ describe('MessageMenu — sans cadre, et l’aperçu se réduit au glissement (#
     });
   };
 
-  test('la liste et le rail se posent NUS sur le voile : ni fond, ni bordure, ni ombre', () => {
+  const cssRule = (selector: string): string => {
     const css = readFileSync(new URL('../styles/thread-menu.css', import.meta.url), 'utf8');
-    const rule = (selector: string): string => new RegExp(`\\n${selector.replace('.', '\\.')} \\{([^}]*)\\}`).exec(css)![1]!;
-    for (const selector of ['.message-menu-list', '.message-menu-rail']) {
-      expect(rule(selector)).not.toMatch(/background|border|box-shadow/);
-    }
+    return new RegExp(`\\n${selector.replace('.', '\\.')} \\{([^}]*)\\}`).exec(css)![1]!;
+  };
+
+  test('le rail se pose NU sur le voile : ni fond, ni bordure, ni ombre', () => {
+    expect(cssRule('.message-menu-rail')).not.toMatch(/background|border|box-shadow/);
+  });
+
+  test('la liste d’actions GARDE sa carte : fond, bordure et ombre (directive porteur 2026-10-01)', () => {
+    const list = cssRule('.message-menu-list');
+    expect(list).toMatch(/background-color/);
+    expect(list).toMatch(/border:/);
+    expect(list).toMatch(/box-shadow/);
   });
 
   test('glisser vers le haut réduit l’aperçu ET remonte la liste d’autant, image par image', () => {

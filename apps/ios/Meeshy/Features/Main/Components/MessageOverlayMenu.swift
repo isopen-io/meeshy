@@ -528,9 +528,9 @@ struct MessageOverlayMenu: View {
         // **Sans capsule** (directive porteur 2026-10-01, #9043 — « enlever le
         // cadre comme pour les story ») : la story pose cette MÊME rangée nue
         // sur sa scène (`FullscreenReactionStrip`, `chrome: .none`). Ici le
-        // voile est la scène ; garder la pilule au-dessus d'un menu désormais
-        // nu laisserait un cadre sur deux. Le voile étant toujours sombre, le
-        // style est `.dark` quel que soit le schéma.
+        // voile est la scène. Seule la bande perd son cadre : le menu du bas
+        // garde son Liquid Glass. Le voile étant toujours sombre, le style est
+        // `.dark` quel que soit le schéma.
         //
         // Le classement (lecture UserDefaults + tri) est calculé UNE fois par
         // présentation via le cache @State — le body de l'overlay se
