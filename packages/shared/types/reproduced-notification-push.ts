@@ -34,3 +34,19 @@ export const REPRODUCED_PUSH_VALUE = 'true';
  * lui-même, il ne peut ni arriver après lui, ni se perdre sans lui.
  */
 export const REPLACES_NOTIFICATION_FIELD = 'replacesNotificationId';
+
+/**
+ * LE PUSH D'UNE RÉACTION REMPLACE LA BANNIÈRE DU MÊME ACTEUR SUR LE MÊME SUJET.
+ *
+ * Changer sa réaction (❤️ → 😂) retire une notification et en crée une AUTRE :
+ * deux identités, donc rien que `REPLACES_NOTIFICATION_FIELD` puisse nommer —
+ * la ligne d'avant est déjà supprimée quand la nouvelle part. Le retrait
+ * voyage en push silencieux, qu'iOS ne garantit pas : la bannière d'avant
+ * restait à côté de la nouvelle.
+ *
+ * Ce champ déclare que la bannière livrée du même `type`, du même acteur
+ * (`senderId`) et du même sujet (`commentId`, sinon `messageId`, sinon
+ * `postId`) est remplacée — l'extension iOS la retire avant d'afficher.
+ */
+export const REPLACES_ACTOR_SUBJECT_FIELD = 'replacesActorSubject';
+export const REPLACES_ACTOR_SUBJECT_VALUE = 'true';

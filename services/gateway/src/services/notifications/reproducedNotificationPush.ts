@@ -1,4 +1,6 @@
 import {
+  REPLACES_ACTOR_SUBJECT_FIELD,
+  REPLACES_ACTOR_SUBJECT_VALUE,
   REPLACES_NOTIFICATION_FIELD,
   REPRODUCED_PUSH_FIELD,
   REPRODUCED_PUSH_VALUE,
@@ -71,4 +73,23 @@ export function staleBannerOf(
 ): RetractedNotification {
   if (!row) return { id, userId, pushSent: true };
   return retractedNotificationOf({ id, userId, type: row.type, context: row.context, delivery: row.delivery });
+}
+
+/**
+ * Les types dont le push REMPLACE la bannière du même acteur sur le même sujet
+ * (`REPLACES_ACTOR_SUBJECT_FIELD`). Changer sa réaction retire une ligne et en
+ * crée une autre : aucune identité commune à nommer, donc c'est le triplet
+ * type · acteur · sujet qui désigne la bannière d'avant.
+ */
+const ACTOR_SUBJECT_REPLACING_TYPES: ReadonlySet<string> = new Set([
+  'message_reaction',
+  'post_like',
+  'story_reaction',
+  'status_reaction',
+  'comment_like',
+  'comment_reaction',
+]);
+
+export function actorSubjectReplacementPushField(type: string): Readonly<Record<string, string>> {
+  return ACTOR_SUBJECT_REPLACING_TYPES.has(type) ? { [REPLACES_ACTOR_SUBJECT_FIELD]: REPLACES_ACTOR_SUBJECT_VALUE } : {};
 }

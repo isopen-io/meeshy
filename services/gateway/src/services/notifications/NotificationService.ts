@@ -53,7 +53,7 @@ import { filterMutedRecipients } from './mutedRecipients';
 import { computeConversationUnreadBadge } from './conversationUnreadBadge';
 import { retractedNotificationOf, type RetractedNotification } from './retractedNotifications';
 import { sendNotificationRevocationPushes } from './notificationRevocationPush';
-import { pushReachedADevice, reproducedPushData, staleBannerOf } from './reproducedNotificationPush';
+import { actorSubjectReplacementPushField, pushReachedADevice, reproducedPushData, staleBannerOf } from './reproducedNotificationPush';
 import { visibleNotificationsWhere } from './visibleNotificationsWhere';
 import type { ServerEmitIOWithRooms } from '../../socketio/serverEmit';
 import { PushNotificationService } from '../PushNotificationService';
@@ -1060,9 +1060,9 @@ export class NotificationService {
                 senderDisplayName: params.actor?.displayName || '',
                 senderAvatar: params.actor?.avatar || '',
                 imageURL: params.actor?.avatar || '',
-                // Phase B — reactions. Emoji used so the iOS extension can format
-                // the body as "<sender> a réagi <emoji> à votre message" while the
-                // INSendMessageIntent path still renders the reactor's avatar.
+                // Réactions : l'emoji compose le corps ; le push remplace la bannière
+                // du même acteur sur le même sujet (❤️ → 😂 n'en laisse qu'une).
+                ...actorSubjectReplacementPushField(params.type),
                 reactionEmoji: (params.metadata && 'reactionEmoji' in params.metadata
                   ? String(params.metadata.reactionEmoji ?? '')
                   : ''),
