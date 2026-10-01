@@ -1,4 +1,4 @@
-# Une garde qui lit la source lit aussi sa FORME (2026-10-01, #9054)
+## Une garde qui lit la source lit aussi sa FORME (2026-10-01, #9054)
 
 **Ce qui s'est passé.** Les tailles d'emoji seul sont passées de littéraux
 (`case .single: return 90`) à des multiples (`Self.inlineSize * 4`). Témoins,
