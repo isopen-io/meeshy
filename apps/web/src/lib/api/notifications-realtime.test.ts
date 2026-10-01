@@ -141,6 +141,22 @@ describe('notification:new', () => {
     expect(ids(queryClient, 'all')).toEqual(['n9', 'n1', 'n2']);
   });
 
+  /* Éditer le message réécrit sa notification sous la MÊME identité, et la
+     passerelle l'annonce par `notification:deleted` PUIS `notification:new`.
+     Un id supprimé qui revient est une REPRODUCTION, pas une rediffusion : le
+     dédoublonnage de la connexion le jetait, et la ligne quittait la cloche. */
+  test('une notification réécrite (supprimée puis rediffusée) revient avec son texte d’après', () => {
+    const { socket, queryClient } = connect();
+    socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, servie('n9', 'new_message'));
+
+    socket.fire(SERVER_EVENTS.NOTIFICATION_DELETED, { notificationId: 'n9' });
+    socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, { ...servie('n9', 'new_message'), content: 'Rendez-vous à 18h' });
+
+    const all = queryClient.getQueryData<NotificationsInfiniteData>(notificationListKey('all'));
+    expect(ids(queryClient, 'all')).toEqual(['n9', 'n1', 'n2']);
+    expect(all?.pages[0]?.notifications.find((n) => n.id === 'n9')?.content).toBe('Rendez-vous à 18h');
+  });
+
   test('une charge illisible est ignorée, jamais une exception', () => {
     const { socket, queryClient } = connect();
     expect(() => socket.fire(SERVER_EVENTS.NOTIFICATION_NEW, { id: 'n9' })).not.toThrow();

@@ -683,6 +683,12 @@ public actor ConversationStore {
             conv.activeCall = call
             changed = true
         }
+        // #9026 — le rang SERVI, monotone : un rang plus ancien arrivé en retard
+        // ne redescend jamais la ligne (l'activité serveur l'est aussi).
+        if let rank = event.listRankAt, rank > (conv.listRankAt ?? .distantPast) {
+            conv.listRankAt = rank
+            changed = true
+        }
         // Un DM ne porte JAMAIS le titre de la base : `APIConversation
         // .toConversation` l'écarte explicitement et pose à la place le nom du
         // participant d'en face. Le payload socket, lui, porte le titre BRUT —
@@ -879,7 +885,7 @@ public actor ConversationStore {
     }
 
     private func publishList() {
-        let snapshot = Array(conversations.values).sorted { $0.lastMessageAt > $1.lastMessageAt }
+        let snapshot = Array(conversations.values).sorted { $0.listActivityAt > $1.listActivityAt }
         subjects.list.send(snapshot)
     }
 

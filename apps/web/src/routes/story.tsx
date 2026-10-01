@@ -42,6 +42,7 @@ import {
   type FrozenStoryActionRail,
 } from '@/lib/stories/action-rail';
 import { STORY_DEFAULT_REACTION, hasReactedToStory } from '@/lib/stories/reaction';
+import { storyRailParticipated, usePublicationParticipation } from '@/lib/view/publication-participation';
 import { resolveStoryCaption } from '@/lib/stories/caption';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { translate } from '@/lib/i18n-catalog';
@@ -540,6 +541,11 @@ export default function StoryScreen() {
   /* « ENVOYER » (#8884) : la feuille d'envoi commune, ouverte avec la story
      regardée ; la lecture attend dessous (`useStoryPauseWhile` plus bas). */
   const storySend = useStorySend(currentStory);
+  /* L'ANNEAU DU CŒUR SUR CHAQUE GESTE DÉJÀ FAIT (directive porteur
+     2026-10-01) : la réaction vient de la story servie (`currentUserReactions`,
+     tout émoji), le commentaire et l'envoi de ce que le lecteur a fait pendant
+     la session — la passerelle ne les sert pas sur une story. */
+  const participationMarks = usePublicationParticipation(currentStory?.id);
   const profilePeekOpen = useProfilePeekOpen();
   /* LES GESTES COMMUNS DES PLEIN ÉCRANS (#8879, `viewer-chrome-gestures.ts`) :
      glisser vers le BAS ferme — le geste de sortie d'iOS
@@ -915,6 +921,10 @@ export default function StoryScreen() {
                     sound: storySoundMuted,
                     react: hasReactedToStory(currentStory, STORY_DEFAULT_REACTION),
                   }}
+                  participated={storyRailParticipated({
+                    marks: participationMarks,
+                    reacted: (currentStory.currentUserReactions?.length ?? 0) > 0,
+                  })}
                   saving={ownerRail.saving}
                   onCancelSave={ownerRail.cancelSave}
                   /* LE RAIL SE RETIRE DEVANT LA FEUILLE — mesuré à la capture :

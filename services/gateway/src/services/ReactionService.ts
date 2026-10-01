@@ -24,6 +24,7 @@ import { assertValidObjectId } from '../utils/object-id.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { EngagementService, type EngagementActivityOptions } from './engagement/EngagementService.js';
+import { recordConversationActivity } from './conversations/conversationActivity.js';
 
 const logger = enhancedLogger.child({ module: 'ReactionService' });
 
@@ -217,6 +218,10 @@ export class ReactionService {
         targetSenderId: message.senderId ?? null,
       }),
     });
+    // #9026 — une réaction posée est une ACTIVITÉ : la conversation remonte en
+    // tête pour TOUS ses participants, au rechargement comme en direct (le
+    // rang part avec `lastReaction`, `emitConversationActivityUpdate`).
+    await recordConversationActivity({ prisma: this.prisma, conversationId: message.conversationId, at: reaction.createdAt });
 
     this.creditReactor(
       message.conversation.participants.find((p) => p.id === participantId)?.userId ?? null,
@@ -248,9 +253,9 @@ export class ReactionService {
   /**
    * La dernière réaction de la conversation (#7545) — la ligne de liste la lit
    * sans balayer les réactions. Son heure et la clé de l'auteur réagi voyagent
-   * avec elle (#7592) : c'est sur elles que `GET /conversations` remonte la
-   * ligne de CET auteur (`utils/conversation-list-rank.ts`), et l'écriture fait
-   * avancer `updatedAt`, donc la page delta de l'auteur la ramène.
+   * avec elle (#7592). Le RANG de la ligne ne les lit plus : il vit sur
+   * `lastActivityAt` (#9026). L'écriture fait avancer `updatedAt`, donc la page
+   * delta de chaque participant la ramène.
    * Best-effort : la réaction est déjà écrite, et une ligne de liste en retard
    * ne vaut pas de la faire échouer.
    */

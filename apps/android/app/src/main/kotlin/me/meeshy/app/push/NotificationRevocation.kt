@@ -53,6 +53,21 @@ data class NotificationRevocation(
         }
         return (byNotification + byConversation).distinct()
     }
+
+    /**
+     * Les TAGS des bannières que FCM a rendues lui-même (app en arrière-plan ou
+     * tuée) : `android.notification.tag = threadId || notificationId`, id 0.
+     * [notificationManagerIds] ne les atteint pas — `cancel(int)` vise le tag
+     * nul. Même règle de conversation que les entiers.
+     */
+    fun systemRenderedTags(): List<String> {
+        val byConversation = notificationIds.indices.mapNotNull { index ->
+            conversationIds.getOrNull(index)?.trim()?.takeIf {
+                it.isNotEmpty() && ConversationIndexedNotifications.replacesBannerOfItsConversation(types.getOrNull(index))
+            }
+        }
+        return (notificationIds + byConversation).distinct()
+    }
 }
 
 object NotificationRevocationParser {

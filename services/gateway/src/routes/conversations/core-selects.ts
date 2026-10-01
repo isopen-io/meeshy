@@ -284,9 +284,8 @@ export const conversationListQuerySelect = (viewerId: string) => ({
   // lecture batchée par page (`loadConversationListActivity`).
   lastReactionId: true,
   activeCallId: true,
-  // #7592 — le rang du lecteur (`listRankAt`, `utils/list-rank.ts`).
-  lastReactionAt: true,
-  lastReactionTargetKey: true,
+  // #9026 — le rang de la ligne (`listRankAt`, `utils/list-rank.ts`).
+  lastActivityAt: true,
   participants: {
     take: 5,
     where: {

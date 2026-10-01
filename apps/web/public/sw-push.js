@@ -140,6 +140,16 @@ const REPRODUCED_PUSH_FIELD = 'reproduced';
 const REPRODUCED_PUSH_VALUE = 'true';
 
 /**
+ * LE CHAMP PAR LEQUEL UNE RÉACTION REMPLACE LA PRÉCÉDENTE (#9028) — JUMEAU de
+ * `REPLACES_ACTOR_SUBJECT_FIELD` / `REPLACES_ACTOR_SUBJECT_VALUE`, même
+ * fichier partagé, même garde par les constantes des témoins.
+ * `ACTOR_SUBJECT_KEY` est la clé, posée sur la bannière, qui la retrouve.
+ */
+const REPLACES_ACTOR_SUBJECT_FIELD = 'replacesActorSubject';
+const REPLACES_ACTOR_SUBJECT_VALUE = 'true';
+const ACTOR_SUBJECT_KEY = 'acteurSujet';
+
+/**
  * L'ACCUSÉ DE REMISE (#7368, W4) — JUMEAU web de
  * `NSEDataSync.postDeliveryReceipt` (`apps/ios/MeeshyNotificationExtension/NSEDataSync.swift:453-466`),
  * appelé sans condition par `NotificationService.didReceive` (`NotificationService.swift:65`).
@@ -534,6 +544,8 @@ function montrer(banniere, notification, data) {
   const offre = rappel(data);
   const contenu = offreContenu(data);
   const actions = offre === null ? contenu.actions : [offre.action];
+  const cle = acteurSujet(data);
+  const tap = { ...donneesDuTap(data), ...(cle === '' ? {} : { [ACTOR_SUBJECT_KEY]: cle }) };
   return self.registration.showNotification(banniere.titre, {
     body: banniere.corps,
     ...livraison(notification, texte(data.notificationId)),
@@ -541,8 +553,45 @@ function montrer(banniere, notification, data) {
     badge: BANNER_BADGE,
     ...(contenu.image === '' ? {} : { image: contenu.image }),
     ...(actions.length === 0 ? {} : { actions: actions }),
-    data: offre === null ? { ...donneesDuTap(data), ...contenu.data } : { ...donneesDuTap(data), callBack: offre.callBack },
+    data: offre === null ? { ...tap, ...contenu.data } : { ...tap, callBack: offre.callBack },
   });
+}
+
+/**
+ * UNE RÉACTION CHANGÉE NE LAISSE QU'UNE BANNIÈRE (#9028).
+ *
+ * ❤️ → 😂 retire une notification et en crée une AUTRE : rien que le tag ni
+ * l'identifiant ne relient. La passerelle déclare le remplacement
+ * (`REPLACES_ACTOR_SUBJECT_FIELD`) ; la bannière remplacée est celle du même
+ * type, du même acteur et du même sujet — le commentaire d'abord, le post qui
+ * le porte seulement à défaut. Le web ne reçoit pas la révocation : sans
+ * cette fermeture, la réaction d'avant restait affichée à côté.
+ */
+function acteurSujet(data) {
+  if (texte(data[REPLACES_ACTOR_SUBJECT_FIELD]) !== REPLACES_ACTOR_SUBJECT_VALUE) return '';
+  const type = texte(data.type);
+  const acteur = texte(data.senderId);
+  const sujet = texte(data.commentId) || texte(data.messageId) || texte(data.postId);
+  return type === '' || acteur === '' || sujet === '' ? '' : [type, acteur, sujet].join('|');
+}
+
+/**
+ * Ferme les bannières que ce push remplace — jamais la sienne : la même
+ * réaction livrée deux fois relève du dédoublonnage (D-11 point 4).
+ */
+async function fermerRemplacees(data) {
+  const cle = acteurSujet(data);
+  if (cle === '') return;
+  const notificationId = texte(data.notificationId);
+  try {
+    const affichees = await self.registration.getNotifications();
+    affichees
+      .filter((affichee) => affichee && texte(objet(affichee.data)[ACTOR_SUBJECT_KEY]) === cle)
+      .filter((affichee) => notificationId === '' || texte(objet(affichee.data).notificationId) !== notificationId)
+      .forEach((affichee) => affichee.close());
+  } catch {
+    /* Barre illisible sous cette portée : la bannière d'avant reste, rien ne casse. */
+  }
 }
 
 /**
@@ -550,9 +599,10 @@ function montrer(banniere, notification, data) {
  *
  * Éditer un message, un post ou un commentaire réécrit sa notification sous
  * la MÊME identité, et la passerelle repousse la version d'après en la
- * déclarant (`REPRODUCED_PUSH_FIELD`). Sur iOS et Android, un push de
- * révocation retire d'abord la bannière d'avant ; le web ne le reçoit pas
- * (#7308), et le dédoublonnage de D-11 point 4 écartait donc la correction.
+ * déclarant (`REPRODUCED_PUSH_FIELD`). Sur iOS, ce même push nomme la
+ * bannière d'avant (`replacesNotificationId`) et l'extension la retire ; sur
+ * Android, le tag la remplace. Le web, lui, la dédoublonnait (D-11 point 4) et
+ * écartait donc la correction.
  *
  * - La bannière de CETTE notification est encore affichée : elle est
  *   remplacée EN PLACE, sous SON tag — pas sous celui de la charge. Si le
@@ -569,7 +619,7 @@ function montrer(banniere, notification, data) {
  *   visible n'est plus la sienne.
  *
  * Le remplacement s'annonce (`renotify`), muet si le son est coupé : iOS fait
- * sonner le push nominal qui suit la révocation, comme tout contenu neuf.
+ * sonner le push de remplacement, comme tout contenu neuf.
  */
 async function corriger(banniere, notification, data) {
   const affichee = await banniereAffichee(texte(data.notificationId));
@@ -603,6 +653,10 @@ async function afficher(payload) {
        catalogue ne porte. */
     if (titre === '' && corps === '') return;
     const banniere = titre === '' ? { titre: corps, corps: '' } : { titre: titre, corps: corps };
+
+    /* Avant D-11 : la bannière d'avant dit une réaction qui n'existe plus,
+       que quelqu'un regarde l'application ou non. */
+    await fermerRemplacees(data);
 
     /* D-11 point 1 — quelqu'un REGARDE l'application : le socket porte la
        bannière in-app, une bannière système la doublerait. */

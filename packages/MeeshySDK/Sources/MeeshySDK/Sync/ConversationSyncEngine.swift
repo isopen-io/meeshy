@@ -480,7 +480,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         } else {
             reconciled = items
         }
-        let sorted = reconciled.sorted { $0.lastMessageAt > $1.lastMessageAt }
+        let sorted = reconciled.sorted { $0.listActivityAt > $1.listActivityAt }
         do {
             try await cache.conversations.save(sorted, for: cacheKey)
         } catch {

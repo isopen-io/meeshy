@@ -59,3 +59,24 @@ export function engagementPillModel(
       : points;
   return { streakDays: shown.streakDays, points: formatConversationPoints(shown), label };
 }
+
+/**
+ * LA SÉRIE À CÔTÉ DE L'HEURE (directive porteur 2026-10-01) — « 🔥4 · 120 » :
+ * la série en jours, puis le total des points de la conversation. Elle ne se
+ * montre que tant que la série COURT, relue au jour du lecteur.
+ */
+export type StreakMarkModel = {
+  readonly streakDays: number;
+  readonly totalPoints: number;
+  readonly label: string;
+};
+
+export function streakMarkModel(
+  snapshot: ConversationEngagementSnapshot | undefined,
+  today: string,
+  language: InterfaceLanguage,
+): StreakMarkModel | null {
+  const pill = engagementPillModel(snapshot, today, language);
+  if (snapshot === undefined || pill === null || pill.streakDays <= 0) return null;
+  return { streakDays: pill.streakDays, totalPoints: snapshot.totalPoints, label: pill.label };
+}

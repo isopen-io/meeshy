@@ -19,9 +19,37 @@ final class StoryInteractionServiceTests: XCTestCase {
     }
 
     private func makeSUT() -> (sut: StoryInteractionService, api: MockAPIClientForApp) {
-        let api = MockAPIClientForApp()
-        let sut = StoryInteractionService(api: api)
+        let (sut, api, _) = makeSUTWithParticipation()
         return (sut, api)
+    }
+
+    private func makeSUTWithParticipation() -> (sut: StoryInteractionService, api: MockAPIClientForApp, participation: SpyParticipationRecorder) {
+        let api = MockAPIClientForApp()
+        let participation = SpyParticipationRecorder()
+        let sut = StoryInteractionService(api: api, participation: participation)
+        return (sut, api, participation)
+    }
+
+    /// Le rail de la story pose l'anneau du cœur sur « Commentaires » dès que le
+    /// lecteur a commenté (directive porteur 2026-10-01) : la passerelle ne le sert
+    /// pas, c'est le POST qui le note — au départ, comme la ligne optimiste.
+    func test_postComment_notesTheCommentForTheStoryRail() async throws {
+        let (sut, api, participation) = makeSUTWithParticipation()
+        api.stub("/posts/\(Self.storyId)/comments", result: makeEmptyResponse())
+
+        try await sut.postComment(storyId: Self.storyId, content: "great story", originalLanguage: "fr")
+
+        XCTAssertEqual(participation.notes.map { $0.storyId }, [Self.storyId])
+        XCTAssertEqual(participation.notes.map { $0.mark }, [.commented])
+    }
+
+    func test_requestTranslation_notesNothing() async {
+        let (sut, api, participation) = makeSUTWithParticipation()
+        api.stub("/posts/\(Self.storyId)/translate", result: makeEmptyResponse())
+
+        await sut.requestTranslation(storyId: Self.storyId, targetLanguage: "es")
+
+        XCTAssertTrue(participation.notes.isEmpty)
     }
 
     // MARK: - requestTranslation
@@ -223,5 +251,16 @@ final class StoryInteractionServiceTests: XCTestCase {
 
         XCTAssertEqual(result, [],
                        "empty array means 'loaded, nobody has viewed yet'")
+    }
+}
+
+@MainActor
+private final class SpyParticipationRecorder: StoryViewerParticipationRecording {
+    nonisolated deinit {}
+
+    private(set) var notes: [(mark: StoryViewerParticipationMark, storyId: String)] = []
+
+    func note(_ mark: StoryViewerParticipationMark, storyId: String) {
+        notes.append((mark, storyId))
     }
 }

@@ -695,14 +695,28 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         // relais, pas de bannière native. Socket down → bannière système
         // UNIQUEMENT si les préférences l'autorisent (master push, DND, toggle
         // par catégorie), son/badge gatés par « Sons »/« Badges ».
-        completionHandler(NotificationPresentationResolver.options(
+        let options = NotificationPresentationResolver.options(
             socketConnected: socketConnected,
             prefs: UserPreferencesManager.shared.notification,
             rawType: userInfo["type"] as? String,
             conversationType: userInfo["conversationType"] as? String,
             conversationId: conversationId,
             activeConversationId: MessageSocketManager.shared.activeConversationId
-        ))
+        )
+
+        // Un push de REMPLACEMENT (édition, réaction changée) annule la bannière d'avant AVANT
+        // que la version d'après soit présentée — même règle que la NSE, pour
+        // le cas où elle n'a pas tourné (expirée, push non mutable).
+        guard let replacement = NotificationReplacement(userInfo: userInfo) else {
+            completionHandler(options)
+            return
+        }
+        Task { @MainActor in
+            await NotificationActionHandler.removeDeliveredNotificationsAwaiting(
+                matching: { replacement.covers($0) }
+            )
+            completionHandler(options)
+        }
     }
 
     /// Called when the user interacts with a notification (tap, action button, etc.).
