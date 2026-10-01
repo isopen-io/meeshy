@@ -17,7 +17,8 @@ public enum EmojiDetector {
         /// ×4 jusqu'à deux emojis, ×3 à trois, ×2 à quatre (#9054).
         public var fontSize: CGFloat? {
             switch self {
-            case .single, .double: return Self.inlineSize * 4
+            case .single: return Self.inlineSize * 4
+            case .double: return Self.inlineSize * 4
             case .triple: return Self.inlineSize * 3
             case .quadruple: return Self.inlineSize * 2
             case .notEmojiOnly: return nil
