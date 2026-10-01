@@ -61,6 +61,12 @@ describe('StickerArtwork — la priorité de RenderSource.resolve', () => {
     expect(html).not.toContain('data-sticker-emoji');
   });
 
+  test('un gabarit MEE (#9034) rend l’image jointe tant que son catalogue n’est pas chargé', () => {
+    const html = renderToStaticMarkup(<StickerArtwork sticker={{ templateId: 'mee.mee-coucou', emoji: '👋' }} picture={picture('a4')} side={160} />);
+    expect(html).toContain('<img');
+    expect(html).not.toContain('data-sticker-emoji');
+  });
+
   test('aucune pièce jointe ⇒ le glyphe, l’emoji du sticker s’il en a un, sinon le repli générique', () => {
     const withEmoji = renderToStaticMarkup(<StickerArtwork sticker={{ emoji: '🎉' }} picture={undefined} side={160} />);
     expect(withEmoji).toContain('🎉');

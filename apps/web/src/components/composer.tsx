@@ -629,9 +629,10 @@ export const Composer = memo(function Composer({
    * ENVOYER UN STICKER DE LA BIBLIOTHÈQUE (#7938) — un message À LUI SEUL,
    * comme sur iOS : le texte en cours, les pièces en attente et le lieu
    * restent dans le composeur. L'image relue par la feuille part en pièce
-   * jointe, le descripteur `{ stickerId }` dans le champ `sticker` du corps.
+   * jointe, le descripteur (`{ stickerId }`, ou `{ templateId: 'mee.…' }`
+   * pour Mee et Meo, #9034) dans le champ `sticker` du corps.
    */
-  const sendSticker = ({ stickerId, file }: { readonly stickerId: string; readonly file: File }) => {
+  const sendSticker = ({ file, sticker }: { readonly file: File; readonly sticker: MessageSticker }) => {
     setStickerSheetOpen(false);
     onSend({
       text: '',
@@ -639,7 +640,7 @@ export const Composer = memo(function Composer({
       language: compose.language,
       protection: effective,
       place: null,
-      sticker: { stickerId },
+      sticker,
     });
   };
 

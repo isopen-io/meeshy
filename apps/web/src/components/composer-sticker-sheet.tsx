@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
-import type { ClipboardEvent as ReactClipboardEvent, DragEvent as ReactDragEvent } from 'react';
+import { Suspense, lazy, useRef, useState } from 'react';
+import type { ClipboardEvent as ReactClipboardEvent, DragEvent as ReactDragEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
 
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import type { StickerDefinition, StickerOrigin } from '@meeshy/shared/types/sticker-definition';
 
 import { GlyphSvg } from './glyph';
@@ -43,6 +44,15 @@ import { imageFilesOf, prepareStickerSource, readClipboardImages } from '@/lib/s
  * au geste, le réseau confirme) et rend les deux à l'hôte, qui l'envoie. Une
  * image qui ne se relit pas est DITE ici, et rien ne part.
  */
+const MeeStickerPanel = lazy(() => import('./composer-mee-stickers').then((m) => ({ default: m.MeeStickerPanel })));
+
+/** Les onglets de la feuille : la bibliothèque, puis Mee, Meo et les Instants (#9034). */
+const STICKER_TABS = ['mine', 'mee', 'meo', 'instants'] as const;
+type StickerTab = (typeof STICKER_TABS)[number];
+
+/** Ce que la feuille rend à l'hôte : l'image à joindre et le descripteur du champ `sticker`. */
+export type PickedSticker = { readonly file: File; readonly sticker: MessageSticker };
+
 const ACTION = 'inline-flex min-h-11 items-center gap-1.5 rounded-full px-3.5 text-body disabled:opacity-50';
 const ACTION_STYLE = {
   backgroundColor: 'color-mix(in srgb, var(--ios-tile-sticker) 14%, transparent)',
@@ -53,8 +63,8 @@ export function ComposerStickerSheet({
   onPick,
   onClose,
 }: {
-  /** Le sticker CHOISI et son image relue — l'hôte l'envoie tel quel. */
-  readonly onPick: (picked: { readonly stickerId: string; readonly file: File }) => void;
+  /** Le sticker CHOISI et son image — l'hôte l'envoie tel quel. */
+  readonly onPick: (picked: PickedSticker) => void;
   readonly onClose: () => void;
 }) {
   const language = currentInterfaceLanguage();
@@ -63,6 +73,7 @@ export function ComposerStickerSheet({
   const [busy, setBusy] = useState(false);
   const [managing, setManaging] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [tab, setTab] = useState<StickerTab>('mine');
 
   const library = useQuery({
     queryKey: STICKERS_QUERY_KEY,
@@ -130,7 +141,7 @@ export function ComposerStickerSheet({
     }
     writeLibrary((list) => withStickerFirst(list, sticker));
     void markStickerUsed(apiDeps, sticker.id);
-    onPick({ stickerId: sticker.id, file });
+    onPick({ file, sticker: { stickerId: sticker.id } });
   };
 
   const remove = (sticker: StickerDefinition) => {
@@ -145,91 +156,163 @@ export function ComposerStickerSheet({
 
   return (
     <Sheet title={translate(language, 'composer.sticker.title')} bodyAs="div" onClose={onClose}>
-      <div
-        data-sticker-library
-        tabIndex={-1}
-        onPaste={onPaste}
-        onDragOver={(event) => event.preventDefault()}
-        onDrop={onDrop}
-        className="flex flex-col gap-3 px-4 pb-4"
-      >
-        <div className="flex flex-wrap gap-2">
-          <button type="button" data-sticker-create className={ACTION} style={ACTION_STYLE} disabled={busy} onClick={() => fileInput.current?.click()}>
-            <GlyphSvg glyph={COMPOSER_GLYPHS.imageSquare} size={18} />
-            <span>{translate(language, 'composer.sticker.fromImage')}</span>
-          </button>
-          <button type="button" data-sticker-paste className={ACTION} style={ACTION_STYLE} disabled={busy} onClick={() => void pasteFromClipboard()}>
-            <GlyphSvg glyph={COMPOSER_GLYPHS.clipboardText} size={18} />
-            <span>{translate(language, 'composer.sticker.paste')}</span>
-          </button>
-          {stickers.length > 0 ? (
-            <button type="button" data-sticker-manage className={ACTION} style={ACTION_STYLE} aria-pressed={managing} onClick={() => setManaging((on) => !on)}>
-              <span>{translate(language, managing ? 'composer.sticker.done' : 'composer.sticker.manage')}</span>
-            </button>
-          ) : null}
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/*"
-            multiple
-            hidden
-            aria-label={translate(language, 'composer.sticker.fromImage')}
-            onChange={(event) => {
-              const files = Array.from(event.currentTarget.files ?? []);
-              event.currentTarget.value = '';
-              void create(files, 'upload');
-            }}
-          />
+      <StickerTabBar tab={tab} onSelect={setTab} language={language} />
+      {tab !== 'mine' ? (
+        <div className="px-4 pb-4">
+          <Suspense fallback={<p className="py-6 text-center text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>…</p>}>
+            <MeeStickerPanel tab={tab} language={language} onPick={onPick} />
+          </Suspense>
         </div>
+      ) : (
+        <div
+          data-sticker-library
+          tabIndex={-1}
+          onPaste={onPaste}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={onDrop}
+          className="flex flex-col gap-3 px-4 pb-4"
+        >
+          <div className="flex flex-wrap gap-2">
+            <button type="button" data-sticker-create className={ACTION} style={ACTION_STYLE} disabled={busy} onClick={() => fileInput.current?.click()}>
+              <GlyphSvg glyph={COMPOSER_GLYPHS.imageSquare} size={18} />
+              <span>{translate(language, 'composer.sticker.fromImage')}</span>
+            </button>
+            <button type="button" data-sticker-paste className={ACTION} style={ACTION_STYLE} disabled={busy} onClick={() => void pasteFromClipboard()}>
+              <GlyphSvg glyph={COMPOSER_GLYPHS.clipboardText} size={18} />
+              <span>{translate(language, 'composer.sticker.paste')}</span>
+            </button>
+            {stickers.length > 0 ? (
+              <button type="button" data-sticker-manage className={ACTION} style={ACTION_STYLE} aria-pressed={managing} onClick={() => setManaging((on) => !on)}>
+                <span>{translate(language, managing ? 'composer.sticker.done' : 'composer.sticker.manage')}</span>
+              </button>
+            ) : null}
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/*"
+              multiple
+              hidden
+              aria-label={translate(language, 'composer.sticker.fromImage')}
+              onChange={(event) => {
+                const files = Array.from(event.currentTarget.files ?? []);
+                event.currentTarget.value = '';
+                void create(files, 'upload');
+              }}
+            />
+          </div>
 
-        <p className="text-caption" style={{ color: notice === null ? 'var(--color-ios-ink-3)' : 'var(--ios-error)' }} role="status" aria-live="polite">
-          {busy ? translate(language, 'composer.sticker.creating') : (notice ?? translate(language, 'composer.sticker.pasteHint'))}
-        </p>
-
-        {library.isSuccess && stickers.length === 0 ? (
-          <p data-sticker-empty className="py-6 text-center text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-            {translate(language, 'composer.sticker.empty')}
+          <p className="text-caption" style={{ color: notice === null ? 'var(--color-ios-ink-3)' : 'var(--ios-error)' }} role="status" aria-live="polite">
+            {busy ? translate(language, 'composer.sticker.creating') : (notice ?? translate(language, 'composer.sticker.pasteHint'))}
           </p>
-        ) : (
-          <ul className="grid grid-cols-4 gap-2" aria-busy={library.isPending}>
-            {stickers.map((sticker) => (
-              <li key={sticker.id} className="relative">
-                <button
-                  type="button"
-                  data-sticker={sticker.id}
-                  aria-label={
-                    managing
-                      ? translate(language, 'composer.sticker.remove')
-                      : (sticker.name ?? translate(language, 'composer.sticker.item'))
-                  }
-                  className="block aspect-square w-full rounded-xl p-1"
-                  style={{ backgroundColor: 'var(--color-ios-card)' }}
-                  onClick={() => (managing ? remove(sticker) : void pick(sticker))}
-                >
-                  <img
-                    src={attachmentSrc(sticker.fileUrl)}
-                    alt=""
-                    width={sticker.width}
-                    height={sticker.height}
-                    loading="lazy"
-                    decoding="async"
-                    className="h-full w-full object-contain"
-                  />
-                </button>
-                {managing ? (
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute right-0 top-0 grid h-6 w-6 place-items-center rounded-full"
-                    style={{ backgroundColor: 'var(--color-error)', color: '#fff' }}
+
+          {library.isSuccess && stickers.length === 0 ? (
+            <p data-sticker-empty className="py-6 text-center text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
+              {translate(language, 'composer.sticker.empty')}
+            </p>
+          ) : (
+            <ul className="grid grid-cols-4 gap-2" aria-busy={library.isPending}>
+              {stickers.map((sticker) => (
+                <li key={sticker.id} className="relative">
+                  <button
+                    type="button"
+                    data-sticker={sticker.id}
+                    aria-label={
+                      managing
+                        ? translate(language, 'composer.sticker.remove')
+                        : (sticker.name ?? translate(language, 'composer.sticker.item'))
+                    }
+                    className="block aspect-square w-full rounded-xl p-1"
+                    style={{ backgroundColor: 'var(--color-ios-card)' }}
+                    onClick={() => (managing ? remove(sticker) : void pick(sticker))}
                   >
-                    <GlyphSvg glyph={COMPOSER_GLYPHS.x} size={14} />
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+                    <img
+                      src={attachmentSrc(sticker.fileUrl)}
+                      alt=""
+                      width={sticker.width}
+                      height={sticker.height}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-contain"
+                    />
+                  </button>
+                  {managing ? (
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute right-0 top-0 grid h-6 w-6 place-items-center rounded-full"
+                      style={{ backgroundColor: 'var(--color-error)', color: '#fff' }}
+                    >
+                      <GlyphSvg glyph={COMPOSER_GLYPHS.x} size={14} />
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </Sheet>
+  );
+}
+
+const TAB_KEYS = {
+  mine: 'composer.sticker.tab.mine',
+  mee: 'composer.sticker.mee.solo',
+  meo: 'composer.sticker.meo.solo',
+  instants: 'composer.sticker.tab.instants',
+} as const;
+
+const TAB_LABELS: Readonly<Partial<Record<StickerTab, string>>> = { mee: 'Mee', meo: 'Meo' };
+
+/** Les onglets — une liste d'onglets au clavier (flèches, Début, Fin), un seul arrêt de tabulation, cibles de 44 px. */
+function StickerTabBar({
+  tab,
+  onSelect,
+  language,
+}: {
+  readonly tab: StickerTab;
+  readonly onSelect: (tab: StickerTab) => void;
+  readonly language: ReturnType<typeof currentInterfaceLanguage>;
+}) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    const current = STICKER_TABS.indexOf(tab);
+    const rtl = document.documentElement.dir === 'rtl';
+    const step = { ArrowRight: rtl ? -1 : 1, ArrowLeft: rtl ? 1 : -1, Home: -current, End: STICKER_TABS.length - 1 - current }[event.key];
+    if (step === undefined) return;
+    event.preventDefault();
+    const next = (current + step + STICKER_TABS.length) % STICKER_TABS.length;
+    const target = STICKER_TABS[next];
+    if (target === undefined) return;
+    onSelect(target);
+    refs.current[next]?.focus();
+  };
+  return (
+    <div role="tablist" aria-label={translate(language, 'composer.sticker.tabs')} onKeyDown={onKeyDown} className="flex shrink-0 gap-2 overflow-x-auto px-4 pb-3">
+      {STICKER_TABS.map((candidate, index) => {
+        const selected = candidate === tab;
+        return (
+          <button
+            key={candidate}
+            ref={(node) => {
+              refs.current[index] = node;
+            }}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            tabIndex={selected ? 0 : -1}
+            data-sticker-tab={candidate}
+            onClick={() => onSelect(candidate)}
+            className="shrink-0 rounded-chip px-4 text-body font-semibold"
+            style={{
+              minHeight: 44,
+              color: selected ? 'var(--color-ios-on-brand)' : 'var(--color-ios-ink)',
+              backgroundColor: selected ? 'var(--accent)' : 'var(--color-ios-card)',
+            }}
+          >
+            {TAB_LABELS[candidate] ?? translate(language, TAB_KEYS[candidate])}
+          </button>
+        );
+      })}
+    </div>
   );
 }

@@ -110,6 +110,15 @@ describe('le contrat de message', () => {
     expect(meeSlotsFor(sticker, { place: ' Biarritz ', weather: 'ignoré', message: '' })).toEqual({ place: 'Biarritz' });
   });
 
+  test('un sticker animé porte sa chorégraphie, sous sa propre classe et sous la préférence de mouvement réduit', () => {
+    const sticker = findMeeSticker('duo-meo-bisou') as MeeSticker;
+    const svg = renderMeeSticker(sticker, { uid: 'a1' });
+    expect(svg).toContain('@keyframes mee-faint');
+    expect(svg).toMatch(/@media \(prefers-reduced-motion:no-preference\)\{.*\.mee-s-a1 \.b2\{animation:mee-faint/);
+    expect(renderMeeSticker(sticker, { uid: 'a1', animated: false })).not.toContain('<style>');
+    expect(renderMeeSticker(findMeeSticker('mee-cafe') as MeeSticker)).not.toContain('<style>');
+  });
+
   test('chaque primitive jouée existe', () => {
     animated(MEE_STICKERS).forEach((s) => Object.values(s.motion?.roles ?? {}).forEach((beat) => expect(beat !== undefined && beat[0] in PRIMS).toBe(true)));
   });

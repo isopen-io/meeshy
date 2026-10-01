@@ -1,4 +1,4 @@
-import { act, ambient, solo } from './build';
+import { act, solo } from './build';
 import { hearts, many, notes, shadow, sparkles, sunAt, tears, zs } from './kit';
 import { P, at, confettiBurst, sign } from './props';
 import type { MeeSticker } from './types';

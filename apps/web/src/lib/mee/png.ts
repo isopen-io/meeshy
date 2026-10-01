@@ -29,7 +29,7 @@ export const rasterizeSvg: RasterizeSvg = (svg, size) =>
   });
 
 export async function meeStickerFile(sticker: MeeSticker, slots: MeeSlots, rasterize: RasterizeSvg = rasterizeSvg): Promise<File> {
-  const svg = renderMeeSticker(sticker, { uid: `png${sticker.id}`, slots, animated: false });
+  const svg = renderMeeSticker(sticker, { uid: `png${sticker.id}`, slots, animated: false, size: 512 });
   const blob = await rasterize(svg, 512);
   return new File([blob], `${sticker.id}.png`, { type: 'image/png' });
 }

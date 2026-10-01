@@ -1,7 +1,7 @@
 import type { BirdPose, MeeCharacter } from './art';
 import { act, ambient, instant } from './build';
 import type { Entry } from './build';
-import { band, hearts, label, many, notes, rain, snowfall, sparkles, sunAt, tears, zs } from './kit';
+import { band, hearts, label, many, notes, rain, snowfall, sparkles, sunAt, zs } from './kit';
 import { P, at, confettiBurst, sign, speech } from './props';
 import type { MeeSlots, MeeSticker } from './types';
 
