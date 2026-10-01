@@ -7,8 +7,8 @@
  * de `data` le DÉCLARE : la charge ne porte pas un événement neuf, elle
  * corrige une notification que le destinataire a déjà reçue.
  *
- * iOS et Android n'ont pas à le lire : un push de révocation retire d'abord la
- * bannière d'avant, puis le push nominal affiche celle d'après. Le web ne
+ * iOS n'a pas à le lire : le même push porte `REPLACES_NOTIFICATION_FIELD`
+ * (ci-dessous), que son extension honore avant d'afficher. Le web ne
  * reçoit pas la révocation (`NOTIFICATION_REVOCATION_PUSH_PLATFORMS`) ; son
  * service worker (`apps/web/public/sw-push.js`, qui en porte le JUMEAU
  * faute de pouvoir importer ce module) lit ce champ pour REMPLACER la bannière
@@ -20,3 +20,17 @@
  */
 export const REPRODUCED_PUSH_FIELD = 'reproduced';
 export const REPRODUCED_PUSH_VALUE = 'true';
+
+/**
+ * L'ANNULATION VOYAGE AVEC LE REMPLACEMENT. Le push d'une notification
+ * réécrite nomme la bannière qu'il remplace (l'identité de la ligne, inchangée
+ * par la réécriture) ; l'extension de notification iOS la retire AVANT
+ * d'afficher la nouvelle version.
+ *
+ * Une révocation silencieuse séparée ne le garantit pas : APNs n'ordonne pas
+ * deux pushes, iOS bride le silencieux et ne le livre jamais à une app tuée —
+ * livré APRÈS le remplacement, il effaçait la version d'après ; jamais livré,
+ * il laissait la version d'avant à côté d'elle. Porté par le remplacement
+ * lui-même, il ne peut ni arriver après lui, ni se perdre sans lui.
+ */
+export const REPLACES_NOTIFICATION_FIELD = 'replacesNotificationId';
