@@ -34,7 +34,9 @@ public final class ConversationAudioCoordinator: ObservableObject {
         case epuisee
     }
 
-    public private(set) var derniereFin: FinDeLecture?
+    /// PUBLIÉE : une fermeture pendant la grâce d'une file épuisée ne change pas `activeContext`
+    /// (déjà `nil`) — c'est ce passage à `.fermee` que le mini-lecteur observe pour partir.
+    @Published public private(set) var derniereFin: FinDeLecture?
 
     // MARK: - Published State
 

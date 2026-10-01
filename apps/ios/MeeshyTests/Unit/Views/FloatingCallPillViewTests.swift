@@ -129,31 +129,47 @@ final class FloatingCallPillViewTests: XCTestCase {
         )
     }
 
-    func test_pill_transition_usesConditionalOpacityWhenReduceMotion() throws {
-        let source = try pillSource()
-        XCTAssertTrue(
-            source.contains("reduceMotion ? .opacity"),
-            "FloatingCallPillView transition must collapse to .opacity when reduceMotion " +
-            "is true — .move animations can trigger vestibular discomfort."
-        )
+    private func layerSource() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Views/
+            .deletingLastPathComponent()   // Unit/
+            .deletingLastPathComponent()   // MeeshyTests/
+            .deletingLastPathComponent()   // ios/
+            .appendingPathComponent("Meeshy/Features/Main/Views/RootLayers/CallPresentationLayer.swift")
+        return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_pill_animation_isNilWhenReduceMotion() throws {
+    /// #9048 — la pilule prend le mouvement PARTAGÉ des barres du haut et lui passe la
+    /// préférence ; sous « Réduire les animations », ce mouvement est un fondu sans translation.
+    func test_pill_transition_isTheSharedTopChromeMotion_fadingWhenReduceMotion() throws {
         let source = try pillSource()
         XCTAssertTrue(
-            source.contains("reduceMotion ? nil"),
-            "FloatingCallPillView spring animation must be nil when reduceMotion is true " +
-            "so the pill appears/disappears without a spring bounce."
+            source.contains("TopChromeBarMotion.transition(isLastBar: isLastBar, reduceMotion: reduceMotion, safeAreaTop: topInset)"),
+            "FloatingCallPillView must enter and leave with the shared top-chrome motion, handing it " +
+            "the Reduce Motion preference — .move animations can trigger vestibular discomfort."
+        )
+        XCTAssertEqual(TopChromeBarMotion.exit(isLastBar: true, reduceMotion: true, safeAreaTop: 62), .fade)
+    }
+
+    /// L'arrivée et le départ de la pilule sont animés par `CallPresentationLayer`, indexés sur
+    /// sa visibilité (#9048) : posé dans la branche que la fin d'un appel retire, le ressort
+    /// n'animait rien. Sous « Réduire les animations », il est coupé.
+    func test_pill_appearance_animation_isNilWhenReduceMotion() throws {
+        XCTAssertNil(TopChromeBarMotion.animation(reduceMotion: true))
+        XCTAssertTrue(
+            try layerSource().contains(".animation(TopChromeBarMotion.animation(reduceMotion: reduceMotion), value: pillShowing)"),
+            "The pill must arrive and leave under the shared spring, switched off under Reduce Motion, " +
+            "so it appears/disappears without a spring bounce."
         )
     }
 
     func test_expandToFullScreen_respectsReduceMotion() throws {
         let source = try pillSource()
+        let fn = try XCTUnwrap(source.range(of: "private func expandToFullScreen()"), "expandToFullScreen not found")
         XCTAssertTrue(
-            source.contains("reduceMotion ? nil : .spring(response: 0.5"),
-            "expandToFullScreen() must gate its withAnimation on reduceMotion — " +
-            "unconditional .spring when reduceMotion is enabled triggers a spring " +
-            "bounce that can cause vestibular discomfort."
+            source[fn.lowerBound...].prefix(400).contains("guard !reduceMotion else"),
+            "expandToFullScreen() must skip the expansion morph when reduceMotion is enabled — " +
+            "the morph is a large movement that can cause vestibular discomfort."
         )
     }
 
@@ -691,7 +707,7 @@ final class CallPresentationLayerMountTests: XCTestCase {
 
     func test_pill_precedesContentInCompressionStack() throws {
         let body = try callPresentationLayerBody()
-        guard let pillRange = body.range(of: "FloatingCallPillView(callManager: callManager)"),
+        guard let pillRange = body.range(of: "FloatingCallPillView(callManager: callManager"),
               let contentRange = body.range(of: "content", range: pillRange.upperBound..<body.endIndex) else {
             XCTFail("expected FloatingCallPillView mounted before content in CallPresentationLayer")
             return
