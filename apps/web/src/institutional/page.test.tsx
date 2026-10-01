@@ -10,6 +10,7 @@ import { PAGE_PARTNERS } from './partners';
 import { PAGE_PRIVACY } from './privacy';
 import { PAGE_TERMS } from './terms';
 import { findMeeSticker } from '../lib/mee/catalog';
+import { meeViewFiles } from './mee-views';
 import { InstitutionalPage } from './page';
 
 /**
@@ -52,7 +53,7 @@ describe('InstitutionalPage — la vue de Mee', () => {
   test('la vue est rendue dans la page, animée sans script, légendée', () => {
     const html = render(<InstitutionalPage page={PAGE_CONTACT} version="3.1.0" />);
     expect(html).toContain('data-mee-view="mee-lettre"');
-    expect(html).toContain('@keyframes mee-flyR');
+    expect(html).toContain('src="/mee/mee-lettre.svg"');
     expect(html).toContain('Mee porte votre message');
     expect(html).not.toContain('<script');
   });
@@ -60,7 +61,15 @@ describe('InstitutionalPage — la vue de Mee', () => {
   test('« À propos » présente Mee et Meo, avec leur galerie', () => {
     const html = render(<InstitutionalPage page={PAGE_ABOUT} version="3.1.0" />);
     expect(html).toContain('Mee et Meo, les mascottes de Meeshy');
-    ['mee-coucou', 'meo-serenade', 'duo-meo-bisou', 'instant-bonjour'].forEach((id) => expect(html).toContain(`data-mee-view="${id}"`));
+    ['mee-coucou', 'duo-meo-bisou'].forEach((id) => expect(html).toContain(`data-mee-view="${id}"`));
+  });
+
+  test('chaque vue devient un fichier SVG animé, une fois par sticker', () => {
+    const files = meeViewFiles(pages);
+    expect(files.map((f) => f.path)).toContain('mee/mee-lettre.svg');
+    expect(new Set(files.map((f) => f.path)).size).toBe(files.length);
+    expect(files.find((f) => f.path === 'mee/mee-lettre.svg')?.svg).toContain('@keyframes mee-flyR');
+    expect(() => meeViewFiles([{ ...PAGE_TERMS, mee: { sticker: 'inconnu', caption: 'x' } }])).toThrow();
   });
 
   test('la FAQ répond à « Qui sont Mee et Meo ? »', () => {

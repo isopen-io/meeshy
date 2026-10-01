@@ -45,18 +45,13 @@ const SECTION_KEYS = {
 const sectionKey = (tab: MeeTab, section: MeeSection): InterfaceCatalogKey =>
   SECTION_KEYS[`${tab}.${section}` as keyof typeof SECTION_KEYS] ?? 'composer.sticker.item';
 
-const HINT_KEYS = {
-  mee: 'composer.sticker.mee.hint',
-  meo: 'composer.sticker.meo.hint',
-  instants: 'composer.sticker.instants.hint',
-} as const satisfies Readonly<Record<MeeTab, InterfaceCatalogKey>>;
 
 const FIELDS = [
-  { slot: 'message', label: 'composer.sticker.instants.field.message', placeholder: 'composer.sticker.instants.placeholder.message' },
-  { slot: 'place', label: 'composer.sticker.instants.field.place', placeholder: 'composer.sticker.instants.placeholder.place' },
-  { slot: 'weather', label: 'composer.sticker.instants.field.weather', placeholder: 'composer.sticker.instants.placeholder.weather' },
-  { slot: 'time', label: 'composer.sticker.instants.field.time', placeholder: 'composer.sticker.instants.placeholder.time' },
-] as const satisfies readonly { readonly slot: MeeSlot; readonly label: InterfaceCatalogKey; readonly placeholder: InterfaceCatalogKey }[];
+  { slot: 'message', label: 'composer.sticker.instants.field.message' },
+  { slot: 'place', label: 'composer.sticker.instants.field.place' },
+  { slot: 'weather', label: 'composer.sticker.instants.field.weather' },
+  { slot: 'time', label: 'composer.sticker.instants.field.time' },
+] as const satisfies readonly { readonly slot: MeeSlot; readonly label: InterfaceCatalogKey }[];
 
 const clockOf = (language: InterfaceLanguage, now: Date): string =>
   new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit' }).format(now);
@@ -101,7 +96,7 @@ export function MeeStickerPanel({
     <div data-mee-panel={tab} className="flex flex-col gap-3">
       {tab === 'instants' ? (
         <div className="grid grid-cols-2 gap-2">
-          {FIELDS.map(({ slot: field, label, placeholder }) => (
+          {FIELDS.map(({ slot: field, label }) => (
             <label key={field} className="flex flex-col gap-1 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
               <span>{translate(language, label)}</span>
               <input
@@ -109,7 +104,6 @@ export function MeeStickerPanel({
                 type="text"
                 maxLength={60}
                 value={values[field] ?? ''}
-                placeholder={translate(language, placeholder)}
                 onInput={(event) => {
                   const value = event.currentTarget.value;
                   setValues((current) => ({ ...current, [field]: value }));
@@ -123,14 +117,14 @@ export function MeeStickerPanel({
       ) : null}
 
       <p className="text-caption" role="status" aria-live="polite" style={{ color: failed ? 'var(--ios-error)' : 'var(--color-ios-ink-3)' }}>
-        {failed ? translate(language, 'composer.sticker.unavailable') : translate(language, HINT_KEYS[tab])}
+        {failed ? translate(language, 'composer.sticker.unavailable') : tab === 'instants' ? translate(language, 'composer.sticker.instants.hint') : ''}
       </p>
 
       {SECTIONS[tab].map((section) => {
         const list = stickers.filter((sticker) => sticker.section === section);
         return list.length === 0 ? null : (
           <section key={section} data-mee-section={section} className="flex flex-col gap-2">
-            <h3 className="text-footnote font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
+            <h3 className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
               {translate(language, sectionKey(tab, section))}
             </h3>
             <ul className="grid grid-cols-4 gap-2">

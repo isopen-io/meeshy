@@ -255,7 +255,7 @@ export function ComposerStickerSheet({
 }
 
 const TAB_KEYS = {
-  mine: 'composer.sticker.tab.mine',
+  mine: 'composer.sticker.title',
   mee: 'composer.sticker.mee.solo',
   meo: 'composer.sticker.meo.solo',
   instants: 'composer.sticker.tab.instants',

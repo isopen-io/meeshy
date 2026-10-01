@@ -13,9 +13,8 @@
  * de regarder la page.
  */
 import { BRAND_LOGO_PATH } from '../lib/brand';
-import { findMeeSticker } from '../lib/mee/catalog';
-import { renderMeeSticker } from '../lib/mee/render';
 import { BrandSignature } from './brand-signature';
+import { meeViewSrc } from './mee-views';
 import type { Block, Card, FramedRow, ContentPage, MeeView, Section } from './type';
 
 /**
@@ -75,16 +74,14 @@ function FramedRowView({ row }: { row: FramedRow }) {
 }
 
 /**
- * MEE DANS LA PAGE (#9034) — le SVG du sticker, son animation comprise : une
- * balise `<style>` dans le SVG, sous `prefers-reduced-motion`, aucun script.
- * Le dessin est décoratif (`aria-hidden`) : la légende porte le sens.
+ * MEE DANS LA PAGE (#9034) — le sticker en image (`mee-views.ts` dit
+ * pourquoi un fichier), animé par son propre SVG, aucun script. Le dessin
+ * est décoratif (`alt` vide) : la légende porte le sens.
  */
 function MeeFigure({ view, size, lead }: { view: MeeView; size: number; lead?: boolean }) {
-  const sticker = findMeeSticker(view.sticker);
-  if (sticker === undefined) return null;
   return (
     <figure
-      data-mee-view={sticker.id}
+      data-mee-view={view.sticker}
       className="rounded-card p-4"
       style={{
         display: 'flex',
@@ -94,11 +91,7 @@ function MeeFigure({ view, size, lead }: { view: MeeView; size: number; lead?: b
         backgroundColor: lead === true ? 'color-mix(in srgb, var(--color-ios-brand) 8%, transparent)' : 'var(--color-ios-card)',
       }}
     >
-      <span
-        aria-hidden="true"
-        style={{ display: 'block', flex: 'none', width: size, height: size }}
-        dangerouslySetInnerHTML={{ __html: renderMeeSticker(sticker, { uid: `page-${sticker.id}` }) }}
-      />
+      <img src={meeViewSrc(view)} width={size} height={size} alt="" style={{ flex: 'none' }} />
       <figcaption className={lead === true ? 'font-medium' : undefined}>{view.caption}</figcaption>
     </figure>
   );
