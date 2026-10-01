@@ -4,6 +4,7 @@ import type { MessageCardCatalogSlice } from './catalog-fr-message-card';
 const deMessageCard = {
   'message.menu.export': 'Als Bild gestalten',
   'message.menu.exportQuick': 'Schnellbild',
+  'message.menu.exportDiscussion': 'Unterhaltung als Bild gestalten',
   'message.menu.compose': 'Gestalten',
   'comments.action.image': 'Als Bild gestalten',
 } satisfies MessageCardCatalogSlice;

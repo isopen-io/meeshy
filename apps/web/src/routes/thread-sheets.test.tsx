@@ -219,6 +219,40 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
     expect(host.querySelectorAll('[data-export-tab]').length > 1).toBe(true);
   });
 
+  test('« Imager la discussion » (#9039) monte l’atelier sur la discussion — un choisi protégé n’en monte aucun', async () => {
+    const earlier = ownMessage({ id: 'm-avant', content: 'Bonjour', attachments: [], createdAt: new Date('2026-09-24T09:59:00.000Z') });
+    const request = { exportFor: { messageId: SERVER_MESSAGE_ID, quick: false, scope: 'discussion' as const } };
+    const host = await mountSheets(menuOf(request), [earlier, ownMessage({ attachments: [] })]);
+    await loadExportCardCatalog('fr');
+    await mounter.settle();
+    expect(host.querySelectorAll('[data-export-tab]').length > 1).toBe(true);
+    mounter.unmountAll();
+
+    const veiled = await mountSheets(menuOf(request), [earlier, ownMessage({ attachments: [], isBlurred: true })]);
+    expect(has(veiled, '[data-export-tab]')).toBe(false);
+  });
+
+  test('le menu reçoit le sous-menu de « Transférer » (#9039)', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    const item = (id: 'forward' | 'exportDiscussion', labelKey: 'message.menu.forward' | 'message.menu.exportDiscussion') => ({ id, labelKey, glyph: 'imageSquare' as const });
+    await mountSheets(
+      menuOf({
+        menuTarget: { messageId: SERVER_MESSAGE_ID, element, isMine: true },
+        menuData: {
+          items: [item('forward', 'message.menu.forward')],
+          forwardItems: [item('forward', 'message.menu.forward'), item('exportDiscussion', 'message.menu.exportDiscussion')],
+          choices: [],
+          subjectLabel: 'Actions',
+        },
+      }),
+      [ownMessage()],
+    );
+    await mounter.click(document.querySelector<HTMLElement>('.message-menu-list [data-action="forward"]'));
+    expect(document.querySelector('.message-menu-list [data-action="exportDiscussion"]') !== null).toBe(true);
+    element.remove();
+  });
+
   test('un message protégé ne monte aucune carte, même ciblé', async () => {
     const host = await mountSheets(menuOf({ exportFor: { messageId: SERVER_MESSAGE_ID, quick: false } }), [ownMessage({ isBlurred: true })]);
     expect(has(host, '[data-export-tab]')).toBe(false);

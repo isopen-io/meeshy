@@ -1,4 +1,5 @@
 
+import { discussionCardSubjectOf } from '@/lib/export/discussion-card-subject';
 import { messageCardLanguagesOf, messageCardSubjectOf } from '@/lib/export/message-card-subject';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { MessageDetailSheet } from '@/components/message-detail-sheet';
@@ -96,6 +97,7 @@ export function ThreadMessageSheets({
             target={target}
             items={data.items}
             choices={data.choices}
+            forwardItems={data.forwardItems}
             subjectLabel={data.subjectLabel}
             onClose={messageMenu.onCloseMenu}
             onReact={(emoji) => messageMenu.onMenuReact(target.messageId, emoji)}
@@ -170,13 +172,25 @@ export function ThreadMessageSheets({
             now: Date.now(),
             language,
           });
-        const subject = subjectIn(null);
+        /* « IMAGER LA DISCUSSION » (#9039) — la même carte, étendue aux messages
+           qui mènent à celui-ci ; elle se lit dans les langues que le lecteur
+           lit, sans choix de langue d'export (chaque message a les siennes). */
+        const discussion = request.scope === 'discussion';
+        const subject = discussion
+          ? discussionCardSubjectOf({
+              messages,
+              anchorId: exportFor,
+              servedOf: (id) => messageMenu.servedOf(id)?.text,
+              viewer: { id: viewerId, displayName: viewerName, handle: viewerHandle },
+              now: Date.now(),
+            })
+          : subjectIn(null);
         if (subject === null) return null;
         return (
           <ExportCatalogGate>
             <MessageExportSheet
               subject={subject}
-              exportLanguages={{ codes: messageCardLanguagesOf(exportMessage), subjectIn }}
+              {...(discussion ? {} : { exportLanguages: { codes: messageCardLanguagesOf(exportMessage), subjectIn } })}
               handle={viewerHandle}
               conversationTitle={conversationTitle}
               quick={request.quick}

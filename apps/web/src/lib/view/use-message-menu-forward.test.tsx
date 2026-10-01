@@ -218,3 +218,28 @@ describe('l’offre du glissé est celle du menu', () => {
     expect(api().swipeActionsOf(ordinary('m2'))).toBeUndefined();
   });
 });
+
+/**
+ * #9039 — « IMAGER LA DISCUSSION », depuis le sous-menu de Transférer, ouvre
+ * l'atelier d'Imager sur la DISCUSSION qui mène à ce message — ni sélection,
+ * ni feuille d'envoi.
+ */
+describe('« Imager la discussion » depuis le menu (#9039)', () => {
+  test('l’atelier s’ouvre sur la discussion de ce message, sans armer de sélection', () => {
+    const { api } = mount([ordinary('m1'), ordinary('m2')]);
+    act(() => {
+      api().onMenuAction('m2', 'exportDiscussion');
+    });
+    expect(api().exportFor).toEqual({ messageId: 'm2', quick: false, scope: 'discussion' });
+    expect(api().selection).toBe(null);
+    expect(openedRequest()).toBe(null);
+  });
+
+  test('« Imager » seul reste la carte d’UN message', () => {
+    const { api } = mount([ordinary('m1')]);
+    act(() => {
+      api().onMenuAction('m1', 'export');
+    });
+    expect(api().exportFor?.scope ?? 'message').toBe('message');
+  });
+});
