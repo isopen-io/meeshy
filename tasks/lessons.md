@@ -831,3 +831,4 @@
 - [Leçon 652 — un commit git construit par plumbing peut porter le bon message et un arbre INCHANGÉ : vérifier le diff, jamais le SHA](lessons/lecon-652-un-commit-git-construit-par-plumbing-peut-porter-le-bon-message-et-un.md)
 - [Leçon 653 — ce qu'une séquence asynchrone a COMMIS s'écrit à chaque commit, jamais à son issue : l'écran peut être parti entre-temps, et un rendu tardif peut réécrire ce que l'issue a purgé](lessons/lecon-653-ce-qu-une-sequence-asynchrone-a-commis-s-ecrit-a-chaque-commit-jamais.md)
 - [Leçon 654 — un gate qui compte des BALISES plutôt que des DÉCLARATIONS EFFECTIVES reste vert sur trois façons de retirer ce qu'il croit garder, et sa propre garde d'entrée peut le rendre MUET](lessons/lecon-654-un-gate-qui-compte-des-balises-plutot-que-des-declarations-effectives.md)
+- [Une garde qui lit la source lit aussi sa FORME (2026-10-01, #9054)](lessons/2026-10-01-une-garde-qui-lit-la-source-lit-aussi-sa-forme.md)
