@@ -11,6 +11,7 @@ import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { captureLock, flashFloorColor, flashSliderShown, zoomAfterDrag, type CameraZoomRange, type LayoutDirection } from '@/lib/stories/studio-capture-gestures';
 import { createBrowserCameraEngine, type CameraEngine } from '@/lib/stories/studio-camera-engine';
 import { cameraFlashPlan, quickCaptureArmedHold, quickCaptureArmedTap, quickCaptureRelease, type CameraFacing } from '@/lib/stories/studio-quick-capture';
+import { appSettingsOpener } from '@/lib/view/settings-recovery';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { StudioCameraFlash } from '@/routes/story-compose-camera-flash';
 import { ROUND_GLASS } from '@/routes/story-compose-chrome';
@@ -110,6 +111,7 @@ export function StudioCamera({
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [facing, setFacing] = useState<CameraFacing>('environment');
   const [status, setStatus] = useState<'opening' | 'live' | 'unavailable'>('opening');
+  const openAppSettings = appSettingsOpener();
   const [torch, setTorch] = useState(false);
   const [recording, setRecording] = useState<Recording>(null);
   const [screenFlash, setScreenFlash] = useState<ScreenFlash>('off');
@@ -463,9 +465,25 @@ export function StudioCamera({
         />
       </div>
       {status === 'unavailable' ? (
-        <p data-story-camera-unavailable role="alert" className="absolute inset-x-6 top-1/2 -translate-y-1/2 text-center text-body" style={{ color: '#fff' }}>
-          {translate(lang, 'story.studio.camera.unavailable')}
-        </p>
+        <div className="absolute inset-x-6 top-1/2 flex -translate-y-1/2 flex-col items-center gap-4">
+          <p data-story-camera-unavailable role="alert" className="text-center text-body" style={{ color: '#fff' }}>
+            {translate(lang, 'story.studio.camera.unavailable')}
+          </p>
+          {/* UN REFUS DÉFINITIF MÈNE AUX RÉGLAGES DE L'APP (#9032, comme le
+              composeur #8882) : dans la coque Android, la caméra refusée deux
+              fois ne se redemande plus. */}
+          {openAppSettings !== null ? (
+            <button
+              type="button"
+              data-story-camera-settings
+              onClick={openAppSettings}
+              className="glass min-h-11 rounded-full px-5 text-body font-semibold"
+              style={{ outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
+            >
+              {translate(lang, 'story.studio.camera.openSettings')}
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 px-3 pt-safe">

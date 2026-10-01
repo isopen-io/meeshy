@@ -101,6 +101,11 @@ struct FloatingCallPillView: View {
     // is mounted as a `.overlay` closure, which SwiftUI does NOT propagate
     // environment objects into — hence explicit injection, not environment.)
     @ObservedObject var callManager: CallManager
+    /// `true` quand aucun mini-lecteur ne reste sous elle : en partant, la pilule sort
+    /// alors par le haut de l'écran ; sinon elle se range sous la bande (#9048).
+    var isLastBar: Bool = true
+    /// L'encart haut, mesuré par la pile qui l'empile (`TopChromeInsetKey`).
+    var topInset: CGFloat = 0
     // Audit P2-iOS-9 — respect the user's Reduce Motion preference. The
     // slide-in/-out spring animation is the primary animation concern here;
     // when reduce motion is on, collapse it to a simple cross-fade.
@@ -146,11 +151,13 @@ struct FloatingCallPillView: View {
                 // Bannière verre + contrôles blancs : on épingle le verre en
                 // sombre pour rester lisible quel que soit le mode système.
                 .environment(\.colorScheme, .dark)
-                // P2-iOS-9 — slide-in from top when motion is allowed; fade
-                // only when reduce motion is on (no translational movement).
-                .transition(reduceMotion ? .opacity : .move(edge: .top).combined(with: .opacity))
-                .animation(reduceMotion ? nil : .spring(response: 0.5, dampingFraction: 0.75), value: callManager.displayMode)
-                .zIndex(999)
+                // #9048 — le mouvement des barres du haut : la pilule descend du haut et
+                // repart par le haut, un simple fondu sous « Réduire les animations »
+                // (P2-iOS-9). Le ressort vit dans `CallPresentationLayer`, indexé sur la
+                // visibilité de la pilule : posé ici, dans la branche que la fin d'un appel
+                // retire, il n'animait rien.
+                .transition(TopChromeBarMotion.transition(isLastBar: isLastBar, reduceMotion: reduceMotion, safeAreaTop: topInset))
+                .zIndex(TopChromeBarMotion.layer(isLastBar: isLastBar, isCall: true))
         }
     }
 
