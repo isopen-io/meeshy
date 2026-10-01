@@ -565,8 +565,23 @@ const MENU_MAPPINGS = [
   [overlaySwift, 'nlMenuGap', 'MENU_GAP', 'écart aperçu → liste (nlMenuGap)'],
   [overlaySwift, 'nlSidePadding', 'SIDE_PADDING', 'marge latérale du cluster (nlSidePadding)'],
   [actionsSwift, 'menuWidth', 'MENU_WIDTH', 'largeur de la liste d’actions (MessageActionsMenu.menuWidth)'],
-  [actionsSwift, 'rowMinHeight', 'MENU_ROW_HEIGHT', 'hauteur d’une entrée (MessageActionsMenu.rowMinHeight)'],
+  [actionsSwift, 'referenceRowHeight', 'MENU_ROW_REFERENCE_HEIGHT', 'hauteur de référence d’une entrée (MessageActionsMenu.referenceRowHeight)'],
+  // #9043 — « agrandir la zone en longueur de ×1,4 » : le facteur est une cote
+  // à part entière, des DEUX côtés ; la hauteur rendue en DÉRIVE (référence × facteur).
+  [actionsSwift, 'lengthFactor', 'MENU_LENGTH_FACTOR', 'allongement de la zone du menu (MessageActionsMenu.lengthFactor)'],
 ];
+// La hauteur RENDUE d'une entrée n'est plus un littéral : elle doit être, des
+// deux côtés, le PRODUIT des deux cotes ci-dessus — jamais un nombre recopié.
+{
+  const swiftDerived = /static let rowHeight:\s*CGFloat\s*=\s*referenceRowHeight\s*\*\s*lengthFactor/.test(actionsSwift);
+  const swiftScaled = /rowMinHeight:\s*CGFloat\s*=\s*MessageActionsMenu\.rowHeight/.test(actionsSwift);
+  const tsDerived = /MENU_ROW_HEIGHT\s*=\s*MENU_ROW_REFERENCE_HEIGHT\s*\*\s*MENU_LENGTH_FACTOR/.test(menuMetrics);
+  const tsEstimated = /\(Math\.max\(1, rows\) \* MENU_ROW_REFERENCE_HEIGHT \+ MENU_CHROME\) \* MENU_LENGTH_FACTOR/.test(menuMetrics);
+  if (!swiftDerived) failures.push('hauteur d’une entrée : « rowHeight = referenceRowHeight * lengthFactor » introuvable dans MessageActionsMenu.swift');
+  if (!swiftScaled) failures.push('hauteur d’une entrée : « rowMinHeight » ne part plus de MessageActionsMenu.rowHeight');
+  if (!tsDerived) failures.push('hauteur d’une entrée : « MENU_ROW_HEIGHT = MENU_ROW_REFERENCE_HEIGHT * MENU_LENGTH_FACTOR » introuvable dans message-menu-metrics.ts');
+  if (!tsEstimated) failures.push('hauteur de la zone : menuListHeight ne suit plus estimatedSize « (n × référence + chrome) × facteur »');
+}
 for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
   const expectedMenu = swiftAssignment(swiftSource, swiftName);
   const actualMenu = count(menuMetrics, downstreamName);

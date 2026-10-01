@@ -13,14 +13,29 @@ export const MENU_GAP = 6;
 export const SIDE_PADDING = 16;
 /** `MessageActionsMenu.swift:36` (`menuWidth`). */
 export const MENU_WIDTH = 240;
-/** `MessageActionsMenu.swift:18` (`@ScaledMetric` rangée). */
-export const MENU_ROW_HEIGHT = 44;
-/** Le CHROME de la liste (rembourrage vertical + bordures) — nombre littéral
- * de `MessageActionsMenu.estimatedSize` (`:93` : `count * scaledRow + 20`),
- * la MÊME estimation dont `MessageOverlayMenu` se sert pour placer le cluster
- * (`:266`, `nlMenuHeight`). La première écriture posait `+ 8` en dur dans le
- * composant — un nombre qui ne venait de nulle part (revue #5814). */
+/** `MessageActionsMenu.referenceRowHeight` — la hauteur d'une entrée AVANT
+ * l'allongement, celle du menu système. */
+export const MENU_ROW_REFERENCE_HEIGHT = 44;
+/** `MessageActionsMenu.lengthFactor` — **la zone du menu s'allonge de ×1,4**
+ * (directive porteur 2026-10-01, #9043). Un seul facteur pour les entrées ET
+ * leur rembourrage : la zone ENTIÈRE grandit. */
+export const MENU_LENGTH_FACTOR = 1.4;
+/** `MessageActionsMenu.rowHeight` — la hauteur rendue d'une entrée. */
+export const MENU_ROW_HEIGHT = MENU_ROW_REFERENCE_HEIGHT * MENU_LENGTH_FACTOR;
+/** Le CHROME de la liste (rembourrage vertical) À LA HAUTEUR DE RÉFÉRENCE —
+ * nombre littéral de `MessageActionsMenu.estimatedSize`
+ * (`(count * scaledRow + 20) * lengthFactor`), la MÊME estimation dont
+ * `MessageOverlayMenu` se sert pour placer le cluster (`nlMenuHeight`). La
+ * première écriture posait `+ 8` en dur dans le composant — un nombre qui ne
+ * venait de nulle part (revue #5814). */
 export const MENU_CHROME = 20;
+/** Le rembourrage vertical rendu de la liste — la moitié du chrome, allongée. */
+export const MENU_PADDING_Y = (MENU_CHROME / 2) * MENU_LENGTH_FACTOR;
+/** La hauteur de la zone du menu pour `rows` entrées — miroir de
+ * `MessageActionsMenu.estimatedSize(actionCount:)`. */
+export function menuListHeight(rows: number): number {
+  return (Math.max(1, rows) * MENU_ROW_REFERENCE_HEIGHT + MENU_CHROME) * MENU_LENGTH_FACTOR;
+}
 /** `MessageOverlayMenu.swift:274` — plancher de réduction de l'aperçu, jamais agrandi. */
 export const PREVIEW_SCALE_FLOOR = 0.4;
 /** Tuile du rail dessinée à 34 (débord tactile ±5 = cible réelle 44,
