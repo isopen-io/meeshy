@@ -169,13 +169,18 @@ final class UserProfileViewModelTests: XCTestCase {
         XCTAssertNil(sut.fullUser)
     }
 
-    func test_loadFullProfile_skipsWhenUserIdIsNil() async {
+    /// Sans identifiant, le profil se résout par le PSEUDO (`resolvedIdentifier`) ;
+    /// il ne se saute que lorsqu'aucun des deux n'est connu. Ce témoin passait
+    /// auparavant parce que l'appel RÉSEAU réel échouait en test — le service
+    /// injecté (#9063) le fait porter sur la vraie condition.
+    func test_loadFullProfile_skipsWhenNeitherUserIdNorUsername() async {
         mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-        let sut = makeSUT(userId: nil)
+        let sut = makeSUT(userId: nil, username: "")
 
         await sut.loadFullProfile()
 
         XCTAssertNil(sut.fullUser)
+        XCTAssertEqual(mockUserService.getProfileHandleCallCount, 0)
     }
 
     /// #9063 — la fiche d'un AMI date sa présence : le chargement POSE la
