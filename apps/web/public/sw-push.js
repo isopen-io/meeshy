@@ -550,9 +550,10 @@ function montrer(banniere, notification, data) {
  *
  * Éditer un message, un post ou un commentaire réécrit sa notification sous
  * la MÊME identité, et la passerelle repousse la version d'après en la
- * déclarant (`REPRODUCED_PUSH_FIELD`). Sur iOS et Android, un push de
- * révocation retire d'abord la bannière d'avant ; le web ne le reçoit pas
- * (#7308), et le dédoublonnage de D-11 point 4 écartait donc la correction.
+ * déclarant (`REPRODUCED_PUSH_FIELD`). Sur iOS, ce même push nomme la
+ * bannière d'avant (`replacesNotificationId`) et l'extension la retire ; sur
+ * Android, le tag la remplace. Le web, lui, la dédoublonnait (D-11 point 4) et
+ * écartait donc la correction.
  *
  * - La bannière de CETTE notification est encore affichée : elle est
  *   remplacée EN PLACE, sous SON tag — pas sous celui de la charge. Si le
@@ -569,7 +570,7 @@ function montrer(banniere, notification, data) {
  *   visible n'est plus la sienne.
  *
  * Le remplacement s'annonce (`renotify`), muet si le son est coupé : iOS fait
- * sonner le push nominal qui suit la révocation, comme tout contenu neuf.
+ * sonner le push de remplacement, comme tout contenu neuf.
  */
 async function corriger(banniere, notification, data) {
   const affichee = await banniereAffichee(texte(data.notificationId));
