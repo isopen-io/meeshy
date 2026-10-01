@@ -32,6 +32,33 @@ enum MessageCardExportMenu {
         MessageCardFormat.readDefault(from: UserDefaultsMessageCardStore()) != nil
     }
 
+    /// **Un message devient une carte** (#8692) : le texte que le Prisme sert au lecteur, ou
+    /// l'original, ses médias — et ceux du message cité quand il est en mémoire (#8901) — puis la
+    /// carte de chaque langue où il existe. `nil` pour un message que rien ne peint. Site unique
+    /// de la conversation et de la vitrine (#8855).
+    static func request(message: Message, translations: [MessageTranslation], servedText: String?, viewer: MessageCardSubject.Viewer, handle: String?, quotedMessage: Message?, conversationTitle: String?, accentColor: String, quick: Bool) -> MessageCardExportRequest? {
+        let texts = Dictionary(translations.map { ($0.targetLanguage.lowercased(), $0.translatedContent) }, uniquingKeysWith: { first, _ in first })
+        let quotedAt = quotedMessage?.createdAt
+        guard let subject = MessageCardSubject.of(
+            message: message, servedText: servedText, translations: texts, viewer: viewer,
+            quotedAt: quotedAt, quotedMessage: quotedMessage, now: Date()
+        ) else { return nil }
+        return MessageCardExportRequest(
+            subject: subject,
+            languages: MessageCardSubject.languages(of: message, translations: texts),
+            subjectIn: { language in
+                MessageCardSubject.of(
+                    message: message, servedText: servedText, translations: texts,
+                    viewer: viewer, language: language, quotedAt: quotedAt, quotedMessage: quotedMessage, now: Date()
+                )
+            },
+            handle: handle,
+            conversationTitle: conversationTitle,
+            accentColor: accentColor,
+            quick: quick
+        )
+    }
+
     /// **Un commentaire devient une carte** : le texte que le lecteur a sous
     /// les yeux (`showOriginal` suit la puce de langue de la ligne), son auteur,
     /// ses médias. `nil` pour un commentaire protégé ou vide. Une réponse

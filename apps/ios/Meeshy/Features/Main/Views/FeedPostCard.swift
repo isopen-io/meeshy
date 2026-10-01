@@ -782,6 +782,9 @@ struct FeedPostCard: View {
         )
         .audioFullscreenCover($audioFullscreen, accentColor: accentColor)
         .mediaSaveFlow(mediaSaveCoordinator)
+        #if DEBUG
+        .onAppear { VitrineRendu.shared.signaler(.fil) }
+        #endif
     }
 
     /// Déclenche le flux unifié « Enregistrer en local » sur le média principal

@@ -322,6 +322,11 @@ struct MeeshyApp: App {
                     // première lecture.
                     await CacheAccountBinder.shared.bind(DependencyContainer.activeAccountStoreKey()).value
                     await CacheCoordinator.shared.start()
+                    #if DEBUG
+                    // Vitrine (#8855, #8922) : le fil et les médias sont rangés AVANT que la
+                    // restauration de la session ne monte les racines qui les lisent.
+                    await VitrineStage.remplirLesCaches()
+                    #endif
                     // Touch PresenceManager early so it has subscribed to
                     // `presence:snapshot` + `user:status` + `didReconnect`
                     // BEFORE the first socket auth lands. Without this, the

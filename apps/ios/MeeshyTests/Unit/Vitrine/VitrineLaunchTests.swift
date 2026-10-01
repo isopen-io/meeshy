@@ -18,4 +18,16 @@ final class VitrineLaunchTests: XCTestCase {
         XCTAssertTrue(VitrineScene.progression.ouvreUneSession)
         XCTAssertFalse(VitrineScene.lien.ouvreUneSession)
     }
+
+    func test_scene_lot2Scenes_openASession() {
+        XCTAssertEqual(VitrineLaunch.scene(in: ["Meeshy", "-MeeshyVitrine", "amour"]), .amour)
+        XCTAssertEqual(VitrineLaunch.scene(in: ["Meeshy", "-MeeshyVitrine", "groupe"]), .groupe)
+        XCTAssertEqual(VitrineLaunch.scene(in: ["Meeshy", "-MeeshyVitrine", "imagine"]), .imagine)
+        XCTAssertTrue([VitrineScene.amour, .groupe, .imagine].allSatisfy(\.ouvreUneSession))
+    }
+
+    func test_dossierMedias_livesInTheVitrineFolder() {
+        XCTAssertEqual(VitrineLaunch.dossierMedias.lastPathComponent, "medias")
+        XCTAssertEqual(VitrineLaunch.dossierMedias.deletingLastPathComponent().standardizedFileURL, VitrineLaunch.dossier.standardizedFileURL)
+    }
 }

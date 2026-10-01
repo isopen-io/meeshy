@@ -3,15 +3,17 @@
 //   node scripts/marketing-kit/vitrine/capturer.mjs --lang fr --appareil iphone,ipad --construire
 //   node scripts/marketing-kit/vitrine/capturer.mjs --lang all --scene global
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
 import { REPO_ROOT } from '../lib/catalog.mjs'
 import { KIT_LANGS } from '../lib/locales.mjs'
+import { CREDITS } from '../lib/photos.mjs'
 import { pngInfo } from '../lib/png.mjs'
 import { VITRINE } from '../templates/vitrine/plan.mjs'
 import { exporterVitrine } from './fixtures.mjs'
+import { DOSSIER_PHOTOS, fichierVoix, lireVoix, synthetiser } from './medias.mjs'
 import { SIMULATEURS, assurerSimulateur, barreDEtat, demarrer } from './simulateurs.mjs'
 
 export const BUNDLE = 'me.meeshy.app'
@@ -35,9 +37,56 @@ export const argumentsDeLancement = ({ scene, lang }) => [
 
 export const cheminBrut = ({ appareil, lang, scene }) => resolve(SORTIE_BRUTE, appareil, lang, `${scene}.png`)
 
+// Les fixtures d'une langue, chaque vocal portant la durée et la taille MESURÉES de sa piste.
+export const fixturesMesurees = ({ lang, maintenant, mesurer }) => {
+  const provisoires = exporterVitrine({ lang, maintenant })
+  const mesures = Object.fromEntries(provisoires.medias.filter((m) => m.genre === 'audio').map((m) => [m.url, mesurer(m)]))
+  return exporterVitrine({ lang, maintenant, mesures })
+}
+
+// Les scènes qui montrent un fil daté : bulles, séparateurs de jour, liste de l'iPad.
+const SANS_FIL = new Set(['lien', 'progression'])
+export const montreUnFil = (scene) => !SANS_FIL.has(scene)
+
+// Un fil qui traverse minuit se coupe en « Hier » et « Aujourd'hui », liste de l'iPad comprise ; l'app
+// datant tout depuis son horloge, décaler les fixtures n'y peut rien. Rend le plus ancien instant
+// montré qui tombe la veille, ou `null`.
+export const veilleMontree = (f, maintenant) => {
+  const jour = maintenant.toDateString()
+  return [...f.conversations.map((c) => c.lastMessageAt), ...Object.values(f.messages).flat().map((m) => m.createdAt)]
+    .map((iso) => new Date(iso))
+    .filter((instant) => instant.toDateString() !== jour)
+    .sort((a, b) => a - b)[0] ?? null
+}
+
+const heure = (instant) => instant.toTimeString().slice(0, 5)
+
+// La scène « amour » annonce « prêt » après 1 s de lecture, et la photo tombe environ 3 s plus tard :
+// une piste plus courte serait déjà finie, karaoké éteint.
+export const DUREE_MIN_VOCAL_MS = 7000
+
+// La piste que le Prisme joue au lecteur, si elle est trop courte pour tenir jusqu'à la photo.
+export const vocalTropCourt = (f, lang) => {
+  const { conversationId, messageId, attachmentId } = f.scenes.amour
+  const piece = f.messages[conversationId].find((m) => m.id === messageId).attachments.find((a) => a.id === attachmentId)
+  const dureeMs = piece.translations[lang]?.durationMs ?? piece.duration
+  return dureeMs < DUREE_MIN_VOCAL_MS ? { lang, dureeMs } : null
+}
+
+// La source d'un média sur le Mac : la photo du kit, ou le vocal synthétisé.
+export const sourceDuMedia = (media) => (media.genre === 'image' ? resolve(DOSSIER_PHOTOS, CREDITS[media.photo].fichier) : fichierVoix(media))
+
+const deposer = (fixtures, dossier) => {
+  const medias = resolve(dossier, 'medias')
+  rmSync(medias, { recursive: true, force: true })
+  mkdirSync(medias, { recursive: true })
+  for (const media of fixtures.medias) copyFileSync(sourceDuMedia(media), resolve(medias, media.fichier))
+  writeFileSync(resolve(dossier, 'fixtures.json'), JSON.stringify(fixtures))
+}
+
 const pause = (ms) => new Promise((r) => setTimeout(r, ms))
 
-export const attendreLeSignal = async ({ existe, delaiMs = 60_000, pasMs = 500, maintenant = Date.now, dormir = pause, etiquette }) => {
+export const attendreLeSignal = async ({ existe, delaiMs = 120_000, pasMs = 500, maintenant = Date.now, dormir = pause, etiquette }) => {
   const limite = maintenant() + delaiMs
   while (!existe()) {
     if (maintenant() > limite) throw new Error(`${etiquette} : aucun signal « prêt » en ${delaiMs / 1000} s — l’app a-t-elle planté ?`)
@@ -65,7 +114,7 @@ const construire = (udid) => {
   return resolve(DERIVED_DATA, 'Products/Debug-iphonesimulator/Meeshy.app')
 }
 
-const capturer = async ({ udid, appareil, lang, capture }) => {
+const capturer = async ({ udid, appareil, lang, capture, voix }) => {
   const { scene, theme } = capture
   const etiquette = `${appareil}/${lang}/${scene}`
   simctl('ui', udid, 'appearance', theme === 'dark' ? 'dark' : 'light')
@@ -73,7 +122,17 @@ const capturer = async ({ udid, appareil, lang, capture }) => {
   const dossier = resolve(simctl('get_app_container', udid, BUNDLE, 'data').trim(), 'Documents/vitrine')
   mkdirSync(dossier, { recursive: true })
   rmSync(resolve(dossier, 'pret.txt'), { force: true })
-  writeFileSync(resolve(dossier, 'fixtures.json'), JSON.stringify(exporterVitrine({ lang, maintenant: new Date() })))
+  const maintenant = new Date()
+  const fixtures = fixturesMesurees({ lang, maintenant, mesurer: (media) => synthetiser(media, voix) })
+  const veille = montreUnFil(scene) ? veilleMontree(fixtures, maintenant) : null
+  if (veille) {
+    const minuit = new Date(maintenant.getFullYear(), maintenant.getMonth(), maintenant.getDate())
+    const des = new Date(minuit.getTime() + (maintenant - veille) + 60_000)
+    throw new Error(`${etiquette} : le fil traverserait minuit (un message de la veille à ${heure(veille)}) et se couperait en « Hier » et « Aujourd’hui » — capturer après ${heure(des)}`)
+  }
+  const court = scene === 'amour' ? vocalTropCourt(fixtures, lang) : null
+  if (court) throw new Error(`${etiquette} : la piste ${court.lang} dure ${court.dureeMs} ms — elle serait finie avant la photo (minimum ${DUREE_MIN_VOCAL_MS} ms)`)
+  deposer(fixtures, dossier)
   simctl('launch', udid, BUNDLE, ...argumentsDeLancement({ scene, lang }))
   await attendreLeSignal({ existe: () => existsSync(resolve(dossier, 'pret.txt')), etiquette })
   await pause(1500)
@@ -108,10 +167,11 @@ const main = async () => {
     for (const udid of Object.values(udids)) simctl('install', udid, app)
   }
   const scenes = values.scene?.split(',')
+  const voix = lireVoix(execFileSync('say', ['-v', '?'], { encoding: 'utf8' }))
   for (const appareil of appareils) {
     for (const lang of langs) {
       for (const capture of VITRINE[appareil].captures.filter((c) => !scenes || scenes.includes(c.scene))) {
-        console.log(`✓ ${await capturer({ udid: udids[appareil], appareil, lang, capture })}`)
+        console.log(`✓ ${await capturer({ udid: udids[appareil], appareil, lang, capture, voix })}`)
       }
     }
   }
