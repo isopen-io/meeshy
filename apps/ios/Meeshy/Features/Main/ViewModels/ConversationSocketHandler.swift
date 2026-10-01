@@ -203,7 +203,6 @@ final class ConversationSocketHandler {
         // n'a jamais rejoint ni publié, donc il ne doit rien défaire — sinon
         // il publie `onConversationClosed` et relance la boucle.
         if didActivate {
-            leaveRoom()
             // Capturé AVANT la `Task` : `deinit` est nonisolé et `self` ne
             // survit pas à la fermeture — lire `conversationId` dedans ne
             // compilerait pas, et le capturer implicitement retiendrait `self`.
@@ -215,7 +214,13 @@ final class ConversationSocketHandler {
                 // d'entrer — et toutes ses notifications se remettaient à
                 // s'afficher par-dessus le fil qu'on lisait.
                 NotificationToastManager.shared.onConversationClosed(id)
-                ConversationViewingReporter.shared.conversationClosed(id)
+                // La room ne se quitte qu'au DERNIER écran de la conversation
+                // (#9047) : un `conversation:leave` immédiat, émis par un écran
+                // démonté après la réouverture, retirait le socket de la room
+                // et la présence « ici » côté serveur.
+                if ConversationViewingReporter.shared.conversationClosed(id) {
+                    MessageSocketManager.shared.leaveConversation(id)
+                }
             }
             if isEmittingTyping {
                 MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
@@ -265,10 +270,6 @@ final class ConversationSocketHandler {
     }
 
     // MARK: - Room Management
-
-    private nonisolated func leaveRoom() {
-        MessageSocketManager.shared.leaveConversation(conversationId)
-    }
 
     // MARK: - Typing Emission
 
