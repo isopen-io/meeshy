@@ -642,7 +642,7 @@ jobs:
       - name: DIAGNOSTIC TEMPORAIRE gate effets d'appel (a retirer)
         run: |
           cd apps/web
-          node scripts/check-calls-effects.mjs 2>&1 | grep -v '^  ok' || true
+          node scripts/zz-diag-effects.mjs 2>&1 | grep -v '^  ok' || true
           npx playwright --version
 
       # CHAQUE GATE RAPPORTE SON VERDICT, PAS SEULEMENT LE PREMIER (#6137).
