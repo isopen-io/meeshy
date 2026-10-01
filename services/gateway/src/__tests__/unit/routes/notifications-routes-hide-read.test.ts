@@ -49,10 +49,10 @@ jest.mock('../../../utils/logger-enhanced', () => ({
   },
 }));
 
-jest.mock('@meeshy/shared/types/api-schemas', () => ({
-  notificationSchema: { type: 'object' },
-  errorResponseSchema: { type: 'object' },
-}));
+jest.mock('@meeshy/shared/types/api-schemas', () => {
+  const actual = jest.requireActual('@meeshy/shared/types/api-schemas') as Record<string, unknown>;
+  return actual;
+});
 
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
