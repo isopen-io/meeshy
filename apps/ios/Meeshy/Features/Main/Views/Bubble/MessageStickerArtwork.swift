@@ -65,6 +65,7 @@ struct MessageStickerArtwork: View {
     /// un sticker plus petit bouge proportionnellement moins.
     private var artworkBox: CGSize {
         switch source {
+        case .mee:      return CGSize(width: side, height: side)
         case .template: return BubbleSticker.fittedSize(
             templateSize == .zero ? templateBox : templateSize, within: templateBox)
         case .picture:  return CGSize(width: side, height: side)
@@ -96,6 +97,13 @@ struct MessageStickerArtwork: View {
     @ViewBuilder
     private var artwork: some View {
         switch source {
+        case .mee(let id):
+            // Le FILM porte son propre mouvement : `effectiveAnimation` reste
+            // `nil` pour un Mee (aucune `StickerAnimation` au fil), donc aucune
+            // pose ne s'ajoute à la sienne.
+            if let mee = MeeStickerCatalog.sticker(forTemplateID: MeeStickerCatalog.templatePrefix + id) {
+                MeeStickerFilmView(sticker: mee, side: side, animates: animates)
+            }
         case .template(let id):
             if let templateImage {
                 let size = BubbleSticker.fittedSize(templateSize, within: templateBox)
@@ -137,7 +145,7 @@ struct MessageStickerArtwork: View {
             .frame(width: side, height: side)
         case .emoji(let emoji):
             Text(emoji)
-                .font(MeeshyFont.relative(EmojiDetector.EmojiOnlyResult.single.fontSize ?? 90))
+                .font(MeeshyFont.relative(BubbleSticker.emojiGlyphSize))
                 .fixedSize()
         }
     }
