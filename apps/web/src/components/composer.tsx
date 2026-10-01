@@ -17,6 +17,7 @@ import {
   type PendingAttachment,
 } from '@/lib/send/attachments';
 import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
+import { pastedContentOf, routePastedContent } from '@/lib/send/paste-route';
 import {
   contactCardFile,
   contactFromVCardFile,
@@ -921,6 +922,21 @@ export const Composer = memo(function Composer({
                 // Croissance jusqu'a cinq lignes, comme iOS (`lineLimit(1...5)`).
                 el.style.height = 'auto';
                 el.style.height = `${Math.min(el.scrollHeight, 5 * 22)}px`;
+              }}
+              /* CE QU'ON COLLE PART TOUJOURS (#9037) — un fichier devient la
+                 pièce, un texte qui dépasserait la limite du serveur part en
+                 `.txt` ; le reste est laissé au navigateur (`paste-route.ts`). */
+              onPaste={(e) => {
+                const el = e.currentTarget;
+                const decision = routePastedContent({
+                  pasted: pastedContentOf(e.clipboardData),
+                  current: el.value,
+                  selection: { start: el.selectionStart, end: el.selectionEnd },
+                  now: new Date(),
+                });
+                if (decision.kind === 'native') return;
+                e.preventDefault();
+                addFiles(decision.files);
               }}
               onClick={(e) => mention.syncCaret(e.currentTarget)}
               onKeyUp={(e) => {
