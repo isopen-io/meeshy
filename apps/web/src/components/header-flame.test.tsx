@@ -9,6 +9,7 @@ import type { Conversation } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 import type { StorageLike } from '@/lib/reading-mode/store';
+import { compactCount } from '@/lib/view/compact-count';
 import { localDayOf } from '@/lib/view/engagement-pill';
 import {
   afterFlameDismissed,
@@ -199,21 +200,22 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
 
   test('la flamme sans capsule, des mèches pour brûler, et un compte abrégé (#9044)', () => {
     const html = renderToStaticMarkup(
-      <HeaderFlame snapshot={snapshot({ todayPoints: 1_234 })} replay={1} onDismiss={() => undefined} language="en" />,
+      <HeaderFlame snapshot={snapshot({ todayPoints: 1_234 })} replay={1} onDismiss={() => undefined} language="fr" />,
     );
     expect(html.match(/data-flame-tongue/g)?.length).toBe(3);
-    expect(html).toContain('>1.2K<');
+    expect(html).toContain(`>${compactCount(1_234, 'fr')}<`);
     const css = readFileSync(new URL('../styles/header-flame.css', import.meta.url), 'utf8');
     const mark = css.match(/\.header-flame-mark\s*\{([^}]*)\}/)?.[1] ?? '';
     expect(mark).not.toMatch(/background|box-shadow|border-radius/);
   });
 
-  test('le compteur est détouré : blanc sur noir en sombre, noir autour de l’anthracite en clair (#9044)', () => {
+  test('le compteur est rouge, cerclé de 2 px gris anthracite, quel que soit le thème (#9044)', () => {
     const css = readFileSync(new URL('../styles/header-flame.css', import.meta.url), 'utf8');
-    const light = css.match(/\.header-flame-count-digits\s*\{([^}]*)\}/)?.[1] ?? '';
-    expect(light).toContain('-webkit-text-stroke');
-    expect(light).toContain('var(--flame-count-stroke)');
-    expect(css).toMatch(/\.dark[^{]*\{[^}]*--flame-count-stroke:\s*#fff/);
+    const digits = css.match(/\.header-flame-count-digits\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(digits).toContain('color: var(--ios-error)');
+    expect(digits).toContain('-webkit-text-stroke: 4px #383e42');
+    expect(digits).toContain('paint-order: stroke fill');
+    expect(css).not.toMatch(/:root\.(dark|light)/);
   });
 
   test('la valeur d’avant l’envoi tient jusqu’à ce que la lueur rejoigne la flamme, puis monte (#9044)', async () => {

@@ -9,17 +9,6 @@
  * minutage (45 % de tour, embrasement jusqu'à 80 %, compte à 82 %) est celui
  * de `HeaderFlameOrbit` côté iOS.
  */
-:root,
-:root.dark {
-  --flame-count-fill: #000;
-  --flame-count-stroke: #fff;
-}
-
-:root.light {
-  --flame-count-fill: #383e42;
-  --flame-count-stroke: #000;
-}
-
 .header-flame-glow {
   position: absolute;
   inset: -4px;
@@ -73,11 +62,15 @@
 .header-flame-tongue-1 { --tongue-x: 3px; --tongue-delay: 1.04s; }
 .header-flame-tongue-2 { --tongue-x: 0px; --tongue-delay: 1.18s; }
 
+/* Rouge (`--ios-error`, le `MeeshyColors.error` d'iOS, le même dans les deux
+   thèmes) cerclé de 2 px gris anthracite, en clair comme en sombre (porteur
+   2026-10-01). `paint-order` peint le trait SOUS le remplissage : 4 px de
+   trait centré = 2 px visibles autour du chiffre. */
 .header-flame-count-digits {
   display: inline-block;
   font-weight: 800;
-  color: var(--flame-count-fill);
-  -webkit-text-stroke: 1px var(--flame-count-stroke);
+  color: var(--ios-error);
+  -webkit-text-stroke: 4px #383e42;
   paint-order: stroke fill;
 }
 
