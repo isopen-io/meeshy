@@ -24,14 +24,22 @@ import type { SocketClient } from '@/lib/net/socket';
  * tenue (`coverConversationViewing`), les conversations tenues sont retirées ;
  * la dernière couverture levée les ré-annonce.
  *
+ * ACTIF (#9061) : un pair ICI qui regarde, écoute ou agit — `viewing:activity`
+ * — porte un point qui PULSE ; il redevient simplement là quand l'activité se
+ * tait plus de `ACTIVITY_HOLD_MS`. L'émission est bornée à une toutes les
+ * `ACTIVITY_THROTTLE_MS`, et seulement pour une conversation tenue et annoncée.
+ *
  * Une coupure VIDE le magasin : ce que la passerelle a retiré pendant qu'on
  * n'écoutait pas ne doit pas survivre en point violet.
  */
 
 export type ViewingState = {
   readonly byConversation: Readonly<Record<string, readonly string[]>>;
+  readonly activeByConversation: Readonly<Record<string, readonly string[]>>;
   arrive(conversationId: string, userId: string): void;
   leave(conversationId: string, userId: string): void;
+  stir(conversationId: string, userId: string): void;
+  rest(conversationId: string, userId: string): void;
   replace(conversationId: string, userIds: readonly string[]): void;
   clear(): void;
 };
@@ -48,9 +56,25 @@ const withPeers = (
   return rest;
 };
 
+const without = (
+  byConversation: ViewingState['byConversation'],
+  conversationId: string,
+  userId: string,
+): ViewingState['byConversation'] => {
+  const current = byConversation[conversationId];
+  if (current === undefined || !current.includes(userId)) return byConversation;
+  return withPeers(byConversation, conversationId, current.filter((id) => id !== userId));
+};
+
+/** Le temps qu'un pair reste ACTIF après sa dernière activité reçue (#9061). */
+export const ACTIVITY_HOLD_MS = 4_000;
+/** L'écart minimal entre deux `viewing:activity` d'une même conversation. */
+export const ACTIVITY_THROTTLE_MS = 2_000;
+
 export function createViewingStore(): ViewingStoreApi {
   return createStore<ViewingState>((set) => ({
     byConversation: {},
+    activeByConversation: {},
     arrive: (conversationId, userId) =>
       set((state) => {
         const current = state.byConversation[conversationId] ?? [];
@@ -59,13 +83,30 @@ export function createViewingStore(): ViewingStoreApi {
       }),
     leave: (conversationId, userId) =>
       set((state) => {
-        const current = state.byConversation[conversationId];
-        if (current === undefined || !current.includes(userId)) return state;
-        return { byConversation: withPeers(state.byConversation, conversationId, current.filter((id) => id !== userId)) };
+        const byConversation = without(state.byConversation, conversationId, userId);
+        const activeByConversation = without(state.activeByConversation, conversationId, userId);
+        if (byConversation === state.byConversation && activeByConversation === state.activeByConversation) return state;
+        return { byConversation, activeByConversation };
+      }),
+    stir: (conversationId, userId) =>
+      set((state) => {
+        const current = state.activeByConversation[conversationId] ?? [];
+        if (current.includes(userId)) return state;
+        return { activeByConversation: withPeers(state.activeByConversation, conversationId, [...current, userId]) };
+      }),
+    rest: (conversationId, userId) =>
+      set((state) => {
+        const activeByConversation = without(state.activeByConversation, conversationId, userId);
+        return activeByConversation === state.activeByConversation ? state : { activeByConversation };
       }),
     replace: (conversationId, userIds) =>
       set((state) => ({ byConversation: withPeers(state.byConversation, conversationId, [...new Set(userIds)]) })),
-    clear: () => set((state) => (Object.keys(state.byConversation).length === 0 ? state : { byConversation: {} })),
+    clear: () =>
+      set((state) =>
+        Object.keys(state.byConversation).length === 0 && Object.keys(state.activeByConversation).length === 0
+          ? state
+          : { byConversation: {}, activeByConversation: {} },
+      ),
   }));
 }
 
@@ -73,6 +114,11 @@ export const viewingStore: ViewingStoreApi = createViewingStore();
 
 export function isHereIn(state: Pick<ViewingState, 'byConversation'>, conversationId: string, userId: string): boolean {
   return state.byConversation[conversationId]?.includes(userId) ?? false;
+}
+
+/** Ce pair ICI regarde-t-il, écoute-t-il ou agit-il en ce moment (#9061) ? */
+export function isActiveIn(state: Pick<ViewingState, 'activeByConversation'>, conversationId: string, userId: string): boolean {
+  return state.activeByConversation[conversationId]?.includes(userId) ?? false;
 }
 
 /** `conversationId → pairs présents`, le lecteur exclu — l'écran de liste
@@ -91,6 +137,7 @@ export function herePeersOf(
 type ViewingTransport = {
   readonly announce: (conversationId: string) => void;
   readonly withdraw: (conversationId: string) => void;
+  readonly stir: (conversationId: string) => void;
 };
 
 let holders: ReadonlyMap<string, number> = new Map();
@@ -138,6 +185,13 @@ export function coverConversationViewing(): () => void {
   };
 }
 
+/** L'utilisateur fait défiler, lit un média, écrit ou réagit dans CETTE
+ * conversation (#9061) : annoncé s'il y est, borné par le lien. */
+export function signalConversationActivity(conversationId: string): void {
+  if (!holders.has(conversationId) || isCovered()) return;
+  transport?.stir(conversationId);
+}
+
 type ViewingEventPayload = { readonly userId: string; readonly conversationId: string };
 type ViewingSnapshotPayload = { readonly conversationId: string; readonly userIds: readonly string[] };
 
@@ -158,12 +212,19 @@ export function bindConversationViewing(params: {
   readonly visibility: VisibilitySource;
   readonly store: ViewingStoreApi;
   readonly viewerId: () => string;
+  readonly now?: () => number;
+  readonly activityHoldMs?: number;
 }): () => void {
-  const { socket, visibility, store, viewerId } = params;
+  const { socket, visibility, store, viewerId, now = Date.now, activityHoldMs = ACTIVITY_HOLD_MS } = params;
   let authenticated = socket.connected;
+  let lastStirred: ReadonlyMap<string, number> = new Map();
+  const restTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   const canAnnounce = (): boolean => authenticated && !isCovered() && visibility.visibilityState() === 'visible';
-  const emit = (event: typeof CLIENT_EVENTS.VIEWING_START | typeof CLIENT_EVENTS.VIEWING_STOP, conversationId: string): void => {
+  const emit = (
+    event: typeof CLIENT_EVENTS.VIEWING_START | typeof CLIENT_EVENTS.VIEWING_STOP | typeof CLIENT_EVENTS.VIEWING_ACTIVITY,
+    conversationId: string,
+  ): void => {
     const body: ViewingActionData = { conversationId };
     socket.emit(event, body);
   };
@@ -179,6 +240,14 @@ export function bindConversationViewing(params: {
     withdraw: (conversationId) => {
       if (authenticated) emit(CLIENT_EVENTS.VIEWING_STOP, conversationId);
     },
+    stir: (conversationId) => {
+      if (!canAnnounce()) return;
+      const at = now();
+      const last = lastStirred.get(conversationId);
+      if (last !== undefined && at - last < ACTIVITY_THROTTLE_MS) return;
+      lastStirred = new Map(lastStirred).set(conversationId, at);
+      emit(CLIENT_EVENTS.VIEWING_ACTIVITY, conversationId);
+    },
   };
   transport = own;
 
@@ -187,9 +256,28 @@ export function bindConversationViewing(params: {
     store.getState().clear();
     announceAll();
   };
+  const stopRestTimers = (): void => {
+    for (const timer of restTimers.values()) clearTimeout(timer);
+    restTimers.clear();
+  };
   const onDisconnect = (): void => {
     authenticated = false;
+    stopRestTimers();
     store.getState().clear();
+  };
+  const onActivity = (payload: unknown): void => {
+    if (!isViewingEvent(payload) || payload.userId === viewerId()) return;
+    const { conversationId, userId } = payload;
+    const key = `${conversationId}\u0000${userId}`;
+    clearTimeout(restTimers.get(key));
+    store.getState().stir(conversationId, userId);
+    restTimers.set(
+      key,
+      setTimeout(() => {
+        restTimers.delete(key);
+        store.getState().rest(conversationId, userId);
+      }, activityHoldMs),
+    );
   };
   const onStart = (payload: unknown): void => {
     if (!isViewingEvent(payload) || payload.userId === viewerId()) return;
@@ -213,6 +301,7 @@ export function bindConversationViewing(params: {
   socket.on(SERVER_EVENTS.VIEWING_START, onStart);
   socket.on(SERVER_EVENTS.VIEWING_STOP, onStop);
   socket.on(SERVER_EVENTS.VIEWING_SNAPSHOT, onSnapshot);
+  socket.on(SERVER_EVENTS.VIEWING_ACTIVITY, onActivity);
   const unwatch = visibility.onChange(onVisibility);
   announceAll();
 
@@ -223,6 +312,8 @@ export function bindConversationViewing(params: {
     socket.off(SERVER_EVENTS.VIEWING_START, onStart);
     socket.off(SERVER_EVENTS.VIEWING_STOP, onStop);
     socket.off(SERVER_EVENTS.VIEWING_SNAPSHOT, onSnapshot);
+    socket.off(SERVER_EVENTS.VIEWING_ACTIVITY, onActivity);
+    stopRestTimers();
     unwatch();
   };
 }

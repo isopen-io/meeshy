@@ -7,7 +7,7 @@ import type { UserPresenceStatus } from '@/lib/api/types';
 import { initialsOf } from '@/lib/view/conversation';
 import type { ActiveMember } from '@/lib/view/top-active-members';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
-import { HerePeersContext } from '@/lib/view/use-conversation-viewing';
+import { ActivePeersContext, HerePeersContext } from '@/lib/view/use-conversation-viewing';
 
 import { Avatar } from './avatar';
 import { AvatarMenuTrigger } from './avatar-menu';
@@ -45,6 +45,7 @@ export function ActiveMembersStack({
   readonly onOpenDetails?: (() => void) | undefined;
 }) {
   const herePeers = useContext(HerePeersContext);
+  const activePeers = useContext(ActivePeersContext);
   if (members.length === 0) return null;
   const label = translate(currentInterfaceLanguage(), 'thread.header.active_members');
 
@@ -67,6 +68,7 @@ export function ActiveMembersStack({
                 size={SIZE}
                 name={member.name}
                 here={herePeers.includes(member.id)}
+                hereActive={activePeers.includes(member.id)}
                 {...(presenceOf === undefined ? {} : { presence: presenceOf(member.id) })}
                 {...(member.avatar === undefined ? {} : { src: member.avatar })}
                 {...(member.username === undefined ? {} : { profileUsername: member.username })}

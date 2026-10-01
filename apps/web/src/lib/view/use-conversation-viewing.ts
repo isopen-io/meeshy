@@ -1,7 +1,16 @@
-import { createContext, useContext, useEffect, useMemo } from 'react';
+import { createContext, useContext, useEffect, useMemo, type RefObject } from 'react';
 import { useStore } from 'zustand/react';
 
-import { acquireConversationViewing, coverConversationViewing, herePeersOf, isHereIn, viewingStore, type ViewingState } from '@/lib/api/conversation-viewing';
+import {
+  acquireConversationViewing,
+  coverConversationViewing,
+  herePeersOf,
+  isActiveIn,
+  isHereIn,
+  signalConversationActivity,
+  viewingStore,
+  type ViewingState,
+} from '@/lib/api/conversation-viewing';
 import { peerOf } from '@/lib/view/conversation';
 
 /**
@@ -16,6 +25,29 @@ export function useConversationViewing(conversationId: string | undefined): void
   );
 }
 
+/**
+ * Ce que l'utilisateur FAIT dans le fil le rend actif aux yeux de ses pairs
+ * (#9061) : défiler (regarder), lire un média (écouter), toucher, écrire.
+ * Les GESTES seulement — `wheel`/`touchmove` plutôt que `scroll`, qu'un
+ * recalage programmatique du fil déclencherait sans personne derrière. Écouté
+ * en CAPTURE sur la racine du fil : `play` et `timeupdate` ne remontent pas,
+ * la capture les voit quand même. Le lien borne l'émission.
+ */
+const ACTIVITY_EVENTS = ['wheel', 'touchmove', 'pointerdown', 'keydown', 'input', 'play', 'timeupdate'] as const;
+
+export function useConversationActivity(conversationId: string | undefined, root: RefObject<HTMLElement | null>): void {
+  useEffect(() => {
+    const element = root.current;
+    if (conversationId === undefined || conversationId === '' || element === null) return undefined;
+    const stir = (): void => signalConversationActivity(conversationId);
+    const options = { capture: true, passive: true } as const;
+    for (const event of ACTIVITY_EVENTS) element.addEventListener(event, stir, options);
+    return () => {
+      for (const event of ACTIVITY_EVENTS) element.removeEventListener(event, stir, options);
+    };
+  }, [conversationId, root]);
+}
+
 /** Une vue plein écran (visionneuse) couvre le fil tant qu'elle est montée :
  * l'utilisateur n'est plus « dans la conversation » (#9052). */
 export function useConversationViewingCover(): void {
@@ -26,6 +58,18 @@ export function useConversationViewingCover(): void {
  * ne se re-rend qu'au changement de CE couple. */
 export function useIsHere(conversationId: string, userId: string | undefined): boolean {
   return useStore(viewingStore, (s) => (userId === undefined ? false : isHereIn(s, conversationId, userId)));
+}
+
+/** Ce pair ICI regarde-t-il, écoute-t-il ou agit-il (#9061) ? */
+export function useIsHereActive(conversationId: string, userId: string | undefined): boolean {
+  return useStore(viewingStore, (s) => (userId === undefined ? false : isActiveIn(s, conversationId, userId)));
+}
+
+/** `conversationId → pairs actifs` pour toute la liste (#9061) — se lit avec
+ * `peerHereIn`, comme les pairs présents. */
+export function useActiveHerePeers(viewerId: string): Readonly<Record<string, readonly string[]>> {
+  const activeByConversation = useStore(viewingStore, (s) => s.activeByConversation);
+  return useMemo(() => herePeersOf({ byConversation: activeByConversation }, viewerId), [activeByConversation, viewerId]);
 }
 
 /** `conversationId → pairs présents` pour toute la liste — l'écran s'abonne
@@ -59,6 +103,11 @@ export function useHereIn(conversationId: string): readonly string[] {
   return useStore(viewingStore, (s) => herePeersIn(s, conversationId));
 }
 
+/** Les pairs ICI qui regardent, écoutent ou agissent dans UNE conversation. */
+export function useActiveIn(conversationId: string): readonly string[] {
+  return useStore(viewingStore, (s) => herePeersIn({ byConversation: s.activeByConversation }, conversationId));
+}
+
 /** Les pairs présents dans la conversation du fil que l'on lit — posé par
  * l'écran de fil, lu par chaque avatar d'auteur (bulles, frappe, en-tête).
  * Hors d'un fil : personne. */
@@ -67,6 +116,15 @@ export const HerePeersContext = createContext<readonly string[]>(NOBODY_HERE);
 export function useAuthorHere(authorKey: string | undefined): boolean {
   const herePeers = useContext(HerePeersContext);
   return authorKey !== undefined && herePeers.includes(authorKey);
+}
+
+/** Les pairs actifs du fil (#9061) — posé par l'écran de fil à côté de
+ * `HerePeersContext`. */
+export const ActivePeersContext = createContext<readonly string[]>(NOBODY_HERE);
+
+export function useAuthorActive(authorKey: string | undefined): boolean {
+  const activePeers = useContext(ActivePeersContext);
+  return authorKey !== undefined && activePeers.includes(authorKey);
 }
 
 type HereKeyBearer = {
