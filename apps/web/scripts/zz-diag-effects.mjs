@@ -331,7 +331,6 @@ try {
       await page.click('[data-carousel-item="volcano"]');
       check((await page.getAttribute('[data-carousel-item="volcano"]', 'aria-checked')) === 'true', `${label} : « Éruption » est coché`);
       const warmth = (color) => (color === null ? 0 : color.r - color.b);
-      const tintStart = Date.now();
       const tinted = await until(page, (base) => {
         const video = document.querySelector('[data-call-mode-preview] video');
         if (video === null || video.videoWidth === 0) return false;
@@ -348,8 +347,8 @@ try {
           blue += data[index + 2];
         }
         return (red - blue) / (data.length / 4) > base + 25 && red > blue;
-      }, warmth(natural), 20000);
-      console.log('TEINTE', label, Date.now() - tintStart, 'ms', tinted);
+      }, warmth(natural), 4000);
+      { const t0 = Date.now(); const samples = []; for (let k = 0; k < 40; k += 1) { samples.push([Date.now() - t0, await page.evaluate(() => { const video = document.querySelector('[data-call-mode-preview] video'); if (video === null || video.videoWidth === 0) return null; const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64; const c = canvas.getContext('2d', { willReadFrequently: true }); c.drawImage(video, 0, 0, 64, 64); const d = c.getImageData(0, 0, 64, 64).data; let r = 0, g = 0, b = 0; for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i+1]; b += d[i + 2]; } const n = d.length / 4; return [Math.round(r / n), Math.round(g / n), Math.round(b / n), video.videoWidth, video.videoHeight]; })]); await page.waitForTimeout(250); } console.log('MESURE', label, 'naturel', JSON.stringify(natural && [Math.round(natural.r), Math.round(natural.g), Math.round(natural.b)]), 'FaceDetector', await page.evaluate(() => typeof globalThis.FaceDetector), await page.evaluate(() => navigator.userAgent)); console.log('MESURE', label, 'eruption', JSON.stringify(samples)); }
       check(natural !== null && tinted, `${label} : l'éruption teint l'image envoyée d'orangé (r−b au départ ${Math.round(warmth(natural))})`);
       check(await peerReceives(page), `${label} : le pair décode toujours des images, éruption posée`);
       await capture(page, `effets-eruption-${slug}`);
