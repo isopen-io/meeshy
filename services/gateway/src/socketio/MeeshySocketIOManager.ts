@@ -1822,13 +1822,7 @@ export class MeeshySocketIOManager {
       });
 
       // « Est dans la conversation » (#8892) — l'écran ouvert au premier plan.
-      socket.on(CLIENT_EVENTS.VIEWING_START, async (data) => {
-        try { await this.conversationViewingHandler.handleStart(socket, data); } catch (error) { logger.error('[VIEWING_START] Error:', error); }
-      });
-
-      socket.on(CLIENT_EVENTS.VIEWING_STOP, async (data) => {
-        try { await this.conversationViewingHandler.handleStop(socket, data); } catch (error) { logger.error('[VIEWING_STOP] Error:', error); }
-      });
+      this.conversationViewingHandler.listen(socket);
 
       // Une app passée en arrière-plan n'est plus dans aucune conversation.
       // `CallEventsHandler` écoute le même événement pour la sonnerie.

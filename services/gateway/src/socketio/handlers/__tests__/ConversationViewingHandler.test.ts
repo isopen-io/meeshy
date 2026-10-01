@@ -451,3 +451,77 @@ describe('ConversationViewingHandler — l’ordre des gestes est celui du clien
     expect(snapshotOf(bob.direct)).toEqual([{ conversationId: CONV, userIds: [ALICE] }]);
   });
 });
+
+const activitiesFor = (emissions: readonly Emission[]) =>
+  emissions.filter(e => e.event === SERVER_EVENTS.VIEWING_ACTIVITY);
+
+describe('ConversationViewingHandler — regarder, écouter, agir (#9061)', () => {
+  it('relaie l’activité d’un lecteur ICI à la room, sans la renvoyer à ses appareils', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: CONV });
+
+    expect(activitiesFor(emissions)).toEqual([
+      {
+        room: `conversation:${CONV}`,
+        except: ['s-alice'],
+        event: SERVER_EVENTS.VIEWING_ACTIVITY,
+        data: { userId: ALICE, conversationId: CONV },
+      },
+    ]);
+  });
+
+  it('ne relaie rien pour un socket qui n’a pas annoncé la conversation', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: OTHER_CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: CONV });
+
+    expect(activitiesFor(emissions)).toEqual([]);
+  });
+
+  it('ne relaie plus rien une fois la conversation quittée', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+    await handler.handleStop(alice.socket, { conversationId: CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: CONV });
+
+    expect(activitiesFor(emissions)).toEqual([]);
+  });
+
+  it('ne relaie rien pour qui masque sa présence — il n’est jamais annoncé ICI', async () => {
+    const { handler, emissions, connect } = makeWorld({ hidesOnlineStatus: [ALICE] });
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: CONV });
+
+    expect(activitiesFor(emissions)).toEqual([]);
+  });
+
+  it('n’atteint pas les appareils d’un pair bloqué', async () => {
+    const { handler, emissions, connect } = makeWorld({ blocks: { [ALICE]: [BOB] } });
+    connect(BOB, 's-bob');
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: CONV });
+
+    expect(activitiesFor(emissions).map(e => [...e.except].sort())).toEqual([['s-alice', 's-bob']]);
+  });
+
+  it('ignore une charge invalide', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: '' });
+
+    expect(activitiesFor(emissions)).toEqual([]);
+  });
+});
