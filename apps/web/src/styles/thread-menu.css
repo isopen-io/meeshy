@@ -88,17 +88,22 @@
   }
 }
 
-/* LA LISTE D'ACTIONS — SANS CADRE (directive porteur 2026-10-01, #9043) : ni
-   carte, ni bordure, ni séparateurs ; les entrées se posent NUES sur le voile,
-   comme le rail d'une story sur sa scène. Le voile étant toujours sombre, le
-   libellé prend l'encre « sur média » et l'ombre portée du texte de la
-   visionneuse (`.viewer-ink-shadow`) ; l'icône garde l'accent. Ancrée en HAUT
-   (les lignes du sous-menu Traduire poussent vers le BAS). */
+/* LA LISTE D'ACTIONS — même chrome que `RowActions`/`ReadingModeChip`
+   (`app.css`, `rounded-card`+`shadow-cast`), ancrée en HAUT (les nouvelles
+   lignes qui apparaissent en changeant de panneau — le sous-menu Traduire —
+   poussent vers le BAS, jamais vers le haut). #9043 ne retire le cadre qu'au
+   RAIL : la liste garde sa carte, et le glissement vers le haut la remonte. */
 .message-menu-list {
-  color: var(--color-on-media);
-  text-shadow: 0 1px 2px color-mix(in srgb, var(--ios-media-backdrop) 60%, transparent);
+  border-radius: var(--radius-card, 14px);
+  overflow: hidden;
+  background-color: var(--color-ios-card);
+  border: 1px solid var(--color-edge);
+  box-shadow: var(--shadow-cast, 0 8px 24px rgba(0, 0, 0, 0.24));
   transform-origin: top;
   animation: messageMenuListIn 260ms cubic-bezier(0.32, 1.4, 0.55, 1);
+}
+.message-menu-list > button + button {
+  border-top: 1px solid var(--color-edge);
 }
 
 /* LA SURFACE DU GLISSEMENT (#9043) — tout le voile : glisser vers le haut y

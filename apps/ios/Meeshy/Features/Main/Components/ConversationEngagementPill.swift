@@ -8,47 +8,37 @@ import MeeshyUI
 /// jours, un point central, puis le total des points depuis toujours, abrégé
 /// (« 1,2 k », « 3 M », `CompactCountLabel`). Sans série EN COURS, rien : ni
 /// flamme ni points. Les points du jour vivent sous l'avatar replié
-/// (`HeaderFlameDecoration`). Feuille PURE : primitives seulement, portillon
+/// (`HeaderFlameDecoration`). Même rendu qu'elle, sans capsule ni fond : la
+/// flamme en dégradé, puis « série · total » en chiffres rouges cerclés de
+/// blanc (`HeaderFlameCount`). Feuille PURE : primitives seulement, portillon
 /// `Equatable`.
 struct ConversationEngagementPill: View, Equatable {
     let streakDays: Int
     let totalText: String
     let accessibilityText: String
-    let accentColor: String
 
     init?(snapshot: ConversationEngagementSnapshot, accentColor: String, locale: Locale = .current) {
         guard snapshot.streakDays > 0 else { return nil }
         self.streakDays = snapshot.streakDays
         self.totalText = CompactCountLabel.text(snapshot.totalPoints, locale: locale)
         self.accessibilityText = Self.accessibilityText(for: snapshot)
-        self.accentColor = accentColor
     }
 
     static func == (lhs: ConversationEngagementPill, rhs: ConversationEngagementPill) -> Bool {
         lhs.streakDays == rhs.streakDays
             && lhs.totalText == rhs.totalText
             && lhs.accessibilityText == rhs.accessibilityText
-            && lhs.accentColor == rhs.accentColor
     }
-
-    private var accent: Color { Color(hex: accentColor) }
 
     /// « série · total » — ce que la pastille écrit à côté de la flamme.
     var text: String { "\(streakDays) · \(totalText)" }
 
     var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: "flame.fill")
-                .imageScale(.small)
-            Text(verbatim: text)
+        HStack(spacing: 2) {
+            HeaderFlameGlyph()
+            HeaderFlameCount(text: text)
         }
-        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold, design: .rounded).monospacedDigit())
-        .foregroundColor(accent)
-        .lineLimit(1)
         .fixedSize()
-        .padding(.horizontal, MeeshySpacing.xsPlus)
-        .padding(.vertical, MeeshySpacing.xxs)
-        .background(Capsule(style: .continuous).fill(accent.opacity(MeeshyOpacity.light)))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
     }

@@ -321,21 +321,20 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
     // press que le menu des conversations), tout en CONSERVANT la barre de
     // réactions emoji rapides et l'aperçu de bulle (`MessageOverlayMenu`).
 
-    /// La liste d'actions du menu message garde les rows du design système —
+    /// La liste d'actions du menu message rend le design système : conteneur
+    /// `adaptiveGlass` (Liquid Glass iOS 26 / fallback material), rows avec
     /// highlight au press (`MenuRowHighlightButtonStyle`, partagé avec le menu
-    /// conversation) et métriques Dynamic Type, jamais `.buttonStyle(.plain)` —
-    /// mais **plus de conteneur** : directive porteur 2026-10-01 (#9043),
-    /// « enlever le cadre comme pour les story ». Le voile de l'overlay est son
-    /// fond, comme la scène est celui de la rangée d'émojis d'une story
-    /// (`FullscreenReactionStrip`, `chrome: .none`) ; la carte de verre du
-    /// 2026-07-14 est supplantée.
+    /// conversation) et métriques Dynamic Type — jamais `.buttonStyle(.plain)`.
+    /// #9043 ne retire le cadre qu'à la BANDE d'emojis : le menu du bas garde
+    /// son verre (directive porteur 2026-10-01), le glissement vers le haut le
+    /// remonte pour en atteindre toutes les entrées.
     func test_messageActionsMenu_rendersSystemDesign_likeConversationMenu() throws {
         let menuSource = try source("Meeshy/Features/Main/Components/MessageActionsMenu.swift")
 
-        XCTAssertFalse(
-            menuSource.contains(".adaptiveGlass("),
-            "MessageActionsMenu se pose NU sur le voile (#9043) : aucun conteneur " +
-            "de verre, comme la rangée d'émojis d'une story."
+        XCTAssertTrue(
+            menuSource.contains(".adaptiveGlass(in: RoundedRectangle"),
+            "MessageActionsMenu garde son conteneur .adaptiveGlass (Liquid Glass " +
+            "iOS 26 + fallback) — #9043 ne retire le cadre qu'à la bande d'emojis."
         )
         XCTAssertTrue(
             menuSource.contains("MenuRowHighlightButtonStyle"),
