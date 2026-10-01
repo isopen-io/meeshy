@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { REPRODUCED_PUSH_FIELD, REPRODUCED_PUSH_VALUE } from '@meeshy/shared/types/reproduced-notification-push';
+import {
+  REPLACES_ACTOR_SUBJECT_FIELD,
+  REPLACES_ACTOR_SUBJECT_VALUE,
+  REPRODUCED_PUSH_FIELD,
+  REPRODUCED_PUSH_VALUE,
+} from '@meeshy/shared/types/reproduced-notification-push';
 
 import type { DeliveryReceiptCredential } from './delivery-receipt-credential';
 import { banner, CODE, mount, push, windowClient, type WorkerHarness } from '@/test-support/sw-push-harness';
@@ -238,6 +243,83 @@ describe('une notification éditée remplace la bannière déjà affichée (#734
       { renotify: true, silent: false },
       { renotify: true, silent: true },
     ]);
+  });
+});
+
+/**
+ * UNE RÉACTION CHANGÉE NE LAISSE QU'UNE BANNIÈRE (#9028).
+ *
+ * Changer sa réaction (❤️ → 😂) retire une notification et en crée une
+ * AUTRE : deux identités, et un post n'empile pas ses bannières sous un tag
+ * commun. La passerelle déclare que le push remplace la bannière du même type,
+ * du même acteur et du même sujet (`REPLACES_ACTOR_SUBJECT_FIELD`) ; le
+ * worker la ferme avant d'afficher la nouvelle.
+ */
+const reaction = (notificationId: string, body: string, data: Record<string, unknown> = {}) =>
+  composed(
+    { body },
+    {
+      notificationId,
+      type: 'post_like',
+      senderId: 'u-kwame',
+      postId: 'p1',
+      [REPLACES_ACTOR_SUBJECT_FIELD]: REPLACES_ACTOR_SUBJECT_VALUE,
+      ...data,
+    },
+  );
+
+describe('une réaction changée remplace la bannière de la réaction d’avant (#9028)', () => {
+  test('❤️ puis 😂 du même acteur sur le même post : une seule bannière, celle d’après', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(reaction('n1', 'Kwame a réagi ❤️')));
+    await worker.dispatch('push', push(reaction('n2', 'Kwame a réagi 😂')));
+    expect(visible(worker)).toEqual([['n2', 'Kwame a réagi 😂']]);
+  });
+
+  test('la réaction d’un AUTRE acteur reste affichée', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(reaction('n1', 'Awa a réagi ❤️', { senderId: 'u-awa' })));
+    await worker.dispatch('push', push(reaction('n2', 'Kwame a réagi 😂')));
+    expect(visible(worker)).toEqual([
+      ['n1', 'Awa a réagi ❤️'],
+      ['n2', 'Kwame a réagi 😂'],
+    ]);
+  });
+
+  test('la réaction du même acteur à un AUTRE commentaire du post reste affichée', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(reaction('n1', 'Kwame aime c1', { type: 'comment_like', commentId: 'c1' })));
+    await worker.dispatch('push', push(reaction('n2', 'Kwame aime c2', { type: 'comment_like', commentId: 'c2' })));
+    expect(visible(worker)).toEqual([
+      ['n1', 'Kwame aime c1'],
+      ['n2', 'Kwame aime c2'],
+    ]);
+  });
+
+  /* L'affirmation reste vraie quand quelqu'un regarde : la bannière d'avant
+     dit une réaction qui n'existe plus, même si la nouvelle passe par le
+     socket (D-11). */
+  test('un onglet VISIBLE ferme quand même la bannière périmée, sans en montrer une autre', async () => {
+    const clients: ReturnType<typeof windowClient>[] = [];
+    const worker = mount({ clients });
+    await worker.dispatch('push', push(reaction('n1', 'Kwame a réagi ❤️')));
+    clients.push(windowClient('visible'));
+    await worker.dispatch('push', push(reaction('n2', 'Kwame a réagi 😂')));
+    expect(worker.tray).toEqual([]);
+  });
+
+  test('un push sans la déclaration ne ferme rien — un commentaire ne remplace pas le précédent', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(reaction('n1', 'Kwame a commenté', { type: 'post_comment', [REPLACES_ACTOR_SUBJECT_FIELD]: undefined })));
+    await worker.dispatch('push', push(reaction('n2', 'Kwame a commenté encore', { type: 'post_comment', [REPLACES_ACTOR_SUBJECT_FIELD]: undefined })));
+    expect(visible(worker).length).toBe(2);
+  });
+
+  test('la même réaction livrée deux fois reste affichée une fois', async () => {
+    const worker = mount();
+    await worker.dispatch('push', push(reaction('n1', 'Kwame a réagi ❤️')));
+    await worker.dispatch('push', push(reaction('n1', 'Kwame a réagi ❤️')));
+    expect(visible(worker)).toEqual([['n1', 'Kwame a réagi ❤️']]);
   });
 });
 
