@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import ImageIO
 import MeeshySDK
 
 // MARK: - Mee et Meo, les deux colibris (#9053)
@@ -19,7 +20,7 @@ import MeeshySDK
 /// sont pas dans l'index : un film ne peut pas porter un emplacement.
 nonisolated public struct MeeSticker: Hashable, Identifiable, Sendable {
 
-    /// L'onglet : Mee seule, Meo seul, ou Mee & Meo ensemble (#9058).
+    /// La distribution : Mee seule, Meo seul, ou les deux ensemble (#9058).
     nonisolated public enum Character: String, Sendable {
         case mee
         case meo
@@ -85,14 +86,53 @@ nonisolated public enum MeeStickerCatalog {
         all.filter { $0.tab == character }
     }
 
-    /// Une section par intention, dans l'ordre du web ; une intention sans
-    /// sticker dans cet onglet ne laisse aucune section vide.
-    public static func sections(of character: MeeSticker.Character) -> [SectionGroup] {
-        let ofCharacter = stickers(of: character)
-        return intentOrder.compactMap { intent in
-            let stickers = ofCharacter.filter { $0.intent == intent }
-            return stickers.isEmpty ? nil : SectionGroup(intent: intent, stickers: stickers)
+    /// **L'onglet « Mee & Meo », une section par INTENTION** (#9068) : on y
+    /// cherche ce qu'on veut dire, pas qui le joue. Dans une section, Mee
+    /// d'abord, puis Meo, puis les duos ; une intention sans sticker ne laisse
+    /// aucune section vide.
+    public static let sections: [SectionGroup] = intentOrder.compactMap { intent in
+        let stickers = [MeeSticker.Character.mee, .meo, .duo].flatMap { character in
+            all.filter { $0.tab == character && $0.intent == intent }
         }
+        return stickers.isEmpty ? nil : SectionGroup(intent: intent, stickers: stickers)
+    }
+
+    /// **Une ligne de la planche** : le titre d'une intention, ou une rangée
+    /// de stickers. La planche défile en RANGÉES de hauteur fixe dans la pile
+    /// paresseuse de la feuille — jamais en grilles imbriquées, qui créaient
+    /// toutes leurs cases d'un coup et figeaient le défilement (2026-10-02).
+    nonisolated public enum Row: Hashable, Identifiable, Sendable {
+        case title(MeeSticker.Intent)
+        case stickers([MeeSticker])
+
+        public var id: String {
+            switch self {
+            case .title(let intent): "title.\(intent.rawValue)"
+            case .stickers(let stickers): "row.\(stickers.first?.id ?? "")"
+            }
+        }
+    }
+
+    public static func rows(columns: Int) -> [Row] {
+        sections.flatMap { section in
+            [Row.title(section.intent)] + stride(from: 0, to: section.stickers.count, by: columns).map {
+                Row.stickers(Array(section.stickers[$0..<min($0 + columns, section.stickers.count)]))
+            }
+        }
+    }
+
+    /// Le Mee qu'une entrée de favori ou de récent désigne — `nil` si elle
+    /// n'en est pas un, ou s'il a quitté le catalogue (#9067).
+    public static func sticker(for entry: StickerUsageEntry) -> MeeSticker? {
+        guard entry.kind == .mee else { return nil }
+        return byID[entry.value]
+    }
+
+    /// **Les Mee d'une liste d'usage, dans son ordre** — aucun là où l'hôte ne
+    /// sait pas les envoyer (loi 4) : ils restent au magasin, invisibles.
+    public static func stickers(in entries: [StickerUsageEntry], hasMee: Bool) -> [MeeSticker] {
+        guard hasMee else { return [] }
+        return entries.compactMap(sticker(for:))
     }
 
     /// Le sticker qu'un `templateId` de message désigne — `nil` s'il ne vient
@@ -121,6 +161,25 @@ nonisolated public enum MeeStickerCatalog {
         return UIImage(data: data)
     }
 
+    /// **La première image, réduite à la case et décodée HORS du fil
+    /// principal** — la vignette d'une case pendant que son film se prépare.
+    /// Lire le WebP plein (`stillImage`) sur le rendu de chaque case qui
+    /// entre pendant un lancer coûtait une image par case.
+    @concurrent
+    public static func still(at url: URL, maxPixelSize: Int) async -> UIImage? {
+        let key = "\(url.lastPathComponent)|\(maxPixelSize)" as NSString
+        if let hit = stills.object(forKey: key) { return hit }
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+                  kCGImageSourceShouldCacheImmediately: true,
+              ] as CFDictionary) else { return nil }
+        let still = UIImage(cgImage: image)
+        stills.setObject(still, forKey: key, cost: image.bytesPerRow * image.height)
+        return still
+    }
+
     /// Le film décodé, lu dans le cache ou décodé sur place.
     @MainActor
     public static func decoded(_ sticker: MeeSticker, maxPixelSize: Int) -> AnimatedImageDecoder.Decoded? {
@@ -128,23 +187,30 @@ nonisolated public enum MeeStickerCatalog {
         return decode(url: url, maxPixelSize: maxPixelSize)
     }
 
-    /// **Le film décodé HORS du fil principal.** Un film de 48 images décodé
-    /// sur le rendu ferait sauter des images au défilement. `Decoded` n'étant
-    /// pas `Sendable`, la tâche de fond REMPLIT le cache, et la vue y lit
-    /// ensuite (`decoded`) sur son propre fil.
+    /// **Le film décodé HORS du fil principal, et RENDU à l'appelant.** Le
+    /// relire ensuite dans le cache pouvait le trouver déjà évincé par les
+    /// voisins préparés pendant un défilement — et le redécoder alors SUR LE
+    /// FIL PRINCIPAL, 48 images d'un coup (2026-10-02). `FilmEntry` est une
+    /// valeur immuable : elle traverse les acteurs.
     @concurrent
-    public static func prepareFilm(at url: URL, maxPixelSize: Int) async {
-        _ = decode(url: url, maxPixelSize: maxPixelSize)
+    public static func film(at url: URL, maxPixelSize: Int) async -> FilmEntry? {
+        guard !Task.isCancelled else { return nil }
+        return decodeEntry(url: url, maxPixelSize: maxPixelSize)
     }
 
     private static func decode(url: URL, maxPixelSize: Int) -> AnimatedImageDecoder.Decoded? {
+        decodeEntry(url: url, maxPixelSize: maxPixelSize)?.decoded
+    }
+
+    private static func decodeEntry(url: URL, maxPixelSize: Int) -> FilmEntry? {
         let key = "\(url.lastPathComponent)|\(maxPixelSize)" as NSString
-        if let hit = films.object(forKey: key) { return hit.decoded }
+        if let hit = films.object(forKey: key) { return hit }
         guard let bytes = try? Data(contentsOf: url, options: .mappedIfSafe),
               let decoded = AnimatedImageDecoder.decode(bytes, maxPixelSize: maxPixelSize) else { return nil }
         let cost = decoded.frames.reduce(0) { $0 + $1.bytesPerRow * $1.height }
-        films.setObject(FilmEntry(decoded), forKey: key, cost: cost)
-        return decoded
+        let entry = FilmEntry(decoded)
+        films.setObject(entry, forKey: key, cost: cost)
+        return entry
     }
 
     /// `NSCache` est sûr entre fils (même choix que `StoryFilterProcessor`).
@@ -157,11 +223,17 @@ nonisolated public enum MeeStickerCatalog {
         return cache
     }()
 
+    nonisolated(unsafe) private static let stills: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.totalCostLimit = 24 * 1024 * 1024
+        return cache
+    }()
+
     /// `nonisolated deinit` : `NSCache` évince sur le fil qu'il choisit, et une
     /// deinit isolée au `MainActor` double-libère sur iOS 26.1 (voir
     /// `AnimatedImageMemo.Entry`).
-    nonisolated private final class FilmEntry {
-        let decoded: AnimatedImageDecoder.Decoded
+    nonisolated public final class FilmEntry: @unchecked Sendable {
+        public let decoded: AnimatedImageDecoder.Decoded
         init(_ decoded: AnimatedImageDecoder.Decoded) { self.decoded = decoded }
         nonisolated deinit {}
     }
@@ -206,10 +278,10 @@ extension MeeSticker.Intent {
 
 // MARK: - L'hôte qui ENVOIE un Mee
 
-/// **Les onglets Mee et Meo n'existent que si un hôte sait envoyer le
-/// sticker** (loi 4). La conversation l'injecte ; la scène d'une story, qui ne
-/// sait pas poser un film, ne l'injecte pas — et la feuille n'y montre pas les
-/// onglets, au lieu de les montrer inertes.
+/// **L'onglet Mee & Meo n'existe que si un hôte sait envoyer le sticker**
+/// (loi 4). La conversation l'injecte ; la scène d'une story, qui ne sait pas
+/// poser un film, ne l'injecte pas — et la feuille n'y montre pas l'onglet,
+/// au lieu de le montrer inerte.
 public struct MeeStickerPickKey: EnvironmentKey {
     public static let defaultValue: ((MeeSticker) -> Void)? = nil
 }

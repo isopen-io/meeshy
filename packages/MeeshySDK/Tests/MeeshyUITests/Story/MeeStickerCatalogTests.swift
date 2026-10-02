@@ -14,22 +14,50 @@ final class MeeStickerCatalogTests: XCTestCase {
 
     // MARK: - L'index et ses films
 
-    /// Trois onglets de personnages (#9058) : Mee, Meo, Mee & Meo.
-    func test_catalog_servesThreeCharacterTabs() {
+    /// Trois distributions (#9058) : Mee, Meo, Mee & Meo — rangées ensemble
+    /// dans un seul onglet depuis #9068.
+    func test_catalog_servesThreeCharacters() {
         XCTAssertFalse(MeeStickerCatalog.stickers(of: .mee).isEmpty)
         XCTAssertFalse(MeeStickerCatalog.stickers(of: .meo).isEmpty)
         XCTAssertFalse(MeeStickerCatalog.stickers(of: .duo).isEmpty)
         XCTAssertTrue(MeeStickerCatalog.stickers(of: .duo).allSatisfy { $0.id.hasPrefix("duo-") })
     }
 
-    /// Les sections sont des INTENTIONS, dans l'ordre du web, sans section vide.
-    func test_sections_followTheIntentOrder_andAreNeverEmpty() {
-        for character in [MeeSticker.Character.mee, .meo, .duo] {
-            let sections = MeeStickerCatalog.sections(of: character)
-            let order = sections.map(\.intent)
-            XCTAssertEqual(order, MeeStickerCatalog.intentOrder.filter(order.contains))
-            XCTAssertTrue(sections.allSatisfy { !$0.stickers.isEmpty })
+    /// **UN onglet, rangé par intention** (directive porteur 2026-10-02,
+    /// #9068) : Mee, Meo et leurs duos se cherchent par ce qu'ils DISENT, pas
+    /// par qui les joue. Chaque section suit l'ordre du web, n'est jamais vide,
+    /// et range ses stickers Mee, puis Meo, puis les duos.
+    func test_sections_mixEveryCharacter_byIntent_meeThenMeoThenDuo() {
+        let sections = MeeStickerCatalog.sections
+        let order = sections.map(\.intent)
+        XCTAssertEqual(order, MeeStickerCatalog.intentOrder.filter(order.contains))
+        XCTAssertTrue(sections.allSatisfy { !$0.stickers.isEmpty })
+        XCTAssertEqual(sections.flatMap(\.stickers).count, MeeStickerCatalog.all.count)
+        let rang: [MeeSticker.Character: Int] = [.mee: 0, .meo: 1, .duo: 2]
+        for section in sections {
+            let rangs = section.stickers.map { rang[$0.tab] ?? -1 }
+            XCTAssertEqual(rangs, rangs.sorted(), "\(section.intent) : Mee, puis Meo, puis les duos")
         }
+    }
+
+    /// **La planche défile en RANGÉES, pas en grilles imbriquées** (retour
+    /// porteur 2026-10-02 : « quand je défile sur toute la planche, ça plante
+    /// et le défilement ne fonctionne plus »). Une grille paresseuse par
+    /// intention, dans la pile paresseuse de la feuille, créait toutes ses
+    /// cases d'un coup et faisait osciller la hauteur du contenu sans fin.
+    /// Chaque ligne de la pile est désormais un titre OU une rangée d'au plus
+    /// `columns` stickers — l'ordre des sections, sans rien perdre ni doubler.
+    func test_rows_areATitleThenRowsOfAtMostThreeStickers_inSectionOrder() {
+        let rows = MeeStickerCatalog.rows(columns: 3)
+        var attendu: [MeeStickerCatalog.Row] = []
+        for section in MeeStickerCatalog.sections {
+            attendu.append(.title(section.intent))
+            attendu += stride(from: 0, to: section.stickers.count, by: 3).map {
+                .stickers(Array(section.stickers[$0..<min($0 + 3, section.stickers.count)]))
+            }
+        }
+        XCTAssertEqual(rows, attendu)
+        XCTAssertEqual(Set(rows.map(\.id)).count, rows.count, "un identifiant par ligne, sinon la pile recycle la mauvaise")
     }
 
     /// Chaque intention a un titre ET une explication — sinon la section se
@@ -57,6 +85,38 @@ final class MeeStickerCatalogTests: XCTestCase {
         XCTAssertNotNil(decoded.stillImage)
     }
 
+    // MARK: - Favoris et récents (#9067)
+
+    /// **Un Mee s'épingle comme les autres stickers** : un RENVOI vers son
+    /// identifiant, qui survit à l'aller-retour du magasin.
+    func test_usageEntry_ofAMee_isARoundTrippableReference() throws {
+        let sticker = MeeStickerCatalog.all[0]
+        let entree = StickerUsageEntry.mee(sticker)
+        XCTAssertEqual(entree.kind, .mee)
+        XCTAssertEqual(entree.value, sticker.id)
+        let relu = try JSONDecoder().decode(StickerUsageEntry.self, from: JSONEncoder().encode(entree))
+        XCTAssertEqual(relu, entree)
+        XCTAssertEqual(MeeStickerCatalog.sticker(for: relu), sticker)
+    }
+
+    /// Un favori dont le Mee a quitté le catalogue est ignoré, jamais purgé ;
+    /// une entrée d'une autre nature n'est pas un Mee.
+    func test_usageEntry_resolvesOnlyAKnownMee() {
+        XCTAssertNil(MeeStickerCatalog.sticker(for: StickerUsageEntry(kind: .mee, value: "n-existe-pas")))
+        XCTAssertNil(MeeStickerCatalog.sticker(for: .emoji("😀")))
+    }
+
+    /// Loi 4 dans les onglets d'usage : là où aucun hôte ne sait ENVOYER un
+    /// Mee (la scène d'une story), ses favoris ne s'affichent pas — ils
+    /// restent au magasin pour la conversation.
+    func test_usageMees_showOnlyWhereAHostSendsThem() {
+        let entrees: [StickerUsageEntry] = [.mee(MeeStickerCatalog.all[0]), .emoji("😀"),
+                                            .mee(MeeStickerCatalog.all[1])]
+        XCTAssertEqual(MeeStickerCatalog.stickers(in: entrees, hasMee: true),
+                       [MeeStickerCatalog.all[0], MeeStickerCatalog.all[1]])
+        XCTAssertEqual(MeeStickerCatalog.stickers(in: entrees, hasMee: false), [])
+    }
+
     // MARK: - Le contrat du message
 
     func test_templateID_isTheWebContract() {
@@ -80,24 +140,19 @@ final class MeeStickerCatalogTests: XCTestCase {
     // MARK: - Les onglets de la feuille
 
     /// Loi 4 : un onglet n'existe que s'il a un effet. Sans hôte capable
-    /// d'ENVOYER un Mee (la scène d'une story ne sait pas le poser), les deux
-    /// onglets ne sont pas rendus — jamais grisés.
-    func test_sheetTabs_offerMeeAndMeo_onlyWhenAHostSendsThem() {
-        XCTAssertFalse(StickerSheetTab.offered(hasMee: false).contains(.mee))
-        XCTAssertFalse(StickerSheetTab.offered(hasMee: false).contains(.meo))
-        XCTAssertFalse(StickerSheetTab.offered(hasMee: false).contains(.meeAndMeo))
+    /// d'ENVOYER un Mee (la scène d'une story ne sait pas le poser), l'onglet
+    /// n'est pas rendu — jamais grisé. Et il n'y en a plus qu'UN (#9068).
+    func test_sheetTabs_offerOneMeeAndMeoTab_onlyWhenAHostSendsThem() {
         XCTAssertEqual(StickerSheetTab.offered(hasMee: false),
                        [.search, .favorites, .recents, .custom, .smileys])
         XCTAssertEqual(StickerSheetTab.offered(hasMee: true),
-                       [.search, .favorites, .recents, .mee, .meo, .meeAndMeo, .custom, .smileys])
+                       [.search, .favorites, .recents, .meeAndMeo, .custom, .smileys])
     }
 
     /// Mee et Meo ne portent aucune famille de palette : leur contenu vient de
     /// leur propre catalogue, comme Favoris vient du magasin d'usage.
     func test_meeTabs_borrowNoPaletteFamily() {
         let toutes = StickerPaletteTab.offered(hasLibrary: true, hasNearbyPlaces: true)
-        XCTAssertEqual(StickerSheetTab.sections(of: .mee, offered: toutes), [])
-        XCTAssertEqual(StickerSheetTab.sections(of: .meo, offered: toutes), [])
         XCTAssertEqual(StickerSheetTab.sections(of: .meeAndMeo, offered: toutes), [])
     }
 }

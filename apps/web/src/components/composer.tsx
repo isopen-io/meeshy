@@ -42,7 +42,6 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { ComposerDraftReport } from '@/lib/view/use-draft';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
-import { useSentiment } from '@/lib/view/use-sentiment';
 import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { locationSupported, useLocationRequest } from '@/lib/view/use-location-request';
@@ -328,9 +327,6 @@ export const Composer = memo(function Composer({
   const locks = imposedLocksOf(imposedProtection);
   const effective = useMemo(() => contaminatedComposeProtection(protection, imposedProtection), [protection, imposedProtection]);
 
-  /** LA TONALITÉ — INDICATEUR PASSIF, débounce 300 ms (`use-sentiment.ts`,
-   * miroir `TextAnalyzer`). */
-  const sentiment = useSentiment(text);
 
   /**
    * L'ACCENT SUBSTITUÉ (#6175, puis #7667) — éphémère > vue unique > flou >
@@ -793,7 +789,15 @@ export const Composer = memo(function Composer({
             setEphemeralPickerOpen(false);
             setEffectsPanelOpen((v) => !v);
           }}
-          sentiment={sentiment}
+          {...(mayAttach(rights, 'image/*')
+            ? {
+                onOpenStickers: () => {
+                  setPanelOpen(false);
+                  setStickerSheetOpen(true);
+                },
+                onPickCamera: addFiles,
+              }
+            : {})}
           languageCode={compose.language}
           onOpenLanguage={() => setLanguageSheetOpen(true)}
           languagePillRef={languagePillRef}

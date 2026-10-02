@@ -51,9 +51,18 @@ struct CallPendingInvite: Equatable, Identifiable, Sendable {
     }
 }
 
+/// Qui a lancé une réaction : la capsule sous l'emoji le dit (miroir de
+/// `CallReactionBursts`, web).
+enum CallReactionAuthor: Equatable, Sendable {
+    case me
+    case peer(name: String)
+    case someone
+}
+
 struct CallFloatingReaction: Equatable, Identifiable, Sendable {
     let id: UUID
     let emoji: CallReactionEmoji
+    let author: CallReactionAuthor
     /// Position horizontale relative (0…1) : les réactions simultanées ne se
     /// superposent pas.
     let lane: Double
@@ -130,7 +139,7 @@ final class CallControlsController: ObservableObject {
             host?.applyModeratorMute()
             notice = .mutedBy(name: host?.participantName(for: muted.byUserId) ?? "")
         case .reactionReceived(let reaction):
-            show(reaction.emoji)
+            show(reaction.emoji, by: author(of: reaction.userId))
         }
     }
 
@@ -198,7 +207,7 @@ final class CallControlsController: ObservableObject {
         let recent = sentReactionTimes.filter { instant.timeIntervalSince($0) < 1 }
         guard recent.count < Self.reactionsPerSecond else { return nil }
         sentReactionTimes = recent + [instant]
-        show(emoji)
+        show(emoji, by: .me)
         return Task { [weak self] in
             do {
                 try await self?.socket.sendCallReaction(callId: callId, emoji: emoji)
@@ -227,8 +236,14 @@ final class CallControlsController: ObservableObject {
         invites.append(invite)
     }
 
-    private func show(_ emoji: CallReactionEmoji) {
-        let reaction = CallFloatingReaction(id: UUID(), emoji: emoji, lane: Double.random(in: 0.15...0.85))
+    private func author(of userId: String) -> CallReactionAuthor {
+        guard userId != viewerId() else { return .me }
+        let name = host?.participantName(for: userId) ?? ""
+        return name.isEmpty ? .someone : .peer(name: name)
+    }
+
+    private func show(_ emoji: CallReactionEmoji, by author: CallReactionAuthor) {
+        let reaction = CallFloatingReaction(id: UUID(), emoji: emoji, author: author, lane: Double.random(in: 0.15...0.85))
         reactions.append(reaction)
         pendingExpiry = Task { [weak self] in
             guard let self else { return }

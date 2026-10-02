@@ -5,6 +5,7 @@ import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
+import { developShots } from '@/lib/media/develop-shots';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { mayAttach } from '@/lib/send/attachments';
@@ -82,19 +83,6 @@ function Tile({ label, color, children }: { readonly label: string; readonly col
  * `e.currentTarget.value = ''` après chaque choix : sans lui, rechoisir le
  * MÊME fichier ne lève aucun `change`.
  */
-type PhotoDevelopModule = Pick<typeof import('@/lib/media/photo-develop'), 'developPhotoFile'>;
-
-/**
- * Ce qui revient de l'appareil photo passe par le développement unique des
- * photos (#8695), chargé au premier retour. Chunk injoignable : la photo part
- * originale, jamais perdue.
- */
-export const developShots = (shots: readonly File[], load: () => Promise<PhotoDevelopModule> = () => import('@/lib/media/photo-develop')): Promise<readonly File[]> =>
-  load().then(
-    ({ developPhotoFile }) => Promise.all(shots.map((shot) => developPhotoFile(shot))),
-    () => shots,
-  );
-
 function FileSource({
   id,
   label,

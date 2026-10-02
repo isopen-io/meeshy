@@ -6,6 +6,7 @@ import { MEE_SOLO_MORE } from './catalog-mee-2';
 import { MEO_SOLO } from './catalog-meo';
 import { MEO_SOLO_MORE } from './catalog-meo-2';
 import { MEE_TEMPLATE_PREFIX, isMeeTemplate } from './template';
+import { MEE_CHARACTER_TABS } from './types';
 import type { MeeSlots, MeeSticker, MeeTab } from './types';
 
 /**
@@ -39,6 +40,9 @@ export function meeStickerOfTemplate(templateId: string | undefined): MeeSticker
 }
 
 export const meeStickersOfTab = (tab: MeeTab): readonly MeeSticker[] => MEE_STICKERS.filter((sticker) => sticker.tab === tab);
+
+/** L'onglet « Mee & Meo » (#9068) : tous les personnages, Mee puis Meo puis les duos — les sections les rangent ensuite par intention. */
+export const MEE_CHARACTER_STICKERS: readonly MeeSticker[] = MEE_CHARACTER_TABS.flatMap(meeStickersOfTab);
 
 /** Les seules valeurs qu'un sticker accepte : celles qu'il déclare, non vides. */
 export function meeSlotsFor(sticker: MeeSticker, slots: MeeSlots): MeeSlots {
