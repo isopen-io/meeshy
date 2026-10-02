@@ -70,16 +70,27 @@ describe('un lien perdu en duo devient une reconnexion, pas une fin', () => {
   });
 });
 
-describe('la reconnexion du socket repart de liens neufs', () => {
-  test('après l’accusé du call:join, les anciens liens sont fermés et une offre neuve est acceptée', async () => {
+describe('un pair revenu offre depuis un lien neuf', () => {
+  test('une offre d’époque 1 sur un lien établi remplace ce lien au lieu d’être jetée', async () => {
     const h = await connectedDuo();
     h.binding.authenticated();
     await flush();
-    expect((h.links[0] as FakeLink).closed).toBe(true);
     h.engine.handle(SERVER_EVENTS.CALL_SIGNAL, { callId: 'call-1', signal: { type: 'offer', from: PEER, to: ME, sdp: 'v=0', negotiationId: 1 } });
     await flush();
+    expect((h.links[0] as FakeLink).closed).toBe(true);
     expect(h.links).toHaveLength(2);
     expect(h.links[1]?.received).toEqual(['offer']);
+  });
+
+  test('la reconnexion du socket garde un lien sain tant qu’aucune offre neuve n’arrive', async () => {
+    const h = await connectedDuo();
+    h.binding.authenticated();
+    await flush();
+    expect((h.links[0] as FakeLink).closed).toBe(false);
+    h.engine.handle(SERVER_EVENTS.CALL_SIGNAL, { callId: 'call-1', signal: { type: 'offer', from: PEER, to: ME, sdp: 'v=0', negotiationId: 4 } });
+    await flush();
+    expect(h.links).toHaveLength(1);
+    expect(h.links[0]?.received).toEqual(['offer']);
   });
 });
 

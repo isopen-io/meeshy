@@ -91,6 +91,15 @@ export type StartCallRequest = {
 
 export type JoinCallRequest = StartCallRequest & { readonly callId: string | null };
 
+/**
+ * Un pair revenu (rechargé, relancé, reconnecté) offre depuis un lien NEUF,
+ * dont l'époque repart de 1 (#9111) : l'ancien lien, déjà établi, ne
+ * l'accepterait jamais (`isStaleEpoch`) — il cède la place à un lien neuf.
+ */
+export function isFreshLinkOffer(signal: { readonly kind: string; readonly type?: string; readonly epoch: number }, link: string | undefined): boolean {
+  return signal.kind === 'description' && signal.type === 'offer' && signal.epoch <= 1 && (link === 'connected' || link === 'reconnecting' || link === 'failed');
+}
+
 export type CallEngineDeps = {
   readonly store: CallStoreApi;
   readonly transport: () => CallTransport | null;
@@ -324,9 +333,13 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     });
   };
 
-  const dropPeer = (userId: string): void => {
+  const dropLink = (userId: string): void => {
     session.links.get(userId)?.close();
     session.links.delete(userId);
+  };
+
+  const dropPeer = (userId: string): void => {
+    dropLink(userId);
     update((current) => withoutMember(current, userId));
   };
 
@@ -360,15 +373,6 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       session.lostTimer = null;
       if (read()?.phase.kind === 'reconnecting') hangupWith('connectionLost', CLIENT_EVENTS.CALL_LEAVE);
     }, REJOIN_GIVE_UP_MS);
-  };
-
-  /** Une reconnexion du socket : les pairs nous offrent à neuf, les anciens liens (et leur époque) s'effacent. */
-  const renewLinks = (): void => {
-    for (const [userId, link] of session.links) {
-      link.close();
-      update((current) => patchMember(current, userId, { link: 'connecting' }));
-    }
-    session.links.clear();
   };
 
   const linkTo = (userId: string): PeerLink | null => {
@@ -676,6 +680,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (signal === null || call === null || call.callId !== signal.callId || call.phase.kind === 'ended' || call.phase.kind === 'incoming') return;
     if (signal.to !== deps.viewerId() || signal.from === deps.viewerId()) return;
     if (call.members[signal.from] === undefined) remember({ userId: signal.from, name: '', avatar: null }, null);
+    if (isFreshLinkOffer(signal, call.members[signal.from]?.link)) dropLink(signal.from);
     const link = linkTo(signal.from);
     if (link === null) return;
     try {
@@ -992,9 +997,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       const ack = decodeAck(raw);
       if (read()?.callId !== callId) return;
       if (!ack.ok && ack.code === 'CALL_ENDED') finish(mapServerEndReason(ack.endReason ?? 'completed'));
-      if (!ack.ok) return;
-      session.iceServers = decodeIceServers(ack.data.iceServers) ?? session.iceServers;
-      renewLinks();
+      if (ack.ok) session.iceServers = decodeIceServers(ack.data.iceServers) ?? session.iceServers;
     });
   });
 
