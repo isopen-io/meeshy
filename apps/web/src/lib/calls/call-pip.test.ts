@@ -40,15 +40,23 @@ describe('pipSupport', () => {
 describe('pipSource', () => {
   test('la vidéo du pair d’abord ; à défaut ma caméra ; sans vidéo, rien', () => {
     const both = call();
-    expect(pipSource(both)).toEqual({ stream: both.remoteStreams.peer, mirrored: false });
+    expect(pipSource(both)).toEqual({ stream: both.remoteStreams.peer, mirrored: false, fit: 'cover' });
     const mine = call({ members: { peer: member('peer', false) } });
-    expect(pipSource(mine)).toEqual({ stream: mine.localStream, mirrored: true });
+    expect(pipSource(mine)).toEqual({ stream: mine.localStream, mirrored: true, fit: 'cover' });
     expect(pipSource(call({ members: { peer: member('peer', false) }, cameraOn: false }))).toBeNull();
   });
 
   test('ma caméra arrière flotte sans miroir (#8696)', () => {
     const rear = call({ members: { peer: member('peer', false) }, facing: 'environment' });
-    expect(pipSource(rear)).toEqual({ stream: rear.localStream, mirrored: false });
+    expect(pipSource(rear)).toEqual({ stream: rear.localStream, mirrored: false, fit: 'cover' });
+  });
+
+  test('un écran partagé flotte ENTIER (#8164) : le pair qui partage comme le mien ; une caméra reste recadrée', () => {
+    const sharing = call({ members: { peer: { ...member('peer', false), screenSharing: true } } });
+    expect(pipSource(sharing)?.fit).toBe('contain');
+    const mine = call({ members: { peer: member('peer', false) }, screenSharing: true });
+    expect(pipSource(mine)).toEqual({ stream: mine.localStream, mirrored: false, fit: 'contain' });
+    expect(pipSource(call())?.fit).toBe('cover');
   });
 });
 
