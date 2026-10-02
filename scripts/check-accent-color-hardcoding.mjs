@@ -216,7 +216,7 @@
 // identiques au web (une seule source de dessin). Les rapporter à
 // `accentColor` changerait le sticker selon la conversation.
 const REFERENCE_LITERAL_COLOR_COUNT = 65;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 443;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 442;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
