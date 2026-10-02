@@ -11,6 +11,11 @@ import type { AdminMoment } from './types';
  * `timeZone` est une option de test et d'exactitude : les séries servies par
  * jour sont en jours UTC (`adminDayLabel`, `dayLabelsEndingToday` les lisent
  * toujours en UTC), alors qu'un instant s'affiche dans le fuseau du lecteur.
+ *
+ * L'absolu JOINT la date et l'heure lui-même : le joint que choisit
+ * `dateStyle` + `timeStyle` dépend de la version d'ICU du moteur (« , » ou
+ * « à » / « at »), et un même instant se lirait autrement d'un navigateur à
+ * l'autre (#9133).
  */
 export type AdminTimeOptions = { readonly timeZone?: string };
 
@@ -65,12 +70,9 @@ export function adminMomentOf(
   const date = parse(iso);
   if (date === null || iso === null || iso === undefined) return null;
   const zone = zoneOf(options);
-  return {
-    iso,
-    absolute: new Intl.DateTimeFormat(language, { dateStyle: 'medium', timeStyle: 'short', ...zone }).format(date),
-    relative: relativeText(date, now, language),
-    date: new Intl.DateTimeFormat(language, { dateStyle: 'medium', ...zone }).format(date),
-  };
+  const day = new Intl.DateTimeFormat(language, { dateStyle: 'medium', ...zone }).format(date);
+  const time = new Intl.DateTimeFormat(language, { timeStyle: 'short', ...zone }).format(date);
+  return { iso, absolute: `${day}, ${time}`, relative: relativeText(date, now, language), date: day };
 }
 
 export function adminDate(iso: string | null | undefined, language: AdminLanguage, options?: AdminTimeOptions): string {

@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
  * appel) passe par `developPhoto` (`photo-develop.ts`). Cette garde lit les
  * sources : un encodage d'image (`toBlob`, `convertToBlob`) hors de la liste
  * ci-dessous la fait tomber, et chaque site de prise de vue doit importer le
- * développement.
+ * développement ET l'appeler — directement, ou par le relais `developShots`
+ * (#9082), dont la garde vérifie qu'il développe bien chaque prise.
  *
  * Les encodeurs admis ne sont PAS des prises de vue : ils ré-encodent une
  * image déjà choisie ou dessinent une carte.
@@ -41,6 +42,16 @@ const sources = (dir: string): readonly string[] =>
     return /\.(ts|tsx)$/.test(name) && !/\.test\.tsx?$/.test(name) ? [path] : [];
   });
 
+const DEVELOPMENT = '@/lib/media/photo-develop';
+
+const DEVELOPERS: Readonly<Record<string, RegExp>> = {
+  [DEVELOPMENT]: /\bdevelopPhoto(?:File)?\s*\(/,
+  '@/lib/media/develop-shots': /\bdevelopShots\s*\(/,
+};
+
+const develops = (source: string): boolean =>
+  Object.entries(DEVELOPERS).some(([module, call]) => source.includes(`from '${module}'`) && call.test(source));
+
 const ENCODE = /\b(?:toBlob|convertToBlob)\s*\(/;
 
 describe('le développement unique des photos (#8695)', () => {
@@ -51,8 +62,14 @@ describe('le développement unique des photos (#8695)', () => {
     expect(encoders.filter((path) => NOT_A_CAPTURE[path] === undefined)).toEqual([]);
   });
 
+  test('le relais des prises de l’appareil photo développe chaque prise', () => {
+    const relay = readFileSync(join(SRC, 'lib/media/develop-shots.ts'), 'utf8');
+    expect(relay).toContain(`import('${DEVELOPMENT}')`);
+    expect(relay).toMatch(/\bdevelopPhotoFile\s*\(/);
+  });
+
   test('chaque prise de vue passe par developPhoto', () => {
-    const missing = CAPTURE_SITES.filter((path) => !readFileSync(join(SRC, path), 'utf8').includes('@/lib/media/photo-develop'));
+    const missing = CAPTURE_SITES.filter((path) => !develops(readFileSync(join(SRC, path), 'utf8')));
     expect(missing).toEqual([]);
   });
 });
