@@ -21,6 +21,14 @@
  * pendant un glissé, et le p95 du traitement d'une image ≤ 4 ms (relevé par le
  * worker, publié en marque `meeshy-call-effects`).
  *
+ * Ces trois seuils de CADENCE et de COÛT supposent un GPU : sur un agent
+ * d'intégration continue sans GPU (WebGL rendu par SwiftShader, mesuré : ~40 ms
+ * par image 720p pour un simple filtre de canevas, ~80 ms avec le flou), ils
+ * sont RAPPORTÉS sans faire échouer — `REQUIRE_GPU=1` les exige quand même.
+ * Ce qui ne dépend pas du matériel échoue partout : aucune tâche longue
+ * pendant un glissé (le traitement a quitté le fil principal), le worker
+ * rend son relevé, et le flou floute.
+ *
  * `DIST=<dossier>` mesure un autre build (la mesure « avant »).
  * `REPORT_ONLY=1` imprime sans échouer. `CAPTURE_DIR=<dossier>` écrit l'image
  * envoyée avant et pendant le flou. `CPU_THROTTLE=4` ralentit le
@@ -162,6 +170,23 @@ const glide = async (page, direction) => {
   return { start, end };
 };
 
+/** Le moteur WebGL de la page : un rendu LOGICIEL ne dit rien du coût d'une image sur un appareil. */
+const softwareGl = (page) =>
+  page.evaluate(() => {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    if (gl === null) return true;
+    const info = gl.getExtension('WEBGL_debug_renderer_info');
+    const renderer = String(info === null ? gl.getParameter(gl.RENDERER) : gl.getParameter(info.UNMASKED_RENDERER_WEBGL));
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return /swiftshader|llvmpipe|software/i.test(renderer);
+  });
+
+let hardwareChecks = true;
+const hardwareCheck = (ok, what) => {
+  if (hardwareChecks) check(ok, what);
+  else console.log(`  ${ok ? 'ok   ' : 'sans GPU, rapporté'} ${what}`);
+};
+
 const measure = async (page, name, { reference = false } = {}) => {
   await elapse(page, 1500);
   const first = await sending(page);
@@ -194,10 +219,11 @@ const measure = async (page, name, { reference = false } = {}) => {
   const result = { name, fps: Math.round(fps * 10) / 10, encoderFps, dropped: Math.round(dropped * 1000) / 10, size: `${last.link.width}×${last.link.height}`, limitation: last.link.limitation, longTasks: long?.length ?? null, longTasksDuringGlide: duringGlide?.length ?? null, worstLongTask: long === null || long.length === 0 ? 0 : Math.round(Math.max(...long.map((task) => task.duration))), p95: timing?.p95 ?? null, p50: timing?.p50 ?? null, frames: timing?.frames ?? null, glides: glides.length };
   console.log(`  mesure ${JSON.stringify(result)}`);
   if (reference) return result;
-  check(fps >= FLOOR.fps, `${name} : ${result.fps} images par seconde remises à l’envoi (≥ ${FLOOR.fps} ; l’encodeur en envoie ${encoderFps}, limité par « ${result.limitation} »)`);
-  check(dropped < FLOOR.dropped, `${name} : ${result.dropped} % d'images perdues (< ${FLOOR.dropped * 100} %)`);
+  hardwareCheck(fps >= FLOOR.fps, `${name} : ${result.fps} images par seconde remises à l’envoi (≥ ${FLOOR.fps} ; l’encodeur en envoie ${encoderFps}, limité par « ${result.limitation} »)`);
+  hardwareCheck(dropped < FLOOR.dropped, `${name} : ${result.dropped} % d'images perdues (< ${FLOOR.dropped * 100} %)`);
   check(duringGlide !== null && duringGlide.length === 0, `${name} : aucune tâche longue pendant ${glides.length} glissés (${result.longTasksDuringGlide})`);
-  check(timing !== null && timing.p95 <= FLOOR.p95, `${name} : p95 du traitement d'une image ${result.p95} ms (≤ ${FLOOR.p95})`);
+  check(timing !== null, `${name} : le worker rend le relevé du coût de chaque image`);
+  hardwareCheck(timing !== null && timing.p95 <= FLOOR.p95, `${name} : p95 du traitement d'une image ${result.p95} ms (≤ ${FLOOR.p95})`);
   return result;
 };
 
@@ -213,6 +239,8 @@ page.on('pageerror', (error) => errors.push(error.message));
 try {
   check(await startConnectedVideoCall(page), 'l’appel se connecte et la caméra s’allume');
   check((await page.evaluate(() => window.__gateLong)) !== null, 'le navigateur rapporte les tâches longues');
+  hardwareChecks = process.env.REQUIRE_GPU === '1' || !(await softwareGl(page));
+  console.log(`  WebGL ${hardwareChecks ? 'matériel : cadence et coût EXIGÉS' : 'logiciel : cadence et coût RAPPORTÉS'}`);
   await measure(page, 'caméra seule (référence)', { reference: true });
 
   await openActions(page);
