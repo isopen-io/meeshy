@@ -4,7 +4,8 @@ import MeeshyUI
 
 /// People hub **Calls** tab: the call journal. Cache-first list of calls
 /// (received / missed / outgoing) over the whole 3-month window, loaded page
-/// after page as the list scrolls (#8066). Tap a row for details; use the
+/// after page as the list scrolls (#8066). The search and the video filter are
+/// answered by the gateway (#8203). Tap a row for details; use the
 /// trailing call button to redial; swipe a row to erase it from your own
 /// journal, or erase everything at once. Missed calls read in red.
 struct CallsTab: View {
@@ -34,10 +35,11 @@ struct CallsTab: View {
         }
         .task { await viewModel.loadCalls() }
         .task(id: viewModel.searchQuery) {
-            guard viewModel.isSearching else { return }
-            try? await Task.sleep(nanoseconds: Self.searchDebounceNanoseconds)
-            guard !Task.isCancelled else { return }
-            await viewModel.searchAcrossHistory()
+            if viewModel.isSearching {
+                try? await Task.sleep(nanoseconds: Self.searchDebounceNanoseconds)
+                guard !Task.isCancelled else { return }
+            }
+            await viewModel.applySearch()
         }
         .sheet(item: $selectedCall) { record in
             CallDetailSheet(record: record)
@@ -63,6 +65,7 @@ struct CallsTab: View {
         HStack(spacing: MeeshySpacing.sm) {
             chip(.all, label: String(localized: "calls.filter.all", defaultValue: "Tous", bundle: .main))
             chip(.missed, label: String(localized: "calls.filter.missed", defaultValue: "Manqués", bundle: .main))
+            videoChip
             Spacer()
             if !viewModel.calls.isEmpty {
                 clearAllButton
@@ -76,6 +79,17 @@ struct CallsTab: View {
         let isSelected = viewModel.filter == filter
         return ContactsFilterChip(title: label, isSelected: isSelected, hitTarget: true) {
             viewModel.setFilter(filter)
+            HapticFeedback.light()
+        }
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+    }
+
+    private var videoChip: some View {
+        let isSelected = viewModel.type == .video
+        let label = String(localized: "calls.filter.video", defaultValue: "Vidéo", bundle: .main)
+        return ContactsFilterChip(title: label, isSelected: isSelected, hitTarget: true) {
+            viewModel.setType(isSelected ? .all : .video)
             HapticFeedback.light()
         }
         .accessibilityLabel(label)
@@ -132,17 +146,17 @@ struct CallsTab: View {
     private var content: some View {
         if viewModel.loadState == .loading && viewModel.calls.isEmpty {
             ContactsSkeletonList()
+        } else if viewModel.isSearching && viewModel.visibleCalls.isEmpty && viewModel.loadState != .loading {
+            EmptyStateView(
+                icon: "magnifyingglass",
+                title: String(format: String(localized: "calls.search.empty", defaultValue: "Aucun appel ne correspond à « %@ »", bundle: .main), viewModel.searchQuery),
+                subtitle: String(localized: "calls.search.empty.hint", defaultValue: "Le journal couvre les trois derniers mois.", bundle: .main)
+            )
         } else if viewModel.calls.isEmpty {
             EmptyStateView(
                 icon: "phone.arrow.up.right",
                 title: String(localized: "calls.empty.title", defaultValue: "Aucun appel récent", bundle: .main),
                 subtitle: String(localized: "calls.empty.subtitle", defaultValue: "Vos appels reçus, manqués, annulés et émis apparaîtront ici.", bundle: .main)
-            )
-        } else if viewModel.isSearching && viewModel.visibleCalls.isEmpty && viewModel.reachedEnd {
-            EmptyStateView(
-                icon: "magnifyingglass",
-                title: String(format: String(localized: "calls.search.empty", defaultValue: "Aucun appel ne correspond à « %@ »", bundle: .main), viewModel.searchQuery),
-                subtitle: String(localized: "calls.search.empty.hint", defaultValue: "Le journal couvre les trois derniers mois.", bundle: .main)
             )
         } else {
             list
@@ -169,7 +183,7 @@ struct CallsTab: View {
                         Task { await viewModel.hide(callId: record.callId) }
                     }
             }
-            if !viewModel.reachedEnd {
+            if !viewModel.reachedEnd && viewModel.showsCurrentQuery {
                 loadMoreRow
                     .journalListRow()
             }
