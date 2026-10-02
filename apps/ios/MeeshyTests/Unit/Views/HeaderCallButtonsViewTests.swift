@@ -199,7 +199,9 @@ final class HeaderCallButtonsViewTests: XCTestCase {
         }
         // Balanced body, not a guessed character window: the doc comments
         // above `.task` grew past every window this test used (700, then 1300).
-        guard let body = DeclarationBodyScanner.body(containing: "var body: some View {",
+        // The marker stops BEFORE the brace: the scanner opens on the first `{`
+        // after the marker, so a marker ending in `{` would scan `Group { … }`.
+        guard let body = DeclarationBodyScanner.body(containing: "var body: some View",
                                                      in: String(source[range.lowerBound...])) else {
             XCTFail("HeaderCallButtonsView.body is unbalanced"); return
         }
