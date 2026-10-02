@@ -278,6 +278,9 @@ struct StoryComposerBarView: View {
                 await MainActor.run { commentPhotoItems = [] }
             }
         }
+        // « Éditer » une pièce jointe : la scène du composeur (#9127). Le
+        // minuteur reste en pause — la pièce en attente compte comme contenu.
+        .commentSceneRetouch(attachments: $commentAttachments)
     }
 
     /// Dépôt / collage arrivé par la bande du composer (`onIngest`). Un dépôt

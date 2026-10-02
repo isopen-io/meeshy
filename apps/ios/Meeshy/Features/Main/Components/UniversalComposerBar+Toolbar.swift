@@ -139,7 +139,7 @@ extension UniversalComposerBar {
             action()
         } label: {
             Image(systemName: symbol)
-                .font(.callout.weight(.semibold))
+                .font(.callout.weight(ComposerGlassDoors.glyphWeight))
                 .foregroundColor(iconTint)
                 .frame(width: 30, height: 30)
                 .frame(width: 44, height: 44)
@@ -227,8 +227,12 @@ extension UniversalComposerBar {
 
 /// **L'angle droit du verre** (#9082) : la caméra se pose juste avant le ⌄,
 /// la photothèque à côté d'elle (#9120), et chaque porte n'existe que si
-/// l'hôte sait l'ouvrir.
+/// l'hôte sait l'ouvrir. Leur glyphe, plus grand que celui des icônes de
+/// gauche (`.caption` semibold), prend un trait `.regular` pour garder la même
+/// épaisseur perçue (#9173).
 nonisolated enum ComposerGlassDoors {
+    static let glyphWeight: Font.Weight = .regular
+
     enum TrailingDoor: Hashable, Sendable {
         case library
         case camera

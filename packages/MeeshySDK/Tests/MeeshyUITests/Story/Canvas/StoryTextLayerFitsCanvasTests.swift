@@ -49,14 +49,20 @@ final class StoryTextLayerFitsCanvasTests: XCTestCase {
             "Le texte déborde du cadre de \(layer.bounds.width - largeur) pt — c'est ce qui rognait « The » et « From ».")
     }
 
-    /// La même exigence tenue quand l'auteur a AGRANDI son texte : l'échelle se
-    /// replie dans la taille de police AVANT la mise en ligne, donc elle change
-    /// le nombre de lignes, jamais la largeur du bloc.
-    func test_unTexteAGRANDI_tientEncore() {
+    /// Quand l'auteur a AGRANDI son texte, la boîte MISE EN LIGNE reste celle de
+    /// l'édition — elle tient dans le cadre —, et c'est le cadre entier qui
+    /// grandit par la transformation du calque (#9139, demande porteur
+    /// 2026-10-02 : la taille d'édition fige le texte et sa forme). L'ancienne
+    /// règle repliait l'échelle dans la police et faisait gagner des LIGNES au
+    /// texte : c'est ce qui recoupait un texte au lâcher du pincement.
+    func test_unTexteAGRANDI_garde_laBoiteDeLEdition() {
         let largeur: CGFloat = 380
-        let layer = poser(Self.longText, fontSize: 28, scale: 2.5, renderWidth: largeur)
-        XCTAssertLessThanOrEqual(layer.bounds.width, largeur,
-            "Un texte mis à l'échelle 2,5 doit gagner des lignes, pas de la largeur.")
+        let édition = poser(Self.longText, fontSize: 28, scale: 1, renderWidth: largeur)
+        let agrandi = poser(Self.longText, fontSize: 28, scale: 2.5, renderWidth: largeur)
+        XCTAssertLessThanOrEqual(agrandi.bounds.width, largeur)
+        XCTAssertEqual(agrandi.bounds.size, édition.bounds.size,
+            "Un texte mis à l'échelle 2,5 garde ses lignes : seul son cadre grandit.")
+        XCTAssertEqual(agrandi.frame.width, édition.frame.width * 2.5, accuracy: 0.01)
     }
 
     /// Et sur un cadre ÉTROIT — un iPhone SE, ou la scène incrustée d'un post,

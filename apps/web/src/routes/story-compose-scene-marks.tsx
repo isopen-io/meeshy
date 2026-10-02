@@ -133,3 +133,34 @@ export function ObjectActionMark({ action, size = 20 }: { readonly action: Studi
 export function EffectMark({ effect, size = 20 }: { readonly effect: StudioSceneEffect; readonly size?: number }) {
   return effect === 'opening' ? <OpeningEffectMark size={size} /> : <VisualEffectMark size={size} />;
 }
+
+/** « Couper » (#9136) — des ciseaux : la vidéo garde sa fenêtre. */
+export function TrimMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M8.6 7.6L20 18M8.6 16.4L20 6" />
+    </svg>
+  );
+}
+
+/** « Son » (#9136) — un haut-parleur et son onde. */
+export function SoundMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />
+      <path d="M15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11" />
+    </svg>
+  );
+}
+
+/** « Recadrer » (#9136) — les deux équerres du recadrage. */
+export function CropMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d="M6 2.5V16a2 2 0 002 2h13.5" />
+      <path d="M2.5 6H16a2 2 0 012 2v13.5" />
+    </svg>
+  );
+}

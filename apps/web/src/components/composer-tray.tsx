@@ -5,6 +5,8 @@ import { ComposerAttachmentPanel, type ComposerAttachmentPanelProps } from './co
 
 /** « Éditer » une image en attente (#8416) — le studio en retouche, à la demande. */
 const ComposerRetouch = lazy(() => import('./composer-retouch'));
+/** « Éditer » un audio en attente (#9136) — sa coupe, à la demande. */
+const ComposerAudioTrim = lazy(() => import('./composer-audio-trim'));
 import { Glyph, GlyphSvg } from './glyph';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
 import { translate } from '@/lib/i18n-catalog';
@@ -403,6 +405,8 @@ function PreviewStrip({
    * plateau peut être posé dans un conteneur qui romprait `position: fixed`. */
   const [retouching, setRetouching] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState<string | null>(null);
+  const [trimming, setTrimming] = useState<string | null>(null);
+  const trimmed = pending.find((attachment) => attachment.localId === trimming) ?? null;
   /** TOUTES les pièces du message en scènes, ouvertes sur la touchée (#9126). */
   const series = retouching === null ? null : retouchSeriesOf(pending, retouching);
   const previewed = pending.find((attachment) => attachment.localId === previewing) ?? null;
@@ -411,6 +415,8 @@ function PreviewStrip({
     if (attachment.kind === 'image' || (attachment.kind === 'video' && onReplace !== undefined)) {
       return onReplace === undefined ? undefined : () => setRetouching(attachment.localId);
     }
+    /* Un AUDIO se coupe dans son éditeur (#9136) — un son n'a pas de scène. */
+    if (attachment.kind === 'audio' && onReplace !== undefined) return () => setTrimming(attachment.localId);
     if (attachment.kind === 'video' || attachment.kind === 'audio') return () => setPreviewing(attachment.localId);
     return undefined;
   };
@@ -450,6 +456,21 @@ function PreviewStrip({
                 onDone={(replaced) => {
                   replaced.forEach(({ localId, file }) => onReplace(localId, file));
                   setRetouching(null);
+                }}
+              />
+            </Suspense>,
+            document.body,
+          )
+        : null}
+      {trimmed !== null && onReplace !== undefined
+        ? createPortal(
+            <Suspense fallback={null}>
+              <ComposerAudioTrim
+                attachment={trimmed}
+                onCancel={() => setTrimming(null)}
+                onDone={(file) => {
+                  onReplace(trimmed.localId, file);
+                  setTrimming(null);
                 }}
               />
             </Suspense>,

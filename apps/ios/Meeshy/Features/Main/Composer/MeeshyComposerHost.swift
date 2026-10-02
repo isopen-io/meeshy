@@ -332,93 +332,17 @@ struct MeeshyComposerHost: View {
     /// > déclencher la caméra et **utiliser le fond de la scène comme
     /// > caméra** » — porteur, 2026-09-04
     ///
-    /// `@StateObject` et non `.shared`, pour la même raison que l'export : une
-    /// session de capture appartient à CETTE composition. Un singleton
-    /// laisserait la caméra ouverte après la fermeture du composer — voyant
-    /// allumé, batterie consommée, et aucun écran pour dire pourquoi.
-    ///
-    /// Le modèle est construit MUET : `CameraModel` n'ouvre sa session qu'à la
-    /// demande, donc le porter ici ne coûte rien tant que l'auteur n'a pas armé.
-    @StateObject var sceneCamera = CameraModel()
+    /// **La machine de capture — la MÊME que le viseur plein écran** (#9134).
+    /// Étape, pastille, flash, segments, tenue, cadenas, zoom : tout vit dans
+    /// `ComposerCaptureSession`. `@StateObject` et non `.shared` : une session
+    /// de capture appartient à CETTE composition, et le modèle de caméra est
+    /// construit MUET tant que l'auteur n'a pas armé.
+    @StateObject var sceneCapture = ComposerCaptureSession()
 
-    /// Le flash du viseur en scène. Le CYCLE et le vocabulaire vivent dans
-    /// `ComposerCameraFlash`, partagés avec la feuille : deux cycles écrits
-    /// séparément divergeraient au premier réglage.
-    @State var sceneCameraFlash: AVCaptureDevice.FlashMode = .off
-
-    /// **Les segments de la prise en cours** (#4099, vue `4b`). Chacun est un
-    /// FICHIER déjà écrit — jamais des octets en mémoire, ce qui est toute la
-    /// promesse de la planche : valider concatène des pistes déjà encodées.
-    @State var sceneSegments: [ComposerCaptureSegment] = []
-
-    /// La durée du segment en cours, saisie AU RELÂCHEMENT.
-    ///
-    /// `CameraModel.recordingDuration` est remise à zéro au démarrage suivant,
-    /// et le fichier n'arrive qu'après — la lire au moment où l'URL se présente
-    /// rendrait zéro pour tous les segments sauf le dernier. C'est le genre
-    /// d'écart qui ne casse rien et fait mentir toute la bande.
-    @State var pendingSegmentDuration: TimeInterval = 0
-
-    /// L'étape du viseur — la loi est dans `ComposerSceneCamera`, l'état ici.
-    @State var sceneCameraStage: ComposerSceneCameraStage = .off
-
-    /// La pastille choisie. `nil` tant que rien n'est armé : un mode qui
-    /// survivrait à la fermeture rendrait le prochain armement dépendant du
-    /// précédent, ce que rien à l'écran n'annoncerait — même raison que
-    /// `pendingCameraMode`, qui est reposé à chaque ouverture.
-    @State var sceneCameraMode: ComposerSceneCameraMode?
-
-    /// La taille du viseur. REPOSÉE à chaque armement : un plein écran qui
-    /// survivrait ferait naître le viseur suivant dans un état que rien à
-    /// l'écran n'annonce — même raison que `pendingCameraMode`.
+    /// La taille du viseur — propre à la scène, le plein écran n'en a qu'une.
+    /// REPOSÉE à chaque armement : un plein écran qui survivrait ferait naître
+    /// le viseur suivant dans un état que rien à l'écran n'annonce.
     @State var sceneCameraSize: ComposerSceneCameraSize = .card
-
-    /// **La course du glissement qui coupe la caméra**, en points, pendant que
-    /// le doigt est posé (directive porteur 2026-09-04 : « lorsqu'on swipe vers
-    /// le bas sur la scène avec la caméra activée, ça arrête la caméra »).
-    ///
-    /// Elle est ici et non dans l'extension parce qu'un `@State` est une
-    /// propriété STOCKÉE : Swift ne permet pas d'en déclarer dans une
-    /// extension. Elle n'est pas `private` pour la raison inverse — un
-    /// `@State private` est inaccessible depuis un fichier d'extension du même
-    /// type, et c'est `MeeshyComposerHost+Viewfinder.swift` qui la lit.
-    ///
-    /// Remise à zéro à la levée : ce qu'elle porte est le GESTE en cours, pas
-    /// un état du viseur. La décision, elle, est prise par
-    /// `ComposerSceneCameraFrame.dismisses(translationY:)`.
-    @State var sceneCameraDismissDrag: CGFloat = 0
-
-    /// **L'instant où le doigt s'est posé sur la SCÈNE**, `nil` quand aucun
-    /// appui long n'est en cours (directive porteur 2026-09-04 : « il faut que
-    /// le simple longpress déclenche la photo et non pas juste l'objectif »).
-    ///
-    /// C'est lui qui fait la différence entre une photo et une vidéo, et il ne
-    /// peut pas se déduire du stage : `armed` dit qu'on cadre, pas depuis
-    /// combien de temps. La barre tient le sien (`pressedAt`) pour son propre
-    /// obturateur ; celui-ci appartient au geste de la scène, qui commence
-    /// AVANT que la barre n'existe.
-    ///
-    /// Sa présence sert de second rôle, et c'est ce qui rend la levée sûre : le
-    /// canvas émet sa fin même quand l'hôte a refusé l'armement (le refus vit
-    /// chez nous, ses trois gardes chez lui). Sans témoin de début, cette fin
-    /// prendrait une photo que personne n'a armée.
-    @State var sceneHoldStartedAt: Date?
-
-    /// La minuterie qui fait passer de la visée à la VIDÉO. Elle est nécessaire
-    /// parce qu'un `UILongPressGestureRecognizer` n'émet `.changed` que sur un
-    /// MOUVEMENT : un doigt immobile ne réveille personne, et la vidéo ne
-    /// partirait jamais sans qu'on bouge.
-    @State var sceneHoldTask: Task<Void, Never>?
-
-    /// Le cadenas de l'appui long (#8671) : `nil` sans doigt, `.locked` dès que
-    /// le glissé l'atteint — et jusqu'au bouton stop, le doigt parti.
-    @State var sceneHoldPhase: ComposerCaptureHold.Phase?
-    @State var sceneLockProgress: Double = 0
-    /// L'ancrage du glissé de zoom en cours (#8671).
-    @State var sceneZoomAnchor: ComposerCaptureZoomAnchor?
-    /// L'intensité du flash, mémorisée d'un viseur à l'autre (#8671).
-    @AppStorage(ComposerFlashIntensity.storageKey)
-    var sceneFlashIntensity: Double = ComposerFlashIntensity.defaultLevel
 
     /// **Le fond dont le menu est ouvert**, `nil` quand aucun ne l'est (#5041).
     ///
@@ -642,9 +566,10 @@ struct MeeshyComposerHost: View {
     /// La catégorie d'effets dont le carrousel est ouvert (#8712) — lue par
     /// `ComposerSceneEffects.carousel`, jamais telle quelle.
     @State var openSceneEffect: ComposerSceneEffect?
-    /// L'édition EN LIGNE du fond (#8847) — lue par
-    /// `ComposerBackgroundTools.resolved`, jamais telle quelle.
-    @State var backgroundEdit: ComposerBackgroundEdit?
+    /// L'édition EN PLACE d'un objet, fond compris (#8847, #9138) — lue par
+    /// `ComposerInlineEditing.resolved` (`activeInlineEdit`), jamais telle
+    /// quelle.
+    @State var inlineEdit: ComposerInlineEdit?
     /// Le menu d'appui long d'un OBJET, peint en verre par le meuble (#8717).
     /// Celui du FOND garde son état d'origine, `backgroundMenuObjectId`.
     @State var sceneObjectMenu: ComposerSceneMenuRequest?
@@ -944,6 +869,7 @@ struct MeeshyComposerHost: View {
         // colonne droite, comme sous le `(x)` — et referme le carrousel
         // d'effets (#8712), qui rend l'audience et Publier.
         selectedSceneItemId = nil
+        inlineEdit = nil
         openSceneEffect = nil
     }
 

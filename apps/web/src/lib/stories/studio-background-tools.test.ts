@@ -24,8 +24,9 @@ describe('studioBackgroundSections — ce que le fond sert en ligne', () => {
     expect(studioBackgroundSections({ mediaType: 'video', retouching: false })).toEqual(['frame', 'describe']);
   });
 
-  test('en retouche, le Cadre seul : l’image retouchée ne se décrit ni ne se filtre d’ici', () => {
-    expect(studioBackgroundSections({ mediaType: 'image', retouching: true })).toEqual(['frame']);
+  test('en retouche, ni description ni filtre : une image se recadre, une vidéo se coupe et se tait (#9136)', () => {
+    expect(studioBackgroundSections({ mediaType: 'image', retouching: true })).toEqual(['frame', 'crop']);
+    expect(studioBackgroundSections({ mediaType: 'video', retouching: true })).toEqual(['frame', 'trim', 'sound']);
   });
 });
 

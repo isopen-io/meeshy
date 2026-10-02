@@ -22,6 +22,7 @@ import { validatePagination } from '../../utils/pagination';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { isHttpUrl } from '@meeshy/shared/utils/validation';
 import { permissionsService } from '../../services/admin/permissions.service';
+import { resolveLinkSharer } from './link-sharer';
 import { UserRoleEnum } from '@meeshy/shared/types';
 
 /**
@@ -373,6 +374,17 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
                 // sharerId volontairement NON exposé ici (route publique) : ce
                 // serait une fuite d'attribution inutile au routage. Strippé par
                 // le response schema Fastify ; l'attribution reste via createdBy.
+                // `sharer` (#9149) : l'identité PUBLIQUE de qui a partagé un
+                // CONTENU, trois champs fermés — `link-sharer.ts`.
+                sharer: {
+                  type: ['object', 'null'],
+                  additionalProperties: false,
+                  properties: {
+                    displayName: { type: ['string', 'null'] },
+                    username: { type: 'string' },
+                    avatar: { type: ['string', 'null'] }
+                  }
+                },
                 isActive: { type: 'boolean' },
                 expiresAt: { type: ['string', 'null'], format: 'date-time' }
               }
@@ -390,7 +402,8 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       if (!resolved) {
         return sendNotFound(reply, 'Lien introuvable');
       }
-      return sendSuccess(reply, resolved);
+      const sharer = await resolveLinkSharer(fastify.prisma, resolved);
+      return sendSuccess(reply, { ...resolved, sharer });
     } catch (error) {
       logError(fastify.log, 'Resolve tracking link error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');

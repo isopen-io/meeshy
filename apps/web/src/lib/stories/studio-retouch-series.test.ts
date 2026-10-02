@@ -80,12 +80,15 @@ describe('ce que « Terminé » rend', () => {
     expect(studioRetouchSeriesReturn([pageOf('p1', a), pageOf('p2', b), pageOf('p3', c)], seeded)).toEqual([]);
   });
 
-  test('un Cadre, un calque, un son ou une transition comptent comme une retouche', () => {
+  test('un Cadre, un calque, un son, une transition, une coupe, un muet ou un recadrage comptent comme une retouche (#9136)', () => {
     const touched: readonly ((page: StudioPage) => StudioPage)[] = [
       (page) => ({ ...page, background: page.background && { ...page.background, frame: { fit: 'fill' } as never } }),
       (page) => ({ ...page, overlay: asset(file('o.png', 'image/png')) }),
       (page) => ({ ...page, sound: { previewUrl: 'blob:s', upload: { phase: 'uploading', progress: 0 }, plane: 'background' } as never }),
       (page) => ({ ...page, opening: 'fade' as never }),
+      (page) => ({ ...page, background: page.background && { ...page.background, trim: { start: 1, end: 3 } } }),
+      (page) => ({ ...page, background: page.background && { ...page.background, muted: true } }),
+      (page) => ({ ...page, background: page.background && { ...page.background, crop: { x: 0.1, y: 0, width: 0.8, height: 1 } } }),
     ];
     for (const change of touched) {
       expect(studioRetouchSeriesReturn([pageOf('p1', a, change)], [seeded[0]!])).toHaveLength(1);

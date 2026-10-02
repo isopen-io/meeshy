@@ -1,3 +1,5 @@
+import { effectiveMediaRatio, type MediaCropRect } from '@meeshy/shared/utils/media-crop';
+
 import { SCENE_BACKDROP_TINT } from '@/lib/canvas/backdrop';
 import { placedMediaDesignSize } from '@/lib/canvas/media-size';
 
@@ -42,18 +44,28 @@ export type StudioCompositeOp =
       readonly width: number;
       readonly height: number;
       readonly rotation: number;
+      /** La part de la SOURCE à peindre (#9136) — absente : toute l'image. */
+      readonly crop?: MediaCropRect;
     };
 
 /** Le rectangle d'un média de rapport `ratio` posé plein cadre : `cover`
  * remplit (et déborde), sinon ajusté (et laisse des bandes). */
-function fitted(ratio: number, cover: boolean): { readonly width: number; readonly height: number } {
-  const wider = ratio > CARD_RATIO;
-  return wider === cover ? { width: ratio / CARD_RATIO, height: 1 } : { width: 1, height: CARD_RATIO / ratio };
+function fitted(ratio: number, cover: boolean, card: number): { readonly width: number; readonly height: number } {
+  const wider = ratio > card;
+  return wider === cover ? { width: ratio / card, height: 1 } : { width: 1, height: card / ratio };
+}
+
+/** Le rapport que le fond MONTRE — celui de son recadrage quand il en a un. */
+export function backgroundShownRatio(background: StudioVisualAsset & { readonly aspectRatio: number }): number {
+  return effectiveMediaRatio(background.aspectRatio, background.crop ?? null);
 }
 
 /** `video` : la retouche d'une VIDÉO (#9124) peint l'image courante d'un
  * `<video>` qui joue — le hash du sol, lui, n'en dessine aucune. */
-export function studioCompositePlan(page: StudioPage, { video = false }: { readonly video?: boolean } = {}): readonly StudioCompositeOp[] | null {
+export function studioCompositePlan(
+  page: StudioPage,
+  { video = false, cardRatio = CARD_RATIO }: { readonly video?: boolean; readonly cardRatio?: number } = {},
+): readonly StudioCompositeOp[] | null {
   const drawable = (asset: StudioVisualAsset | null): asset is StudioVisualAsset & { readonly aspectRatio: number } =>
     asset !== null && (asset.mediaType === 'image' || (video && asset.mediaType === 'video')) && asset.aspectRatio !== undefined && asset.aspectRatio > 0;
   const { background, overlay } = page;
@@ -71,9 +83,11 @@ export function studioCompositePlan(page: StudioPage, { video = false }: { reado
       y: 0.5,
       rotation: 0,
       ...rect,
+      ...(background.crop !== undefined ? { crop: background.crop } : {}),
     });
-    if (fitMode === 'fit') ops.push(backdrop === 'blur' ? image(fitted(background.aspectRatio, true), true) : { kind: 'fill', color: SCENE_BACKDROP_TINT[backdrop] });
-    ops.push(image(fitted(background.aspectRatio, fitMode === 'fill'), false));
+    const shown = backgroundShownRatio(background);
+    if (fitMode === 'fit') ops.push(backdrop === 'blur' ? image(fitted(shown, true, cardRatio), true) : { kind: 'fill', color: SCENE_BACKDROP_TINT[backdrop] });
+    ops.push(image(fitted(shown, fitMode === 'fill', cardRatio), false));
   }
   if (drawable(overlay)) {
     const size = placedMediaDesignSize({ aspectRatio: overlay.aspectRatio });
@@ -85,7 +99,7 @@ export function studioCompositePlan(page: StudioPage, { video = false }: { reado
       x: overlay.pose.x,
       y: overlay.pose.y,
       width,
-      height: (width * CARD_RATIO) / overlay.aspectRatio,
+      height: (width * cardRatio) / overlay.aspectRatio,
       rotation: overlay.pose.rotation,
     });
   }
@@ -140,7 +154,24 @@ export function paintCompositePlan(
     context.translate(op.x * w, op.y * h);
     context.rotate((op.rotation * Math.PI) / 180);
     context.filter = op.blur ? blur : 'none';
-    context.drawImage(image, (-op.width * w) / 2, (-op.height * h) / 2, op.width * w, op.height * h);
+    const [dx, dy, dw, dh] = [(-op.width * w) / 2, (-op.height * h) / 2, op.width * w, op.height * h];
+    const source = op.crop === undefined ? null : croppedSource(image, op.crop);
+    if (source === null) context.drawImage(image, dx, dy, dw, dh);
+    else context.drawImage(image, source.x, source.y, source.width, source.height, dx, dy, dw, dh);
     context.restore();
   });
+}
+
+/** La part de l'image que le recadrage garde, en pixels de la SOURCE — `null`
+ * quand ses dimensions ne se lisent pas (on peint alors l'image entière). */
+function croppedSource(image: CanvasImageSource, crop: MediaCropRect): { readonly x: number; readonly y: number; readonly width: number; readonly height: number } | null {
+  const dimension = (keys: readonly string[]): number => {
+    const record = image as unknown as Record<string, unknown>;
+    const value = keys.map((key) => record[key]).find((candidate) => typeof candidate === 'number' && candidate > 0);
+    return typeof value === 'number' ? value : 0;
+  };
+  const width = dimension(['naturalWidth', 'videoWidth', 'width']);
+  const height = dimension(['naturalHeight', 'videoHeight', 'height']);
+  if (width === 0 || height === 0) return null;
+  return { x: crop.x * width, y: crop.y * height, width: crop.width * width, height: crop.height * height };
 }

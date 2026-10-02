@@ -1,6 +1,6 @@
 import { loadPlanSources, paintCompositePlan, studioCompositePlan } from './studio-composite-plan';
 import { cameraVideoMime } from './studio-quick-capture';
-import { studioPageVideo, type StudioPage, type StudioVisualAsset } from './studio-page';
+import { studioPageVideo, type StudioMediaTrim, type StudioPage, type StudioVisualAsset } from './studio-page';
 import { paintText, studioTextOps, withMeasuredImages, type StudioRetouchCanvas } from './studio-retouch';
 
 /**
@@ -19,8 +19,13 @@ export type StudioRetouchVideoSource = {
   readonly frame: CanvasImageSource;
   readonly aspectRatio: number;
   readonly audioTracks: readonly MediaStreamTrack[];
-  /** Joue la vidéo de bout en bout, `onFrame` à chaque image ; résolue à la fin. */
-  readonly play: (onFrame: () => void) => Promise<void>;
+  /** Place la lecture au début de la fenêtre coupée (#9136) — AVANT que
+   * l'enregistrement ne commence, sans quoi sa première image serait celle du
+   * début du fichier. */
+  readonly seek: (seconds: number) => Promise<void>;
+  /** Joue la vidéo — de bout en bout, ou jusqu'à la fin de sa fenêtre coupée
+   * (#9136) —, `onFrame` à chaque image ; résolue à la fin. */
+  readonly play: (onFrame: () => void, window: StudioMediaTrim | null) => Promise<void>;
   readonly release: () => void;
 };
 
@@ -49,7 +54,8 @@ export async function renderStudioRetouchVideo(unmeasured: StudioPage, deps: Stu
     if (plan === null || surface === null) return null;
     const sources = await loadPlanSources(plan, (src) => (src === asset.previewUrl ? Promise.resolve(source.frame) : deps.loadImage(src)));
     if (sources === null) return null;
-    const recorder = deps.record([...surface.videoTracks(), ...source.audioTracks]);
+    if (asset.trim !== undefined) await source.seek(asset.trim.start);
+    const recorder = deps.record([...surface.videoTracks(), ...(asset.muted === true ? [] : source.audioTracks)]);
     if (recorder === null) return null;
     const texts = studioTextOps(page);
     const paint = () => {
@@ -57,7 +63,7 @@ export async function renderStudioRetouchVideo(unmeasured: StudioPage, deps: Stu
       texts.forEach((op) => paintText(surface.context, op, width, height));
     };
     paint();
-    await source.play(paint);
+    await source.play(paint, asset.trim ?? null);
     const blob = await recorder.stop();
     return blob === null ? null : { blob, mimeType: recorder.mimeType };
   } finally {
@@ -114,19 +120,32 @@ export const browserRetouchVideoDeps: StudioRetouchVideoDeps = {
       frame: video,
       aspectRatio: video.videoWidth / video.videoHeight,
       audioTracks: destination?.stream.getAudioTracks() ?? [],
-      play: (onFrame) =>
+      play: (onFrame, window) =>
         new Promise<void>((resolve) => {
+          let done = false;
           const finish = () => {
+            if (done) return;
+            done = true;
+            video.pause();
             onFrame();
             resolve();
           };
           const tick = () => {
-            if (video.ended) return finish();
+            if (video.ended || (window !== null && video.currentTime >= window.end)) return finish();
             onFrame();
             requestAnimationFrame(tick);
           };
           video.onended = finish;
           video.play().then(() => requestAnimationFrame(tick), finish);
+        }),
+      seek: (seconds) =>
+        new Promise<void>((resolve) => {
+          if (seconds <= 0) return resolve();
+          video.onseeked = () => {
+            video.onseeked = null;
+            resolve();
+          };
+          video.currentTime = seconds;
         }),
       release: () => {
         video.pause();

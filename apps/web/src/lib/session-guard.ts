@@ -289,7 +289,10 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   /* « MES STORIES » (#6149) — voir la raison écrite sur `RouteKey` plus haut. */
   'storiesMine',
   'storyCompose',
-  'story',
+  /* `story` N'EST PLUS PRIVÉE (#9149) — `/story/:id` est l'adresse d'un lien
+     PARTAGÉ : le lecteur sert la story publique à un visiteur sans compte
+     (`GET /posts/:id`, `optionalAuth` + `anonymousPostGate`) et pose
+     l'invitation par-dessus (`components/visitor-invitation.tsx`). */
   'feed',
   /* MON HUMEUR (#7462) — voir la raison écrite sur `RouteKey` plus haut. */
   'statusCompose',

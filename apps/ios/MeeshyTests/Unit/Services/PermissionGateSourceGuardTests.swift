@@ -229,10 +229,11 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// #9125 — l'ancienne `CameraView` a quitté le dépôt : le viseur du
     /// composeur, servi seul en plein écran, porte la même promesse.
     func test_cameraView_rendersDeniedPanelInsteadOfBlackPreview() throws {
-        let src = try source("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
+        // #9134 — l'aperçu est PARTAGÉ par les deux montages du viseur.
+        let src = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(src.contains("CameraPermissionPanel()"),
                       "Le viseur doit exposer un panneau de refus.")
-        XCTAssertTrue(src.contains("ComposerSceneCameraSurface.shown(stage: stage, permission: camera.permission)"),
+        XCTAssertTrue(src.contains("ComposerSceneCameraSurface.shown(stage: session.stage, permission: session.camera.permission)"),
                       "Le rendu doit basculer sur l'état d'autorisation publié par le modèle.")
         let panneau = try source("Meeshy/Features/Main/Components/CameraPermissionPanel.swift")
         XCTAssertTrue(panneau.contains("MediaPermissionCoordinator.openSettings()"),

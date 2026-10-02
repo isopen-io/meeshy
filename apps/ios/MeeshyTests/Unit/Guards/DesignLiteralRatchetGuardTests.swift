@@ -198,7 +198,6 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
             globs: [
                 "\(app)/Views/VideoFiltersPanel.swift",
                 "\(app)/Views/VideoFilterControlView.swift",
-                "\(ui)/Media/VideoEditor/VideoFilterPreviewer.swift",
                 "\(app)/Views/ReelAudioBackdrop.swift",
                 "\(app)/Components/MessageEffectModifiers.swift",
             ]

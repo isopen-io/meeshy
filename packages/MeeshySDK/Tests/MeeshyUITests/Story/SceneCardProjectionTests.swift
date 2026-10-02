@@ -47,12 +47,16 @@ final class SceneCardProjectionTests: XCTestCase {
         }
     }
 
-    /// Le texte PINCÉ (échelle d'objet ≠ 1) suit la même loi.
+    /// Le texte PINCÉ (échelle d'objet ≠ 1) suit la même loi. Depuis le
+    /// #9139 l'échelle n'entre plus dans la police posée : elle agrandit le
+    /// cadre entier par la transformation du calque (`sceneTransform`), et
+    /// c'est le produit des deux que l'œil voit.
     func test_unTextePince_resteProportionnel() {
         let reduite = carte(CGSize(width: 300, height: 380))
         let t = texte(fontSize: 64, scale: 1.75)
+        let cadre = StoryTextLayer.sceneTransform(rotationDegrees: 0, scale: t.scale).m11
         let part = StoryTextLayer.renderedFontSize(of: t, in: reduite.mountedGeometry)
-            * reduite.scale / reduite.fit.width
+            * cadre * reduite.scale / reduite.fit.width
         XCTAssertEqual(part, CGFloat(64 * 1.75) / CanvasGeometry.designWidth, accuracy: 0.0001)
     }
 

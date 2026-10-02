@@ -1181,114 +1181,19 @@ struct CommentsSheetView: View {
         .adaptiveOnChange(of: commentPhotoItems) { _, items in
             handleCommentPhotoSelection(items)
         }
-        // "Éditer" from the recent-media strip → edit BEFORE staging: only the
-        // edited output lands in the comment attachments.
-        .fullScreenCover(isPresented: Binding(
-            get: { commentRecentImageToEdit != nil },
-            set: { if !$0 { commentRecentImageToEdit = nil } }
-        )) {
-            if let image = commentRecentImageToEdit {
-                MeeshyImageEditorView(image: image, context: .post, accentColor: accentColor, onAccept: { edited in
-                    commentRecentImageToEdit = nil
-                    ingestCommentRecentMedia(.image(edited))
-                }, onCancel: {
-                    commentRecentImageToEdit = nil
-                })
-            }
-        }
-        .fullScreenCover(isPresented: Binding(
-            get: { commentRecentVideoToEdit != nil },
-            set: { if !$0 { commentRecentVideoToEdit = nil } }
-        )) {
-            if let url = commentRecentVideoToEdit {
-                MeeshyVideoEditorView(
-                    url: url,
-                    context: .post,
-                    accentColor: accentColor,
-                    onComplete: { result in
-                        commentRecentVideoToEdit = nil
-                        ingestCommentRecentMedia(.video(result.url))
-                    },
-                    onCancel: { commentRecentVideoToEdit = nil }
-                )
-            }
-        }
+        // « Éditer » sur un média récent ou sur une pièce jointe : la SCÈNE du
+        // composeur, plus les anciens éditeurs (#9127).
+        .commentRecentMediaScene(image: $commentRecentImageToEdit, video: $commentRecentVideoToEdit,
+                                 onDone: { pick in ingestCommentRecentMedia(pick) })
+        .commentSceneRetouch(attachments: $commentAttachments)
     }
 
     // MARK: - Comment Attachments Preview (custom chips with remove)
 
     private var commentAttachmentsPreview: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: MeeshySpacing.sm) {
-                if let place = commentPendingPlace {
-                    HStack(spacing: MeeshySpacing.xsPlus) {
-                        Image(systemName: "location.fill")
-                            .font(.caption)
-                            .foregroundColor(MeeshyColors.success)
-                        Text(MediaKindLabel.placeLabel(place.name))
-                            .font(.caption.weight(.medium))
-                            .lineLimit(1)
-                            .frame(maxWidth: 120)
-                        Button {
-                            HapticFeedback.light()
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                                commentPendingPlace = nil
-                            }
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.caption2.weight(.bold))
-                                .foregroundColor(theme.textMuted)
-                                .frame(width: 18, height: 18)
-                                .background(Circle().fill(theme.textMuted.opacity(0.15)))
-                        }
-                        .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))
-                    }
-                    .padding(.horizontal, MeeshySpacing.smPlus)
-                    .padding(.vertical, MeeshySpacing.xsPlus)
-                    .background(
-                        Capsule()
-                            .fill(theme.inputBackground)
-                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: MeeshyBorder.hairline))
-                    )
-                    .foregroundColor(theme.textPrimary)
-                }
-                ForEach(commentAttachments) { attachment in
-                    HStack(spacing: MeeshySpacing.xsPlus) {
-                        Image(systemName: attachment.type.glyph)
-                            .font(.caption)
-                            .foregroundColor(Color(hex: attachment.thumbnailColor))
-                        Text(attachment.name)
-                            .font(.caption.weight(.medium))
-                            .lineLimit(1)
-                            .frame(maxWidth: 120)
-                        Button {
-                            HapticFeedback.light()
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) {
-                                commentAttachments.removeAll { $0.id == attachment.id }
-                            }
-                            if let url = attachment.url { try? FileManager.default.removeItem(at: url) }
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.caption2.weight(.bold))
-                                .foregroundColor(theme.textMuted)
-                                .frame(width: 18, height: 18)
-                                .background(Circle().fill(theme.textMuted.opacity(0.15)))
-                        }
-                        .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))
-                    }
-                    .padding(.horizontal, MeeshySpacing.smPlus)
-                    .padding(.vertical, MeeshySpacing.xsPlus)
-                    .background(
-                        Capsule()
-                            .fill(theme.inputBackground)
-                            .overlay(Capsule().stroke(theme.textMuted.opacity(0.2), lineWidth: MeeshyBorder.hairline))
-                    )
-                    .foregroundColor(theme.textPrimary)
-                }
-            }
-            .padding(.horizontal, MeeshySpacing.mdPlus)
-            .padding(.vertical, MeeshySpacing.sm)
-        }
+        CommentAttachmentsTray(attachments: commentAttachments, onRemove: { id in
+            commentAttachments.removeAll { $0.id == id }
+        }, place: commentPendingPlace, onRemovePlace: { commentPendingPlace = nil })
     }
 
     // MARK: - Comment Attachment Pickers

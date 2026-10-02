@@ -35,7 +35,7 @@ export async function postRoutes(fastify: FastifyInstance) {
     allowAnonymous: false,
   });
 
-  registerCoreRoutes(fastify, prisma, requiredAuth);
+  registerCoreRoutes(fastify, prisma, requiredAuth, optionalAuth);
   registerPostMediaRoutes(fastify, prisma, requiredAuth);
   registerPostMediaExportRoutes(fastify, prisma, requiredAuth);
   registerFeedRoutes(fastify, prisma, requiredAuth, optionalAuth);

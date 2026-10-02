@@ -60,49 +60,42 @@ extension MeeshyComposerHost {
 
     // MARK: - Le rail droit : les options du moment (#8713, #8714)
 
-    /// **Ce que l'objet touché offre** — ses sections d'éditeur et ses actions,
-    /// lues des DEUX inventaires qui existent. `nil` ⇒ rien de sélectionné, ou
-    /// un identifiant qui ne désigne plus rien (un objet supprimé pendant que
-    /// la sélection tenait).
+    /// **Ce que l'objet en édition offre** (#9138) — ses sous-outils dans
+    /// l'ordre canonique, celui qui est ouvert, et ses actions, lus des
+    /// inventaires qui existent. `nil` ⇒ rien en édition, ou un identifiant qui
+    /// ne désigne plus rien (un objet supprimé pendant que la sélection tenait).
     var sceneSelectionInventory: (sections: [ComposerObjectEditorSection],
+                                  open: ComposerObjectEditorSection?,
                                   actions: [StoryCanvasContextAction])? {
         let slide = viewModel.currentSlide
-        guard let id = selectedSceneItemId, let objet = slide.sceneObject(id: id) else { return nil }
-        // **Le FOND n'offre que ses outils EN LIGNE** (#8847) : aucune entrée
-        // de la colonne ne mène plus à l'éditeur plein écran pour lui.
-        let sections = id == sceneBackgroundMedia?.id
-            ? sceneBackgroundTools
-            : ComposerObjectEditorRail.entries(
-                for: objet.kind,
-                hasTrimmableSource: viewModel.sourceTrim(id: id) != nil,
-                offersFilter: Self.offersFilter(objet))
-        let actions = ComposerTrailingRailPolicy.actions(
+        guard let edition = activeInlineEdit, let objet = slide.sceneObject(id: edition.objectId) else {
+            return nil
+        }
+        let offertes = ComposerTrailingRailPolicy.actions(
             slide: slide,
-            selectedId: id,
+            selectedId: edition.objectId,
             served: ComposerTrailingColumn.servedActions,
             hasEditor: editableSceneKindsServed.contains(Self.canvasKind(objet.kind)),
             canLeaveScene: false)
-        return (sections, actions)
-    }
-
-    /// Le filtre d'un objet se cuit dans son IMAGE : une vidéo posée n'en rend
-    /// aucun — la même question que l'éditeur pose (`objectOffersFilter`).
-    private static func offersFilter(_ objet: MeeshySceneObject) -> Bool {
-        guard case .media(let media) = objet else { return true }
-        return media.kind != .video
+        return (inlineSections(for: edition.objectId, family: edition.family),
+                edition.openSection,
+                ComposerInlineEditing.actions(for: edition.family, offered: offertes))
     }
 
     private var editableSceneKindsServed: Set<StoryCanvasUIView.CanvasItemKind> {
         ComposerSceneSurface.defaultEditableSceneKinds
     }
 
-    var sceneTrailingOptions: [ComposerTrailingColumn.Entry] {
-        ComposerTrailingColumn.options(for: ComposerTrailingColumn.focus(
+    var sceneTrailingFocus: ComposerTrailingColumn.Focus {
+        ComposerTrailingColumn.focus(
             railMode: sceneRailMode,
             selection: sceneSelectionInventory,
             effects: sceneEffects,
-            openEffect: activeSceneEffect,
-            backgroundTools: activeBackgroundEdit.map { (sections: sceneBackgroundTools, open: $0.openSection) }))
+            openEffect: activeSceneEffect)
+    }
+
+    var sceneTrailingOptions: [ComposerTrailingColumn.Entry] {
+        ComposerTrailingColumn.options(for: sceneTrailingFocus)
     }
 
     // MARK: - Les effets d'une scène à fond média (#8712)
@@ -185,10 +178,6 @@ extension MeeshyComposerHost {
             openSceneEffect = ComposerSceneEffects.toggled(effet, open: activeSceneEffect)
         case .toolControl(let control):
             handleRailToolControl(control)
-        case .backgroundSection(let section, _):
-            tapBackgroundTool(section)
-        case .exitTool where activeBackgroundEdit != nil && !sceneRailMode.opensTool:
-            leaveBackgroundEdit()
         case .exitTool:
             // Terminer un outil rend la SCÈNE : le texte que la porte vient de
             // poser ne reste pas sélectionné derrière le `(x)`, sans quoi un
@@ -196,19 +185,17 @@ extension MeeshyComposerHost {
             handleRailExitTool()
             selectedSceneItemId = nil
             selectedSceneItemKind = nil
-        case .editorSection(let section):
-            guard let id = selectedSceneItemId else { return }
-            openObjectEditor(id, section: section)
+        case .editorSection(let section, _):
+            tapInlineSection(section)
         case .objectAction(.edit):
             guard let id = selectedSceneItemId, let kind = selectedSceneItemKind else { return }
             editSceneItem(id, kind: kind)
         case .objectAction(let action):
             handleTrailingRailAction(action)
         case .exitObject:
-            // Le `(x)` d'une sélection ne détruit rien : il rend les rails de
-            // la scène.
-            selectedSceneItemId = nil
-            selectedSceneItemKind = nil
+            // Le `(x)` d'une édition ne détruit rien : il rend les rails de la
+            // scène.
+            leaveInlineEdit()
         }
     }
 
@@ -230,8 +217,9 @@ extension MeeshyComposerHost {
             // deux autres surfaces qui portent un son.
             editSceneSound(id)
         case .media, .sticker, .place:
-            // L'éditeur d'objet sert les cinq familles (#4937).
-            openObjectEditor(id)
+            // **L'édition EN PLACE** (#9138) : ses sous-outils à droite, leurs
+            // options depuis le haut — jamais l'ancien écran plein.
+            beginInlineEdit(id)
             HapticFeedback.medium()
         }
     }

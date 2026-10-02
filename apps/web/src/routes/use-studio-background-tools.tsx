@@ -107,7 +107,7 @@ export function useStudioBackgroundTools({
                 onFrame={(next) => edit((current) => withBackgroundFrame(current, next))}
                 onClose={() => state.setEdit({ open: null })}
                 {...(retouching
-                  ? {}
+                  ? { edits: { asset: background, onPage: editPage } }
                   : {
                       caption: { value: background.caption, onChange: (value: string) => edit((current) => withVisualCaption(current, 'visual', value), 'caption:visual') },
                       media: { alt: background.alt ?? '', filter: background.filter ?? null, onPage: editPage },

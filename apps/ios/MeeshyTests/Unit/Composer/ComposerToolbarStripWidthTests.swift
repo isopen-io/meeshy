@@ -108,4 +108,28 @@ final class ComposerGlassDoorsTests: XCTestCase {
         XCTAssertTrue(toolbar.contains("onRequestStickerPicker"), "Le sticker ouvre le sélecteur de stickers.")
         XCTAssertTrue(toolbar.contains("ComposerGlassDoors.trailing("), "L'angle droit consulte la loi.")
     }
+    private func source(_ name: String) throws -> String {
+        try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Main/Components/\(name)"),
+            encoding: .utf8)
+    }
+
+    func test_glassDoors_glyphWeight_isRegular() {
+        XCTAssertEqual(ComposerGlassDoors.glyphWeight, .regular)
+    }
+
+    func test_toolbar_doorsDrawWithTheSharedGlyphWeight() throws {
+        let toolbar = try source("UniversalComposerBar+Toolbar.swift")
+        XCTAssertTrue(toolbar.contains(".font(.callout.weight(ComposerGlassDoors.glyphWeight))"), "Les portes de verre prennent le trait des icônes de gauche.")
+        XCTAssertFalse(toolbar.contains(".font(.callout.weight(.semibold))"), "Plus de trait semibold sur les portes de verre.")
+    }
+
+    func test_attachCarousel_doesNotRepeatTheGlassDoors() throws {
+        let attachments = try source("UniversalComposerBar+Attachments.swift")
+        XCTAssertFalse(attachments.contains("id: \"camera\""), "La caméra vit dans la barre, plus dans le (+).")
+        XCTAssertFalse(attachments.contains("id: \"sticker\""), "Le sticker vit dans la barre, plus dans le (+).")
+    }
 }

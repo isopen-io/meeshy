@@ -240,7 +240,8 @@ extension UniversalComposerBar {
     /// The attachment types offered by the carousel. Each tile is included only
     /// when the host actually wired its callback (or, for voice, when the mode
     /// allows it) — so a context like comments that only wires photo/file/voice
-    /// never shows a dead camera or emoji tile.
+    /// never shows a dead camera or emoji tile. Camera and sticker are not
+    /// listed: the glass doors of the toolbar already serve them (#9173).
     private var carouselTiles: [CarouselTile] {
         var tiles: [CarouselTile] = []
         // The dedicated "Photos" tile is only listed when there is NO recent-media
@@ -252,12 +253,6 @@ extension UniversalComposerBar {
                 id: "photo", icon: "photo.fill", color: MeeshyColors.tileAmethystHex,
                 label: String(localized: "composer.attach.photo", defaultValue: "Photos", bundle: .main)
             ) { fire { onPhotoLibrary?() } })
-        }
-        if onCamera != nil {
-            tiles.append(CarouselTile(
-                id: "camera", icon: "camera.fill", color: MeeshyColors.tileSaffronHex,
-                label: String(localized: "composer.attach.camera", defaultValue: "Caméra", bundle: .main)
-            ) { fire { onCamera?() } })
         }
         if onFilePicker != nil {
             tiles.append(CarouselTile(
@@ -293,16 +288,6 @@ extension UniversalComposerBar {
                 id: "emoji", icon: "face.smiling.fill", color: "FF9F43",
                 label: String(localized: "composer.attach.emoji", defaultValue: "Emoji", bundle: .main)
             ) { fire { onRequestTextEmoji?() } })
-        }
-        // Même glyphe que la porte `ComposerRailDoor.sticker` et que l'en-tête
-        // de la palette (`StickerPickerView.sheetSymbolName`) : ce n'est PAS un
-        // smiley — la tuile emoji ci-dessus insère dans le TEXTE, celle-ci
-        // ouvre une palette de constructions qui deviennent un MESSAGE.
-        if onRequestStickerPicker != nil {
-            tiles.append(CarouselTile(
-                id: "sticker", icon: "rectangle.portrait.on.rectangle.portrait.angled", color: "6C5CE7",
-                label: String(localized: "composer.attach.sticker", defaultValue: "Sticker", bundle: .main)
-            ) { fire { onRequestStickerPicker?() } })
         }
         return tiles
     }
