@@ -155,43 +155,23 @@ try {
         const drag = async (distance) => {
           const x = Math.round(width / 2);
           const y = Math.round(height * 0.25);
-          const under = await page.evaluate(([px, py]) => {
-            const hit = document.elementFromPoint(px, py);
-            const name = (el) => (el === null ? null : `${el.tagName.toLowerCase()}${[...el.attributes].filter((a) => a.name !== 'class' && a.name !== 'style').map((a) => `[${a.name}=${a.value.slice(0, 24)}]`).join('')}`);
-            const chain = [];
-            for (let el = hit; el !== null && chain.length < 6; el = el.parentElement) chain.push(name(el));
-            const keep = hit?.closest('[data-call-header], [data-call-chrome-keep], label, summary, input, [role="toolbar"]') ?? null;
-            const box = (sel) => {
-              const r = document.querySelector(sel)?.getBoundingClientRect();
-              return r === undefined ? null : [Math.round(r.top), Math.round(r.bottom)];
-            };
-            return { chain, keep: name(keep), header: box('[data-call-header]'), pill: box('[data-call-control-pill]'), controls: box('[data-call-controls]') };
-          }, [x, y]);
-          await page.evaluate(() => {
-            window.__swipeSeen = [];
-            if (window.__swipeRecording === true) return;
-            window.__swipeRecording = true;
-            for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'dragstart', 'selectstart', 'lostpointercapture']) {
-              document.addEventListener(type, (event) => window.__swipeSeen.push(`${type}${event.defaultPrevented ? '!' : ''}:${event.target?.tagName?.toLowerCase() ?? '?'}`), { capture: true });
-            }
-          });
           await page.mouse.move(x, y);
           await page.mouse.down();
           await page.mouse.move(x, y + distance / 2, { steps: 8 });
           await page.mouse.move(x, y + distance, { steps: 8 });
           const held = await page.evaluate(() => {
             const screen = document.querySelector('[data-call-screen]');
-            const seen = (window.__swipeSeen ?? []).reduce((acc, entry) => (acc.length > 0 && acc[acc.length - 1].startsWith(`${entry}×`) ? [...acc.slice(0, -1), `${entry}×${Number(acc[acc.length - 1].split('×')[1]) + 1}`] : [...acc, `${entry}×1`]), []);
-            return screen === null ? null : { swipe: screen.getAttribute('data-call-swipe-down'), transform: screen.style.transform, height: innerHeight, seen };
+            return screen === null ? null : { swipe: screen.getAttribute('data-call-swipe-down'), transform: screen.style.transform };
           });
           await page.waitForTimeout(150);
           await page.mouse.up();
-          return { from: [x, y], distance, under, held };
+          return { from: [x, y], distance, held };
         };
         await drag(30);
         await page.waitForTimeout(300);
         check((await page.$('[data-call-screen="connected"]')) !== null && (await page.$('[data-call-pill-bar]')) === null, `${label} : un toucher ou un petit glissé laisse l'écran d'appel en place`);
         const swiped = await drag(Math.min(280, height - Math.round(height * 0.25) - 20));
+        check(swiped.held?.swipe === 'dragging' && swiped.held.transform !== '', `${label} : pendant le glissé, l'écran suit le pointeur — aucun glisser-déposer du navigateur ne l'annule (${JSON.stringify(swiped.held)})`);
         const reduced = await appears(page, '[data-call-pill-bar]', 3000);
         check(reduced, `${label} : glissé aux trois quarts et relâché, l'appel se réduit — ${JSON.stringify(swiped)}`);
         check((await page.$('[data-call-screen]')) === null, `${label} : réduit, l'écran d'appel a quitté le plein écran`);

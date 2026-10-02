@@ -12,7 +12,10 @@ import { tapTogglesChrome } from './use-call-chrome';
  * - l'écran suit le doigt (`offset`), puis le relâcher conclut ou revient ;
  * - un glissé n'est jamais un toucher : le clic que la souris émet en fin de
  *   glissé est AVALÉ par `useCallChrome` (`swallowTap`), qui ne range donc
- *   pas les commandes. Le toucher suivant repart de zéro.
+ *   pas les commandes. Le toucher suivant repart de zéro ;
+ * - un glissé n'est pas non plus un glisser-déposer : à la souris, passer sur
+ *   le portrait lancerait celui du navigateur, qui annule le pointeur — le
+ *   `dragstart` est refusé tant qu'un doigt est posé sur la scène.
  */
 
 type Input = {
@@ -85,17 +88,22 @@ export function useCallSwipeDown({ root, allowed, canPip, reducedMotion, onOutco
     const cancel = (event: PointerEvent) => {
       if (state.gesture !== null && event.pointerId === state.gesture.id) end();
     };
+    const holdNativeDrag = (event: DragEvent) => {
+      if (state.gesture !== null) event.preventDefault();
+    };
     const down = (event: PointerEvent) => {
       swiped.current = false;
       if (!latest.current.allowed || !event.isPrimary || event.button !== 0 || !tapTogglesChrome(event)) return;
       state.gesture = { id: event.pointerId, x: event.clientX, y: event.clientY, started: false, lastY: event.clientY, lastAt: event.timeStamp, velocity: 0 };
     };
     element.addEventListener('pointerdown', down);
+    element.addEventListener('dragstart', holdNativeDrag);
     page.addEventListener('pointermove', move);
     page.addEventListener('pointerup', up);
     page.addEventListener('pointercancel', cancel);
     return () => {
       element.removeEventListener('pointerdown', down);
+      element.removeEventListener('dragstart', holdNativeDrag);
       page.removeEventListener('pointermove', move);
       page.removeEventListener('pointerup', up);
       page.removeEventListener('pointercancel', cancel);
