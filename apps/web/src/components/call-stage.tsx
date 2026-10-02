@@ -1,16 +1,34 @@
-import { lazy, Suspense, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useId, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import { CallButton } from '@/components/call-glass-button';
 import { CallGrid, Portrait } from '@/components/call-grid';
 import { StreamVideo } from '@/components/call-media-elements';
 import { GlyphSvg } from '@/components/glyph';
+import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
+import { useTileDrag, type TileOffset } from '@/components/use-tile-drag';
 import { useTilePinch } from '@/components/use-tile-pinch';
 import type { MineAction } from '@/lib/calls/call-controls';
 import type { CallModeration } from '@/lib/calls/call-moderation';
 import { inSelfGroup, selfRowBounds, selfRowsLayout, selfRowWidth, type SelfControlGroup, type SelfRow } from '@/lib/calls/call-self-controls';
-import { selfTileScaleFor, selfTileSize, selfTileStore, setSelfTileScale, type SelfTileScale } from '@/lib/calls/call-self-tile';
+import {
+  cornerAfterArrow,
+  nearestSelfCorner,
+  SELF_TILE_BOTTOM,
+  SELF_TILE_MARGIN,
+  SELF_TILE_TOP,
+  selfTileBox,
+  selfTileCornerFor,
+  selfTileScaleFor,
+  selfTileSize,
+  selfTileStore,
+  setSelfTileCorner,
+  setSelfTileScale,
+  type SelfTileCorner,
+  type SelfTileScale,
+  type TileSize,
+} from '@/lib/calls/call-self-tile';
 import type { SpotlightChoice } from '@/lib/calls/call-spotlight';
 import { useLocalZoom } from '@/lib/calls/self-zoom';
 import type { ActiveCall } from '@/lib/calls/call-store';
@@ -28,6 +46,11 @@ import { cameraMirrored } from '@/lib/media/camera-mirror';
  *
  * - Ma vignette en coin se PINCE (#8577) : x1 · x2 · x3, accrochée, retenue
  *   pour l'appel (`call-self-tile.ts`) ; Ctrl + molette de même.
+ * - Elle se GLISSE (#8747) vers l'un des quatre coins, où elle s'aimante ; un
+ *   toucher reste un toucher, les flèches la déplacent quand elle a le focus,
+ *   et son coin tient pour l'appel. Ses rangées la suivent pendant le geste.
+ * - Le micro coupé du pair (#8787) se voit SUR son image — grande ou en
+ *   vignette — et se dit dans le libellé de la scène, chrome masqué ou non.
  * - Les commandes de MA caméra (#8626) vivent AUTOUR de ma vignette (#8747) :
  *   Effets · Écran au-dessus, Retourner · Couper et le cran du zoom en
  *   dessous (`selfRowsLayout`) ; quand mon image passe en PLEIN ÉCRAN, elles
@@ -80,11 +103,41 @@ type StageProps = {
 
 const cornerTop = { top: 'calc(env(safe-area-inset-top) + 4.5rem)' } as const;
 
-const CORNER_Y = 128;
+const TILE_CORNER_SAID: Readonly<Record<SelfTileCorner, `callControls.selfTile.corner.${SelfTileCorner}`>> = {
+  'top-left': 'callControls.selfTile.corner.top-left',
+  'top-right': 'callControls.selfTile.corner.top-right',
+  'bottom-left': 'callControls.selfTile.corner.bottom-left',
+  'bottom-right': 'callControls.selfTile.corner.bottom-right',
+};
 
-const CORNER_RIGHT = 16;
+/** Le coin de repos, en marges de zone sûre : ce que `selfTileBox` calcule sans elles. */
+function cornerPlace(corner: SelfTileCorner, size: TileSize): { readonly left: string; readonly top: string } {
+  const left = corner.endsWith('left') ? `calc(env(safe-area-inset-left) + ${SELF_TILE_MARGIN}px)` : `calc(100% - env(safe-area-inset-right) - ${SELF_TILE_MARGIN + size.width}px)`;
+  const top = corner.startsWith('top') ? `calc(env(safe-area-inset-top) + ${SELF_TILE_TOP}px)` : `max(calc(env(safe-area-inset-top) + ${SELF_TILE_TOP}px), calc(100% - env(safe-area-inset-bottom) - ${SELF_TILE_BOTTOM + size.height}px))`;
+  return { left, top };
+}
 
-const cornerBelowControls = { top: `calc(env(safe-area-inset-top) + ${CORNER_Y}px)` } as const;
+const PIN_ORIGIN: Readonly<Record<SelfTileCorner, string>> = { 'top-left': 'top left', 'top-right': 'top right', 'bottom-left': 'bottom left', 'bottom-right': 'bottom right' };
+
+const both =
+  <E,>(first: (event: E) => void, second: (event: E) => void) =>
+  (event: E): void => {
+    first(event);
+    second(event);
+  };
+
+/** Sous la rangée des pastilles, au centre : entre les rangées d'une vignette de coin. */
+const peerMutedTop = { top: 'calc(env(safe-area-inset-top) + 7rem)' } as const;
+
+/** Le micro coupé du pair (#8787), posé sur son image : il reste quand le chrome se retire. */
+function PeerMuted({ where }: { readonly where: 'main' | 'corner' }) {
+  const place = where === 'main' ? 'absolute left-1/2 z-10 -translate-x-1/2 size-9' : 'absolute bottom-1.5 left-1.5 z-10 size-7';
+  return (
+    <span aria-hidden="true" className={`glass-call pointer-events-none grid place-items-center rounded-full text-on-media ${place}`} style={where === 'main' ? peerMutedTop : undefined} data-call-peer-muted={where}>
+      <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={where === 'main' ? 18 : 14} />
+    </span>
+  );
+}
 
 /** Une moitié des commandes de ma caméra, posée hors de ma vignette (`row` est relatif au cadre de la vignette). */
 function SelfRowSlot({ group, row, tile, children }: { readonly group: SelfControlGroup; readonly row: SelfRow; readonly tile: { readonly x: number; readonly y: number }; readonly children: ReactNode }) {
@@ -131,13 +184,20 @@ function DuoScreen({ call, language, immersive, onToggleImmersive }: Pick<StageP
 
 function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language' | 'self'>) {
   const swapped = self.full;
-  const scale = useStore(selfTileStore, (state) => selfTileScaleFor(state, call.callId ?? ''));
+  const callId = call.callId ?? '';
+  const scale = useStore(selfTileStore, (state) => selfTileScaleFor(state, callId));
+  const corner = useStore(selfTileStore, (state) => selfTileCornerFor(state, callId));
   const [said, setSaid] = useState('');
+  const hint = useId();
   const resize = (next: SelfTileScale): void => {
     setSelfTileScale(call.callId ?? '', next);
     setSaid(translateCallControls(language, TILE_SAID[next]));
   };
   const pinch = useTilePinch(scale, resize);
+  const moveTo = (next: SelfTileCorner): void => {
+    setSelfTileCorner(callId, next);
+    setSaid(translateCallControls(language, TILE_CORNER_SAID[next]));
+  };
   const firstPeer = orderedMembers(call.members)[0];
   const remoteStream = firstPeer === undefined ? null : (call.remoteStreams[firstPeer.userId] ?? null);
   const remoteVideoOn = firstPeer !== undefined && firstPeer.cameraOn && hasVideo(remoteStream);
@@ -145,18 +205,41 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
   const local = useLocalZoom(call.callId, call.facing);
   const you = translate(language, 'call.you');
   const main = swapped ? call.localStream : remoteStream;
-  const corner = swapped ? remoteStream : call.localStream;
+  const cornerStream = swapped ? remoteStream : call.localStream;
   const mainOn = swapped ? call.cameraOn : remoteVideoOn;
   const cornerShown = swapped || call.cameraOn;
   const cornerVideo = swapped ? remoteVideoOn : call.cameraOn;
   const screen = viewport();
   const size = selfTileSize(scale, screen);
-  const tileBox = { x: screen.width - CORNER_RIGHT - size.width, y: CORNER_Y, width: size.width, height: size.height };
+  const rest = selfTileBox({ corner, size, viewport: screen });
+  const drop = ({ dx, dy }: TileOffset): void => {
+    const next = nearestSelfCorner({ center: { x: rest.x + rest.width / 2 + dx, y: rest.y + rest.height / 2 + dy }, size, viewport: screen });
+    if (next !== corner) moveTo(next);
+  };
+  const drag = useTileDrag(drop);
+  const offset = swapped ? null : drag.offset;
+  const gestures = {
+    onPointerDown: both(pinch.onPointerDown, drag.onPointerDown),
+    onPointerMove: both(pinch.onPointerMove, drag.onPointerMove),
+    onPointerUp: both(pinch.onPointerUp, drag.onPointerUp),
+    onPointerCancel: both(pinch.onPointerCancel, drag.onPointerCancel),
+    onClickCapture: both(pinch.onClickCapture, drag.onClickCapture),
+    onWheel: pinch.onWheel,
+  };
+  const tileBox = offset === null ? rest : { ...rest, x: rest.x + offset.dx, y: rest.y + offset.dy };
+  const onArrow = (event: KeyboardEvent<HTMLButtonElement>): void => {
+    const next = swapped ? null : cornerAfterArrow(corner, event.key);
+    if (next === null) return;
+    event.preventDefault();
+    moveTo(next);
+  };
+  const peerMuted = firstPeer?.micMuted === true;
+  const stageLabel = peerMuted ? `${call.title} · ${translate(language, 'call.peer.muted')}` : call.title;
   const count = (group: SelfControlGroup): number => self.mine.filter((action) => inSelfGroup(group, action)).length;
   const rows = swapped || !self.controls ? null : selfRowsLayout({ tile: tileBox, bounds: selfRowBounds(screen), effectsWidth: selfRowWidth(count('effects')), cameraWidth: selfRowWidth(count('camera') + 1) });
   const glyphs = { plus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.plus} size={18} />, minus: <GlyphSvg glyph={CALL_VIEW_GLYPHS.minus} size={18} /> };
   return (
-    <div className="absolute inset-0">
+    <div role="group" aria-label={stageLabel} className="absolute inset-0" data-call-duo-stage="">
       {mainOn ? (
         <div className="absolute inset-0 overflow-hidden">
           <StreamVideo stream={main} mirrored={swapped && selfMirrored} zoom={swapped ? local.value : 1} className="absolute inset-0 size-full" label={swapped ? you : call.title} member={swapped ? undefined : firstPeer?.userId} self={swapped} />
@@ -171,6 +254,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
           </div>
         </div>
       )}
+      {peerMuted && !swapped ? <PeerMuted where="main" /> : null}
       {swapped ? (
         <Suspense fallback={self.controls ? self.column(null) : null}>
           <CallSelfCamera stream={call.cameraOn && !call.screenSharing ? call.localStream : null} local={local} language={language} glyphs={glyphs} column={self.controls ? self.column : null} />
@@ -182,7 +266,13 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
         </div>
       ) : null}
       {cornerShown ? (
-        <div className="absolute right-4 z-10 transition-[width,height] duration-200 motion-reduce:transition-none" style={{ ...cornerBelowControls, width: size.width, height: size.height }} data-call-corner-frame="">
+        <div
+          className={`absolute z-10 ${offset === null ? 'transition-[left,top,transform,width,height] duration-300 ease-out motion-reduce:transition-none' : ''}`}
+          style={{ ...cornerPlace(corner, size), width: size.width, height: size.height, transform: offset === null ? undefined : `translate(${offset.dx}px, ${offset.dy}px)` }}
+          data-call-corner-frame=""
+          data-call-self-tile-corner={corner}
+          data-call-self-tile-dragging={offset === null ? undefined : ''}
+        >
           {rows?.effects ? (
             <SelfRowSlot group="effects" row={rows.effects} tile={tileBox}>
               {self.row('effects')}
@@ -191,14 +281,17 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
           <button
             type="button"
             aria-label={translate(language, 'call.video.swap')}
+            aria-describedby={swapped ? undefined : hint}
             onClick={self.onToggle}
-            className="relative z-10 grid size-full place-items-center overflow-hidden rounded-card shadow-lg"
-            {...(swapped ? {} : pinch)}
-            style={{ background: 'var(--color-scrim-soft)', ...(swapped ? {} : pinch.style) }}
+            onKeyDown={onArrow}
+            className={`relative z-10 grid size-full place-items-center overflow-hidden rounded-card shadow-lg ${swapped ? '' : offset === null ? 'cursor-grab' : 'cursor-grabbing'}`}
+            {...(swapped ? {} : gestures)}
+            style={{ background: 'var(--color-scrim-soft)', ...(swapped ? {} : { ...pinch.style, transformOrigin: PIN_ORIGIN[corner] }) }}
             data-call-corner=""
             data-call-self-tile={swapped ? undefined : String(scale)}
           >
-            {cornerVideo ? <StreamVideo stream={corner} mirrored={!swapped && selfMirrored} zoom={swapped ? 1 : local.value} className="size-full" member={swapped ? firstPeer?.userId : undefined} self={!swapped} /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} />}
+            {cornerVideo ? <StreamVideo stream={cornerStream} mirrored={!swapped && selfMirrored} zoom={swapped ? 1 : local.value} className="size-full" member={swapped ? firstPeer?.userId : undefined} self={!swapped} /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} />}
+            {peerMuted && swapped ? <PeerMuted where="corner" /> : null}
           </button>
           {rows?.camera ? (
             <SelfRowSlot group="camera" row={rows.camera} tile={tileBox}>
@@ -209,6 +302,9 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
       ) : null}
       <span role="status" aria-live="polite" className="sr-only" data-call-self-tile-status="">
         {said}
+      </span>
+      <span id={hint} hidden>
+        {translateCallControls(language, 'callControls.selfTile.hint')}
       </span>
     </div>
   );

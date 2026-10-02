@@ -59,6 +59,11 @@ const ar = {
   'callControls.selfTile.small': 'صورتي المصغرة: صغيرة',
   'callControls.selfTile.medium': 'صورتي المصغرة: متوسطة',
   'callControls.selfTile.large': 'صورتي المصغرة: كبيرة',
+  'callControls.selfTile.hint': 'اضغط لتبديل مقطعي الفيديو؛ اسحبها أو استخدم الأسهم لتحريكها',
+  'callControls.selfTile.corner.top-left': 'صورتي المصغرة: أعلى اليسار',
+  'callControls.selfTile.corner.top-right': 'صورتي المصغرة: أعلى اليمين',
+  'callControls.selfTile.corner.bottom-left': 'صورتي المصغرة: أسفل اليسار',
+  'callControls.selfTile.corner.bottom-right': 'صورتي المصغرة: أسفل اليمين',
 } satisfies CallControlsCatalog;
 
 export default ar;

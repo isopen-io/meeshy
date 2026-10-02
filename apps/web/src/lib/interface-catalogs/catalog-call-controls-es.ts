@@ -59,6 +59,11 @@ const es = {
   'callControls.selfTile.small': 'Mi miniatura: pequeña',
   'callControls.selfTile.medium': 'Mi miniatura: mediana',
   'callControls.selfTile.large': 'Mi miniatura: grande',
+  'callControls.selfTile.hint': 'Toca para intercambiar los vídeos; arrástrala o usa las flechas para moverla',
+  'callControls.selfTile.corner.top-left': 'Mi miniatura: arriba a la izquierda',
+  'callControls.selfTile.corner.top-right': 'Mi miniatura: arriba a la derecha',
+  'callControls.selfTile.corner.bottom-left': 'Mi miniatura: abajo a la izquierda',
+  'callControls.selfTile.corner.bottom-right': 'Mi miniatura: abajo a la derecha',
 } satisfies CallControlsCatalog;
 
 export default es;

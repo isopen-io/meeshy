@@ -59,6 +59,11 @@ const en = {
   'callControls.selfTile.small': 'My thumbnail: small',
   'callControls.selfTile.medium': 'My thumbnail: medium',
   'callControls.selfTile.large': 'My thumbnail: large',
+  'callControls.selfTile.hint': 'Tap to swap the videos; drag it or use the arrow keys to move it',
+  'callControls.selfTile.corner.top-left': 'My thumbnail: top left',
+  'callControls.selfTile.corner.top-right': 'My thumbnail: top right',
+  'callControls.selfTile.corner.bottom-left': 'My thumbnail: bottom left',
+  'callControls.selfTile.corner.bottom-right': 'My thumbnail: bottom right',
 } satisfies CallControlsCatalog;
 
 export default en;

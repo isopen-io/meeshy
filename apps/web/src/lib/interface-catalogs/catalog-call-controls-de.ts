@@ -59,6 +59,11 @@ const de = {
   'callControls.selfTile.small': 'Mein Vorschaubild: klein',
   'callControls.selfTile.medium': 'Mein Vorschaubild: mittel',
   'callControls.selfTile.large': 'Mein Vorschaubild: groß',
+  'callControls.selfTile.hint': 'Tippen, um die Videos zu tauschen; ziehen oder mit den Pfeiltasten verschieben',
+  'callControls.selfTile.corner.top-left': 'Mein Vorschaubild: oben links',
+  'callControls.selfTile.corner.top-right': 'Mein Vorschaubild: oben rechts',
+  'callControls.selfTile.corner.bottom-left': 'Mein Vorschaubild: unten links',
+  'callControls.selfTile.corner.bottom-right': 'Mein Vorschaubild: unten rechts',
 } satisfies CallControlsCatalog;
 
 export default de;

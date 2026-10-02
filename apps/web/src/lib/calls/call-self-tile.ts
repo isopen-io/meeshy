@@ -6,7 +6,7 @@ import { createStore } from 'zustand/vanilla';
  * d'un cran — deux si le geste est franc —, et elle s'accroche toujours à
  * une taille : jamais entre deux. Elle ne dépasse jamais 45 % de la largeur ni
  * 40 % de la hauteur de l'écran. La taille choisie tient pour l'appel en
- * cours (`selfTileStore`), et le suivant repart de x2.
+ * cours (`selfTileStore`), son coin aussi (#8747), et le suivant repart de x2.
  */
 
 export type SelfTileScale = 1 | 2 | 3;
@@ -45,10 +45,71 @@ export const scaleAfterPinch = (scale: SelfTileScale, ratio: number): SelfTileSc
 
 export const scaleAfterWheel = (scale: SelfTileScale, deltaY: number): SelfTileScale => clampScale(scale + Math.sign(-deltaY));
 
-type SelfTileState = { readonly callId: string | null; readonly scale: SelfTileScale };
+/**
+ * **ELLE SE GLISSE DE COIN EN COIN** (#8747, miroir de `pipCenter` /
+ * `nearestCorner` dans `CallView+SelfView.swift`) — quatre coins à 16 px du
+ * bord ; en haut 128 px sous la zone sûre, en bas 176 px au-dessus d'elle :
+ * une rangée de commandes tient toujours entre la vignette et l'en-tête comme
+ * entre elle et la pilule. Lâchée, elle s'aimante au coin le plus proche ;
+ * sous 8 px, le geste reste un toucher.
+ */
+export type SelfTileCorner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
-export const selfTileStore = createStore<SelfTileState>(() => ({ callId: null, scale: DEFAULT_SELF_TILE }));
+export const SELF_CORNERS: readonly SelfTileCorner[] = ['top-left', 'top-right', 'bottom-left', 'bottom-right'];
+
+export const DEFAULT_SELF_CORNER: SelfTileCorner = 'top-right';
+
+export const SELF_TILE_MARGIN = 16;
+
+export const SELF_TILE_TOP = 128;
+
+export const SELF_TILE_BOTTOM = 176;
+
+const DRAG_THRESHOLD = 8;
+
+export type TileBox = TileSize & { readonly x: number; readonly y: number };
+
+const onTop = (corner: SelfTileCorner): boolean => corner.startsWith('top');
+
+const onLeft = (corner: SelfTileCorner): boolean => corner.endsWith('left');
+
+type BoxInput = { readonly corner: SelfTileCorner; readonly size: TileSize; readonly viewport: TileSize };
+
+export function selfTileBox({ corner, size, viewport }: BoxInput): TileBox {
+  const x = onLeft(corner) ? SELF_TILE_MARGIN : viewport.width - SELF_TILE_MARGIN - size.width;
+  const y = onTop(corner) ? SELF_TILE_TOP : Math.max(SELF_TILE_TOP, viewport.height - SELF_TILE_BOTTOM - size.height);
+  return { x, y, width: size.width, height: size.height };
+}
+
+type NearestInput = { readonly center: { readonly x: number; readonly y: number }; readonly size: TileSize; readonly viewport: TileSize };
+
+export function nearestSelfCorner({ center, size, viewport }: NearestInput): SelfTileCorner {
+  const away = (corner: SelfTileCorner): number => {
+    const box = selfTileBox({ corner, size, viewport });
+    return Math.hypot(center.x - (box.x + box.width / 2), center.y - (box.y + box.height / 2));
+  };
+  return SELF_CORNERS.reduce((best, corner) => (away(corner) < away(best) ? corner : best), DEFAULT_SELF_CORNER);
+}
+
+export const isTileDrag = ({ dx, dy }: { readonly dx: number; readonly dy: number }): boolean => Math.hypot(dx, dy) >= DRAG_THRESHOLD;
+
+const cornerOf = (top: boolean, left: boolean): SelfTileCorner => `${top ? 'top' : 'bottom'}-${left ? 'left' : 'right'}`;
+
+export function cornerAfterArrow(corner: SelfTileCorner, key: string): SelfTileCorner | null {
+  const top = onTop(corner);
+  const left = onLeft(corner);
+  const next = key === 'ArrowUp' ? cornerOf(true, left) : key === 'ArrowDown' ? cornerOf(false, left) : key === 'ArrowLeft' ? cornerOf(top, true) : key === 'ArrowRight' ? cornerOf(top, false) : null;
+  return next === corner ? null : next;
+}
+
+type SelfTileState = { readonly callId: string | null; readonly scale: SelfTileScale; readonly corner: SelfTileCorner };
+
+export const selfTileStore = createStore<SelfTileState>(() => ({ callId: null, scale: DEFAULT_SELF_TILE, corner: DEFAULT_SELF_CORNER }));
 
 export const selfTileScaleFor = (state: SelfTileState, callId: string): SelfTileScale => (state.callId === callId ? state.scale : DEFAULT_SELF_TILE);
 
-export const setSelfTileScale = (callId: string, scale: SelfTileScale): void => selfTileStore.setState({ callId, scale });
+export const selfTileCornerFor = (state: SelfTileState, callId: string): SelfTileCorner => (state.callId === callId ? state.corner : DEFAULT_SELF_CORNER);
+
+export const setSelfTileScale = (callId: string, scale: SelfTileScale): void => selfTileStore.setState((state) => ({ callId, scale, corner: selfTileCornerFor(state, callId) }));
+
+export const setSelfTileCorner = (callId: string, corner: SelfTileCorner): void => selfTileStore.setState((state) => ({ callId, scale: selfTileScaleFor(state, callId), corner }));
