@@ -7,6 +7,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 import type { ActiveCall } from '@/lib/calls/call-store';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
 import { CallCaptionsPanel } from './call-captions-panel';
@@ -155,7 +156,8 @@ describe('les gestes', () => {
 });
 
 describe('la voix non transcrite (#9142)', () => {
-  test('la note ne nomme pas le navigateur : la coque Android n’en a pas, et la note y est permanente', () => {
+  test('la note ne nomme pas le navigateur : la coque Android n’en a pas, et la note y est permanente', async () => {
+    await Promise.all(SUPPORTED_INTERFACE_LANGUAGES.map((language) => loadInterfaceCatalog(language)));
     const notes = SUPPORTED_INTERFACE_LANGUAGES.map((language) =>
       renderToStaticMarkup(<CallCaptionsPanel call={call({ transcription: 'unsupported' })} language={language} colorOf={colorOf} />).match(/data-call-captions-note="unsupported">([^<]*)</)?.[1] ?? '',
     );
