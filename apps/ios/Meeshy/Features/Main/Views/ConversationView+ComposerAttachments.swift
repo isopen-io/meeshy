@@ -57,24 +57,6 @@ extension ConversationView {
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: 56, height: 56)
                                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-
-                            if attachment.type == .video {
-                                Image(systemName: "play.circle.fill")
-                                    // Doctrine 86i : overlay décoratif borné par la tuile fixe 56×56 → figé + masqué.
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(MeeshyColors.mediaChromeForeground, MeeshyColors.mediaChromeFill)
-                                    .accessibilityHidden(true)
-                            } else if attachment.type == .image {
-                                Image(systemName: "eye.fill")
-                                    // Doctrine 86i : indicateur décoratif borné par la tuile fixe 56×56 → figé + masqué.
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(MeeshySpacing.xs)
-                                    .background(Circle().fill(MeeshyColors.mediaChromeFill))
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                                    .padding(MeeshySpacing.xxs)
-                                    .accessibilityHidden(true)
-                            }
                         } else if attachment.type == .audio {
                             PendingAudioTile(attachment: attachment, player: pendingAudioPlayer)
                         } else if attachment.type == .location {
@@ -90,17 +72,28 @@ extension ConversationView {
                                 )
                                 .frame(width: 56, height: 56)
 
-                            Image(systemName: attachment.type.composerGlyph)
-                                // Doctrine 86i : glyphe de type décoratif borné par la tuile fixe 56×56 → figé + masqué
-                                // (le libellé sous la tuile porte le nom du fichier).
-                                .font(.system(size: 22))
-                                .foregroundColor(.white)
+                            if ComposerPendingTileGlyph.center(for: attachment.type, mimeType: attachment.mimeType) == nil {
+                                Image(systemName: attachment.type.composerGlyph)
+                                    // Doctrine 86i : glyphe de type décoratif borné par la tuile fixe 56×56 → figé + masqué
+                                    // (le libellé sous la tuile porte le nom du fichier).
+                                    .font(.system(size: 22))
+                                    .foregroundColor(.white)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        if let glyph = ComposerPendingTileGlyph.center(for: attachment.type, mimeType: attachment.mimeType) {
+                            Image(systemName: glyph)
+                                // Doctrine 86i : glyphe borné par la tuile fixe 56×56 → figé ; le bouton porte le libellé.
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(MeeshyColors.mediaChromeForeground)
+                                .frame(width: 26, height: 26)
+                                .background(Circle().fill(MeeshyColors.mediaChromeFill))
                                 .accessibilityHidden(true)
                         }
                     }
                     .frame(width: 56, height: 56)
                 }
-                .accessibilityLabel(String(localized: "conversation.composer.attachment.preview", defaultValue: "Aperçu \(labelForAttachment(attachment))", bundle: .main))
+                .accessibilityLabel(pendingTileAccessibilityLabel(attachment))
 
                 // Delete button — top-right corner
                 Button {
@@ -314,6 +307,14 @@ extension ConversationView {
         }
     }
 
+    private func pendingTileAccessibilityLabel(_ attachment: MessageAttachment) -> String {
+        let label = labelForAttachment(attachment)
+        guard ComposerPendingTileGlyph.center(for: attachment.type, mimeType: attachment.mimeType) != nil else {
+            return String(localized: "conversation.composer.attachment.preview", defaultValue: "Aperçu \(label)", bundle: .main)
+        }
+        return String(localized: "conversation.composer.attachment.edit", defaultValue: "Éditer \(label)", bundle: .main)
+    }
+
     func labelForAttachment(_ attachment: MessageAttachment) -> String {
         MediaKindLabel.attachmentLabel(for: attachment)
     }
@@ -360,12 +361,6 @@ struct PendingAudioTile: View {
                     }
                 }
                 .frame(height: 20)
-
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    // Doctrine 86i : glyphe décoratif borné par la tuile fixe 56×56 → figé + masqué.
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
-                    .accessibilityHidden(true)
             }
         }
     }
