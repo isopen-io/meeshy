@@ -10,7 +10,8 @@
  * `AnimatedImageDecoder` lit déjà.
  *
  * Il écrit dans `packages/MeeshySDK/Sources/MeeshyUI/Resources/MeeStickers/` :
- * un `mee.<id>.webp` par sticker, et l'index `Story/MeeStickerCatalog+Index.swift`
+ * un `mee.<id>.webp` par sticker des onglets Mee, Meo et Mee & Meo, et l'index
+ * `Story/MeeStickerCatalog+Index.swift` (onglet, intention, ordre des intentions)
  * que lit la feuille de stickers (en Swift, pas en JSON : la résolution d'un
  * `templateId` se fait hors du fil principal, où `Bundle.module` n'est pas
  * accessible). Les stickers « Instants » n'y sont pas : leurs
@@ -32,7 +33,8 @@ import type { CDPSession, Page } from '@playwright/test';
 
 import { MEE_STICKERS } from '../src/lib/mee/catalog';
 import type { Motion } from '../src/lib/mee/motion';
-import type { MeeSticker } from '../src/lib/mee/types';
+import { MEE_INTENTS } from '../src/lib/mee/types';
+import type { MeeIntent, MeeSticker } from '../src/lib/mee/types';
 import { renderMeeSticker } from '../src/lib/mee/render';
 
 const OUT = fileURLToPath(new URL('../../../packages/MeeshySDK/Sources/MeeshyUI/Resources/MeeStickers', import.meta.url));
@@ -55,7 +57,7 @@ export function loopSeconds(motion: Motion): number {
   return lcm / 10 <= MAX_LOOP ? lcm / 10 : Math.max(...tenths) / 10;
 }
 
-const stickers = MEE_STICKERS.filter((sticker) => sticker.tab === 'mee' || sticker.tab === 'meo');
+const stickers = MEE_STICKERS.filter((sticker) => sticker.tab !== 'instants');
 
 /** `--index-only` réécrit l'index sans retourner les films (douze minutes). */
 const indexOnly = process.argv.includes('--index-only');
@@ -118,11 +120,21 @@ if (!indexOnly) {
   await filmAll();
 }
 
-const entry = (sticker: MeeSticker): string =>
-  `        MeeSticker(id: ${JSON.stringify(sticker.id)}, tab: .${sticker.tab === 'meo' ? 'meo' : 'mee'}, section: .${sticker.section === 'duo' ? 'duo' : 'solo'}, title: ${JSON.stringify(sticker.title)}, emoji: ${JSON.stringify(sticker.emoji)}, animated: ${sticker.motion !== null}),`;
-const index = `// GÉNÉRÉ par apps/web/scripts/mee-ios-stickers.ts — ne pas modifier à la main (#9053).
+/** `coup-de-mou` → `coupDeMou` : le nom du `case` Swift d'une intention. */
+const swiftCase = (intent: string): string => intent.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+
+const isIntent = (section: string): section is MeeIntent => (MEE_INTENTS as readonly string[]).includes(section);
+
+const entry = (sticker: MeeSticker): string => {
+  if (!isIntent(sticker.section)) throw new Error(`${sticker.id} : « ${sticker.section} » n'est pas une intention`);
+  return `        MeeSticker(id: ${JSON.stringify(sticker.id)}, tab: .${sticker.tab}, intent: .${swiftCase(sticker.section)}, title: ${JSON.stringify(sticker.title)}, emoji: ${JSON.stringify(sticker.emoji)}, animated: ${sticker.motion !== null}),`;
+};
+const index = `// GÉNÉRÉ par apps/web/scripts/mee-ios-stickers.ts — ne pas modifier à la main (#9053, #9058).
 
 extension MeeStickerCatalog {
+    /// L'ordre des intentions dans la feuille — \`MEE_INTENTS\` du web.
+    nonisolated public static let intentOrder: [MeeSticker.Intent] = [${MEE_INTENTS.map((intent) => `.${swiftCase(intent)}`).join(', ')}]
+
     nonisolated public static let all: [MeeSticker] = [
 ${stickers.map(entry).join('\n')}
     ]

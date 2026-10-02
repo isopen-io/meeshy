@@ -14,14 +14,32 @@ final class MeeStickerCatalogTests: XCTestCase {
 
     // MARK: - L'index et ses films
 
-    func test_catalog_servesBothCharacters_inSoloThenDuo() {
-        let mee = MeeStickerCatalog.stickers(of: .mee)
-        let meo = MeeStickerCatalog.stickers(of: .meo)
+    /// Trois onglets de personnages (#9058) : Mee, Meo, Mee & Meo.
+    func test_catalog_servesThreeCharacterTabs() {
+        XCTAssertFalse(MeeStickerCatalog.stickers(of: .mee).isEmpty)
+        XCTAssertFalse(MeeStickerCatalog.stickers(of: .meo).isEmpty)
+        XCTAssertFalse(MeeStickerCatalog.stickers(of: .duo).isEmpty)
+        XCTAssertTrue(MeeStickerCatalog.stickers(of: .duo).allSatisfy { $0.id.hasPrefix("duo-") })
+    }
 
-        XCTAssertFalse(mee.isEmpty)
-        XCTAssertFalse(meo.isEmpty)
-        XCTAssertEqual(MeeStickerCatalog.sections(of: .mee).map(\.section), [.solo, .duo])
-        XCTAssertEqual(MeeStickerCatalog.sections(of: .meo).map(\.section), [.solo, .duo])
+    /// Les sections sont des INTENTIONS, dans l'ordre du web, sans section vide.
+    func test_sections_followTheIntentOrder_andAreNeverEmpty() {
+        for character in [MeeSticker.Character.mee, .meo, .duo] {
+            let sections = MeeStickerCatalog.sections(of: character)
+            let order = sections.map(\.intent)
+            XCTAssertEqual(order, MeeStickerCatalog.intentOrder.filter(order.contains))
+            XCTAssertTrue(sections.allSatisfy { !$0.stickers.isEmpty })
+        }
+    }
+
+    /// Chaque intention a un titre ET une explication — sinon la section se
+    /// lirait comme un mot-clé, pas comme un « quand l'employer ».
+    func test_everyIntent_hasATitleAndAHint() {
+        for intent in MeeStickerCatalog.intentOrder {
+            XCTAssertFalse(intent.title.isEmpty)
+            XCTAssertFalse(intent.hint.isEmpty)
+            XCTAssertNotEqual(intent.title, intent.hint)
+        }
     }
 
     /// Une entrée sans film rendrait une case vide dans la feuille ET un
@@ -67,10 +85,11 @@ final class MeeStickerCatalogTests: XCTestCase {
     func test_sheetTabs_offerMeeAndMeo_onlyWhenAHostSendsThem() {
         XCTAssertFalse(StickerSheetTab.offered(hasMee: false).contains(.mee))
         XCTAssertFalse(StickerSheetTab.offered(hasMee: false).contains(.meo))
+        XCTAssertFalse(StickerSheetTab.offered(hasMee: false).contains(.meeAndMeo))
         XCTAssertEqual(StickerSheetTab.offered(hasMee: false),
                        [.search, .favorites, .recents, .custom, .smileys])
         XCTAssertEqual(StickerSheetTab.offered(hasMee: true),
-                       [.search, .favorites, .recents, .mee, .meo, .custom, .smileys])
+                       [.search, .favorites, .recents, .mee, .meo, .meeAndMeo, .custom, .smileys])
     }
 
     /// Mee et Meo ne portent aucune famille de palette : leur contenu vient de
@@ -79,6 +98,7 @@ final class MeeStickerCatalogTests: XCTestCase {
         let toutes = StickerPaletteTab.offered(hasLibrary: true, hasNearbyPlaces: true)
         XCTAssertEqual(StickerSheetTab.sections(of: .mee, offered: toutes), [])
         XCTAssertEqual(StickerSheetTab.sections(of: .meo, offered: toutes), [])
+        XCTAssertEqual(StickerSheetTab.sections(of: .meeAndMeo, offered: toutes), [])
     }
 }
 
