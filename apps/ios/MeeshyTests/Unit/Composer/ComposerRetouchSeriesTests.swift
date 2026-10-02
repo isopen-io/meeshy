@@ -100,4 +100,43 @@ final class ComposerRetouchSeriesTests: XCTestCase {
         let b = ComposerRetouchPiece(attachmentId: "b", fileURL: url("b"), mimeType: "video/mp4", kind: .video)
         XCTAssertEqual(ComposerRetouchSeed(pieces: [a, b], focusId: "b").focus, b)
     }
+
+    // MARK: - Ce que « Terminé » rend (#9136)
+
+    private func slide(background: StoryMediaObject) -> StorySlide {
+        var s = StorySlide()
+        s.effects.mediaObjects = [background]
+        return s
+    }
+
+    private func video(duration: Double?, sourceStart: Double? = nil, sourceEnd: Double? = nil) -> StoryMediaObject {
+        StoryMediaObject(id: "v", mediaType: StoryMediaKind.video.rawValue, aspectRatio: 9.0 / 16.0,
+                         isBackground: true, duration: duration, sourceStart: sourceStart, sourceEnd: sourceEnd)
+    }
+
+    func test_messageVideoSlide_trimmedVideo_lastsItsWindow() {
+        let rendue = ComposerRetouchSeries.messageVideoSlide(slide(background: video(duration: 3, sourceStart: 2, sourceEnd: 5)))
+        XCTAssertEqual(rendue.computedTotalDuration(), 3, accuracy: 0.001,
+                       "Une pièce vidéo coupée à 3 s repart de 3 s, pas de la durée minimale d'une story")
+    }
+
+    func test_messageVideoSlide_videoWithoutMeasuredDuration_isLeftAsIs() {
+        let depart = slide(background: video(duration: nil))
+        XCTAssertNil(ComposerRetouchSeries.messageVideoSlide(depart).effects.timelineDuration)
+    }
+
+    func test_imageRenderSize_squareCrop_rendersASquare() {
+        var image = StoryMediaObject(id: "i", mediaType: StoryMediaKind.image.rawValue, aspectRatio: 4.0 / 3.0,
+                                     isBackground: true)
+        image.crop = MediaCropRule.centered(ratio: .square, sourceRatio: 4.0 / 3.0)
+        let taille = ComposerRetouchSeries.imageRenderSize(slide: slide(background: image), canvasRatio: 9.0 / 16.0)
+        XCTAssertEqual(taille.width, taille.height, accuracy: 1)
+    }
+
+    func test_imageRenderSize_uncropped_keepsTheSceneRatio() {
+        let image = StoryMediaObject(id: "i", mediaType: StoryMediaKind.image.rawValue, aspectRatio: 4.0 / 3.0,
+                                     isBackground: true)
+        let taille = ComposerRetouchSeries.imageRenderSize(slide: slide(background: image), canvasRatio: 9.0 / 16.0)
+        XCTAssertEqual(taille, ComposerReturnImage.renderSize(ratio: 9.0 / 16.0))
+    }
 }
