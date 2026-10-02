@@ -27,18 +27,17 @@ final class ConversationStickerSendGuardTests: XCTestCase {
 
     // MARK: - La tuile
 
-    func test_composerBar_declaresStickerCallback_andGatesTheTileOnIt() throws {
+    func test_composerBar_declaresStickerCallback_andGatesTheGlassDoorOnIt() throws {
         let bar = try appSource("Meeshy/Features/Main/Components/UniversalComposerBar.swift")
         XCTAssertTrue(bar.contains("var onRequestStickerPicker: (() -> Void)? = nil"),
                       "la barre déclare la porte, avec `nil` pour défaut : un hôte qui ne la câble pas n'a pas de tuile")
 
-        let tiles = try appSource("Meeshy/Features/Main/Components/UniversalComposerBar+Attachments.swift")
-        XCTAssertTrue(tiles.contains("if onRequestStickerPicker != nil {"),
-                      "la tuile est GATÉE sur le rappel — loi 4, une porte sans effet n'est pas rendue")
-        XCTAssertTrue(tiles.contains("id: \"sticker\""))
-        XCTAssertTrue(tiles.contains("icon: \"rectangle.portrait.on.rectangle.portrait.angled\""),
+        let door = try appSource("Meeshy/Features/Main/Components/UniversalComposerBar+Toolbar.swift")
+        XCTAssertTrue(door.contains("if let openStickers = onRequestStickerPicker {"),
+                      "la porte est GATÉE sur le rappel — loi 4, une porte sans effet n'est pas rendue")
+        XCTAssertTrue(door.contains("symbol: \"rectangle.portrait.on.rectangle.portrait.angled\""),
                       "même glyphe que `ComposerRailDoor.sticker` et que l'en-tête de la palette — pas un smiley")
-        XCTAssertTrue(tiles.contains("\"composer.attach.sticker\""))
+        XCTAssertTrue(door.contains("\"composer.attach.sticker\""))
     }
 
     // MARK: - L'hôte
