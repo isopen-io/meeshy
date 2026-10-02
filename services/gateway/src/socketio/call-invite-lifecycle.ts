@@ -141,14 +141,14 @@ export function createCallInvitationLifecycle(deps: CallInvitationLifecycleDeps)
     });
   };
 
-  const settle = (io: MeeshyIOServer, invitation: PendingCallInvitation): Promise<void> =>
-    settleUnanswered(io, invitation).catch((error: unknown) =>
+  const reportSettlementFailure =
+    (invitation: PendingCallInvitation) =>
+    (error: unknown): void =>
       logger.error('call-invite: unanswered invitation settlement failed', {
         callId: invitation.callId,
         inviteeUserId: invitation.inviteeUserId,
         error,
-      })
-    );
+      });
 
   return {
     /** L'invitation sonne : son échéance est celle de la sonnerie d'un appel. Ré-inviter la réarme. */
@@ -156,7 +156,7 @@ export function createCallInvitationLifecycle(deps: CallInvitationLifecycleDeps)
       take(invitation.callId, invitation.inviteeUserId);
       const handle = schedule(() => {
         pending.delete(keyOf(invitation.callId, invitation.inviteeUserId));
-        void settle(io, invitation);
+        void settleUnanswered(io, invitation).catch(reportSettlementFailure(invitation));
       }, ringMs);
       pending.set(keyOf(invitation.callId, invitation.inviteeUserId), { invitation, handle });
     },
@@ -182,7 +182,9 @@ export function createCallInvitationLifecycle(deps: CallInvitationLifecycleDeps)
       const due = [...pending.values()]
         .filter((entry) => entry.invitation.callId === callId)
         .flatMap((entry) => take(entry.invitation.callId, entry.invitation.inviteeUserId) ?? []);
-      await Promise.all(due.map((invitation) => settle(io, invitation)));
+      await Promise.all(
+        due.map((invitation) => settleUnanswered(io, invitation).catch(reportSettlementFailure(invitation)))
+      );
     },
   };
 }

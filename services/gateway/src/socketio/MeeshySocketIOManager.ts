@@ -3491,7 +3491,7 @@ export class MeeshySocketIOManager {
   async close(): Promise<void> {
     // Les sockets d'abord, quoi qu'il arrive ensuite (#8297) ; `engine.close()` coupe
     // les transports sans attendre les adaptateurs, que Redis peut retenir.
-    void this.io.close();
+    void this.io.close().catch((error: unknown) => logger.error(`❌ Fermeture des sockets échouée: ${error}`));
     this.io.engine?.close();
     const steps: ReadonlyArray<() => unknown> = [
       () => this.agentAdminRelay?.stop(),
