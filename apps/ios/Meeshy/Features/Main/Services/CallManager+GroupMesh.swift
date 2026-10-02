@@ -147,6 +147,8 @@ final class GroupCallMeshBinding {
     private var cancellables = Set<AnyCancellable>()
     private weak var boundManager: CallManager?
 
+    private lazy var syncCoalescer = MainTurnCoalescer { [weak self] in self?.mesh.syncWithHost() }
+
     init(mesh: GroupCallMeshCoordinator = .shared) {
         self.mesh = mesh
     }
@@ -178,14 +180,16 @@ final class GroupCallMeshBinding {
             .sink { [weak self] in self?.mesh.handleIceServersRefreshed($0) }
             .store(in: &cancellables)
 
-        let state = manager.$callState.map { _ in () }
-        let primary = manager.$remoteUserId.map { _ in () }
-        let muted = manager.$isMuted.map { _ in () }
-        let video = manager.$isVideoEnabled.map { _ in () }
-        let call = manager.$currentCallId.map { _ in () }
+        // #9089 — pendant la négociation, ces cinq sources changent en rafale :
+        // chacune ne publie que ce qui CHANGE, et la rafale se resynchronise UNE
+        // fois, au prochain tour de boucle principale.
+        let state = manager.$callState.removeDuplicates().map { _ in () }
+        let primary = manager.$remoteUserId.removeDuplicates().map { _ in () }
+        let muted = manager.$isMuted.removeDuplicates().map { _ in () }
+        let video = manager.$isVideoEnabled.removeDuplicates().map { _ in () }
+        let call = manager.$currentCallId.removeDuplicates().map { _ in () }
         Publishers.Merge5(state, primary, muted, video, call)
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] in self?.mesh.syncWithHost() }
+            .sink { [weak self] in self?.syncCoalescer.request() }
             .store(in: &cancellables)
     }
 }
