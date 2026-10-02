@@ -38,7 +38,7 @@ final class ComposerConversationImageTests: XCTestCase {
     func test_leSocleDUneRetouche_neMontreQueTermine() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
             .components(separatedBy: .whitespacesAndNewlines).joined()
-        XCTAssertTrue(code.contains("ifreturnsImageToConversation{Spacer();returnImageButton}else{"),
+        XCTAssertTrue(code.contains("ifreturnsToConversation{Spacer();returnImageButton}else{"),
                       "En retouche, le socle ne porte que la capsule Terminé.")
     }
 

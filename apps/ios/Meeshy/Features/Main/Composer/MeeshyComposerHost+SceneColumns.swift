@@ -42,7 +42,7 @@ extension MeeshyComposerHost {
     // MARK: - Le rail gauche : l'éclair puis le Cadre, après le lieu (#8713)
 
     var sceneToggleEntries: [ComposerSceneToggleEntry] {
-        ComposerLeadingSceneToggles.served(animated: !returnsImageToConversation,
+        ComposerLeadingSceneToggles.served(animated: !returnsToConversation,
                                            frame: sceneHasBackgroundMedia)
             .map { bouton in
                 switch bouton {

@@ -1545,10 +1545,10 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // deux choses (quel contenu reprendre, quelle audience il autorise)
             // parce que les séparer aurait permis d'en passer une sans l'autre,
             // c'est-à-dire de republier SANS PLAFOND, silencieusement.
-            // `onReturnImage` ferme la liste (#8416) : la retouche d'une image du
+            // `onReturnMedia` ferme la liste (#8416, #9123) : la retouche d'une pièce du
             // fil rend l'image composée au lieu de la publier.
             ["intent", "initialVisibility", "draftId", "hydration", "onPublishAllInBackground",
-             "onPublishDocument", "moodSeed", "mediaSeed", "onPreview", "onDismiss", "onReturnImage"],
+             "onPublishDocument", "moodSeed", "mediaSeed", "onPreview", "onDismiss", "onReturnMedia"],
             "La liste des paramètres du meuble a changé. Ce n'est pas un échec en soi — elle est écrite en "
                 + "toutes lettres ici pour qu'un changement d'ordre se lise dans un diff au lieu de se "
                 + "découvrir à la compilation, et pour que la sous-suite ci-dessous ait une référence stable."

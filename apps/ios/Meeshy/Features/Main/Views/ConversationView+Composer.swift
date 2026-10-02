@@ -250,26 +250,18 @@ extension ConversationView {
         .fileImporter(isPresented: $composerState.showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
         }
+        // **La caméra de la barre ouvre le composer, viseur ARMÉ** (#9123) —
+        // plus l'ancienne `CameraView` : la prise s'édite dans la scène, et
+        // « Terminé » la verse au message en attente par les mêmes chemins que
+        // l'ancienne feuille.
         .conversationCover(isPresented: $composerState.showCamera) {
-            CameraView { result in
-                switch result {
-                // **Le CINQUIÈME consommateur** de `CameraResult.photo`, élargi
-                // le 2026-09-04 pour porter les octets d'origine — donc l'EXIF
-                // (#4080). Ce chemin est celui de la CONVERSATION, qui ré-encode
-                // déjà l'image avant l'envoi : les octets ne lui servent à rien,
-                // et il les jette explicitement plutôt que de faire croire
-                // qu'il les préserve.
-                //
-                // Il m'avait échappé : `git grep` sur `.photo(` rendait quatre
-                // sites, et seul le COMPILATEUR compte les consommateurs d'un
-                // membre élargi.
-                case .photo(let image, _):
-                    handleCameraCapture(image)
-                case .video(let url):
-                    handleCameraVideo(url)
+            ConversationCaptureSceneEditor(onDone: { media in
+                composerState.showCamera = false
+                switch media {
+                case .image(let image): handleCameraCapture(image)
+                case .video(let url): handleCameraVideo(url)
                 }
-            }
-            .ignoresSafeArea()
+            }, onCancel: { composerState.showCamera = false })
         }
         .sheet(isPresented: $composerState.showLocationPicker) {
             LocationPickerView(accentColor: accentColor) { place in

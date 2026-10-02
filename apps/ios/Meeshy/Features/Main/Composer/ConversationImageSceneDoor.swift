@@ -4,7 +4,7 @@ import MeeshyUI
 
 // **La porte de la RETOUCHE d'une image du fil** (#8416) — le composer plein
 // écran semé de l'image, qui ne publie rien : « Terminé » rend l'image composée
-// au brouillon du message (`MeeshyComposerHost.onReturnImage`). Une porte à
+// au brouillon du message (`MeeshyComposerHost.onReturnMedia`). Une porte à
 // part, comme toutes celles qui montent le meuble.
 
 /// **La porte de la retouche** : le composer semé de l'image, qui ne publie rien.
@@ -29,7 +29,32 @@ struct ConversationImageSceneEditor: View {
             mediaSeed: graine.seed,
             onPreview: { _, _, _, _, _ in },
             onDismiss: onCancel,
-            onReturnImage: onDone
+            onReturnMedia: { media in
+                guard case .image(let image) = media else { return }
+                onDone(image)
+            }
+        )
+    }
+}
+
+/// **La porte de la caméra de la barre** (#9123) : le composer plein écran,
+/// VIDE et viseur armé ; « Terminé » rend la prise — retouchée ou telle
+/// quelle — au message en attente.
+struct ConversationCaptureSceneEditor: View {
+    let onDone: (ComposerReturnedMedia) -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        MeeshyComposerHost(
+            intent: ComposerIntent(origin: .conversationCapture),
+            initialVisibility: "PUBLIC",
+            onPublishAllInBackground: { _, _, _, _, _, _, _, _, _, _, _, _, _ in false },
+            onPublishDocument: { _ in false },
+            moodSeed: nil,
+            mediaSeed: nil,
+            onPreview: { _, _, _, _, _ in },
+            onDismiss: onCancel,
+            onReturnMedia: onDone
         )
     }
 }

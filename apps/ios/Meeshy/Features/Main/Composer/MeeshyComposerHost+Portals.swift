@@ -92,6 +92,8 @@ extension MeeshyComposerHost {
         // **La photothèque s'ouvre d'office** à la création d'un post, d'une
         // story ou d'un réel vierge (directive porteur 2026-09-28).
         .task { await presentOpeningPickerIfNeeded() }
+        // La caméra de la barre d'une conversation arrive viseur armé (#9123).
+        .task { armViewfinderIfTheDoorAsks() }
         // **Les personnes à proposer, chargées UNE fois** (#4475) — mêmes amis
         // acceptés que la bande du document, par la même source. Deux
         // chargements auraient donné deux listes à faire diverger, et deux

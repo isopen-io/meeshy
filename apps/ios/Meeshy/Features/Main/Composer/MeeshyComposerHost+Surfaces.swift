@@ -508,8 +508,8 @@ extension MeeshyComposerHost {
             onPickBandFitMode: { applySceneFitMode($0) },
             onPickBandBackdrop: { applySceneBackdrop($0) },
             // Le `(+)` d'une nouvelle scène, à la place de l'éclair (#8713).
-            topBarAccessory: returnsImageToConversation ? nil : sceneAddSlideButton,
-            onTimeButton: sceneIsAnimated && !returnsImageToConversation ? { toggleSceneFrise() } : nil,
+            topBarAccessory: returnsToConversation ? nil : sceneAddSlideButton,
+            onTimeButton: sceneIsAnimated && !returnsToConversation ? { toggleSceneFrise() } : nil,
             timeIsOpen: viewModel.timelineIsOpen,
             timelinePanel: sceneTimelinePanel,
             timelineBridge: viewModel.canvasTimelineBridge,
@@ -572,7 +572,7 @@ extension MeeshyComposerHost {
                 guard editedObject == nil else { return }
                 viewModel.exitTextEditingMode()
             },
-            descriptionPanel: returnsImageToConversation ? nil : sceneDescriptionPanel,
+            descriptionPanel: returnsToConversation ? nil : sceneDescriptionPanel,
             // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
             // reste : le canvas garde son calque persisté, il continue de
             // recevoir les touches, et aucune surface ne se pose dessus.

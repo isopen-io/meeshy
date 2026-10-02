@@ -160,10 +160,10 @@ struct MeeshyComposerHost: View {
     let onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     let onDismiss: () -> Void
 
-    /// **Rendre l'image composée au lieu de la publier** (#8416) — posé par la
-    /// retouche d'une image du brouillon d'un message. `nil` pour toute autre
-    /// porte, qui publie.
-    let onReturnImage: ((UIImage) -> Void)?
+    /// **Rendre le média composé au lieu de le publier** (#8416, #9123) — posé
+    /// par la retouche d'une pièce du brouillon d'un message et par sa caméra.
+    /// `nil` pour toute autre porte, qui publie.
+    let onReturnMedia: ((ComposerReturnedMedia) -> Void)?
 
     /// L'atelier et le meuble lisent le MÊME état de composition. Le host le
     /// possède pour que le gate du réel (`ComposerReelGate`) lise la composition
@@ -797,9 +797,9 @@ struct MeeshyComposerHost: View {
         mediaSeed: StoryComposerSeed?,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
         onDismiss: @escaping () -> Void,
-        onReturnImage: ((UIImage) -> Void)? = nil
+        onReturnMedia: ((ComposerReturnedMedia) -> Void)? = nil
     ) {
-        self.onReturnImage = onReturnImage
+        self.onReturnMedia = onReturnMedia
         self.intent = intent
         self.initialVisibility = initialVisibility
         // **La PORTE peut porter le brouillon** (#4611). `draftId` était le

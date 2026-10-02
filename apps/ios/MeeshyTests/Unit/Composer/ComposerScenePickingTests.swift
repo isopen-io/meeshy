@@ -36,7 +36,7 @@ final class ComposerScenePickingTests: XCTestCase {
     /// Jamais sur ce qui REPREND un contenu, ni sur l'humeur, ni sur une
     /// composition qui a déjà sa matière (brouillon restauré).
     func test_laPhotothequeNeSOuvrePas_surUneReprise() {
-        for origine: ComposerOrigin in [.moodChip, .draft(id: "d"), .share, .conversationDraftImage,
+        for origine: ComposerOrigin in [.moodChip, .draft(id: "d"), .share, .conversationDraftImage, .conversationCapture,
                                          .edit(postId: "p", documentFormat: .story),
                                          .repost(ofPostId: "p", sourceFormat: .story)] {
             XCTAssertFalse(ComposerScenePicking.opensOnPicker(origin: origine, compositionIsEmpty: true), "\(origine)")
