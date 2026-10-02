@@ -128,6 +128,7 @@ const itStudioChrome = {
   'story.studio.trim.kept': '{kept} su {total}',
   'story.studio.crop.original': 'Originale',
   'story.studio.crop.ratio': 'Proporzioni',
+  'story.studio.audioTrim.title': 'Accorcia l’audio',
   'story.studio.background.tools.leave': 'Torna alla scena',
   'story.studio.reelSwitch.announcement': 'Passato a reel',
 } satisfies StudioChromeCatalogSlice;

@@ -132,6 +132,7 @@ const frStudioChrome = {
   'story.studio.trim.kept': '{kept} sur {total}',
   'story.studio.crop.original': 'Original',
   'story.studio.crop.ratio': 'Proportions',
+  'story.studio.audioTrim.title': 'Couper l’audio',
   'story.studio.background.tools.leave': 'Retour à la scène',
   'story.studio.reelSwitch.announcement': 'Publication passée en réel',
 } as const;
