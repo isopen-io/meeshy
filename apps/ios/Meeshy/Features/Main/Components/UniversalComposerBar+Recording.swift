@@ -36,7 +36,7 @@ extension UniversalComposerBar {
                 } label: {
                     Image(systemName: "mic.fill")
                         .font(.callout.weight(.medium))
-                        .foregroundColor(mutedColor)
+                        .foregroundColor(iconTint)
                         .frame(width: 36, height: 36)
                 }
                 .accessibilityLabel(String(localized: "composer.a11y.startRecording", defaultValue: "Enregistrer un message vocal", bundle: .main))

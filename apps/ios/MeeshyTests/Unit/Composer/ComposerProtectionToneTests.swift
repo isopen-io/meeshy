@@ -203,5 +203,7 @@ final class ComposerIconTintTests: XCTestCase {
         XCTAssertFalse(protections.contains(": mutedColor)"), "Une bascule au repos lit la couleur commune de la loi.")
         XCTAssertTrue(protections.contains("ComposerIconTint.resolve("), "La barre consulte la loi.")
         XCTAssertFalse(attachments.contains("Color.white.opacity(0.85) : accent"), "Le « + » lit la loi.")
+        let recording = try read("UniversalComposerBar+Recording.swift")
+        XCTAssertTrue(recording.contains("Image(systemName: \"mic.fill\")\n                        .font(.callout.weight(.medium))\n                        .foregroundColor(iconTint)"), "Le micro du champ lit la loi.")
     }
 }
