@@ -359,7 +359,14 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // `ConversationService.engagement(conversationId:)`. Les deux cliquets se
 // lisent ici sur le résultat de la fusion (chacun 279 de son côté : 285 et
 // 280), jamais sur l'un des deux parents. Valeur MESURÉE le 2026-09-30.
-const BASELINE_DEAD_ENTRIES = 285;
+// 285 -> 292 (#9141, 2026-10-02) : les sept entrées `StickerPacksEndpoint`
+// GÉNÉRÉES depuis `route-manifest.json` pour les packs de stickers tiers —
+// `.root`, `.installed`, `.pending`, `.submissions`, `.bySlug`,
+// `.bySlugInstall` et `.bySlugReview`. Mortes à la naissance PAR
+// CONSTRUCTION : #9141 livre les routes gateway et la Boutique WEB ; les
+// onglets par pack côté iOS sont un suivi à part, qui n'existe pas encore.
+// Valeur MESURÉE le 2026-10-02.
+const BASELINE_DEAD_ENTRIES = 292;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
