@@ -619,6 +619,7 @@ describe('MeeshySocketIOManager', () => {
     ioState.toEmit.mockClear();
     ioState.except.mockClear();
     ioState.close.mockClear();
+    ioState.close.mockResolvedValue(undefined);
     ioState.connectionHandler = null;
     ioState.sockets.sockets.clear();
     ioState.sockets.adapter.rooms.clear();
