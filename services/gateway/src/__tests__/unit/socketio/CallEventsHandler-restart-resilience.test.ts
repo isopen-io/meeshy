@@ -108,6 +108,7 @@ import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { validateSocketEvent, type SocketValidationResult } from '../../../middleware/validation';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CallEndReason } from '@meeshy/shared/prisma/client';
+import { CALL_REJOIN_GRACE_MS } from '@meeshy/shared/types/call-rules';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -118,7 +119,7 @@ const CALL_ID = '507f1f77bcf86cd799439011';
 const CONV_ID = '507f1f77bcf86cd799439012';
 const PARTICIPANT_ID = 'conv-participant-abc';
 const PARTICIPANT_DBID = 'call-participant-row-abc';
-const GRACE_MS = 30_000;
+const GRACE_MS = CALL_REJOIN_GRACE_MS;
 const PRE_ANSWER_GRACE_MS = 10_000;
 
 // ---------------------------------------------------------------------------
@@ -231,6 +232,28 @@ describe('CallEventsHandler — restart / disconnect resilience', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  describe('la grâce de reprise dure 60 s (#9111)', () => {
+    it('un appel décroché tient encore à 31 s — l’ancienne grâce de 30 s ne le termine plus', async () => {
+      const prisma = makePrisma({ activeParticipations: [makeParticipation('active')] });
+      const { handlers } = setup({ prisma });
+
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(31_000);
+
+      expect(mockLeaveCall).not.toHaveBeenCalled();
+    });
+
+    it('sans retour, la grâce expirée sort le participant', async () => {
+      const prisma = makePrisma({ activeParticipations: [makeParticipation('active')] });
+      const { handlers } = setup({ prisma });
+
+      await handlers['disconnect']();
+      await jest.advanceTimersByTimeAsync(CALL_REJOIN_GRACE_MS + 100);
+
+      expect(mockLeaveCall).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('graceful shutdown', () => {

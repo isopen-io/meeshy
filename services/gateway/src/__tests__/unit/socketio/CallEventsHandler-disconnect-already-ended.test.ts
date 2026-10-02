@@ -15,6 +15,7 @@
  * already-ended call and re-broadcast for it.
  */
 
+import { CALL_REJOIN_GRACE_MS } from '@meeshy/shared/types/call-rules';
 import { jest, describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 
 // ---------------------------------------------------------------------------
@@ -95,7 +96,7 @@ const CALL_ID = '507f1f77bcf86cd799439011';
 const CONV_ID = '507f1f77bcf86cd799439012';
 const CALL_PART_ID = 'call-part-dae-abc';
 const MEMBERSHIP_ID = 'membership-dae-abc';
-const GRACE_EXPIRY_MS = 31_000;
+const GRACE_EXPIRY_MS = CALL_REJOIN_GRACE_MS + 1_000;
 
 // ---------------------------------------------------------------------------
 // Helpers

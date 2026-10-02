@@ -38,6 +38,10 @@ final class CallRulesContractTests: XCTestCase {
         XCTAssertEqual(CallRules.pushTimeToLive, try SharedCallRules.seconds("CALL_PUSH_TTL_MS"))
     }
 
+    func test_rejoinGrace_matchesSharedRule() throws {
+        XCTAssertEqual(CallRules.rejoinGrace, try SharedCallRules.seconds("CALL_REJOIN_GRACE_MS"))
+    }
+
     func test_maxParticipants_matchesSharedRule() throws {
         XCTAssertEqual(Double(CallRules.maxParticipants), try SharedCallRules.value("CALL_MAX_PARTICIPANTS"))
     }

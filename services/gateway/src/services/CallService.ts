@@ -18,6 +18,7 @@ import {
   CALL_CONNECTING_GRACE_MS,
   CALL_HEARTBEAT_TIMEOUT_MS,
   CALL_MAX_PARTICIPANTS,
+  CALL_REJOIN_GRACE_MS,
   CALL_RING_TIMEOUT_MS
 } from '@meeshy/shared/types/call-rules';
 import {
@@ -28,6 +29,8 @@ import {
 } from '@meeshy/shared/utils/call-summary';
 import { TURNCredentialService } from './TURNCredentialService';
 import { ActiveCallClaim, type ActiveCallChangedListener } from './calls/activeCallClaim';
+import { fireAndForget } from './calls/fireAndForget';
+import { LoneSurvivorGrace } from './calls/loneSurvivorGrace';
 import { LIVE_MESSAGE_MARK } from './messaging/liveMessage';
 import { isConversationClosed } from './messaging/conversationWriteAdmission';
 import type { CallHistoryItem } from './callHistory';
@@ -290,6 +293,17 @@ export class CallService {
   /** #8959 — les points d'un appel terminé, crédités à l'écriture de son résumé terminal. */
   private readonly creditCallEngagement: (callId: string) => void;
 
+  /** #9109 — un groupe réduit à un seul participant se termine après la grâce de reprise. */
+  private readonly loneSurvivorGrace = new LoneSurvivorGrace({
+    graceMs: CALL_REJOIN_GRACE_MS,
+    readCall: (callId) => this.getCallSession(callId),
+    endFor: async ({ callId, userId, participantId, lastLeaverUserId }) => {
+      this.broadcastCallEndedIfTerminal(await this.leaveCall({ callId, userId, participantId, endReasonHint: CallEndReason.completed }), lastLeaverUserId);
+      this.finalizeCallSummary(callId);
+    },
+    onError: (callId, error) => logger.warn('lone-survivor end failed', { callId, error })
+  });
+
   /**
    * Register the callback notified with every callId force-ended by
    * `initiateCall`'s own GC sweeps (phantom stale participations + zombie
@@ -306,13 +320,7 @@ export class CallService {
     if (!callback) {
       return;
     }
-    try {
-      Promise.resolve(callback(callId)).catch((error) => {
-        logger.warn('reaped-call callback failed', { callId, error });
-      });
-    } catch (error) {
-      logger.warn('reaped-call callback failed synchronously', { callId, error });
-    }
+    fireAndForget(() => callback(callId), 'reaped-call callback', callId);
   }
 
   /**
@@ -349,13 +357,7 @@ export class CallService {
       reason: CallEndReason.garbageCollected
     };
 
-    try {
-      Promise.resolve(broadcaster(callId, conversationId, endedEvent)).catch((error) => {
-        logger.warn('call-ended broadcaster failed (reaped call)', { callId, error });
-      });
-    } catch (error) {
-      logger.warn('call-ended broadcaster failed synchronously (reaped call)', { callId, error });
-    }
+    fireAndForget(() => broadcaster(callId, conversationId, endedEvent), 'call-ended broadcaster (reaped call)', callId);
   }
 
   /**
@@ -448,13 +450,7 @@ export class CallService {
       reason: (callSession.endReason || CallEndReason.completed) as CallEndReason
     };
 
-    try {
-      Promise.resolve(broadcaster(callSession.id, callSession.conversationId, endedEvent)).catch((error) => {
-        logger.warn('call-ended broadcaster failed', { callId: callSession.id, error });
-      });
-    } catch (error) {
-      logger.warn('call-ended broadcaster failed synchronously', { callId: callSession.id, error });
-    }
+    fireAndForget(() => broadcaster(callSession.id, callSession.conversationId, endedEvent), 'call-ended broadcaster', callSession.id);
   }
 
   /**
@@ -507,13 +503,7 @@ export class CallService {
       mode: mode as CallMode
     };
 
-    try {
-      Promise.resolve(broadcaster(callId, event)).catch((error) => {
-        logger.warn('participant-left broadcaster failed', { callId, error });
-      });
-    } catch (error) {
-      logger.warn('participant-left broadcaster failed synchronously', { callId, error });
-    }
+    fireAndForget(() => broadcaster(callId, event), 'participant-left broadcaster', callId);
   }
 
   /**
@@ -610,6 +600,7 @@ export class CallService {
    * and buffer-cleanup timers.
    */
   destroy(): void {
+    this.loneSurvivorGrace.destroy();
     for (const handle of this.ringingTimeouts.values()) {
       clearTimeout(handle);
     }
@@ -1858,6 +1849,7 @@ export class CallService {
       // in memory for the rest of the call.
       this.clearParticipantBackgrounded(callId, participantId);
       this.heartbeats.get(callId)?.delete(participantId);
+      this.loneSurvivorGrace.arm(callId);
     }
 
     logger.info('✅ User left call successfully', { callId, userId, wasPreAnswered });

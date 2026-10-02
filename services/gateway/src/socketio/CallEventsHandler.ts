@@ -36,6 +36,8 @@ import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { handleMediaToggle as handleMediaToggleBody, mapMediaToggleError, registerMediaToggleListeners } from './call-media-toggle';
 import { announceRecordingArrival, registerCallRecordingEvents } from './call-recording-events';
 import { evictStaleSameUserSockets } from './call-room-eviction';
+import { DISCONNECT_GRACE_MS, GRACE_EXTENSION_MS, MAX_GRACE_EXTENSIONS, alreadyActiveCallDetails, isCallRevenant } from './call-rejoin';
+import { forceLeaveSparesLiveCall } from './call-force-leave-scope';
 import { registerCallControlEvents } from './call-controls';
 import { CallRecordingService } from '../services/calls/callRecording';
 import { callRosterFrom, prismaCallRecordingRepository } from '../services/calls/callRecordingRepository';
@@ -238,15 +240,6 @@ export class CallEventsHandler {
    */
   private isShuttingDown = false;
   private disconnectGraceTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  private static readonly DISCONNECT_GRACE_MS = 30_000;
-  // CALL-RESILIENCE (chaos-test prod 2026-07-02, callId 6a46713b…) — the
-  // socket.io reconnect backoff can legitimately exceed the 30s grace (the
-  // re-join landed 18s late on a call whose BOTH apps were alive and whose
-  // P2P media was healthy). When the user still has ANY connected socket at
-  // expiry, the re-join is coming: extend rather than kill, capped so the
-  // total stays under the heartbeat GC tier (30s + 4×15s = 90s < 120s).
-  private static readonly GRACE_EXTENSION_MS = 15_000;
-  private static readonly MAX_GRACE_EXTENSIONS = 4;
   // Pre-answer disconnects: long enough to absorb a socket churn / transport
   // blip of the caller mid-ring, short enough that a real crash still resolves
   // the ring quickly (the 60s ringing timeout remains the hard cap).
@@ -582,7 +575,7 @@ export class CallEventsHandler {
     getUserId: (socketId: string) => string | undefined;
     participation: DisconnectParticipation;
     userId: string;
-  }, graceMs: number = CallEventsHandler.DISCONNECT_GRACE_MS): void {
+  }, graceMs: number = DISCONNECT_GRACE_MS): void {
     const { participation, userId } = opts;
     const callId = participation.callSessionId;
     const key = this.graceKey(callId, userId);
@@ -652,12 +645,12 @@ export class CallEventsHandler {
       // didReconnect re-join is on its way. Extend rather than end healthy
       // P2P media; a re-join cancels the extension via the same grace key.
       const extensions = opts.extensionCount ?? 0;
-      if (extensions < CallEventsHandler.MAX_GRACE_EXTENSIONS) {
+      if (extensions < MAX_GRACE_EXTENSIONS) {
         const userSockets = await io.in(ROOMS.user(userId)).fetchSockets();
         if (userSockets.length > 0) {
           logger.info('📞 Grace expired but user still has a live socket — extending grace', {
             callId, userId, extension: extensions + 1,
-            maxExtensions: CallEventsHandler.MAX_GRACE_EXTENSIONS
+            maxExtensions: MAX_GRACE_EXTENSIONS
           });
           const key = this.graceKey(callId, userId);
           const timer = setTimeout(() => {
@@ -669,7 +662,7 @@ export class CallEventsHandler {
               (error: unknown) =>
                 logger.error('📞 Extended disconnect grace expiry rejected', { callId, userId, error })
             );
-          }, CallEventsHandler.GRACE_EXTENSION_MS);
+          }, GRACE_EXTENSION_MS);
           timer.unref?.();
           this.disconnectGraceTimers.set(key, timer);
           return;
@@ -2049,8 +2042,7 @@ export class CallEventsHandler {
         logger.error('Error initiating call', error);
 
         const { code: errorCode, message } = parseCallHandlerError(error, 'Failed to initiate call');
-
-        ack?.({ success: false, error: { code: errorCode, message } });
+        ack?.({ success: false, error: { code: errorCode, message, ...(await alreadyActiveCallDetails(this.prisma, errorCode, data?.conversationId)) } });
         socket.emit(CALL_EVENTS.ERROR, { code: errorCode, message } as CallError);
       }
     });
@@ -2138,6 +2130,7 @@ export class CallEventsHandler {
         // window expires. Item F follow-up below explains why join no
         // longer clears the ringing timer at all — see that note past the
         // catch block for the current (and final) ownership of the clear.
+        const joinStartedAt = new Date();
         const joinResult = await this.callService.joinCall({
           callId: data.callId,
           userId,
@@ -2231,7 +2224,9 @@ export class CallEventsHandler {
         // Match the same identity the relay uses to resolve `signal.to`:
         // the participant's real userId (registered) or participantId (anon).
         const joinerParticipantId = participant.participant?.userId || participant.participantId;
-        const replayOffer = this.bufferedOfferFor(data.callId, userId, joinerParticipantId);
+        const revenant = isCallRevenant({ answeredAt: callSession.answeredAt, rows: callSession.participants, userId, joinStartedAt });
+        if (revenant) this.clearBufferedOfferFor(data.callId, userId, joinerParticipantId);
+        const replayOffer = revenant ? null : this.bufferedOfferFor(data.callId, userId, joinerParticipantId);
         if (replayOffer) {
           // C2 — verify the offer sender is still an active participant before
           // replaying. If the sender left between buffering and this join, the
@@ -2637,7 +2632,7 @@ export class CallEventsHandler {
             (p) => p.participant?.userId === userId && !p.leftAt
           );
 
-          if (participant) {
+          if (participant && !forceLeaveSparesLiveCall(call, userId)) {
             logger.info('🔄 Force leaving call', {
               callId: call.id,
               userId,
@@ -4018,7 +4013,7 @@ export class CallEventsHandler {
               userId
             },
             isAnswered
-              ? CallEventsHandler.DISCONNECT_GRACE_MS
+              ? DISCONNECT_GRACE_MS
               : CallEventsHandler.PRE_ANSWER_GRACE_MS
           );
         }
