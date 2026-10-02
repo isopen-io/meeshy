@@ -1,5 +1,6 @@
 import CoreImage
 import CoreVideo
+import QuartzCore
 import XCTest
 @testable import Meeshy
 
@@ -12,6 +13,7 @@ final class CallBackgroundBlurTests: XCTestCase {
         executor: any CallVisionExecuting = InlineVisionExecutor(),
         clock: TestClock = TestClock(),
         isPowerConstrained: Bool = false,
+        stopwatch: @escaping @Sendable () -> CFTimeInterval = { 0 },
         faceEffects: any CallFaceEffectsRendererProviding = CallFaceEffectsRenderer(detector: SilentFaceDetector(), executor: InlineVisionExecutor())
     ) -> VideoFilterPipeline {
         let pipeline = VideoFilterPipeline(
@@ -19,6 +21,7 @@ final class CallBackgroundBlurTests: XCTestCase {
             segmenter: segmenter,
             segmentationExecutor: executor,
             clock: { clock.now },
+            stopwatch: stopwatch,
             isPowerConstrained: { isPowerConstrained }
         )
         pipeline.config = VideoFilterConfig.default.withBackgroundBlur(true)
@@ -105,7 +108,7 @@ final class CallBackgroundBlurTests: XCTestCase {
     func test_process_overBudget_lowersQualityBeforeStoppingTheBlur() {
         let segmenter = CountingSegmenter()
         let clock = TestClock()
-        let sut = makeSUT(segmenter: segmenter, clock: clock, faceEffects: SlowFaceRenderer(delay: 0.03))
+        let sut = makeSUT(segmenter: segmenter, clock: clock, stopwatch: { CACurrentMediaTime() }, faceEffects: SlowFaceRenderer(delay: 0.03))
         sut.config = sut.config.selectingFaceEffect(.volcano)
 
         feed(sut, frames: 10, clock: clock)
