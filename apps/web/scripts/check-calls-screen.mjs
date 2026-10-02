@@ -164,11 +164,11 @@ try {
           await page.mouse.down();
           await page.mouse.move(x, y + distance / 2, { steps: 8 });
           await page.mouse.move(x, y + distance, { steps: 8 });
-          await page.waitForTimeout(150);
           const held = await page.evaluate(() => {
             const screen = document.querySelector('[data-call-screen]');
             return screen === null ? null : { swipe: screen.getAttribute('data-call-swipe-down'), transform: screen.style.transform, height: innerHeight };
           });
+          await page.waitForTimeout(150);
           await page.mouse.up();
           return { from: [x, y], distance, under, held };
         };
