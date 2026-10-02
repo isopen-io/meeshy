@@ -24,6 +24,8 @@ type Input = {
 };
 
 export type CallSwipeDown = {
+  /** Le geste existe ici et maintenant — l'écran lui réserve le doigt (`touch-action: none`). */
+  readonly allowed: boolean;
   /** Le décalage vertical que suit l'écran, en px. */
   readonly offset: number;
   readonly dragging: boolean;
@@ -106,5 +108,5 @@ export function useCallSwipeDown({ root, allowed, canPip, reducedMotion, onOutco
     return was;
   }).current;
 
-  return { offset: allowed ? offset : 0, dragging: allowed && dragging, swallowTap };
+  return { allowed, offset: allowed ? offset : 0, dragging: allowed && dragging, swallowTap };
 }
