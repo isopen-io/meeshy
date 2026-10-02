@@ -42,7 +42,8 @@ import { peerAlert } from './call-peer-alerts';
 import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
 import type { playCue, primeTones, startTone, stopTone } from './call-tones';
 import { listenCallEvents, type CallTransport } from './call-transport';
-import { callNoticeStore, callReactionStore, type CallNoticeStoreApi, type CallReactionStoreApi } from './call-control-state';
+import { callNoticeStore, callReactionStore, showNotice, type CallNoticeStoreApi, type CallReactionStoreApi } from './call-control-state';
+import { createEngineCamera } from './engine-camera';
 import { createEngineControls } from './engine-controls';
 import { createEnginePreview } from './engine-preview';
 import { loadDefaultEngineDeps } from './engine-defaults';
@@ -94,6 +95,10 @@ export type CallEngineDeps = {
   readonly fetchActiveCallId: (conversationId: string) => Promise<string | null>;
   readonly acquireMedia: (options: { readonly video: boolean; readonly facing: Facing }) => Promise<MediaStream>;
   readonly acquireCamera: (facing: Facing) => Promise<MediaStreamTrack>;
+  /** Une caméra EXIGÉE par son identifiant (#9094, `acquireChosenInput`). */
+  readonly acquireCameraDevice: (deviceId: string) => Promise<MediaStreamTrack>;
+  /** La caméra choisie a répondu : elle devient la préférée (#8046). */
+  readonly rememberCamera: (deviceId: string) => void;
   /** La piste de l'écran choisi (#8063) — rejette quand l'utilisateur annule le choix. */
   readonly acquireDisplay: () => Promise<MediaStreamTrack>;
   readonly createLink: (deps: PeerLinkDeps) => PeerLink;
@@ -129,6 +134,8 @@ export type CallEngine = {
   readonly toggleMic: () => void;
   readonly toggleCamera: () => Promise<void>;
   readonly switchCamera: () => Promise<void>;
+  /** Une caméra choisie par son identifiant (#9094) — la piste envoyée est remplacée, sans renégociation. */
+  readonly selectCamera: (deviceId: string) => Promise<void>;
   /** Partager l'écran, ou arrêter le partage (#8063). */
   readonly toggleScreen: () => Promise<void>;
   /** Un périphérique choisi en cours d'appel (#8046) : la piste, déjà acquise, remplace l'actuelle. */
@@ -166,7 +173,6 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
   let incomingTimer: unknown = null;
   let generation = 0;
   let screenPicking = false;
-  let cameraBusy = false;
 
   const read = (): ActiveCall | null => store.getState().call;
   const write = (call: ActiveCall | null): void => store.setState({ call });
@@ -820,86 +826,21 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     update((latest) => ({ ...latest, localStream: deps.createStream(stream.getTracks()) }));
   };
 
-  /**
-   * UN GESTE DE CAMÉRA À LA FOIS (#8735) — l'écran bascule AVANT que la
-   * caméra ne réponde ; un second toucher pendant qu'elle s'ouvre est ignoré
-   * (il partirait d'un état périmé), comme le choix d'un écran à partager.
-   */
-  const cameraGesture = async (run: () => Promise<void>): Promise<void> => {
-    if (cameraBusy) return;
-    cameraBusy = true;
-    try {
-      await run();
-    } finally {
-      cameraBusy = false;
-    }
-  };
-
-  /** Une caméra ouverte pour CE flux ; arrivée trop tard (appel fini, flux remplacé), elle est relâchée. */
-  const openCamera = async (facing: Facing, stream: MediaStream): Promise<MediaStreamTrack | null> => {
-    const track = await deps.acquireCamera(facing).catch(() => null);
-    if (track !== null && localStream !== stream) {
-      track.stop();
-      return null;
-    }
-    return track;
-  };
-
-  const announceCamera = (): void => {
-    const after = read();
-    if (after?.callId != null) emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId: after.callId, enabled: after.cameraOn });
-  };
-
-  const toggleCamera = (): Promise<void> =>
-    cameraGesture(async () => {
-      const call = read();
-      const stream = localStream;
-      if (call === null || stream === null || !isCallLive(call) || call.phase.kind === 'incoming' || call.screenSharing) return;
-      write({ ...call, cameraOn: !call.cameraOn });
-      if (call.cameraOn) {
-        await setCamera(null);
-        announceCamera();
-        return;
-      }
-      const track = await openCamera(call.facing, stream);
-      if (localStream !== stream) return;
-      if (track === null) {
-        update((current) => ({ ...current, cameraOn: call.cameraOn }));
-        return;
-      }
-      await setCamera(track);
-      if (call.media === 'audio') update((current) => ({ ...current, media: 'video' }));
-      announceCamera();
-    });
-
-  /**
-   * Retourner : l'autre caméra, ouverte d'abord à côté de celle qui tourne ;
-   * un appareil qui n'en ouvre qu'une à la fois la refuse — la caméra en
-   * cours est alors relâchée, puis l'autre rouverte. Si elle ne vient pas,
-   * celle d'avant revient (et l'écran avec elle) ; sans aucune, la caméra
-   * s'éteint et le pair l'apprend.
-   */
-  const switchCamera = (): Promise<void> =>
-    cameraGesture(async () => {
-      const call = read();
-      const stream = localStream;
-      if (call === null || stream === null || !call.cameraOn || call.screenSharing) return;
-      const facing: Facing = call.facing === 'user' ? 'environment' : 'user';
-      write({ ...call, facing });
-      const beside = await openCamera(facing, stream);
-      if (localStream !== stream) return;
-      if (beside !== null) {
-        await setCamera(beside);
-        return;
-      }
-      await setCamera(null, true);
-      const flipped = await openCamera(facing, stream);
-      const track = flipped ?? (await openCamera(call.facing, stream));
-      if (localStream !== stream) return;
-      update((current) => ({ ...current, facing: flipped === null ? call.facing : facing }));
-      await setCamera(track);
-      if (track === null) announceCamera();
-    });
+  const camera = createEngineCamera({
+    read,
+    write,
+    update,
+    stream: () => localStream,
+    acquireCamera: deps.acquireCamera,
+    acquireCameraDevice: deps.acquireCameraDevice,
+    setCamera,
+    announce: (enabled) => {
+      const callId = read()?.callId ?? null;
+      if (callId !== null) emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled });
+    },
+    failed: (failure) => showNotice(controlState.notices, { kind: 'camera-failed', failure }),
+    remember: deps.rememberCamera,
+  });
 
   const sharable = (call: ActiveCall | null): call is ActiveCall => call !== null && (call.phase.kind === 'connected' || call.phase.kind === 'reconnecting');
 
@@ -1049,8 +990,9 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       hangupWith('local');
     },
     toggleMic,
-    toggleCamera,
-    switchCamera,
+    toggleCamera: camera.toggleCamera,
+    switchCamera: camera.switchCamera,
+    selectCamera: camera.selectCamera,
     toggleScreen,
     replaceInput,
     setDisplay: (display) => update((call) => ({ ...call, display })),

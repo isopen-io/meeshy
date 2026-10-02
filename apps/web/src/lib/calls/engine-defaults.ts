@@ -10,8 +10,8 @@ import { deviceLabel } from './call-analytics';
 import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
 import { createCameraEffects } from './camera-effects';
 import { browserConnection, dataProfileOf, opusShapeFor, type DataProfile } from './call-data-profile';
-import { preferredInputs } from './call-devices';
-import { acquireCallMedia, acquireCamera, acquireDisplay } from './call-media';
+import { browserPreferenceStorage, preferredInputs, writeDevicePreference } from './call-devices';
+import { acquireCallMedia, acquireCamera, acquireChosenInput, acquireDisplay } from './call-media';
 import { createJournalRecorder, type JournalRecorder } from './call-network-journal-recorder';
 import { createCallJournalStore } from './call-network-journal-store';
 import { shapeOpusSdp } from './call-opus-sdp';
@@ -116,6 +116,8 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     fetchActiveCallId: (conversationId) => fetchActiveCallId(apiDeps, conversationId),
     acquireMedia: (options) => acquireCallMedia({ ...options, ...preferredInputs(), profile: currentProfile() }),
     acquireCamera: (facing) => (facing === 'environment' ? acquireRearCamera({ profile: currentProfile() }) : acquireCamera({ facing, cameraId: preferredInputs().cameraId, profile: currentProfile() })),
+    acquireCameraDevice: (deviceId) => acquireChosenInput({ kind: 'camera', deviceId }),
+    rememberCamera: (deviceId) => void writeDevicePreference(browserPreferenceStorage(), 'camera', deviceId),
     acquireDisplay: () => acquireDisplay(),
     createLink: (link) => createPeerLink({ ...link, shapeSdp: (sdp) => shapeOpusSdp(sdp, opusShapeFor(currentProfile())) }),
     cameraEffects,

@@ -40,6 +40,12 @@ describe('le mot d’un contrôle d’appel', () => {
     expect(controlNoticeText('fr', { kind: 'remove-failed', name: 'Nadia' }, nameOf)).toBe('Impossible de retirer Nadia');
   });
 
+  test('une caméra qui ne s’ouvre pas en cours d’appel se dit (#9095) : refusée, ou indisponible', () => {
+    expect(controlNoticeText('fr', { kind: 'camera-failed', failure: 'permission' }, nameOf)).toBe('L’accès à la caméra est refusé');
+    expect(controlNoticeText('fr', { kind: 'camera-failed', failure: 'unavailable' }, nameOf)).toBe('La caméra n’a pas pu s’ouvrir');
+    expect(noticeRole({ kind: 'camera-failed', failure: 'unavailable' })).toBe('alert');
+  });
+
   test('une coupure imposée se dit, un échec s’annonce', () => {
     expect(noticeRole({ kind: 'muted-by', byUserId: 'u' })).toBe('status');
     expect(noticeRole({ kind: 'remove-failed', name: 'x' })).toBe('alert');

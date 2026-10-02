@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useStore } from 'zustand/react';
 
 import type { CallRowsKit } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
@@ -10,10 +11,12 @@ import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { CallClock, CallScreenHeader } from '@/components/call-screen-header';
 import { CallStage, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
 import { Glyph, GlyphSvg } from '@/components/glyph';
+import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
-import { callControlSet, flipOffered, isVideoScene } from '@/lib/calls/call-controls';
+import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
+import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallPanels, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
 import { mineInMenu, SELF_CONTROL_GROUPS, selfControlsPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
@@ -28,7 +31,7 @@ import { useCallModeration } from '@/lib/calls/use-call-moderation';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered } from '@/lib/calls/video-effects';
+import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered, effectsUsedOf, videoEffectsStore } from '@/lib/calls/video-effects';
 
 import type { EffectsCompanion } from './call-effects-companions';
 
@@ -145,7 +148,21 @@ const CallPreview = lazy(() => import('./call-preview').then((module) => ({ defa
 
 const PREVIEW_KIT = { Video: StreamVideo, Audio: StreamAudio, soundOn: <GlyphSvg glyph={CALL_VIEW_GLYPHS.speakerHigh} size={22} />, soundOff: <GlyphSvg glyph={CALL_VIEW_GLYPHS.speakerSlash} size={22} /> };
 
-const ROWS_KIT: CallRowsKit = { Button: CallButton, glyphs: CALL_VIEW_GLYPHS, onRowKeyDown, onRowWheel, rowItem: ROW_ITEM, actionsId: CALL_ACTIONS_ID, panelIds: CALL_PANEL_ID };
+const useEffectsActive = (): boolean => useStore(videoEffectsStore, (state) => effectsUsedOf(state.effects).length > 0);
+
+const ROWS_KIT: CallRowsKit = {
+  Button: CallButton,
+  glyphs: CALL_VIEW_GLYPHS,
+  onRowKeyDown,
+  onRowWheel,
+  rowItem: ROW_ITEM,
+  actionsId: CALL_ACTIONS_ID,
+  panelIds: CALL_PANEL_ID,
+  useEffectsActive,
+  cameraSourceOf,
+  requestPip: requestCallPip,
+  pipGlyph: <GlyphSvg glyph={CALL_DEVICES_GLYPHS.pictureInPicture} size={22} />,
+};
 
 const CallCameraControls = lazy(() => loadActions().then((module) => ({ default: module.CallCameraControls })));
 
@@ -249,18 +266,18 @@ function useEffectsSupport(stream: MediaStream | null, forced: EffectsSupport | 
   return useMemo(() => forced ?? { color: browserColorSupport(), blur: blurCapable(sent === null ? null : cameraSourceOf(sent)) }, [forced, sent]);
 }
 
-/** Une autre caméra où se retourner — relu quand la caméra s'allume et quand un appareil arrive ou part. */
-function useCanFlip(cameraOn: boolean): boolean {
-  const [canFlip, setCanFlip] = useState(true);
+/** Retourner, choisir sa caméra, ou rien (#9094) — relu quand la caméra s'allume et quand un appareil arrive ou part. */
+function useCameraSwitch(cameraOn: boolean): CameraSwitch {
+  const [cameraSwitch, setCameraSwitch] = useState<CameraSwitch>('flip');
   useEffect(() => {
     const media = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices;
     if (media?.enumerateDevices === undefined) return undefined;
-    const read = () => void media.enumerateDevices().then((devices) => setCanFlip(flipOffered(devices)), () => undefined);
+    const read = () => void media.enumerateDevices().then((devices) => setCameraSwitch(cameraSwitchOf(devices)), () => undefined);
     read();
     media.addEventListener?.('devicechange', read);
     return () => media.removeEventListener?.('devicechange', read);
   }, [cameraOn]);
-  return canFlip;
+  return cameraSwitch;
 }
 
 const CallDeclineSheet = lazy(() =>
@@ -341,8 +358,8 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const videoScene = live && isVideoScene(call);
   const sharer = layout === 'screen' ? screenSharer(call.members) : null;
   const support = useEffectsSupport(call.localStream, effectsSupport);
-  const canFlip = useCanFlip(call.cameraOn);
-  const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), canFlip, videoScene });
+  const cameraSwitch = useCameraSwitch(call.cameraOn);
+  const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), cameraSwitch, canPip: shouldOfferPip(call, browserPipSupport()), videoScene });
   const place = selfControlsPlace({ layout, selfFull, selfTileShown: call.cameraOn });
   const local = useLocalZoom(call.callId, call.facing);
   const offer: LayerOffer = {

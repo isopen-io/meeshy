@@ -42,13 +42,13 @@ export const zoomControlIn = (place: SelfControlsPlace): ZoomControl | null => (
  * **AUTOUR DE MA VIGNETTE, JAMAIS DEDANS** (#8747, miroir de
  * `CallSelfTileControlsPlacement` sur iOS) — ce qui part AVEC mon image
  * (Effets, Écran) au-dessus de la vignette, ce qui agit sur la caméra
- * (Retourner, Couper, et le cran du zoom) en dessous.
+ * (Retourner ou le choix de la caméra, Couper, et le cran du zoom) en dessous.
  */
 export type SelfControlGroup = 'effects' | 'camera';
 
 export const SELF_CONTROL_GROUPS: Readonly<Record<SelfControlGroup, readonly MineAction[]>> = {
   effects: ['effects', 'screen'],
-  camera: ['flip', 'camera'],
+  camera: ['flip', 'camera-picker', 'camera'],
 };
 
 export const inSelfGroup = (group: SelfControlGroup | undefined, action: MineAction): boolean => group === undefined || SELF_CONTROL_GROUPS[group].includes(action);

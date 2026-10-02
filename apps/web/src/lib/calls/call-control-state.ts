@@ -1,6 +1,8 @@
 import type { CallControlErrorCode, CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
+import type { MediaFailure } from './call-media';
+
 /**
  * **CE QUE LES CONTRÔLES D'UN APPEL MONTRENT** (#8433, #8438, #8439) — deux
  * petits magasins qu'écrit le moteur (`engine-controls.ts`) et que lit l'écran
@@ -37,7 +39,8 @@ export type CallControlNotice =
   | { readonly kind: 'mute-failed'; readonly code: CallControlErrorCode; readonly name: string }
   | { readonly kind: 'remove-failed'; readonly name: string }
   | { readonly kind: 'invite-declined'; readonly name: string }
-  | { readonly kind: 'invite-unanswered'; readonly name: string };
+  | { readonly kind: 'invite-unanswered'; readonly name: string }
+  | { readonly kind: 'camera-failed'; readonly failure: MediaFailure };
 
 export type CallNoticeState = { readonly notice: CallControlNotice | null; readonly seq: number };
 

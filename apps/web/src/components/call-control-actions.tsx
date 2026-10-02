@@ -1,6 +1,7 @@
 import { Fragment, lazy, Suspense, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
+import { CallCameraPicker } from '@/components/call-camera-picker';
 import type { CallButton, CallButtonTone } from '@/components/call-glass-button';
 import { GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
@@ -31,6 +32,12 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * portent pas. Les règles (qui est offert, dans quel ordre) sont dans
  * `lib/calls/call-controls.ts`.
  *
+ * Comme iOS (#9094, #9095) : sur un ordinateur à plusieurs webcams, le choix
+ * de la caméra (`call-camera-picker.tsx`) remplace Retourner ; Effets se
+ * montre actif quand un effet est posé ; un appel vocal propose d'ajouter la
+ * vidéo (la caméra et son « + ») ; l'image dans l'image ferme la rangée
+ * « l'appel ».
+ *
  * Une chose à la fois (#8578, `call-screen-layer.ts`) : Enregistrer au repos
  * (#8437), Ajouter (#8433) et Réagir (#8439) ouvrent un PANNEAU qui REMPLACE
  * les rangées dans le cadre ; Effets (#8442, #8551) et Capturer (#8552)
@@ -53,17 +60,45 @@ export type CallRowsKit = {
   readonly rowItem: string;
   readonly actionsId: string;
   readonly panelIds: Readonly<Record<CallPanelKind, string>>;
+  /** Un effet est posé sur ma vidéo : Effets se montre actif (`.active` d'iOS, #9095). Un hook. */
+  readonly useEffectsActive: () => boolean;
+  /** La caméra derrière la piste envoyée (les effets en font une autre piste). */
+  readonly cameraSourceOf: (track: MediaStreamTrack) => MediaStreamTrack;
+  /** L'image dans l'image, ouverte DANS le geste (`requestCallPip`). */
+  readonly requestPip: () => void;
+  readonly pipGlyph: ReactNode;
 };
 
 const CAPTIONS_KEY = { off: 'call.captions.on', translated: 'call.captions.original', original: 'call.captions.off' } as const;
 
 const screenGlyph = (name: CallScreenGlyphName, size = 22) => <GlyphSvg glyph={CALL_SCREEN_GLYPHS[name]} size={size} />;
 
+/** Un glyphe et son badge, à la manière des `*.badge.*` d'iOS (`video.badge.plus`, `camera.badge.ellipsis`). */
+const badged = (base: ReactNode, badge: ReactNode) => (
+  <span className="relative grid place-items-center">
+    {base}
+    <span aria-hidden className="absolute -right-1.5 -top-1.5 grid size-3.5 place-items-center rounded-full" style={{ background: 'var(--color-on-media)', color: 'var(--ios-indigo-950)' }}>
+      {badge}
+    </span>
+  </span>
+);
+
+/**
+ * La caméra allumée, coupée, ou — dans un appel VOCAL — à ajouter : iOS y
+ * pose `video.badge.plus`, la caméra et son « + » (#9095).
+ */
+function cameraGlyph(call: ActiveCall, kit: CallRowsKit): ReactNode {
+  const state = call.cameraOn ? 'on' : call.media === 'audio' ? 'add' : 'off';
+  const glyph = state === 'on' ? screenGlyph('videoCamera') : state === 'off' ? screenGlyph('videoCameraSlash') : badged(screenGlyph('videoCamera'), <GlyphSvg glyph={kit.glyphs.plus} size={10} />);
+  return <span className="contents" data-call-camera-glyph={state}>{glyph}</span>;
+}
+
 type ActionContext = {
   readonly call: ActiveCall;
   readonly language: InterfaceLanguage;
   readonly panels: CallPanels;
   readonly kit: CallRowsKit;
+  readonly effectsActive: boolean;
 };
 
 type ActionView = {
@@ -87,14 +122,14 @@ const panelView = (panels: CallPanels, panel: CallPanelKind) => ({
   panel,
 });
 
-function mineAction(action: MineAction, { call, language, panels, kit }: ActionContext): ActionView {
+function mineAction(action: Exclude<MineAction, 'camera-picker'>, { call, language, panels, kit, effectsActive }: ActionContext): ActionView {
   switch (action) {
     case 'camera':
       return {
         key: action,
         label: translate(language, call.cameraOn ? 'call.camera.off' : 'call.camera.on'),
         caption: translate(language, 'call.devices.camera'),
-        glyph: screenGlyph(call.cameraOn ? 'videoCamera' : 'videoCameraSlash'),
+        glyph: cameraGlyph(call, kit),
         onPress: callActions.toggleCamera,
         tone: call.cameraOn ? 'active' : 'bare',
         pressed: call.cameraOn,
@@ -118,7 +153,8 @@ function mineAction(action: MineAction, { call, language, panels, kit }: ActionC
         caption: translate(language, 'call.effects'),
         glyph: <GlyphSvg glyph={kit.glyphs.magicWand} size={22} />,
         onPress: () => panels.enter('effects'),
-        tone: 'bare',
+        tone: effectsActive ? 'active' : 'bare',
+        pressed: effectsActive,
         data: { 'data-call-control': 'effects' },
       };
     case 'screen':
@@ -171,6 +207,16 @@ function callAction(action: Exclude<CallAction, 'record'>, context: ActionContex
       glyph: journalGlyph,
       ...panelView(panels, 'journal'),
       data: { 'data-call-control': 'journal' },
+    };
+  if (action === 'pip')
+    return {
+      key: action,
+      label: translate(language, 'call.pip.enter'),
+      caption: translateCallControls(language, 'callControls.pip'),
+      glyph: kit.pipGlyph,
+      onPress: kit.requestPip,
+      tone: 'bare',
+      data: { 'data-call-control': 'pip', 'data-call-pip': '' },
     };
   if (action === 'capture')
     return {
@@ -244,6 +290,8 @@ function RecordButton({ language, panels, kit }: { readonly language: InterfaceL
   );
 }
 
+const pickerGlyph = (kit: CallRowsKit) => badged(screenGlyph('videoCamera'), <GlyphSvg glyph={kit.glyphs.dotsThree} size={10} />);
+
 function Family({ actions, context }: { readonly actions: readonly (MineAction | CallAction)[]; readonly context: ActionContext }) {
   return (
     <>
@@ -251,6 +299,8 @@ function Family({ actions, context }: { readonly actions: readonly (MineAction |
         <Fragment key={action}>
           {action === 'record' ? (
             <RecordButton language={context.language} panels={context.panels} kit={context.kit} />
+          ) : action === 'camera-picker' ? (
+            <CallCameraPicker call={context.call} language={context.language} kit={context.kit} glyph={pickerGlyph(context.kit)} captioned data={{ 'data-call-control': 'camera-picker', [context.kit.rowItem]: '' }} />
           ) : action === 'camera' || action === 'flip' || action === 'effects' || action === 'screen' ? (
             <ActionButton view={mineAction(action, context)} kit={context.kit} />
           ) : (
@@ -279,7 +329,7 @@ type RowsProps = { readonly call: ActiveCall; readonly set: CallControlSet; read
 
 const CallZoomStep = lazy(() => import('./call-self-camera').then((module) => ({ default: module.CallZoomStep })));
 
-const CAMERA_ORDER = ['flip', 'camera', 'effects', 'screen'] as const;
+const CAMERA_ORDER = ['flip', 'camera-picker', 'camera', 'effects', 'screen'] as const;
 
 /**
  * LES COMMANDES DE MA CAMÉRA (#8576, #8626) — Retourner, Couper la caméra,
@@ -292,11 +342,13 @@ const CAMERA_ORDER = ['flip', 'camera', 'effects', 'screen'] as const;
  * d'un bouton à l'autre.
  */
 export function CallCameraControls({ call, set, language, panels, kit, place, local, group, only }: RowsProps & { readonly place: 'tile' | 'top'; readonly local: LocalZoom | null; readonly group?: SelfControlGroup | undefined; readonly only?: readonly MineAction[] | undefined }) {
-  const context = { call, language, panels, kit };
+  const context = { call, language, panels, kit, effectsActive: kit.useEffectsActive() };
   const label = translateCallControls(language, 'callControls.camera.options');
   return (
     <div role="toolbar" aria-label={label} aria-orientation="horizontal" onKeyDown={kit.onRowKeyDown} className="glass-call flex w-max items-center gap-0.5 rounded-full p-0.5" data-call-self-controls={place} data-call-self-group={group}>
       {CAMERA_ORDER.filter((action) => set.mine.includes(action) && (only === undefined || only.includes(action))).map((action) => {
+        if (action === 'camera-picker')
+          return <CallCameraPicker key={action} call={call} language={language} kit={kit} glyph={pickerGlyph(kit)} captioned={false} data={{ 'data-call-control': action, 'data-call-self-control': action, [kit.rowItem]: '' }} />;
         const view = mineAction(action, context);
         return (
           <kit.Button
@@ -323,7 +375,7 @@ export function CallCameraControls({ call, set, language, panels, kit, place, lo
 
 /** Les deux familles, une rangée chacune, dans la pilule qui a grandi. */
 export function CallActionRows({ call, set, language, panels, kit }: RowsProps) {
-  const context = { call, language, panels, kit };
+  const context = { call, language, panels, kit, effectsActive: kit.useEffectsActive() };
   const families = [
     ['mine', set.mine, 'call.section.mine'],
     ['call', set.call, 'call.section.call'],

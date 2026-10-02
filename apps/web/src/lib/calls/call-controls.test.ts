@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { callControlSet, chromeAfter, flipOffered, isVideoScene } from './call-controls';
+import { callControlSet, cameraSwitchOf, chromeAfter, isVideoScene } from './call-controls';
 import type { ActiveCall, CallMember } from './call-store';
 
 /**
@@ -19,7 +19,8 @@ const context = (overrides: Partial<Parameters<typeof callControlSet>[0]> = {}) 
   screenSharing: false,
   canShare: true,
   canEffect: true,
-  canFlip: true,
+  cameraSwitch: 'flip' as const,
+  canPip: false,
   videoScene: false,
   ...overrides,
 });
@@ -34,7 +35,7 @@ describe('ce que (…) sort', () => {
   });
 
   test('Retourner n’existe que là où il y a une AUTRE caméra — sinon le bouton n’aurait aucun effet (#8432)', () => {
-    expect(callControlSet(context({ cameraOn: true, canFlip: false })).mine).toEqual(['camera', 'effects', 'screen']);
+    expect(callControlSet(context({ cameraOn: true, cameraSwitch: 'none' })).mine).toEqual(['camera', 'effects', 'screen']);
   });
 
   test('Effets n’existe que caméra allumée, là où le navigateur sait les faire, et jamais sur un écran partagé (#8442)', () => {
@@ -65,16 +66,43 @@ describe('ce que (…) sort', () => {
 
 });
 
-describe('une autre caméra où se retourner (#8432)', () => {
-  const input = (kind: MediaDeviceKind) => ({ kind }) as MediaDeviceInfo;
+describe('se retourner, ou choisir sa caméra (#8432, #9094)', () => {
+  type Device = Parameters<typeof cameraSwitchOf>[0][number];
+  const camera = (label: string, facing?: string): Device => ({ kind: 'videoinput', label, ...(facing === undefined ? {} : { getCapabilities: () => ({ facingMode: [facing] }) }) });
+  const microphone: Device = { kind: 'audioinput', label: 'Micro' };
 
-  test('une seule caméra : Retourner n’aurait aucun effet', () => {
-    expect(flipOffered([input('videoinput'), input('audioinput')])).toBe(false);
+  test('une seule caméra : ni Retourner ni choix, rien n’aurait d’effet', () => {
+    expect(cameraSwitchOf([camera('FaceTime HD'), microphone])).toBe('none');
   });
 
-  test('deux caméras, ou une liste encore vide : Retourner est offert', () => {
-    expect(flipOffered([input('videoinput'), input('videoinput')])).toBe(true);
-    expect(flipOffered([])).toBe(true);
+  test('une liste encore vide ne retire rien : Retourner reste offert', () => {
+    expect(cameraSwitchOf([])).toBe('flip');
+  });
+
+  test('un téléphone (une caméra arrière, dite par ses capacités ou son nom) : Retourner', () => {
+    expect(cameraSwitchOf([camera('camera2 1', 'user'), camera('camera2 0', 'environment')])).toBe('flip');
+    expect(cameraSwitchOf([camera('Caméra avant'), camera('Caméra arrière')])).toBe('flip');
+    expect(cameraSwitchOf([camera('Front Camera'), camera('Back Dual Wide Camera')])).toBe('flip');
+  });
+
+  test('un ordinateur à deux webcams, sans avant ni arrière : le choix de la caméra, comme iOS sur Mac (`.cameraPicker`)', () => {
+    expect(cameraSwitchOf([camera('FaceTime HD'), camera('Logitech C920')])).toBe('picker');
+    expect(cameraSwitchOf([camera('FaceTime HD', 'user'), camera('Caméra de l’iPhone')])).toBe('picker');
+  });
+
+  test('le choix remplace Retourner dans mon image, caméra allumée seulement', () => {
+    expect(callControlSet(context({ cameraOn: true, cameraSwitch: 'picker' })).mine).toEqual(['camera', 'camera-picker', 'effects', 'screen']);
+    expect(callControlSet(context({ cameraOn: false, cameraSwitch: 'picker' })).mine).not.toContain('camera-picker');
+  });
+});
+
+describe('l’image dans l’image rejoint la rangée « l’appel » (#9095, `CallView+Pill.swift`)', () => {
+  test('offerte, elle ferme la rangée, après Ajouter et Réagir — comme iOS', () => {
+    expect(callControlSet(context({ canPip: true })).call).toEqual(['captions', 'journal', 'record', 'invite', 'react', 'pip']);
+  });
+
+  test('non offerte, elle n’y est pas', () => {
+    expect(callControlSet(context({ canPip: false })).call).not.toContain('pip');
   });
 });
 

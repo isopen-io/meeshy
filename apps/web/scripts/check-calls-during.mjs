@@ -270,7 +270,9 @@ try {
       await page.click('[data-call-bubble-body]');
       check(await appears(page, '[data-call-screen]'), `${label} : toucher la bulle rend l'écran d'appel`);
 
-      // ------------------------------------------------ 7. l'image dans l'image
+      // ------------------------------------------------ 7. l'image dans l'image (rangée « l'appel » du (…), #9095)
+      if ((await page.$('[data-call-actions="rows"]')) === null) await page.click('[data-call-more]').catch(() => undefined);
+      await page.waitForSelector('[data-call-actions="rows"]', { timeout: 3000 }).catch(() => null);
       const pipButton = await page.$('[data-call-pip]');
       const support = await page.evaluate(() => ('documentPictureInPicture' in window ? 'document' : document.pictureInPictureEnabled ? 'video' : 'none'));
       if (support === 'none') {

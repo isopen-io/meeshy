@@ -2,6 +2,7 @@ import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events/event-names'
 
 import type { CameraEffectsPort } from '@/lib/calls/camera-effects';
 import { createCaptions } from '@/lib/calls/call-captions-controller';
+import { createCallNoticeStore, createCallReactionStore } from '@/lib/calls/call-control-state';
 import { createCallStore, type CallStoreApi } from '@/lib/calls/call-store';
 import { bindCallTransport, resetCallTransportForTests, type CallTransport } from '@/lib/calls/call-transport';
 import type { QualityTick } from '@/lib/calls/call-quality-loop';
@@ -40,7 +41,7 @@ export const stream = (tracks: readonly FakeTrack[]): MediaStream => {
 
 export type FakeLink = PeerLink & { readonly deps: PeerLinkDeps; offers: number; closed: boolean; received: string[]; sent: unknown[] };
 
-export function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number; readonly cameraEffects?: CameraEffectsPort; readonly acquireCamera?: CallEngineDeps['acquireCamera'] } = {}) {
+export function harness(options: { readonly acks?: Record<string, unknown>; readonly activeCallId?: string | null; readonly mediaError?: Error; readonly displayError?: Error; readonly quality?: () => QualityTick | null; readonly random?: number; readonly cameraEffects?: CameraEffectsPort; readonly acquireCamera?: CallEngineDeps['acquireCamera']; readonly acquireCameraDevice?: CallEngineDeps['acquireCameraDevice'] } = {}) {
   resetCallTransportForTests();
   const store: CallStoreApi = createCallStore();
   const emitted: Array<readonly [string, unknown]> = [];
@@ -50,6 +51,8 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
   const tones: string[] = [];
   const displays: FakeTrack[] = [];
   const cameras: FakeTrack[] = [];
+  const remembered: string[] = [];
+  const notices = createCallNoticeStore();
   const repeats: Array<{ readonly fn: () => void; readonly ms: number; stopped: boolean }> = [];
   const networkListeners: Array<() => void> = [];
   let clock = 1_000;
@@ -82,6 +85,15 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
         cameras.push(camera);
         return camera as unknown as MediaStreamTrack;
       }),
+    acquireCameraDevice:
+      options.acquireCameraDevice ??
+      (async () => {
+        const camera = track('video');
+        cameras.push(camera);
+        return camera as unknown as MediaStreamTrack;
+      }),
+    rememberCamera: (deviceId) => void remembered.push(deviceId),
+    controlState: { reactions: createCallReactionStore(), notices },
     acquireDisplay: async () => {
       if (options.displayError !== undefined) throw options.displayError;
       const display = track('video');
@@ -153,7 +165,7 @@ export function harness(options: { readonly acks?: Record<string, unknown>; read
   };
   const networkChanged = (): void => networkListeners.forEach((listener) => listener());
 
-  return { engine, store, emitted, requested, links, tones, displays, cameras, advance, call, names, linkState, binding, sampleQuality, networkChanged };
+  return { engine, store, emitted, requested, links, tones, displays, cameras, remembered, notices, advance, call, names, linkState, binding, sampleQuality, networkChanged };
 }
 
 export const DIRECT: StartCallRequest = { conversationId: 'c-1', media: 'audio', title: 'Amina', avatar: null, isGroup: false };

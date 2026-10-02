@@ -7,8 +7,8 @@ import type { CallControlNotice } from './call-control-state';
 
 /**
  * **LE MOT QU'UN CONTRÔLE D'APPEL DOIT À L'UTILISATEUR** (#8433, #8438) — qui a
- * coupé mon micro, et pourquoi une invitation, une coupure ou un retrait n'a
- * pas abouti. Le code de l'accusé choisit la phrase ; un code sans phrase
+ * coupé mon micro, et pourquoi une invitation, une coupure, un retrait ou ma
+ * caméra (#9095) n'a pas abouti. Le code de l'accusé choisit la phrase ; un code sans phrase
  * propre retombe sur « Impossible de … », jamais sur le code brut.
  */
 
@@ -49,6 +49,8 @@ export function controlNoticeText(language: InterfaceLanguage, notice: CallContr
       return t(language, 'callControls.invite.declined', { name: notice.name });
     case 'invite-unanswered':
       return t(language, 'callControls.invite.unanswered', { name: notice.name });
+    case 'camera-failed':
+      return t(language, notice.failure === 'permission' ? 'callControls.camera.denied' : 'callControls.camera.failed');
   }
 }
 
