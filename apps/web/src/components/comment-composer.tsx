@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useId, useRef, useState } from 'react';
 
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { COMMENT_MAX_LENGTH } from '@/lib/api/publication-comments';
+import { COMMENT_MEDIA_ACCEPT, acceptCommentFiles } from '@/lib/comments/comment-media';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { removePendingAttachment, replacePendingAttachment, type PendingAttachment } from '@/lib/send/attachments';
 import { withReplyMention, type CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import type { MentionSource } from '@/lib/view/mention-source';
 import { useMentionField } from '@/lib/view/use-mention-field';
@@ -14,8 +16,9 @@ import { useMentionField } from '@/lib/view/use-mention-field';
  * **LE COMPOSEUR DE COMMENTAIRE** — miroir réduit de
  * `PostDetailView+CommentComposer.swift` et de `StoryComposerBarView`
  * (`StoryViewerView+CanvasComposerBar.swift`) : **UNE seule zone de saisie**
- * (spécification porteur du 2026-05-28 citée par le fichier Swift), pièces
- * jointes, voix et lieu hors tranche — donc aucun de leurs boutons ici.
+ * (spécification porteur du 2026-05-28 citée par le fichier Swift). Il joint
+ * photos et vidéos de la photothèque (#9167) ; voix et lieu restent hors
+ * tranche — donc aucun de leurs boutons ici.
  *
  * **LE CHAMP SE VIDE AVANT LE RÉSEAU.** L'optimiste vit dans la liste
  * (`performComment` l'y pose) : garder le texte dans le champ le montrerait
@@ -29,6 +32,11 @@ import { useMentionField } from '@/lib/view/use-mention-field';
  * commentaires (`replayCost: 'diverges'` côté passerelle — l'idempotence par
  * `X-Client-Mutation-Id` garde un REJEU, pas deux intentions distinctes).
  */
+
+/** LE PLATEAU DES PIÈCES (#9167) — celui du composeur de message, chargé à la
+ * première pièce jointe : ses vignettes portent « Éditer » et ouvrent la MÊME
+ * retouche en série (`composer-retouch.tsx`). */
+const ComposerTray = lazy(() => import('@/components/composer-tray'));
 
 /** La cible du ⌄ : 44 px, la taille minimale d'un contrôle au doigt. */
 const FOLD_TARGET_PX = 44;
@@ -77,7 +85,9 @@ type ComposerNotice = { readonly text: string; readonly issue: 'refused' | 'unco
 
 export type CommentComposerProps = {
   readonly language: InterfaceLanguage;
-  readonly onSend: (content: string) => Promise<CommentComposerResult>;
+  /** Le texte, et les photos et vidéos jointes (#9167) — l'hôte les téléverse
+   * (`uploadContext: comment`) avant de les envoyer dans `attachmentIds`. */
+  readonly onSend: (content: string, pending: readonly PendingAttachment[]) => Promise<CommentComposerResult>;
   /** Absent ⇒ le composeur laisse place à une invitation à se connecter :
    * `POST /posts/:postId/comments` exige un `registeredUser` (`comments.ts:184`),
    * donc un champ offert à un visiteur anonyme serait un contrôle qui ment. */
@@ -117,6 +127,8 @@ export function CommentComposer({
   foldOnSend = false,
 }: CommentComposerProps) {
   const [text, setText] = useState('');
+  const [pending, setPending] = useState<readonly PendingAttachment[]>([]);
+  const pickerRef = useRef<HTMLInputElement | null>(null);
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<ComposerNotice | null>(null);
   const fieldRef = useRef<HTMLTextAreaElement | null>(null);
@@ -167,12 +179,19 @@ export function CommentComposer({
 
   const submit = useCallback(async () => {
     const content = text.trim();
-    if (content === '' || sending) return;
+    const pieces = pending;
+    if ((content === '' && pieces.length === 0) || sending) return;
     setSending(true);
     setNotice(null);
-    /* Vidé AVANT l'appel — l'optimiste est déjà dans la liste. */
-    setText('');
-    const result = await onSend(content);
+    /* Vidé AVANT l'appel — l'optimiste est déjà dans la liste. Des pièces
+       jointes montent d'abord (#9167) : l'optimiste n'existe qu'après elles,
+       donc le brouillon RESTE, en vol, jusqu'à l'issue. */
+    if (pieces.length === 0) setText('');
+    const result = await onSend(content, pieces);
+    if (result.ok) {
+      setText((current) => (pieces.length > 0 && current === text ? '' : current));
+      setPending((current) => (current === pieces ? [] : current));
+    }
     setSending(false);
     if (result.message !== undefined) {
       setNotice({
@@ -187,7 +206,7 @@ export function CommentComposer({
       return;
     }
     if (foldOnSend) release();
-  }, [text, sending, onSend, language, foldOnSend, release]);
+  }, [text, pending, sending, onSend, language, foldOnSend, release]);
 
   if (!canWrite) {
     return (
@@ -197,7 +216,7 @@ export function CommentComposer({
     );
   }
 
-  const vide = text.trim() === '';
+  const vide = text.trim() === '' && pending.length === 0;
 
   return (
     <form
@@ -266,8 +285,53 @@ export function CommentComposer({
           )}
         </div>
       )}
+      {pending.length === 0 ? null : (
+        <div
+          data-comment-tray=""
+          aria-busy={sending}
+          className={sending ? 'pointer-events-none opacity-60' : undefined}
+          style={{ ['--accent' as string]: 'var(--color-ios-brand)' }}
+        >
+          <Suspense fallback={null}>
+            <ComposerTray
+              variant="above"
+              pending={pending}
+              onRemove={(localId) => setPending((current) => removePendingAttachment(current, localId))}
+              onReplace={(localId, file) => setPending((current) => replacePendingAttachment(current, localId, file))}
+              notice={null}
+              place={null}
+              onRemovePlace={() => undefined}
+            />
+          </Suspense>
+        </div>
+      )}
       <div className="relative flex items-end gap-2">
       <MentionFieldPanel field={mention} language={language} />
+      {/* LA PHOTOTHÈQUE (#9167, miroir du bouton « + » des hôtes iOS) —
+          photos et vidéos seulement : un commentaire n'a ni son ni fichier. */}
+      <button
+        type="button"
+        data-comment-attach=""
+        aria-label={translate(language, 'comments.composer.attach')}
+        onClick={() => pickerRef.current?.click()}
+        className="grid shrink-0 place-items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+        style={{ width: 44, height: 44, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
+      >
+        <Glyph name="image" size={20} />
+      </button>
+      <input
+        ref={pickerRef}
+        type="file"
+        data-comment-attach-input=""
+        accept={COMMENT_MEDIA_ACCEPT}
+        multiple
+        hidden
+        onChange={(e) => {
+          const files = Array.from(e.currentTarget.files ?? []);
+          e.currentTarget.value = '';
+          if (files.length > 0) setPending((current) => acceptCommentFiles(current, files));
+        }}
+      />
       <label className="sr-only" htmlFor={fieldId}>
         {translate(language, 'comments.placeholder')}
       </label>

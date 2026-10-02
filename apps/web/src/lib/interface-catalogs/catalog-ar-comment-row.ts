@@ -14,6 +14,8 @@ const arCommentRow = {
   'comments.reply.cancel': 'إلغاء الرد',
   'comments.composer.fold': 'طيّ حقل التعليق',
   'comments.composer.unfold': 'إظهار حقل التعليق',
+  'comments.composer.attach': 'إرفاق صورة أو فيديو',
+  'comments.media.upload_failed': 'تعذّر إرسال المرفق.',
   'comments.replies.show': 'عرض الردود ({count})',
   'comments.replies.hide': 'إخفاء الردود',
   'comments.replies.more': 'عرض المزيد من الردود',
