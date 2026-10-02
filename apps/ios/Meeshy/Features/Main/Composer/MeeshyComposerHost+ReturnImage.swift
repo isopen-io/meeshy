@@ -79,12 +79,12 @@ extension MeeshyComposerHost {
                 slide: slide,
                 bgImage: viewModel.slideImages[slide.id],
                 loadedImages: viewModel.loadedImages,
-                size: ComposerReturnImage.renderSize(ratio: viewModel.currentCanvasRatio)
+                size: ComposerRetouchSeries.imageRenderSize(slide: slide, canvasRatio: viewModel.currentCanvasRatio)
             ) else { return }
             onReturnMedia(.image(image))
             onDismiss()
         case .renderVideo:
-            let slide = viewModel.exportableCurrentSlide()
+            let slide = ComposerRetouchSeries.messageVideoSlide(viewModel.exportableCurrentSlide())
             sceneExport.bakeForMessage(slide: slide, inputs: viewModel.exportInputs(for: slide)) { url in
                 onReturnMedia(.video(url))
                 onDismiss()

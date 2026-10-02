@@ -9,35 +9,56 @@ import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 const StoryComposeScreen = lazy(() => import('@/routes/story-compose'));
 
 /**
- * **« ÉDITER » UNE IMAGE EN ATTENTE** (#8416, miroir
- * `ConversationImageSceneDoor.swift`) — le MÊME studio plein écran, posé en
+ * **« ÉDITER » UNE PIÈCE EN ATTENTE** (#8416, #9126, miroir
+ * `ConversationRetouchSeriesEditor` iOS) — le MÊME studio plein écran, posé en
  * couche au-dessus du fil (le composeur garde son brouillon : aucune
- * navigation), semé de l'image, en mode RETOUCHE. « Terminé » rend le
- * composite, que l'hôte substitue à la pièce ; ✕ ou Échap referment sans rien
- * changer. Rien n'est envoyé.
+ * navigation), avec TOUTES les pièces du message en scènes (rail des scènes),
+ * ouvert sur la pièce touchée. « Terminé » rend chaque scène retouchée, que
+ * l'hôte substitue à SA pièce ; une scène intacte laisse sa pièce telle
+ * quelle. ✕ ou Échap referment sans rien changer. Rien n'est envoyé.
  *
  * Le retour matériel de la coque Android la referme aussi (#8460) : c'est une
  * couche modale, elle passe par `useBackDismiss` comme les autres — Échap
  * compris (#8517), qui ne la referme que si aucune plaque du studio n'est
  * ouverte par-dessus.
  */
+export type ComposerRetouchedPiece = { readonly localId: string; readonly file: File };
+
 export default function ComposerRetouch({
-  attachment,
+  pieces,
+  focus,
   onDone,
   onCancel,
   render,
 }: {
-  readonly attachment: PendingAttachment;
-  readonly onDone: (file: File) => void;
+  readonly pieces: readonly PendingAttachment[];
+  /** L'index, dans `pieces`, de la pièce touchée. */
+  readonly focus: number;
+  readonly onDone: (replaced: readonly ComposerRetouchedPiece[]) => void;
   readonly onCancel: () => void;
   readonly render?: StudioRetouchDeps;
 }) {
   useBackDismiss(onCancel, { escape: true });
+  const touched = pieces[focus];
+  const files = pieces.map((piece) => piece.file);
+  const handBack = (replaced: readonly { readonly index: number; readonly file: File }[]) =>
+    onDone(replaced.flatMap(({ index, file }) => {
+      const piece = pieces[index];
+      return piece === undefined ? [] : [{ localId: piece.localId, file }];
+    }));
 
   return (
     <div data-composer-retouch role="dialog" aria-modal="true" className="fixed inset-0 z-50">
       <Suspense fallback={null}>
-        <StoryComposeScreen retouch={{ file: attachment.file, onDone, onCancel, ...(render !== undefined ? { render } : {}) }} />
+        <StoryComposeScreen
+          retouch={{
+            file: touched?.file ?? null,
+            series: { files, focus, onDone: handBack },
+            onDone: (file) => handBack([{ index: focus, file }]),
+            onCancel,
+            ...(render !== undefined ? { render } : {}),
+          }}
+        />
       </Suspense>
     </div>
   );

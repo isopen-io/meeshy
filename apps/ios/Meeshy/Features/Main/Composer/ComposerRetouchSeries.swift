@@ -92,4 +92,25 @@ nonisolated enum ComposerRetouchSeries {
             return ComposerRetouchedScene(piece: piece, slideId: slideId)
         }
     }
+
+    /// **Une pièce vidéo dure ce que dure sa vidéo** (#9136) — la fenêtre
+    /// coupée, jamais la durée minimale d'une story (six secondes) : la scène se
+    /// fige sur la durée du fond, que le rognage a écrite (`MediaTrimRule.fields`).
+    static func messageVideoSlide(_ slide: StorySlide) -> StorySlide {
+        guard let duree = slide.effects.mediaObjects?.first(where: { $0.isBackground && $0.kind == .video })?.duration,
+              duree > 0 else { return slide }
+        var figee = slide
+        figee.effects.timelineDuration = duree
+        return figee
+    }
+
+    /// **La taille d'une pièce image rendue** — le cadre RECADRÉ du fond quand
+    /// l'auteur l'a recadré (un carré repart carré), sinon celui de la scène.
+    static func imageRenderSize(slide: StorySlide, canvasRatio: CGFloat) -> CGSize {
+        guard let fond = slide.effects.mediaObjects?.first(where: { $0.isBackground && $0.kind == .image }),
+              let cadre = fond.crop, !cadre.isFull, let ratio = fond.measuredAspectRatio else {
+            return ComposerReturnImage.renderSize(ratio: canvasRatio)
+        }
+        return ComposerReturnImage.renderSize(ratio: CGFloat(MediaCropRule.effectiveRatio(sourceRatio: ratio, crop: cadre)))
+    }
 }

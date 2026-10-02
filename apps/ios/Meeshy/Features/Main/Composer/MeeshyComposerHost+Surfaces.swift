@@ -642,6 +642,9 @@ extension MeeshyComposerHost {
                   let url = sceneCamera.capturedVideoURL else { return }
             collectSceneSegment(url)
         }
+        .adaptiveOnChange(of: viewModel.textEditingMode.activeTextId) { _, id in
+            if id == nil { settleTextSceneAfterEditing() }
+        }
     }
     static let descriptionLayerHeaderClearance: CGFloat = 76
 

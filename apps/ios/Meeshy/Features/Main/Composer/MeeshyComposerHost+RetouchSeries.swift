@@ -73,7 +73,7 @@ extension MeeshyComposerHost {
         viewModel.selectSlide(at: index)
         let id = scene.piece.attachmentId
         if (viewModel.currentSlide.effects.mediaObjects ?? []).contains(where: { $0.kind == .video }) {
-            let slide = viewModel.exportableCurrentSlide()
+            let slide = ComposerRetouchSeries.messageVideoSlide(viewModel.exportableCurrentSlide())
             sceneExport.bakeForMessage(slide: slide, inputs: viewModel.exportInputs(for: slide)) { url in
                 renderRetouched(suite, rendues: rendues + [ComposerRetouchedPiece(attachmentId: id, media: .video(url))],
                                 done: done)
@@ -85,7 +85,7 @@ extension MeeshyComposerHost {
             slide: slide,
             bgImage: viewModel.slideImages[slide.id],
             loadedImages: viewModel.loadedImages,
-            size: ComposerReturnImage.renderSize(ratio: viewModel.currentCanvasRatio)
+            size: ComposerRetouchSeries.imageRenderSize(slide: slide, canvasRatio: viewModel.currentCanvasRatio)
         )
         let suivantes = image.map { rendues + [ComposerRetouchedPiece(attachmentId: id, media: .image($0))] } ?? rendues
         renderRetouched(suite, rendues: suivantes, done: done)
