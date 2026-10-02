@@ -50,6 +50,7 @@ const arComposerAttach = {
   'composer.sticker.error.failed': 'تعذّر إنشاء الملصق',
   'composer.sticker.tabs': 'مجموعات الملصقات',
   'composer.sticker.tab.instants': 'لحظات',
+  'composer.sticker.tab.custom': 'مخصّص',
   'composer.sticker.intent.bonjour.title': 'مرحبًا، شكرًا',
   'composer.sticker.intent.bonjour.hint': 'للتحية والشكر والموافقة والاعتذار أو لتمنّي ليلة سعيدة',
   'composer.sticker.intent.amour.title': 'قل أحبك',

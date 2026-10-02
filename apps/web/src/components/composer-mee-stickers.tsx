@@ -1,25 +1,28 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { meeSlotsFor, meeStickersOfTab, meeTemplateId } from '@/lib/mee/catalog';
+import { MEE_CHARACTER_STICKERS, meeSlotsFor, meeStickersOfTab, meeTemplateId } from '@/lib/mee/catalog';
 import { MEE_INTENT_KEYS } from '@/lib/mee/intents';
 import { meeStickerFile, rasterizeSvg } from '@/lib/mee/png';
 import type { RasterizeSvg } from '@/lib/mee/png';
 import { renderMeeSticker } from '@/lib/mee/render';
 import { MEE_INTENTS } from '@/lib/mee/types';
-import type { MeeSection, MeeSlot, MeeSlots, MeeSticker, MeeTab } from '@/lib/mee/types';
+import type { MeeSection, MeeSlot, MeeSlots, MeeSticker } from '@/lib/mee/types';
 
 /**
- * LES STICKERS DE MEE ET MEO (#9034, #9058) — quatre onglets de la feuille de
- * stickers, après « Mes stickers ». Mee, Meo, puis « Mee & Meo » (les duos),
- * chacun rangé par INTENTION : un titre, la phrase qui dit quand l'employer,
- * puis la grille — une intention vide ne s'affiche pas. Instants : les
- * stickers dynamiques, qui écrivent ce que l'utilisateur saisit au-dessus
- * (message, lieu, météo, heure — l'heure est celle de l'instant, modifiable).
+ * LES STICKERS DE MEE ET MEO (#9034, #9058, #9068, #9069) — deux usages dans
+ * la feuille de stickers, comme sur iOS :
+ * - `characters`, l'onglet « Mee & Meo » : Mee, Meo et leurs duos ENSEMBLE,
+ *   rangés par INTENTION (un titre, la phrase qui dit quand l'employer, puis
+ *   la grille : Mee, puis Meo, puis les duos) — une intention vide ne
+ *   s'affiche pas ;
+ * - `instants`, la section de « Personnalisés » : les stickers dynamiques, qui
+ *   écrivent ce que l'utilisateur saisit au-dessus (message, lieu, météo,
+ *   heure — l'heure est celle de l'instant, modifiable).
  *
  * Toucher un sticker rend son image fixe (le repli des clients qui ne le
  * redessinent pas) et rend à l'hôte l'image et le descripteur
@@ -33,17 +36,22 @@ type Section = readonly [MeeSection, Heading];
 
 const INTENT_SECTIONS: readonly Section[] = MEE_INTENTS.map((intent) => [intent, MEE_INTENT_KEYS[intent]]);
 
-/** Les sections d'un onglet, dans leur ordre : les intentions pour les personnages, les familles pour les Instants. */
-const SECTIONS: Readonly<Record<MeeTab, readonly Section[]>> = {
-  mee: INTENT_SECTIONS,
-  meo: INTENT_SECTIONS,
-  duo: INTENT_SECTIONS,
+export type MeePanelMode = 'characters' | 'instants';
+
+/** Les sections d'un usage, dans leur ordre : les intentions pour les personnages, les familles pour les Instants. */
+const SECTIONS: Readonly<Record<MeePanelMode, readonly Section[]>> = {
+  characters: INTENT_SECTIONS,
   instants: [
     ['message', { title: 'composer.sticker.instants.message' }],
     ['moment', { title: 'composer.sticker.instants.moment' }],
     ['lieu', { title: 'composer.sticker.instants.lieu' }],
     ['meteo', { title: 'composer.sticker.instants.meteo' }],
   ],
+};
+
+const STICKERS: Readonly<Record<MeePanelMode, readonly MeeSticker[]>> = {
+  characters: MEE_CHARACTER_STICKERS,
+  instants: meeStickersOfTab('instants'),
 };
 
 const FIELDS = [
@@ -57,13 +65,13 @@ const clockOf = (language: InterfaceLanguage, now: Date): string =>
   new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit' }).format(now);
 
 export function MeeStickerPanel({
-  tab,
+  mode,
   language,
   onPick,
   rasterize = rasterizeSvg,
   now = () => new Date(),
 }: {
-  readonly tab: MeeTab;
+  readonly mode: MeePanelMode;
   readonly language: InterfaceLanguage;
   readonly onPick: (picked: MeePicked) => void;
   readonly rasterize?: RasterizeSvg;
@@ -72,8 +80,8 @@ export function MeeStickerPanel({
   const [values, setValues] = useState<MeeSlots>(() => ({ time: clockOf(language, now()) }));
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
-  const stickers = useMemo(() => meeStickersOfTab(tab), [tab]);
-  const typed = tab === 'instants' ? values : {};
+  const stickers = STICKERS[mode];
+  const typed = mode === 'instants' ? values : {};
 
   const pick = async (sticker: MeeSticker) => {
     if (busy) return;
@@ -93,8 +101,8 @@ export function MeeStickerPanel({
   };
 
   return (
-    <div data-mee-panel={tab} className="flex flex-col gap-3">
-      {tab === 'instants' ? (
+    <div data-mee-panel={mode} className="flex flex-col gap-3">
+      {mode === 'instants' ? (
         <div className="grid grid-cols-2 gap-2">
           {FIELDS.map(({ slot: field, label }) => (
             <label key={field} className="flex flex-col gap-1 text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
@@ -117,10 +125,10 @@ export function MeeStickerPanel({
       ) : null}
 
       <p className="text-caption" role="status" aria-live="polite" style={{ color: failed ? 'var(--ios-error)' : 'var(--color-ios-ink-3)' }}>
-        {failed ? translate(language, 'composer.sticker.unavailable') : tab === 'instants' ? translate(language, 'composer.sticker.instants.hint') : ''}
+        {failed ? translate(language, 'composer.sticker.unavailable') : mode === 'instants' ? translate(language, 'composer.sticker.instants.hint') : ''}
       </p>
 
-      {SECTIONS[tab].map(([section, heading]) => {
+      {SECTIONS[mode].map(([section, heading]) => {
         const list = stickers.filter((sticker) => sticker.section === section);
         return list.length === 0 ? null : (
           <section key={section} data-mee-section={section} className="flex flex-col gap-2">
