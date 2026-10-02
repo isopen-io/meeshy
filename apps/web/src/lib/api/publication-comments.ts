@@ -83,6 +83,11 @@ export type PostComment = {
   readonly effectFlags?: number | null;
   readonly currentUserReactions?: readonly string[] | null;
   readonly media?: readonly FeedMedia[] | null;
+  /** La carte `{ url, token }` des adresses suivies (#9074) — `metadata.trackingLinks`
+   * en REST, hissée en `trackingLinks` par le socket ; décodée par `trackingLinksOf`,
+   * jamais lue telle quelle. Elle couvre le contenu ET la légende du média. */
+  readonly metadata?: unknown;
+  readonly trackingLinks?: unknown;
   /**
    * **LOCAL SEULEMENT** — vrai tant que la passerelle n'a pas confirmé. Aucun
    * champ de ce nom ne voyage sur le fil : c'est la marque qui permet au rendu
