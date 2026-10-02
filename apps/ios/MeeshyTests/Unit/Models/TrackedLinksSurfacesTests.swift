@@ -68,6 +68,21 @@ final class TrackedLinksSurfacesTests: XCTestCase {
         XCTAssertEqual(liens(texte).map(\.absoluteString), ["https://example.com/x"])
     }
 
+    // MARK: - #9093 — la forme écrite décide du rendu
+
+    @MainActor
+    func test_legendeRiche_lesTroisFormes_suiventLaLoiDeRendu() {
+        let legende = MediaCaptionRichText(
+            "a [[\(Self.notes)]] b [mes notes](\(Self.notes)) c \(Self.notes).",
+            size: 14, trackedLinks: Self.carte, webOrigin: Self.staging
+        )
+        let rendu = legende.attributed
+
+        XCTAssertEqual(String(rendu.characters), "a \(Self.notes) b mes notes c m+tok42.")
+        XCTAssertEqual(liens(rendu).map(\.absoluteString),
+                       [Self.notes, "https://staging.meeshy.me/l/tok42", "https://staging.meeshy.me/l/tok42"])
+    }
+
     // MARK: - La légende partagée (story, galerie, scène, réel)
 
     @MainActor
