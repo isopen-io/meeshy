@@ -186,7 +186,7 @@ describe('un cadre étendu se peint comme un cadre d’aujourd’hui', () => {
   };
 
   test('sans signature déclarée, aucune marque n’est tracée — et le reste se peint', () => {
-    const look = { ...base(), title: { source: 'names', font: 'elegant', color: '#fff', place: 'top', size: 'm' } };
+    const look: Record<string, unknown> = { ...base(), title: { source: 'names', font: 'elegant', color: '#fff', place: 'top', size: 'm' } };
     delete look.brand;
     const log = paint({ ...motif(), base: look });
     expect(written(log).includes('meeshy')).toBe(false);
