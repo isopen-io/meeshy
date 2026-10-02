@@ -147,50 +147,38 @@ extension MeeshyComposerHost {
     /// le placer — deux gestes pour un. `StorySticker.posedScale` le pose à la
     /// taille où il se voit.
     ///
-    /// Les deux rappels vont au VIEWMODEL, jamais au canvas : muter par le
-    /// modèle est ce qui garde publication, reader et export d'accord — et le
-    /// meuble n'a aucune référence à la vue UIKit.
+    /// Les poses vont au VIEWMODEL, jamais au canvas : muter par le modèle est
+    /// ce qui garde publication, reader et export d'accord — et le meuble n'a
+    /// aucune référence à la vue UIKit (`SceneStickerPose`).
+    ///
+    /// **La feuille est celle de tout le produit** (#9189) : les mêmes onglets
+    /// que la conversation — Mee, Meo et leurs duos, les Instants, « Mes
+    /// stickers », un onglet par pack installé et la Boutique (#9190) —, les
+    /// mêmes détentes. Seule la destination change : POSER. Poser SÉLECTIONNE
+    /// (#9138) : l'objet posé montre ses sous-outils, comme le texte que sa
+    /// porte vient de poser.
     var stickerPickerSheet: some View {
-        StickerPickerView(onStickerSelected: { emoji in
-            // **Poser SÉLECTIONNE** (#9138) : le sticker posé montre ses
-            // sous-outils à droite, comme le texte que sa porte vient de poser.
-            let objet = viewModel.addSticker(emoji: emoji, scale: StorySticker.posedScale)
+        MeeshyStickerSheet(destination: StickerSheetDestination(diesCut: false) { choice in
             presentedPortal = nil
-            beginInlineEdit(objet.id)
-            HapticFeedback.light()
-        }, onLibraryStickerSelected: { item in
-            // Le bitmap suffit à la pose : il vit sous l'id de l'ÉLÉMENT dans
-            // `loadedImages` jusqu'à ce que la publication le téléverse et
-            // remplisse `postMediaId`. Les octets animés le suivent (#3956) —
-            // un GIF posé sans eux perdrait son mouvement entre la grille et
-            // la scène, sans qu'aucun site rougisse.
-            let objet = viewModel.addSticker(image: item.thumbnail,
-                                            provider: StoryStickerLibraryItem.provider,
-                                            scale: StorySticker.posedScale,
-                                            animatedData: item.animatedData)
-            presentedPortal = nil
-            beginInlineEdit(objet.id)
-            HapticFeedback.light()
-        }, onTemplateSelected: { gabarit, emplacements in
-            // **L'échelle vient du GABARIT**, pas de `posedScale` : ce 2,2
-            // agrandit un glyphe NU, et ferait déborder un cartouche qui mesure
-            // déjà son contenu. `addSticker(template:slots:)` la lit lui-même.
-            let objet = viewModel.addSticker(template: gabarit, slots: emplacements)
-            presentedPortal = nil
-            beginInlineEdit(objet.id)
-            HapticFeedback.light()
-        }, onLocationTemplateSelected: { lieu, gabarit in
-            // **Un lieu décoré reste un `StoryLocationObject`**, jamais un
-            // sticker jumeau : lui seul porte les coordonnées et l'id de POI
-            // que la plateforme LIT (`/posts/nearby`). Le gabarit n'en décore
-            // que l'apparence.
-            let objet = viewModel.addLocation(place: lieu, styleId: gabarit.id)
-            presentedPortal = nil
-            beginInlineEdit(objet.id)
-            HapticFeedback.light()
+            poseStickerChoice(choice)
         })
-        .presentationDetents([.medium])
-        .presentationDragIndicator(.visible)
+    }
+
+    /// Pose le choix, puis ouvre son édition en place. Un sticker de pack
+    /// attend ses octets (cache des images) : la feuille est déjà refermée, la
+    /// scène le reçoit dès qu'ils sont là.
+    func poseStickerChoice(_ choice: StickerSheetChoice) {
+        if let id = SceneStickerPose.pose(choice, on: viewModel) {
+            beginInlineEdit(id)
+            HapticFeedback.light()
+            return
+        }
+        guard case .packItem(_, let item) = choice else { return }
+        Task {
+            guard let loaded = await StickerPackItemImages.load(item) else { return }
+            beginInlineEdit(SceneStickerPose.posePackSticker(loaded, on: viewModel))
+            HapticFeedback.light()
+        }
     }
 
     /// **La SECONDE porte pour nommer** — celle qui n'écrit pas.

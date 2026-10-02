@@ -95,44 +95,9 @@ extension StoryComposerView {
                 onCancel: { showSoundLibrary = false }
             )
         }
-        .sheet(isPresented: $showStickerPicker) {
-            // C8 — le picker existait, complet, sans AUCUN call site. Sheet
-            // medium, dismiss gestuel natif ; reste ouverte après un ajout
-            // (poser plusieurs stickers d'affilée, fermer par swipe-down).
-            StickerPickerView(onStickerSelected: { emoji in
-                // C13 — chemin VM unique (currentEffects source de vérité).
-                // `posedScale` : la MÊME échelle que le composer (#4824) — le
-                // même geste posait à 2,2 d'un site et à 1,0 de l'autre.
-                viewModel.addSticker(emoji: emoji, scale: StorySticker.posedScale)
-                HapticFeedback.light()
-            }, onLibraryStickerSelected: { item in
-                // S2 — le bitmap suffit à la pose : il vit en local sous l'id
-                // de l'élément jusqu'à ce que la publication le téléverse et
-                // remplisse `postMediaId`. Les octets animés voyagent AVEC lui
-                // (#3956) : le bitmap n'est que la première image d'un GIF, et
-                // poser sans eux figerait sur place ce que la bibliothèque
-                // affichait en mouvement.
-                viewModel.addSticker(image: item.thumbnail,
-                                     provider: StoryStickerLibraryItem.provider,
-                                     scale: StorySticker.posedScale,
-                                     animatedData: item.animatedData)
-                HapticFeedback.light()
-            }, onTemplateSelected: { gabarit, emplacements in
-                // L'échelle vient du GABARIT — `addSticker(template:slots:)` la
-                // lit lui-même. `StorySticker.posedScale` agrandit un glyphe NU
-                // et ferait déborder un cartouche qui mesure son contenu.
-                viewModel.addSticker(template: gabarit, slots: emplacements)
-                HapticFeedback.light()
-            }, onLocationTemplateSelected: { lieu, gabarit in
-                // Un lieu décoré reste un `StoryLocationObject` : lui seul porte
-                // les coordonnées que la plateforme LIT. Le gabarit n'en décore
-                // que l'apparence.
-                viewModel.addLocation(place: lieu, styleId: gabarit.id)
-                HapticFeedback.light()
-            })
-            .presentationDetents([.medium])
-            .presentationDragIndicator(.visible)
-        }
+        // La feuille de stickers n'est plus montée ICI (#9189) : la porte la
+        // demande à l'hôte (`storyStickerSheetRequest`), qui présente la seule
+        // feuille du produit, avec tous ses onglets.
         .sheet(isPresented: $showLocationPicker) {
             // T20 — la pastille de lieu se pose depuis le composer. Le picker
             // vient de l'app (MapKit + CoreLocation + permissions) via

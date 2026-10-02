@@ -286,51 +286,18 @@ extension ConversationView {
     ///
     /// La feuille se FERME au choix : dans une conversation un sticker est un
     /// message à part entière, pas une décoration qu'on empile sur une scène.
-    /// Les trois injecteurs sont ceux du composer de story
-    /// (`MeeshyComposerHost+Surfaces`) — sans `storyStickerLibraryProvided`,
-    /// l'onglet « Mes stickers » n'est pas rendu ; sans `storyPasteProvided`,
-    /// sa capsule « Coller » non plus ; sans `stickerNearbyPlacesProvided`,
-    /// l'onglet « Lieu » est absent (loi 4, jamais grisé) ; sans
-    /// `storyLocationPickerProvided`, la carte l'est aussi (#7922).
+    ///
+    /// **La feuille est celle de tout le produit** (#9189) : `MeeshyStickerSheet`
+    /// porte les injecteurs et les détentes, une fois. La conversation ne dit
+    /// que sa destination — ENVOYER — et que ses gabarits partent contournés
+    /// de blanc, comme Mee (#9060).
     private func composerStickerSheet(_ content: AnyView) -> AnyView {
         AnyView(content
         .sheet(isPresented: $composerState.showStickerPicker) {
-            StickerPickerView(onStickerSelected: { emoji in
+            MeeshyStickerSheet(destination: StickerSheetDestination(diesCut: true) { choice in
                 composerState.showStickerPicker = false
-                sendEmojiSticker(emoji)
-            }, onLibraryStickerSelected: { item in
-                composerState.showStickerPicker = false
-                sendLibrarySticker(item)
-            }, onTemplateSelected: { gabarit, emplacements in
-                composerState.showStickerPicker = false
-                sendTemplateSticker(gabarit, slots: emplacements)
-            }, onLocationTemplateSelected: { lieu, gabarit in
-                composerState.showStickerPicker = false
-                sendLocationTemplateSticker(place: lieu, template: gabarit)
-            })
-            .storyPasteProvided()
-            .storyStickerLibraryProvided()
-            .stickerNearbyPlacesProvided()
-            // Mee et Meo (#9053) : seule la conversation sait envoyer un film ;
-            // sans cet injecteur, la feuille ne montre pas leurs onglets.
-            // Les gabarits partent contournés de blanc, comme Mee (#9060) :
-            // la feuille les montre comme ils partiront.
-            .stickerSheetDieCut()
-            .meeStickersProvided { mee in
-                composerState.showStickerPicker = false
-                sendMeeSticker(mee)
-            }
-            // Les Instants (#9069) : Mee et Meo qui écrivent tes mots, ton
-            // lieu, l'heure — dans « Personnalisés », là où ils partent.
-            .meeInstantsProvided { instant, slots in
-                composerState.showStickerPicker = false
-                sendMeeInstant(instant, slots: slots)
-            }
-            // « Ma position… » ouvre la carte : adresse, lieu, monument
-            // nommé (#7922). Sans ce fournisseur, la puce n'est pas rendue.
-            .storyLocationPickerProvided(accentColor: accentColor)
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+                sendStickerChoice(choice)
+            }, accentColor: accentColor)
         })
     }
 

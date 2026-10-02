@@ -305,7 +305,7 @@ extension StoryComposerView {
                 onBandTopYChange: { measuredBandTopY = $0 },
                 onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
                 onDismissActivePanel: dismissActiveBandPanel,
-                onOpenStickerPicker: { showStickerPicker = true },
+                onOpenStickerPicker: stickerSheetRequest,
                 onOpenLocationPicker: { showLocationPicker = true },
                 onOpenMentionPicker: { showMentionPicker = true },
                 // V3-4 — le store de collecte vient du composer, pas de la
@@ -997,7 +997,7 @@ extension StoryComposerView {
     /// les `.fullScreenCover` (éditeurs) : ils couvrent l'écran, le canvas
     /// derrière n'a pas à rester visible.
     var presentedSystemSheetFraction: CGFloat? {
-        if showStickerPicker || showVoiceRecorderSheet || showTransitionSheet { return 0.5 }
+        if showVoiceRecorderSheet || showTransitionSheet { return 0.5 }
         return nil
     }
 

@@ -198,6 +198,10 @@ extension MeeshyComposerHost {
         // quand l'autorisation de localisation est refusée : c'est l'injecteur
         // qui le décide, pas la feuille.
         .stickerNearbyPlacesProvided()
+        // **La porte « Stickers » de l'atelier ouvre la feuille du MEUBLE**
+        // (#9189) : l'atelier n'en monte plus à lui, il la demande. Une seule
+        // feuille, celle de la conversation, avec tous ses onglets.
+        .storyStickerSheetRequestProvided { presentedPortal = .sticker }
         .sheet(item: presentedPortal(as: .sheet),
                onDismiss: { forgetEditedSound(); resumePendingPresentation() }) { portalView($0) }
         // **La caméra s'ouvre SEULE en plein écran** (#9125) : le même

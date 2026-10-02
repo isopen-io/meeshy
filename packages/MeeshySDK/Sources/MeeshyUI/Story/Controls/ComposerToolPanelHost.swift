@@ -674,12 +674,16 @@ struct ComposerToolPanelHost: View {
                 // Troisième site de ce glyphe, trouvé APRÈS avoir cru la liste
                 // close à deux : c'est pourquoi la garde balaie désormais les
                 // sources au lieu de les nommer.
-                toolIconButton(
-                    systemImage: StickerPickerView.sheetSymbolName,
-                    a11y: String(localized: "story.sticker.title",
-                                 defaultValue: "Stickers", bundle: .module),
-                    action: { onOpenStickerPicker?() }
-                )
+                // Rendu SEULEMENT si l'hôte sert la feuille (#9189) : l'atelier
+                // n'en monte plus à lui, et une porte sur rien n'est pas une porte.
+                if let onOpenStickerPicker {
+                    toolIconButton(
+                        systemImage: StickerPickerView.sheetSymbolName,
+                        a11y: String(localized: "story.sticker.title",
+                                     defaultValue: "Stickers", bundle: .module),
+                        action: { onOpenStickerPicker() }
+                    )
+                }
                 // T20 — la pastille de lieu partage ce foyer : c'est un overlay
                 // de la même famille que texte et sticker. Rendu SEULEMENT si
                 // l'app a injecté un picker (`\.storyLocationPicker`) : un chip
