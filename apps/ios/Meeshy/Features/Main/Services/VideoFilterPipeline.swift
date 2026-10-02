@@ -32,6 +32,11 @@ nonisolated struct VideoFilterConfig: Equatable, Sendable {
 
     var faceEffect: CallFaceEffect = .none
 
+    /// #9196 — Teint naturel : actif par défaut, imperceptible, coupé dès que
+    /// l'appareil se protège. Ne compte pas dans `hasAdvancedFilters` : ce
+    /// n'est pas un filtre qu'on a choisi, c'est la qualité de base de l'image.
+    var naturalComplexionEnabled: Bool = true
+
     var hasAdvancedFilters: Bool {
         backgroundBlurEnabled || skinSmoothingEnabled || faceEffect.isStylized
     }
@@ -253,7 +258,8 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
             averageBrightness: averageBrightness,
             isConstrained: ladder.isExhausted || isConstrained
         )
-        guard hasChosenFilters || lowLightBoost != nil else {
+        let retouchPlan = CallSkinRetouchPlan.make(config: cfg, ladder: ladder, isConstrained: isConstrained)
+        guard hasChosenFilters || lowLightBoost != nil || retouchPlan != nil else {
             recordFrame(elapsedMs: 0, blurActive: false)
             return pixelBuffer
         }
@@ -264,6 +270,24 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         let start = CACurrentMediaTime()
 
         var image = CIImage(cvPixelBuffer: pixelBuffer)
+
+        // 0. #9196 — Teint naturel / Peau lissée, sur l'image du capteur, avant
+        // toute colorimétrie : le masque de peau lit la chrominance d'origine.
+        // Teint naturel seul, sans visage connu : l'image repart telle quelle.
+        let retouched = retouchPlan.flatMap {
+            faceEffects.retouch(
+                image,
+                pixelBuffer: pixelBuffer,
+                rotation: rotation,
+                plan: $0,
+                isDegraded: !$0.usesFinePass
+            )
+        }
+        guard hasChosenFilters || lowLightBoost != nil || retouched != nil else {
+            recordFrame(elapsedMs: 0, blurActive: false)
+            return pixelBuffer
+        }
+        if let retouched { image = retouched }
 
         // Pipeline order per §14.2.5:
         // 1. Low-light boost (automatic)
@@ -284,9 +308,9 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
                 timestamp: clock()
             )
         }
-        // 4. Face effect: skin smoothing (skipped when degraded) or a stylized preset
+        // 4. Stylized face preset (skin smoothing is the retouch of step 0)
         let faceEffect = cfg.activeFaceEffect
-        if faceEffect.isStylized || (faceEffect == .smoothing && !ladder.isSmoothingDegraded) {
+        if faceEffect.isStylized {
             image = faceEffects.render(
                 faceEffect,
                 on: image,

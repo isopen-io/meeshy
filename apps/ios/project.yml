@@ -220,6 +220,13 @@ targets:
       ENABLE_PREVIEWS: YES
       CODE_SIGN_STYLE: Automatic
       CODE_SIGN_ENTITLEMENTS: Meeshy/Meeshy.entitlements
+      # #9196 — les `.metal` de l'app sont des noyaux Core Image
+      # (`Services/Shaders/CallSkinRetouch.metal`, chargé par
+      # `CallSkinRetouchKernel` depuis `default.metallib`). Sans ces deux
+      # drapeaux la bibliothèque compile mais `CIColorKernel` refuse la
+      # fonction ; garde : `CallSkinRetouchTests.test_kernel_loadsFromTheAppLibrary`.
+      MTL_COMPILER_FLAGS: "-fcikernel"
+      MTLLINKER_FLAGS: "-cikernel"
     dependencies:
       - target: MeeshyWidgets
       - target: MeeshyNotificationExtension

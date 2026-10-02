@@ -498,7 +498,12 @@ final class ConversationViewingReporterTests: XCTestCase {
             XCTAssertFalse(source.contains(".fullScreenCover("), "\(host) présente un plein écran sans .conversationCover")
             covers += source.components(separatedBy: ".conversationCover(").count - 1
         }
-        XCTAssertGreaterThanOrEqual(covers, 13)
+        // 13 → 12 (#9126, ca74b0279d) : la retouche d'une image en attente et
+        // celle d'une vidéo en attente avaient chacune leur couverture ; elles
+        // n'en font plus qu'UNE, la série de scènes de toutes les pièces du
+        // message (`ConversationRetouchSeriesEditor`). Aucun plein écran n'a
+        // quitté `.conversationCover` — l'assertion ci-dessus le tient.
+        XCTAssertGreaterThanOrEqual(covers, 12)
     }
 
     /// Le mood remplace le point mais porte la présence en CONTOUR (#9065) :

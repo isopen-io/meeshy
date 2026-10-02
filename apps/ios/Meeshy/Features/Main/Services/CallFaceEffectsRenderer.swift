@@ -14,7 +14,28 @@ protocol CallFaceEffectsRendererProviding: AnyObject {
         intensity: Float,
         isDegraded: Bool
     ) -> CIImage
+    /// #9196 — Teint naturel et Peau lissée sur le visage suivi. `nil` quand
+    /// aucun visage n'est connu : l'image n'a alors rien à payer de plus.
+    nonisolated func retouch(
+        _ image: CIImage,
+        pixelBuffer: CVPixelBuffer,
+        rotation: Int,
+        plan: CallSkinRetouchPlan,
+        isDegraded: Bool
+    ) -> CIImage?
     nonisolated func reset()
+}
+
+extension CallFaceEffectsRendererProviding {
+    nonisolated func retouch(
+        _ image: CIImage,
+        pixelBuffer: CVPixelBuffer,
+        rotation: Int,
+        plan: CallSkinRetouchPlan,
+        isDegraded: Bool
+    ) -> CIImage? {
+        nil
+    }
 }
 
 nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProviding, @unchecked Sendable {
@@ -70,19 +91,46 @@ nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProvidin
         lock.lock()
         defer { lock.unlock() }
 
+        let isAnimated = !isReduceMotionEnabled()
+        let time = isAnimated ? clock() - clockOrigin : 0
+        return Self.upright(image, rotation: rotation) { upright, canvas, orientation in
+            let face = effect.needsFace
+                ? tracker.landmarks(for: pixelBuffer, orientation: orientation, canvas: canvas.size, isDegraded: isDegraded)
+                : nil
+            return stylize(effect, upright, face: face, canvas: canvas, intensity: intensity, time: time, isAnimated: isAnimated, isDegraded: isDegraded)
+        } ?? image
+    }
+
+    func retouch(
+        _ image: CIImage,
+        pixelBuffer: CVPixelBuffer,
+        rotation: Int,
+        plan: CallSkinRetouchPlan,
+        isDegraded: Bool
+    ) -> CIImage? {
+        lock.lock()
+        defer { lock.unlock() }
+        return Self.upright(image, rotation: rotation) { upright, canvas, orientation in
+            guard let face = tracker.landmarks(for: pixelBuffer, orientation: orientation, canvas: canvas.size, isDegraded: isDegraded) else {
+                return nil
+            }
+            return CallSkinRetoucher.apply(plan, to: upright, face: face, canvas: canvas)
+        }
+    }
+
+    /// Redresse l'image (le visage se cherche et se dessine debout), applique
+    /// `body`, puis rend l'image dans son orientation et son étendue d'origine.
+    private static func upright(
+        _ image: CIImage,
+        rotation: Int,
+        _ body: (CIImage, CGRect, CGImagePropertyOrientation) -> CIImage?
+    ) -> CIImage? {
         let orientation = CallFrameOrientation.orientation(forRotation: rotation)
         let oriented = image.oriented(orientation)
         let uprightOrigin = oriented.extent.origin
         let upright = oriented.transformed(by: CGAffineTransform(translationX: -uprightOrigin.x, y: -uprightOrigin.y))
         let canvas = CGRect(origin: .zero, size: upright.extent.size)
-        let face = effect.needsFace
-            ? tracker.landmarks(for: pixelBuffer, orientation: orientation, canvas: canvas.size, isDegraded: isDegraded)
-            : nil
-        let isAnimated = !isReduceMotionEnabled()
-        let time = isAnimated ? clock() - clockOrigin : 0
-
-        let styled = stylize(effect, upright, face: face, canvas: canvas, intensity: intensity, time: time, isAnimated: isAnimated, isDegraded: isDegraded)
-            .cropped(to: canvas)
+        guard let styled = body(upright, canvas, orientation)?.cropped(to: canvas) else { return nil }
 
         let restored = styled
             .transformed(by: CGAffineTransform(translationX: uprightOrigin.x, y: uprightOrigin.y))
@@ -118,24 +166,18 @@ nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProvidin
 
     // MARK: - Effects
 
+    /// Peau lissée appelée comme un effet (aperçu, chemin historique) : même
+    /// séparation de fréquences que la retouche de l'appel, sans Teint naturel.
     private func smoothing(_ image: CIImage, face: CallFaceLandmarks?, canvas: CGRect, intensity: Float) -> CIImage {
         guard let face, intensity > 0 else { return image }
-        let bounds = face.bounds
-        let region = bounds
-            .insetBy(dx: -bounds.width * 0.05, dy: -bounds.height * 0.05)
-            .intersection(canvas)
-            .integral
-        guard !region.isNull, !region.isEmpty else { return image }
-        let sigma = max(1, Double(bounds.width) * 0.045 * Double(intensity))
-        let local = image.cropped(to: region)
-        let blurred = local.clampedToExtent().applyingGaussianBlur(sigma: sigma).cropped(to: region)
-        return blurred
-            .applyingFilter("CIBlendWithMask", parameters: [
-                kCIInputBackgroundImageKey: local,
-                kCIInputMaskImageKey: Self.ellipseMask(around: bounds, strength: 0.8)
-            ])
-            .cropped(to: region)
-            .composited(over: image)
+        let plan = CallSkinRetouchPlan(
+            tone: 0,
+            smoothing: min(intensity, 1),
+            texture: CallSkinRetouchPlan.textureKept,
+            underEye: min(intensity, 1) * CallSkinRetouchPlan.underEyeShare,
+            usesFinePass: true
+        )
+        return CallSkinRetoucher.apply(plan, to: image, face: face, canvas: canvas)
     }
 
     private func toad(_ image: CIImage, face: CallFaceLandmarks?, canvas: CGRect, isDegraded: Bool) -> CIImage {
