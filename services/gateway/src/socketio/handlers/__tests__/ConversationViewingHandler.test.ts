@@ -525,3 +525,27 @@ describe('ConversationViewingHandler — regarder, écouter, agir (#9061)', () =
     expect(activitiesFor(emissions)).toEqual([]);
   });
 });
+
+describe('ConversationViewingHandler — regarder en plein écran (#9065)', () => {
+  it('relaie le plein écran ouvert depuis la conversation, sans dire quel élément', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: CONV, focus: true, attachmentId: 'a1' });
+
+    expect(activitiesFor(emissions).map(e => e.data)).toEqual([
+      { userId: ALICE, conversationId: CONV, focus: true },
+    ]);
+  });
+
+  it('ignore un drapeau de plein écran qui n’est pas un booléen', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: CONV, focus: 'oui' });
+
+    expect(activitiesFor(emissions)).toEqual([]);
+  });
+});

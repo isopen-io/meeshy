@@ -25,7 +25,7 @@ import type { PrivacyPreferencesService } from '../../services/PrivacyPreference
 import { getConnectedUser, normalizeConversationId, type SocketUser } from '../utils/socket-helpers';
 import { resolveParticipant } from '../utils/participant-resolver';
 import { validateSocketEvent } from '../../middleware/validation.js';
-import { SocketViewingSchema } from '../../validation/socket-event-schemas.js';
+import { SocketViewingActivitySchema, SocketViewingSchema } from '../../validation/socket-event-schemas.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { getBlockRelatedUserIds } from '../../utils/blocking';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
@@ -213,7 +213,7 @@ export class ConversationViewingHandler {
   }
 
   private async activity(socket: Socket, data: unknown): Promise<void> {
-    const validation = validateSocketEvent(SocketViewingSchema, data);
+    const validation = validateSocketEvent(SocketViewingActivitySchema, data);
     if (!validation.success) return;
     const viewing = this.bySocket.get(socket.id);
     const userIdOrToken = this.socketToUser.get(socket.id);
@@ -224,7 +224,8 @@ export class ConversationViewingHandler {
     const allowed = await this.rateLimiter.checkLimit(userIdOrToken, SOCKET_RATE_LIMITS.CONVERSATION_ACTIVITY);
     if (!allowed) return;
 
-    this.broadcast(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: viewing.userId, conversationId }, viewing.blockRelated);
+    const focus = validation.data.focus === true ? { focus: true } : {};
+    this.broadcast(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: viewing.userId, conversationId, ...focus }, viewing.blockRelated);
   }
 
   private async appState(socket: Socket, data: { foreground?: boolean } | undefined): Promise<void> {

@@ -213,6 +213,7 @@ import type {
   TypingEvent,
   UserStatusEvent,
   ViewingActionData,
+  ViewingActivityData,
   ViewingEvent,
   ViewingSnapshotEvent,
 } from './presence.js';
@@ -459,7 +460,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.TYPING_STOP]: (data: TypingActionData) => void;
   [CLIENT_EVENTS.VIEWING_START]: (data: ViewingActionData) => void;
   [CLIENT_EVENTS.VIEWING_STOP]: (data: ViewingActionData) => void;
-  [CLIENT_EVENTS.VIEWING_ACTIVITY]: (data: ViewingActionData) => void;
+  [CLIENT_EVENTS.VIEWING_ACTIVITY]: (data: ViewingActivityData) => void;
   [CLIENT_EVENTS.AUTHENTICATE]: (data: AuthenticateData) => void;
   [CLIENT_EVENTS.REQUEST_TRANSLATION]: (data: RequestTranslationData) => void;
   /**
