@@ -159,13 +159,11 @@ extension MeeshyComposerHost {
         )
     }
 
-    /// La capture caméra du document (T2.3), montée ICI plutôt que sous la
-    /// scène : le document n'a pas d'atelier, donc pas d'environnement
-    /// `storyCameraCaptureProvided` à réutiliser — `CameraView` est montée
-    /// telle quelle, le même composant que la scène emprunte par
-    /// environnement.
+    /// La capture caméra du document (T2.3) : le viseur du composeur, servi
+    /// SEUL en plein écran (#9125) — un statut n'a pas de scène où l'armer.
+    /// C'est le même viseur que la page blanche emprunte par environnement.
     var documentCameraSheet: some View {
-        CameraView(initialMode: pendingCameraMode) { result in
+        ComposerViewfinder(initialMode: pendingCameraMode) { result in
             Task { await ingestCameraCapture(result) }
         }
     }

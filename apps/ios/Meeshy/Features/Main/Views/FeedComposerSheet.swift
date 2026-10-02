@@ -461,12 +461,11 @@ struct FeedComposerSheet: View {
             handleFileImport(result)
         }
         .fullScreenCover(isPresented: $showCamera) {
-            CameraView { result in
+            // Le viseur du composeur, seul en plein écran (#9125).
+            ComposerViewfinder { result in
                 switch result {
-                // Sixième et septième consommateurs de `CameraResult.photo`,
-                // élargi le 2026-09-04 pour porter l'EXIF (#4080). Le fil du
-                // feed ré-encode déjà l'image : les octets d'origine ne lui
-                // servent pas, et il les jette explicitement.
+                // Le fil du feed ré-encode déjà l'image : les octets d'origine
+                // ne lui servent pas, et il les jette explicitement.
                 case .photo(let image, _):
                     handleCameraCapture(image)
                 case .video(let url):

@@ -214,7 +214,10 @@ final class ComposerIntakePortalsTests: XCTestCase {
     /// changement innocent.
     func test_laFeuilleUnique_estPiloteeParUnItem() throws {
         let code = compact(try hostSource())
-        XCTAssertTrue(code.contains(".sheet(item:$presentedPortal"))
+        // #9125 — le MÊME item, vu par présentation : la caméra part en plein
+        // écran, le reste en feuille. Toujours un item, jamais un booléen.
+        XCTAssertTrue(code.contains(".sheet(item:presentedPortal(as:.sheet)"))
+        XCTAssertTrue(code.contains(".fullScreenCover(item:presentedPortal(as:.fullScreen)"))
         XCTAssertFalse(code.contains(".sheet(isPresented:"),
                        "Un booléen par feuille laisse deux feuilles s'ouvrir ensemble ; "
                         + "un item ne porte qu'une valeur.")

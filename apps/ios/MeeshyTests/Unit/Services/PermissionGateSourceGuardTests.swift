@@ -226,13 +226,16 @@ final class PermissionGateSourceGuardTests: XCTestCase {
 
     /// Le panneau de refus (et son bouton Réglages) est la seule chose qui
     /// distingue « caméra refusée » d'un bug d'affichage.
+    /// #9125 — l'ancienne `CameraView` a quitté le dépôt : le viseur du
+    /// composeur, servi seul en plein écran, porte la même promesse.
     func test_cameraView_rendersDeniedPanelInsteadOfBlackPreview() throws {
-        let src = try source("Meeshy/Features/Main/Components/CameraView.swift")
-        XCTAssertTrue(src.contains("permissionDeniedPanel"),
-                      "CameraView doit exposer un panneau de refus.")
-        XCTAssertTrue(src.contains("camera.permission.needsSettingsRedirect"),
+        let src = try source("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
+        XCTAssertTrue(src.contains("CameraPermissionPanel()"),
+                      "Le viseur doit exposer un panneau de refus.")
+        XCTAssertTrue(src.contains("ComposerSceneCameraSurface.shown(stage: stage, permission: camera.permission)"),
                       "Le rendu doit basculer sur l'état d'autorisation publié par le modèle.")
-        XCTAssertTrue(src.contains("MediaPermissionCoordinator.openSettings()"),
+        let panneau = try source("Meeshy/Features/Main/Components/CameraPermissionPanel.swift")
+        XCTAssertTrue(panneau.contains("MediaPermissionCoordinator.openSettings()"),
                       "Le panneau doit offrir l'ouverture des Réglages.")
     }
 

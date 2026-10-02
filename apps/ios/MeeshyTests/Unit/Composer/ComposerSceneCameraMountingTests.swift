@@ -74,7 +74,10 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
             montages.append(contentsOf: Array(repeating: fichier.lastPathComponent,
                                               count: occurrences))
         }
-        XCTAssertEqual(montages, ["MeeshyComposerHost+Viewfinder.swift"],
+        // #9125 — le viseur servi SEUL en plein écran (statut, page blanche,
+        // citation) monte le sien : une autre présentation, jamais un second
+        // aperçu dans la scène du composer.
+        XCTAssertEqual(montages.sorted(), ["ComposerViewfinder.swift", "MeeshyComposerHost+Viewfinder.swift"],
                        "un aperçu qui se remplace ne peut pas grandir fluidement")
     }
 

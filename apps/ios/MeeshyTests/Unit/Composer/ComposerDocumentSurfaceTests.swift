@@ -1947,7 +1947,7 @@ final class ComposerDocumentSurfaceTests: XCTestCase {
     /// effet.
     func test_laSurface_neFabriquePasUnSecondPipelineDIngestion() throws {
         let bloc = try surfaceBlock()
-        for interdit in ["photosPicker(", "fileImporter(", "PhotosPickerItem", "UIImagePickerController", "CameraView("] {
+        for interdit in ["photosPicker(", "fileImporter(", "PhotosPickerItem", "UIImagePickerController", "ComposerViewfinder("] {
             XCTAssertFalse(
                 bloc.contains(interdit),
                 "La surface monte « \(interdit) » : le pipeline d'ingestion du dépôt est ailleurs, et unique."

@@ -123,7 +123,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Contacts/KeypadTab.swift",
         "Features/Main/Components/AddParticipantSheet.swift",
         "Features/Main/Components/AttachmentLoadingTile.swift",
-        "Features/Main/Components/CameraView.swift",
         "Features/Main/Components/ConversationDashboardView.swift",
         "Features/Main/Components/ConversationInfoSheet.swift",
         "Features/Main/Components/ConversationLockSheet.swift",
@@ -525,8 +524,10 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// populations doivent donc être NON VIDES, chacune de son côté.
     func test_laClassificationSepareBienLesDeuxPopulations() throws {
         let sites = try allSites().map { $0.1 }
-        XCTAssertGreaterThan(sites.filter { $0.receiver == .glyph }.count, 150,
-                             "les glyphes sont la population majoritaire (207 au 264i)")
+        // #9125 — 148 : les glyphes figés de l'ancienne `CameraView` sont
+        // partis avec elle. La borne garde un classifieur VIVANT, pas un compte.
+        XCTAssertGreaterThan(sites.filter { $0.receiver == .glyph }.count, 140,
+                             "les glyphes sont la population majoritaire (207 au 264i, 148 au #9125)")
         XCTAssertGreaterThan(sites.filter { $0.receiver == .text }.count, 20,
                              "le texte figé existe (36 au 264i) — un 0 ici signerait un classifieur mort")
     }

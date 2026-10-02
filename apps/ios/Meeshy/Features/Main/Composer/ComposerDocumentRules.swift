@@ -24,7 +24,7 @@ import ImageIO
 nonisolated enum ComposerMediaIntake: Equatable, Hashable, CaseIterable {
     /// La pellicule — `PhotosPicker`.
     case photoLibrary
-    /// La capture en direct — `CameraView`.
+    /// La capture en direct — le viseur du composeur (`ComposerViewfinder`).
     case camera
     /// L'importateur de documents — `fileImporter`.
     case files
