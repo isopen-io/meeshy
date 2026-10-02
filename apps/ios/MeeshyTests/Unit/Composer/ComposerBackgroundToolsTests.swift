@@ -143,7 +143,7 @@ final class ComposerBackgroundToolsTests: XCTestCase {
     // MARK: - Aucune porte vers l'ancien éditeur pour le fond
 
     func test_openObjectEditor_consulteLaRedirectionDuFond_avantDOuvrirLEcranPleinEcran() throws {
-        let hote = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost+Intake.swift")
+        let hote = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost+ObjectEditing.swift")
         let corps = try XCTUnwrap(hote.range(of: "func openObjectEditor(")
             .map { String(hote[$0.lowerBound...].prefix(900)) })
         let redirection = try XCTUnwrap(corps.range(of: "backgroundToolsRedirect("))
