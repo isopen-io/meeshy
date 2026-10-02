@@ -48,6 +48,7 @@ const itCall = {
   'call.ended.permission': 'Consenti il microfono per chiamare',
   'call.retry': 'Riprova',
   'call.close': 'Chiudi',
+  'call.openSettings': 'Impostazioni',
   'call.waiting.from': '{caller} ti sta chiamando',
   'call.waiting.answer': 'Rispondi',
   'call.waiting.decline': 'Rifiuta',

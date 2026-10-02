@@ -14,6 +14,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
+import { FLOATING_GLYPHS } from '@/components/glyphs-floating';
 import { callActions } from '@/lib/calls/call-actions';
 import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
 import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
@@ -31,6 +32,7 @@ import { useCallModeration } from '@/lib/calls/use-call-moderation';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { appSettingsOpener } from '@/lib/view/settings-recovery';
 import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered, effectsUsedOf, videoEffectsStore } from '@/lib/calls/video-effects';
 
 import type { EffectsCompanion } from './call-effects-companions';
@@ -511,10 +513,16 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     </div>
   );
 
+  const openAppSettings = appSettingsOpener();
   const endedControls = (
     <div className="flex items-start justify-center gap-10 px-8">
       <RoundButton label={t('call.close')} caption={t('call.close')} size={60} glyph={screenGlyph('arrowsInSimple', 24)} onPress={callActions.dismiss} />
       {canRetry(call) ? <RoundButton label={t('call.retry')} caption={t('call.retry')} tone="accept" size={60} glyph={<Glyph name="phone" size={26} />} onPress={callActions.retry} /> : null}
+      {/* UN REFUS DÉFINITIF DU MICRO MÈNE AUX RÉGLAGES DE L'APP (#9033, comme le
+          composeur #8882) : dans la coque Android, il ne se redemande plus. */}
+      {call.phase.kind === 'ended' && call.phase.reason === 'permission' && openAppSettings !== null ? (
+        <RoundButton label={t('call.openSettings')} caption={t('call.openSettings')} size={60} glyph={<GlyphSvg glyph={FLOATING_GLYPHS.gear} size={24} />} onPress={openAppSettings} />
+      ) : null}
     </div>
   );
 

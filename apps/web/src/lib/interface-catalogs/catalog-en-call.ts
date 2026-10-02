@@ -48,6 +48,7 @@ const enCall = {
   'call.ended.permission': 'Allow the microphone to call',
   'call.retry': 'Try again',
   'call.close': 'Close',
+  'call.openSettings': 'Settings',
   'call.waiting.from': '{caller} is calling you',
   'call.waiting.answer': 'Answer',
   'call.waiting.decline': 'Decline',
