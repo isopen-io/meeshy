@@ -7,6 +7,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import type { CallCaption } from '@/lib/calls/call-captions';
 import { SELF_SPEAKER_COLOR, speakerColor } from '@/lib/calls/call-speaker-color';
 import type { ActiveCall } from '@/lib/calls/call-store';
+import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 
 import { CallCaptionsPanel } from './call-captions-panel';
 
@@ -150,5 +151,15 @@ describe('les gestes', () => {
     expect(view.host.querySelector('[data-call-captions-journal-toggle]')).toBeNull();
     expect(view.host.querySelector('[data-call-journal-entry]')).toBeNull();
     view.done();
+  });
+});
+
+describe('la voix non transcrite (#9142)', () => {
+  test('la note ne nomme pas le navigateur : la coque Android n’en a pas, et la note y est permanente', () => {
+    const notes = SUPPORTED_INTERFACE_LANGUAGES.map((language) =>
+      renderToStaticMarkup(<CallCaptionsPanel call={call({ transcription: 'unsupported' })} language={language} colorOf={colorOf} />).match(/data-call-captions-note="unsupported">([^<]*)</)?.[1] ?? '',
+    );
+    expect(notes.every((note) => note !== '')).toBe(true);
+    expect(notes.filter((note) => /navigateur|browser|navegador|المتصفح/i.test(note))).toEqual([]);
   });
 });
