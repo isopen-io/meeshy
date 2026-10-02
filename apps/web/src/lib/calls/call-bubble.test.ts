@@ -107,7 +107,7 @@ describe('mémoire de la place', () => {
 describe('les tailles de la bulle (#8145)', () => {
   const PHONE_SPACE = { width: 390, height: 844 };
   const SMALL_PHONE = { width: 320, height: 568 };
-  const HEADER_AND_COMPOSER = { top: 64, bottom: 96 };
+  const HEADER_AND_COMPOSER = { top: 64, bottom: 120 };
 
   test('trois paliers, du plus petit au plus grand, la barre comprise', () => {
     const [small, medium, large] = BUBBLE_TIERS.map((tier) => bubbleSize('video', tier));

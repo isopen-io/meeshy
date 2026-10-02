@@ -102,7 +102,7 @@ function CallPipView({ call }: { readonly call: ActiveCall }) {
         {source === null ? (
           <Avatar initials={initialsOf(call.title)} color={colorForName(call.title)} size={72} {...(call.avatar === null ? {} : { src: call.avatar })} />
         ) : (
-          <StreamVideo stream={source.stream} mirrored={source.mirrored} className="absolute inset-0 size-full" label={call.title} />
+          <StreamVideo stream={source.stream} mirrored={source.mirrored} fit={source.fit} className="absolute inset-0 size-full" label={call.title} />
         )}
         <span className="absolute left-2 top-2 flex items-center gap-2 rounded-full px-2 py-0.5 text-mini" style={{ background: 'var(--color-scrim)' }}>
           <span className="max-w-[10rem] truncate font-semibold">{call.title}</span>

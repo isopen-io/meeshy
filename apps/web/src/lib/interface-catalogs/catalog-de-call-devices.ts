@@ -9,6 +9,7 @@ const deCallDevices = {
   'call.bubble.collapse': 'Zur Blase verkleinern',
   'call.bubble.ongoing': 'Anruf läuft',
   'call.bubble.moveHint': 'Die Pfeiltasten bewegen die Blase',
+  'call.bubble.resizeHint': '+ und − ändern ihre Größe, ebenso Strg + Mausrad oder das Aufziehen mit zwei Fingern',
   'call.pip.enter': 'Bild-im-Bild',
   'call.devices.open': 'Geräte auswählen',
   'call.devices.title': 'Geräte',

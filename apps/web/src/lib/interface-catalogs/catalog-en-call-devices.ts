@@ -9,6 +9,7 @@ const enCallDevices = {
   'call.bubble.collapse': 'Collapse to bubble',
   'call.bubble.ongoing': 'Call in progress',
   'call.bubble.moveHint': 'Arrow keys move the bubble',
+  'call.bubble.resizeHint': '+ and − change its size, as do Ctrl + scroll wheel and pinching',
   'call.pip.enter': 'Picture in picture',
   'call.devices.open': 'Choose devices',
   'call.devices.title': 'Devices',

@@ -9,6 +9,7 @@ const itCallDevices = {
   'call.bubble.collapse': 'Riduci a bolla',
   'call.bubble.ongoing': 'Chiamata in corso',
   'call.bubble.moveHint': 'Le frecce spostano la bolla',
+  'call.bubble.resizeHint': '+ e − ne cambiano la dimensione, come Ctrl + rotellina o il pizzico',
   'call.pip.enter': 'Picture-in-picture',
   'call.devices.open': 'Scegli i dispositivi',
   'call.devices.title': 'Dispositivi',
