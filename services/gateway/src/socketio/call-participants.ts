@@ -109,6 +109,7 @@ export async function resolveActiveCallParticipantDetailed(
   mode: Awaited<ReturnType<CallService['getCallSession']>>['mode'];
   isDirectCall: boolean;
   hasOtherActiveParticipants: boolean;
+  session: Awaited<ReturnType<CallService['getCallSession']>>;
 } | null> {
   try {
     const callSession = await deps.callService.getCallSession(callId);
@@ -124,7 +125,8 @@ export async function resolveActiveCallParticipantDetailed(
       isDirectCall: callSession.conversation?.type === 'direct',
       hasOtherActiveParticipants: callSession.participants.some(
         (p) => !p.leftAt && p.id !== activeParticipant.id
-      )
+      ),
+      session: callSession
     };
   } catch (error) {
     // A genuine "not a participant" resolves via the `.find()` above
