@@ -67,6 +67,14 @@ describe('StickerArtwork — la priorité de RenderSource.resolve', () => {
     expect(html).not.toContain('data-sticker-emoji');
   });
 
+  test('un sticker de PACK (#9141) rend son image jointe — le GIF d’un pack cinématique reste animé, l’Instant porte son texte', () => {
+    const html = renderToStaticMarkup(
+      <StickerArtwork sticker={{ templateId: 'pack.chats-de-paris.dodo', emoji: '😴', slots: { texte: 'Léa' } }} picture={picture('a6')} side={160} />,
+    );
+    expect(html).toContain('<img');
+    expect(html).not.toContain('data-sticker-emoji');
+  });
+
   test('aucune pièce jointe ⇒ le glyphe, l’emoji du sticker s’il en a un, sinon le repli générique', () => {
     const withEmoji = renderToStaticMarkup(<StickerArtwork sticker={{ emoji: '🎉' }} picture={undefined} side={160} />);
     expect(withEmoji).toContain('🎉');

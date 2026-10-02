@@ -392,8 +392,8 @@ export const STICKER_PACK_AUTHOR_MEESHY = 'Meeshy';
 
 export const isBuiltinStickerPackSlug = (slug: string): boolean => BUILTIN_STICKER_PACKS.some((pack) => pack.slug === slug);
 
-/** Les segments d'adresse de l'API des packs, qu'aucun slug ne peut prendre. */
-const ROUTE_SEGMENTS: ReadonlySet<string> = new Set(['submissions', 'pending', 'installed', 'mine']);
+/** Les segments d'adresse de l'API des packs et les onglets fixes de la feuille de stickers, qu'aucun slug ne peut prendre. */
+const ROUTE_SEGMENTS: ReadonlySet<string> = new Set(['submissions', 'pending', 'installed', 'mine', 'favorites', 'shop']);
 
 /** Un slug qu'un tiers ne peut pas prendre : celui d'un pack intégré ou d'une adresse de l'API. */
 export const isReservedStickerPackSlug = (slug: string): boolean => isBuiltinStickerPackSlug(slug) || ROUTE_SEGMENTS.has(slug);

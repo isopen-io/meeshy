@@ -48,6 +48,7 @@ import frContactDiscovery from './catalog-fr-contact-discovery';
 import frDownload from './catalog-fr-download';
 import frPhonePrompt from './catalog-fr-phone-prompt';
 import frUserProfile from './catalog-fr-user-profile';
+import frStickerPacks from './catalog-fr-sticker-packs';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -1146,6 +1147,7 @@ const fr = {
   ...frCommentRow,
   ...frContactDiscovery,
   ...frUserProfile,
+  ...frStickerPacks,
 } as const;
 
 export default fr;

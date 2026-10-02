@@ -37,6 +37,7 @@ import ptContactDiscovery from './catalog-pt-contact-discovery';
 import ptDownload from './catalog-pt-download';
 import ptPhonePrompt from './catalog-pt-phone-prompt';
 import ptUserProfile from './catalog-pt-user-profile';
+import ptStickerPacks from './catalog-pt-sticker-packs';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -1129,6 +1130,7 @@ const pt = {
   ...ptCommentRow,
   ...ptContactDiscovery,
   ...ptUserProfile,
+  ...ptStickerPacks,
 } satisfies InterfaceCatalog;
 
 export default pt;

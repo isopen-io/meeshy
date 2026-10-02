@@ -37,6 +37,7 @@ import deContactDiscovery from './catalog-de-contact-discovery';
 import deDownload from './catalog-de-download';
 import dePhonePrompt from './catalog-de-phone-prompt';
 import deUserProfile from './catalog-de-user-profile';
+import deStickerPacks from './catalog-de-sticker-packs';
 
 const de = {
   'announce.messageSent': 'Nachricht gesendet',
@@ -1125,6 +1126,7 @@ const de = {
   ...deCommentRow,
   ...deContactDiscovery,
   ...deUserProfile,
+  ...deStickerPacks,
 } satisfies InterfaceCatalog;
 
 export default de;

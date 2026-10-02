@@ -69,6 +69,7 @@ describe('validateStickerPackManifest', () => {
   it('keeps the names of the built-in packs for Meeshy', () => {
     expect(codes(manifest({ slug: 'mee' }))).toEqual(['slug:reserved-slug']);
     expect(codes(manifest({ slug: 'submissions' }))).toEqual(['slug:reserved-slug']);
+    expect(codes(manifest({ slug: 'shop' }))).toEqual(['slug:reserved-slug']);
   });
 
   it('refuses two stickers with the same key or the same file', () => {

@@ -37,6 +37,7 @@ import esContactDiscovery from './catalog-es-contact-discovery';
 import esDownload from './catalog-es-download';
 import esPhonePrompt from './catalog-es-phone-prompt';
 import esUserProfile from './catalog-es-user-profile';
+import esStickerPacks from './catalog-es-sticker-packs';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -1125,6 +1126,7 @@ const es = {
   ...esCommentRow,
   ...esContactDiscovery,
   ...esUserProfile,
+  ...esStickerPacks,
 } satisfies InterfaceCatalog;
 
 export default es;
