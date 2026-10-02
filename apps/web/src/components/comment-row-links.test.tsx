@@ -71,7 +71,7 @@ describe('Un commentaire ouvre ses adresses', () => {
   test('REST — la carte de `metadata` envoie l’adresse suivie par /l/, l’autre en direct', async () => {
     const host = await monter(commentaire({ metadata: { trackingLinks: TRACKED } }));
     expect(hrefs(host)).toEqual(['/l/Guide3', 'https://ailleurs.net/x']);
-    expect(host.querySelector('[data-comment-row] [data-rich-text] a')?.textContent).toBe('https://exemple.org/guide');
+    expect(host.querySelector('[data-comment-row] [data-rich-text] a')?.textContent).toBe('m+Guide3');
   });
 
   test('socket — la carte hissée en `trackingLinks` vaut la même chose', async () => {

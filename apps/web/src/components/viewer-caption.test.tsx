@@ -51,11 +51,11 @@ function mount(node: React.ReactNode): HTMLDivElement {
 const TRACKED = [{ url: 'https://exemple.org/promo', token: 'Promo42' }] as const;
 
 describe('ViewerCaption — les adresses', () => {
-  test('une URL de la carte passe par /l/<token> et AFFICHE l’adresse', () => {
+  test('une URL de la carte passe par /l/<token> et s’affiche m+<token> (#9093)', () => {
     const c = mount(<ViewerCaption text="voir https://exemple.org/promo" trackingLinks={TRACKED} />);
     const link = c.querySelector('a');
     expect(link?.getAttribute('href')).toBe('/l/Promo42');
-    expect(link?.textContent).toBe('https://exemple.org/promo');
+    expect(link?.textContent).toBe('m+Promo42');
   });
 
   test('une URL hors carte est un lien direct, sans opener ni referrer', () => {

@@ -174,7 +174,7 @@ describe('StoryMediaLayer — le texte d’une story de texte (#9074)', () => {
       />,
     );
     expect(html).toContain('href="/l/Rdv7"');
-    expect(html).toContain('>https://exemple.org/rdv</a>');
+    expect(html).toContain('>m+Rdv7</a>');
     expect(html).toContain('data-claims-gesture');
   });
 });
