@@ -132,9 +132,12 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
             source.contains("FloatingCallPillView(callManager: callManager"),
             "`CallPresentationLayer` must pass its own `callManager` into FloatingCallPillView."
         )
+        // #8739 — la bulle vit dans la fenêtre passe-plat du point de retour,
+        // au-dessus de tout plein écran : c'est elle qui lui remet la pile.
+        let window = try source(of: "Views/RootLayers/CallWindowPresenter.swift")
         XCTAssertTrue(
-            source.contains("CallBubbleView(callManager: callManager)"),
-            "`CallPresentationLayer` must pass its own `callManager` into CallBubbleView."
+            window.contains("CallBubbleView(callManager: callManager"),
+            "The return-point window must pass its own `callManager` into CallBubbleView."
         )
     }
 
