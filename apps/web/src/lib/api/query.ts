@@ -115,8 +115,8 @@ export function useStatusMoods(options: { readonly enabled?: boolean } = {}) {
  * cache existant sans jamais poser de spinner dessus), mais sans figer une
  * minute de fraîcheur sur un corpus qui change à chaque `markStoryViewed`.
  */
-export function useStoryFeed() {
-  return useQuery({ ...storyFeedQueryOptions(apiDeps), staleTime: 0 });
+export function useStoryFeed(options: { readonly enabled?: boolean } = {}) {
+  return useQuery({ ...storyFeedQueryOptions(apiDeps), staleTime: 0, enabled: options.enabled ?? true });
 }
 
 /**

@@ -102,6 +102,15 @@ describe('/l/:token — le clic compté, puis la cible', () => {
     expect(script.went).toEqual([{ url: '/chat/mshy_abc', replace: true }]);
   });
 
+  test('un réel partagé ouvre sa page dans l’application, avec ?via= (#9149)', async () => {
+    const id = '6abfd6cb9fa9a97766e6bf7a';
+    const script = scripted(ok({ originalUrl: `https://meeshy.me/reel/${id}` }), link({ originalUrl: `https://meeshy.me/reel/${id}`, content: { type: 'REEL', id } }));
+    await mount(<TrackingLinkRedirect token="abc123" language="fr" deps={script.deps} />);
+    expect(script.recorded).toHaveLength(1);
+    expect(script.left).toEqual([]);
+    expect(script.went).toEqual([{ url: `/reel/${id}?via=abc123`, replace: true }]);
+  });
+
   test('un jeton hors forme ne consulte pas la passerelle', async () => {
     const script = scripted(ok({ originalUrl: 'https://example.com/' }), link());
     await mount(<TrackingLinkRedirect token="x" language="fr" deps={script.deps} />);

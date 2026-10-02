@@ -4,7 +4,7 @@ import { CommentThread } from '@/components/comment-thread';
 import { FeedPostCard } from '@/components/feed-post-card';
 import { Glyph } from '@/components/glyph';
 import { SceneFullscreenGallery } from '@/components/scene-fullscreen-gallery';
-import { ApiError } from '@/lib/api/client';
+import { isContentRefusal as isRefusal, useVisitorInvitation } from '@/components/visitor-invitation';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { usePost } from '@/lib/api/query';
@@ -12,7 +12,7 @@ import { resolveFeedCardModel } from '@/lib/feed/card-model';
 import { useFeedAutoplayRoot } from '@/lib/feed/use-feed-autoplay';
 import { useSceneGallery } from '@/lib/feed/use-scene-gallery';
 import { useOnline } from '@/lib/net/online';
-import { useParams, useSearch } from '@/lib/router';
+import { useParams, useRoute, useSearch } from '@/lib/router';
 import { COMMENTS_ANCHOR, revealComments, useCommentsReveal } from '@/lib/view/comments-anchor';
 import { useMinute } from '@/lib/view/use-minute';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
@@ -128,7 +128,6 @@ export function PostDetailError({ online, onRetry }: { readonly online: boolean;
   );
 }
 
-const isRefusal = (error: unknown): boolean => error instanceof ApiError && (error.status === 403 || error.status === 404);
 
 export default function PostDetailScreen() {
   const { post: postId } = useParams<'/post/$post'>();
@@ -169,6 +168,15 @@ export default function PostDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [post.data, readerLanguages, minute],
   );
+  /* LE VISITEUR D'UN LIEN PARTAGÉ (#9149) — la publication en fond, servie
+     sans compte si elle est publique, l'invitation par-dessus ; chaque geste
+     qui exige un compte la rappelle. Une humeur (`/mood/`) a son libellé. */
+  const { key: routeKey } = useRoute();
+  const invitation = useVisitorInvitation({
+    kind: routeKey === 'mood' ? 'mood' : 'post',
+    state: model !== undefined ? 'served' : isRefusal(post.error) ? 'refused' : 'pending',
+  });
+  const { visitor, ask } = invitation;
 
   // `?scene=N` — LE LIEN PROFOND (#6902, § F de la spécification) : l'ADRESSE
   // que le carrousel de scène (`Next scene`, `share-url.ts`) et un lien reçu
@@ -209,16 +217,16 @@ export default function PostDetailScreen() {
                de clavier vers la page courante. C'est le SEUL hôte de la carte
                qui le déclare, et `routes/post-card-hosts.test.ts` le garde. */
             isDetail
-            onGesture={onGesture}
-            onShare={onShare}
-            onComment={onComment}
-            onRepost={onRepost}
-            menu={menu}
+            onGesture={visitor ? ask : onGesture}
+            onShare={visitor ? ask : onShare}
+            onComment={visitor ? ask : onComment}
+            onRepost={visitor ? ask : onRepost}
+            {...(visitor ? {} : { menu })}
             preferredLanguages={readerLanguages}
             onOpenScene={sceneGallery.onOpenScene}
             registerScene={registerScene}
           />
-        ) : isRefusal(post.error) ? (
+        ) : visitor && isRefusal(post.error) ? null : isRefusal(post.error) ? (
           <PostDetailRefused />
         ) : post.isError ? (
           <PostDetailError online={online} onRetry={() => void post.refetch()} />
@@ -230,7 +238,7 @@ export default function PostDetailScreen() {
         {/* LE FIL — seulement sur une publication SERVIE : l'ouvrir sur un
             refus (D-6) dirait que la publication existe. Le même argument que
             la carte elle-même, appliqué à ce qui la suit. */}
-        {model !== undefined ? (
+        {model !== undefined && !visitor ? (
           <div id={COMMENTS_ANCHOR} ref={commentsAnchor} className="flex flex-col pt-2">
             <h2 className="text-body font-semibold px-1 pb-1" style={{ color: 'var(--color-ios-ink)' }}>
               {commentsTitle}
@@ -248,6 +256,7 @@ export default function PostDetailScreen() {
         />
       ) : null}
       {repostConfirm}
+      {invitation.dialog}
     </div>
   );
 }
