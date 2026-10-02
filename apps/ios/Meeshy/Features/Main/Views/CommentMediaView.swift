@@ -15,6 +15,10 @@ struct CommentAttachmentsTray: View {
     var place: SharedPlace? = nil
     var onRemovePlace: (() -> Void)? = nil
 
+    /// « Éditer » une pièce dans la scène (#9127) — posé par l'hôte via
+    /// `.commentSceneRetouch` ; absent, le bandeau ne promet aucune édition.
+    @Environment(\.commentRetouch) private var retouch
+
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
@@ -25,14 +29,7 @@ struct CommentAttachmentsTray: View {
                 }
                 ForEach(attachments) { attachment in
                     HStack(spacing: MeeshySpacing.xsPlus) {
-                        Image(systemName: attachment.type.glyph)
-                            .font(.caption)
-                            .foregroundColor(Color(hex: attachment.thumbnailColor))
-                            .accessibilityHidden(true)
-                        Text(attachment.name)
-                            .font(.caption.weight(.medium))
-                            .lineLimit(1)
-                            .frame(maxWidth: 120)
+                        attachmentLabel(attachment)
                         Button {
                             remove(attachment)
                         } label: {
@@ -56,11 +53,53 @@ struct CommentAttachmentsTray: View {
                     .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))) {
                         remove(attachment)
                     }
+                    .modifier(EditableChipAccessibility(label: editLabel(attachment), open: editAction(attachment)))
                 }
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.vertical, MeeshySpacing.sm)
         }
+    }
+
+    /// Une pièce que la scène ouvre se touche pour s'éditer : le glyphe
+    /// « Éditer » le dit, comme au centre d'une tuile de conversation (#9119).
+    @ViewBuilder
+    private func attachmentLabel(_ attachment: ComposerAttachment) -> some View {
+        let label = HStack(spacing: MeeshySpacing.xsPlus) {
+            Image(systemName: attachment.type.glyph)
+                .font(.caption)
+                .foregroundColor(Color(hex: attachment.thumbnailColor))
+                .accessibilityHidden(true)
+            Text(attachment.name)
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+                .frame(maxWidth: 120)
+        }
+        if let open = editAction(attachment), let glyph = CommentSceneRetouch.editGlyph(for: attachment) {
+            Button(action: open) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
+                    label
+                    Image(systemName: glyph)
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(MeeshyColors.mediaChromeForeground)
+                        .frame(width: 18, height: 18)
+                        .background(Circle().fill(MeeshyColors.mediaChromeFill))
+                        .accessibilityHidden(true)
+                }
+            }
+            .buttonStyle(.plain)
+        } else {
+            label
+        }
+    }
+
+    private func editAction(_ attachment: ComposerAttachment) -> (() -> Void)? {
+        guard let retouch, CommentSceneRetouch.editGlyph(for: attachment) != nil else { return nil }
+        return { retouch.open(attachment.id) }
+    }
+
+    private func editLabel(_ attachment: ComposerAttachment) -> String {
+        String(localized: "conversation.composer.attachment.edit", defaultValue: "Éditer \(attachment.name)", bundle: .main)
     }
 
     private func remove(_ attachment: ComposerAttachment) {
@@ -107,6 +146,24 @@ struct CommentAttachmentsTray: View {
         .accessibilityElement(children: .combine)
         .accessibilityAction(named: Text(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))) {
             onRemovePlace?()
+        }
+    }
+}
+
+/// Une pièce éditable se lit « Éditer … » et s'ouvre par l'action par défaut
+/// de VoiceOver ; les autres gardent leur lecture.
+private struct EditableChipAccessibility: ViewModifier {
+    let label: String
+    let open: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        if let open {
+            content
+                .accessibilityLabel(label)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityAction { open() }
+        } else {
+            content
         }
     }
 }
