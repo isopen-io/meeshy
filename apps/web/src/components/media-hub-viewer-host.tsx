@@ -6,7 +6,7 @@ import { browserFileDeliveryHost, hasFileDeliveryDoor } from '@/lib/media/file-d
 import { participantAvatarOf } from '@/lib/view/conversation';
 import type { MediaCarrier } from '@/lib/view/media';
 import { mediaHubViewerOf, type MediaHubItem } from '@/lib/view/media-hub';
-import { mediaPageOffers, type MediaViewerCapabilities } from '@/lib/view/media-viewer-actions';
+import { attachmentSendRequest, mediaPageOffers, type MediaViewerCapabilities } from '@/lib/view/viewer-page-offers';
 import { isMineOf } from '@/lib/view/message';
 
 import { revealedAttachment } from './view-once-opened';
@@ -27,7 +27,7 @@ const MediaViewer = lazy(() => import('./media-viewer'));
  * La pièce touchée s'ouvre en clair si elle était floutée (#8008) — elle
  * seule : ses voisines gardent leur substitut dans la visionneuse.
  *
- * LES ACTIONS (#8180) — Enregistrer, Réagir, Créer avec ce média, décidées
+ * LES ACTIONS (#8180, #8884) — Enregistrer, Réagir, Partager, Créer avec ce média, décidées
  * page par page par `mediaPageOffers` sur la pièce ORIGINALE (jamais sa copie
  * révélée). Pas « Répondre » : l'écran ne tient pas le composeur du fil
  * (iOS `MediaHubGalleryCover` non plus) — loi 4, un contrôle existe s'il a un
@@ -74,7 +74,7 @@ export function MediaHubViewerHost({
     [items],
   );
   const capabilities = useMemo<MediaViewerCapabilities>(
-    () => ({ save: hasFileDeliveryDoor(browserFileDeliveryHost()), react: true, reply: false, compose: true }),
+    () => ({ save: hasFileDeliveryDoor(browserFileDeliveryHost()), react: true, reply: false, compose: true, share: true }),
     [],
   );
   const shown = viewer.items.map((attachment, index) => (index === viewer.startIndex ? revealedAttachment(attachment) : attachment));
@@ -102,11 +102,13 @@ export function MediaHubViewerHost({
           const attachment = viewer.items[index];
           const message = messages[index];
           if (attachment === undefined || message === undefined) return null;
+          const offers = mediaPageOffers({ attachment, message, capabilities });
           return {
             attachment,
             messageId: message.id,
             conversationId: message.conversationId,
-            offers: mediaPageOffers({ attachment, message, capabilities }),
+            offers,
+            ...(offers.share ? { share: attachmentSendRequest({ attachment, message, mine: isMineOf(message, viewerId) }) } : {}),
           };
         }}
         {...(deps === undefined ? {} : { deps })}

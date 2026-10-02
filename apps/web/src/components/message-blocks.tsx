@@ -583,7 +583,7 @@ export function QuoteRail({ isMine = false, className = '' }: { readonly isMine?
     <span
       data-quote-rail
       className={`w-1 shrink-0 rounded-full ${className}`}
-      style={{ backgroundColor: isMine ? 'color-mix(in srgb, white 70%, transparent)' : 'var(--accent)' }}
+      style={{ backgroundColor: isMine ? 'color-mix(in srgb, var(--color-ios-on-brand) 70%, transparent)' : 'var(--accent)' }}
       aria-hidden
     />
   );
@@ -720,7 +720,7 @@ export function Quote({
           ) : still !== null ? (
             <QuoteVideoStill src={still} />
           ) : null}
-          {media.timebased ? <Glyph name="fillPlay" size={12} className="absolute inset-0 m-auto text-white" /> : null}
+          {media.timebased ? <Glyph name="fillPlay" size={12} className="absolute inset-0 m-auto text-on-media" /> : null}
         </QuoteOpenZone>
       ) : null}
       <span className="flex min-w-0 flex-1 flex-col items-start pe-2.5 ps-2">
@@ -735,7 +735,7 @@ export function Quote({
           {...(media === null ? {} : { 'data-quote-media': media.kind })}
           aria-label={label}
         >
-          <span className="font-semibold" style={{ color: isMine ? 'white' : 'var(--accent)' }}>
+          <span className="font-semibold" style={{ color: isMine ? 'var(--color-ios-on-brand)' : 'var(--accent)' }}>
             {quote.sender?.displayName ?? ''}{' '}
           </span>
           {media !== null && media.frame === null && !hasThumb && !preview.isProtected ? (

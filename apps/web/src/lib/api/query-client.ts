@@ -1,13 +1,14 @@
 import { QueryClient, dehydrate, hydrate, type DehydratedState } from '@tanstack/react-query';
 
 import { createAccountCacheShelf } from './account-caches';
+import { pruneGoneEphemerals } from './ephemeral-cache';
 import { ApiError } from './client';
 import { apiConfig } from './config';
 import { resetAbsentMedia } from './media-absent';
 import { reactionStore } from './reaction-store';
 /* `souverain.ts` n'a AUCUNE dépendance — c'est ce qui le rend importable
    depuis le socle sans y tirer les décodeurs d'administration (#6862). */
-import { estClefSouveraine } from './souverain';
+import { estClefNonPersistable } from './souverain';
 import { sessionIdentityKey, sessionStore, type SessionState, type SessionStoreApi } from './session';
 
 /**
@@ -147,7 +148,7 @@ export function persistableQuery(query: {
   readonly state: { readonly status: string };
   readonly queryKey: readonly unknown[];
 }): boolean {
-  return query.state.status === 'success' && !estClefSouveraine(query.queryKey);
+  return query.state.status === 'success' && !estClefNonPersistable(query.queryKey);
 }
 
 export type CreateAppQueryClientOptions = {
@@ -166,6 +167,9 @@ export type CreateAppQueryClientOptions = {
    * celui du compte qui revient (#8674). Optionnel : un témoin qui ne teste
    * que la persistance n'en a pas besoin. */
   readonly session?: SessionStoreApi;
+  /** L'horloge qui juge les éphémères partis à l'écriture et à la relecture
+   * (#8900). Défaut : `Date.now` — un témoin l'injecte. */
+  readonly now?: () => number;
 };
 
 export { purgeReaderCaches, type CacheStorageLike } from './account-caches';
@@ -183,6 +187,7 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
   const storage = options.storage ?? browserStorage();
   const busterOf = options.busterOf ?? ((userId: string | null) => `${options.buster}|${userId ?? 'anonymous'}`);
   const shelf = createAccountCacheShelf(storage);
+  const now = options.now ?? Date.now;
   let buster = options.buster;
 
   const client = new QueryClient({
@@ -204,7 +209,9 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
     try {
       const parsed: unknown = JSON.parse(raw);
       if (!isPersistedCache(parsed) || parsed.buster !== expected) return false;
-      hydrate(client, parsed.state);
+      // UN ÉPHÉMÈRE PARTI NE RESSUSCITE PAS (#8900) : le cache a pu être
+      // écrit avant son échéance — il est jugé à l'instant de la relecture.
+      hydrate(client, pruneGoneEphemerals(parsed.state, now()));
       // « MES RÉACTIONS », SUR LA MÊME HORLOGE (revue #5814, défaut
       // majeur 5) — restaurée dans le MÊME bloc, sous la MÊME garde de
       // `buster`, pour que les deux moitiés d'un même fait naissent et
@@ -218,7 +225,7 @@ export function createAppQueryClient(options: CreateAppQueryClientOptions): AppQ
   };
 
   const serialize = (sealedWith: string): string => {
-    const state = dehydrate(client, { shouldDehydrateQuery: persistableQuery });
+    const state = pruneGoneEphemerals(dehydrate(client, { shouldDehydrateQuery: persistableQuery }), now());
     const reactions = reactionStore.getState().mine;
     return JSON.stringify({ buster: sealedWith, state, reactions });
   };

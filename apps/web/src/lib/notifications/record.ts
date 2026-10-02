@@ -1,5 +1,7 @@
 import type { NotificationActor, NotificationContext } from '@meeshy/shared/types/notification';
 
+import { decodeContentDetail } from './content-detail';
+
 /**
  * **UNE NOTIFICATION TELLE QUE LA CLOCHE LA LIT** (#6288) — une PROJECTION du
  * type partagé `Notification` (`packages/shared/types/notification.ts`), jamais
@@ -94,7 +96,14 @@ type MetadataNumberField = 'threshold' | 'level';
 
 const METADATA_NUMBER_FIELDS: readonly MetadataNumberField[] = ['threshold', 'level'];
 
-export type NotificationRecordContext = Pick<NotificationContext, ContextStringField | 'conversationType'>;
+/**
+ * #8860 — le DÉTAIL du contenu (#8857) et le média inline du vocal, que la
+ * bannière in-app montre. `firstAttachmentFileSize` n'est pas lu : la
+ * bannière ne dit pas le poids d'un fichier.
+ */
+type MediaField = 'contentDetail' | 'firstAttachmentUrl' | 'firstAttachmentMimeType' | 'firstAttachmentDurationMs';
+
+export type NotificationRecordContext = Pick<NotificationContext, ContextStringField | 'conversationType' | MediaField>;
 
 export type NotificationRecordMetadata = Partial<Readonly<Record<MetadataField, string>>> &
   Partial<Readonly<Record<MetadataNumberField, number>>>;
@@ -161,12 +170,35 @@ function decodeActor(value: unknown): NotificationRecordActor | null {
   return { id, username, displayName: filledString(actor.displayName), avatar: filledString(actor.avatar) };
 }
 
+/**
+ * Le média et le détail d'un message — RIEN sous `notificationLocKey`, la
+ * DÉCLARATION d'un contenu protégé (éphémère, vue unique, flouté, chiffré).
+ * La passerelle les retient déjà (`mediaMayTravel`) ; ce second verrou ne
+ * dépend pas de sa fidélité : une garde de confidentialité échoue en montrant
+ * MOINS (cycle 125).
+ */
+function decodeMedia(context: Json | null): Pick<NotificationRecordContext, MediaField> {
+  if (context === null || filledString(context.notificationLocKey) !== null) return {};
+  const detail = decodeContentDetail(context.contentDetail);
+  const url = filledString(context.firstAttachmentUrl);
+  const mimeType = filledString(context.firstAttachmentMimeType);
+  const durationMs = context.firstAttachmentDurationMs;
+  return {
+    ...(detail === null ? {} : { contentDetail: detail }),
+    ...(url === null || mimeType === null ? {} : { firstAttachmentUrl: url, firstAttachmentMimeType: mimeType }),
+    ...(url !== null && typeof durationMs === 'number' && Number.isFinite(durationMs) && durationMs > 0
+      ? { firstAttachmentDurationMs: durationMs }
+      : {}),
+  };
+}
+
 function decodeContext(value: unknown): NotificationRecordContext {
   const context = objectOf(value);
   const conversationType = CONVERSATION_TYPES.find((type) => type === context?.conversationType);
   return {
     ...pickStrings(context, CONTEXT_STRING_FIELDS),
     ...(conversationType === undefined ? {} : { conversationType }),
+    ...decodeMedia(context),
   };
 }
 

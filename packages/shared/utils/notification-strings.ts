@@ -13,7 +13,7 @@ export const NOTIFICATION_LANGUAGES = [
 export type NotificationLanguage = typeof NOTIFICATION_LANGUAGES[number];
 
 export const NOTIFICATION_STRING_KEYS = [
-  'reaction.message', 'reaction.comment', 'reaction.commentVerbose', 'reaction.post',
+  'reaction.message', 'reaction.comment', 'reaction.commentVerbose', 'reaction.commentContext', 'reaction.post',
   'comment.your', 'comment.generic', 'comment.repliedIn', 'comment.reply', 'comment.replyWithParent',
   'comment.genericFrom', 'comment.repliedInFrom',
   'comment.repliedToYours',
@@ -34,6 +34,7 @@ export const NOTIFICATION_STRING_KEYS = [
   'attachment.contact',
   'content.location', 'content.sticker', 'content.invitation',
   'content.storyReply.yours', 'content.storyReply.other',
+  'content.action.openMap', 'content.action.join', 'message.action.reply',
   'login.newDevice.title',
   'push.private',
   'engagement.badgeEarned', 'engagement.streakMilestone', 'engagement.levelUp',
@@ -321,7 +322,7 @@ export function notificationString(
     tokens.callBody = INCOMING_CALL_BODY[L][params.callType];
   }
 
-  if (key === 'reaction.commentVerbose') {
+  if (key === 'reaction.commentVerbose' || key === 'reaction.commentContext') {
     // postType (entité réelle) prime ; `isStory` reste un repli legacy binaire.
     const kind: NotificationPostLabelKind = params.postType ?? (params.isStory ? 'STORY' : 'POST');
     tokens.context = params.author

@@ -33,7 +33,7 @@ struct ConversationRowItem: View {
     let isDragging: Bool
     let presenceState: PresenceState
     /// Le pair a l'écran de CETTE conversation ouvert (#8892).
-    let isPeerHere: Bool
+    let isPeerHere: ConversationHere
     let isDark: Bool
     let storyRingState: StoryRingState
     let moodStatus: StatusEntry?

@@ -688,7 +688,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
    * largeur du carrousel. La grille QUAD ouverte ici est exactement ce cas —
    * quatre pages, le carrousel le plus large du fil de conversation.
    */
-  const porte = await confinementDe(page, '[data-media-viewer] .media-viewer-close', { nom: 'la croix de la visionneuse' });
+  const porte = await confinementDe(page, '[data-media-viewer] [data-viewer-exit="close"]', { nom: 'la croix de la visionneuse' });
   expect(porte.ok, `[${skin}/${scheme}] #7040 : ${porte.message}`);
 
   /* D-134 (#6303) — LA PELLICULE DU FIL PORTE LA CONVERSATION. Elle s'ouvre sur
@@ -772,9 +772,17 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   // focus REMIS sur « Fermer » : le clic de restauration l'a déplacé sur la vignette.
   await filmstripItems.nth(openedAt).click();
   await page.waitForFunction((id) => document.querySelector('[data-media-viewer]')?.getAttribute('data-viewer-attachment') === id, secondId);
-  await dialog.getByRole('button', { name: 'Fermer' }).focus();
+  // La croix est EN FIN de la barre haute (#8879) : le premier focalisable est
+  // l'identité ou « … ». On part donc du PREMIER, quel qu'il soit.
+  await page.evaluate(() => {
+    const dlg = document.querySelector('[data-media-viewer]');
+    const focusables = Array.from(dlg.querySelectorAll('button, [href], [tabindex]:not([tabindex="-1"])')).filter(
+      (el) => !el.hasAttribute('disabled') && el.closest('[inert]') === null,
+    );
+    focusables[0]?.focus();
+  });
 
-  // Shift+Tab depuis « Fermer » (le premier focalisable) revient au DERNIER
+  // Shift+Tab depuis le PREMIER focalisable revient au DERNIER
   // (motif QUE le composant lui-même applique — `nextFocusIndex`, prouvé ici
   // dans un vrai navigateur, jamais seulement en unitaire).
   await page.keyboard.press('Shift+Tab');
@@ -785,7 +793,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
     );
     return focusables.length > 0 && document.activeElement === focusables[focusables.length - 1];
   });
-  expect(wrappedToLast, `[${skin}/${scheme}] Shift+Tab depuis « Fermer » boucle sur le DERNIER focalisable (le piège)`);
+  expect(wrappedToLast, `[${skin}/${scheme}] Shift+Tab depuis le PREMIER focalisable boucle sur le DERNIER (le piège)`);
 
   await page.keyboard.press('Escape');
   await page.waitForSelector('[data-media-viewer]', { state: 'detached' });

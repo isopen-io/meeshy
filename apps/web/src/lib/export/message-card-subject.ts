@@ -31,7 +31,9 @@ import type { CardMedia } from './message-card-media';
  *
  * LES MÉDIAS (#8693) : les images, les vidéos (leur première image) et les
  * audios (leur représentation) ; un document n'a rien à montrer sur une carte.
- * Un message fait d'un seul média s'image, même sans texte.
+ * Un message fait d'un seul média s'image, même sans texte. Une pièce CHIFFRÉE
+ * ne se peint pas : son fichier n'est pas lisible hors de la bulle. Le message
+ * CITÉ apporte aussi ses médias, après ceux de la réponse (#8901).
  */
 
 type AuthorFields = Pick<Message, 'senderId'> & {
@@ -91,6 +93,7 @@ export type CardMediaFields = Pick<Attachment, 'id' | 'fileUrl'> & {
   readonly originalName?: string | null;
   readonly isViewOnce?: boolean;
   readonly isBlurred?: boolean;
+  readonly isEncrypted?: boolean;
   readonly effectFlags?: number | null;
 };
 
@@ -98,8 +101,9 @@ export type CardMediaFields = Pick<Attachment, 'id' | 'fileUrl'> & {
 export const maskedByEffects = (effectFlags: number | null | undefined): boolean =>
   ((effectFlags ?? 0) & (MESSAGE_EFFECT_FLAGS.VIEW_ONCE | MESSAGE_EFFECT_FLAGS.BLURRED)) !== 0;
 
-/** Une pièce MASQUÉE à son propre niveau — vue unique, floutée, ou marquée par ses effets. */
-const maskedPiece = (piece: CardMediaFields): boolean => piece.isViewOnce === true || piece.isBlurred === true || maskedByEffects(piece.effectFlags);
+/** Une pièce MASQUÉE à son propre niveau — vue unique, floutée, chiffrée, ou marquée par ses effets. */
+const maskedPiece = (piece: CardMediaFields): boolean =>
+  piece.isViewOnce === true || piece.isBlurred === true || piece.isEncrypted === true || maskedByEffects(piece.effectFlags);
 
 /** Les médias peignables d'un message, dans leur ordre. */
 export function cardMediaOf(attachments: readonly CardMediaFields[] | null | undefined): readonly MessageCardMediaItem[] {
@@ -143,20 +147,38 @@ export function messageCardSubjectOf(params: {
   const replyTo = message.replyTo;
   let quoted: MessageCardSubjectPart | null = null;
   let quotedAt: Date | null = null;
+  let quotedMedia: readonly MessageCardMediaItem[] = [];
   if (replyTo !== undefined && replyTo !== null) {
     const preview = quotedPreviewOf({ quoted: replyTo, readerLanguages, interfaceLanguage: params.interfaceLanguage });
     if (preview.text.trim() !== '') {
       quoted = { author: cardAuthorOf(replyTo, viewer), text: preview.text, handle: cardHandleOf(replyTo, viewer) };
       quotedAt = replyTo.createdAt === undefined ? null : new Date(replyTo.createdAt);
     }
+    quotedMedia = quotedMediaOf(replyTo, preview.isProtected, params.now);
   }
+  const ownIds = new Set(media.map((item) => item.id));
   return {
     quoted,
     reply: { author: cardAuthorOf(message, viewer), text, handle: cardHandleOf(message, viewer) },
     sentAt: new Date(message.createdAt),
     quotedAt,
-    media,
+    media: [...media, ...quotedMedia.filter((item) => !ownIds.has(item.id))],
   };
+}
+
+/**
+ * LE MÉDIA DU MESSAGE CITÉ (#8901) — répondre à une photo par du texte, c'est
+ * répondre À la photo : la carte la peint, après les médias de la réponse.
+ * Mêmes gardes que la citation elle-même (`quotedPreviewOf` : supprimée ou
+ * protégée au niveau du message ⇒ rien) et, pièce par pièce, que la réponse
+ * (`cardMediaOf` : vue unique, floutée, chiffrée ⇒ jamais peinte). Une
+ * citation éphémère ÉCHUE n'apporte plus rien : son fichier a disparu du fil.
+ */
+function quotedMediaOf(replyTo: NonNullable<Message['replyTo']>, isProtected: boolean, now: number): readonly MessageCardMediaItem[] {
+  if (isProtected) return [];
+  const expiresAt = replyTo.expiresAt === undefined || replyTo.expiresAt === null ? null : new Date(replyTo.expiresAt).getTime();
+  if (expiresAt !== null && Number.isFinite(expiresAt) && expiresAt <= now) return [];
+  return cardMediaOf(replyTo.attachments);
 }
 
 /** Les langues dans lesquelles la réponse EXISTE : son original d'abord, puis chaque traduction servie. */

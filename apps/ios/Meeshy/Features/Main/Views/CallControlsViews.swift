@@ -76,10 +76,30 @@ extension CallControlsCopy {
     static var reactionsTitle: String {
         String(localized: "call.history.reactions", defaultValue: "Réactions", bundle: .main)
     }
+
+    static func reactionAuthor(_ author: CallReactionAuthor) -> String {
+        switch author {
+        case .me: return String(localized: "call.reaction.author.you", defaultValue: "Vous", bundle: .main)
+        case .peer(let name): return name
+        case .someone: return String(localized: "call.reaction.author.someone", defaultValue: "Un participant", bundle: .main)
+        }
+    }
+
+    static func reactionAnnouncement(_ reaction: CallFloatingReaction) -> String {
+        guard reaction.author != .me else {
+            return String(format: String(localized: "call.reaction.mine", defaultValue: "Vous avez réagi %@", bundle: .main), reaction.emoji.rawValue)
+        }
+        return String(
+            format: String(localized: "call.reaction.from", defaultValue: "%1$@ a réagi %2$@", bundle: .main),
+            reactionAuthor(reaction.author),
+            reaction.emoji.rawValue
+        )
+    }
 }
 
-/// L'envol des réactions : chacune monte et s'efface ; sous Réduire les
-/// animations, elle apparaît et s'efface sur place.
+/// L'envol des réactions : chacune monte avec le nom de son auteur sous
+/// l'emoji et s'efface ; sous Réduire les animations, elle apparaît et
+/// s'efface sur place. VoiceOver annonce qui a réagi.
 struct CallFloatingReactionsLayer: View, Equatable {
     let reactions: [CallFloatingReaction]
     let reduceMotion: Bool
@@ -88,7 +108,7 @@ struct CallFloatingReactionsLayer: View, Equatable {
         GeometryReader { proxy in
             ZStack {
                 ForEach(reactions) { reaction in
-                    CallFloatingReactionView(emoji: reaction.emoji, reduceMotion: reduceMotion)
+                    CallFloatingReactionView(reaction: reaction, reduceMotion: reduceMotion)
                         .position(x: proxy.size.width * reaction.lane, y: proxy.size.height * 0.62)
                 }
             }
@@ -99,19 +119,31 @@ struct CallFloatingReactionsLayer: View, Equatable {
 }
 
 private struct CallFloatingReactionView: View {
-    let emoji: CallReactionEmoji
+    let reaction: CallFloatingReaction
     let reduceMotion: Bool
     @State private var launched = false
 
     var body: some View {
-        Text(emoji.rawValue)
-            .font(MeeshyFont.relative(34))
-            .offset(y: launched && !reduceMotion ? -260 : 0)
-            .scaleEffect(launched && !reduceMotion ? 2.4 : 1.6)
-            .opacity(launched ? 0 : 1)
-            .onAppear {
-                withAnimation(.easeOut(duration: 2.5)) { launched = true }
-            }
+        VStack(spacing: MeeshySpacing.xs) {
+            Text(reaction.emoji.rawValue)
+                .font(MeeshyFont.relative(MeeshyFont.largeTitleSize))
+                .scaleEffect(launched && !reduceMotion ? 2.4 : 1.6, anchor: .bottom)
+            Text(CallControlsCopy.reactionAuthor(reaction.author))
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: 128)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, 2)
+                .callChromeGlass(in: Capsule())
+        }
+        .offset(y: launched && !reduceMotion ? -260 : 0)
+        .opacity(launched ? 0 : 1)
+        .onAppear {
+            UIAccessibility.post(notification: .announcement, argument: CallControlsCopy.reactionAnnouncement(reaction))
+            withAnimation(.easeOut(duration: 2.5)) { launched = true }
+        }
     }
 }
 
@@ -120,9 +152,9 @@ struct CallInviteStrip: View, Equatable {
     let invites: [CallPendingInvite]
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             ForEach(invites) { invite in
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     MeeshyAvatar(name: invite.displayName, context: .typingIndicator, avatarURL: invite.avatar)
                     Text(invite.displayName)
                         .font(.footnote.weight(.semibold))
@@ -130,9 +162,9 @@ struct CallInviteStrip: View, Equatable {
                         .lineLimit(1)
                     Text(CallControlsCopy.ringing)
                         .font(.caption)
-                        .foregroundColor(.white.opacity(0.75))
+                        .foregroundColor(MeeshyColors.mediaChromeTertiary)
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .frame(minHeight: 44)
                 .callChromeGlass(in: Capsule())
                 .accessibilityElement(children: .combine)
@@ -152,7 +184,7 @@ struct CallControlsNoticePill: View, Equatable {
     static func == (lhs: Self, rhs: Self) -> Bool { lhs.notice == rhs.notice }
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             Text(CallControlsCopy.notice(notice))
                 .font(.footnote.weight(.medium))
                 .foregroundColor(.white)
@@ -160,14 +192,14 @@ struct CallControlsNoticePill: View, Equatable {
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(CallRecordingCopy.close)
         }
-        .padding(.leading, 14)
+        .padding(.leading, MeeshySpacing.mdPlus)
         .callChromeGlass(in: Capsule())
         .task(id: notice) {
             try? await Task.sleep(nanoseconds: 4_000_000_000)
@@ -207,7 +239,7 @@ struct CallAddPeopleSheet: View {
                             onInvite(CallInvitedUser(userId: friend.id, username: friend.username, displayName: friend.displayName, avatar: friend.avatar))
                             dismiss()
                         } label: {
-                            HStack(spacing: 12) {
+                            HStack(spacing: MeeshySpacing.md) {
                                 MeeshyAvatar(name: friend.displayName ?? friend.username, context: .userListItem, avatarURL: friend.avatar)
                                 Text(friend.displayName ?? friend.username)
                                     .font(.body)

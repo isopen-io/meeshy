@@ -5,9 +5,13 @@
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { CONTENT_ENGAGEMENT_AXES, CONVERSATION_ENGAGEMENT_AXES, ENGAGEMENT_AXIS_WEIGHTS, SOCIAL_ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
+import { CONTENT_ENGAGEMENT_AXES, CONVERSATION_ENGAGEMENT_AXES, SOCIAL_ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
 import { getSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
+import { DEFAULT_ENGAGEMENT_SCALE } from '@meeshy/shared/types/engagement-scale';
+import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
+
+const poidsParDefaut = (axisKey: EngagementAxisKey): number => DEFAULT_ENGAGEMENT_SCALE.operations[axisKey].points;
 
 jest.mock('../../../../services/notifications/notification-service-registry');
 jest.mock('../../../../services/notifications/NotificationService');
@@ -61,6 +65,10 @@ function makePrisma(overrides: Partial<{
     engagementConversationCredit: {
       create: overrides.conversationCreditCreate ?? jest.fn().mockResolvedValue({}),
     },
+    engagementSignatureCredit: { create: jest.fn().mockResolvedValue({}) },
+    engagementScaleConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+    engagementQuota: { upsert: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn().mockResolvedValue({ count: 1 }), updateMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue(null) },
+    conversationEngagement: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
     user: {
       // Same mock answers both `recordActivity`'s language lookups (badge/streak
       // notifications) and `updateStreak`'s state read — none of the existing
@@ -99,6 +107,9 @@ function makeStreakPrisma(streakState: {
     engagementConversationCredit: {
       create: jest.fn().mockResolvedValue({}),
     },
+    engagementScaleConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+    engagementQuota: { upsert: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn().mockResolvedValue({ count: 1 }), updateMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue(null) },
+    conversationEngagement: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
     user: {
       findUnique,
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({}),
@@ -133,6 +144,9 @@ function makeLevelPrisma(overrides: Partial<{
     engagementConversationCredit: {
       create: jest.fn().mockResolvedValue({}),
     },
+    engagementScaleConfig: { findUnique: jest.fn().mockResolvedValue(null) },
+    engagementQuota: { upsert: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn().mockResolvedValue({ count: 1 }), updateMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue(null) },
+    conversationEngagement: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
     user: {
       findUnique: jest.fn().mockResolvedValue(null),
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({ engagementScore: 0 }),
@@ -180,11 +194,11 @@ describe('EngagementService.recordActivity', () => {
         userId: 'user-1',
         axisKey: 'content.text_message',
         count: 1,
-        points: ENGAGEMENT_AXIS_WEIGHTS['content.text_message'],
+        points: poidsParDefaut('content.text_message'),
       },
       update: {
         count: { increment: 1 },
-        points: { increment: ENGAGEMENT_AXIS_WEIGHTS['content.text_message'] },
+        points: { increment: poidsParDefaut('content.text_message') },
       },
       select: { count: true },
     });
@@ -675,7 +689,7 @@ describe('EngagementService level tracking (#5545)', () => {
    * lui, se lit à la source de vérité.
    */
   it('adds the axis family weight to the engagement score, null-safely (#5742)', async () => {
-    const attendu = ENGAGEMENT_AXIS_WEIGHTS['content.text_message'];
+    const attendu = poidsParDefaut('content.text_message');
     const runCommandRaw = makeRawScore(attendu);
     const prisma = makeLevelPrisma({ runCommandRaw });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
@@ -693,19 +707,19 @@ describe('EngagementService level tracking (#5545)', () => {
   });
 
   /**
-   * **Le poids DISTINGUE les familles, ou il ne sert à rien.** Le témoin
-   * ci-dessus passerait au vert si tous les axes valaient la même chose : il
-   * lit la constante des deux côtés. Celui-ci mesure l'ÉCART voulu par le
-   * porteur — contenu 9 > social 7 > conversation 5 > commentaire 3 > outil 1.
+   * **Le poids DISTINGUE les gestes, ou il ne sert à rien.** Le témoin
+   * ci-dessus passerait au vert si tous les axes valaient la même chose. Celui-ci
+   * mesure l'ÉCART voulu par le porteur (liste du 2026-09-30) — publier un reel
+   * 199 > se lier 7 > une conversation, un vocal 5 > un texte, un commentaire 3
+   * > un sticker 1.
    */
-  it('le barème ORDONNE les familles — le lien vaut plus que la conversation', () => {
-    const poids = (axe: keyof typeof ENGAGEMENT_AXIS_WEIGHTS) => ENGAGEMENT_AXIS_WEIGHTS[axe];
-    expect(poids('content.text_message')).toBeGreaterThan(poids(SOCIAL_ENGAGEMENT_AXES[0]!));
-    expect(poids(SOCIAL_ENGAGEMENT_AXES[0]!)).toBeGreaterThan(poids('conversation.private'));
-    expect(poids('conversation.private')).toBeGreaterThan(poids('comment.text'));
-    expect(poids('comment.text')).toBeGreaterThan(poids('tool.sticker'));
-    // Les quatre axes sociaux partagent UN poids : la famille est l'unité.
-    expect(new Set(SOCIAL_ENGAGEMENT_AXES.map(poids)).size).toBe(1);
+  it('le barème ORDONNE les gestes — publier passe devant se lier, se lier devant écrire', () => {
+    const poids = (axe: EngagementAxisKey) => poidsParDefaut(axe);
+    expect(poids('content.reel')).toBeGreaterThan(poids(SOCIAL_ENGAGEMENT_AXES[3]!));
+    expect(poids(SOCIAL_ENGAGEMENT_AXES[3]!)).toBeGreaterThan(poids('conversation.private'));
+    expect(poids('conversation.private')).toBeGreaterThan(poids('content.text_message'));
+    expect(poids('content.text_message')).toBeGreaterThan(poids('tool.sticker'));
+    expect(poids('comment.text')).toBe(poids('content.text_message'));
   });
 
   it('weighs a tool axis at 1, distinct from a content axis at 3', async () => {

@@ -1,11 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useId, useState, type ReactNode } from 'react';
 
+import { AdminButton } from '@/components/admin/button';
 import { Field } from '@/components/field';
 import { adminUserDetailQueryKey, type AdminUserDetail } from '@/lib/api/admin-user-detail';
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 /**
  * **LES BRIQUES DE LA FICHE ÉDITABLE D'UN MEMBRE** (#8289).
@@ -44,7 +44,7 @@ export type SectionState =
   | { readonly phase: 'error'; readonly message: string };
 
 /** Le motif d'un refus, dit dans la langue de l'administrateur — jamais le texte brut de la passerelle. */
-export function refusalOf(failure: ApiFailure, language: InterfaceLanguage): string {
+export function refusalOf(failure: ApiFailure, language: AdminLanguage): string {
   if (failure.code === 'USERNAME_TAKEN') return translateAdmin(language, 'admin.create.usernameTaken');
   if (failure.code === 'EMAIL_TAKEN') return translateAdmin(language, 'admin.create.emailTaken');
   if (failure.code === 'TWO_FACTOR_NOT_ENROLLED') return translateAdmin(language, 'admin.security.twoFactorNotEnrolled');
@@ -65,7 +65,7 @@ export function useMemberWrite({
   onAnnounce,
 }: {
   readonly userId: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
 }) {
   const client = useQueryClient();
@@ -130,7 +130,7 @@ export function MemberSection({
 }: {
   readonly name: string;
   readonly titre: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   /** `null` : la section n'a RIEN à enregistrer d'un bloc (ses gestes sont immédiats). */
   readonly dirty: boolean | null;
   readonly state: SectionState;
@@ -187,7 +187,7 @@ export function MemberSection({
   );
 }
 
-/** Un bouton COMPACT de section — 44 px de haut, jamais étiré sur la largeur d'une carte. */
+/** Un bouton COMPACT de section — le bouton commun de l'administration (`AdminButton`), 44 px, jamais étiré. */
 export function SectionButton({
   type = 'button',
   tone = 'secondary',
@@ -205,24 +205,17 @@ export function SectionButton({
   readonly data?: Readonly<Record<`data-${string}`, string>>;
   readonly children: string;
 }) {
-  const teinte =
-    tone === 'primary'
-      ? { color: 'white', background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))' }
-      : tone === 'danger'
-        ? { color: 'var(--color-danger)', border: '1px solid color-mix(in srgb, var(--color-danger) 40%, transparent)' }
-        : { color: INK, border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)' };
   return (
-    <button
-      {...data}
+    <AdminButton
       type={type}
+      tone={tone}
       disabled={disabled}
-      aria-label={label}
-      onClick={onClick}
-      className="rounded-chip px-4 text-body font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed"
-      style={{ ...teinte, minHeight: 44, opacity: disabled ? 0.45 : 1, outlineColor: BRAND }}
+      {...(label === undefined ? {} : { label })}
+      {...(onClick === undefined ? {} : { onClick })}
+      {...(data === undefined ? {} : { data })}
     >
       {children}
-    </button>
+    </AdminButton>
   );
 }
 
@@ -362,14 +355,14 @@ export function Bascule({
         className="relative h-7 w-12 shrink-0 rounded-full transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
         style={{ backgroundColor: actif ? BRAND : 'color-mix(in srgb, var(--color-ios-ink-3) 35%, transparent)', outlineColor: BRAND }}
       >
-        <span aria-hidden="true" className="absolute top-0.5 size-6 rounded-full bg-white transition-all" style={{ insetInlineStart: actif ? 'calc(100% - 1.625rem)' : '0.125rem' }} />
+        <span aria-hidden="true" className="absolute top-0.5 size-6 rounded-full bg-ios-on-brand transition-all" style={{ insetInlineStart: actif ? 'calc(100% - 1.625rem)' : '0.125rem' }} />
       </button>
     </div>
   );
 }
 
 /** Vérifié ✓ ou non : le MOT porte l'état, la couleur ne fait que l'appuyer. */
-export function BadgeVerifie({ verifie, language }: { readonly verifie: boolean; readonly language: InterfaceLanguage }) {
+export function BadgeVerifie({ verifie, language }: { readonly verifie: boolean; readonly language: AdminLanguage }) {
   const teinte = verifie ? 'var(--color-success)' : 'var(--color-ios-ink-2)';
   return (
     <span

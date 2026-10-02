@@ -10,7 +10,6 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import {
-  conversationResponseSchema,
   errorResponseSchema,
   validationErrorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
@@ -21,6 +20,7 @@ import { presenceFor, viewerFromRequest } from '../users/presence-gate';
 import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversation-helpers';
 import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import type { ConversationParams } from './types';
+import { conversationDetailWithEngagementResponseSchema, loadViewerEngagementsOrEmpty } from './engagement';
 import { conversationDetailInclude } from './core-selects';
 import { loadReadCursorBoundaries } from './read-cursor-projection';
 import {
@@ -200,6 +200,8 @@ export const CONVERSATION_DETAIL_SERVED_FIELDS = [
   'lastReadMessageId',
   'lastReadAt',
   'lastReadMessageCreatedAt',
+  // « N (M) 🔥 » du lecteur (#8906) — composé, aucune colonne de `Conversation`.
+  'viewerEngagement',
 ] as const;
 
 /**
@@ -231,6 +233,7 @@ export const conversationDetailPlan: ColumnPlan<typeof conversationDetailColumns
     lastReadMessageId: [],
     lastReadAt: [],
     lastReadMessageCreatedAt: [],
+    viewerEngagement: [],
   },
 };
 
@@ -284,7 +287,7 @@ export function registerConversationDetailRoute(
         }
       },
       response: {
-        200: conversationResponseSchema,
+        200: conversationDetailWithEngagementResponseSchema,
         400: validationErrorResponseSchema,
         401: errorResponseSchema,
         403: errorResponseSchema,
@@ -553,6 +556,14 @@ export function registerConversationDetailRoute(
       }
       if (sertHorlogeMessageLu && readCursorBoundary?.lastReadMessageCreatedAt) {
         charge.lastReadMessageCreatedAt = readCursorBoundary.lastReadMessageCreatedAt;
+      }
+
+      // ABSENT tant que le lecteur n'a rien crédité ici, et pour un invité
+      // anonyme, qui n'a pas de compte (#8906).
+      if (isFieldServed(champs, 'viewerEngagement') && !authRequest.authContext.isAnonymous) {
+        const engagement = await loadViewerEngagementsOrEmpty(prisma, userId, [conversationId]);
+        const viewerEngagement = engagement.get(conversationId);
+        if (viewerEngagement) charge.viewerEngagement = viewerEngagement;
       }
 
       return sendSuccess(reply, restrictFields(charge, champs, CONVERSATION_DETAIL_PINNED));

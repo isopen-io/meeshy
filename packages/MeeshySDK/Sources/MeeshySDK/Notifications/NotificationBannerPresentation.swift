@@ -17,7 +17,7 @@ import Foundation
 /// |---|---|---|
 /// | commentaire de contenu | X a commenté une story / un réel / un post | vignette + commentaire |
 /// | nouvelle publication | X a publié un réel / une humeur / un post / une story | vignette + contenu |
-/// | message privé | X | message |
+/// | message privé | X | message (aucune case sauf vraie vignette — #8897) |
 /// | message de groupe | X dans « nom local du groupe » | message / média / indicateur de protection |
 /// | relation acceptée | X a accepté votre demande | — |
 /// | demande de relation | X veut se connecter | — |
@@ -33,19 +33,26 @@ public struct NotificationBannerPresentation: Equatable, Sendable {
     /// `nil` quand la headline la porte déjà — le serveur l'y fusionne
     /// (« a réagi 🔥 à votre story ») et la répéter serait du bruit.
     public let reactionBadge: String?
-    /// Vignette du contenu visé (miniature du post / de la story / du réel, ou
-    /// la photo du message). `nil` ⇒ la bannière pose `contentSymbol`.
+    /// Vignette du contenu visé (miniature du post / de la story / du réel, la
+    /// photo du message, la vignette d'une vidéo, l'image d'aperçu d'un lien).
     public let thumbnailURL: String?
-    /// Icône typée du contenu visé (SF Symbol), toujours résolue : c'est ce qui
-    /// tient la place de la vignette quand il n'y en a pas.
-    public let contentSymbol: String
+    /// Icône du CONTENU SOCIAL visé (story, réel, humeur, statut, publication),
+    /// posée quand sa miniature manque. `nil` pour tout le reste (#8897) : la
+    /// pastille de l'avatar dit déjà le type, et le corps servi porte déjà son
+    /// emoji (« 🎵 Audio · 0:32 », « 📍 Tour Eiffel ») — une case-symbole de
+    /// plus disait la même chose une deuxième, voire une troisième fois.
+    public let contentSymbol: String?
+
+    /// La case devant le corps n'existe que pour une vraie vignette ou un
+    /// contenu social — la règle du web (`ContentTile`).
+    public var showsContentTile: Bool { thumbnailURL != nil || contentSymbol != nil }
 
     public init(
         headline: String,
         body: String?,
         reactionBadge: String?,
         thumbnailURL: String?,
-        contentSymbol: String
+        contentSymbol: String?
     ) {
         self.headline = headline
         self.body = body
@@ -153,8 +160,8 @@ public extension SocketNotificationEvent {
             // message n'a pas de texte (`buildMessageNotificationBodyI18n` →
             // « 🎵 Audio · 0:32 · 193 Ko »). Le préfixer ici du libellé client
             // disait « 🎵 Audio • 🎵 Audio · 0:32 · 193 Ko ». Quand il y a un
-            // texte, c'est la case typée (`bannerContentSymbol`) qui nomme le
-            // média. Le libellé client ne sert que si le serveur n'a rien servi.
+            // texte, la pastille de l'avatar dit déjà « message » et la
+            // vignette, quand il y en a une, montre le média (#8897). Le libellé client ne sert que si le serveur n'a rien servi.
             let served = nonBlank(messagePreview) ?? nonBlank(content)
             // #8858 — une position, une carte de visite, une invitation ou un
             // lien n'ont pas de texte à dire : leur DÉTAIL le dit. Un corps que
@@ -184,6 +191,10 @@ public extension SocketNotificationEvent {
         // (« a réagi 🔥 à votre story ») : le rendre une seconde fois en pastille
         // ferait dire deux fois la même chose à deux endroits de la même carte.
         if let action = nonBlank(subtitle), action.contains(emoji) { return nil }
+        // Même règle pour le CORPS (#9049) : une réaction de message arrive
+        // avec « a réagi ❤️ à votre message : « … » » — la pastille devant
+        // faisait lire « ❤️  a réagi ❤️ … ».
+        if let body = bannerBody, body.contains(emoji) { return nil }
         return emoji
     }
 
@@ -228,24 +239,18 @@ public extension SocketNotificationEvent {
         }
     }
 
-    /// L'icône dit l'ENTITÉ visée quand on la connaît (story / réel / humeur /
-    /// publication), le MÉDIA sinon, et à défaut l'action.
-    var bannerContentSymbol: String {
-        if let detail = messageDetail { return detail.symbolName }
-        if isStickerMessage { return "face.smiling.inverse" }
-        switch (metadata?.mediaType ?? metadata?.attachments?.firstType)?.lowercased() {
-        case "image": return "photo.fill"
-        case "video": return "play.rectangle.fill"
-        case "audio": return "waveform"
-        case "document": return "doc.fill"
-        default: break
-        }
+    /// L'icône du contenu SOCIAL visé, et rien d'autre (#8897). Ni le média
+    /// d'un message (le corps servi le nomme), ni son détail (position, contact,
+    /// invitation, lien : `summary` le nomme), ni le type de la notification
+    /// (la pastille de l'avatar le porte).
+    var bannerContentSymbol: String? {
+        guard bannerFraming == .action else { return nil }
         switch postType?.uppercased() {
         case "STORY": return "circle.dashed.inset.filled"
         case "REEL": return "play.rectangle.fill"
         case "MOOD", "STATUS": return "face.smiling.fill"
         case "POST": return "square.text.square.fill"
-        default: return notificationType.systemIcon
+        default: return nil
         }
     }
 
@@ -258,10 +263,6 @@ public extension SocketNotificationEvent {
     var messageDetail: NotificationMessageDetail? {
         guard !declaresProtection else { return nil }
         return NotificationMessageDetail(lookup: { detailFields[$0] })
-    }
-
-    var isStickerMessage: Bool {
-        detailFields["messageType"]?.lowercased() == "sticker" || detailFields["sticker"] != nil
     }
 
     private var declaresProtection: Bool {

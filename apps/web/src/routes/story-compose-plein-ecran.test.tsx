@@ -423,8 +423,8 @@ describe('lot 6 — la scène se touche sans s’entourer', () => {
 
     click(el.querySelector('[data-story-option="frame"]'));
     await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
-    // Les options de la colonne droite quittent la scène : l'outil porte les siennes.
-    expect(chrome()).toEqual(['hidden', 'hidden', 'absent']);
+    // Les outils du FOND vivent au rail droit (#8849) : lui seul reste.
+    expect(chrome()).toEqual(['hidden', 'hidden', 'shown']);
     expect(el.querySelector('[data-story-studio-top]')?.getAttribute('aria-hidden')).toBe('true');
     expect(el.querySelector('[data-story-studio-rail="leading"]')?.hasAttribute('inert')).toBe(true);
     expect(row().split(' ')).toContain('hidden');
@@ -435,8 +435,12 @@ describe('lot 6 — la scène se touche sans s’entourer', () => {
     // La tuile qui l'a ouvert est devenue inerte : le focus entre dans l'outil.
     expect(document.activeElement).toBe(close);
 
+    // Son (X) range les contrôles ; le (x) du rail rend la gestion de la scène.
     click(close);
     await flush(() => el.querySelector('[data-story-frame-panel]') === null);
+    expect(chrome()).toEqual(['hidden', 'hidden', 'shown']);
+    click(el.querySelector('[data-story-option="background:exit"]'));
+    await flush(() => el.querySelector('[data-story-option="background:exit"]') === null);
     expect(chrome()).toEqual(['shown', 'shown', 'shown']);
     expect(row().split(' ')).not.toContain('hidden');
   });

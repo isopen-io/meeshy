@@ -128,27 +128,27 @@ public struct TrackBarView<Content: View>: View {
     }
 
     private var label: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+            HStack(spacing: MeeshySpacing.xs) {
                 if isLocked {
                     Image(systemName: "lock.fill")
-                        .font(.system(size: 10))
+                        .font(.system(size: MeeshyIconSize.xxs))
                         .foregroundStyle(MeeshyColors.warning)
                 } else if let iconName {
                     // Tinted chip wrapping the type icon — picks up the lane
                     // tint so audio (warning), text (indigo400), video/image
                     // (indigo500) each get their own colour cue at a glance.
                     ZStack {
-                        RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous)
                             .fill(Color(hex: tintHex).opacity(isDark ? 0.30 : 0.18))
                             .frame(width: 18, height: 18)
                         Image(systemName: iconName)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.system(size: MeeshyIconSize.xxs, weight: .semibold))
                             .foregroundStyle(Color(hex: tintHex))
                     }
                 }
                 Text(durationLabel)
-                    .font(.system(size: 10, weight: .semibold))
+                    .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
                     .monospacedDigit()
                     .foregroundStyle(isDark ? MeeshyColors.indigo100 : MeeshyColors.indigo700)
                     .lineLimit(1)
@@ -156,7 +156,7 @@ public struct TrackBarView<Content: View>: View {
                 Spacer(minLength: 0)
             }
             Text(typeLabel)
-                .font(.system(size: 11, weight: isSelected ? .bold : .semibold))
+                .font(.system(size: MeeshyFont.footnoteSize, weight: isSelected ? .bold : .semibold))
                 .foregroundStyle(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo900)
                 .lineLimit(1)
                 .allowsTightening(true)

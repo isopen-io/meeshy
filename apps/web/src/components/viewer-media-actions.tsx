@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useRef, useState } from 'react';
 
 import { currentCredential } from '@/lib/api/client';
 import { attachmentSrc } from '@/lib/api/media-url';
@@ -10,15 +9,19 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { currentGallerySaver } from '@/lib/gallery/gallery-saver';
 import { saveToGallery } from '@/lib/gallery/save-to-gallery';
 import { browserFileDeliveryHost } from '@/lib/media/file-delivery-host';
+import { openSendSheet } from '@/lib/send/send-sheet-store';
 import { offerStudioSeed } from '@/lib/stories/studio-seed';
 import { performAttachmentReaction } from '@/lib/view/attachment-reaction';
 import { QUICK_REACTIONS } from '@/lib/view/message-actions';
-import type { MediaViewerPage } from '@/lib/view/media-viewer-actions';
+import type { MediaViewerPage } from '@/lib/view/viewer-page-offers';
 import { href, navigate } from '@/routes/route-table';
 
 import { Glyph, GlyphSvg } from './glyph';
+import { FEED_GLYPHS } from './glyphs-feed';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
-import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
+import { GLYPH_SIZE } from './ui-chrome';
+import { ViewerActionRail, type ViewerAction } from './viewer-chrome';
+import { ViewerMenu, ViewerReactionTray } from './viewer-chrome-menu';
 
 /**
  * LES ACTIONS DE LA VISIONNEUSE (#6303) — chunk À LA DEMANDE, chargé par
@@ -27,16 +30,21 @@ import { THREAD_STATES_GLYPHS } from './glyphs-thread-states';
  * médias sur une pièce protégée n'en paie rien.
  *
  * Disposition d'iOS (`ConversationMediaGalleryView+Actions.swift`,
- * `+Menu.swift`) : « Enregistrer » dans le couloir HAUT, en face de la croix ;
- * Réagir · Répondre · Créer avec ce média en COLONNE à droite du cadre, 40 de
- * verre dans 44 de cible. « Réagir » est une ACTION, pas un ornement : il
- * ouvre la traînée d'émojis, un choix la referme.
+ * `+Menu.swift`) ET du chrome commun des plein écrans (#8879,
+ * `viewer-chrome.tsx`) : « Enregistrer » DANS le menu « … » de la barre haute
+ * (iOS #6145) ; Réagir · Créer avec ce média en rail vertical à droite de la
+ * légende, 40 de verre dans 44 de cible. Partager (#8884) s'y pose entre les
+ * deux, au MÊME endroit que dans le rail d'une story : il ouvre la feuille
+ * d'envoi commune (`openSendSheet`), que l'hôte a déjà remplie (`page.share`). « Répondre… » n'est plus un bouton du
+ * rail : c'est la capsule de la barre basse, que la visionneuse pose. « Réagir »
+ * est une ACTION, pas un ornement : il ouvre la traînée d'émojis, un choix la
+ * referme.
  *
- * Chaque geste dit son issue dans une région vivante (`role="status"`) :
- * enregistrer, réagir ou composer peut échouer hors ligne, et un échec muet
- * ressemble à un bouton inerte.
+ * Chaque geste dit son issue dans la région vivante UNIQUE de la visionneuse
+ * (`announce`) : enregistrer, réagir ou composer peut échouer hors ligne, et un
+ * échec muet ressemble à un bouton inerte.
  */
-type NoticeKey = Extract<
+export type NoticeKey = Extract<
   InterfaceCatalogKey,
   | 'media.viewer.saved'
   | 'media.viewer.save_failed'
@@ -80,114 +88,47 @@ async function savePiece(attachment: Attachment): Promise<NoticeKey> {
   }
 }
 
-function useNotice(): readonly [NoticeKey | null, (key: NoticeKey) => void] {
-  const [notice, setNotice] = useState<NoticeKey | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (timer.current !== null) clearTimeout(timer.current);
-  }, []);
-  const show = (key: NoticeKey): void => {
-    setNotice(key);
-    if (timer.current !== null) clearTimeout(timer.current);
-    timer.current = setTimeout(() => setNotice(null), 3_000);
+function SaveMenu({ page, language, announce }: { readonly page: MediaViewerPage; readonly language: InterfaceLanguage; readonly announce: (key: NoticeKey) => void }) {
+  const saving = useRef(false);
+  const save = (): void => {
+    if (saving.current) return;
+    saving.current = true;
+    void savePiece(page.attachment).then((key) => {
+      saving.current = false;
+      announce(key);
+    });
   };
-  return [notice, show];
-}
-
-function Notice({ notice, language }: { readonly notice: NoticeKey | null; readonly language: InterfaceLanguage }) {
   return (
-    <p
-      role="status"
-      aria-live="polite"
-      data-viewer-notice={notice ?? ''}
-      className={notice === null ? 'sr-only' : 'rounded-full px-3 py-1 text-mini text-white'}
-      style={notice === null ? undefined : { backgroundColor: 'rgb(0 0 0 / 55%)' }}
-    >
-      {notice === null ? '' : translate(language, notice)}
-    </p>
+    <ViewerMenu
+      label={translate(language, 'feed.post.more_options')}
+      items={[
+        {
+          key: 'save',
+          label: translate(language, 'media.viewer.save'),
+          glyph: <Glyph name="downloadSimple" size={GLYPH_SIZE.md} />,
+          onSelect: page.offers.save ? save : undefined,
+        },
+      ]}
+    />
   );
 }
 
-function StageButton({
-  label,
-  onPress,
-  busy = false,
-  pressed,
-  children,
-  action,
-  buttonRef,
-}: {
-  readonly buttonRef?: { current: HTMLButtonElement | null };
-  readonly label: string;
-  readonly onPress: () => void;
-  readonly busy?: boolean;
-  readonly pressed?: boolean;
-  readonly children: ReactNode;
-  readonly action: string;
-}) {
-  return (
-    <button
-      ref={buttonRef}
-      type="button"
-      aria-label={label}
-      data-viewer-action={action}
-      {...(pressed === undefined ? {} : { 'aria-pressed': pressed })}
-      {...(busy ? { 'aria-busy': true } : {})}
-      disabled={busy}
-      onClick={(event) => {
-        event.stopPropagation();
-        onPress();
-      }}
-      className="grid size-11 place-items-center text-white"
-    >
-      <span className="media-viewer-scene-control grid place-items-center rounded-full" style={{ opacity: busy ? 0.5 : 1 }}>
-        {children}
-      </span>
-    </button>
-  );
-}
-
-function SaveAction({ page, language }: { readonly page: MediaViewerPage; readonly language: InterfaceLanguage }) {
-  const [busy, setBusy] = useState(false);
-  const [notice, show] = useNotice();
-  return (
-    <div className="flex items-center gap-2">
-      <Notice notice={notice} language={language} />
-      <button
-        type="button"
-        aria-label={translate(language, 'media.viewer.save')}
-        data-viewer-action="save"
-        disabled={busy}
-        {...(busy ? { 'aria-busy': true } : {})}
-        onClick={() => {
-          setBusy(true);
-          void savePiece(page.attachment).then((key) => {
-            setBusy(false);
-            show(key);
-          });
-        }}
-        className="media-viewer-close tap-target-34 grid place-items-center rounded-full text-white"
-        style={{ opacity: busy ? 0.5 : 1 }}
-      >
-        <Glyph name="downloadSimple" size={16} />
-      </button>
-    </div>
-  );
-}
-
-function ActionColumn({
+function ActionRail({
   page,
   language,
   onClose,
+  announce,
+  hidden,
 }: {
   readonly page: MediaViewerPage;
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
+  readonly announce: (key: NoticeKey) => void;
+  readonly hidden: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [mine, setMine] = useState<readonly string[]>(page.attachment.currentUserReactions ?? []);
   const [composing, setComposing] = useState(false);
-  const [notice, show] = useNotice();
   const reactButton = useRef<HTMLButtonElement | null>(null);
   const { offers } = page;
 
@@ -208,7 +149,7 @@ function ActionColumn({
     }).then((outcome) => {
       if (outcome === 'ok') return;
       setMine(before);
-      show(outcome === 'offline' ? 'media.viewer.offline' : outcome === 'limit' ? 'media.viewer.react_limit' : 'media.viewer.react_failed');
+      announce(outcome === 'offline' ? 'media.viewer.offline' : outcome === 'limit' ? 'media.viewer.react_limit' : 'media.viewer.react_failed');
     });
   };
 
@@ -218,7 +159,7 @@ function ActionColumn({
       .then((fetched) => {
         setComposing(false);
         if (fetched.status === 'failed') {
-          show(fetched.notice === 'media.viewer.offline' ? fetched.notice : 'media.viewer.compose_failed');
+          announce(fetched.notice === 'media.viewer.offline' ? fetched.notice : 'media.viewer.compose_failed');
           return;
         }
         offerStudioSeed(new File([fetched.blob], fetched.fileName, { type: page.attachment.mimeType }));
@@ -227,54 +168,57 @@ function ActionColumn({
       })
       .catch(() => {
         setComposing(false);
-        show('media.viewer.offline');
+        announce('media.viewer.offline');
       });
   };
 
+  const { share } = page;
+  const actions: readonly ViewerAction[] = [
+    {
+      action: 'react',
+      label: translate(language, 'media.viewer.react'),
+      glyph: <Glyph name="smiley" size={GLYPH_SIZE.lg} />,
+      pressed: open,
+      onPress: offers.react ? () => setOpen((o) => !o) : undefined,
+      buttonRef: reactButton,
+    },
+    {
+      action: 'share',
+      label: translate(language, 'story.action.share'),
+      glyph: <GlyphSvg glyph={FEED_GLYPHS.shareNetwork} size={GLYPH_SIZE.lg} />,
+      onPress: offers.share && share !== undefined ? () => openSendSheet(share) : undefined,
+    },
+    {
+      action: 'compose',
+      label: translate(language, 'media.viewer.compose'),
+      glyph: <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={GLYPH_SIZE.lg} />,
+      busy: composing,
+      onPress: offers.compose ? compose : undefined,
+    },
+  ];
+
   return (
-    <div
-      data-viewer-actions
-      className="flex flex-col items-end gap-2"
-      onClick={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
-      onPointerUp={(event) => event.stopPropagation()}
-    >
-      {open ? (
-        <div role="group" aria-label={translate(language, 'media.viewer.react')} data-viewer-reactions className="flex max-w-[85vw] gap-1 overflow-x-auto">
-          {QUICK_REACTIONS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              aria-label={translate(language, 'media.viewer.react_with', { emoji })}
-              aria-pressed={mine.includes(emoji)}
-              onClick={(event) => {
-                event.stopPropagation();
-                react(emoji);
-              }}
-              className="grid size-11 place-items-center text-2xl"
-            >
-              <span aria-hidden="true">{emoji}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-      {offers.react ? (
-        <StageButton buttonRef={reactButton} action="react" label={translate(language, 'media.viewer.react')} pressed={open} onPress={() => setOpen((o) => !o)}>
-          <Glyph name="smiley" size={18} />
-        </StageButton>
-      ) : null}
-      {offers.reply && page.onReply !== undefined ? (
-        <StageButton action="reply" label={translate(language, 'media.viewer.reply')} onPress={page.onReply}>
-          <GlyphSvg glyph={THREAD_STATES_GLYPHS.arrowBendUpLeft} size={18} />
-        </StageButton>
-      ) : null}
-      {offers.compose ? (
-        <StageButton action="compose" label={translate(language, 'media.viewer.compose')} busy={composing} onPress={compose}>
-          <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={18} />
-        </StageButton>
-      ) : null}
-      <Notice notice={notice} language={language} />
-    </div>
+    <ViewerActionRail
+      label={translate(language, 'media.viewer.react')}
+      actions={actions}
+      hidden={hidden}
+      {...(open
+        ? {
+            anchored: {
+              action: 'react',
+              node: (
+                <ViewerReactionTray
+                  label={translate(language, 'media.viewer.react')}
+                  reactions={QUICK_REACTIONS}
+                  mine={mine}
+                  labelOf={(emoji) => translate(language, 'media.viewer.react_with', { emoji })}
+                  onPick={react}
+                />
+              ),
+            },
+          }
+        : {})}
+    />
   );
 }
 
@@ -283,11 +227,20 @@ export default function ViewerMediaActions({
   page,
   language,
   onClose,
+  announce,
+  hidden = false,
 }: {
-  readonly slot: 'save' | 'column';
+  readonly slot: 'menu' | 'rail';
   readonly page: MediaViewerPage;
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
+  /** La région vivante UNIQUE de la visionneuse — chaque issue s'y dit. */
+  readonly announce: (key: NoticeKey) => void;
+  readonly hidden?: boolean;
 }) {
-  return slot === 'save' ? <SaveAction page={page} language={language} /> : <ActionColumn page={page} language={language} onClose={onClose} />;
+  return slot === 'menu' ? (
+    <SaveMenu page={page} language={language} announce={announce} />
+  ) : (
+    <ActionRail page={page} language={language} onClose={onClose} announce={announce} hidden={hidden} />
+  );
 }

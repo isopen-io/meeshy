@@ -84,9 +84,10 @@ const enStudioChrome = {
   'story.studio.camera.shutter.photo': 'Take a photo',
   'story.studio.camera.shutter.start': 'Start recording',
   'story.studio.camera.shutter.stop': 'Stop recording',
-  'story.studio.camera.hint.photo': 'Tap the screen: photo · hold the shutter: video',
+  'story.studio.camera.hint.photo': 'Tap the screen: photo · hold it: video',
   'story.studio.camera.hint.video': 'Tap to film · tap again to place',
-  'story.studio.camera.unavailable': 'The camera isn’t available. Allow it in your browser settings.',
+  'story.studio.camera.unavailable': 'The camera isn’t available. Allow it in settings.',
+  'story.studio.camera.openSettings': 'Settings',
   'story.studio.camera.recording': 'Recording',
   'story.studio.scene.empty.title': 'This is your scene',
   'story.studio.scene.empty.invite': 'Drop in text, a drawing, a photo or a video — and make it yours.',
@@ -116,6 +117,9 @@ const enStudioChrome = {
   'story.studio.background.menu.retake': 'Retake a photo',
   'story.studio.background.menu.forward': 'Bring to foreground',
   'story.studio.background.menu.remove': 'Remove background',
+  'story.studio.background.tools': 'Background tools',
+  'story.studio.background.tools.describe': 'Describe',
+  'story.studio.background.tools.leave': 'Back to the scene',
   'story.studio.reelSwitch.announcement': 'Switched to a reel',
 } satisfies StudioChromeCatalogSlice;
 

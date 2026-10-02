@@ -39,7 +39,7 @@ import { protectionOf } from '@/lib/reading-mode/protection';
  * serveur est dite ICI, avant l'aller-retour, pour qu'un refus ne se découvre
  * pas après coup.
  */
-export type MessageActionId = 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'export' | 'exportQuick' | 'more';
+export type MessageActionId = 'select' | 'translate' | 'copy' | 'forward' | 'reply' | 'export' | 'exportQuick' | 'exportDiscussion' | 'more';
 
 /** Les six glyphes du menu — miroir `MessageActionsMenu.swift:96-111`. */
 export type MessageMenuGlyph = 'checkCircle' | 'globe' | 'copy' | 'arrowBendUpRight' | 'magicWand' | 'imageSquare' | 'lightning' | 'dotsThree';
@@ -59,6 +59,7 @@ const MENU_LABEL_KEYS = {
   reply: 'message.menu.reply',
   export: 'message.menu.export',
   exportQuick: 'message.menu.exportQuick',
+  exportDiscussion: 'message.menu.exportDiscussion',
   more: 'message.menu.more',
 } as const satisfies Readonly<Record<MessageActionId, InterfaceCatalogKey>>;
 
@@ -188,7 +189,7 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
      place qu'iOS donnait à « Composer » ; « Composer » ET « Imager » vivent
      ensemble derrière le (>) de « Plus… » (`message-detail-sheet.tsx`). Un
      message fait d'un seul média s'image aussi. */
-  if ((ctx.hasText || ctx.hasImageableMedia === true) && !ctx.isProtected) {
+  if (imageableOf(ctx)) {
     items.push({ id: 'export', labelKey: MENU_LABEL_KEYS.export, glyph: 'imageSquare' });
     if (ctx.hasDefaultExportFormat === true) {
       items.push({ id: 'exportQuick', labelKey: MENU_LABEL_KEYS.exportQuick, glyph: 'lightning' });
@@ -196,6 +197,21 @@ export function messageMenuItems(ctx: MessageMenuContext): readonly MessageMenuI
   }
   items.push({ id: 'more', labelKey: MENU_LABEL_KEYS.more, glyph: 'dotsThree' });
   return items;
+}
+
+const imageableOf = (ctx: MessageMenuContext): boolean => (ctx.hasText || ctx.hasImageableMedia === true) && !ctx.isProtected;
+
+/**
+ * **LE SOUS-MENU DE « TRANSFÉRER »** (#9039) — « Transférer » y garde son
+ * effet (armer la sélection, D-113) et propose « Imager la discussion » :
+ * l'image des messages qui mènent à celui-ci (`discussion-card-subject.ts`),
+ * sous la garde d'« Imager ». Une seule entrée ⇒ le menu n'ouvre pas de
+ * sous-menu (loi 4 : un niveau qui ne change rien n'existe pas).
+ */
+export function forwardMenuItems(ctx: MessageMenuContext): readonly MessageMenuItem[] {
+  const forward: MessageMenuItem = { id: 'forward', labelKey: MENU_LABEL_KEYS.forward, glyph: 'arrowBendUpRight' };
+  if (!imageableOf(ctx)) return [forward];
+  return [forward, { id: 'exportDiscussion', labelKey: MENU_LABEL_KEYS.exportDiscussion, glyph: 'imageSquare' }];
 }
 
 /**

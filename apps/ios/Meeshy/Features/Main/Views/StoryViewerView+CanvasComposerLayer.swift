@@ -27,13 +27,13 @@ extension StoryCardView {
     }
 
     /// **Le sol du texte de la story** : le haut de la plaque du composeur
-    /// (#8431). Sans composeur (story de l'auteur), la place historique.
+    /// (#8431). Sans composeur (story de l'auteur) ou chrome caché, le ras du
+    /// bas (#9072).
     func captionBottomInset(geometry: GeometryProxy) -> CGFloat { // internal for cross-file extension access
         StoryCaptionPlacement.bottomInset(
             composerBlockHeight: composerBlockHeight,
             composerBottomPadding: composerBottomPadding(geometry),
-            isComposerShown: chromeVisible,
-            fallback: topInset + 130)
+            isComposerShown: chromeVisible)
     }
 
     @ViewBuilder
@@ -140,7 +140,7 @@ extension StoryCardView {
                 // la carte reader (`readerCanvasFraming`) et le
                 // `.padding(.trailing, 16)` du sidebar — même rythme 16pt
                 // pour les trois colonnes de chrome.
-                .padding(.horizontal, 16)
+                .padding(.horizontal, MeeshySpacing.lg)
                 .simultaneousGesture(composerDragGesture)
                 .frame(height: isFolded ? 0 : nil, alignment: .top)
                 .opacity(isFolded ? 0 : 1)
@@ -217,9 +217,9 @@ extension StoryCardView {
     private var composerUnfoldButton: some View {
         Button(action: unfoldComposer) {
             Image(systemName: StoryComposerFold.unfoldSymbol)
-                .font(MeeshyFont.relative(17, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                 .foregroundColor(.white)
-                .frame(width: 44, height: 44)
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .adaptiveLiquidGlass(in: Circle(), interactive: true)
                 .contentShape(Circle())
         }

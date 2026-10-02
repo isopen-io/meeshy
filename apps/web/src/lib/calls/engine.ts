@@ -313,6 +313,12 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     });
   };
 
+  const dropPeer = (userId: string): void => {
+    session.links.get(userId)?.close();
+    session.links.delete(userId);
+    update((current) => withoutMember(current, userId));
+  };
+
   const onLinkState = (userId: string, state: LinkState): void => {
     const call = read();
     if (call === null || call.phase.kind === 'ended') return;
@@ -322,9 +328,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
         hangupWith('connectionLost');
         return;
       }
-      session.links.get(userId)?.close();
-      session.links.delete(userId);
-      update((current) => withoutMember(current, userId));
+      dropPeer(userId);
       return;
     }
     const before = call.members[userId]?.link;
@@ -415,7 +419,15 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     const callId = read()?.callId ?? null;
     if (callId === null) return null;
     const shown = (): void => void (session.telemetry = markCaptions(session.telemetry));
-    const bye = (): void => (read()?.callId === callId ? finish('remote') : undefined);
+    const bye = (userId: string): void => {
+      const call = read();
+      if (call === null || call.callId !== callId) return;
+      if (!call.isGroup) {
+        finish('remote');
+        return;
+      }
+      dropPeer(userId);
+    };
     session.captions ??= deps.createCaptions({ callId, read, update, emit, viewerId: deps.viewerId, now: deps.now, repeat: deps.repeat, stopRepeat: deps.stopRepeat, shown, bye });
     return session.captions;
   };
@@ -664,9 +676,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (left === null || call === null || call.callId !== left.callId) return;
     const userId = left.userId ?? (left.participantId === null ? null : (session.participantIds.get(left.participantId) ?? null));
     if (userId === null || userId === deps.viewerId()) return;
-    session.links.get(userId)?.close();
-    session.links.delete(userId);
-    update((current) => withoutMember(current, userId));
+    dropPeer(userId);
     const after = read();
     if (after !== null && !after.isGroup && after.phase.kind !== 'ended' && after.phase.kind !== 'outgoing') finish('remote');
   };

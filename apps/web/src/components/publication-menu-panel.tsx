@@ -5,6 +5,7 @@ import type { PostToggleKind } from '@/lib/feed/interactions';
 import type { PostMenuEntry } from '@/lib/feed/publication-menu';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { readingModeScopeOf } from '@/lib/reading-mode/scope';
 import { href, navigate } from '@/routes/route-table';
 
 import type { PostMenuHost } from './feed-post-menu';
@@ -184,6 +185,9 @@ export function PostMenuPanel(props: PostMenuPanelProps) {
             original={originalText ?? ''}
             originalLanguage={originalLanguage ?? ''}
             onSave={menu.onEdit}
+            {...(menu.editDrafts !== undefined && menu.viewerId !== null
+              ? { drafts: { store: menu.editDrafts, scope: readingModeScopeOf({ id: menu.viewerId }) } }
+              : {})}
             /* LE FOCUS REVIENT AU « ⋯ » — la feuille a démonté le bouton qui
                vient de l'ouvrir (`closeAndFocusButton`, déjà appelé à
                l'ouverture de la feuille, le referme une seconde fois sans

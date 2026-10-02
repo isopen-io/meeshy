@@ -250,7 +250,7 @@ extension ConversationView {
         .fileImporter(isPresented: $composerState.showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
         }
-        .fullScreenCover(isPresented: $composerState.showCamera) {
+        .conversationCover(isPresented: $composerState.showCamera) {
             CameraView { result in
                 switch result {
                 // **Le CINQUIÈME consommateur** de `CameraResult.photo`, élargi
@@ -322,6 +322,15 @@ extension ConversationView {
             .storyPasteProvided()
             .storyStickerLibraryProvided()
             .stickerNearbyPlacesProvided()
+            // Mee et Meo (#9053) : seule la conversation sait envoyer un film ;
+            // sans cet injecteur, la feuille ne montre pas leurs onglets.
+            // Les gabarits partent contournés de blanc, comme Mee (#9060) :
+            // la feuille les montre comme ils partiront.
+            .stickerSheetDieCut()
+            .meeStickersProvided { mee in
+                composerState.showStickerPicker = false
+                sendMeeSticker(mee)
+            }
             // « Ma position… » ouvre la carte : adresse, lieu, monument
             // nommé (#7922). Sans ce fournisseur, la puce n'est pas rendue.
             .storyLocationPickerProvided(accentColor: accentColor)
@@ -347,7 +356,7 @@ extension ConversationView {
         // reads to the user as the composer "crashing" on tap: a full-screen
         // cover appears with no way to dismiss it from inside. The two must
         // share one source of truth so the cover can never present empty.
-        .fullScreenCover(isPresented: Binding(
+        .conversationCover(isPresented: Binding(
             get: { scrollState.editingPendingAttachmentId != nil },
             set: { if !$0 { closePendingImageRetouche() } }
         )) {
@@ -393,7 +402,7 @@ extension ConversationView {
             }
         }
         // D. Tap pending video → VideoPreviewView
-        .fullScreenCover(isPresented: Binding(
+        .conversationCover(isPresented: Binding(
             get: { scrollState.videoToEdit != nil },
             set: { if !$0 { scrollState.videoToEdit = nil } }
         )) {
@@ -418,7 +427,7 @@ extension ConversationView {
         // D2. "Éditer" from the recent-media strip → the editor opens BEFORE
         // staging; the edited output goes through the same preparation pipeline
         // as a camera capture (the pre-edit original is never staged).
-        .fullScreenCover(isPresented: Binding(
+        .conversationCover(isPresented: Binding(
             get: { scrollState.recentImageToEdit != nil },
             set: { if !$0 { scrollState.recentImageToEdit = nil } }
         )) {
@@ -431,7 +440,7 @@ extension ConversationView {
                 })
             }
         }
-        .fullScreenCover(isPresented: Binding(
+        .conversationCover(isPresented: Binding(
             get: { scrollState.recentVideoToEdit != nil },
             set: { if !$0 { scrollState.recentVideoToEdit = nil } }
         )) {
@@ -449,7 +458,7 @@ extension ConversationView {
             }
         }
         // E. Audio → MeeshyAudioEditorView
-        .fullScreenCover(item: Binding(
+        .conversationCover(item: Binding(
             get: { scrollState.audioToEdit },
             set: { scrollState.audioToEdit = $0 }
         )) { target in

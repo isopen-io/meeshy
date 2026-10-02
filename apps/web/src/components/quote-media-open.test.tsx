@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Attachment, Message } from '@/lib/api/types';
+import { closeSendSheet, sendSheetStore } from '@/lib/send/send-sheet-store';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 
 import { Quote } from './message-blocks';
@@ -91,6 +92,7 @@ describe('Quote — l’aperçu média d’une citation s’ouvre, le reste saut
 
   afterEach(() => {
     act(() => {
+      closeSendSheet();
       root.unmount();
     });
     container.remove();
@@ -171,9 +173,28 @@ describe('Quote — l’aperçu média d’une citation s’ouvre, le reste saut
     await act(async () => {
       container.querySelector<HTMLButtonElement>('button[data-quote-open="video"]')?.click();
     });
-    await waitFor(() => document.querySelector('[role="dialog"] [data-viewer-action="reply"]') !== null);
+    await waitFor(() => document.querySelector('[role="dialog"] [data-viewer-reply]') !== null);
     expect(document.querySelector('[role="dialog"] video')?.getAttribute('src')).toContain('sortie.mp4');
-    expect(document.querySelector('[role="dialog"] [data-viewer-action="reply"]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"] [data-viewer-reply]')).not.toBeNull();
+  });
+
+  test('hors du fil, la pièce citée se partage par ses identifiants, « mine » faux faute de lecteur connu (#8884)', async () => {
+    const host = mount(quoting([VIDEO_SANS_VIGNETTE]));
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[data-quote-open="video"]')?.click();
+    });
+    await waitFor(() => document.querySelector('[role="dialog"] [data-viewer-action="share"]') !== null);
+    act(() => {
+      document.querySelector<HTMLButtonElement>('[role="dialog"] [data-viewer-action="share"]')?.click();
+    });
+    expect(sendSheetStore.getState().request?.payload).toMatchObject({
+      kind: 'attachment',
+      conversationId: 'c-a',
+      messageId: 'm-quoted',
+      attachmentId: 'a-video',
+      mime: 'video/mp4',
+      mine: false,
+    });
   });
 
   test('toucher le RESTE de la citation saute au message, sans rien ouvrir', async () => {

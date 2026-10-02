@@ -14,7 +14,7 @@ struct ThemedConversationRow: View {
     var presenceState: PresenceState = .offline
     /// Le pair a l'écran de CETTE conversation ouvert (#8892) — valeur
     /// pré-calculée par le parent, comme `presenceState`.
-    var isPeerHere: Bool = false
+    var isPeerHere: ConversationHere = .absent
     var onViewStory: (() -> Void)? = nil
     var onViewProfile: (() -> Void)? = nil
     var onViewConversationInfo: (() -> Void)? = nil
@@ -137,7 +137,7 @@ struct ThemedConversationRow: View {
 
                 HStack(alignment: .top) {
                     // Name with type indicator
-                    HStack(spacing: 6) {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
                         Text(conversation.displayName)
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: conversation.userState.unreadCount > 0 ? .bold : .semibold))
                             .foregroundColor(textPrimary)
@@ -168,8 +168,8 @@ struct ThemedConversationRow: View {
                     if conversation.userState.hasPendingSync {
                         Image(systemName: "arrow.triangle.2.circlepath")
                             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                            .foregroundColor(accent.opacity(0.7))
-                            .padding(.top, 2)
+                            .foregroundColor(accent.opacity(MeeshyOpacity.heavy))
+                            .padding(.top, MeeshySpacing.xxs)
                             .accessibilityHidden(true)
                     }
 
@@ -184,7 +184,7 @@ struct ThemedConversationRow: View {
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
                         .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent))
                         .layoutPriority(1)
-                        .padding(.top, 2)
+                        .padding(.top, MeeshySpacing.xxs)
                 }
 
                 // Last message with attachment indicators
@@ -208,7 +208,7 @@ struct ThemedConversationRow: View {
                     accent.opacity(isDark ? 0.28 : 0.18)
                 }
                 if isDragging {
-                    accent.opacity(0.05)
+                    accent.opacity(MeeshyOpacity.faint)
                 }
             }
         )
@@ -218,7 +218,7 @@ struct ThemedConversationRow: View {
                 RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                     .fill(accent)
                     .frame(width: 3)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
                     .transition(.asymmetric(
                         insertion: .move(edge: .leading).combined(with: .opacity),
                         removal: .opacity
@@ -288,7 +288,7 @@ struct ThemedConversationRow: View {
     // MARK: - Tags Row
     private var tagsRow: some View {
         let tagInfo = visibleTagsInfo
-        return HStack(spacing: 6) {
+        return HStack(spacing: MeeshySpacing.xsPlus) {
             // Show dynamically calculated visible tags
             ForEach(tagInfo.tags) { tag in
                 TagChip(tag: tag)
@@ -299,11 +299,11 @@ struct ThemedConversationRow: View {
                 Text("+\(tagInfo.remaining)")
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
                     .foregroundColor(textMuted)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, MeeshySpacing.xsPlus)
+                    .padding(.vertical, MeeshySpacing.xxs)
                     .background(
                         Capsule()
-                            .fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.08))
+                            .fill(isDark ? Color.white.opacity(MeeshyOpacity.subtle) : Color.black.opacity(MeeshyOpacity.subtle))
                     )
             }
         }
@@ -328,7 +328,7 @@ struct ThemedConversationRow: View {
 
     // MARK: - Type Badge
     private var typeBadge: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             Image(systemName: typeBadgeIcon)
                 .font(MeeshyFont.relative(MeeshyFont.captionSize))
                 .imageScale(.small)
@@ -338,8 +338,8 @@ struct ThemedConversationRow: View {
             }
         }
         .foregroundColor(accent)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 2)
+        .padding(.horizontal, MeeshySpacing.xsPlus)
+        .padding(.vertical, MeeshySpacing.xxs)
         .background(
             Capsule()
                 .fill(accent.opacity(isDark ? 0.2 : 0.15))
@@ -363,13 +363,13 @@ struct ThemedConversationRow: View {
         return Text(NotificationBadge.displayed(conversation.userState.unreadCount))
             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: NotificationBadge.fontWeight))
             .foregroundColor(.white)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 4)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
+            .padding(.vertical, MeeshySpacing.xs)
             .frame(minWidth: 24, minHeight: 24)
             .background(
                 Capsule()
                     .fill(badgeColor)
-                    .shadow(color: badgeColor.opacity(0.25), radius: 3)
+                    .shadow(color: badgeColor.opacity(MeeshyOpacity.medium), radius: 3)
             )
     }
 
@@ -427,7 +427,7 @@ struct ThemedConversationRow: View {
         @State private var isAnimating = false
 
         var body: some View {
-            HStack(spacing: 3) {
+            HStack(spacing: MeeshySpacing.xxs) {
                 ForEach(0..<3, id: \.self) { i in
                     Circle()
                         .fill(Color(hex: accentColor))
@@ -454,7 +454,7 @@ struct ThemedConversationRow: View {
 
     @ViewBuilder
     private var typingIndicatorView: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             Text(typingUsername.map { name in
                 String(format: String(localized: "typing.named", bundle: .main), name)
             } ?? String(localized: "typing.anonymous", bundle: .main))
@@ -469,7 +469,7 @@ struct ThemedConversationRow: View {
 
     @ViewBuilder
     private func draftPreviewView(_ draft: DraftSummary) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Text(draft.previewText.isEmpty
                 ? String(localized: "draft.label", bundle: .main)
                 : String(localized: "draft.label_prefix", bundle: .main))
@@ -558,7 +558,7 @@ enum ConversationAvatarMenu {
 private struct ConversationAvatarView: View {
     let conversation: Conversation
     let presenceState: PresenceState?
-    let isPeerHere: Bool
+    let isPeerHere: ConversationHere
     let storyRingState: StoryRingState
     let moodStatus: StatusEntry?
     var onViewStory: (() -> Void)? = nil
@@ -611,8 +611,8 @@ private struct ConversationAvatarView: View {
                 avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
                 storyState: storyRingState,
                 moodEmoji: moodStatus?.moodEmoji,
-                presenceState: (isDirect && moodStatus == nil) ? presenceState : nil,
-                isHere: isDirect && isPeerHere,
+                presenceState: isDirect ? presenceState : nil,
+                isHere: isDirect ? isPeerHere : .absent,
                 // DM : tap → story (si non lue) sinon profil, via handleTap() de MeeshyAvatar.
                 //   Le handler profil passe par `onTap` (et NON `onViewProfile`) pour
                 //   préserver le tap-vers-profil sans déclencher l'auto-injection d'une
@@ -641,11 +641,11 @@ private struct ConversationAvatarView: View {
                 Text(text)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, MeeshySpacing.sm)
+                    .padding(.vertical, MeeshySpacing.xs)
                     .background(
                         Capsule()
-                            .fill(Color.black.opacity(0.75))
+                            .fill(Color.black.opacity(MeeshyOpacity.heavy))
                     )
                     .offset(x: 0, y: -34)
                     .transition(.scale.combined(with: .opacity))

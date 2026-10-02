@@ -112,6 +112,10 @@ export class UserManagementService {
     if (filters.search) {
       where.OR = [
         { username: { contains: filters.search, mode: 'insensitive' } },
+        // #8876 — le NOM AFFICHÉ est ce que la console montre d'un compte : chercher
+        // « Awa Diop » doit trouver Awa, même quand ni son prénom ni son nom de
+        // famille ne contiennent ces lettres.
+        { displayName: { contains: filters.search, mode: 'insensitive' } },
         { firstName: { contains: filters.search, mode: 'insensitive' } },
         { lastName: { contains: filters.search, mode: 'insensitive' } },
         { email: { contains: filters.search, mode: 'insensitive' } }
@@ -119,7 +123,7 @@ export class UserManagementService {
     }
 
     if (filters.role) {
-      where.role = filters.role;
+      where.role = typeof filters.role === 'string' ? filters.role : { in: [...filters.role] };
     }
 
     if (filters.isActive !== undefined) {

@@ -4,10 +4,9 @@ import { contactDraftOf, contactEditOf, sectionIsDirty, type ContactDraft } from
 import type { AdminDeps } from '@/lib/api/admin';
 import { updateAdminUser } from '@/lib/api/admin-user-actions';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
-import { requestAdminUserVerification, setAdminUserVerification, type AdminContactChannel } from '@/lib/api/admin-user-verifications';
+import { requestAdminUserVerification, type AdminContactChannel } from '@/lib/api/admin-user-verifications';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { BadgeVerifie, INK2, MemberSection, SectionButton, Texte, useFieldFocus, useMemberWrite } from './admin-member-parts';
 
@@ -17,10 +16,13 @@ import { BadgeVerifie, INK2, MemberSection, SectionButton, Texte, useFieldFocus,
  *
  * Deux sortes de gestes vivent ici, et ne se confondent pas :
  * - la VALEUR (changer l'adresse, le numéro) s'enregistre avec la section ;
- * - la PREUVE (renvoyer la vérification, marquer vérifié ou non) est un geste
- *   IMMÉDIAT sur la valeur servie — renvoyer une vérification vers une adresse
- *   encore en brouillon l'enverrait à l'ancienne. Tant que la section a des
- *   modifications non enregistrées, ces gestes attendent.
+ * - le RENVOI de la vérification est un geste IMMÉDIAT sur la valeur servie —
+ *   renvoyer une vérification vers une adresse encore en brouillon l'enverrait à
+ *   l'ancienne. Tant que la section a des modifications non enregistrées, il attend.
+ *
+ * POSER ou RETIRER la preuve n'est plus ici (#8004) : c'est un geste sensible, qui
+ * vit dans la section Sécurité, derrière sa confirmation et son motif. Deux portes
+ * pour un même geste, l'une confirmée et l'autre pas, n'auraient pas la même loi.
  */
 export function AdminMemberContactSection({
   membre,
@@ -29,7 +31,7 @@ export function AdminMemberContactSection({
   deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
   readonly deps?: AdminDeps;
 }) {
@@ -120,18 +122,17 @@ function ContactRow({
 }: {
   readonly channel: AdminContactChannel;
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
   readonly deps: AdminDeps;
   readonly gesturesWaiting: boolean;
   readonly champ: ReactNode;
 }) {
-  const preuve = useMemberWrite({ userId: membre.id, language, onAnnounce });
   const [renvoi, setRenvoi] = useState<{ readonly phase: 'idle' | 'sending' | 'sent' | 'failed' }>({ phase: 'idle' });
 
   const valeur = channel === 'email' ? membre.email : membre.phoneNumber;
   const verifie = (channel === 'email' ? membre.emailVerifiedAt : membre.phoneVerifiedAt) !== null;
-  const occupe = gesturesWaiting || preuve.state.phase === 'saving' || renvoi.phase === 'sending';
+  const occupe = gesturesWaiting || renvoi.phase === 'sending';
 
   async function renvoyer() {
     setRenvoi({ phase: 'sending' });
@@ -146,9 +147,7 @@ function ContactRow({
       ? translateAdmin(language, 'admin.contact.resent')
       : renvoi.phase === 'failed'
         ? translateAdmin(language, 'admin.contact.resendFailed')
-        : preuve.state.phase === 'saved' || preuve.state.phase === 'error'
-          ? preuve.state.message
-          : '';
+        : '';
 
   return (
     <div className="grid gap-2" data-admin-contact={channel}>
@@ -161,25 +160,12 @@ function ContactRow({
               {translateAdmin(language, 'admin.contact.resend')}
             </SectionButton>
           )}
-          <SectionButton
-            data={{ 'data-admin-contact-verify': channel }}
-            disabled={occupe}
-            onClick={() =>
-              void preuve.run(
-                () => setAdminUserVerification({ ...deps, userId: membre.id, channel, verified: !verifie }),
-                'admin.edit.saved',
-                (avant) => withContactProof(avant, channel, !verifie),
-              )
-            }
-          >
-            {translateAdmin(language, verifie ? 'admin.contact.markUnverified' : 'admin.contact.markVerified')}
-          </SectionButton>
           <p
             role="status"
             aria-live="polite"
             className="min-w-0 basis-full text-caption"
             data-admin-contact-state={channel}
-            style={{ color: renvoi.phase === 'failed' || preuve.state.phase === 'error' ? 'var(--color-danger)' : INK2 }}
+            style={{ color: renvoi.phase === 'failed' ? 'var(--color-danger)' : INK2 }}
           >
             {statut}
           </p>

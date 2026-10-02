@@ -1,8 +1,6 @@
-import type { ReactNode } from 'react';
-
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
+import { AdminLoading } from '@/components/admin/states';
+import { currentAdminLanguage, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
 
 /**
@@ -29,7 +27,7 @@ const INK2 = 'var(--color-ios-ink-2)';
  * droit » de « le serveur n'a pas répondu » sur une porte d'administration
  * apprend à un visiteur non autorisé si l'espace existe et s'il est vivant.
  */
-export function AdminDenied({ language }: { readonly language: InterfaceLanguage }) {
+export function AdminDenied({ language }: { readonly language: AdminLanguage }) {
   return (
     <div className="grid flex-1 place-items-center p-6 text-center">
       <div className="grid gap-3">
@@ -41,7 +39,7 @@ export function AdminDenied({ language }: { readonly language: InterfaceLanguage
         </p>
         <Link
           to="list"
-          className="mx-auto grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+          className="mx-auto grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
           style={{ backgroundColor: BRAND, minHeight: 44 }}
         >
           {translate(language, 'pending.back')}
@@ -69,9 +67,19 @@ export function AdminCounter({ label, value }: { readonly label: string; readonl
 }
 
 /** Le squelette d'attente — jamais un `ProgressView` (cache-first, dimension 2). */
-export function AdminSkeleton({ rows }: { readonly rows: number }) {
+export function AdminSkeleton({
+  rows,
+  language = currentAdminLanguage(),
+  label,
+  anchor,
+}: {
+  readonly rows: number;
+  readonly language?: AdminLanguage;
+  readonly label?: string;
+  readonly anchor?: string;
+}) {
   return (
-    <div className="grid gap-3" aria-hidden="true">
+    <AdminLoading language={language} {...(label === undefined ? {} : { label })} {...(anchor === undefined ? {} : { anchor })} className="grid gap-3">
       {Array.from({ length: rows }, (_, index) => (
         <div
           key={index}
@@ -79,7 +87,7 @@ export function AdminSkeleton({ rows }: { readonly rows: number }) {
           style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)' }}
         />
       ))}
-    </div>
+    </AdminLoading>
   );
 }
 
@@ -119,35 +127,5 @@ export function AdminAnnouncement({ text }: { readonly text: string }) {
     >
       {text}
     </p>
-  );
-}
-
-/** Un bloc titré d'une fiche d'administration — membre ou anonyme. */
-export function AdminSection({ titre, children }: { readonly titre: string; readonly children: ReactNode }) {
-  return (
-    <section className="grid gap-2">
-      <h2 className="text-caption font-medium" style={{ color: INK2 }}>
-        {titre}
-      </h2>
-      <dl
-        className="grid gap-1 rounded-card px-4 py-3"
-        style={{ backgroundColor: 'var(--color-ios-surface)', border: '1px solid var(--color-edge)' }}
-      >
-        {children}
-      </dl>
-    </section>
-  );
-}
-
-export function AdminLine({ label, valeur }: { readonly label: string; readonly valeur: string }) {
-  return (
-    <div className="flex items-baseline gap-3">
-      <dt className="shrink-0 text-caption" style={{ color: INK2 }}>
-        {label}
-      </dt>
-      <dd className="min-w-0 flex-1 truncate text-end text-body" style={{ color: INK }}>
-        {valeur}
-      </dd>
-    </div>
   );
 }

@@ -222,6 +222,10 @@ export const SocketViewingSchema = z.object({
 
 export type SocketViewingData = z.infer<typeof SocketViewingSchema>;
 
+export const SocketViewingActivitySchema = SocketViewingSchema.extend({
+  focus: z.boolean().optional(),
+});
+
 export const SocketReactionAddSchema = z.object({
   messageId: mongoId,
   emoji: utf16Bounded(z.string(), { min: 1, max: EMOJI_MAX_LENGTH }),

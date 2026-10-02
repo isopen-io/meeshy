@@ -29,7 +29,9 @@
 @source not '../../**/*.md';
 @import '@meeshy/design-tokens/tokens.css';
 @import './ios.css';
+@import './admin.css';
 @import './glass.css';
+@import './ui.css';
 
 /* Le schema SOMBRE est le defaut de la table (`:root, :root.dark`) ; le clair
    s'obtient par la classe `.light`. La variante ci-dessous sert les rares cas
@@ -113,7 +115,11 @@
 
   /* ---- RAYONS : cinq roles, pas cinq tailles (charte regle 9) ---- */
   --radius-menu: var(--radius-xs);
-  --radius-field: var(--radius-sm);
+  /* 14 et non plus 8 (#8879) : le champ d'iOS (`MeeshyRadius.md`), celui
+     que `field.tsx` et la recherche de `sheet.tsx` posaient déjà en dur. */
+  --radius-field: var(--ios-radius-md);
+  /* La tuile (`MeeshyRadius.sm`, 10) — vignettes et icônes carrées. */
+  --radius-tile: var(--ios-radius-sm);
   --radius-card: var(--radius-lg);
   --radius-hero: var(--radius-xl);
   --radius-sheet: var(--radius-2xl);
@@ -688,8 +694,51 @@
   animation-fill-mode: both;
 }
 
+/* LE PLEIN ÉCRAN DU PAIR (#9065) : le mood quitte sa respiration pour un
+   pulse à peine perceptible, tant que le pair regarde. Miroir de
+   `MeeshyMoodBadge.hushedScale` (iOS). */
+@keyframes moodHush {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1.05);
+  }
+}
+
+.mood-hush {
+  animation-name: moodHush;
+  animation-duration: 1.6s;
+  animation-direction: alternate;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
+/* LE PAIR ACTIF (#9065) : une respiration à peine plus élevée, qui dure tant
+   qu'il défile, écoute ou agit — le même cran que l'onde active du point « ici »,
+   jamais un pulse qui crie.
+   Miroir de `MeeshyMoodBadge` (iOS). */
+@keyframes moodStir {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+}
+
+.mood-stir {
+  animation-name: moodStir;
+  animation-duration: 2s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .mood-breathe {
+  .mood-breathe,
+  .mood-stir,
+  .mood-hush {
     animation: none;
   }
 }
@@ -733,4 +782,29 @@
 
 :root[dir='rtl'] body .text-start {
   text-align: right;
+}
+
+/*
+ * L'ADMINISTRATION EST TOUJOURS À L'ENDROIT (D-162, directive porteur
+ * 2026-09-30). Son cadre porte `dir="ltr"` quelle que soit la langue
+ * d'interface — une interface arabe lit l'administration en anglais — mais les
+ * règles ci-dessus décrivent le corps par un sélecteur DESCENDANT : elles
+ * atteignent le cadre malgré son `dir`, et l'`unicode-bidi: plaintext` hérité
+ * + l'alignement `right` remettraient à droite chaque texte d'une mise en page
+ * qui lit de gauche à droite. On les rend ici, sous le cadre seulement ; le
+ * reste du document garde son sens. (`revert` rend la valeur de la feuille de
+ * style du navigateur : `isolate` pour un élément qui porte `dir`.)
+ */
+:root[dir='rtl'] [data-admin-shell] {
+  text-align: left;
+}
+
+:root[dir='rtl'] [data-admin-shell],
+:root[dir='rtl'] [data-admin-shell] :where(*),
+:root[dir='rtl'] [data-admin-shell] ::placeholder {
+  unicode-bidi: revert;
+}
+
+:root[dir='rtl'] [data-admin-shell] .text-start {
+  text-align: left;
 }

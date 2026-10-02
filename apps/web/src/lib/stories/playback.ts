@@ -174,6 +174,9 @@ export type StoryPlaybackStory = {
    * C4 — miroir `StoryViewersSheet:1381`). */
   readonly viewCount?: number | null;
   readonly currentUserReactions?: readonly string[] | null;
+  /** La carte des adresses suivies (#9074), lue par `trackingLinksOf` — jamais un champ direct. */
+  readonly metadata?: unknown;
+  readonly trackingLinks?: unknown;
 };
 
 export type StoryPlaybackGroup = {

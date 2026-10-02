@@ -103,7 +103,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             || (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } == true
         if isEncryptedPush, !didDecrypt,
            let locKey = userInfo["notificationLocKey"] as? String, !locKey.isEmpty {
-            let localized = NSLocalizedString(locKey, comment: "")
+            let localized = NSLocalizedString(locKey, bundle: InterfaceLanguageResolver.bundle(), comment: "")
             if localized != locKey {
                 bestAttemptContent.body = localized
             }
@@ -171,6 +171,14 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         let group = DispatchGroup()
         var avatarData: Data?
         nonisolated(unsafe) var messageAttachment: UNNotificationAttachment?
+
+        // Un push de REMPLACEMENT (édition, réaction changée) annule la bannière d'avant AVANT de
+        // s'afficher : le `contentHandler` n'est appelé qu'au `notify` du
+        // groupe, donc après ce retrait confirmé.
+        group.enter()
+        Self.removeReplacedBanners(userInfo: userInfo, incomingIdentifier: request.identifier) {
+            group.leave()
+        }
 
         // Les URLs du payload sont RELATIVES quand le média est servi par le
         // gateway (`/api/v1/attachments/file/…`) : `URL(string:)` les accepte
@@ -672,6 +680,65 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             let expired = EphemeralBannerDeadline.expiredIdentifiers(from: entries, now: now)
             guard !expired.isEmpty else { return }
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: expired)
+        }
+    }
+
+    /// Délai accordé à la CONFIRMATION du retrait d'une bannière remplacée.
+    /// Prélevé sur le budget de la NSE, borné pour ne jamais retarder
+    /// l'affichage de la version d'après au-delà de ce qu'il vaut.
+    static let replacedBannerConfirmationBudget: TimeInterval = 2
+
+    /// Retire la bannière qu'un push de REMPLACEMENT annule
+    /// (`userInfo.replacesNotificationId`, édition d'un message / post /
+    /// commentaire), puis appelle `completion` — que l'hôte place AVANT le
+    /// `contentHandler`.
+    ///
+    /// L'annulation voyage dans le même push que la version d'après : c'est
+    /// ce qui garantit qu'elle ne peut ni la suivre (et l'effacer) ni se
+    /// perdre (app tuée), contrairement à la révocation silencieuse séparée.
+    /// `removeDeliveredNotifications` n'ayant aucun completion handler, le
+    /// retrait est CONFIRMÉ par relecture, dans un délai borné.
+    nonisolated static func removeReplacedBanners(
+        userInfo: [AnyHashable: Any],
+        incomingIdentifier: String,
+        completion: @escaping @Sendable () -> Void
+    ) {
+        guard let replacement = NotificationReplacement(userInfo: userInfo) else {
+            completion()
+            return
+        }
+        UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
+            let identifiers = replacement.identifiersToRemove(
+                from: delivered.map { (id: $0.request.identifier, userInfo: $0.request.content.userInfo) },
+                excluding: incomingIdentifier
+            )
+            guard !identifiers.isEmpty else {
+                completion()
+                return
+            }
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
+            Self.confirmReplacedBannersRemoved(
+                Set(identifiers),
+                deadline: Date().addingTimeInterval(Self.replacedBannerConfirmationBudget),
+                completion: completion
+            )
+        }
+    }
+
+    private nonisolated static func confirmReplacedBannersRemoved(
+        _ identifiers: Set<String>,
+        deadline: Date,
+        completion: @escaping @Sendable () -> Void
+    ) {
+        UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
+            let stillDelivered = Set(delivered.map { $0.request.identifier })
+            guard !stillDelivered.isDisjoint(with: identifiers), Date() < deadline else {
+                completion()
+                return
+            }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.05) {
+                Self.confirmReplacedBannersRemoved(identifiers, deadline: deadline, completion: completion)
+            }
         }
     }
 

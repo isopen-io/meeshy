@@ -3967,6 +3967,108 @@
       "text": "Alice a réagi 😮 à « Vue unique »"
     },
     {
+      "id": "reaction-peer-direct",
+      "matrix": "Priorité 4 — réaction du pair en discussion directe : le titre le nomme déjà (#9049)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastReaction": {
+          "reactorId": "p-alice",
+          "reactorUserId": "u-alice",
+          "reactorName": "Alice",
+          "messageId": "m-1",
+          "targetSenderId": "p-me",
+          "targetSenderUserId": "u-me",
+          "excerpt": "Bonjour…",
+          "excerptOriginalLanguage": "fr",
+          "excerptTranslations": null,
+          "excerptProtection": null,
+          "createdAt": "2026-09-23T09:59:59.000Z",
+          "emoji": "❤️"
+        },
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "text",
+          "originalLanguage": "fr",
+          "content": "Bonjour tout le monde"
+        },
+        "isDirect": true
+      },
+      "expected": {
+        "tone": "default",
+        "icon": null,
+        "author": null,
+        "kind": "reaction",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "a réagi ❤️ à « Bonjour… »"
+          }
+        ]
+      },
+      "text": "a réagi ❤️ à « Bonjour… »"
+    },
+    {
+      "id": "reaction-peer-direct-bare",
+      "matrix": "Priorité 4 — réaction du pair en discussion directe, sans extrait (#9049)",
+      "input": {
+        "viewerId": "u-me",
+        "language": "fr",
+        "preferredLanguages": [
+          "fr",
+          "en"
+        ],
+        "now": "2026-09-23T10:00:00.000Z",
+        "lastReaction": {
+          "reactorId": "p-alice",
+          "reactorUserId": "u-alice",
+          "reactorName": "Alice",
+          "messageId": "m-1",
+          "targetSenderId": "p-me",
+          "targetSenderUserId": "u-me",
+          "excerpt": null,
+          "excerptOriginalLanguage": null,
+          "excerptTranslations": null,
+          "excerptProtection": null,
+          "createdAt": "2026-09-23T09:59:59.000Z",
+          "emoji": "😂"
+        },
+        "lastMessage": {
+          "id": "m-1",
+          "senderId": "u-me",
+          "senderName": "Moi",
+          "createdAt": "2026-09-23T09:59:00.000Z",
+          "messageType": "image",
+          "originalLanguage": "fr",
+          "attachment": {
+            "mimeType": "image/jpeg"
+          }
+        },
+        "isDirect": true
+      },
+      "expected": {
+        "tone": "default",
+        "icon": null,
+        "author": null,
+        "kind": "reaction",
+        "segments": [
+          {
+            "kind": "label",
+            "text": "a réagi 😂"
+          }
+        ]
+      },
+      "text": "a réagi 😂"
+    },
+    {
       "id": "reaction-older-than-message",
       "matrix": "Priorité 4 — réaction plus ancienne que le message",
       "input": {

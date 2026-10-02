@@ -40,10 +40,15 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 import { requirePermission, requireSovereign, withAudit } from '../../middleware/authorize';
+import { registerShareLinkFicheRoute } from './share-link-fiche';
 
 const requireAdmin = requirePermission('canAccessAdmin');
 
 export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
+  // #8876 — la FICHE d'un lien (verbe neuf sur un chemin existant). Elle vit avec
+  // la liste et le geste souverain, pour que tout ce qui lit un lien dise UNE
+  // fois ce qu'il retient.
+  registerShareLinkFicheRoute(fastify);
 
   // Gestion des liens de partage - Liste avec pagination
   fastify.get('/share-links', {

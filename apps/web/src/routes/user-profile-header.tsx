@@ -9,6 +9,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import type { PublicProfile } from '@/lib/api/public-profile';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { ProfilePresenceLine } from '@/lib/profile/presence-line';
 import type { ProfileActionKind, ProfileRelation } from '@/lib/profile/relation';
 import { initialsOf } from '@/lib/view/conversation';
 import { BRAND, BRAND_FILL, BRAND_INK, FOCUS, INK, INK_2 } from './user-profile-style';
@@ -30,10 +31,13 @@ import { BRAND, BRAND_FILL, BRAND_INK, FOCUS, INK, INK_2 } from './user-profile-
  * L'ACCENT (`defaultBannerGradient`, `:78-112`) : la fiche d'un compte sans
  * bannière reste une fiche, pas un rectangle vide.
  *
- * **LA PRÉSENCE N'Y EST PAS** (`+Header.swift:139-143`), et c'est mesuré : le
- * port ne décode ni `isOnline` ni `lastActiveAt`, et la requête ne demande
- * jamais `expand=presence`. La loi du 2026-08-25 masque la présence hors amitié
- * acceptée ; un client qui ne décode rien ne peut pas fabriquer un point vert.
+ * **LA PRÉSENCE D'UN AMI** (#9063, `+Header.swift:139-143`) : la pastille sur
+ * l'avatar, et après le pseudo « · En ligne » ou « · Vu il y a X ». Elle vient
+ * de `profilePresenceLine`, donc de ce que la passerelle a SERVI — la loi du
+ * 2026-08-25 la réserve aux amis acceptés et respecte les réglages de la
+ * personne ; `null` ne peint rien. La ligne est à l'encre SECONDAIRE, écart
+ * assumé avec iOS qui la teinte : le vert et l'orange de la pastille tombent
+ * sous AA en texte sur fond de carte, et la pastille porte déjà la couleur.
  *
  * **LA BANNIÈRE EST À LIRE, PAS À TOUCHER** dans ce lot : iOS l'ouvre en plein
  * écran, mais brancher le visualiseur ici tirerait un chunk de plus sur un
@@ -44,10 +48,12 @@ export const ProfileHero = memo(function ProfileHero({
   profile,
   name,
   accent,
+  presence,
 }: {
   readonly profile: PublicProfile;
   readonly name: string;
   readonly accent: string;
+  readonly presence: ProfilePresenceLine | null;
 }) {
   return (
     <section data-user-hero aria-label={name} className="grid justify-items-center">
@@ -63,7 +69,14 @@ export const ProfileHero = memo(function ProfileHero({
         )}
       </div>
       <span className="block rounded-chip" style={{ marginTop: -45, padding: 4, backgroundColor: 'var(--color-ios-surface)' }}>
-        <Avatar initials={initialsOf(name)} color={accent} size={90} name={name} {...(profile.avatar === null ? {} : { src: profile.avatar })} />
+        <Avatar
+          initials={initialsOf(name)}
+          color={accent}
+          size={90}
+          name={name}
+          {...(profile.avatar === null ? {} : { src: profile.avatar })}
+          {...(presence === null ? {} : { presence: presence.status })}
+        />
       </span>
       <div className="grid max-w-full justify-items-center gap-0.5 pt-2 text-center">
         <p className="max-w-full break-words text-screen font-bold" style={{ color: INK }}>
@@ -76,7 +89,15 @@ export const ProfileHero = memo(function ProfileHero({
             carte (mesuré : 4,22 en sombre). Un texte que le lecteur ne lit pas
             n'est pas une identité, c'est un défaut. L'accent reste peint là où
             il ne porte aucun texte — le dégradé de bannière et l'avatar. */}
-        <p className={`text-body font-medium ${BRAND_INK}`}>{`@${profile.username}`}</p>
+        <p className="text-body font-medium">
+          <span className={BRAND_INK}>{`@${profile.username}`}</span>
+          {presence?.label == null ? null : (
+            <span style={{ color: INK_2 }}>
+              <span aria-hidden="true">{' · '}</span>
+              <span data-user-presence={presence.status}>{presence.label}</span>
+            </span>
+          )}
+        </p>
         {profile.bio === null ? null : (
           <p className="max-w-prose whitespace-pre-wrap pt-1.5 text-body" style={{ color: INK }}>
             {profile.bio}
@@ -204,7 +225,7 @@ export function ActionButton({
            et `--color-ios-surface` suit le schéma — en sombre il tombait à
            4,45 contre l'indigo de marque (mesuré). Même choix que la pastille
            de « Découvrir » (`discover-parts.tsx`, `text-white`). */
-        ...(filled ? { color: '#fff' } : brandInk ? {} : { color: tone }),
+        ...(filled ? { color: 'var(--color-ios-on-brand)' } : brandInk ? {} : { color: tone }),
         backgroundColor: filled ? (ACTIONS[kind].tone === 'brand' ? BRAND_FILL : tone) : `color-mix(in srgb, ${tone} 12%, transparent)`,
       }}
     >

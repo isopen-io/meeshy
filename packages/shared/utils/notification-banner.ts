@@ -260,6 +260,7 @@ export function buildNotificationBannerBody(
 export function buildNotificationReactionBadge(
   notification: Notification,
   headline: string,
+  body: string | null = null,
 ): string | null {
   const type = typeof notification.type === 'string' ? notification.type : '';
   if (!TYPES_DE_REACTION.has(type)) return null;
@@ -271,7 +272,8 @@ export function buildNotificationReactionBadge(
   // Le serveur fusionne déjà l'émoji dans la phrase d'action (« a réagi 🔥 à
   // votre story ») : le rendre une seconde fois en pastille ferait dire deux
   // fois la même chose à deux endroits de la même carte.
-  return headline.includes(emoji) ? null : emoji;
+  // Même règle pour le CORPS (#9049) : « a réagi ❤️ à votre message : « … » ».
+  return headline.includes(emoji) || (body?.includes(emoji) ?? false) ? null : emoji;
 }
 
 export function buildNotificationThumbnail(notification: Notification): string | null {
@@ -294,10 +296,11 @@ export function buildNotificationBanner(
   options?: { readonly groupName?: string | null },
 ): NotificationBanner {
   const headline = buildNotificationHeadline(notification, t, conventions, options?.groupName);
+  const body = buildNotificationBannerBody(notification, t, conventions);
   return {
     headline,
-    body: buildNotificationBannerBody(notification, t, conventions),
-    reactionBadge: buildNotificationReactionBadge(notification, headline),
+    body,
+    reactionBadge: buildNotificationReactionBadge(notification, headline, body),
     thumbnailUrl: buildNotificationThumbnail(notification),
   };
 }

@@ -1,6 +1,7 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
 
-import { type AdminDeps, asCount, asRecord, asText, pageServie } from './admin';
+import { type AdminDeps, asCount, asRecord, asText } from './admin';
+import { adminPageOf, type AdminPage } from './admin-page';
 import type { ApiResult } from './http';
 import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
@@ -73,42 +74,29 @@ import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
 export const ADMIN_AGENT_PAGE_SIZE = 20;
 
-export const agentOverviewQueryKey = () => [ADMIN_SOUVERAIN_PREFIXE, 'agent', 'overview'] as const;
+/** Les tailles de page que le pager offre — la passerelle borne `limit` à 100. */
+export const ADMIN_AGENT_PAGE_SIZES = [20, 50, 100] as const;
 
-export const agentTrackedQueryKey = (page: number, search: string) =>
-  [ADMIN_SOUVERAIN_PREFIXE, 'agent', 'configs', page, search] as const;
+/** La RACINE de tout ce que l'agent lit : ce qu'un geste (relance, arrêt) relit en bloc. */
+export const AGENT_ROOT_KEY = [ADMIN_SOUVERAIN_PREFIXE, 'agent'] as const;
 
-export const agentLiveQueryKey = (conversationId: string) =>
-  [ADMIN_SOUVERAIN_PREFIXE, 'agent', 'live', conversationId] as const;
+export const agentOverviewQueryKey = () => [...AGENT_ROOT_KEY, 'overview'] as const;
 
-export const agentScanLogsQueryKey = (page: number, conversationId: string) =>
-  [ADMIN_SOUVERAIN_PREFIXE, 'agent', 'scan-logs', page, conversationId] as const;
+export const agentTrackedQueryKey = (offset: number, limit: number, search: string) =>
+  [...AGENT_ROOT_KEY, 'configs', offset, limit, search] as const;
 
-export const agentScanLogQueryKey = (logId: string) =>
-  [ADMIN_SOUVERAIN_PREFIXE, 'agent', 'scan-log', logId] as const;
+export const agentLiveQueryKey = (conversationId: string) => [...AGENT_ROOT_KEY, 'live', conversationId] as const;
+
+export const agentScanLogsQueryKey = (offset: number, limit: number, outcome: string, trigger: string) =>
+  [...AGENT_ROOT_KEY, 'scan-logs', offset, limit, outcome, trigger] as const;
+
+export const agentScanLogQueryKey = (logId: string) => [...AGENT_ROOT_KEY, 'scan-log', logId] as const;
 
 const asTextOrNull = (value: unknown): string | null =>
   typeof value === 'string' && value !== '' ? value : null;
 
-/**
- * LA PAGE se lit par `pageServie` (`./admin`) — « où le transport la POSE, et
- * non là où le schéma la dessine ». Cette lecture vivait ICI (#6733) pendant
- * que quatre décodeurs voisins la faisaient FAUSSE au même moment (#6862) :
- * une loi juste, dans un seul fichier, ne garde pas ses voisins. Elle a donc
- * rejoint les trois helpers que toute l'administration partage déjà.
- */
-const totalEtSuite = (
-  meta: Readonly<Record<string, unknown>>,
-  page: number,
-  rendues: number,
-): { readonly total: number; readonly hasMore: boolean } => {
-  const total = asCount(meta.total);
-  // `hasMore` vient du SERVEUR quand il le dit ; sinon il se recalcule depuis
-  // la page et le total — jamais depuis la seule longueur, qui vaut aussi bien
-  // « fin de liste » que « page pleine ».
-  const hasMore = typeof meta.hasMore === 'boolean' ? meta.hasMore : page * ADMIN_AGENT_PAGE_SIZE < total;
-  return { total: total || rendues, hasMore };
-};
+/** Une page servie PAR PAGE (`?page=`) devient une page par OFFSET pour la manette commune : l'offset d'une page est `(page − 1) × limit`. */
+const pageOfOffset = (offset: number, limit: number): number => Math.floor(offset / limit) + 1;
 
 // ---------------------------------------------------------------------------
 // LA VUE D'ENSEMBLE — GET /admin/agent/stats
@@ -151,6 +139,8 @@ export type AgentTrackedConversation = {
   readonly conversationId: string;
   /** `null` sur un direct, qui n'a pas de titre stocké (D-75). */
   readonly title: string | null;
+  /** Le type de la conversation, que son nom (`conversationLabel`) et son genre lisent. */
+  readonly conversationType: string | null;
   readonly enabled: boolean;
   /** Le handler l'élit depuis `scanStartedAt` (`isScanActive`), jamais un booléen stocké. */
   readonly isScanning: boolean;
@@ -159,13 +149,6 @@ export type AgentTrackedConversation = {
   readonly controlledUsersCount: number;
   readonly messagesSent: number;
   readonly lastResponseAt: string | null;
-};
-
-export type AgentTrackedPage = {
-  readonly conversations: readonly AgentTrackedConversation[];
-  readonly page: number;
-  readonly total: number;
-  readonly hasMore: boolean;
 };
 
 function decodeTracked(raw: unknown): AgentTrackedConversation | null {
@@ -178,6 +161,7 @@ function decodeTracked(raw: unknown): AgentTrackedConversation | null {
   return {
     conversationId: ligne.conversationId,
     title: asTextOrNull(conversation.title),
+    conversationType: asTextOrNull(conversation.type),
     enabled: ligne.enabled === true,
     isScanning: ligne.isScanning === true,
     currentNode: asTextOrNull(ligne.currentNode),
@@ -188,13 +172,18 @@ function decodeTracked(raw: unknown): AgentTrackedConversation | null {
 }
 
 export async function loadAgentTracked(
-  params: AdminDeps & { readonly page: number; readonly search: string; readonly signal?: AbortSignal },
-): Promise<ApiResult<AgentTrackedPage>> {
+  params: AdminDeps & {
+    readonly offset: number;
+    readonly limit: number;
+    readonly search: string;
+    readonly signal?: AbortSignal;
+  },
+): Promise<ApiResult<AdminPage<AgentTrackedConversation>>> {
   const recherche = params.search.trim();
   const query = new URLSearchParams({
     // `page`, JAMAIS `offset` : l'inverse de `GET /admin/users`.
-    page: String(params.page),
-    limit: String(ADMIN_AGENT_PAGE_SIZE),
+    page: String(pageOfOffset(params.offset, params.limit)),
+    limit: String(params.limit),
     ...(recherche === '' ? {} : { search: recherche }),
   });
 
@@ -203,26 +192,54 @@ export async function loadAgentTracked(
     path: `${adminEndpoints.agentConfigs}?${query.toString()}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
-  if (!resultat.ok) return resultat;
 
-  const { lignes, meta } = pageServie(resultat);
-  const conversations = lignes
-    .map(decodeTracked)
-    .filter((ligne): ligne is AgentTrackedConversation => ligne !== null);
-
-  return { ok: true, data: { conversations, page: params.page, ...totalEtSuite(meta, params.page, conversations.length) } };
+  return adminPageOf(resultat, decodeTracked, { kind: 'page-based' });
 }
 
 // ---------------------------------------------------------------------------
 // L'ÉTAT VIVANT — GET /admin/agent/configs/:conversationId/live
 // ---------------------------------------------------------------------------
 
+/**
+ * UN MEMBRE PILOTÉ, tel que la vue en DIRECT le nomme — la seule lecture de
+ * l'agent qui résolve les noms (`GET /configs/:id/live` joint les comptes). Les
+ * listes (`/configs`, `/scan-logs`) ne servent que des IDENTIFIANTS : elles ne
+ * disent donc que leur NOMBRE.
+ *
+ * Le handler retombe sur l'identifiant quand le compte n'existe plus
+ * (`displayName ?? username ?? userId`) : cette valeur n'est pas un nom, et elle
+ * est jetée — `displayName` vaut alors `null`, et l'écran dit « Compte sans nom ».
+ */
+export type AgentControlledUser = {
+  readonly userId: string;
+  readonly displayName: string | null;
+  readonly username: string | null;
+  readonly language: string | null;
+};
+
 export type AgentLiveState = {
   readonly conversationId: string;
   readonly isScanning: boolean;
   readonly currentNode: string | null;
-  readonly controlledUsersCount: number;
+  readonly controlledUsers: readonly AgentControlledUser[];
+  readonly messagesSent: number | null;
+  readonly lastResponseAt: string | null;
 };
+
+const OBJECT_ID = /^[0-9a-f]{24}$/;
+
+function decodeControlledUser(raw: unknown): AgentControlledUser | null {
+  const ligne = asRecord(raw);
+  if (ligne === null || typeof ligne.userId !== 'string' || ligne.userId === '') return null;
+
+  const name = asTextOrNull(ligne.displayName);
+  return {
+    userId: ligne.userId,
+    displayName: name === null || name === ligne.userId || OBJECT_ID.test(name) ? null : name,
+    username: asTextOrNull(ligne.username),
+    language: asTextOrNull(ligne.systemLanguage),
+  };
+}
 
 export async function loadAgentLive(
   params: AdminDeps & { readonly conversationId: string; readonly signal?: AbortSignal },
@@ -235,6 +252,7 @@ export async function loadAgentLive(
   if (!resultat.ok) return resultat;
 
   const charge = asRecord(resultat.data) ?? {};
+  const analytics = asRecord(charge.analytics);
 
   return {
     ok: true,
@@ -242,7 +260,11 @@ export async function loadAgentLive(
       conversationId: asText(charge.conversationId) || params.conversationId,
       isScanning: charge.isScanning === true,
       currentNode: asTextOrNull(charge.currentNode),
-      controlledUsersCount: (Array.isArray(charge.controlledUsers) ? charge.controlledUsers : []).length,
+      controlledUsers: (Array.isArray(charge.controlledUsers) ? charge.controlledUsers : [])
+        .map(decodeControlledUser)
+        .filter((user): user is AgentControlledUser => user !== null),
+      messagesSent: analytics === null ? null : asCount(analytics.messagesSent),
+      lastResponseAt: analytics === null ? null : asTextOrNull(analytics.lastResponseAt),
     },
   };
 }
@@ -318,11 +340,18 @@ export type AgentScanLogRow = {
   readonly id: string;
   readonly conversationId: string;
   readonly title: string | null;
+  readonly conversationType: string | null;
   readonly trigger: string;
   readonly startedAt: string | null;
   readonly durationMs: number;
   readonly outcome: string;
   readonly messagesSent: number;
+  readonly reactionsSent: number;
+  readonly messagesRejected: number;
+  readonly totalInputTokens: number;
+  readonly totalOutputTokens: number;
+  /** `null` quand le coût n'a pas été estimé : zéro dollar affirmerait un scan gratuit. */
+  readonly estimatedCostUsd: number | null;
 };
 
 export type AgentScanLogDetail = AgentScanLogRow & {
@@ -339,28 +368,38 @@ function decodeScanLog(raw: unknown): AgentScanLogRow | null {
     id: ligne.id,
     conversationId: asText(ligne.conversationId),
     title: asTextOrNull(conversation.title),
+    conversationType: asTextOrNull(conversation.type),
     trigger: asText(ligne.trigger),
     startedAt: asTextOrNull(ligne.startedAt),
     durationMs: asCount(ligne.durationMs),
     outcome: asText(ligne.outcome),
     messagesSent: asCount(ligne.messagesSent),
+    reactionsSent: asCount(ligne.reactionsSent),
+    messagesRejected: asCount(ligne.messagesRejected),
+    totalInputTokens: asCount(ligne.totalInputTokens),
+    totalOutputTokens: asCount(ligne.totalOutputTokens),
+    estimatedCostUsd:
+      typeof ligne.estimatedCostUsd === 'number' && Number.isFinite(ligne.estimatedCostUsd) && ligne.estimatedCostUsd >= 0
+        ? ligne.estimatedCostUsd
+        : null,
   };
 }
 
-export type AgentScanLogsPage = {
-  readonly logs: readonly AgentScanLogRow[];
-  readonly page: number;
-  readonly total: number;
-  readonly hasMore: boolean;
-};
-
 export async function loadAgentScanLogs(
-  params: AdminDeps & { readonly page: number; readonly conversationId: string; readonly signal?: AbortSignal },
-): Promise<ApiResult<AgentScanLogsPage>> {
+  params: AdminDeps & {
+    readonly offset: number;
+    readonly limit: number;
+    /** L'issue et le déclencheur que le handler filtre ; `''` n'est pas un filtre. */
+    readonly outcome?: string;
+    readonly trigger?: string;
+    readonly signal?: AbortSignal;
+  },
+): Promise<ApiResult<AdminPage<AgentScanLogRow>>> {
   const query = new URLSearchParams({
-    page: String(params.page),
-    limit: String(ADMIN_AGENT_PAGE_SIZE),
-    ...(params.conversationId === '' ? {} : { conversationId: params.conversationId }),
+    page: String(pageOfOffset(params.offset, params.limit)),
+    limit: String(params.limit),
+    ...(params.outcome === undefined || params.outcome === '' ? {} : { outcome: params.outcome }),
+    ...(params.trigger === undefined || params.trigger === '' ? {} : { trigger: params.trigger }),
   });
 
   const resultat = await params.transport.request<unknown>({
@@ -368,12 +407,8 @@ export async function loadAgentScanLogs(
     path: `${adminEndpoints.agentScanLogs}?${query.toString()}`,
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
-  if (!resultat.ok) return resultat;
 
-  const { lignes, meta } = pageServie(resultat);
-  const logs = lignes.map(decodeScanLog).filter((ligne): ligne is AgentScanLogRow => ligne !== null);
-
-  return { ok: true, data: { logs, page: params.page, ...totalEtSuite(meta, params.page, logs.length) } };
+  return adminPageOf(resultat, decodeScanLog, { kind: 'page-based' });
 }
 
 export async function loadAgentScanLog(

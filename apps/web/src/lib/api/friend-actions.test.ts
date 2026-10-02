@@ -215,6 +215,7 @@ const profileView = (person: PersonSummary, relation: ServedRelation): PublicPro
   isSelf: false,
   blockedByViewer: false,
   relationRequestId: null,
+  presence: null,
 });
 
 const relationIn = (queryClient: QueryClient, handle: string): ServedRelation | undefined =>

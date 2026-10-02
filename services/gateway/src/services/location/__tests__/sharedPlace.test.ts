@@ -134,3 +134,19 @@ describe('hoistLocationDeep', () => {
     expect(hoistLocationDeep(noPlace)).toEqual(noPlace);
   });
 });
+
+describe('hoistLocationDeep — le sticker d’un commentaire embarqué (#9080)', () => {
+  it('hisse metadata.sticker sur chaque commentaire de l’aperçu, comme la liste complète', () => {
+    const post = {
+      id: 'p1',
+      metadata: {},
+      comments: [
+        { id: 'c1', metadata: {} },
+        { id: 'c2', metadata: { sticker: { templateId: 'mee.mee-coucou', animation: 'wobble' } } },
+      ],
+    };
+    const hoisted = hoistLocationDeep(post) as typeof post & { comments: Array<{ sticker?: unknown }> };
+    expect(hoisted.comments[0].sticker).toBeUndefined();
+    expect(hoisted.comments[1].sticker).toEqual({ templateId: 'mee.mee-coucou', animation: 'wobble' });
+  });
+});

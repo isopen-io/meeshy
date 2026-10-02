@@ -3,6 +3,7 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { TrackingLink, TrackingLinkClick } from '@meeshy/shared/types/tracking-link';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { EngagementService } from './engagement/EngagementService';
+import type { LinkVisitor, LinkVisitRecorder } from '../routes/links/utils/link-visitor';
 import {
   clickStatsPipeline,
   foldClickStatsFacet,
@@ -57,14 +58,25 @@ export type ResolvedLinkTarget = {
   expiresAt: Date | null;
 };
 
+/** Ce que les liens de suivi demandent au moteur d'engagement (#8959) — un double en test. */
+export type TrackingLinkEngagement = Pick<EngagementService, 'recordActivity'> & LinkVisitRecorder;
+
 /**
  * Service pour gérer les liens de tracking
  */
 export class TrackingLinkService {
   private prisma: PrismaClient;
 
-  constructor(prisma: PrismaClient) {
+  private engagementInstance: TrackingLinkEngagement | null;
+
+  constructor(prisma: PrismaClient, engagement?: TrackingLinkEngagement) {
     this.prisma = prisma;
+    this.engagementInstance = engagement ?? null;
+  }
+
+  private engagement(): TrackingLinkEngagement {
+    if (!this.engagementInstance) this.engagementInstance = new EngagementService(this.prisma);
+    return this.engagementInstance;
   }
 
   /**
@@ -134,6 +146,13 @@ export class TrackingLinkService {
     messageId?: string;
     expiresAt?: Date;
     customToken?: string;
+    /**
+     * `true` ⇒ la création est un geste de l'auteur (`POST /tracking-links`)
+     * et lui paie `social.tracked_link`. La réécriture automatique des URL
+     * d'un message ou d'un post passe aussi par ici : elle ne paie rien, sans
+     * quoi coller dix liens dans un message rapporterait dix créations.
+     */
+    creditCreator?: boolean;
   }): Promise<TrackingLink> {
     let token: string;
 
@@ -175,8 +194,8 @@ export class TrackingLinkService {
     // il ne crédite alors personne — plutôt que de créditer « quelqu'un » par
     // défaut, ce qui fabriquerait de l'engagement à partir de rien.
     const auteurDuLien = params.createdBy;
-    if (auteurDuLien) {
-      new EngagementService(this.prisma)
+    if (auteurDuLien && params.creditCreator === true) {
+      this.engagement()
         .recordActivity(auteurDuLien, 'social.tracked_link')
         .catch((err) => enhancedLogger.warn('[TrackingLinkService] engagement social.tracked_link failed', { err }));
     }
@@ -298,6 +317,8 @@ export class TrackingLinkService {
     utmClickCampaign?: string;
     utmClickTerm?: string;
     utmClickContent?: string;
+    /** Le visiteur établi par le SERVEUR (`linkVisitorFromRequest`) — absent ⇒ rien n'est crédité. */
+    visitor?: LinkVisitor;
   }): Promise<{ trackingLink: TrackingLink; click: TrackingLinkClick }> {
     // Vérifier que le lien existe et est actif
     const trackingLink = await this.getTrackingLinkByToken(params.token);
@@ -369,10 +390,29 @@ export class TrackingLinkService {
       }
     });
 
+    this.creditVisit(trackingLink, params.visitor);
+
     return {
       trackingLink: updatedLink as TrackingLink,
       click: click as TrackingLinkClick
     };
+  }
+
+  /**
+   * `social.link_visit` (#8959) : la visite crédite l'auteur du lien, hors du
+   * chemin du clic. Le moteur dédoublonne par visiteur et écarte l'auteur.
+   */
+  private creditVisit(trackingLink: TrackingLink, visitor: LinkVisitor | undefined): void {
+    const creatorId = trackingLink.createdBy;
+    if (!creatorId || !visitor) return;
+    this.engagement()
+      .recordLinkVisit({
+        creatorId,
+        linkKey: `tracked:${trackingLink.token}`,
+        visitorKey: visitor.key,
+        visitorUserId: visitor.userId,
+      })
+      .catch((err: unknown) => enhancedLogger.warn('[TrackingLinkService] engagement social.link_visit failed', { err }));
   }
 
   /**

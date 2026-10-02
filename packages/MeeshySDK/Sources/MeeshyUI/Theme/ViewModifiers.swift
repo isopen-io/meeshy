@@ -143,6 +143,14 @@ public struct PulseEffect: ViewModifier {
                 value: isPulsing
             )
             .onAppear { guard !reduceMotion else { return }; isPulsing = true }
+            // Une amplitude nouvelle relance le pulse sur place, sans recréer
+            // la vue qui le porte (#9065 : le mood change d'amplitude selon
+            // ce que fait le pair, et ne doit pas rejouer son arrivée).
+            .adaptiveOnChange(of: intensity) { _, _ in
+                guard !reduceMotion else { return }
+                withTransaction(Transaction(animation: nil)) { isPulsing = false }
+                DispatchQueue.main.async { isPulsing = true }
+            }
             .onDisappear {
                 withTransaction(Transaction(animation: nil)) {
                     isPulsing = false

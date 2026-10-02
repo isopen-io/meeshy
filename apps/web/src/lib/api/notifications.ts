@@ -13,7 +13,7 @@ import type { ApiResult, HttpTransport } from './http';
  * `source` résolue ICI, jamais dans l'écran (motif `conversations.ts`) : les
  * fixtures sont servies par le MÊME chemin.
  *
- * - `GET /notifications?limit=30[&types=…|&unreadOnly=true][&cursor=…]` — AU
+ * - `GET /notifications?limit=30[&types=…|&unreadOnly=true][&hideReadTypes=…][&cursor=…]` — AU
  *   CURSEUR : `offset` absent retire le `count()` complet du chemin nominal dès
  *   la première page (`:152-170`). Une catégorie est un filtre SERVEUR
  *   (`lib/notifications/categories.ts`), chacune sa liste en cache.
@@ -89,11 +89,12 @@ export async function loadNotificationsPage(
       }),
     };
   }
-  const { types, unreadOnly } = categoryQuery(params.category);
+  const { types, unreadOnly, hideReadTypes } = categoryQuery(params.category);
   const query = new URLSearchParams({
     limit: String(NOTIFICATIONS_PAGE_SIZE),
     ...(types === undefined ? {} : { types }),
     ...(unreadOnly === undefined ? {} : { unreadOnly: 'true' }),
+    ...(hideReadTypes === undefined ? {} : { hideReadTypes }),
     ...(params.cursor === undefined ? {} : { cursor: params.cursor }),
   });
   const result = await params.transport.request<unknown>({

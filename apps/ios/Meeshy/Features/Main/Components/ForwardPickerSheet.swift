@@ -41,6 +41,10 @@ struct ForwardPickerSheet: View {
     ///
     /// `nil` = l'hôte n'a rien branché, et l'entrée est ABSENTE (loi 4).
     var onCompose: (() -> Void)? = nil
+    /// **« Imager la discussion »** (#9039) — la feuille se referme et l'hôte
+    /// ouvre l'atelier « Imagine » sur la discussion qui mène au message.
+    /// `nil` = l'entrée est ABSENTE (loi 4).
+    var onImageDiscussion: (() -> Void)? = nil
     let onDismiss: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -90,7 +94,7 @@ struct ForwardPickerSheet: View {
                 messagePreview
 
                 Divider()
-                    .overlay(theme.textMuted.opacity(0.2))
+                    .overlay(theme.textMuted.opacity(MeeshyOpacity.light))
 
                 if isColdStartLoading {
                     Spacer()
@@ -179,7 +183,7 @@ struct ForwardPickerSheet: View {
     // MARK: - Message Preview (thin, like reply banner)
 
     private var messagePreview: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             RoundedRectangle(cornerRadius: 1.5)
                 .fill(Color(hex: accentColor))
                 .frame(width: 3, height: 28)
@@ -191,12 +195,12 @@ struct ForwardPickerSheet: View {
             VStack(alignment: .leading, spacing: 1) {
                 if additionalMessages.isEmpty {
                     Text(message.senderName ?? "?")
-                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundColor(Color(hex: accentColor))
                         .lineLimit(1)
 
                     Text(previewText)
-                        .font(MeeshyFont.relative(11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                 } else {
@@ -207,7 +211,7 @@ struct ForwardPickerSheet: View {
                             bundle: .main
                         )
                     )
-                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                     .lineLimit(1)
                 }
@@ -227,9 +231,9 @@ struct ForwardPickerSheet: View {
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .background(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.02))
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.sm)
+        .background(MeeshyColors.surfaceFill(isDark: isDark))
     }
 
     /// Aperçu digne d'un média : type localisé + compteur, plus jamais « [Media] ».
@@ -263,11 +267,11 @@ struct ForwardPickerSheet: View {
                 thumbnailUrl: thumbUrl,
                 fullUrl: fullUrl ?? thumbUrl
             ) {
-                Color(hex: accentColor).opacity(0.3)
+                Color(hex: accentColor).opacity(MeeshyOpacity.medium)
             }
             .aspectRatio(contentMode: .fill)
             .frame(width: 28, height: 28)
-            .clipShape(RoundedRectangle(cornerRadius: 5))
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))
         }
     }
 
@@ -359,10 +363,10 @@ struct ForwardPickerSheet: View {
 
     @ViewBuilder
     private var publicationSection: some View {
-        if !publicationTargets.isEmpty || offersCompose {
-            VStack(alignment: .leading, spacing: 8) {
+        if !publicationTargets.isEmpty || offersCompose || onImageDiscussion != nil {
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
                 Text(String(localized: "forward.publish-section", defaultValue: "Publier", bundle: .main))
-                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(theme.textMuted)
 
                 // Défilement horizontal plutôt qu'un `HStack` nu : aux tailles
@@ -370,21 +374,21 @@ struct ForwardPickerSheet: View {
                 // dépassent la largeur d'un iPhone, et un `HStack` les
                 // COMPRIMERAIT jusqu'à tronquer les libellés.
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
+                    HStack(spacing: MeeshySpacing.sm) {
                         ForEach(publicationTargets, id: \.self) { target in
                             Button {
                                 handlePublishTap(target)
                             } label: {
                                 Text(publicationLabel(for: target))
-                                    .font(MeeshyFont.relative(13, weight: .medium))
+                                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                                     .foregroundColor(Color(hex: accentColor))
-                                    .padding(.horizontal, 14)
+                                    .padding(.horizontal, MeeshySpacing.mdPlus)
                                     // 44pt : plancher de cible tactile (HIG). Il
                                     // se pose ici, et non par du padding
                                     // vertical, pour que la pilule garde sa
                                     // hauteur quand le corps GRANDIT sous
                                     // Dynamic Type.
-                                    .frame(minHeight: 44)
+                                    .frame(minHeight: MeeshyControlSize.tapTarget)
                                     .background(
                                         Capsule().stroke(Color(hex: accentColor).opacity(0.4), lineWidth: 1)
                                     )
@@ -395,6 +399,10 @@ struct ForwardPickerSheet: View {
 
                         if offersCompose {
                             composeEntry
+                        }
+
+                        if onImageDiscussion != nil {
+                            imageDiscussionEntry
                         }
 
                         if isPublishing {
@@ -410,13 +418,13 @@ struct ForwardPickerSheet: View {
 
                 if let publishFailure {
                     Text(publishFailure)
-                        .font(MeeshyFont.relative(11))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                         .foregroundColor(MeeshyColors.error)
                         .lineLimit(2)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.smPlus)
         }
     }
 
@@ -449,14 +457,35 @@ struct ForwardPickerSheet: View {
                 String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main),
                 systemImage: "wand.and.stars"
             )
-            .font(MeeshyFont.relative(13, weight: .semibold))
+            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             .foregroundColor(Color(hex: accentColor))
-            .padding(.horizontal, 14)
-            .frame(minHeight: 44)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .frame(minHeight: MeeshyControlSize.tapTarget)
             .background(
-                Capsule().fill(Color(hex: accentColor).opacity(0.12))
+                Capsule().fill(Color(hex: accentColor).opacity(MeeshyOpacity.light))
             )
             .contentShape(Capsule())
+        }
+        .disabled(isPublishing)
+    }
+
+    /// **« Imager la discussion »** (#9039) — même geste que « Composer » : la
+    /// feuille se referme d'abord, l'atelier s'ouvre une fois qu'elle est partie
+    /// (`MessageCardExportPresenter` attend la fin de la fermeture).
+    private var imageDiscussionEntry: some View {
+        Button {
+            dismiss()
+            onImageDiscussion?()
+        } label: {
+            Label(MessageCardDiscussion.menuLabel, systemImage: MessageCardExportMenu.imageSymbol)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                .foregroundColor(Color(hex: accentColor))
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .frame(minHeight: MeeshyControlSize.tapTarget)
+                .background(
+                    Capsule().fill(Color(hex: accentColor).opacity(MeeshyOpacity.light))
+                )
+                .contentShape(Capsule())
         }
         .disabled(isPublishing)
     }
@@ -467,26 +496,26 @@ struct ForwardPickerSheet: View {
     /// ouvert la caméra ou le micro) : lui seul n'a encore été vu par personne.
     @ViewBuilder
     private func captureConfirmation(for target: PublicationTarget) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             Text(String(
                 localized: "forward.publish-capture-warning",
                 defaultValue: "Ce média vient d'être capturé par l'application. Le publier le rendra visible au-delà de cette conversation.",
                 bundle: .main
             ))
-            .font(MeeshyFont.relative(12))
+            .font(MeeshyFont.relative(MeeshyFont.smallSize))
             .foregroundColor(theme.textPrimary)
             .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Button {
                     pendingCapture = nil
                     publish(target)
                 } label: {
                     Text(String(localized: "forward.publish-confirm", defaultValue: "Publier", bundle: .main))
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 16)
-                        .frame(minHeight: 44)
+                        .padding(.horizontal, MeeshySpacing.lg)
+                        .frame(minHeight: MeeshyControlSize.tapTarget)
                         .background(Capsule().fill(Color(hex: accentColor)))
                         .contentShape(Capsule())
                 }
@@ -495,18 +524,18 @@ struct ForwardPickerSheet: View {
                     pendingCapture = nil
                 } label: {
                     Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                        .font(MeeshyFont.relative(13))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                         .foregroundColor(theme.textMuted)
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 44)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .frame(minHeight: MeeshyControlSize.tapTarget)
                         .contentShape(Rectangle())
                 }
             }
         }
-        .padding(10)
+        .padding(MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(theme.textMuted.opacity(0.25), lineWidth: 1)
+            RoundedRectangle(cornerRadius: MeeshyRadius.sm)
+                .stroke(theme.textMuted.opacity(MeeshyOpacity.medium), lineWidth: 1)
         )
     }
 
@@ -590,14 +619,14 @@ struct ForwardPickerSheet: View {
                 batchSend()
             } label: {
                 Text(String(format: String(localized: "forward.send-selected", defaultValue: "Envoyer (%d)", bundle: .main), sendState.selectedIds.count))
-                    .font(MeeshyFont.relative(15, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, MeeshySpacing.md)
                     .background(Capsule().fill(Color(hex: accentColor)))
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.sm)
             .background(.ultraThinMaterial)
             .transition(.move(edge: .bottom).combined(with: .opacity))
         }
@@ -770,8 +799,8 @@ struct ForwardPickerRow: View, Equatable {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            HStack(spacing: MeeshySpacing.md) {
                 MeeshyAvatar(
                     name: name,
                     context: .conversationList,
@@ -781,16 +810,16 @@ struct ForwardPickerRow: View, Equatable {
                     onMoodTap: onMoodTap
                 )
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     ConversationTitleLabel(
                         name: name,
                         favoriteEmoji: nil,
-                        font: MeeshyFont.relative(15, weight: .medium),
+                        font: MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium),
                         color: theme.textPrimary
                     )
 
                     Text(typeLabel)
-                        .font(MeeshyFont.relative(12))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundColor(theme.textMuted)
                 }
                 .accessibilityElement(children: .combine)
@@ -799,7 +828,7 @@ struct ForwardPickerRow: View, Equatable {
 
                 if state == .selected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(MeeshyFont.relative(18))
+                        .font(MeeshyFont.relative(MeeshyIconSize.lg))
                         .foregroundColor(Color(hex: accentHex))
                         .transition(.scale.combined(with: .opacity))
                         .accessibilityHidden(true)
@@ -811,15 +840,15 @@ struct ForwardPickerRow: View, Equatable {
             if case .failed(let reason) = state {
                 // La RAISON du refus (ex. vue unique) — plus jamais un glyphe muet.
                 Text(reason)
-                    .font(MeeshyFont.relative(11))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundColor(MeeshyColors.error)
                     .lineLimit(2)
                     .padding(.leading, 52)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(state == .selected ? Color(hex: accentHex).opacity(0.10) : Color.clear)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .background(state == .selected ? Color(hex: accentHex).opacity(MeeshyOpacity.subtle) : Color.clear)
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
         .accessibilityAddTraits(state == .selected ? .isSelected : [])

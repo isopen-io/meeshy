@@ -80,9 +80,9 @@ declare module 'bun:test' {
   export function expect(value: unknown): Expectations & { readonly not: Expectations };
 
   /**
-   * L'horloge simulée (#8391) — le masquage des commandes d'une vidéo après
-   * 4 s sans geste se prouve sans attendre 4 s : `setTimeout` ET `Date.now()`
-   * avancent ensemble.
+   * L'horloge simulée — qu'aucune attente n'efface les commandes d'une vidéo
+   * (#8988), ou que la durée d'un appel avance, se prouve sans attendre :
+   * `setTimeout` ET `Date.now()` avancent ensemble.
    */
   export const jest: {
     useFakeTimers(): void;

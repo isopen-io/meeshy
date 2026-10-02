@@ -32,6 +32,7 @@ import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
+import { AuthorMoodsContext, useAuthorMoods } from '@/lib/view/use-author-moods';
 import { topActiveMembers } from '@/lib/view/top-active-members';
 import { accentOf, withAccent } from '@/lib/accent';
 import { conversationStore } from '@/lib/conversation-store';
@@ -40,12 +41,25 @@ import { useOptionalRoute } from '@/lib/router';
 import { mergeTimeline, place } from '@/lib/grouping';
 import { useReaderLanguages } from '@/lib/view/use-reader';
 import { useSend } from '@/lib/view/use-send';
+import { useHeaderMemory } from '@/lib/view/use-header-memory';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useOnline } from '@/lib/net/online';
 import { useThreadTyping } from '@/lib/view/use-thread-typing';
-import { useConversationViewing } from '@/lib/view/use-conversation-viewing';
+import {
+  ActivePeersContext,
+  FocusedPeersContext,
+  HerePeersContext,
+  useActiveIn,
+  useConversationActivity,
+  useConversationViewing,
+  useFocusedIn,
+  useHereIn,
+} from '@/lib/view/use-conversation-viewing';
 import { useEphemeralDestruction } from '@/lib/view/ephemeral-destruction';
+import { useLivingMessages } from '@/lib/view/ephemeral-gone';
+import { isMineOf } from '@/lib/view/message';
+import type { Message } from '@/lib/api/types';
 import { useThreadReadingMode } from '@/lib/reading-mode/use-thread-reading-mode';
 import { readingModeStore } from '@/lib/reading-mode/store';
 import { readingModeScopeOf } from '@/lib/reading-mode/scope';
@@ -59,6 +73,7 @@ import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
 import { AfterReadSeenContext, useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
+import { useEngagementRevalidation } from '@/lib/view/use-conversation-engagement';
 import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
 import { useThreadJump } from '@/lib/view/use-thread-jump';
@@ -142,7 +157,6 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
    */
   const conversationId = threadData.conversationId;
   const queryClient = useQueryClient();
-  const [expanded, setExpanded] = useState(false);
   /**
    * LES DÉTAILS DE LA CONVERSATION (#7829) — une feuille de CE fil : le titre
    * de l'en-tête et le menu de chaque avatar d'auteur (#7828) l'ouvrent par la
@@ -161,6 +175,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const storyRingOf = useAuthorStoryRings(viewer);
+  const moodOf = useAuthorMoods(viewer);
 
   /**
    * LE `Participant` DU LECTEUR DANS cette conversation (#5813, étape 8) —
@@ -259,6 +274,11 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
    */
   const { languages: readerLanguages, locale: readerLocale } = useReaderLanguages();
   const scope = useMemo(() => readingModeScopeOf(viewer), [viewer.id]);
+  /** L'EN-TÊTE DÉPLIÉ ET LA FLAMME MASQUÉE, retenus par conversation (#9031). */
+  const header = useHeaderMemory({ scope, conversationId, preview: preview !== undefined });
+  const expanded = header.expanded;
+  /** Chaque message parti rejoue la flamme du jour sous l'avatar (#9031). */
+  const [flameReplay, setFlameReplay] = useState(0);
 
   /**
    * LA RÉGION LIVE UNIQUE DE L'ÉCRAN (revue #5814, défaut majeur 9) — UN
@@ -294,10 +314,15 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
    * revue-correction #5813, défaut majeur 5 (voir le doc-comment de
    * `mergeTimeline` pour le scénario qu'une concaténation inverse).
    */
-  const messages = useMemo(
+  const timeline = useMemo(
     () => mergeTimeline(threadData.messages, pending),
     [threadData.messages, pending],
   );
+  /* UN ÉPHÉMÈRE PARTI QUITTE LE FIL (#8900) — pas seulement sa peau : sa
+     rangée, son `aria-label`, sa hauteur virtualisée, et le Résumé qui lit
+     ce même `messages`. La rangée qui brûle reste le temps de l'effet. */
+  const isMine = useCallback((message: Message) => isMineOf(message, viewer.id ?? ''), [viewer.id]);
+  const messages = useLivingMessages({ messages: timeline, isMine, destroyingIds, expiredIds });
   const placed = useMemo(() => place(messages, { locale: readerLocale }), [messages, readerLocale]);
   const group = conversation !== undefined && isGroup(conversation);
   /** LES TROIS QUI PARLENT LE PLUS dans ce qui est chargé (#7830) — groupe seulement. */
@@ -391,6 +416,12 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
   });
   /* « EST DANS LA CONVERSATION » (#8892) — le fil ouvert s'annonce aux pairs. */
   useConversationViewing(conversationId);
+  /* … et chaque avatar d'auteur du fil dit qui l'a ouvert — et qui y regarde,
+     écoute ou agit en ce moment (#9061), ou regarde en plein écran (#9065). */
+  const herePeers = useHereIn(conversationId);
+  const activePeers = useActiveIn(conversationId);
+  const focusedPeers = useFocusedIn(conversationId);
+  useConversationActivity(conversationId, chrome.host);
 
   /**
    * QUI ÉCRIT — LE ROSTER ENTIER (#6171, § 5 étape 0/2 de la spécification) —
@@ -442,6 +473,14 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     readerLanguages,
     send,
   });
+  const composeSend = compose.onSend;
+  const sendAndReplayFlame = useCallback(
+    (input: Parameters<typeof composeSend>[0]) => {
+      composeSend(input);
+      setFlameReplay((count) => count + 1);
+    },
+    [composeSend],
+  );
 
   /**
    * LE MENU DU MESSAGE (#5814) — appui long / clic droit / `ContextMenu` sur
@@ -531,6 +570,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     queryClient,
   });
   const noteAfterReadSeen = afterRead.noteSeenUpTo;
+  /* « N (M) 🔥 » (#8906) — l'état serveur relu à l'ouverture du fil. */
+  useEngagementRevalidation(conversationId);
   const onMarkCaughtUp = useCallback((markedConversationId: string, caughtUpToMessageId: string) => {
     noteAfterReadSeen(caughtUpToMessageId);
     void markCaughtUp({
@@ -642,6 +683,10 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
        par cette racine, qui doit rester exactement haute de `100dvh` pour que
        le contenu puisse transiter sous la bande. */
     <ThreadMediaContext.Provider value={threadMedia}>
+    <HerePeersContext.Provider value={herePeers}>
+    <ActivePeersContext.Provider value={activePeers}>
+    <FocusedPeersContext.Provider value={focusedPeers}>
+    <AuthorMoodsContext.Provider value={moodOf}>
     <div
       ref={chrome.host}
       className={`relative ${preview === undefined ? 'h-dvh' : 'h-full'} overflow-hidden`}
@@ -658,7 +703,10 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
         activeMembers={activeMembers}
         otherUnread={otherUnread}
         expanded={expanded}
-        onToggleExpanded={() => setExpanded((v) => !v)}
+        onToggleExpanded={header.toggleExpanded}
+        flameDismissed={header.flameDismissed}
+        onDismissFlame={header.dismissFlame}
+        flameReplay={flameReplay}
         onOpenDetails={openDetails}
         currentRowTitle={reading.currentRow?.title ?? ''}
         isAuto={reading.readingDecision.reason !== 'sticky'}
@@ -781,6 +829,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
             selection={messageMenu.selection}
             onRowTap={messageMenu.onRowTap}
             longPress={messageMenu.longPress}
+            swipeActionsOf={messageMenu.swipeActionsOf}
+            onSwipeAction={messageMenu.onMenuAction}
             onPickLanguage={messageMenu.onPickLanguage}
             onReact={messageMenu.onMenuReact}
             onOpenDetail={messageMenu.setDetailFor}
@@ -877,7 +927,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
         >
           <Composer
             preferred={readerLanguages}
-            onSend={compose.onSend}
+            onSend={sendAndReplayFlame}
             onTextChange={typing.onTextChange}
             draft={compose.initialDraft}
             stickyProtection={compose.stickyProtection}
@@ -924,6 +974,10 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
         announce={announcer.announce}
       />
     </div>
+    </AuthorMoodsContext.Provider>
+    </FocusedPeersContext.Provider>
+    </ActivePeersContext.Provider>
+    </HerePeersContext.Provider>
     </ThreadMediaContext.Provider>
   );
 }

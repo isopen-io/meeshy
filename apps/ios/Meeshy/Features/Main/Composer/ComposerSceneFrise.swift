@@ -28,13 +28,13 @@ struct ComposerSceneFrise: View {
     @State private var enCours: (id: String, fenetre: ComposerSceneFriseMetrics.Window)?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             transport
             pistes
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 12)
-        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous),
+        .padding(.vertical, MeeshySpacing.smPlus)
+        .padding(.horizontal, MeeshySpacing.md)
+        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous),
                        tint: plateauTint.opacity(0.55))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(ComposerSceneFriseCopy.panel))
@@ -43,7 +43,7 @@ struct ComposerSceneFrise: View {
     // MARK: - Transport
 
     private var transport: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: MeeshySpacing.sm) {
             Button {
                 HapticFeedback.light()
                 timeline.togglePlayback()
@@ -60,7 +60,7 @@ struct ComposerSceneFrise: View {
             .accessibilityLabel(Text(timeline.isPlaying ? ComposerSceneFriseCopy.pause : ComposerSceneFriseCopy.play))
 
             Text(ComposerSceneFriseMetrics.timeLabel(current: timeline.currentTime, total: duree))
-                .font(MeeshyFont.relative(12, weight: .bold).monospacedDigit())
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold).monospacedDigit())
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -85,9 +85,9 @@ struct ComposerSceneFrise: View {
             action()
         } label: {
             Text(titre)
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .frame(height: 32)
                 .adaptiveGlass(in: Capsule(), tint: plateauTint.opacity(0.55))
                 .frame(minHeight: 44)
@@ -99,13 +99,13 @@ struct ComposerSceneFrise: View {
     // MARK: - Règle, pistes, tête
 
     private var pistes: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             regle
             if timeline.sceneFriseTracks.isEmpty {
                 Text(ComposerSceneFriseCopy.empty)
-                    .font(MeeshyFont.relative(12, weight: .regular))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
                     .foregroundStyle(MeeshyColors.textPrimary(isDark: true).opacity(0.7))
-                    .padding(.vertical, 4)
+                    .padding(.vertical, MeeshySpacing.xs)
             } else {
                 ForEach(timeline.sceneFriseTracks) { piste in
                     ligne(piste)
@@ -144,9 +144,9 @@ struct ComposerSceneFrise: View {
         let fenetre = enCours?.id == piste.id
             ? enCours!.fenetre
             : ComposerSceneFriseMetrics.Window(start: piste.start, end: piste.end)
-        return HStack(spacing: 8) {
+        return HStack(spacing: MeeshySpacing.sm) {
             Text(ComposerSceneFriseCopy.label(for: piste))
-                .font(MeeshyFont.relative(11, weight: .regular))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
                 .foregroundStyle(MeeshyColors.textSecondary(isDark: true))
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -156,16 +156,16 @@ struct ComposerSceneFrise: View {
                 let debut = CGFloat(ComposerSceneFriseMetrics.fraction(fenetre.start, of: duree)) * largeur
                 let fin = CGFloat(ComposerSceneFriseMetrics.fraction(fenetre.end, of: duree)) * largeur
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous)
                         .fill(Color.white.opacity(0.07))
                         .contentShape(Rectangle())
                         .onTapGesture(coordinateSpace: .local) { point in
                             choisir(piste, a: temps(x: point.x, largeur: largeur))
                         }
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.xxs, style: .continuous)
                         .fill(choisie ? MeeshyColors.brandPrimary : Color.white.opacity(0.35))
                         .frame(width: max(4, fin - debut))
-                        .padding(.vertical, 4)
+                        .padding(.vertical, MeeshySpacing.xs)
                         .contentShape(Rectangle())
                         .offset(x: debut)
                         .onTapGesture(coordinateSpace: .local) { point in

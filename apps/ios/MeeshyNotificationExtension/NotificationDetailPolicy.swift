@@ -32,8 +32,8 @@ nonisolated enum NotificationDetailPolicy {
     ]
 
     /// La catégorie finale : `MEESHY_LOCATION` / `MEESHY_CONTACT` /
-    /// `MEESHY_INVITE` quand le message en porte le détail, la catégorie de
-    /// base sinon. Dérivée par l'extension elle-même plutôt que lue sur
+    /// `MEESHY_INVITE` quand le message en porte le détail, `MEESHY_AUDIO`
+    /// quand sa piste voyage (#8859), la catégorie de base sinon. Dérivée par l'extension elle-même plutôt que lue sur
     /// `aps.category` : un gateway plus ancien ne la pose pas.
     static func refinedCategory(
         _ base: String,
@@ -44,6 +44,9 @@ nonisolated enum NotificationDetailPolicy {
         guard base == "MEESHY_MESSAGE", refinableTypes.contains(type),
               !NSEAttachmentPolicy.declaresProtection(userInfo: userInfo) else { return base }
         if let refined = detail(userInfo: userInfo)?.categoryIdentifier { return refined }
+        // #8859 — un vocal dont la piste voyage se déploie en LECTEUR : c'est
+        // cette catégorie qui fait choisir l'extension de contenu.
+        if audioTravels(userInfo: userInfo) { return audioCategory }
         // Une carte de visite SANS nom ne porte aucune clé `data` (#8857) :
         // seule la catégorie posée par la passerelle (`aps.category`) la dit.
         guard let declared, detailCategories.contains(declared) else { return base }
@@ -51,6 +54,19 @@ nonisolated enum NotificationDetailPolicy {
     }
 
     private static let detailCategories: Set<String> = ["MEESHY_LOCATION", "MEESHY_CONTACT", "MEESHY_INVITE"]
+
+    static let audioCategory = "MEESHY_AUDIO"
+
+    /// La piste d'un vocal a-t-elle VOYAGÉ ? Un mime audio ET une adresse non
+    /// vide — la passerelle vide `attachmentUrl` sous une clé de protection et
+    /// ne le pose pas du tout en `showPreview:false`. Jamais pour un message
+    /// qui déclare une protection (second verrou).
+    static func audioTravels(userInfo: [AnyHashable: Any]) -> Bool {
+        guard !NSEAttachmentPolicy.declaresProtection(userInfo: userInfo),
+              NSEAttachmentPolicy.isAudioFamily(userInfo["attachmentMimeType"] as? String ?? "") else { return false }
+        let url = (userInfo["attachmentUrl"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return !url.isEmpty
+    }
 
     /// La vignette d'une VIDÉO — jamais le fichier : l'enveloppe mémoire de
     /// l'extension ne le supporte pas (#7003). `nil` pour un message protégé.

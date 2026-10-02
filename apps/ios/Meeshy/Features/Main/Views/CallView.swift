@@ -37,7 +37,6 @@ struct CallView: View {
     @State var showControls = true
     /// #8735 — les touchers du chrome : chacun réarme le masquage automatique,
     /// et aucun masquage ne tombe sous un doigt posé.
-    @State var chromeTouches = CallChromeTouches()
     @State var showTranscript = false
     @State var showOriginalText = false
     @State var showEffectsToolbar = false
@@ -345,7 +344,7 @@ struct CallView: View {
             // §7.7 — self-preview background mirrors only the front camera.
             LocalCameraVideoView(track: callManager.localVideoTrack, intendedFront: callManager.isUsingFrontCamera, contentMode: .scaleAspectFill)
                 .ignoresSafeArea()
-            Color.black.opacity(0.25)
+            Color.black.opacity(MeeshyOpacity.medium)
                 .ignoresSafeArea()
         } else {
             callBackground
@@ -431,7 +430,7 @@ struct CallView: View {
             // (white-on-white). This keeps the call screen correct in .dark AND
             // .light appearance.
             LinearGradient(
-                colors: [Color(hex: "09090B"), Color(hex: "0F0D19"), Color(hex: "13111C")],
+                colors: [MeeshyColors.surfaceDarkBase, MeeshyColors.surfaceDarkDeep, MeeshyColors.surfaceDarkRaised],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -460,13 +459,13 @@ struct CallView: View {
                     .scaleEffect(1.08)
                     .blur(radius: 20)
                     .clipped()
-                    .opacity(0.55)
+                    .opacity(MeeshyOpacity.strong)
                     .overlay(
                         LinearGradient(
                             colors: [
-                                Color.black.opacity(0.50),
-                                Color.black.opacity(0.18),
-                                Color.black.opacity(0.55)
+                                Color.black.opacity(MeeshyOpacity.strong),
+                                Color.black.opacity(MeeshyOpacity.light),
+                                Color.black.opacity(MeeshyOpacity.strong)
                             ],
                             startPoint: .top,
                             endPoint: .bottom
@@ -479,7 +478,7 @@ struct CallView: View {
 
             // Animated ambient orbs — decorative only
             Circle()
-                .fill(MeeshyColors.indigo500.opacity(0.15))
+                .fill(MeeshyColors.indigo500.opacity(MeeshyOpacity.light))
                 .frame(width: 300, height: 300)
                 .blur(radius: 80)
                 .offset(x: -80, y: -200)
@@ -487,7 +486,7 @@ struct CallView: View {
                 .accessibilityHidden(true)
 
             Circle()
-                .fill(MeeshyColors.indigo400.opacity(0.12))
+                .fill(MeeshyColors.indigo400.opacity(MeeshyOpacity.light))
                 .frame(width: 350, height: 350)
                 .blur(radius: 90)
                 .offset(x: 100, y: 200)
@@ -495,7 +494,7 @@ struct CallView: View {
                 .accessibilityHidden(true)
 
             Circle()
-                .fill(MeeshyColors.error.opacity(0.1))
+                .fill(MeeshyColors.error.opacity(MeeshyOpacity.subtle))
                 .frame(width: 250, height: 250)
                 .blur(radius: 70)
                 .offset(x: 80, y: -100)

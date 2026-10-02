@@ -119,6 +119,9 @@ public struct LastMessageFacet: Sendable {
     /// de l'envoi. La ligne rend ce libellé depuis la NATURE du message — les
     /// pièces jointes et la position voyagent dans la facette —, donc dans la
     /// langue du lecteur, et de la même façon que pour un média reçu.
+    ///
+    /// Un éphémère y porte sa DURÉE, jamais une échéance (#8905) : l'envoi
+    /// n'est pas une réception, la ligne lit « en attente de réception ».
     public static func sent(
         id: String,
         text: String,
@@ -127,6 +130,7 @@ public struct LastMessageFacet: Sendable {
         isBlurred: Bool = false,
         isViewOnce: Bool = false,
         expiresAt: Date? = nil,
+        ephemeralDuration: Int? = nil,
         originalLanguage: String? = nil,
         location: SharedPlace? = nil,
         youLabel: String = ConversationListAuthor.readerLabel
@@ -144,6 +148,7 @@ public struct LastMessageFacet: Sendable {
             originalLanguage: originalLanguage,
             location: location,
             nature: LastMessageNature(
+                ephemeralDuration: ephemeralDuration,
                 attachmentSummary: LastMessageAttachmentSummary(attachments: attachments)
             )
         )

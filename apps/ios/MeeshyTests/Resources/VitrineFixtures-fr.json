@@ -1,0 +1,2873 @@
+{
+ "version": 2,
+ "lang": "fr",
+ "lecteur": {
+  "id": "0cdc3a1317dfaf952cb35b8d",
+  "username": "lea.mtn",
+  "displayName": "Léa Martin",
+  "firstName": "Léa",
+  "lastName": "Martin",
+  "systemLanguage": "fr",
+  "regionalLanguage": "en",
+  "role": "USER",
+  "createdAt": "2026-07-02T12:00:00.000Z"
+ },
+ "conversations": [
+  {
+   "id": "ca4fa0732bd34cb8c64b7ed7",
+   "type": "direct",
+   "memberCount": 2,
+   "unreadCount": 0,
+   "isMember": true,
+   "createdAt": "2026-08-21T12:00:00.000Z",
+   "updatedAt": "2026-09-30T11:58:00.000Z",
+   "participants": [
+    {
+     "id": "d61154ee0cccefeb6c1707d7",
+     "conversationId": "ca4fa0732bd34cb8c64b7ed7",
+     "type": "user",
+     "userId": "0cdc3a1317dfaf952cb35b8d",
+     "displayName": "Léa Martin",
+     "language": "fr",
+     "role": "USER",
+     "isActive": true,
+     "joinedAt": "2026-08-31T12:00:00.000Z",
+     "user": {
+      "id": "0cdc3a1317dfaf952cb35b8d",
+      "username": "lea.mtn",
+      "displayName": "Léa Martin",
+      "firstName": "Léa",
+      "lastName": "Martin"
+     }
+    },
+    {
+     "id": "13bcb13e0f28fd34ba321855",
+     "conversationId": "ca4fa0732bd34cb8c64b7ed7",
+     "type": "user",
+     "userId": "c1dcfc966154a301adabb8c7",
+     "displayName": "Min-jun Park",
+     "language": "ko",
+     "role": "USER",
+     "isActive": true,
+     "joinedAt": "2026-08-31T12:00:00.000Z",
+     "user": {
+      "id": "c1dcfc966154a301adabb8c7",
+      "username": "minjun.p",
+      "displayName": "Min-jun Park",
+      "firstName": "Min-jun",
+      "lastName": "Park"
+     }
+    }
+   ],
+   "lastMessage": {
+    "id": "73ebc77c61517253ef7940ec",
+    "content": "",
+    "senderId": "13bcb13e0f28fd34ba321855",
+    "createdAt": "2026-09-30T11:58:00.000Z",
+    "messageType": "audio",
+    "sender": {
+     "id": "13bcb13e0f28fd34ba321855",
+     "username": "minjun.p",
+     "displayName": "Min-jun Park",
+     "firstName": "Min-jun",
+     "lastName": "Park",
+     "userId": "c1dcfc966154a301adabb8c7",
+     "type": "user"
+    },
+    "attachments": [
+     {
+      "id": "9663058c1872d84ca677e9d7",
+      "messageId": "73ebc77c61517253ef7940ec",
+      "fileName": "vocal-minjun.p-ko.m4a",
+      "originalName": "vocal-minjun.p-ko.m4a",
+      "mimeType": "audio/mp4",
+      "fileSize": 36000,
+      "fileUrl": "/api/v1/attachments/file/vitrine/vocal-minjun.p-ko.m4a",
+      "uploadedBy": "c1dcfc966154a301adabb8c7",
+      "createdAt": "2026-09-30T11:58:00.000Z",
+      "duration": 9000
+     }
+    ]
+   },
+   "lastMessageTranslations": {},
+   "lastMessageOriginalLanguage": "ko",
+   "lastMessageAt": "2026-09-30T11:58:00.000Z"
+  },
+  {
+   "id": "5f4ae64a155d6b8f9eb31f06",
+   "type": "group",
+   "title": "Pizza Night 🍕",
+   "memberCount": 6,
+   "unreadCount": 0,
+   "isMember": true,
+   "createdAt": "2026-08-01T12:00:00.000Z",
+   "updatedAt": "2026-09-30T11:48:00.000Z",
+   "lastMessage": {
+    "id": "d3ea491cc243f0228b1c9d4b",
+    "content": "Honnêtement… l’ananas, c’est bon 🙈",
+    "senderId": "8ba2c1d4ae11e16c23006263",
+    "createdAt": "2026-09-30T11:48:00.000Z",
+    "messageType": "text",
+    "sender": {
+     "id": "8ba2c1d4ae11e16c23006263",
+     "username": "lea.mtn",
+     "displayName": "Léa Martin",
+     "firstName": "Léa",
+     "lastName": "Martin",
+     "userId": "0cdc3a1317dfaf952cb35b8d",
+     "type": "user"
+    }
+   },
+   "lastMessageTranslations": {},
+   "lastMessageOriginalLanguage": "fr",
+   "lastMessageAt": "2026-09-30T11:48:00.000Z"
+  },
+  {
+   "id": "dbf04862a7819ba64c9d4b0c",
+   "type": "group",
+   "title": "Lisboa ✈️",
+   "memberCount": 6,
+   "unreadCount": 4,
+   "isMember": true,
+   "createdAt": "2026-08-01T12:00:00.000Z",
+   "updatedAt": "2026-09-30T10:25:00.000Z",
+   "lastMessage": {
+    "id": "83ca9edf44263997c40d970a",
+    "content": "明日の旅行、ちょっと問題発生… 😭",
+    "senderId": "c2f86142e47cc93780ea6596",
+    "createdAt": "2026-09-30T10:25:00.000Z",
+    "messageType": "text",
+    "sender": {
+     "id": "c2f86142e47cc93780ea6596",
+     "username": "aiko.t",
+     "displayName": "Aiko Tanaka",
+     "firstName": "Aiko",
+     "lastName": "Tanaka",
+     "userId": "76cffb9b729978327d9e3fe0",
+     "type": "user"
+    }
+   },
+   "lastMessageTranslations": {
+    "fr": "Petit problème pour demain… 😭",
+    "en": "Slight problem for tomorrow… 😭",
+    "es": "Pequeño problema para mañana… 😭",
+    "de": "Kleines Problem für morgen… 😭",
+    "it": "Piccolo problema per domani… 😭",
+    "pt": "Probleminha pra amanhã… 😭",
+    "ar": "مشكلة صغيرة بخصوص الغد… 😭"
+   },
+   "lastMessageOriginalLanguage": "ja",
+   "lastMessageAt": "2026-09-30T10:25:00.000Z"
+  },
+  {
+   "id": "cbf409287826cb1890ad69f7",
+   "type": "group",
+   "title": "Nova Club 🌍",
+   "memberCount": 12,
+   "unreadCount": 3,
+   "isMember": true,
+   "createdAt": "2026-08-01T12:00:00.000Z",
+   "updatedAt": "2026-09-30T09:20:00.000Z",
+   "lastMessage": {
+    "id": "fc4be86fc8d3b2dfac7b0dd1",
+    "content": "私も！時差は気にしない 😂",
+    "senderId": "cde6e6e204e90041421868b1",
+    "createdAt": "2026-09-30T09:20:00.000Z",
+    "messageType": "text",
+    "sender": {
+     "id": "cde6e6e204e90041421868b1",
+     "username": "aiko.t",
+     "displayName": "Aiko Tanaka",
+     "firstName": "Aiko",
+     "lastName": "Tanaka",
+     "userId": "76cffb9b729978327d9e3fe0",
+     "type": "user"
+    }
+   },
+   "lastMessageTranslations": {
+    "fr": "Moi aussi ! Le décalage horaire, on s’en fiche 😂",
+    "en": "Me too! Who cares about the time difference 😂",
+    "es": "¡Yo también! La diferencia horaria da igual 😂",
+    "de": "Ich auch! Zeitverschiebung ist mir egal 😂",
+    "it": "Anch’io! Il fuso orario non conta 😂",
+    "pt": "Eu também! Fuso horário não importa 😂",
+    "ar": "وأنا أيضًا! فرق التوقيت لا يهم 😂"
+   },
+   "lastMessageOriginalLanguage": "ja",
+   "lastMessageAt": "2026-09-30T09:20:00.000Z"
+  },
+  {
+   "id": "cd2497b0ef23413bae5c43f9",
+   "type": "global",
+   "identifier": "meeshy",
+   "title": "Meeshy Global",
+   "memberCount": 2481,
+   "unreadCount": 0,
+   "isMember": true,
+   "createdAt": "2025-09-30T12:00:00.000Z",
+   "updatedAt": "2026-09-30T11:57:00.000Z",
+   "lastMessage": {
+    "id": "02540dca5382c170025d5179",
+    "content": "안녕하세요! 서울에서 인사드려요 👋",
+    "senderId": "6555bcf692dc1c0607112ec0",
+    "createdAt": "2026-09-30T11:57:00.000Z",
+    "messageType": "text",
+    "sender": {
+     "id": "6555bcf692dc1c0607112ec0",
+     "username": "minjun.p",
+     "displayName": "Min-jun Park",
+     "firstName": "Min-jun",
+     "lastName": "Park",
+     "userId": "c1dcfc966154a301adabb8c7",
+     "type": "user"
+    }
+   },
+   "lastMessageTranslations": {
+    "fr": "Salut ! Un grand bonjour de Séoul 👋",
+    "en": "Hi! Big hello from Seoul 👋",
+    "es": "¡Hola! Un saludo enorme desde Seúl 👋",
+    "de": "Hi! Liebe Grüße aus Seoul 👋",
+    "it": "Ciao! Un saluto da Seul 👋",
+    "pt": "Oi! Um salve de Seul 👋",
+    "ar": "أهلًا! تحية كبيرة من سيول 👋"
+   },
+   "lastMessageOriginalLanguage": "ko",
+   "lastMessageAt": "2026-09-30T11:57:00.000Z"
+  },
+  {
+   "id": "ce492bd0222fea42b57194a3",
+   "type": "direct",
+   "memberCount": 2,
+   "unreadCount": 0,
+   "isMember": true,
+   "createdAt": "2026-08-21T12:00:00.000Z",
+   "updatedAt": "2026-09-30T08:40:00.000Z",
+   "participants": [
+    {
+     "id": "75f2a73671d5ae55418fa504",
+     "conversationId": "ce492bd0222fea42b57194a3",
+     "type": "user",
+     "userId": "0cdc3a1317dfaf952cb35b8d",
+     "displayName": "Léa Martin",
+     "language": "fr",
+     "role": "USER",
+     "isActive": true,
+     "joinedAt": "2026-08-31T12:00:00.000Z",
+     "user": {
+      "id": "0cdc3a1317dfaf952cb35b8d",
+      "username": "lea.mtn",
+      "displayName": "Léa Martin",
+      "firstName": "Léa",
+      "lastName": "Martin"
+     }
+    },
+    {
+     "id": "8868bd17bcf124c327ba0eda",
+     "conversationId": "ce492bd0222fea42b57194a3",
+     "type": "user",
+     "userId": "76cffb9b729978327d9e3fe0",
+     "displayName": "Aiko Tanaka",
+     "language": "ja",
+     "role": "USER",
+     "isActive": true,
+     "joinedAt": "2026-08-31T12:00:00.000Z",
+     "user": {
+      "id": "76cffb9b729978327d9e3fe0",
+      "username": "aiko.t",
+      "displayName": "Aiko Tanaka",
+      "firstName": "Aiko",
+      "lastName": "Tanaka"
+     }
+    }
+   ],
+   "lastMessage": {
+    "id": "ace8175776423371474fe25c",
+    "content": "ステッカー楽しみ！💜",
+    "senderId": "8868bd17bcf124c327ba0eda",
+    "createdAt": "2026-09-30T08:40:00.000Z",
+    "messageType": "text",
+    "sender": {
+     "id": "8868bd17bcf124c327ba0eda",
+     "username": "aiko.t",
+     "displayName": "Aiko Tanaka",
+     "firstName": "Aiko",
+     "lastName": "Tanaka",
+     "userId": "76cffb9b729978327d9e3fe0",
+     "type": "user"
+    }
+   },
+   "lastMessageTranslations": {
+    "fr": "Trop hâte de voir les stickers ! 💜",
+    "en": "Can’t wait for the stickers! 💜",
+    "es": "¡Qué ganas de ver los stickers! 💜",
+    "de": "Freu mich so auf die Sticker! 💜",
+    "it": "Non vedo l’ora di vedere gli sticker! 💜",
+    "pt": "Doida pra ver os stickers! 💜",
+    "ar": "متحمسة جدًا لرؤية الملصقات! 💜"
+   },
+   "lastMessageOriginalLanguage": "ja",
+   "lastMessageAt": "2026-09-30T08:40:00.000Z"
+  },
+  {
+   "id": "523ab1de62e577a3c4f16798",
+   "type": "direct",
+   "memberCount": 2,
+   "unreadCount": 0,
+   "isMember": true,
+   "createdAt": "2026-08-21T12:00:00.000Z",
+   "updatedAt": "2026-09-30T07:55:00.000Z",
+   "participants": [
+    {
+     "id": "928f92df23c9a8bac4b07680",
+     "conversationId": "523ab1de62e577a3c4f16798",
+     "type": "user",
+     "userId": "0cdc3a1317dfaf952cb35b8d",
+     "displayName": "Léa Martin",
+     "language": "fr",
+     "role": "USER",
+     "isActive": true,
+     "joinedAt": "2026-08-31T12:00:00.000Z",
+     "user": {
+      "id": "0cdc3a1317dfaf952cb35b8d",
+      "username": "lea.mtn",
+      "displayName": "Léa Martin",
+      "firstName": "Léa",
+      "lastName": "Martin"
+     }
+    },
+    {
+     "id": "ba68ecf43804085ad08df4ac",
+     "conversationId": "523ab1de62e577a3c4f16798",
+     "type": "user",
+     "userId": "655bb9940592461b29c7d9bd",
+     "displayName": "Lucas Oliveira",
+     "language": "pt",
+     "role": "USER",
+     "isActive": true,
+     "joinedAt": "2026-08-31T12:00:00.000Z",
+     "user": {
+      "id": "655bb9940592461b29c7d9bd",
+      "username": "lucas.olv",
+      "displayName": "Lucas Oliveira",
+      "firstName": "Lucas",
+      "lastName": "Oliveira"
+     }
+    }
+   ],
+   "lastMessage": {
+    "id": "7303df26cee62e939c7d0251",
+    "content": "Pôr do sol na Paulista 🧡 Quem vem no sábado?",
+    "senderId": "ba68ecf43804085ad08df4ac",
+    "createdAt": "2026-09-30T07:55:00.000Z",
+    "messageType": "text",
+    "sender": {
+     "id": "ba68ecf43804085ad08df4ac",
+     "username": "lucas.olv",
+     "displayName": "Lucas Oliveira",
+     "firstName": "Lucas",
+     "lastName": "Oliveira",
+     "userId": "655bb9940592461b29c7d9bd",
+     "type": "user"
+    }
+   },
+   "lastMessageTranslations": {
+    "fr": "Coucher de soleil sur la Paulista 🧡 Qui vient samedi ?",
+    "en": "Sunset on Paulista 🧡 Who’s coming Saturday?",
+    "es": "Atardecer en la Paulista 🧡 ¿Quién viene el sábado?",
+    "de": "Sonnenuntergang auf der Paulista 🧡 Wer kommt Samstag?",
+    "it": "Tramonto sulla Paulista 🧡 Chi viene sabato?",
+    "ar": "غروب الشمس في شارع باوليستا 🧡 مين جاي السبت؟"
+   },
+   "lastMessageOriginalLanguage": "pt",
+   "lastMessageAt": "2026-09-30T07:55:00.000Z"
+  },
+  {
+   "id": "6263f394edbf28c8fb54b5a9",
+   "type": "direct",
+   "memberCount": 2,
+   "unreadCount": 0,
+   "isMember": true,
+   "createdAt": "2026-08-21T12:00:00.000Z",
+   "updatedAt": "2026-09-30T07:10:00.000Z",
+   "participants": [
+    {
+     "id": "795a3eb8360679c8a852cc38",
+     "conversationId": "6263f394edbf28c8fb54b5a9",
+     "type": "user",
+     "userId": "0cdc3a1317dfaf952cb35b8d",
+     "displayName": "Léa Martin",
+     "language": "fr",
+     "role": "USER",
+     "isActive": true,
+     "joinedAt": "2026-08-31T12:00:00.000Z",
+     "user": {
+      "id": "0cdc3a1317dfaf952cb35b8d",
+      "username": "lea.mtn",
+      "displayName": "Léa Martin",
+      "firstName": "Léa",
+      "lastName": "Martin"
+     }
+    },
+    {
+     "id": "bb31f57d35a204b195e51981",
+     "conversationId": "6263f394edbf28c8fb54b5a9",
+     "type": "user",
+     "userId": "b65f1cd71cd29ed7ce30c5e5",
+     "displayName": "Sofía Romero",
+     "language": "es",
+     "role": "USER",
+     "isActive": true,
+     "joinedAt": "2026-08-31T12:00:00.000Z",
+     "user": {
+      "id": "b65f1cd71cd29ed7ce30c5e5",
+      "username": "sofi.romero",
+      "displayName": "Sofía Romero",
+      "firstName": "Sofía",
+      "lastName": "Romero"
+     }
+    }
+   ],
+   "lastMessage": {
+    "id": "aba558f833498c41fcb86044",
+    "content": "Ensayo de la coreo para el sábado 💃",
+    "senderId": "bb31f57d35a204b195e51981",
+    "createdAt": "2026-09-30T07:10:00.000Z",
+    "messageType": "text",
+    "sender": {
+     "id": "bb31f57d35a204b195e51981",
+     "username": "sofi.romero",
+     "displayName": "Sofía Romero",
+     "firstName": "Sofía",
+     "lastName": "Romero",
+     "userId": "b65f1cd71cd29ed7ce30c5e5",
+     "type": "user"
+    }
+   },
+   "lastMessageTranslations": {
+    "fr": "Répétition de la choré pour samedi 💃",
+    "en": "Rehearsing the dance for Saturday 💃",
+    "de": "Probe der Choreo für Samstag 💃",
+    "it": "Prove della coreografia per sabato 💃",
+    "pt": "Ensaio da coreografia pra sábado 💃",
+    "ar": "تمرين الرقصة ليوم السبت 💃"
+   },
+   "lastMessageOriginalLanguage": "es",
+   "lastMessageAt": "2026-09-30T07:10:00.000Z"
+  },
+  {
+   "id": "33939c756bd0e2a9702eb90f",
+   "type": "direct",
+   "memberCount": 2,
+   "unreadCount": 0,
+   "isMember": true,
+   "createdAt": "2026-08-21T12:00:00.000Z",
+   "updatedAt": "2026-09-30T06:25:00.000Z",
+   "participants": [
+    {
+     "id": "9234c62324c9b34b2622a69f",
+     "conversationId": "33939c756bd0e2a9702eb90f",
+     "type": "user",
+     "userId": "0cdc3a1317dfaf952cb35b8d",
+     "displayName": "Léa Martin",
+     "language": "fr",
+     "role": "USER",
+     "isActive": true,
+     "joinedAt": "2026-08-31T12:00:00.000Z",
+     "user": {
+      "id": "0cdc3a1317dfaf952cb35b8d",
+      "username": "lea.mtn",
+      "displayName": "Léa Martin",
+      "firstName": "Léa",
+      "lastName": "Martin"
+     }
+    },
+    {
+     "id": "fc93224217a90402f469563b",
+     "conversationId": "33939c756bd0e2a9702eb90f",
+     "type": "user",
+     "userId": "3ce2c56e30a0aa8b1de407ae",
+     "displayName": "Giulia Rossi",
+     "language": "it",
+     "role": "USER",
+     "isActive": true,
+     "joinedAt": "2026-08-31T12:00:00.000Z",
+     "user": {
+      "id": "3ce2c56e30a0aa8b1de407ae",
+      "username": "giulia.r",
+      "displayName": "Giulia Rossi",
+      "firstName": "Giulia",
+      "lastName": "Rossi"
+     }
+    }
+   ],
+   "lastMessage": {
+    "id": "c92cf2d3f252d7ed26666950",
+    "content": "Bologna ti risponde con un tramonto rosa 💗",
+    "senderId": "fc93224217a90402f469563b",
+    "createdAt": "2026-09-30T06:25:00.000Z",
+    "messageType": "text",
+    "sender": {
+     "id": "fc93224217a90402f469563b",
+     "username": "giulia.r",
+     "displayName": "Giulia Rossi",
+     "firstName": "Giulia",
+     "lastName": "Rossi",
+     "userId": "3ce2c56e30a0aa8b1de407ae",
+     "type": "user"
+    }
+   },
+   "lastMessageTranslations": {
+    "fr": "Bologne te répond avec un coucher de soleil rose 💗",
+    "en": "Bologna answers with a pink sunset 💗",
+    "es": "Bolonia te responde con un atardecer rosa 💗",
+    "de": "Bologna antwortet mit einem rosa Sonnenuntergang 💗",
+    "pt": "Bolonha responde com um pôr do sol rosa 💗",
+    "ar": "بولونيا ترد عليك بغروب وردي 💗"
+   },
+   "lastMessageOriginalLanguage": "it",
+   "lastMessageAt": "2026-09-30T06:25:00.000Z"
+  },
+  {
+   "id": "c2af9a89102dc9d253fc06bd",
+   "type": "direct",
+   "memberCount": 2,
+   "unreadCount": 0,
+   "isMember": true,
+   "createdAt": "2026-08-21T12:00:00.000Z",
+   "updatedAt": "2026-09-30T05:40:00.000Z",
+   "participants": [
+    {
+     "id": "89282c5079d174f6aef880e2",
+     "conversationId": "c2af9a89102dc9d253fc06bd",
+     "type": "user",
+     "userId": "0cdc3a1317dfaf952cb35b8d",
+     "displayName": "Léa Martin",
+     "language": "fr",
+     "role": "USER",
+     "isActive": true,
+     "joinedAt": "2026-08-31T12:00:00.000Z",
+     "user": {
+      "id": "0cdc3a1317dfaf952cb35b8d",
+      "username": "lea.mtn",
+      "displayName": "Léa Martin",
+      "firstName": "Léa",
+      "lastName": "Martin"
+     }
+    },
+    {
+     "id": "0a8cc66d46fdb9d4bb0e15f8",
+     "conversationId": "c2af9a89102dc9d253fc06bd",
+     "type": "user",
+     "userId": "b6ce6229c69bf522abfc25cd",
+     "displayName": "Kwame Mensah",
+     "language": "en",
+     "role": "USER",
+     "isActive": true,
+     "joinedAt": "2026-08-31T12:00:00.000Z",
+     "user": {
+      "id": "b6ce6229c69bf522abfc25cd",
+      "username": "kwame.m",
+      "displayName": "Kwame Mensah",
+      "firstName": "Kwame",
+      "lastName": "Mensah"
+     }
+    }
+   ],
+   "lastMessage": {
+    "id": "5bcc5eb414dd2632539f8167",
+    "content": "First week here: new friends in Seoul, Madrid and Lyon. Who’s next? 🌍",
+    "senderId": "0a8cc66d46fdb9d4bb0e15f8",
+    "createdAt": "2026-09-30T05:40:00.000Z",
+    "messageType": "text",
+    "sender": {
+     "id": "0a8cc66d46fdb9d4bb0e15f8",
+     "username": "kwame.m",
+     "displayName": "Kwame Mensah",
+     "firstName": "Kwame",
+     "lastName": "Mensah",
+     "userId": "b6ce6229c69bf522abfc25cd",
+     "type": "user"
+    }
+   },
+   "lastMessageTranslations": {
+    "fr": "Première semaine ici : de nouveaux amis à Séoul, Madrid et Lyon. À qui le tour ? 🌍",
+    "es": "Primera semana aquí: amigos nuevos en Seúl, Madrid y Lyon. ¿Quién sigue? 🌍",
+    "de": "Erste Woche hier: neue Freunde in Seoul, Madrid und Lyon. Wer ist der Nächste? 🌍",
+    "it": "Prima settimana qui: nuovi amici a Seul, Madrid e Lione. Chi è il prossimo? 🌍",
+    "pt": "Primeira semana aqui: amigos novos em Seul, Madri e Lyon. Quem é o próximo? 🌍",
+    "ar": "أول أسبوع هنا: أصدقاء جدد في سيول ومدريد وليون. مين التالي؟ 🌍"
+   },
+   "lastMessageOriginalLanguage": "en",
+   "lastMessageAt": "2026-09-30T05:40:00.000Z"
+  }
+ ],
+ "messages": {
+  "cd2497b0ef23413bae5c43f9": [
+   {
+    "id": "a689db123e144b69d9294a91",
+    "conversationId": "cd2497b0ef23413bae5c43f9",
+    "senderId": "a41363905274b50ba5090fd9",
+    "createdAt": "2026-09-30T11:27:00.000Z",
+    "sender": {
+     "id": "a41363905274b50ba5090fd9",
+     "username": "amara.d",
+     "displayName": "Amara Diallo",
+     "firstName": "Amara",
+     "lastName": "Diallo",
+     "userId": "1cadb563aebdf6321b3041d2",
+     "type": "user"
+    },
+    "content": "Amara a rejoint la conversation",
+    "originalLanguage": "fr",
+    "messageType": "system",
+    "metadata": {
+     "kind": "member-joined",
+     "participantId": "a41363905274b50ba5090fd9",
+     "displayName": "Amara Diallo",
+     "username": "amara.d",
+     "givenName": "Amara",
+     "isAnonymous": false,
+     "viaShareLink": false
+    }
+   },
+   {
+    "id": "bbca4f147b4e9c93a9d9c2ee",
+    "conversationId": "cd2497b0ef23413bae5c43f9",
+    "senderId": "a41363905274b50ba5090fd9",
+    "createdAt": "2026-09-30T11:30:00.000Z",
+    "sender": {
+     "id": "a41363905274b50ba5090fd9",
+     "username": "amara.d",
+     "displayName": "Amara Diallo",
+     "firstName": "Amara",
+     "lastName": "Diallo",
+     "userId": "1cadb563aebdf6321b3041d2",
+     "type": "user"
+    },
+    "content": "Salut tout le monde 👋 Bonjour de Dakar !",
+    "originalLanguage": "fr",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "2f1cb8c560e05d78f3ecba8d",
+      "messageId": "bbca4f147b4e9c93a9d9c2ee",
+      "targetLanguage": "en",
+      "translatedContent": "Hi everyone 👋 Hello from Dakar!",
+      "sourceLanguage": "fr"
+     },
+     {
+      "id": "ba885bbb48cb4e0ecb8140fc",
+      "messageId": "bbca4f147b4e9c93a9d9c2ee",
+      "targetLanguage": "es",
+      "translatedContent": "¡Hola a todos 👋 Saludos desde Dakar!",
+      "sourceLanguage": "fr"
+     },
+     {
+      "id": "a5b006f1413d1c250e392f07",
+      "messageId": "bbca4f147b4e9c93a9d9c2ee",
+      "targetLanguage": "de",
+      "translatedContent": "Hallo zusammen 👋 Grüße aus Dakar!",
+      "sourceLanguage": "fr"
+     },
+     {
+      "id": "cebbbc1c90cd11a7bf96634e",
+      "messageId": "bbca4f147b4e9c93a9d9c2ee",
+      "targetLanguage": "it",
+      "translatedContent": "Ciao a tutti 👋 Un saluto da Dakar!",
+      "sourceLanguage": "fr"
+     },
+     {
+      "id": "f1f3e9cadaec78245e9f5c98",
+      "messageId": "bbca4f147b4e9c93a9d9c2ee",
+      "targetLanguage": "pt",
+      "translatedContent": "Oi, pessoal 👋 Um salve de Dacar!",
+      "sourceLanguage": "fr"
+     },
+     {
+      "id": "64899c15fbe8fd15f8c6dfdc",
+      "messageId": "bbca4f147b4e9c93a9d9c2ee",
+      "targetLanguage": "ar",
+      "translatedContent": "مرحبًا بالجميع 👋 تحياتي من داكار!",
+      "sourceLanguage": "fr"
+     }
+    ]
+   },
+   {
+    "id": "c1638293139fe57cde40709a",
+    "conversationId": "cd2497b0ef23413bae5c43f9",
+    "senderId": "ca5774acc4189aa20c46217d",
+    "createdAt": "2026-09-30T11:33:00.000Z",
+    "sender": {
+     "id": "ca5774acc4189aa20c46217d",
+     "username": "kwame.m",
+     "displayName": "Kwame Mensah",
+     "firstName": "Kwame",
+     "lastName": "Mensah",
+     "userId": "b6ce6229c69bf522abfc25cd",
+     "type": "user"
+    },
+    "content": "Kwame a rejoint la conversation",
+    "originalLanguage": "fr",
+    "messageType": "system",
+    "metadata": {
+     "kind": "member-joined",
+     "participantId": "ca5774acc4189aa20c46217d",
+     "displayName": "Kwame Mensah",
+     "username": "kwame.m",
+     "givenName": "Kwame",
+     "isAnonymous": false,
+     "viaShareLink": false
+    }
+   },
+   {
+    "id": "ccbdaffba34ae57819c620c8",
+    "conversationId": "cd2497b0ef23413bae5c43f9",
+    "senderId": "ca5774acc4189aa20c46217d",
+    "createdAt": "2026-09-30T11:36:00.000Z",
+    "sender": {
+     "id": "ca5774acc4189aa20c46217d",
+     "username": "kwame.m",
+     "displayName": "Kwame Mensah",
+     "firstName": "Kwame",
+     "lastName": "Mensah",
+     "userId": "b6ce6229c69bf522abfc25cd",
+     "type": "user"
+    },
+    "content": "Hello from Accra 👋 Who else just landed here?",
+    "originalLanguage": "en",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "5cfa1bc5cda923bb55b407bf",
+      "messageId": "ccbdaffba34ae57819c620c8",
+      "targetLanguage": "fr",
+      "translatedContent": "Salut depuis Accra 👋 Qui d’autre vient d’arriver ?",
+      "sourceLanguage": "en"
+     },
+     {
+      "id": "4b9cdfcf7bf89a148ea9ad36",
+      "messageId": "ccbdaffba34ae57819c620c8",
+      "targetLanguage": "es",
+      "translatedContent": "¡Hola desde Acra 👋 ¿Quién más acaba de llegar?",
+      "sourceLanguage": "en"
+     },
+     {
+      "id": "70f68afcaee05b6b2132e2dd",
+      "messageId": "ccbdaffba34ae57819c620c8",
+      "targetLanguage": "de",
+      "translatedContent": "Hallo aus Accra 👋 Wer ist noch neu hier?",
+      "sourceLanguage": "en"
+     },
+     {
+      "id": "af155c4d94499f416101eff0",
+      "messageId": "ccbdaffba34ae57819c620c8",
+      "targetLanguage": "it",
+      "translatedContent": "Ciao da Accra 👋 Chi altro è appena arrivato?",
+      "sourceLanguage": "en"
+     },
+     {
+      "id": "40543d58550df427c527d9ad",
+      "messageId": "ccbdaffba34ae57819c620c8",
+      "targetLanguage": "pt",
+      "translatedContent": "Oi de Acra 👋 Quem mais acabou de chegar?",
+      "sourceLanguage": "en"
+     },
+     {
+      "id": "b39be839c690775f26819bac",
+      "messageId": "ccbdaffba34ae57819c620c8",
+      "targetLanguage": "ar",
+      "translatedContent": "مرحبًا من أكرا 👋 مين وصل هنا للتو أيضًا؟",
+      "sourceLanguage": "en"
+     }
+    ]
+   },
+   {
+    "id": "5c55b5782970c196d0b72c28",
+    "conversationId": "cd2497b0ef23413bae5c43f9",
+    "senderId": "2efde3986fbe7f0986de019f",
+    "createdAt": "2026-09-30T11:39:00.000Z",
+    "sender": {
+     "id": "2efde3986fbe7f0986de019f",
+     "username": "aiko.t",
+     "displayName": "Aiko Tanaka",
+     "firstName": "Aiko",
+     "lastName": "Tanaka",
+     "userId": "76cffb9b729978327d9e3fe0",
+     "type": "user"
+    },
+    "content": "みんなこんにちは！大阪から🌸",
+    "originalLanguage": "ja",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "9cf0430b8fc0106ae270b94b",
+      "messageId": "5c55b5782970c196d0b72c28",
+      "targetLanguage": "fr",
+      "translatedContent": "Coucou tout le monde ! Depuis Osaka 🌸",
+      "sourceLanguage": "ja"
+     },
+     {
+      "id": "aca0a5eaeb49eb47516d02ca",
+      "messageId": "5c55b5782970c196d0b72c28",
+      "targetLanguage": "en",
+      "translatedContent": "Hi everyone! From Osaka 🌸",
+      "sourceLanguage": "ja"
+     },
+     {
+      "id": "29624e8877f7f7312d0e4bd1",
+      "messageId": "5c55b5782970c196d0b72c28",
+      "targetLanguage": "es",
+      "translatedContent": "¡Hola a todos! Desde Osaka 🌸",
+      "sourceLanguage": "ja"
+     },
+     {
+      "id": "c4bcd2ff482285d9bcded41a",
+      "messageId": "5c55b5782970c196d0b72c28",
+      "targetLanguage": "de",
+      "translatedContent": "Hallo alle! Aus Osaka 🌸",
+      "sourceLanguage": "ja"
+     },
+     {
+      "id": "3972fa6342ce8ad1f528e3c7",
+      "messageId": "5c55b5782970c196d0b72c28",
+      "targetLanguage": "it",
+      "translatedContent": "Ciao a tutti! Da Osaka 🌸",
+      "sourceLanguage": "ja"
+     },
+     {
+      "id": "9905126932506f0a34322fd5",
+      "messageId": "5c55b5782970c196d0b72c28",
+      "targetLanguage": "pt",
+      "translatedContent": "Oi, gente! De Osaka 🌸",
+      "sourceLanguage": "ja"
+     },
+     {
+      "id": "7c95a88ae90fb376d6b02a55",
+      "messageId": "5c55b5782970c196d0b72c28",
+      "targetLanguage": "ar",
+      "translatedContent": "مرحبًا يا جماعة! من أوساكا 🌸",
+      "sourceLanguage": "ja"
+     }
+    ]
+   },
+   {
+    "id": "065896f8122ac22dc08fa52c",
+    "conversationId": "cd2497b0ef23413bae5c43f9",
+    "senderId": "3300f186653b1609781a531a",
+    "createdAt": "2026-09-30T11:42:00.000Z",
+    "sender": {
+     "id": "3300f186653b1609781a531a",
+     "username": "yusuf.h",
+     "displayName": "Yusuf Haddad",
+     "firstName": "Yusuf",
+     "lastName": "Haddad",
+     "userId": "b97389c5be1aa560990a0647",
+     "type": "user"
+    },
+    "content": "Yusuf a rejoint la conversation",
+    "originalLanguage": "fr",
+    "messageType": "system",
+    "metadata": {
+     "kind": "member-joined",
+     "participantId": "3300f186653b1609781a531a",
+     "displayName": "Yusuf Haddad",
+     "username": "yusuf.h",
+     "givenName": "Yusuf",
+     "isAnonymous": false,
+     "viaShareLink": false
+    }
+   },
+   {
+    "id": "308ef85f6ec1c6bd8bc3b0f0",
+    "conversationId": "cd2497b0ef23413bae5c43f9",
+    "senderId": "3300f186653b1609781a531a",
+    "createdAt": "2026-09-30T11:45:00.000Z",
+    "sender": {
+     "id": "3300f186653b1609781a531a",
+     "username": "yusuf.h",
+     "displayName": "Yusuf Haddad",
+     "firstName": "Yusuf",
+     "lastName": "Haddad",
+     "userId": "b97389c5be1aa560990a0647",
+     "type": "user"
+    },
+    "content": "مرحبًا بالجميع! تحياتي من عمّان ☀️",
+    "originalLanguage": "ar",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "95e26c93becf4a032f2535af",
+      "messageId": "308ef85f6ec1c6bd8bc3b0f0",
+      "targetLanguage": "fr",
+      "translatedContent": "Bonjour à tous ! Salutations d’Amman ☀️",
+      "sourceLanguage": "ar"
+     },
+     {
+      "id": "b8f5952acf03c0d4ba4fa67e",
+      "messageId": "308ef85f6ec1c6bd8bc3b0f0",
+      "targetLanguage": "en",
+      "translatedContent": "Hello everyone! Greetings from Amman ☀️",
+      "sourceLanguage": "ar"
+     },
+     {
+      "id": "b08fd24429658c25f8dfae01",
+      "messageId": "308ef85f6ec1c6bd8bc3b0f0",
+      "targetLanguage": "es",
+      "translatedContent": "¡Hola a todos! Saludos desde Amán ☀️",
+      "sourceLanguage": "ar"
+     },
+     {
+      "id": "c5536d5f74799c6fc2009f54",
+      "messageId": "308ef85f6ec1c6bd8bc3b0f0",
+      "targetLanguage": "de",
+      "translatedContent": "Hallo zusammen! Grüße aus Amman ☀️",
+      "sourceLanguage": "ar"
+     },
+     {
+      "id": "63958f495d054296d2ed4380",
+      "messageId": "308ef85f6ec1c6bd8bc3b0f0",
+      "targetLanguage": "it",
+      "translatedContent": "Ciao a tutti! Saluti da Amman ☀️",
+      "sourceLanguage": "ar"
+     },
+     {
+      "id": "ab08ad0a4c9e2600ef91ee37",
+      "messageId": "308ef85f6ec1c6bd8bc3b0f0",
+      "targetLanguage": "pt",
+      "translatedContent": "Olá a todos! Saudações de Amã ☀️",
+      "sourceLanguage": "ar"
+     }
+    ]
+   },
+   {
+    "id": "6b9b0960065073a16d112ca1",
+    "conversationId": "cd2497b0ef23413bae5c43f9",
+    "senderId": "4e62dd53a9ac891ee0f195e2",
+    "createdAt": "2026-09-30T11:48:00.000Z",
+    "sender": {
+     "id": "4e62dd53a9ac891ee0f195e2",
+     "username": "lucas.olv",
+     "displayName": "Lucas Oliveira",
+     "firstName": "Lucas",
+     "lastName": "Oliveira",
+     "userId": "655bb9940592461b29c7d9bd",
+     "type": "user"
+    },
+    "content": "Oi gente! Alguém de São Paulo? 🇧🇷",
+    "originalLanguage": "pt",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "c054db7b5dc72c8cff8f39cc",
+      "messageId": "6b9b0960065073a16d112ca1",
+      "targetLanguage": "fr",
+      "translatedContent": "Salut ! Quelqu’un de São Paulo ? 🇧🇷",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "e0f539e0cb367015bc8122b7",
+      "messageId": "6b9b0960065073a16d112ca1",
+      "targetLanguage": "en",
+      "translatedContent": "Hey all! Anyone from São Paulo? 🇧🇷",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "48b6ee43a87dd5cd8e304520",
+      "messageId": "6b9b0960065073a16d112ca1",
+      "targetLanguage": "es",
+      "translatedContent": "¡Hola! ¿Alguien de São Paulo? 🇧🇷",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "9798258cda83e8085ade6dc9",
+      "messageId": "6b9b0960065073a16d112ca1",
+      "targetLanguage": "de",
+      "translatedContent": "Hey Leute! Jemand aus São Paulo? 🇧🇷",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "3193ede2e314f0af2cbd74c5",
+      "messageId": "6b9b0960065073a16d112ca1",
+      "targetLanguage": "it",
+      "translatedContent": "Ciao! Qualcuno di San Paolo? 🇧🇷",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "c9bf9bc025bc50bbb2121da2",
+      "messageId": "6b9b0960065073a16d112ca1",
+      "targetLanguage": "ar",
+      "translatedContent": "أهلًا يا جماعة! أحد من ساو باولو؟ 🇧🇷",
+      "sourceLanguage": "pt"
+     }
+    ]
+   },
+   {
+    "id": "7496cd628d71196d4334fdf4",
+    "conversationId": "cd2497b0ef23413bae5c43f9",
+    "senderId": "f509c755b6eaf416aea66795",
+    "createdAt": "2026-09-30T11:51:00.000Z",
+    "sender": {
+     "id": "f509c755b6eaf416aea66795",
+     "username": "priya.n",
+     "displayName": "Priya Nair",
+     "firstName": "Priya",
+     "lastName": "Nair",
+     "userId": "8fda9dc54c488a39c0d02079",
+     "type": "user"
+    },
+    "content": "Priya a rejoint la conversation",
+    "originalLanguage": "fr",
+    "messageType": "system",
+    "metadata": {
+     "kind": "member-joined",
+     "participantId": "f509c755b6eaf416aea66795",
+     "displayName": "Priya Nair",
+     "username": "priya.n",
+     "givenName": "Priya",
+     "isAnonymous": false,
+     "viaShareLink": false
+    }
+   },
+   {
+    "id": "10640c4e2c9cc291f3aadd8a",
+    "conversationId": "cd2497b0ef23413bae5c43f9",
+    "senderId": "f509c755b6eaf416aea66795",
+    "createdAt": "2026-09-30T11:54:00.000Z",
+    "sender": {
+     "id": "f509c755b6eaf416aea66795",
+     "username": "priya.n",
+     "displayName": "Priya Nair",
+     "firstName": "Priya",
+     "lastName": "Nair",
+     "userId": "8fda9dc54c488a39c0d02079",
+     "type": "user"
+    },
+    "content": "नमस्ते सबको! बैंगलोर से 🙏",
+    "originalLanguage": "hi",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "285bc10c4a82a1aef636a82a",
+      "messageId": "10640c4e2c9cc291f3aadd8a",
+      "targetLanguage": "fr",
+      "translatedContent": "Bonjour à tous ! Depuis Bangalore 🙏",
+      "sourceLanguage": "hi"
+     },
+     {
+      "id": "c3bb748c057742dcd492081b",
+      "messageId": "10640c4e2c9cc291f3aadd8a",
+      "targetLanguage": "en",
+      "translatedContent": "Hello everyone! From Bangalore 🙏",
+      "sourceLanguage": "hi"
+     },
+     {
+      "id": "48df25da32d54725017adbd5",
+      "messageId": "10640c4e2c9cc291f3aadd8a",
+      "targetLanguage": "es",
+      "translatedContent": "¡Hola a todos! Desde Bangalore 🙏",
+      "sourceLanguage": "hi"
+     },
+     {
+      "id": "d28422254f38aeb9b686795a",
+      "messageId": "10640c4e2c9cc291f3aadd8a",
+      "targetLanguage": "de",
+      "translatedContent": "Hallo zusammen! Aus Bangalore 🙏",
+      "sourceLanguage": "hi"
+     },
+     {
+      "id": "7eee8544a09985844bbdf91b",
+      "messageId": "10640c4e2c9cc291f3aadd8a",
+      "targetLanguage": "it",
+      "translatedContent": "Ciao a tutti! Da Bangalore 🙏",
+      "sourceLanguage": "hi"
+     },
+     {
+      "id": "853365328e6f31926c69e21a",
+      "messageId": "10640c4e2c9cc291f3aadd8a",
+      "targetLanguage": "pt",
+      "translatedContent": "Olá, pessoal! De Bangalore 🙏",
+      "sourceLanguage": "hi"
+     },
+     {
+      "id": "786b3753dd10293e9719f686",
+      "messageId": "10640c4e2c9cc291f3aadd8a",
+      "targetLanguage": "ar",
+      "translatedContent": "مرحبًا بالجميع! من بنغالور 🙏",
+      "sourceLanguage": "hi"
+     }
+    ]
+   },
+   {
+    "id": "a850d55d5af775af39405599",
+    "conversationId": "cd2497b0ef23413bae5c43f9",
+    "senderId": "6555bcf692dc1c0607112ec0",
+    "createdAt": "2026-09-30T11:57:00.000Z",
+    "sender": {
+     "id": "6555bcf692dc1c0607112ec0",
+     "username": "minjun.p",
+     "displayName": "Min-jun Park",
+     "firstName": "Min-jun",
+     "lastName": "Park",
+     "userId": "c1dcfc966154a301adabb8c7",
+     "type": "user"
+    },
+    "content": "안녕하세요! 서울에서 인사드려요 👋",
+    "originalLanguage": "ko",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "6ec948b070d528d01d0c7c3f",
+      "messageId": "a850d55d5af775af39405599",
+      "targetLanguage": "fr",
+      "translatedContent": "Salut ! Un grand bonjour de Séoul 👋",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "9b60b32e38b1fee1300806f2",
+      "messageId": "a850d55d5af775af39405599",
+      "targetLanguage": "en",
+      "translatedContent": "Hi! Big hello from Seoul 👋",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "5e31d42f216bd5b835c9c371",
+      "messageId": "a850d55d5af775af39405599",
+      "targetLanguage": "es",
+      "translatedContent": "¡Hola! Un saludo enorme desde Seúl 👋",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "e533910493119032d0629278",
+      "messageId": "a850d55d5af775af39405599",
+      "targetLanguage": "de",
+      "translatedContent": "Hi! Liebe Grüße aus Seoul 👋",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "aa6bc20da54f0fc02407b954",
+      "messageId": "a850d55d5af775af39405599",
+      "targetLanguage": "it",
+      "translatedContent": "Ciao! Un saluto da Seul 👋",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "c189f7ddcb9086241314e3a9",
+      "messageId": "a850d55d5af775af39405599",
+      "targetLanguage": "pt",
+      "translatedContent": "Oi! Um salve de Seul 👋",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "d9e7f11ca4941b067e538c0f",
+      "messageId": "a850d55d5af775af39405599",
+      "targetLanguage": "ar",
+      "translatedContent": "أهلًا! تحية كبيرة من سيول 👋",
+      "sourceLanguage": "ko"
+     }
+    ]
+   }
+  ],
+  "ca4fa0732bd34cb8c64b7ed7": [
+   {
+    "id": "314b2f3e9c8e665437cfa79f",
+    "conversationId": "ca4fa0732bd34cb8c64b7ed7",
+    "senderId": "13bcb13e0f28fd34ba321855",
+    "createdAt": "2026-09-30T08:55:00.000Z",
+    "sender": {
+     "id": "13bcb13e0f28fd34ba321855",
+     "username": "minjun.p",
+     "displayName": "Min-jun Park",
+     "firstName": "Min-jun",
+     "lastName": "Park",
+     "userId": "c1dcfc966154a301adabb8c7",
+     "type": "user"
+    },
+    "content": "점심시간인데… 계속 네 생각만 나 💭",
+    "originalLanguage": "ko",
+    "messageType": "image",
+    "translations": [
+     {
+      "id": "08f9093d51eaf378d30905fc",
+      "messageId": "314b2f3e9c8e665437cfa79f",
+      "targetLanguage": "fr",
+      "translatedContent": "Pause déjeuner… je ne pense qu’à toi 💭",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "be2d3de8226cb5d310001627",
+      "messageId": "314b2f3e9c8e665437cfa79f",
+      "targetLanguage": "en",
+      "translatedContent": "Lunch break… and all I think about is you 💭",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "e137173a8815710ee64e51f8",
+      "messageId": "314b2f3e9c8e665437cfa79f",
+      "targetLanguage": "es",
+      "translatedContent": "Pausa para comer… y solo pienso en ti 💭",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "01b4aa34a7ecf66b8db32b85",
+      "messageId": "314b2f3e9c8e665437cfa79f",
+      "targetLanguage": "de",
+      "translatedContent": "Mittagspause… und ich denk nur an dich 💭",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "9329881511ff94a92744c821",
+      "messageId": "314b2f3e9c8e665437cfa79f",
+      "targetLanguage": "it",
+      "translatedContent": "Pausa pranzo… e penso solo a te 💭",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "2c60b226c77682f7895dc964",
+      "messageId": "314b2f3e9c8e665437cfa79f",
+      "targetLanguage": "pt",
+      "translatedContent": "Hora do almoço… e só penso em você 💭",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "b184eb94a31d8d3c3469ccc5",
+      "messageId": "314b2f3e9c8e665437cfa79f",
+      "targetLanguage": "ar",
+      "translatedContent": "استراحة الغداء… ولا أفكر إلا فيك 💭",
+      "sourceLanguage": "ko"
+     }
+    ],
+    "attachments": [
+     {
+      "id": "12c66c2e7256fa38ccce53aa",
+      "messageId": "314b2f3e9c8e665437cfa79f",
+      "fileName": "bol-ramen.jpg",
+      "originalName": "bol-ramen.jpg",
+      "mimeType": "image/jpeg",
+      "fileSize": 152600,
+      "fileUrl": "/api/v1/attachments/file/vitrine/bol-ramen.jpg",
+      "width": 800,
+      "height": 1200,
+      "uploadedBy": "c1dcfc966154a301adabb8c7",
+      "createdAt": "2026-09-30T08:55:00.000Z"
+     }
+    ]
+   },
+   {
+    "id": "18bf52cec5a85b968763b87f",
+    "conversationId": "ca4fa0732bd34cb8c64b7ed7",
+    "senderId": "d61154ee0cccefeb6c1707d7",
+    "createdAt": "2026-09-30T09:00:00.000Z",
+    "sender": {
+     "id": "d61154ee0cccefeb6c1707d7",
+     "username": "lea.mtn",
+     "displayName": "Léa Martin",
+     "firstName": "Léa",
+     "lastName": "Martin",
+     "userId": "0cdc3a1317dfaf952cb35b8d",
+     "type": "user"
+    },
+    "content": "Moi aussi 🥰 Envoie-moi ta vue ce soir !",
+    "originalLanguage": "fr",
+    "messageType": "text",
+    "translations": []
+   },
+   {
+    "id": "da935151abb6615f2c736a05",
+    "conversationId": "ca4fa0732bd34cb8c64b7ed7",
+    "senderId": "13bcb13e0f28fd34ba321855",
+    "createdAt": "2026-09-30T11:18:00.000Z",
+    "sender": {
+     "id": "13bcb13e0f28fd34ba321855",
+     "username": "minjun.p",
+     "displayName": "Min-jun Park",
+     "firstName": "Min-jun",
+     "lastName": "Park",
+     "userId": "c1dcfc966154a301adabb8c7",
+     "type": "user"
+    },
+    "content": "오늘 밤 야경… 너만 있으면 완벽할 텐데 ❤️",
+    "originalLanguage": "ko",
+    "messageType": "image",
+    "translations": [
+     {
+      "id": "f7b65e43e858bcb15c368dc6",
+      "messageId": "da935151abb6615f2c736a05",
+      "targetLanguage": "fr",
+      "translatedContent": "La vue ce soir… il ne manque que toi ❤️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "5a1e6800f2b06e9405dba5a2",
+      "messageId": "da935151abb6615f2c736a05",
+      "targetLanguage": "en",
+      "translatedContent": "Tonight’s view… the only thing missing is you ❤️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "78cfc046bc98937205be2514",
+      "messageId": "da935151abb6615f2c736a05",
+      "targetLanguage": "es",
+      "translatedContent": "La vista de esta noche… solo faltas tú ❤️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "5cbfbd05c605f62deef4f76d",
+      "messageId": "da935151abb6615f2c736a05",
+      "targetLanguage": "de",
+      "translatedContent": "Die Aussicht heute Abend… nur du fehlst ❤️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "77fc971b14b252852d6cb51b",
+      "messageId": "da935151abb6615f2c736a05",
+      "targetLanguage": "it",
+      "translatedContent": "La vista di stasera… manchi solo tu ❤️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "33050eebd94ef79ced0f7850",
+      "messageId": "da935151abb6615f2c736a05",
+      "targetLanguage": "pt",
+      "translatedContent": "A vista de hoje à noite… só falta você ❤️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "6bd14ecd4ac510a52f3edac1",
+      "messageId": "da935151abb6615f2c736a05",
+      "targetLanguage": "ar",
+      "translatedContent": "منظر الليلة… لا ينقصه إلا أنت ❤️",
+      "sourceLanguage": "ko"
+     }
+    ],
+    "attachments": [
+     {
+      "id": "76420c3e3348df282ac28e44",
+      "messageId": "da935151abb6615f2c736a05",
+      "fileName": "seoul-crepuscule.jpg",
+      "originalName": "seoul-crepuscule.jpg",
+      "mimeType": "image/jpeg",
+      "fileSize": 187452,
+      "fileUrl": "/api/v1/attachments/file/vitrine/seoul-crepuscule.jpg",
+      "width": 800,
+      "height": 1200,
+      "uploadedBy": "c1dcfc966154a301adabb8c7",
+      "createdAt": "2026-09-30T11:18:00.000Z"
+     }
+    ]
+   },
+   {
+    "id": "5e5e5e9a37ce927f52ea9177",
+    "conversationId": "ca4fa0732bd34cb8c64b7ed7",
+    "senderId": "d61154ee0cccefeb6c1707d7",
+    "createdAt": "2026-09-30T11:20:00.000Z",
+    "sender": {
+     "id": "d61154ee0cccefeb6c1707d7",
+     "username": "lea.mtn",
+     "displayName": "Léa Martin",
+     "firstName": "Léa",
+     "lastName": "Martin",
+     "userId": "0cdc3a1317dfaf952cb35b8d",
+     "type": "user"
+    },
+    "content": "Magnifique 😍 Tu me manques tellement…",
+    "originalLanguage": "fr",
+    "messageType": "text",
+    "translations": []
+   },
+   {
+    "id": "f9ecc26b5b0d1dd494021146",
+    "conversationId": "ca4fa0732bd34cb8c64b7ed7",
+    "senderId": "13bcb13e0f28fd34ba321855",
+    "createdAt": "2026-09-30T11:22:00.000Z",
+    "sender": {
+     "id": "13bcb13e0f28fd34ba321855",
+     "username": "minjun.p",
+     "displayName": "Min-jun Park",
+     "firstName": "Min-jun",
+     "lastName": "Park",
+     "userId": "c1dcfc966154a301adabb8c7",
+     "type": "user"
+    },
+    "content": "이제 12일만 기다리면 돼 ❤️",
+    "originalLanguage": "ko",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "704dc8f4e4003c00167d8838",
+      "messageId": "f9ecc26b5b0d1dd494021146",
+      "targetLanguage": "fr",
+      "translatedContent": "Plus que 12 jours ❤️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "53ddd7cb6d15449d553eab5d",
+      "messageId": "f9ecc26b5b0d1dd494021146",
+      "targetLanguage": "en",
+      "translatedContent": "Just 12 more days ❤️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "2588764e5bce66c393faa12b",
+      "messageId": "f9ecc26b5b0d1dd494021146",
+      "targetLanguage": "es",
+      "translatedContent": "Solo quedan 12 días ❤️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "3effaa664508b5ba762945e9",
+      "messageId": "f9ecc26b5b0d1dd494021146",
+      "targetLanguage": "de",
+      "translatedContent": "Nur noch 12 Tage ❤️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "12718f77a5d1147ee1f583e2",
+      "messageId": "f9ecc26b5b0d1dd494021146",
+      "targetLanguage": "it",
+      "translatedContent": "Mancano solo 12 giorni ❤️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "943b5784d923663a2da0c076",
+      "messageId": "f9ecc26b5b0d1dd494021146",
+      "targetLanguage": "pt",
+      "translatedContent": "Só faltam 12 dias ❤️",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "301fddee92cde45d8961989b",
+      "messageId": "f9ecc26b5b0d1dd494021146",
+      "targetLanguage": "ar",
+      "translatedContent": "باقي 12 يومًا فقط ❤️",
+      "sourceLanguage": "ko"
+     }
+    ]
+   },
+   {
+    "id": "73ebc77c61517253ef7940ec",
+    "conversationId": "ca4fa0732bd34cb8c64b7ed7",
+    "senderId": "13bcb13e0f28fd34ba321855",
+    "createdAt": "2026-09-30T11:58:00.000Z",
+    "sender": {
+     "id": "13bcb13e0f28fd34ba321855",
+     "username": "minjun.p",
+     "displayName": "Min-jun Park",
+     "firstName": "Min-jun",
+     "lastName": "Park",
+     "userId": "c1dcfc966154a301adabb8c7",
+     "type": "user"
+    },
+    "content": "",
+    "originalLanguage": "ko",
+    "messageType": "audio",
+    "attachments": [
+     {
+      "id": "9663058c1872d84ca677e9d7",
+      "messageId": "73ebc77c61517253ef7940ec",
+      "fileName": "vocal-minjun.p-ko.m4a",
+      "originalName": "vocal-minjun.p-ko.m4a",
+      "mimeType": "audio/mp4",
+      "fileSize": 36000,
+      "fileUrl": "/api/v1/attachments/file/vitrine/vocal-minjun.p-ko.m4a",
+      "uploadedBy": "c1dcfc966154a301adabb8c7",
+      "createdAt": "2026-09-30T11:58:00.000Z",
+      "duration": 9000,
+      "transcription": {
+       "text": "하루 종일 네 목소리가 듣고 싶었어. 오늘 밤 창밖으로 도시의 불빛을 보면서 네 생각만 했어, 우리가 함께 할 모든 것들도. 12일 뒤에 공항에서 기다릴게.",
+       "language": "ko",
+       "confidence": 0.97,
+       "durationMs": 9000,
+       "segments": [
+        {
+         "text": "하루",
+         "startMs": 0,
+         "endMs": 281
+        },
+        {
+         "text": "종일",
+         "startMs": 281,
+         "endMs": 563
+        },
+        {
+         "text": "네",
+         "startMs": 563,
+         "endMs": 703
+        },
+        {
+         "text": "목소리가",
+         "startMs": 703,
+         "endMs": 1266
+        },
+        {
+         "text": "듣고",
+         "startMs": 1266,
+         "endMs": 1547
+        },
+        {
+         "text": "싶었어.",
+         "startMs": 1547,
+         "endMs": 2109
+        },
+        {
+         "text": "오늘",
+         "startMs": 2109,
+         "endMs": 2391
+        },
+        {
+         "text": "밤",
+         "startMs": 2391,
+         "endMs": 2531
+        },
+        {
+         "text": "창밖으로",
+         "startMs": 2531,
+         "endMs": 3094
+        },
+        {
+         "text": "도시의",
+         "startMs": 3094,
+         "endMs": 3516
+        },
+        {
+         "text": "불빛을",
+         "startMs": 3516,
+         "endMs": 3938
+        },
+        {
+         "text": "보면서",
+         "startMs": 3938,
+         "endMs": 4359
+        },
+        {
+         "text": "네",
+         "startMs": 4359,
+         "endMs": 4500
+        },
+        {
+         "text": "생각만",
+         "startMs": 4500,
+         "endMs": 4922
+        },
+        {
+         "text": "했어,",
+         "startMs": 4922,
+         "endMs": 5344
+        },
+        {
+         "text": "우리가",
+         "startMs": 5344,
+         "endMs": 5766
+        },
+        {
+         "text": "함께",
+         "startMs": 5766,
+         "endMs": 6047
+        },
+        {
+         "text": "할",
+         "startMs": 6047,
+         "endMs": 6188
+        },
+        {
+         "text": "모든",
+         "startMs": 6188,
+         "endMs": 6469
+        },
+        {
+         "text": "것들도.",
+         "startMs": 6469,
+         "endMs": 7031
+        },
+        {
+         "text": "12일",
+         "startMs": 7031,
+         "endMs": 7453
+        },
+        {
+         "text": "뒤에",
+         "startMs": 7453,
+         "endMs": 7734
+        },
+        {
+         "text": "공항에서",
+         "startMs": 7734,
+         "endMs": 8297
+        },
+        {
+         "text": "기다릴게.",
+         "startMs": 8297,
+         "endMs": 9000
+        }
+       ]
+      },
+      "translations": {
+       "fr": {
+        "type": "audio",
+        "url": "/api/v1/attachments/file/vitrine/vocal-minjun.p-fr.m4a",
+        "transcription": "Toute la journée, j’avais envie d’entendre ta voix. Ce soir, en regardant les lumières de la ville depuis ma fenêtre, je n’ai pensé qu’à toi et à tout ce qu’on va faire ensemble. Dans 12 jours, je t’attends à l’aéroport.",
+        "durationMs": 9000,
+        "format": "m4a",
+        "cloned": true,
+        "quality": 0.93,
+        "ttsModel": "chatterbox",
+        "segments": [
+         {
+          "text": "Toute",
+          "startMs": 0,
+          "endMs": 249
+         },
+         {
+          "text": "la",
+          "startMs": 249,
+          "endMs": 348
+         },
+         {
+          "text": "journée,",
+          "startMs": 348,
+          "endMs": 746
+         },
+         {
+          "text": "j’avais",
+          "startMs": 746,
+          "endMs": 1094
+         },
+         {
+          "text": "envie",
+          "startMs": 1094,
+          "endMs": 1343
+         },
+         {
+          "text": "d’entendre",
+          "startMs": 1343,
+          "endMs": 1840
+         },
+         {
+          "text": "ta",
+          "startMs": 1840,
+          "endMs": 1939
+         },
+         {
+          "text": "voix.",
+          "startMs": 1939,
+          "endMs": 2188
+         },
+         {
+          "text": "Ce",
+          "startMs": 2188,
+          "endMs": 2287
+         },
+         {
+          "text": "soir,",
+          "startMs": 2287,
+          "endMs": 2536
+         },
+         {
+          "text": "en",
+          "startMs": 2536,
+          "endMs": 2635
+         },
+         {
+          "text": "regardant",
+          "startMs": 2635,
+          "endMs": 3083
+         },
+         {
+          "text": "les",
+          "startMs": 3083,
+          "endMs": 3232
+         },
+         {
+          "text": "lumières",
+          "startMs": 3232,
+          "endMs": 3630
+         },
+         {
+          "text": "de",
+          "startMs": 3630,
+          "endMs": 3729
+         },
+         {
+          "text": "la",
+          "startMs": 3729,
+          "endMs": 3829
+         },
+         {
+          "text": "ville",
+          "startMs": 3829,
+          "endMs": 4077
+         },
+         {
+          "text": "depuis",
+          "startMs": 4077,
+          "endMs": 4376
+         },
+         {
+          "text": "ma",
+          "startMs": 4376,
+          "endMs": 4475
+         },
+         {
+          "text": "fenêtre,",
+          "startMs": 4475,
+          "endMs": 4873
+         },
+         {
+          "text": "je",
+          "startMs": 4873,
+          "endMs": 4972
+         },
+         {
+          "text": "n’ai",
+          "startMs": 4972,
+          "endMs": 5171
+         },
+         {
+          "text": "pensé",
+          "startMs": 5171,
+          "endMs": 5420
+         },
+         {
+          "text": "qu’à",
+          "startMs": 5420,
+          "endMs": 5619
+         },
+         {
+          "text": "toi",
+          "startMs": 5619,
+          "endMs": 5768
+         },
+         {
+          "text": "et",
+          "startMs": 5768,
+          "endMs": 5867
+         },
+         {
+          "text": "à",
+          "startMs": 5867,
+          "endMs": 5917
+         },
+         {
+          "text": "tout",
+          "startMs": 5917,
+          "endMs": 6116
+         },
+         {
+          "text": "ce",
+          "startMs": 6116,
+          "endMs": 6215
+         },
+         {
+          "text": "qu’on",
+          "startMs": 6215,
+          "endMs": 6464
+         },
+         {
+          "text": "va",
+          "startMs": 6464,
+          "endMs": 6564
+         },
+         {
+          "text": "faire",
+          "startMs": 6564,
+          "endMs": 6812
+         },
+         {
+          "text": "ensemble.",
+          "startMs": 6812,
+          "endMs": 7260
+         },
+         {
+          "text": "Dans",
+          "startMs": 7260,
+          "endMs": 7459
+         },
+         {
+          "text": "12",
+          "startMs": 7459,
+          "endMs": 7558
+         },
+         {
+          "text": "jours,",
+          "startMs": 7558,
+          "endMs": 7856
+         },
+         {
+          "text": "je",
+          "startMs": 7856,
+          "endMs": 7956
+         },
+         {
+          "text": "t’attends",
+          "startMs": 7956,
+          "endMs": 8403
+         },
+         {
+          "text": "à",
+          "startMs": 8403,
+          "endMs": 8453
+         },
+         {
+          "text": "l’aéroport.",
+          "startMs": 8453,
+          "endMs": 9000
+         }
+        ]
+       },
+       "en": {
+        "type": "audio",
+        "url": "/api/v1/attachments/file/vitrine/vocal-minjun.p-en.m4a",
+        "transcription": "All day long, I wanted to hear your voice. Tonight, watching the city lights from my window, I could only think of you and everything we’ll do together. In 12 days, I’ll be waiting for you at the airport.",
+        "durationMs": 9000,
+        "format": "m4a",
+        "cloned": true,
+        "quality": 0.93,
+        "ttsModel": "chatterbox",
+        "segments": [
+         {
+          "text": "All",
+          "startMs": 0,
+          "endMs": 163
+         },
+         {
+          "text": "day",
+          "startMs": 163,
+          "endMs": 325
+         },
+         {
+          "text": "long,",
+          "startMs": 325,
+          "endMs": 596
+         },
+         {
+          "text": "I",
+          "startMs": 596,
+          "endMs": 651
+         },
+         {
+          "text": "wanted",
+          "startMs": 651,
+          "endMs": 976
+         },
+         {
+          "text": "to",
+          "startMs": 976,
+          "endMs": 1084
+         },
+         {
+          "text": "hear",
+          "startMs": 1084,
+          "endMs": 1301
+         },
+         {
+          "text": "your",
+          "startMs": 1301,
+          "endMs": 1518
+         },
+         {
+          "text": "voice.",
+          "startMs": 1518,
+          "endMs": 1843
+         },
+         {
+          "text": "Tonight,",
+          "startMs": 1843,
+          "endMs": 2277
+         },
+         {
+          "text": "watching",
+          "startMs": 2277,
+          "endMs": 2711
+         },
+         {
+          "text": "the",
+          "startMs": 2711,
+          "endMs": 2873
+         },
+         {
+          "text": "city",
+          "startMs": 2873,
+          "endMs": 3090
+         },
+         {
+          "text": "lights",
+          "startMs": 3090,
+          "endMs": 3416
+         },
+         {
+          "text": "from",
+          "startMs": 3416,
+          "endMs": 3633
+         },
+         {
+          "text": "my",
+          "startMs": 3633,
+          "endMs": 3741
+         },
+         {
+          "text": "window,",
+          "startMs": 3741,
+          "endMs": 4120
+         },
+         {
+          "text": "I",
+          "startMs": 4120,
+          "endMs": 4175
+         },
+         {
+          "text": "could",
+          "startMs": 4175,
+          "endMs": 4446
+         },
+         {
+          "text": "only",
+          "startMs": 4446,
+          "endMs": 4663
+         },
+         {
+          "text": "think",
+          "startMs": 4663,
+          "endMs": 4934
+         },
+         {
+          "text": "of",
+          "startMs": 4934,
+          "endMs": 5042
+         },
+         {
+          "text": "you",
+          "startMs": 5042,
+          "endMs": 5205
+         },
+         {
+          "text": "and",
+          "startMs": 5205,
+          "endMs": 5367
+         },
+         {
+          "text": "everything",
+          "startMs": 5367,
+          "endMs": 5910
+         },
+         {
+          "text": "we’ll",
+          "startMs": 5910,
+          "endMs": 6181
+         },
+         {
+          "text": "do",
+          "startMs": 6181,
+          "endMs": 6289
+         },
+         {
+          "text": "together.",
+          "startMs": 6289,
+          "endMs": 6777
+         },
+         {
+          "text": "In",
+          "startMs": 6777,
+          "endMs": 6886
+         },
+         {
+          "text": "12",
+          "startMs": 6886,
+          "endMs": 6994
+         },
+         {
+          "text": "days,",
+          "startMs": 6994,
+          "endMs": 7265
+         },
+         {
+          "text": "I’ll",
+          "startMs": 7265,
+          "endMs": 7482
+         },
+         {
+          "text": "be",
+          "startMs": 7482,
+          "endMs": 7590
+         },
+         {
+          "text": "waiting",
+          "startMs": 7590,
+          "endMs": 7970
+         },
+         {
+          "text": "for",
+          "startMs": 7970,
+          "endMs": 8133
+         },
+         {
+          "text": "you",
+          "startMs": 8133,
+          "endMs": 8295
+         },
+         {
+          "text": "at",
+          "startMs": 8295,
+          "endMs": 8404
+         },
+         {
+          "text": "the",
+          "startMs": 8404,
+          "endMs": 8566
+         },
+         {
+          "text": "airport.",
+          "startMs": 8566,
+          "endMs": 9000
+         }
+        ]
+       }
+      }
+     }
+    ]
+   }
+  ],
+  "5f4ae64a155d6b8f9eb31f06": [
+   {
+    "id": "2364f4a94c609f2de58ced6c",
+    "conversationId": "5f4ae64a155d6b8f9eb31f06",
+    "senderId": "5f0d72f8685420e117f5e164",
+    "createdAt": "2026-09-30T10:50:00.000Z",
+    "sender": {
+     "id": "5f0d72f8685420e117f5e164",
+     "username": "kwame.m",
+     "displayName": "Kwame Mensah",
+     "firstName": "Kwame",
+     "lastName": "Mensah",
+     "userId": "b6ce6229c69bf522abfc25cd",
+     "type": "user"
+    },
+    "content": "Tonight’s dinner 😇🍍",
+    "originalLanguage": "en",
+    "messageType": "image",
+    "translations": [
+     {
+      "id": "ec18f3d0131186d84341f097",
+      "messageId": "2364f4a94c609f2de58ced6c",
+      "targetLanguage": "fr",
+      "translatedContent": "Le dîner de ce soir 😇🍍",
+      "sourceLanguage": "en"
+     },
+     {
+      "id": "dda61ba1e1b111e920f4b54f",
+      "messageId": "2364f4a94c609f2de58ced6c",
+      "targetLanguage": "es",
+      "translatedContent": "La cena de esta noche 😇🍍",
+      "sourceLanguage": "en"
+     },
+     {
+      "id": "0ba4c637402b76c37c820c81",
+      "messageId": "2364f4a94c609f2de58ced6c",
+      "targetLanguage": "de",
+      "translatedContent": "Das Abendessen heute 😇🍍",
+      "sourceLanguage": "en"
+     },
+     {
+      "id": "232a521c448c77fd52007dfb",
+      "messageId": "2364f4a94c609f2de58ced6c",
+      "targetLanguage": "it",
+      "translatedContent": "La cena di stasera 😇🍍",
+      "sourceLanguage": "en"
+     },
+     {
+      "id": "2cf4e42c47234b2e53841f82",
+      "messageId": "2364f4a94c609f2de58ced6c",
+      "targetLanguage": "pt",
+      "translatedContent": "O jantar de hoje 😇🍍",
+      "sourceLanguage": "en"
+     },
+     {
+      "id": "4e653999a3d162fd071ad778",
+      "messageId": "2364f4a94c609f2de58ced6c",
+      "targetLanguage": "ar",
+      "translatedContent": "عشاء الليلة 😇🍍",
+      "sourceLanguage": "en"
+     }
+    ],
+    "attachments": [
+     {
+      "id": "c47fb243d46c38d7b9a71cd3",
+      "messageId": "2364f4a94c609f2de58ced6c",
+      "fileName": "pizza-ananas.jpg",
+      "originalName": "pizza-ananas.jpg",
+      "mimeType": "image/jpeg",
+      "fileSize": 218008,
+      "fileUrl": "/api/v1/attachments/file/vitrine/pizza-ananas.jpg",
+      "width": 900,
+      "height": 1200,
+      "uploadedBy": "b6ce6229c69bf522abfc25cd",
+      "createdAt": "2026-09-30T10:50:00.000Z"
+     }
+    ]
+   },
+   {
+    "id": "ac019a17cbd716b8d1bfc7f2",
+    "conversationId": "5f4ae64a155d6b8f9eb31f06",
+    "senderId": "ef996981879e3cb07c4305c0",
+    "createdAt": "2026-09-30T10:59:00.000Z",
+    "sender": {
+     "id": "ef996981879e3cb07c4305c0",
+     "username": "giulia.r",
+     "displayName": "Giulia Rossi",
+     "firstName": "Giulia",
+     "lastName": "Rossi",
+     "userId": "3ce2c56e30a0aa8b1de407ae",
+     "type": "user"
+    },
+    "content": "NO. L’ananas sulla pizza è un crimine 😤🇮🇹",
+    "originalLanguage": "it",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "3cd0b9de1f571135a01982cb",
+      "messageId": "ac019a17cbd716b8d1bfc7f2",
+      "targetLanguage": "fr",
+      "translatedContent": "NON. L’ananas sur une pizza, c’est un crime 😤🇮🇹",
+      "sourceLanguage": "it"
+     },
+     {
+      "id": "a2886be4db20d2e34f64b427",
+      "messageId": "ac019a17cbd716b8d1bfc7f2",
+      "targetLanguage": "en",
+      "translatedContent": "NO. Pineapple on pizza is a crime 😤🇮🇹",
+      "sourceLanguage": "it"
+     },
+     {
+      "id": "0ea3575efd2120b6f9ebb0e6",
+      "messageId": "ac019a17cbd716b8d1bfc7f2",
+      "targetLanguage": "es",
+      "translatedContent": "NO. La piña en la pizza es un crimen 😤🇮🇹",
+      "sourceLanguage": "it"
+     },
+     {
+      "id": "71e06d0f1e85b46bacf72afe",
+      "messageId": "ac019a17cbd716b8d1bfc7f2",
+      "targetLanguage": "de",
+      "translatedContent": "NEIN. Ananas auf Pizza ist ein Verbrechen 😤🇮🇹",
+      "sourceLanguage": "it"
+     },
+     {
+      "id": "22a22018976a9f63827e0ea2",
+      "messageId": "ac019a17cbd716b8d1bfc7f2",
+      "targetLanguage": "pt",
+      "translatedContent": "NÃO. Abacaxi na pizza é crime 😤🇮🇹",
+      "sourceLanguage": "it"
+     },
+     {
+      "id": "c216b236efefec132c7ec759",
+      "messageId": "ac019a17cbd716b8d1bfc7f2",
+      "targetLanguage": "ar",
+      "translatedContent": "لا. الأناناس على البيتزا جريمة 😤🇮🇹",
+      "sourceLanguage": "it"
+     }
+    ],
+    "reactionSummary": {
+     "🔥": 8
+    },
+    "reactionCount": 8
+   },
+   {
+    "id": "e0319342448495f7aba69a54",
+    "conversationId": "5f4ae64a155d6b8f9eb31f06",
+    "senderId": "98413b8cbb1f47b85ab003c8",
+    "createdAt": "2026-09-30T11:08:00.000Z",
+    "sender": {
+     "id": "98413b8cbb1f47b85ab003c8",
+     "username": "lucas.olv",
+     "displayName": "Lucas Oliveira",
+     "firstName": "Lucas",
+     "lastName": "Oliveira",
+     "userId": "655bb9940592461b29c7d9bd",
+     "type": "user"
+    },
+    "content": "No Brasil a gente põe chocolate na pizza e tá tudo bem 🍫",
+    "originalLanguage": "pt",
+    "messageType": "image",
+    "translations": [
+     {
+      "id": "6367622e36a2b3eb184e022e",
+      "messageId": "e0319342448495f7aba69a54",
+      "targetLanguage": "fr",
+      "translatedContent": "Au Brésil, pizza au chocolat. Et tout va bien 🍫",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "c0eecc0860d250bd4f5e117e",
+      "messageId": "e0319342448495f7aba69a54",
+      "targetLanguage": "en",
+      "translatedContent": "In Brazil we put chocolate on pizza and we’re fine 🍫",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "8442adc0e1e11ebe7986a697",
+      "messageId": "e0319342448495f7aba69a54",
+      "targetLanguage": "es",
+      "translatedContent": "En Brasil hay pizza de chocolate y no pasa nada 🍫",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "36be09c492ade58f12c36f1c",
+      "messageId": "e0319342448495f7aba69a54",
+      "targetLanguage": "de",
+      "translatedContent": "In Brasilien kommt Schokolade auf die Pizza, und uns geht’s gut 🍫",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "3dcc6bf690b2c1feed267f4a",
+      "messageId": "e0319342448495f7aba69a54",
+      "targetLanguage": "it",
+      "translatedContent": "In Brasile mettiamo il cioccolato sulla pizza e stiamo benissimo 🍫",
+      "sourceLanguage": "pt"
+     },
+     {
+      "id": "1fac7d6fb60dc20ef1d9f82f",
+      "messageId": "e0319342448495f7aba69a54",
+      "targetLanguage": "ar",
+      "translatedContent": "في البرازيل نضع الشوكولاتة على البيتزا ولا مشكلة 🍫",
+      "sourceLanguage": "pt"
+     }
+    ],
+    "attachments": [
+     {
+      "id": "46390898db8ebf2e53058fd5",
+      "messageId": "e0319342448495f7aba69a54",
+      "fileName": "pizza-chocolat.jpg",
+      "originalName": "pizza-chocolat.jpg",
+      "mimeType": "image/jpeg",
+      "fileSize": 112229,
+      "fileUrl": "/api/v1/attachments/file/vitrine/pizza-chocolat.jpg",
+      "width": 1200,
+      "height": 800,
+      "uploadedBy": "655bb9940592461b29c7d9bd",
+      "createdAt": "2026-09-30T11:08:00.000Z"
+     }
+    ]
+   },
+   {
+    "id": "5709ea14d4576ea69b65d9b6",
+    "conversationId": "5f4ae64a155d6b8f9eb31f06",
+    "senderId": "ef996981879e3cb07c4305c0",
+    "createdAt": "2026-09-30T11:17:00.000Z",
+    "sender": {
+     "id": "ef996981879e3cb07c4305c0",
+     "username": "giulia.r",
+     "displayName": "Giulia Rossi",
+     "firstName": "Giulia",
+     "lastName": "Rossi",
+     "userId": "3ce2c56e30a0aa8b1de407ae",
+     "type": "user"
+    },
+    "content": "Esco da questo gruppo. 🙅‍♀️",
+    "originalLanguage": "it",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "18be913704108e73797c8a4d",
+      "messageId": "5709ea14d4576ea69b65d9b6",
+      "targetLanguage": "fr",
+      "translatedContent": "Je quitte ce groupe. 🙅‍♀️",
+      "sourceLanguage": "it"
+     },
+     {
+      "id": "4b4c55ac703c803323c0b1c7",
+      "messageId": "5709ea14d4576ea69b65d9b6",
+      "targetLanguage": "en",
+      "translatedContent": "I’m leaving this group. 🙅‍♀️",
+      "sourceLanguage": "it"
+     },
+     {
+      "id": "504307a559b5a65a397f1505",
+      "messageId": "5709ea14d4576ea69b65d9b6",
+      "targetLanguage": "es",
+      "translatedContent": "Me salgo de este grupo. 🙅‍♀️",
+      "sourceLanguage": "it"
+     },
+     {
+      "id": "3edfa3b0d928317a8cc6c11f",
+      "messageId": "5709ea14d4576ea69b65d9b6",
+      "targetLanguage": "de",
+      "translatedContent": "Ich verlasse diese Gruppe. 🙅‍♀️",
+      "sourceLanguage": "it"
+     },
+     {
+      "id": "ef9134b4ea0f9edf87ea6bc0",
+      "messageId": "5709ea14d4576ea69b65d9b6",
+      "targetLanguage": "pt",
+      "translatedContent": "Tô saindo deste grupo. 🙅‍♀️",
+      "sourceLanguage": "it"
+     },
+     {
+      "id": "9cb0f3395379e51ebe0701a9",
+      "messageId": "5709ea14d4576ea69b65d9b6",
+      "targetLanguage": "ar",
+      "translatedContent": "سأغادر هذه المجموعة. 🙅‍♀️",
+      "sourceLanguage": "it"
+     }
+    ]
+   },
+   {
+    "id": "4eaea943e3e82359ae802cb7",
+    "conversationId": "5f4ae64a155d6b8f9eb31f06",
+    "senderId": "e50c691d6935ea17b92b7579",
+    "createdAt": "2026-09-30T11:26:00.000Z",
+    "sender": {
+     "id": "e50c691d6935ea17b92b7579",
+     "username": "jonas.wb",
+     "displayName": "Jonas Weber",
+     "firstName": "Jonas",
+     "lastName": "Weber",
+     "userId": "241a9fa5ab434b28ace8682c",
+     "type": "user"
+    },
+    "content": "Ich hol schon mal Popcorn 🍿",
+    "originalLanguage": "de",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "a2163de038dcdae31b8d0481",
+      "messageId": "4eaea943e3e82359ae802cb7",
+      "targetLanguage": "fr",
+      "translatedContent": "Je vais chercher le pop-corn 🍿",
+      "sourceLanguage": "de"
+     },
+     {
+      "id": "eeb9ad09f871c5600f16b151",
+      "messageId": "4eaea943e3e82359ae802cb7",
+      "targetLanguage": "en",
+      "translatedContent": "Getting the popcorn 🍿",
+      "sourceLanguage": "de"
+     },
+     {
+      "id": "ad914b61706b0980c7f631a2",
+      "messageId": "4eaea943e3e82359ae802cb7",
+      "targetLanguage": "es",
+      "translatedContent": "Voy a por palomitas 🍿",
+      "sourceLanguage": "de"
+     },
+     {
+      "id": "0ad6b3b0deae9e626a9a3606",
+      "messageId": "4eaea943e3e82359ae802cb7",
+      "targetLanguage": "it",
+      "translatedContent": "Vado a prendere i popcorn 🍿",
+      "sourceLanguage": "de"
+     },
+     {
+      "id": "8f84c4d3ec947a27b9678816",
+      "messageId": "4eaea943e3e82359ae802cb7",
+      "targetLanguage": "pt",
+      "translatedContent": "Vou pegar a pipoca 🍿",
+      "sourceLanguage": "de"
+     },
+     {
+      "id": "3cc524d2c74f2c417702fd3a",
+      "messageId": "4eaea943e3e82359ae802cb7",
+      "targetLanguage": "ar",
+      "translatedContent": "سأحضر الفشار 🍿",
+      "sourceLanguage": "de"
+     }
+    ]
+   },
+   {
+    "id": "02f1f22a804499e21d037134",
+    "conversationId": "5f4ae64a155d6b8f9eb31f06",
+    "senderId": "89e079ec6263ad1c3e3cd185",
+    "createdAt": "2026-09-30T11:35:00.000Z",
+    "sender": {
+     "id": "89e079ec6263ad1c3e3cd185",
+     "username": "minjun.p",
+     "displayName": "Min-jun Park",
+     "firstName": "Min-jun",
+     "lastName": "Park",
+     "userId": "c1dcfc966154a301adabb8c7",
+     "type": "user"
+    },
+    "content": "한국에선 피자에 고구마 올려 먹어 🍠",
+    "originalLanguage": "ko",
+    "messageType": "text",
+    "translations": [
+     {
+      "id": "94654d45bd6baa4519bfd90d",
+      "messageId": "02f1f22a804499e21d037134",
+      "targetLanguage": "fr",
+      "translatedContent": "En Corée, on met de la patate douce sur la pizza 🍠",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "67dbe3bed6a3793b23ab15de",
+      "messageId": "02f1f22a804499e21d037134",
+      "targetLanguage": "en",
+      "translatedContent": "In Korea we put sweet potato on pizza 🍠",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "4ede947c66dec036856ffee3",
+      "messageId": "02f1f22a804499e21d037134",
+      "targetLanguage": "es",
+      "translatedContent": "En Corea le ponemos boniato a la pizza 🍠",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "8956ddd8c21954524d0ca0a2",
+      "messageId": "02f1f22a804499e21d037134",
+      "targetLanguage": "de",
+      "translatedContent": "In Korea kommt Süßkartoffel auf die Pizza 🍠",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "03e87750d343079dbb2b1ab1",
+      "messageId": "02f1f22a804499e21d037134",
+      "targetLanguage": "it",
+      "translatedContent": "In Corea mettiamo la patata dolce sulla pizza 🍠",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "e92f83b1b26cdbd91c9905b1",
+      "messageId": "02f1f22a804499e21d037134",
+      "targetLanguage": "pt",
+      "translatedContent": "Na Coreia a gente põe batata-doce na pizza 🍠",
+      "sourceLanguage": "ko"
+     },
+     {
+      "id": "0bbeb170e8392e5385989982",
+      "messageId": "02f1f22a804499e21d037134",
+      "targetLanguage": "ar",
+      "translatedContent": "في كوريا نضع البطاطا الحلوة على البيتزا 🍠",
+      "sourceLanguage": "ko"
+     }
+    ]
+   },
+   {
+    "id": "d3ea491cc243f0228b1c9d4b",
+    "conversationId": "5f4ae64a155d6b8f9eb31f06",
+    "senderId": "8ba2c1d4ae11e16c23006263",
+    "createdAt": "2026-09-30T11:48:00.000Z",
+    "sender": {
+     "id": "8ba2c1d4ae11e16c23006263",
+     "username": "lea.mtn",
+     "displayName": "Léa Martin",
+     "firstName": "Léa",
+     "lastName": "Martin",
+     "userId": "0cdc3a1317dfaf952cb35b8d",
+     "type": "user"
+    },
+    "content": "Honnêtement… l’ananas, c’est bon 🙈",
+    "originalLanguage": "fr",
+    "messageType": "text",
+    "translations": []
+   }
+  ]
+ },
+ "progression": {
+  "counters": [
+   {
+    "axisKey": "content.text_message",
+    "count": 64
+   },
+   {
+    "axisKey": "content.audio_message",
+    "count": 12
+   },
+   {
+    "axisKey": "content.story",
+    "count": 7
+   },
+   {
+    "axisKey": "conversation.private",
+    "count": 5
+   },
+   {
+    "axisKey": "conversation.public",
+    "count": 23
+   },
+   {
+    "axisKey": "conversation.community",
+    "count": 2
+   },
+   {
+    "axisKey": "social.friendship",
+    "count": 10
+   }
+  ],
+  "milestones": [
+   {
+    "milestoneType": "badge",
+    "milestoneKey": "content.text_message:1",
+    "reachedAt": "2026-09-10T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "badge",
+    "milestoneKey": "content.text_message:10",
+    "reachedAt": "2026-09-16T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "badge",
+    "milestoneKey": "content.text_message:50",
+    "reachedAt": "2026-09-22T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "badge",
+    "milestoneKey": "content.audio_message:1",
+    "reachedAt": "2026-09-10T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "badge",
+    "milestoneKey": "content.audio_message:10",
+    "reachedAt": "2026-09-16T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "badge",
+    "milestoneKey": "content.story:1",
+    "reachedAt": "2026-09-10T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "badge",
+    "milestoneKey": "conversation.private:1",
+    "reachedAt": "2026-09-10T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "badge",
+    "milestoneKey": "conversation.public:1",
+    "reachedAt": "2026-09-10T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "badge",
+    "milestoneKey": "conversation.public:10",
+    "reachedAt": "2026-09-16T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "badge",
+    "milestoneKey": "conversation.community:1",
+    "reachedAt": "2026-09-10T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "badge",
+    "milestoneKey": "social.friendship:1",
+    "reachedAt": "2026-09-10T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "badge",
+    "milestoneKey": "social.friendship:10",
+    "reachedAt": "2026-09-16T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "streak",
+    "milestoneKey": "streak:3",
+    "reachedAt": "2026-09-26T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "streak",
+    "milestoneKey": "streak:7",
+    "reachedAt": "2026-09-30T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "level",
+    "milestoneKey": "level:10",
+    "reachedAt": "2026-08-31T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "level",
+    "milestoneKey": "level:50",
+    "reachedAt": "2026-09-06T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "level",
+    "milestoneKey": "level:150",
+    "reachedAt": "2026-09-12T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "level",
+    "milestoneKey": "level:400",
+    "reachedAt": "2026-09-18T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "achievement",
+    "milestoneKey": "achievement.first_content",
+    "reachedAt": "2026-09-05T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "achievement",
+    "milestoneKey": "achievement.first_voice",
+    "reachedAt": "2026-09-10T12:00:00.000Z"
+   },
+   {
+    "milestoneType": "achievement",
+    "milestoneKey": "achievement.three_conversation_kinds",
+    "reachedAt": "2026-09-23T12:00:00.000Z"
+   }
+  ],
+  "streak": {
+   "currentStreakDays": 7,
+   "longestStreakDays": 10
+  },
+  "level": {
+   "engagementScore": 486
+  },
+  "meesh": {
+   "balance": 340,
+   "mintedLifetime": 352,
+   "debitablePoints": 62,
+   "floorPoints": 0,
+   "missingPoints": 38,
+   "mintCost": 100,
+   "firstMintedAt": "2026-08-01T12:00:00.000Z",
+   "lastMintedAt": "2026-09-29T12:00:00.000Z"
+  },
+  "elan": {
+   "factor": 3,
+   "activeFamilyCount": 3,
+   "hasStanding": false,
+   "windowDays": 7,
+   "activeFamilies": [
+    "conversation",
+    "content",
+    "social"
+   ]
+  }
+ },
+ "lienInvitation": {
+  "id": "57679ff3cc37dcff0a2ab26f",
+  "linkId": "lisboa-2026",
+  "name": "Lisboa ✈️",
+  "currentUses": 5,
+  "currentConcurrentUsers": 2,
+  "requireAccount": false,
+  "requireNickname": false,
+  "requireEmail": false,
+  "requireBirthday": false,
+  "allowedLanguages": [],
+  "allowAnonymousMessages": true,
+  "allowAnonymousImages": true,
+  "allowAnonymousFiles": false,
+  "allowViewHistory": true,
+  "conversation": {
+   "id": "dbf04862a7819ba64c9d4b0c",
+   "title": "Lisboa ✈️",
+   "type": "group",
+   "createdAt": "2026-08-01T12:00:00.000Z"
+  },
+  "creator": {
+   "id": "76cffb9b729978327d9e3fe0",
+   "username": "aiko.t",
+   "displayName": "Aiko Tanaka",
+   "firstName": "Aiko",
+   "lastName": "Tanaka"
+  },
+  "stats": {
+   "totalParticipants": 6,
+   "memberCount": 6,
+   "anonymousCount": 0,
+   "languageCount": 6,
+   "spokenLanguages": [
+    "fr",
+    "ja",
+    "pt",
+    "en",
+    "ko",
+    "es"
+   ]
+  }
+ },
+ "modesDeLecture": {
+  "cd2497b0ef23413bae5c43f9": "script",
+  "5f4ae64a155d6b8f9eb31f06": "script",
+  "ca4fa0732bd34cb8c64b7ed7": "bubbles"
+ },
+ "medias": [
+  {
+   "url": "/api/v1/attachments/file/vitrine/bol-ramen.jpg",
+   "fichier": "bol-ramen.jpg",
+   "genre": "image",
+   "photo": "bol-ramen",
+   "taille": 152600,
+   "width": 800,
+   "height": 1200
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/seoul-crepuscule.jpg",
+   "fichier": "seoul-crepuscule.jpg",
+   "genre": "image",
+   "photo": "seoul-crepuscule",
+   "taille": 187452,
+   "width": 800,
+   "height": 1200
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/pizza-ananas.jpg",
+   "fichier": "pizza-ananas.jpg",
+   "genre": "image",
+   "photo": "pizza-ananas",
+   "taille": 218008,
+   "width": 900,
+   "height": 1200
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/pizza-chocolat.jpg",
+   "fichier": "pizza-chocolat.jpg",
+   "genre": "image",
+   "photo": "pizza-chocolat",
+   "taille": 112229,
+   "width": 1200,
+   "height": 800
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/osaka-coucher.jpg",
+   "fichier": "osaka-coucher.jpg",
+   "genre": "image",
+   "photo": "osaka-coucher",
+   "taille": 197206,
+   "width": 900,
+   "height": 1600
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/vocal-minjun.p-ko.m4a",
+   "fichier": "vocal-minjun.p-ko.m4a",
+   "genre": "audio",
+   "texte": "하루 종일 네 목소리가 듣고 싶었어. 오늘 밤 창밖으로 도시의 불빛을 보면서 네 생각만 했어, 우리가 함께 할 모든 것들도. 12일 뒤에 공항에서 기다릴게.",
+   "lang": "ko"
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/vocal-minjun.p-fr.m4a",
+   "fichier": "vocal-minjun.p-fr.m4a",
+   "genre": "audio",
+   "texte": "Toute la journée, j’avais envie d’entendre ta voix. Ce soir, en regardant les lumières de la ville depuis ma fenêtre, je n’ai pensé qu’à toi et à tout ce qu’on va faire ensemble. Dans 12 jours, je t’attends à l’aéroport.",
+   "lang": "fr"
+  },
+  {
+   "url": "/api/v1/attachments/file/vitrine/vocal-minjun.p-en.m4a",
+   "fichier": "vocal-minjun.p-en.m4a",
+   "genre": "audio",
+   "texte": "All day long, I wanted to hear your voice. Tonight, watching the city lights from my window, I could only think of you and everything we’ll do together. In 12 days, I’ll be waiting for you at the airport.",
+   "lang": "en"
+  }
+ ],
+ "posts": [
+  {
+   "id": "4aa7a5dea88ca9b88bf4e105",
+   "type": "POST",
+   "visibility": "PUBLIC",
+   "content": "大阪の夕焼け、最高すぎる🌇 みんなの街の夕日も見せて！",
+   "originalLanguage": "ja",
+   "createdAt": "2026-09-30T11:05:00.000Z",
+   "updatedAt": "2026-09-30T11:05:00.000Z",
+   "author": {
+    "id": "76cffb9b729978327d9e3fe0",
+    "username": "aiko.t",
+    "displayName": "Aiko Tanaka",
+    "firstName": "Aiko",
+    "lastName": "Tanaka"
+   },
+   "likeCount": 312,
+   "commentCount": 24,
+   "repostCount": 0,
+   "viewCount": 2496,
+   "bookmarkCount": 0,
+   "shareCount": 0,
+   "reactionSummary": {
+    "❤️": 312
+   },
+   "media": [
+    {
+     "id": "476293b2c84569e980663a5c",
+     "fileName": "osaka-coucher.jpg",
+     "originalName": "osaka-coucher.jpg",
+     "mimeType": "image/jpeg",
+     "fileSize": 197206,
+     "fileUrl": "/api/v1/attachments/file/vitrine/osaka-coucher.jpg",
+     "width": 900,
+     "height": 1600,
+     "order": 0
+    }
+   ],
+   "translations": {
+    "fr": {
+     "text": "Le coucher de soleil à Osaka, c’est trop beau 🌇 Montrez-moi celui de votre ville !"
+    },
+    "en": {
+     "text": "Osaka sunsets hit different 🌇 Show me the one in your city!"
+    },
+    "es": {
+     "text": "El atardecer en Osaka es lo más 🌇 ¡Enseñadme el de vuestra ciudad!"
+    },
+    "de": {
+     "text": "Sonnenuntergang in Osaka, einfach zu schön 🌇 Zeigt mir euren!"
+    },
+    "it": {
+     "text": "Il tramonto a Osaka è troppo bello 🌇 Fatemi vedere quello della vostra città!"
+    },
+    "pt": {
+     "text": "O pôr do sol em Osaka é demais 🌇 Me mostrem o da cidade de vocês!"
+    },
+    "ar": {
+     "text": "غروب الشمس في أوساكا رائع جدًا 🌇 أروني غروب مدينتكم!"
+    }
+   }
+  },
+  {
+   "id": "0cdc386952dfdd9784e995f8",
+   "type": "POST",
+   "visibility": "PUBLIC",
+   "content": "First week here: new friends in Seoul, Madrid and Lyon. Who’s next? 🌍",
+   "originalLanguage": "en",
+   "createdAt": "2026-09-30T08:55:00.000Z",
+   "updatedAt": "2026-09-30T08:55:00.000Z",
+   "author": {
+    "id": "b6ce6229c69bf522abfc25cd",
+    "username": "kwame.m",
+    "displayName": "Kwame Mensah",
+    "firstName": "Kwame",
+    "lastName": "Mensah"
+   },
+   "likeCount": 128,
+   "commentCount": 17,
+   "repostCount": 0,
+   "viewCount": 1024,
+   "bookmarkCount": 0,
+   "shareCount": 0,
+   "reactionSummary": {
+    "❤️": 128
+   },
+   "media": [],
+   "translations": {
+    "fr": {
+     "text": "Première semaine ici : de nouveaux amis à Séoul, Madrid et Lyon. À qui le tour ? 🌍"
+    },
+    "es": {
+     "text": "Primera semana aquí: amigos nuevos en Seúl, Madrid y Lyon. ¿Quién sigue? 🌍"
+    },
+    "de": {
+     "text": "Erste Woche hier: neue Freunde in Seoul, Madrid und Lyon. Wer ist der Nächste? 🌍"
+    },
+    "it": {
+     "text": "Prima settimana qui: nuovi amici a Seul, Madrid e Lione. Chi è il prossimo? 🌍"
+    },
+    "pt": {
+     "text": "Primeira semana aqui: amigos novos em Seul, Madri e Lyon. Quem é o próximo? 🌍"
+    },
+    "ar": {
+     "text": "أول أسبوع هنا: أصدقاء جدد في سيول ومدريد وليون. مين التالي؟ 🌍"
+    }
+   }
+  }
+ ],
+ "scenes": {
+  "global": {
+   "conversationId": "cd2497b0ef23413bae5c43f9"
+  },
+  "amour": {
+   "conversationId": "ca4fa0732bd34cb8c64b7ed7",
+   "messageId": "73ebc77c61517253ef7940ec",
+   "attachmentId": "9663058c1872d84ca677e9d7"
+  },
+  "groupe": {
+   "conversationId": "5f4ae64a155d6b8f9eb31f06",
+   "messageId": "5709ea14d4576ea69b65d9b6"
+  },
+  "imagine": {
+   "conversationId": "ca4fa0732bd34cb8c64b7ed7",
+   "messageId": "da935151abb6615f2c736a05"
+  }
+ }
+}

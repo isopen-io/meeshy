@@ -71,19 +71,17 @@ const CHARGE_COMPLETE = {
   registrationCountry: 'SN',
 };
 
-const INTERDITS = [
-  'twoFactorBackupCodes',
-  'lastLoginIp',
-  'lastLoginLocation',
-  'lastLoginDevice',
-  'registrationIp',
-  'registrationLocation',
-  'registrationDevice',
-  'registrationCountry',
-] as const;
+/**
+ * #8876 — les données d'administration ne sont plus déshydratées sur le disque
+ * (`estClefNonPersistable`) : le lieu, l'appareil et le pays d'inscription sont
+ * désormais GARDÉS (la fiche dit d'où l'on se connecte). Restent écartés : les
+ * adresses IP, que la fiche n'a aucune phrase à leur consacrer, et les
+ * empreintes des codes de secours.
+ */
+const INTERDITS = ['twoFactorBackupCodes', 'lastLoginIp', 'registrationIp'] as const;
 
-describe('decodeAdminUserDetail — ce que le cache ne doit pas garder', () => {
-  test('ÉCARTE les huit champs traçants, alors que la charge les porte tous', () => {
+describe('decodeAdminUserDetail — ce que la fiche ne garde pas', () => {
+  test('ÉCARTE les adresses IP et les empreintes de codes de secours, alors que la charge les porte', () => {
     const membre = decodeAdminUserDetail(CHARGE_COMPLETE);
 
     expect(membre).not.toBeNull();
@@ -155,10 +153,11 @@ describe('decodeAdminUserDetail — ce qu’il sert', () => {
     expect(membre?.deactivatedAt).toBeNull();
   });
 
-  test('le nom affiché retombe sur le pseudo — jamais un détail sans nom', () => {
+  test('ne fabrique AUCUN libellé : le nom affiché absent reste vide, `personLabel` décide du repli', () => {
     const membre = decodeAdminUserDetail({ ...CHARGE_COMPLETE, displayName: '' });
 
-    expect(membre?.displayName).toBe('amina');
+    expect(membre?.displayName).toBe('');
+    expect(membre?.username).toBe('amina');
   });
 
   test('les dates absentes deviennent null, jamais une chaîne vide', () => {

@@ -677,7 +677,7 @@ describe('un visiteur SANS session REJOINT EN INVITÉ', () => {
     const join: HTMLElement = el;
     expect(join?.querySelector('[data-guest-form]')).toBeNull();
     expect(join?.querySelector('[data-invite-account-required]')).not.toBeNull();
-    expect(join?.querySelector('[data-invite-sign-in]')?.className).toContain('text-white');
+    expect(join?.querySelector('[data-invite-sign-in]')?.className).toContain('text-ios-on-brand');
   });
 });
 

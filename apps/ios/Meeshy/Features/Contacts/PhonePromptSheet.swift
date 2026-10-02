@@ -142,7 +142,7 @@ struct PhonePromptSheet: View {
                 Text(String(localized: "common.edit", defaultValue: "Modifier", bundle: .main))
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(MeeshyColors.indigo500)
-                    .frame(minWidth: 44, minHeight: 44)
+                    .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -170,8 +170,8 @@ struct PhonePromptSheet: View {
     // MARK: - Pièces
 
     private var fieldBackground: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(theme.textMuted.opacity(0.1))
+        RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
+            .fill(theme.textMuted.opacity(MeeshyOpacity.subtle))
     }
 
     private func primaryButton(title: String, isBusy: Bool, isEnabled: Bool, action: @escaping () -> Void) -> some View {

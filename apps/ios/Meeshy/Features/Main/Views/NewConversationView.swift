@@ -119,7 +119,7 @@ struct NewConversationView: View {
                 // Chrome nav glyph: fixed 16pt tap target (doctrine 82i/87i/90i —
                 // header/toolbar chevrons stay fixed, not Dynamic-Type-scaled).
                 Image(systemName: "chevron.backward")
-                    .font(MeeshyFont.relative(16, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo400)
             }
             .accessibilityLabel(String(localized: "a11y.back", bundle: .main))
@@ -127,7 +127,7 @@ struct NewConversationView: View {
             Spacer()
 
             Text(String(localized: "conversation.new.title", defaultValue: "Nouvelle conversation"))
-                .font(MeeshyFont.relative(17, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -142,7 +142,7 @@ struct NewConversationView: View {
                             .tint(MeeshyColors.indigo400)
                     } else {
                         Text(String(localized: "common.create", defaultValue: "Créer"))
-                            .font(MeeshyFont.relative(14, weight: .bold))
+                            .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
                             .foregroundColor(MeeshyColors.indigo400)
                     }
                 }
@@ -151,35 +151,35 @@ struct NewConversationView: View {
                 Color.clear.frame(width: 40, height: 24)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.md)
     }
 
     // MARK: - Group Title Field
 
     private var groupTitleField: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "person.3.fill")
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                 .foregroundColor(MeeshyColors.indigo600)
                 .accessibilityHidden(true)
 
             TextField(String(localized: "conversation.new.group-name", defaultValue: "Nom du groupe"), text: $groupTitle)
-                .font(MeeshyFont.relative(15, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(theme.surfaceGradient(tint: "4338CA"))
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                .fill(theme.surfaceGradient(tint: MeeshyColors.brandDeepHex))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(theme.border(tint: "4338CA"), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                        .stroke(theme.border(tint: MeeshyColors.brandDeepHex), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 16)
-        .padding(.bottom, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.sm)
         .transition(.opacity.combined(with: .move(edge: .top)))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isGroupMode)
     }
@@ -190,19 +190,19 @@ struct NewConversationView: View {
     private var selectedUsersBar: some View {
         if !selectedUsers.isEmpty {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     ForEach(selectedUsers) { user in
                         selectedUserChip(user)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.sm)
             }
         }
     }
 
     private func selectedUserChip(_ user: SearchedUser) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             MeeshyAvatar(
                 name: user.displayName ?? user.username,
                 context: .custom(24),
@@ -214,7 +214,7 @@ struct NewConversationView: View {
             )
 
             Text(user.displayName ?? user.username)
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(1)
 
@@ -225,13 +225,13 @@ struct NewConversationView: View {
                 }
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(MeeshyFont.relative(14))
+                    .font(MeeshyFont.relative(MeeshyIconSize.sm))
                     .foregroundColor(theme.textMuted)
             }
             .accessibilityLabel(String(localized: "accessibility.remove_selected_user", bundle: .main))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
             Capsule()
                 .fill(MeeshyColors.indigo400.opacity(0.12))
@@ -246,14 +246,14 @@ struct NewConversationView: View {
     // MARK: - Search Field
 
     private var searchField: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "magnifyingglass")
-                .font(MeeshyFont.relative(14, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .accessibilityHidden(true)
 
             TextField(String(localized: "conversation.new.search-placeholder", defaultValue: "Rechercher un utilisateur…"), text: $searchQuery)
-                .font(MeeshyFont.relative(15, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -267,24 +267,24 @@ struct NewConversationView: View {
                     viewModel.clearSearch()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(MeeshyFont.relative(14))
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm))
                         .foregroundColor(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "accessibility.clear_search", bundle: .main))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .stroke(theme.border(tint: accentColor), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
     }
 
     // MARK: - Results List
@@ -300,15 +300,15 @@ struct NewConversationView: View {
 
     private var resultsList: some View {
         ScrollView(showsIndicators: false) {
-            LazyVStack(spacing: 4) {
+            LazyVStack(spacing: MeeshySpacing.xs) {
                 if isSearchActive {
                     searchResultsSection
                 } else {
                     contactsSection
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 4)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.xs)
         }
     }
 
@@ -326,14 +326,14 @@ struct NewConversationView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "person.slash")
                 .font(MeeshyFont.relative(36))
                 .foregroundColor(theme.textMuted.opacity(0.5))
                 .accessibilityHidden(true)
 
             Text(String(localized: "conversation.new.no-user-found", defaultValue: "Aucun utilisateur trouvé"))
-                .font(MeeshyFont.relative(15, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
@@ -362,34 +362,34 @@ struct NewConversationView: View {
     private var contactsSectionHeader: some View {
         HStack {
             Text(String(localized: "new_conversation.contacts.section", defaultValue: "Vos contacts", bundle: .main))
-                .font(MeeshyFont.relative(12, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                 .foregroundColor(theme.textMuted)
                 .textCase(.uppercase)
             Spacer()
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 6)
-        .padding(.bottom, 2)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.top, MeeshySpacing.xsPlus)
+        .padding(.bottom, MeeshySpacing.xxs)
         .accessibilityAddTraits(.isHeader)
     }
 
     private var contactsLoadingState: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: MeeshySpacing.xs) {
             ForEach(0..<6, id: \.self) { _ in
                 contactSkeletonRow
             }
         }
-        .padding(.top, 4)
+        .padding(.top, MeeshySpacing.xs)
         .accessibilityLabel(String(localized: "new_conversation.contacts.loading", defaultValue: "Chargement des contacts", bundle: .main))
     }
 
     private var contactSkeletonRow: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             Circle()
                 .fill(theme.textMuted.opacity(0.12))
                 .frame(width: 44, height: 44)
-            VStack(alignment: .leading, spacing: 4) {
-                RoundedRectangle(cornerRadius: 4)
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                     .fill(theme.textMuted.opacity(0.12))
                     .frame(width: 120, height: 12)
                 RoundedRectangle(cornerRadius: 3)
@@ -398,30 +398,30 @@ struct NewConversationView: View {
             }
             Spacer()
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .shimmer()
         .accessibilityHidden(true)
     }
 
     private var contactsEmptyState: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: MeeshySpacing.md) {
             Image(systemName: "person.2")
                 .font(MeeshyFont.relative(36))
                 .foregroundColor(theme.textMuted.opacity(0.5))
                 .accessibilityHidden(true)
 
             Text(String(localized: "new_conversation.contacts.empty.title", defaultValue: "Aucun contact", bundle: .main))
-                .font(MeeshyFont.relative(15, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "new_conversation.contacts.empty.subtitle", defaultValue: "Recherchez un utilisateur pour démarrer une conversation.", bundle: .main))
-                .font(MeeshyFont.relative(13, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
-        .padding(.horizontal, 32)
+        .padding(.horizontal, MeeshySpacing.xxxl)
         .padding(.top, 60)
         .accessibilityElement(children: .combine)
     }
@@ -442,7 +442,7 @@ struct NewConversationView: View {
                 }
             }
         } label: {
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 MeeshyAvatar(
                     name: user.displayName ?? user.username,
                     context: .userListItem,
@@ -453,13 +453,13 @@ struct NewConversationView: View {
                     onMoodTap: statusViewModel.moodTapHandler(for: user.id)
                 )
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(user.displayName ?? user.username)
-                        .font(MeeshyFont.relative(15, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
                     Text("@\(user.username)")
-                        .font(MeeshyFont.relative(12, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
 
@@ -467,32 +467,32 @@ struct NewConversationView: View {
 
                 if isBlocked {
                     Text(String(localized: "new_conversation.user.blocked", defaultValue: "Bloqué", bundle: .main))
-                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundColor(MeeshyColors.error.opacity(0.8))
                     Image(systemName: "hand.raised.fill")
-                        .font(MeeshyFont.relative(16))
+                        .font(MeeshyFont.relative(MeeshyIconSize.md))
                         .foregroundColor(MeeshyColors.error.opacity(0.7))
                         .accessibilityHidden(true)
                 } else {
                     // Selection state is conveyed to VoiceOver by the row's
                     // `.isSelected` trait below; the glyph itself is decorative.
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                        .font(MeeshyFont.relative(20))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xl))
                         .foregroundColor(isSelected ? MeeshyColors.indigo400 : theme.textMuted.opacity(0.4))
                         .accessibilityHidden(true)
                 }
             }
             .opacity(isBlocked ? 0.5 : 1)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.smPlus)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(isSelected
                         ? AnyShapeStyle(MeeshyColors.indigo400.opacity(0.08))
                         : AnyShapeStyle(theme.surfaceGradient(tint: userColor))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(
                                 isSelected ? AnyShapeStyle(MeeshyColors.indigo400.opacity(0.3)) : AnyShapeStyle(theme.border(tint: userColor)),
                                 lineWidth: 1

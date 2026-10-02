@@ -55,7 +55,7 @@ struct MessageCardExportSheet: View {
     @State var failed = false
     @State var busy = false
     @State var notice: String?
-    @State var shareFile: ShareFile?
+    @State var sharePayload: MessageCardSharePayload?
     @State var quickSent = false
     @State var loaded = false
     @State var tab: MessageCardExportTab = .styles
@@ -65,9 +65,14 @@ struct MessageCardExportSheet: View {
     @State var thumbnails = MessageCardThumbnailStore()
     @State var loadedMedia: MessageCardLoadedMedia = .empty
     @State var mediaVersion = 0
+    @State var mediaAttempt = 0
     @State var output: MessageCardOutput = .image
     @State var motionTask: Task<Void, Never>?
     @StateObject var motion = MessageCardMotionProgress()
+    /// Où commence le passage exporté d'un son ou d'une vidéo, en secondes (#8979) — propre à ce message.
+    @State var clipStart: Double = 0
+    /// Le pincement en cours sur une partie de l'aperçu (#8979).
+    @State var pinch: MessageCardPinch?
 
     struct Rendered {
         let key: String
@@ -76,16 +81,13 @@ struct MessageCardExportSheet: View {
         let truncated: Bool
         let size: CGSize
         let regions: [MessageCardRegion]
-    }
-
-    struct ShareFile: Identifiable {
-        let url: URL
-        var id: String { url.path }
+        /// La coupe vient des médias — l'avis le dit (revue #8979).
+        var crowdedByMedia = false
+        /// L'échelle la plus grande que la carte laisse aux médias — le pincement s'y arrête.
+        var mediaScaleLimit = MessageCardScales.range.upperBound
     }
 
     private static let popularCount = 8
-    /// La tolérance du doigt autour d'une zone, en points d'écran.
-    private static let touchSlop: CGFloat = 8
 
     var accent: Color { Color(hex: request.accentColor) }
 
@@ -93,9 +95,25 @@ struct MessageCardExportSheet: View {
         exportLanguage.flatMap(request.subjectIn) ?? request.subject
     }
 
-    /// Les médias tels qu'on les peint — avec leur onde réelle dès qu'elle est lue.
+    /// Les médias tels qu'on les peint — chaque son avec l'onde et la durée de
+    /// SA piste (celle que sert la langue d'export) dès qu'elle est lue.
     var currentMedia: [MessageCardMedia] {
-        loadedMedia.media.isEmpty ? subject.media.map(\.media) : loadedMedia.media
+        loadedMedia.media(of: subject.media)
+    }
+
+    /// Le plan d'une carte animée : la durée choisie, à partir du passage choisi (#8979).
+    var motionPlan: MessageCardMotionPlan? {
+        MessageCardMotionPlan.of(output, media: currentMedia, length: format.disposition.clipLength, start: clipStart)
+    }
+
+    /// L'extrait que l'aperçu montre — celui que la vidéo emportera.
+    private var clipKey: String {
+        motionPlan.map { "\($0.start)+\($0.duration)" } ?? ""
+    }
+
+    /// Les pistes à lire — une langue d'export qui sert une autre piste en fait charger une autre.
+    private var soundsKey: String {
+        subject.media.filter { $0.media.kind == .audio }.map(\.fileURL).joined(separator: "|")
     }
 
     private var title: String? {
@@ -103,7 +121,7 @@ struct MessageCardExportSheet: View {
         return trimmed
     }
 
-    var renderKey: String { "\(format.serialized)|\(exportLanguage ?? "")|\(mediaVersion)" }
+    var renderKey: String { "\(format.serialized)|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)" }
     var ready: Bool { rendered?.key == renderKey }
     private var isDefault: Bool { savedDefault == format }
 
@@ -113,19 +131,19 @@ struct MessageCardExportSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 stage
                 notices
                 AdaptiveGlassContainer(spacing: 12) {
-                    VStack(spacing: 12) {
+                    VStack(spacing: MeeshySpacing.md) {
                         tray
                         outputPicker
                         actions
                     }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, 12)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.bottom, MeeshySpacing.md)
             .background(ambient)
             .navigationTitle(MessageCardExportText.text("export.card.title", "Imagine"))
             .navigationBarTitleDisplayMode(.inline)
@@ -134,7 +152,7 @@ struct MessageCardExportSheet: View {
         .tint(accent)
         .onAppear(perform: load)
         .onDisappear { motionTask?.cancel() }
-        .task(id: loaded) { await loadMedia() }
+        .task(id: "\(loaded)|\(mediaAttempt)|\(soundsKey)") { await loadMedia() }
         .task(id: "\(loaded)|\(renderKey)") { await render() }
         .sheet(isPresented: $galleryOpen) {
             MessageCardExportGallery(
@@ -148,9 +166,9 @@ struct MessageCardExportSheet: View {
                 onClose: { galleryOpen = false }
             )
         }
-        .sheet(item: $shareFile) { file in
-            ShareSheet(activityItems: [file.url]) { completed in
-                shareFile = nil
+        .sheet(item: $sharePayload) { payload in
+            ShareSheet(activityItems: payload.activityItems) { completed in
+                sharePayload = nil
                 finish(completed ? .shared : .cancelled)
             }
         }
@@ -218,7 +236,7 @@ struct MessageCardExportSheet: View {
                         .font(.footnote)
                         .foregroundStyle(MeeshyColors.error)
                 } else {
-                    VStack(spacing: 8) {
+                    VStack(spacing: MeeshySpacing.sm) {
                         ProgressView()
                         Text(MessageCardExportText.text("export.card.rendering", "Préparation de l’image…"))
                             .font(.footnote)
@@ -231,70 +249,15 @@ struct MessageCardExportSheet: View {
         .overlay(alignment: .bottom) { hint }
     }
 
-    private func card(_ rendered: Rendered, in space: CGSize) -> some View {
-        let ratio = rendered.size.width / max(rendered.size.height, 1)
-        let width = min(space.width, space.height * ratio)
-        let height = width / ratio
-        let scale = width / rendered.size.width
-        return ZStack(alignment: .topLeading) {
-            Button { pick(.background) } label: {
-                Image(uiImage: rendered.image)
-                    .resizable()
-                    .frame(width: width, height: height)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(MessageCardExportText.partLabel(.background))
-            .accessibilityHint(MessageCardExportText.text("export.card.hint", "Touchez une partie de la carte pour la régler"))
-            ForEach(Array(rendered.regions.enumerated()), id: \.offset) { _, region in
-                zone(region, scale: scale)
-            }
-        }
-        .frame(width: width, height: height)
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .shadow(color: .black.opacity(0.22), radius: 18, y: 8)
-        .opacity(ready ? 1 : 0.7)
-        .animation(.easeInOut(duration: 0.2), value: ready)
-    }
-
-    private func zone(_ region: MessageCardRegion, scale: CGFloat) -> some View {
-        let slop = Self.touchSlop
-        let focused = focus == region.part
-        return Button { pick(region.part) } label: {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(0.001))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.white.opacity(focused ? 0.9 : 0), style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
-                )
-                .overlay(alignment: .topLeading) {
-                    if focused {
-                        Text(MessageCardExportText.partLabel(region.part))
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .adaptiveGlass(in: Capsule())
-                            .offset(x: 6, y: -12)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .frame(width: CGFloat(region.width) * scale + 2 * slop, height: CGFloat(region.height) * scale + 2 * slop)
-        .offset(x: CGFloat(region.x) * scale - slop, y: CGFloat(region.y) * scale - slop)
-        .accessibilityLabel(MessageCardExportText.partLabel(region.part))
-        .accessibilityAddTraits(focused ? [.isSelected] : [])
-    }
-
     @ViewBuilder
     private var hint: some View {
         if !touched && rendered != nil {
-            Label(MessageCardExportText.text("export.card.hint", "Touchez une partie de la carte pour la régler"), systemImage: "hand.tap")
+            Label(MessageCardExportText.text("export.card.hint.pinch", "Touchez pour régler, pincez pour redimensionner"), systemImage: "hand.tap")
                 .font(.footnote.weight(.semibold))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.vertical, MeeshySpacing.sm)
                 .adaptiveGlass(in: Capsule())
-                .padding(.bottom, 10)
+                .padding(.bottom, MeeshySpacing.smPlus)
                 .allowsHitTesting(false)
                 .transition(.opacity)
         }
@@ -306,8 +269,12 @@ struct MessageCardExportSheet: View {
             Text(notice)
                 .font(.footnote)
                 .foregroundStyle(MeeshyColors.error)
-        } else if ready, rendered?.truncated == true {
-            Text(MessageCardExportText.text("export.card.truncated", "Message long : la fin est coupée sur l’image."))
+        } else if let failure = MessageCardExportText.mediaFailure(count: loadedMedia.failures(of: subject.media, output: output).count) {
+            mediaFailure(failure)
+        } else if ready, let rendered, rendered.truncated {
+            Text(rendered.crowdedByMedia
+                 ? MessageCardExportText.text("export.card.truncated.media", "Les médias prennent la place : la fin du texte est coupée.")
+                 : MessageCardExportText.text("export.card.truncated", "Message long : la fin est coupée sur l’image."))
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -325,17 +292,20 @@ struct MessageCardExportSheet: View {
             hasQuote: subject.quoted != nil,
             hasTitle: title != nil,
             hasHandles: subject.hasHandles,
-            mediaKinds: currentMedia.map(\.kind),
+            media: currentMedia,
+            output: output,
+            plan: motionPlan,
             languages: request.languages,
             exportLanguage: $exportLanguage,
             thumbs: thumbSource,
             onTab: openTab,
-            onGallery: { galleryOpen = true }
+            onGallery: { galleryOpen = true },
+            onExcerptStart: { clipStart = $0 }
         )
     }
 
     /// Toucher une partie de la carte ouvre l'onglet qui la règle.
-    private func pick(_ part: MessageCardPartID) {
+    func pick(_ part: MessageCardPartID) {
         HapticFeedback.light()
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
             touched = true
@@ -354,7 +324,7 @@ struct MessageCardExportSheet: View {
             case .link: focus = subject.quoted == nil ? nil : .link
             case .typeface: focus = focus == .quote || focus == .reply ? focus : .reply
             case .frame: focus = painted.contains(.header) ? .header : nil
-            case .media: focus = painted.contains(.media) ? .media : nil
+            case .media: focus = painted.contains(.media) ? .media : (painted.contains(.transcript) ? .transcript : nil)
             case .styles, .format, .details, .language: focus = nil
             }
         }
@@ -365,7 +335,7 @@ struct MessageCardExportSheet: View {
     var thumbSource: MessageCardThumbSource {
         var neutral = format
         neutral.template = MessageCardTemplates.defaultID
-        let state = "\(neutral.serialized)|\(exportLanguage ?? "")|\(mediaVersion)"
+        let state = "\(neutral.serialized)|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)"
         let format = format
         return MessageCardThumbSource(
             store: thumbnails,
@@ -379,6 +349,7 @@ struct MessageCardExportSheet: View {
         )
     }
 
+    /// La carte telle qu'elle partira — animée, sur l'extrait que la vidéo emportera (#8979).
     func input(for format: MessageCardFormat) -> MessageCardInput {
         MessageCardInput.of(
             subject: subject,
@@ -389,7 +360,7 @@ struct MessageCardExportSheet: View {
             formatDate: { Self.dateFormatter.string(from: $0) },
             formatTime: { Self.timeFormatter.string(from: $0) },
             media: currentMedia
-        )
+        ).clipped(to: motionPlan?.clip)
     }
 
     // MARK: - Chargement et peinture
@@ -404,17 +375,41 @@ struct MessageCardExportSheet: View {
         popular = MessageCardUsage.popular(usage, count: Self.popularCount)
     }
 
+    /// « Un média n'a pas pu se charger » + « Réessayer » (#8901) — jamais un cadre muet.
+    private func mediaFailure(_ message: String) -> some View {
+        HStack(spacing: 12) {
+            Label(message, systemImage: "exclamationmark.triangle")
+                .font(.footnote)
+                .foregroundStyle(MeeshyColors.error)
+            Button(MessageCardExportText.text("export.card.media.retry", "Réessayer")) {
+                HapticFeedback.light()
+                mediaAttempt += 1
+            }
+            .font(.footnote.weight(.semibold))
+            .frame(minHeight: 44)
+        }
+        .accessibilityElement(children: .contain)
+    }
+
     /// Les pixels et l'onde réelle des médias, chargés HORS du MainActor —
-    /// la carte est déjà peinte avec leurs couleurs d'attente.
+    /// la carte est déjà peinte avec leurs couleurs d'attente. Rejoué par
+    /// « Réessayer » (`mediaAttempt`), et par une langue d'export qui sert une
+    /// autre piste : seul ce qui manque se charge.
     private func loadMedia() async {
-        let items = request.subject.media
-        guard loaded, mediaVersion == 0, !items.isEmpty else { return }
+        let items = subject.media
+        let wanted = loadedMedia.missing(items)
+        guard loaded, !wanted.isEmpty else { return }
         let result = await Task.detached(priority: .userInitiated) {
-            await MessageCardMediaLoader.load(items)
+            await MessageCardMediaLoader.load(wanted)
         }.value
         guard !Task.isCancelled else { return }
-        loadedMedia = result
+        loadedMedia = loadedMedia.merging(result, for: items)
         mediaVersion += 1
+    }
+
+    /// Les pixels des médias sont là, et aucun n'a échoué : la carte montre ce qui partira.
+    private var mediaArePainted: Bool {
+        request.subject.media.isEmpty || (mediaVersion > 0 && loadedMedia.failed.isEmpty)
     }
 
     private func render() async {
@@ -435,14 +430,20 @@ struct MessageCardExportSheet: View {
             png: card.png,
             truncated: card.truncated,
             size: CGSize(width: card.width, height: card.height),
-            regions: card.regions
+            regions: card.regions,
+            crowdedByMedia: card.crowdedByMedia,
+            mediaScaleLimit: card.mediaScaleLimit
         )
         // L'export rapide attend les pixels des médias : il ne part jamais
         // avec leurs couleurs d'attente.
-        if request.quick && !quickSent && (request.subject.media.isEmpty || mediaVersion > 0) {
+        // Un média en échec retient l'export rapide : l'atelier le dit et attend « Réessayer ».
+        if request.quick && !quickSent && mediaArePainted {
             quickSent = true
             save()
         }
+        #if DEBUG
+        if mediaArePainted { VitrineRendu.shared.signaler(.imagine) }
+        #endif
     }
 
     static let dateFormatter: DateFormatter = {

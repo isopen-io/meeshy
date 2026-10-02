@@ -137,6 +137,9 @@ function shareLinkRow(): Record<string, unknown> {
   return {
     id: LINK_ROW_ID,
     ...JOIN_KEY_SENTINELS,
+    // #8876 — la plage d'adresses attendues n'est pas une clé de jointure, mais
+    // elle dit où se trouvent les invités : la fiche ne la lit pas non plus.
+    allowedIpRanges: ['203.0.113.0/24'],
     name: 'Lien de revue',
     description: null,
     maxUses: null,
@@ -182,6 +185,8 @@ function makePrisma() {
     user: { findUnique: jest.fn(async () => ({ id: 'u1' })) },
     conversationShareLink: {
       findMany: jest.fn(async (args: { select?: unknown }) => [projeter(shareLinkRow(), args?.select)]),
+      // #8876 — la FICHE `GET /admin/share-links/:id`, même double qui honore le `select`.
+      findUnique: jest.fn(async (args: { select?: unknown }) => projeter(shareLinkRow(), args?.select)),
       count: jest.fn(async () => 1),
     },
     trackingLink: { findMany: jest.fn(async () => []) },
@@ -343,6 +348,31 @@ describe.each(ROLES_SANS_DONNEES_SENSIBLES)(
     });
   }
 );
+
+/**
+ * #8876 — la FICHE d'un lien est une troisième porte d'administration qui sert la
+ * ligne : elle doit retenir les mêmes colonnes que la liste, et la plage d'adresses
+ * en plus. Le fixture dérive de la LOI (`SHARE_LINK_JOIN_KEY_COLUMNS`) comme les
+ * deux témoins ci-dessus : une colonne ajoutée à la loi la peuple d'un sentinelle
+ * de plus, et ce témoin tombe si la fiche la sert.
+ */
+describe.each(ROLES_SANS_DONNEES_SENSIBLES)("#8876 — la fiche d'un lien ne sert aucune clé de jointure à %s", (role) => {
+  it('GET /admin/share-links/:id ne sert ni clé de jointure ni plage d’adresses', async () => {
+    if (role === 'AUDIT') return; // `canManageConversations` false — la porte refuse, testée ailleurs
+
+    const app = await monter(role);
+    const res = await app.inject({ method: 'GET', url: `/share-links/${LINK_ROW_ID}` });
+
+    expect(res.statusCode).toBe(200);
+    for (const sentinelle of Object.values(JOIN_KEY_SENTINELS)) {
+      expect(res.payload).not.toContain(sentinelle);
+    }
+    expect(res.payload).not.toContain('203.0.113.0/24');
+    expect(res.json().data.id).toBe(LINK_ROW_ID);
+
+    await app.close();
+  });
+});
 
 describe('#4692 — la ligne reste IDENTIFIABLE sans sa clé de jointure', () => {
   it('sert toujours `id`, sur lequel la console agit', async () => {

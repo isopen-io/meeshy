@@ -138,14 +138,19 @@ const peerReceives = async (page) => {
 };
 
 const openActions = async (page) => {
-  const { width, height } = page.viewportSize();
-  await page.mouse.move(width / 2, height / 3);
-  await page.mouse.move(width / 2 + 8, height / 3 + 8);
   await appears(page, '[data-call-chrome="shown"]');
   const more = page.locator('[data-call-more]');
   if ((await more.getAttribute('aria-expanded')) !== 'true') await more.click();
   await appears(page, '[data-call-actions]');
 };
+
+/**
+ * Ma vignette a reçu sa PREMIÈRE image : la caméra est allumée quand on SE
+ * VOIT, pas quand le bouton le dit. Au premier passage d'un navigateur neuf,
+ * la caméra simulée rend son image après le basculement du bouton ; ce qui la
+ * lit avant (sa couleur, son cran de zoom) ne lit rien (#9009).
+ */
+const selfFramed = (page) => until(page, () => (document.querySelector('[data-call-corner] video, [data-call-tile-self] video')?.videoWidth ?? 0) > 0);
 
 const startConnectedVideoCall = async (page) => {
   await page.goto(`${BASE}/`, { waitUntil: 'load' });
@@ -158,7 +163,7 @@ const startConnectedVideoCall = async (page) => {
   if (!(await appears(page, '[data-call-screen="connected"]', 15_000))) return false;
   await openActions(page);
   await page.click('button[aria-label="Activer la caméra"]');
-  return appears(page, 'button[aria-label="Couper la caméra"]');
+  return (await appears(page, 'button[aria-label="Couper la caméra"]')) && selfFramed(page);
 };
 
 /** La piste vidéo que ma vignette montre — celle qui part. */
@@ -274,6 +279,7 @@ try {
       // ------------------------------------------------ 4. le mode Effets
       const before = await sentVideo(page);
       const natural = await sentColor(page);
+      check(natural !== null, `${label} : la couleur de départ se mesure sur ma vignette`);
       await openActions(page);
       await page.click('[data-call-control="effects"]');
       check(await appears(page, '[data-call-mode="effects"]'), `${label} : « Effets » entre dans le mode Effets`);
@@ -351,7 +357,7 @@ try {
         }
         return (red - blue) / (data.length / 4) > base + 25 && red > blue;
       }, warmth(natural), 4000);
-      check(natural !== null && tinted, `${label} : l'éruption teint l'image envoyée d'orangé (r−b au départ ${Math.round(warmth(natural))})`);
+      check(tinted, `${label} : l'éruption teint l'image envoyée d'orangé (r−b au départ ${Math.round(warmth(natural))})`);
       check(await peerReceives(page), `${label} : le pair décode toujours des images, éruption posée`);
       await capture(page, `effets-eruption-${slug}`);
 

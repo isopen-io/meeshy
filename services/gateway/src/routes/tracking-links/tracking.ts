@@ -30,6 +30,7 @@ import {
 } from './response-schemas';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { validatePagination } from '../../utils/pagination';
+import { linkVisitorFromRequest } from '../links/utils/link-visitor';
 
 /**
  * Routes de suivi et analytics des liens de tracking
@@ -141,7 +142,8 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         os,
         device,
         language,
-        referrer
+        referrer,
+        visitor: linkVisitorFromRequest(request)
       });
 
       return reply.redirect(trackingLink.originalUrl);
@@ -300,6 +302,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         utmClickCampaign: body.utmClickCampaign,
         utmClickTerm: body.utmClickTerm,
         utmClickContent: body.utmClickContent,
+        visitor: linkVisitorFromRequest(request),
       });
 
       return sendSuccess(reply, {

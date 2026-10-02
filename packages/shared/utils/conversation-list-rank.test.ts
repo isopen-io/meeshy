@@ -7,93 +7,72 @@ import {
 } from './conversation-list-rank';
 
 /**
- * LE RANG D'UNE LIGNE DE LISTE (#7592, directive porteur du 2026-09-23).
+ * LE RANG D'UNE LIGNE DE LISTE (#9026, directive porteur du 2026-10-01, qui
+ * remplace la règle PAR LECTEUR de #7592).
  *
- * rang = max(`lastMessageAt`, `lastReaction.createdAt` quand la réaction vise un
- * message du LECTEUR). Le serveur l'applique au tri de `GET /conversations` et
- * le SERT (`listRankAt`) ; les clients trient sur la valeur servie.
+ * rang = max(`lastMessageAt`, `lastActivityAt`) — le MÊME pour tous les
+ * participants. `lastActivityAt` avance à chaque réaction, appel ou épingle.
  */
 
 const MESSAGE_AT = '2026-09-23T12:07:16.000Z';
-const REACTION_AT = '2026-09-23T12:07:24.082Z';
+const ACTIVITY_AT = '2026-09-23T12:07:24.082Z';
 const AUTHOR_USER = '64b000000000000000000001';
 const AUTHOR_PARTICIPANT = '64b0000000000000000000a1';
-const THIRD_USER = '64b000000000000000000003';
 
 describe('reactionTargetKey', () => {
-  it('désigne l’auteur réagi par son User.id quand il en a un', () => {
+  it("rend le User.id de l'auteur réagi quand il existe", () => {
     expect(reactionTargetKey({ targetSenderUserId: AUTHOR_USER, targetSenderId: AUTHOR_PARTICIPANT })).toBe(AUTHOR_USER);
   });
 
-  it('retombe sur le Participant.id pour un invité', () => {
+  it("rend le Participant.id d'un auteur invité", () => {
     expect(reactionTargetKey({ targetSenderUserId: null, targetSenderId: AUTHOR_PARTICIPANT })).toBe(AUTHOR_PARTICIPANT);
   });
 
-  it('ne désigne personne quand le message réagi n’a pas d’auteur connu', () => {
+  it('rend null sans auteur', () => {
     expect(reactionTargetKey({ targetSenderUserId: null, targetSenderId: null })).toBeNull();
   });
 });
 
-describe('conversationListRank', () => {
-  const reactionToAuthor = {
-    createdAt: REACTION_AT,
-    targetSenderUserId: AUTHOR_USER,
-    targetSenderId: AUTHOR_PARTICIPANT,
-  };
-
-  it('une réaction à MON message fait remonter ma ligne à l’heure de la réaction', () => {
-    expect(conversationListRank({ lastMessageAt: MESSAGE_AT, lastReaction: reactionToAuthor }, AUTHOR_USER)).toBe(REACTION_AT);
+describe('conversationListRank — une activité remonte la ligne pour TOUS', () => {
+  it("une activité plus récente que le dernier message donne le rang", () => {
+    expect(conversationListRank({ lastMessageAt: MESSAGE_AT, lastActivityAt: ACTIVITY_AT })).toBe(ACTIVITY_AT);
   });
 
-  it('une réaction entre tiers laisse le rang au dernier message', () => {
-    expect(conversationListRank({ lastMessageAt: MESSAGE_AT, lastReaction: reactionToAuthor }, THIRD_USER)).toBe(MESSAGE_AT);
+  it('une activité plus ancienne que le dernier message ne recule pas le rang', () => {
+    expect(conversationListRank({ lastMessageAt: ACTIVITY_AT, lastActivityAt: MESSAGE_AT })).toBe(ACTIVITY_AT);
   });
 
-  it('un invité auteur remonte par son Participant.id', () => {
-    const guestReaction = { ...reactionToAuthor, targetSenderUserId: null };
-    expect(conversationListRank({ lastMessageAt: MESSAGE_AT, lastReaction: guestReaction }, AUTHOR_PARTICIPANT)).toBe(REACTION_AT);
+  it('sans activité (document antérieur), le rang est le dernier message', () => {
+    expect(conversationListRank({ lastMessageAt: MESSAGE_AT, lastActivityAt: null })).toBe(MESSAGE_AT);
+    expect(conversationListRank({ lastMessageAt: MESSAGE_AT })).toBe(MESSAGE_AT);
   });
 
-  it('une réaction PLUS ANCIENNE que le dernier message ne fait pas redescendre la ligne', () => {
-    const olderReaction = { ...reactionToAuthor, createdAt: '2026-09-23T12:00:00.000Z' };
-    expect(conversationListRank({ lastMessageAt: MESSAGE_AT, lastReaction: olderReaction }, AUTHOR_USER)).toBe(MESSAGE_AT);
+  it('sans message ni activité : null', () => {
+    expect(conversationListRank({ lastMessageAt: null })).toBeNull();
   });
 
-  it('sans réaction, le rang est le dernier message', () => {
-    expect(conversationListRank({ lastMessageAt: MESSAGE_AT, lastReaction: null }, AUTHOR_USER)).toBe(MESSAGE_AT);
-  });
-
-  it('sans message ni réaction, il n’y a pas de rang', () => {
-    expect(conversationListRank({ lastMessageAt: null }, AUTHOR_USER)).toBeNull();
-  });
-
-  it('accepte des Date et rend toujours une chaîne ISO', () => {
-    expect(
-      conversationListRank(
-        { lastMessageAt: new Date(MESSAGE_AT), lastReaction: { ...reactionToAuthor, createdAt: new Date(REACTION_AT) } },
-        AUTHOR_USER,
-      ),
-    ).toBe(REACTION_AT);
-  });
-
-  it('un lecteur inconnu ne remonte jamais rien', () => {
-    expect(conversationListRank({ lastMessageAt: MESSAGE_AT, lastReaction: reactionToAuthor }, null)).toBe(MESSAGE_AT);
+  it('une chaîne illisible ne compte pas', () => {
+    expect(conversationListRank({ lastMessageAt: MESSAGE_AT, lastActivityAt: 'pas-une-date' })).toBe(MESSAGE_AT);
   });
 });
 
 describe('listRankFromColumns — la même règle sur les colonnes dénormalisées', () => {
-  it('rend le même rang que la forme servie', () => {
-    const columns = {
-      lastMessageAt: new Date(MESSAGE_AT),
-      lastReactionAt: new Date(REACTION_AT),
-      lastReactionTargetKey: AUTHOR_USER,
-    };
-    expect(listRankFromColumns(columns, AUTHOR_USER)?.toISOString()).toBe(REACTION_AT);
-    expect(listRankFromColumns(columns, THIRD_USER)?.toISOString()).toBe(MESSAGE_AT);
+  it("lit lastActivityAt pour tout lecteur — plus aucune clé de lecteur", () => {
+    const columns = { lastMessageAt: new Date(MESSAGE_AT), lastActivityAt: new Date(ACTIVITY_AT) };
+    expect(listRankFromColumns(columns)?.toISOString()).toBe(ACTIVITY_AT);
   });
 
-  it('un champ absent (document hérité) vaut une absence de réaction', () => {
-    expect(listRankFromColumns({ lastMessageAt: new Date(MESSAGE_AT) }, AUTHOR_USER)?.toISOString()).toBe(MESSAGE_AT);
-    expect(listRankFromColumns({ lastMessageAt: null }, AUTHOR_USER)).toBeNull();
+  it("une réaction seule (colonnes #7592) ne remonte plus rien : c'est lastActivityAt qui porte le rang", () => {
+    const columns = {
+      lastMessageAt: new Date(MESSAGE_AT),
+      lastReactionAt: new Date(ACTIVITY_AT),
+      lastReactionTargetKey: AUTHOR_USER,
+    };
+    expect(listRankFromColumns(columns)?.toISOString()).toBe(MESSAGE_AT);
+  });
+
+  it('retombe sur lastMessageAt, et null sans rien', () => {
+    expect(listRankFromColumns({ lastMessageAt: new Date(MESSAGE_AT) })?.toISOString()).toBe(MESSAGE_AT);
+    expect(listRankFromColumns({ lastMessageAt: null })).toBeNull();
   });
 });

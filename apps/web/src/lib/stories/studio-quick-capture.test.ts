@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   cameraFlashPlan,
   cameraVideoMime,
+  quickCaptureArmedHold,
   quickCaptureArmedTap,
   quickCaptureHintLines,
   quickCaptureOffered,
@@ -105,5 +106,25 @@ describe('cameraVideoMime — un conteneur que la passerelle accepte', () => {
 
   test('aucun conteneur servi : le défaut du navigateur', () => {
     expect(cameraVideoMime(() => false)).toBeUndefined();
+  });
+});
+
+/** VISEUR ARMÉ : L'APPUI LONG FILME (#8849, jumelle web de #8846 — directive
+ * porteur 2026-09-30 : « le longpress à partir de la scène doit déclencher la
+ * capture vidéo après avoir armé l'objectif »). */
+describe('quickCaptureArmedHold — tenir le viseur armé démarre la vidéo', () => {
+  test('viseur vivant, rien en cours : l’appui long filme, dans les trois formats', () => {
+    expect(quickCaptureArmedHold({ live: true, recording: false, busy: false })).toBe('start-filming');
+  });
+
+  test('un viseur qui ne voit pas encore, une prise en cours ou une photo qui part : rien', () => {
+    expect(quickCaptureArmedHold({ live: false, recording: false, busy: false })).toBe('ignore');
+    expect(quickCaptureArmedHold({ live: true, recording: true, busy: false })).toBe('ignore');
+    expect(quickCaptureArmedHold({ live: true, recording: false, busy: true })).toBe('ignore');
+  });
+
+  test('le toucher reste la photo, l’appui long la vidéo : deux gestes, deux intentions', () => {
+    expect(quickCaptureArmedTap({ live: true, recording: false, busy: false, kind: 'STORY' })).toBe('take-photo');
+    expect(quickCaptureArmedHold({ live: true, recording: false, busy: false })).toBe('start-filming');
   });
 });

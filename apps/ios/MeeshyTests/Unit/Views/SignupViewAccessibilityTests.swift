@@ -195,7 +195,8 @@ final class SignupViewAccessibilityTests: XCTestCase {
         XCTAssertTrue(body.contains("meeshyTapTarget()"),
                       "la croix de fermeture est un glyphe : sans cadre déclaré, sa cible EST son dessin")
         XCTAssertGreaterThanOrEqual(
-            occurrences(of: "minHeight: 44", in: body), 4,
+            occurrences(of: "minHeight: 44", in: body)
+                + occurrences(of: "minHeight: MeeshyControlSize.tapTarget", in: body), 4,
             "les boutons de texte (Se connecter ×2, conditions, confidentialité) portent chacun 44 pt"
         )
         XCTAssertFalse(body.contains("frame(height: 3"),
@@ -206,7 +207,7 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// touchable sur 44 pt, et annoncer celle qui est retenue.
     func test_countrySheet_rowsAreTouchableAndAnnounceTheSelection() throws {
         let body = try signupViewCode()
-        XCTAssertTrue(body.contains(".frame(minHeight: 44)"))
+        XCTAssertTrue(body.contains(".frame(minHeight: 44)") || body.contains(".frame(minHeight: MeeshyControlSize.tapTarget)"))
         XCTAssertTrue(body.contains("country.id == selection.id ? [.isSelected] : []"),
                       "le pays retenu doit s'entendre, pas seulement se voir")
     }

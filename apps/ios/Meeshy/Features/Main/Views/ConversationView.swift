@@ -652,7 +652,7 @@ struct ConversationView: View {
     private var bodyWithSheets: AnyView {
         AnyView(
         bodyWithCovers
-            .fullScreenCover(isPresented: $headerState.showStoryViewerFromHeader) {
+            .conversationCover(isPresented: $headerState.showStoryViewerFromHeader) {
                 StoryViewerContainer(
                     viewModel: storyViewModel,
                     userId: headerState.storyUserIdForHeader,
@@ -675,7 +675,7 @@ struct ConversationView: View {
                 // (tray in-chat), fallback cover standard sinon (avatar header).
                 .zoomTransitionDestination(sourceID: headerState.storyUserIdForHeader ?? "", in: zoomNamespace)
             }
-            .fullScreenCover(isPresented: $overlayState.showStoryViewer) {
+            .conversationCover(isPresented: $overlayState.showStoryViewer) {
                 StoryViewerContainer(
                     viewModel: storyViewModel,
                     userId: overlayState.storyViewerUserId,
@@ -790,26 +790,7 @@ struct ConversationView: View {
                 composerState.pendingComposeTarget = nil
                 composerState.composeMediaTarget = attendue
             }) { msgToForward in
-                ForwardPickerSheet(
-                    message: msgToForward,
-                    additionalMessages: composerState.forwardAdditionalMessages,
-                    sourceConversationId: conversation?.id ?? "",
-                    accentColor: accentColor,
-                    onOpenConversation: { router.navigateToConversation($0) },
-                    // Loi 6 — SECOND point d'entrée du MÊME chemin, jamais une
-                    // dixième porte : la feuille se referme et rend la main,
-                    // l'hôte pose le même état que l'appui long. Elle ne monte
-                    // pas le meuble, ce qui en ferait un second contrat d'envoi.
-                    onCompose: { composerState.pendingComposeTarget = ComposerSeedTarget(message: msgToForward) },
-                    onDismiss: { composerState.forwardMessage = nil }
-                )
-                    .presentationDetents([.medium, .large])
-                    .presentationDragIndicator(.visible)
-                    // ForwardPickerSheet reads `@EnvironmentObject StatusViewModel`
-                    // internally — .sheet does not reliably inherit the parent's
-                    // environment across this boundary (documented crash pattern,
-                    // see docs/lessons on @EnvironmentObject-across-sheet).
-                    .environmentObject(statusViewModel)
+                forwardPicker(for: msgToForward)
             }
             // Flou du fond quand l'overlay d'appui-long est ouvert — appliqué
             // AVANT `.overlay` pour ne flouter que la conversation, jamais le
@@ -842,7 +823,7 @@ struct ConversationView: View {
             // primitives que la bulle (`BubbleStandardLayout`,
             // `.fullScreenCover(item: $fullscreenPlace)`), présentées ICI
             // parce que la rangée vit dans une cellule de collection.
-            .fullScreenCover(item: $focalFullscreenPlace) { item in
+            .conversationCover(item: $focalFullscreenPlace) { item in
                 LocationFullscreenView(
                     latitude: item.place.latitude,
                     longitude: item.place.longitude,
@@ -870,7 +851,7 @@ struct ConversationView: View {
             // Le montage du MEUBLE, lui, reste dans la porte : le poser ici
             // recopierait son envoi, sa reprise hors-ligne et sa sortie — et
             // ce lot livre justement un SECOND déclencheur du même chemin.
-            .fullScreenCover(item: $composerState.composeMediaTarget) { cible in
+            .conversationCover(item: $composerState.composeMediaTarget) { cible in
                 MediaComposerDoor(
                     // L'INTENTION naît dans la porte, pas ici : un second site
                     // qui la construirait serait un second contrat à tenir
@@ -886,7 +867,7 @@ struct ConversationView: View {
                 viewModel: viewModel, scrollState: $scrollState,
                 composerState: $composerState, accentColor: accentColor,
                 onReply: { triggerReply(for: $0) }))
-            .fullScreenCover(item: $composerState.previewMedia) { media in
+            .conversationCover(item: $composerState.previewMedia) { media in
                 switch media.type {
                 case "video":
                     VideoFullscreenPlayer(urlString: media.url.absoluteString, speed: .x1_0)
@@ -1071,6 +1052,7 @@ struct ConversationView: View {
                 // subscriptions, sync-engine gate) are deferred here out of
                 // `init` so the throwaway VMs SwiftUI allocates on every
                 // reconstruction stay free — see ConversationViewModel.start().
+                restoreHeaderMemory()
                 viewModel.start()
                 viewModel.observeSync()
                 await viewModel.loadMessages()
@@ -2174,7 +2156,7 @@ struct ConversationView: View {
                 moodEmoji: headerMoodEmoji
             ) {
                 isTyping = false
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { composerState.showOptions = true }
+                setHeaderExpanded(true)
             }
         }
         .padding(.horizontal, MeeshySpacing.lg)
@@ -2188,7 +2170,7 @@ struct ConversationView: View {
             ConversationTitleLabel(
                 name: conversation?.displayName ?? "Conversation",
                 favoriteEmoji: conversation?.userState.reaction,
-                font: MeeshyFont.relative(15, weight: .semibold, design: .rounded),
+                font: MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded),
                 color: .white
             )
             Spacer()
@@ -2197,10 +2179,10 @@ struct ConversationView: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark")
-                    .font(MeeshyFont.relative(11, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
                     .foregroundColor(theme.textMuted)
-                    .frame(width: 32, height: 32)
-                    .background(Circle().fill(theme.textMuted.opacity(0.12)))
+                    .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
+                    .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
             }
             .accessibilityLabel(String(localized: "conversation.view.close", bundle: .main))
         }
@@ -2282,14 +2264,13 @@ struct ConversationView: View {
     // le plus proche, une érasure de plus. C'est exactement ce qu'un type
     // NOMINAL supprime : son nom se substitue au sous-arbre entier dans le
     // mangled name, donc le démangleur n'a plus à le parcourir.
+    // L'aperçu (#9031) : « agrandir » prend la place de la loupe.
     private var headerButtonsCluster: AnyView {
-        let cluster = ConversationHeaderActionsCluster(
+        AnyView(ConversationHeaderActionsCluster(
             callButtons: { headerCallButtons },
-            searchButton: { expandedHeaderSearchButton },
+            searchButton: { previewMode ? openFullConversationButton : expandedHeaderSearchButton },
             readingModeCluster: { readingModeAffordanceCluster }
-        )
-        guard headerLayout.showsOpenFullConversation else { return AnyView(cluster) }
-        return AnyView(HStack(spacing: 0) { cluster; openFullConversationButton })
+        ))
     }
 
     /// Chip de mode + bouton Aa (§WS-7 travaux 3-4, arbitrage F-086bis) —
@@ -2430,7 +2411,7 @@ struct ConversationView: View {
             ConversationTitleLabel(
                 name: conversation?.displayName ?? "Conversation",
                 favoriteEmoji: conversation?.userState.reaction,
-                font: MeeshyFont.relative(13, weight: .bold, design: .rounded),
+                font: MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded),
                 color: isDark ? .white : MeeshyColors.indigo950, // blanc sur le verre clair était illisible (#8822)
                 lineLimit: 2
             )
@@ -2439,8 +2420,8 @@ struct ConversationView: View {
             // REST response lands — no blocking spinner.
             if viewModel.isRevalidating {
                 Image(systemName: "sparkles")
-                    .font(MeeshyFont.relative(10, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.85))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
+                    .foregroundStyle(.white.opacity(MeeshyOpacity.intense))
                     .adaptiveSymbolPulse()
                     .accessibilityLabel(String(localized: "conversation.view.refreshing_background", bundle: .main))
             }
@@ -2467,20 +2448,7 @@ struct ConversationView: View {
     }
 
     private var expandedHeaderBackground: AnyView {
-        // Le BLOC DE VERRE (#8822) : Liquid Glass sur iOS 26, matériau avant.
-        guard headerLayout.isGlassBlock else { return AnyView(Color.clear) }
-        return AnyView(
-            Color.clear.adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xxl - 2))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xxl - 2)
-                        .stroke(
-                            LinearGradient(colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)], startPoint: .leading, endPoint: .trailing),
-                            lineWidth: 1
-                        )
-                )
-                .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 8, y: 2)
-                .transition(.scale(scale: 0.1, anchor: .trailing).combined(with: .opacity))
-        )
+        AnyView(ConversationHeaderGlass(shape: headerLayout.glassShape, accentColor: accentColor, secondaryColor: secondaryColor))
     }
 
     // MARK: - Overlay Menu Content (extracted to help type-checker)
@@ -2584,10 +2552,10 @@ private struct HeaderSearchGlyph: View {
 
     var body: some View {
         Image(systemName: "magnifyingglass")
-            .font(MeeshyFont.relative(13, weight: .semibold))
+            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
             .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            .frame(width: 28, height: 28)
-            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(0.25))
+            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
+            .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
             .meeshyTapTarget()
     }
 }

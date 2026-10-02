@@ -64,7 +64,7 @@ export function SignupIdentityCard({
       ref={card}
       data-signup-card
       aria-labelledby="signup-card-title"
-      className="glass glass-card relative grid gap-4 overflow-hidden rounded-[26px] p-4"
+      className="glass glass-card relative grid gap-4 overflow-hidden rounded-sheet p-4"
       style={{
         border: '1px solid color-mix(in srgb, var(--color-ios-ink) 12%, transparent)',
         boxShadow: '0 18px 48px color-mix(in srgb, var(--color-ios-ink) 14%, transparent)',
@@ -89,7 +89,7 @@ export function SignupIdentityCard({
                 onClick={onValidateNow}
                 disabled={!canValidate || isValidating}
                 aria-busy={isValidating}
-                className="grid place-items-center rounded-[16px] px-4 font-semibold transition-opacity"
+                className="grid place-items-center rounded-card px-4 font-semibold transition-opacity"
                 style={{
                   minHeight: 48,
                   color: 'var(--color-ios-ink)',

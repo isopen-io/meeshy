@@ -33,6 +33,7 @@ import { refuserCommeIntrouvable } from './utils/access-control';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { EngagementService } from '../../services/engagement/EngagementService';
 import { serializeConversationParticipant } from '@meeshy/shared/utils/participant-helpers';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { viewerFromRequest } from '../users/presence-gate';
@@ -95,7 +96,8 @@ export const conversationShareLinkResponseSchema = {
 export function registerSharingRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
-  requiredAuth: any
+  requiredAuth: any,
+  engagement: Pick<EngagementService, 'recordActivity'> = new EngagementService(prisma)
 ) {
   fastify.post<{
     Params: { id: string };
@@ -234,7 +236,8 @@ export function registerSharingRoutes(
         socketIOHandler: fastify.socketIOHandler,
         userId: currentUserId,
         userRole: user.role,
-        input: { conversationId: id, ...body }
+        input: { conversationId: id, ...body },
+        engagement
       });
       if (!result) return; // La réponse d'erreur est déjà partie.
 
@@ -518,6 +521,7 @@ export function registerSharingRoutes(
 
       const result = await performLinkJoin({
         prisma,
+        engagement,
         key: linkId,
         authContext: userToken,
         requestIp: resolveClientIp(request),
@@ -886,6 +890,14 @@ export function registerSharingRoutes(
 
       if (entry.outcome === 'rejoin' && entry.participantId) {
         invalidateParticipantLookup(entry.participantId, conversationId);
+      }
+
+      // `social.conversation_invite` (#8959) — même crédit que
+      // `POST …/participants` : une fois par personne et par conversation.
+      if (inviterId && inviterId !== userId) {
+        engagement
+          .recordActivity(inviterId, 'social.conversation_invite', { targetId: `${conversationId}:${userId}` })
+          .catch((err: unknown) => logger.warn('engagement social.conversation_invite failed', { err }));
       }
 
       // Annoncer l'arrivée — troisième des quatre portes, même loi.

@@ -71,6 +71,7 @@ public struct StickerPickerView: View {
     /// #4579 — les lieux alentour. `nil` tant que l'app n'a pas injecté son
     /// fournisseur : l'onglet « Lieu » n'existe alors pas.
     @Environment(\.stickerNearbyPlaces) var nearbyPlaces
+    @Environment(\.meeStickerPick) var meeStickerPick
     @Environment(\.stickerPaletteClock) private var clock
 
     @State var libraryItems: [StoryStickerLibraryItem] = []
@@ -157,7 +158,8 @@ public struct StickerPickerView: View {
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.top, MeeshySpacing.lg)
                     .padding(.bottom, MeeshySpacing.md)
-                StickerSheetTabBar(selection: $selectedTab)
+                StickerSheetTabBar(selection: $selectedTab,
+                                   tabs: StickerSheetTab.offered(hasMee: meeStickerPick != nil))
                     .padding(.bottom, MeeshySpacing.sm)
                 tabbedContent
             }

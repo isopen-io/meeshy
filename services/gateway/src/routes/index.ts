@@ -108,6 +108,7 @@ import { reportCreationRoutes } from './reports';
 import * as AdminInvitations from './admin/invitations';
 import { analyticsRoutes } from './admin/analytics';
 import { languagesRoutes } from './admin/languages';
+import { engagementScaleAdminRoutes } from './admin/engagement-scale';
 import * as AdminMessages from './admin/messages';
 import { registerContentRoutes } from './admin/content';
 import { registerAdminShareLinkRoutes } from './admin/share-links';
@@ -118,6 +119,7 @@ import { adminPostRoutes } from './admin/posts';
 import { agentAdminRoutes } from './admin/agent';
 import { agentTopicsRoutes } from './admin/agent-topics';
 import { routeUsageAdminRoutes } from './admin/route-usage';
+import { adminOversightRoutes } from './admin/oversight';
 import { userRoutes } from './users';
 import meRoutes from './me';
 import { mePermissionsRoutes } from './me/permissions';
@@ -269,6 +271,13 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   { name: 'admin-agent', prefix: `${API_PREFIX}/admin/agent`, module: agentAdminRoutes },
   { name: 'admin-agent-topics', prefix: `${API_PREFIX}/admin/agent`, module: agentTopicsRoutes },
   { name: 'admin-route-usage', prefix: `${API_PREFIX}/admin`, module: routeUsageAdminRoutes },
+  // La « vue de dieu » (#8876) : journal d'audit, liens de suivi, fiche de
+  // communauté et supervision, sous le MÊME préfixe que `admin-content` /
+  // `admin-rankings`. Une seule entrée : le module enregistre ses quatre
+  // fichiers lui-même, pour que la table dise « une surface », pas quatre.
+  { name: 'admin-oversight', prefix: `${API_PREFIX}/admin`, module: adminOversightRoutes },
+  // Le barème d'engagement (#8906) — ADMIN/BIGBOSS, lecture et réglage.
+  { name: 'admin-engagement-scale', prefix: `${API_PREFIX}/admin`, module: engagementScaleAdminRoutes },
 
   // ── Utilisateur, annuaire ────────────────────────────────────────────
   { name: 'users', prefix: API_PREFIX, module: userRoutes },

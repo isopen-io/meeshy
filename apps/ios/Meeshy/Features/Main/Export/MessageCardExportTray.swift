@@ -22,22 +22,32 @@ struct MessageCardExportTray: View {
     let hasTitle: Bool
     /// Le pseudo des auteurs est connu : « pseudo au lieu du nom » s'offre.
     let hasHandles: Bool
-    /// Les médias du contenu — « Médias » ne propose que ce qui a un effet.
-    let mediaKinds: [MessageCardMediaKind]
+    /// Les médias du contenu, tels qu'on les peint — « Médias » ne propose que ce qui a un effet.
+    let media: [MessageCardMedia]
+    /// Ce que « Sauvegarder » produira — la durée et le passage n'existent qu'en vidéo (#8979).
+    let output: MessageCardOutput
+    let plan: MessageCardMotionPlan?
     let languages: [String]
     @Binding var exportLanguage: String?
     let thumbs: MessageCardThumbSource
     let onTab: (MessageCardExportTab) -> Void
     let onGallery: () -> Void
+    /// Le passage glissé sur l'onde : son nouveau point de départ, en secondes.
+    let onExcerptStart: (Double) -> Void
 
+    /// Le plateau prend sa hauteur IDÉALE : ses rangées défilent à l'horizontale,
+    /// donc se laisseraient écraser à la verticale, et un panneau haut (un vocal
+    /// en vidéo : durée et passage) débordait sur les boutons. C'est l'aperçu,
+    /// lui, qui cède la place (#8979).
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             tabBar
             panel
                 .frame(minHeight: 96, alignment: .top)
                 .animation(.spring(response: 0.35, dampingFraction: 0.85), value: tab)
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, MeeshySpacing.md)
+        .fixedSize(horizontal: false, vertical: true)
         .adaptiveGlass(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
@@ -45,7 +55,7 @@ struct MessageCardExportTray: View {
 
     private var tabBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 4) {
+            HStack(spacing: MeeshySpacing.xs) {
                 ForEach(tabs) { item in
                     let selected = item == tab
                     Button {
@@ -55,7 +65,7 @@ struct MessageCardExportTray: View {
                         Label(item.label, systemImage: item.systemImage)
                             .labelStyle(.titleAndIcon)
                             .font(.subheadline.weight(selected ? .semibold : .regular))
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, MeeshySpacing.md)
                             .frame(minHeight: 36)
                             .background(Capsule().fill(selected ? Color.primary.opacity(0.12) : Color.clear))
                             .contentShape(Capsule())
@@ -65,7 +75,7 @@ struct MessageCardExportTray: View {
                     .accessibilityAddTraits(selected ? [.isSelected] : [])
                 }
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, MeeshySpacing.md)
         }
     }
 
@@ -97,13 +107,13 @@ struct MessageCardExportTray: View {
                 HapticFeedback.light()
                 onGallery()
             } label: {
-                VStack(spacing: 4) {
+                VStack(spacing: MeeshySpacing.xs) {
                     Image(systemName: "square.grid.3x3.fill").font(.title3)
                     Text(verbatim: "\(MessageCardTemplates.all.count)").font(.caption.weight(.bold))
                     Text(MessageCardExportText.text("export.card.gallery.open", "Tout voir")).font(.caption2)
                 }
                 .frame(width: 72, height: 76)
-                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.primary.opacity(0.07)))
+                .background(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous).fill(Color.primary.opacity(0.07)))
             }
             .buttonStyle(MessageCardPressStyle())
             .foregroundStyle(.primary)
@@ -126,7 +136,7 @@ struct MessageCardExportTray: View {
     }
 
     private var typefacePanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             row {
                 ForEach(MessageCardTypefaceID.allCases, id: \.self) { typeface in
                     tile(MessageCardExportText.typefaceLabel(typeface), selected: typeface == format.template.typeface) {
@@ -138,7 +148,7 @@ struct MessageCardExportTray: View {
                     }
                 }
             }
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Text(MessageCardExportText.text("export.card.typeface.pairs", "La police habille la citation et la réponse"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -150,7 +160,7 @@ struct MessageCardExportTray: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, MeeshySpacing.lg)
         }
     }
 
@@ -203,9 +213,9 @@ struct MessageCardExportTray: View {
 
     func row<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 10) { content() }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 2)
+            HStack(alignment: .top, spacing: MeeshySpacing.smPlus) { content() }
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.xxs)
         }
     }
 
@@ -219,13 +229,13 @@ struct MessageCardExportTray: View {
             HapticFeedback.light()
             action()
         } label: {
-            VStack(spacing: 6) {
+            VStack(spacing: MeeshySpacing.xsPlus) {
                 content()
                     .frame(width: 56, height: 56)
-                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.primary.opacity(selected ? 0.14 : 0.06)))
+                    .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(Color.primary.opacity(selected ? 0.14 : 0.06)))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .strokeBorder(selected ? Color.primary : Color.clear, lineWidth: 2)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous)
+                            .strokeBorder(selected ? Color.primary : Color.clear, lineWidth: MeeshyBorder.strong)
                     )
                 Text(label)
                     .font(.caption2.weight(selected ? .semibold : .regular))
@@ -244,11 +254,11 @@ struct MessageCardExportTray: View {
             HapticFeedback.light()
             action()
         } label: {
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 if selected { Image(systemName: "checkmark").font(.footnote.weight(.bold)) }
                 Text(label).font(.subheadline.weight(.semibold)).lineLimit(1)
             }
-            .padding(.horizontal, 14)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
             .frame(minHeight: 44)
             .foregroundStyle(selected ? Color(uiColor: .systemBackground) : Color.primary)
             .background(Capsule().fill(selected ? Color.primary : Color.primary.opacity(0.07)))

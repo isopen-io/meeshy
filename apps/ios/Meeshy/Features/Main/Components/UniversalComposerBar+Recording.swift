@@ -40,7 +40,7 @@ extension UniversalComposerBar {
                         .frame(width: 36, height: 36)
                 }
                 .accessibilityLabel(String(localized: "composer.a11y.startRecording", defaultValue: "Enregistrer un message vocal", bundle: .main))
-                .padding(.leading, 4)
+                .padding(.leading, MeeshySpacing.xs)
                 .transition(.scale.combined(with: .opacity))
             }
 
@@ -55,11 +55,12 @@ extension UniversalComposerBar {
                 // La sélection est lue à partir d'iOS 18 pour la barre de
                 // format (#7849, `UniversalComposerBar+Format.swift`).
                 composerTextFieldBase
+                    .background { composerPasteInterceptor }
                     .focused($isFocused)
                     .foregroundColor(textColor)
                     .padding(.leading, (resolvedShowVoice && !isFocused) ? 2 : 16)
-                    .padding(.trailing, 16)
-                    .padding(.vertical, 12)
+                    .padding(.trailing, MeeshySpacing.lg)
+                    .padding(.vertical, MeeshySpacing.md)
                     .lineLimit(1...5)
                     .font(.callout)
                     // **La touche RETOUR ENVOIE, et elle porte l'accent**
@@ -167,7 +168,7 @@ extension UniversalComposerBar {
             ? 1
             : (effectiveDuration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
 
-        return HStack(spacing: 10) {
+        return HStack(spacing: MeeshySpacing.smPlus) {
             // Cancel (X) button — discards the recording without sending.
             // Hit area expanded to 44x44pt per Apple HIG while keeping the
             // visible pill at 32pt.
@@ -197,7 +198,7 @@ extension UniversalComposerBar {
                 .accessibilityHidden(true)
 
             // Recording indicator + timer — grouped for VoiceOver.
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Circle()
                     .fill(MeeshyColors.error)
                     .frame(width: 6, height: 6)
@@ -289,8 +290,8 @@ extension UniversalComposerBar {
                 ? "Termine et envoie l'enregistrement"
                 : "Maintenez encore pour atteindre la duree minimum")
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 5)
+        .padding(.horizontal, MeeshySpacing.xsPlus)
+        .padding(.vertical, MeeshySpacing.xs)
         .frame(minHeight: 44)
         .adaptiveLiquidGlass(in: Self.fieldShape, tint: MeeshyColors.error.opacity(0.12))
     }

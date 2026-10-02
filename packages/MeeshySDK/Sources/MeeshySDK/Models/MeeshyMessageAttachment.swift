@@ -248,6 +248,16 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
             public var startTime: Double?
             public var endTime: Double?
             public var speakerId: String?
+
+            public init(text: String, startTime: Double? = nil, endTime: Double? = nil, speakerId: String? = nil) {
+                self.text = text; self.startTime = startTime; self.endTime = endTime; self.speakerId = speakerId
+            }
+        }
+
+        public init(text: String, language: String, confidence: Double? = nil, durationMs: Int? = nil,
+                    speakerCount: Int? = nil, segments: [TranscriptionSegmentData]? = nil) {
+            self.text = text; self.language = language; self.confidence = confidence
+            self.durationMs = durationMs; self.speakerCount = speakerCount; self.segments = segments
         }
     }
 
@@ -262,6 +272,14 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         public var voiceModelId: String?
         public var ttsModel: String?
         public var segments: [EmbeddedTranscription.TranscriptionSegmentData]?
+
+        public init(url: String, transcription: String? = nil, durationMs: Int? = nil, format: String? = nil,
+                    cloned: Bool? = nil, quality: Double? = nil, voiceModelId: String? = nil, ttsModel: String? = nil,
+                    segments: [EmbeddedTranscription.TranscriptionSegmentData]? = nil) {
+            self.url = url; self.transcription = transcription; self.durationMs = durationMs; self.format = format
+            self.cloned = cloned; self.quality = quality; self.voiceModelId = voiceModelId; self.ttsModel = ttsModel
+            self.segments = segments
+        }
     }
 
     public var type: AttachmentType {

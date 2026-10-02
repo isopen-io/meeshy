@@ -49,20 +49,6 @@ extension CallView {
         // permanence, et en UN seul endroit : le bouton « Écran » vit avec les
         // commandes de ma caméra (vignette, haut de l'écran ou (…), #8626).
         .background(screenSharePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
-        // §7.3 — auto-hide after 4s of no interaction, in duo AND group
-        // video. Re-arms whenever showControls flips to true (a reveal tap),
-        // the (…) / a panel is used, AND on every touch of the chrome (#8735:
-        // a pressed button, a scrolled row); never under a finger, never
-        // while a panel is open, on Mac, under VoiceOver or without video.
-        .task(id: AutoHideKey(isVisible: showControls, layer: layer, interactionRevision: chromeTouches.revision)) {
-            guard showControls, mayAutoHideNow else { return }
-            try? await Task.sleep(nanoseconds: CallChromeVisibility.autoHideDelayNanoseconds)
-            guard !Task.isCancelled, mayAutoHideNow else { return }
-            withAnimation(.easeInOut(duration: CallChromeVisibility.fadeDuration)) {
-                showControls = false
-                isCameraMenuUnfolded = false
-            }
-        }
         // §7.1 — populate the camera list when video turns on so the « mon
         // image » actions can decide flip vs device picker (Continuity/USB).
         .task(id: callManager.isVideoEnabled) {
@@ -72,7 +58,6 @@ extension CallView {
         .onDisappear {
             showControls = true
             layer = .idle
-            chromeTouches = chromeTouches.released()
         }
         .adaptiveOnChange(of: currentActionSet) { _, actions in
             let reconciled = layer.reconciled(with: actions)
@@ -129,8 +114,9 @@ extension CallView {
             // audio call to video unilaterally — its stream must render even
             // while the local camera stays off.
             if callManager.isVideoUIActive {
-                // §7.3 — tap the primary video to toggle the controls
-                // (auto-hide UX). The PiP (on top) keeps its own swap tap.
+                // #8978 — tap the primary video to hide the controls, tap again to
+                // bring them back; nothing hides them on a timer. The PiP (on top)
+                // keeps its own swap tap.
                 videoCallLayout
                     .contentShape(Rectangle())
                     .onTapGesture { toggleControls() }
@@ -143,13 +129,12 @@ extension CallView {
                         ? String(localized: "call.video.hideControls", defaultValue: "Masquer les contrôles", bundle: .main)
                         : String(localized: "call.video.showControls", defaultValue: "Afficher les contrôles", bundle: .main))
                     .accessibilityAddTraits(.isButton)
-                    // Controls never auto-hide during VoiceOver (shouldAutoHideControls
-                    // returns false) — this tap element has no meaningful purpose then,
-                    // so hide it from the accessibility tree to avoid confusing VoiceOver.
-                    .accessibilityHidden(!shouldAutoHideControls)
+                    // Under VoiceOver the controls stay put — this tap element has no
+                    // meaningful purpose then, so it leaves the accessibility tree.
+                    .accessibilityHidden(!exposesTheTapToggle)
             }
 
-            VStack(spacing: 12) {
+            VStack(spacing: MeeshySpacing.md) {
                 if !callManager.isVideoUIActive {
                     if showTranscript {
                         // Captions active on an audio call: compact header at
@@ -159,13 +144,13 @@ extension CallView {
                         compactAudioCallHeader
                             .padding(.top, Self.chromeTopInset + 52)
                         transcriptPanel
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, MeeshySpacing.lg)
                             .frame(maxHeight: .infinity)
                     } else {
                         // #8435 — en audio aussi, glisser vers le bas quitte
                         // le plein écran. Pas sur le panneau de sous-titres :
                         // son défilement garde ses propres glissés.
-                        VStack(spacing: 12) {
+                        VStack(spacing: MeeshySpacing.md) {
                             Spacer()
                             audioCallLayout
                             Spacer()
@@ -177,13 +162,13 @@ extension CallView {
                     Spacer()
                 }
 
-                VStack(spacing: 12) {
+                VStack(spacing: MeeshySpacing.md) {
                     // #8396 — le bandeau de sous-titres, juste au-dessus de la
                     // pilule ; il RESTE quand les actions sont rangées, et
                     // quand le chrome se masque.
                     if callManager.isVideoUIActive && showTranscript {
                         captionsBand(hasOwnGlass: true)
-                            .padding(.horizontal, 16)
+                            .padding(.horizontal, MeeshySpacing.lg)
                             .transition(.opacity)
                     }
 
@@ -191,7 +176,7 @@ extension CallView {
                     // en vidéo (4 s) ; toujours visibles en audio, sur Mac, avec
                     // VoiceOver. Masquées, elles ne captent aucun toucher.
                     callControlsPill
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.bottom, Self.chromeBottomInset)
                         .callChromeVisibility(isChromeVisible)
                 }
@@ -256,11 +241,11 @@ extension CallView {
     /// de la mise en page : quand la pilule grandit (rangées, sous-titres), la
     /// grille rétrécit au lieu de passer dessous — en portrait comme en paysage.
     private var groupStageLayout: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             Color.clear
                 .frame(height: isStageFullScreen ? DeviceLayout.safeAreaTop : Self.chromeTopInset + 52)
             GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, isChromeVisible: isChromeVisible, onStageTap: toggleControls, onSelfFeaturedChange: { isSelfFeatured = $0 })
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
             if !isStageFullScreen {
                 ZStack(alignment: .bottom) {
                     callControlsPill
@@ -271,7 +256,7 @@ extension CallView {
                     }
                 }
                 .overlay(alignment: .top) { callControlsNoticesAbove }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, MeeshySpacing.md)
                 .padding(.bottom, Self.chromeBottomInset)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -290,31 +275,17 @@ extension CallView {
             .accessibilityHidden(true)
     }
 
-    /// §7.3 — controls auto-hide only on a video stage (duo or group, #8550),
-    /// never on Mac (no touch to recall them), never while a panel is open,
-    /// and never while VoiceOver is running. The rule is
-    /// `CallChromeVisibility.mayAutoHide`.
-    private var shouldAutoHideControls: Bool {
-        CallChromeVisibility.mayAutoHide(
-            isVideoStage: isVideoStage, isPanelOpen: showEffectsToolbar || !layer.mayAutoHide,
-            isOnMac: ProcessInfo.processInfo.isiOSAppOnMac, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning
-        )
-    }
-
-    /// #8735 — la même règle, jamais sous un doigt posé.
-    private var mayAutoHideNow: Bool {
-        CallChromeVisibility.mayAutoHide(
-            isVideoStage: isVideoStage, isPanelOpen: showEffectsToolbar || !layer.mayAutoHide,
-            isOnMac: ProcessInfo.processInfo.isiOSAppOnMac, isVoiceOverRunning: UIAccessibility.isVoiceOverRunning,
-            isTouching: chromeTouches.isTouching
-        )
+    /// #8978 — la bascule au toucher n'existe que sur une scène vidéo, et pas sous VoiceOver,
+    /// où les contrôles restent en place.
+    private var exposesTheTapToggle: Bool {
+        CallChromeVisibility.mayToggleByTap(isVideoStage: isVideoStage) && !UIAccessibility.isVoiceOverRunning
     }
 
     /// #8735 — la porte UNIQUE par laquelle un contrôle dit qu'il est touché
-    /// (`callChromeInteraction`) : chaque toucher réarme le compte à rebours ;
-    /// celui reçu pendant le fondu de disparition rallume le chrome.
+    /// (`callChromeInteraction`). Seul compte le toucher reçu pendant le fondu
+    /// de disparition, qui rallume le chrome : un appui n'écrit aucun état de
+    /// la racine, il recalculerait tout l'écran d'appel (#8978).
     func noteChromeInteraction(_ interaction: CallChromeInteraction) {
-        chromeTouches = chromeTouches.noting(interaction)
         guard interaction.revealsChrome, !showControls else { return }
         withAnimation(.easeInOut(duration: CallChromeVisibility.fadeDuration)) { showControls = true }
     }
@@ -354,7 +325,7 @@ extension CallView {
     }
 
     var audioCallLayout: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             // Duo d'avatars (no pulse) — correspondant + pastille locale.
             // Decorative: the remote user's name is shown as a Text element
             // directly below, mirroring pulsingAvatar's rationale — without
@@ -362,7 +333,7 @@ extension CallView {
             // "Vous", then the full name as three disjoint stops.
             callAvatarPair(size: 120)
                 .accessibilityHidden(true)
-                .padding(.bottom, 8)
+                .padding(.bottom, MeeshySpacing.sm)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
@@ -372,7 +343,7 @@ extension CallView {
             // invisible sur lien sain, apparaît à la dégradation, persiste en
             // vert `recoveryLingerSeconds` après récupération puis se retire
             // (cycle de vie dans TransientCallSignalGlyph).
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 TransientCallSignalGlyph(strength: signalStrength)
                 Text(callManager.formattedDuration)
                     .font(.body.weight(.medium).monospacedDigit())
@@ -386,11 +357,11 @@ extension CallView {
                     .accessibilityLabel(String(localized: "call.duration.a11y.label"))
                     .accessibilityValue(callManager.spokenDuration)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
                 Capsule()
-                    .fill(durationColor.opacity(0.15))
+                    .fill(durationColor.opacity(MeeshyOpacity.light))
             )
             // Naked-readout fix (doctrine 206i/210i/211i): the combined element
             // previously announced a bare "0:34" with no context. Signal state is
@@ -404,7 +375,7 @@ extension CallView {
             .callQualityDetailTrigger(isPresented: $showQualityDetail)
 
             // Status indicators
-            HStack(spacing: 12) {
+            HStack(spacing: MeeshySpacing.md) {
                 // §4.3 — reconnexion ICE en cours : remplace l'ancien bandeau
                 // plein-écran (user-reported 2026-07-11) par une pill compacte,
                 // au même endroit que les autres indicateurs de statut.
@@ -415,7 +386,7 @@ extension CallView {
                     statusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupé", bundle: .main), color: MeeshyColors.error)
                 }
                 if !callManager.isRemoteAudioEnabled {
-                    statusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact en sourdine", bundle: .main), color: .white.opacity(0.7))
+                    statusPill(icon: "mic.slash", text: String(localized: "call.status.peer.muted", defaultValue: "Contact en sourdine", bundle: .main), color: .white.opacity(MeeshyOpacity.heavy))
                 }
                 if callManager.isRemoteScreenCapturing {
                     statusPill(icon: "record.circle", text: String(localized: "call.status.peer.recording", defaultValue: "Enregistrement", bundle: .main), color: MeeshyColors.error)
@@ -444,17 +415,17 @@ extension CallView {
     /// vertically centered (sits at the top) so `transcriptPanel` gets the
     /// freed vertical space. User-requested 2026-07-11.
     var compactAudioCallHeader: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             callAvatarPair(size: 56)
                 .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                     .font(.system(.headline, design: .rounded).weight(.semibold))
                     .foregroundColor(.white)
                     .lineLimit(1)
 
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     TransientCallSignalGlyph(strength: signalStrength)
                     Text(callManager.formattedDuration)
                         .font(.caption.weight(.medium).monospacedDigit())
@@ -476,7 +447,7 @@ extension CallView {
 
             Spacer()
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, MeeshySpacing.lg)
     }
 
 
@@ -587,9 +558,9 @@ extension CallView {
     private var connectingVideoPlaceholder: some View {
         Color.black.opacity(0.4)
             .overlay(
-                VStack(spacing: 12) {
+                VStack(spacing: MeeshySpacing.md) {
                     ProgressView()
-                        .tint(.white.opacity(0.5))
+                        .tint(.white.opacity(MeeshyOpacity.strong))
                         .accessibilityHidden(true)
                     Text(videoConnectSlow
                         ? String(localized: "call.video.connecting.slow", defaultValue: "La vidéo prend plus de temps que prévu…", bundle: .main)
@@ -604,7 +575,7 @@ extension CallView {
                             .multilineTextAlignment(.center)
                     }
                 }
-                .padding(.horizontal, 32)
+                .padding(.horizontal, MeeshySpacing.xxxl)
                 .accessibilityElement(children: .combine)
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -629,13 +600,13 @@ extension CallView {
     // last frame.
     private var remoteCameraOffPlaceholder: some View {
         ZStack {
-            Color.black.opacity(0.5)
-            VStack(spacing: 14) {
+            Color.black.opacity(MeeshyOpacity.strong)
+            VStack(spacing: MeeshySpacing.mdPlus) {
                 avatarCircle(size: 96)
                     .accessibilityHidden(true)
-                HStack(spacing: 6) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     Image(systemName: "video.slash.fill")
-                        .font(MeeshyFont.relative(13, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
                         .accessibilityHidden(true)
                     Text(String(localized: "call.video.remoteOff", defaultValue: "Caméra désactivée", bundle: .main))
                         .font(.footnote.weight(.medium))

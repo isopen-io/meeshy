@@ -64,7 +64,7 @@ const viewport = () => (typeof window === 'undefined' ? { width: 390, height: 84
 /** Mon image dans son aperçu (#8696) : la loi du miroir, jamais une condition locale. */
 export const selfPreviewMirrored = (call: Pick<ActiveCall, 'facing' | 'screenSharing'>): boolean => cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing });
 
-const INK_2 = 'rgba(255,255,255,0.72)';
+const INK_2 = 'var(--color-on-media-3)';
 
 type StageProps = {
   readonly call: ActiveCall;
@@ -194,7 +194,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
             onClick={self.onToggle}
             className="relative z-10 grid size-full place-items-center overflow-hidden rounded-card shadow-lg"
             {...(swapped ? {} : pinch)}
-            style={{ background: 'rgb(0 0 0 / 0.35)', ...(swapped ? {} : pinch.style) }}
+            style={{ background: 'var(--color-scrim-soft)', ...(swapped ? {} : pinch.style) }}
             data-call-corner=""
             data-call-self-tile={swapped ? undefined : String(scale)}
           >

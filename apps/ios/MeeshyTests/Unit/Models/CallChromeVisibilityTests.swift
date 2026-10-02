@@ -77,32 +77,6 @@ final class CallChromeVisibilityTests: XCTestCase {
         XCTAssertFalse(CallChromeVisibility.mayToggleByTap(isVideoStage: false))
     }
 
-    // MARK: - Masquage automatique (4 s)
-
-    func test_mayAutoHide_videoStage_nothingOpen_returnsTrue() {
-        XCTAssertTrue(CallChromeVisibility.mayAutoHide(isVideoStage: true, isPanelOpen: false, isOnMac: false, isVoiceOverRunning: false))
-    }
-
-    func test_mayAutoHide_panelOpen_returnsFalse() {
-        XCTAssertFalse(CallChromeVisibility.mayAutoHide(isVideoStage: true, isPanelOpen: true, isOnMac: false, isVoiceOverRunning: false))
-    }
-
-    func test_mayAutoHide_voiceOver_returnsFalse() {
-        XCTAssertFalse(CallChromeVisibility.mayAutoHide(isVideoStage: true, isPanelOpen: false, isOnMac: false, isVoiceOverRunning: true))
-    }
-
-    func test_mayAutoHide_mac_returnsFalse() {
-        XCTAssertFalse(CallChromeVisibility.mayAutoHide(isVideoStage: true, isPanelOpen: false, isOnMac: true, isVoiceOverRunning: false))
-    }
-
-    func test_mayAutoHide_audioStage_returnsFalse() {
-        XCTAssertFalse(CallChromeVisibility.mayAutoHide(isVideoStage: false, isPanelOpen: false, isOnMac: false, isVoiceOverRunning: false))
-    }
-
-    func test_autoHideDelay_isFourSeconds() {
-        XCTAssertEqual(CallChromeVisibility.autoHideDelayNanoseconds, 4_000_000_000)
-    }
-
     // MARK: - Une scène est-elle vidéo ?
 
     func test_isVideoStage_duo_followsTheDuoVideoLayout() {

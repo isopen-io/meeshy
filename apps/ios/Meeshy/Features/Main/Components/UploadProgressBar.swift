@@ -46,8 +46,8 @@ struct UploadProgressBar: View {
     }
 
     var body: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.xsPlus) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(Color(hex: accentColor))
@@ -101,13 +101,13 @@ struct UploadProgressBar: View {
                     .foregroundColor(theme.textMuted)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(theme.surfaceGradient(tint: accentColor))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .stroke(Color(hex: accentColor).opacity(0.2), lineWidth: 1)
                 )
         )

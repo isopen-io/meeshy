@@ -3,133 +3,6 @@ import Combine
 import MeeshySDK
 import os
 
-// MARK: - Notification Category Filter
-
-enum NotificationCategory: String, CaseIterable {
-    case all
-    case unread
-    case messages
-    case reactions
-    case mentions
-    case social
-    case contacts
-    case groups
-    case calls
-    case translations
-    case system
-
-    var label: String {
-        switch self {
-        case .all: return String(localized: "notifications.category.all", defaultValue: "Toutes", bundle: .module)
-        case .unread: return String(localized: "notifications.category.unread", defaultValue: "Non lues", bundle: .module)
-        case .messages: return String(localized: "notifications.category.messages", defaultValue: "Messages", bundle: .module)
-        case .reactions: return String(localized: "notifications.category.reactions", defaultValue: "Reactions", bundle: .module)
-        case .mentions: return String(localized: "notifications.category.mentions", defaultValue: "Mentions", bundle: .module)
-        case .social: return String(localized: "notifications.category.social", defaultValue: "Social", bundle: .module)
-        case .contacts: return String(localized: "notifications.category.contacts", defaultValue: "Contacts", bundle: .module)
-        case .groups: return String(localized: "notifications.category.groups", defaultValue: "Groupes", bundle: .module)
-        case .calls: return String(localized: "notifications.category.calls", defaultValue: "Appels", bundle: .module)
-        case .translations: return String(localized: "notifications.category.translations", defaultValue: "Traductions", bundle: .module)
-        case .system: return String(localized: "notifications.category.system", defaultValue: "Systeme", bundle: .module)
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .all: return "bell.fill"
-        case .unread: return "circle.fill"
-        case .messages: return "bubble.left.fill"
-        case .reactions: return "heart.fill"
-        case .mentions: return "at"
-        case .social: return "hand.thumbsup.fill"
-        case .contacts: return "person.badge.plus"
-        case .groups: return "person.3.fill"
-        case .calls: return "phone.fill"
-        case .translations: return "globe"
-        case .system: return "gear"
-        }
-    }
-
-    // Categorical filter palette: each notification category keeps a distinct
-    // hue so the filter chips read as a colour-coded set, not brand chrome.
-    // Treated as one ladder (arbitrated separately) — do not migrate piecemeal.
-    var color: String {
-        switch self {
-        case .all: return "6366F1"
-        case .unread: return "FF6B6B"
-        case .messages: return "3498DB"
-        case .reactions: return "FF6B6B"
-        case .mentions: return "9B59B6"
-        case .social: return "F8B500"
-        case .contacts: return "4ECDC4"
-        case .groups: return "F8B500"
-        case .calls: return "E91E63"
-        case .translations: return "08D9D6"
-        case .system: return "6366F1"
-        }
-    }
-
-    var matchingTypes: Set<MeeshyNotificationType> {
-        switch self {
-        case .all, .unread:
-            return Set(MeeshyNotificationType.allCases)
-        case .messages:
-            return [
-                .newMessage, .legacyNewMessage, .messageReply, .reply,
-                .messageEdited, .messageDeleted, .messagePinned, .messageForwarded
-            ]
-        case .reactions:
-            return [
-                .messageReaction, .reaction, .legacyMessageReaction,
-                .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike
-            ]
-        case .mentions:
-            return [
-                .userMentioned, .mention, .legacyMention
-            ]
-        case .social:
-            return [
-                .postComment, .legacyPostComment, .postRepost, .commentReply,
-                .legacyStoryReply
-            ]
-        case .contacts:
-            return [
-                .friendRequest, .contactRequest, .legacyFriendRequest,
-                .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-                .contactJoined, .contactRecentlyActive, .legacyStatusUpdate
-            ]
-        case .groups:
-            return [
-                .communityInvite, .communityJoined, .communityLeft,
-                .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
-                .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
-                .addedToConversation, .newConversation, .removedFromConversation
-            ]
-        case .calls:
-            return [
-                .missedCall, .callDeclined, .legacyCallMissed,
-                .incomingCall, .incomingCallAlert, .callEnded, .legacyCallIncoming
-            ]
-        case .translations:
-            return [
-                .translationCompleted, .translationReady, .legacyTranslationReady,
-                .transcriptionCompleted, .voiceCloneReady
-            ]
-        case .system:
-            return [
-                .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
-                .system, .maintenance, .updateAvailable, .reportResolved,
-                .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned,
-                .legacyAffiliateSignup
-            ]
-        }
-    }
-
-    func matches(_ notification: APINotification) -> Bool {
-        matchingTypes.contains(notification.notificationType)
-    }
-}
-
 // MARK: - NotificationListView
 
 public struct NotificationListView: View {
@@ -147,7 +20,7 @@ public struct NotificationListView: View {
     /// posé AVANT l'aller-retour, retiré s'il échoue.
     @State private var connectRequestedIds: Set<String> = []
 
-    private let brandColor = Color(hex: "6366F1")
+    private let brandColor = MeeshyColors.indigo500
 
     public init(
         onNotificationTap: ((APINotification) -> Void)? = nil,
@@ -208,7 +81,7 @@ public struct NotificationListView: View {
                                 Task { await viewModel.markAllRead() }
                             } label: {
                                 Text(String(localized: "notifications.markAllRead", defaultValue: "Tout lire", bundle: .module))
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                                     .foregroundColor(brandColor)
                             }
                         } else {
@@ -220,9 +93,9 @@ public struct NotificationListView: View {
 
             if viewModel.unreadCount > 0 {
                 Text("\(viewModel.unreadCount) non lue\(viewModel.unreadCount > 1 ? "s" : "")")
-                    .font(.system(size: 11))
+                    .font(.system(size: MeeshyFont.footnoteSize))
                     .foregroundColor(brandColor)
-                    .padding(.bottom, 4)
+                    .padding(.bottom, MeeshySpacing.xs)
             }
         }
     }
@@ -231,13 +104,13 @@ public struct NotificationListView: View {
 
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(NotificationCategory.allCases, id: \.self) { category in
                     filterChip(category: category)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.sm)
         }
     }
 
@@ -247,26 +120,23 @@ public struct NotificationListView: View {
 
         return Button {
             HapticFeedback.light()
-            // #7169 — AUCUN aller-retour réseau. `filteredNotifications` filtre
-            // ce qui est DÉJÀ chargé, sur `selectedCategory` seul : recharger
-            // faisait attendre le réseau pour un geste de LECTURE, et hors
-            // ligne la liste ne se filtrait pas alors que les données étaient
-            // là. `selectedCategory` est `@Published` : la poser suffit à
-            // redessiner.
-            viewModel.selectedCategory = category
+            // #7169 puis #8958 — la puce s'allume et la liste se redessine
+            // TOUT DE SUITE, depuis ce qui est déjà chargé ; la page serveur
+            // de la catégorie arrive ensuite, sans spinner (`select`).
+            Task { await viewModel.select(category) }
         } label: {
-            HStack(spacing: 5) {
+            HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: category.icon)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 Text(category.label)
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
             }
             .foregroundColor(isSelected ? .white : Color(hex: chipColor))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.xsPlus)
             .background(
                 Capsule()
-                    .fill(isSelected ? Color(hex: chipColor) : Color(hex: chipColor).opacity(0.12))
+                    .fill(isSelected ? Color(hex: chipColor) : Color(hex: chipColor).opacity(MeeshyOpacity.light))
             )
         }
         .buttonStyle(.plain)
@@ -291,7 +161,9 @@ public struct NotificationListView: View {
             } else if filteredNotifications.isEmpty {
                 emptyState
             } else {
-                ScrollView {
+                List {
+                    // Le lecteur de décalage du chemin iOS 16–17 : une ligne de
+                    // hauteur nulle, en tête.
                     GeometryReader { geo in
                         Color.clear.preference(
                             key: ScrollOffsetPreferenceKey.self,
@@ -299,40 +171,69 @@ public struct NotificationListView: View {
                         )
                     }
                     .frame(height: 0)
+                    .notificationListRow()
 
-                    LazyVStack(spacing: 0) {
-                        ForEach(filteredNotifications) { notification in
-                            NotificationRowView(
-                                notification: notification,
-                                onTap: {
+                    ForEach(filteredNotifications) { notification in
+                        NotificationRowView(
+                            notification: notification,
+                            onTap: {
+                                Task { await viewModel.markRead(notification) }
+                                onNotificationTap?(notification)
+                            },
+                            onMarkRead: {
+                                Task { await viewModel.markRead(notification) }
+                            },
+                            onDelete: {
+                                Task { await viewModel.deleteNotification(notification) }
+                            },
+                            onQuickAction: onQuickAction.map { perform in
+                                { action in runQuickAction(action, on: notification, perform: perform) }
+                            },
+                            isConnectRequested: notification.senderId.map(connectRequestedIds.contains) ?? false,
+                            isFriend: notification.senderId.map { FriendshipCache.shared.isFriend($0) } ?? false
+                        )
+                        .equatable()
+                        .notificationListRow()
+                        // #8958 — le glissement vers la gauche VIDE la ligne.
+                        // Il vit ici et non dans la rangée : `.swipeActions` n'a
+                        // d'effet que dans une `List`.
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(role: .destructive) {
+                                Task { await viewModel.deleteNotification(notification) }
+                            } label: {
+                                Label(
+                                    String(localized: "notifications.swipe.delete", defaultValue: "Supprimer", bundle: .module),
+                                    systemImage: "trash.fill"
+                                )
+                            }
+                            if !notification.isRead {
+                                Button {
                                     Task { await viewModel.markRead(notification) }
-                                    onNotificationTap?(notification)
-                                },
-                                onMarkRead: {
-                                    Task { await viewModel.markRead(notification) }
-                                },
-                                onDelete: {
-                                    Task { await viewModel.deleteNotification(notification) }
-                                },
-                                onQuickAction: onQuickAction.map { perform in
-                                    { action in runQuickAction(action, on: notification, perform: perform) }
-                                },
-                                isConnectRequested: notification.senderId.map(connectRequestedIds.contains) ?? false,
-                                isFriend: notification.senderId.map { FriendshipCache.shared.isFriend($0) } ?? false
-                            )
-                            .equatable()
-                        }
-
-                        if viewModel.hasMore && viewModel.selectedCategory == .all {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                                .onAppear {
-                                    Task { await viewModel.loadMore() }
+                                } label: {
+                                    Label(
+                                        String(localized: "notifications.swipe.read", defaultValue: "Lu", bundle: .module),
+                                        systemImage: "envelope.open.fill"
+                                    )
                                 }
+                                .tint(brandColor)
+                            }
                         }
                     }
+
+                    if viewModel.hasMore {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .notificationListRow()
+                            .onAppear {
+                                Task { await viewModel.loadMore() }
+                            }
+                    }
                 }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .environment(\.defaultMinListRowHeight, 0)
+                .animation(.easeInOut(duration: 0.25), value: filteredNotifications.map(\.id))
                 .coordinateSpace(name: "scroll")
                 .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }   // iOS 16–17
                 .trackScrollContentOffset { scrollRelay.offset = -$0 }                            // iOS 18+ (preference path is dead there)
@@ -359,6 +260,7 @@ public struct NotificationListView: View {
             case .reactions: return String(localized: "notifications.empty.reactions", defaultValue: "Aucune reaction", bundle: .module)
             case .mentions: return String(localized: "notifications.empty.mentions", defaultValue: "Aucune mention", bundle: .module)
             case .social: return String(localized: "notifications.empty.social", defaultValue: "Aucune notification sociale", bundle: .module)
+            case .engagement: return String(localized: "notifications.empty.engagement", defaultValue: "Aucun engagement", bundle: .module)
             case .contacts: return String(localized: "notifications.empty.contacts", defaultValue: "Aucune notification de contact", bundle: .module)
             case .groups: return String(localized: "notifications.empty.groups", defaultValue: "Aucune notification de groupe", bundle: .module)
             case .calls: return String(localized: "notifications.empty.calls", defaultValue: "Aucun appel manque", bundle: .module)
@@ -367,21 +269,31 @@ public struct NotificationListView: View {
             }
         }()
 
-        return VStack(spacing: 16) {
+        return VStack(spacing: MeeshySpacing.lg) {
             Spacer()
             Image(systemName: category.icon)
-                .font(.system(size: 48))
+                .font(.system(size: MeeshyIconSize.hero))
                 .foregroundColor(Color(hex: category.color).opacity(0.4))
 
             Text(emptyMessage)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: MeeshyFont.calloutSize, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "notifications.empty.subtitle", defaultValue: "Vos notifications apparaitront ici", bundle: .module))
-                .font(.system(size: 13))
+                .font(.system(size: MeeshyFont.subheadSize))
                 .foregroundColor(theme.textMuted)
             Spacer()
         }
+    }
+}
+
+private extension View {
+    /// Une ligne de la cloche dans la `List` : bord à bord, sans séparateur ni
+    /// fond de cellule — la rangée dessine elle-même son fond de non-lu.
+    func notificationListRow() -> some View {
+        listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
     }
 }
 
@@ -398,7 +310,7 @@ final class NotificationListViewModel: ObservableObject {
     // et lu par personne — les deux appels de liste passent `unreadOnly: false`
     // EN DUR. Un `@Published` sans lecteur fait republier l'objet, donc
     // re-rendre ses abonnés, sans porter aucune information.
-    @Published var selectedCategory: NotificationCategory = .all
+    @Published private(set) var selectedCategory: NotificationCategory = .all
 
     /// Le dernier chargement RÉSEAU a échoué (#7000). L'erreur était avalée
     /// dans un `Logger.error` : la vue retombait sur son état VIDE, et une
@@ -422,15 +334,11 @@ final class NotificationListViewModel: ObservableObject {
         refreshTask?.cancel()
     }
 
+    /// Ce que la catégorie choisie affiche : la page serveur de la catégorie,
+    /// passée au crible de la même loi (`accepts`) — une ligne lue ou
+    /// arrivée par le socket depuis le chargement se range sans aller-retour.
     var filteredNotifications: [APINotification] {
-        switch selectedCategory {
-        case .all:
-            return notifications
-        case .unread:
-            return notifications.filter { !$0.isRead }
-        default:
-            return notifications.filter { selectedCategory.matches($0) }
-        }
+        notifications.filter(selectedCategory.accepts)
     }
 
     private let service: NotificationServiceProviding
@@ -591,23 +499,28 @@ final class NotificationListViewModel: ObservableObject {
 
     // MARK: - Loading
 
+    /// Seule la liste « Toutes » est persistée : c'est elle que le manager
+    /// tient à jour (lu, supprimé, reçu). Une catégorie s'affiche d'abord
+    /// depuis elle, filtrée, puis depuis sa propre page serveur.
+    private static let persistedCacheKey = "all"
+
     func loadInitial() async {
         offset = 0
+        nextCursor = nil
 
         // Un réessai après panne repart d'une ardoise propre : sinon l'état
         // d'erreur resterait affiché le temps du chargement, sous le squelette.
         loadDidFail = false
 
-        let cached = await CacheCoordinator.shared.notifications.load(for: "all")
+        let cached = await CacheCoordinator.shared.notifications.load(for: Self.persistedCacheKey)
         switch cached {
-        case .fresh(let data, _):
+        case .fresh(let data, _) where selectedCategory == .all:
             notifications = data
             offset = data.count
             hasMore = data.count >= limit
             return
-        case .stale(let data, _):
-            notifications = data
-            offset = data.count
+        case .fresh(let data, _), .stale(let data, _):
+            showCachedPreview(data)
             await refreshFromAPI()
         case .expired, .empty:
             isLoading = notifications.isEmpty
@@ -615,30 +528,79 @@ final class NotificationListViewModel: ObservableObject {
         }
     }
 
+    /// Change de catégorie (#8958). La liste se redessine TOUT DE SUITE depuis
+    /// ce qui est en mémoire ou en cache, puis la passerelle sert la page
+    /// de la catégorie — celle qui contient aussi ses lignes plus anciennes
+    /// que la première page « Toutes ».
+    func select(_ category: NotificationCategory) async {
+        guard category != selectedCategory else { return }
+        let preview = notifications
+        selectedCategory = category
+        offset = 0
+        nextCursor = nil
+        hasMore = false
+        loadDidFail = false
+        notifications = preview.filter(category.accepts)
+        if notifications.isEmpty {
+            switch await CacheCoordinator.shared.notifications.load(for: Self.persistedCacheKey) {
+            case .fresh(let data, _), .stale(let data, _):
+                showCachedPreview(data)
+            case .expired, .empty:
+                break
+            }
+        }
+        isLoading = notifications.isEmpty
+        await refreshFromAPI()
+    }
+
+    private func showCachedPreview(_ data: [APINotification]) {
+        let rows = data.filter(selectedCategory.accepts)
+        notifications = rows
+        offset = selectedCategory == .all ? rows.count : 0
+    }
+
     private func refreshFromAPI() async {
+        let category = selectedCategory
+        let query = category.serverQuery
         do {
             // Sans rang ni curseur : la première page KEYSET (#4901) — plus de
             // `count()` payé pour un total que cet écran n'affiche pas.
-            let response = try await service.list(offset: nil, cursor: nil, limit: limit, unreadOnly: false)
+            let response = try await service.list(
+                offset: nil,
+                cursor: nil,
+                limit: limit,
+                unreadOnly: query.unreadOnly,
+                types: query.types,
+                hideReadTypes: query.hideReadTypes
+            )
+            // La réponse d'une catégorie quittée entre-temps ne s'affiche pas.
+            guard category == selectedCategory else { return }
             notifications = response.data
             hasMore = response.pagination?.hasMore ?? false
             nextCursor = response.pagination?.nextCursor
             offset = response.data.count
             loadDidFail = false
-            try await CacheCoordinator.shared.notifications.save(response.data, for: "all")
+            isLoading = false
+            if category == .all {
+                try await CacheCoordinator.shared.notifications.save(response.data, for: Self.persistedCacheKey)
+            }
             await NotificationToastManager.shared.refreshUnreadCount()
         } catch {
             Logger.notifications.error("Failed to refresh notifications: \(error.localizedDescription)")
+            guard category == selectedCategory else { return }
             // L'échec doit ATTEINDRE l'écran (#7000) : journalisé et oublié,
             // il laissait la vue rendre son état vide.
             loadDidFail = true
+            isLoading = false
         }
-        isLoading = false
     }
 
     func loadMore() async {
         guard !isLoading, hasMore else { return }
+        let category = selectedCategory
+        let query = category.serverQuery
         isLoading = true
+        defer { isLoading = false }
         do {
             // LE CURSEUR QUAND IL EST LÀ (#4901) — stable sous insertion : une
             // notification arrivée en tête entre deux pages ne fait ni doublon
@@ -648,16 +610,19 @@ final class NotificationListViewModel: ObservableObject {
                 offset: nextCursor == nil ? offset : nil,
                 cursor: nextCursor,
                 limit: limit,
-                unreadOnly: false
+                unreadOnly: query.unreadOnly,
+                types: query.types,
+                hideReadTypes: query.hideReadTypes
             )
-            notifications.append(contentsOf: response.data)
+            guard category == selectedCategory else { return }
+            let known = Set(notifications.map(\.id))
+            notifications.append(contentsOf: response.data.filter { !known.contains($0.id) })
             hasMore = response.pagination?.hasMore ?? false
             nextCursor = response.pagination?.nextCursor
             offset += response.data.count
         } catch {
             Logger.notifications.error("Failed to load more notifications: \(error.localizedDescription)")
         }
-        isLoading = false
     }
 
     /// Passe par le manager : lui seul écrit le cache durable ET publie vers les
@@ -692,11 +657,27 @@ final class NotificationListViewModel: ObservableObject {
         notifications = NotificationCachePatch.markingRead(notifications, scope: .all)
     }
 
+    /// Le glissement vide la ligne TOUT DE SUITE (#8958) : une `List` dont la
+    /// ligne glissée attend le réseau pour partir la laisse revenir en place
+    /// le temps de l'aller-retour. Le manager retire ensuite la ligne du cache
+    /// durable ; s'il échoue, elle revient à sa place et l'utilisateur
+    /// l'apprend.
     func deleteNotification(_ notification: APINotification) async {
-        // Le manager retire la ligne du cache durable puis publie
-        // `notificationWasDeleted`, que cette vue écoute déjà — pas de retrait
-        // local en double ici.
-        await NotificationToastManager.shared.delete(notificationId: notification.id)
+        guard let index = notifications.firstIndex(where: { $0.id == notification.id }) else { return }
+        let removed = notifications.remove(at: index)
+        guard await NotificationToastManager.shared.delete(notificationId: notification.id) else {
+            if !notifications.contains(where: { $0.id == removed.id }) {
+                notifications.insert(removed, at: min(index, notifications.count))
+            }
+            Self.announceFailure(
+                String(
+                    localized: "notifications.delete.failed",
+                    defaultValue: "Impossible de supprimer cette notification",
+                    bundle: .module
+                )
+            )
+            return
+        }
     }
 }
 

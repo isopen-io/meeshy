@@ -8,6 +8,7 @@ import { generateNickname } from '../../utils/anonymous-nickname';
 import { generateSessionToken, hashSessionToken } from '../../utils/session-token';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import { logError } from '../../utils/logger';
+import { creditLinkJoin, type LinkJoinEngagement } from '../links/utils/link-join-credit';
 import {
   sendSuccess,
   sendError,
@@ -88,6 +89,8 @@ export interface LinkJoinParams {
   /** #7797 — coutures du pays d'arrivée ; la production prend les défauts. */
   readonly afterResponse?: AfterResponse;
   readonly lookupCountry?: ArrivalCountryLookup;
+  /** `social.conversation_link_joined` (#8959) — le moteur partagé par défaut, un double en test. */
+  readonly engagement?: LinkJoinEngagement;
 }
 
 export type LinkJoinOutcome =
@@ -504,6 +507,7 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
       }),
       'link-arrival-country',
     );
+    creditLinkJoin({ prisma, engagement: params.engagement, creatorId: shareLink.createdBy, identity, participantId });
   }
 
   return outcome;

@@ -68,7 +68,7 @@ struct CallTranscriptSection: View {
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
             HStack {
                 Text(String(localized: "calls.detail.transcript", defaultValue: "Transcription", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
@@ -85,7 +85,7 @@ struct CallTranscriptSection: View {
                     : String(localized: "call.control.translation.showOriginal", defaultValue: "Afficher le texte original", bundle: .main))
             }
 
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
                 // id: \.offset, not \.capturedAt (recommended, plan review) — saveMerging's dedup
                 // key deliberately allows two segments to share a capturedAt (different
                 // speaker/text at the same instant), which would collide as a ForEach id.
@@ -93,10 +93,10 @@ struct CallTranscriptSection: View {
                     transcriptRow(segment, callStartedAt: transcript.callStartedAt)
                 }
             }
-            .padding(12)
-            .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous), tint: tint.opacity(0.1))
+            .padding(MeeshySpacing.md)
+            .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous), tint: tint.opacity(MeeshyOpacity.subtle))
 
-            HStack(spacing: 6) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "info.circle")
                     .font(.caption2)
                 Text(String(localized: "call.transcript.disclaimer", defaultValue: "Transcription locale à cet appareil, jamais envoyée au serveur Meeshy — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel.", bundle: .main))
@@ -129,8 +129,8 @@ struct CallTranscriptSection: View {
         let elapsedLabel = CallManager.formatDuration(max(0, elapsed))
         let speakerColor = segment.isLocal ? MeeshyColors.indigo400 : MeeshyColors.brandPrimary
         let displayText = segment.isLocal ? segment.text : (showOriginalText ? segment.text : (segment.translatedText ?? segment.text))
-        return VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
+        return VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+            HStack(spacing: MeeshySpacing.xsPlus) {
                 Text(segment.speakerName)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(speakerColor)

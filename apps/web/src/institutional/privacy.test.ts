@@ -26,6 +26,8 @@ const blockText = (block: Block): string => {
       return block.cards
         .map((card) => [card.title, card.body ?? '', ...(card.items ?? [])].join(' '))
         .join(' ');
+    case 'mee':
+      return block.views.map((view) => view.caption).join(' ');
   }
 };
 

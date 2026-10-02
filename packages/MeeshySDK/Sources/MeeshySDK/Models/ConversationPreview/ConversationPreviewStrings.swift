@@ -19,6 +19,8 @@ public enum ConversationPreviewStringKey: String, Sendable, CaseIterable {
     case draft = "draft"
     case reactionMember = "reaction.member"
     case reactionMemberBare = "reaction.member.bare"
+    case reactionPeer = "reaction.peer"
+    case reactionPeerBare = "reaction.peer.bare"
     case reactionSelf = "reaction.self"
     case reactionSelfBare = "reaction.self.bare"
     case callActive = "call.active"

@@ -70,7 +70,7 @@ public struct NotificationRowView: View, Equatable {
 
     private var rowButton: some View {
         Button { onTap?() } label: {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: MeeshySpacing.md) {
                 leadingView
                 contentView
                 Spacer(minLength: 4)
@@ -79,16 +79,14 @@ public struct NotificationRowView: View, Equatable {
                 }
                 timestampView
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.md)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        // Pas de `.swipeActions` ici : ce modifier n'a d'effet que dans une
-        // `List`, or la rangée vit dans la `LazyVStack` de
-        // `NotificationListView` — les actions étaient du code mort évalué à
-        // chaque render. `onMarkRead`/`onDelete` restent dans l'API pour un
-        // futur hôte `List`.
+        // Pas de `.swipeActions` ici : le glissement (#8958) est posé par
+        // l'hôte, `NotificationListView`, sur la ligne de SA `List` — le seul
+        // endroit où ce modifier a un effet.
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityDescription)
     }
@@ -101,14 +99,14 @@ public struct NotificationRowView: View, Equatable {
     private var quickActionsRow: some View {
         let actions = notification.quickActions(isFriend: isFriend)
         if let onQuickAction, !actions.isEmpty {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(actions, id: \.self) { action in
                     quickActionButton(action, perform: onQuickAction)
                 }
             }
             .padding(.leading, 16 + 44 + 12)
-            .padding(.trailing, 16)
-            .padding(.bottom, 12)
+            .padding(.trailing, MeeshySpacing.lg)
+            .padding(.bottom, MeeshySpacing.md)
         }
     }
 
@@ -134,11 +132,11 @@ public struct NotificationRowView: View, Equatable {
             perform(action)
         } label: {
             Label(label, systemImage: icon)
-                .font(MeeshyFont.relative(13, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(isPrimary ? .white : (isDark ? MeeshyColors.indigo300 : MeeshyColors.indigo600))
-                .padding(.horizontal, 14)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
                 .frame(minHeight: 44)
-                .background(Capsule().fill(isPrimary ? MeeshyColors.indigo600 : MeeshyColors.indigo500.opacity(0.14)))
+                .background(Capsule().fill(isPrimary ? MeeshyColors.indigo600 : MeeshyColors.indigo500.opacity(MeeshyOpacity.light)))
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -189,36 +187,36 @@ public struct NotificationRowView: View, Equatable {
                     endPoint: .bottomTrailing
                 )
             )
-            .overlay(Circle().strokeBorder(accentColor.opacity(0.45), lineWidth: 1))
+            .overlay(Circle().strokeBorder(accentColor.opacity(MeeshyOpacity.strong), lineWidth: 1))
             .overlay(
                 Image(systemName: symbol)
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
                     .foregroundColor(isDark ? .white : accentColor)
             )
-            .frame(width: 44, height: 44)
-            .shadow(color: accentColor.opacity(0.35), radius: 6, y: 3)
+            .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+            .shadow(color: accentColor.opacity(MeeshyOpacity.medium), radius: 6, y: 3)
             .accessibilityHidden(true)
     }
 
     // MARK: - Content
 
     private var contentView: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(presentation.title)
-                .font(MeeshyFont.relative(14, weight: notification.isRead ? .medium : .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: notification.isRead ? .medium : .semibold))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(2)
 
             if let body = presentation.body {
                 Text(body)
-                    .font(MeeshyFont.relative(13))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(2)
             }
 
             if let quote = presentation.quote {
                 Text(quote)
-                    .font(MeeshyFont.relative(12))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
                     .italic()
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
@@ -226,7 +224,7 @@ public struct NotificationRowView: View, Equatable {
 
             if let footer = presentation.footer {
                 footerView(footer)
-                    .padding(.top, 2)
+                    .padding(.top, MeeshySpacing.xxs)
             }
         }
     }
@@ -245,21 +243,21 @@ public struct NotificationRowView: View, Equatable {
                         tint: isExpired ? MeeshyColors.error : theme.textMuted)
         case .plain(let text):
             Text(text)
-                .font(MeeshyFont.relative(11))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                 .foregroundColor(theme.textMuted)
                 .lineLimit(1)
         }
     }
 
     private func footerLabel(_ text: String, symbol: String, tint: Color) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: symbol)
                 .font(MeeshyFont.relative(11, weight: .semibold))
                 .accessibilityHidden(true)
             Text(text)
                 .lineLimit(1)
         }
-        .font(MeeshyFont.relative(11))
+        .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
         .foregroundColor(tint)
     }
 
@@ -273,13 +271,13 @@ public struct NotificationRowView: View, Equatable {
         // deja fourni ; pas de bouton retry sur une vignette 44pt.
         CachedAsyncImage(url: urlString, targetSize: CGSize(width: 44, height: 44), showsStatusOverlays: false) {
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .fill(accentColor.opacity(0.12))
+                .fill(accentColor.opacity(MeeshyOpacity.light))
         }
-        .frame(width: 44, height: 44)
+        .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.sm)
-                .stroke(theme.textMuted.opacity(0.15), lineWidth: 0.5)
+                .stroke(theme.textMuted.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline)
         )
         .accessibilityHidden(true)
     }
@@ -288,7 +286,7 @@ public struct NotificationRowView: View, Equatable {
 
     private var timestampView: some View {
         Text(relativeTime)
-            .font(MeeshyFont.relative(11, weight: .medium))
+            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
             .foregroundColor(theme.textMuted)
     }
 

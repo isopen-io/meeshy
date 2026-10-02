@@ -46,7 +46,7 @@ enum MessageCardExportTab: String, CaseIterable, Identifiable {
         case .header: return .frame
         case .quote, .reply: return .typeface
         case .link: return .link
-        case .media: return .media
+        case .media, .transcript: return .media
         }
     }
 
@@ -71,6 +71,13 @@ enum MessageCardExportText {
         String(localized: key, defaultValue: fallback, bundle: .main)
     }
 
+    /// « Un média n'a pas pu se charger » — `nil` quand tout est arrivé (#8901).
+    static func mediaFailure(count: Int) -> String? {
+        guard count > 0 else { return nil }
+        guard count > 1 else { return text("export.card.media.failed.one", "Un média n’a pas pu se charger.") }
+        return String(format: text("export.card.media.failed.other", "%lld médias n’ont pas pu se charger."), count)
+    }
+
     static func partLabel(_ part: MessageCardPartID) -> String {
         switch part {
         case .header: return text("export.card.part.header", "En-tête")
@@ -78,6 +85,7 @@ enum MessageCardExportText {
         case .link: return text("export.card.part.link", "Liaison")
         case .reply: return text("export.card.part.reply", "Réponse")
         case .media: return text("export.card.part.media", "Médias")
+        case .transcript: return text("export.card.part.transcript", "Transcription")
         case .background: return text("export.card.part.background", "Fond")
         }
     }
@@ -180,6 +188,15 @@ enum MessageCardExportText {
         case .pill: return text("export.card.audio.pill", "Pastille")
         case .spectrum: return text("export.card.audio.spectrum", "Spectre")
         case .ticket: return text("export.card.audio.ticket", "Fiche")
+        }
+    }
+
+    /// La durée d'une vidéo tirée d'un son (#8979).
+    static func clipLabel(_ length: MessageCardClipLength) -> String {
+        switch length {
+        case .fifteenSeconds: return text("export.card.clip.15", "15 s")
+        case .thirtySeconds: return text("export.card.clip.30", "30 s")
+        case .oneMinute: return text("export.card.clip.60", "1 min")
         }
     }
 

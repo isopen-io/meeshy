@@ -7,8 +7,7 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { updateAdminUser } from '@/lib/api/admin-user-actions';
 import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin } from '@/lib/i18n-admin-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
+import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
 import { BRAND, Choix, INK, INK2, MemberSection, Texte, useFieldFocus, useMemberWrite } from './admin-member-parts';
 
@@ -36,7 +35,7 @@ export function AdminMemberIdentitySection({
   deps = apiDeps,
 }: {
   readonly membre: AdminUserDetail;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
   readonly deps?: AdminDeps;
 }) {
@@ -72,8 +71,8 @@ export function AdminMemberIdentitySection({
       state={ecriture.state}
       onSave={() => void enregistrer()}
     >
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-2 sm:col-span-2">
+      <div className="grid gap-4 @xl:grid-cols-2">
+        <div className="grid gap-2 @xl:col-span-2">
           <Texte
             id="admin-member-username"
             label={translateAdmin(language, 'admin.create.username')}
@@ -117,7 +116,7 @@ export function AdminMemberIdentitySection({
           {...focus('lastName')}
           onValeur={(lastName) => poser({ lastName })}
         />
-        <div className="sm:col-span-2">
+        <div className="@xl:col-span-2">
           <Texte
             id="admin-member-displayName"
             label={translateAdmin(language, 'admin.edit.displayName')}
@@ -126,7 +125,7 @@ export function AdminMemberIdentitySection({
             onValeur={(displayName) => poser({ displayName })}
           />
         </div>
-        <label className="grid gap-1 sm:col-span-2" htmlFor="admin-member-bio">
+        <label className="grid gap-1 @xl:col-span-2" htmlFor="admin-member-bio">
           <span className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
             {translateAdmin(language, 'admin.edit.bio')}
           </span>
@@ -141,7 +140,7 @@ export function AdminMemberIdentitySection({
           />
         </label>
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 @xl:grid-cols-3">
         <Choix
           id="admin-member-systemLanguage"
           label={translateAdmin(language, 'admin.meta.systemLanguage')}

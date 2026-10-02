@@ -2,7 +2,6 @@ import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
 import { lazy, Suspense, useState } from 'react';
 
 import type { CallMember, CallQuality } from '@/lib/calls/call-store';
-import { useChromeHold } from '@/lib/calls/use-call-chrome';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
@@ -19,7 +18,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 
 const CallQualityDetail = lazy(() => import('./call-quality-detail').then((module) => ({ default: module.CallQualityDetail })));
 
-const TONE: Readonly<Record<ConnectionQualityLevel, string>> = { excellent: '#34d399', good: '#34d399', fair: '#fbbf24', poor: '#f87171' };
+const TONE: Readonly<Record<ConnectionQualityLevel, string>> = { excellent: 'var(--ios-success)', good: 'var(--ios-success)', fair: 'var(--ios-warning)', poor: 'var(--ios-error)' };
 const LIT: Readonly<Record<ConnectionQualityLevel, number>> = { excellent: 4, good: 3, fair: 2, poor: 1 };
 const LEVEL_KEY = {
   excellent: 'call.quality.level.excellent',
@@ -34,7 +33,7 @@ function SignalBars({ level }: { readonly level: ConnectionQualityLevel }) {
       {[0, 1, 2, 3].map((index) => {
         const lit = index < LIT[level];
         const height = 5 + index * 4;
-        return <rect key={index} x={index * 6} y={18 - height} width="4" height={height} rx="1" fill={lit ? TONE[level] : 'rgba(255,255,255,0.28)'} data-bar={lit ? 'on' : 'off'} />;
+        return <rect key={index} x={index * 6} y={18 - height} width="4" height={height} rx="1" fill={lit ? TONE[level] : 'var(--color-media-hairline)'} data-bar={lit ? 'on' : 'off'} />;
       })}
     </svg>
   );
@@ -47,8 +46,6 @@ type CallQualityChipProps = {
   readonly language: InterfaceLanguage;
   /** Teinte plus sombre au-dessus d'un fond clair (écran partagé à la une). */
   readonly prominent: boolean;
-  /** Le détail ouvert retient l'écran (#8735) : `true` à l'ouverture, `false` à la fermeture. */
-  readonly onHold?: (held: boolean) => void;
 };
 
 /**
@@ -57,12 +54,9 @@ type CallQualityChipProps = {
  * ouvre le détail. Son nom accessible DIT ce qu'elle montre puis le niveau :
  * la légende visible est contenue dans le nom (WCAG 2.5.3). Sans relevé, la
  * puce n'est qu'une étiquette : aucun bouton ne promet un détail absent.
- * Le détail ouvert RETIENT l'écran d'appel (`onHold`, #8735) : il ne s'efface
- * pas sous qui le lit.
  */
-export function CallQualityChip({ title, clock, quality, language, prominent, onHold }: CallQualityChipProps) {
+export function CallQualityChip({ title, clock, quality, language, prominent }: CallQualityChipProps) {
   const [open, setOpen] = useState(false);
-  useChromeHold(open && quality !== null, onHold);
   const shown = clock === null ? title : `${title} · ${clock}`;
   const glass = `${prominent ? 'glass-call-prominent' : 'glass-call'} flex min-h-11 min-w-0 max-w-[60vw] items-center gap-2 rounded-full px-3 text-body font-semibold tabular-nums`;
   if (quality === null) {
@@ -95,7 +89,7 @@ export function CallPeerAlerts({ members, language }: { readonly members: Readon
       {peers
         .filter((member) => member.capturing)
         .map((member) => (
-          <span key={`capture-${member.userId}`} role="alert" className="rounded-full px-3 py-1 text-mini font-semibold" style={{ background: 'rgba(239,68,68,0.85)', color: '#fff' }} data-call-alert="capturing">
+          <span key={`capture-${member.userId}`} role="alert" className="rounded-full px-3 py-1 text-mini font-semibold" style={{ background: 'color-mix(in srgb, var(--ios-error-strong) 85%, transparent)', color: 'var(--color-ios-on-brand)' }} data-call-alert="capturing">
             {translate(language, 'call.alert.capturing', { name: member.name })}
           </span>
         ))}

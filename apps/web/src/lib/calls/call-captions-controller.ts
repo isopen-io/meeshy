@@ -59,8 +59,8 @@ export type CaptionsContext = {
   readonly stopRepeat: (handle: unknown) => void;
   /** Des sous-titres ont été AFFICHÉS — `call:analytics` › `transcriptionUsed` (#8047). */
   readonly shown: () => void;
-  /** Le pair a raccroché EN BANDE (`{"type":"bye"}`), avant le `call:ended` de la passerelle. */
-  readonly bye: () => void;
+  /** Le pair `userId` a raccroché EN BANDE (`{"type":"bye"}`), avant le `call:ended` ou le `call:participant-left` de la passerelle. */
+  readonly bye: (userId: string) => void;
 };
 
 export type CaptionsPort = {
@@ -180,7 +180,7 @@ export function createCaptions(ctx: CaptionsContext, deps: CaptionsDeps): Captio
     const message = decodeChannelMessage(raw);
     if (message === null || stopped) return;
     if (message.kind === 'bye') {
-      ctx.bye();
+      ctx.bye(userId);
       return;
     }
     const call = live();

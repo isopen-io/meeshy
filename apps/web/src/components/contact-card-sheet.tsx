@@ -4,6 +4,7 @@ import type { ParsedVCard, PublicContactAccount } from '@meeshy/shared/types/con
 
 import { contactInitials, vcardFieldRows, type ContactAction, type VCardFieldRow } from '@/lib/contact-card/view';
 import { translate } from '@/lib/i18n-catalog';
+import { copyPlainText } from '@/lib/view/copy-text';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -17,10 +18,9 @@ const LONG_PRESS_MS = 500;
 
 export type ClipboardWriter = (text: string) => Promise<void>;
 
-const systemClipboard: ClipboardWriter = (text) =>
-  typeof navigator === 'object' && navigator.clipboard
-    ? navigator.clipboard.writeText(text)
-    : Promise.reject(new Error('presse-papiers indisponible'));
+const systemClipboard: ClipboardWriter = async (text) => {
+  if ((await copyPlainText(text)) !== 'copied') throw new Error('copie impossible');
+};
 
 /**
  * **LA FICHE « VERRE » D'UNE CARTE DE VISITE** (#8101) — toucher le nom dans

@@ -261,6 +261,14 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 60000,
     keyPrefix: 'socket:viewing'
   },
+  // #9061 — `viewing:activity` : le client émet au plus une fois toutes les
+  // deux secondes pendant qu'on défile, écoute ou agit (30/min) ; le budget
+  // laisse deux appareils actifs et n'arrête que le script.
+  CONVERSATION_ACTIVITY: {
+    maxRequests: 90,
+    windowMs: 60000,
+    keyPrefix: 'socket:viewing-activity'
+  },
   TYPING_INDICATOR: {
     maxRequests: 60,
     windowMs: 60000, // 1 minute — global guard; per-conversation 2s throttle is the primary gate

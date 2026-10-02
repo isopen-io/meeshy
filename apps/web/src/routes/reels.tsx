@@ -1,10 +1,12 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { Glyph, GlyphSvg } from '@/components/glyph';
+import { GlyphSvg, Glyph } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { CommentsSheetPortal } from '@/components/publication-comments-sheet-lazy';
 import { ReelPage } from '@/components/reel-page';
+import { BUTTON, GLYPH_SIZE } from '@/components/ui-chrome';
+import { ViewerTopBar } from '@/components/viewer-chrome';
 import { cachedCardSeed } from '@/lib/api/card-caches';
 import { apiDeps } from '@/lib/api/deps';
 import { feedQuery } from '@/lib/api/feed';
@@ -18,7 +20,7 @@ import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
 import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
-import { chromeYields, yieldingChrome } from '@/lib/view/chrome-yields';
+import { chromeYields } from '@/lib/view/chrome-yields';
 import { sceneYieldOf, writingSceneScale, yieldingScene } from '@/lib/view/scene-yields';
 import { REEL_COLUMN_STYLE } from '@/lib/view/reading-column';
 import { screenGestureYields, shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
@@ -99,6 +101,15 @@ function prefersReducedMotion(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+/**
+ * **« RETOUR » DU LECTEUR** — la barre haute COMMUNE des plein écrans
+ * (`ViewerTopBar`, #8879), sans identité : ici l'auteur reste en BAS avec la
+ * légende, dans la page (divergence admise — un pager VERTICAL porte son
+ * identité dans le contenu de la page, qui défile avec lui ; la barre fixe ne
+ * tient que la sortie). Le réel se QUITTE par ‹ (`kind: 'back'`, en TÊTE de
+ * barre, retournée en RTL) — Échap ou le retour matériel —, jamais d'un
+ * glissé vers le bas, qui passe au réel suivant.
+ */
 export function ReelsBackButton({
   language,
   onBack,
@@ -109,31 +120,23 @@ export function ReelsBackButton({
   /** La feuille de commentaires est ouverte (`chromeYields`, #8601). */
   readonly hidden?: boolean;
 }) {
-  const chrome = yieldingChrome({ hidden, reducedMotion: prefersReducedMotion() });
   return (
-    <button
-      type="button"
-      data-reels-back
-      data-chrome-yields={chrome['data-chrome-yields']}
-      inert={chrome.inert}
-      aria-label={translate(language, 'reels.back')}
-      onClick={onBack}
-      className="absolute start-3 z-10 grid size-11 place-items-center rounded-full text-white focus-visible:outline-2 focus-visible:outline-offset-2"
-      style={{ top: 'calc(env(safe-area-inset-top, 0px) + 10px)', backgroundColor: 'rgba(0,0,0,0.42)', outlineColor: 'white', ...chrome.style }}
-    >
-      <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
-    </button>
+    <ViewerTopBar
+      placement="overlay"
+      hidden={hidden}
+      exit={{ kind: 'back', label: translate(language, 'reels.back'), onExit: onBack, probe: { 'data-reels-back': '' } }}
+    />
   );
 }
 
 /** Le démarrage à froid SEUL — jamais sur un rafraîchissement de fond. */
 export function ReelsSkeleton({ language }: { readonly language: InterfaceLanguage }) {
   return (
-    <div role="status" aria-busy="true" data-reels-skeleton className="absolute inset-0 bg-black">
+    <div role="status" aria-busy="true" data-reels-skeleton className="absolute inset-0 bg-media-backdrop">
       <span className="sr-only">{translate(language, 'reels.loading')}</span>
       <div aria-hidden="true" className="absolute inset-x-4 flex flex-col gap-2.5" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 28px)' }}>
-        <div className="rounded-chip" style={{ width: 150, height: 14, backgroundColor: 'rgba(255,255,255,0.2)' }} />
-        <div className="rounded-chip" style={{ width: 230, height: 12, backgroundColor: 'rgba(255,255,255,0.14)' }} />
+        <div className="rounded-chip" style={{ width: 150, height: 14, backgroundColor: 'var(--color-media-hairline)' }} />
+        <div className="rounded-chip" style={{ width: 230, height: 12, backgroundColor: 'var(--color-media-fill)' }} />
       </div>
     </div>
   );
@@ -141,7 +144,7 @@ export function ReelsSkeleton({ language }: { readonly language: InterfaceLangua
 
 function StateFrame({ children, ...rest }: { readonly children: React.ReactNode } & Readonly<Record<`data-${string}`, string>> & { readonly role?: string }) {
   return (
-    <div {...rest} className="absolute inset-0 grid content-center justify-items-center gap-3 bg-black px-8 text-center">
+    <div {...rest} className="absolute inset-0 grid content-center justify-items-center gap-3 bg-media-backdrop px-8 text-center">
       {children}
     </div>
   );
@@ -150,9 +153,9 @@ function StateFrame({ children, ...rest }: { readonly children: React.ReactNode 
 export function ReelsEmpty({ language }: { readonly language: InterfaceLanguage }) {
   return (
     <StateFrame data-reels-empty="">
-      <GlyphSvg glyph={FEED_GLYPHS.monitorPlay} size={44} style={{ color: 'rgba(255,255,255,0.72)' }} />
-      <p className="text-body font-semibold text-white">{translate(language, 'reels.empty')}</p>
-      <p className="text-caption" style={{ color: 'rgba(255,255,255,0.78)' }}>
+      <GlyphSvg glyph={FEED_GLYPHS.monitorPlay} size={44} style={{ color: 'var(--color-on-media-3)' }} />
+      <p className="text-body font-semibold text-on-media">{translate(language, 'reels.empty')}</p>
+      <p className="text-caption" style={{ color: 'var(--color-on-media-3)' }}>
         {translate(language, 'reels.empty.hint')}
       </p>
     </StateFrame>
@@ -164,19 +167,14 @@ export function ReelsEmpty({ language }: { readonly language: InterfaceLanguage 
 export function ReelsFailure({ language, online, onRetry }: { readonly language: InterfaceLanguage; readonly online: boolean; readonly onRetry: () => void }) {
   return (
     <StateFrame role="alert" data-reels-failure={online ? 'error' : 'offline'}>
-      <span style={{ color: online ? 'var(--color-error)' : 'rgba(255,255,255,0.72)' }}>
-        <Glyph name="warningCircle" size={28} />
+      <span style={{ color: online ? 'var(--color-error)' : 'var(--color-on-media-3)' }}>
+        <Glyph name="warningCircle" size={GLYPH_SIZE.xl} />
       </span>
-      <p className="text-body font-semibold text-white">{translate(language, online ? 'reels.error' : 'reels.offline')}</p>
-      <p className="text-caption" style={{ color: 'rgba(255,255,255,0.78)' }}>
+      <p className="text-body font-semibold text-on-media">{translate(language, online ? 'reels.error' : 'reels.offline')}</p>
+      <p className="text-caption" style={{ color: 'var(--color-on-media-3)' }}>
         {translate(language, online ? 'reels.error.hint' : 'reels.offline.cold')}
       </p>
-      <button
-        type="button"
-        onClick={onRetry}
-        className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
-        style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
-      >
+      <button type="button" onClick={onRetry} className={BUTTON.primary}>
         {translate(language, 'reels.retry')}
       </button>
     </StateFrame>
@@ -400,7 +398,7 @@ export function ReelsFrame({
   readonly chromeHidden?: boolean;
 }) {
   return (
-    <div data-reels className="h-dvh overflow-hidden bg-black text-white">
+    <div data-reels className="h-dvh overflow-hidden bg-media-backdrop text-on-media">
       {/* LA COLONNE DES RÉELS (#7449) — `REEL_COLUMN_STYLE`
           (`lib/view/reading-column.ts`) : un réel est en 9:16, sa largeur utile
           est donc `hauteur × 9/16` et tout le reste n'est que du noir — du noir

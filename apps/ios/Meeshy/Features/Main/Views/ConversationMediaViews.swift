@@ -131,34 +131,34 @@ struct DownloadBadgeView: View {
                     .fill(.ultraThinMaterial)
                     .frame(width: 56, height: 56)
                 Circle()
-                    .fill(accent.opacity(0.85))
+                    .fill(accent.opacity(MeeshyOpacity.intense))
                     .frame(width: 48, height: 48)
                 Image(systemName: "arrow.down.to.line")
-                    .font(MeeshyFont.relative(22, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .bold))
                     .foregroundColor(.white)
             }
-            .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+            .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
 
             if !totalSizeText.isEmpty {
                 Text(totalSizeText)
-                    .font(MeeshyFont.relative(11, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, MeeshySpacing.sm)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(.black.opacity(0.55)))
+                    .padding(.vertical, MeeshySpacing.xxs)
+                    .background(Capsule().fill(MeeshyColors.mediaScrim))
             }
         }
     }
 
     private var downloadingBadge: some View {
         Button { downloader.cancel() } label: {
-            VStack(spacing: 2) {
+            VStack(spacing: MeeshySpacing.xxs) {
                 ZStack {
                     Circle()
-                        .stroke(Color.white.opacity(0.15), lineWidth: 2.5)
+                        .stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.strong)
                     Circle()
                         .trim(from: 0, to: downloader.progress)
-                        .stroke(accent, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .stroke(accent, style: StrokeStyle(lineWidth: MeeshyBorder.strong, lineCap: .round))
                         .rotationEffect(.degrees(-90))
                         .animation(.linear(duration: 0.2), value: downloader.progress)
 
@@ -180,10 +180,10 @@ struct DownloadBadgeView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.5)
             }
-            .padding(5)
-            .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.6)))
+            .padding(MeeshySpacing.xs)
+            .background(RoundedRectangle(cornerRadius: MeeshyRadius.xs).fill(MeeshyColors.mediaScrim))
         }
-        .padding(4)
+        .padding(MeeshySpacing.xs)
         .accessibilityLabel(String(localized: "a11y.media.download.cancel", defaultValue: "Annuler le téléchargement", bundle: .main))
         .accessibilityValue(downloader.progress.formatted(.percent))
     }
@@ -502,7 +502,7 @@ struct AudioMediaView: View, Equatable {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             audioPlayer
 
             // Legacy caption rendering OUTSIDE the playerBackground (faded,
@@ -518,7 +518,7 @@ struct AudioMediaView: View, Equatable {
                 MessageTextRenderer.render(
                     message.content,
                     fontSize: 13,
-                    color: isDark ? MeeshyColors.indigo400.opacity(0.5) : MeeshyColors.indigo500.opacity(0.4),
+                    color: isDark ? MeeshyColors.indigo400.opacity(MeeshyOpacity.strong) : MeeshyColors.indigo500.opacity(0.4),
                     mentionColor: MeeshyColors.mentionColor(isDark: isDark),
                     hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
                     accentColor: Color(hex: contactColor),
@@ -526,8 +526,8 @@ struct AudioMediaView: View, Equatable {
                 )
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, 4)
-                .padding(.top, 2)
+                .padding(.leading, MeeshySpacing.xs)
+                .padding(.top, MeeshySpacing.xxs)
                 .tint(Color(hex: contactColor))
             }
             if Self.shouldShowConsentNotice(isMe: parentIsMe, voiceConsentMissing: voiceConsentMissing) {
@@ -537,10 +537,10 @@ struct AudioMediaView: View, Equatable {
                     accentHex: accentColor,
                     onTap: { onTapConsentNotice?() }
                 )
-                .padding(.top, 6)
+                .padding(.top, MeeshySpacing.xsPlus)
             }
         }
-        .fullScreenCover(isPresented: $showAudioFullscreen) {
+        .conversationCover(isPresented: $showAudioFullscreen) {
             AudioFullscreenView(
                 // Cold-open (F1) : `fullscreenSource(for:)` câble
                 // conversationName / audioQueueTailProvider (nowPlayingContextName

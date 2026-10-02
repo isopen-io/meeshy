@@ -126,7 +126,7 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
           <Link
             to="forgotPassword"
             replace
-            className="grid place-items-center rounded-[14px] font-bold text-white"
+            className="grid place-items-center rounded-field font-bold text-ios-on-brand"
             style={{ minHeight: 52, background: RESET_TINT }}
           >
             Demander un nouveau lien
@@ -142,7 +142,7 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
           <button
             type="button"
             onClick={retryCheck}
-            className="mx-auto grid place-items-center rounded-[14px] px-6 font-semibold text-white"
+            className="mx-auto grid place-items-center rounded-field px-6 font-semibold text-ios-on-brand"
             style={{ minHeight: 44, background: RESET_TINT }}
           >
             Réessayer
@@ -162,7 +162,7 @@ export function ResetPasswordFlow({ token, deps = defaultDeps }: { token: string
           <Link
             to="login"
             replace
-            className="grid w-full place-items-center rounded-[14px] px-8 font-bold text-white"
+            className="grid w-full place-items-center rounded-field px-8 font-bold text-ios-on-brand"
             style={{ minHeight: 52, background: RESET_TINT }}
           >
             Se connecter

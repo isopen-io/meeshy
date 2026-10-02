@@ -33,8 +33,9 @@ extension ConversationSyncEngine {
     /// Apply a `conversation:updated` payload to a cached list, returning `nil`
     /// when the event changes nothing. Delegates the per-row rule to
     /// `ConversationStore.merging` so the persisted list and the RAM store can
-    /// never disagree. Re-sorts only when `lastMessageAt` moved — the cache
-    /// invariant is "sorted by `lastMessageAt` DESC" (cf. `saveSorted`), and
+    /// never disagree. Re-sorts only when the row's RANK moved (`listActivityAt`,
+    /// #9026 — a reaction, a call or a pin raises the row for everyone) — the
+    /// cache invariant is "sorted by `listActivityAt` DESC" (cf. `saveSorted`), and
     /// `sorted(by:)` is not stable, so re-sorting on a metadata-only change
     /// would shuffle rows sharing a timestamp for nothing.
     nonisolated static func applyingConversationUpdate(
@@ -46,8 +47,8 @@ extension ConversationSyncEngine {
         else { return nil }
         var updated = conversations
         updated[index] = merged
-        guard merged.lastMessageAt != conversations[index].lastMessageAt else { return updated }
-        return updated.sorted { $0.lastMessageAt > $1.lastMessageAt }
+        guard merged.listActivityAt != conversations[index].listActivityAt else { return updated }
+        return updated.sorted { $0.listActivityAt > $1.listActivityAt }
     }
 
     /// `user:updated` relayed into the PERSISTED list. Le store RAM l'applique

@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-quer
 import { conversationStore } from '@/lib/conversation-store';
 import { performSend, retrySend, type Draft } from '@/lib/send/perform-send';
 import { outboxStore } from '@/lib/send/outbox-store';
+import { notePublicationParticipation } from '@/lib/view/publication-participation';
 import type { RowActionId } from '@/lib/view/row-actions';
 
 import { cachedCardSeed } from './card-caches';
@@ -102,8 +103,8 @@ export function useStoryTray(options: { readonly enabled?: boolean } = {}) {
  * fenêtre courte (une heure — `PostType.STATUS`, `schema.prisma`) et n'a
  * aucune raison d'être refetchée à chaque retour sur la liste.
  */
-export function useStatusMoods() {
-  return useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000 });
+export function useStatusMoods(options: { readonly enabled?: boolean } = {}) {
+  return useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000, enabled: options.enabled ?? true });
 }
 
 /**
@@ -195,7 +196,10 @@ export function postGestureAction(postId: string, kind: PostToggleKind): Promise
  * `appQueryClient`, donc un réel repartagé depuis le lecteur des Réels
  * l'est aussi dans le Flux, sans relecture. */
 export function repostAction(postId: string, intent?: RepostIntent): Promise<RepostResult> {
-  return performRepost({ postId, deps: { ...apiDeps, queryClient: appQueryClient }, ...(intent === undefined ? {} : { intent }) });
+  return performRepost({ postId, deps: { ...apiDeps, queryClient: appQueryClient }, ...(intent === undefined ? {} : { intent }) }).then((result) => {
+    if (result.ok) notePublicationParticipation(postId, 'reposted');
+    return result;
+  });
 }
 
 /** LES GESTES DU MENU « ⋯ » (#7533) — mêmes références de module stables,
@@ -228,6 +232,9 @@ export function reportCommentAction(commentId: string, reason: ReportReason): Pr
 /** `recordShareAction` (#6278) — RÉFÉRENCE DE MODULE STABLE : compter un
  * partage DÉJÀ parti, sur l'instance partagée du cache du fil. */
 export function recordShareAction(postId: string): Promise<boolean> {
+  /* Le partage EST parti (c'est la condition de cet appel) : le rail le montre
+     tout de suite par l'anneau de « Envoyer », sans attendre le compteur. */
+  notePublicationParticipation(postId, 'sent');
   return recordPostShare({ postId, deps: { ...apiDeps, queryClient: appQueryClient } });
 }
 
@@ -510,6 +517,11 @@ export function commentAction(params: {
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
     ...(params.parentId === undefined ? {} : { parentId: params.parentId }),
     deps: { ...apiDeps, queryClient: appQueryClient },
+  }).then((result) => {
+    /* Un commentaire RETENU (servi, ou gardé en attente) allume l'anneau de
+       « Commentaires » ; un refus permanent, défait, ne l'allume pas. */
+    if (result.ok) notePublicationParticipation(params.postId, 'commented');
+    return result;
   });
 }
 

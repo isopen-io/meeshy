@@ -11,9 +11,8 @@ import {
   type PasswordProposals,
 } from '@/lib/api/admin-user-password';
 import { apiDeps } from '@/lib/api/deps';
-import { translateAdmin, type AdminPlainCatalogKey } from '@/lib/i18n-admin-catalog';
+import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceLanguage } from '@/lib/interface-language';
 import { portailDuNavigateur, type PortailPartage } from '@/lib/view/invitation';
 import { ActionButton } from '@/routes/link-page-parts';
 
@@ -83,7 +82,7 @@ export function AdminUserPasswordSheet({
   deps = apiDeps,
 }: {
   readonly userId: string;
-  readonly language: InterfaceLanguage;
+  readonly language: AdminLanguage;
   readonly onClose: () => void;
   readonly onAnnounce: (texte: string) => void;
   readonly portail?: PortailPartage;
@@ -171,7 +170,7 @@ export function AdminUserPasswordSheet({
   const pretAAppliquer = !envoi && motDePasse.length >= ADMIN_PASSWORD_MIN_LENGTH;
 
   return (
-    <Sheet title={translateAdmin(language, 'admin.password.title')} presentation="centered" onClose={onClose}>
+    <Sheet title={translateAdmin(language, 'admin.password.title')} presentation="centered" closeLabel={translateAdmin(language, 'admin.kit.close')} onClose={onClose}>
       <div className="grid gap-4 px-4 pb-6">
         <p
           className="rounded-card px-4 py-3 text-caption"
@@ -198,7 +197,7 @@ export function AdminUserPasswordSheet({
                 className="shrink-0 rounded-chip px-4 text-body font-semibold disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-offset-2"
                 style={{
                   minHeight: 44,
-                  color: enfonce ? 'white' : INK,
+                  color: enfonce ? 'var(--color-ios-on-brand)' : INK,
                   backgroundColor: enfonce ? BRAND : 'var(--color-ios-surface)',
                   border: `1px solid ${enfonce ? BRAND : 'var(--color-edge)'}`,
                   outlineColor: BRAND,

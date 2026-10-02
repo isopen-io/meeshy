@@ -10,7 +10,8 @@ import { cameraMirrored } from '@/lib/media/camera-mirror';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { captureLock, flashFloorColor, flashSliderShown, zoomAfterDrag, type CameraZoomRange, type LayoutDirection } from '@/lib/stories/studio-capture-gestures';
 import { createBrowserCameraEngine, type CameraEngine } from '@/lib/stories/studio-camera-engine';
-import { cameraFlashPlan, quickCaptureArmedTap, quickCaptureRelease, type CameraFacing } from '@/lib/stories/studio-quick-capture';
+import { cameraFlashPlan, quickCaptureArmedHold, quickCaptureArmedTap, quickCaptureRelease, type CameraFacing } from '@/lib/stories/studio-quick-capture';
+import { appSettingsOpener } from '@/lib/view/settings-recovery';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { StudioCameraFlash } from '@/routes/story-compose-camera-flash';
 import { ROUND_GLASS } from '@/routes/story-compose-chrome';
@@ -110,6 +111,7 @@ export function StudioCamera({
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [facing, setFacing] = useState<CameraFacing>('environment');
   const [status, setStatus] = useState<'opening' | 'live' | 'unavailable'>('opening');
+  const openAppSettings = appSettingsOpener();
   const [torch, setTorch] = useState(false);
   const [recording, setRecording] = useState<Recording>(null);
   const [screenFlash, setScreenFlash] = useState<ScreenFlash>('off');
@@ -122,6 +124,11 @@ export function StudioCamera({
   const dragFromRef = useRef(1);
   const pressRef = useRef<{ readonly x: number; readonly y: number; readonly already: boolean } | null>(null);
   const viewDragRef = useRef<{ readonly y: number } | null>(null);
+  /** L'appui posé sur le viseur armé (#8849) — son origine, son minuteur, et
+   * s'il a tenu jusqu'à filmer. */
+  const viewPressRef = useRef<{ readonly x: number; readonly y: number } | null>(null);
+  const viewHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const heldRef = useRef(false);
   const recordingRef = useRef<Recording>(null);
   recordingRef.current = recording;
   const holdingRef = useRef(holding);
@@ -306,10 +313,17 @@ export function StudioCamera({
   const close = () => {
     closedRef.current = true;
     if (holdTimer.current !== null) clearTimeout(holdTimer.current);
+    if (viewHoldTimer.current !== null) clearTimeout(viewHoldTimer.current);
     recordingRef.current = null;
     releaseStream();
     onClose();
   };
+  useEffect(
+    () => () => {
+      if (viewHoldTimer.current !== null) clearTimeout(viewHoldTimer.current);
+    },
+    [],
+  );
   useBackDismiss(close, { escape: true });
 
   const tap = () => {
@@ -341,23 +355,60 @@ export function StudioCamera({
 
   /* LE VISEUR, PENDANT UN FILM MAINS LIBRES : glisser vers le haut zoome,
      vers le bas dézoome. Les boutons gardent leurs propres gestes. */
+  /* L'APPUI LONG SUR LE VISEUR ARMÉ (#8849, jumelle de #8846) — n'importe où
+     hors de ses contrôles : tenu, il FILME ; le doigt qui glisse mène au
+     cadenas puis zoome, comme l'appui long d'une scène vide ; levé, il clôt
+     la prise. Un toucher bref reste la photo. */
+  const clearViewHold = () => {
+    if (viewHoldTimer.current !== null) clearTimeout(viewHoldTimer.current);
+    viewHoldTimer.current = null;
+  };
   const onViewDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (!handsFree || event.button !== 0 || !(event.target instanceof Element) || event.target.closest('button, input') !== null) return;
+    if (event.button !== 0 || !(event.target instanceof Element) || event.target.closest('button, input') !== null) return;
+    if (handsFree) {
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      viewDragRef.current = { y: event.clientY };
+      dragFromRef.current = zoomRef.current;
+      return;
+    }
+    if (quickCaptureArmedHold({ live: status === 'live', recording: recordingRef.current !== null, busy: busyRef.current }) !== 'start-filming') return;
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    viewDragRef.current = { y: event.clientY };
-    dragFromRef.current = zoomRef.current;
+    viewPressRef.current = { x: event.clientX, y: event.clientY };
+    clearViewHold();
+    viewHoldTimer.current = setTimeout(() => {
+      viewHoldTimer.current = null;
+      heldRef.current = true;
+      void startRecording('hold');
+    }, HOLD_MS);
   };
   const onViewMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const press = viewPressRef.current;
+    if (press !== null) {
+      dragWhileFilming(event.clientX - press.x, event.clientY - press.y);
+      return;
+    }
     const drag = viewDragRef.current;
     if (drag === null || recordingRef.current === null) return;
     applyZoom(zoomAfterDrag({ from: dragFromRef.current, dy: event.clientY - drag.y, range: zoomRangeRef.current }));
   };
   const onViewEnd = () => {
     viewDragRef.current = null;
+    const pressed = viewPressRef.current !== null;
+    viewPressRef.current = null;
+    if (viewHoldTimer.current !== null) {
+      clearViewHold();
+      return;
+    }
+    if (pressed && recordingRef.current === 'hold') void stopRecording();
   };
   /* LE SECOND TOUCHER (#8711) — n'importe où sur le viseur armé, hors de ses
-     contrôles (flash, optique, sortie, déclencheur) : la photo part. */
+     contrôles (flash, optique, sortie, déclencheur) : la photo part. Le clic
+     qui suit la levée d'un appui long n'en est pas un. */
   const onViewTap = (event: { readonly target: EventTarget | null }) => {
+    if (heldRef.current) {
+      heldRef.current = false;
+      return;
+    }
     if (!photoFirst || (event.target instanceof Element && event.target.closest('button, input') !== null)) return;
     if (quickCaptureArmedTap({ live: status === 'live', recording: recordingRef.current !== null, busy: busyRef.current, kind }) === 'take-photo') void takePhoto();
   };
@@ -414,9 +465,25 @@ export function StudioCamera({
         />
       </div>
       {status === 'unavailable' ? (
-        <p data-story-camera-unavailable role="alert" className="absolute inset-x-6 top-1/2 -translate-y-1/2 text-center text-body" style={{ color: '#fff' }}>
-          {translate(lang, 'story.studio.camera.unavailable')}
-        </p>
+        <div className="absolute inset-x-6 top-1/2 flex -translate-y-1/2 flex-col items-center gap-4">
+          <p data-story-camera-unavailable role="alert" className="text-center text-body" style={{ color: '#fff' }}>
+            {translate(lang, 'story.studio.camera.unavailable')}
+          </p>
+          {/* UN REFUS DÉFINITIF MÈNE AUX RÉGLAGES DE L'APP (#9032, comme le
+              composeur #8882) : dans la coque Android, la caméra refusée deux
+              fois ne se redemande plus. */}
+          {openAppSettings !== null ? (
+            <button
+              type="button"
+              data-story-camera-settings
+              onClick={openAppSettings}
+              className="glass min-h-11 rounded-full px-5 text-body font-semibold"
+              style={{ outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
+            >
+              {translate(lang, 'story.studio.camera.openSettings')}
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 px-3 pt-safe">

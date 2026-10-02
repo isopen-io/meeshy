@@ -17,6 +17,7 @@ import {
   type PendingAttachment,
 } from '@/lib/send/attachments';
 import { releasePreviewUrl } from '@/lib/send/attachment-preview-url';
+import { pastedContentOf, routePastedContent } from '@/lib/send/paste-route';
 import {
   contactCardFile,
   contactFromVCardFile,
@@ -41,7 +42,6 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { ComposerDraftReport } from '@/lib/view/use-draft';
 import { useComposeLanguage } from '@/lib/view/use-compose-language';
-import { useSentiment } from '@/lib/view/use-sentiment';
 import type { SharedPlace } from '@/lib/send/shared-place';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { locationSupported, useLocationRequest } from '@/lib/view/use-location-request';
@@ -214,7 +214,9 @@ export const Composer = memo(function Composer({
   onDraftChange?: (report: ComposerDraftReport) => void;
   /** Absent en conversation standard (§1.2 point 2, #6175) — aucun appelant
    * ne le fournit cette itération, faute de source honnête de la limite
-   * serveur (issue gateway compagnon). Le compteur ne se rend QUE si fourni. */
+   * serveur (issue gateway compagnon). Le compteur ne se rend QUE si fourni.
+   * Le collage (#9037) suit la MÊME limite : ce `maxLength` s'il est fourni,
+   * sinon `MAX_MESSAGE_LENGTH` partagé (2000, `lib/send/paste-route.ts`). */
   maxLength?: number;
 }) {
   const [text, setText] = useState(() => draft?.text ?? '');
@@ -325,9 +327,6 @@ export const Composer = memo(function Composer({
   const locks = imposedLocksOf(imposedProtection);
   const effective = useMemo(() => contaminatedComposeProtection(protection, imposedProtection), [protection, imposedProtection]);
 
-  /** LA TONALITÉ — INDICATEUR PASSIF, débounce 300 ms (`use-sentiment.ts`,
-   * miroir `TextAnalyzer`). */
-  const sentiment = useSentiment(text);
 
   /**
    * L'ACCENT SUBSTITUÉ (#6175, puis #7667) — éphémère > vue unique > flou >
@@ -422,12 +421,12 @@ export const Composer = memo(function Composer({
                l'APPLICATION, pas du navigateur — la copie « réglages du
                navigateur » envoyait le lecteur au mauvais endroit sur deux
                des trois plateformes). */
-            message: 'Micro refusé — autorisez-le dans les réglages',
+            message: translate(uiLanguage, 'composer.mic.refused'),
             ...refusalExit(() => recorder.start()),
             onDismiss: recorder.reset,
           }
         : recorder.state.status === 'unsupported'
-          ? { message: 'Micro indisponible sur ce navigateur', onDismiss: recorder.reset }
+          ? { message: translate(uiLanguage, 'composer.mic.unavailable'), onDismiss: recorder.reset }
           : null);
 
   const showAbove = pending.length > 0 || notice !== null || locator.place !== null;
@@ -629,9 +628,10 @@ export const Composer = memo(function Composer({
    * ENVOYER UN STICKER DE LA BIBLIOTHÈQUE (#7938) — un message À LUI SEUL,
    * comme sur iOS : le texte en cours, les pièces en attente et le lieu
    * restent dans le composeur. L'image relue par la feuille part en pièce
-   * jointe, le descripteur `{ stickerId }` dans le champ `sticker` du corps.
+   * jointe, le descripteur (`{ stickerId }`, ou `{ templateId: 'mee.…' }`
+   * pour Mee et Meo, #9034) dans le champ `sticker` du corps.
    */
-  const sendSticker = ({ stickerId, file }: { readonly stickerId: string; readonly file: File }) => {
+  const sendSticker = ({ file, sticker }: { readonly file: File; readonly sticker: MessageSticker }) => {
     setStickerSheetOpen(false);
     onSend({
       text: '',
@@ -639,7 +639,7 @@ export const Composer = memo(function Composer({
       language: compose.language,
       protection: effective,
       place: null,
-      sticker: { stickerId },
+      sticker,
     });
   };
 
@@ -789,7 +789,15 @@ export const Composer = memo(function Composer({
             setEphemeralPickerOpen(false);
             setEffectsPanelOpen((v) => !v);
           }}
-          sentiment={sentiment}
+          {...(mayAttach(rights, 'image/*')
+            ? {
+                onOpenStickers: () => {
+                  setPanelOpen(false);
+                  setStickerSheetOpen(true);
+                },
+                onPickCamera: addFiles,
+              }
+            : {})}
           languageCode={compose.language}
           onOpenLanguage={() => setLanguageSheetOpen(true)}
           languagePillRef={languagePillRef}
@@ -921,6 +929,22 @@ export const Composer = memo(function Composer({
                 // Croissance jusqu'a cinq lignes, comme iOS (`lineLimit(1...5)`).
                 el.style.height = 'auto';
                 el.style.height = `${Math.min(el.scrollHeight, 5 * 22)}px`;
+              }}
+              /* CE QU'ON COLLE PART TOUJOURS (#9037) — un fichier devient la
+                 pièce, un texte qui dépasserait la limite du serveur part en
+                 `.txt` ; le reste est laissé au navigateur (`paste-route.ts`). */
+              onPaste={(e) => {
+                const el = e.currentTarget;
+                const decision = routePastedContent({
+                  pasted: pastedContentOf(e.clipboardData),
+                  current: el.value,
+                  selection: { start: el.selectionStart, end: el.selectionEnd },
+                  now: new Date(),
+                  ...(maxLength === undefined ? {} : { maxLength }),
+                });
+                if (decision.kind === 'native') return;
+                e.preventDefault();
+                addFiles(decision.files);
               }}
               onClick={(e) => mention.syncCaret(e.currentTarget)}
               onKeyUp={(e) => {

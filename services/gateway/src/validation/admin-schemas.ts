@@ -77,6 +77,8 @@ export const BroadcastsListQuerySchema = z.object({
   offset: paginationOffset(),
   limit: paginationLimit(20),
   status: z.string().optional(),
+  // #8876 — recherche sur le NOM et l'OBJET de la diffusion, jamais sur son corps.
+  search: z.string().trim().max(100).optional(),
 });
 
 export type BroadcastsListQuery = z.infer<typeof BroadcastsListQuerySchema>;
@@ -131,8 +133,16 @@ export const InvitationIdParamSchema = z.object({
 
 export type InvitationIdParam = z.infer<typeof InvitationIdParamSchema>;
 
+/**
+ * Un seul geste d'administration : REJETER une demande en attente (#8876).
+ *
+ * `FriendRequest.status === 'accepted'` EST l'amitié — elle ouvre la présence, les
+ * publications FRIENDS, les appels et les paquets Signal. Forcer `accepted` depuis la
+ * console créerait une amitié que NI l'un NI l'autre membre n'a consentie ; remettre
+ * `pending` rouvrirait une demande déjà tranchée. Aucun des deux n'est offert.
+ */
 export const UpdateInvitationBodySchema = z.object({
-  status: z.enum(['pending', 'accepted', 'rejected']),
+  status: z.enum(['rejected']),
 });
 
 export type UpdateInvitationBody = z.infer<typeof UpdateInvitationBodySchema>;

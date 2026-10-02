@@ -27,6 +27,7 @@ import frPassword from './catalog-fr-password';
 import frAccounts from './catalog-fr-accounts';
 import frCall from './catalog-fr-call';
 import frRowActions from './catalog-fr-row-actions';
+import frEngagement from './catalog-fr-engagement';
 import frCallShell from './catalog-fr-call-shell';
 import frCallJoin from './catalog-fr-call-join';
 import frCallDecline from './catalog-fr-call-decline';
@@ -46,6 +47,7 @@ import frCommentRow from './catalog-fr-comment-row';
 import frContactDiscovery from './catalog-fr-contact-discovery';
 import frDownload from './catalog-fr-download';
 import frPhonePrompt from './catalog-fr-phone-prompt';
+import frUserProfile from './catalog-fr-user-profile';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -54,7 +56,6 @@ const fr = {
   'announce.messageProtected': 'Message protégé',
   'announce.selectionCap': 'Maximum {count} messages',
   'announce.nothingToCopy': 'Rien à copier',
-
   'message.author.self': 'Vous',
   'message.excerpt.protected': 'contenu protégé',
   'a11y.message.menu.subject': 'Actions du message de {author} : {excerpt}',
@@ -217,6 +218,7 @@ const fr = {
   ...frAccounts,
   ...frCall,
   ...frRowActions,
+  ...frEngagement,
   ...frCallShell,
   ...frCallJoin,
   ...frCallDecline,
@@ -228,7 +230,6 @@ const fr = {
   ...frCallCaptions,
   ...frCallRecording,
   ...frSignup,
-  'userProfile.self.edit': 'Modifier mon profil',
   'report.title': 'Signaler ce compte',
   'report.body': 'Choisissez ce qui motive votre signalement. Notre équipe de modération le recevra.',
   'report.action': 'Signaler',
@@ -273,6 +274,7 @@ const fr = {
   'notifications.category.reactions': 'Réactions',
   'notifications.category.mentions': 'Mentions',
   'notifications.category.social': 'Social',
+  'notifications.category.engagement': 'Engagements',
   'notifications.category.contacts': 'Contacts',
   'notifications.category.groups': 'Groupes',
   'notifications.category.calls': 'Appels',
@@ -499,6 +501,7 @@ const fr = {
   'settings.save.error': "Le réglage n'a pas été enregistré.",
   'settings.theme.sync_error': 'Thème appliqué sur cet appareil, sans synchronisation.',
   'common.cancel': 'Annuler',
+  'common.close': 'Fermer',
 
   'media.video.play': 'Lire la vidéo',
   'media.video.pause': 'Pause',
@@ -651,65 +654,14 @@ const fr = {
   'discover.announce.unblockFailed': 'Impossible de débloquer',
   'discover.announce.offline': 'Hors ligne : rien n’a été envoyé.',
 
-  /* LE PROFIL PUBLIC DE QUELQU'UN (#7083) — préfixe `userProfile.*` : le
-     préfixe `profile.*` appartient à /me, et deux écrans qui partageraient un
-     préfixe partageraient ses retouches. Ce qui EXISTE déjà est réutilisé, pas
-     redit : `discover.connection.*` et `discover.announce.*` (les mêmes
-     gestes), `profile.stats.*`, `profile.section.stats`,
-     `profile.section.member_since`, `profile.retry`, `profile.offline.title`. */
-  'userProfile.title': 'Profil',
-  'userProfile.loading': 'Chargement du profil',
-  'userProfile.section.publications': 'PUBLICATIONS',
-  'userProfile.section.relation': 'CONNEXION',
-  'userProfile.section.conversations': 'CONVERSATIONS',
-  'userProfile.conversations.empty': 'Aucune conversation en commun',
-  'userProfile.conversations.emptyBody': 'Rien ne vous relie encore — « Écrire » ouvre la première.',
-  'userProfile.conversations.error': 'Impossible de charger les conversations',
-  'userProfile.conversations.loading': 'Chargement des conversations',
-  'userProfile.refused.title': 'Ce profil n’est pas accessible',
-  'userProfile.refused.body': 'Il n’existe pas, ou vous n’y avez pas accès.',
-  'userProfile.throttled.title': 'Trop de demandes',
-  'userProfile.throttled.body': 'Réessayez dans un instant.',
-  'userProfile.error.title': 'Impossible de charger ce profil',
-  'userProfile.error.body': 'Réessayez dans un instant.',
-  'userProfile.offline.body': 'Le profil s’affichera à la reconnexion.',
-  'userProfile.posts.empty': 'Aucune publication',
-  'userProfile.posts.emptyBody': 'Rien de public à lire pour l’instant.',
   /* LE VIDE D'UN FILTRE N'EST PAS LE VIDE D'UN COMPTE (miroir de
      `filteredEmptyState`, `ProfileUserPostsList.swift:498-510`) : dire
      « Aucune publication » à qui vient de toucher « Réels » est FAUX — le
      compte publie, c'est le filtre qui ne trouve rien ICI. */
-  'userProfile.posts.emptyPosts': 'Aucun poste',
-  'userProfile.posts.emptyReels': 'Aucun réel',
-  'userProfile.posts.emptyFilter': 'Touchez à nouveau la tuile pour tout revoir.',
-  'userProfile.posts.error': 'Impossible de charger les publications',
-  'userProfile.posts.loadMore': 'Charger plus',
   /* CE QUI EST ARRIVÉ SE DIT (revue #7083) : « Charger plus » était le seul
      geste de l'écran à changer la LONGUEUR de la liste, et le seul à ne rien
      annoncer. La forme « Publications ajoutées : {count} » évite l'accord de
      pluriel dans les sept langues — un seul libellé pour 1 comme pour 12. */
-  'userProfile.posts.loaded': 'Publications ajoutées : {count}',
-  'userProfile.posts.loadedNone': 'Aucune publication de plus à afficher',
-  'userProfile.posts.loading': 'Chargement…',
-  'userProfile.stat.posts': 'Postes',
-  'userProfile.stat.reels': 'Réels',
-  'userProfile.stat.stories': 'Stories',
-  'userProfile.stat.filterLabel': 'Filtrer sur {name}',
-  'userProfile.stat.filterClear': 'Tout afficher',
-  'userProfile.context.received': '{name} souhaite entrer en contact avec vous. Acceptez pour échanger des messages.',
-  'userProfile.context.sent': 'Vous avez envoyé une demande de connexion à {name}. En attente de sa réponse.',
-  'userProfile.action.write': 'Écrire',
-  'userProfile.action.writeLabel': 'Écrire à {name}',
-  'userProfile.action.block': 'Bloquer',
-  'userProfile.action.blockLabel': 'Bloquer {name}',
-  'userProfile.blocked.title': 'Vous avez bloqué cette personne',
-  'userProfile.blocked.body': 'Ses publications et ses statistiques restent masquées tant que le blocage dure.',
-  'userProfile.signin.title': 'Connectez-vous pour entrer en contact',
-  'userProfile.signin.body': 'Les demandes de connexion et les messages demandent un compte.',
-  'userProfile.signin.cta': 'Se connecter',
-  'userProfile.announce.blocked': 'Personne bloquée',
-  'userProfile.announce.blockFailed': 'Impossible de bloquer',
-  'userProfile.announce.writeFailed': 'Impossible d’ouvrir la conversation',
 
   'a11y.floating.rung.discover.requests.one': 'Découvrir, {count} demande reçue',
   'a11y.floating.rung.discover.requests.other': 'Découvrir, {count} demandes reçues',
@@ -1193,6 +1145,7 @@ const fr = {
   ...frQuote,
   ...frCommentRow,
   ...frContactDiscovery,
+  ...frUserProfile,
 } as const;
 
 export default fr;

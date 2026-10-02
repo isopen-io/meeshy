@@ -30,13 +30,14 @@ final class FocalRowInputEquatableTests: XCTestCase {
         userLanguages: (regional: String?, custom: String?) = (nil, nil),
         allAudioItems: [ConversationViewModel.AudioItem] = [],
         effects: MessageEffects = .none,
-        senderIsAnonymous: Bool = false
+        senderIsAnonymous: Bool = false,
+        senderIsHere: ConversationHere = .absent
     ) -> FocalRowInput {
         FocalRowInput(
             localId: "m1", serverId: "s1", content: content ?? makeContent(), density: density,
             isFirstInGroup: true, senderId: "u1", senderDisplayName: "Ali", senderUsername: "ali",
             senderAvatarURL: nil, senderThumbHash: nil, senderColorHex: "#31B6BA",
-            senderPresence: .online, senderStoryRing: .none, senderMoodEmoji: nil,
+            senderPresence: .online, senderIsHere: senderIsHere, senderStoryRing: .none, senderMoodEmoji: nil,
             senderIsAnonymous: senderIsAnonymous,
             accentHex: "#31B6BA", isDark: false, isDirect: true, isRightToLeft: false,
             isOptimistic: false, isAgentAuthored: false, showsAgentGrammar: false,
@@ -55,6 +56,11 @@ final class FocalRowInputEquatableTests: XCTestCase {
 
     func test_differentContent_areNotEqual() {
         XCTAssertNotEqual(makeInput(content: makeContent(messageId: "m1")), makeInput(content: makeContent(messageId: "m2")))
+    }
+
+    func test_senderIsHereChange_areNotEqual() {
+        XCTAssertNotEqual(makeInput(senderIsHere: false), makeInput(senderIsHere: true))
+        XCTAssertNotEqual(makeInput(senderIsHere: .here), makeInput(senderIsHere: .active), "l'activité (#9061) redessine la rangée")
     }
 
     func test_differentDensity_areNotEqual() {

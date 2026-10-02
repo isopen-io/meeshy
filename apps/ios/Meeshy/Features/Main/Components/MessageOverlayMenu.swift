@@ -73,18 +73,28 @@ struct MessageOverlayMenu: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     private var isDark: Bool { colorScheme == .dark }
     @State private var isVisible = false
     /// Classement des emojis rapides figé pour la durée de la présentation —
     /// cf. `emojiQuickBar`.
     @State private var cachedTopEmojis: [String]?
-    /// Offset vertical du cluster native-lean pendant le drag (suivi du doigt,
-    /// amorti au-delà des seuils par `MessageOverlayDragLaw.displayOffset`).
-    /// `@GestureState` : reset automatique (spring) au release ET à
-    /// l'annulation système du geste (appel entrant, background) — le cluster
-    /// ne reste jamais figé hors position.
-    @GestureState(resetTransaction: Transaction(animation: .spring(response: 0.35, dampingFraction: 0.75)))
-    private var clusterDragOffset: CGFloat = 0
+    /// Parcours vertical BRUT du doigt pendant le drag. Il se partage entre la
+    /// réduction de l'aperçu (`MessageOverlayRevealLaw`, #9043) et l'offset du
+    /// cluster (`MessageOverlayDragLaw.displayOffset`). `@GestureState` : reset
+    /// automatique au release ET à l'annulation système du geste (appel
+    /// entrant, background) — le cluster ne reste jamais figé hors position ;
+    /// sans ressort sous Reduce Motion.
+    @GestureState(reset: { _, transaction in
+        transaction.animation = MainActor.assumeIsolated { UIAccessibility.isReduceMotionEnabled }
+            ? nil
+            : .spring(response: 0.35, dampingFraction: 0.75)
+    })
+    private var liveDragTranslation: CGFloat = 0
+    /// Le facteur de réduction de l'aperçu GARDÉ au relâchement (#9043).
+    /// `nil` tant qu'aucun geste n'a conclu : l'ouverture vaut alors
+    /// `MessageOverlayRevealLaw.restingFactor` (réduit d'office sous VoiceOver).
+    @State private var committedReveal: CGFloat?
     /// Haptic d'armement émis une seule fois par geste ; réarmé au release.
     @State private var dragHapticArmed = false
 
@@ -260,7 +270,7 @@ struct MessageOverlayMenu: View {
             let nlSidePadding: CGFloat = 16
             let nlMenuWidth: CGFloat = MessageActionsMenu.menuWidth
             let nlMenuHeight: CGFloat = MessageActionsMenu.estimatedSize(actionCount: primaryActions.count).height
-            let nlEmojiWidth: CGFloat = 300
+            let nlEmojiWidth: CGFloat = Self.emojiBandWidth(available: geometry.size.width - 2 * nlSidePadding)
             let nlAvailTop = safeTop + 12
             let nlAvailBottom = screenH - safeBottom - 12
             let nlAvailable = max(160, nlAvailBottom - nlAvailTop)
@@ -282,11 +292,24 @@ struct MessageOverlayMenu: View {
             let nlMenuY = nlBubbleTop + nlBubbleH - nlRowBottomPaddingEstimate * nlFitScale + nlMenuGap + nlMenuHeight / 2
             let nlMenuX = max(nlSidePadding + nlMenuWidth / 2, min(geometry.size.width - nlSidePadding - nlMenuWidth / 2, nlAnchorX))
             let nlEmojiX = max(nlSidePadding + nlEmojiWidth / 2, min(geometry.size.width - nlSidePadding - nlEmojiWidth / 2, nlAnchorX))
+            // #9043 — glisser vers le haut réduit l'aperçu (ancré en haut) et
+            // remonte le menu coupé d'autant ; le reste du parcours va au geste
+            // existant. `shrinkable` = la hauteur VISIBLE de la bulle au repos.
+            let shrinkable = max(0, nlBubbleH - nlRowBottomPaddingEstimate * nlFitScale)
+            let revealFloor = MessageOverlayRevealLaw.floor(
+                hiddenHeight: nlMenuY + nlMenuHeight / 2 - nlAvailBottom, shrinkableHeight: shrinkable)
+            let reveal = RevealContext(
+                floor: revealFloor, shrinkable: shrinkable,
+                committed: committedReveal
+                    ?? MessageOverlayRevealLaw.restingFactor(floor: revealFloor, assistiveReveal: voiceOverEnabled))
+            let revealSplit = reveal.split(liveDragTranslation)
+            let clusterDragOffset = MessageOverlayDragLaw.displayOffset(for: revealSplit.residual)
+            let menuRise = MessageOverlayRevealLaw.rise(factor: revealSplit.factor, shrinkableHeight: shrinkable)
 
             ZStack {
                 dismissBackground
 
-                VStack(spacing: 10) {
+                VStack(spacing: MeeshySpacing.smPlus) {
                     // Zone tappable haute — `maxHeight: .infinity` laisse ce
                     // spacer absorber l'espace au-dessus du cluster
                     // bulle+emojis+panneau. Le cluster reste donc ancre vers
@@ -310,7 +333,7 @@ struct MessageOverlayMenu: View {
                             if !message.isMe { Spacer(minLength: 44) }
                         }
                         .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 4)
+                        .padding(.horizontal, MeeshySpacing.xs)
                         .opacity(isVisible ? 1 : 0)
                         .offset(y: isVisible ? 0 : -28)
                         .scaleEffect(
@@ -325,10 +348,10 @@ struct MessageOverlayMenu: View {
                         // sans frame source).
                         HStack(spacing: 0) {
                             if message.isMe { Spacer(minLength: 0) }
-                            emojiQuickBar
+                            emojiQuickBar(width: Self.emojiBandWidth(available: geometry.size.width - 2 * MeeshySpacing.mdPlus))
                             if !message.isMe { Spacer(minLength: 0) }
                         }
-                        .padding(.horizontal, 14)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
                         .opacity(isVisible ? 1 : 0)
                         .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
                         .offset(y: isVisible ? 0 : 18)
@@ -357,8 +380,8 @@ struct MessageOverlayMenu: View {
                             accentHex: contactColor,
                             onSelect: { handlePrimaryAction($0) }
                         )
-                        .padding(.horizontal, 14)
-                        .padding(.bottom, 12)
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .padding(.bottom, MeeshySpacing.md)
                         .opacity(isVisible ? 1 : 0)
                         .scaleEffect(isVisible ? 1.0 : 0.85, anchor: .top)
                     }
@@ -380,7 +403,7 @@ struct MessageOverlayMenu: View {
                         x: nlMenuX,
                         y: isVisible ? nlMenuY : (bubbleRect.maxY + 8)
                     )
-                    .offset(y: clusterDragOffset)
+                    .offset(y: clusterDragOffset - menuRise)
                     .opacity(isVisible ? 1 : 0)
                     .scaleEffect(isVisible ? 1.0 : 0.85, anchor: .top)
                     // highPriorityGesture : en `.gesture` simple, les Button
@@ -388,7 +411,7 @@ struct MessageOverlayMenu: View {
                     // un swipe faible amorcé sur « Pin » épinglait au lieu de
                     // snap back). Le seuil minimumDistance 12 laisse les taps
                     // simples aux rows.
-                    .highPriorityGesture(clusterDragGesture)
+                    .highPriorityGesture(clusterDragGesture(reveal))
 
                     // FIDÉLITÉ — vrai `ThemedMessageBubble` avec les mêmes
                     // paramètres que la cellule live de la liste : rendu
@@ -436,6 +459,9 @@ struct MessageOverlayMenu: View {
                     .frame(width: bubbleRect.width, height: bubbleRect.height, alignment: .leading)
                     .scaleEffect(nlFitScale, anchor: .center)
                     .frame(width: nlBubbleW, height: nlBubbleH)
+                    // #9043 — transformation de RENDU seule (aucune passe de
+                    // layout par image) : le haut et le bord natif restent fixes.
+                    .scaleEffect(revealSplit.factor, anchor: message.isMe ? .topTrailing : .topLeading)
                     .position(
                         x: nlAnchorX,
                         y: isVisible ? nlBubbleMidY : bubbleRect.midY
@@ -445,7 +471,7 @@ struct MessageOverlayMenu: View {
                     .allowsHitTesting(false)
 
                     // Barre de réactions AU-DESSUS de la bulle (native-lean).
-                    emojiQuickBar
+                    emojiQuickBar(width: nlEmojiWidth)
                         .position(
                             x: nlEmojiX,
                             y: isVisible ? nlEmojiY : bubbleRect.minY
@@ -456,6 +482,11 @@ struct MessageOverlayMenu: View {
                         .allowsHitTesting(true)
                 }
             }
+            // #9043 — le glissement vaut sur TOUTE la vue (le voile, l'aperçu,
+            // dont les touches traversent), pas seulement sur le menu : c'est
+            // l'aperçu qu'on pousse vers le haut. Un tap reste un tap (seuil
+            // 12 pt) ; le menu garde sa propre instance prioritaire.
+            .gesture(clusterDragGesture(reveal), including: useSourceFrame ? .all : .subviews)
         }
         .ignoresSafeArea()
         // A11y (C2) : l'overlay est MODAL — VoiceOver piège le focus dedans
@@ -476,13 +507,30 @@ struct MessageOverlayMenu: View {
 
     // MARK: - Emoji Quick Bar (EmojiReactionPicker — shared component)
 
-    private var emojiQuickBar: some View {
+    /// La largeur de la bande AVANT l'allongement.
+    static let emojiBandReferenceWidth: CGFloat = 280
+    /// **La bande d'emojis s'allonge de ×1,4** (directive porteur 2026-10-01,
+    /// #9043) — la bande, pas les emojis : leur taille ne change pas, la
+    /// bande en montre davantage. Bornée à la largeur disponible. Miroir web :
+    /// `RAIL_LENGTH_FACTOR`.
+    static let emojiBandLengthFactor: CGFloat = 1.4
+
+    static func emojiBandWidth(available: CGFloat) -> CGFloat {
+        min(emojiBandReferenceWidth * emojiBandLengthFactor, max(0, available))
+    }
+
+    private func emojiQuickBar(width: CGFloat) -> some View {
         // Shared `EmojiReactionPicker` (MeeshyUI) — meme call-site que le
         // strip inline du long-press (`ConversationView+MessageRow`) pour
-        // garder les deux surfaces visuellement identiques. Le composant
-        // embarque deja son chrome (capsule glass + shadow), son padding
-        // interne et la cascade d'entree gauche→droite (`WaveTileModifier`),
-        // donc aucun wrapper supplementaire ici.
+        // garder les deux surfaces visuellement identiques (padding interne,
+        // cascade d'entree gauche→droite `WaveTileModifier`).
+        //
+        // **Sans capsule** (directive porteur 2026-10-01, #9043 — « enlever le
+        // cadre comme pour les story ») : la story pose cette MÊME rangée nue
+        // sur sa scène (`FullscreenReactionStrip`, `chrome: .none`). Ici le
+        // voile est la scène. Seule la bande perd son cadre : le menu du bas
+        // garde son Liquid Glass. Le voile étant toujours sombre, le style est
+        // `.dark` quel que soit le schéma.
         //
         // Le classement (lecture UserDefaults + tri) est calculé UNE fois par
         // présentation via le cache @State — le body de l'overlay se
@@ -492,8 +540,9 @@ struct MessageOverlayMenu: View {
             ?? EmojiUsageTracker.topEmojis(count: 20, defaults: Self.defaultEmojis)
         return EmojiReactionPicker(
             quickEmojis: topEmojis,
-            style: isDark ? .dark : .light,
+            style: .dark,
             scrollable: true,
+            chrome: .none,
             onReact: { emoji in
                 EmojiUsageTracker.recordUsage(emoji: emoji)
                 onReact?(emoji)
@@ -505,7 +554,7 @@ struct MessageOverlayMenu: View {
                 dismiss()
             }
         )
-        .frame(maxWidth: 280)
+        .frame(maxWidth: width)
         .onAppear {
             if cachedTopEmojis == nil {
                 cachedTopEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: Self.defaultEmojis)
@@ -543,17 +592,30 @@ struct MessageOverlayMenu: View {
         .onTapGesture { dismiss() }
     }
 
-    // MARK: - Cluster Drag (swipe-up → Menu 2, swipe-down → fermeture)
+    // MARK: - Cluster Drag (réduction de l'aperçu, puis swipe-up → Menu 2, swipe-down → fermeture)
 
-    private var clusterDragGesture: some Gesture {
+    /// La géométrie de la réduction (#9043), résolue dans le `GeometryReader`
+    /// et remise au geste — il partage le MÊME parcours que le rendu.
+    struct RevealContext {
+        let floor: CGFloat
+        let shrinkable: CGFloat
+        let committed: CGFloat
+
+        func split(_ translation: CGFloat) -> MessageOverlayRevealLaw.Split {
+            MessageOverlayRevealLaw.split(translation: translation, committed: committed,
+                                          floor: floor, shrinkableHeight: shrinkable)
+        }
+    }
+
+    private func clusterDragGesture(_ reveal: RevealContext) -> some Gesture {
         DragGesture(minimumDistance: 12)
-            .updating($clusterDragOffset) { value, state, _ in
+            .updating($liveDragTranslation) { value, state, _ in
                 guard isVisible else { return }
-                state = MessageOverlayDragLaw.displayOffset(for: value.translation.height)
+                state = value.translation.height
             }
             .onChanged { value in
                 guard isVisible else { return }
-                if MessageOverlayDragLaw.isArmed(translation: value.translation.height),
+                if MessageOverlayDragLaw.isArmed(translation: reveal.split(value.translation.height).residual),
                    !dragHapticArmed {
                     dragHapticArmed = true
                     HapticFeedback.medium()
@@ -562,9 +624,12 @@ struct MessageOverlayMenu: View {
             .onEnded { value in
                 defer { dragHapticArmed = false }
                 guard isVisible else { return }
+                let reached = reveal.split(value.translation.height)
+                // L'état atteint est GARDÉ, sans aimant (cf. `MessageOverlayRevealLaw`).
+                committedReveal = reached.factor
                 switch MessageOverlayDragLaw.outcome(
-                    translation: value.translation.height,
-                    predicted: value.predictedEndTranslation.height
+                    translation: reached.residual,
+                    predicted: reveal.split(value.predictedEndTranslation.height).residual
                 ) {
                 case .openMore:
                     handlePrimaryAction(.more)
@@ -579,7 +644,7 @@ struct MessageOverlayMenu: View {
     // MARK: - Message Preview (aligned left/right)
 
     private var messagePreview: some View {
-        VStack(alignment: message.isMe ? .trailing : .leading, spacing: 6) {
+        VStack(alignment: message.isMe ? .trailing : .leading, spacing: MeeshySpacing.xsPlus) {
             previewSenderHeader
 
             previewContent
@@ -596,7 +661,7 @@ struct MessageOverlayMenu: View {
             maxWidth: DeviceLayout.bubbleMaxWidth(sizeClass: horizontalSizeClass),
             alignment: message.isMe ? .trailing : .leading
         )
-        .padding(.horizontal, 8)
+        .padding(.horizontal, MeeshySpacing.sm)
         // Halo lumineux ancre a l'accent de la conversation + ombre
         // profonde : le preview semble decolle de la liste, flottant
         // au-dessus du flou. Les deux ombres ne s'allument qu'une fois
@@ -616,7 +681,7 @@ struct MessageOverlayMenu: View {
         let name = isMe ? "Moi" : (message.senderName ?? "?")
         let color = isMe ? contactColor : (message.senderColor ?? contactColor)
 
-        return HStack(spacing: 6) {
+        return HStack(spacing: MeeshySpacing.xsPlus) {
             if !isMe {
                 MeeshyAvatar(
                     name: name,
@@ -627,15 +692,15 @@ struct MessageOverlayMenu: View {
             }
 
             Text(name)
-                .font(MeeshyFont.relative(13, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(Color(hex: color))
 
             MetaSeparator()
-                .font(MeeshyFont.relative(13))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(theme.textMuted)
 
             Text(formatExactDate(message.createdAt))
-                .font(MeeshyFont.relative(12))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize))
                 .foregroundColor(theme.textMuted)
         }
     }
@@ -672,7 +737,7 @@ struct MessageOverlayMenu: View {
         let audios = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .audio }
         let files = message.attachments.filter { !AttachmentKind(mimeType: $0.mimeType).isMedia }
 
-        VStack(alignment: message.isMe ? .trailing : .leading, spacing: 8) {
+        VStack(alignment: message.isMe ? .trailing : .leading, spacing: MeeshySpacing.sm) {
             if !images.isEmpty {
                 OverlayPreviewMediaGrid(attachments: images, masked: false)
             }
@@ -749,13 +814,13 @@ struct MessageOverlayMenu: View {
         let showDelivery = message.isMe
         let shouldRenderMeta = hasFlags || showDelivery
 
-        return VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
+        return VStack(alignment: message.isMe ? .trailing : .leading, spacing: MeeshySpacing.xs) {
             Text(truncated)
-                .font(MeeshyFont.relative(15))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .foregroundColor(message.isMe ? .white : theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 14)
-                .padding(.top, 10)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.top, MeeshySpacing.smPlus)
                 .padding(.bottom, shouldRenderMeta ? 4 : 10)
 
             if shouldRenderMeta {
@@ -768,8 +833,8 @@ struct MessageOverlayMenu: View {
                     onTranslateTap: nil,
                     isMe: message.isMe
                 )
-                .padding(.horizontal, 14)
-                .padding(.bottom, 8)
+                .padding(.horizontal, MeeshySpacing.mdPlus)
+                .padding(.bottom, MeeshySpacing.sm)
                 .allowsHitTesting(false)
             }
         }
@@ -780,11 +845,11 @@ struct MessageOverlayMenu: View {
                 isDark: isDark
             )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
         // Liseré subtil a la teinte de la bulle — donne du relief au
         // preview flottant sans alourdir la lecture.
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous)
                 .stroke(
                     Color(hex: bubbleAccentHex).opacity(message.isMe ? 0.0 : 0.18),
                     lineWidth: 0.75
@@ -797,35 +862,35 @@ struct MessageOverlayMenu: View {
     private func previewFileRow(_ attachment: MessageAttachment) -> some View {
         let accent = Color(hex: contactColor)
 
-        return HStack(spacing: 10) {
+        return HStack(spacing: MeeshySpacing.smPlus) {
             ZStack {
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: MeeshyRadius.xs)
                     .fill(accent.opacity(0.15))
                     .frame(width: 36, height: 36)
                 // Decorative glyph inside a fixed 36×36 badge — kept fixed so
                 // it never overflows the badge; filename text carries the label.
                 Image(systemName: "doc.fill")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                     .foregroundColor(accent)
                     .accessibilityHidden(true)
             }
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName)
-                    .font(MeeshyFont.relative(13, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 Text(formatFileSize(attachment.fileSize))
-                    .font(MeeshyFont.relative(11))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundColor(theme.textMuted)
             }
 
             Spacer()
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
         )
     }
@@ -867,8 +932,8 @@ private struct PreviewAudioPlayer: View {
     private var accent: Color { Color(hex: contactColor) }
 
     var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
+        VStack(spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Button { player.toggle(url: attachment.fileUrl) } label: {
                     ZStack {
                         Circle()
@@ -882,7 +947,7 @@ private struct PreviewAudioPlayer: View {
                             // Glyph inside a fixed 40×40 circle — kept fixed to
                             // stay centred; the Button carries the a11y label.
                             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.system(size: MeeshyIconSize.md, weight: .semibold))
                                 .foregroundColor(accent)
                         }
                     }
@@ -891,16 +956,16 @@ private struct PreviewAudioPlayer: View {
                 .accessibilityLabel(player.isPlaying
                     ? String(localized: "media.pauseAudio", defaultValue: "Mettre en pause", bundle: .main)
                     : String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main))
-                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.spokenTotalDuration(totalDuration: attachment.duration)))
+                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.spokenTotalDuration(attachmentDurationMs: attachment.duration)))
 
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
-                        .font(MeeshyFont.relative(13, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
-                    Text(player.timeLabel(totalDuration: attachment.duration))
-                        .font(MeeshyFont.relative(11, weight: .medium))
+                    Text(player.timeLabel(attachmentDurationMs: attachment.duration))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .monospacedDigit()
                 }
@@ -922,18 +987,18 @@ private struct PreviewAudioPlayer: View {
                     }
                 } label: {
                     Text("\(String(format: "%.2g", player.playbackRate))x")
-                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundColor(accent)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, MeeshySpacing.sm)
+                        .padding(.vertical, MeeshySpacing.xs)
                         .background(Capsule().fill(accent.opacity(0.12)))
                 }
             }
 
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 Button { player.skip(seconds: -5) } label: {
                     Image(systemName: "gobackward.5")
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
@@ -952,7 +1017,7 @@ private struct PreviewAudioPlayer: View {
 
                 // Pourcentage d'avancement
                 Text(LocalizedNumber.percent(player.percentInt))
-                    .font(MeeshyFont.relative(11, weight: .heavy, design: .monospaced))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .heavy, design: .monospaced))
                     .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
                     .frame(minWidth: 36)
                     .contentTransition(.numericText())
@@ -961,180 +1026,20 @@ private struct PreviewAudioPlayer: View {
 
                 Button { player.skip(seconds: 5) } label: {
                     Image(systemName: "goforward.5")
-                        .font(MeeshyFont.relative(14, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Avancer de 5 secondes", bundle: .main))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.smPlus)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: MeeshyRadius.md)
                 .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
         )
         .onDisappear { player.stop() }
-    }
-}
-
-// MARK: - Preview Video Player (interactive)
-
-private struct PreviewVideoPlayer: View {
-    let attachment: MessageAttachment
-    let contactColor: String
-
-    private var theme: ThemeManager { ThemeManager.shared }
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-    @StateObject private var player = OverlayAudioPlayer()
-    @State private var showThumbnail = true
-
-    private var accent: Color { Color(hex: contactColor) }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-                let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
-                ProgressiveCachedImage(
-                    thumbHash: attachment.thumbHash,
-                    thumbnailUrl: thumbUrl,
-                    fullUrl: fullUrl ?? thumbUrl
-                ) {
-                    Color(hex: contactColor).opacity(0.2)
-                }
-                // #8009 — le rapport d'aspect ORIGINAL de la vidéo, ni rognée ni étirée.
-                .aspectRatio(OverlayPreviewMediaLayout.aspectRatio(of: attachment), contentMode: .fit)
-                .frame(maxWidth: .infinity, maxHeight: 320)
-                .clipped()
-
-                if showThumbnail {
-                    Button {
-                        showThumbnail = false
-                        player.toggle(url: attachment.fileUrl)
-                    } label: {
-                        Circle()
-                            .fill(.black.opacity(0.5))
-                            .frame(width: 52, height: 52)
-                            .overlay(
-                                // Glyph inside a fixed 52×52 play circle — kept
-                                // fixed; the Button carries the a11y label.
-                                Image(systemName: "play.fill")
-                                    .font(.system(size: 20))
-                                    .foregroundColor(.white)
-                                    .offset(x: 2)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "media.playVideo", defaultValue: "Lire la vidéo", bundle: .main))
-                }
-            }
-            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 14))
-
-            if !showThumbnail {
-                videoControls
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .onDisappear { player.stop() }
-    }
-
-    private var videoControls: some View {
-        VStack(spacing: 4) {
-            Slider(
-                value: Binding(
-                    get: { player.progress },
-                    set: { player.seek(to: $0) }
-                ),
-                in: 0...1
-            )
-            .tint(accent)
-            .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Position de lecture", bundle: .main))
-            .accessibilityValue(LocalizedNumber.percent(player.percentInt))
-
-            HStack(spacing: 8) {
-                Button { player.toggle(url: attachment.fileUrl) } label: {
-                    if player.isLoading {
-                        ProgressView()
-                            .tint(accent)
-                            .scaleEffect(0.5)
-                            .frame(width: 14, height: 14)
-                    } else {
-                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(MeeshyFont.relative(14, weight: .semibold))
-                            .foregroundColor(accent)
-                    }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(player.isPlaying
-                    ? String(localized: "media.pauseVideo", defaultValue: "Mettre la vidéo en pause", bundle: .main)
-                    : String(localized: "media.playVideo", defaultValue: "Lire la vidéo", bundle: .main))
-
-                Button { player.skip(seconds: -5) } label: {
-                    Image(systemName: "gobackward.5")
-                        .font(MeeshyFont.relative(12, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Reculer de 5 secondes", bundle: .main))
-
-                Text(LocalizedNumber.percent(player.percentInt))
-                    .font(MeeshyFont.relative(10, weight: .heavy, design: .monospaced))
-                    .foregroundColor(player.percentInt == 0 ? theme.textMuted : accent)
-                    .frame(minWidth: 32)
-                    .contentTransition(.numericText())
-                    .animation(.easeInOut(duration: 0.15), value: player.percentInt)
-                    .accessibilityHidden(true)
-
-                Button { player.skip(seconds: 5) } label: {
-                    Image(systemName: "goforward.5")
-                        .font(MeeshyFont.relative(12, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Avancer de 5 secondes", bundle: .main))
-
-                Spacer()
-
-                Text(player.timeLabel(totalDuration: attachment.duration))
-                    .font(MeeshyFont.relative(10, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-                    .monospacedDigit()
-
-                speedMenu
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 14, bottomTrailingRadius: 14, topTrailingRadius: 0)
-                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
-        )
-    }
-
-    private var speedMenu: some View {
-        Menu {
-            ForEach([0.5, 0.75, 1.0, 1.25, 1.5, 2.0], id: \.self) { rate in
-                Button {
-                    player.setRate(Float(rate))
-                } label: {
-                    HStack {
-                        Text(rate == 1.0 ? "Normal" : "\(String(format: "%.2g", rate))x")
-                        if abs(Double(player.playbackRate) - rate) < 0.01 {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
-            }
-        } label: {
-            Text("\(String(format: "%.2g", player.playbackRate))x")
-                .font(MeeshyFont.relative(10, weight: .semibold))
-                .foregroundColor(accent)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(Capsule().fill(accent.opacity(0.12)))
-        }
     }
 }
 

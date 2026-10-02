@@ -154,6 +154,16 @@ export function registerSearchRoutes(
                   id: true,
                   username: true,
                   displayName: true,
+                  // #8970 — `generateDefaultConversationTitle` nomme un membre
+                  // `displayName` → `firstName lastName` → `username`. Ne pas
+                  // charger le nom réel ici ne dégradait pas le titre : il le
+                  // rendait IMPOSSIBLE — la fonction ne recevait que deux des
+                  // quatre champs, et cette route était la seule des quatre
+                  // appelantes dans ce cas. Ses trois soeurs
+                  // (`conversationCard.ts`, `core-detail.ts`, `core-list.ts`)
+                  // les chargent depuis toujours.
+                  firstName: true,
+                  lastName: true,
                 },
               },
             },
@@ -292,6 +302,8 @@ export function registerSearchRoutes(
                     id: m.userId,
                     displayName: m.user?.displayName,
                     username: m.user?.username,
+                    firstName: m.user?.firstName,
+                    lastName: m.user?.lastName,
                   })),
                   userId
                 ));

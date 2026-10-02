@@ -71,6 +71,10 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   // jumelle de la 1re sur `GET /admin/translations`, même portée découverte.
   'admin/content.ts': { kind: 'applies', reads: 5, applications: 2 },
   'admin/conversation-messages-sovereign.ts': { kind: 'applies', reads: 1, applications: 1 },
+  // #8876 — `enrichReports` nomme l'entité qu'un signalement désigne ; sa lecture
+  // de messages charge `sender` (l'auteur) et est enveloppée — un expéditeur
+  // disparu ne doit pas faire rejeter toute la page de modération.
+  'admin/reports-enrichment.ts': { kind: 'applies', reads: 1, applications: 1 },
   // `rankMessages` (la seule des trois à charger `sender`) est enveloppée ;
   // les deux lectures de `rankConversations` ne chargent qu'identifiant/titre.
   'admin/system-rankings.ts': { kind: 'applies', reads: 3, applications: 1 },

@@ -16,18 +16,18 @@ extension UniversalComposerBar {
 
     var attachmentsPreview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(allAttachments) { attachment in
                     attachmentChip(attachment)
                 }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .padding(.vertical, MeeshySpacing.sm)
         }
     }
 
     func attachmentChip(_ attachment: ComposerAttachment) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             // Type icon
             Image(systemName: attachment.type.glyph)
                 .font(.caption)
@@ -61,8 +61,8 @@ extension UniversalComposerBar {
             }
             .accessibilityLabel(String(localized: "composer.a11y.removeAttachment", defaultValue: "Retirer la pièce jointe", bundle: .main))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xsPlus)
         .background(
             Capsule()
                 .fill(style == .dark ? Color.white.opacity(0.12) : theme.inputBackground)
@@ -98,8 +98,8 @@ extension UniversalComposerBar {
                         carouselTile(tile, index: index)
                     }
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 12)
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.md)
             }
 
             // Inline recent photos/videos — selectable straight into the
@@ -107,7 +107,7 @@ extension UniversalComposerBar {
             // scrollable grid fills the remaining panel height on every idiom;
             // only hosts WITHOUT it need the trailing spacer.
             if let onRecentMediaSelected {
-                Divider().opacity(0.4).padding(.horizontal, 14)
+                Divider().opacity(0.4).padding(.horizontal, MeeshySpacing.mdPlus)
                 RecentMediaStrip(
                     accentColor: servedAccentHex,
                     onOpenLibrary: { openFullPhotoLibrary(preselecting: $0) },
@@ -176,8 +176,8 @@ extension UniversalComposerBar {
         Capsule()
             .fill(mutedColor.opacity(emphasis))
             .frame(width: 36, height: 4)
-            .padding(.top, 8)
-            .padding(.bottom, 4)
+            .padding(.top, MeeshySpacing.sm)
+            .padding(.bottom, MeeshySpacing.xs)
     }
 
     /// La décision vit dans `ComposerPanelHandleLaw` (pure, testée) ; ce geste
@@ -249,19 +249,19 @@ extension UniversalComposerBar {
         // access never disappears.
         if onPhotoLibrary != nil && onRecentMediaSelected == nil {
             tiles.append(CarouselTile(
-                id: "photo", icon: "photo.fill", color: "9B59B6",
+                id: "photo", icon: "photo.fill", color: MeeshyColors.tileAmethystHex,
                 label: String(localized: "composer.attach.photo", defaultValue: "Photos", bundle: .main)
             ) { fire { onPhotoLibrary?() } })
         }
         if onCamera != nil {
             tiles.append(CarouselTile(
-                id: "camera", icon: "camera.fill", color: "F8B500",
+                id: "camera", icon: "camera.fill", color: MeeshyColors.tileSaffronHex,
                 label: String(localized: "composer.attach.camera", defaultValue: "Caméra", bundle: .main)
             ) { fire { onCamera?() } })
         }
         if onFilePicker != nil {
             tiles.append(CarouselTile(
-                id: "file", icon: "doc.fill", color: "45B7D1",
+                id: "file", icon: "doc.fill", color: MeeshyColors.tileSkyHex,
                 label: String(localized: "composer.attach.file", defaultValue: "Fichier", bundle: .main)
             ) { fire { onFilePicker?() } })
         }
@@ -273,7 +273,7 @@ extension UniversalComposerBar {
         }
         if showLocation && onLocationRequest != nil {
             tiles.append(CarouselTile(
-                id: "location", icon: "location.fill", color: "2ECC71",
+                id: "location", icon: "location.fill", color: MeeshyColors.tileEmeraldHex,
                 label: String(localized: "composer.attach.location", defaultValue: "Position", bundle: .main)
             ) { fire { onLocationRequest?() } })
         }
@@ -334,7 +334,7 @@ extension UniversalComposerBar {
             HapticFeedback.light()
             tile.action()
         } label: {
-            VStack(spacing: 7) {
+            VStack(spacing: MeeshySpacing.xsPlus) {
                 ZStack {
                     Circle()
                         .fill(
@@ -423,14 +423,13 @@ extension UniversalComposerBar {
 
     // MARK: - Clipboard Content Handling
 
-    func handleClipboardCheck(_ newText: String) {
-        // Collage d'une URL `file://` → pièce jointe, pas du texte. Delta
-        // HONNÊTE, distinct de l'expression historique ci-dessous (qui compte
-        // le double de la croissance réelle et dont le seuil ne doit pas
-        // bouger) : seule une INSERTION assez grande pour contenir
-        // « file:// » déclenche la détection — un utilisateur qui tape ces
-        // caractères un par un n'a jamais une insertion de cette taille.
-        let insertedCount = newText.count - text.count
+    /// `previous` : le texte d'AVANT l'écriture — dans `onChange`, `text` vaut déjà `newText`.
+    func handleClipboardCheck(_ newText: String, previous: String) {
+        // Collage d'une URL `file://` → pièce jointe, pas du texte : seule
+        // une INSERTION assez grande pour contenir « file:// » déclenche la
+        // détection — un utilisateur qui tape ces caractères un par un n'a
+        // jamais une insertion de cette taille.
+        let insertedCount = newText.count - previous.count
         if insertedCount >= "file://".count, newText.contains("file://") {
             let (cleaned, urls) = FileURLPasteDetector.detect(in: newText)
             if !urls.isEmpty {
@@ -448,30 +447,34 @@ extension UniversalComposerBar {
             }
         }
 
-        // Detect if a paste of 2000+ chars just happened
-        let delta = newText.count - (text.count - (newText.count - text.count))
-        if newText.count > 2000 && delta > 500 {
-            // Likely a paste — create clipboard content
-            let clip = ClipboardContent(text: newText)
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                clipboardContent = clip
-            }
-            // Clear the text field since it's now an attachment
-            DispatchQueue.main.async {
-                text = ""
-            }
-            onClipboardContent?(clip)
-            HapticFeedback.medium()
+        // **Le filet de la limite d'un message** (#9037). L'intercepteur du
+        // champ (`ComposerPasteInterceptor`) décide AVANT l'insertion ; si la
+        // vue de texte ne lui a pas été trouvée, un collage massif arrive
+        // ici. Ce qui ferait dépasser la limite part en `.txt` et le champ
+        // retrouve son texte d'avant — jamais un texte perdu, jamais un
+        // message refusé. Une frappe n'insère jamais 500 unités d'un coup.
+        guard let onIngest,
+              PastedContentRouter.length(newText) > pasteLimit,
+              let run = PastedContentRouter.insertion(from: previous, to: newText),
+              PastedContentRouter.length(run.inserted) >= Self.pasteInsertionFloor,
+              let ingest = try? PastedTextFile.write(run.inserted) else { return }
+        DispatchQueue.main.async {
+            text = run.restored
         }
+        onIngest([ingest])
+        HapticFeedback.medium()
     }
 
+    /// En deçà, une écriture est une frappe, une dictée ou une correction.
+    static var pasteInsertionFloor: Int { 500 }
+
     func clipboardContentPreview(_ clip: ClipboardContent) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "doc.plaintext.fill")
                 .font(.body)
                 .foregroundColor(MeeshyColors.indigo500)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(String(localized: "composer.clipboard.title", defaultValue: "Contenu du presse-papiers", bundle: .main))
                     .font(.caption2.weight(.bold))
                     .foregroundColor(style == .dark ? .white : theme.textPrimary)
@@ -499,18 +502,18 @@ extension UniversalComposerBar {
             }
             .accessibilityLabel(String(localized: "composer.a11y.removeClipboardContent", defaultValue: "Retirer le contenu du presse-papier", bundle: .main))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                 .fill(style == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .stroke(MeeshyColors.indigo500.opacity(0.3), lineWidth: 1)
                 )
         )
-        .padding(.horizontal, 12)
-        .padding(.bottom, 4)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.bottom, MeeshySpacing.xs)
     }
 
     // MARK: - Helpers

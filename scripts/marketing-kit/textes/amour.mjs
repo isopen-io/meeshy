@@ -75,6 +75,22 @@ const appel = replique('amour.appel', { ko: '빗소리 들려? 빨리 네가 여
   ar: 'هل تسمع صوت المطر؟ لا أطيق الانتظار حتى تكون هنا ❤️',
 })
 
+// Le vocal que le partenaire envoie au lecteur (vitrine #8855, scène 1) : joué dans la langue du
+// lecteur, sa transcription défile. Sans marque de genre, comme les autres répliques. Trois phrases :
+// la piste jouée doit durer assez pour que la photo la prenne en pleine lecture (DUREE_MIN_VOCAL_MS).
+const vocalRecu = replique('amour.vocal.recu', {
+  ko: '하루 종일 네 목소리가 듣고 싶었어. 오늘 밤 창밖으로 도시의 불빛을 보면서 네 생각만 했어, 우리가 함께 할 모든 것들도. 12일 뒤에 공항에서 기다릴게.',
+  ja: '一日中、君の声が聞きたかった。今夜は窓から街の灯りを見ながら、君のことと、二人でやりたいことばかり考えてた。12日後、空港で待ってるね。',
+}, {
+  fr: 'Toute la journée, j’avais envie d’entendre ta voix. Ce soir, en regardant les lumières de la ville depuis ma fenêtre, je n’ai pensé qu’à toi et à tout ce qu’on va faire ensemble. Dans 12 jours, je t’attends à l’aéroport.',
+  en: 'All day long, I wanted to hear your voice. Tonight, watching the city lights from my window, I could only think of you and everything we’ll do together. In 12 days, I’ll be waiting for you at the airport.',
+  es: 'Todo el día quise oír tu voz. Esta noche, mirando las luces de la ciudad desde mi ventana, solo pensaba en ti y en todo lo que vamos a hacer juntos. En 12 días te espero en el aeropuerto.',
+  de: 'Den ganzen Tag wollte ich deine Stimme hören. Heute Abend habe ich beim Blick auf die Lichter der Stadt nur an dich gedacht und an alles, was wir zusammen machen werden. In 12 Tagen warte ich am Flughafen auf dich.',
+  it: 'Tutto il giorno ho voluto sentire la tua voce. Stasera, guardando le luci della città dalla finestra, ho pensato solo a te e a tutto quello che faremo insieme. Tra 12 giorni ti aspetto all’aeroporto.',
+  pt: 'O dia todo eu quis ouvir a sua voz. Hoje à noite, olhando as luzes da cidade pela janela, só pensei em você e em tudo o que a gente vai fazer junto. Daqui a 12 dias te espero no aeroporto.',
+  ar: 'طوال اليوم أردت أن أسمع صوتك. الليلة، وأنا أنظر إلى أضواء المدينة من نافذتي، لم أفكر إلا فيك وفي كل ما سنفعله معًا. بعد 12 يومًا سأنتظرك في المطار.',
+})
+
 // Messages écrits PAR le lecteur, accordés : une lectrice écrit à Min-jun, un lecteur à Aiko.
 const miens = {
   vueDemandee: {
@@ -105,7 +121,7 @@ const miens = {
 }
 
 export const AMOUR = {
-  repliques: [pense, vue, jours, vocalReaction, grandJour, minutes, table, appel],
+  repliques: [pense, vue, jours, vocalReaction, grandJour, minutes, table, appel, vocalRecu],
   pense,
   vue,
   jours,
@@ -114,6 +130,7 @@ export const AMOUR = {
   minutes,
   table,
   appel,
+  vocalRecu,
   miens,
   // Le vocal du LECTEUR, joué dans la langue du partenaire : la piste active et sa transcription.
   vocal: { duree: '0:09', ecoule: '0:04', progression: 0.45, transcription: { ko: '사랑해. 빨리 보고 싶어.', ja: '愛してる。早く会いたい。' } },

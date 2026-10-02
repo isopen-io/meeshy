@@ -344,7 +344,22 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // 280 → 279 (#8438) : le retrait d'un participant d'appel appelle enfin
 // `DELETE /calls/:callId/participants/:participantId` depuis le catalogue.
 // Valeur MESURÉE le 2026-09-28.
-const BASELINE_DEAD_ENTRIES = 279;
+// 279 -> 285 (#8876, 2026-09-30) : six entrées `AdminEndpoint` GÉNÉRÉES depuis
+// `route-manifest.json` pour la vue de Dieu de l'administration —
+// `.auditLogs`, `.trackingLinks`, `.trackingLinksByLinkId`, `.monitoring`,
+// `.communitiesByCommunityId` et `.communitiesByCommunityIdMembers`. Leur seul
+// appelant est la console d'administration WEB, comme leurs voisines
+// `AdminEndpoint` ; iOS n'a pas d'écran d'administration. Valeur MESURÉE le
+// 2026-09-30.
+// 285 -> 286 (#8906, fusion de `dev` dans la vue de Dieu, 2026-09-30) :
+// `AdminEndpoint.engagementScale` — le barème de points se règle depuis
+// l'administration WEB (`/admin/engagement-scale`) ; iOS n'a pas d'écran
+// d'administration du barème. Sa jumelle lecteur,
+// `ConversationsEndpoint.byIdEngagement`, est appelée par
+// `ConversationService.engagement(conversationId:)`. Les deux cliquets se
+// lisent ici sur le résultat de la fusion (chacun 279 de son côté : 285 et
+// 280), jamais sur l'un des deux parents. Valeur MESURÉE le 2026-09-30.
+const BASELINE_DEAD_ENTRIES = 286;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

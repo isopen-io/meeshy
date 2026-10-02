@@ -28,8 +28,12 @@ enum MiniAudioPlayerBarStyle {
 /// Mini-player flottant qui suit le `ConversationAudioCoordinator.shared`.
 ///
 /// Visibilité contrôlée par `coordinator.activeContext`. Pendant 5s après la fin de
-/// queue (`activeContext` → nil), conserve une copie du contexte (`graceContext`)
-/// pour animer un fade-out propre au lieu de disparaître instantanément.
+/// queue (`activeContext` → nil), conserve une copie du contexte (`graceContext`).
+///
+/// Ce que la barre doit afficher (`displayedContext`) ne passe à l'écran
+/// (`presentedContext`) que sous le mouvement des barres du haut (#9048) : elle descend
+/// du haut en arrivant, et remonte hors de l'écran en partant, le contenu de l'app la
+/// suivant dans la même transaction.
 ///
 /// Pure orchestration UX produit — kept app-side per SDK purity rule.
 ///
@@ -39,16 +43,27 @@ struct MiniAudioPlayerBar: View {
     /// Named magic numbers for the mini-player's grace-fade lifecycle.
     private enum Constants {
         /// Window during which the bar keeps showing the last-played context
-        /// after `activeContext` flips to nil. Allows a clean fade-out
-        /// animation rather than an instant pop.
+        /// after the queue runs out, before it slides away.
         static let graceDurationSeconds: TimeInterval = 5.0
         static let graceDurationNanos: UInt64 = UInt64(graceDurationSeconds * 1_000_000_000)
     }
 
     @ObservedObject private var coordinator: ConversationAudioCoordinator
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var graceContext: ActiveAudioContext?
     @State private var graceTask: Task<Void, Never>?
     @State private var lastObservedContext: ActiveAudioContext?
+    /// Ce qui est À L'ÉCRAN : `displayedContext`, rejoint sous le ressort des barres du
+    /// haut (#9048). Une animation posée sur la barre seule n'anime ni sa sortie (mesuré :
+    /// barre et bande partaient en une image) ni le contenu qu'elle libère — seul un
+    /// changement d'état fait sous `withAnimation` emporte les deux.
+    @State private var presentedContext: ActiveAudioContext?
+
+    /// `true` quand aucune barre d'appel n'est au-dessus : en partant, la barre sort alors
+    /// par le haut de l'écran ; sinon elle se range sous la barre d'appel.
+    private let isLastBar: Bool
+    /// L'encart haut, mesuré par la pile qui l'empile (`TopChromeInsetKey`).
+    private let topInset: CGFloat
 
     private let onTapBody: () -> Void
     private let routerForTesting: ((String) -> Void)?
@@ -75,6 +90,8 @@ struct MiniAudioPlayerBar: View {
          onTapBody: @escaping () -> Void = {},
          currentConversationId: @escaping () -> String? = { nil },
          onDisplayedContextChange: @escaping (ActiveAudioContext?) -> Void = { _ in },
+         isLastBar: Bool = true,
+         topInset: CGFloat = 0,
          routerForTesting: ((String) -> Void)? = nil) {
         self._coordinator = ObservedObject(
             wrappedValue: coordinatorForTesting ?? .shared
@@ -82,6 +99,8 @@ struct MiniAudioPlayerBar: View {
         self.onTapBody = onTapBody
         self.currentConversationId = currentConversationId
         self.onDisplayedContextChange = onDisplayedContextChange
+        self.isLastBar = isLastBar
+        self.topInset = topInset
         self.routerForTesting = routerForTesting
     }
 
@@ -116,40 +135,73 @@ struct MiniAudioPlayerBar: View {
     }
 
     var body: some View {
-        Group {
-            if let context = displayedContext {
+        VStack(spacing: 0) {
+            // L'ANCRE, de hauteur nulle (#9048) : un conteneur sans enfant n'installe aucun de
+            // ses modificateurs — ni `onAppear` ni `onChange`. Barre masquée, la barre doit
+            // pourtant suivre son contexte pour savoir QUAND entrer.
+            Color.clear.frame(height: 0)
+            if let context = presentedContext {
                 content(for: context)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(TopChromeBarMotion.transition(isLastBar: isLastBar, reduceMotion: reduceMotion, safeAreaTop: topInset))
             }
         }
-        // Animate on the *displayed* context so the bar fades in/out when
-        // the user enters/leaves the playing conversation, not only when
-        // the coordinator itself swaps the active audio.
-        .animation(.spring(response: 0.4, dampingFraction: 0.8),
-                   value: displayedContext)
+        .zIndex(TopChromeBarMotion.layer(isLastBar: isLastBar, isCall: false))
+        // Chaque entrée de `displayedContext` — le coordinateur, la conversation courante, la
+        // fermeture, la fin de la grâce — appelle `present` après avoir posé son état. Jamais un
+        // `onChange` sur `displayedContext` lui-même : à la fin d'une file, il verrait `nil`
+        // AVANT que la grâce ne soit posée, et ferait partir une barre qui doit rester.
         .adaptiveOnChange(of: coordinator.activeContext) { _, newValue in
             handleContextChange(newValue)
+            present(displayedContext)
         }
-        // Sur `displayedContext`, pas sur `activeContext` : c'est la valeur
-        // AFFICHÉE qui doit gouverner la bande du haut (#6579) — masquage dans
-        // la conversation qui joue et fenêtre de grâce compris.
-        .adaptiveOnChange(of: displayedContext) { _, newValue in
-            onDisplayedContextChange(newValue)
+        .adaptiveOnChange(of: currentConversationId()) { _, _ in
+            present(displayedContext)
+        }
+        // Une fermeture pendant la grâce d'une file épuisée (#8983) : `activeContext` y vaut déjà
+        // `nil`, donc seul ce passage à `.fermee` dit à la barre de partir — grâce comprise.
+        .adaptiveOnChange(of: coordinator.derniereFin) { _, fin in
+            guard fin == .fermee else { return }
+            graceTask?.cancel()
+            graceTask = nil
+            graceContext = nil
+            present(displayedContext)
         }
         .onAppear {
             lastObservedContext = coordinator.activeContext
-            onDisplayedContextChange(displayedContext)
+            presentedContext = displayedContext
+            onDisplayedContextChange(presentedContext)
+        }
+    }
+
+    /// Fait rejoindre l'écran à ce que la barre doit afficher, sous le ressort des barres du
+    /// haut, et remonte la valeur AFFICHÉE à l'hôte, qui peint la bande en conséquence (#6579).
+    /// Les deux dans la MÊME transaction : la bande part et arrive avec sa barre.
+    private func present(_ target: ActiveAudioContext?) {
+        guard target != presentedContext else { return }
+        withAnimation(TopChromeBarMotion.animation(reduceMotion: reduceMotion)) {
+            presentedContext = target
+            onDisplayedContextChange(target)
         }
     }
 
     private func handleContextChange(_ newValue: ActiveAudioContext?) {
         if newValue == nil {
-            // Fin de queue : capture le dernier contexte pour le fade.
-            graceContext = lastObservedContext
             graceTask?.cancel()
+            graceTask = nil
+            // La croix ferme sur le champ (#8983) : seule une file épuisée garde la barre. Et
+            // seulement une barre À L'ÉCRAN : masquée dans la conversation qui joue, il n'y a
+            // rien à garder.
+            guard coordinator.derniereFin == .epuisee, presentedContext != nil else {
+                graceContext = nil
+                lastObservedContext = nil
+                return
+            }
+            graceContext = lastObservedContext
             graceTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: Constants.graceDurationNanos)
-                if !Task.isCancelled { graceContext = nil }
+                guard !Task.isCancelled else { return }
+                graceContext = nil
+                present(displayedContext)
             }
         } else {
             graceContext = nil
@@ -161,12 +213,12 @@ struct MiniAudioPlayerBar: View {
 
     @ViewBuilder
     private func content(for context: ActiveAudioContext) -> some View {
-        HStack(spacing: 10) {
+        HStack(spacing: MeeshySpacing.smPlus) {
             // Now-playing cluster (avatar + track meta + progress). Tapping it
             // opens the source conversation — so VoiceOver exposes it as a single
             // button rather than as disconnected monogram / name / percent
             // fragments, and the whole-card tap action stays reachable non-visually.
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 // Avatar conv. Le fond de la barre étant lui-même indigo
                 // plein, le placeholder ne peut plus être un dégradé indigo —
                 // il s'y fondrait. Voile blanc translucide : il se détache du
@@ -242,18 +294,21 @@ struct MiniAudioPlayerBar: View {
                         .font(.caption.weight(.bold))
                         .foregroundColor(MiniAudioPlayerBarStyle.secondaryForeground)
                         .frame(width: 44, height: 44)
+                        // Tout le cadre se touche (#8983) : sa partie transparente tombait sur
+                        // le corps de la barre, qui ouvre la conversation au lieu de fermer.
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "mini_player.close", defaultValue: "Fermer le lecteur", bundle: .main))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.smPlus)
         // Les 6 pt de respiration sont ABSORBÉS par le bandeau (#6579) : posés
         // APRÈS `.background`, ils laissaient une couture de 6 pt non teintés
         // entre la bande du haut et l'aplat de la barre. Posés avant, ils sont
         // peints de la même couleur — la respiration reste, la couture non.
-        .padding(.top, 6)
+        .padding(.top, MeeshySpacing.xsPlus)
         // Bandeau INDIGO PLEIN, à angles droits, pleine largeur (retour user
         // 2026-08-13). La capsule glass d'avant flottait au-dessus du contenu
         // et empruntait sa couleur au fond : à ce point de montage — le bloc

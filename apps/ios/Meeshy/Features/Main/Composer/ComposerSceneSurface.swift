@@ -527,7 +527,7 @@ struct ComposerSceneSurface: View {
                                 badges: railBadges)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, ComposerRailGeometry.outerMargin)
-                .padding(.bottom, 4)
+                .padding(.bottom, MeeshySpacing.xs)
         )
     }
 
@@ -544,7 +544,7 @@ struct ComposerSceneSurface: View {
             descriptionPanel
                 .padding(.horizontal, ComposerRailGeometry.descriptionInset(roomy: isRoomy,
                                                                              cardLeading: sceneCardLeading))
-                .padding(.bottom, 10)
+                .padding(.bottom, MeeshySpacing.smPlus)
         }
     }
 
@@ -703,7 +703,7 @@ struct ComposerSceneSurface: View {
         EmbeddedSceneCanvas(
             slide: $slide,
             aspectRatio: aspectRatio,
-            cornerRadius: 22,
+            cornerRadius: MeeshyRadius.xlPlus,
             // **Le dessin se pose DANS la carte, pas sur le cadre** (#4515) : un
             // trait hors du canvas est perdu à la publication.
             canvasOverlay: drawingSurface,
@@ -816,7 +816,7 @@ struct ComposerSceneSurface: View {
                                      onEdit: onEditBackgroundSound,
                                      onDelete: onDeleteBackgroundSound,
                                      onPromote: onPromoteBackgroundSound)
-                .padding(.top, 4)
+                .padding(.top, MeeshySpacing.xs)
 
             freeZone
 
@@ -864,11 +864,11 @@ struct ComposerSceneSurface: View {
                 // d'objet (directive porteur 2026-09-27).
                 if let toolOptions {
                     toolOptions
-                        .padding(10)
-                        .adaptiveGlass(in: RoundedRectangle(cornerRadius: 22, style: .continuous),
+                        .padding(MeeshySpacing.smPlus)
+                        .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous),
                                        tint: plateauTint.opacity(0.55))
                         .padding(.horizontal, ComposerRailGeometry.outerMargin)
-                        .padding(.bottom, 6)
+                        .padding(.bottom, MeeshySpacing.xsPlus)
                 }
             case .band(let ouverte):
                 // Sur grand écran, la bande flotte en CARTE à côté du rail droit

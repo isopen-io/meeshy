@@ -46,6 +46,11 @@ public final class JoinFlowViewModel: ObservableObject {
     // MARK: - Private
 
     private let shareLinkService = ShareLinkService.shared
+    #if DEBUG
+    /// Vitrine App Store (#8855, DEBUG uniquement) : prévenue quand l'aperçu d'un lien est servi,
+    /// pour que la capture attende l'accueil RENDU (#8921). `nil` hors vitrine.
+    nonisolated(unsafe) public static var debugOnPreviewShown: (@MainActor @Sendable () -> Void)?
+    #endif
     private let identifier: String
     public let entry: Entry
 
@@ -66,6 +71,9 @@ public final class JoinFlowViewModel: ObservableObject {
             let info = try await shareLinkService.getLinkInfo(identifier: identifier)
             linkInfo = info
             phase = entry == .anonymousForm ? .form : .preview
+            #if DEBUG
+            if phase == .preview { Self.debugOnPreviewShown?() }
+            #endif
         } catch let error as MeeshyError {
             let message: String
             switch error {

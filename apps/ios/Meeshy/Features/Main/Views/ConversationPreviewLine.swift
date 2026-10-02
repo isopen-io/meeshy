@@ -141,7 +141,7 @@ struct ConversationPreviewLine: View {
 
     @ViewBuilder
     private func line(_ preview: ConversationPreview, at now: Date) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: MeeshySpacing.xsPlus) {
             styledText(preview, at: now)
                 .lineLimit(lineLimit)
             if preview.offersJoin, let onJoin {
@@ -149,8 +149,8 @@ struct ConversationPreviewLine: View {
                     Text(String(localized: "call.header.rejoin", defaultValue: "Rejoindre", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                         .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, MeeshySpacing.smPlus)
+                        .padding(.vertical, MeeshySpacing.xs)
                         .background(Capsule().fill(MeeshyColors.success))
                 }
                 .buttonStyle(.plain)
@@ -250,7 +250,7 @@ struct ConversationPreviewLine: View {
         case .forward?: return "arrowshape.turn.up.right"
         case .viewOnce?: return MessageProtectionSymbols.viewOnce
         case .ephemeral?: return MessageProtectionSymbols.ephemeral
-        case .expired?: return "timer.badge.xmark"
+        case .expired?: return MessageProtectionSymbols.expired
         case .hidden?: return MessageProtectionSymbols.blurred
         case .encrypted?: return "lock.fill"
         }

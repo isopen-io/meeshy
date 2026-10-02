@@ -27,7 +27,7 @@ struct LentilleConversationRow: View {
     var isDragging: Bool = false
     var presenceState: PresenceState = .offline
     /// Le pair a l'écran de CETTE conversation ouvert (#8892).
-    var isPeerHere: Bool = false
+    var isPeerHere: ConversationHere = .absent
     var onViewStory: (() -> Void)? = nil
     var onViewProfile: (() -> Void)? = nil
     var onViewConversationInfo: (() -> Void)? = nil
@@ -116,7 +116,7 @@ struct LentilleConversationRow: View {
         HStack(alignment: .center, spacing: MeeshySpacing.md) {
             avatarView
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 if let magnification {
                     LentilleMagnifiedTopLine(
                         conversation: conversation,
@@ -157,7 +157,7 @@ struct LentilleConversationRow: View {
                 RoundedRectangle(cornerRadius: 1.5, style: .continuous)
                     .fill(accent)
                     .frame(width: 3)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, MeeshySpacing.xsPlus)
             }
         }
         .contentShape(Rectangle())
@@ -351,6 +351,16 @@ struct LentilleConversationRow: View {
 
             Spacer(minLength: 0)
 
+            // La série « 🔥4 · 120 » en rouge, juste avant l'heure (#9025) —
+            // masquée sur la rangée en focus pour le moment (directive porteur
+            // 2026-10-01), où la pastille « N (M) » ne se pose plus non plus.
+            if magnification == nil {
+                ConversationStreakMarkHost(
+                    conversationId: conversation.id,
+                    seed: conversation.viewerEngagement
+                )
+            }
+
             // Le glyphe d'outbox a quitté cette ligne en amont (amendement
             // L09 : « l'outbox continue de renvoyer, sans affordance de
             // liste ») — la magnification ne le rétablit pas. Elle n'ajoute
@@ -393,7 +403,7 @@ struct LentilleConversationRow: View {
     /// au rang plat du `tagsRow` historique (capsules de texte, en propre
     /// ligne) : ici de simples points colorés, inline, jamais une carte.
     private var tagPastilles: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(conversation.tags.prefix(LentilleMetrics.Tags.maxCount)) { tag in
                 Circle()
                     .fill(Color(hex: tag.color))
@@ -433,7 +443,7 @@ struct LentilleConversationRow: View {
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
                 .foregroundColor(.white)
                 .padding(.horizontal, MeeshySpacing.sm)
-                .padding(.vertical, 3)
+                .padding(.vertical, MeeshySpacing.xxs)
                 .background(Capsule(style: .continuous).fill(accent))
         }
         .buttonStyle(.plain)
@@ -476,7 +486,7 @@ struct LentilleConversationRow: View {
     }
 
     private var typingLine: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             Text(typingUsername.map { name in
                 String(format: String(localized: "typing.named", bundle: .main), name)
             } ?? String(localized: "typing.anonymous", bundle: .main))
@@ -489,7 +499,7 @@ struct LentilleConversationRow: View {
     }
 
     private func draftLine(_ draft: DraftSummary) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Text(draft.previewText.isEmpty
                 ? String(localized: "draft.label", bundle: .main)
                 : String(localized: "draft.label_prefix", bundle: .main))
@@ -573,7 +583,7 @@ extension LentilleConversationRow: @MainActor Equatable {
 private struct LentilleRowAvatar: View {
     let conversation: Conversation
     let presenceState: PresenceState?
-    let isPeerHere: Bool
+    let isPeerHere: ConversationHere
     let storyRingState: StoryRingState
     let moodStatus: StatusEntry?
     var onViewStory: (() -> Void)? = nil
@@ -633,8 +643,8 @@ private struct LentilleRowAvatar: View {
             // dot de présence agrégée qu'un DM. `presenceState` porte déjà
             // `.offline` = aucun dot (contrat §4.3 « offline = aucun dot »,
             // verrouillé par MeeshyAvatar, pas ici).
-            presenceState: moodStatus == nil ? presenceState : nil,
-            isHere: isDirect && isPeerHere,
+            presenceState: presenceState,
+            isHere: isDirect ? isPeerHere : .absent,
             onTap: isDirect ? onViewProfile : onViewConversationInfo,
             onViewProfile: nil,
             onViewStory: (isDirect && storyRingState != .none) ? onViewStory : nil,
@@ -680,7 +690,7 @@ private struct LentilleTypingDots: View {
     @State private var isAnimating = false
 
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: MeeshySpacing.xxs) {
             ForEach(0..<3, id: \.self) { i in
                 Circle()
                     .fill(Color(hex: accentColorHex))
@@ -722,7 +732,7 @@ private struct LentilleLiveCallBadge: View {
     private var accent: Color { Color(hex: accentColorHex) }
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: MeeshySpacing.xs) {
             Circle()
                 .fill(accent)
                 .frame(width: LentilleMetrics.Tags.size, height: LentilleMetrics.Tags.size)

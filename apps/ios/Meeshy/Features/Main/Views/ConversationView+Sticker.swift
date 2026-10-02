@@ -33,6 +33,17 @@ extension ConversationView {
         sendTemplateSticker(template, slots: ConversationStickerRendering.locationSlots(for: place))
     }
 
+    /// Mee ou Meo (#9053) : la première image du film en PNG — le repli des
+    /// clients qui ne le redessinent pas — et `templateId: "mee.<id>"`, que le
+    /// web et iOS rejouent animé. Le contrat est celui du web.
+    func sendMeeSticker(_ mee: MeeSticker) {
+        guard let image = MeeStickerCatalog.stillImage(mee) else {
+            sendEmojiSticker(mee.emoji)
+            return
+        }
+        sendStickerImage(image, sticker: mee.messageSticker)
+    }
+
     /// « Mes stickers » : le PNG collé EST le sticker — aucun gabarit à
     /// redessiner, donc `sticker: nil` et une image ordinaire.
     func sendLibrarySticker(_ item: StoryStickerLibraryItem) {

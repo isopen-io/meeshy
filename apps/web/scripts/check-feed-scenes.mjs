@@ -686,7 +686,7 @@ async function fullscreenInvariants(viewport) {
    * capsule de synchronisation) ne couvrait pas les plein écran. Il y est
    * porté, aux DEUX gabarits que cette fonction joue déjà.
    */
-  const porte = await confinementDe(page, '[data-scene-fullscreen] .media-viewer-close', { nom: 'la croix du plein écran de scène' });
+  const porte = await confinementDe(page, '[data-scene-fullscreen] [data-viewer-exit="close"]', { nom: 'la croix du plein écran de scène' });
   check(porte.ok, `[${viewport.width}×${viewport.height}] #7040 : ${porte.message}`);
 
   const ratioCard = sceneBoxBefore.width / sceneBoxBefore.height;
@@ -845,18 +845,18 @@ for (const [asked, expected] of [
   const during = Number(await page.getAttribute(SCRUB, 'aria-valuenow'));
   await page.mouse.up();
   check(Math.abs(during - 75) <= 3, `#8598 : glisser le curseur doit pointer 75 % (reçu ${during})`);
-  const corridorAfterScrub = await page.evaluate((s) => document.querySelector(s).closest('.media-viewer-chrome').style.opacity, SCRUB);
-  check(corridorAfterScrub === '1', `#8598 : glisser le curseur ne doit PAS basculer le plein cadre (opacité du couloir ${corridorAfterScrub})`);
+  const corridorAfterScrub = await page.evaluate((s) => document.querySelector(s).closest('[data-viewer-bottom-bar]').getAttribute('data-chrome-yields'), SCRUB);
+  check(corridorAfterScrub === 'shown', `#8598 : glisser le curseur ne doit PAS basculer le plein cadre (couloir ${corridorAfterScrub})`);
 
   await page.mouse.click(195, 400);
   await page
-    .waitForFunction((s) => getComputedStyle(document.querySelector(s).closest('.media-viewer-chrome')).opacity === '0', SCRUB, { timeout: 1500 })
+    .waitForFunction((s) => getComputedStyle(document.querySelector(s).closest('[data-viewer-bottom-bar]')).opacity === '0', SCRUB, { timeout: 1500 })
     .catch(() => undefined);
   const full = await page.evaluate((s) => {
-    const corridor = document.querySelector(s).closest('.media-viewer-chrome');
-    return { opacity: getComputedStyle(corridor).opacity, pointer: getComputedStyle(corridor).pointerEvents };
+    const corridor = document.querySelector(s).closest('[data-viewer-bottom-bar]');
+    return { opacity: getComputedStyle(corridor).opacity, inert: corridor.inert };
   }, SCRUB);
-  check(full.opacity === '0' && full.pointer === 'none', `#8598 : en plein cadre, le curseur s'efface avec le chrome (opacité ${full.opacity}, pointeur ${full.pointer})`);
+  check(full.opacity === '0' && full.inert, `#8598 : en plein cadre, le curseur s'efface avec le chrome (opacité ${full.opacity}, inerte ${full.inert})`);
 
   check(pageErrors.length === 0, `#8598 : ${pageErrors.length} erreur(s) de page — ${pageErrors.slice(0, 3).join(' | ')}`);
   await context.close();

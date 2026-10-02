@@ -10,6 +10,7 @@ import esPassword from './catalog-es-password';
 import esAccounts from './catalog-es-accounts';
 import esCall from './catalog-es-call';
 import esRowActions from './catalog-es-row-actions';
+import esEngagement from './catalog-es-engagement';
 import esCallShell from './catalog-es-call-shell';
 import esCallJoin from './catalog-es-call-join';
 import esCallDecline from './catalog-es-call-decline';
@@ -35,6 +36,7 @@ import esCommentRow from './catalog-es-comment-row';
 import esContactDiscovery from './catalog-es-contact-discovery';
 import esDownload from './catalog-es-download';
 import esPhonePrompt from './catalog-es-phone-prompt';
+import esUserProfile from './catalog-es-user-profile';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -227,6 +229,7 @@ const es = {
   ...esAccounts,
   ...esCall,
   ...esRowActions,
+  ...esEngagement,
   ...esCallShell,
   ...esCallJoin,
   ...esCallDecline,
@@ -238,7 +241,6 @@ const es = {
   ...esCallCaptions,
   ...esCallRecording,
   ...esSignup,
-  'userProfile.self.edit': 'Editar mi perfil',
   'report.title': 'Denunciar esta cuenta',
   'report.body': 'Elija el motivo de su denuncia. Nuestro equipo de moderación la recibirá.',
   'report.action': 'Denunciar',
@@ -283,6 +285,7 @@ const es = {
   'notifications.category.reactions': 'Reacciones',
   'notifications.category.mentions': 'Menciones',
   'notifications.category.social': 'Social',
+  'notifications.category.engagement': 'Participación',
   'notifications.category.contacts': 'Contactos',
   'notifications.category.groups': 'Grupos',
   'notifications.category.calls': 'Llamadas',
@@ -501,6 +504,7 @@ const es = {
   'settings.save.error': 'El ajuste no se guardó.',
   'settings.theme.sync_error': 'Tema aplicado en este dispositivo, sin sincronizar.',
   'common.cancel': 'Cancelar',
+  'common.close': 'Cerrar',
 
   'media.video.play': 'Reproducir vídeo',
   'media.video.pause': 'Pausa',
@@ -653,51 +657,6 @@ const es = {
   'discover.announce.unblockFailed': 'No se pudo desbloquear',
   'discover.announce.offline': 'Sin conexión: no se envió nada.',
 
-  'userProfile.title': 'Perfil',
-  'userProfile.loading': 'Cargando el perfil',
-  'userProfile.section.publications': 'PUBLICACIONES',
-  'userProfile.section.relation': 'CONEXIÓN',
-  'userProfile.section.conversations': 'CONVERSACIONES',
-  'userProfile.conversations.empty': 'Ninguna conversación en común',
-  'userProfile.conversations.emptyBody': 'Todavía nada os une: «Escribir» abre la primera.',
-  'userProfile.conversations.error': 'No se pudieron cargar las conversaciones',
-  'userProfile.conversations.loading': 'Cargando las conversaciones',
-  'userProfile.refused.title': 'Este perfil no está disponible',
-  'userProfile.refused.body': 'No existe, o no tienes acceso.',
-  'userProfile.throttled.title': 'Demasiadas solicitudes',
-  'userProfile.throttled.body': 'Inténtalo de nuevo en un momento.',
-  'userProfile.error.title': 'No se pudo cargar este perfil',
-  'userProfile.error.body': 'Inténtalo de nuevo en un momento.',
-  'userProfile.offline.body': 'El perfil aparecerá al volver a conectarte.',
-  'userProfile.posts.empty': 'Sin publicaciones',
-  'userProfile.posts.emptyBody': 'Todavía no hay nada público que leer.',
-  'userProfile.posts.emptyPosts': 'Ninguna publicación aquí',
-  'userProfile.posts.emptyReels': 'Ningún reel aquí',
-  'userProfile.posts.emptyFilter': 'Toca de nuevo la casilla para volver a verlo todo.',
-  'userProfile.posts.error': 'No se pudieron cargar las publicaciones',
-  'userProfile.posts.loadMore': 'Cargar más',
-  'userProfile.posts.loaded': 'Publicaciones añadidas: {count}',
-  'userProfile.posts.loadedNone': 'No hay más publicaciones que mostrar',
-  'userProfile.posts.loading': 'Cargando…',
-  'userProfile.stat.posts': 'Publicaciones',
-  'userProfile.stat.reels': 'Reels',
-  'userProfile.stat.stories': 'Historias',
-  'userProfile.stat.filterLabel': 'Filtrar por {name}',
-  'userProfile.stat.filterClear': 'Mostrar todo',
-  'userProfile.context.received': '{name} quiere conectar contigo. Acepta para intercambiar mensajes.',
-  'userProfile.context.sent': 'Enviaste una solicitud de conexión a {name}. A la espera de su respuesta.',
-  'userProfile.action.write': 'Escribir',
-  'userProfile.action.writeLabel': 'Escribir a {name}',
-  'userProfile.action.block': 'Bloquear',
-  'userProfile.action.blockLabel': 'Bloquear a {name}',
-  'userProfile.blocked.title': 'Has bloqueado a esta persona',
-  'userProfile.blocked.body': 'Sus publicaciones y estadísticas quedan ocultas mientras dure el bloqueo.',
-  'userProfile.signin.title': 'Inicia sesión para conectar',
-  'userProfile.signin.body': 'Las solicitudes de conexión y los mensajes requieren una cuenta.',
-  'userProfile.signin.cta': 'Iniciar sesión',
-  'userProfile.announce.blocked': 'Persona bloqueada',
-  'userProfile.announce.blockFailed': 'No se pudo bloquear',
-  'userProfile.announce.writeFailed': 'No se pudo abrir la conversación',
 
   'a11y.floating.rung.discover.requests.one': 'Descubrir, {count} solicitud recibida',
   'a11y.floating.rung.discover.requests.other': 'Descubrir, {count} solicitudes recibidas',
@@ -1165,6 +1124,7 @@ const es = {
   ...esQuote,
   ...esCommentRow,
   ...esContactDiscovery,
+  ...esUserProfile,
 } satisfies InterfaceCatalog;
 
 export default es;

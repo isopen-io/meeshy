@@ -1,10 +1,14 @@
 import { FeedMediaSurface } from './feed-media-surface';
 import { FeedMosaicFrame } from './feed-mosaic-frame';
+import { ViewerCaption } from './viewer-caption';
 import type { FeedCardMedia } from '@/lib/feed/card-model';
 import { captionWordLimit, tileCarriesCaption, type MosaicTile, type TiledLayoutMode } from '@/lib/feed/mosaic-layout';
 import { truncateWords } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+
+/** Le voile sous une légende posée sur un média — carrousel et mosaïque. */
+export const CAPTION_SCRIM = { background: 'linear-gradient(to top, var(--color-scrim-strong), transparent)' } as const;
 
 function MosaicTileMedia({
   tile,
@@ -27,20 +31,18 @@ function MosaicTileMedia({
     <>
       <FeedMediaSurface media={item} playable />
       {caption !== undefined ? (
-        <p
-          /* MARQUÉE pour être mesurable (#6864) — la légende était le seul
-             élément de cette tuile sans attribut, alors que la tuile et le
-             « +N » en portent un. Un gate qui la ciblerait par `p` mesurerait
-             le premier paragraphe venu ; `captionOrigin` dit d'OÙ elle vient,
-             et c'est ce que la recette doit pouvoir lire à l'écran plutôt que
-             dans le modèle. */
-          data-feed-mosaic-caption={item.captionOrigin ?? 'media'}
-          className="absolute inset-x-0 bottom-0 px-2 py-1.5 text-check text-white"
-          style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }}
-          {...(item.captionLanguage !== undefined ? { lang: item.captionLanguage } : {})}
-        >
-          {caption}
-        </p>
+        /* MARQUÉE pour être mesurable (#6864) — `captionOrigin` dit d'OÙ
+           vient la légende, et c'est ce que la recette doit pouvoir lire à
+           l'écran plutôt que dans le modèle. Ses adresses s'ouvrent par `/l/`
+           (#9074, `ViewerCaption`). */
+        <ViewerCaption
+          probe={{ 'data-feed-mosaic-caption': item.captionOrigin ?? 'media' }}
+          text={caption}
+          trackingLinks={item.trackingLinks}
+          className="absolute inset-x-0 bottom-0 px-2 py-1.5 text-check text-on-media"
+          style={CAPTION_SCRIM}
+          lang={item.captionLanguage}
+        />
       ) : null}
     </>
   );

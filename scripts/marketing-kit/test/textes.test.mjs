@@ -3,6 +3,7 @@ import { LEGENDES } from '../textes/legendes.mjs'
 import { KIT_TEXTES } from '../textes/kit.mjs'
 import { DEMO } from '../textes/demo.mjs'
 import { KIT_LANGS } from '../lib/locales.mjs'
+import { AMOUR } from '../textes/amour.mjs'
 
 const graphemes = (s) => [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(s)].length
 
@@ -14,8 +15,8 @@ const toutesLesChaines = (valeur) => {
 }
 
 describe('légendes App Store L1-L12 (captures-app-store.md § 4, #8825)', () => {
-  test('douze légendes, chacune dans les sept langues du kit', () => {
-    expect(Object.keys(LEGENDES)).toEqual(['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9', 'L10', 'L11', 'L12'])
+  test('treize légendes, chacune dans les sept langues du kit', () => {
+    expect(Object.keys(LEGENDES)).toEqual(['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9', 'L10', 'L11', 'L12', 'L13'])
     for (const legende of Object.values(LEGENDES)) {
       expect(Object.keys(legende).sort()).toEqual([...KIT_LANGS].sort())
     }
@@ -87,5 +88,19 @@ describe('contenus de démo (captures-app-store.md § 6)', () => {
       KIT_LANGS.filter((lang) => !parLangue[lang]).map((lang) => `${cle}/${lang}`),
     )
     expect(manquants).toEqual([])
+  })
+})
+
+describe('vitrine #8855, lot 2 — le vocal reçu et la légende d’Imagine', () => {
+  test('le vocal que reçoit le lecteur existe dans les deux langues du partenaire, traduit dans les sept', () => {
+    expect(AMOUR.repliques).toContain(AMOUR.vocalRecu)
+    for (const lang of ['ko', 'ja']) {
+      expect(AMOUR.vocalRecu[lang].lang).toBe(lang)
+      expect(Object.keys(AMOUR.vocalRecu[lang].translations).sort()).toEqual([...KIT_LANGS].sort())
+    }
+  })
+
+  test('Imagine a sa légende', () => {
+    expect(LEGENDES.L13.fr).toBe('Un message. Une image. Sa langue.')
   })
 })

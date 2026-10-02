@@ -51,23 +51,29 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
         XCTAssertTrue(primary.contains("onToggleSpeaker()"))
     }
 
-    func test_callView_injectsTheSingleInteractionDoor() throws {
+    /// #8978 — un appui n'écrit plus aucun état de la racine : la porte ne garde que le rallumage
+    /// pendant le fondu. Écrire un compteur de touchers à chaque doigt posé ou levé recalculait tout
+    /// l'écran d'appel deux fois par appui, dans les images où le bouton doit montrer son enfoncement.
+    func test_callView_injectsTheSingleInteractionDoor_andAPressWritesNoRootState() throws {
         let unit = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
         XCTAssertEqual(unit.components(separatedBy: ".environment(\\.callChromeInteraction,").count - 1, 1,
                        "UNE porte, posée à la racine de l'écran d'appel")
         XCTAssertTrue(unit.contains(".environment(\\.callChromeInteraction, { noteChromeInteraction($0) })"))
         let note = try block("func noteChromeInteraction(_ interaction: CallChromeInteraction) {", until: "\n    }\n", in: unit)
-        XCTAssertTrue(note.contains("chromeTouches = chromeTouches.noting(interaction)"))
         XCTAssertTrue(note.contains("interaction.revealsChrome"))
+        XCTAssertFalse(unit.contains("chromeTouches"), "Aucun état de la racine ne compte les touchers")
     }
 
-    func test_autoHide_isKeyedOnEveryInteraction_andNeverFallsUnderAFinger() throws {
-        let connected = try view("CallView+Connected.swift")
-        XCTAssertTrue(connected.contains(".task(id: AutoHideKey(isVisible: showControls, layer: layer, interactionRevision: chromeTouches.revision))"))
-        XCTAssertTrue(connected.contains("isTouching: chromeTouches.isTouching"))
-        let task = try block(".task(id: AutoHideKey(", until: ".task(id: callManager.isVideoEnabled)", in: connected)
-        XCTAssertEqual(task.components(separatedBy: "mayAutoHideNow").count - 1, 2,
-                       "La règle se relit au réveil : un doigt posé pendant l'attente retient le masquage")
+    /// #8978 — aucun minuteur ne cache les contrôles : un toucher sur l'écran les cache, un autre
+    /// les remet. Le masquage au bout de 4 s les retirait sous le doigt de qui cherchait une option.
+    func test_noTimerHidesTheControls_onlyATapTogglesThem() throws {
+        let unit = AppSourceGuard.stripComments(try AppSourceGuard.callViewSource())
+        for minuterie in ["AutoHideKey", "autoHideDelay", "mayAutoHideNow", "shouldAutoHideControls"] {
+            XCTAssertFalse(unit.contains(minuterie), "Le masquage minuté est revenu : \(minuterie)")
+        }
+        let toggle = try block("func toggleControls() {", until: "\n    }\n", in: unit)
+        XCTAssertTrue(toggle.contains("CallChromeVisibility.mayToggleByTap(isVideoStage: isVideoStage)"))
+        XCTAssertTrue(toggle.contains("showControls.toggle()"))
     }
 
     func test_pillRows_reportTheirScrolling_andFlickFreely() throws {

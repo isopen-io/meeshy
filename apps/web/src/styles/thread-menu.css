@@ -59,19 +59,21 @@
   }
 }
 
-/* LE RAIL — capsule, entrée en vague ATTENUÉE (`scale` seul, jamais un
-   décalage de position — les seules propriétés qui n'invalident PAS le
-   layout, même discipline que la Lentille/la scène du fil). */
+/* LE RAIL — SANS CAPSULE (directive porteur 2026-10-01, #9043 — « enlever le
+   cadre comme pour les story ») : la story pose la même rangée NUE sur sa
+   scène (`FullscreenReactionStrip`, `chrome: .none`) ; ici le voile est la
+   scène. Entrée en vague ATTENUÉE (`scale` seul, jamais un décalage de
+   position — les seules propriétés qui n'invalident PAS le layout). */
 .message-menu-rail {
   display: flex;
   align-items: center;
+  /* La bande s'allonge de ×1,4 (#9043, `RAIL_LENGTH_FACTOR`) sans grossir ses
+     tuiles : l'espace gagné se répartit entre elles. */
+  justify-content: space-between;
   /* `gap` posé en STYLE INLINE par `message-menu.tsx` (`RAIL_TILE_GAP`,
      `message-menu-metrics.ts`) — jamais un second `10px` écrit ici. */
-  border-radius: var(--radius-pill, 999px);
   padding: 9px 8px;
-  background-color: var(--color-ios-card);
-  border: 1px solid var(--color-edge);
-  box-shadow: var(--shadow-cast, 0 8px 24px rgba(0, 0, 0, 0.24));
+  color: var(--color-on-media);
   animation: messageMenuRailIn 260ms cubic-bezier(0.32, 1.4, 0.55, 1);
 }
 
@@ -89,7 +91,8 @@
 /* LA LISTE D'ACTIONS — même chrome que `RowActions`/`ReadingModeChip`
    (`app.css`, `rounded-card`+`shadow-cast`), ancrée en HAUT (les nouvelles
    lignes qui apparaissent en changeant de panneau — le sous-menu Traduire —
-   poussent vers le BAS, jamais vers le haut). */
+   poussent vers le BAS, jamais vers le haut). #9043 ne retire le cadre qu'au
+   RAIL : la liste garde sa carte, et le glissement vers le haut la remonte. */
 .message-menu-list {
   border-radius: var(--radius-card, 14px);
   overflow: hidden;
@@ -101,6 +104,13 @@
 }
 .message-menu-list > button + button {
   border-top: 1px solid var(--color-edge);
+}
+
+/* LA SURFACE DU GLISSEMENT (#9043) — tout le voile : glisser vers le haut y
+   réduit l'aperçu, un toucher y ferme. `touch-action: none` : le doigt pilote
+   la réduction, jamais un défilement du document. */
+.message-menu-drag-surface {
+  touch-action: none;
 }
 
 @keyframes messageMenuListIn {
@@ -152,5 +162,67 @@
   .message-menu-cluster {
     -webkit-user-select: none;
     user-select: none;
+  }
+}
+
+/*
+ * L'ICÔNE « RÉPONDRE » DU POINTEUR FIN (#8899, `message-swipe.tsx`) — là où
+ * le glissé n'existe pas. ABSENTE sans pointeur fin (doigt, coque Android) :
+ * `display: none` retire aussi la halte de tabulation. Au pointeur fin, elle
+ * reste dans l'ordre du clavier et ne se MONTRE qu'au survol de la rangée ou
+ * au focus — une cible de 44 px, un disque de 32 px, au bord LIBRE
+ * (`data-edge`) : après le contenu d'un message reçu, avant celui d'un envoyé.
+ */
+.message-swipe-reply {
+  display: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .message-swipe-reply {
+    position: absolute;
+    top: 50%;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin-top: -22px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 120ms ease-out;
+  }
+  .message-swipe-reply[data-edge='end'] {
+    inset-inline-end: 4px;
+  }
+  .message-swipe-reply[data-edge='start'] {
+    inset-inline-start: 4px;
+  }
+  .message-swipe:hover > .message-swipe-reply,
+  .message-swipe:focus-within > .message-swipe-reply,
+  [data-row]:focus-visible .message-swipe-reply {
+    opacity: 1;
+  }
+  .message-swipe-reply-disc {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 9999px;
+    color: var(--color-ios-ink-2);
+    background: var(--color-ios-card);
+    border: 0.5px solid var(--color-ios-separator);
+  }
+  .message-swipe-reply:hover .message-swipe-reply-disc,
+  .message-swipe-reply:focus-visible .message-swipe-reply-disc {
+    color: var(--color-ios-brand);
+  }
+  .message-swipe-reply:focus-visible {
+    outline: none;
+  }
+  .message-swipe-reply:focus-visible .message-swipe-reply-disc {
+    outline: 2px solid var(--color-ios-brand);
+    outline-offset: 2px;
   }
 }

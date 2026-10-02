@@ -64,7 +64,7 @@ final class SignupPhoneLaterGuardTests: XCTestCase {
         XCTAssertTrue(button.contains("viewModel.skipPhone()"), "même action qu'avant")
         XCTAssertTrue(button.contains("focusedField = .email"), "le focus part sur l'e-mail")
         XCTAssertTrue(button.contains("auth.signup.phone.later"), "libellé « Plus tard »")
-        XCTAssertTrue(button.contains("Image(systemName: \"arrow.right\")"),
+        XCTAssertTrue(button.contains("Image(systemName: \"arrow.forward\")"),
                       "la flèche est un symbole système, retourné automatiquement en RTL")
         XCTAssertTrue(button.contains("minHeight: 44"), "cible tactile d'au moins 44 pt")
         XCTAssertTrue(button.contains(".contentShape("), "toute la cible est tapable")

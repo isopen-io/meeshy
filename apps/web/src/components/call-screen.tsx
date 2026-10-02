@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import type { CallRowsKit } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
@@ -13,7 +13,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
-import { callControlSet, chromeInteractive, flipOffered, isVideoScene } from '@/lib/calls/call-controls';
+import { callControlSet, flipOffered, isVideoScene } from '@/lib/calls/call-controls';
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallPanels, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
 import { mineInMenu, SELF_CONTROL_GROUPS, selfControlsPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
@@ -45,7 +45,7 @@ import type { EffectsCompanion } from './call-effects-companions';
  * défile à l'horizontale (`call-control-actions.tsx`, #8550) ; en haut,
  * Réduire et la puce « Nom · durée » (`call-screen-header.tsx`). En vidéo,
  * toucher la scène efface TOUTES les commandes et un second toucher les rend ;
- * elles s'effacent aussi après 4 s sans geste (`use-call-chrome.ts`). Au-dessus
+ * rien d'autre ne les efface, aucune attente (#8988, `use-call-chrome.ts`). Au-dessus
  * d'un écran partagé, fond clair par nature, les verres prennent leur teinte
  * plus sombre.
  *
@@ -65,11 +65,11 @@ import type { EffectsCompanion } from './call-effects-companions';
  * changent pas.
  */
 
-const INK = '#ffffff';
-const INK_2 = 'rgba(255,255,255,0.72)';
-const BACKDROP = 'linear-gradient(180deg, #16131f 0%, #07060b 100%)';
-const HANGUP = '#ef4444';
-const ANSWER = '#22c55e';
+const INK = 'var(--color-on-media)';
+const INK_2 = 'var(--color-on-media-3)';
+const BACKDROP = 'linear-gradient(180deg, var(--ios-indigo-950) 0%, var(--color-media-backdrop) 100%)';
+const HANGUP = 'var(--ios-error-strong)';
+const ANSWER = 'var(--ios-success)';
 
 /* Refuser et Accepter gardent leur couleur de signal ; le neutre prend le verre d'appel. */
 const SIGNAL_TONE = { danger: { background: HANGUP, color: INK }, accept: { background: ANSWER, color: INK } } as const;
@@ -211,11 +211,11 @@ export function CallModePending({ label, glyph, onExit }: { readonly label: stri
     <div className="flex w-full flex-col items-center gap-3" data-call-mode-pending="">
       <div aria-hidden className="flex h-24 items-center gap-2">
         {[0.82, 1.1, 0.82].map((scale, index) => (
-          <span key={index} className="size-16 rounded-full bg-white/15" style={{ scale: String(scale) }} />
+          <span key={index} className="size-16 rounded-full bg-media-fill" style={{ scale: String(scale) }} />
         ))}
       </div>
       <div className="flex w-full justify-start px-6">
-        <button type="button" aria-label={label} title={label} onClick={onExit} className="glass-call grid size-12 place-items-center rounded-full text-white">
+        <button type="button" aria-label={label} title={label} onClick={onExit} className="glass-call grid size-12 place-items-center rounded-full text-on-media">
           {glyph}
         </button>
       </div>
@@ -317,11 +317,8 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   const [choice, setChoice] = useState<SpotlightChoice>(null);
   const [selfFull, setSelfFull] = useState(false);
   const [declineOpen, setDeclineOpen] = useState(false);
-  const [holds, setHolds] = useState(0);
-  const hold = useCallback((held: boolean) => setHolds((count) => Math.max(0, count + (held ? 1 : -1))), []);
   const focusNext = useRef<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
-  const controls = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const myPreview = useRef<HTMLVideoElement | null>(null);
   const moderation = useCallModeration(call);
@@ -358,7 +355,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   };
   const shown = live ? layerOffered(layer, offer) : IDLE;
   const chrome = layerChrome(shown);
-  const visibility = useCallChrome({ videoScene: videoScene && chrome.mode === null, root, controls, held: !chrome.autoHide || holds > 0 });
+  const visibility = useCallChrome({ videoScene: videoScene && chrome.mode === null, root });
   const send = (event: CallLayerEvent) => {
     const next = nextLayer(shown, event);
     focusNext.current = focusTarget(shown, next);
@@ -451,7 +448,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     mine: set.mine,
     row: (group) =>
       place === 'menu' ? null : (
-        <div className={fade} aria-hidden={unreachable ? true : undefined} data-call-self-controls-holder={place}>
+        <div className={fade} aria-hidden={hidden ? true : undefined} data-call-self-controls-holder={place}>
           <Suspense fallback={null}>
             <CallCameraControls
               call={call}
@@ -469,7 +466,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       ),
     column: (capsule) =>
       capsule === null ? null : (
-        <div className={`absolute left-3 top-1/2 z-10 -translate-y-1/2 ${fade}`} aria-hidden={unreachable ? true : undefined} data-call-self-column="">
+        <div className={`absolute left-3 top-1/2 z-10 -translate-y-1/2 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-self-column="">
           {capsule}
         </div>
       ),
@@ -506,10 +503,6 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
 
   const overlayVideo = layout === 'video-duo' || layout === 'screen';
   const hidden = visibility !== 'shown' || immersive;
-  /* Effacées par l'attente, elles répondent encore au doigt (#8735) : seules
-     celles qu'un toucher a rangées — ou le plein écran — le laissent passer. */
-  const chromeState = immersive ? 'dismissed' : visibility;
-  const unreachable = !chromeInteractive(chromeState);
   /* Les sous-titres ne s'effacent JAMAIS avec les commandes : posés dans le
      cadre de la pilule déployée, ils en sortent quand elle s'efface, et
      restent lus (et annoncés) au-dessus de sa place. */
@@ -575,7 +568,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   /* Le fondu ne retire JAMAIS le doigt à un bouton encore visible (#8735) :
      rangées d'un toucher, les commandes deviennent `invisible` à la FIN du
      fondu (la visibilité suit la transition), et reviennent d'un coup. */
-  const fade = `duration-300 motion-reduce:transition-none ${!hidden ? 'transition-opacity opacity-100' : unreachable ? 'transition-[opacity,visibility] opacity-0 invisible' : 'transition-opacity opacity-0'}`;
+  const fade = `duration-300 motion-reduce:transition-none ${hidden ? 'transition-[opacity,visibility] opacity-0 invisible' : 'transition-opacity opacity-100'}`;
 
   return (
     <div
@@ -587,7 +580,6 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       style={{ background: BACKDROP, color: INK }}
       data-call-screen={phase}
       data-call-chrome={hidden ? 'hidden' : 'shown'}
-      data-call-chrome-state={chromeState}
       data-call-layer={shown.kind}
     >
       {call.preview === null ? null : (
@@ -603,14 +595,14 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       <CallControlFeedbackSlot language={language} nameOf={nameOf} live={live} />
       <div className="relative flex min-h-0 flex-1 flex-col gap-4">
         {chrome.header ? (
-          <div className={`relative z-20 ${fade}`} aria-hidden={unreachable ? true : undefined} data-call-plane="">
-            <CallScreenHeader call={call} language={language} joined={joined} prominent={sharedScreenShown} onHold={hold} />
+          <div className={`relative z-20 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-plane="">
+            <CallScreenHeader call={call} language={language} joined={joined} prominent={sharedScreenShown} />
           </div>
         ) : null}
         {layout === 'grid' ? (
           <>
             {immersive || chrome.mode !== null ? null : (
-              <div className={fade} aria-hidden={unreachable ? true : undefined}>
+              <div className={fade} aria-hidden={hidden ? true : undefined}>
                 {pillRow}
               </div>
             )}
@@ -619,7 +611,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
             </div>
           </>
         ) : overlayVideo ? (
-          <div className={`flex flex-col items-center gap-2 px-6 ${fade} ${chrome.mode === null ? '' : 'invisible'}`} aria-hidden={unreachable || chrome.mode !== null ? true : undefined}>
+          <div className={`flex flex-col items-center gap-2 px-6 ${fade} ${chrome.mode === null ? '' : 'invisible'}`} aria-hidden={hidden || chrome.mode !== null ? true : undefined}>
             {sharer === null ? null : (
               <span className="glass-call-prominent rounded-full px-3 py-1 text-mini" role="status" data-call-screen-banner="">
                 {translate(language, 'call.screen.peerSharing', {
@@ -640,7 +632,7 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
           <div className="relative z-20 flex flex-col gap-3 pb-6" data-call-plane="">
             {captionsFramed ? null : <div className="relative z-10">{captions}</div>}
             {mode === null ? (
-              <div ref={controls} className={`flex flex-col gap-3 ${fade}`} aria-hidden={unreachable ? true : undefined} data-call-controls="">
+              <div className={`flex flex-col gap-3 ${fade}`} aria-hidden={hidden ? true : undefined} data-call-controls="">
                 <CallControlPill
                   call={call}
                   language={language}
@@ -652,7 +644,6 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
                   panels={panels}
                   kit={ROWS_KIT}
                   panel={chrome.panel === null ? null : <Suspense fallback={null}>{panelOf(chrome.panel)}</Suspense>}
-                  onHold={hold}
                 />
               </div>
             ) : (

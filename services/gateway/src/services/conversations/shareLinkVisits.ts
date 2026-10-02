@@ -15,6 +15,8 @@
  * traite l'absence comme zéro, en une écriture atomique.
  */
 
+import type { LinkVisitor, LinkVisitRecorder } from '../../routes/links/utils/link-visitor';
+
 type RawCommandRunner = {
   $runCommandRaw(command: Record<string, unknown>): Promise<unknown>;
 };
@@ -22,12 +24,35 @@ type RawCommandRunner = {
 /** `@@map` absent du modèle : la collection porte le nom du modèle. */
 const SHARE_LINK_COLLECTION = 'ConversationShareLink';
 
-export async function recordShareLinkVisit(prisma: RawCommandRunner, shareLinkId: string): Promise<void> {
+/**
+ * Ce que la visite rapporte à l'auteur du lien (#8959, `social.link_visit`) :
+ * le visiteur est établi par le SERVEUR depuis la requête de l'aperçu
+ * (`linkVisitorFromRequest`), et le moteur dédoublonne par visiteur.
+ */
+export type ShareLinkVisitCredit = {
+  readonly engagement: LinkVisitRecorder;
+  readonly creatorId: string;
+  readonly linkId: string;
+  readonly visitor: LinkVisitor;
+};
+
+export async function recordShareLinkVisit(
+  prisma: RawCommandRunner,
+  shareLinkId: string,
+  credit?: ShareLinkVisitCredit,
+): Promise<void> {
   await prisma.$runCommandRaw({
     update: SHARE_LINK_COLLECTION,
     updates: [{
       q: { _id: { $oid: shareLinkId } },
       u: [{ $set: { visitCount: { $add: [{ $ifNull: ['$visitCount', 0] }, 1] } } }],
     }],
+  });
+  if (!credit) return;
+  await credit.engagement.recordLinkVisit({
+    creatorId: credit.creatorId,
+    linkKey: `conversation:${credit.linkId}`,
+    visitorKey: credit.visitor.key,
+    visitorUserId: credit.visitor.userId,
   });
 }

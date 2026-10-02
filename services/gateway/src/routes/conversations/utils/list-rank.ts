@@ -3,41 +3,41 @@ import { listRankFromColumns } from '@meeshy/shared/utils/conversation-list-rank
 import type { CurseurDeListe } from '../list-cursor';
 
 /**
- * **LA PAGE DE `GET /conversations`, TRIÉE PAR LE RANG DU LECTEUR** (#7592).
+ * **LA PAGE DE `GET /conversations`, TRIÉE PAR LE RANG DE LA LIGNE** (#9026).
  *
- * rang = max(`lastMessageAt`, `lastReactionAt` quand `lastReactionTargetKey`
- * est le lecteur) — `listRankFromColumns`, la règle de `packages/shared`. Une
- * réaction à MON message remonte ma ligne ; une réaction entre tiers ne
- * réordonne rien.
+ * rang = max(`lastMessageAt`, `lastActivityAt`) — `listRankFromColumns`, la
+ * règle de `packages/shared`, la MÊME pour tous les participants. Toute
+ * activité (message, réaction, appel, épingle) remonte la ligne pour tout le
+ * monde (directive porteur du 2026-10-01, qui remplace la règle PAR LECTEUR de
+ * #7592).
  *
  * ## Pourquoi deux flux et pas un `orderBy`
  *
- * Un rang PAR LECTEUR ne s'écrit pas en `orderBy` Prisma. Mais seules les
- * lignes dont la dernière réaction vise le lecteur peuvent monter au-dessus de
- * leur `lastMessageAt`. D'où deux lectures bornées :
+ * Un `max` de deux colonnes ne s'écrit pas en `orderBy` Prisma. Mais seules les
+ * lignes qui portent une activité peuvent monter au-dessus de leur
+ * `lastMessageAt`. D'où deux lectures bornées :
  *
  *   - A — toutes les lignes, par `lastMessageAt desc` ;
- *   - B — celles dont `lastReactionTargetKey` est le lecteur, par
- *     `lastReactionAt desc` (index `[lastReactionTargetKey, lastReactionAt]`).
+ *   - B — celles qui portent une activité, par `lastActivityAt desc` (index
+ *     `[isActive, lastActivityAt]`).
  *
  * Le top-K par rang est inclus dans top-K(A) ∪ top-K(B) : une ligne de rang
  * `lastMessageAt` a moins de K lignes de `lastMessageAt` plus grand ; une
- * ligne REMONTÉE a moins de K lignes de B de `lastReactionAt` plus grand.
+ * ligne REMONTÉE a moins de K lignes de B de `lastActivityAt` plus grand.
  *
  * ## Le chemin chaud reste à une lecture
  *
  * A (en lignes complètes, `skip`/`take` habituels) et B (clés seules) partent
- * en parallèle. Tant qu'aucune ligne de B n'est effectivement REMONTÉE (sa
- * réaction plus récente que son dernier message), A est déjà la bonne page.
+ * en parallèle. Tant qu'aucune ligne de B n'est effectivement REMONTÉE (son
+ * activité plus récente que son dernier message), A est déjà la bonne page.
  * Sinon seulement : les clés de A sur K = offset + limit, la fusion par rang,
  * et la lecture des lignes complètes qui manquent.
  *
  * ## Le curseur borne sur le RANG
  *
- * `rang < R` ⇔ `lastMessageAt < R` ET NON(la réaction vise le lecteur ET
- * `lastReactionAt ≥ R`). Le `NOT` d'une conjonction reste juste sur un champ
- * ABSENT (document antérieur à #7592) : la conjonction y est fausse, sa
- * négation vraie — aucune ligne héritée ne disparaît.
+ * `rang < R` ⇔ `lastMessageAt < R` ET NON(`lastActivityAt ≥ R`). Le `NOT`
+ * reste juste sur un champ ABSENT (document antérieur à #9026) : la condition
+ * y est fausse, sa négation vraie — aucune ligne héritée ne disparaît.
  *
  * ## La page delta garde son ordre
  *
@@ -52,15 +52,13 @@ import type { CurseurDeListe } from '../list-cursor';
 export const LIST_RANK_SELECT = {
   id: true,
   lastMessageAt: true,
-  lastReactionAt: true,
-  lastReactionTargetKey: true,
+  lastActivityAt: true,
 } as const;
 
 export interface ListRankRow {
   readonly id: string;
   readonly lastMessageAt?: Date | null;
-  readonly lastReactionAt?: Date | null;
-  readonly lastReactionTargetKey?: string | null;
+  readonly lastActivityAt?: Date | null;
 }
 
 export interface RowsQuery {
@@ -86,25 +84,20 @@ export interface RankedPageRequest<Row extends ListRankRow> {
   /** Lit les lignes COMPLÈTES (le `select` de la route). */
   readonly readRows: (query: RowsQuery) => Promise<Row[]>;
   readonly where: Prisma.ConversationWhereInput;
-  /** `User.id` d'un compte, `Participant.id` d'un invité — la clé des rooms `user:<clé>`. */
-  readonly viewerKey: string;
   readonly curseur: Exclude<CurseurDeListe, { genre: 'refus' }>;
   readonly deltaOrder: boolean;
   readonly limit: number;
   readonly offset: number;
 }
 
-/** Borne `rang < R` du lecteur, en deux clauses — une par flux. */
-function rankBound(viewerKey: string, bound: Date): {
+/** Borne `rang < R`, en deux clauses — une par flux. */
+function rankBound(bound: Date): {
   readonly byMessage: Prisma.ConversationWhereInput[];
-  readonly byReaction: Prisma.ConversationWhereInput[];
+  readonly byActivity: Prisma.ConversationWhereInput[];
 } {
   return {
-    byMessage: [
-      { lastMessageAt: { lt: bound } },
-      { NOT: { lastReactionTargetKey: viewerKey, lastReactionAt: { gte: bound } } },
-    ],
-    byReaction: [{ lastReactionAt: { lt: bound } }, { lastMessageAt: { lt: bound } }],
+    byMessage: [{ lastMessageAt: { lt: bound } }, { NOT: { lastActivityAt: { gte: bound } } }],
+    byActivity: [{ lastActivityAt: { lt: bound } }, { lastMessageAt: { lt: bound } }],
   };
 }
 
@@ -116,12 +109,12 @@ function boundOf(curseur: RankedPageRequest<ListRankRow>['curseur']): Date | nul
   return null;
 }
 
-function rankMillis(row: ListRankRow, viewerKey: string): number {
-  return listRankFromColumns(row, viewerKey)?.getTime() ?? Number.NEGATIVE_INFINITY;
+function rankMillis(row: ListRankRow): number {
+  return listRankFromColumns(row)?.getTime() ?? Number.NEGATIVE_INFINITY;
 }
 
-function isLifted(row: ListRankRow, viewerKey: string): boolean {
-  const rank = listRankFromColumns(row, viewerKey);
+function isLifted(row: ListRankRow): boolean {
+  const rank = listRankFromColumns(row);
   if (rank === null) return false;
   return !row.lastMessageAt || rank.getTime() > row.lastMessageAt.getTime();
 }
@@ -130,7 +123,6 @@ function isLifted(row: ListRankRow, viewerKey: string): boolean {
 export function mergeByRank(
   byMessage: readonly ListRankRow[],
   lifted: readonly ListRankRow[],
-  viewerKey: string,
   window: { readonly offset: number; readonly limit: number },
 ): string[] {
   const seen = new Set<string>();
@@ -140,7 +132,7 @@ export function mergeByRank(
     return true;
   });
   return [...unique]
-    .sort((a, b) => rankMillis(b, viewerKey) - rankMillis(a, viewerKey))
+    .sort((a, b) => rankMillis(b) - rankMillis(a))
     .slice(window.offset, window.offset + window.limit)
     .map((row) => row.id);
 }
@@ -148,34 +140,34 @@ export function mergeByRank(
 export async function loadRankedConversationPage<Row extends ListRankRow>(
   request: RankedPageRequest<Row>,
 ): Promise<Row[]> {
-  const { prisma, readRows, where, viewerKey, curseur, limit, offset } = request;
+  const { prisma, readRows, where, curseur, limit, offset } = request;
 
   if (request.deltaOrder && curseur.genre === 'absent') {
     return readRows({ where, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], skip: offset, take: limit });
   }
 
   const bound = boundOf(curseur);
-  const clauses = bound ? rankBound(viewerKey, bound) : { byMessage: [], byReaction: [] };
+  const clauses = bound ? rankBound(bound) : { byMessage: [], byActivity: [] };
   const byMessageWhere: Prisma.ConversationWhereInput = clauses.byMessage.length
     ? { AND: [where, ...clauses.byMessage] }
     : where;
-  const byReactionWhere: Prisma.ConversationWhereInput = {
-    AND: [where, { lastReactionTargetKey: viewerKey }, ...clauses.byReaction],
+  const byActivityWhere: Prisma.ConversationWhereInput = {
+    AND: [where, { lastActivityAt: { not: null } }, ...clauses.byActivity],
   };
   const window = offset + limit;
   const byMessageOrder = { lastMessageAt: 'desc' } as const;
 
-  const [firstRows, reactedToViewer] = await Promise.all([
+  const [firstRows, withActivity] = await Promise.all([
     readRows({ where: byMessageWhere, orderBy: byMessageOrder, skip: offset, take: limit }),
     prisma.conversation.findMany({
-      where: byReactionWhere,
-      orderBy: { lastReactionAt: 'desc' },
+      where: byActivityWhere,
+      orderBy: { lastActivityAt: 'desc' },
       take: window,
       select: LIST_RANK_SELECT,
     }),
   ]);
 
-  const lifted = reactedToViewer.filter((row) => isLifted(row, viewerKey));
+  const lifted = withActivity.filter(isLifted);
   if (lifted.length === 0) return firstRows;
 
   const byMessageKeys = await prisma.conversation.findMany({
@@ -184,7 +176,7 @@ export async function loadRankedConversationPage<Row extends ListRankRow>(
     take: window,
     select: LIST_RANK_SELECT,
   });
-  const pageIds = mergeByRank(byMessageKeys, lifted, viewerKey, { offset, limit });
+  const pageIds = mergeByRank(byMessageKeys, lifted, { offset, limit });
 
   const loaded = new Map(firstRows.map((row) => [row.id, row] as const));
   const missing = pageIds.filter((id) => !loaded.has(id));

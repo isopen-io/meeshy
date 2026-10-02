@@ -65,7 +65,25 @@ public struct StickerPaletteClockKey: EnvironmentKey {
     public static let defaultValue: @Sendable () -> Date = { Date() }
 }
 
+/// **Les gabarits de la feuille portent-ils le contour blanc ?** (#9060) Vrai
+/// là où le sticker part contourné — la conversation ; faux dans le composer
+/// de story, dont la scène pose le gabarit nu.
+public struct StickerSheetDieCutKey: EnvironmentKey {
+    public static let defaultValue = false
+}
+
+extension View {
+    public func stickerSheetDieCut(_ enabled: Bool = true) -> some View {
+        environment(\.stickerSheetDieCut, enabled)
+    }
+}
+
 extension EnvironmentValues {
+    public var stickerSheetDieCut: Bool {
+        get { self[StickerSheetDieCutKey.self] }
+        set { self[StickerSheetDieCutKey.self] = newValue }
+    }
+
     public var stickerNearbyPlaces: StickerNearbyPlacesProvider? {
         get { self[StickerNearbyPlacesKey.self] }
         set { self[StickerNearbyPlacesKey.self] = newValue }

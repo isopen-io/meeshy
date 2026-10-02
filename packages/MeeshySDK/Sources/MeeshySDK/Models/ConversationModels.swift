@@ -203,6 +203,12 @@ public struct APIConversation: Decodable, Sendable {
     /// réaction et l'appel en cours. `var` : décodés sans élargir l'init.
     public var lastReaction: ConversationLastReaction? = nil
     public var activeCall: ConversationActiveCall? = nil
+    /// Le rang SERVI de la ligne (#9026), le même pour tous les participants :
+    /// max(`lastMessageAt`, `lastActivityAt` — réaction, appel, épingle).
+    public var listRankAt: Date? = nil
+    /// « 🔥 série · N (M) » du LECTEUR dans cette conversation (#8906) —
+    /// absent tant qu'il n'y a rien gagné. `var` : décodé sans élargir l'init.
+    public var viewerEngagement: ConversationEngagementSnapshot? = nil
     /// Prisme Linguistique de la ligne de liste — `{ langue: aperçu traduit }`,
     /// déjà restreint par le gateway aux langues du prisme du LECTEUR et tronqué
     /// au même plafond que `lastMessage.content`.
@@ -501,7 +507,9 @@ extension APIConversation {
         conversation.lastMessageNature = lastMessage?.nature
         conversation.lastReaction = lastReaction
         conversation.lastReactionTargetsReader = lastReaction?.targets(readerId: currentUserId) ?? false
+        conversation.listRankAt = listRankAt
         conversation.activeCall = activeCall
+        conversation.viewerEngagement = viewerEngagement
 
         // La frontière de lecture (#7198, #7222) — même idiome que la Prisme
         // ci-dessus : arrivée après l'init memberwise, projetée post-init pour

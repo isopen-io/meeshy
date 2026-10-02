@@ -194,10 +194,10 @@ final class NotificationBannerPresentationTests: XCTestCase {
 
         let banner = event.bannerPresentation()
         XCTAssertEqual(banner.body, "🎵 Audio · 0:32 · 193 Ko")
-        XCTAssertEqual(banner.contentSymbol, "waveform")
+        XCTAssertFalse(banner.showsContentTile, "le « 🎵 » du corps nomme déjà le média (#8897)")
     }
 
-    func test_bannerBody_photoWithCaption_showsTheCaptionAlone_theTileNamesTheMedia() throws {
+    func test_bannerBody_photoWithCaption_withoutThumbnail_showsTheCaptionAlone() throws {
         let event = try makeEvent("""
         {
             "id": "n8c", "userId": "u1", "type": "new_message",
@@ -210,7 +210,7 @@ final class NotificationBannerPresentationTests: XCTestCase {
 
         let banner = event.bannerPresentation()
         XCTAssertEqual(banner.body, "regarde ça")
-        XCTAssertEqual(banner.contentSymbol, "photo.fill")
+        XCTAssertNil(banner.contentSymbol, "sans vignette, aucune case-symbole (#8897)")
     }
 
     /// Un message protégé (éphémère / vue unique / flouté / chiffré) arrive avec
@@ -347,6 +347,23 @@ final class NotificationBannerPresentationTests: XCTestCase {
         let banner = event.bannerPresentation()
         XCTAssertTrue(banner.headline.contains("Équipe Tech"), "cadrage de conversation")
         XCTAssertEqual(banner.reactionBadge, "🔥")
+    }
+
+    func test_messageReaction_whenTheServedSentenceCarriesTheEmoji_noSecondEmoji() throws {
+        let event = try makeEvent("""
+        {
+            "id": "n17", "userId": "u1", "type": "message_reaction",
+            "title": "meeshy sama",
+            "content": "a réagi ❤️ à votre message : « J'attends! »",
+            "actor": { "id": "a1", "displayName": "meeshy sama" },
+            "context": { "conversationType": "direct" },
+            "metadata": { "reactionEmoji": "❤️" }
+        }
+        """)
+
+        let banner = event.bannerPresentation()
+        XCTAssertEqual(banner.body, "a réagi ❤️ à votre message : « J'attends! »")
+        XCTAssertNil(banner.reactionBadge, "#9049 — l'émoji est déjà dans la phrase servie : pas de second ❤️ devant")
     }
 
     // MARK: - Replis

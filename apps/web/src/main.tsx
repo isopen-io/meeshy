@@ -170,6 +170,17 @@ if (__SHELL__) {
 }
 
 /**
+ * UNE IMAGE, UNE VIDÉO OU UN LIEN PARTAGÉ DEPUIS UNE AUTRE APPLICATION OUVRE LA
+ * FEUILLE D'ENVOI (#8884) — l'intent `SEND` de la coque Android est copié par
+ * `MeeshyShareIntentPlugin`, lu ici ; le partage d'un lancement à froid attend
+ * côté natif, celui d'un utilisateur pas encore connecté attend la connexion.
+ * Le web reçoit le même partage par le `share_target` de la PWA (`/share`).
+ */
+if (__SHELL__) {
+  void import('@/lib/share-incoming/native-start').then(({ startNativeShareInboxInShell }) => startNativeShareInboxInShell());
+}
+
+/**
  * LA COQUE ANDROID REÇOIT SES PUSHS PAR FCM NATIF (#7307). La WebView n'a ni
  * Push API ni service worker : le jeton vient de `@capacitor/push-notifications`
  * et s'enregistre par le même port qu'iOS. Derrière `__SHELL__`, ce module et
@@ -228,6 +239,10 @@ if (!__SHELL__ && import.meta.env.PROD && 'serviceWorker' in navigator) {
     );
     void import('@/lib/calls/call-back-intent').then(({ listenCallBackIntentsInBrowser }) =>
       listenCallBackIntentsInBrowser(),
+    );
+    /** ET « RÉPONDRE » SUR UNE NOTIFICATION DE MESSAGE MET LE CURSEUR DANS LE COMPOSEUR (#8860). */
+    void import('@/lib/notifications/composer-focus-intent').then(({ listenComposerFocusIntentsInBrowser }) =>
+      listenComposerFocusIntentsInBrowser(),
     );
     /**
      * ET LE WORKER PEUT ACCUSER LA REMISE D'UN PUSH, ONGLET FERMÉ (#7368,

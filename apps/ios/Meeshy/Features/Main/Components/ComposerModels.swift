@@ -267,7 +267,7 @@ struct ComposerWaveformBar: View {
         RoundedRectangle(cornerRadius: 2)
             .fill(
                 LinearGradient(
-                    colors: [Color(hex: accentColor).opacity(0.8), Color(hex: accentColor).opacity(0.4)],
+                    colors: [Color(hex: accentColor).opacity(MeeshyOpacity.intense), Color(hex: accentColor).opacity(0.4)],
                     startPoint: .top,
                     endPoint: .bottom
                 )

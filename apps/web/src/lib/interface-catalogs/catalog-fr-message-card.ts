@@ -7,6 +7,7 @@
 const frMessageCard = {
   'message.menu.export': 'Imager',
   'message.menu.exportQuick': 'Imager rapide',
+  'message.menu.exportDiscussion': 'Imager la discussion',
   'message.menu.compose': 'Composer',
   'comments.action.image': 'Imager',
 } as const;

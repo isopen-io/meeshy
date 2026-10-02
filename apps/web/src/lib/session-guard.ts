@@ -1,3 +1,4 @@
+import { ADMIN_ROUTE_KEYS, type AdminFicheRouteKey, type AdminListRouteKey } from './admin/admin-routes';
 import type { SessionState } from './api/session';
 import { safeReturnPath } from './view/magic-link';
 
@@ -184,6 +185,15 @@ export type RouteKey =
   | 'admAnonymous'
   | 'adminAnonymousOne'
   | 'admAnonymousOne'
+  /**
+   * LA VUE DE DIEU (#8876) — TOUTES les clés d'administration, dans les deux
+   * espaces, DÉRIVÉES de `admin-routes.ts` : une section ou une fiche ajoutée à
+   * la table est PRIVÉE sans qu'on ait à y penser. Écrites à la main, vingt
+   * clés de plus auraient laissé l'oubli d'une seule ouvrir une adresse
+   * d'administration à un visiteur sans session.
+   */
+  | AdminListRouteKey
+  | AdminFicheRouteKey
   | 'login'
   | 'signup'
   | 'welcome'
@@ -316,6 +326,9 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'admAnonymous',
   'adminAnonymousOne',
   'admAnonymousOne',
+  /* LA VUE DE DIEU (#8876) — le reste, dérivé de la table des sections : voir
+     la raison écrite sur `RouteKey` plus haut. */
+  ...ADMIN_ROUTE_KEYS,
 ]);
 const AUTH_ROUTES: ReadonlySet<string> = new Set<RouteKey>(['login', 'signup', 'welcome', 'magicLink', 'forgotPassword']);
 

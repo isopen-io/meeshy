@@ -26,13 +26,17 @@ public struct StickerSheetTabBar: View {
     @Binding var selection: StickerSheetTab
     @Environment(\.colorScheme) private var colorScheme
 
-    public init(selection: Binding<StickerSheetTab>) {
+    let tabs: [StickerSheetTab]
+
+    public init(selection: Binding<StickerSheetTab>,
+                tabs: [StickerSheetTab] = StickerSheetTab.offered(hasMee: false)) {
         self._selection = selection
+        self.tabs = tabs
     }
 
     public var body: some View {
         HStack(spacing: 4) {
-            ForEach(StickerSheetTab.allCases) { onglet in
+            ForEach(tabs) { onglet in
                 Button {
                     // L'animation porte sur la SÉLECTION, donc sur la pastille
                     // qui glisse — le contenu, lui, se remplace sans ressort :

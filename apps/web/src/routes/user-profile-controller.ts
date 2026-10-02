@@ -21,6 +21,7 @@ import { reportUser, type ReportReason } from '@/lib/api/reports';
 import { sessionStore } from '@/lib/api/session';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { profilePresenceLine } from '@/lib/profile/presence-line';
 import { actionsFor, pendingRequestFrom, relationFromServed, type ProfileActionKind } from '@/lib/profile/relation';
 import { announcementToneOf } from '@/lib/view/announcement-tone';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
@@ -141,6 +142,9 @@ export function useProfileController(username: string, language: InterfaceLangua
 
   const name = person?.displayName ?? person?.username ?? `@${username}`;
   const accent = person === undefined ? 'var(--color-ios-brand)' : authorAccentColor(person.id, name);
+  /* La présence d'un AMI (#9063) — telle que la passerelle l'a servie, et
+     jamais sur une fiche bloquée : la pastille ne survit pas au geste. */
+  const presence = relation.kind === 'blocked' ? null : profilePresenceLine(view.data?.presence ?? null, new Date(), language);
 
   const deps: FriendActionDeps = useMemo(
     () => ({
@@ -240,6 +244,7 @@ export function useProfileController(username: string, language: InterfaceLangua
     person,
     name,
     accent,
+    presence,
     relation,
     actions,
     viewerId,

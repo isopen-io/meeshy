@@ -280,11 +280,11 @@ export function GuestSubmit({
         data-guest-submit
         disabled={disabled}
         aria-busy={busy}
-        className="grid w-full place-items-center rounded-[18px] text-body font-extrabold text-white transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2"
+        className="grid w-full place-items-center rounded-bubble text-body font-extrabold text-ios-on-brand transition-opacity focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{
           minHeight: 54,
           backgroundColor: 'var(--ios-indigo-600)',
-          backgroundImage: 'linear-gradient(135deg, var(--ios-indigo-600), color-mix(in srgb, var(--ios-purple-600) 75%, black))',
+          backgroundImage: 'linear-gradient(135deg, var(--ios-indigo-600), color-mix(in srgb, var(--ios-purple-600) 75%, var(--color-media-backdrop)))',
           outlineColor: 'var(--color-ios-brand)',
           opacity: disabled ? 0.6 : 1,
         }}

@@ -35,6 +35,7 @@ import { listCallHistory } from './calls/callHistoryList';
 import { unrespondedParticipantUserIds } from './calls/unrespondedParticipants';
 import { assertDirectCalleeReachable } from './calls/callRingPolicy';
 import { commitCallEnd } from './calls/endCallRetry';
+import { callEngagementCrediter } from './calls/callEngagementCredits';
 
 /** Floor a finite, non-negative byte counter; anything else → null. */
 const clampNonNegativeInt = (value?: number | null): number | null =>
@@ -212,6 +213,8 @@ interface LeaveCallData {
   // silently excludes it from the web retry-on-failure feature
   // (isRetryableCallFailure only treats failed/connectionLost as retryable).
   endReasonHint?: CallEndReason;
+  // #9088 — endCall() delegating a group hang-up hands over what it already read.
+  snapshot?: { call: Prisma.CallSessionGetPayload<{ include: { participants: true } }>; isDirectCall: boolean };
 }
 
 export class CallService {
@@ -279,7 +282,13 @@ export class CallService {
   ) {
     this.turnCredentialService = new TURNCredentialService();
     this.activeCallClaim = new ActiveCallClaim(prisma, ACTIVE_STATUSES);
+    this.creditCallEngagement = callEngagementCrediter(prisma, (callId, error) =>
+      logger.warn('Call engagement credit failed', { callId, error })
+    );
   }
+
+  /** #8959 — les points d'un appel terminé, crédités à l'écriture de son résumé terminal. */
+  private readonly creditCallEngagement: (callId: string) => void;
 
   /**
    * Register the callback notified with every callId force-ended by
@@ -1315,6 +1324,12 @@ export class CallService {
     return (error as { code?: string } | null)?.code === 'P2034';
   }
 
+  /** A missing conversation reads as NOT direct — fail toward never ending a call others may still be on. */
+  private async isDirectConversation(conversationId: string): Promise<boolean> {
+    const conversation = await this.prisma.conversation.findUnique({ where: { id: conversationId }, select: { type: true } });
+    return conversation?.type === 'direct';
+  }
+
   /**
    * TOCTOU close (audit 2026-07-02): the `activeParticipants.length >=
    * CALL_MAX_PARTICIPANTS` check below reads a snapshot fetched before this
@@ -1551,11 +1566,7 @@ export class CallService {
       }
 
       // Mirror the normal direct/last-participant decision below.
-      const idemConversation = await this.prisma.conversation.findUnique({
-        where: { id: existing.conversationId },
-        select: { type: true }
-      });
-      const idemIsDirect = idemConversation?.type === 'direct';
+      const idemIsDirect = await this.isDirectConversation(existing.conversationId);
       const idemRemaining = existing.participants.filter((p) => !p.leftAt).length;
       if (!idemIsDirect && idemRemaining > 1) {
         // Group call with others still active and this leaver already gone:
@@ -1650,10 +1661,7 @@ export class CallService {
     }
 
     // Get call with all participants
-    const call = await this.prisma.callSession.findUnique({
-      where: { id: callId },
-      include: { participants: true }
-    });
+    const call = data.snapshot?.call ?? await this.prisma.callSession.findUnique({ where: { id: callId }, include: { participants: true } });
 
     if (!call) {
       logger.error('❌ Call not found', { callId });
@@ -1690,11 +1698,7 @@ export class CallService {
     // call stayed open, no call:ended was broadcast, and the caller's ringback kept
     // playing until they manually hung up. GROUP calls still continue until the
     // last participant leaves.
-    const conversation = await this.prisma.conversation.findUnique({
-      where: { id: call.conversationId },
-      select: { type: true }
-    });
-    const isDirectCall = conversation?.type === 'direct';
+    const isDirectCall = data.snapshot?.isDirectCall ?? await this.isDirectConversation(call.conversationId);
 
     // Vague 183 — `isLastParticipant` is decided FRESH inside the
     // transaction (see below), never from `call.participants` here. That
@@ -2043,7 +2047,7 @@ export class CallService {
     participantId: string,
     isAnonymous?: boolean,
     reason?: string,
-    options?: { preJoinDecline?: boolean }
+    options?: { preJoinDecline?: boolean; session?: CallSessionWithParticipants }
   ): Promise<CallSessionWithParticipants> {
     logger.info('Ending call', { callId, endedBy, isAnonymous, reason });
 
@@ -2053,12 +2057,8 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.PERMISSION_DENIED}: Anonymous users cannot end calls. Use leave instead.`);
     }
 
-    const call = await this.prisma.callSession.findUnique({
-      where: { id: callId },
-      include: {
-        participants: true
-      }
-    });
+    // #9088 — `options.session` is the session the gateway already read to authorize the caller.
+    const call = options?.session ?? await this.prisma.callSession.findUnique({ where: { id: callId }, include: { participants: true } });
 
     if (!call) {
       logger.error('❌ Call not found', { callId });
@@ -2115,12 +2115,11 @@ export class CallService {
     // ringing. A missing/undeleted conversation resolves the same way as
     // "not direct" — fail toward NOT destroying a call that may still be
     // live for others.
+    const isDirectCall = options?.session
+      ? options.session.conversation?.type === 'direct'
+      : await this.isDirectConversation(call.conversationId);
     if (options?.preJoinDecline) {
-      const conversation = await this.prisma.conversation.findUnique({
-        where: { id: call.conversationId },
-        select: { type: true }
-      });
-      if (conversation?.type !== 'direct') {
+      if (!isDirectCall) {
         logger.info('ℹ️ Pre-join decline on a group call — session continues for other invitees', {
           callId, endedBy
         });
@@ -2143,14 +2142,10 @@ export class CallService {
     // returns early (group) or falls through to the direct-call end path
     // below (direct).
     if (!options?.preJoinDecline) {
-      const conversation = await this.prisma.conversation.findUnique({
-        where: { id: call.conversationId },
-        select: { type: true }
-      });
       const otherActiveParticipants = call.participants.filter(
         (p) => !p.leftAt && p.id !== userParticipant?.id
       );
-      if (conversation?.type !== 'direct' && otherActiveParticipants.length > 0) {
+      if (!isDirectCall && otherActiveParticipants.length > 0) {
         logger.info('ℹ️ endCall on a group call with other active participants — treated as a leave', {
           callId, endedBy
         });
@@ -2158,7 +2153,8 @@ export class CallService {
           callId,
           userId: endedBy,
           participantId,
-          endReasonHint: this.resolveEndReason(reason)
+          endReasonHint: this.resolveEndReason(reason),
+          snapshot: { call, isDirectCall }
         });
       }
     }
@@ -2708,7 +2704,9 @@ export class CallService {
         // A concurrent terminal path already posted the final summary.
         return null;
       }
-      return applyUpdate(existing.id, summary.content, callMetadata);
+      const updated = await applyUpdate(existing.id, summary.content, callMetadata);
+      this.creditCallEngagement(call.id);
+      return updated;
     }
 
     // `Message.senderId` references a Participant (not a User); resolve the
@@ -2749,6 +2747,7 @@ export class CallService {
         outcome: summary.outcome,
         callType: summary.callType
       });
+      this.creditCallEngagement(call.id);
       return { kind: 'created', message };
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
@@ -2758,7 +2757,9 @@ export class CallService {
         // was another terminal path, stay idempotent.
         const raced = await findExisting();
         if (raced && isLiveMessage(raced)) {
-          return applyUpdate(raced.id, summary.content, callMetadata);
+          const updated = await applyUpdate(raced.id, summary.content, callMetadata);
+          this.creditCallEngagement(call.id);
+          return updated;
         }
         return null;
       }

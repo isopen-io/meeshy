@@ -7,6 +7,7 @@ import { setAttachmentReactionEmitter, type AttachmentReactionRequest } from '@/
 import { mediaHubPath, mediaHubQueryKey } from '@/lib/api/conversation-media-hub';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
+import { closeSendSheet, sendSheetStore } from '@/lib/send/send-sheet-store';
 import { takeStudioSeed } from '@/lib/stories/studio-seed';
 import { href } from '@/routes/route-table';
 import type { ConversationsDeps } from '@/lib/api/conversations';
@@ -245,7 +246,7 @@ describe('la grille et la visionneuse conversation-entière (#6303)', () => {
     const viewer = $('[data-media-viewer]');
     expect(viewer?.getAttribute('data-viewer-index')).toBe('1');
     expect(viewer?.getAttribute('aria-label')).toBe('Média 2 sur 3');
-    expect(viewer?.querySelector('[data-viewer-footer]')?.textContent).toContain('Nour Haddad');
+    expect(viewer?.querySelector('[data-viewer-top-bar]')?.textContent).toContain('Nour Haddad');
   });
 });
 
@@ -273,15 +274,32 @@ describe('les actions de la visionneuse ouverte depuis l’écran (#8180)', () =
   afterEach(() => {
     appQueryClient.clear();
     setAttachmentReactionEmitter(null);
+    act(() => closeSendSheet());
+  });
+
+  test('Partager vise la PIÈCE regardée par ses identifiants, dans SA conversation (#8884)', async () => {
+    await openFirst([photoMessage('m2'), photoMessage('m1')]);
+    await until(() => $('[data-viewer-action="share"]') !== null);
+    click($('[data-viewer-action="share"]'));
+    expect(sendSheetStore.getState().request?.intent).toBe('share');
+    expect(sendSheetStore.getState().request?.payload).toMatchObject({
+      kind: 'attachment',
+      conversationId: 'c1',
+      messageId: 'm2',
+      attachmentId: 'a-m2',
+      protected: false,
+    });
   });
 
   test('Enregistrer, Réagir et Créer avec ce média sont offerts ; Répondre ne l’est pas', async () => {
     await openFirst([photoMessage('m2'), photoMessage('m1')]);
-    await until(() => $('[data-viewer-action="compose"]') !== null && $('[data-viewer-action="save"]') !== null);
-    expect($('[data-viewer-action="save"]')).not.toBeNull();
+    await until(() => $('[data-viewer-action="compose"]') !== null && $('[data-viewer-menu-button]') !== null);
+    click($('[data-viewer-menu-button]'));
+    expect($('[data-viewer-menu-item="save"]')).not.toBeNull();
     expect($('[data-viewer-action="react"]')).not.toBeNull();
     expect($('[data-viewer-action="compose"]')).not.toBeNull();
     expect($('[data-viewer-action="reply"]')).toBeNull();
+    expect($('[data-viewer-reply]')).toBeNull();
   });
 
   test('Réagir vise la PIÈCE regardée et se relit aussitôt dans l’index de l’écran', async () => {
@@ -341,6 +359,7 @@ describe('les actions de la visionneuse ouverte depuis l’écran (#8180)', () =
     await openFirst([wireMessage('m1', { attachments: [{ ...piece, isBlurred: true }] })]);
     await settle(60);
     expect($('[data-viewer-action]')).toBeNull();
+    expect($('[data-viewer-menu-button]')).toBeNull();
   });
 });
 

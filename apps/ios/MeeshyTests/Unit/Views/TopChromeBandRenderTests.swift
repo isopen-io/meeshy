@@ -445,7 +445,9 @@ final class TopChromeBandRenderTests: XCTestCase {
         )
     }
 
-    func test_laBarreResteRemontee_pendantLaFenetreDeGrace() throws {
+    /// La croix ferme le lecteur sur le champ (#8983) : la fenêtre de grâce de 5 s est celle d'une
+    /// file épuisée, jamais d'un geste de fermeture.
+    func test_laCroix_retireLaBarreSurLeChamp() throws {
         let (coord, _) = coordinateur(actif: true, conversation: "conv-A")
         let journal = Journal()
         let rendu = try monterLaBarre(coord: coord, conversationCourante: nil, journal: journal)
@@ -453,6 +455,23 @@ final class TopChromeBandRenderTests: XCTestCase {
         XCTAssertNotNil(journal.recus.last ?? nil, "Préalable : la barre doit d'abord remonter.")
 
         coord.close()
+
+        XCTAssertTrue(
+            rendu.attendre(borne: 1) { (journal.recus.last ?? nil) == nil },
+            "Après la croix, la barre doit disparaître sur le champ ; elle est restée affichée " +
+            "(\(String(describing: journal.recus.last ?? nil))), comme pendant la grâce d'une file épuisée."
+        )
+    }
+
+    func test_laBarreResteRemontee_pendantLaFenetreDeGrace() throws {
+        let (coord, moteur) = coordinateur(actif: true, conversation: "conv-A")
+        let journal = Journal()
+        let rendu = try monterLaBarre(coord: coord, conversationCourante: nil, journal: journal)
+        rendu.attendre(borne: 3) { !journal.recus.isEmpty }
+        XCTAssertNotNil(journal.recus.last ?? nil, "Préalable : la barre doit d'abord remonter.")
+
+        // La file s'épuise d'elle-même : la seule fin qui garde la barre (#8983).
+        moteur.simulateFinishPlayback()
         // Attente BORNÉE, et assumée : on mesure ici qu'il ne se passe RIEN
         // pendant la fenêtre de grâce. Une borne trop courte ne peut que rendre
         // le témoin indulgent, jamais instable — l'inverse d'un pari sur la
@@ -465,6 +484,34 @@ final class TopChromeBandRenderTests: XCTestCase {
             "Si elle remontait `nil` tout de suite, la bande disparaîtrait d'un coup " +
             "au-dessus d'une barre encore visible. Reçu : " +
             "\(String(describing: journal.recus.last ?? nil))."
+        )
+    }
+
+    /// La croix ferme AUSSI pendant la grâce d'une file épuisée — le « parfois 5 s » du porteur
+    /// (#8983), filmé au simulateur le 2026-10-01 après la fin d'un vocal. `activeContext` y vaut
+    /// déjà `nil` : `close()` le remettait à `nil`, la barre n'observait aucun changement et
+    /// attendait la fin de la grâce.
+    func test_laCroix_pendantLaGraceDUneFileEpuisee_retireLaBarreSurLeChamp() throws {
+        let (coord, moteur) = coordinateur(actif: true, conversation: "conv-A")
+        let journal = Journal()
+        let rendu = try monterLaBarre(coord: coord, conversationCourante: nil, journal: journal)
+        rendu.attendre(borne: 3) { !journal.recus.isEmpty }
+        XCTAssertNotNil(journal.recus.last ?? nil, "Préalable : la barre doit d'abord remonter.")
+
+        moteur.simulateFinishPlayback()
+        XCTAssertTrue(
+            rendu.settle(borne: 2) { coord.activeContext == nil && coord.derniereFin == .epuisee },
+            "Préalable : la file doit s'épuiser."
+        )
+        rendu.capture()
+        XCTAssertNotNil(journal.recus.last ?? nil, "Préalable : la grâce garde la barre après la fin de la file.")
+
+        coord.close()
+
+        XCTAssertTrue(
+            rendu.attendre(borne: 1) { (journal.recus.last ?? nil) == nil },
+            "Pendant la grâce d'une file épuisée, la croix doit retirer la barre sur le champ ; elle est " +
+            "restée affichée (\(String(describing: journal.recus.last ?? nil))) jusqu'à la fin de la grâce."
         )
     }
 

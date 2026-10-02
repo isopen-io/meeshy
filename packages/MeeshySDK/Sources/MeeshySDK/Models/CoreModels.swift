@@ -315,8 +315,15 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     /// La dernière réaction vise un message du LECTEUR — posé là où le lecteur
     /// est connu (REST, socket), lu par `listActivityAt` pour le rang.
     public var lastReactionTargetsReader: Bool = false
+    /// Le rang SERVI de la ligne (#9026) : max(`lastMessageAt`, `lastActivityAt`)
+    /// — une réaction, un appel ou une épingle remonte la ligne pour TOUS les
+    /// participants. `nil` : serveur antérieur, ou aucune activité connue.
+    public var listRankAt: Date? = nil
     /// Appel en cours (#7545) — ligne 1 de la priorité de la ligne d'aperçu.
     public var activeCall: ConversationActiveCall? = nil
+    /// « 🔥 série · N (M) » du lecteur (#8906) — `viewerEngagement` de la liste
+    /// et du détail. Gardé en cache : la pastille s'affiche avant le réseau.
+    public var viewerEngagement: ConversationEngagementSnapshot? = nil
     public var recentMessages: [RecentMessagePreview] = []
     /// Display-layer tags (separate concept from `userState.tags`, which
     /// is the wire-format `String[]` from `UserConversationPreferences`).
@@ -528,6 +535,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(lastMessageNature)
         h.combine(lastReaction)
         h.combine(activeCall)
+        h.combine(viewerEngagement)
         h.combine(name)
         // Effectif — AFFICHÉ des deux côtés du drapeau Lentille : badge de
         // type du rang historique (`ThemedConversationRow.typeBadge`,
@@ -722,7 +730,8 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         case lastMessageAttachments, lastMessageAttachmentCount, lastMessageId
         case lastMessageSenderName, lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
         case lastMessageLocation
-        case lastMessageNature, lastReaction, lastReactionTargetsReader, activeCall
+        case lastMessageNature, lastReaction, lastReactionTargetsReader, activeCall, listRankAt
+        case viewerEngagement
         case recentMessages, tags
         case bridge
         case isAnnouncementChannel, defaultWriteRole, slowModeSeconds, autoTranslateEnabled
@@ -782,7 +791,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.lastMessageNature = (try? c.decodeIfPresent(LastMessageNature.self, forKey: .lastMessageNature))
         self.lastReaction = (try? c.decodeIfPresent(ConversationLastReaction.self, forKey: .lastReaction))
         self.lastReactionTargetsReader = (try? c.decodeIfPresent(Bool.self, forKey: .lastReactionTargetsReader)) ?? false
+        self.listRankAt = (try? c.decodeIfPresent(Date.self, forKey: .listRankAt)) ?? nil
         self.activeCall = (try? c.decodeIfPresent(ConversationActiveCall.self, forKey: .activeCall))
+        self.viewerEngagement = (try? c.decodeIfPresent(ConversationEngagementSnapshot.self, forKey: .viewerEngagement))
         self.recentMessages = try c.decodeIfPresent([RecentMessagePreview].self, forKey: .recentMessages) ?? []
         self.tags = try c.decodeIfPresent([MeeshyConversationTag].self, forKey: .tags) ?? []
         // Tolérance dans les DEUX sens, même patron que `callSummary` /
@@ -883,7 +894,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         try c.encodeIfPresent(lastMessageNature, forKey: .lastMessageNature)
         try c.encodeIfPresent(lastReaction, forKey: .lastReaction)
         try c.encode(lastReactionTargetsReader, forKey: .lastReactionTargetsReader)
+        try c.encodeIfPresent(listRankAt, forKey: .listRankAt)
         try c.encodeIfPresent(activeCall, forKey: .activeCall)
+        try c.encodeIfPresent(viewerEngagement, forKey: .viewerEngagement)
         try c.encode(recentMessages, forKey: .recentMessages)
         try c.encode(tags, forKey: .tags)
         try c.encodeIfPresent(bridge, forKey: .bridge)

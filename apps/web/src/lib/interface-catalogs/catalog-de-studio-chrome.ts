@@ -84,9 +84,10 @@ const deStudioChrome = {
   'story.studio.camera.shutter.photo': 'Foto aufnehmen',
   'story.studio.camera.shutter.start': 'Aufnahme starten',
   'story.studio.camera.shutter.stop': 'Aufnahme beenden',
-  'story.studio.camera.hint.photo': 'Bildschirm tippen: Foto · Auslöser halten: Video',
+  'story.studio.camera.hint.photo': 'Bildschirm tippen: Foto · gedrückt halten: Video',
   'story.studio.camera.hint.video': 'Zum Filmen tippen · erneut tippen zum Platzieren',
-  'story.studio.camera.unavailable': 'Die Kamera ist nicht verfügbar. Erlaube sie in den Browsereinstellungen.',
+  'story.studio.camera.unavailable': 'Die Kamera ist nicht verfügbar. Erlaube sie in den Einstellungen.',
+  'story.studio.camera.openSettings': 'Einstellungen',
   'story.studio.camera.recording': 'Aufnahme läuft',
   'story.studio.scene.empty.title': 'Das ist deine Szene',
   'story.studio.scene.empty.invite': 'Füge Text, eine Zeichnung, ein Bild oder ein Video hinzu – und mach sie zu deiner.',
@@ -116,6 +117,9 @@ const deStudioChrome = {
   'story.studio.background.menu.retake': 'Neues Foto aufnehmen',
   'story.studio.background.menu.forward': 'In den Vordergrund',
   'story.studio.background.menu.remove': 'Hintergrund entfernen',
+  'story.studio.background.tools': 'Hintergrund-Werkzeuge',
+  'story.studio.background.tools.describe': 'Beschreiben',
+  'story.studio.background.tools.leave': 'Zurück zur Szene',
   'story.studio.reelSwitch.announcement': 'Zu einem Reel gewechselt',
 } satisfies StudioChromeCatalogSlice;
 

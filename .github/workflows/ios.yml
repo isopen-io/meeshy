@@ -277,6 +277,12 @@ jobs:
       - name: Élection de simulateur — la famille décide, pas le nom
         run: bash apps/ios/scripts/check_simulator_election.sh
 
+      # Un build local porte le numéro de la dernière livraison App Store
+      # Connect en build setting, sans réécrire project.yml ni le pbxproj.
+      # Le script remplace `andp` par un double — il juge sans réseau.
+      - name: Numéro de build local — la dernière livraison, sans réécrire le dépôt
+        run: bash apps/ios/scripts/check_build_number_resolution.sh
+
       # Un `.swift` de test présent sur disque mais absent du `pbxproj` COMMITTÉ
       # n'entre dans aucune compilation : son rouge n'a jamais lieu, et l'issue
       # se ferme sur une absence. Mesuré deux fois le 2026-09-16.

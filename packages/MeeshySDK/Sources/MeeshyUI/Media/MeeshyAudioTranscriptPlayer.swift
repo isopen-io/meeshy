@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// **Le son du contenu, écouté et LU** (#4657).
 ///
@@ -89,16 +90,16 @@ public struct MeeshyAudioTranscriptPlayer: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             transcript
             barre
         }
-        .padding(12)
+        .padding(MeeshySpacing.md)
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
                 .fill(tint.opacity(0.10))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous)
                         .stroke(tint.opacity(0.28), lineWidth: 1)
                 )
         )
@@ -125,7 +126,7 @@ public struct MeeshyAudioTranscriptPlayer: View {
             let actif = indexActif
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                         ForEach(Array(lignes.enumerated()), id: \.element.id) { index, cue in
                             ligne(cue, actif: index == actif)
                         }
@@ -166,7 +167,7 @@ public struct MeeshyAudioTranscriptPlayer: View {
     // MARK: - La bande et ses deux cibles
 
     private var barre: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: MeeshySpacing.md) {
             boutonLecture
             zoneEdition
         }
@@ -182,14 +183,14 @@ public struct MeeshyAudioTranscriptPlayer: View {
             HapticFeedback.light()
         } label: {
             Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                .font(.system(size: 15, weight: .bold))
+                .font(.system(size: MeeshyIconSize.sm, weight: .bold))
                 .foregroundStyle(.white)
-                .frame(width: 40, height: 40)
+                .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                 .background(Circle().fill(tint))
                 // La pastille mesure 40 pt ; sa CIBLE en mesure 44, le plancher
                 // de la HIG. Peindre 44 aurait épaissi un rond que la carte ne
                 // demande pas — la cible et le dessin sont deux tailles.
-                .frame(width: 44, height: 44)
+                .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -207,14 +208,14 @@ public struct MeeshyAudioTranscriptPlayer: View {
     /// reste alors ce qu'elle est : le dessin d'un son, avec sa durée.
     @ViewBuilder
     private var zoneEdition: some View {
-        let contenu = HStack(spacing: 10) {
+        let contenu = HStack(spacing: MeeshySpacing.smPlus) {
             bande
             Text(Self.horloge(player.playhead) + " / " + Self.horloge(dureeEffective))
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
             if onEdit != nil {
                 Image(systemName: "slider.horizontal.below.rectangle")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                     .foregroundStyle(tint)
             }
         }

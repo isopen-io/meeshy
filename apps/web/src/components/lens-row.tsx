@@ -5,6 +5,7 @@ import { apiConfig } from '@/lib/api/config';
 import type { ListConversation } from '@/lib/api/list-preview';
 import { sessionStore } from '@/lib/api/session';
 import type { Conversation } from '@/lib/api/types';
+import type { ConversationEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
 import { callActions } from '@/lib/calls/call-actions';
 import { translate } from '@/lib/i18n-catalog';
 import type { ConversationFlags } from '@/lib/api/preferences';
@@ -21,6 +22,7 @@ import { Glyph } from './glyph';
 import { LensJoinCallButton, LensPreviewLine } from './lens-preview-line';
 import { LensTime } from './lens-time';
 import { UnreadBadge } from './unread-badge';
+import { ConversationStreakMark } from './conversation-streak-mark';
 import { RowActions } from './row-actions';
 
 /**
@@ -115,6 +117,20 @@ export type LensRowProps = {
    * à la couleur primaire Meeshy.
    */
   peerHere?: boolean | undefined;
+  /** … et il y regarde, écoute ou agit en ce moment : le point pulse (#9061). */
+  peerActive?: boolean | undefined;
+  /** … ou il regarde en plein écran un élément de la conversation : le point
+   * pulse, son mood se fige (#9065). */
+  peerFocused?: boolean | undefined;
+  /** Le mood courant du pair d'un direct (#9065, `use-author-moods.ts`) — il
+   * masque le point et se cerne de la présence. */
+  peerMood?: string | undefined;
+  /**
+   * « N (M) 🔥 » (#8906) — l'état d'engagement EFFECTIF de la conversation pour
+   * le lecteur (servi + direct, `effectiveEngagementOf`), distribué par
+   * l'écran. Rendu dans le supplément de la rangée ÉLUE seulement.
+   */
+  engagement?: ConversationEngagementSnapshot | undefined;
   /** Langue de CADRAGE des libellés — l'interface par défaut ; injectable pour les témoins. */
   interfaceLanguage?: string | undefined;
   /** Horloge injectable — jamais `Date.now()` lu dans un témoin. */
@@ -131,6 +147,10 @@ function LensRowImpl({
   onRowAction,
   typists,
   peerHere = false,
+  peerActive = false,
+  peerFocused = false,
+  peerMood,
+  engagement,
   interfaceLanguage,
   now,
 }: LensRowProps) {
@@ -200,6 +220,15 @@ function LensRowImpl({
     now,
   });
   const typing = typists !== undefined && typists.length > 0;
+  const peerSignals = group
+    ? {}
+    : {
+        presence: typing ? ('online' as const) : presenceOf(peerOf(conversation, viewerId)),
+        here: peerHere,
+        hereActive: peerActive,
+        hereFocused: peerFocused,
+        ...(peerMood === undefined ? {} : { mood: peerMood }),
+      };
 
   return (
     <li
@@ -307,7 +336,7 @@ function LensRowImpl({
               name={title}
               opacity={chromeFade}
               {...(photo === undefined ? {} : { src: photo })}
-              {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)), here: peerHere })}
+              {...peerSignals}
             />
           </Link>
         ) : (
@@ -319,7 +348,7 @@ function LensRowImpl({
             opacity={chromeFade}
             profileUsername={peerHandle}
             {...(photo === undefined ? {} : { src: photo })}
-            {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)), here: peerHere })}
+            {...peerSignals}
           />
         )}
 
@@ -511,6 +540,7 @@ function LensRowImpl({
               (`shortRelativeTime`), vivante à la minute (`minuteClock`), et
               fondue avec le reste du CHROME sous sourdine (`chromeFade`).
             */}
+            {status.magnified ? null : <ConversationStreakMark snapshot={engagement} now={now} />}
             {at === undefined ? null : (
               <span style={{ opacity: chromeFade }}>
                 <LensTime at={at} />
@@ -573,6 +603,12 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
      doc-comment de `useTypistNames` promet de borner. */
   if ((prev.typists ?? []).join('\u0001') !== (next.typists ?? []).join('\u0001')) return false;
   if ((prev.peerHere ?? false) !== (next.peerHere ?? false)) return false;
+  if ((prev.peerActive ?? false) !== (next.peerActive ?? false)) return false;
+  if ((prev.peerFocused ?? false) !== (next.peerFocused ?? false)) return false;
+  if (prev.peerMood !== next.peerMood) return false;
+  /* L'instantané d'engagement (#8906) — comparé par RÉFÉRENCE : il vient du
+     magasin ou de la charge, stables tant qu'aucun geste n'est crédité. */
+  if (prev.engagement !== next.engagement) return false;
   if (prev.interfaceLanguage !== next.interfaceLanguage || prev.now !== next.now) return false;
 
   const s1 = prev.status ?? AT_REST;

@@ -392,14 +392,25 @@ export type SendMessageBody = {
   /** OMIS quand la source est inconnue — `''` casse l'écriture `@db.ObjectId`. */
   readonly forwardedFromConversationId?: string;
   /**
+   * LA COPIE SERVEUR D'UNE PIÈCE, SANS RÉ-UPLOAD (#8884) — `messages-send.ts:79`.
+   * Le serveur recopie les pièces du message désigné vers le nouveau message
+   * (mêmes blobs) : c'est ce qui fait qu'un envoi à N personnes ne coûte qu'UN
+   * téléversement. Réservée à l'AUTEUR du message source. Exclusive de
+   * `attachmentIds` comme `forwardedFromId` (même `else if`,
+   * `MessageProcessor.ts:688`) ; `content` porte alors la légende.
+   */
+  readonly copyAttachmentsFromMessageId?: string;
+  /**
    * LA PROTECTION (#6175) — `SendMessageBodySchema:76-81`
    * (`services/gateway/src/routes/conversations/messages-send.ts`). Chaque
    * clé est OMISE à sa valeur par défaut (`protectionBodyOf`,
    * `send/perform-send.ts`) — jamais `false`/`0` posé explicitement.
    */
   readonly isBlurred?: boolean;
-  /** Chaîne ISO — le serveur la revit en `Date` (`messages-send.ts:317`). */
+  /** Chaîne ISO — le serveur n'en garde que la DISTANCE (`normalizeEphemeralDuration`) ; un client à jour envoie `ephemeralDuration`. */
   readonly expiresAt?: string;
+  /** Secondes — le décompte part de la RÉCEPTION de chaque destinataire (#7451, #8905). */
+  readonly ephemeralDuration?: number;
   readonly effectFlags?: number;
   readonly isViewOnce?: boolean;
   /**

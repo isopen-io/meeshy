@@ -233,6 +233,13 @@ describe('Caméra — la prise revient dans les pièces jointes (#7280)', () => 
     await act(async () => {
       input.dispatchEvent(new Event('change', { bubbles: true }));
     });
-    expect(el.querySelector('button[aria-label="Supprimer cliche.jpg"]')).not.toBeNull();
+    const piece = () => el.querySelector('button[aria-label="Supprimer cliche.jpg"]');
+    const limite = Date.now() + 2000;
+    while (piece() === null && Date.now() < limite) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+    expect(piece()).not.toBeNull();
   });
 });

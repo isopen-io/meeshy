@@ -1254,7 +1254,8 @@ final class BubbleCallNoticeViewAccessibilityTests: XCTestCase {
         guard let range = source.range(of: "private func qualityRow(_ quality: CallSummaryMetadata.NetworkQuality) -> some View {") else {
             XCTFail("qualityRow not found"); return
         }
-        let endIdx = source.index(range.upperBound, offsetBy: 1000, limitedBy: source.endIndex) ?? source.endIndex
+        let body = source[range.upperBound...]
+        let endIdx = body.range(of: "\n    private func ")?.lowerBound ?? source.endIndex
         let vicinity = String(source[range.lowerBound..<endIdx])
         XCTAssertTrue(
             vicinity.contains(".accessibilityElement(children: .combine)"),
@@ -4672,84 +4673,28 @@ final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
     }
 }
 
-// MARK: - CallView auto-hide controls source guards
+// MARK: - CallView tap-to-toggle controls source guards
 
-/// Source guards ensuring `shouldAutoHideControls` in CallView.swift correctly
-/// blocks auto-hide for Mac Catalyst, VoiceOver, non-video calls, and when
-/// the effects toolbar is open — any of these missing would cause controls to
-/// vanish in a context where they must remain permanently visible.
+/// #8978 — les contrôles de l'appel ne disparaissent plus seuls : un toucher sur la scène
+/// vidéo les cache, un autre les remet. La bascule reste réservée à une scène VIDÉO (#8550) :
+/// sur un appel vocal, rien ne permettrait de les rappeler.
 @MainActor
-final class CallViewAutoHideControlsSourceGuardTests: XCTestCase {
+final class CallViewTapToggleControlsSourceGuardTests: XCTestCase {
 
     private func callViewSource() throws -> String {
         // L'unité de l'écran d'appel (#8276) : la vue et ses extensions.
         try AppSourceGuard.callViewSource()
     }
 
-    func test_shouldAutoHideControls_gatesOnVideoLayoutActive() throws {
+    func test_tapToggle_gatesOnTheVideoStage() throws {
         let source = try callViewSource()
-        guard let fnRange = source.range(of: "private var shouldAutoHideControls: Bool") else {
-            XCTFail("shouldAutoHideControls not found in CallView.swift")
-            return
-        }
-        let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[fnRange.lowerBound ..< end])
         XCTAssertTrue(
-            body.contains("isVideoStage"),
-            "shouldAutoHideControls must gate on the video stage (#8550) — controls must never " +
-            "auto-hide on a voice-only layout (no video surface to tap for recall)."
+            source.contains("CallChromeVisibility.mayToggleByTap(isVideoStage: isVideoStage)"),
+            "Un toucher ne bascule les contrôles que sur une scène vidéo (#8550)."
         )
         XCTAssertTrue(
             source.contains("isDuoVideoActive: callManager.isVideoUIActive"),
-            "The duo video stage stays isVideoUIActive (local OR remote video, Fix 7): controls " +
-            "must auto-hide once the video layout is active even when only the REMOTE camera is on."
-        )
-    }
-
-    func test_shouldAutoHideControls_gatesOnIsiOSAppOnMac() throws {
-        let source = try callViewSource()
-        guard let fnRange = source.range(of: "private var shouldAutoHideControls: Bool") else {
-            XCTFail("shouldAutoHideControls not found in CallView.swift")
-            return
-        }
-        let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[fnRange.lowerBound ..< end])
-        XCTAssertTrue(
-            body.contains("isiOSAppOnMac"),
-            "shouldAutoHideControls must gate on isiOSAppOnMac — on Mac the user cannot " +
-            "tap the video surface to recall hidden controls (no touch), so controls must " +
-            "always be visible."
-        )
-    }
-
-    func test_shouldAutoHideControls_gatesOnVoiceOver() throws {
-        let source = try callViewSource()
-        guard let fnRange = source.range(of: "private var shouldAutoHideControls: Bool") else {
-            XCTFail("shouldAutoHideControls not found in CallView.swift")
-            return
-        }
-        let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[fnRange.lowerBound ..< end])
-        XCTAssertTrue(
-            body.contains("isVoiceOverRunning"),
-            "shouldAutoHideControls must gate on UIAccessibility.isVoiceOverRunning — " +
-            "VoiceOver users navigate via swipe gestures, not taps on the video surface, " +
-            "so hidden controls are unreachable and must always stay visible."
-        )
-    }
-
-    func test_shouldAutoHideControls_gatesOnEffectsToolbar() throws {
-        let source = try callViewSource()
-        guard let fnRange = source.range(of: "private var shouldAutoHideControls: Bool") else {
-            XCTFail("shouldAutoHideControls not found in CallView.swift")
-            return
-        }
-        let end = source.index(fnRange.lowerBound, offsetBy: 300, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[fnRange.lowerBound ..< end])
-        XCTAssertTrue(
-            body.contains("showEffectsToolbar"),
-            "shouldAutoHideControls must gate on showEffectsToolbar — hiding the controls " +
-            "while the effects toolbar is open would leave the user unable to close it."
+            "La scène vidéo en duo reste isVideoUIActive (vidéo locale OU distante, Fix 7)."
         )
     }
 }

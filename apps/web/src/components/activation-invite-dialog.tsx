@@ -130,7 +130,7 @@ export function ActivationInviteDialog({
       aria-labelledby={titleId}
       aria-describedby={leadId}
       onClose={onClose}
-      className="m-auto w-[min(28rem,calc(100%-2rem))] rounded-card p-0 backdrop:bg-black/40"
+      className="m-auto w-[min(28rem,calc(100%-2rem))] rounded-card p-0 backdrop:bg-veil"
       style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', border: 0 }}
     >
       <div className="grid gap-4 p-5">
@@ -181,7 +181,7 @@ export function ActivationInviteDialog({
                   onClick={() => void sendEmailCode()}
                   disabled={emailStep === 'sending'}
                   aria-busy={emailStep === 'sending'}
-                  className="grid place-items-center rounded-chip px-4 font-bold text-white focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
+                  className="grid place-items-center rounded-chip px-4 font-bold text-ios-on-brand focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-60"
                   style={primaryButton}
                 >
                   {translate(language, emailStep === 'sending' ? 'activation.email.sending' : 'activation.email.send')}

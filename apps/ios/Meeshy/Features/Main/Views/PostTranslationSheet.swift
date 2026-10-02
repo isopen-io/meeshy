@@ -37,7 +37,7 @@ struct PostTranslationSheet: View {
                 theme.backgroundGradient.ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 20) {
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
                         originalSection
                         if !availableTranslations.isEmpty {
                             translationsSection
@@ -46,7 +46,7 @@ struct PostTranslationSheet: View {
                             requestTranslationSection
                         }
                     }
-                    .padding(16)
+                    .padding(MeeshySpacing.lg)
                 }
             }
             .navigationTitle(String(localized: "feed.post.translation.title", defaultValue: "Langues", bundle: .main))
@@ -78,8 +78,8 @@ struct PostTranslationSheet: View {
             onSelectLanguage?(post.originalLanguage ?? "")
             dismiss()
         } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
+                HStack(spacing: MeeshySpacing.xsPlus) {
                     let display = LanguageDisplay.from(code: post.originalLanguage)
                     Text(LanguageFlagChip.flag(for: post.originalLanguage ?? ""))
                     Text("\(String(localized: "feed.post.translation.original", defaultValue: "Original", bundle: .main)) (\(display?.name ?? post.originalLanguage ?? "?"))")
@@ -99,13 +99,13 @@ struct PostTranslationSheet: View {
                     .lineLimit(4)
                     .multilineTextAlignment(.leading)
             }
-            .padding(14)
+            .padding(MeeshySpacing.mdPlus)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
                     .fill(theme.inputBackground)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
                             .stroke(theme.inputBorder, lineWidth: 1)
                     )
             )
@@ -116,7 +116,7 @@ struct PostTranslationSheet: View {
     // MARK: - Available Translations
 
     private var translationsSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Text(String(localized: "feed.post.translation.available", defaultValue: "Traductions disponibles", bundle: .main))
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
@@ -127,12 +127,12 @@ struct PostTranslationSheet: View {
                     onSelectLanguage?(lang)
                     dismiss()
                 } label: {
-                    HStack(spacing: 10) {
+                    HStack(spacing: MeeshySpacing.smPlus) {
                         let display = LanguageDisplay.from(code: lang)
                         Text(LanguageFlagChip.flag(for: lang))
                             .font(.title3)
 
-                        VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(display?.name ?? Locale.current.localizedString(forLanguageCode: lang) ?? lang)
                                 .font(.subheadline.weight(.medium))
                                 .foregroundColor(theme.textPrimary)
@@ -159,12 +159,12 @@ struct PostTranslationSheet: View {
                             .font(.caption.weight(.semibold))
                             .foregroundColor(theme.textMuted)
                     }
-                    .padding(12)
+                    .padding(MeeshySpacing.md)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                             .fill(theme.inputBackground)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                     .stroke(theme.inputBorder, lineWidth: 1)
                             )
                     )
@@ -177,13 +177,13 @@ struct PostTranslationSheet: View {
     // MARK: - Request New Translations
 
     private var requestTranslationSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
             Text(String(localized: "feed.post.translation.other_languages", defaultValue: "Autres langues", bundle: .main))
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
 
             ForEach(missingLanguages, id: \.self) { lang in
-                HStack(spacing: 10) {
+                HStack(spacing: MeeshySpacing.smPlus) {
                     let display = LanguageDisplay.from(code: lang)
                     Text(LanguageFlagChip.flag(for: lang))
                         .font(.title3)
@@ -195,7 +195,7 @@ struct PostTranslationSheet: View {
                     Spacer()
 
                     if requestedLanguages.contains(lang) {
-                        HStack(spacing: 4) {
+                        HStack(spacing: MeeshySpacing.xs) {
                             Image(systemName: "checkmark")
                                 .font(.caption2.weight(.bold))
                             Text(String(localized: "feed.post.translation.requested", defaultValue: "Demandée", bundle: .main))
@@ -221,27 +221,27 @@ struct PostTranslationSheet: View {
                                 }
                             }
                         } label: {
-                            HStack(spacing: 4) {
+                            HStack(spacing: MeeshySpacing.xs) {
                                 Image(systemName: "translate")
                                     .font(.caption.weight(.medium))
                                 Text(String(localized: "feed.post.translation.translate", defaultValue: "Traduire", bundle: .main))
                                     .font(.caption.weight(.semibold))
                             }
                             .foregroundColor(.white)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
+                            .padding(.horizontal, MeeshySpacing.md)
+                            .padding(.vertical, MeeshySpacing.xsPlus)
                             .background(
                                 Capsule().fill(MeeshyColors.brandGradient)
                             )
                         }
                     }
                 }
-                .padding(12)
+                .padding(MeeshySpacing.md)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                         .fill(theme.inputBackground)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                 .stroke(theme.inputBorder.opacity(0.5), lineWidth: 1)
                         )
                 )

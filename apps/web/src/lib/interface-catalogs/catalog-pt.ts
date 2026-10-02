@@ -10,6 +10,7 @@ import ptPassword from './catalog-pt-password';
 import ptAccounts from './catalog-pt-accounts';
 import ptCall from './catalog-pt-call';
 import ptRowActions from './catalog-pt-row-actions';
+import ptEngagement from './catalog-pt-engagement';
 import ptCallShell from './catalog-pt-call-shell';
 import ptCallJoin from './catalog-pt-call-join';
 import ptCallDecline from './catalog-pt-call-decline';
@@ -35,6 +36,7 @@ import ptCommentRow from './catalog-pt-comment-row';
 import ptContactDiscovery from './catalog-pt-contact-discovery';
 import ptDownload from './catalog-pt-download';
 import ptPhonePrompt from './catalog-pt-phone-prompt';
+import ptUserProfile from './catalog-pt-user-profile';
 
 /**
  * Le portugais du web est celui qu'iOS catalogue sous `pt-BR` : le script
@@ -231,6 +233,7 @@ const pt = {
   ...ptAccounts,
   ...ptCall,
   ...ptRowActions,
+  ...ptEngagement,
   ...ptCallShell,
   ...ptCallJoin,
   ...ptCallDecline,
@@ -242,7 +245,6 @@ const pt = {
   ...ptCallCaptions,
   ...ptCallRecording,
   ...ptSignup,
-  'userProfile.self.edit': 'Editar o meu perfil',
   'report.title': 'Denunciar esta conta',
   'report.body': 'Escolha o motivo da sua denúncia. A nossa equipa de moderação irá recebê-la.',
   'report.action': 'Denunciar',
@@ -287,6 +289,7 @@ const pt = {
   'notifications.category.reactions': 'Reações',
   'notifications.category.mentions': 'Menções',
   'notifications.category.social': 'Social',
+  'notifications.category.engagement': 'Engajamento',
   'notifications.category.contacts': 'Contatos',
   'notifications.category.groups': 'Grupos',
   'notifications.category.calls': 'Chamadas',
@@ -505,6 +508,7 @@ const pt = {
   'settings.save.error': 'O ajuste não foi salvo.',
   'settings.theme.sync_error': 'Tema aplicado neste dispositivo, sem sincronização.',
   'common.cancel': 'Cancelar',
+  'common.close': 'Fechar',
 
   'media.video.play': 'Reproduzir vídeo',
   'media.video.pause': 'Pausar',
@@ -657,51 +661,6 @@ const pt = {
   'discover.announce.unblockFailed': 'Não foi possível desbloquear',
   'discover.announce.offline': 'Sem conexão: nada foi enviado.',
 
-  'userProfile.title': 'Perfil',
-  'userProfile.loading': 'A carregar o perfil',
-  'userProfile.section.publications': 'PUBLICAÇÕES',
-  'userProfile.section.relation': 'LIGAÇÃO',
-  'userProfile.section.conversations': 'CONVERSAS',
-  'userProfile.conversations.empty': 'Nenhuma conversa em comum',
-  'userProfile.conversations.emptyBody': 'Ainda nada vos liga — «Escrever» abre a primeira.',
-  'userProfile.conversations.error': 'Não foi possível carregar as conversas',
-  'userProfile.conversations.loading': 'A carregar as conversas',
-  'userProfile.refused.title': 'Este perfil não está disponível',
-  'userProfile.refused.body': 'Não existe, ou não tem acesso.',
-  'userProfile.throttled.title': 'Demasiados pedidos',
-  'userProfile.throttled.body': 'Tente novamente dentro de instantes.',
-  'userProfile.error.title': 'Não foi possível carregar este perfil',
-  'userProfile.error.body': 'Tente novamente dentro de instantes.',
-  'userProfile.offline.body': 'O perfil aparecerá quando voltar a ligar-se.',
-  'userProfile.posts.empty': 'Sem publicações',
-  'userProfile.posts.emptyBody': 'Ainda não há nada público para ler.',
-  'userProfile.posts.emptyPosts': 'Nenhuma publicação aqui',
-  'userProfile.posts.emptyReels': 'Nenhum reel aqui',
-  'userProfile.posts.emptyFilter': 'Toque novamente no bloco para ver tudo.',
-  'userProfile.posts.error': 'Não foi possível carregar as publicações',
-  'userProfile.posts.loadMore': 'Carregar mais',
-  'userProfile.posts.loaded': 'Publicações adicionadas: {count}',
-  'userProfile.posts.loadedNone': 'Não há mais publicações a mostrar',
-  'userProfile.posts.loading': 'A carregar…',
-  'userProfile.stat.posts': 'Publicações',
-  'userProfile.stat.reels': 'Reels',
-  'userProfile.stat.stories': 'Stories',
-  'userProfile.stat.filterLabel': 'Filtrar por {name}',
-  'userProfile.stat.filterClear': 'Mostrar tudo',
-  'userProfile.context.received': '{name} quer ligar-se a si. Aceite para trocar mensagens.',
-  'userProfile.context.sent': 'Enviou um pedido de ligação a {name}. A aguardar resposta.',
-  'userProfile.action.write': 'Escrever',
-  'userProfile.action.writeLabel': 'Escrever a {name}',
-  'userProfile.action.block': 'Bloquear',
-  'userProfile.action.blockLabel': 'Bloquear {name}',
-  'userProfile.blocked.title': 'Bloqueou esta pessoa',
-  'userProfile.blocked.body': 'As publicações e estatísticas ficam ocultas enquanto o bloqueio durar.',
-  'userProfile.signin.title': 'Inicie sessão para se ligar',
-  'userProfile.signin.body': 'Pedidos de ligação e mensagens exigem uma conta.',
-  'userProfile.signin.cta': 'Iniciar sessão',
-  'userProfile.announce.blocked': 'Pessoa bloqueada',
-  'userProfile.announce.blockFailed': 'Não foi possível bloquear',
-  'userProfile.announce.writeFailed': 'Não foi possível abrir a conversa',
 
   'a11y.floating.rung.discover.requests.one': 'Descobrir, {count} pedido recebido',
   'a11y.floating.rung.discover.requests.other': 'Descobrir, {count} pedidos recebidos',
@@ -1169,6 +1128,7 @@ const pt = {
   ...ptQuote,
   ...ptCommentRow,
   ...ptContactDiscovery,
+  ...ptUserProfile,
 } satisfies InterfaceCatalog;
 
 export default pt;

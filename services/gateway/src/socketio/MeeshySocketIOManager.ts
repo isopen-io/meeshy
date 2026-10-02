@@ -109,7 +109,9 @@ import type { QueuedPayloadFor, QueuedVariantFor } from './queuedEventContract';
 import { drainedEventName, isAddressableConversationId, isDeliverableQueuedPayload } from './queuedEventContract';
 import { isValidObjectId } from '@meeshy/shared/utils/object-id';
 import { syncConversationListOnNewMessage } from './postMessageSyncFanOut';
+import { wireCallMessageBroadcasters } from './callMessageBroadcasters';
 import { attachSocketIORedisAdapter, type SocketIORedisAdapterHandle } from './redis-adapter';
+import { creditTranslationRequest, lazyTranslationRequestEngagement } from '../services/messaging/translationRequestCredit';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -238,6 +240,7 @@ export class MeeshySocketIOManager {
   }
 
   private prisma: PrismaClient;
+  private readonly translationRequestEngagement = lazyTranslationRequestEngagement(() => this.prisma);
   private translationService: MessageTranslationService;
   private maintenanceService: MaintenanceService;
   private statusService: StatusService;
@@ -345,16 +348,14 @@ export class MeeshySocketIOManager {
     // state actually being written by the socket handlers).
     this.callService = new CallService(prisma);
     this.callEventsHandler = new CallEventsHandler(prisma, this.callService);
-    // P3 — let the call handler post the call-summary system message through
-    // the canonical message broadcast path when a call ends.
-    this.callEventsHandler.setMessageBroadcaster(
-      (message, conversationId) => this.broadcastMessage(message as Message, conversationId)
-    );
-    // Live-call message — let the terminal upsert EDIT the live message
-    // in-place (message:edited full payload + preview + offline enqueue).
-    this.callEventsHandler.setMessageUpdateBroadcaster(
-      (message, conversationId) => this.broadcastMessageEdited(message as Message, conversationId)
-    );
+    // P3 + live-call message + #9026 (un appel remonte la conversation pour tous).
+    wireCallMessageBroadcasters({
+      handler: this.callEventsHandler,
+      prisma,
+      getIO: () => this.io,
+      broadcastMessage: (message, conversationId) => this.broadcastMessage(message as Message, conversationId),
+      broadcastMessageEdited: (message, conversationId) => this.broadcastMessageEdited(message as Message, conversationId)
+    });
 
     // CORRECTION: Configurer le callback de broadcast pour le MaintenanceService
     this.maintenanceService.setStatusBroadcastCallback(
@@ -458,6 +459,7 @@ export class MeeshySocketIOManager {
       userSockets: this.userSockets,
       emitPresenceSnapshot: (socket, userId, isAnonymous) =>
         this._emitPresenceSnapshot(socket, userId, isAnonymous),
+      emitViewingSnapshots: (socket) => this.conversationViewingHandler.afterAuthentication(socket),
       // CALL-RESILIENCE (Vague 44) — lets AuthHandler's anonymous-guest
       // disconnect leave reuse CallEventsHandler's PARTICIPANT_LEFT/
       // call:ended fanout instead of leaving the other party's UI "in call".
@@ -1820,13 +1822,7 @@ export class MeeshySocketIOManager {
       });
 
       // « Est dans la conversation » (#8892) — l'écran ouvert au premier plan.
-      socket.on(CLIENT_EVENTS.VIEWING_START, async (data) => {
-        try { await this.conversationViewingHandler.handleStart(socket, data); } catch (error) { logger.error('[VIEWING_START] Error:', error); }
-      });
-
-      socket.on(CLIENT_EVENTS.VIEWING_STOP, async (data) => {
-        try { await this.conversationViewingHandler.handleStop(socket, data); } catch (error) { logger.error('[VIEWING_STOP] Error:', error); }
-      });
+      this.conversationViewingHandler.listen(socket);
 
       // Une app passée en arrière-plan n'est plus dans aucune conversation.
       // `CallEventsHandler` écoute le même événement pour la sonnerie.
@@ -2103,6 +2099,12 @@ export class MeeshySocketIOManager {
         socket.emit(SERVER_EVENTS.ERROR, { message: 'Access denied' });
         return;
       }
+      const creditRequest = () => creditTranslationRequest({
+        engagement: this.translationRequestEngagement,
+        requester: { userId, isAnonymous: connectedUser?.isAnonymous ?? false },
+        conversationId: message.conversationId,
+        onError: (error) => logger.warn('[REQUEST_TRANSLATION] tool.translation_request credit failed', { error }),
+      });
 
       // Récupérer la traduction (depuis le cache ou la base de données)
       const translation = await this.translationService.getTranslation(messageId, targetLanguage);
@@ -2127,6 +2129,7 @@ export class MeeshySocketIOManager {
         }));
 
         this.stats.translations_sent++;
+        creditRequest();
 
       } else {
         // No cached translation — trigger on-demand translation via ZMQ
@@ -2142,6 +2145,7 @@ export class MeeshySocketIOManager {
           });
 
           logger.info(`🔄 On-demand translation requested for message ${messageId} -> ${targetLanguage}`);
+          creditRequest();
         } catch (translationError) {
           logger.error(`❌ On-demand translation failed: ${translationError}`);
           socket.emit(SERVER_EVENTS.ERROR, {

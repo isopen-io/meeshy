@@ -49,12 +49,15 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case analyticsVolumeTimeline
     case anonymousUsers
     case anonymousUsersByParticipantId(participantId: String)
+    case auditLogs
     case broadcasts
     case broadcastsById(id: String)
     case broadcastsByIdPreview(id: String)
     case broadcastsByIdSend(id: String)
     case broadcastsByIdSendInapp(id: String)
     case communities
+    case communitiesByCommunityId(communityId: String)
+    case communitiesByCommunityIdMembers(communityId: String)
     case conversations
     case conversationsByConversationId(conversationId: String)
     case conversationsByConversationIdMessages(conversationId: String)
@@ -63,6 +66,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case conversationsByConversationIdParticipantsByUserIdRemove(conversationId: String, userId: String)
     case dashboard
     case dashboardInvalidateCache
+    case engagementScale
     case invitations
     case invitationsById(id: String)
     case invitationsStats
@@ -75,6 +79,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case messagesEngagement
     case messagesStats
     case messagesTrends
+    case monitoring
     case posts
     case postsByPostId(postId: String)
     case postsStats
@@ -90,6 +95,8 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case shareLinks
     case shareLinksById(id: String)
     case shareLinksByIdReveal(id: String)
+    case trackingLinks
+    case trackingLinksByLinkId(linkId: String)
     case translations
     case users
     case usersByUserId(userId: String)
@@ -167,12 +174,15 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .analyticsVolumeTimeline: return "/api/v1/admin/analytics/volume-timeline"
         case .anonymousUsers: return "/api/v1/admin/anonymous-users"
         case .anonymousUsersByParticipantId(let participantId): return "/api/v1/admin/anonymous-users/\(participantId)"
+        case .auditLogs: return "/api/v1/admin/audit-logs"
         case .broadcasts: return "/api/v1/admin/broadcasts"
         case .broadcastsById(let id): return "/api/v1/admin/broadcasts/\(id)"
         case .broadcastsByIdPreview(let id): return "/api/v1/admin/broadcasts/\(id)/preview"
         case .broadcastsByIdSend(let id): return "/api/v1/admin/broadcasts/\(id)/send"
         case .broadcastsByIdSendInapp(let id): return "/api/v1/admin/broadcasts/\(id)/send-inapp"
         case .communities: return "/api/v1/admin/communities"
+        case .communitiesByCommunityId(let communityId): return "/api/v1/admin/communities/\(communityId)"
+        case .communitiesByCommunityIdMembers(let communityId): return "/api/v1/admin/communities/\(communityId)/members"
         case .conversations: return "/api/v1/admin/conversations"
         case .conversationsByConversationId(let conversationId): return "/api/v1/admin/conversations/\(conversationId)"
         case .conversationsByConversationIdMessages(let conversationId): return "/api/v1/admin/conversations/\(conversationId)/messages"
@@ -181,6 +191,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .conversationsByConversationIdParticipantsByUserIdRemove(let conversationId, let userId): return "/api/v1/admin/conversations/\(conversationId)/participants/\(userId)/remove"
         case .dashboard: return "/api/v1/admin/dashboard"
         case .dashboardInvalidateCache: return "/api/v1/admin/dashboard/invalidate-cache"
+        case .engagementScale: return "/api/v1/admin/engagement-scale"
         case .invitations: return "/api/v1/admin/invitations"
         case .invitationsById(let id): return "/api/v1/admin/invitations/\(id)"
         case .invitationsStats: return "/api/v1/admin/invitations/stats"
@@ -193,6 +204,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .messagesEngagement: return "/api/v1/admin/messages/engagement"
         case .messagesStats: return "/api/v1/admin/messages/stats"
         case .messagesTrends: return "/api/v1/admin/messages/trends"
+        case .monitoring: return "/api/v1/admin/monitoring"
         case .posts: return "/api/v1/admin/posts"
         case .postsByPostId(let postId): return "/api/v1/admin/posts/\(postId)"
         case .postsStats: return "/api/v1/admin/posts/stats"
@@ -208,6 +220,8 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .shareLinks: return "/api/v1/admin/share-links"
         case .shareLinksById(let id): return "/api/v1/admin/share-links/\(id)"
         case .shareLinksByIdReveal(let id): return "/api/v1/admin/share-links/\(id)/reveal"
+        case .trackingLinks: return "/api/v1/admin/tracking-links"
+        case .trackingLinksByLinkId(let linkId): return "/api/v1/admin/tracking-links/\(linkId)"
         case .translations: return "/api/v1/admin/translations"
         case .users: return "/api/v1/admin/users"
         case .usersByUserId(let userId): return "/api/v1/admin/users/\(userId)"

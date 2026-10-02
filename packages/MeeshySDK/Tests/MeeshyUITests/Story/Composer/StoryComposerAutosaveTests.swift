@@ -46,14 +46,16 @@ final class StoryComposerAutosaveTests: XCTestCase {
         let vm = StoryComposerViewModel()
         vm.autosaveDebounceInterval = 0.05
         var fireCount = 0
+        let firedOnce = expectation(description: "first burst settled")
         let firedTwice = expectation(description: "autosave trigger fired twice")
         let cancellable = vm.autosaveTrigger.sink { _ in
             fireCount += 1
+            if fireCount == 1 { firedOnce.fulfill() }
             if fireCount == 2 { firedTwice.fulfill() }
         }
 
         vm.selectedElementId = "first-burst"
-        RunLoop.main.run(until: Date().addingTimeInterval(0.15))
+        wait(for: [firedOnce], timeout: 2.0)
         vm.selectedElementId = "second-burst"
 
         wait(for: [firedTwice], timeout: 2.0)

@@ -78,12 +78,60 @@ public enum AvatarPresenceDot: Equatable, Sendable {
         }
     }
 
-    /// Être dans la conversation est une activité en cours : il pulse comme `online`.
+    /// L'identité du point pour ses transitions (#9047) : quand elle change, le
+    /// point sortant diminue et le point entrant apparaît en rebondissant.
+    public var transitionKey: String {
+        switch self {
+        case .here: return "here"
+        case .presence(let state): return "presence.\(state.rawValue)"
+        }
+    }
+
+    /// Le point indigo « ici » pulse en arrivant (#9047) — une onde qui part
+    /// de lui et s'éteint ; les autres points ne font que rebondir.
+    public var arrivesWithRipple: Bool {
+        self == .here
+    }
+
+    /// Le contour de l'emoji de mood (#9065) : le mood remplace le point, et
+    /// porte sa couleur quand elle dit « ici » (indigo) ou « en ligne » (vert).
+    public var moodOutline: Color? {
+        switch self {
+        case .here: return color
+        case .presence(.online): return color
+        case .presence: return nil
+        }
+    }
+
+    /// La respiration d'échelle des pastilles de présence. « ici » a la sienne,
+    /// son onde (`PresenceHereWave`, #9065).
     public var pulses: Bool {
         switch self {
-        case .here: return true
+        case .here: return false
         case .presence(let state): return state.pulses
         }
+    }
+
+    /// Le diamètre du point, en fraction de l'avatar : la pastille de présence
+    /// à 0,26, le point « ici » au double (#9061). Jumeau de `HERE_DOT_RATIO`
+    /// (`apps/web/src/components/avatar.tsx`).
+    public func diameter(avatarSize: CGFloat, hereRatio: CGFloat = AvatarPresenceDot.hereRatio) -> CGFloat {
+        switch self {
+        case .here: return avatarSize * hereRatio
+        case .presence: return avatarSize * 0.26
+        }
+    }
+
+    public static let hereRatio: CGFloat = 0.52
+
+    /// Le décalage qui pose le CENTRE du point sur le cercle de l'avatar, à
+    /// 45°, depuis l'alignement `.bottomTrailing` de son cadre (#9061). Le
+    /// cadre vaut l'avatar seul, ou l'anneau de story quand il est peint.
+    /// Sans ce calcul, un point aligné au coin du cadre tombe hors du cercle.
+    public static func centerOffset(avatarSize: CGFloat, frameSize: CGFloat, dotDiameter: CGFloat) -> CGSize {
+        let target = frameSize / 2 + avatarSize / 2 * cos(.pi / 4)
+        let delta = target - (frameSize - dotDiameter / 2)
+        return CGSize(width: delta, height: delta)
     }
 
     public var localizedLabel: String {
@@ -134,4 +182,39 @@ public extension MeeshyConversation {
             bundle: .module
         )
     }
+}
+
+/// L'onde du point « ici » (#9065), une échelle partagée avec le mood :
+/// IMPERCEPTIBLE quand le pair regarde en plein écran — il s'y stabilise —,
+/// DOUCE au repos — il observe —, à peine plus ample quand il défile,
+/// écoute ou agit. Seule l'arrivée pulse franchement (`PresenceArrival`).
+/// Jumelle de `presence-dot-hush` / `-rest` / `-pulse`
+/// (`apps/web/src/styles/avatar.css`).
+public struct PresenceHereWave: Equatable, Sendable {
+    public let peakScale: CGFloat
+    public let startOpacity: Double
+    public let duration: Double
+
+    public static let hush = PresenceHereWave(peakScale: 1.25, startOpacity: 0.2, duration: 2.8)
+    public static let rest = PresenceHereWave(peakScale: 1.6, startOpacity: 0.3, duration: 2.4)
+    public static let vivid = PresenceHereWave(peakScale: 1.9, startOpacity: 0.4, duration: 1.8)
+
+    public static func `for`(_ here: ConversationHere) -> PresenceHereWave? {
+        switch here {
+        case .absent: return nil
+        case .here: return .rest
+        case .active: return .vivid
+        case .focused: return .hush
+        }
+    }
+}
+
+/// L'arrivée « ici » (#9047, #9065) : le point — ou le mood — grossit en
+/// ressort, et un GROS pulse part de lui avant qu'il se stabilise. Jumelle de
+/// `presence-dot-ripple` (`apps/web/src/styles/avatar.css`).
+public enum PresenceArrival {
+    public static let peakScale: CGFloat = 3
+    public static let lineWidth: CGFloat = 3
+    public static let startOpacity: Double = 0.9
+    public static let duration: Double = 0.9
 }

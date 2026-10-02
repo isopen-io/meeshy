@@ -157,7 +157,7 @@ struct BubbleSwipeContainer<Content: View>: View {
         // adapts to the bubble's intrinsic width.
         ZStack(alignment: indicatorAlignment) {
             swipeIndicator
-                .padding(.horizontal, 8)
+                .padding(.horizontal, MeeshySpacing.sm)
 
             content()
                 .padding(.leading, selectionShift)
@@ -242,10 +242,10 @@ struct BubbleSwipeContainer<Content: View>: View {
         .overlay(alignment: .topLeading) {
             if isSelectionModeActive {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20))
+                    .font(.system(size: MeeshyIconSize.xl))
                     .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.6))
                     .background(Circle().fill(.background).frame(width: 18, height: 18))
-                    .padding(.top, 6)
+                    .padding(.top, MeeshySpacing.xsPlus)
                     .padding(.leading, selectionLeadingCircleInset)
                     .allowsHitTesting(false)
             }
@@ -267,18 +267,18 @@ struct BubbleSwipeContainer<Content: View>: View {
                     // direction, forward (curved arrow forward) for the
                     // opposite. Crossfade transition keeps the swap subtle.
                     Image(systemName: isReplyDir ? "arrowshape.turn.up.left.fill" : "arrowshape.turn.up.right.fill")
-                        .font(MeeshyFont.relative(22, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyIconSize.xxl, weight: .semibold))
                         .foregroundStyle(MeeshyColors.brandPrimary)
                         .transition(.scale.combined(with: .opacity))
                 } else {
                     // Under the threshold — day + hour stamp gives the user
                     // context (when the message was sent) while they decide
                     // whether to commit the gesture.
-                    VStack(spacing: 2) {
+                    VStack(spacing: MeeshySpacing.xxs) {
                         Text(swipeStampDay)
-                            .font(MeeshyFont.relative(11, weight: .medium))
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         Text(swipeStampTime)
-                            .font(MeeshyFont.relative(12, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                     }
                     .foregroundColor(.secondary)
                     .transition(.opacity)
@@ -651,7 +651,10 @@ struct MessageListView: UIViewControllerRepresentable {
     @Environment(\.meeshyConversationList) private var conversationListViewModel
     @Environment(\.colorScheme) private var colorScheme
 
-    class Coordinator {
+    /// Porte aussi l'écoute des gestes du fil (#9061) : un toucher n'importe
+    /// où dans la liste — réagir, lancer un audio, ouvrir un menu — rend le
+    /// lecteur actif aux yeux de ses pairs, sans rien retenir du geste.
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
@@ -661,9 +664,26 @@ struct MessageListView: UIViewControllerRepresentable {
         var lastScrollToMessageTrigger: Int = 0
         var lastFlushSeenTrigger: Int = 0
         var wasSearchingQuotedMessage: Bool = false
+
+        @MainActor @objc func threadTouched() {
+            ConversationViewingReporter.shared.touched()
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                               shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
+
+    /// Le défilement du doigt relaie au parent ET au rapporteur de présence
+    /// (#9061) : défiler, c'est regarder.
+    private var scrollingRelay: (Bool) -> Void {
+        let parent = onScrollingActiveChanged
+        return { isActive in
+            parent?(isActive)
+            ConversationViewingReporter.shared.scrollingChanged(isActive)
+        }
+    }
 
     func makeUIViewController(context: Context) -> MessageListViewController {
         let vc = MessageListViewController(
@@ -681,8 +701,13 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onScrollToMessage = onScrollToMessage
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
-        vc.onScrollingActiveChanged = onScrollingActiveChanged
+        vc.onScrollingActiveChanged = scrollingRelay
         vc.isHeaderExpanded = isHeaderExpanded
+        let touches = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.threadTouched))
+        touches.cancelsTouchesInView = false
+        touches.delaysTouchesEnded = false
+        touches.delegate = context.coordinator
+        vc.view.addGestureRecognizer(touches)
         // WS-6 (F-085) : posées AVANT `applyBottomInset`/`applyTopInset`
         // ci-dessous — `applyTopInset` recompose `headInset` (§4.5) à partir
         // de `readingMode`/`hasReachedOldest`, qui doivent donc déjà être à
@@ -786,7 +811,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onScrollToMessage = onScrollToMessage
         vc.onLoadOlder = onLoadOlder
         vc.onNearBottomChanged = onNearBottomChanged
-        vc.onScrollingActiveChanged = onScrollingActiveChanged
+        vc.onScrollingActiveChanged = scrollingRelay
         vc.isHeaderExpanded = isHeaderExpanded
         // #3947 — **la liste ne se dessine pas sous ce qui la recouvre.**
         //

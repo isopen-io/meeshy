@@ -94,7 +94,9 @@ struct iPadRootView: View {
 
     /// Conversation surfaced by a long-press / pull-down on a notification toast
     /// — presented as a reusable `ConversationView` preview over the columns.
-    @State var notificationPreviewConversation: Conversation?
+    /// Sur le tas (`iPadRootSheetTargets`, #8972) : en ligne, elle faisait
+    /// franchir à la vue son budget de taille.
+    @State var sheetTargets = iPadRootSheetTargets()
     /// Swallows the toast Button's release tap that can fire right after the
     /// long-press / drag opened the preview (prevents double action).
     @State var suppressToastTap = false
@@ -200,7 +202,7 @@ struct iPadRootView: View {
             storyViewerCoordinator: storyViewerCoordinator,
             showSharePicker: $showSharePicker,
             showNewConversation: $showNewConversation,
-            notificationPreviewConversation: $notificationPreviewConversation,
+            notificationPreviewConversation: $sheetTargets.notificationPreview,
             onOpenFullConversation: openConversation
         ))
         .modifier(iPadCoversAndChromeLayer(
@@ -216,7 +218,7 @@ struct iPadRootView: View {
             activeConversationId: activeConversation?.id,
             onStoryReply: handleStoryReply,
             onSyncPillTap: handleSyncPillTap,
-            activeConversationIdForBanner: { activeConversation?.id ?? notificationPreviewConversation?.id },
+            activeConversationIdForBanner: { activeConversation?.id ?? sheetTargets.notificationPreview?.id },
             onMiniPlayerTap: {
                 guard let convId = ConversationAudioCoordinator.shared
                     .activeContext?.conversationId else { return }
@@ -363,6 +365,7 @@ struct iPadRootView: View {
                 forcedReadingMode: router.pendingForcedReadingMode,
                 landsOnMessage: router.landsOnMessage(in: conversation.id)
             )
+            .reportsConversationViewing(conversation.id)
             .id(conversation.id)
             .navigationBarHidden(true)
             .onAppear {

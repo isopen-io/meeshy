@@ -17,25 +17,25 @@ extension CallView {
 
             // Pulsing avatar
             pulsingAvatar
-                .padding(.bottom, 24)
+                .padding(.bottom, MeeshySpacing.xxl)
 
             // Name
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundColor(.white)
-                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
-                .padding(.bottom, 8)
+                .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 4, y: 2)
+                .padding(.bottom, MeeshySpacing.sm)
 
             // §H2 — Status: "Appel en cours…" until 6s have elapsed, then the
             // calmer "En attente du correspondant…" so the user knows the ring
             // is reaching the peer (not a silent failure). The watchdog task
             // below drives this flag and auto-cancels on state transition.
-            VStack(spacing: 4) {
+            VStack(spacing: MeeshySpacing.xs) {
                 Text(sdpOfferSlow
                     ? String(localized: "call.outgoing.waiting", defaultValue: "En attente du correspondant…", bundle: .main)
                     : String(localized: "call.outgoing.ringing", defaultValue: "Appel en cours...", bundle: .main))
                     .font(.callout.weight(.medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
                 if sdpOfferSlow {
                     Text(String(localized: "call.outgoing.waiting.hint", defaultValue: "Le correspondant n'a pas encore répondu.", bundle: .main))
                         .font(.caption2)
@@ -44,22 +44,22 @@ extension CallView {
                         .transition(.opacity)
                 }
             }
-            .padding(.bottom, 8)
+            .padding(.bottom, MeeshySpacing.sm)
             .animation(.easeInOut(duration: 0.3), value: sdpOfferSlow)
 
             // Call type badge
             callTypeBadge
-                .padding(.bottom, 16)
+                .padding(.bottom, MeeshySpacing.lg)
 
             // #8480, #8795 — ce que l'appelé reçoit vraiment avant de décrocher
             CallPreviewSeenLabel(preview: .shared, peerName: peerDisplayName)
                 .frame(minHeight: 28)
-                .padding(.bottom, 16)
+                .padding(.bottom, MeeshySpacing.lg)
 
             Spacer()
 
             // #8795 — micro et caméra de l'aperçu, puis filtres et raccroché
-            HStack(spacing: 20) {
+            HStack(spacing: MeeshySpacing.xl) {
                 CallPreviewOutgoingControls(
                     preview: .shared,
                     peerName: peerDisplayName,
@@ -99,21 +99,21 @@ extension CallView {
             Spacer()
 
             pulsingAvatar
-                .padding(.bottom, 24)
+                .padding(.bottom, MeeshySpacing.xxl)
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
                 .foregroundColor(.white)
-                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
-                .padding(.bottom, 8)
+                .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 4, y: 2)
+                .padding(.bottom, MeeshySpacing.sm)
 
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ProgressView()
                     .tint(MeeshyColors.indigo400)
                     .accessibilityHidden(true)
                 Text(String(localized: "call.connecting", defaultValue: "Connexion...", bundle: .main))
                     .font(.callout.weight(.medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
             }
             .accessibilityElement(children: .combine)
             .padding(.bottom, 60)
@@ -136,7 +136,7 @@ extension CallView {
     // MARK: - Ended
 
     func endedView(reason: CallEndReason) -> some View {
-        VStack(spacing: 16) {
+        VStack(spacing: MeeshySpacing.lg) {
             Spacer()
 
             avatarCircle(size: 100)
@@ -145,16 +145,16 @@ extension CallView {
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title3, design: .rounded).weight(.semibold))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
 
             Text(endReasonText(reason))
                 .font(.callout.weight(.medium))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(MeeshyColors.mediaChromeTertiary)
 
             if callManager.callDuration > 0 {
                 Text(callManager.formattedDuration)
                     .font(.footnote.weight(.medium).monospacedDigit())
-                    .foregroundColor(.white.opacity(0.45))
+                    .foregroundColor(.white.opacity(MeeshyOpacity.strong))
                     // Final call-total duration: same naked-readout fix, static
                     // (no .updatesFrequently). Bare "0:34" → "Durée de l'appel, 0:34".
                     .accessibilityLabel(String(localized: "call.duration.a11y.label"))
@@ -172,12 +172,12 @@ extension CallView {
                     )
                     .font(.callout.weight(.semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, MeeshySpacing.xxl)
+                    .padding(.vertical, MeeshySpacing.md)
                     .frame(minHeight: 44)
                     .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.success)
                 }
-                .padding(.top, 8)
+                .padding(.top, MeeshySpacing.sm)
                 .accessibilityLabel(String(localized: "call.action.retry", defaultValue: "Réessayer", bundle: .main))
             }
 
@@ -194,7 +194,7 @@ extension CallView {
                 Circle()
                     .stroke(
                         LinearGradient(
-                            colors: [MeeshyColors.indigo500.opacity(0.3), MeeshyColors.indigo400.opacity(0.1)],
+                            colors: [MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), MeeshyColors.indigo400.opacity(MeeshyOpacity.subtle)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -258,7 +258,7 @@ extension CallView {
                 .clipShape(Circle())
             }
         }
-        .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 12, y: 4)
+        .shadow(color: MeeshyColors.indigo500.opacity(MeeshyOpacity.medium), radius: 12, y: 4)
     }
 
     /// Duo d'avatars de l'appel : le correspondant en grand, l'utilisateur
@@ -307,7 +307,7 @@ extension CallView {
         }
         .frame(width: size, height: size)
         // Liseré au ton du fond : détache la pastille du grand cercle.
-        .overlay(Circle().stroke(Color(hex: "0F0D19"), lineWidth: 3))
+        .overlay(Circle().stroke(MeeshyColors.surfaceDarkDeep, lineWidth: 3))
         .accessibilityLabel(String(localized: "call.avatar.you", defaultValue: "Vous", bundle: .main))
     }
 
@@ -321,7 +321,7 @@ extension CallView {
     }
 
     func statusPill(icon: String, text: String, color: Color) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
                 .font(.caption2.weight(.semibold))
                 .accessibilityHidden(true)
@@ -329,11 +329,11 @@ extension CallView {
                 .font(.caption2.weight(.medium))
         }
         .foregroundColor(color)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
+        .padding(.horizontal, MeeshySpacing.smPlus)
+        .padding(.vertical, MeeshySpacing.xs)
         .background(
             Capsule()
-                .fill(color.opacity(0.12))
+                .fill(color.opacity(MeeshyOpacity.light))
         )
     }
 }

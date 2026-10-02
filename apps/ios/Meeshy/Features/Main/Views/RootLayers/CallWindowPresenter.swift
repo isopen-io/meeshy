@@ -50,13 +50,20 @@ final class CallWindowPresenter {
     static let shared = CallWindowPresenter()
 
     private let hosting: CallWindowHosting
+    private let viewing: ConversationViewingReporting
     private var subscription: AnyCancellable?
     private var activation: AnyCancellable?
     private weak var pendingManager: CallManager?
     private(set) var isShowing = false
 
-    init(hosting: CallWindowHosting = CallOverlayWindowHost()) {
+    /// `viewing` : l'écran d'appel en grand fait quitter la conversation
+    /// (#9065) ; réduit, l'utilisateur y revient s'il l'a sous les yeux.
+    init(
+        hosting: CallWindowHosting = CallOverlayWindowHost(),
+        viewing: ConversationViewingReporting = ConversationViewingReporter.shared
+    ) {
         self.hosting = hosting
+        self.viewing = viewing
     }
 
     var isBound: Bool { subscription != nil }
@@ -90,6 +97,7 @@ final class CallWindowPresenter {
     }
 
     func apply(manager: CallManager?, visible: Bool) {
+        viewing.setCallScreenShown(manager != nil && visible)
         guard let manager, visible else {
             pendingManager = nil
             guard isShowing else { return }

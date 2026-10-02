@@ -256,6 +256,7 @@ struct FocalRow: View {
                     senderThumbHash: input.senderThumbHash,
                     senderColorHex: input.senderColorHex,
                     senderPresence: input.senderPresence,
+                    senderIsHere: input.senderIsHere,
                     senderStoryRing: input.senderStoryRing,
                     senderMoodEmoji: input.senderMoodEmoji,
                     senderIsAnonymous: input.senderIsAnonymous,
@@ -523,7 +524,7 @@ struct FocalRow: View {
         if isFailedOutgoing {
             BubbleFailedRetryBar(onRetry: { actions.onRetry?(input.localId) })
                 .frame(width: 72, height: 28)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous))
                 .padding(.leading, indent)
         }
     }
@@ -659,13 +660,15 @@ struct FocalRow: View {
             .accessibilityLabel(BubbleSticker.accessibilityLabel(for: sticker))
     }
 
-    /// « emoji-only conserve 90/60/quarante-cinq pt » (critère §7) : `emojiFontSize`
-    /// vient de `content.text.emojiFontSize`, jamais recalculé ici.
+    /// L'emoji seul prend la taille de `content.text.emojiFontSize` (×4 / ×3 /
+    /// ×2, #9054), jamais recalculée ici — et à la taille EXACTE
+    /// (`MeeshyFont.emoji`) : `relative` la plafonnait à 34 pt.
     /// Rendu du texte ORIGINAL (`raw`), jamais traduit — même règle que
     /// `BubbleStandardLayout.emojiOnlyContent` (lu, jamais modifié).
     private var emojiBlock: some View {
         Text(content.text?.raw ?? "")
-            .font(MeeshyFont.relative(content.text?.emojiFontSize ?? FocalMetrics.Text.size))
+            .font(content.text?.emojiFontSize.map(MeeshyFont.emoji)
+                  ?? MeeshyFont.relative(FocalMetrics.Text.size))
             .fixedSize(horizontal: false, vertical: true)
             .padding(.leading, indent)
     }
@@ -800,7 +803,7 @@ struct FocalRow: View {
         // de la propriété. Inoffensif tant que le corps tient en une
         // expression — et un piège dès qu'on y ajoutera une seconde vue, qui
         // ne se monterait alors pas.
-        HStack(alignment: .center, spacing: 6) {
+        HStack(alignment: .center, spacing: MeeshySpacing.xsPlus) {
             // Jamais de drapeau EN CLAIR sur un message protégé (revue
             // adversariale 2026-08-18) : la bulle floute sa bande de
             // drapeaux avec le contenu — révéler la langue d'origine
@@ -888,7 +891,7 @@ struct FocalRow: View {
         @ViewBuilder _ content: () -> Content
     ) -> some View {
         content()
-            .padding(.horizontal, 7)
+            .padding(.horizontal, MeeshySpacing.xsPlus)
             .frame(minWidth: FocalMetrics.FocusStrip.chipMinWidth)
             .frame(height: height)
             .background(
@@ -937,7 +940,7 @@ struct FocalRow: View {
                         actions.onSetActiveDisplayLanguage?(content.messageId, code)
                     } label: {
                         focusChip(isActive: code.lowercased() == translation.activeLangCode.lowercased()) {
-                            Text(LanguageFlagChip.flag(for: code)).font(MeeshyFont.relative(12))
+                            Text(LanguageFlagChip.flag(for: code)).font(MeeshyFont.relative(MeeshyFont.smallSize))
                         }
                     }
                     .buttonStyle(.plain)
@@ -975,7 +978,7 @@ struct FocalRow: View {
             actions.onToggleReaction?(reaction.emoji)
         } label: {
             focusChip(filled: mine) {
-                HStack(spacing: 2) {
+                HStack(spacing: MeeshySpacing.xxs) {
                     Text(reaction.emoji).font(.caption2)
                     if reaction.count > 1 {
                         Text("\(reaction.count)")
@@ -1072,6 +1075,7 @@ struct FocalRow: View {
                 senderThumbHash: input.senderThumbHash,
                 senderColorHex: input.senderColorHex,
                 senderPresence: input.senderPresence,
+                senderIsHere: input.senderIsHere,
                 senderStoryRing: input.senderStoryRing,
                 senderMoodEmoji: input.senderMoodEmoji,
                 senderIsAnonymous: input.senderIsAnonymous,

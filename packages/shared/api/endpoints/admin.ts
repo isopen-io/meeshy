@@ -123,6 +123,9 @@ export const anonymousUsers = '/api/v1/admin/anonymous-users';
 /** GET /api/v1/admin/anonymous-users/:participantId */
 export const anonymousUsersByParticipantId = (participantId: string): string => `/api/v1/admin/anonymous-users/${encodeURIComponent(participantId)}`;
 
+/** GET /api/v1/admin/audit-logs */
+export const auditLogs = '/api/v1/admin/audit-logs';
+
 /** GET · POST /api/v1/admin/broadcasts */
 export const broadcasts = '/api/v1/admin/broadcasts';
 
@@ -141,10 +144,16 @@ export const broadcastsByIdSendInapp = (id: string): string => `/api/v1/admin/br
 /** GET /api/v1/admin/communities */
 export const communities = '/api/v1/admin/communities';
 
+/** GET · PATCH /api/v1/admin/communities/:communityId */
+export const communitiesByCommunityId = (communityId: string): string => `/api/v1/admin/communities/${encodeURIComponent(communityId)}`;
+
+/** GET /api/v1/admin/communities/:communityId/members */
+export const communitiesByCommunityIdMembers = (communityId: string): string => `/api/v1/admin/communities/${encodeURIComponent(communityId)}/members`;
+
 /** GET /api/v1/admin/conversations */
 export const conversations = '/api/v1/admin/conversations';
 
-/** PATCH /api/v1/admin/conversations/:conversationId */
+/** GET · PATCH /api/v1/admin/conversations/:conversationId */
 export const conversationsByConversationId = (conversationId: string): string => `/api/v1/admin/conversations/${encodeURIComponent(conversationId)}`;
 
 /** GET /api/v1/admin/conversations/:conversationId/messages */
@@ -164,6 +173,9 @@ export const dashboard = '/api/v1/admin/dashboard';
 
 /** POST /api/v1/admin/dashboard/invalidate-cache */
 export const dashboardInvalidateCache = '/api/v1/admin/dashboard/invalidate-cache';
+
+/** GET · PUT /api/v1/admin/engagement-scale */
+export const engagementScale = '/api/v1/admin/engagement-scale';
 
 /** GET /api/v1/admin/invitations */
 export const invitations = '/api/v1/admin/invitations';
@@ -200,6 +212,9 @@ export const messagesStats = '/api/v1/admin/messages/stats';
 
 /** GET /api/v1/admin/messages/trends */
 export const messagesTrends = '/api/v1/admin/messages/trends';
+
+/** GET /api/v1/admin/monitoring */
+export const monitoring = '/api/v1/admin/monitoring';
 
 /** GET /api/v1/admin/posts */
 export const posts = '/api/v1/admin/posts';
@@ -240,11 +255,17 @@ export const routeUsage = '/api/v1/admin/route-usage';
 /** GET /api/v1/admin/share-links */
 export const shareLinks = '/api/v1/admin/share-links';
 
-/** PATCH · DELETE /api/v1/admin/share-links/:id */
+/** GET · PATCH · DELETE /api/v1/admin/share-links/:id */
 export const shareLinksById = (id: string): string => `/api/v1/admin/share-links/${encodeURIComponent(id)}`;
 
 /** POST /api/v1/admin/share-links/:id/reveal */
 export const shareLinksByIdReveal = (id: string): string => `/api/v1/admin/share-links/${encodeURIComponent(id)}/reveal`;
+
+/** GET /api/v1/admin/tracking-links */
+export const trackingLinks = '/api/v1/admin/tracking-links';
+
+/** GET · PATCH /api/v1/admin/tracking-links/:linkId */
+export const trackingLinksByLinkId = (linkId: string): string => `/api/v1/admin/tracking-links/${encodeURIComponent(linkId)}`;
 
 /** GET /api/v1/admin/translations */
 export const translations = '/api/v1/admin/translations';

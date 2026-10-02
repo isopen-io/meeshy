@@ -757,6 +757,8 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     this.server.decorate('mentionService', this.mentionService);
     this.server.decorate('socketIOHandler', this.socketIOHandler);
     this.server.decorate('jobMappingCache', this.jobMappingCache);
+    // Lu par la supervision d'administration (routes/admin/monitoring.ts) : sans elle, la carte « Présence » restait vide.
+    this.server.decorate('statusService', this.statusService);
     this.server.decorate('authenticate', this.createAuthMiddleware());
 
     logger.info('✓ Middleware configured successfully');

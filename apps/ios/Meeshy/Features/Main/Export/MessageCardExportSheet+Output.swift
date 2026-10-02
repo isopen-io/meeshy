@@ -19,7 +19,7 @@ extension MessageCardExportSheet {
     var outputPicker: some View {
         let offered = offeredOutputs
         if offered.count > 1 {
-            HStack(spacing: 8) {
+            HStack(spacing: MeeshySpacing.sm) {
                 ForEach(offered, id: \.self) { item in
                     let selected = item == output
                     Button {
@@ -29,7 +29,7 @@ extension MessageCardExportSheet {
                         Label(MessageCardExportText.outputLabel(item), systemImage: MessageCardExportSymbols.output(item))
                             .font(.subheadline.weight(.semibold))
                             .lineLimit(1)
-                            .padding(.horizontal, 14)
+                            .padding(.horizontal, MeeshySpacing.mdPlus)
                             .frame(maxWidth: .infinity, minHeight: 44)
                             .foregroundStyle(selected ? Color(uiColor: .systemBackground) : Color.primary)
                             .background(Capsule().fill(selected ? Color.primary : Color.primary.opacity(0.07)))
@@ -46,7 +46,7 @@ extension MessageCardExportSheet {
     }
 
     var actions: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: MeeshySpacing.sm) {
             if let progress = motion.value {
                 ProgressView(value: progress) {
                     Text(MessageCardExportText.text("export.card.motion.running", "Animation en cours…"))
@@ -56,7 +56,7 @@ extension MessageCardExportSheet {
                 .tint(accent)
                 .accessibilityValue(Text(progress, format: .percent.precision(.fractionLength(0))))
             }
-            HStack(spacing: 10) {
+            HStack(spacing: MeeshySpacing.smPlus) {
                 Button { save() } label: {
                     Label(MessageCardExportText.text("export.card.save", "Sauvegarder"), systemImage: "square.and.arrow.down")
                         .font(.body.weight(.semibold))
@@ -75,9 +75,14 @@ extension MessageCardExportSheet {
                 .buttonStyle(.plain)
                 .adaptiveGlass(in: Capsule(), interactive: true)
             }
-            .disabled(!ready || busy)
-            .opacity(ready && !busy ? 1 : 0.6)
+            .disabled(!canSave || busy)
+            .opacity(canSave && !busy ? 1 : 0.6)
         }
+    }
+
+    /// La carte est peinte — et, pour une vidéo, sa voix est là : jamais une vidéo muette (revue #8979).
+    var canSave: Bool {
+        ready && (output != .video || loadedMedia.hearsThePaintedSound(of: subject.media))
     }
 
     enum Destination { case gallery, share }
@@ -100,25 +105,26 @@ extension MessageCardExportSheet {
         guard ready, !busy, let rendered else { return }
         guard output == .image else { return animate(to: .share) }
         notice = nil
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(MessageCardSubject.fileName(at: Date()))
-        do {
-            try rendered.png.write(to: url, options: .atomic)
-            shareFile = ShareFile(url: url)
-        } catch {
+        // L'IMAGE, jamais le chemin d'un fichier temporaire (#9038).
+        guard let payload = MessageCardSharePayload.image(png: rendered.png) else {
             notice = MessageCardExportText.text("export.announce.failed", "Impossible de créer l’image")
+            return
         }
+        sharePayload = payload
     }
 
-    /// Peint la carte image par image, hors du MainActor, puis l'enregistre ou la partage.
+    /// Peint la carte image par image, hors du MainActor, puis l'enregistre ou la
+    /// partage — sur la durée et le passage choisis, avec la piste que sert la
+    /// langue d'export (#8979).
     private func animate(to destination: Destination) {
-        guard let plan = MessageCardMotionPlan.of(output, media: currentMedia) else { return }
+        guard let plan = motionPlan, canSave else { return }
         busy = true
         notice = nil
         motion.value = 0
         let input = input(for: format)
         let pictures = loadedMedia.pictures
-        let audioFile = loadedMedia.audioFile
-        let video = request.subject.media.first { $0.media.kind == .video }
+        let audioFile = loadedMedia.soundFile(of: subject.media)
+        let video = subject.media.first { $0.media.kind == .video }
         let box = motion
         let progress: @Sendable (Double) -> Void = { value in
             Task { @MainActor in box.value = value }
@@ -156,7 +162,7 @@ extension MessageCardExportSheet {
         switch destination {
         case .share:
             busy = false
-            shareFile = ShareFile(url: url)
+            sharePayload = .file(url)
         case .gallery:
             let saved: Bool
             if output == .gif, let data = try? Data(contentsOf: url) {

@@ -14,7 +14,8 @@
  */
 import { BRAND_LOGO_PATH } from '../lib/brand';
 import { BrandSignature } from './brand-signature';
-import type { Block, Card, FramedRow, ContentPage, Section } from './type';
+import { meeViewSrc } from './mee-views';
+import type { Block, Card, FramedRow, ContentPage, MeeView, Section } from './type';
 
 /**
  * LE RENDU DES CINQ PAGES INSTITUTIONNELLES.
@@ -73,6 +74,30 @@ function FramedRowView({ row }: { row: FramedRow }) {
 }
 
 /**
+ * MEE DANS LA PAGE (#9034) — le sticker en image (`mee-views.ts` dit
+ * pourquoi un fichier), animé par son propre SVG, aucun script. Le dessin
+ * est décoratif (`alt` vide) : la légende porte le sens.
+ */
+function MeeFigure({ view, size, lead }: { view: MeeView; size: number; lead?: boolean }) {
+  return (
+    <figure
+      data-mee-view={view.sticker}
+      className="rounded-card p-4"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 16,
+        margin: 0,
+        backgroundColor: lead === true ? 'color-mix(in srgb, var(--color-ios-brand) 8%, transparent)' : 'var(--color-ios-card)',
+      }}
+    >
+      <img src={meeViewSrc(view)} width={size} height={size} alt="" style={{ flex: 'none' }} />
+      <figcaption className={lead === true ? 'font-medium' : undefined}>{view.caption}</figcaption>
+    </figure>
+  );
+}
+
+/**
  * Le `switch` est EXHAUSTIF et sans `default` — repris de l'ancienne refonte,
  * avec sa raison : un sixième genre ajouté au type somme ne compilera pas tant
  * qu'il n'est pas rendu. Un `default` qui rendrait `null` transformerait cette
@@ -120,6 +145,14 @@ function RenderedBlock({ block }: { block: Block }) {
             <FramedRowView key={row.text} row={row} />
           ))}
         </ul>
+      );
+    case 'mee':
+      return (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {block.views.map((view) => (
+            <MeeFigure key={view.sticker} view={view} size={96} />
+          ))}
+        </div>
       );
   }
 }
@@ -182,6 +215,11 @@ export function InstitutionalPage({ page, version }: { page: ContentPage; versio
             {page.mention}
           </p>
         ) : null}
+        {page.mee ? (
+          <div className="mt-6">
+            <MeeFigure view={page.mee} size={132} lead />
+          </div>
+        ) : null}
 
         {page.sections.map((section) => (
           <RenderedSection key={section.title} section={section} />
@@ -197,7 +235,7 @@ export function InstitutionalPage({ page, version }: { page: ContentPage; versio
               <a
                 key={link.href}
                 href={link.href}
-                className="grid place-items-center rounded-chip px-5 text-body font-semibold text-white"
+                className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
                 style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 52 }}
               >
                 {link.label}
