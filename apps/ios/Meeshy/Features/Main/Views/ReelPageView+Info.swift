@@ -145,6 +145,9 @@ extension ReelPageView {
                 MediaCaptionOverlay(
                     caption: displayedDescription,
                     isExpanded: descriptionExpanded,
+                    // #9075 — les adresses de la légende s'ouvrent par `/l/`.
+                    trackedLinks: reel.trackedLinkMap,
+                    validUsernames: reel.validMentionUsernames,
                     // **Aucun retrait à elle** (directive porteur 2026-09-01) :
                     // la colonne d'information est déjà posée à 16 pt par
                     // `ReelsPlayerView`, et les 20 pt que la couche ajoutait
@@ -174,18 +177,6 @@ extension ReelPageView {
                     dimsBackgroundWhenExpanded: false,
                     onToggle: {
                         withAnimation(.easeInOut(duration: 0.2)) { descriptionExpanded.toggle() }
-                    },
-                    render: { texte, taille in
-                        MessageTextRenderer.render(
-                            texte,
-                            fontSize: taille,
-                            color: .white,
-                            mentionColor: MeeshyColors.mentionColor(isDark: true),
-                            hashtagColor: MeeshyColors.hashtagColor(isDark: true),
-                            accentColor: .white,
-                            usesRelativeFont: true
-                        )
-                        .tint(.white)
                     }
                 )
             }

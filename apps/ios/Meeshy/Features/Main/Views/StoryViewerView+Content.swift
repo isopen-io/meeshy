@@ -2078,25 +2078,7 @@ extension StoryViewerView {
 
     private func mapStoryReplies(_ data: [APIPostComment], parentId: String) -> [FeedComment] {
         let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-        return data.map { c -> FeedComment in
-            let translated = PostDetailViewModel.resolveCommentTranslation(
-                translations: c.translations, originalLanguage: c.originalLanguage,
-                preferredLanguages: langs
-            )
-            return FeedComment(
-                id: c.id, author: c.author.name, authorId: c.author.id,
-                authorUsername: c.author.username,
-                authorAvatarURL: c.author.avatar,
-                content: c.content, timestamp: c.createdAt,
-                likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                parentId: parentId,
-                effectFlags: c.effectFlags ?? 0,
-                originalLanguage: c.originalLanguage, translatedContent: translated,
-                currentUserReactions: c.currentUserReactions,
-                media: (c.media ?? []).map { $0.toFeedMedia() },
-                location: c.location
-            )
-        }
+        return data.map { FeedComment(api: $0, preferredLanguages: langs, parentId: parentId) }
     }
 
     // MARK: - Story Comment Reactions
@@ -2133,29 +2115,7 @@ extension StoryViewerView {
     func applyStoryCommentAdded(_ data: SocketCommentAddedData) {
         guard data.postId == currentStory?.id else { return }
 
-        let translatedContent = PostDetailViewModel.resolveCommentTranslation(
-            translations: data.comment.translations,
-            originalLanguage: data.comment.originalLanguage,
-            preferredLanguages: resolvedViewerLanguageChain
-        )
-        let comment = FeedComment(
-            id: data.comment.id,
-            author: data.comment.author.name,
-            authorId: data.comment.author.id,
-            authorUsername: data.comment.author.username,
-            authorAvatarURL: data.comment.author.avatar,
-            content: data.comment.content,
-            timestamp: data.comment.createdAt,
-            likes: data.comment.likeCount ?? 0,
-            replies: data.comment.replyCount ?? 0,
-            parentId: data.comment.parentId,
-            effectFlags: data.comment.effectFlags ?? 0,
-            originalLanguage: data.comment.originalLanguage,
-            translatedContent: translatedContent,
-            currentUserReactions: data.comment.currentUserReactions,
-            media: (data.comment.media ?? []).map { $0.toFeedMedia() },
-            location: data.comment.location
-        )
+        let comment = FeedComment(api: data.comment, preferredLanguages: resolvedViewerLanguageChain)
 
         let result = Self.applyingStoryCommentAdded(
             comment: comment,
@@ -2174,29 +2134,7 @@ extension StoryViewerView {
     /// à toucher. Miroir de `PostDetailViewModel.applyCommentUpdated`.
     func applyStoryCommentUpdated(_ data: SocketCommentUpdatedData) {
         guard data.postId == currentStory?.id else { return }
-        let translated = PostDetailViewModel.resolveCommentTranslation(
-            translations: data.comment.translations,
-            originalLanguage: data.comment.originalLanguage,
-            preferredLanguages: resolvedViewerLanguageChain
-        )
-        let updated = FeedComment(
-            id: data.comment.id,
-            author: data.comment.author.name,
-            authorId: data.comment.author.id,
-            authorUsername: data.comment.author.username,
-            authorAvatarURL: data.comment.author.avatar,
-            content: data.comment.content,
-            timestamp: data.comment.createdAt,
-            likes: data.comment.likeCount ?? 0,
-            replies: data.comment.replyCount ?? 0,
-            parentId: data.comment.parentId,
-            effectFlags: data.comment.effectFlags ?? 0,
-            originalLanguage: data.comment.originalLanguage,
-            translatedContent: translated,
-            currentUserReactions: data.comment.currentUserReactions,
-            media: (data.comment.media ?? []).map { $0.toFeedMedia() },
-            location: data.comment.location
-        )
+        let updated = FeedComment(api: data.comment, preferredLanguages: resolvedViewerLanguageChain)
         let applied = StoryCommentEditing.replacing(updated, comments: storyComments, replies: storyCommentRepliesMap)
         storyComments = applied.comments
         storyCommentRepliesMap = applied.replies
@@ -2439,24 +2377,7 @@ extension StoryViewerView {
     /// Extrait en `static` pour que le témoin de RANG lise ce chemin-ci, pas
     /// seulement le résolveur.
     static func storyComment(from c: APIPostComment, preferredLanguages langs: [String]) -> FeedComment {
-        FeedComment(
-            id: c.id, author: c.author.name, authorId: c.author.id,
-            authorUsername: c.author.username,
-            authorAvatarURL: c.author.avatar,
-            content: c.content, timestamp: c.createdAt,
-            likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-            parentId: c.parentId,
-            effectFlags: c.effectFlags ?? 0,
-            originalLanguage: c.originalLanguage,
-            translatedContent: PostDetailViewModel.resolveCommentTranslation(
-                translations: c.translations,
-                originalLanguage: c.originalLanguage,
-                preferredLanguages: langs
-            ),
-            currentUserReactions: c.currentUserReactions,
-            media: (c.media ?? []).map { $0.toFeedMedia() },
-            location: c.location
-        )
+        FeedComment(api: c, preferredLanguages: langs)
     }
 
     private func fetchStoryCommentsFromNetwork(story: StoryItem, cacheKey: String) async {
@@ -2501,23 +2422,7 @@ extension StoryViewerView {
                 postId: story.id, cursor: storyCommentsNextCursor, limit: 50
             )
             if let now = currentStory?.id, now != story.id { return }
-            let fetched = response.data.map { c -> FeedComment in
-                FeedComment(
-                    id: c.id, author: c.author.name, authorId: c.author.id,
-                    authorUsername: c.author.username,
-                    authorAvatarURL: c.author.avatar,
-                    content: c.content, timestamp: c.createdAt,
-                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                    parentId: c.parentId,
-                    originalLanguage: c.originalLanguage,
-                    translatedContent: PostDetailViewModel.resolveCommentTranslation(
-                        translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
-                    ),
-                    currentUserReactions: c.currentUserReactions,
-                    media: (c.media ?? []).map { $0.toFeedMedia() },
-                    location: c.location
-                )
-            }
+            let fetched = response.data.map { FeedComment(api: $0, preferredLanguages: langs) }
             let existing = Set(storyComments.map(\.id))
             storyComments.append(contentsOf: fetched.filter { !existing.contains($0.id) })
             storyCommentsNextCursor = response.pagination?.nextCursor
