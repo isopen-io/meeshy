@@ -379,9 +379,14 @@ extension StoryViewModel {
             // part avec lui : `create(content:type:…)` ne porte aucun
             // `storyEffects`, et y router un post composé perdrait chaque objet
             // texte, autocollant et dessin sans la moindre erreur.
+            // #9179 — un réel sans texte publie sa légende de scène : la MÊME
+            // règle que le canal document (`PublishIntent.document`).
+            let legendes = (updatedEffects.mediaObjects ?? []).map { serverMediaCaption[$0.postMediaId] }
+                + [uploadResult?.id].compactMap { $0 }.map { serverMediaCaption[$0] }
             let post = try await postService.createCanvasPost(
                 type: upload.targetType,
-                content: slide.content,
+                content: ReelPublishedContent.content(type: upload.targetType, text: slide.content,
+                                                      captions: legendes),
                 storyEffects: updatedEffects,
                 visibility: upload.visibility,
                 visibilityUserIds: upload.visibilityUserIds,

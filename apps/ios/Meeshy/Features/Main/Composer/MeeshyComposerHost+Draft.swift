@@ -105,7 +105,13 @@ extension MeeshyComposerHost {
             return ComposerDocumentDraft.document(
                 format: choice.format,
                 forcePlainPost: choice.format == .post,
-                text: documentText,
+                // **Un réel sans texte publie sa légende de scène** (#9179). En
+                // profil Réel la description d'une scène s'écrit dans la SLIDE
+                // (`ComposerSlideTextRole.role(for: .reel) == .content`), que
+                // `PublishIntent.document` ne voit pas : elle entre ICI ; les
+                // légendes PAR MÉDIA, elles, sont lues un étage plus bas.
+                text: ReelPublishedContent.content(type: choice.format.postType, text: documentText,
+                                                   captions: viewModel.slides.map(\.content)) ?? documentText,
                 visibility: composerVisibility,
                 visibilityUserIds: composerVisibilityUserIds,
                 repostOfId: intent.origin.repostedPostId,
