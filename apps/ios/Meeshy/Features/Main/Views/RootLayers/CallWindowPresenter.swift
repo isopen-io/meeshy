@@ -207,6 +207,21 @@ enum CallReturnPoint {
         return !(presented is UIAlertController)
     }
 
+    /// Le contrôleur qui décide de la barre d'état de l'app : la présentation
+    /// la plus haute, puis l'enfant auquel elle délègue. Une fenêtre posée
+    /// au-dessus prend la main sur la barre d'état — sans ce relais, la bulle
+    /// ferait reparaître l'heure par-dessus une visionneuse qui la cache.
+    static func statusBarOwner(root: UIViewController?) -> UIViewController? {
+        guard var owner = root else { return nil }
+        while let presented = owner.presentedViewController, !(presented is UIAlertController) {
+            owner = presented
+        }
+        while let child = owner.childForStatusBarHidden {
+            owner = child
+        }
+        return owner
+    }
+
     /// Au-dessus de la fenêtre principale et de ses présentations, sous la
     /// vue d'appel plein écran.
     static let windowLevel = UIWindow.Level(rawValue: CallWindowPresentation.windowLevel.rawValue - 1)
@@ -280,6 +295,30 @@ struct CallReturnPointRoot: View {
 protocol CallReturnPointHosting: AnyObject {
     func show(_ manager: CallManager, coverage: CallScreenCoverage) -> Bool
     func hide()
+    /// Recopie la barre d'état de l'écran d'en dessous.
+    func refreshAppearance()
+}
+
+/// Le contrôleur de la fenêtre passe-plat ne décide pas de la barre d'état :
+/// il rend celle de l'écran que l'app montre en dessous.
+final class CallReturnPointController: UIHostingController<CallReturnPointRoot> {
+    nonisolated deinit {}
+    private var followed: (hidden: Bool, style: UIStatusBarStyle)?
+
+    private var appOwner: UIViewController? {
+        CallReturnPoint.statusBarOwner(root: DeviceLayout.measurementWindow?.rootViewController)
+    }
+
+    override var prefersStatusBarHidden: Bool { appOwner?.prefersStatusBarHidden ?? false }
+    override var preferredStatusBarStyle: UIStatusBarStyle { appOwner?.preferredStatusBarStyle ?? .default }
+
+    func followAppStatusBar() {
+        let owner = appOwner
+        let current = (hidden: owner?.prefersStatusBarHidden ?? false, style: owner?.preferredStatusBarStyle ?? .default)
+        guard followed.map({ $0.hidden != current.hidden || $0.style != current.style }) ?? true else { return }
+        followed = current
+        setNeedsStatusBarAppearanceUpdate()
+    }
 }
 
 /// Monte la fenêtre passe-plat tant qu'un appel est réduit. Le recouvrement
@@ -361,6 +400,7 @@ final class CallReturnPointPresenter {
 
     func refreshCoverage() {
         coverage.update(probe())
+        hosting.refreshAppearance()
     }
 }
 
@@ -368,6 +408,10 @@ final class CallReturnPointPresenter {
 final class CallReturnPointWindowHost: CallReturnPointHosting {
     nonisolated deinit {}
     private var window: CallPassthroughWindow?
+
+    func refreshAppearance() {
+        (window?.rootViewController as? CallReturnPointController)?.followAppStatusBar()
+    }
 
     func show(_ manager: CallManager, coverage: CallScreenCoverage) -> Bool {
         guard window == nil else { return true }
@@ -378,7 +422,7 @@ final class CallReturnPointWindowHost: CallReturnPointHosting {
             coverage: coverage,
             frameSink: CallReturnPointFrameSink(window: overlay)
         )
-        let controller = UIHostingController(rootView: root)
+        let controller = CallReturnPointController(rootView: root)
         controller.view.backgroundColor = .clear
         overlay.windowLevel = CallReturnPoint.windowLevel
         overlay.overrideUserInterfaceStyle = DeviceLayout.measurementWindow?.overrideUserInterfaceStyle ?? .unspecified
