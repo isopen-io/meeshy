@@ -50,6 +50,7 @@ const itComposerAttach = {
   'composer.sticker.error.failed': 'Impossibile creare lo sticker',
   'composer.sticker.tabs': 'Famiglie di sticker',
   'composer.sticker.tab.instants': 'Istanti',
+  'composer.sticker.tab.custom': 'Personalizzati',
   'composer.sticker.intent.bonjour.title': 'Ciao, grazie',
   'composer.sticker.intent.bonjour.hint': 'Per salutare, ringraziare, dire di sì, scusarsi o augurare la buonanotte',
   'composer.sticker.intent.amour.title': 'Dire ti amo',

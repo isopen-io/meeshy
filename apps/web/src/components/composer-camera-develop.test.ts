@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { developShots } from './composer-attachment-panel';
+import { developShots } from '@/lib/media/develop-shots';
 
 /**
  * LA PHOTO PRISE PAR LA CAMÉRA DU COMPOSEUR (#8695) — elle passe par le

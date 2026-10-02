@@ -49,10 +49,11 @@ final class MeeStickerBubbleTests: XCTestCase {
         XCTAssertEqual(StickerAltText.describe(mee.messageSticker), mee.title)
     }
 
-    /// Loi 4 : la feuille ne sait pas encore relire un Mee depuis les favoris —
-    /// l'épingler l'y ferait disparaître sans rien dire. L'entrée de menu est
-    /// donc ABSENTE, jamais inerte.
-    func test_favoriteEntry_isAbsentForAMee() throws {
-        XCTAssertNil(MessageStickerFavorite.entry(for: try known.messageSticker))
+    /// **Un Mee s'épingle depuis sa bulle** (#9067) : la feuille le relit
+    /// désormais depuis ses favoris, donc l'entrée de menu existe — et elle
+    /// désigne le MEE, jamais le gabarit `mee.<id>` ni l'emoji de repli.
+    func test_favoriteEntry_ofAMee_pinsTheMee() throws {
+        let sticker = try known
+        XCTAssertEqual(MessageStickerFavorite.entry(for: sticker.messageSticker), .mee(sticker))
     }
 }

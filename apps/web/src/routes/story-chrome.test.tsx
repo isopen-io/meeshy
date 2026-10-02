@@ -293,6 +293,22 @@ describe('la barre basse de la story : légende, rail, « Répondre… »', () =
     expect(el.querySelector('[data-viewer-bottom-bar]')?.className).toContain('viewer-scrim-bottom');
   });
 
+  test('#9074 — les deux légendes ouvrent leurs adresses : la carte par /l/, le reste en direct', () => {
+    const trackingLinks = [{ url: 'https://exemple.org/lac', token: 'Lac42' }];
+    const el = mount(
+      bottomBar({
+        content: { text: 'Le lac https://exemple.org/lac', language: 'fr' },
+        mediaCaption: { text: 'Photo https://ailleurs.net/brume', language: 'fr' },
+        trackingLinks,
+      }),
+    );
+    const links = [...el.querySelectorAll('[data-viewer-caption] a')];
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['/l/Lac42', 'https://ailleurs.net/brume']);
+    expect(links[0]?.textContent).toBe('https://exemple.org/lac');
+    expect(links.every((a) => a.hasAttribute('data-claims-gesture'))).toBe(true);
+    expect(el.querySelector('[data-story-media-caption] a')).not.toBeNull();
+  });
+
   test('#9072 — tenue par l’appui long : la légende RESTE lisible et la capsule quitte le flux, pour que le texte redescende', () => {
     const el = mount(bottomBar({ held: true, onReply: () => undefined, rail: rail({ react: () => undefined }) }));
     const bar = el.querySelector('[data-viewer-bottom-bar]');

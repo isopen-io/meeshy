@@ -50,6 +50,7 @@ const deComposerAttach = {
   'composer.sticker.error.failed': 'Der Sticker konnte nicht erstellt werden',
   'composer.sticker.tabs': 'Sticker-Familien',
   'composer.sticker.tab.instants': 'Momente',
+  'composer.sticker.tab.custom': 'Persönlich',
   'composer.sticker.intent.bonjour.title': 'Hallo, danke',
   'composer.sticker.intent.bonjour.hint': 'Zum Grüßen, Danken, Zustimmen, Entschuldigen oder Gute-Nacht-Sagen',
   'composer.sticker.intent.amour.title': 'Ich liebe dich',

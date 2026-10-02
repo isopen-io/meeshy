@@ -10,6 +10,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { useStore } from 'zustand/react';
+import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
 
 import type { SceneScrubPainter } from '@/components/scene-scrub-bar';
 import { Glyph } from '@/components/glyph';
@@ -690,6 +691,10 @@ export default function StoryScreen() {
    * la règle de DÉRIVATION de `caption.ts` ne s'y applique pas : elle juge un
    * `Post.content` qui redit les calques, pas une légende qui a son sujet.
    */
+  /* LA CARTE DES ADRESSES SUIVIES (#9074), décodée UNE fois : elle couvre le
+     corps, les textes de scène et chaque légende de média de la story. */
+  const trackingLinks = useMemo(() => (currentStory === undefined ? [] : trackingLinksOf(currentStory)), [currentStory]);
+
   const resolvedMediaCaption = useMemo(
     () => resolveStoryMediaCaption({ media, preferredLanguages: reader.languages }),
     [media, reader.languages],
@@ -863,6 +868,7 @@ export default function StoryScreen() {
               hasMedia={hasMedia}
               background={sceneBackground(storyEffectsBackgroundOf(currentStory.storyEffects))}
               caption={resolvedContent}
+              trackingLinks={trackingLinks}
               onReady={() => setReadyStoryId(currentStory.id)}
               onDurationKnown={(ms) => reportMediaDuration(currentStory.id, ms)}
               onFailed={() => {
@@ -910,6 +916,7 @@ export default function StoryScreen() {
             showsCaption={hasMedia}
             content={resolvedContent}
             mediaCaption={resolvedMediaCaption}
+            trackingLinks={trackingLinks}
             onReply={frozenRail !== null && frozenRail.storyId === currentStory.id && frozenRail.plan.showsReply ? openComments : undefined}
             rail={
               railShown ? (

@@ -3,6 +3,7 @@ import { OBJECT_ID_REGEX, OBJECT_ID_PATTERN } from '@meeshy/shared/utils/object-
 import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 import { EMOJI_MAX_LENGTH } from '@meeshy/shared/types/reaction';
 import { utf16Bounded } from '@meeshy/shared/utils/validation-primitives';
+import { parseMessageSticker } from '../../services/stickers/messageSticker';
 
 // ============================================
 // CURSOR PAGINATION HELPERS
@@ -466,9 +467,21 @@ export const CreateCommentSchema = z.object({
   mobileTranscription: MobileTranscriptionSchema.optional(),
   /// Lieu partagé — même contrat que CreatePostSchema ci-dessus.
   location: z.unknown().optional(),
+  /// Sticker (#9080) — la MÊME forme que le sticker d'un message
+  /// (`MessageSticker`) : ce descripteur ici, l'image rendue en média joint
+  /// (`attachmentIds`). `z.unknown()` parce que la loi est
+  /// `parseMessageSticker`, seul site : le service l'écrit, blanchi, dans
+  /// `metadata.sticker`.
+  sticker: z.unknown().optional(),
 }).refine(
-  (data) => (data.content?.trim().length ?? 0) > 0 || (data.attachmentIds?.length ?? 0) > 0,
-  { message: 'A comment must have text content or an attached media' },
+  // Un sticker seul rend le corps non vide — mais VALIDE, comme pour un
+  // message (`services/messaging/nonTextBody.ts`) : un sticker que la loi
+  // rejette n'écrirait rien, le commentaire serait vide.
+  (data) =>
+    (data.content?.trim().length ?? 0) > 0 ||
+    (data.attachmentIds?.length ?? 0) > 0 ||
+    parseMessageSticker(data.sticker) !== null,
+  { message: 'A comment must have text content, an attached media or a sticker' },
 );
 
 export const UpdateCommentSchema = z.object({

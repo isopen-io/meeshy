@@ -85,6 +85,7 @@ export function SceneFullscreenGallery({ request, models, preferredLanguages, on
       sender: { displayName: found.author.name, avatarUrl: found.author.avatarSrc ?? null },
       sentAt: found.createdAt,
       caption: null,
+      ...(found.trackingLinks === undefined ? {} : { trackingLinks: found.trackingLinks }),
     };
     return { lot, carrier, found };
   }, [models, postId]);

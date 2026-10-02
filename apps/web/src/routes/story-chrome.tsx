@@ -1,8 +1,11 @@
 import type { CSSProperties, ReactNode } from 'react';
 
+import type { ContentTrackingLink } from '@meeshy/shared/types/post';
+
 import { GlyphSvg } from '@/components/glyph';
 import { GLYPHS } from '@/components/glyphs';
 import { ViewerBottomBar, ViewerTopBar, type ViewerIdentityModel } from '@/components/viewer-chrome';
+import { ViewerCaption } from '@/components/viewer-caption';
 import { ViewerMenu } from '@/components/viewer-chrome-menu';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -87,6 +90,7 @@ export function StoryBottomBar({
   showsCaption,
   rail,
   onReply,
+  trackingLinks,
 }: {
   readonly hidden: boolean;
   /** Appui long (#9072) : les contrôles cèdent, la légende reste et redescend — comme iOS. */
@@ -101,6 +105,8 @@ export function StoryBottomBar({
   readonly rail: ReactNode;
   /** Absent ⇒ aucune capsule (loi 4) : la story d'autrui l'offre, la sienne non. */
   readonly onReply?: (() => void) | undefined;
+  /** La carte `{ url, token }` de la story (#9074) — elle couvre son corps ET chaque légende de média. */
+  readonly trackingLinks?: readonly ContentTrackingLink[] | undefined;
 }) {
   const hasCaption = showsCaption && (content !== null || mediaCaption !== null);
   return (
@@ -116,15 +122,18 @@ export function StoryBottomBar({
             caption: (
               <>
                 {content === null ? null : (
-                  <p className="text-body" style={CLAMPED_CAPTION} lang={content.language || undefined}>
-                    {content.text}
-                  </p>
+                  <ViewerCaption text={content.text} trackingLinks={trackingLinks} className="text-body" style={CLAMPED_CAPTION} lang={content.language} />
                 )}
                 {/* Deux contenus, deux `lang=` : un lecteur d'écran qui prononcerait la seconde avec la voix de la première est le défaut du cycle 122 rendu audible. */}
                 {mediaCaption === null ? null : (
-                  <p data-story-media-caption className="text-body" style={CLAMPED_CAPTION} lang={mediaCaption.language || undefined}>
-                    {mediaCaption.text}
-                  </p>
+                  <ViewerCaption
+                    probe={{ 'data-story-media-caption': '' }}
+                    text={mediaCaption.text}
+                    trackingLinks={trackingLinks}
+                    className="text-body"
+                    style={CLAMPED_CAPTION}
+                    lang={mediaCaption.language}
+                  />
                 )}
               </>
             ),
