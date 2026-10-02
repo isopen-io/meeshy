@@ -14,6 +14,8 @@ const enCommentRow = {
   'comments.reply.cancel': 'Cancel reply',
   'comments.composer.fold': 'Fold the comment field',
   'comments.composer.unfold': 'Show the comment field',
+  'comments.composer.attach': 'Attach a photo or video',
+  'comments.media.upload_failed': 'The attachment couldn’t be sent.',
   'comments.replies.show': 'View replies ({count})',
   'comments.replies.hide': 'Hide replies',
   'comments.replies.more': 'View more replies',

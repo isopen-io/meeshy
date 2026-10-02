@@ -14,6 +14,8 @@ const itCommentRow = {
   'comments.reply.cancel': 'Annulla la risposta',
   'comments.composer.fold': 'Chiudi il campo del commento',
   'comments.composer.unfold': 'Mostra il campo del commento',
+  'comments.composer.attach': 'Allega una foto o un video',
+  'comments.media.upload_failed': 'Non è stato possibile inviare l’allegato.',
   'comments.replies.show': 'Vedi risposte ({count})',
   'comments.replies.hide': 'Nascondi risposte',
   'comments.replies.more': 'Vedi altre risposte',

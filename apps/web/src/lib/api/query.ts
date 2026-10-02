@@ -19,6 +19,7 @@ import { performPostGesture, type PostGestureResult } from './feed-gestures';
 import type { FeedAuthor } from './feed-pages';
 import { recordPostShare } from './feed-share';
 import { commentsInfiniteOptions, flattenCommentPages, performComment, type CommentInfiniteData, type CommentResult, type PostComment } from './publication-comments';
+import type { PostMediaUploadResult } from './post-media-upload';
 import { postQueryOptions } from './publication-detail';
 import { performRepost, type RepostIntent, type RepostResult } from './publication-repost';
 import type { PostToggleKind } from '@/lib/feed/interactions';
@@ -509,6 +510,8 @@ export function commentAction(params: {
   readonly originalLanguage?: string | undefined;
   /** La RACINE de la réponse (#8583) — absent ⇒ premier niveau. */
   readonly parentId?: string | undefined;
+  /** Les photos et vidéos déjà téléversées (#9167). */
+  readonly media?: readonly PostMediaUploadResult[] | undefined;
 }): Promise<CommentResult> {
   return performComment({
     postId: params.postId,
@@ -516,6 +519,7 @@ export function commentAction(params: {
     author: params.author,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
     ...(params.parentId === undefined ? {} : { parentId: params.parentId }),
+    ...(params.media === undefined || params.media.length === 0 ? {} : { media: params.media }),
     deps: { ...apiDeps, queryClient: appQueryClient },
   }).then((result) => {
     /* Un commentaire RETENU (servi, ou gardé en attente) allume l'anneau de

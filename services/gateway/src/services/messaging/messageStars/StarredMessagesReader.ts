@@ -29,7 +29,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { StarredMessageItem } from '@meeshy/shared/types/message-star';
 
 import { decodeCursor, encodeCursor, keysetBeforeClause } from '../../../utils/keyset-cursor';
-import { unsetOrNull } from '../../../utils/prisma-unset';
+import { differsOrUnset, unsetOrNull } from '../../../utils/prisma-unset';
 import { HISTORY_FLOOR_PARTICIPANT_SELECT, loadHistoryFloorsOrFail } from '../../historyFloor';
 import { NO_PERSONAL_HIDING, loadPersonalHistoryHidingByConversation } from '../../personalHistoryFilter';
 import { loadExpiredShareLinkConversationIds } from '../../shareLinkReadGate';
@@ -168,7 +168,7 @@ export class StarredMessagesReader {
   ): Promise<ReadonlyMap<string, StarredDirectPeerRow>> {
     if (directConversationIds.length === 0) return new Map();
     const rows = await this.prisma.participant.findMany({
-      where: { conversationId: { in: [...directConversationIds] }, isActive: true, NOT: { userId } },
+      where: { conversationId: { in: [...directConversationIds] }, isActive: true, ...differsOrUnset('userId', userId) },
       select: STARRED_DIRECT_PEER_SELECT,
       take: directConversationIds.length * DIRECT_PEERS_PER_CONVERSATION,
     });

@@ -42,6 +42,14 @@ nonisolated struct CallFaceLandmarks: Equatable, Sendable {
         )
         return CallFaceLandmarks(bounds: bounds, leftEye: blendPoint(leftEye, next.leftEye), rightEye: blendPoint(rightEye, next.rightEye))
     }
+    func scaled(to size: CGSize) -> CallFaceLandmarks {
+        let transform = CGAffineTransform(scaleX: size.width, y: size.height)
+        return CallFaceLandmarks(
+            bounds: bounds.applying(transform),
+            leftEye: leftEye?.applying(transform),
+            rightEye: rightEye?.applying(transform)
+        )
+    }
 }
 
 nonisolated struct CallEmber: Equatable, Sendable {
@@ -153,6 +161,9 @@ nonisolated enum CallFaceEffectBudget {
     static func allowsBloom(isDegraded: Bool) -> Bool {
         !isDegraded
     }
+
+    static let emberOpacityLevels = 5
+    static let glowReduction: CGFloat = 0.25
 
     static let landmarkSmoothing: CGFloat = 0.5
     static let missesBeforeLosingFace = 3

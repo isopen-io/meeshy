@@ -4,7 +4,6 @@ import CoreVideo
 import Foundation
 import ImageIO
 import QuartzCore
-import Vision
 
 protocol CallFaceEffectsRendererProviding: AnyObject {
     nonisolated func render(
@@ -20,23 +19,43 @@ protocol CallFaceEffectsRendererProviding: AnyObject {
 
 nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProviding, @unchecked Sendable {
     private let lock = NSLock()
-    private let sequenceHandler = VNSequenceRequestHandler()
-    private let clockOrigin = CACurrentMediaTime()
+    private let tracker: CallFaceTracker
+    private let isReduceMotionEnabled: @Sendable () -> Bool
+    private let clock: @Sendable () -> CFTimeInterval
+    private let clockOrigin: CFTimeInterval
     private let seed: UInt64 = 0x4D65_6573_6879_2A2A
-    private var landmarks: CallFaceLandmarks?
-    private var frameCounter = 0
-    private var missedDetections = 0
     private var sprites: [String: CIImage] = [:]
+    private var spriteDraws: [String: Int] = [:]
 
-    init() {}
+    init(
+        detector: any CallFaceLandmarkDetecting = VisionFaceLandmarkDetector(),
+        executor: any CallVisionExecuting = CallVisionQueueExecutor(label: "me.meeshy.call.face-landmarks"),
+        isReduceMotionEnabled: @escaping @Sendable () -> Bool = { CallMotionPreference.shared.isReduceMotionEnabled },
+        clock: @escaping @Sendable () -> CFTimeInterval = { CACurrentMediaTime() }
+    ) {
+        self.tracker = CallFaceTracker(detector: detector, executor: executor)
+        self.isReduceMotionEnabled = isReduceMotionEnabled
+        self.clock = clock
+        self.clockOrigin = clock()
+    }
 
     func reset() {
+        tracker.reset()
         lock.lock()
         defer { lock.unlock() }
-        landmarks = nil
-        frameCounter = 0
-        missedDetections = 0
         sprites = [:]
+    }
+
+    var spriteDrawCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return spriteDraws.values.reduce(0, +)
+    }
+
+    func spriteDrawCount(prefix: String) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return spriteDraws.filter { $0.key.hasPrefix(prefix) }.values.reduce(0, +)
     }
 
     func render(
@@ -57,11 +76,12 @@ nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProvidin
         let upright = oriented.transformed(by: CGAffineTransform(translationX: -uprightOrigin.x, y: -uprightOrigin.y))
         let canvas = CGRect(origin: .zero, size: upright.extent.size)
         let face = effect.needsFace
-            ? trackFace(in: pixelBuffer, orientation: orientation, canvas: canvas.size, isDegraded: isDegraded)
+            ? tracker.landmarks(for: pixelBuffer, orientation: orientation, canvas: canvas.size, isDegraded: isDegraded)
             : nil
-        let time = CACurrentMediaTime() - clockOrigin
+        let isAnimated = !isReduceMotionEnabled()
+        let time = isAnimated ? clock() - clockOrigin : 0
 
-        let styled = stylize(effect, upright, face: face, canvas: canvas, intensity: intensity, time: time, isDegraded: isDegraded)
+        let styled = stylize(effect, upright, face: face, canvas: canvas, intensity: intensity, time: time, isAnimated: isAnimated, isDegraded: isDegraded)
             .cropped(to: canvas)
 
         let restored = styled
@@ -83,6 +103,7 @@ nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProvidin
         canvas: CGRect,
         intensity: Float,
         time: TimeInterval,
+        isAnimated: Bool,
         isDegraded: Bool
     ) -> CIImage {
         switch effect {
@@ -91,54 +112,30 @@ nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProvidin
         case .toad: return toad(image, face: face, canvas: canvas, isDegraded: isDegraded)
         case .angel: return angel(image, face: face, canvas: canvas, time: time, isDegraded: isDegraded)
         case .demon: return demon(image, face: face, canvas: canvas, time: time)
-        case .volcano: return volcano(image, canvas: canvas, time: time, isDegraded: isDegraded)
+        case .volcano: return volcano(image, canvas: canvas, time: time, isAnimated: isAnimated, isDegraded: isDegraded)
         }
-    }
-
-    // MARK: - Face tracking
-
-    private func trackFace(in pixelBuffer: CVPixelBuffer, orientation: CGImagePropertyOrientation, canvas: CGSize, isDegraded: Bool) -> CallFaceLandmarks? {
-        frameCounter &+= 1
-        let stride = CallFaceEffectBudget.detectionStride(isDegraded: isDegraded)
-        let isDue = frameCounter % stride == 0 || (landmarks == nil && frameCounter % 2 == 0)
-        guard isDue else { return landmarks }
-
-        let request = VNDetectFaceLandmarksRequest()
-        guard (try? sequenceHandler.perform([request], on: pixelBuffer, orientation: orientation)) != nil,
-              let observation = request.results?.max(by: { $0.boundingBox.width < $1.boundingBox.width }) else {
-            missedDetections += 1
-            if missedDetections >= CallFaceEffectBudget.missesBeforeLosingFace { landmarks = nil }
-            return landmarks
-        }
-
-        missedDetections = 0
-        let detected = CallFaceLandmarks.fromNormalized(
-            boundingBox: observation.boundingBox,
-            leftEye: Self.center(of: observation.landmarks?.leftEye),
-            rightEye: Self.center(of: observation.landmarks?.rightEye),
-            imageSize: canvas
-        )
-        landmarks = landmarks?.smoothed(toward: detected, factor: CallFaceEffectBudget.landmarkSmoothing) ?? detected
-        return landmarks
-    }
-
-    private static func center(of region: VNFaceLandmarkRegion2D?) -> CGPoint? {
-        guard let points = region?.normalizedPoints, !points.isEmpty else { return nil }
-        let sum = points.reduce(CGPoint.zero) { CGPoint(x: $0.x + $1.x, y: $0.y + $1.y) }
-        return CGPoint(x: sum.x / CGFloat(points.count), y: sum.y / CGFloat(points.count))
     }
 
     // MARK: - Effects
 
     private func smoothing(_ image: CIImage, face: CallFaceLandmarks?, canvas: CGRect, intensity: Float) -> CIImage {
         guard let face, intensity > 0 else { return image }
-        let sigma = max(1, Double(face.bounds.width) * 0.045 * Double(intensity))
-        let blurred = image.clampedToExtent().applyingGaussianBlur(sigma: sigma).cropped(to: canvas)
-        let mask = Self.ellipseMask(around: face.bounds, strength: 0.8)
-        return blurred.applyingFilter("CIBlendWithMask", parameters: [
-            kCIInputBackgroundImageKey: image,
-            kCIInputMaskImageKey: mask
-        ])
+        let bounds = face.bounds
+        let region = bounds
+            .insetBy(dx: -bounds.width * 0.05, dy: -bounds.height * 0.05)
+            .intersection(canvas)
+            .integral
+        guard !region.isNull, !region.isEmpty else { return image }
+        let sigma = max(1, Double(bounds.width) * 0.045 * Double(intensity))
+        let local = image.cropped(to: region)
+        let blurred = local.clampedToExtent().applyingGaussianBlur(sigma: sigma).cropped(to: region)
+        return blurred
+            .applyingFilter("CIBlendWithMask", parameters: [
+                kCIInputBackgroundImageKey: local,
+                kCIInputMaskImageKey: Self.ellipseMask(around: bounds, strength: 0.8)
+            ])
+            .cropped(to: region)
+            .composited(over: image)
     }
 
     private func toad(_ image: CIImage, face: CallFaceLandmarks?, canvas: CGRect, isDegraded: Bool) -> CIImage {
@@ -174,10 +171,7 @@ nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProvidin
 
     private func angel(_ image: CIImage, face: CallFaceLandmarks?, canvas: CGRect, time: TimeInterval, isDegraded: Bool) -> CIImage {
         let glowing = CallFaceEffectBudget.allowsBloom(isDegraded: isDegraded)
-            ? image.applyingFilter("CIBloom", parameters: [
-                kCIInputRadiusKey: max(4, canvas.width * 0.015),
-                kCIInputIntensityKey: 0.55
-            ]).cropped(to: canvas)
+            ? Self.glow(image, canvas: canvas, radius: max(4, canvas.width * 0.015), intensity: 0.55)
             : image
         let warm = glowing.applyingFilter("CIColorControls", parameters: [
             kCIInputBrightnessKey: 0.03,
@@ -222,7 +216,7 @@ nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProvidin
             }
     }
 
-    private func volcano(_ image: CIImage, canvas: CGRect, time: TimeInterval, isDegraded: Bool) -> CIImage {
+    private func volcano(_ image: CIImage, canvas: CGRect, time: TimeInterval, isAnimated: Bool, isDegraded: Bool) -> CIImage {
         let graded = image.applyingFilter("CIColorMatrix", parameters: [
             "inputRVector": CIVector(x: 1.12, y: 0, z: 0, w: 0),
             "inputGVector": CIVector(x: 0, y: 0.9, z: 0, w: 0),
@@ -238,17 +232,52 @@ nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProvidin
             "inputColor1": CIColor(red: 1, green: 0.55, blue: 0.05, alpha: 0)
         ])?.outputImage?.cropped(to: canvas)
         let withLava = lava.map { $0.composited(over: graded) } ?? graded
+        guard isAnimated else { return withLava.cropped(to: canvas) }
 
-        return CallFaceEffectGeometry
+        let levels = CallFaceEffectBudget.emberOpacityLevels
+        let embers = CallFaceEffectGeometry
             .embers(count: CallFaceEffectBudget.emberCount(isDegraded: isDegraded), time: time, canvas: canvas, seed: seed)
-            .map { Self.spot(at: $0.center, radius: $0.radius, color: CIColor(red: 1, green: 0.6, blue: 0.15, alpha: $0.opacity)) }
-            .reduce(withLava) { base, ember in
-                ember.applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: base])
+            .compactMap { ember -> CIImage? in
+                let level = min(levels, Int((ember.opacity * CGFloat(levels)).rounded(.up)))
+                guard level > 0,
+                      let sprite = sprite(named: "ember-\(level)", size: Self.emberSpriteSize, draw: Self.drawEmber(alpha: CGFloat(level) / CGFloat(levels)))
+                else { return nil }
+                return Self.place(sprite, in: CGRect(
+                    x: ember.center.x - ember.radius,
+                    y: ember.center.y - ember.radius,
+                    width: ember.radius * 2,
+                    height: ember.radius * 2
+                ))
             }
+        guard !embers.isEmpty else { return withLava.cropped(to: canvas) }
+        return embers
+            .reduce(CIImage.empty()) { $1.composited(over: $0) }
+            .applyingFilter("CIAdditionCompositing", parameters: [kCIInputBackgroundImageKey: withLava])
             .cropped(to: canvas)
     }
 
     // MARK: - Building blocks
+
+    /// Le halo de l'ange : flou calculé au quart de la résolution puis ajouté en
+    /// écran — l'éclat d'un `CIBloom` pour un seizième de ses pixels.
+    private static func glow(_ image: CIImage, canvas: CGRect, radius: CGFloat, intensity: CGFloat) -> CIImage {
+        let down = CGAffineTransform(scaleX: CallFaceEffectBudget.glowReduction, y: CallFaceEffectBudget.glowReduction)
+        let reduced = image.transformed(by: down)
+        return reduced
+            .clampedToExtent()
+            .applyingGaussianBlur(sigma: Double(radius * CallFaceEffectBudget.glowReduction))
+            .cropped(to: reduced.extent)
+            .clampedToExtent()
+            .transformed(by: down.inverted())
+            .cropped(to: canvas)
+            .applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": CIVector(x: intensity, y: 0, z: 0, w: 0),
+                "inputGVector": CIVector(x: 0, y: intensity, z: 0, w: 0),
+                "inputBVector": CIVector(x: 0, y: 0, z: intensity, w: 0)
+            ])
+            .applyingFilter("CIScreenBlendMode", parameters: [kCIInputBackgroundImageKey: image])
+            .cropped(to: canvas)
+    }
 
     private static func monochrome(_ image: CIImage, color: CIColor, intensity: Double) -> CIImage {
         image.applyingFilter("CIColorMonochrome", parameters: [
@@ -312,6 +341,7 @@ nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProvidin
         let key = "\(name)-\(width)x\(height)"
         if let cached = sprites[key] { return cached }
         guard let bitmap = Self.bitmap(width: width, height: height, draw: draw) else { return nil }
+        spriteDraws[name, default: 0] += 1
         if sprites.count >= 24 { sprites = [:] }
         let image = CIImage(cgImage: bitmap)
         sprites[key] = image
@@ -334,6 +364,28 @@ nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProvidin
         ) else { return nil }
         draw(context, CGSize(width: width, height: height))
         return context.makeImage()
+    }
+
+    private static let emberSpriteSize = CGSize(width: 32, height: 32)
+
+    private static func drawEmber(alpha: CGFloat) -> (CGContext, CGSize) -> Void {
+        { context, size in
+            let colors = [
+                CGColor(red: 1, green: 0.6, blue: 0.15, alpha: alpha),
+                CGColor(red: 1, green: 0.6, blue: 0.15, alpha: 0)
+            ] as CFArray
+            guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) else { return }
+            let center = CGPoint(x: size.width / 2, y: size.height / 2)
+            let radius = size.width / 2
+            context.drawRadialGradient(
+                gradient,
+                startCenter: center,
+                startRadius: radius * 0.25,
+                endCenter: center,
+                endRadius: radius,
+                options: [.drawsBeforeStartLocation]
+            )
+        }
     }
 
     private static func drawHalo(_ context: CGContext, _ size: CGSize) {

@@ -350,22 +350,30 @@ export type CommentStickerSend = {
   readonly picture?: PostMediaUploadResult;
 };
 
-/** Ce que le sticker ajoute au CORPS envoyé — `sticker` et `attachmentIds`. */
-const stickerBodyOf = (send: CommentStickerSend | undefined): Readonly<Record<string, unknown>> =>
-  send === undefined
-    ? {}
-    : { sticker: send.sticker, ...(send.picture === undefined ? {} : { attachmentIds: [send.picture.postMediaId] }) };
+/** LES MÉDIAS JOINTS (#9167) — l'image du sticker d'abord (`commentStickerOf`
+ * la lit au premier rang), puis les photos et vidéos de la photothèque. */
+const joinedMedia = (send: CommentStickerSend | undefined, media: readonly PostMediaUploadResult[] | undefined): readonly PostMediaUploadResult[] => [
+  ...(send?.picture === undefined ? [] : [send.picture]),
+  ...(media ?? []),
+];
 
-/** Ce que le sticker ajoute à la rangée PROVISOIRE — la forme que la passerelle servira. */
-const stickerRowOf = (send: CommentStickerSend | undefined): Pick<PostComment, 'sticker' | 'media'> =>
-  send === undefined
-    ? {}
-    : {
-        sticker: send.sticker,
-        ...(send.picture === undefined
-          ? {}
-          : { media: [{ id: send.picture.postMediaId, fileUrl: send.picture.fileUrl, mimeType: send.picture.mimeType }] }),
-      };
+/** Ce que le sticker et les médias ajoutent au CORPS envoyé — `sticker` et `attachmentIds`. */
+const stickerBodyOf = (send: CommentStickerSend | undefined, media?: readonly PostMediaUploadResult[]): Readonly<Record<string, unknown>> => {
+  const joined = joinedMedia(send, media);
+  return {
+    ...(send === undefined ? {} : { sticker: send.sticker }),
+    ...(joined.length === 0 ? {} : { attachmentIds: joined.map((piece) => piece.postMediaId) }),
+  };
+};
+
+/** Ce que le sticker et les médias ajoutent à la rangée PROVISOIRE — la forme que la passerelle servira. */
+const stickerRowOf = (send: CommentStickerSend | undefined, media?: readonly PostMediaUploadResult[]): Pick<PostComment, 'sticker' | 'media'> => {
+  const joined = joinedMedia(send, media);
+  return {
+    ...(send === undefined ? {} : { sticker: send.sticker }),
+    ...(joined.length === 0 ? {} : { media: joined.map((piece) => ({ id: piece.postMediaId, fileUrl: piece.fileUrl, mimeType: piece.mimeType })) }),
+  };
+};
 
 /**
  * L'ENVOI — optimiste, puis l'issue, exactement la forme de
@@ -390,11 +398,14 @@ export async function performComment(params: {
   readonly parentId?: string | undefined;
   /** Un sticker (#9080) — il suffit à rendre le commentaire non vide. */
   readonly sticker?: CommentStickerSend | undefined;
+  /** Les photos et vidéos DÉJÀ téléversées (#9167) — elles suffisent aussi. */
+  readonly media?: readonly PostMediaUploadResult[] | undefined;
   readonly deps: CommentDeps & { readonly queryClient: QueryClient };
 }): Promise<CommentResult> {
   const { postId, author, deps } = params;
   const content = params.content.trim();
-  if ((content === '' && params.sticker === undefined) || content.length > COMMENT_MAX_LENGTH) {
+  const bare = params.sticker === undefined && (params.media?.length ?? 0) === 0;
+  if ((content === '' && bare) || content.length > COMMENT_MAX_LENGTH) {
     return { ok: false, message: COMMENT_EMPTY_MESSAGE };
   }
   const parentId = typeof params.parentId === 'string' && params.parentId !== '' ? params.parentId : undefined;
@@ -408,7 +419,7 @@ export async function performComment(params: {
     author,
     pending: true,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
-    ...stickerRowOf(params.sticker),
+    ...stickerRowOf(params.sticker, params.media),
   };
 
   const key = commentsQueryKey(postId);
@@ -418,7 +429,7 @@ export async function performComment(params: {
   const body = {
     content,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
-    ...stickerBodyOf(params.sticker),
+    ...stickerBodyOf(params.sticker, params.media),
   };
 
   const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId) }).catch(() => null);
@@ -487,6 +498,7 @@ async function performReply(params: {
   readonly author: FeedAuthor;
   readonly originalLanguage?: string | undefined;
   readonly sticker?: CommentStickerSend | undefined;
+  readonly media?: readonly PostMediaUploadResult[] | undefined;
   readonly deps: CommentDeps & { readonly queryClient: QueryClient };
 }): Promise<CommentResult> {
   const { postId, content, parentId, author, deps } = params;
@@ -499,7 +511,7 @@ async function performReply(params: {
     parentId,
     pending: true,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
-    ...stickerRowOf(params.sticker),
+    ...stickerRowOf(params.sticker, params.media),
   };
 
   const key = commentRepliesQueryKey(postId, parentId);
@@ -512,7 +524,7 @@ async function performReply(params: {
     content,
     parentId,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
-    ...stickerBodyOf(params.sticker),
+    ...stickerBodyOf(params.sticker, params.media),
   };
   const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId) }).catch(() => null);
 

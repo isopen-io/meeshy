@@ -14,6 +14,8 @@ const deCommentRow = {
   'comments.reply.cancel': 'Antwort abbrechen',
   'comments.composer.fold': 'Kommentarfeld einklappen',
   'comments.composer.unfold': 'Kommentarfeld anzeigen',
+  'comments.composer.attach': 'Foto oder Video anhängen',
+  'comments.media.upload_failed': 'Der Anhang konnte nicht gesendet werden.',
   'comments.replies.show': 'Antworten ansehen ({count})',
   'comments.replies.hide': 'Antworten ausblenden',
   'comments.replies.more': 'Weitere Antworten ansehen',

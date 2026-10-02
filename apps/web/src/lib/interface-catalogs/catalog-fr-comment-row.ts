@@ -18,6 +18,8 @@ const frCommentRow = {
   'comments.reply.cancel': 'Annuler la réponse',
   'comments.composer.fold': 'Replier la saisie du commentaire',
   'comments.composer.unfold': 'Afficher la saisie du commentaire',
+  'comments.composer.attach': 'Joindre une photo ou une vidéo',
+  'comments.media.upload_failed': 'La pièce jointe n’a pas pu être envoyée.',
   'comments.replies.show': 'Voir les réponses ({count})',
   'comments.replies.hide': 'Masquer les réponses',
   'comments.replies.more': 'Voir plus de réponses',
