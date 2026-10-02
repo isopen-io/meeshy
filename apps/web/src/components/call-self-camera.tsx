@@ -12,8 +12,8 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * l'écran (un toucher sur ma vignette l'y met), et là seulement :
  *
  * - pincer mon image, ou la molette dessus, zoome la caméra là où elle le
- *   propose (Chrome sur Android, la coque), sinon mon seul aperçu
- *   (`use-camera-zoom.ts`) ;
+ *   propose (Chrome sur Android, la coque), sinon recadre l'image ENVOYÉE
+ *   (`use-camera-zoom.ts`) — l'autre voit ce que je vois ;
  * - la capsule `+  1×  −` du zoom se pose sur le bord : elle le fait au
  *   clavier et au lecteur d'écran, et dit le facteur. Les commandes de ma
  *   caméra, elles, montent en haut au centre (#8626, `call-stage.tsx`).
@@ -123,7 +123,7 @@ export function CallSelfCamera({ stream, local, language, glyphs, column }: Self
 
 type ZoomStepProps = { readonly stream: MediaStream | null; readonly local: LocalZoom; readonly language: InterfaceLanguage; readonly Button: typeof CallButton; readonly rowItem: string };
 
-/** Le cran du zoom dans ma vignette (#8441) : « 1× », puis 2×, 5×, et retour — la caméra, sinon mon seul aperçu. */
+/** Le cran du zoom dans ma vignette (#8441) : « 1× », puis 2×, 5×, et retour — la caméra, sinon l'image envoyée recadrée. */
 export function CallZoomStep({ stream, local, language, Button, rowItem }: ZoomStepProps) {
   const zoom = useCameraZoom({ stream, local });
   if (zoom === null) return null;

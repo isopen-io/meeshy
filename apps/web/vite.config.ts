@@ -655,6 +655,11 @@ export default defineConfig({
                 'sw-push.js',
                 'sw-share-target.js',
                 'assets/*.woff2',
+                /* Le flou d'arrière-plan par segmentation (#8471) : MediaPipe
+                   et son chargeur WebAssembly ne se téléchargent qu'au premier
+                   flou que la caméra ne fait pas — jamais à l'installation. */
+                'assets/video-effects-segmentation-*.js',
+                'assets/vision_wasm_*',
               ],
               /**
                * Chargés EN TÊTE du service worker généré, donc leurs écouteurs
@@ -798,6 +803,13 @@ export default defineConfig({
           }),
         ]),
   ],
+  /**
+   * LE WORKER DES EFFETS D'APPEL EST UN MODULE (#9099, #8471) — le format
+   * `iife` par défaut interdit le découpage : le modèle de segmentation
+   * (`video-effects-segmentation.ts`, MediaPipe) doit rester un chunk que le
+   * worker ne charge qu'au premier flou.
+   */
+  worker: { format: 'es' },
   build: {
     target: 'es2022',
     cssCodeSplit: true,

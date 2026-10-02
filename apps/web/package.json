@@ -81,6 +81,7 @@
   "dependencies": {
     "@capacitor-community/media": "9.1.0",
     "@capacitor/push-notifications": "8.1.2",
+    "@mediapipe/tasks-vision": "1.0.1",
     "@meeshy/shared": "workspace:*",
     "@tanstack/react-query": "5.102.8",
     "@tanstack/react-virtual": "3.14.13",
