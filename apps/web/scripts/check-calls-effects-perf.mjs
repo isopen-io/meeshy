@@ -48,6 +48,14 @@ const check = (ok, what) => {
   else failures.push(what);
 };
 
+/**
+ * LE TEMPS SE LIT SUR L'HORLOGE DE LA PAGE, jamais en délai fixe : une fenêtre
+ * de mesure est un FAIT (« dix secondes de la page se sont écoulées »), un pas
+ * de geste attend l'image suivante du navigateur.
+ */
+const elapse = (page, ms) => page.evaluate((wait) => new Promise((resolve) => setTimeout(resolve, wait)), ms);
+const nextFrame = (page) => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => resolve())));
+
 const appears = (page, selector, timeout = 8000) => page.waitForSelector(selector, { timeout }).then(() => true, () => false);
 const until = (page, fn, arg, timeout = 8000) => page.waitForFunction(fn, arg, { timeout }).then(() => true, () => false);
 
@@ -148,14 +156,14 @@ const glide = async (page, direction) => {
   const start = await page.evaluate(() => performance.now());
   for (let step = 0; step < 12; step += 1) {
     await page.mouse.wheel(direction * 40, 0);
-    await page.waitForTimeout(25);
+    await nextFrame(page);
   }
   const end = await page.evaluate(() => performance.now());
   return { start, end };
 };
 
 const measure = async (page, name, { reference = false } = {}) => {
-  await page.waitForTimeout(1500);
+  await elapse(page, 1500);
   const first = await sending(page);
   const longBefore = await page.evaluate(() => window.__gateLong?.length ?? -1);
   const glides = [];
@@ -163,12 +171,12 @@ const measure = async (page, name, { reference = false } = {}) => {
   let direction = 1;
   while (Date.now() < deadline) {
     if (reference) {
-      await page.waitForTimeout(500);
+      await elapse(page, 500);
       continue;
     }
     glides.push(await glide(page, direction));
     direction = -direction;
-    await page.waitForTimeout(150);
+    await elapse(page, 150);
   }
   const last = await sending(page);
   const long = await page.evaluate((from) => (window.__gateLong === null ? null : window.__gateLong.slice(from)), longBefore);
@@ -220,7 +228,8 @@ try {
   await page.click('[data-call-effects-category="color"]');
   await page.click('[data-carousel-item="natural"]');
   await until(page, () => (document.querySelector('[data-call-mode-preview] video')?.videoWidth ?? 0) > 0);
-  await page.waitForTimeout(500);
+  await nextFrame(page);
+  await nextFrame(page);
   const sharp = await sharpness(page);
   check(sharp !== null && sharp > 0, `la netteté de l’image envoyée se mesure sans flou (${sharp})`);
   await capture(page, 'perf-sans-flou');
@@ -251,7 +260,7 @@ try {
       20_000,
     );
     check(blurred, `le flou floute l’image envoyée (netteté avant ${sharp === null ? '?' : sharp.toFixed(2)}, après ${((await sharpness(page)) ?? 0).toFixed(2)})`);
-    await page.waitForTimeout(3000);
+    await elapse(page, 3000);
     await capture(page, 'perf-flou');
     console.log(`  netteté avec le masque : ${((await sharpness(page)) ?? 0).toFixed(2)} (sans flou : ${(sharp ?? 0).toFixed(2)})`);
     await measure(page, 'flou d’arrière-plan (segmentation)');
@@ -270,7 +279,7 @@ try {
     await openActions(page);
     await page.click('[data-call-control="effects"]');
     await appears(page, '[data-call-mode="effects"]');
-    await page.waitForTimeout(1500);
+    await elapse(page, 1500);
     await capture(page, 'perf-zoom');
     await measure(page, 'zoom numérique 2×');
   }
