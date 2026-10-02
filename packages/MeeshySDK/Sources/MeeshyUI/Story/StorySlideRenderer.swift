@@ -245,11 +245,11 @@ public enum StorySlideRenderer {
         // projeté par `size.width / 1080` — parité avec le canvas réel (`StoryTextLayer`)
         // et `SlideMiniPreview`. L'ancien diviseur `390` (largeur device) rendait le
         // texte ~2,77× trop gros dans le composite ThumbHash.
-        // `resolvedSize × scale` = `designFontSize` du canvas (`StoryTextLayer` : `fontSize * scale`).
-        // Le pinch écrit `text.scale` (StoryCanvasUIView.updateScale, 0.3…4.0) — sans le `× scale`
-        // ici, un texte agrandi/réduit au doigt s'affichait à sa taille de BASE dans le cover/thumbHash
-        // (incohérence avec le canvas). Parité avec `drawMediaObject`/`drawSticker` qui appliquent déjà scale.
-        let designFontSize = textObj.resolvedSize * textObj.scale
+        // Le pinch écrit `text.scale` (StoryCanvasUIView.updateScale, 0.3…4.0). Comme sur le
+        // canvas (#9139), il agrandit le CADRE entier — la mise en ligne se fait à la taille
+        // d'édition, puis le contexte est mis à l'échelle autour du centre : un texte agrandi
+        // garde ses lignes dans le cover/thumbHash comme dans la scène.
+        let designFontSize = textObj.resolvedSize
         let fontSize = max(6, size.width * CGFloat(designFontSize / Double(CanvasGeometry.designWidth)))
         let textColor = UIColor(hex: textObj.textColor ?? "FFFFFF") ?? .white
 
@@ -297,7 +297,15 @@ public enum StorySlideRenderer {
         // Rotation autour du centre — parité canvas (`StoryTextLayer`). Sans ça un texte
         // pivoté apparaissait DROIT dans le composite cover/thumbHash (≠ ce que l'auteur voit).
         drawRotated(textObj.rotation, around: CGPoint(x: centerX, y: centerY), in: ctx) {
+            // `drawRotated` ne sauve pas l'état pour un texte droit : l'échelle
+            // se sauve elle-même, sans quoi elle fuirait sur l'objet suivant.
+            let scale = CGFloat(max(textObj.scale, 0.0001))
+            ctx.saveGState()
+            ctx.translateBy(x: centerX, y: centerY)
+            ctx.scaleBy(x: scale, y: scale)
+            ctx.translateBy(x: -centerX, y: -centerY)
             (textObj.text as NSString).draw(in: textRect, withAttributes: attrs)
+            ctx.restoreGState()
         }
     }
 
