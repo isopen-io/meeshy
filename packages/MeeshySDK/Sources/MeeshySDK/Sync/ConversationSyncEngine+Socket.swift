@@ -792,58 +792,53 @@ extension ConversationSyncEngine {
             await recomputeTotalUnread()
         }
 
-        // Update delivery status of own messages in the message cache.
-        // WhatsApp-style all-or-nothing: the double-gray "delivered" / indigo
-        // "read" indicator must represent EVERY recipient, never a single member
-        // of a group. `summary.totalMembers` is the active recipient count
-        // (sender excluded); a 0 denominator falls back to legacy "any > 0" so
-        // 1:1 keeps working.
+        // #7433 — le résumé ne touche que le message qu'il décrit, s'il est
+        // le mien (`ReadStatusReceipt`), même règle que la base GRDB.
         let summary = event.summary
-        let newStatus = DeliveryStatusResolver.fromCounts(
-            deliveredCount: summary.deliveredCount,
-            readCount: summary.readCount,
-            recipientCount: summary.totalMembers
-        )
-
         await cache.messages.update(for: event.conversationId) { messages in
-            Self.applyReadReceipt(
-                to: messages,
-                newStatus: newStatus,
-                deliveredCount: summary.deliveredCount,
-                readCount: summary.readCount,
-                frontier: event.updatedAt
-            )
+            Self.applyReadReceipt(to: messages, summary: summary)
         }
         _messagesDidChange.send(event.conversationId)
     }
 
-    /// Applies a read/deliver-status update to the sender's own messages, gated
-    /// by the read frontier `frontier` (the event's `updatedAt`). A message
-    /// created AFTER the recipient's read/deliver moment cannot have been
-    /// read/delivered yet, so it must NOT advance to `.read`/`.delivered` —
-    /// otherwise a message sent right after the peer read would falsely render
-    /// the double-check / "Lu". Iterates newest-first: messages beyond the
-    /// frontier are skipped, the monotonic guard only advances a status that is
-    /// genuinely better, and once an already-`.read` message is reached every
-    /// older one is read too. Pure + testable.
+    /// Pose un résumé d'accusé sur le SEUL message qu'il décrit — celui qu'il
+    /// nomme, sinon le dernier message acquitté du fil (passerelle d'avant
+    /// #7433) — et seulement si ce message est le mien. Compteurs fusionnés
+    /// sans recul, coche dérivée des compteurs (tout-ou-rien en groupe) et
+    /// jamais rétrogradée. Pure + testable.
     nonisolated static func applyReadReceipt(
         to messages: [MeeshyMessage],
-        newStatus: MeeshyMessage.DeliveryStatus,
-        deliveredCount: Int,
-        readCount: Int,
-        frontier: Date
+        summary: ReadStatusSummary
     ) -> [MeeshyMessage] {
+        let inFlight: Set<MeeshyMessage.DeliveryStatus> = [.sending, .invisible, .clock, .slow, .failed]
+        let latestAcked = messages
+            .filter { !inFlight.contains($0.deliveryStatus) }
+            .max { $0.createdAt < $1.createdAt }
+        guard let targetId = ReadStatusReceipt.describedMessageId(of: summary, latestMessageId: latestAcked?.id),
+              let index = messages.firstIndex(where: { $0.id == targetId }),
+              messages[index].isMe
+        else { return messages }
+        let target = messages[index]
+        let current = ReadStatusReceipt.Counters(
+            deliveredCount: target.deliveredCount,
+            readCount: target.readCount,
+            recipientCount: target.recipientCount,
+            readByAllAt: target.readByAllAt
+        )
+        let next = ReadStatusReceipt.merged(current, with: summary)
+        guard next != current else { return messages }
         var updated = messages
-        for i in updated.indices.reversed() {
-            guard updated[i].isMe else { continue }
-            if updated[i].createdAt > frontier { continue }
-            let current = updated[i].deliveryStatus
-            if current == .read { break }
-            if newStatus.isBetterThan(current) {
-                updated[i].deliveryStatus = newStatus
-                updated[i].deliveredCount = deliveredCount
-                updated[i].readCount = readCount
-            }
+        updated[index].deliveredCount = next.deliveredCount
+        updated[index].readCount = next.readCount
+        updated[index].recipientCount = next.recipientCount
+        updated[index].readByAllAt = next.readByAllAt
+        let derived = DeliveryStatusResolver.fromCounts(
+            deliveredCount: next.deliveredCount,
+            readCount: next.readCount,
+            recipientCount: next.recipientCount
+        )
+        if derived.isBetterThan(target.deliveryStatus) {
+            updated[index].deliveryStatus = derived
         }
         return updated
     }
