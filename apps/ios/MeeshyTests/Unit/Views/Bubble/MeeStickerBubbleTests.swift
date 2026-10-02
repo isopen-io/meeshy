@@ -34,6 +34,13 @@ final class MeeStickerBubbleTests: XCTestCase {
         XCTAssertEqual(source, .mee(id: mee.id))
     }
 
+    /// **Un Instant reçu se rejoue** (#9069) : son film, et le texte saisi
+    /// redessiné en natif — jamais le seul PNG de l'expéditeur.
+    func test_renderSource_knownInstant_playsTheFilmUnderItsText() {
+        let source = BubbleSticker.RenderSource.resolve(sticker: makeSticker(templateId: "mee.instant-plage")) { _ in false }
+        XCTAssertEqual(source, .meeInstant(id: "instant-plage"))
+    }
+
     func test_renderSource_meeFromANewerWeb_fallsBackToThePicture() {
         let source = BubbleSticker.RenderSource.resolve(sticker: makeSticker(templateId: "mee.pas-encore-filme")) { _ in false }
         XCTAssertEqual(source, .picture(makePicture()))

@@ -15,16 +15,21 @@ export function clip(text: string, max: number): string {
 
 const FONT = 'font-family="system-ui,sans-serif"';
 
-/** Le BANDEAU d'un sticker dynamique : une ligne forte (lieu, heure, météo) et, dessous, une ligne douce. */
+/**
+ * Le BANDEAU d'un sticker dynamique : une ligne forte (lieu, heure, météo) et,
+ * dessous, une ligne douce. Il se DÉCLARE (`data-mee-band`) : sa forme dépend
+ * du texte saisi, donc le film qu'iOS en tire le laisse de côté et iOS le
+ * redessine en natif, avec ces mêmes règles (#9069).
+ */
 export function band(main: string, sub: string | undefined, o: { readonly fill?: string; readonly ink?: string } = {}): string {
   const fill = o.fill ?? '#ffffff';
   const ink = o.ink ?? INK;
   const top = clip(main, 20);
   const bottom = sub !== undefined && sub.trim() !== '' ? clip(sub, 28) : '';
   const mainSize = top.length > 14 ? 15 : 19;
-  return bottom === ''
+  return `<g data-mee-band>${bottom === ''
     ? `<rect x="14" y="158" width="172" height="34" rx="17" fill="${fill}" stroke="${INK}" stroke-width="2.4"/><text x="100" y="${181 - (19 - mainSize) / 2}" text-anchor="middle" font-size="${mainSize}" font-weight="900" fill="${ink}" ${FONT}>${escapeSvg(top)}</text>`
-    : `<rect x="14" y="148" width="172" height="46" rx="16" fill="${fill}" stroke="${INK}" stroke-width="2.4"/><text x="100" y="169" text-anchor="middle" font-size="${mainSize}" font-weight="900" fill="${ink}" ${FONT}>${escapeSvg(top)}</text><text x="100" y="186" text-anchor="middle" font-size="11.5" font-weight="700" fill="${ink}" opacity=".78" ${FONT}>${escapeSvg(bottom)}</text>`;
+    : `<rect x="14" y="148" width="172" height="46" rx="16" fill="${fill}" stroke="${INK}" stroke-width="2.4"/><text x="100" y="169" text-anchor="middle" font-size="${mainSize}" font-weight="900" fill="${ink}" ${FONT}>${escapeSvg(top)}</text><text x="100" y="186" text-anchor="middle" font-size="11.5" font-weight="700" fill="${ink}" opacity=".78" ${FONT}>${escapeSvg(bottom)}</text>`}</g>`;
 }
 
 /** Un texte libre posé sur une surface (un cœur, une banderole, une lettre). */

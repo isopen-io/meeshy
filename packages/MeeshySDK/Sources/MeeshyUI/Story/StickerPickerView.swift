@@ -72,6 +72,7 @@ public struct StickerPickerView: View {
     /// fournisseur : l'onglet « Lieu » n'existe alors pas.
     @Environment(\.stickerNearbyPlaces) var nearbyPlaces
     @Environment(\.meeStickerPick) var meeStickerPick
+    @Environment(\.meeInstantPick) var meeInstantPick
     @Environment(\.stickerPaletteClock) private var clock
 
     @State var libraryItems: [StoryStickerLibraryItem] = []

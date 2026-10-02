@@ -55,6 +55,8 @@ struct BubbleSticker: View, Equatable {
     nonisolated enum RenderSource: Equatable {
         /// Un sticker Mee ou Meo dont ce binaire embarque le FILM (#9053).
         case mee(id: String)
+        /// Un Instant (#9069) : son film, et le texte saisi redessiné dessus.
+        case meeInstant(id: String)
         case template(id: String)
         case picture(BubbleContent.Sticker.Picture)
         case emoji(String)
@@ -65,6 +67,9 @@ struct BubbleSticker: View, Equatable {
         ) -> RenderSource {
             if let mee = MeeStickerCatalog.sticker(forTemplateID: sticker.templateId) {
                 return .mee(id: mee.id)
+            }
+            if let instant = MeeInstantCatalog.instant(forTemplateID: sticker.templateId) {
+                return .meeInstant(id: instant.id)
             }
             if let id = sticker.templateId, !id.isEmpty, registryKnows(id) {
                 return .template(id: id)
