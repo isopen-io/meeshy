@@ -1,0 +1,16 @@
+name: pbxproj regen (temporaire)
+on:
+  push:
+    branches: [ci/pbxproj-regen-stickers]
+jobs:
+  regen:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: cd apps/ios && xcodegen generate
+      - run: |
+          echo "=====DIFF-BEGIN====="
+          git diff --no-color -U3 apps/ios/Meeshy.xcodeproj/project.pbxproj
+          echo "=====DIFF-END====="
+          git status --porcelain
