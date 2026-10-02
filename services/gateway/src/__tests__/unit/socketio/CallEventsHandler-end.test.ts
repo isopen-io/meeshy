@@ -229,10 +229,9 @@ describe('CallEventsHandler — call:end handler', () => {
     });
 
     it('calls callService.endCall with the correct arguments, handing over the session it already read (#9088)', async () => {
-      const readSession = await mockGetCallSession.mock.results[0].value;
       expect(mockEndCall).toHaveBeenCalledWith(
         CALL_ID, CALLER_ID, PARTICIPANT_ID, false, END_DATA.reason,
-        { preJoinDecline: false, session: readSession }
+        { preJoinDecline: false, session: await mockGetCallSession.mock.results[0].value }
       );
     });
 
