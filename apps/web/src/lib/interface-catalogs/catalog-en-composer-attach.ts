@@ -50,6 +50,7 @@ const enComposerAttach = {
   'composer.sticker.error.failed': 'The sticker could not be created',
   'composer.sticker.tabs': 'Sticker families',
   'composer.sticker.tab.instants': 'Moments',
+  'composer.sticker.tab.custom': 'Custom',
   'composer.sticker.intent.bonjour.title': 'Hello, thanks',
   'composer.sticker.intent.bonjour.hint': 'To greet, thank, say yes, apologize or say good night',
   'composer.sticker.intent.amour.title': 'Say I love you',

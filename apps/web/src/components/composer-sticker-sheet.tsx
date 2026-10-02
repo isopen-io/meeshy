@@ -46,12 +46,19 @@ import { imageFilesOf, prepareStickerSource, readClipboardImages } from '@/lib/s
  */
 const MeeStickerPanel = lazy(() => import('./composer-mee-stickers').then((m) => ({ default: m.MeeStickerPanel })));
 
-/** Les onglets de la feuille : la bibliothèque, puis Mee, Meo, Mee & Meo et les Instants (#9034, #9058). */
-const STICKER_TABS = ['mine', 'mee', 'meo', 'duo', 'instants'] as const;
+/**
+ * Les onglets de la feuille, comme iOS (directive porteur 2026-10-02, #9068,
+ * #9069) : « Mee & Meo » range tous les personnages par intention ;
+ * « Personnalisés » porte la bibliothèque, puis les Instants — les Mee qui
+ * écrivent un texte, l'heure, le lieu ou la météo.
+ */
+const STICKER_TABS = ['mee', 'mine'] as const;
 type StickerTab = (typeof STICKER_TABS)[number];
 
 /** Ce que la feuille rend à l'hôte : l'image à joindre et le descripteur du champ `sticker`. */
 export type PickedSticker = { readonly file: File; readonly sticker: MessageSticker };
+
+const MEE_FALLBACK = <p className="py-6 text-center text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>…</p>;
 
 const ACTION = 'inline-flex min-h-11 items-center gap-1.5 rounded-full px-3.5 text-body disabled:opacity-50';
 const ACTION_STYLE = {
@@ -157,10 +164,10 @@ export function ComposerStickerSheet({
   return (
     <Sheet title={translate(language, 'composer.sticker.title')} bodyAs="div" onClose={onClose}>
       <StickerTabBar tab={tab} onSelect={setTab} language={language} />
-      {tab !== 'mine' ? (
+      {tab === 'mee' ? (
         <div className="px-4 pb-4">
-          <Suspense fallback={<p className="py-6 text-center text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>…</p>}>
-            <MeeStickerPanel tab={tab} language={language} onPick={onPick} />
+          <Suspense fallback={MEE_FALLBACK}>
+            <MeeStickerPanel mode="characters" language={language} onPick={onPick} />
           </Suspense>
         </div>
       ) : (
@@ -248,27 +255,24 @@ export function ComposerStickerSheet({
               ))}
             </ul>
           )}
+
+          <section data-sticker-instants className="flex flex-col gap-2 pt-2">
+            <h2 className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+              {translate(language, 'composer.sticker.tab.instants')}
+            </h2>
+            <Suspense fallback={MEE_FALLBACK}>
+              <MeeStickerPanel mode="instants" language={language} onPick={onPick} />
+            </Suspense>
+          </section>
         </div>
       )}
     </Sheet>
   );
 }
 
-/** Les personnages portent leur NOM, le même dans toutes les langues ; les autres onglets se traduisent. */
-const tabLabel = (tab: StickerTab, language: ReturnType<typeof currentInterfaceLanguage>): string => {
-  switch (tab) {
-    case 'mine':
-      return translate(language, 'composer.sticker.title');
-    case 'instants':
-      return translate(language, 'composer.sticker.tab.instants');
-    case 'mee':
-      return 'Mee';
-    case 'meo':
-      return 'Meo';
-    case 'duo':
-      return 'Mee & Meo';
-  }
-};
+/** « Mee & Meo » porte les NOMS des personnages, les mêmes dans toutes les langues ; « Personnalisés » se traduit. */
+const tabLabel = (tab: StickerTab, language: ReturnType<typeof currentInterfaceLanguage>): string =>
+  tab === 'mee' ? 'Mee & Meo' : translate(language, 'composer.sticker.tab.custom');
 
 /** Les onglets — une liste d'onglets au clavier (flèches, Début, Fin), un seul arrêt de tabulation, cibles de 44 px. */
 function StickerTabBar({

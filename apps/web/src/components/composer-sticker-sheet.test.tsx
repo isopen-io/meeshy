@@ -127,23 +127,33 @@ describe('ComposerStickerSheet', () => {
     expect(host.textContent).toContain('Aucune image dans le presse-papier');
   });
 
-  test('l’onglet Mee, après « Mes stickers », montre Mee seule — les duos ont leur onglet « Mee & Meo »', async () => {
+  test('deux onglets, comme iOS : « Mee & Meo » range tous les personnages, « Personnalisés » la bibliothèque puis les Instants', async () => {
     appQueryClient.setQueryData(STICKERS_QUERY_KEY, []);
     const host = await mount();
     const tabs = Array.from(host.querySelectorAll('[role="tab"]')).map((tab) => tab.getAttribute('data-sticker-tab'));
-    expect(tabs).toEqual(['mine', 'mee', 'meo', 'duo', 'instants']);
-    expect(host.querySelector('[data-sticker-tab="duo"]')?.textContent).toBe('Mee & Meo');
+    expect(tabs).toEqual(['mee', 'mine']);
+    expect(host.querySelector('[data-sticker-tab="mee"]')?.textContent).toBe('Mee & Meo');
+    expect(host.querySelector('[data-sticker-tab="mine"]')?.textContent).toBe('Personnalisés');
+    expect(host.querySelector('[data-sticker-tab="mine"]')?.getAttribute('aria-selected')).toBe('true');
+
+    await act(async () => {
+      await import('./composer-mee-stickers');
+      await settle();
+      await settle();
+    });
+    expect(host.querySelector('[data-sticker-library]')).not.toBe(null);
+    expect(host.querySelector('[data-mee-panel="instants"] [data-mee-sticker="instant-plage"]')).not.toBe(null);
 
     await mounter.click(host.querySelector('[data-sticker-tab="mee"]'));
     await act(async () => {
-      await import('./composer-mee-stickers');
       await settle();
       await settle();
     });
 
     expect(host.querySelector('[data-sticker-library]')).toBe(null);
     expect(host.querySelector('[data-mee-sticker="mee-coucou"]')).not.toBe(null);
-    expect(host.querySelector('[data-mee-sticker="duo-mee-bisou"]')).toBe(null);
-    expect(host.querySelector('[data-mee-sticker="meo-salut"]')).toBe(null);
+    expect(host.querySelector('[data-mee-sticker="meo-salut"]')).not.toBe(null);
+    expect(host.querySelector('[data-mee-sticker="duo-mee-bisou"]')).not.toBe(null);
+    expect(host.querySelector('[data-mee-sticker^="instant-"]')).toBe(null);
   });
 });

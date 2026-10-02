@@ -11,9 +11,9 @@ import { MeeStickerPanel } from './composer-mee-stickers';
 import type { MeePicked } from './composer-mee-stickers';
 
 /**
- * LES ONGLETS MEE, MEO ET INSTANTS (#9034) — un choix REMET à l'hôte l'image
- * fixe et le descripteur que le web redessine ; un sticker dynamique écrit ce
- * qu'on a saisi, et seulement ce qu'il déclare.
+ * MEE & MEO ET LES INSTANTS (#9034, #9068, #9069) — un choix REMET à l'hôte
+ * l'image fixe et le descripteur que le web redessine ; un sticker dynamique
+ * écrit ce qu'on a saisi, et seulement ce qu'il déclare.
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -40,34 +40,33 @@ const fakeRasterize = async (svg: string) => {
 };
 const now = () => new Date('2026-10-01T08:05:00');
 
-const mount = (tab: 'mee' | 'meo' | 'duo' | 'instants', onPick: (picked: MeePicked) => void) =>
-  mounter.mount(<MeeStickerPanel tab={tab} language="fr" onPick={onPick} rasterize={fakeRasterize} now={now} />);
+const mount = (mode: 'characters' | 'instants', onPick: (picked: MeePicked) => void) =>
+  mounter.mount(<MeeStickerPanel mode={mode} language="fr" onPick={onPick} rasterize={fakeRasterize} now={now} />);
 
 describe('MeeStickerPanel', () => {
-  test('l’onglet Meo range Meo seul par intention : un titre, une phrase qui dit quand l’employer, la grille', async () => {
-    const host = await mount('meo', () => {});
+  test('Mee & Meo range TOUS les personnages par intention — Mee, puis Meo, puis les duos (directive porteur 2026-10-02)', async () => {
+    const host = await mount('characters', () => {});
     const sections = Array.from(host.querySelectorAll('[data-mee-section]'));
     expect(sections.map((s) => s.getAttribute('data-mee-section'))).toEqual([...MEE_INTENTS]);
-    expect(host.querySelectorAll('[data-mee-sticker]').length).toBe(meeStickersOfTab('meo').length);
-    expect(host.querySelector('[data-mee-sticker^="duo-"]')).toBe(null);
+    const total = meeStickersOfTab('mee').length + meeStickersOfTab('meo').length + meeStickersOfTab('duo').length;
+    expect(host.querySelectorAll('[data-mee-sticker]').length).toBe(total);
+    expect(host.querySelector('[data-mee-sticker^="instant-"]')).toBe(null);
 
     const hello = host.querySelector('[data-mee-section="bonjour"]');
     expect(hello?.querySelector('h3')?.textContent).toBe('Bonjour, merci');
     expect(hello?.querySelector('[data-mee-hint]')?.textContent).toContain('Pour saluer');
     expect(hello?.querySelector('[data-mee-sticker="meo-salut"] svg')?.innerHTML).toContain('<style>');
-  });
 
-  test('l’onglet Mee & Meo réunit les duos, dans les deux sens', async () => {
-    const host = await mount('duo', () => {});
-    expect(host.querySelector('[data-mee-sticker="duo-mee-bisou"]')).not.toBe(null);
-    expect(host.querySelector('[data-mee-sticker="duo-meo-bisou"] svg')?.getAttribute('class')).toContain('mee-s-pick-duo-meo-bisou');
-    expect(host.querySelector('[data-mee-sticker="mee-coucou"]')).toBe(null);
-    expect(host.querySelectorAll('[data-mee-sticker]').length).toBe(meeStickersOfTab('duo').length);
+    const rang = (id: string | null) => (id?.startsWith('duo-') ? 2 : id?.startsWith('meo-') ? 1 : 0);
+    sections.forEach((section) => {
+      const rangs = Array.from(section.querySelectorAll('[data-mee-sticker]')).map((b) => rang(b.getAttribute('data-mee-sticker')));
+      expect(rangs).toEqual([...rangs].sort((a, b) => a - b));
+    });
   });
 
   test('choisir un sticker remet son image fixe et son gabarit `mee.<id>`', async () => {
     const picked: MeePicked[] = [];
-    const host = await mount('mee', (p) => picked.push(p));
+    const host = await mount('characters', (p) => picked.push(p));
 
     await mounter.click(host.querySelector('[data-mee-sticker="mee-bisou-vole"]'));
     await act(settle);
@@ -101,7 +100,7 @@ describe('MeeStickerPanel', () => {
 
   test('une image qui ne se rend pas est DITE, et rien ne part', async () => {
     const picked: MeePicked[] = [];
-    const host = mounter.mount(<MeeStickerPanel tab="mee" language="fr" onPick={(p) => picked.push(p)} rasterize={() => Promise.reject(new Error('x'))} />);
+    const host = mounter.mount(<MeeStickerPanel mode="characters" language="fr" onPick={(p) => picked.push(p)} rasterize={() => Promise.reject(new Error('x'))} />);
     await mounter.click((await host).querySelector('[data-mee-sticker="mee-coucou"]'));
     await act(settle);
     expect(picked).toEqual([]);

@@ -4,9 +4,8 @@ import UIKit
 /// **Un sticker Mee ou Meo, animé** (#9053) — la même vue dans la feuille et
 /// dans la bulle.
 ///
-/// La première image s'affiche AUSSITÔT (lue sur le rendu : un WebP de 360 px
-/// se décode en une image) ; le film se décode hors du fil principal, puis
-/// prend sa place. `animates: false` (vignettes de la feuille) ou Reduce
+/// La première image, réduite à la case, puis le film : tous deux décodés
+/// hors du fil principal, le film seulement si la case reste à l'écran. `animates: false` (vignettes de la feuille) ou Reduce
 /// Motion ⇒ l'image reste fixe : le sticker perd son mouvement, pas son
 /// intention — `AnimatedImageView` honore les deux préférences.
 public struct MeeStickerFilmView: View {
@@ -36,6 +35,9 @@ public struct MeeStickerFilmView: View {
     /// cases visibles tiennent sous le plafond du cache (96 Mo).
     public static let gridPixelCap = 180
 
+    /// Le temps qu'une case reste à l'écran avant que son film se décode.
+    static let filmDelayMilliseconds = 150
+
     public static func decodePixelSize(side: CGFloat, scale: CGFloat, cap: Int) -> Int {
         min(cap, 360, Int((side * scale).rounded(.up)))
     }
@@ -61,12 +63,16 @@ public struct MeeStickerFilmView: View {
         .frame(width: side, height: side)
         .contentShape(Rectangle())
         .task(id: "\(sticker.id)|\(animates && !reduceMotion)|\(maxPixelSize)") {
-            if still == nil { still = MeeStickerCatalog.stillImage(sticker) }
-            guard animates, !reduceMotion, sticker.animated,
-                  let url = MeeStickerCatalog.fileURL(for: sticker) else { return }
-            await MeeStickerCatalog.prepareFilm(at: url, maxPixelSize: maxPixelSize)
-            guard !Task.isCancelled else { return }
-            film = MeeStickerCatalog.decoded(sticker, maxPixelSize: maxPixelSize)
+            guard let url = MeeStickerCatalog.fileURL(for: sticker) else { return }
+            if still == nil { still = await MeeStickerCatalog.still(at: url, maxPixelSize: maxPixelSize) }
+            guard animates, !reduceMotion, sticker.animated else { return }
+            // Une case qui ne fait que PASSER pendant un lancer ne décode rien :
+            // sa tâche est annulée avant la fin de ce délai.
+            try? await Task.sleep(for: .milliseconds(Self.filmDelayMilliseconds))
+            guard !Task.isCancelled,
+                  let entry = await MeeStickerCatalog.film(at: url, maxPixelSize: maxPixelSize),
+                  !Task.isCancelled else { return }
+            film = entry.decoded
         }
         .onDisappear { film = nil }
         .accessibilityHidden(true)
