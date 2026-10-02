@@ -61,6 +61,16 @@ final class PresenceManagerViewingTests: XCTestCase {
         XCTAssertTrue(sut.isHere(userId: "peer", conversationId: "conv-a"), "l'activité s'apaise, « ici » demeure")
     }
 
+    func test_applyViewing_focus_saysFocused_thenRestsLikeActivity() async throws {
+        sut.activityHold = 0.05
+        sut.applyViewing(.arrived(change("peer", "conv-a")))
+        sut.applyViewing(.active(ConversationViewingChange(userId: "peer", conversationId: "conv-a", focus: true)))
+
+        XCTAssertEqual(sut.here(userId: "peer", conversationId: "conv-a"), .focused)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(sut.here(userId: "peer", conversationId: "conv-a"), .here)
+    }
+
     func test_applyViewing_repeatedActivity_extendsThePulse() async throws {
         sut.activityHold = 0.3
         sut.applyViewing(.active(change("peer", "conv-a")))

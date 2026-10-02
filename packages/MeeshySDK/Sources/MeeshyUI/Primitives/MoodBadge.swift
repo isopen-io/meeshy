@@ -35,6 +35,12 @@ public struct MeeshyMoodBadge: View {
     /// Position GLOBALE du centre de la pastille, pour ancrer un popover de
     /// statut. `nil` ⇒ pastille décorative.
     public var onTap: ((CGPoint) -> Void)?
+    /// Le contour de la SILHOUETTE de l'emoji (#9065) — la présence qu'un point
+    /// aurait dite : indigo « ici », vert « en ligne ». `nil` ⇒ aucun contour.
+    public var outline: Color?
+    /// Le pair regarde un élément en plein écran depuis la conversation : la
+    /// pastille se pose et ne respire plus, jusqu'à son retour au fil.
+    public var holdsStill: Bool
 
     // MARK: - Trame et loi du ressort
     //
@@ -70,10 +76,28 @@ public struct MeeshyMoodBadge: View {
         animates && !reduceMotion
     }
 
-    public init(emoji: String, diameter: CGFloat, animates: Bool, onTap: ((CGPoint) -> Void)? = nil) {
+    public nonisolated static func shouldBreathe(animates: Bool, reduceMotion: Bool, holdsStill: Bool) -> Bool {
+        shouldAnimate(animates: animates, reduceMotion: reduceMotion) && !holdsStill
+    }
+
+    /// L'épaisseur du contour : proportionnelle à la pastille, jamais un filet.
+    public nonisolated static func outlineWidth(diameter: CGFloat) -> CGFloat {
+        max(1.5, diameter * 0.07)
+    }
+
+    public init(
+        emoji: String,
+        diameter: CGFloat,
+        animates: Bool,
+        outline: Color? = nil,
+        holdsStill: Bool = false,
+        onTap: ((CGPoint) -> Void)? = nil
+    ) {
         self.emoji = emoji
         self.diameter = diameter
         self.animates = animates
+        self.outline = outline
+        self.holdsStill = holdsStill
         self.onTap = onTap
     }
 
@@ -85,8 +109,7 @@ public struct MeeshyMoodBadge: View {
         // Frame explicite sur le `GeometryReader` : sans elle il s'effondre à
         // 0×0 en contexte d'overlay et l'emoji disparaît.
         GeometryReader { geo in
-            Text(emoji)
-                .font(.system(size: diameter * Self.glyphRatio))
+            glyph
                 .frame(width: diameter, height: diameter)
                 .scaleEffect(scale)
                 .contentShape(Circle())
@@ -99,7 +122,10 @@ public struct MeeshyMoodBadge: View {
                 // de vue — respirer la fenêtre d'annonce, puis se poser. Un
                 // `.onAppear` re-tiré par re-parenting relancerait un ressort
                 // qu'aucun apaisement ne viendrait plus clore.
-                .task {
+                // Relancée quand le plein écran du pair commence ou finit :
+                // elle pose la pastille, puis la refait respirer à son retour.
+                .task(id: holdsStill) {
+                    guard !holdsStill else { settlePulse(); return }
                     startPulse()
                     try? await Task.sleep(for: .seconds(Self.maximumStartDelay + Self.breathingDuration))
                     guard !Task.isCancelled else { return }
@@ -110,6 +136,27 @@ public struct MeeshyMoodBadge: View {
                 }
         }
         .frame(width: diameter, height: diameter)
+    }
+
+    /// Le contour suit la forme du glyphe : sa silhouette, teinte et décalée
+    /// dans huit directions, sous l'emoji.
+    @ViewBuilder
+    private var glyph: some View {
+        let text = Text(emoji).font(.system(size: diameter * Self.glyphRatio))
+        if let outline {
+            let width = Self.outlineWidth(diameter: diameter)
+            ZStack {
+                ForEach(0..<8, id: \.self) { step in
+                    let angle = Double(step) * .pi / 4
+                    outline
+                        .mask(text)
+                        .offset(x: cos(angle) * width, y: sin(angle) * width)
+                }
+                text
+            }
+        } else {
+            text
+        }
     }
 
     /// `scale == restingScale` = aucun ressort en vol pour cette identité de
@@ -124,7 +171,7 @@ public struct MeeshyMoodBadge: View {
             system: systemReduceMotion,
             userForced: userForcedReduceMotion
         )
-        guard Self.shouldAnimate(animates: animates, reduceMotion: reduceMotion) else { return }
+        guard Self.shouldBreathe(animates: animates, reduceMotion: reduceMotion, holdsStill: holdsStill) else { return }
         guard scale == Self.restingScale else { return }
         withAnimation(
             .spring(response: Self.springResponse, dampingFraction: Self.springDamping)

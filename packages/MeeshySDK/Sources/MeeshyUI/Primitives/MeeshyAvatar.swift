@@ -534,9 +534,11 @@ public struct MeeshyAvatar: View {
             emoji: emoji,
             diameter: context.badgeSize,
             animates: context.animatesMoodBadge,
+            outline: effectivePresence?.moodOutline,
+            holdsStill: isHere.isFocused,
             onTap: onMoodTap
         )
-        .ifTrue(enablePulse) { $0.pulse(intensity: 0.12) }
+        .ifTrue(enablePulse && !isHere.isFocused) { $0.pulse(intensity: 0.12) }
     }
 
     @ViewBuilder

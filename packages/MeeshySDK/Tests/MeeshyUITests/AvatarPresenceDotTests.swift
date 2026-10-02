@@ -87,6 +87,26 @@ final class AvatarPresenceDotTests: XCTestCase {
         assertCentreOnCircle(avatarSize: 44, frameSize: 50, dot: AvatarPresenceDot.here.diameter(avatarSize: 44))
     }
 
+    // MARK: - Le contour du mood (#9065)
+
+    func test_moodOutline_isIndigoHere_greenOnline_noneOtherwise() {
+        XCTAssertEqual(AvatarPresenceDot.here.moodOutline, PresenceStyle.hereDotColor)
+        XCTAssertEqual(AvatarPresenceDot.presence(.online).moodOutline, MeeshyColors.success)
+        XCTAssertNil(AvatarPresenceDot.presence(.away).moodOutline)
+        XCTAssertNil(AvatarPresenceDot.presence(.idle).moodOutline)
+    }
+
+    func test_moodBreathes_asUsual_butHoldsStillWhileThePeerWatchesFullScreen() {
+        XCTAssertTrue(MeeshyMoodBadge.shouldBreathe(animates: true, reduceMotion: false, holdsStill: false))
+        XCTAssertFalse(MeeshyMoodBadge.shouldBreathe(animates: true, reduceMotion: false, holdsStill: true))
+        XCTAssertFalse(MeeshyMoodBadge.shouldBreathe(animates: true, reduceMotion: true, holdsStill: false))
+    }
+
+    func test_moodOutlineWidth_scalesWithTheBadge_neverHairline() {
+        XCTAssertEqual(MeeshyMoodBadge.outlineWidth(diameter: 10), 1.5, accuracy: 0.001)
+        XCTAssertEqual(MeeshyMoodBadge.outlineWidth(diameter: 32), 32 * 0.07, accuracy: 0.001)
+    }
+
     private func assertCentreOnCircle(avatarSize: CGFloat, frameSize: CGFloat, dot: CGFloat, line: UInt = #line) {
         let offset = AvatarPresenceDot.centerOffset(avatarSize: avatarSize, frameSize: frameSize, dotDiameter: dot)
         let centreX = frameSize - dot / 2 + offset.width

@@ -93,6 +93,16 @@ public enum AvatarPresenceDot: Equatable, Sendable {
         self == .here
     }
 
+    /// Le contour de l'emoji de mood (#9065) : le mood remplace le point, et
+    /// porte sa couleur quand elle dit « ici » (indigo) ou « en ligne » (vert).
+    public var moodOutline: Color? {
+        switch self {
+        case .here: return color
+        case .presence(.online): return color
+        case .presence: return nil
+        }
+    }
+
     /// « ici » ne pulse pas de lui-même : il pulse tant que le pair regarde,
     /// écoute ou agit (#9061) — `MeeshyAvatar.isHereActive` en décide.
     public var pulses: Bool {

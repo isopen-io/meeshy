@@ -145,6 +145,41 @@ final class ConversationViewingTests: XCTestCase {
         XCTAssertEqual(received, [.active(change("u1", "c1"))])
     }
 
+    // MARK: - Regarder en plein écran (#9065)
+
+    func test_decodeChange_focusFlag_readsIt_absentMeansFalse() throws {
+        let focused = try JSONDecoder().decode(
+            ConversationViewingChange.self,
+            from: Data(#"{"userId":"u1","conversationId":"c1","focus":true}"#.utf8)
+        )
+        let plain = try JSONDecoder().decode(
+            ConversationViewingChange.self,
+            from: Data(#"{"userId":"u1","conversationId":"c1"}"#.utf8)
+        )
+        XCTAssertTrue(focused.focus)
+        XCTAssertFalse(plain.focus)
+    }
+
+    func test_focusedActivity_saysFocused_andStillPulses() {
+        let viewers = ConversationViewers()
+            .applying(.arrived(change("u1", "c1")))
+            .applying(.active(ConversationViewingChange(userId: "u1", conversationId: "c1", focus: true)))
+        XCTAssertEqual(viewers.here(userId: "u1", conversationId: "c1"), .focused)
+        XCTAssertTrue(ConversationHere.focused.isHere)
+        XCTAssertTrue(ConversationHere.focused.isActive, "le point pulse en plein écran")
+        XCTAssertTrue(ConversationHere.focused.isFocused)
+        XCTAssertFalse(ConversationHere.active.isFocused)
+    }
+
+    func test_plainActivity_endsFocus_restingEndsBoth() {
+        let focused = ConversationViewers()
+            .applying(.arrived(change("u1", "c1")))
+            .applying(.active(ConversationViewingChange(userId: "u1", conversationId: "c1", focus: true)))
+        XCTAssertEqual(focused.applying(.active(change("u1", "c1"))).here(userId: "u1", conversationId: "c1"), .active)
+        XCTAssertEqual(focused.resting(userId: "u1", conversationId: "c1").here(userId: "u1", conversationId: "c1"), .here)
+        XCTAssertEqual(focused.applying(.left(change("u1", "c1"))), ConversationViewers())
+    }
+
     // MARK: - Nouvelle session (snapshots à la (re)connexion)
 
     func test_applying_sessionStarted_forgetsEveryConversation() {

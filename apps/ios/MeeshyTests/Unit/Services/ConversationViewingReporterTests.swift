@@ -14,13 +14,16 @@ final class ConversationViewingReporterTests: XCTestCase {
             case start(String)
             case stop(String)
             case activity(String)
+            case focus(String)
         }
         private(set) var calls: [Call] = []
         var onCall: ((Call) -> Void)?
 
         func emitViewingStart(conversationId: String) { record(.start(conversationId)) }
         func emitViewingStop(conversationId: String) { record(.stop(conversationId)) }
-        func emitViewingActivity(conversationId: String) { record(.activity(conversationId)) }
+        func emitViewingActivity(conversationId: String, focus: Bool) {
+            record(focus ? .focus(conversationId) : .activity(conversationId))
+        }
 
         private func record(_ call: Call) {
             calls.append(call)
@@ -77,9 +80,9 @@ final class ConversationViewingReporterTests: XCTestCase {
         sut.activityOccurred("conv-a")
 
         sut.conversationOpened("conv-a")
-        sut.coverBegan()
+        sut.setCallScreenShown(true)
         sut.activityOccurred("conv-a")
-        sut.coverEnded()
+        sut.setCallScreenShown(false)
         sut.setForeground(false)
         sut.activityOccurred("conv-a")
         sut.activityOccurred("conv-b")
@@ -365,22 +368,52 @@ final class ConversationViewingReporterTests: XCTestCase {
         }
     }
 
-    // MARK: - La couverture plein écran (#9052) : un `fullScreenCover` ne
-    // déclenche pas `onDisappear` sur l'écran recouvert — le contenu présenté
-    // se déclare lui-même.
+    // MARK: - Le plein écran ouvert depuis la conversation (#9052, #9065) :
+    // un `fullScreenCover` ne déclenche pas `onDisappear` sur l'écran
+    // recouvert — le contenu présenté se déclare lui-même. Il n'éloigne plus
+    // de la conversation : il dit « regarde en plein écran », et le point
+    // pulse chez les pairs.
 
-    func test_coverBegan_overTheConversation_stops_andCoverEnded_restarts() {
+    func test_coverBegan_keepsViewing_andSaysFocusAtOnce() {
         let (sut, emitter, _) = makeSUT()
         sut.screenAppeared("conv-a")
         sut.conversationOpened("conv-a")
 
         sut.coverBegan()
-        sut.coverEnded()
 
-        XCTAssertEqual(emitter.calls, [.start("conv-a"), .stop("conv-a"), .start("conv-a")])
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .focus("conv-a")])
     }
 
-    func test_nestedCovers_restartOnlyWhenTheLastOneEnds() {
+    func test_coverEnded_backToTheThread_endsFocusAtOnce() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        let (sut, emitter, _) = makeSUT(now: { clock })
+        sut.conversationOpened("conv-a")
+        sut.coverBegan()
+        clock.addTimeInterval(0.5)
+
+        sut.coverEnded()
+
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .focus("conv-a"), .activity("conv-a")])
+    }
+
+    func test_heartbeat_whileCovered_repeatsFocus_everyTwoSeconds() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        let (sut, emitter, _) = makeSUT(now: { clock })
+        sut.conversationOpened("conv-a")
+        sut.coverBegan()
+
+        clock.addTimeInterval(1)
+        sut.heartbeat()
+        clock.addTimeInterval(1)
+        sut.heartbeat()
+        sut.activityOccurred("conv-a")
+        clock.addTimeInterval(2)
+        sut.activityOccurred("conv-a")
+
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .focus("conv-a"), .focus("conv-a"), .focus("conv-a")])
+    }
+
+    func test_nestedCovers_focusOnce_andEndOnlyWithTheLastOne() {
         let (sut, emitter, _) = makeSUT()
         sut.conversationOpened("conv-a")
         sut.coverBegan()
@@ -388,9 +421,9 @@ final class ConversationViewingReporterTests: XCTestCase {
 
         sut.coverEnded()
 
-        XCTAssertEqual(emitter.calls, [.start("conv-a"), .stop("conv-a")])
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .focus("conv-a")])
         sut.coverEnded()
-        XCTAssertEqual(emitter.calls, [.start("conv-a"), .stop("conv-a"), .start("conv-a")])
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .focus("conv-a"), .activity("conv-a")])
     }
 
     func test_coverEnded_withoutBegan_neverGoesBelowZero() {
@@ -400,31 +433,52 @@ final class ConversationViewingReporterTests: XCTestCase {
 
         sut.coverBegan()
 
-        XCTAssertEqual(emitter.calls, [.start("conv-a"), .stop("conv-a")])
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .focus("conv-a")])
     }
 
-    func test_conversationOpened_whileCovered_announcesNothing_untilTheCoverEnds() {
-        let (sut, emitter, _) = makeSUT()
-        sut.coverBegan()
-
-        sut.conversationOpened("conv-a")
-
-        XCTAssertEqual(emitter.calls, [])
-        sut.coverEnded()
-        XCTAssertEqual(emitter.calls, [.start("conv-a")])
-    }
-
-    func test_reconnect_underACover_emitsNothing() async {
+    func test_reconnect_underACover_reannouncesTheConversation() async {
         let (sut, emitter, connection) = makeSUT()
         sut.conversationOpened("conv-a")
         sut.coverBegan()
-        let nothing = expectation(description: "no emission while covered")
-        nothing.isInverted = true
-        emitter.onCall = { _ in nothing.fulfill() }
+        let restarted = expectation(description: "re-announced under the cover")
+        emitter.onCall = { if $0 == .start("conv-a") { restarted.fulfill() } }
 
         connection.send(true)
 
-        await fulfillment(of: [nothing], timeout: 0.3)
+        await fulfillment(of: [restarted], timeout: 1)
+    }
+
+    // MARK: - Un appel fait quitter la conversation (#9065)
+
+    func test_callScreenShown_stops_andHidden_restarts() {
+        let (sut, emitter, _) = makeSUT()
+        sut.conversationOpened("conv-a")
+
+        sut.setCallScreenShown(true)
+        sut.setCallScreenShown(true)
+        sut.setCallScreenShown(false)
+
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .stop("conv-a"), .start("conv-a")])
+    }
+
+    func test_callScreenShown_overAFullScreenElement_stillLeaves() {
+        let (sut, emitter, _) = makeSUT()
+        sut.conversationOpened("conv-a")
+        sut.coverBegan()
+
+        sut.setCallScreenShown(true)
+        sut.heartbeat()
+
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .focus("conv-a"), .stop("conv-a")])
+    }
+
+    func test_callWindowPresenter_reportsTheCallScreenToTheReporter() throws {
+        let presenter = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/RootLayers/CallWindowPresenter.swift")
+        let source = AppSourceGuard.stripComments(try String(contentsOf: presenter, encoding: .utf8))
+        XCTAssertTrue(source.contains("setCallScreenShown("))
     }
 
     /// Chaque plein écran présenté depuis la conversation passe par

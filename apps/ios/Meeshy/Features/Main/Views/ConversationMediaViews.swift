@@ -540,7 +540,7 @@ struct AudioMediaView: View, Equatable {
                 .padding(.top, MeeshySpacing.xsPlus)
             }
         }
-        .fullScreenCover(isPresented: $showAudioFullscreen) {
+        .conversationCover(isPresented: $showAudioFullscreen) {
             AudioFullscreenView(
                 // Cold-open (F1) : `fullscreenSource(for:)` câble
                 // conversationName / audioQueueTailProvider (nowPlayingContextName

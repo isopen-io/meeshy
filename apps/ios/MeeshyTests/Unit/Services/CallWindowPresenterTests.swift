@@ -26,9 +26,39 @@ final class CallWindowPresenterTests: XCTestCase {
         func hide() { hidden += 1 }
     }
 
-    private func makeSUT() -> (sut: CallWindowPresenter, hosting: RecordingHosting) {
+    private final class RecordingViewing: ConversationViewingReporting {
+        var callScreen: [Bool] = []
+        func conversationOpened(_ conversationId: String) {}
+        func conversationClosed(_ conversationId: String) -> Bool { true }
+        func setForeground(_ isForeground: Bool) {}
+        func screenAppeared(_ conversationId: String) {}
+        func screenDisappeared(_ conversationId: String) {}
+        func coverBegan() {}
+        func coverEnded() {}
+        func setCallScreenShown(_ isShown: Bool) { callScreen.append(isShown) }
+        func activityOccurred(_ conversationId: String) {}
+        func scrollingChanged(_ isScrolling: Bool) {}
+        func touched() {}
+    }
+
+    private func makeSUT(
+        viewing: RecordingViewing = RecordingViewing()
+    ) -> (sut: CallWindowPresenter, hosting: RecordingHosting) {
         let hosting = RecordingHosting()
-        return (CallWindowPresenter(hosting: hosting), hosting)
+        return (CallWindowPresenter(hosting: hosting, viewing: viewing), hosting)
+    }
+
+    // MARK: - L'écran d'appel fait quitter la conversation (#9065)
+
+    func test_apply_callScreenShownThenHidden_tellsTheViewingReporter() {
+        let viewing = RecordingViewing()
+        let (sut, _) = makeSUT(viewing: viewing)
+        let manager = CallManager.shared
+
+        sut.apply(manager: manager, visible: true)
+        sut.apply(manager: manager, visible: false)
+
+        XCTAssertEqual(viewing.callScreen, [true, false])
     }
 
     // MARK: - La règle
