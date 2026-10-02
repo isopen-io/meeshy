@@ -22,41 +22,15 @@ extension CallManager {
             try await startLocalMediaKeepingMute(isVideo: isVideo, callId: callId)
             guard currentCallId == callId else { return }
             if isVideo { hasLocalVideoTrack = true }
-        } catch WebRTCError.simulatorVideoUnsupported {
-            Logger.calls.warning("Simulator video unsupported — continuing audio-only")
-            guard currentCallId == callId else { return }
-            isVideoEnabled = false
-            do {
-                try await startLocalMediaKeepingMute(isVideo: false, callId: callId)
-            } catch {
-                // Le repli a échoué à son tour : l'appel n'a PLUS AUCUN média
-                // (ni vidéo ni audio) — état muet invisible sans cette trace.
-                Logger.calls.error("Audio-only fallback failed, call has no local media at all: \(error.localizedDescription, privacy: .public)")
-            }
-            guard currentCallId == callId else { return }
-        } catch WebRTCError.cameraPermissionDenied {
-            Logger.calls.warning("[CALL_SETUP] camera permission denied — degrading to audio-only")
-            guard currentCallId == callId else { return }
-            isVideoEnabled = false
-            do {
-                try await startLocalMediaKeepingMute(isVideo: false, callId: callId)
-            } catch {
-                // Le repli a échoué à son tour : l'appel n'a PLUS AUCUN média
-                // (ni vidéo ni audio) — état muet invisible sans cette trace.
-                Logger.calls.error("Audio-only fallback failed, call has no local media at all: \(error.localizedDescription, privacy: .public)")
-            }
-            guard currentCallId == callId else { return }
-            FeedbackToastManager.shared.showError(
-                String(localized: "call.video.permission.denied",
-                       defaultValue: "Caméra : accès refusé — toucher pour ouvrir les Paramètres",
-                       bundle: .main)
-            ) {
-                guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
-                UIApplication.shared.open(url)
-            }
         } catch is CancellationError {
             return
         } catch {
+            // #8788 — pas de caméra (simulateur, Mac sans caméra) ou caméra
+            // refusée : l'appel continue en audio, il ne se termine pas.
+            if let fallback = CallVideoFallback.classify(error) {
+                await continueAudioOnly(after: fallback, callId: callId)
+                return
+            }
             Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
             if currentCallId == callId {
                 failCall(String(localized: "call.error.media"))

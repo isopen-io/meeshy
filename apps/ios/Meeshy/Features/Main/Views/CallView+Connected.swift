@@ -246,6 +246,9 @@ extension CallView {
                 .frame(height: isStageFullScreen ? DeviceLayout.safeAreaTop : Self.chromeTopInset + 52)
             GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, isChromeVisible: isChromeVisible, onStageTap: toggleControls, onSelfFeaturedChange: { isSelfFeatured = $0 })
                 .padding(.horizontal, MeeshySpacing.md)
+                // #8410 — la pilule qui grandit rétrécit ses rangées (qui
+                // défilent alors), jamais la grille sous ce minimum.
+                .frame(minHeight: CallGroupStageSizing.minimumGridHeight)
             if !isStageFullScreen {
                 ZStack(alignment: .bottom) {
                     callControlsPill
@@ -265,7 +268,21 @@ extension CallView {
         // #8735 — chrome masqué, TOUTE la scène le rallume : l'en-tête et la
         // pilule effacés ne laissaient que les 8 pt entre les vignettes.
         .background(stageRevealTarget)
+        .background(
+            GeometryReader { stage in
+                Color.clear.preference(key: CallGroupStageHeightKey.self, value: stage.size.height)
+            }
+        )
+        .onPreferenceChange(CallGroupStageHeightKey.self) { noteGroupStageHeight($0) }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isStageFullScreen)
+    }
+
+    /// #8410 — seul le franchissement du seuil écrit l'état : une rotation
+    /// recalcule l'écran, un redimensionnement continu non.
+    func noteGroupStageHeight(_ height: CGFloat) {
+        let compact = CallGroupStageSizing.isCompactHeight(height)
+        guard compact != isStageCompactHeight else { return }
+        isStageCompactHeight = compact
     }
 
     private var stageRevealTarget: some View {
@@ -343,35 +360,37 @@ extension CallView {
             // invisible sur lien sain, apparaît à la dégradation, persiste en
             // vert `recoveryLingerSeconds` après récupération puis se retire
             // (cycle de vie dans TransientCallSignalGlyph).
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                TransientCallSignalGlyph(strength: signalStrength)
-                Text(callManager.formattedDuration)
-                    .font(.body.weight(.medium).monospacedDigit())
-                    .foregroundColor(durationColor)
-                    // Without an explicit label the combined capsule announces a
-                    // context-free "1:23" (the signal glyph is invisible on a
-                    // healthy link) — VoiceOver users can't tell it is the call
-                    // timer. Static label + dynamic value mirror the video badge
-                    // (and FloatingCallPillView 211i): the label reads once, the
-                    // timer updates via .accessibilityValue under .updatesFrequently.
-                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                    .accessibilityValue(callManager.spokenDuration)
+            CallDurationClock {
+                HStack(spacing: MeeshySpacing.xsPlus) {
+                    TransientCallSignalGlyph(strength: signalStrength)
+                    Text(callManager.formattedDuration)
+                        .font(.body.weight(.medium).monospacedDigit())
+                        .foregroundColor(durationColor)
+                        // Without an explicit label the combined capsule announces a
+                        // context-free "1:23" (the signal glyph is invisible on a
+                        // healthy link) — VoiceOver users can't tell it is the call
+                        // timer. Static label + dynamic value mirror the video badge
+                        // (and FloatingCallPillView 211i): the label reads once, the
+                        // timer updates via .accessibilityValue under .updatesFrequently.
+                        .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                        .accessibilityValue(callManager.spokenDuration)
+                }
+                .padding(.horizontal, MeeshySpacing.lg)
+                .padding(.vertical, MeeshySpacing.xsPlus)
+                .background(
+                    Capsule()
+                        .fill(durationColor.opacity(MeeshyOpacity.light))
+                )
+                // Naked-readout fix (doctrine 206i/210i/211i): the combined element
+                // previously announced a bare "0:34" with no context. Signal state is
+                // already surfaced by the separate statusPill row here (unlike the video
+                // badge), so this label carries only call-duration context — no double
+                // announcement. Reuses the existing `call.duration.a11y.label` key.
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                .accessibilityValue(callManager.spokenDuration)
+                .accessibilityAddTraits(.updatesFrequently)
             }
-            .padding(.horizontal, MeeshySpacing.lg)
-            .padding(.vertical, MeeshySpacing.xsPlus)
-            .background(
-                Capsule()
-                    .fill(durationColor.opacity(MeeshyOpacity.light))
-            )
-            // Naked-readout fix (doctrine 206i/210i/211i): the combined element
-            // previously announced a bare "0:34" with no context. Signal state is
-            // already surfaced by the separate statusPill row here (unlike the video
-            // badge), so this label carries only call-duration context — no double
-            // announcement. Reuses the existing `call.duration.a11y.label` key.
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-            .accessibilityValue(callManager.spokenDuration)
-            .accessibilityAddTraits(.updatesFrequently)
             .callQualityDetailTrigger(isPresented: $showQualityDetail)
 
             // Status indicators
@@ -425,23 +444,25 @@ extension CallView {
                     .foregroundColor(.white)
                     .lineLimit(1)
 
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    TransientCallSignalGlyph(strength: signalStrength)
-                    Text(callManager.formattedDuration)
-                        .font(.caption.weight(.medium).monospacedDigit())
-                        .foregroundColor(durationColor)
-                        // Same context-free-timer fix as audioCallLayout: this
-                        // caption-mode header has no status-pill row, so the
-                        // labelled value is the only place the timer gains meaning.
-                        .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                        .accessibilityValue(callManager.spokenDuration)
+                CallDurationClock {
+                    HStack(spacing: MeeshySpacing.xsPlus) {
+                        TransientCallSignalGlyph(strength: signalStrength)
+                        Text(callManager.formattedDuration)
+                            .font(.caption.weight(.medium).monospacedDigit())
+                            .foregroundColor(durationColor)
+                            // Same context-free-timer fix as audioCallLayout: this
+                            // caption-mode header has no status-pill row, so the
+                            // labelled value is the only place the timer gains meaning.
+                            .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                            .accessibilityValue(callManager.spokenDuration)
+                    }
+                    // Same naked-readout fix as audioCallLayout — captions-active
+                    // compact header. Bare "0:34" → "Durée de l'appel, 0:34".
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(String(localized: "call.duration.a11y.label"))
+                    .accessibilityValue(callManager.spokenDuration)
+                    .accessibilityAddTraits(.updatesFrequently)
                 }
-                // Same naked-readout fix as audioCallLayout — captions-active
-                // compact header. Bare "0:34" → "Durée de l'appel, 0:34".
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(String(localized: "call.duration.a11y.label"))
-                .accessibilityValue(callManager.spokenDuration)
-                .accessibilityAddTraits(.updatesFrequently)
                 .callQualityDetailTrigger(isPresented: $showQualityDetail)
             }
 
@@ -473,17 +494,14 @@ extension CallView {
     /// child's own `.accessibilityLabel` — this composes what would otherwise be
     /// swallowed, mirroring exactly what the sighted layout renders.
     var videoDurationBadgeAccessibilityLabel: String {
-        var parts = [String(localized: "call.duration.a11y.label")]
-        if signalStrength.isDegraded {
-            parts.append(signalStrength.accessibilityLabel)
-        }
-        if callManager.isRemoteQualityDegraded {
-            parts.append(String(localized: "call.status.peer.network", defaultValue: "Réseau faible (contact)", bundle: .main))
-        }
-        if case .reconnecting = callManager.callState {
-            parts.append(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
-        }
-        return parts.joined(separator: ", ")
+        let reconnecting: Bool
+        if case .reconnecting = callManager.callState { reconnecting = true } else { reconnecting = false }
+        return CallVideoBadgeAccessibility.label(
+            signalDegraded: signalStrength.isDegraded ? signalStrength.accessibilityLabel : nil,
+            peerMuted: !callManager.isRemoteAudioEnabled,
+            peerNetworkWeak: callManager.isRemoteQualityDegraded,
+            reconnecting: reconnecting
+        )
     }
 
     private var isConnectionDegraded: Bool {
@@ -513,8 +531,23 @@ extension CallView {
             videoStream(local: effectiveSwapStreams, contentMode: primaryVideoContentMode)
                 .callCameraZoom(isEnabled: effectiveSwapStreams)
                 .ignoresSafeArea()
+            // #8787 — le micro coupé du correspondant reste sur SON image,
+            // sous la rangée d'en-tête, même quand le chrome s'efface.
+            if showsPeerMutedBadge && !effectiveSwapStreams {
+                CallPeerMutedBadge(compact: false)
+                    .padding(.top, Self.chromeTopInset + 52)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .transition(.opacity)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: showsPeerMutedBadge)
+    }
+
+    /// #8787 — en duo vidéo, le micro coupé du correspondant se voit sur son
+    /// image (la disposition audio a sa pastille « Contact en sourdine »).
+    var showsPeerMutedBadge: Bool {
+        !callManager.isRemoteAudioEnabled && !isGroupStage
     }
 
     /// Effective primary-stream selector — `swapStreams` gated on local-track
@@ -544,15 +577,29 @@ extension CallView {
             // §7.7 — mirror ONLY the front camera (a mirrored back camera shows
             // reversed text/scene — bug k).
             LocalCameraVideoView(track: callManager.localVideoTrack, intendedFront: callManager.isUsingFrontCamera, contentMode: contentMode)
-        } else if callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
-            CallVideoView(track: callManager.remoteVideoTrack, contentMode: contentMode)
-        } else if callManager.hasRemoteVideoTrack {
-            // P0-3 — peer turned its camera off: avatar placeholder, never the
-            // frozen last frame.
-            remoteCameraOffPlaceholder
         } else {
-            connectingVideoPlaceholder
+            switch remoteVideoSurface {
+            case .live:
+                CallVideoView(track: callManager.remoteVideoTrack, contentMode: contentMode)
+            case .cameraOff:
+                // P0-3 — peer turned its camera off (or sends no image at
+                // all, #8788): avatar placeholder, never the frozen last
+                // frame nor an endless spinner.
+                remoteCameraOffPlaceholder
+            case .connecting:
+                connectingVideoPlaceholder
+            }
         }
+    }
+
+    var remoteVideoSurface: CallRemoteVideoSurface {
+        CallRemoteVideoSurface.resolve(
+            hasTrack: callManager.hasRemoteVideoTrack,
+            peerVideoEnabled: callManager.isRemoteVideoEnabled,
+            waitElapsed: callManager.hasEstablishedMedia
+                && remoteVideoWaitElapsedCallId != nil
+                && remoteVideoWaitElapsedCallId == callManager.currentCallId
+        )
     }
 
     private var connectingVideoPlaceholder: some View {
@@ -562,18 +609,10 @@ extension CallView {
                     ProgressView()
                         .tint(.white.opacity(MeeshyOpacity.strong))
                         .accessibilityHidden(true)
-                    Text(videoConnectSlow
-                        ? String(localized: "call.video.connecting.slow", defaultValue: "La vidéo prend plus de temps que prévu…", bundle: .main)
-                        : String(localized: "call.video.connecting", defaultValue: "Connexion vidéo...", bundle: .main))
+                    Text(String(localized: "call.video.connecting", defaultValue: "Connexion vidéo...", bundle: .main))
                         .font(.footnote.weight(.medium))
-                        .foregroundColor(.white.opacity(videoConnectSlow ? 0.7 : 0.4))
+                        .foregroundColor(.white.opacity(0.4))
                         .multilineTextAlignment(.center)
-                    if videoConnectSlow {
-                        Text(String(localized: "call.video.connecting.slow.hint", defaultValue: "L'audio est peut-être déjà actif.", bundle: .main))
-                            .font(.caption2)
-                            .foregroundColor(.white.opacity(0.6))
-                            .multilineTextAlignment(.center)
-                    }
                 }
                 .padding(.horizontal, MeeshySpacing.xxxl)
                 .accessibilityElement(children: .combine)
@@ -581,15 +620,18 @@ extension CallView {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // The watchdog runs only while this placeholder is on screen; SwiftUI
             // cancels the task the moment the remote track arrives and the view
-            // is replaced by the live feed.
-            .task {
-                videoConnectSlow = false
+            // is replaced by the live feed. #8788 — when it fires, the peer is
+            // shown with its camera off: nothing is loading any more.
+            .task(id: callManager.currentCallId) {
                 try? await Task.sleep(nanoseconds: videoConnectWatchdogSeconds * 1_000_000_000)
                 if !Task.isCancelled {
-                    withAnimation(.easeInOut(duration: 0.3)) { videoConnectSlow = true }
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        remoteVideoWaitElapsedCallId = callManager.currentCallId
+                    }
+                    guard callManager.hasEstablishedMedia else { return }
                     UIAccessibility.post(
                         notification: .announcement,
-                        argument: String(localized: "call.video.connecting.slow", defaultValue: "La vidéo prend plus de temps que prévu…", bundle: .main)
+                        argument: String(localized: "call.video.remoteOff", defaultValue: "Caméra désactivée", bundle: .main)
                     )
                 }
             }
@@ -616,5 +658,13 @@ extension CallView {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private nonisolated struct CallGroupStageHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }

@@ -252,8 +252,8 @@ extension CallView {
 
     private func familyRows(_ rows: [CallActionFamilyRow]) -> some View {
         VStack(spacing: 0) {
-            ForEach(rows) { row in
-                CallPillRow(title: CallControlsCopy.familyTitle(row.family)) {
+            ForEach(CallGroupStageSizing.rows(rows, isCompactHeight: isGroupStage && isStageCompactHeight)) { row in
+                CallPillRow(title: row.family.map { CallControlsCopy.familyTitle($0) }) {
                     ForEach(row.actions, id: \.self) { action in
                         actionButton(action)
                             .frame(width: Self.rowCellWidth)

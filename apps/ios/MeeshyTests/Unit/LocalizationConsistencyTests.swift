@@ -217,6 +217,7 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Services/CallManager+Outgoing.swift",
         "apps/ios/Meeshy/Features/Main/Services/CallManager+RemoteEvents.swift",
         "apps/ios/Meeshy/Features/Main/Services/CallManager+Signaling.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+VideoFallback.swift",
         "apps/ios/Meeshy/Features/Main/Views/CallWaitingBannerView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",  // 8

@@ -223,7 +223,9 @@ final class CallManager: ObservableObject {
     /// self-activation (when false, no CallKit means we own the session lifecycle).
     var callUsesCallKit = true
     @Published var isSpeaker: Bool = false
-    @Published var callDuration: TimeInterval = 0
+    /// #8989 — NON publié : à 1 Hz, il recalculait tout ce qui observe le
+    /// gestionnaire. La durée affichée se lit sous `CallDurationClock`.
+    var callDuration: TimeInterval = 0
     @Published var currentCallId: String?
     @Published var connectionQuality: PeerConnectionState = .new
     /// RTT+packet-loss quality level from stats samples; nil until first sample.

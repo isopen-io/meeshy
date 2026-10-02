@@ -7,6 +7,8 @@ final class CallAudioRouteViewModel: ObservableObject {
 
     private let service: CallAudioRouteProviding
     private var routeSubscription: AnyCancellable?
+    private(set) var refreshTask: Task<Void, Never>?
+    private(set) var selectionTask: Task<Void, Never>?
 
     init(service: CallAudioRouteProviding? = nil) {
         self.service = service ?? CallAudioRouteService.shared
@@ -29,18 +31,27 @@ final class CallAudioRouteViewModel: ObservableObject {
     func selectInput(id: String) {
         let snapshot = state
         state = state.selecting(inputId: id)
-        do {
-            try service.selectInput(id: id)
-        } catch {
-            Logger.callAudioRoute.error("Preferred input change failed: \(error.localizedDescription)")
-            state = snapshot
+        selectionTask?.cancel()
+        selectionTask = Task { [weak self, service] in
+            do {
+                try await service.selectInput(id: id)
+            } catch {
+                Logger.callAudioRoute.error("Preferred input change failed: \(error.localizedDescription)")
+                guard !Task.isCancelled else { return }
+                self?.state = snapshot
+            }
         }
     }
 
+    /// #8989 — la lecture de la route part HORS du fil principal ; seul
+    /// l'état résultant y revient.
     private func refresh() {
-        let route = service.currentRoute()
-        guard route != state else { return }
-        state = route
+        refreshTask?.cancel()
+        refreshTask = Task { [weak self, service] in
+            let route = await service.currentRoute()
+            guard !Task.isCancelled, let self, route != self.state else { return }
+            self.state = route
+        }
     }
 }
 
