@@ -13,7 +13,7 @@ const ptCallCaptions = {
   'callCaptions.mode.translated': 'Traduzidas para o seu idioma',
   'callCaptions.mode.original': 'No idioma original',
   'callCaptions.listening': 'A sua voz está a ser transcrita',
-  'callCaptions.unsupported': 'Este navegador não transcreve a sua voz: você lê os outros',
+  'callCaptions.unsupported': 'A sua voz não é transcrita neste dispositivo: você lê os outros',
   'callCaptions.denied': 'Reconhecimento de voz recusado: você lê os outros',
   'callCaptions.journal.title': 'Registo da chamada',
   'callCaptions.participant': 'Participante',

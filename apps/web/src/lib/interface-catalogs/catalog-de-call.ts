@@ -48,6 +48,7 @@ const deCall = {
   'call.ended.permission': 'Erlaube das Mikrofon, um anzurufen',
   'call.retry': 'Erneut versuchen',
   'call.close': 'Schließen',
+  'call.openSettings': 'Einstellungen',
   'call.waiting.from': '{caller} ruft dich an',
   'call.waiting.answer': 'Annehmen',
   'call.waiting.decline': 'Ablehnen',

@@ -48,6 +48,7 @@ const ptCall = {
   'call.ended.permission': 'Permita o microfone para ligar',
   'call.retry': 'Tentar novamente',
   'call.close': 'Fechar',
+  'call.openSettings': 'Ajustes',
   'call.waiting.from': '{caller} está a ligar-lhe',
   'call.waiting.answer': 'Atender',
   'call.waiting.decline': 'Recusar',

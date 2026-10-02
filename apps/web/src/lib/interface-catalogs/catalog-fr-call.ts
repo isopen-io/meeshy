@@ -48,6 +48,7 @@ const frCall = {
   'call.ended.permission': 'Autorisez le micro pour appeler',
   'call.retry': 'Réessayer',
   'call.close': 'Fermer',
+  'call.openSettings': 'Réglages',
   'call.waiting.from': '{caller} vous appelle',
   'call.waiting.answer': 'Répondre',
   'call.waiting.decline': 'Refuser',
