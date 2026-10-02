@@ -105,9 +105,14 @@ export function peerHereIn(
   conversation: Parameters<typeof peerOf>[0],
   viewerId: string,
 ): boolean {
+  const peerId = peerKeyIn(conversation, viewerId);
+  return peerId !== undefined && (herePeers[conversation.id]?.includes(peerId) ?? false);
+}
+
+/** Le compte du pair d'une conversation DIRECTE ; un groupe n'en a pas. */
+export function peerKeyIn(conversation: Parameters<typeof peerOf>[0], viewerId: string): string | undefined {
   const peer = peerOf(conversation, viewerId);
-  const peerId = peer?.userId ?? peer?.user?.id;
-  return peerId !== undefined && peerId !== null && (herePeers[conversation.id]?.includes(peerId) ?? false);
+  return peer?.userId ?? peer?.user?.id ?? undefined;
 }
 
 const NOBODY_HERE: readonly string[] = [];

@@ -10,6 +10,7 @@ import {
   servePublishedPost,
   finalReferences,
   hoistLocation,
+  hoistTrackingLinks,
   type PublishedPostRow,
   type PublishedPostType,
 } from './publication';
@@ -634,7 +635,7 @@ export function registerCoreRoutes(
         // — doit rester visible sur CE broadcast aussi, sinon un post modifié
         // après coup (visibilité, contenu…) republierait sans sa position.
         const broadcastPost = withMentions(
-          graftReferences(hoistLocation(post as unknown as Record<string, unknown>), broadcastReferences),
+          graftReferences(hoistLocation(hoistTrackingLinks(post as unknown as Record<string, unknown>)), broadcastReferences),
           WIRE_BROADCAST
         ) as unknown as Post;
         if (updatedPostType === 'STORY') {

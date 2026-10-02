@@ -28,13 +28,14 @@ nonisolated enum StoryCaptionPlacement {
     ///   - composerBottomPadding: retrait bas du bloc (zone sûre, clavier).
     ///   - isComposerShown: le chrome est visible — caché, le bloc glisse hors
     ///     de l'écran et ne réserve plus rien.
-    ///   - fallback: la place historique, pour un lecteur sans composeur.
+    ///
+    /// Sans composeur (sa propre story) ou chrome caché, le texte se pose au
+    /// ras du bas, sur le seul retrait — il ne garde plus une « place
+    /// historique » tirée du HAUT de l'écran, ≈ 135 pt trop haut (#9072).
     static func bottomInset(composerBlockHeight: CGFloat?,
                             composerBottomPadding: CGFloat,
-                            isComposerShown: Bool,
-                            fallback: CGFloat) -> CGFloat {
-        guard let height = composerBlockHeight, height > 0 else { return fallback }
-        guard isComposerShown else { return composerBottomPadding }
+                            isComposerShown: Bool) -> CGFloat {
+        guard isComposerShown, let height = composerBlockHeight, height > 0 else { return composerBottomPadding }
         return composerBottomPadding + height
     }
 }

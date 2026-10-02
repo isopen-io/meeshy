@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
+import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
+
 import { Avatar } from '@/components/avatar';
 import { CommentBody } from '@/components/comment-body';
 import { CommentRowMenu, type CommentMenuPick } from '@/components/comment-row-menu';
@@ -25,6 +27,7 @@ import { initialsOf } from '@/lib/view/conversation';
 import type { MentionSource } from '@/lib/view/mention-source';
 import { useMentionField } from '@/lib/view/use-mention-field';
 import { PrismPastille } from './message-blocks';
+import { RichText } from './rich-text';
 
 /**
  * **UNE RANGÉE DE COMMENTAIRE ET SES TROIS GESTES** (#7135) — miroir de
@@ -138,6 +141,8 @@ const countOf = (value: number | null | undefined): number =>
    SOUS l'icône (mesuré à la capture). `display` ne se surcharge pas en
    ajoutant `flex` derrière `grid` dans la liste de classes : c'est l'ordre de
    la FEUILLE qui tranche, pas celui de l'attribut. */
+const COMMENT_TEXT_STYLE = { color: 'var(--color-ios-ink)' } as const;
+
 const GESTURE_BUTTON =
   'inline-flex items-center justify-center gap-1 rounded-chip px-2 focus-visible:outline-2 focus-visible:outline-offset-2';
 
@@ -431,6 +436,8 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
   const lu = showingOriginal
     ? { text: comment.content, language: originalLanguage, marque: originalLanguage !== '' }
     : { text: servi.text, language: servi.language, marque: servi.translated && servi.language !== '' };
+  /* LA CARTE DES ADRESSES SUIVIES (#9074) — décodée une fois par commentaire. */
+  const trackingLinks = useMemo(() => trackingLinksOf(comment), [comment]);
   const photo = typeof comment.author.avatar === 'string' && comment.author.avatar !== '' ? comment.author.avatar : undefined;
   /* Une rangée EN VOL n'a pas d'adresse chez la passerelle — aucun geste. */
   const actionable = comment.pending !== true ? gestures : undefined;
@@ -576,13 +583,13 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
                  document : poser `lang` partout ferait mentir la voix sur les
                  rangées non traduites. */
               <CommentBody comment={comment} contentLength={lu.text.length}>
-                <p
+                <RichText
+                  text={lu.text}
+                  trackingLinks={trackingLinks}
                   className="text-body break-words whitespace-pre-wrap"
-                  style={{ color: 'var(--color-ios-ink)' }}
+                  style={COMMENT_TEXT_STYLE}
                   {...(lu.marque ? { lang: lu.language } : {})}
-                >
-                  {lu.text}
-                </p>
+                />
               </CommentBody>
             )}
             {actionable !== undefined && !editing ? (

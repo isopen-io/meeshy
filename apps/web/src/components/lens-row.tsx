@@ -122,6 +122,9 @@ export type LensRowProps = {
   /** … ou il regarde en plein écran un élément de la conversation : le point
    * pulse, son mood se fige (#9065). */
   peerFocused?: boolean | undefined;
+  /** Le mood courant du pair d'un direct (#9065, `use-author-moods.ts`) — il
+   * masque le point et se cerne de la présence. */
+  peerMood?: string | undefined;
   /**
    * « N (M) 🔥 » (#8906) — l'état d'engagement EFFECTIF de la conversation pour
    * le lecteur (servi + direct, `effectiveEngagementOf`), distribué par
@@ -146,6 +149,7 @@ function LensRowImpl({
   peerHere = false,
   peerActive = false,
   peerFocused = false,
+  peerMood,
   engagement,
   interfaceLanguage,
   now,
@@ -216,6 +220,15 @@ function LensRowImpl({
     now,
   });
   const typing = typists !== undefined && typists.length > 0;
+  const peerSignals = group
+    ? {}
+    : {
+        presence: typing ? ('online' as const) : presenceOf(peerOf(conversation, viewerId)),
+        here: peerHere,
+        hereActive: peerActive,
+        hereFocused: peerFocused,
+        ...(peerMood === undefined ? {} : { mood: peerMood }),
+      };
 
   return (
     <li
@@ -323,7 +336,7 @@ function LensRowImpl({
               name={title}
               opacity={chromeFade}
               {...(photo === undefined ? {} : { src: photo })}
-              {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)), here: peerHere, hereActive: peerActive, hereFocused: peerFocused })}
+              {...peerSignals}
             />
           </Link>
         ) : (
@@ -335,7 +348,7 @@ function LensRowImpl({
             opacity={chromeFade}
             profileUsername={peerHandle}
             {...(photo === undefined ? {} : { src: photo })}
-            {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)), here: peerHere, hereActive: peerActive, hereFocused: peerFocused })}
+            {...peerSignals}
           />
         )}
 
@@ -592,6 +605,7 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
   if ((prev.peerHere ?? false) !== (next.peerHere ?? false)) return false;
   if ((prev.peerActive ?? false) !== (next.peerActive ?? false)) return false;
   if ((prev.peerFocused ?? false) !== (next.peerFocused ?? false)) return false;
+  if (prev.peerMood !== next.peerMood) return false;
   /* L'instantané d'engagement (#8906) — comparé par RÉFÉRENCE : il vient du
      magasin ou de la charge, stables tant qu'aucun geste n'est crédité. */
   if (prev.engagement !== next.engagement) return false;

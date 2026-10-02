@@ -8,6 +8,7 @@ import { apiConfig } from '@/lib/api/config';
 import { internalPathOf } from '@/lib/links/internal-link';
 import { webOriginOf } from '@/lib/links/web-origin';
 import { peekProfileOnClick } from '@/lib/view/profile-peek';
+import { CLAIMS_GESTURE_ATTRIBUTE } from '@/lib/view/shortcut-scope';
 import { isAppPath } from '@/routes/app-paths';
 import { Link, navigate } from '@/routes/route-table';
 
@@ -61,6 +62,9 @@ const inAppPathOf = (href: string): string | null =>
     isAppPath,
   });
 
+const CLAIMED_LINK: Readonly<Record<string, string>> = { [CLAIMS_GESTURE_ATTRIBUTE]: '' };
+const UNMARKED_LINK: Readonly<Record<string, string>> = {};
+
 /** La teinte d'un lien, quand la surface ne la donne pas. */
 const DEFAULT_LINK_COLOR = 'var(--color-ios-brand)';
 
@@ -78,16 +82,21 @@ type InlineHosts = {
    * pas lue deux fois, et les liens restent atteignables et nommés.
    */
   readonly plainTextHidden: boolean;
+  /** Les attributs posés sur CHAQUE lien — `data-claims-gesture` quand le
+   * texte vit sur une scène qui a son propre geste (`ViewerCaption`). */
+  readonly linkAttributes: Readonly<Record<string, string>>;
 };
 
 function inlineNodes(segments: readonly InlineSegment[], hosts: InlineHosts, keyPrefix: string): readonly ReactNode[] {
   const linkStyle: CSSProperties = { color: hosts.linkColor, fontWeight: 600 };
+  const marks = hosts.linkAttributes;
   return segments.map((segment, index) => {
     const key = `${keyPrefix}-${index}`;
     switch (segment.kind) {
       case 'mention':
         return (
           <Link
+            {...marks}
             key={key}
             to="userProfile"
             params={{ username: segment.username }}
@@ -98,7 +107,7 @@ function inlineNodes(segments: readonly InlineSegment[], hosts: InlineHosts, key
         );
       case 'hashtag':
         return (
-          <Link key={key} to="hashtag" params={{ tag: segment.tag }} style={linkStyle} className="hover:underline">
+          <Link {...marks} key={key} to="hashtag" params={{ tag: segment.tag }} style={linkStyle} className="hover:underline">
             {segment.text}
           </Link>
         );
@@ -107,7 +116,7 @@ function inlineNodes(segments: readonly InlineSegment[], hosts: InlineHosts, key
            qui compte le clic puis ouvre la cible : même onglet, navigation du
            routeur. Une URL brute suivie garde son TEXTE ; seul le lien change. */
         return (
-          <Link key={key} to="trackingLink" params={{ token: segment.token }} style={{ color: hosts.linkColor }} className="underline">
+          <Link {...marks} key={key} to="trackingLink" params={{ token: segment.token }} style={{ color: hosts.linkColor }} className="underline">
             {segment.url === null ? trackedLinkLabel(segment.token) : segment.text}
           </Link>
         );
@@ -131,6 +140,7 @@ function inlineNodes(segments: readonly InlineSegment[], hosts: InlineHosts, key
         if (inApp !== null) {
           return (
             <a
+              {...marks}
               key={key}
               href={inApp}
               style={{ color: hosts.linkColor }}
@@ -149,6 +159,7 @@ function inlineNodes(segments: readonly InlineSegment[], hosts: InlineHosts, key
           /* `noopener noreferrer` : la page ouverte ne reçoit ni la main sur
              l'onglet d'origine (`window.opener`) ni l'adresse d'où elle vient. */
           <a
+            {...marks}
             key={key}
             href={segment.href}
             target="_blank"
@@ -266,6 +277,7 @@ export function RichText({
   linkColor = DEFAULT_LINK_COLOR,
   plainTextHidden = false,
   trackingLinks,
+  claimsGesture = false,
   ...rest
 }: {
   readonly text: string;
@@ -286,6 +298,9 @@ export function RichText({
   /** Les URL BRUTES que la passerelle a rendues traçables (#7827) — décodées
    * par `trackingLinksOf` ; absentes ⇒ chaque URL est un lien direct. */
   readonly trackingLinks?: readonly ContentTrackingLink[] | undefined;
+  /** `true` ⇒ chaque lien porte `data-claims-gesture` : le lecteur qui
+   * l'héberge (story, visionneuse) lui cède le geste, et à lui seul. */
+  readonly claimsGesture?: boolean;
 } & Omit<React.HTMLAttributes<HTMLParagraphElement>, 'children' | 'className' | 'lang' | 'style'>) {
   const blocks = useMemo(() => (hasBlockSyntax(text) ? parseBlocks(text) : null), [text]);
   const render = useMemo(() => {
@@ -294,8 +309,9 @@ export function RichText({
       ...(mentions === undefined ? {} : { mentions }),
       ...(trackingLinks === undefined ? {} : { trackingLinks }),
     };
-    return (content: string) => segmentNodes(segmentText(content, options), { linkColor, plainTextHidden });
-  }, [hashtags, mentions, trackingLinks, linkColor, plainTextHidden]);
+    const linkAttributes = claimsGesture ? CLAIMED_LINK : UNMARKED_LINK;
+    return (content: string) => segmentNodes(segmentText(content, options), { linkColor, plainTextHidden, linkAttributes });
+  }, [hashtags, mentions, trackingLinks, linkColor, plainTextHidden, claimsGesture]);
   if (blocks === null) {
     return (
       <p data-rich-text="" className={className} lang={lang} style={style} {...rest}>

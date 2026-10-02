@@ -46,6 +46,7 @@ import { MEDIA_GLYPHS } from './glyphs-media';
 import { MediaFilmstrip } from './media-filmstrip';
 import { MediaUnavailable } from './media-unavailable';
 import { GLYPH_SIZE } from './ui-chrome';
+import { ViewerCaption } from './viewer-caption';
 import { ViewerBottomBar, ViewerTopBar, type ViewerIdentityModel } from './viewer-chrome';
 import { useViewerSwipe } from './viewer-chrome-gestures';
 import type { NoticeKey } from './viewer-media-actions';
@@ -236,9 +237,13 @@ function carrierFooter(params: {
         </div>
       ) : null}
       {hasCaption ? (
-        <p data-viewer-caption-text className="line-clamp-4 text-body" {...(captionLang !== undefined ? { lang: captionLang } : {})}>
-          {captionText}
-        </p>
+        <ViewerCaption
+          probe={{ 'data-viewer-caption-text': '' }}
+          text={captionText}
+          trackingLinks={carrier.trackingLinks}
+          className="line-clamp-4 text-body"
+          lang={captionLang}
+        />
       ) : null}
     </div>
   );

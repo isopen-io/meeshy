@@ -27,13 +27,13 @@ extension StoryCardView {
     }
 
     /// **Le sol du texte de la story** : le haut de la plaque du composeur
-    /// (#8431). Sans composeur (story de l'auteur), la place historique.
+    /// (#8431). Sans composeur (story de l'auteur) ou chrome caché, le ras du
+    /// bas (#9072).
     func captionBottomInset(geometry: GeometryProxy) -> CGFloat { // internal for cross-file extension access
         StoryCaptionPlacement.bottomInset(
             composerBlockHeight: composerBlockHeight,
             composerBottomPadding: composerBottomPadding(geometry),
-            isComposerShown: chromeVisible,
-            fallback: topInset + 130)
+            isComposerShown: chromeVisible)
     }
 
     @ViewBuilder

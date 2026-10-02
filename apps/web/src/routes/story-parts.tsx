@@ -1,7 +1,10 @@
 import { useEffect, useRef, type CSSProperties } from 'react';
 
+import type { ContentTrackingLink } from '@meeshy/shared/types/post';
+
 import { MediaUnavailable } from '@/components/media-unavailable';
 import { SceneScrubBar, type SceneScrubPainter } from '@/components/scene-scrub-bar';
+import { ViewerCaption } from '@/components/viewer-caption';
 import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
 import { feedMediaKindOf } from '@/lib/feed/layout';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
@@ -39,6 +42,8 @@ export { MediaUnavailable } from '@/components/media-unavailable';
  * suivi). `ABORTED` (1) et `DECODE` (3) ne prouvent rien sur son existence —
  * voir `échecVidéo` ci-dessous.
  */
+const STORY_TEXT_STYLE: CSSProperties = { fontSize: 28, lineHeight: 1.3 };
+
 const NETWORK_OR_SOURCE_ERROR: ReadonlySet<number> = new Set([2, 4]);
 
 export type StoryCaption = {
@@ -67,6 +72,8 @@ export type StoryMediaLayerProps = {
   readonly background: CSSProperties;
   /** Le texte SERVI PAR LE PRISME (`resolveStoryCaption`), ou `null`. */
   readonly caption: StoryCaption | null;
+  /** La carte `{ url, token }` de la story (#9074) : les adresses du texte s'ouvrent par `/l/`. */
+  readonly trackingLinks?: readonly ContentTrackingLink[] | undefined;
   readonly onReady: () => void;
   readonly onFailed: () => void;
   /** LA DURÉE DU MÉDIA, en millisecondes, dès que le décodeur la connaît
@@ -90,6 +97,7 @@ export function StoryMediaLayer({
   hasMedia,
   background,
   caption,
+  trackingLinks,
   onReady,
   onFailed,
   onDurationKnown,
@@ -262,13 +270,13 @@ export function StoryMediaLayer({
            disparaîtraient en clair comme en sombre. */
         <MediaUnavailable language={currentInterfaceLanguage()} />
       ) : caption !== null ? (
-        <p
+        <ViewerCaption
+          text={caption.text}
+          trackingLinks={trackingLinks}
           className="viewer-ink-shadow text-center text-title font-semibold"
-          style={{ fontSize: 28, lineHeight: 1.3 }}
-          lang={caption.language || undefined}
-        >
-          {caption.text}
-        </p>
+          style={STORY_TEXT_STYLE}
+          lang={caption.language}
+        />
       ) : null}
     </div>
   );

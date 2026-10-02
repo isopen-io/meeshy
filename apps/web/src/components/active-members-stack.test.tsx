@@ -6,6 +6,7 @@ import type { Conversation } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import type { ActiveMember } from '@/lib/view/top-active-members';
+import { AuthorMoodsContext } from '@/lib/view/use-author-moods';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { ThreadHeader } from './thread-header';
@@ -166,5 +167,44 @@ describe('ActiveMembersStack — dans l’en-tête d’un groupe (#7830)', () =>
     });
     act(() => document.querySelector<HTMLButtonElement>('[data-avatar-menu-entry="details"]')?.click());
     expect(journal).toEqual(['details']);
+  });
+});
+
+describe('l’en-tête d’un direct porte le mood du pair (#9065)', () => {
+  test('le pair qui a un mood le porte sur l’avatar de l’en-tête', () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const direct = {
+      ...groupe('direct'),
+      participants: [
+        { id: 'p-b', conversationId: 'c-groupe', userId: 'u-b', type: 'user', role: 'member', displayName: 'Recette', language: 'fr', isActive: true, isOnline: true, joinedAt: new Date('2026-01-01') },
+        { id: 'p-moi', conversationId: 'c-groupe', userId: 'u-moi', type: 'user', role: 'member', displayName: 'Moi', language: 'fr', isActive: true, isOnline: true, joinedAt: new Date('2026-01-01') },
+      ],
+    } as unknown as Conversation;
+    act(() => {
+      root.render(
+        <AuthorMoodsContext.Provider value={(authorId) => (authorId === 'u-b' ? '😎' : undefined)}>
+          <ThreadHeader
+            title="Recette"
+            accent="#6366f1"
+            conversation={direct}
+            viewerId="u-moi"
+            group={false}
+            activeMembers={[]}
+            otherUnread={0}
+            expanded
+            onToggleExpanded={() => {}}
+            onOpenDetails={() => {}}
+            currentRowTitle=""
+            isAuto
+            readingMenuRows={[]}
+            onSelectReadingMode={() => {}}
+            onResetReadingModeToAuto={() => {}}
+          />
+        </AuthorMoodsContext.Provider>,
+      );
+    });
+    expect(container.querySelector('[data-mood]')?.getAttribute('data-mood')).toBe('😎');
   });
 });

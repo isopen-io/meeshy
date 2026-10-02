@@ -32,6 +32,7 @@ import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
+import { AuthorMoodsContext, useAuthorMoods } from '@/lib/view/use-author-moods';
 import { topActiveMembers } from '@/lib/view/top-active-members';
 import { accentOf, withAccent } from '@/lib/accent';
 import { conversationStore } from '@/lib/conversation-store';
@@ -174,6 +175,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const storyRingOf = useAuthorStoryRings(viewer);
+  const moodOf = useAuthorMoods(viewer);
 
   /**
    * LE `Participant` DU LECTEUR DANS cette conversation (#5813, étape 8) —
@@ -684,6 +686,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     <HerePeersContext.Provider value={herePeers}>
     <ActivePeersContext.Provider value={activePeers}>
     <FocusedPeersContext.Provider value={focusedPeers}>
+    <AuthorMoodsContext.Provider value={moodOf}>
     <div
       ref={chrome.host}
       className={`relative ${preview === undefined ? 'h-dvh' : 'h-full'} overflow-hidden`}
@@ -971,6 +974,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
         announce={announcer.announce}
       />
     </div>
+    </AuthorMoodsContext.Provider>
     </FocusedPeersContext.Provider>
     </ActivePeersContext.Provider>
     </HerePeersContext.Provider>

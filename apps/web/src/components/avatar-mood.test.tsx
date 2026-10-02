@@ -191,13 +191,13 @@ describe('le mood pulse à peine quand le pair regarde en plein écran (#9065)',
     expect(avatar({ mood: '😴', hereActive: true })).toContain('mood-breathe');
   });
 
-  test('une seule échelle : à peine < respiration < ample, et le mouvement réduit coupe tout', () => {
+  test('une seule échelle : à peine < ample, une respiration à peine plus élevée — et le mouvement réduit coupe tout', () => {
     const css = readFileSync(new URL('../styles/app.css', import.meta.url), 'utf8');
     const peak = (name: string) => Math.max(...[...(new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?)\\n\\}`).exec(css)?.[1] ?? '').matchAll(/scale\(([\d.]+)\)/g)].map((m) => Number(m[1])));
     expect(peak('moodHush')).toBeLessThan(peak('moodBreathe'));
-    expect(peak('moodBreathe')).toBeLessThan(peak('moodStir'));
-    expect(peak('moodStir')).toBeCloseTo(1.22, 5);
-    expect(css).toMatch(/\.mood-stir\s*\{[^}]*animation-name:\s*moodStir[^}]*animation-duration:\s*1\.4s[^}]*infinite/);
+    expect(peak('moodHush')).toBeLessThan(peak('moodStir'));
+    expect(peak('moodStir')).toBeCloseTo(1.2, 5);
+    expect(css).toMatch(/\.mood-stir\s*\{[^}]*animation-name:\s*moodStir[^}]*animation-duration:\s*2s[^}]*infinite/);
     expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{[^@]*\.mood-stir/);
   });
 

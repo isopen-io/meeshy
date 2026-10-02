@@ -79,6 +79,7 @@ const HOOK_NAMES = [
   'useConversationActivity',
   'useMessageMenu',
   'useAuthorStoryRings',
+  'useAuthorMoods',
   'useEphemeralDestruction',
   'useLivingMessages',
   'useOlderMessages',

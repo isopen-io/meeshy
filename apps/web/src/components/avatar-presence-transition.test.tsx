@@ -145,6 +145,10 @@ describe('le point indigo « ici »', () => {
     expect(start('presence-dot-hush')).toBeCloseTo(0.2, 5);
     expect(peak('presence-dot-hush')).toBeLessThan(peak('presence-dot-rest'));
     expect(peak('presence-dot-rest')).toBeLessThan(peak('presence-dot-pulse'));
+    expect(peak('presence-dot-pulse')).toBeLessThan(2.2);
+    expect(peak('presence-dot-pulse')).toBeCloseTo(1.9, 5);
+    expect(start('presence-dot-pulse')).toBeCloseTo(0.4, 5);
+    expect(css).toMatch(/\.presence-dot-active::after\s*\{[^}]*animation:\s*presence-dot-pulse 1\.8s[^;]*infinite/);
     expect(start('presence-dot-hush')).toBeLessThan(start('presence-dot-rest'));
     expect(css).toMatch(/\.presence-dot-focused::before\s*\{[^}]*animation:\s*presence-dot-hush 2\.8s[^;]*infinite/);
     expect(css).toMatch(/\.presence-dot-focused::after\s*\{[^}]*animation:\s*none/);
@@ -153,6 +157,11 @@ describe('le point indigo « ici »', () => {
 
   test('l’arrivée ici est un gros pulse : anneau de 3 px, ×3 en 0,9 s', () => {
     const css = readFileSync(new URL('../styles/avatar.css', import.meta.url), 'utf8');
+    const bounce = /@keyframes presence-dot-bounce\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? '';
+    const scales = [...bounce.matchAll(/scale\(([\d.]+)\)/g)].map((m) => Number(m[1]));
+    expect(Math.max(...scales)).toBeGreaterThanOrEqual(1.3);
+    expect(scales.slice(scales.indexOf(Math.max(...scales))).some((v) => v < 1)).toBe(true);
+    expect(scales.at(-1)).toBe(1);
     expect(css).toMatch(/\.presence-dot-here\.presence-dot-enter::after\s*\{[^}]*border:\s*3px[^}]*animation:\s*presence-dot-ripple 0\.9s/);
     expect(Number(/@keyframes presence-dot-ripple[\s\S]*?100%[^}]*scale\(([\d.]+)\)/.exec(css)?.[1])).toBeCloseTo(3, 5);
   });
@@ -166,7 +175,7 @@ describe('le point indigo « ici »', () => {
     const css = readFileSync(new URL('../styles/avatar.css', import.meta.url), 'utf8');
     expect(css).toMatch(/\.presence-dot-here::before\s*\{[^}]*animation:\s*presence-dot-rest[^;]*infinite/);
     const peak = (name: string) => Number(new RegExp(`@keyframes ${name}[\\s\\S]*?100%[^}]*scale\\(([\\d.]+)\\)`).exec(css)?.[1]);
-    expect(peak('presence-dot-pulse')).toBeGreaterThan(peak('presence-dot-rest') + 0.8);
+    expect(peak('presence-dot-pulse')).toBeGreaterThan(peak('presence-dot-rest'));
     expect(css).toMatch(/\.presence-dot-active::before\s*\{[^}]*animation:\s*none/);
   });
 

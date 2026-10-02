@@ -466,3 +466,20 @@ describe('LensRow — le pair a cette conversation OUVERTE (#8892)', () => {
     expect(sameRowProps(baseProps({ ...stable, peerHere: false }), baseProps(stable))).toBe(true);
   });
 });
+
+describe('la rangée d’un direct porte le mood du pair (#9065)', () => {
+  test('le mood du pair se peint sur l’avatar, cerné de vert quand il est en ligne', () => {
+    const html = renderToStaticMarkup(<LensRow {...baseProps({ peerMood: '😎' })} />);
+    expect(html).toContain('data-mood="😎"');
+  });
+
+  test('sans mood, aucun badge', () => {
+    expect(renderToStaticMarkup(<LensRow {...baseProps()} />)).not.toContain('data-mood');
+  });
+
+  test('un mood qui change re-rend la rangée', () => {
+    const props = baseProps();
+    expect(sameRowProps(props, { ...props, peerMood: '😎' })).toBe(false);
+    expect(sameRowProps({ ...props, peerMood: '😎' }, { ...props, peerMood: '😎' })).toBe(true);
+  });
+});

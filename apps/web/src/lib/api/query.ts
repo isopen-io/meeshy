@@ -103,8 +103,8 @@ export function useStoryTray(options: { readonly enabled?: boolean } = {}) {
  * fenêtre courte (une heure — `PostType.STATUS`, `schema.prisma`) et n'a
  * aucune raison d'être refetchée à chaque retour sur la liste.
  */
-export function useStatusMoods() {
-  return useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000 });
+export function useStatusMoods(options: { readonly enabled?: boolean } = {}) {
+  return useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000, enabled: options.enabled ?? true });
 }
 
 /**
