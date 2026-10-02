@@ -13,7 +13,7 @@ import MeeshySDK
 ///   `>` quotes and ```` ``` ```` code blocks — see `MessageBlockParser`
 ///   (`MessageTextRenderer+Blocks.swift`), mirror of `packages/shared/utils/text-blocks.ts`
 /// - **Addresses without scheme**: `www.…` → `https://www.…`, `a@b.fr` → `mailto:`
-/// - **Meeshy links**: `m+TOKEN` → tappable link to `https://meeshy.me/l/TOKEN`
+/// - **Meeshy links**: `m+TOKEN` → tappable link to `<web origin>/l/TOKEN`
 /// - **Mentions**: `@username` → tappable link to the profile
 /// - **Hashtags**: `#tag` → tappable link to `https://meeshy.me/hashtag/<tag>`
 /// - **URLs**: Auto-detected via `NSDataDetector` and made tappable
@@ -42,7 +42,7 @@ public enum MessageTextRenderer {
     /// Pass `mentionDisplayNames` to resolve `@username` → display name (e.g. `["atabeth": "Ata Beth"]`).
     /// Pass `trackedLinks` (`[rawURL: token]`) to route raw URLs through the
     /// gateway tracking redirect: a `.urlLink` whose raw string is a key (with a
-    /// trailing-punctuation-trimmed fallback) links to `https://meeshy.me/l/<token>`
+    /// trailing-punctuation-trimmed fallback) links to `<web origin>/l/<token>`
     /// instead of the raw URL — the DISPLAYED text stays the raw URL.
     /// Pass `validUsernames` when the caller KNOWS who really exists (posts,
     /// stories, réels — anywhere `PostReference` is available): only pseudos in
@@ -66,6 +66,32 @@ public enum MessageTextRenderer {
         validUsernames: Set<String>? = nil
     ) -> Text {
         guard !text.isEmpty else { return Text("") }
+        return Text(attributed(text, fontSize: fontSize, color: color, mentionColor: mentionColor,
+                               hashtagColor: hashtagColor, accentColor: accentColor,
+                               usesRelativeFont: usesRelativeFont, mentionDisplayNames: mentionDisplayNames,
+                               highlightTerm: highlightTerm, trackedLinks: trackedLinks,
+                               validUsernames: validUsernames))
+    }
+
+    /// The `AttributedString` behind `render` — same parameters, plus the web
+    /// origin a mapped URL's `/l/<token>` redirect is built on (the ACTIVE
+    /// environment by default, #9075). Public so a host can read where each
+    /// link leads without mounting a view.
+    public static func attributed(
+        _ text: String,
+        fontSize: CGFloat = 15,
+        color: Color,
+        mentionColor: Color? = nil,
+        hashtagColor: Color? = nil,
+        accentColor: Color? = nil,
+        usesRelativeFont: Bool = false,
+        mentionDisplayNames: [String: String]? = nil,
+        highlightTerm: String? = nil,
+        trackedLinks: [String: String]? = nil,
+        validUsernames: Set<String>? = nil,
+        webOrigin: String = MeeshyConfig.shared.webOrigin
+    ) -> AttributedString {
+        guard !text.isEmpty else { return AttributedString() }
         let context = RenderContext(
             mentionColor: mentionColor,
             hashtagColor: hashtagColor,
@@ -73,14 +99,15 @@ public enum MessageTextRenderer {
             usesRelativeFont: usesRelativeFont,
             mentionDisplayNames: mentionDisplayNames,
             trackedLinks: trackedLinks,
-            validUsernames: validUsernames
+            validUsernames: validUsernames,
+            webOrigin: webOrigin
         )
         if MessageBlockParser.hasBlockSyntax(text) {
-            return Text(renderBlocks(MessageBlockParser.parse(text), fontSize: fontSize, color: color, context: context))
+            return renderBlocks(MessageBlockParser.parse(text), fontSize: fontSize, color: color, context: context)
         }
         let segments = parse(text, mentionDisplayNames: mentionDisplayNames, validUsernames: validUsernames)
         let ranges = highlightTerm.flatMap { highlightRanges(in: text, term: $0) } ?? []
-        return Text(buildAttributed(segments, fontSize: fontSize, color: color, context: context, highlightRanges: ranges))
+        return buildAttributed(segments, fontSize: fontSize, color: color, context: context, highlightRanges: ranges)
     }
 
     /// Everything `render` receives besides the text, its size and its color —
@@ -93,6 +120,7 @@ public enum MessageTextRenderer {
         let mentionDisplayNames: [String: String]?
         let trackedLinks: [String: String]?
         let validUsernames: Set<String>?
+        var webOrigin: String = MeeshyConfig.shared.webOrigin
     }
 
     /// **What one reads, without the notation** (#7849) — `**gras**` → `gras`,
@@ -123,19 +151,14 @@ public enum MessageTextRenderer {
     // MARK: - Tracked-link resolution
 
     /// Resolves the tappable destination for a raw URL string. Returns the
-    /// `https://meeshy.me/l/<token>` tracking URL when the raw string (or its
+    /// `<webOrigin>/l/<token>` tracking URL when the raw string (or its
     /// trailing-punctuation-trimmed form) is a key in `trackedLinks`; otherwise
     /// the original `url`. Pure + side-effect-free so it's unit-testable.
-    static func resolvedLinkURL(raw: String, original: URL, trackedLinks: [String: String]?) -> URL {
+    static func resolvedLinkURL(raw: String, original: URL, trackedLinks: [String: String]?,
+                                webOrigin: String = MeeshyConfig.shared.webOrigin) -> URL {
         guard let trackedLinks, !trackedLinks.isEmpty else { return original }
-        if let token = trackedLinks[raw] {
-            return URL(string: "https://meeshy.me/l/\(token)") ?? original
-        }
-        let trimmed = raw.trimmingTrailingLinkPunctuation
-        if trimmed != raw, let token = trackedLinks[trimmed] {
-            return URL(string: "https://meeshy.me/l/\(token)") ?? original
-        }
-        return original
+        let token = trackedLinks[raw] ?? trackedLinks[raw.trimmingTrailingLinkPunctuation]
+        return token.flatMap { TrackedLink.redirectURL(token: $0, webOrigin: webOrigin) } ?? original
     }
 
     /// Extract all URLs found in the text (for link preview / OG cards).
@@ -149,7 +172,7 @@ public enum MessageTextRenderer {
 
         for match in meeshyLinkRegex.matches(in: text, range: fullRange) {
             let token = ns.substring(with: match.range(at: 1))
-            if let url = URL(string: "https://meeshy.me/l/\(token)") {
+            if let url = TrackedLink.redirectURL(token: token) {
                 urls.append(url)
             }
         }
@@ -502,7 +525,7 @@ public enum MessageTextRenderer {
             case .meeshyLink:
                 let token = ns.substring(with: match.range(at: 1))
                 let display = ns.substring(with: match.range)
-                if let url = URL(string: "https://meeshy.me/l/\(token)") {
+                if let url = TrackedLink.redirectURL(token: token) {
                     segments.append(.meeshyTokenLink(display: display, url: url, token: token))
                 }
 
@@ -646,7 +669,8 @@ public enum MessageTextRenderer {
                 var attr = AttributedString(display)
                 // DISPLAY stays the raw URL; the tappable destination becomes
                 // the gateway tracking redirect when a token is mapped.
-                attr.link = Self.resolvedLinkURL(raw: display, original: url, trackedLinks: trackedLinks)
+                attr.link = Self.resolvedLinkURL(raw: display, original: url, trackedLinks: trackedLinks,
+                                                 webOrigin: context.webOrigin)
                 attr.font = Self.font(fontSize, .medium, relative: usesRelativeFont)
                 attr.underlineStyle = .single
                 if let accentColor {

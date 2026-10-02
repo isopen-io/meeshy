@@ -156,6 +156,9 @@ struct CommentMediaView: View {
     let authorAvatarURL: String?
     let authorColor: String
     let sentAt: Date
+    /// La carte des liens suivis du commentaire porteur — la légende du média en
+    /// plein écran ouvre ses adresses par `/l/` (#9075).
+    var trackedLinks: [String: String] = [:]
 
     @State private var showFullscreen = false
     @State private var audioFullscreen: AudioFullscreenSource?
@@ -350,6 +353,7 @@ struct CommentMediaView: View {
         return CommentMediaGallerySnapshot(
             attachments: [attachment],
             captions: caption.map { [attachment.id: $0] } ?? [:],
+            links: trackedLinks.isEmpty ? [:] : [attachment.id: trackedLinks],
             senders: [attachment.id: ConversationViewModel.MediaSenderInfo(
                 senderName: authorName,
                 senderAvatarURL: authorAvatarURL,
@@ -375,6 +379,7 @@ struct CommentMediaView: View {
             startAttachmentId: media.id,
             accentColor: accentColor,
             captionMap: snapshot.captions,
+            captionLinks: snapshot.links,
             senderInfoMap: snapshot.senders,
             // #7362 — pièce de COMMENTAIRE, pas de `MessageAttachment` :
             // aucune consommation à reporter.

@@ -332,7 +332,6 @@ struct RootView: View {
             onContinueWithAccount: joinViaShareLink(identifier:),
             onJoinAnonymously: { deepLinkRouter.requestedGuestJoin = $0 }
         ))
-        .inAppLinks(router: router)
         .modifier(RootEnvironmentLayer(
             router: router,
             storyViewModel: storyViewModel,
@@ -395,6 +394,7 @@ struct RootView: View {
             upgradeGate: upgradeGate,
             onDeepLink: handleDeepLink
         ))
+        .inAppLinks(router: router)
     }
 
     // MARK: - Démarrage de la racine

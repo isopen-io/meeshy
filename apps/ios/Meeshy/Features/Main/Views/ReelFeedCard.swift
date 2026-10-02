@@ -124,6 +124,7 @@ struct ReelFeedCard: View, Equatable {
             && lhs.displayShareCount == rhs.displayShareCount
             && lhs.post.commentCount == rhs.post.commentCount
             && lhs.post.content == rhs.post.content
+            && lhs.post.trackedLinkMap == rhs.post.trackedLinkMap
             && lhs.post.translatedContent == rhs.post.translatedContent
     }
 
@@ -371,6 +372,7 @@ struct ReelFeedCard: View, Equatable {
                     hashtagColor: MeeshyColors.hashtagColor(isDark: true),
                     accentColor: .white,
                     usesRelativeFont: true,
+                    trackedLinks: post.trackedLinkMap,
                     validUsernames: post.validMentionUsernames
                 )
                     .tint(.white)

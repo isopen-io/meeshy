@@ -23,11 +23,6 @@ struct iPadEnvironmentLayer: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            // Un lien Meeshy touché dans un message s'ouvre dans l'app, comme
-            // sur iPhone — sans cette action, iOS le rendait à Safari (#7808).
-            // Posée ici plutôt que sur la racine : un modificateur de plus
-            // sur `iPadRootView.body` franchit le plafond de profondeur (24).
-            .inAppLinks(router: router)
             .environmentObject(router)
             .environmentObject(storyViewModel)
             .environmentObject(statusViewModel)
@@ -342,5 +337,12 @@ struct iPadCoversAndChromeLayer: ViewModifier {
             // « Validez votre compte » (#8239) : une FEUILLE, qui passe après
             // l'onboarding (`OnboardingPresenceSignal`).
             .activationInviteHost()
+            // Un lien Meeshy touché dans l'app s'ouvre dans l'app (#7808) — posé
+            // sur la couche la plus EXTÉRIEURE : une couverture présentée par un
+            // modificateur hérite de l'environnement de SON point d'attache, et
+            // le lecteur de story (couverture plein écran) rendait sinon à Safari
+            // les liens de sa légende et de ses commentaires (#9075). Ici plutôt
+            // que sur `iPadRootView.body` : plafond de profondeur (24).
+            .inAppLinks(router: router)
     }
 }

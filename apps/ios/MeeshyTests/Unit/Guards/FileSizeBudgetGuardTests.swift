@@ -573,7 +573,13 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // latérale de `FullscreenTopBarLayout` : le `.padding(.horizontal, …)` que
     // `StoryViewerView+Canvas.swift` posait autour de `StoryHeaderView` part (−1 ligne).
     // L'hôte RESTE en dette ; le plafond baisse d'exactement ce que le lot retire.
-    private static let legacyLineCeiling = 42_091
+    //
+    // #9075 — 42 091 → 41 996 (−95). Les CINQ projections jumelles
+    // `APIPostComment → FeedComment` de `StoryViewerView+Content.swift` (premier
+    // chargement, page suivante, réponses, `comment:added`, `comment:updated`)
+    // délèguent au site UNIQUE `FeedComment(api:)` — qui porte la carte des liens
+    // suivis qu'aucune d'elles ne recopiait. L'hôte RESTE en dette.
+    private static let legacyLineCeiling = 41_996
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

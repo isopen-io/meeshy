@@ -1071,7 +1071,7 @@ struct CommentsSheetView: View {
                     mentionColor: MeeshyColors.mentionColor(isDark: isDark),
                     hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
                     accentColor: Color(hex: reply.authorColor),
-                    usesRelativeFont: true
+                    usesRelativeFont: true, trackedLinks: reply.trackedLinkMap
                 )
                     .tint(Color(hex: reply.authorColor))
                     .lineLimit(1)

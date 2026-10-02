@@ -68,6 +68,14 @@ extension StoryCardView {
                 // pour que le lecteur de réel puisse aligner la sienne sur
                 // sa propre colonne (directive porteur 2026-09-01).
                 MediaCaptionOverlay(caption: description, isExpanded: isCaptionExpanded,
+                                    // #9075 — une adresse de la légende s'ouvre par
+                                    // le lien suivi `/l/<token>` de la carte servie.
+                                    // Le lien est rendu par le `Text` de la légende,
+                                    // montée AU-DESSUS de la couche de gestes
+                                    // (`zIndex(60)`) : le toucher qui l'ouvre n'avance
+                                    // pas la story.
+                                    trackedLinks: currentStory?.trackedLinkMap ?? [:],
+                                    validUsernames: currentStory?.validMentionUsernames,
                                     horizontalInset: 20,
                                     // Le rail d'actions occupe la bande droite
                                     // (x ≈ 318 → 386 sur un écran de 402).
