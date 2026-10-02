@@ -1,7 +1,7 @@
 import { useContext, type ComponentProps } from 'react';
 
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
-import { useAuthorActive, useAuthorHere } from '@/lib/view/use-conversation-viewing';
+import { useAuthorActive, useAuthorFocused, useAuthorHere } from '@/lib/view/use-conversation-viewing';
 
 import { Avatar } from './avatar';
 import { AvatarMenuTrigger, ConversationDetailsContext } from './avatar-menu';
@@ -27,6 +27,7 @@ export function AuthorAvatar({
 }) {
   const here = useAuthorHere(authorId);
   const active = useAuthorActive(authorId);
+  const focused = useAuthorFocused(authorId);
   const openDetails = useContext(ConversationDetailsContext);
   const entries = avatarMenuEntries({
     username: props.profileUsername,
@@ -44,7 +45,12 @@ export function AuthorAvatar({
       name={props.name ?? props.profileUsername ?? ''}
       onOpenDetails={openDetails ?? undefined}
     >
-      <Avatar {...props} here={here || props.here === true} hereActive={active || props.hereActive === true} />
+      <Avatar
+        {...props}
+        here={here || props.here === true}
+        hereActive={active || props.hereActive === true}
+        hereFocused={focused || props.hereFocused === true}
+      />
     </AvatarMenuTrigger>
   );
 }

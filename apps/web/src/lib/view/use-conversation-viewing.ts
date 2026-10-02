@@ -3,11 +3,13 @@ import { useStore } from 'zustand/react';
 
 import {
   acquireConversationViewing,
-  coverConversationViewing,
+  focusConversationViewing,
   herePeersOf,
   isActiveIn,
+  isFocusedIn,
   isHereIn,
   signalConversationActivity,
+  suspendConversationViewing,
   viewingStore,
   type ViewingState,
 } from '@/lib/api/conversation-viewing';
@@ -48,10 +50,16 @@ export function useConversationActivity(conversationId: string | undefined, root
   }, [conversationId, root]);
 }
 
-/** Une vue plein écran (visionneuse) couvre le fil tant qu'elle est montée :
- * l'utilisateur n'est plus « dans la conversation » (#9052). */
-export function useConversationViewingCover(): void {
-  useEffect(() => coverConversationViewing(), []);
+/** Une visionneuse plein écran ouverte depuis le fil le garde « dans la
+ * conversation » et fait pulser son point chez les pairs (#9065). */
+export function useConversationViewingFocus(): void {
+  useEffect(() => focusConversationViewing(), []);
+}
+
+/** Tant que `suspended` (l'écran d'appel en grand), l'utilisateur n'est plus
+ * « dans la conversation » ; le lever la rend (#9065). */
+export function useConversationViewingSuspension(suspended: boolean): void {
+  useEffect(() => (suspended ? suspendConversationViewing() : undefined), [suspended]);
 }
 
 /** Ce pair a-t-il CETTE conversation ouverte ? Un booléen primitif : l'en-tête
@@ -63,6 +71,17 @@ export function useIsHere(conversationId: string, userId: string | undefined): b
 /** Ce pair ICI regarde-t-il, écoute-t-il ou agit-il (#9061) ? */
 export function useIsHereActive(conversationId: string, userId: string | undefined): boolean {
   return useStore(viewingStore, (s) => (userId === undefined ? false : isActiveIn(s, conversationId, userId)));
+}
+
+/** Ce pair ICI regarde-t-il un élément de la conversation en plein écran (#9065) ? */
+export function useIsHereFocused(conversationId: string, userId: string | undefined): boolean {
+  return useStore(viewingStore, (s) => (userId === undefined ? false : isFocusedIn(s, conversationId, userId)));
+}
+
+/** `conversationId → pairs en plein écran` pour toute la liste (#9065). */
+export function useFocusedHerePeers(viewerId: string): Readonly<Record<string, readonly string[]>> {
+  const focusedByConversation = useStore(viewingStore, (s) => s.focusedByConversation);
+  return useMemo(() => herePeersOf({ byConversation: focusedByConversation }, viewerId), [focusedByConversation, viewerId]);
 }
 
 /** `conversationId → pairs actifs` pour toute la liste (#9061) — se lit avec
@@ -108,6 +127,11 @@ export function useActiveIn(conversationId: string): readonly string[] {
   return useStore(viewingStore, (s) => herePeersIn({ byConversation: s.activeByConversation }, conversationId));
 }
 
+/** Les pairs ICI en plein écran dans UNE conversation (#9065). */
+export function useFocusedIn(conversationId: string): readonly string[] {
+  return useStore(viewingStore, (s) => herePeersIn({ byConversation: s.focusedByConversation }, conversationId));
+}
+
 /** Les pairs présents dans la conversation du fil que l'on lit — posé par
  * l'écran de fil, lu par chaque avatar d'auteur (bulles, frappe, en-tête).
  * Hors d'un fil : personne. */
@@ -125,6 +149,14 @@ export const ActivePeersContext = createContext<readonly string[]>(NOBODY_HERE);
 export function useAuthorActive(authorKey: string | undefined): boolean {
   const activePeers = useContext(ActivePeersContext);
   return authorKey !== undefined && activePeers.includes(authorKey);
+}
+
+/** Les pairs du fil en plein écran (#9065) — posé à côté de `ActivePeersContext`. */
+export const FocusedPeersContext = createContext<readonly string[]>(NOBODY_HERE);
+
+export function useAuthorFocused(authorKey: string | undefined): boolean {
+  const focusedPeers = useContext(FocusedPeersContext);
+  return authorKey !== undefined && focusedPeers.includes(authorKey);
 }
 
 type HereKeyBearer = {

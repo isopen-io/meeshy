@@ -1,4 +1,4 @@
-import { useAuthorActive, useAuthorHere } from '@/lib/view/use-conversation-viewing';
+import { useAuthorActive, useAuthorFocused, useAuthorHere } from '@/lib/view/use-conversation-viewing';
 
 import { Avatar } from './avatar';
 import { TypingDots } from './typing-dots';
@@ -90,6 +90,7 @@ export function TypingRosterCell({
   const lead = typingLead(typists);
   const leadHere = useAuthorHere(lead?.userId);
   const leadActive = useAuthorActive(lead?.userId);
+  const leadFocused = useAuthorFocused(lead?.userId);
   if (lead === undefined) return null;
   /* `undefined` quand il n'y a pas de photo — jamais `''` : `Avatar` rendrait
      un `<img src="">`, qui RECHARGE la page courante. */
@@ -115,6 +116,7 @@ export function TypingRosterCell({
           size={AVATAR_SIZE}
           here={leadHere}
           hereActive={leadActive}
+          hereFocused={leadFocused}
           {...(leadPhoto === undefined ? {} : { src: leadPhoto })}
         />
         <TypingDots color={accent} />
@@ -136,6 +138,7 @@ export function TypingRosterCell({
         size={18}
         here={leadHere}
         hereActive={leadActive}
+        hereFocused={leadFocused}
         {...(leadPhoto === undefined ? {} : { src: leadPhoto })}
       />
       <span

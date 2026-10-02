@@ -14,8 +14,10 @@ import type { SocketClient } from '@/lib/net/socket';
 import MediaViewer from './media-viewer';
 
 /**
- * #9052 — ouvrir une image depuis le fil, c'est QUITTER la conversation : le
- * pair voit le point « ici » s'éteindre, et se rallumer à la fermeture.
+ * #9065 (revient sur #9052) — ouvrir une image depuis le fil, c'est RESTER dans
+ * la conversation en la regardant : aucun `viewing:stop`, et un
+ * `viewing:activity { focus: true }` qui fait pulser le point chez le pair ;
+ * la refermer émet aussitôt une activité simple qui le rend au fil.
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -46,8 +48,8 @@ function recordingSocket() {
   return { socket, emitted };
 }
 
-describe('MediaViewer — la visionneuse couvre le fil (#9052)', () => {
-  test('monter la visionneuse retire la présence, la démonter la rend', () => {
+describe('MediaViewer — la visionneuse garde « ici » et le fait pulser (#9065)', () => {
+  test('monter la visionneuse annonce le plein écran sans quitter ; la démonter rend le fil sans rien retirer', () => {
     const { socket, emitted } = recordingSocket();
     const unbind = bindConversationViewing({
       socket,
@@ -73,7 +75,9 @@ describe('MediaViewer — la visionneuse couvre le fil (#9052)', () => {
     release();
     unbind();
 
-    expect(whileOpen).toEqual([CLIENT_EVENTS.VIEWING_START, CLIENT_EVENTS.VIEWING_STOP]);
-    expect(afterClose).toEqual([CLIENT_EVENTS.VIEWING_START, CLIENT_EVENTS.VIEWING_STOP, CLIENT_EVENTS.VIEWING_START]);
+    expect(whileOpen).toEqual([CLIENT_EVENTS.VIEWING_START, CLIENT_EVENTS.VIEWING_ACTIVITY]);
+    expect(emitted[1]?.payload).toEqual({ conversationId: 'conv-a', focus: true });
+    expect(afterClose).toEqual([...whileOpen, CLIENT_EVENTS.VIEWING_ACTIVITY]);
+    expect(emitted[2]?.payload).toEqual({ conversationId: 'conv-a' });
   });
 });

@@ -1,6 +1,8 @@
 import { useEffect, type RefObject } from 'react';
 import { useStore } from 'zustand/react';
 
+import { useConversationViewingSuspension } from '@/lib/view/use-conversation-viewing';
+
 import { callCoversScreen, interruptPlayback, presentationModeFor } from './call-presentation';
 import { callStore, isCallLive } from './call-store';
 
@@ -17,7 +19,9 @@ import { callStore, isCallLive } from './call-store';
  *   voler le focus) : la feuille d'en dessous revit, intacte ;
  * - un élément étranger en plein écran (`requestFullscreen`) est quitté à
  *   l'arrivée de l'écran d'appel ;
- * - à l'arrivée de l'appel, ce qui joue hors de la couche se met en pause.
+ * - à l'arrivée de l'appel, ce qui joue hors de la couche se met en pause ;
+ * - tant que l'écran d'appel couvre, l'utilisateur quitte « ici » (#9065) :
+ *   réduire l'appel le rend à la conversation qu'il a sous les yeux.
  */
 
 const isModal = (dialog: HTMLDialogElement): boolean => {
@@ -40,6 +44,7 @@ function leaveForeignFullscreen(dialog: HTMLDialogElement): void {
 export function useCallPresentation(layer: RefObject<HTMLDialogElement | null>): void {
   const covers = useStore(callStore, (state) => callCoversScreen(state.call));
   const live = useStore(callStore, (state) => isCallLive(state.call));
+  useConversationViewingSuspension(covers);
 
   useEffect(() => {
     const dialog = layer.current;

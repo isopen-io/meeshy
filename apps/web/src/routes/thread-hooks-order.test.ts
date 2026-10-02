@@ -75,6 +75,7 @@ const HOOK_NAMES = [
   'useConversationViewing',
   'useHereIn',
   'useActiveIn',
+  'useFocusedIn',
   'useConversationActivity',
   'useMessageMenu',
   'useAuthorStoryRings',

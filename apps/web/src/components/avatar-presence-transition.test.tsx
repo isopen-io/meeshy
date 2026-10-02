@@ -29,7 +29,12 @@ afterAll(async () => {
 const mounter = createActMounter();
 afterEach(() => mounter.unmountAll());
 
-const avatar = (state: { readonly here?: boolean; readonly hereActive?: boolean; readonly presence?: UserPresenceStatus }) => (
+const avatar = (state: {
+  readonly here?: boolean;
+  readonly hereActive?: boolean;
+  readonly hereFocused?: boolean;
+  readonly presence?: UserPresenceStatus;
+}) => (
   <Avatar initials="AD" color="#4F46E5" size={44} {...state} />
 );
 
@@ -115,6 +120,14 @@ describe('le point indigo « ici »', () => {
     const dot = host.querySelector('[data-presence="here"]');
     expect(dot?.className).toContain('presence-dot-active');
     expect(dot?.getAttribute('data-presence-active')).toBe('true');
+
+    await mounter.rerender(host, avatar({ here: true }));
+    expect(host.querySelector('[data-presence="here"]')?.className).not.toContain('presence-dot-active');
+  });
+
+  test('il pulse tant que le pair regarde en plein écran (#9065), et redevient fixe après', async () => {
+    const host = await mounter.mount(avatar({ here: true, hereFocused: true }));
+    expect(host.querySelector('[data-presence="here"]')?.className).toContain('presence-dot-active');
 
     await mounter.rerender(host, avatar({ here: true }));
     expect(host.querySelector('[data-presence="here"]')?.className).not.toContain('presence-dot-active');

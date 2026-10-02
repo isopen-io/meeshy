@@ -77,6 +77,19 @@
   animation: presence-dot-pulse 1.4s ease-out infinite;
 }
 
+/*
+ * LE CONTOUR DU MOOD PORTE LA PRÉSENCE QU'IL MASQUE (#9065) — la silhouette
+ * de l'emoji DILATÉE par quatre ombres nettes dans la couleur servie, jamais un
+ * anneau : indigo « ici », vert en ligne. Statique : rien ne s'anime ici.
+ */
+[data-mood-outline] {
+  display: inline-block;
+  filter: drop-shadow(var(--mood-outline-width, 1px) 0 0 var(--mood-outline))
+    drop-shadow(calc(-1 * var(--mood-outline-width, 1px)) 0 0 var(--mood-outline))
+    drop-shadow(0 var(--mood-outline-width, 1px) 0 var(--mood-outline))
+    drop-shadow(0 calc(-1 * var(--mood-outline-width, 1px)) 0 var(--mood-outline));
+}
+
 @keyframes presence-dot-pulse {
   0% { opacity: 0.55; transform: scale(1); }
   100% { opacity: 0; transform: scale(2.2); }

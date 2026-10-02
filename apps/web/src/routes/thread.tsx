@@ -47,10 +47,12 @@ import { useOnline } from '@/lib/net/online';
 import { useThreadTyping } from '@/lib/view/use-thread-typing';
 import {
   ActivePeersContext,
+  FocusedPeersContext,
   HerePeersContext,
   useActiveIn,
   useConversationActivity,
   useConversationViewing,
+  useFocusedIn,
   useHereIn,
 } from '@/lib/view/use-conversation-viewing';
 import { useEphemeralDestruction } from '@/lib/view/ephemeral-destruction';
@@ -413,9 +415,10 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
   /* « EST DANS LA CONVERSATION » (#8892) — le fil ouvert s'annonce aux pairs. */
   useConversationViewing(conversationId);
   /* … et chaque avatar d'auteur du fil dit qui l'a ouvert — et qui y regarde,
-     écoute ou agit en ce moment (#9061). */
+     écoute ou agit en ce moment (#9061), ou regarde en plein écran (#9065). */
   const herePeers = useHereIn(conversationId);
   const activePeers = useActiveIn(conversationId);
+  const focusedPeers = useFocusedIn(conversationId);
   useConversationActivity(conversationId, chrome.host);
 
   /**
@@ -680,6 +683,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     <ThreadMediaContext.Provider value={threadMedia}>
     <HerePeersContext.Provider value={herePeers}>
     <ActivePeersContext.Provider value={activePeers}>
+    <FocusedPeersContext.Provider value={focusedPeers}>
     <div
       ref={chrome.host}
       className={`relative ${preview === undefined ? 'h-dvh' : 'h-full'} overflow-hidden`}
@@ -967,6 +971,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
         announce={announcer.announce}
       />
     </div>
+    </FocusedPeersContext.Provider>
     </ActivePeersContext.Provider>
     </HerePeersContext.Provider>
     </ThreadMediaContext.Provider>

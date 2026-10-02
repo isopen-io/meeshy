@@ -44,6 +44,7 @@ export function Avatar({
   presence,
   here = false,
   hereActive = false,
+  hereFocused = false,
   name,
   opacity,
   src,
@@ -69,6 +70,12 @@ export function Avatar({
    * PULSE tant que `viewing:activity` arrive. Sans `here`, rien ne pulse.
    */
   hereActive?: boolean;
+  /**
+   * LE PAIR ICI REGARDE EN PLEIN ÉCRAN UN ÉLÉMENT DE LA CONVERSATION (#9065) —
+   * le point indigo PULSE comme à l'activité, et le mood s'IMMOBILISE. Sans
+   * `here`, rien.
+   */
+  hereFocused?: boolean;
   name?: string;
   /**
    * Le fondu de SOURDINE, appliqué ICI plutôt qu'en enveloppant l'avatar
@@ -115,7 +122,13 @@ export function Avatar({
    * Taille : 0,42 × l'avatar, miroir `MeeshyAvatar.swift:186-195`. Elle RESPIRE
    * puis se pose après ~8 s (`mood-breathe`, 2 s × 4 — la borne posée par
    * l'audit de chauffe iOS du 2026-08-26), et `prefers-reduced-motion` la coupe
-   * sans la faire disparaître.
+   * sans la faire disparaître. Elle se tient IMMOBILE tant que le pair regarde
+   * en plein écran (`hereFocused`, #9065).
+   *
+   * **SON CONTOUR PORTE LA PRÉSENCE QU'ELLE MASQUE** (#9065) — la silhouette
+   * DILATÉE de l'emoji (`[data-mood-outline]`, `avatar.css`), jamais un anneau
+   * de plus : indigo ici, vert en ligne, rien sinon. Le vert ne se lit que sur
+   * la présence SERVIE : aucun contour ne se fabrique d'une présence masquée.
    */
   mood?: string;
   /**
@@ -194,6 +207,15 @@ export function Avatar({
      amont, mais un appelant direct la laisserait passer et peindrait une
      pastille MUETTE — visible, sans rien dire. */
   const humeur = mood !== undefined && mood !== '' ? mood : undefined;
+  const focused = here && hereFocused;
+  const moodOutline = here ? 'here' : presence === 'online' ? 'online' : undefined;
+  const moodOutlineStyle =
+    moodOutline === undefined
+      ? undefined
+      : ({
+          '--mood-outline': moodOutline === 'here' ? PRESENCE_HERE_HEX : PRESENCE_HEX[presenceTone('online')],
+          '--mood-outline-width': `${Math.max(1, Math.round(size * 0.07) / 2)}px`,
+        } as CSSProperties);
 
   const corps = (
     /* `block` — et ce n'est pas décoratif : un `<span>` reste INLINE, et un
@@ -254,7 +276,7 @@ export function Avatar({
            se montrant (#9047) : `PresenceDot`. */
         <PresenceDot
           state={showsDot ? (here ? 'here' : presence) : undefined}
-          active={here && hereActive}
+          active={here && (hereActive || hereFocused)}
           color={dotColor}
           size={dot}
           offset={offset}
@@ -266,7 +288,8 @@ export function Avatar({
            enfants de `.avatar-root` mentirait sur la cause (revue #5935). */
         <span
           data-mood={humeur}
-          className="pointer-events-none absolute grid place-items-center rounded-chip mood-breathe"
+          data-mood-focused={focused ? 'true' : undefined}
+          className={`pointer-events-none absolute grid place-items-center rounded-chip${focused ? '' : ' mood-breathe'}`}
           style={{
             width: Math.round(size * 0.42),
             height: Math.round(size * 0.42),
@@ -278,7 +301,9 @@ export function Avatar({
           }}
           aria-hidden
         >
-          {humeur}
+          <span data-mood-glyph="" data-mood-outline={moodOutline} style={moodOutlineStyle}>
+            {humeur}
+          </span>
         </span>
       )}
       {storyRing === undefined ? null : (
