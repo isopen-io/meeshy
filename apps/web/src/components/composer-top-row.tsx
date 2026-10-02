@@ -6,7 +6,6 @@ import { Glyph, GlyphSvg } from './glyph';
 import { FlameEyeGlyph } from './flame-eye-glyph';
 import { EPHEMERAL_DURATIONS, characterCounterOf, ephemeralDurationLabelOf, isAfterReadChoice } from '@/lib/send/compose-protection';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
-import { developShots } from '@/lib/media/develop-shots';
 import type { ImposedLocks } from '@/lib/send/reply-contagion';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -80,7 +79,7 @@ export function ComposerTopRow({
   onToggleEffects,
   onOpenStickers,
   onPickLibrary,
-  onPickCamera,
+  onOpenCamera,
   languageCode,
   onOpenLanguage,
   languagePillRef,
@@ -112,9 +111,9 @@ export function ComposerTopRow({
   /** La photothèque, juste avant la caméra (#9120) — images ET vidéos ;
    * absente ⇒ rien. */
   readonly onPickLibrary?: (files: FileList | null) => void;
-  /** La caméra de l'angle droit (#9082) — mêmes fichiers que la tuile du
-   * panneau (`developShots`) ; absente ⇒ rien. */
-  readonly onPickCamera?: (files: readonly File[]) => void;
+  /** La caméra de l'angle droit (#9082) — elle ouvre le studio plein écran,
+   * viseur armé (#9123) ; absente ⇒ rien. */
+  readonly onOpenCamera?: () => void;
   readonly languageCode: string;
   readonly onOpenLanguage: () => void;
   readonly languagePillRef?: Ref<HTMLButtonElement>;
@@ -281,25 +280,17 @@ export function ComposerTopRow({
           </label>
         )}
 
-        {onPickCamera === undefined ? null : (
-          <label
+        {onOpenCamera === undefined ? null : (
+          <button
+            type="button"
             data-composer-camera
+            onClick={onOpenCamera}
+            aria-label={translate(language, 'composer.attach.camera.action')}
             className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-chip px-2"
             style={{ color: 'var(--composer-icon)' }}
           >
             <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={16} />
-            <input
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="sr-only"
-              aria-label={translate(language, 'composer.attach.camera.action')}
-              onChange={(e) => {
-                void developShots([...(e.currentTarget.files ?? [])]).then(onPickCamera);
-                e.currentTarget.value = '';
-              }}
-            />
-          </label>
+          </button>
         )}
     </div>
   );

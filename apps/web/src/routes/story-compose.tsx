@@ -297,7 +297,9 @@ function StoryStudio({
   const [backgroundEdit, setBackgroundEdit] = useState<StudioBackgroundEdit | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [postTextOpen, setPostTextOpen] = useState(false);
-  const { finishing, retouchFailed, finishRetouch } = useStudioRetouchFinish(retouch, () => currentStudioPage(latestDraft.current));
+  /** La prise de la caméra de la barre (#9123) — rendue telle quelle si l'auteur n'y touche pas. */
+  const takenRef = useRef<File | null>(null);
+  const { finishing, retouchFailed, finishRetouch } = useStudioRetouchFinish(retouch, () => currentStudioPage(latestDraft.current), () => takenRef.current);
 
   /** La page COURANTE — LE SITE UNIQUE de lecture (#7684) : tout ce qui lisait
    * `draft.texts`/`draft.background`/… lit désormais `page.X`. Son IDENTITÉ ne
@@ -363,7 +365,7 @@ function StoryStudio({
      avant de naviguer : elle devient le FOND de la page courante par la MÊME
      porte qu'un fichier choisi (montée, cadrage, publication ordinaires). */
   useEffect(() => {
-    const seed = retouch?.file ?? takeStudioSeed();
+    const seed = retouch !== undefined ? retouch.file : takeStudioSeed();
     if (seed !== null) place('visual', seed);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -681,12 +683,17 @@ function StoryStudio({
   });
   const tool = studioOpenTool({ editing, editsBackground: backgroundTools.active });
   const chrome = studioChrome({ tool, timelineOpen });
+  const cameraEngine = deps.camera ?? retouch?.camera;
   const quick = useStudioQuickCapture({
     lang,
     kind,
-    scene: { pageBlank: isStudioPageEmpty(page), toolOpen: tool !== null, timelineOpen, retouching, locked: publishing },
-    onTake: (file) => place('visual', file),
-    ...(deps.camera !== undefined ? { engine: deps.camera } : {}),
+    scene: { pageBlank: isStudioPageEmpty(page), toolOpen: tool !== null, timelineOpen, retouching: retouching && retouch.file !== null, locked: publishing },
+    armsOnOpen: retouch !== undefined && retouch.file === null,
+    onTake: (file) => {
+      takenRef.current = file;
+      place('visual', file);
+    },
+    ...(cameraEngine !== undefined ? { engine: cameraEngine } : {}),
   });
   const animatedToggle = <StudioAnimatedToggle lang={lang} active={animated} onToggle={toggleAnimated} disabled={publishing} />;
   /** La tuile Cadre : les outils du fond, le Cadre déjà déplié (#8849). */

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 
 import type { PendingAttachment } from '@/lib/send/attachments';
+import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
 import type { StudioRetouchDeps } from '@/lib/stories/studio-retouch';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
@@ -37,6 +38,36 @@ export default function ComposerRetouch({
     <div data-composer-retouch role="dialog" aria-modal="true" className="fixed inset-0 z-50">
       <Suspense fallback={null}>
         <StoryComposeScreen retouch={{ file: attachment.file, onDone, onCancel, ...(render !== undefined ? { render } : {}) }} />
+      </Suspense>
+    </div>
+  );
+}
+
+/**
+ * **LA CAMÉRA DE LA BARRE DE COMPOSITION** (#9123, miroir
+ * `ConversationCaptureSceneEditor` iOS) — le même studio plein écran, VIDE et
+ * viseur ARMÉ dès l'ouverture ; la prise s'y édite, et « Terminé » la rend au
+ * message en attente : intacte, telle quelle ; retouchée, composée.
+ */
+export function ComposerCapture({
+  onDone,
+  onCancel,
+  render,
+  camera,
+}: {
+  readonly onDone: (file: File) => void;
+  readonly onCancel: () => void;
+  readonly render?: StudioRetouchDeps;
+  readonly camera?: CameraEngine;
+}) {
+  useBackDismiss(onCancel, { escape: true });
+
+  return (
+    <div data-composer-capture role="dialog" aria-modal="true" className="fixed inset-0 z-50">
+      <Suspense fallback={null}>
+        <StoryComposeScreen
+          retouch={{ file: null, onDone, onCancel, ...(render !== undefined ? { render } : {}), ...(camera !== undefined ? { camera } : {}) }}
+        />
       </Suspense>
     </div>
   );

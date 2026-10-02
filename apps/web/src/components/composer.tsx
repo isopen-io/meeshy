@@ -1,4 +1,5 @@
 import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
@@ -90,6 +91,8 @@ const LanguageSheet = lazy(() => import('./language-sheet').then((m) => ({ defau
  */
 
 const ComposerTray = lazy(() => import('./composer-tray'));
+/** La caméra de la barre (#9123) — le studio viseur armé, chargé à la demande. */
+const ComposerCapture = lazy(() => import('./composer-retouch').then((m) => ({ default: m.ComposerCapture })));
 
 /**
  * LA PALETTE D'EMOJIS, CHARGÉE À LA DEMANDE (#7280) — même discipline que
@@ -234,6 +237,7 @@ export const Composer = memo(function Composer({
   const locator = useLocationRequest();
   const [emojiSheetOpen, setEmojiSheetOpen] = useState(false);
   const [stickerSheetOpen, setStickerSheetOpen] = useState(false);
+  const [capturing, setCapturing] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
   /** LA MENTION (#7826, #7846) — le mécanisme PARTAGÉ par tous les champs
    * qui mentionnent (`use-mention-field.ts`) : curseur, clavier de la liste,
@@ -796,7 +800,7 @@ export const Composer = memo(function Composer({
                   setStickerSheetOpen(true);
                 },
                 onPickLibrary: addFiles,
-                onPickCamera: addFiles,
+                onOpenCamera: () => setCapturing(true),
               }
             : {})}
           languageCode={compose.language}
@@ -836,6 +840,21 @@ export const Composer = memo(function Composer({
           <ComposerStickerSheet onPick={sendSticker} onClose={() => setStickerSheetOpen(false)} />
         </Suspense>
       ) : null}
+
+      {capturing
+        ? createPortal(
+            <Suspense fallback={null}>
+              <ComposerCapture
+                onCancel={() => setCapturing(false)}
+                onDone={(file) => {
+                  setCapturing(false);
+                  addFiles([file]);
+                }}
+              />
+            </Suspense>,
+            document.body,
+          )
+        : null}
 
       {isRecording ? (
         <Suspense fallback={<div style={{ minHeight: 56 }} aria-hidden />}>
@@ -1023,6 +1042,10 @@ export const Composer = memo(function Composer({
                même `addFiles` applique les mêmes droits, les mêmes bornes de
                taille et le même refus DIT (`acceptPendingFiles`). */
             onPickCamera={addFiles}
+            onOpenCamera={() => {
+              setPanelOpen(false);
+              setCapturing(true);
+            }}
             onPickFile={addFiles}
             onRequestLocation={() => {
               setPanelOpen(false);

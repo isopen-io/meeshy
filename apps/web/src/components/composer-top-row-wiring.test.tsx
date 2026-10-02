@@ -393,13 +393,14 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
     expect(sticker?.className).toMatch(/min-w-11/);
   });
 
-  test('#9082 — la caméra se pose à l’angle droit du verre : dernier occupant de la rangée, appareil arrière', () => {
+  test('#9082 — la caméra se pose à l’angle droit du verre : dernier occupant de la rangée ; #9123 — elle ouvre le studio, plus l’appareil de l’OS', () => {
     const el = mount(() => {});
     const toolbar = el.querySelector('[data-composer-toolbar]')!;
     const camera = toolbar.querySelector('[data-composer-camera]');
     expect(camera).not.toBeNull();
     expect(toolbar.lastElementChild).toBe(camera);
-    expect(camera?.querySelector('input[type="file"]')?.getAttribute('capture')).toBe('environment');
+    expect(camera?.tagName).toBe('BUTTON');
+    expect(camera?.querySelector('input[type="file"]')).toBeNull();
   });
 
   test('#9120 — la photothèque (images ET vidéos) se pose juste avant la caméra', () => {
