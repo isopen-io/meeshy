@@ -44,6 +44,15 @@ struct ComposerMediaTrimBand: View {
         .task(id: source.url) { await measure(url: source.url) }
     }
 
+    /// L'onde d'un SON, quand elle a été analysée ; une vidéo n'en porte pas
+    /// sur le modèle — la bande montre alors ses vignettes seules.
+    @MainActor
+    static func waveform(viewModel: StoryComposerViewModel, objectId: String) -> [Float] {
+        viewModel.currentEffects.audioPlayerObjects?
+            .first(where: { $0.id == objectId })?
+            .waveformSamples ?? []
+    }
+
     private func measure(url: URL) async {
         let asset = AVURLAsset(url: url)
         guard let duree = try? await asset.load(.duration) else { return }
@@ -109,46 +118,17 @@ struct ComposerMediaActionRow: View {
     }
 }
 
-/// **Les contrôles de l'outil du FOND, sous la scène** (#8847) — à la place de
-/// ce qui y était (barre des mentions et hashtags, socle), que le mode outil
-/// masque. La plaque de verre est celle de la surface (`toolOptions`) : cette
-/// vue ne porte que le contenu de l'outil ouvert.
-struct ComposerBackgroundToolPanel: View {
+/// **LA grille de filtres d'un média** — partagée par l'éditeur d'objet et
+/// l'édition en place (#9138). La grille du SDK, telle quelle ; ce qui change
+/// est la CIBLE (retour porteur 2026-09-28 : « les modifications impactent cet
+/// objet-là et non toute la scène ») : le FOND garde le filtre de slide et son
+/// aperçu, un média POSÉ règle son propre filtre sur sa propre image.
+struct ComposerMediaFilterGrid: View {
     @ObservedObject var viewModel: StoryComposerViewModel
-    let section: ComposerObjectEditorSection
     let media: StoryMediaObject
-    let altText: Binding<String>
+    let isBackground: Bool
 
     var body: some View {
-        content
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(Text(ComposerObjectEditorCopy.entry(section)))
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        switch section {
-        case .media(.filter):
-            // Le filtre d'un FOND est celui de la slide, prévisualisé sur le
-            // fond — la même portée que l'éditeur d'objet lui donne.
-            StoryFilterGridView(viewModel: viewModel,
-                                previewImage: viewModel.currentSlideBackgroundImage,
-                                objectId: nil)
-        case .media(.trim):
-            if let source = viewModel.sourceTrim(id: media.id) {
-                ComposerMediaTrimBand(viewModel: viewModel, objectId: media.id, source: source)
-            }
-        case .media(.actions):
-            ComposerMediaActionRow(viewModel: viewModel, media: media)
-        case .media(.altText):
-            MediaAltTextField(kind: .alt, text: altText.wrappedValue) { saisi in
-                altText.wrappedValue = saisi
-            }
-        case .media(.crop), .media(.split), .tool, .timing, .plan:
-            // Hors de `ComposerBackgroundTools.servedInline` : le rail ne les
-            // offre jamais pour un fond.
-            EmptyView()
-        }
+        StoryFilterGridView(viewModel: viewModel, previewImage: isBackground ? viewModel.currentSlideBackgroundImage : viewModel.loadedImages[media.id], objectId: isBackground ? nil : media.id)
     }
 }

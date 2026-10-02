@@ -80,24 +80,25 @@ final class ComposerSceneColumnsTests: XCTestCase {
     func test_focus_outilOuvert_lEmporteSurUneSelection() {
         let controles = [control("drawing.tool")]
         let focus = ComposerTrailingColumn.focus(railMode: .tool(controles),
-                                                 selection: (sections: [.timing], actions: [.delete]))
+                                                 selection: (sections: [.timing], open: nil, actions: [.delete]))
         XCTAssertEqual(focus, .tool(controles))
     }
 
     func test_focus_selectionSansOutil_rendLObjet() {
         let focus = ComposerTrailingColumn.focus(railMode: .doors([.media]),
-                                                 selection: (sections: [.timing], actions: [.delete]))
-        XCTAssertEqual(focus, .object(sections: [.timing], actions: [.delete]))
+                                                 selection: (sections: [.timing], open: nil, actions: [.delete]))
+        XCTAssertEqual(focus, .object(sections: [.timing], open: nil, actions: [.delete]))
         XCTAssertEqual(ComposerTrailingColumn.focus(railMode: .doors([]), selection: nil), .scene(effects: [], open: nil))
     }
 
     func test_options_objet_modifierPuisSectionsPuisActionsPuisSortie() {
         let options = ComposerTrailingColumn.options(for: .object(
             sections: [.media(.filter), .timing],
+            open: .timing,
             actions: [.edit, .duplicate, .delete]))
         XCTAssertEqual(options, [
             .objectAction(.edit),
-            .editorSection(.media(.filter)), .editorSection(.timing),
+            .editorSection(.media(.filter), isOpen: false), .editorSection(.timing, isOpen: true),
             .objectAction(.duplicate), .objectAction(.delete),
             .exitObject
         ])
@@ -107,9 +108,10 @@ final class ComposerSceneColumnsTests: XCTestCase {
     func test_options_objetAvecRognage_neLeMontreQuUneFois() {
         let options = ComposerTrailingColumn.options(for: .object(
             sections: [.media(.trim), .timing],
+            open: nil,
             actions: [.trim, .delete]))
         XCTAssertFalse(options.contains(.objectAction(.trim)))
-        XCTAssertTrue(options.contains(.editorSection(.media(.trim))))
+        XCTAssertTrue(options.contains(.editorSection(.media(.trim), isOpen: false)))
     }
 
     /// **Aucune seconde liste** : ce que la colonne offre pour un texte sort
@@ -123,7 +125,7 @@ final class ComposerSceneColumnsTests: XCTestCase {
         let actions = ComposerTrailingRailPolicy.actions(slide: slide, selectedId: "t1",
                                                          served: ComposerTrailingColumn.servedActions,
                                                          hasEditor: true, canLeaveScene: false)
-        let options = ComposerTrailingColumn.options(for: .object(sections: sections, actions: actions))
+        let options = ComposerTrailingColumn.options(for: .object(sections: sections, open: nil, actions: actions))
         XCTAssertEqual(options.first, .objectAction(.edit))
         XCTAssertTrue(options.contains(.objectAction(.delete)))
         XCTAssertEqual(options.filter { if case .editorSection = $0 { return true }; return false }.count,
@@ -135,12 +137,13 @@ final class ComposerSceneColumnsTests: XCTestCase {
         XCTAssertTrue(ComposerTrailingColumn.Entry.exitTool.isExit)
         XCTAssertTrue(ComposerTrailingColumn.Entry.exitObject.isExit)
         XCTAssertFalse(ComposerTrailingColumn.Entry.objectAction(.delete).isExit)
-        XCTAssertFalse(ComposerTrailingColumn.Entry.editorSection(.timing).isExit)
+        XCTAssertFalse(ComposerTrailingColumn.Entry.editorSection(.timing, isOpen: false).isExit)
     }
 
     func test_entryIds_sontUniquesDansUneColonne() {
         let options = ComposerTrailingColumn.options(for: .object(
             sections: ComposerObjectEditorRail.entries(for: .text),
+            open: nil,
             actions: [.edit, .duplicate, .bringForward, .sendBackward, .delete]))
         XCTAssertEqual(Set(options.map(\.id)).count, options.count)
     }
@@ -185,9 +188,9 @@ final class ComposerSceneColumnsTests: XCTestCase {
 
     func test_focus_objetTouche_remplaceLesEffets() {
         let focus = ComposerTrailingColumn.focus(railMode: .doors([]),
-                                                 selection: (sections: [.timing], actions: [.delete]),
+                                                 selection: (sections: [.timing], open: nil, actions: [.delete]),
                                                  effects: [.visual], openEffect: .visual)
-        XCTAssertEqual(focus, .object(sections: [.timing], actions: [.delete]))
+        XCTAssertEqual(focus, .object(sections: [.timing], open: nil, actions: [.delete]))
     }
 
     func test_toggled_retoucherLEffetOuvert_leReferme() {

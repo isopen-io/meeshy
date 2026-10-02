@@ -378,7 +378,8 @@ final class ComposerObjectEditorTests: XCTestCase {
     /// simplifiée perdrait les poignées de bord, le verrou des fonds et le
     /// signal de blocage du scroll — la leçon 336 rejouée.
     func test_lePlan2D_estCeluiDuSDK() throws {
-        let code = compact(try source("ComposerObjectEditorView.swift"))
+        // Extrait de l'éditeur pour #9138 : l'édition en place le monte aussi.
+        let code = compact(try source("ComposerObjectTimingControls.swift"))
         XCTAssertTrue(code.contains("Plan2DView("))
         XCTAssertTrue(code.contains("Plan2DLayout.tracks(from:viewModel.currentEffects"),
                       "Les pistes se dérivent de la slide par la règle du SDK, jamais "
@@ -388,12 +389,15 @@ final class ComposerObjectEditorTests: XCTestCase {
     /// **La fenêtre se LIT du modèle à chaque rendu.** Recopiée dans un `@State`,
     /// elle divergerait de ce que le plan 2D dessine juste en dessous.
     func test_laFenetre_neVitPasDansUnEtatDeVue() throws {
-        let code = compact(try source("ComposerObjectEditorView.swift"))
+        // Extraite de l'éditeur pour #9138 : l'édition en place la monte aussi.
+        let code = compact(try source("ComposerObjectTimingControls.swift"))
         XCTAssertFalse(code.contains("@Stateprivatevartiming"),
                        "La fenêtre doit se lire du modèle — deux sources pour un même "
                        + "fait divergeraient au premier geste sur le plan.")
-        XCTAssertTrue(code.contains("varttiming:ComposerObjectTiming{")
-                      || code.contains("vartiming:ComposerObjectTiming{"))
+        XCTAssertTrue(code.contains("staticfunctiming(viewModel:StoryComposerViewModel,objectId:String)->ComposerObjectTiming{"))
+        XCTAssertTrue(compact(try source("ComposerObjectEditorView.swift"))
+                        .contains("ComposerObjectTimingControls(viewModel:viewModel,objectId:objectId)"),
+                      "l'éditeur monte LES contrôles partagés, jamais une copie")
     }
 
     // MARK: - La frontière entre le rail et les options (#5097)
@@ -506,8 +510,10 @@ final class ComposerObjectEditorTests: XCTestCase {
     /// divergentes — ici il n'y en a qu'un, `viewModel.applyFilter`, et aucune
     /// des deux surfaces n'écrit `currentEffects.filter` de sa main.
     func test_leFiltre_estLaMemeGrilleDepuisLesDeuxSurfaces() throws {
+        // **La grille vit dans `ComposerMediaFilterGrid`** (#9138) : l'éditeur
+        // d'objet ET l'édition en place la montent — une seule expression.
         let editeur = try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
+            "Meeshy/Features/Main/Composer/ComposerMediaControls.swift")
         let nu = AppSourceGuard.stripComments(editeur)
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "\n", with: "")
@@ -524,7 +530,7 @@ final class ComposerObjectEditorTests: XCTestCase {
         // de slide et son aperçu, un média POSÉ règle son propre filtre sur sa
         // propre image. Le montage entier est écrit, fermante comprise.
         XCTAssertTrue(
-            nu.contains("StoryFilterGridView(viewModel:viewModel,previewImage:media.isBackground?viewModel.currentSlideBackgroundImage:viewModel.loadedImages[media.id],objectId:media.isBackground?nil:media.id)"),
+            nu.contains("StoryFilterGridView(viewModel:viewModel,previewImage:isBackground?viewModel.currentSlideBackgroundImage:viewModel.loadedImages[media.id],objectId:isBackground?nil:media.id)"),
             "l'éditeur monte LA grille du SDK : filtre de slide pour le fond, filtre de l'objet "
             + "pour un média posé — le montage entier, fermante comprise, pas son préfixe")
         XCTAssertFalse(nu.contains("currentEffects.filter="),
@@ -540,7 +546,13 @@ final class ComposerObjectEditorTests: XCTestCase {
             "Meeshy/Features/Main/Composer/ComposerObjectEditorView.swift")
         XCTAssertTrue(editeur.contains("struct ComposerObjectEditorView"))
         XCTAssertTrue(editeur.contains("var mediaOptions"),
-                      "les options média — l'unité inclut l'extension `+Media` où vit la grille")
+                      "les options média — l'unité inclut l'extension `+Media`")
+        XCTAssertTrue(AppSourceGuard.stripComments(editeur)
+                        .contains("ComposerMediaFilterGrid(viewModel: viewModel, media: media,"),
+                      "l'éditeur monte LA grille partagée")
+        let panneau = try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerInlineToolPanel.swift")
+        XCTAssertTrue(panneau.contains("ComposerMediaFilterGrid(viewModel: viewModel, media: media,"),
+                      "l'édition en place monte LA MÊME grille")
     }
 
 }

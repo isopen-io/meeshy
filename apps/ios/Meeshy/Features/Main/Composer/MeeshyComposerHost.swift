@@ -642,9 +642,10 @@ struct MeeshyComposerHost: View {
     /// La catégorie d'effets dont le carrousel est ouvert (#8712) — lue par
     /// `ComposerSceneEffects.carousel`, jamais telle quelle.
     @State var openSceneEffect: ComposerSceneEffect?
-    /// L'édition EN LIGNE du fond (#8847) — lue par
-    /// `ComposerBackgroundTools.resolved`, jamais telle quelle.
-    @State var backgroundEdit: ComposerBackgroundEdit?
+    /// L'édition EN PLACE d'un objet, fond compris (#8847, #9138) — lue par
+    /// `ComposerInlineEditing.resolved` (`activeInlineEdit`), jamais telle
+    /// quelle.
+    @State var inlineEdit: ComposerInlineEdit?
     /// Le menu d'appui long d'un OBJET, peint en verre par le meuble (#8717).
     /// Celui du FOND garde son état d'origine, `backgroundMenuObjectId`.
     @State var sceneObjectMenu: ComposerSceneMenuRequest?
@@ -944,6 +945,7 @@ struct MeeshyComposerHost: View {
         // colonne droite, comme sous le `(x)` — et referme le carrousel
         // d'effets (#8712), qui rend l'audience et Publier.
         selectedSceneItemId = nil
+        inlineEdit = nil
         openSceneEffect = nil
     }
 

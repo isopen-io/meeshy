@@ -104,6 +104,7 @@ extension MeeshyComposerHost {
         // `ComposerMediaPlacement` tranche, et sa moitié la moins évidente est
         // celle qui garde la rangée haute d'accord avec le modèle : le rail ne
         // pose en premier plan que s'il a un fond SUR QUOI poser.
+        var poseeParLeRail: String?
         for media in documentContentMedia where media.kind != .audio
             && mediaRoleByURL[media.sourceURL] == nil {
             let porte: ComposerMediaDoor =
@@ -133,9 +134,12 @@ extension MeeshyComposerHost {
                 // Il rejoint la scène COURANTE et n'y fonde rien : pas de
                 // `addSlide`, pas d'entrée dans l'index des fondations, donc
                 // pas de tuile. C'est tout le lot.
-                documentMediaObjectIdBySource.merge(
-                    viewModel.applyContentMedia([media], intoSlideId: viewModel.currentSlide.id)
-                ) { _, neuf in neuf }
+                let poses = viewModel.applyContentMedia([media], intoSlideId: viewModel.currentSlide.id)
+                documentMediaObjectIdBySource.merge(poses) { _, neuf in neuf }
+                // **Poser par le rail SÉLECTIONNE** (#9138) : l'image posée
+                // montre ses sous-outils à droite, comme le texte et le
+                // sticker. Le dernier de la sélection l'emporte.
+                if porte == .sceneRail, let id = poses[media.sourceURL] { poseeParLeRail = id }
 
             case .background:
                 let target: String
@@ -198,6 +202,7 @@ extension MeeshyComposerHost {
         // énumérer — cinq, dont une née d'un GESTE et absente de tout
         // inventaire (#4879, #5069). Ici, une sixième porte hérite de la
         // pré-montée sans que personne n'ait à y penser.
+        if let poseeParLeRail { beginInlineEdit(poseeParLeRail) }
         startPendingPreUploads()
     }
 

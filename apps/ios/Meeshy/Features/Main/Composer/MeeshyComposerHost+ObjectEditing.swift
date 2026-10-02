@@ -10,36 +10,6 @@ import MeeshyUI
 
 extension MeeshyComposerHost {
 
-    /// **LA façon d'éditer un texte — une seule, quelle que soit la porte**
-    /// (#4634, directive porteur : « il faut préserver la même façon d'éditer un
-    /// texte que celle de le créer »).
-    ///
-    /// Créer un texte et modifier un texte existant passaient tous deux par
-    /// `enterTextEditingMode`, mais aboutissaient à des écrans différents : la
-    /// création ouvrait l'édition en ligne avec une zone basse VIDE (aucun outil
-    /// déplié), la modification la même chose. Les dix-huit styles, eux,
-    /// n'étaient atteignables qu'APRÈS avoir refermé l'éditeur.
-    ///
-    /// Ce site unique ouvre l'éditeur plein écran dans les deux cas — et ferme
-    /// le portail d'abord : `fullScreenCover` et `.sheet` se disputent le même
-    /// présentateur, et fermer l'état invalide chez l'ÉCRIVAIN vaut mieux que le
-    /// garder chez le lecteur.
-    /// **Ouvre l'éditeur sur N'IMPORTE QUELLE famille** (#4937).
-    ///
-    /// Il posait `.text` en dur et entrait toujours en mode saisie — l'écran ne
-    /// savait éditer qu'un texte. Taper un sticker ou un média ne faisait alors
-    /// RIEN, ce qui se lit comme une scène morte plutôt que comme une limite.
-    ///
-    /// Le mode SAISIE reste réservé au texte, et c'est une distinction, pas une
-    /// précaution : `enterTextEditingMode` ouvre le curseur en ligne sur le
-    /// canvas. L'appeler sur un sticker mettrait l'écran dans un état qu'aucune
-    /// vue ne rend.
-    /// - Parameter section: la section sur laquelle OUVRIR — `nil` ⇒ celle que
-    ///   la famille sert en premier. Elle vient des jetons de l'inspecteur
-    ///   (2026-09-05), qui nomment chacun un réglage : l'auteur a désigné
-    ///   « ALIGN ▭ » du doigt, l'écran ne doit pas lui demander de le
-    ///   retrouver. Les autres portes — appui long, création, plan 2D — ne
-    ///   désignent rien et passent `nil`.
     /// **Saisir un texte SUR la scène**, sans l'éditeur plein écran : le canvas
     /// ouvre sa saisie en ligne dès que `editingTextId` le désigne.
     func beginSceneTextEditing(_ id: String) {
@@ -47,12 +17,36 @@ extension MeeshyComposerHost {
         selectedSceneItemId = id
         selectedSceneItemKind = .text
         viewModel.enterTextEditingMode(textId: id)
+        // **Les sous-outils du texte à droite, comme toute famille** (#9138) :
+        // la saisie et l'édition en place sont le MÊME état, clavier en plus.
+        beginInlineEdit(id)
     }
 
+    /// **LE site unique d'ouverture d'un objet, quelle que soit la porte**
+    /// (#4634, #4937) — menu du fond, vignette de slide, « Modifier », jetons,
+    /// rognage.
+    ///
+    /// Sur la SCÈNE, il rend l'objet à l'édition en place (#9138) et
+    /// l'éditeur plein écran ne s'ouvre plus. Ailleurs — l'atelier, le
+    /// document —, il ouvre l'éditeur sur n'importe quelle famille, en fermant
+    /// le portail d'abord : `fullScreenCover` et `.sheet` se disputent le même
+    /// présentateur, et fermer l'état invalide chez l'ÉCRIVAIN vaut mieux que le
+    /// garder chez le lecteur. Le mode SAISIE reste réservé au texte :
+    /// `enterTextEditingMode` sur un sticker mettrait l'écran dans un état
+    /// qu'aucune vue ne rend.
+    ///
+    /// - Parameter section: la section sur laquelle OUVRIR — `nil` ⇒ aucune
+    ///   (sur la scène) ou celle que la famille sert en premier (ailleurs).
+    ///   Elle vient des jetons et du rognage, qui nomment un réglage : l'auteur
+    ///   l'a désigné du doigt, l'écran ne doit pas lui demander de le
+    ///   retrouver.
     func openObjectEditor(_ id: String, section: ComposerObjectEditorSection? = nil) {
-        // **Le FOND ne s'ouvre plus plein écran** (#8847) : ses outils au rail
-        // droit, leurs contrôles sous la scène — quelle que soit la porte.
-        if backgroundToolsRedirect(id, section: section) { return }
+        // **Sur la scène, AUCUN objet ne s'ouvre plus plein écran** (#8847 pour
+        // le fond, #9138 pour toutes les familles) : ses sous-outils au rail
+        // droit, leurs options à droite depuis le haut — quelle que soit la
+        // porte. L'éditeur plein écran ne reste que la destination de
+        // l'atelier et du document.
+        if beginInlineEdit(id, section: section) { return }
         presentedPortal = nil
         selectedSceneItemId = id
         let famille = viewModel.currentSlide.sceneObject(id: id)?.kind
