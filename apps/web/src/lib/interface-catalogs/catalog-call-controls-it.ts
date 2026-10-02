@@ -72,6 +72,8 @@ const it = {
   'callControls.selfTile.corner.top-right': 'La mia miniatura: in alto a destra',
   'callControls.selfTile.corner.bottom-left': 'La mia miniatura: in basso a sinistra',
   'callControls.selfTile.corner.bottom-right': 'La mia miniatura: in basso a destra',
+  'callControls.spotlight.self': 'Metti in evidenza la mia immagine',
+  'callControls.screenZoom.hint': 'Schermo condiviso: pizzica o Ctrl + rotellina per ingrandire, tocca due volte per vederlo intero',
 } satisfies CallControlsCatalog;
 
 export default it;

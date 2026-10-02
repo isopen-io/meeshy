@@ -14,13 +14,17 @@ import { hasVideo } from './call-view';
  *   règle reprend la main — sans effet à rejouer, parce que le choix NOMME le
  *   partage qu'il écarte.
  *
+ * - MA tuile passe à la une comme les autres (#9098, `featuresLocal` sur
+ *   iOS) : `featured` nul dit « moi », tous les pairs passent en bandeau.
+ *
  * Le choix est LOCAL : il ne quitte jamais cet écran.
  */
 
-export type SpotlightChoice = null | { readonly kind: 'member'; readonly userId: string } | { readonly kind: 'grid'; readonly dismissedSharer: string | null };
+export type SpotlightChoice = null | { readonly kind: 'member'; readonly userId: string } | { readonly kind: 'self' } | { readonly kind: 'grid'; readonly dismissedSharer: string | null };
 
 export type SpotlightView = {
-  readonly featured: CallMember;
+  /** Le membre à la une — `null` : MA tuile. */
+  readonly featured: CallMember | null;
   readonly others: readonly CallMember[];
   /** La une montre l'ÉCRAN partagé (entier, `contain`), pas la caméra. */
   readonly screen: boolean;
@@ -29,6 +33,8 @@ export type SpotlightView = {
 };
 
 export const chooseMember = (userId: string): SpotlightChoice => ({ kind: 'member', userId });
+
+export const chooseSelf = (): SpotlightChoice => ({ kind: 'self' });
 
 export const chooseGrid = (dismissedSharer: string | null): SpotlightChoice => ({ kind: 'grid', dismissedSharer });
 
@@ -55,8 +61,19 @@ const featuring = (featured: CallMember, input: SpotlightInput, automatic: boole
 export function resolveSpotlight(input: SpotlightInput): SpotlightView | null {
   const { choice } = input;
   const sharer = autoSharer(input.members, input.remoteStreams);
+  if (choice?.kind === 'self') return { featured: null, others: input.members, screen: false, automatic: false };
   const chosen = choice?.kind === 'member' ? input.members.find((member) => member.userId === choice.userId) : undefined;
   if (chosen !== undefined) return featuring(chosen, input, false);
   if (choice?.kind === 'grid' && choice.dismissedSharer === (sharer?.userId ?? null)) return null;
   return sharer === null ? null : featuring(sharer, input, true);
 }
+
+/** Le zoom d'un écran partagé à la une (#9098, `GroupCallSpotlight.clampedZoom`) : de 1 à 4, autour du centre. */
+export const SCREEN_MAX_ZOOM = 4;
+
+const clampZoom = (zoom: number): number => Math.min(Math.max(zoom, 1), SCREEN_MAX_ZOOM);
+
+export const screenZoomAfterPinch = (zoom: number, ratio: number): number => clampZoom(zoom * ratio);
+
+/** Un cran de Ctrl + molette (ou du pincement d'un pavé tactile) : vers le haut grandit. */
+export const screenZoomAfterWheel = (zoom: number, deltaY: number): number => clampZoom(zoom * Math.exp(-deltaY / 300));

@@ -76,6 +76,8 @@ const fr = {
   'callControls.selfTile.corner.top-right': 'Ma vignette : en haut à droite',
   'callControls.selfTile.corner.bottom-left': 'Ma vignette : en bas à gauche',
   'callControls.selfTile.corner.bottom-right': 'Ma vignette : en bas à droite',
+  'callControls.spotlight.self': 'Mettre mon image à la une',
+  'callControls.screenZoom.hint': 'Écran partagé : pincez ou Ctrl + molette pour zoomer, touchez deux fois pour le revoir entier',
 } as const;
 
 export default fr;
