@@ -370,8 +370,7 @@ extension UniversalComposerBar {
     /// - When the carousel is shown it shows a `keyboard` glyph — tapping hides
     ///   the carousel and brings the system keyboard back.
     var attachButton: some View {
-        let accent = servedAccent
-        let iconColor = style == .dark ? Color.white.opacity(0.85) : accent
+        let iconColor = iconTint
 
         return Button(action: {
             onAnyInteraction?()

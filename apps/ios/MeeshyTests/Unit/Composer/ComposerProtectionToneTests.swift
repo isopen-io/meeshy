@@ -161,3 +161,47 @@ final class ComposerProtectionToneTests: XCTestCase {
                           ComposerProtection.blurred.accessibilityState)
     }
 }
+
+/// **UNE loi de teinte d'icône** (#9121) : un effet armé donne SA couleur à
+/// toutes les icônes de la barre — la protection dominante la sienne, un effet
+/// de message (sans couleur propre) la couleur de marque ; sinon la couleur
+/// COMMUNE des icônes. Avant : seule une protection colorait, et seulement
+/// certaines portes en thème clair ; les bascules au repos restaient grises.
+@MainActor
+final class ComposerIconTintTests: XCTestCase {
+
+    func test_resolve_nothingArmed_returnsCommon() {
+        XCTAssertEqual(ComposerIconTint.resolve(protection: nil, hasMessageEffect: false), .common)
+        XCTAssertNil(ComposerIconTint.common.hex)
+    }
+
+    func test_resolve_protectionArmed_returnsItsColor() {
+        for protection in ComposerProtection.allCases {
+            let tint = ComposerIconTint.resolve(protection: protection, hasMessageEffect: true)
+            XCTAssertEqual(tint, .protection(protection))
+            XCTAssertEqual(tint.hex, protection.tintHex)
+        }
+    }
+
+    func test_resolve_messageEffectOnly_returnsBrand() {
+        let tint = ComposerIconTint.resolve(protection: nil, hasMessageEffect: true)
+        XCTAssertEqual(tint, .brand)
+        XCTAssertEqual(tint.hex, MeeshyColors.brandPrimaryHex)
+    }
+
+    func test_bar_everyIconReadsTheLaw() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let read = { (path: String) in
+            try String(contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Components/" + path), encoding: .utf8)
+        }
+        let toolbar = try read("UniversalComposerBar+Toolbar.swift")
+        let protections = try read("UniversalComposerBar+Protections.swift")
+        let attachments = try read("UniversalComposerBar+Attachments.swift")
+        XCTAssertFalse(toolbar.contains(".white.opacity(0.9) : servedAccent"), "Les portes lisent la loi, plus un accent clair seulement.")
+        XCTAssertFalse(protections.contains(": mutedColor)"), "Une bascule au repos lit la couleur commune de la loi.")
+        XCTAssertTrue(protections.contains("ComposerIconTint.resolve("), "La barre consulte la loi.")
+        XCTAssertFalse(attachments.contains("Color.white.opacity(0.85) : accent"), "Le « + » lit la loi.")
+    }
+}

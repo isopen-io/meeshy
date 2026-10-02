@@ -119,7 +119,7 @@ extension UniversalComposerBar {
         Button(action: fold.action) {
             Image(systemName: fold.symbol)
                 .font(.footnote.weight(.bold))
-                .foregroundColor(style == .dark ? .white.opacity(0.9) : servedAccent)
+                .foregroundColor(iconTint)
                 .frame(width: 30, height: 30)
                 .adaptiveLiquidGlass(in: Circle(), interactive: true)
                 .frame(width: 44, height: 44)
@@ -140,7 +140,7 @@ extension UniversalComposerBar {
         } label: {
             Image(systemName: symbol)
                 .font(.callout.weight(.semibold))
-                .foregroundColor(style == .dark ? .white.opacity(0.9) : servedAccent)
+                .foregroundColor(iconTint)
                 .frame(width: 30, height: 30)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
@@ -184,12 +184,8 @@ extension UniversalComposerBar {
             .fixedSize()
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xs)
-            .adaptiveLiquidGlass(in: Capsule(), tint: style == .dark ? nil : servedAccent.opacity(0.18))
-            .foregroundColor(
-                style == .dark
-                    ? .white.opacity(0.9)
-                    : servedAccent
-            )
+            .adaptiveLiquidGlass(in: Capsule(), tint: style == .dark ? nil : iconTint.opacity(0.18))
+            .foregroundColor(iconTint)
         }
         .accessibilityLabel(String(localized: "a11y.composer.language", defaultValue: "Langue du message", bundle: .main))
         .accessibilityValue(currentLangOption.name)

@@ -50,7 +50,7 @@ extension UniversalComposerBar {
                 } else {
                     Image(systemName: isActive ? MessageProtectionSymbols.ephemeralFilled : MessageProtectionSymbols.ephemeral)
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(isActive ? ComposerProtection.ephemeral.tint : mutedColor)
+                        .foregroundColor(isActive ? ComposerProtection.ephemeral.tint : iconTint)
                 }
 
                 if case .duration(let duration) = ephemeralChoice.wrappedValue {
@@ -102,7 +102,7 @@ extension UniversalComposerBar {
                 } label: {
                     Text(String(localized: "composer.ephemeral.off", defaultValue: "Désactivé", bundle: .main))
                         .font(.caption).fontWeight(.semibold)
-                        .foregroundColor(ephemeralChoice.wrappedValue == nil ? .white : mutedColor)
+                        .foregroundColor(ephemeralChoice.wrappedValue == nil ? .white : iconTint)
                         .padding(.horizontal, MeeshySpacing.mdPlus)
                         .padding(.vertical, MeeshySpacing.xsPlus)
                         .background(
@@ -193,7 +193,7 @@ extension UniversalComposerBar {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: isActive ? MessageProtectionSymbols.blurredFilled : MessageProtectionSymbols.blurred)
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? ComposerProtection.blurred.tint : mutedColor)
+                    .foregroundColor(isActive ? ComposerProtection.blurred.tint : iconTint)
 
                 if isActive {
                     Text(String(localized: "composer.blur.label", defaultValue: "Flou", bundle: .main))
@@ -243,7 +243,7 @@ extension UniversalComposerBar {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: isActive ? MessageProtectionSymbols.viewOnceFilled : MessageProtectionSymbols.viewOnce)
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? ComposerProtection.viewOnce.tint : mutedColor)
+                    .foregroundColor(isActive ? ComposerProtection.viewOnce.tint : iconTint)
 
                 if isActive {
                     Text(String(localized: "composer.viewonce.label", defaultValue: "Vue unique", bundle: .main))
@@ -308,6 +308,15 @@ extension UniversalComposerBar {
         dominantProtection?.tint ?? Color(hex: secondaryColor)
     }
 
+    /// La teinte de TOUTES les icônes de la barre (#9121) — la couleur de
+    /// l'effet armé, sinon la couleur commune des icônes du thème.
+    var iconTint: Color {
+        ComposerIconTint.resolve(
+            protection: dominantProtection,
+            hasMessageEffect: pendingEffects.wrappedValue.hasAnyEffect
+        ).color(common: style == .dark ? .white.opacity(0.85) : theme.textSecondary)
+    }
+
     /// Le cadenas d'une protection imposée par le message cité (#8557).
     func imposedLockGlyph(tint: Color) -> some View {
         Image(systemName: "lock.fill")
@@ -344,14 +353,14 @@ extension UniversalComposerBar {
             }
         } label: {
             HStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: isActive ? "wand.and.stars" : "wand.and.stars")
+                Image(systemName: "wand.and.stars")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? servedAccent : mutedColor)
+                    .foregroundColor(iconTint)
 
                 if isActive {
                     Text("\(effectCount)")
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(servedAccent)
+                        .foregroundColor(iconTint)
                 }
             }
             .padding(.horizontal, MeeshySpacing.sm)
@@ -359,12 +368,12 @@ extension UniversalComposerBar {
             .background(
                 Capsule()
                     .fill(isActive
-                          ? servedAccent.opacity(0.15)
+                          ? iconTint.opacity(0.15)
                           : Color.clear)
                     .overlay(
                         Capsule()
                             .stroke(isActive
-                                    ? servedAccent.opacity(0.3)
+                                    ? iconTint.opacity(0.3)
                                     : Color.clear,
                                     lineWidth: 0.5)
                     )
@@ -393,14 +402,14 @@ extension UniversalComposerBar {
             }
         } label: {
             HStack(spacing: MeeshySpacing.xs) {
-                Image(systemName: isActive ? "wand.and.stars" : "wand.and.stars")
+                Image(systemName: "wand.and.stars")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? servedAccent : mutedColor)
+                    .foregroundColor(iconTint)
 
                 if isActive {
                     Text("\(activeCount)")
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(servedAccent)
+                        .foregroundColor(iconTint)
                 }
             }
             .padding(.horizontal, MeeshySpacing.sm)
@@ -408,12 +417,12 @@ extension UniversalComposerBar {
             .background(
                 Capsule()
                     .fill(isActive
-                          ? servedAccent.opacity(0.15)
+                          ? iconTint.opacity(0.15)
                           : Color.clear)
                     .overlay(
                         Capsule()
                             .stroke(isActive
-                                    ? servedAccent.opacity(0.3)
+                                    ? iconTint.opacity(0.3)
                                     : Color.clear,
                                     lineWidth: 0.5)
                     )
