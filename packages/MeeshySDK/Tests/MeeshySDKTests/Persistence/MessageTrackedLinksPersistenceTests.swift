@@ -31,8 +31,8 @@ final class MessageTrackedLinksPersistenceTests: XCTestCase {
         return try APIClient.makeAPIPayloadDecoder().decode(APIMessage.self, from: data)
     }
 
-    private func row(_ serverId: String, in conversationId: String) async throws -> MessageRecord {
-        try XCTUnwrap(try await actor.messages(for: conversationId, limit: 10).first { $0.serverId == serverId })
+    private func row(_ serverId: String, in conversationId: String) throws -> MessageRecord {
+        try XCTUnwrap(try actor.messages(for: conversationId, limit: 10).first { $0.serverId == serverId })
     }
 
     func test_upsertFromAPIMessages_persistsTheTrackedLinkMapAndReadsItBack() async throws {
@@ -41,7 +41,7 @@ final class MessageTrackedLinksPersistenceTests: XCTestCase {
 
         try await actor.upsertFromAPIMessages([api])
 
-        let message = try await row("srv_link", in: "conv_link").toMessage(currentUserId: "user_me")
+        let message = try row("srv_link", in: "conv_link").toMessage(currentUserId: "user_me")
         XCTAssertEqual(message.trackedLinkMap, ["https://example.com/a": "tok123"])
     }
 
@@ -54,7 +54,7 @@ final class MessageTrackedLinksPersistenceTests: XCTestCase {
             try makeAPIMessage(id: "srv_keep", conversationId: "conv_keep", trackingLinks: nil)
         ])
 
-        let message = try await row("srv_keep", in: "conv_keep").toMessage(currentUserId: "user_me")
+        let message = try row("srv_keep", in: "conv_keep").toMessage(currentUserId: "user_me")
         XCTAssertEqual(message.trackedLinkMap["https://example.com/a"], "tok123")
     }
 
@@ -62,13 +62,13 @@ final class MessageTrackedLinksPersistenceTests: XCTestCase {
         try await actor.upsertFromAPIMessages([
             try makeAPIMessage(id: "srv_late", conversationId: "conv_late", trackingLinks: nil)
         ])
-        let before = try await row("srv_late", in: "conv_late")
+        let before = try row("srv_late", in: "conv_late")
 
         try await actor.upsertFromAPIMessages([
             try makeAPIMessage(id: "srv_late", conversationId: "conv_late",
                                trackingLinks: [["url": "https://example.com/a", "token": "tok123"]])
         ])
-        let after = try await row("srv_late", in: "conv_late")
+        let after = try row("srv_late", in: "conv_late")
 
         XCTAssertEqual(after.toMessage(currentUserId: "user_me").trackedLinkMap["https://example.com/a"], "tok123")
         XCTAssertGreaterThan(after.changeVersion, before.changeVersion,
@@ -80,7 +80,7 @@ final class MessageTrackedLinksPersistenceTests: XCTestCase {
             try makeAPIMessage(id: "srv_once", conversationId: "conv_once",
                                trackingLinks: [["url": "https://example.com/a", "token": "tok123"]])
         ])
-        var record = try await row("srv_once", in: "conv_once")
+        var record = try row("srv_once", in: "conv_once")
 
         record.sealAsOpenedViewOnce(at: Date())
 
