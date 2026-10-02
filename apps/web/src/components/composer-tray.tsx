@@ -12,6 +12,7 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { previewUrlFor } from '@/lib/send/attachment-preview-url';
 import { pendingTileGlyph } from '@/lib/send/pending-tile-glyph';
 import { type PendingAttachment } from '@/lib/send/attachments';
+import { retouchSeriesOf } from '@/lib/stories/studio-retouch-series';
 import type { SharedPlace } from '@/lib/send/shared-place';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { MIN_SENDABLE_DURATION_MS, type RecorderState } from '@/lib/view/use-recorder';
@@ -402,7 +403,8 @@ function PreviewStrip({
    * plateau peut être posé dans un conteneur qui romprait `position: fixed`. */
   const [retouching, setRetouching] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState<string | null>(null);
-  const target = pending.find((attachment) => attachment.localId === retouching) ?? null;
+  /** TOUTES les pièces du message en scènes, ouvertes sur la touchée (#9126). */
+  const series = retouching === null ? null : retouchSeriesOf(pending, retouching);
   const previewed = pending.find((attachment) => attachment.localId === previewing) ?? null;
   const editOf = (attachment: PendingAttachment): (() => void) | undefined => {
     /* Une VIDÉO s'édite dans la scène, comme une image (#9124) — plus le lecteur. */
@@ -438,14 +440,15 @@ function PreviewStrip({
           );
         })}
       </div>
-      {target !== null && onReplace !== undefined
+      {series !== null && onReplace !== undefined
         ? createPortal(
             <Suspense fallback={null}>
               <ComposerRetouch
-                attachment={target}
+                pieces={series.pieces}
+                focus={series.focus}
                 onCancel={() => setRetouching(null)}
-                onDone={(file) => {
-                  onReplace(target.localId, file);
+                onDone={(replaced) => {
+                  replaced.forEach(({ localId, file }) => onReplace(localId, file));
                   setRetouching(null);
                 }}
               />

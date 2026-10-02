@@ -35,6 +35,10 @@ function capturedPageUntouched(page: StudioPage, taken: File): boolean {
     background.frame === undefined &&
     background.filter === undefined &&
     page.overlay === null &&
+    page.sound === null &&
+    page.duration === undefined &&
+    page.opening === undefined &&
+    page.closing === undefined &&
     page.texts.every((layer) => layer.text.trim() === '')
   );
 }
@@ -51,4 +55,20 @@ export async function renderedVideo(retouch: StudioRetouch, page: StudioPage, or
   const rendered = await renderStudioRetouchVideo(page, retouch.renderVideo ?? browserRetouchVideoDeps);
   if (rendered === null) return null;
   return new File([rendered.blob], retouchedVideoFileName(original?.name ?? 'video', rendered.mimeType), { type: rendered.mimeType });
+}
+
+/** **TOUTES LES PIÈCES DU MESSAGE EN SCÈNES** (#9126, miroir
+ * `ComposerRetouchSeries.retouchedScenes`) — la pièce posée sur chaque page, et
+ * ce que « Terminé » en rend : rien pour une scène intacte (sa pièce reste telle
+ * quelle, sans ré-encodage, #9131), sinon son rendu, en vidéo dès qu'elle en
+ * porte une. */
+export type StudioSeededPiece = { readonly index: number; readonly pageId: string; readonly original: File };
+export type StudioRetouchedScene = StudioSeededPiece & { readonly render: 'render-image' | 'render-video' };
+
+export function studioRetouchSeriesReturn(pages: readonly StudioPage[], seeded: readonly StudioSeededPiece[]): readonly StudioRetouchedScene[] {
+  return seeded.flatMap((piece) => {
+    const page = pages.find((candidate) => candidate.id === piece.pageId);
+    if (page === undefined || capturedPageUntouched(page, piece.original)) return [];
+    return [{ ...piece, render: studioPageVideo(page) !== null ? ('render-video' as const) : ('render-image' as const) }];
+  });
 }
