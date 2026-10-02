@@ -91,10 +91,11 @@ nonisolated enum StoryComposerFold {
         userFolded && !isReplying ? .folded : .expanded
     }
 
-    /// Le bouton ⌄ de l'angle haut-droit n'existe qu'en RÉDACTION — clavier ou
-    /// panneau d'émojis ouverts. Au repos, le glissement suffit.
-    static func offersFoldButton(presentation: Presentation, isComposerEngaged: Bool) -> Bool {
-        presentation == .expanded && isComposerEngaged
+    /// Le ⌄ de l'angle haut-droit est visible PAR DÉFAUT (#9122) : au repos
+    /// aussi, la barre dit qu'elle se replie — le glissement seul ne se
+    /// devinait pas.
+    static func offersFoldButton(presentation: Presentation) -> Bool {
+        presentation == .expanded
     }
 
     static let foldSymbol = "chevron.down"

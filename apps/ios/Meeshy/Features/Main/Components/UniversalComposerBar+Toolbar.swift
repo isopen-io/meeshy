@@ -80,7 +80,7 @@ extension UniversalComposerBar {
             // la photothèque (images ET vidéos) à côté d'elle (#9120).
             ForEach(ComposerGlassDoors.trailing(offersLibrary: onPhotoLibrary != nil,
                                                 offersCamera: onCamera != nil,
-                                                offersFold: foldControl != nil), id: \.self) { door in
+                                                offersFold: resolvedFoldControl != nil), id: \.self) { door in
                 switch door {
                 case .library:
                     if let openLibrary = onPhotoLibrary {
@@ -97,7 +97,7 @@ extension UniversalComposerBar {
                             action: openCamera)
                     }
                 case .fold:
-                    if let fold = foldControl {
+                    if let fold = resolvedFoldControl {
                         foldButton(fold)
                             .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .topTrailing)))
                     }

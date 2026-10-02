@@ -459,7 +459,7 @@ struct CommentsSheetView: View {
                             )
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                         }
-                        commentComposer
+                        commentComposer.foldableComment(isReplying: replyingTo != nil)
                     }
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.activeQuery != nil)
                 }
