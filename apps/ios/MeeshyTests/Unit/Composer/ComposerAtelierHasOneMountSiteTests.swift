@@ -95,18 +95,46 @@ final class ComposerAtelierHasOneMountSiteTests: XCTestCase {
                            + "sous un nom neuf. Sites trouvés : \(sites)")
     }
 
-    // MARK: - 2 · Le composer unifié n'a plus de porte
+    // MARK: - 2 · L'ancien atelier a quitté le dépôt
 
-    /// `UnifiedPostComposer` vit toujours dans le SDK — cinq suites l'exercent,
-    /// et son RETRAIT est un lot à lui, comme celui d'`EditPostSheet`. Ce qui
-    /// est acquis et doit le rester : plus aucune porte de production ne
-    /// l'ouvre (#5055).
-    func test_leComposerUnifie_nAPlusAucunePorteDeProduction() {
-        let sites = fichiersMontant("UnifiedPostComposer(")
-        XCTAssertEqual(sites, [],
-                       "« Éditer et republier en post » monte `StoryRepublishComposer` depuis "
-                           + "#5055 — la même porte que « Republier », ouverte sur `.post`. "
-                           + "Sites trouvés : \(sites)")
+    /// Les sources du SDK, balayées comme celles de l'app : un ancien type
+    /// rouvert DANS le moteur se verrait autrement nulle part.
+    private func sourcesDuSDK() -> [URL] {
+        let racine = Self.racineApp
+            .deletingLastPathComponent()   // …/apps/ios
+            .deletingLastPathComponent()   // …/apps
+            .deletingLastPathComponent()   // racine du dépôt
+            .appendingPathComponent("packages/MeeshySDK/Sources")
+        guard let marcheur = FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil) else {
+            return []
+        }
+        return marcheur.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
+    }
+
+    /// Les fichiers de l'app ET du SDK où un identifiant apparaît hors commentaires.
+    private func fichiersCitant(_ identifiant: String) -> [String] {
+        (sourcesDeLApp() + sourcesDuSDK()).compactMap { url in
+            guard let brut = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+            return AppSourceGuard.occurrences(ofIdentifier: identifiant, in: AppSourceGuard.stripComments(brut)) > 0 ? url.lastPathComponent : nil
+        }.sorted()
+    }
+
+    func test_leBalayageDuSDK_voitBienSesSources() {
+        XCTAssertGreaterThan(sourcesDuSDK().count, 200)
+        XCTAssertFalse(fichiersCitant("StoryComposerViewModel").isEmpty)
+    }
+
+    /// **Une seule capture, une seule édition — la scène** (#9166, directive
+    /// porteur « Nettoie l'ancien ! »). Le composer unifié n'avait plus de porte
+    /// depuis #5055 ; l'éditeur vidéo plein écran n'en a plus depuis que la
+    /// citation, la conversation (#9124), les commentaires (#9127) et la vidéo
+    /// de premier plan de l'atelier ouvrent la scène. Ils quittent le dépôt, et
+    /// rien ne les y ramène.
+    func test_lAncienAtelier_aQuitteLeDepot() {
+        for ancien in ["MeeshyVideoEditorView", "UnifiedPostComposer", "VideoPreviewView", "VideoEditorViewModel"] {
+            let sites = fichiersCitant(ancien)
+            XCTAssertEqual(sites, [], "`\(ancien)` est revenu : \(sites)")
+        }
     }
 
     // MARK: - 3 · Le meuble reste atteignable

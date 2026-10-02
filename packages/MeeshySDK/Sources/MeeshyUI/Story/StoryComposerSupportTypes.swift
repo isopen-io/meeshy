@@ -105,9 +105,3 @@ struct EditingMediaImage: Identifiable {
     let elementId: String
     let image: UIImage
 }
-
-struct EditingMediaVideo: Identifiable {
-    let id = UUID()
-    let elementId: String
-    let url: URL
-}

@@ -245,96 +245,6 @@ extension StoryComposerView {
                 onCancel: { editingElementImage = nil }
             )
         }
-        .fullScreenCover(item: $editingElementVideo) { item in
-            MeeshyVideoEditorView(
-                url: item.url,
-                context: .story,
-                onComplete: { result in
-                    // 1. **Écrase le fichier cache** par la version éditée.
-                    //    Le caller a stocké `item.url` (path original cached
-                    //    dans le composer tmp) → on remplace son contenu par
-                    //    `result.url` (output du `VideoExportPipeline`).
-                    //    Bénéfices :
-                    //    - L'URL reste **identique** : AVPlayer items, thumb
-                    //      caches keyés par URL n'invalident pas → 0 reload.
-                    //    - Pas d'orphelin temp : `result.url` est consommé.
-                    //    Fallback : si le move échoue (cross-volume, perm),
-                    //    on garde simplement `result.url` (le comportement
-                    //    pré-fix).
-                    let destinationURL = item.url
-                    let cachedURL: URL
-                    if result.url != destinationURL {
-                        do {
-                            try? FileManager.default.removeItem(at: destinationURL)
-                            try FileManager.default.moveItem(at: result.url, to: destinationURL)
-                            cachedURL = destinationURL
-                        } catch {
-                            // Move impossible → on conserve result.url tel
-                            // quel. Le map pointera dessus, le contenu sera
-                            // valide. L'ancien item.url reste sur disque
-                            // jusqu'à l'éviction tmp système.
-                            cachedURL = result.url
-                        }
-                    } else {
-                        cachedURL = destinationURL
-                    }
-                    viewModel.loadedVideoURLs[item.elementId] = cachedURL
-
-                    // 2. Refresh la vignette pour qu'elle reflète la frame
-                    //    courante du clip édité (utilisée par le composer
-                    //    tray, l'export et le placeholder).
-                    let thumbnail = Self.generateVideoThumbnail(url: cachedURL)
-                    if let thumbnail {
-                        viewModel.loadedImages[item.elementId] = thumbnail
-                        // Un recadrage vidéo change le ratio : on le réécrit
-                        // depuis la frame éditée (sinon la vidéo s'affiche au
-                        // ratio d'origine après crop). Même rationale que le
-                        // bloc image editor (#1).
-                        let thumbSize = thumbnail.size
-                        if thumbSize.width > 0, thumbSize.height > 0 {
-                            viewModel.setMediaAspectRatio(
-                                id: item.elementId,
-                                aspectRatio: Double(thumbSize.width / thumbSize.height),
-                                slideId: viewModel.currentSlide.id
-                            )
-                        }
-                    }
-
-                    // 3. Si l'utilisateur a transcrit la piste audio, on
-                    //    propage les sous-titres comme **metadata** de la
-                    //    vidéo cached (cf. spec : « sauvegardé comme une
-                    //    metadata de la vidéo lors de la validation pour
-                    //    remplacer la vidéo originellement chargé »).
-                    //    Le renderer story peut les overlay au rendu sans
-                    //    avoir besoin de re-transcrire.
-                    if !result.captions.isEmpty || result.transcriptionText != nil {
-                        viewModel.loadedVideoCaptions[item.elementId] = StoryVideoCaptionMetadata(
-                            captions: result.captions,
-                            transcriptionText: result.transcriptionText,
-                            languageCode: result.captionLanguageCode
-                        )
-                    } else {
-                        // L'utilisateur a effacé / pas transcrit — purge la
-                        // metadata pour ne pas réutiliser celle d'un
-                        // précédent edit du même element.
-                        viewModel.loadedVideoCaptions.removeValue(forKey: item.elementId)
-                    }
-
-                    // Bump version INCONDITIONNEL : toute édition vidéo (URL du
-                    // clip, filtre, sous-titres/transcription, ratio) doit se
-                    // refléter sur le canvas même quand aucune nouvelle vignette
-                    // n'est générée. L'ancien bump était gaté sur `if let thumbnail`
-                    // → une transcription/filtre seul restait invisible jusqu'au
-                    // prochain rebuild. `loadedVideoURLs`/`loadedVideoCaptions`/
-                    // `mediaAspectRatios` vivent HORS du JSON du slide, donc SwiftUI
-                    // ne peut pas détecter leur mutation sans ce cookie.
-                    viewModel.loadedImagesVersion &+= 1
-
-                    editingElementVideo = nil
-                },
-                onCancel: { editingElementVideo = nil }
-            )
-        }
     }
 
     func handleForegroundMediaSelection(from item: PhotosPickerItem?) {
@@ -679,8 +589,11 @@ extension StoryComposerView {
         let mediaObj = viewModel.currentEffects.mediaObjects?.first(where: { $0.id == elementId })
         guard let mediaObj else { return }
 
-        if mediaObj.kind == .video, let url = viewModel.loadedVideoURLs[elementId] {
-            editingElementVideo = EditingMediaVideo(elementId: elementId, url: url)
+        // Une vidéo s'édite dans la SCÈNE de l'hôte (#9166) : coupe, muet,
+        // recadrage, filtre — l'ancien éditeur vidéo plein écran a quitté le
+        // dépôt.
+        if mediaObj.kind == .video {
+            onEditSceneObject?(elementId)
         } else if let image = viewModel.loadedImages[elementId] {
             editingElementImage = EditingMediaImage(elementId: elementId, image: image)
         }

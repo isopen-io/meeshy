@@ -750,14 +750,4 @@ extension StoryComposerView {
         saveDraft()
         onDismiss()
     }
-
-    // DEPRECATED: Replaced by StoryMediaLoader.shared.videoThumbnail(url:) — async, cached, off main thread.
-    // Kept for backward compatibility with external callers.
-    static func generateVideoThumbnail(url: URL) -> UIImage? {
-        let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 400, height: 400)
-        return try? UIImage(cgImage: generator.copyCGImage(at: .zero, actualTime: nil))
-    }
 }

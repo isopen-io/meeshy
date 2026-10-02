@@ -72,7 +72,6 @@ public struct StoryComposerView: View {
 
     @State var editingBgImage: UIImage?
     @State var editingElementImage: EditingMediaImage?
-    @State var editingElementVideo: EditingMediaVideo?
 
     // MARK: - Audio pickers
 

@@ -516,46 +516,40 @@ struct FeedComposerSheet: View {
             }
             .ignoresSafeArea()
         }
-        // PhotosPicker videos queue → VideoPreviewView
+        // Une vidéo choisie s'ouvre dans la SCÈNE avant de rejoindre la
+        // citation, et la vignette d'une vidéo en attente aussi (#9166) — la
+        // même porte que la conversation et les commentaires.
         .fullScreenCover(isPresented: Binding(
             get: { !videosToPreview.isEmpty },
             set: { if !$0 { videosToPreview.removeAll() } }
         )) {
             if let url = videosToPreview.first {
-                MeeshyVideoEditorView(
-                    url: url,
-                    context: .post,
-                    onComplete: { result in
-                        handleCameraVideo(result.url)
-                        videosToPreview.removeFirst()
-                    },
-                    onCancel: {
-                        videosToPreview.removeFirst()
+                ConversationVideoSceneEditor(url: url, staged: false, onDone: { media in
+                    videosToPreview.removeFirst()
+                    switch media {
+                    case .video(let rendue): handleCameraVideo(rendue)
+                    case .image(let image): handleCameraCapture(image)
                     }
-                )
+                }, onCancel: { videosToPreview.removeFirst() })
             }
         }
-        // Tap pending video → unified video editor
         .fullScreenCover(isPresented: Binding(
             get: { editingVideo != nil },
             set: { if !$0 { editingVideo = nil } }
         )) {
             if let target = editingVideo {
-                MeeshyVideoEditorView(
-                    url: target.url,
-                    context: .post,
-                    onComplete: { result in
-                        // La vidéo éditée remplace la pièce jointe (#8523).
-                        let issue = PendingVideoEditReplacement.apply(result, to: target.id,
-                                                                      files: pendingMediaFiles,
-                                                                      attachments: pendingAttachments)
-                        pendingMediaFiles = issue.files
-                        pendingAttachments = issue.attachments
-                        if let stale = issue.staleURL { try? FileManager.default.removeItem(at: stale) }
-                        editingVideo = nil
-                    },
-                    onCancel: { editingVideo = nil }
-                )
+                ConversationVideoSceneEditor(url: target.url, staged: true, onDone: { media in
+                    editingVideo = nil
+                    guard case .video(let rendue) = media else { return }
+                    let result = VideoEditResult(url: rendue, didEdit: true, duration: 0, transcriptionText: nil,
+                                                 captions: [], captionLanguageCode: nil)
+                    let issue = PendingVideoEditReplacement.apply(result, to: target.id,
+                                                                  files: pendingMediaFiles,
+                                                                  attachments: pendingAttachments)
+                    pendingMediaFiles = issue.files
+                    pendingAttachments = issue.attachments
+                    if let stale = issue.staleURL { try? FileManager.default.removeItem(at: stale) }
+                }, onCancel: { editingVideo = nil })
             }
         }
         .adaptiveOnChange(of: selectedPhotoItems) { _, items in
@@ -731,11 +725,9 @@ struct FeedComposerSheet: View {
         for item in items {
             let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
             if isVideo {
-                // Videos go through the editor first — compress + queue the
-                // compressed URL for the previewer. The editor is the source
-                // of truth for trimming/cover selection; once the user
-                // confirms there, `handleCameraVideo` (below) wires the
-                // preparation into the loading tray.
+                // Une vidéo passe d'abord par la scène (#9166) : compressée,
+                // puis mise en file ; « Terminé » la prépare comme une prise
+                // de la caméra (`handleCameraVideo`).
                 Task {
                     if let movieData = try? await item.loadTransferable(type: Data.self) {
                         let rawURL = FileManager.default.temporaryDirectory.appendingPathComponent("video_raw_\(UUID().uuidString).mp4")

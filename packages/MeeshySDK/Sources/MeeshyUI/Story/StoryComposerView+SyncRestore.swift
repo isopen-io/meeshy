@@ -65,7 +65,6 @@ extension StoryComposerView {
         fgMediaItem = nil
         editingBgImage = nil
         editingElementImage = nil
-        editingElementVideo = nil
         confirmedMediaAudioURL = nil
         lostMediaCount = 0
         // Le cover caméra a DEUX écrivains légitimes (ce binding SDK et le
