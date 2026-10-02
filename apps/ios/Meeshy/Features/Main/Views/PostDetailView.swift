@@ -448,7 +448,7 @@ struct PostDetailView: View {
     private var embedTrackedURL: URL? {
         guard let raw = LinkPreviewFetcher.firstURL(in: effectiveContent),
               let token = displayPost?.trackedLinkMap[raw] else { return nil }
-        return URL(string: "https://meeshy.me/l/\(token)")
+        return TrackedLink.redirectURL(token: token)
     }
 
     private var textTruncation: (text: String, isTruncated: Bool) {
