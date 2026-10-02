@@ -169,8 +169,8 @@ async function tokensStillReferenced(
  * ils continuaient de compter des clics vers un contenu effacé.
  *
  * Mais `TrackingLink.messageId` NE DÉSIGNE PAS le propriétaire, et c'est tout
- * l'enjeu : `findExistingTrackingLink(url, conversationId)` REND À TOUT MESSAGE
- * de la conversation le lien déjà minté pour la même URL. Une ligne est donc
+ * l'enjeu : `findExistingTrackingLink(url, { kind: 'conversation', … })` REND À
+ * TOUT MESSAGE de la conversation le lien déjà minté pour la même URL. Une ligne est donc
  * PARTAGÉE, et `messageId` n'en retient qu'un seul message — le premier à
  * l'avoir réclamée par le chemin d'envoi (`updateTrackingLinksWithMessageId`
  * filtre sur `messageId: null`), le dernier par le chemin de partage

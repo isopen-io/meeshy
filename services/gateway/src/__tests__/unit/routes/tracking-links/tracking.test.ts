@@ -155,17 +155,20 @@ describe('POST /tracking-links — missing required field', () => {
   });
 });
 
-describe('POST /tracking-links — existing link returned', () => {
-  it('returns 200 with existing link when duplicate URL is detected', async () => {
-    const existingLink = { id: 'link-1', token: 'abc123', originalUrl: 'https://example.com', isActive: true };
+describe('POST /tracking-links — an anonymous caller reuses nobody\'s link (#9184)', () => {
+  it('creates a fresh link without looking up existing ones', async () => {
+    const existingLink = { id: 'link-1', token: 'abc123', originalUrl: 'https://example.com', isActive: true, createdBy: 'someone-else' };
+    mockFindExisting.mockClear();
     mockFindExisting.mockResolvedValue(existingLink);
+    mockCreate.mockResolvedValue({ id: 'link-3', token: 'fresh1', originalUrl: 'https://example.com', isActive: true });
     const { app } = await buildApp();
     const res = await app.inject({
       method: 'POST', url: '/tracking-links',
       payload: { originalUrl: 'https://example.com' },
     });
-    expect(res.statusCode).toBe(200);
-    expect(res.json().success).toBe(true);
+    expect(res.statusCode).toBe(201);
+    expect(res.json().data.trackingLink.token).toBe('fresh1');
+    expect(mockFindExisting).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -187,7 +190,7 @@ describe('POST /tracking-links — success creates new link', () => {
 
 describe('POST /tracking-links — DB error', () => {
   it('returns 500 on unexpected error', async () => {
-    mockFindExisting.mockRejectedValue(new Error('db crash'));
+    mockCreate.mockRejectedValue(new Error('db crash'));
     const { app } = await buildApp();
     const res = await app.inject({
       method: 'POST', url: '/tracking-links',

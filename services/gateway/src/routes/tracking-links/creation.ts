@@ -200,10 +200,16 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         }
       }
 
-      const existingLink = await trackingLinkService.findExistingTrackingLink(
-        body.originalUrl,
-        body.conversationId
-      );
+      // Seul l'appelant récupère un lien qu'il a déjà créé (#9184) : la
+      // réponse sert le lien ENTIER, compteurs de clics compris. Un appelant
+      // sans compte n'a rien à retrouver — il reçoit toujours un lien neuf.
+      const existingLink = createdBy
+        ? await trackingLinkService.findExistingTrackingLink(body.originalUrl, {
+          kind: 'owner',
+          createdBy,
+          conversationId: body.conversationId
+        })
+        : null;
 
       if (existingLink) {
         return sendSuccess(reply, {
