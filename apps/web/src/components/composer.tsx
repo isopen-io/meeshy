@@ -104,7 +104,10 @@ const ComposerEmojiSheet = lazy(() =>
   import('./composer-emoji-sheet').then((m) => ({ default: m.ComposerEmojiSheet })),
 );
 const ComposerStickerSheet = lazy(() =>
-  import('./composer-sticker-sheet').then((m) => ({ default: m.ComposerStickerSheet })),
+  Promise.all([
+    import('./composer-sticker-sheet'),
+    import('@/lib/i18n-sticker-packs-catalog').then((m) => m.loadStickerPacksCatalog(currentInterfaceLanguage())),
+  ]).then(([m]) => ({ default: m.ComposerStickerSheet })),
 );
 
 /** IDENTITÉ STABLE pour l'appelant qui omet `preferred` (les témoins, surtout)

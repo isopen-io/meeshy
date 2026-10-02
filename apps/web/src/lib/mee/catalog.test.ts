@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { MEE_STICKERS, findMeeSticker, meeSlotsFor, meeStickerOfTemplate, meeStickersOfTab, meeTemplateId } from './catalog';
+import { MEE_STICKERS, findMeeSticker, meeSlotsFor, meeStickerOfTemplate, meeStickersOfPack, meeStickersOfTab, meeTemplateId } from './catalog';
 import { PRIMS, motionSignature, tellsAnAction } from './motion';
 import { renderMeeSticker } from './render';
 import { MEE_EMOTIONS } from './types';
@@ -191,5 +191,20 @@ describe('le dessin se lit comme un sticker mignon (#9053)', () => {
     const reach = beaks.flatMap((d) => [...d.matchAll(/(-?[0-9.]+) (-?[0-9.]+)/g)].map((m) => Number(m[1])));
     expect(beaks.length).toBeGreaterThanOrEqual(60);
     expect(Math.max(...reach)).toBeLessThanOrEqual(92);
+  });
+});
+
+describe('les packs intégrés (#9141)', () => {
+  test('range chaque sticker dans exactement un des trois packs — Mee, Meo, Mee & Meo', () => {
+    const counts = (['mee', 'meo', 'mee-et-meo'] as const).map((pack) => meeStickersOfPack(pack).length);
+    expect(counts.reduce((a, b) => a + b, 0)).toBe(MEE_STICKERS.length);
+    expect(counts.every((n) => n > 0)).toBe(true);
+  });
+
+  test('met les duos dans Mee & Meo et les Instants avec leur personnage', () => {
+    expect(meeStickersOfPack('mee-et-meo').every((s) => s.tab === 'duo')).toBe(true);
+    expect(meeStickersOfPack('mee').some((s) => s.tab === 'instants')).toBe(true);
+    expect(meeStickersOfPack('meo').some((s) => s.tab === 'instants')).toBe(true);
+    expect(meeStickersOfPack('mee').filter((s) => s.tab !== 'instants').every((s) => s.tab === 'mee')).toBe(true);
   });
 });

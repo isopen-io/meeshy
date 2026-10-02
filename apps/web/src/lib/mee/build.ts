@@ -2,7 +2,7 @@ import { DUO_LEFT_AT, DUO_RIGHT_AT, SOLO_AT, bird, placed } from './art';
 import type { BirdPose, MeeCharacter } from './art';
 import type { Beat, Motion, Role } from './motion';
 import { meeIntentOf } from './intents';
-import type { MeeCharacterFeeling, MeeFeeling, MeeInstantSection, MeeIntent, MeeSection, MeeSlot, MeeSlots, MeeSticker, MeeTab } from './types';
+import type { MeeBuiltinPack, MeeCharacterFeeling, MeeFeeling, MeeInstantSection, MeeIntent, MeeSection, MeeSlot, MeeSlots, MeeSticker, MeeTab } from './types';
 
 /**
  * LES OUTILS D'ÉCRITURE DU CATALOGUE (#9034) — pour qu'une entrée tienne en
@@ -34,9 +34,10 @@ export type CharacterEntry = Entry & { readonly feeling: MeeCharacterFeeling; re
 
 const intentOf = (e: CharacterEntry): MeeIntent => e.intent ?? meeIntentOf(e.feeling);
 
-const base = (tab: MeeTab, section: MeeSection, e: Entry, scene: MeeSticker['scene'], slots: readonly MeeSlot[] = [], defaults: MeeSlots = {}): MeeSticker => ({
+const base = (tab: MeeTab, pack: MeeBuiltinPack, section: MeeSection, e: Entry, scene: MeeSticker['scene'], slots: readonly MeeSlot[] = [], defaults: MeeSlots = {}): MeeSticker => ({
   id: e.id,
   tab,
+  pack,
   section,
   title: e.title,
   feeling: e.feeling,
@@ -50,7 +51,7 @@ const base = (tab: MeeTab, section: MeeSection, e: Entry, scene: MeeSticker['sce
 /** Un personnage SEUL. */
 export function solo(tab: 'mee' | 'meo', e: CharacterEntry & { readonly pose: BirdPose } & Layers): MeeSticker {
   const c: MeeCharacter = tab;
-  return base(tab, intentOf(e), e, (uid) => `${e.back ?? ''}${placed(SOLO_AT, bird(c, e.pose, 1, uid), 'b1')}${e.front ?? ''}`);
+  return base(tab, tab, intentOf(e), e, (uid) => `${e.back ?? ''}${placed(SOLO_AT, bird(c, e.pose, 1, uid), 'b1')}${e.front ?? ''}`);
 }
 
 /**
@@ -61,6 +62,7 @@ export function duo(actor: MeeCharacter, e: CharacterEntry & { readonly actor: B
   const partner: MeeCharacter = actor === 'mee' ? 'meo' : 'mee';
   return base(
     'duo',
+    'mee-et-meo',
     intentOf(e),
     e,
     (uid) =>
@@ -85,6 +87,7 @@ export function instant(
 ): MeeSticker {
   return base(
     'instants',
+    c,
     section,
     e,
     (uid, slots) => {

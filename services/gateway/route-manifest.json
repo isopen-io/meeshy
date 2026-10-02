@@ -22,7 +22,7 @@
       "authenticated-only": "Authentifié (onRequest/preHandler référence fastify.authenticate) sans requirePermission/requireHierarchy/requireSovereign détecté, donc S2 ou S3. Les deux ne se distinguent pas mécaniquement : l'appartenance à la ressource (S3) peut être vérifiée à l'intérieur du corps du handler, invisible depuis le serveur assemblé."
     }
   },
-  "routeCount": 615,
+  "routeCount": 624,
   "routes": [
     {
       "method": "DELETE",
@@ -884,6 +884,20 @@
       "path": "/api/v1/reactions/:messageId/:emoji",
       "module": "reactionRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/sticker-packs/:slug/install",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -4245,6 +4259,76 @@
       "path": "/api/v1/status-metrics",
       "module": "maintenanceRoutes",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sticker-packs",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sticker-packs/:slug",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sticker-packs/installed",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sticker-packs/pending",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/sticker-packs/submissions",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",
@@ -7851,6 +7935,34 @@
     },
     {
       "method": "POST",
+      "path": "/api/v1/sticker-packs/:slug/review",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S4",
+        "S5"
+      ],
+      "securityBasisKey": "permission-gated",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/sticker-packs/submissions",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "POST",
       "path": "/api/v1/tracking-links",
       "module": "trackingLinksRoutes",
       "mountPrefix": "/api/v1",
@@ -8656,6 +8768,20 @@
       "path": "/api/v1/posts/:postId",
       "module": "anonyme~10",
       "mountPrefix": "/api/v1",
+      "securityLevel": "inconnu",
+      "securityLevelCandidates": [
+        "S2",
+        "S3"
+      ],
+      "securityBasisKey": "authenticated-only",
+      "hierarchyGated": false,
+      "adminPrefixed": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/sticker-packs/:slug/install",
+      "module": "stickerPacksRoutes",
+      "mountPrefix": "/api/v1/sticker-packs",
       "securityLevel": "inconnu",
       "securityLevelCandidates": [
         "S2",

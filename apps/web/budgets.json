@@ -799,6 +799,15 @@
         "source": "Mesure du 2026-09-29 (`bun run build` puis gzip -9) : 7,52 Ko pour les SEPT catalogues du composer d export en image (`export.card.*` et `export.announce.*` : onglets du plateau, parties touchables de la carte, galerie et sa recherche, tons, typographies, liaisons, options, format par defaut, annonces). Charges avec la feuille d export seulement, au premier « Exporter en image » (`routes/thread-sheets.tsx`, `lib/i18n-export-card-catalog.ts`) ; un lecteur n en telecharge qu UN. POURQUOI UN CATALOGUE A PART : le composer tactile ajoutait 0,74 Ko au-dela du plafond de `interface_catalogs` (161) ; il en sort toute la famille, ce qui ramene les catalogues d interface a 156,5 Ko. Arrondi au Ko SUPERIEUR (8) + 1 Ko de marge."
       }
     },
+    "interface_catalogs_sticker_packs": {
+      "pattern": "^assets/catalog-sticker-packs-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 10,
+        "status": "CIBLE -- MESUREE PAR #9141, NON ARBITREE",
+        "source": "Mesure du 2026-10-02 (`bun run build` puis gzip -9) : 8,25 Ko pour les SEPT catalogues des packs de stickers (cles `stickerPacks.*` : boutique, onglet d un pack de tiers, editeur de proposition et ses refus motives), de 1,06 Ko (en) a 1,30 Ko (ar). Charges avec la feuille de stickers seulement (`composer.tsx`, `i18n-sticker-packs-catalog`), jamais avec la premiere peinture ; un lecteur n en telecharge qu UN. POURQUOI UN CATALOGUE A PART : ces cles portaient `interface_catalogs` a 183,54 Ko, au-dela de son plafond de 177. Arrondi au Ko SUPERIEUR (9) + 1 Ko de marge."
+      }
+    },
     "interface_catalogs_send_sheet": {
       "pattern": "^assets/catalog-send-sheet-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,

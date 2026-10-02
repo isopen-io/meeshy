@@ -187,7 +187,11 @@ describe('ROUTE_TABLE (#4278)', () => {
     // 72 : #8906 ajoute `admin-engagement-scale` — les adresses NEUVES
     // `GET`/`PUT /api/v1/admin/engagement-scale` (le barème d'engagement).
     // Aucun alias, aucune route retirée ni renommée.
-    expect(ROUTE_TABLE.length).toBe(72);
+    // 73 : #9141 ajoute `sticker-packs` — le montage AUTONOME des packs de
+    // stickers sous `/api/v1/sticker-packs` (boutique, installation,
+    // proposition par des tiers, modération). Aucun alias, aucune route
+    // retirée ni renommée.
+    expect(ROUTE_TABLE.length).toBe(73);
   });
 });
 

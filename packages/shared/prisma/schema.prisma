@@ -387,6 +387,7 @@ model User {
   sessions                 UserSession[]
   pushTokens               PushToken[]
   stickers                 UserSticker[]
+  stickerPacks             UserStickerPack[]
 
   // Signal Protocol E2EE Relations
   signalPreKeyBundle SignalPreKeyBundle?
@@ -5119,4 +5120,69 @@ model UserSticker {
 
   @@unique([userId, contentHash])
   @@index([userId, lastUsedAt])
+}
+
+/// Un PACK de stickers proposé par un tiers (#9141). Définition partagée :
+/// `packages/shared/types/sticker-pack.ts`. Les packs INTÉGRÉS (Mee, Meo,
+/// Mee & Meo) n'ont pas de ligne ici : le client les dessine.
+model StickerPack {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  /// L'adresse du pack et le préfixe de ses gabarits (`pack.<slug>.<clé>`)
+  slug         String    @unique
+  name         String
+  description  String
+  author       String
+  /// Le compte qui l'a proposé
+  submitterId  String    @db.ObjectId
+  /// pending · approved · rejected
+  status       String    @default("pending")
+  reviewNote   String?
+  reviewerId   String?   @db.ObjectId
+  reviewedAt   DateTime?
+  installCount Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  items StickerPackItem[]
+
+  @@index([status, createdAt])
+  @@index([submitterId])
+}
+
+/// Un sticker d'un pack — fixe, cinématique (animé) ou Instant (zones de texte).
+model StickerPackItem {
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
+  packId    String @db.ObjectId
+  key       String
+  title     String
+  emoji     String
+  /// static · cinematic · instant — vérifié contre l'animation RÉELLE des octets
+  kind      String
+  mimeType  String
+  filePath  String
+  width     Int
+  height    Int
+  sizeBytes Int
+  /// `StickerTextZone[]` d'un Instant, validées à la proposition
+  zones     Json?
+  position  Int
+
+  pack StickerPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+
+  @@unique([packId, key])
+}
+
+/// Le CHOIX d'un utilisateur sur un pack : sans ligne, le défaut du pack
+/// (installé pour les intégrés, absent pour les autres) ; `installedAt` nul =
+/// retiré par l'utilisateur.
+model UserStickerPack {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String    @db.ObjectId
+  packSlug    String
+  installedAt DateTime?
+  updatedAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, packSlug])
+  @@index([userId, installedAt])
 }
