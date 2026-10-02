@@ -795,6 +795,7 @@ export const Composer = memo(function Composer({
                   setPanelOpen(false);
                   setStickerSheetOpen(true);
                 },
+                onPickLibrary: addFiles,
                 onPickCamera: addFiles,
               }
             : {})}

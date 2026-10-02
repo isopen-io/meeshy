@@ -62,7 +62,7 @@ const NO_LOCKS: ImposedLocks = { blurred: false, ephemeral: false };
  * (`1.circle` / `1.circle.fill`) dit l'état : contour au repos, plein armé.
  *
  * ORDRE FIXE, jamais réordonné : éphémère · flou · vue unique · effets ·
- * sticker · langue · spacer · compteur · caméra — le groupe MENANT d'iOS
+ * sticker · langue · spacer · compteur · photothèque · caméra — le groupe MENANT d'iOS
  * (`targets/README.md` § 1.4, `+Protections.swift:161-238` pour le rang de
  * « vue unique » entre flou et effets).
  */
@@ -79,6 +79,7 @@ export function ComposerTopRow({
   effectsPanelOpen,
   onToggleEffects,
   onOpenStickers,
+  onPickLibrary,
   onPickCamera,
   languageCode,
   onOpenLanguage,
@@ -108,6 +109,9 @@ export function ComposerTopRow({
   readonly onToggleEffects: () => void;
   /** La porte de la feuille de stickers (#9082) — absente ⇒ rien. */
   readonly onOpenStickers?: () => void;
+  /** La photothèque, juste avant la caméra (#9120) — images ET vidéos ;
+   * absente ⇒ rien. */
+  readonly onPickLibrary?: (files: FileList | null) => void;
   /** La caméra de l'angle droit (#9082) — mêmes fichiers que la tuile du
    * panneau (`developShots`) ; absente ⇒ rien. */
   readonly onPickCamera?: (files: readonly File[]) => void;
@@ -252,6 +256,30 @@ export function ComposerTopRow({
             {counter.text}
           </span>
         ) : null}
+
+        {/* LA PHOTOTHÈQUE (#9120) — images ET vidéos, à côté de la caméra
+            (miroir `ComposerGlassDoors.trailing` → [library, camera, fold]) ;
+            sans `capture`, elle ouvre la galerie, jamais l'objectif. */}
+        {onPickLibrary === undefined ? null : (
+          <label
+            data-composer-library
+            className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-chip px-2"
+            style={{ color: 'var(--color-ios-ink-2)' }}
+          >
+            <Glyph name="image" size={16} />
+            <input
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              className="sr-only"
+              aria-label={translate(language, 'composer.attach.photo.action')}
+              onChange={(e) => {
+                onPickLibrary(e.currentTarget.files);
+                e.currentTarget.value = '';
+              }}
+            />
+          </label>
+        )}
 
         {onPickCamera === undefined ? null : (
           <label

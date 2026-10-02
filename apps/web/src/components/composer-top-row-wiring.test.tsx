@@ -402,6 +402,21 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
     expect(camera?.querySelector('input[type="file"]')?.getAttribute('capture')).toBe('environment');
   });
 
+  test('#9120 — la photothèque (images ET vidéos) se pose juste avant la caméra', () => {
+    const el = mount(() => {});
+    const toolbar = el.querySelector('[data-composer-toolbar]')!;
+    const library = toolbar.querySelector('[data-composer-library]');
+    const camera = toolbar.querySelector('[data-composer-camera]');
+    expect(library).not.toBeNull();
+    expect(library?.nextElementSibling).toBe(camera);
+    const input = library?.querySelector('input[type="file"]');
+    expect(input?.getAttribute('accept')).toBe('image/*,video/*');
+    expect(input?.hasAttribute('capture')).toBe(false);
+    expect(input?.hasAttribute('multiple')).toBe(true);
+    expect(library?.className).toMatch(/min-h-11/);
+    expect(library?.className).toMatch(/min-w-11/);
+  });
+
   test('les cibles éphémère/flou/effets/langue portent le plancher 44 px sur les DEUX dimensions', () => {
     const el = mount(() => {});
     for (const selector of ['[data-composer-ephemeral]', '[data-composer-blur]', '[data-composer-effects]', '[data-composer-language]']) {

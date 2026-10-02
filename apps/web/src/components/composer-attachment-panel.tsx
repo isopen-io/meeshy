@@ -255,7 +255,7 @@ export function ComposerAttachmentPanel({
             label={translate(language, 'composer.attach.photo')}
             action={translate(language, 'composer.attach.photo.action')}
             color="var(--ios-tile-photo)"
-            accept="image/*"
+            accept="image/*,video/*"
             multiple
             onPick={onPickPhotos}
           >
