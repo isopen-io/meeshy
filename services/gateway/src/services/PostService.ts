@@ -28,8 +28,9 @@ import { authorSelect, mediaInclude, postInclude } from './posts/postIncludes';
 import { projectReferencesForViewer, toPostReferences } from './posts/postReferences';
 import { attachReferenceAccess, consumeReferenceView, resolveReferenceAccess } from './posts/referenceAccess';
 import { remapStoryEffectsMediaIds } from './posts/storyEffectsMediaRemap';
-import { composeStoryContent, isContentDerivedFromTextObjects, storyTextObjectText } from './posts/storyContentComposition';
+import { isContentDerivedFromTextObjects, storyTextObjectText } from './posts/storyContentComposition';
 import { storyTranslatableTexts } from './posts/storyEffectsV3';
+import { syncPostTrackingLinks } from './posts/publicationTrackingLinks';
 import { storyContentEditRequested } from './posts/storyEditPolicy';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { applyPostRemovalEffects } from './posts/postRemovalEffects';
@@ -50,6 +51,7 @@ import { isAdult } from '@meeshy/shared/utils/age';
 import { translationTargetId } from './zmq-translation/utils/zmq-helpers';
 import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
 import { parseAttachmentTranscription } from '@meeshy/shared/utils/attachment-validators';
+import { detectContentLanguage } from '../utils/content-language';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -73,26 +75,6 @@ interface StoryTextObjectRaw {
  */
 function computeExpiresAt(type: PostType): Date | undefined {
   return ephemeralExpiresAt(type, new Date());
-}
-
-// Minimal language detection (first word heuristics + fallback)
-function detectLanguage(text: string): string {
-  if (!text) return 'en';
-  const lower = text.toLowerCase();
-  // Simple heuristic based on common words
-  const langPatterns: Record<string, RegExp> = {
-    fr: /\b(le|la|les|un|une|des|je|tu|il|nous|vous|est|sont|avec|pour|dans|que|qui|pas|mais)\b/,
-    es: /\b(el|la|los|las|un|una|es|son|con|para|en|que|por|del|como|pero|más)\b/,
-    de: /\b(der|die|das|ein|eine|ist|sind|mit|für|und|ich|nicht|auf|dem|den)\b/,
-    pt: /\b(o|a|os|as|um|uma|é|são|com|para|em|que|por|do|da|não|mas)\b/,
-    ar: /[\u0600-\u06FF]/,
-    zh: /[\u4e00-\u9fff]/,
-    ja: /[\u3040-\u309F\u30A0-\u30FF]/,
-  };
-  for (const [lang, pattern] of Object.entries(langPatterns)) {
-    if (pattern.test(lower)) return lang;
-  }
-  return 'en';
 }
 
 // postInclude is shared — see ./posts/postIncludes for the single source of truth.
@@ -188,12 +170,12 @@ export class PostService {
     const expiresAt = ephemeralExpiresAt(data.type, now);
 
     // Canonicalize the client claim at the write boundary — clients send the raw
-    // platform locale (iOS `fr_FR`, web `fr-FR`). `detectLanguage` already returns
+    // platform locale (iOS `fr_FR`, web `fr-FR`). `detectContentLanguage` already returns
     // canonical codes, so only the claim path needs normalization. Irreducible
     // codes (`bas`) fall back verbatim. Mirrors the message funnel (218/219).
     const originalLanguage = data.originalLanguage
       ? (normalizeLanguageCode(data.originalLanguage) ?? data.originalLanguage)
-      : (data.content ? detectLanguage(data.content) : undefined);
+      : (data.content ? detectContentLanguage(data.content) : undefined);
 
     // `detectedLanguage` (#5349/#5422) est déjà de l'ISO 639-1 mesuré
     // (`detectMeasuredLanguage`, tinyld) — normalisée par sûreté, comme la
@@ -491,49 +473,27 @@ export class PostService {
       });
     }
 
-    // Tracking des URLs brutes du post/story : mapping `url → token` rangé dans
-    // `metadata.trackingLinks`. Même mécanisme que les messages — le client rend
-    // le lien (texte + façade vidéo) vers `/l/<token>` SANS réécrire le contenu
-    // (aperçu vidéo + URL lisible préservés). Le texte effectif est le corps du
-    // post, le texte de la story (`content`) ou l'index de recherche des
-    // textObjects. JAMAIS bloquant : le helper avale ses erreurs (→ []) et
-    // l'écriture metadata est gardée.
-    const trackingContent =
-      data.content
-      ?? (textObjects?.length ? composeStoryContent(textObjects) : undefined);
-    if (trackingContent) {
-      try {
-        const trackingLinks = await this.trackingLinkService.collectContentTrackingLinks({
-          content: trackingContent,
-          createdBy: userId,
-          postId: post.id,
-        });
-        if (trackingLinks.length > 0) {
-          const existingMetadata = (post.metadata as Record<string, unknown> | null) ?? {};
-          await this.prisma.post.update({
-            where: { id: post.id },
-            data: { metadata: { ...existingMetadata, trackingLinks } as Prisma.InputJsonValue },
-          });
-        }
-      } catch (err) {
-        log.warn('createPost: tracking link persistence failed', { postId: post.id, err });
-      }
-    }
-
     // Refetch pour inclure transcription et translations après toutes les opérations media
     const refreshed = await this.prisma.post.findUnique({
       where: { id: post.id },
       select: postInclude,
     });
+    // Carte `metadata.trackingLinks` (#9073) : TOUS les textes affichés —
+    // corps, scène, légendes de média — relus sur la ligne enregistrée.
+    const persisted = refreshed ?? post;
+    const trackingMetadata = await syncPostTrackingLinks({
+      prisma: this.prisma, linkService: this.trackingLinkService, post: persisted, createdBy: userId,
+    });
+    const served = trackingMetadata === undefined ? persisted : { ...persisted, metadata: trackingMetadata };
     // `soundLibrary` : champ de service (#6603), pas une colonne.
-    return { ...(refreshed ?? post), soundLibrary };
+    return { ...served, soundLibrary };
   }
 
   private async triggerStoryTextTranslation(postId: string, content: string, authorId: string, sourceLanguageOverride?: string): Promise<void> {
     try {
       // An explicit source (e.g. the language chosen when editing a post) wins
       // over the heuristic detector, which only guesses from word patterns.
-      const sourceLanguage = sourceLanguageOverride ?? detectLanguage(content);
+      const sourceLanguage = sourceLanguageOverride ?? detectContentLanguage(content);
 
       // 1. Résoudre les langues cibles depuis les contacts de l'auteur, hors
       // la langue source elle-même — même garde que le sibling
@@ -677,7 +637,7 @@ export class PostService {
         return;
       }
 
-      const sourceLanguage = obj.sourceLanguage ?? detectLanguage(text);
+      const sourceLanguage = obj.sourceLanguage ?? detectContentLanguage(text);
       const targetLanguages = allTargetLanguages.filter(l => l !== sourceLanguage);
 
       if (targetLanguages.length === 0) {
@@ -1394,7 +1354,18 @@ export class PostService {
       });
     }
 
-    return soundLibrary ? { ...updated, soundLibrary } : updated;
+    // Édition : la carte de liens suivis se recalcule sur la ligne ÉCRITE
+    // (#9073) — une URL retirée sort, une ajoutée entre, et le document rendu
+    // porte la nouvelle carte que la diffusion socket hisse.
+    const editTouchesTexts = data.content !== undefined || data.storyEffects !== undefined
+      || data.mediaCaption !== undefined || editTouchesComposition;
+    const trackingMetadata = editTouchesTexts
+      ? await syncPostTrackingLinks({
+          prisma: this.prisma, linkService: this.trackingLinkService, post: updated, createdBy: userId,
+        })
+      : undefined;
+    const served = trackingMetadata === undefined ? updated : { ...updated, metadata: trackingMetadata };
+    return soundLibrary ? { ...served, soundLibrary } : served;
   }
 
   /**
@@ -2297,7 +2268,7 @@ export class PostService {
     const content = opts.content;
     const isQuote = opts.isQuote ?? false;
 
-    const originalLanguage = content ? detectLanguage(content) : undefined;
+    const originalLanguage = content ? detectContentLanguage(content) : undefined;
 
     const originalRepostOfId = original.originalRepostOfId
       ?? original.repostOfId

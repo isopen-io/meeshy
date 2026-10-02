@@ -22,13 +22,7 @@ import XCTest
 final class CallManagerNetworkReconnectionSourceTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     /// `.connecting` is the answer-received/ICE-negotiating window — the FSM's
@@ -39,7 +33,7 @@ final class CallManagerNetworkReconnectionSourceTests: XCTestCase {
     /// watchdog window instead of triggering an immediate reconnect attempt.
     func test_networkMonitor_isInActiveCall_includesConnectingState() throws {
         let source = try callManagerSource()
-        guard let body = DeclarationBodyScanner.body(containing: "private func startNetworkMonitoring() {", in: source) else {
+        guard let body = DeclarationBodyScanner.body(containing: "func startNetworkMonitoring() {", in: source) else {
             XCTFail("startNetworkMonitoring not found"); return
         }
 

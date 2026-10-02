@@ -15,6 +15,8 @@
  * gabarits (390 × 844, 320 × 568) :
  *
  *  1. un appel VOCAL se connecte au pair ;
+ *  1 bis. glisser l'écran vers le bas (#9096) : un petit glissé le laisse en
+ *     place, un glissé aux trois quarts le réduit en pastille, qui le rend ;
  *  2. le bouton « Partager l’écran » est offert, cible de 44, derrière le (…)
  *     de la pilule qui déplie les actions (#8391) ;
  *  3. le toucher annonce le partage, et le pair DÉCODE des images de l'écran
@@ -25,7 +27,8 @@
  *  5. la caméra allumée, un partage puis son arrêt au bouton rendent la caméra ;
  *  6. le pair partage à son tour : son écran s'affiche en grand, ENTIER
  *     (`object-fit: contain`), des images arrivent, sous la bannière « Nadia
- *     Benali partage son écran » ; son arrêt rend l'écran d'appel ;
+ *     Benali partage son écran » ; réduit en bulle, puis dans l'image dans
+ *     l'image, il reste ENTIER (#8164) ; son arrêt rend l'écran d'appel ;
  *  7. sans `getDisplayMedia` (la WebView de la coque Android, Safari iOS),
  *     aucun bouton ne promet le partage — mais la RÉCEPTION n'en dépend pas :
  *     dans un appel VOCAL où personne n'a allumé de caméra, l'écran du pair
@@ -147,6 +150,48 @@ try {
         // ------------------------------------------------ 1. un appel vocal connecté
         check(await startConnectedAudioCall(page), `${label} : l'appel vocal se connecte au pair`);
 
+        // ------------------------------------------------ 1 bis. glisser vers le bas réduit l'appel (#9096)
+        check((await page.getAttribute('[data-call-screen]', 'data-call-swipe-down')) === 'ready', `${label} : en duo connecté, l'écran d'appel se glisse vers le bas`);
+        const drag = async (distance) => {
+          const x = Math.round(width / 2);
+          const y = Math.round(height * 0.25);
+          const under = await page.evaluate(([px, py]) => {
+            const hit = document.elementFromPoint(px, py);
+            const name = (el) => (el === null ? null : `${el.tagName.toLowerCase()}${[...el.attributes].filter((a) => a.name !== 'class' && a.name !== 'style').map((a) => `[${a.name}=${a.value.slice(0, 24)}]`).join('')}`);
+            const chain = [];
+            for (let el = hit; el !== null && chain.length < 6; el = el.parentElement) chain.push(name(el));
+            const keep = hit?.closest('[data-call-header], [data-call-chrome-keep], label, summary, input, [role="toolbar"]') ?? null;
+            const box = (sel) => {
+              const r = document.querySelector(sel)?.getBoundingClientRect();
+              return r === undefined ? null : [Math.round(r.top), Math.round(r.bottom)];
+            };
+            return { chain, keep: name(keep), header: box('[data-call-header]'), pill: box('[data-call-control-pill]'), controls: box('[data-call-controls]') };
+          }, [x, y]);
+          await page.mouse.move(x, y);
+          await page.mouse.down();
+          await page.mouse.move(x, y + distance / 2, { steps: 8 });
+          await page.mouse.move(x, y + distance, { steps: 8 });
+          const held = await page.evaluate(() => {
+            const screen = document.querySelector('[data-call-screen]');
+            return screen === null ? null : { swipe: screen.getAttribute('data-call-swipe-down'), transform: screen.style.transform, height: innerHeight };
+          });
+          await page.waitForTimeout(150);
+          await page.mouse.up();
+          return { from: [x, y], distance, under, held };
+        };
+        await drag(30);
+        await page.waitForTimeout(300);
+        check((await page.$('[data-call-screen="connected"]')) !== null && (await page.$('[data-call-pill-bar]')) === null, `${label} : un toucher ou un petit glissé laisse l'écran d'appel en place`);
+        const swiped = await drag(Math.min(280, height - Math.round(height * 0.25) - 20));
+        const reduced = await appears(page, '[data-call-pill-bar]', 3000);
+        check(reduced, `${label} : glissé aux trois quarts et relâché, l'appel se réduit — ${JSON.stringify(swiped)}`);
+        check((await page.$('[data-call-screen]')) === null, `${label} : réduit, l'écran d'appel a quitté le plein écran`);
+        await capture(page, `glisse-reduit-${slug}`);
+        if (reduced) {
+          await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
+          check(await appears(page, '[data-call-screen="connected"]'), `${label} : la pastille rend l'écran d'appel`);
+        }
+
         // ------------------------------------------------ 2. le bouton
         await openActions(page);
         const share = page.locator(SHARE);
@@ -198,6 +243,23 @@ try {
         const banner = await page.$eval('[data-call-screen-banner]', (el) => el.textContent ?? '').catch(() => '');
         check(banner === `${PEER_NAME} partage son écran`, `${label} : la bannière nomme celui qui partage (« ${banner} »)`);
         await capture(page, `partage-recu-${slug}`);
+        await page.click('[data-call-screen] button[aria-label="Réduire l’appel"]');
+        await page.click('[data-call-pill-collapse]');
+        const bubbleFit = await page.waitForSelector('[data-call-bubble] video', { timeout: 5000 }).then((video) => video.evaluate((el) => getComputedStyle(el).objectFit), () => null);
+        check(bubbleFit === 'contain', `${label} : réduit en bulle, l'écran partagé reste ENTIER (object-fit ${bubbleFit})`);
+        await capture(page, `partage-recu-bulle-${slug}`);
+        const pipButton = await page.$('[data-call-bubble-control="pip"]');
+        if (pipButton !== null && (await page.evaluate(() => 'documentPictureInPicture' in window))) {
+          await pipButton.click();
+          const pipFit = await until(page, () => {
+            const video = window.documentPictureInPicture?.window?.document.querySelector('[data-call-pip-window] video');
+            return video !== null && video !== undefined && video.ownerDocument.defaultView?.getComputedStyle(video).objectFit === 'contain';
+          });
+          check(pipFit, `${label} : dans l'image dans l'image, l'écran partagé reste ENTIER`);
+          await page.evaluate(() => window.documentPictureInPicture?.window?.close());
+        }
+        await page.click('[data-call-bubble-body]');
+        check(await appears(page, '[data-call-shared-screen] video'), `${label} : toucher la bulle rend l'écran partagé en grand`);
         await page.evaluate(() => window.__meeshyFixtureCallPeer?.stopShare());
         const back = await page.waitForSelector('[data-call-shared-screen]', { state: 'detached', timeout: 5000 }).then(() => true, () => false);
         check(back && (await page.$('[data-call-screen="connected"]')) !== null, `${label} : la fin du partage du pair rend l'écran d'appel`);

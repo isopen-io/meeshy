@@ -26,8 +26,10 @@ enum GroupCallStage {
 
     /// La grille ne remplace l'écran 1:1 qu'à partir de DEUX membres distants :
     /// avec le seul pair principal, `CallView` est déjà la bonne disposition.
+    /// Un membre tenu par le maillage (le principal parti, #9085) n'a que la
+    /// grille pour être vu : l'écran 1:1 ne montre que le principal.
     static func isShown(isMeshActive: Bool, roster: GroupCallRoster) -> Bool {
-        isMeshActive && roster.members.count >= 2
+        isMeshActive && (roster.members.count >= 2 || roster.members.contains { !$0.isPrimary })
     }
 
     /// Moi d'abord, puis les membres dans l'ordre d'arrivée : la grille ne se

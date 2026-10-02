@@ -27,14 +27,18 @@ enum GroupSignalRouting {
     /// Un appel DIRECT ne passe jamais par le maillage : son unique pair peut
     /// signer `from` d'un `participantId` (invité anonyme) différent du
     /// `remoteUserId` connu, et le 1:1 ne doit rien perdre à ce lot.
+    ///
+    /// Le siège du principal libéré (#9085) : tout membre passe par le maillage.
     static func destination(
         from: String?,
         localUserId: String,
         primaryUserId: String?,
-        isGroupCall: Bool
+        isGroupCall: Bool,
+        primaryVacated: Bool = false
     ) -> GroupSignalDestination {
         guard isGroupCall, let from, !from.isEmpty else { return .primary }
         if from == localUserId { return .ignore }
+        if primaryVacated { return .mesh(userId: from) }
         guard let primaryUserId, !primaryUserId.isEmpty else { return .primary }
         return from == primaryUserId ? .primary : .mesh(userId: from)
     }
@@ -47,9 +51,11 @@ enum GroupSignalRouting {
         arrivalUserId: String,
         localUserId: String,
         primaryUserId: String?,
-        isInCall: Bool
+        isInCall: Bool,
+        primaryVacated: Bool = false
     ) -> Bool {
         guard isInCall, !arrivalUserId.isEmpty, arrivalUserId != localUserId else { return false }
+        if primaryVacated { return true }
         guard let primaryUserId, !primaryUserId.isEmpty else { return false }
         return arrivalUserId != primaryUserId
     }

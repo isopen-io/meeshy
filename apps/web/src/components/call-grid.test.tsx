@@ -42,7 +42,8 @@ const liveVideo = { getVideoTracks: () => [{ readyState: 'live' }], getTracks: (
 const props = (overrides: Partial<CallGridProps> = {}): CallGridProps => ({
   members: [member('u-a', 'Awa'), member('u-b', 'Bintou')],
   remoteStreams: {},
-  self: { stream: null, cameraOn: false, mirrored: true },
+  self: { stream: null, cameraOn: false, mirrored: true, micMuted: false },
+  selfControls: null,
   choice: null,
   onChoose: () => undefined,
   immersive: false,
@@ -67,7 +68,7 @@ describe('CallGrid', () => {
   });
 
   test('chaque vidéo dit À QUI elle est — le membre, ou moi : la capture pose chaque visage dans SA case (#8743)', () => {
-    const html = grid({ members: [member('u-a', 'Awa', { cameraOn: true })], remoteStreams: { 'u-a': liveVideo }, self: { stream: liveVideo, cameraOn: true, mirrored: true } });
+    const html = grid({ members: [member('u-a', 'Awa', { cameraOn: true })], remoteStreams: { 'u-a': liveVideo }, self: { stream: liveVideo, cameraOn: true, mirrored: true, micMuted: false } });
     expect(html).toMatch(/<video[^>]*data-call-member="u-a"/);
     expect(html).toMatch(/<video[^>]*data-call-self=""/);
     const shared = grid(sharing);
@@ -123,6 +124,53 @@ describe('CallGrid', () => {
   });
 });
 
+describe('CallGrid — toute tuile à la une, la mienne aussi (#9098)', () => {
+  test('ma tuile montre mon micro coupé', () => {
+    expect(grid({ self: { stream: null, cameraOn: false, mirrored: true, micMuted: true } })).toMatch(/data-call-tile-self=""[\s\S]*data-call-tile-muted=""/);
+    expect(grid()).not.toContain('data-call-tile-muted');
+  });
+
+  test('ma tuile se met à la une, comme les autres', () => {
+    expect(grid()).toContain('aria-label="Mettre mon image à la une"');
+  });
+
+  test('ma tuile à la une : mon image occupe la scène, les commandes de ma caméra en haut au centre, tous les pairs en bandeau', () => {
+    const html = grid({ choice: { kind: 'self' }, selfControls: <span data-mine-row="" /> });
+    expect(html).toContain('data-call-spotlight="self"');
+    expect(html).toMatch(/data-call-self-featured-controls=""[^>]*>[\s\S]*data-mine-row=""/);
+    expect(html).toContain('data-call-strip=""');
+    expect(html).toContain('data-call-tile="u-a"');
+    expect(html).toContain('data-call-tile="u-b"');
+    expect(html).toContain('aria-label="Revenir à la grille"');
+  });
+
+  test('ses commandes n’existent qu’à la une', () => {
+    expect(grid({ selfControls: <span data-mine-row="" /> })).not.toContain('data-mine-row');
+  });
+
+  test('le plein écran s’offre pour toute tuile à la une, pas seulement un écran partagé', () => {
+    expect(grid({ choice: { kind: 'member', userId: 'u-b' } })).toContain('aria-label="Plein écran"');
+    expect(grid({ choice: { kind: 'self' } })).toContain('aria-label="Plein écran"');
+  });
+});
+
+describe('CallGrid — un partage d’écran en groupe laisse les caméras en rail (#9112)', () => {
+  test('l’écran partagé occupe la scène, les caméras des autres et la mienne forment le rail, chacune se met à la une', () => {
+    const html = grid({
+      members: [member('u-a', 'Awa', { cameraOn: true }), member('u-b', 'Bintou', { cameraOn: true }), member('u-k', 'Kofi', { screenSharing: true })],
+      remoteStreams: { 'u-a': liveVideo, 'u-b': liveVideo, 'u-k': liveVideo },
+      self: { stream: liveVideo, cameraOn: true, mirrored: true, micMuted: false },
+    });
+    expect(html).toContain('data-call-shared-screen=""');
+    const strip = html.slice(html.indexOf('data-call-strip'));
+    expect(strip).toMatch(/<video[^>]*data-call-member="u-a"/);
+    expect(strip).toMatch(/<video[^>]*data-call-member="u-b"/);
+    expect(strip).toMatch(/<video[^>]*data-call-self=""/);
+    expect(strip).toContain('aria-label="Mettre Awa en avant"');
+    expect(strip).toContain('aria-label="Mettre mon image à la une"');
+  });
+});
+
 describe('CallGrid — les gestes (#8392)', () => {
   const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
@@ -155,6 +203,35 @@ describe('CallGrid — les gestes (#8392)', () => {
     const view = mount({});
     view.press('[data-call-tile="u-b"]');
     expect(view.chosen).toEqual([{ kind: 'member', userId: 'u-b' }]);
+    view.done();
+  });
+
+  test('toucher ma tuile la choisit (#9098)', () => {
+    const view = mount({});
+    view.press('[data-call-tile-self]');
+    expect(view.chosen).toEqual([{ kind: 'self' }]);
+    view.done();
+  });
+
+  test('un écran partagé se zoome — Ctrl + molette, pincer — et un double toucher le rend entier (#9098)', () => {
+    const domStream = Object.defineProperty(new MediaStream(), 'getVideoTracks', { value: () => [{ readyState: 'live' }] });
+    const view = mount({ ...sharing, remoteStreams: { 'u-k': domStream } });
+    const screen = () => document.querySelector('[data-call-shared-screen]') as HTMLElement;
+    const zoom = () => Number(screen().getAttribute('data-call-screen-zoom'));
+    expect(zoom()).toBe(1);
+    /* happy-dom ne porte pas `ctrlKey` sur `WheelEvent` : il est posé à la main. */
+    const wheel = Object.defineProperty(new WheelEvent('wheel', { deltaY: -200, bubbles: true, cancelable: true }), 'ctrlKey', { value: true });
+    act(() => void screen().dispatchEvent(wheel));
+    expect(zoom()).toBeGreaterThan(1);
+    act(() => void screen().dispatchEvent(new MouseEvent('dblclick', { bubbles: true })));
+    expect(zoom()).toBe(1);
+    const finger = (type: string, pointerId: number, x: number) => act(() => void screen().dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId, clientX: x, clientY: 100, pointerType: 'touch' })));
+    finger('pointerdown', 1, 100);
+    finger('pointerdown', 2, 200);
+    finger('pointermove', 2, 300);
+    finger('pointerup', 2, 300);
+    finger('pointerup', 1, 100);
+    expect(zoom()).toBe(2);
     view.done();
   });
 

@@ -124,6 +124,7 @@ struct ReelFeedCard: View, Equatable {
             && lhs.displayShareCount == rhs.displayShareCount
             && lhs.post.commentCount == rhs.post.commentCount
             && lhs.post.content == rhs.post.content
+            && lhs.post.trackedLinkMap == rhs.post.trackedLinkMap
             && lhs.post.translatedContent == rhs.post.translatedContent
     }
 
@@ -173,8 +174,12 @@ struct ReelFeedCard: View, Equatable {
     private var displayAuthor: String { repostedReel?.author ?? post.author }
     private var displayAuthorColor: String { repostedReel?.authorColor ?? accentHex }
     private var displayAvatarURL: String? { repostedReel?.authorAvatarURL ?? post.authorAvatarURL }
+    /// Un réel publié sans texte montre la légende de sa scène (#9179), comme
+    /// le lecteur de réels — une seule règle, `ReelPublishedContent`.
     private var displayCaption: String {
-        post.content.isEmpty ? (repostedReel?.content ?? "") : post.displayContent
+        if post.content.isEmpty, let repostedReel { return repostedReel.content }
+        return ReelPublishedContent.content(type: .reel, text: post.displayContent,
+                                            captions: post.media.map(\.caption)) ?? ""
     }
 
     private var kind: ReelMediaKind {
@@ -371,6 +376,7 @@ struct ReelFeedCard: View, Equatable {
                     hashtagColor: MeeshyColors.hashtagColor(isDark: true),
                     accentColor: .white,
                     usesRelativeFont: true,
+                    trackedLinks: post.trackedLinkMap,
                     validUsernames: post.validMentionUsernames
                 )
                     .tint(.white)

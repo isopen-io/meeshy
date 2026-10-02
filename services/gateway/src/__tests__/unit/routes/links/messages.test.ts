@@ -22,11 +22,11 @@ jest.mock('../../../../utils/session-token', () => ({
   hashSessionToken: jest.fn((token) => 'hashed-' + token),
 }));
 
-const mockProcessMessageLinks = jest.fn().mockResolvedValue({ processedContent: 'Hello!', trackingLinks: [] } as any);
 const mockUpdateTrackingLinks = jest.fn().mockResolvedValue(undefined);
 jest.mock('../../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
-    processMessageLinks: (...args: any[]) => mockProcessMessageLinks(...args),
+    processExplicitLinksInContent: jest.fn(async ({ content }: any) => ({ processedContent: content, trackingLinks: [] })),
+    collectContentTrackingLinks: jest.fn().mockResolvedValue([] as any),
     updateTrackingLinksMessageId: (...args: any[]) => mockUpdateTrackingLinks(...args),
   })),
 }));

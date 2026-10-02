@@ -1,4 +1,5 @@
 import type { CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
+import { CALL_REJOIN_GRACE_MS } from '@meeshy/shared/types/call-rules';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import {
@@ -42,7 +43,8 @@ import { peerAlert } from './call-peer-alerts';
 import type { QualityLoop, QualityLoopDeps } from './call-quality-loop';
 import type { playCue, primeTones, startTone, stopTone } from './call-tones';
 import { listenCallEvents, type CallTransport } from './call-transport';
-import { callNoticeStore, callReactionStore, type CallNoticeStoreApi, type CallReactionStoreApi } from './call-control-state';
+import { callNoticeStore, callReactionStore, showNotice, type CallNoticeStoreApi, type CallReactionStoreApi } from './call-control-state';
+import { createEngineCamera } from './engine-camera';
 import { createEngineControls } from './engine-controls';
 import { createEnginePreview } from './engine-preview';
 import { loadDefaultEngineDeps } from './engine-defaults';
@@ -76,6 +78,8 @@ export const ENDED_SCREEN_MS = 2_500;
 export const ENDED_RETRY_SCREEN_MS = 8_000;
 export const QUALITY_INTERVAL_MS = 2_000;
 export const QUALITY_REPORT_MS = 5_000;
+/** Un duo dont le lien est perdu attend le retour du pair le temps de la grâce du serveur, plus une marge (#9111). */
+export const REJOIN_GIVE_UP_MS = CALL_REJOIN_GRACE_MS + 15_000;
 
 export type StartCallRequest = {
   readonly conversationId: string;
@@ -87,6 +91,15 @@ export type StartCallRequest = {
 
 export type JoinCallRequest = StartCallRequest & { readonly callId: string | null };
 
+/**
+ * Un pair revenu (rechargé, relancé, reconnecté) offre depuis un lien NEUF,
+ * dont l'époque repart de 1 (#9111) : l'ancien lien, déjà établi, ne
+ * l'accepterait jamais (`isStaleEpoch`) — il cède la place à un lien neuf.
+ */
+export function isFreshLinkOffer(signal: { readonly kind: string; readonly type?: string; readonly epoch: number }, link: string | undefined): boolean {
+  return signal.kind === 'description' && signal.type === 'offer' && signal.epoch <= 1 && (link === 'connected' || link === 'reconnecting' || link === 'failed');
+}
+
 export type CallEngineDeps = {
   readonly store: CallStoreApi;
   readonly transport: () => CallTransport | null;
@@ -94,6 +107,10 @@ export type CallEngineDeps = {
   readonly fetchActiveCallId: (conversationId: string) => Promise<string | null>;
   readonly acquireMedia: (options: { readonly video: boolean; readonly facing: Facing }) => Promise<MediaStream>;
   readonly acquireCamera: (facing: Facing) => Promise<MediaStreamTrack>;
+  /** Une caméra EXIGÉE par son identifiant (#9094, `acquireChosenInput`). */
+  readonly acquireCameraDevice: (deviceId: string) => Promise<MediaStreamTrack>;
+  /** La caméra choisie a répondu : elle devient la préférée (#8046). */
+  readonly rememberCamera: (deviceId: string) => void;
   /** La piste de l'écran choisi (#8063) — rejette quand l'utilisateur annule le choix. */
   readonly acquireDisplay: () => Promise<MediaStreamTrack>;
   readonly createLink: (deps: PeerLinkDeps) => PeerLink;
@@ -129,6 +146,8 @@ export type CallEngine = {
   readonly toggleMic: () => void;
   readonly toggleCamera: () => Promise<void>;
   readonly switchCamera: () => Promise<void>;
+  /** Une caméra choisie par son identifiant (#9094) — la piste envoyée est remplacée, sans renégociation. */
+  readonly selectCamera: (deviceId: string) => Promise<void>;
   /** Partager l'écran, ou arrêter le partage (#8063). */
   readonly toggleScreen: () => Promise<void>;
   /** Un périphérique choisi en cours d'appel (#8046) : la piste, déjà acquise, remplace l'actuelle. */
@@ -154,7 +173,6 @@ export type CallEngine = {
   readonly react: (emoji: CallReactionEmoji) => boolean;
   readonly handle: (event: string, payload: unknown) => void;
   readonly reauthenticated: () => void;
-  readonly pageHidden: () => void;
   readonly dispose: () => void;
 };
 
@@ -166,7 +184,6 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
   let incomingTimer: unknown = null;
   let generation = 0;
   let screenPicking = false;
-  let cameraBusy = false;
 
   const read = (): ActiveCall | null => store.getState().call;
   const write = (call: ActiveCall | null): void => store.setState({ call });
@@ -192,6 +209,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
 
   const stopTimers = (): void => {
     session.ringTimer = clear(session.ringTimer);
+    session.lostTimer = clear(session.lostTimer);
     if (session.heartbeat !== null) deps.stopRepeat(session.heartbeat);
     session.heartbeat = null;
     if (session.qualityTimer !== null) deps.stopRepeat(session.qualityTimer);
@@ -274,6 +292,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       deps.tones.stop();
       if (call.connectedAt === null) deps.tones.cue('connected');
       session.ringTimer = clear(session.ringTimer);
+      session.lostTimer = clear(session.lostTimer);
       write({ ...call, phase: { kind: 'connected' }, connectedAt: call.connectedAt ?? deps.now() });
       preview.close();
       if (session.mutedWhileRinging && call.micMuted) toggleMic();
@@ -297,6 +316,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
   const remember = (person: DecodedPerson, participantId: string | null, flags?: { readonly micMuted?: boolean; readonly cameraOn?: boolean }): void => {
     if (person.userId === deps.viewerId()) return;
     if (participantId !== null) session.participantIds.set(participantId, person.userId);
+    if (participantId !== null) session.currentRows.set(person.userId, participantId);
     update((call) => {
       const current = call.members[person.userId];
       return withMember(call, {
@@ -313,18 +333,23 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     });
   };
 
+  const dropLink = (userId: string): void => {
+    session.links.get(userId)?.close();
+    session.links.delete(userId);
+  };
+
+  const dropPeer = (userId: string): void => {
+    dropLink(userId);
+    update((current) => withoutMember(current, userId));
+  };
+
   const onLinkState = (userId: string, state: LinkState): void => {
     const call = read();
     if (call === null || call.phase.kind === 'ended') return;
     if (state === 'failed') {
       const others = [...session.links.keys()].filter((id) => id !== userId);
-      if (!call.isGroup || others.length === 0) {
-        hangupWith('connectionLost');
-        return;
-      }
-      session.links.get(userId)?.close();
-      session.links.delete(userId);
-      update((current) => withoutMember(current, userId));
+      if (call.isGroup && others.length > 0) dropPeer(userId);
+      else awaitRejoin(userId);
       return;
     }
     const before = call.members[userId]?.link;
@@ -338,6 +363,16 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       emit(CLIENT_EVENTS.CALL_RECONNECTED, { callId, participantId: deps.viewerId() });
     }
     refreshPhase();
+  };
+
+  /** Un lien perdu en duo n'est pas une fin (#9111) : le pair peut revenir tant que la grâce du serveur court ; passé elle, on QUITTE. */
+  const awaitRejoin = (userId: string): void => {
+    session.troubled = true;
+    update((current) => patchMember({ ...current, phase: { kind: 'reconnecting' } }, userId, { link: 'reconnecting' }));
+    session.lostTimer ??= deps.schedule(() => {
+      session.lostTimer = null;
+      if (read()?.phase.kind === 'reconnecting') hangupWith('connectionLost', CLIENT_EVENTS.CALL_LEAVE);
+    }, REJOIN_GIVE_UP_MS);
   };
 
   const linkTo = (userId: string): PeerLink | null => {
@@ -372,14 +407,14 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
 
   const preview = createEnginePreview({ read, update, emit, viewerId: deps.viewerId, createLink: deps.createLink, createStream: deps.createStream, localStream: () => localStream, iceServers: () => session.iceServers, silenceRing: deps.tones.stop });
 
-  const leaveServer = (reason?: string): void => {
+  const leaveServer = (event: string = CLIENT_EVENTS.CALL_END): void => {
     const callId = read()?.callId ?? null;
     if (callId === null) return;
-    void request(CLIENT_EVENTS.CALL_END, reason === undefined ? { callId } : { callId, reason });
+    void request(event, { callId });
   };
 
-  const hangupWith = (reason: CallEndReason): void => {
-    leaveServer();
+  const hangupWith = (reason: CallEndReason, event?: string): void => {
+    leaveServer(event);
     finish(reason);
   };
 
@@ -415,7 +450,15 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     const callId = read()?.callId ?? null;
     if (callId === null) return null;
     const shown = (): void => void (session.telemetry = markCaptions(session.telemetry));
-    const bye = (): void => (read()?.callId === callId ? finish('remote') : undefined);
+    const bye = (userId: string): void => {
+      const call = read();
+      if (call === null || call.callId !== callId) return;
+      if (!call.isGroup) {
+        finish('remote');
+        return;
+      }
+      dropPeer(userId);
+    };
     session.captions ??= deps.createCaptions({ callId, read, update, emit, viewerId: deps.viewerId, now: deps.now, repeat: deps.repeat, stopRepeat: deps.stopRepeat, shown, bye });
     return session.captions;
   };
@@ -480,6 +523,14 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (afterJoinAck(ack)) startHeartbeat(callId);
   };
 
+  /** « Appeler » une conversation dont l'appel est en cours le REJOINT (#9111) — sans force-leave, qui quitterait sa propre ligne. */
+  const joinLive = async (callId: string, stream: MediaStream, token: number): Promise<void> => {
+    const ack = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId, settings: mediaSettings(stream) }));
+    if (token !== generation) return;
+    update((call) => ({ ...call, callId, phase: { kind: 'connecting' } }));
+    if (afterJoinAck(ack)) startHeartbeat(callId);
+  };
+
   const start = async (callRequest: StartCallRequest): Promise<void> => {
     deps.tones.prime();
     if (isCallLive(read())) {
@@ -492,9 +543,13 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     session.retry = callRequest;
     session.telemetry = createTelemetry(deps.now());
     write(baseCall(callRequest, 'outgoing', { kind: 'outgoing' }));
-    const stream = await acquire(callRequest.media === 'video', 'user');
+    const [stream, liveId] = await Promise.all([acquire(callRequest.media === 'video', 'user'), deps.fetchActiveCallId(callRequest.conversationId).catch(() => null)]);
     if (stream === null || token !== generation) return;
     update((call) => ({ ...call, localStream: stream, cameraOn: stream.getVideoTracks().length > 0 }));
+    if (liveId !== null) {
+      await joinLive(liveId, stream, token);
+      return;
+    }
     emit(CLIENT_EVENTS.CALL_FORCE_LEAVE, { conversationId: callRequest.conversationId });
     const ack = decodeAck(
       await request(CLIENT_EVENTS.CALL_INITIATE, {
@@ -506,12 +561,9 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (token !== generation || read()?.phase.kind === 'ended') return;
     if (!ack.ok) {
       if (ack.code === 'CALL_ALREADY_ACTIVE') {
-        const activeId = await deps.fetchActiveCallId(callRequest.conversationId).catch(() => null);
+        const activeId = ack.activeCallId ?? (await deps.fetchActiveCallId(callRequest.conversationId).catch(() => null));
         if (activeId !== null && token === generation) {
-          const ackJoin = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId: activeId, settings: mediaSettings(stream) }));
-          if (token !== generation) return;
-          update((call) => ({ ...call, callId: activeId, phase: { kind: 'connecting' } }));
-          if (afterJoinAck(ackJoin)) startHeartbeat(activeId);
+          await joinLive(activeId, stream, token);
           return;
         }
       }
@@ -628,6 +680,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (signal === null || call === null || call.callId !== signal.callId || call.phase.kind === 'ended' || call.phase.kind === 'incoming') return;
     if (signal.to !== deps.viewerId() || signal.from === deps.viewerId()) return;
     if (call.members[signal.from] === undefined) remember({ userId: signal.from, name: '', avatar: null }, null);
+    if (isFreshLinkOffer(signal, call.members[signal.from]?.link)) dropLink(signal.from);
     const link = linkTo(signal.from);
     if (link === null) return;
     try {
@@ -664,9 +717,9 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (left === null || call === null || call.callId !== left.callId) return;
     const userId = left.userId ?? (left.participantId === null ? null : (session.participantIds.get(left.participantId) ?? null));
     if (userId === null || userId === deps.viewerId()) return;
-    session.links.get(userId)?.close();
-    session.links.delete(userId);
-    update((current) => withoutMember(current, userId));
+    const currentRow = session.currentRows.get(userId);
+    if (left.participantId !== null && currentRow !== undefined && currentRow !== left.participantId) return;
+    dropPeer(userId);
     const after = read();
     if (after !== null && !after.isGroup && after.phase.kind !== 'ended' && after.phase.kind !== 'outgoing') finish('remote');
   };
@@ -750,6 +803,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
         onPeerAlert(event, payload);
         return;
       case SERVER_EVENTS.CALL_PARTICIPANT_INVITED:
+      case SERVER_EVENTS.CALL_INVITE_DECLINED:
+      case SERVER_EVENTS.CALL_INVITE_EXPIRED:
       case SERVER_EVENTS.CALL_MUTED_BY_MODERATOR:
       case SERVER_EVENTS.CALL_REACTION_RECEIVED:
         controls.receive(event, payload);
@@ -808,86 +863,21 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     update((latest) => ({ ...latest, localStream: deps.createStream(stream.getTracks()) }));
   };
 
-  /**
-   * UN GESTE DE CAMÉRA À LA FOIS (#8735) — l'écran bascule AVANT que la
-   * caméra ne réponde ; un second toucher pendant qu'elle s'ouvre est ignoré
-   * (il partirait d'un état périmé), comme le choix d'un écran à partager.
-   */
-  const cameraGesture = async (run: () => Promise<void>): Promise<void> => {
-    if (cameraBusy) return;
-    cameraBusy = true;
-    try {
-      await run();
-    } finally {
-      cameraBusy = false;
-    }
-  };
-
-  /** Une caméra ouverte pour CE flux ; arrivée trop tard (appel fini, flux remplacé), elle est relâchée. */
-  const openCamera = async (facing: Facing, stream: MediaStream): Promise<MediaStreamTrack | null> => {
-    const track = await deps.acquireCamera(facing).catch(() => null);
-    if (track !== null && localStream !== stream) {
-      track.stop();
-      return null;
-    }
-    return track;
-  };
-
-  const announceCamera = (): void => {
-    const after = read();
-    if (after?.callId != null) emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId: after.callId, enabled: after.cameraOn });
-  };
-
-  const toggleCamera = (): Promise<void> =>
-    cameraGesture(async () => {
-      const call = read();
-      const stream = localStream;
-      if (call === null || stream === null || !isCallLive(call) || call.phase.kind === 'incoming' || call.screenSharing) return;
-      write({ ...call, cameraOn: !call.cameraOn });
-      if (call.cameraOn) {
-        await setCamera(null);
-        announceCamera();
-        return;
-      }
-      const track = await openCamera(call.facing, stream);
-      if (localStream !== stream) return;
-      if (track === null) {
-        update((current) => ({ ...current, cameraOn: call.cameraOn }));
-        return;
-      }
-      await setCamera(track);
-      if (call.media === 'audio') update((current) => ({ ...current, media: 'video' }));
-      announceCamera();
-    });
-
-  /**
-   * Retourner : l'autre caméra, ouverte d'abord à côté de celle qui tourne ;
-   * un appareil qui n'en ouvre qu'une à la fois la refuse — la caméra en
-   * cours est alors relâchée, puis l'autre rouverte. Si elle ne vient pas,
-   * celle d'avant revient (et l'écran avec elle) ; sans aucune, la caméra
-   * s'éteint et le pair l'apprend.
-   */
-  const switchCamera = (): Promise<void> =>
-    cameraGesture(async () => {
-      const call = read();
-      const stream = localStream;
-      if (call === null || stream === null || !call.cameraOn || call.screenSharing) return;
-      const facing: Facing = call.facing === 'user' ? 'environment' : 'user';
-      write({ ...call, facing });
-      const beside = await openCamera(facing, stream);
-      if (localStream !== stream) return;
-      if (beside !== null) {
-        await setCamera(beside);
-        return;
-      }
-      await setCamera(null, true);
-      const flipped = await openCamera(facing, stream);
-      const track = flipped ?? (await openCamera(call.facing, stream));
-      if (localStream !== stream) return;
-      update((current) => ({ ...current, facing: flipped === null ? call.facing : facing }));
-      await setCamera(track);
-      if (track === null) announceCamera();
-    });
+  const camera = createEngineCamera({
+    read,
+    write,
+    update,
+    stream: () => localStream,
+    acquireCamera: deps.acquireCamera,
+    acquireCameraDevice: deps.acquireCameraDevice,
+    setCamera,
+    announce: (enabled) => {
+      const callId = read()?.callId ?? null;
+      if (callId !== null) emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled });
+    },
+    failed: (failure) => showNotice(controlState.notices, { kind: 'camera-failed', failure }),
+    remember: deps.rememberCamera,
+  });
 
   const sharable = (call: ActiveCall | null): call is ActiveCall => call !== null && (call.phase.kind === 'connected' || call.phase.kind === 'reconnecting');
 
@@ -999,11 +989,6 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     void request(CLIENT_EVENTS.CALL_END, { callId: waiting.callId, reason: 'rejected' });
   };
 
-  const onPageHide = (): void => {
-    const call = read();
-    if (call?.callId != null && call.phase.kind !== 'incoming' && isCallLive(call)) emit(CLIENT_EVENTS.CALL_END, { callId: call.callId });
-  };
-
   const unlisten = listenCallEvents(handle, () => {
     const call = read();
     if (call === null || call.callId === null || !isCallLive(call) || call.phase.kind === 'incoming') return;
@@ -1037,8 +1022,9 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       hangupWith('local');
     },
     toggleMic,
-    toggleCamera,
-    switchCamera,
+    toggleCamera: camera.toggleCamera,
+    switchCamera: camera.switchCamera,
+    selectCamera: camera.selectCamera,
     toggleScreen,
     replaceInput,
     setDisplay: (display) => update((call) => ({ ...call, display })),
@@ -1063,7 +1049,6 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     },
     handle,
     reauthenticated: () => undefined,
-    pageHidden: onPageHide,
     dispose: () => {
       unlisten();
       resetToIdle();
@@ -1079,6 +1064,5 @@ export async function defaultCallEngine(): Promise<CallEngine> {
   const deps = loadDefaultEngineDeps();
   const engine = createCallEngine({ ...deps, store: callStore });
   singleton = engine;
-  if (typeof window !== 'undefined') window.addEventListener('pagehide', engine.pageHidden);
   return engine;
 }

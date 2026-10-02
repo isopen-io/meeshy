@@ -158,6 +158,18 @@ public struct APIPostComment: Decodable, Sendable {
     /// n'existe plus ou qu'il a quitté le post commenté — la citation reste,
     /// portée par `quotedPostMedia`.
     public var quotedMedia: APIPostMedia? = nil
+    /// La carte des liens suivis du commentaire — son contenu ET la légende de
+    /// son média (#9075). Hissée en tête par l'écho socket (`comment:added`,
+    /// `comment:updated`), rangée sous `metadata` par le REST : les deux sont
+    /// lues, la hissée d'abord.
+    public var trackingLinks: [TrackedLink]? = nil
+    var metadata: TrackingLinksMetadata? = nil
+
+    /// `[rawURL: token]`, la forme que lit `MessageTextRenderer`.
+    public var trackedLinkMap: [String: String] {
+        let hoisted = trackingLinks ?? []
+        return (hoisted.isEmpty ? (metadata?.trackingLinks ?? []) : hoisted).trackedLinkMap
+    }
 
     /// **Le recollement des deux moitiés, site UNIQUE.**
     ///
@@ -174,6 +186,20 @@ public struct APIPostComment: Decodable, Sendable {
             kind: CommentQuotedMedia.Kind(rawValue: ancre.kind) ?? .file,
             media: quotedMedia?.toFeedMedia()
         )
+    }
+}
+
+/// Le `metadata` d'un contenu social réduit à ce que le client en lit : la
+/// carte des liens suivis. Décodage TOLÉRANT — un `metadata` illisible ne doit
+/// pas emporter le contenu qui le porte.
+struct TrackingLinksMetadata: Decodable, Sendable {
+    let trackingLinks: [TrackedLink]?
+
+    private enum CodingKeys: String, CodingKey { case trackingLinks }
+
+    init(from decoder: Decoder) throws {
+        let c = try? decoder.container(keyedBy: CodingKeys.self)
+        trackingLinks = (try? c?.decodeIfPresent([TrackedLink].self, forKey: .trackingLinks)) ?? nil
     }
 }
 
@@ -533,7 +559,8 @@ extension APIPost {
                         currentUserReactions: c.currentUserReactions,
                         media: (c.media ?? []).map { $0.toFeedMedia() },
                         location: c.location,
-                        quotedMedia: c.quotedCitation)
+                        quotedMedia: c.quotedCitation,
+                        trackedLinkMap: c.trackedLinkMap)
         }
 
         let repost: RepostContent? = repostOf?.toRepostContent()

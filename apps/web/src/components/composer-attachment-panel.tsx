@@ -5,6 +5,7 @@ import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
+import { developShots } from '@/lib/media/develop-shots';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { mayAttach } from '@/lib/send/attachments';
@@ -82,19 +83,6 @@ function Tile({ label, color, children }: { readonly label: string; readonly col
  * `e.currentTarget.value = ''` après chaque choix : sans lui, rechoisir le
  * MÊME fichier ne lève aucun `change`.
  */
-type PhotoDevelopModule = Pick<typeof import('@/lib/media/photo-develop'), 'developPhotoFile'>;
-
-/**
- * Ce qui revient de l'appareil photo passe par le développement unique des
- * photos (#8695), chargé au premier retour. Chunk injoignable : la photo part
- * originale, jamais perdue.
- */
-export const developShots = (shots: readonly File[], load: () => Promise<PhotoDevelopModule> = () => import('@/lib/media/photo-develop')): Promise<readonly File[]> =>
-  load().then(
-    ({ developPhotoFile }) => Promise.all(shots.map((shot) => developPhotoFile(shot))),
-    () => shots,
-  );
-
 function FileSource({
   id,
   label,
@@ -188,6 +176,9 @@ export type ComposerAttachmentPanelProps = {
   readonly onPickPhotos: (files: FileList | null) => void;
   /** Les photos prises, déjà développées (`developPhotoFile`, #8695). */
   readonly onPickCamera: (files: readonly File[]) => void;
+  /** LA CAMÉRA DE LA BARRE (#9123) : présente ⇒ la tuile ouvre le studio,
+   * viseur armé ; absente ⇒ l'appareil photo de l'OS (`onPickCamera`). */
+  readonly onOpenCamera?: () => void;
   readonly onPickFile: (files: FileList | null) => void;
   readonly onRequestLocation: () => void;
   readonly onRequestEmoji: () => void;
@@ -208,6 +199,7 @@ export type ComposerAttachmentPanelProps = {
 export function ComposerAttachmentPanel({
   onPickPhotos,
   onPickCamera,
+  onOpenCamera,
   onPickFile,
   onRequestLocation,
   onRequestEmoji,
@@ -267,7 +259,7 @@ export function ComposerAttachmentPanel({
             label={translate(language, 'composer.attach.photo')}
             action={translate(language, 'composer.attach.photo.action')}
             color="var(--ios-tile-photo)"
-            accept="image/*"
+            accept="image/*,video/*"
             multiple
             onPick={onPickPhotos}
           >
@@ -275,7 +267,17 @@ export function ComposerAttachmentPanel({
           </FileSource>
         ) : null}
 
-        {canImages ? (
+        {canImages && onOpenCamera !== undefined ? (
+          <GestureSource
+            id="camera"
+            label={translate(language, 'composer.attach.camera')}
+            action={translate(language, 'composer.attach.camera.action')}
+            color="var(--ios-tile-camera)"
+            onTrigger={onOpenCamera}
+          >
+            <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={26} />
+          </GestureSource>
+        ) : canImages ? (
           <FileSource
             id="camera"
             label={translate(language, 'composer.attach.camera')}

@@ -76,11 +76,11 @@ describe('listCallHistory — participants d’un appel de groupe', () => {
     bytesSent: null,
     bytesReceived: null,
     metadata: { type: 'audio' },
-    conversation: { type: 'group', title: 'Équipe', avatar: null },
+    conversation: { type: 'group', title: 'Équipe', avatar: null, participants: [{ id: 'p-reader' }] },
   };
 
   it('porte les participants sur la ligne d’un appel de groupe, une liste vide pour un appel direct', async () => {
-    const directRow = { ...groupRow, id: 'call-d', conversationId: 'conv-d', conversation: { type: 'direct', title: null, avatar: null } };
+    const directRow = { ...groupRow, id: 'call-d', conversationId: 'conv-d', conversation: { type: 'direct', title: null, avatar: null, participants: [{ id: 'p-reader' }] } };
     const prisma = {
       callSession: { findMany: jest.fn<any>().mockResolvedValue([groupRow, directRow]) },
       participant: { findMany: jest.fn<any>().mockResolvedValue([]) },

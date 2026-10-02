@@ -27,7 +27,7 @@ struct LentilleConversationRow: View {
     var isDragging: Bool = false
     var presenceState: PresenceState = .offline
     /// Le pair a l'écran de CETTE conversation ouvert (#8892).
-    var isPeerHere: Bool = false
+    var isPeerHere: ConversationHere = .absent
     var onViewStory: (() -> Void)? = nil
     var onViewProfile: (() -> Void)? = nil
     var onViewConversationInfo: (() -> Void)? = nil
@@ -583,7 +583,7 @@ extension LentilleConversationRow: @MainActor Equatable {
 private struct LentilleRowAvatar: View {
     let conversation: Conversation
     let presenceState: PresenceState?
-    let isPeerHere: Bool
+    let isPeerHere: ConversationHere
     let storyRingState: StoryRingState
     let moodStatus: StatusEntry?
     var onViewStory: (() -> Void)? = nil
@@ -643,8 +643,8 @@ private struct LentilleRowAvatar: View {
             // dot de présence agrégée qu'un DM. `presenceState` porte déjà
             // `.offline` = aucun dot (contrat §4.3 « offline = aucun dot »,
             // verrouillé par MeeshyAvatar, pas ici).
-            presenceState: moodStatus == nil ? presenceState : nil,
-            isHere: isDirect && isPeerHere,
+            presenceState: presenceState,
+            isHere: isDirect ? isPeerHere : .absent,
             onTap: isDirect ? onViewProfile : onViewConversationInfo,
             onViewProfile: nil,
             onViewStory: (isDirect && storyRingState != .none) ? onViewStory : nil,

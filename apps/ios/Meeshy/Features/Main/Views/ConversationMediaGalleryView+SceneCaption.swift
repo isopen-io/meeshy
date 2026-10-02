@@ -102,9 +102,10 @@ struct GallerySceneCaptionBlock: View {
             accessory: translationRow,
             onToggle: onToggle
         ) { texte, taille in
-            Text(texte)
-                .font(MeeshyFont.relative(taille))
-                .foregroundColor(.white)
+            // #9075 — la légende d'une scène est un texte DU POST : ses adresses
+            // s'ouvrent par la carte des liens suivis du post.
+            MediaCaptionRichText(texte, size: taille, trackedLinks: post.trackedLinkMap,
+                                 validUsernames: post.validMentionUsernames)
         }
         .padding(.vertical, MeeshySpacing.sm)
         // Une traduction arrivée sort sa langue de l'attente (#6504, #6280).

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { blurCapable, colorPipelineSupported, effectsFilter, effectsOffered, effectsUsedOf, FACE_EFFECTS, needsFramePipeline, NO_EFFECTS, setVideoEffects, VIDEO_PRESETS, videoEffectsStore, type VideoEffects } from './video-effects';
+import { blurCapable, blurOffered, cameraBlur, colorPipelineSupported, effectsFilter, effectsOffered, effectsUsedOf, FACE_EFFECTS, frameSettings, needsFramePipeline, needsFrames, NO_EFFECTS, segmentationSupported, setVideoEffects, VIDEO_PRESETS, videoEffectsStore, type VideoEffects } from './video-effects';
 
 /**
  * LES EFFETS DE MA VIDÉO (#8442) — les règles, sans DOM : ce qu'un préréglage
@@ -82,6 +82,61 @@ describe('ce que le navigateur sait faire', () => {
     expect(effectsOffered({ color: false, blur: false })).toBe(false);
     expect(effectsOffered({ color: true, blur: false })).toBe(true);
     expect(effectsOffered({ color: false, blur: true })).toBe(true);
+  });
+});
+
+describe('ce que le traitement des images reçoit (#8471, #8441)', () => {
+  test('le flou se fait à la source quand la caméra l’offre : aucune image à traiter', () => {
+    const settings = frameSettings(effects({ blur: true }), { nativeBlur: true, zoom: 1 });
+    expect(settings.segmentBlur).toBe(false);
+    expect(needsFrames(settings)).toBe(false);
+  });
+
+  test('sans flou de caméra, le flou se fait par segmentation : les images passent par le traitement', () => {
+    const settings = frameSettings(effects({ blur: true }), { nativeBlur: false, zoom: 1 });
+    expect(settings.segmentBlur).toBe(true);
+    expect(needsFrames(settings)).toBe(true);
+  });
+
+  test('le zoom numérique recadre l’image envoyée : au-delà de 1×, les images passent par le traitement', () => {
+    expect(needsFrames(frameSettings(NO_EFFECTS, { nativeBlur: false, zoom: 2 }))).toBe(true);
+    expect(needsFrames(frameSettings(NO_EFFECTS, { nativeBlur: false, zoom: 1 }))).toBe(false);
+  });
+
+  test('naturel, sans visage, sans flou ni zoom : la caméra part brute', () => {
+    expect(needsFrames(frameSettings(NO_EFFECTS, { nativeBlur: false, zoom: 1 }))).toBe(false);
+    expect(needsFrames(frameSettings(effects({ preset: 'warm' }), { nativeBlur: false, zoom: 1 }))).toBe(true);
+  });
+
+  test('un zoom hors bornes se ramène à 1× au moins', () => {
+    expect(frameSettings(NO_EFFECTS, { nativeBlur: false, zoom: 0.4 }).zoom).toBe(1);
+    expect(frameSettings(NO_EFFECTS, { nativeBlur: false, zoom: Number.NaN }).zoom).toBe(1);
+  });
+});
+
+describe('le flou offert (#8471)', () => {
+  const cameraWith = (backgroundBlur: unknown) => ({ getCapabilities: () => ({ backgroundBlur }) }) as unknown as MediaStreamTrack;
+  const able = { MediaStreamTrackProcessor: class {}, MediaStreamTrackGenerator: class {}, OffscreenCanvas: class {}, Worker: class {}, WebAssembly: {}, createCanvas: () => ({ getContext: (kind: string) => (kind === 'webgl2' ? {} : { filter: 'none' }) }) };
+
+  test('le flou natif de la caméra se lit dans ses capacités', () => {
+    expect(cameraBlur(cameraWith([false, true]))).toBe(true);
+    expect(cameraBlur(cameraWith([false]))).toBe(false);
+    expect(cameraBlur(null)).toBe(false);
+  });
+
+  test('il est offert par la caméra, sinon par la segmentation', () => {
+    expect(blurOffered(cameraWith([false, true]), false)).toBe(true);
+    expect(blurOffered(cameraWith([false]), true)).toBe(true);
+    expect(blurOffered(cameraWith([false]), false)).toBe(false);
+    expect(blurOffered(null, true)).toBe(false);
+  });
+
+  test('la segmentation demande un traitement des images, un worker, WebAssembly et WebGL2', () => {
+    expect(segmentationSupported(able)).toBe(true);
+    expect(segmentationSupported({ ...able, Worker: undefined })).toBe(false);
+    expect(segmentationSupported({ ...able, WebAssembly: undefined })).toBe(false);
+    expect(segmentationSupported({ ...able, createCanvas: () => ({ getContext: (kind: string) => (kind === 'webgl2' ? null : { filter: 'none' }) }) })).toBe(false);
+    expect(segmentationSupported({ ...able, MediaStreamTrackProcessor: undefined })).toBe(false);
   });
 });
 

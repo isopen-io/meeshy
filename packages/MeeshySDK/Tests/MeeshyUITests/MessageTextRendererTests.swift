@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 @testable import MeeshyUI
+import MeeshySDK
 
 @MainActor
 final class MessageTextRendererTests: XCTestCase {
@@ -93,40 +94,51 @@ final class MessageTextRendererTests: XCTestCase {
 
     // MARK: - Tracked links (outbound-link redirect rewrite)
 
-    func test_resolvedLinkURL_exactMatch_rewritesToTrackingRedirect() {
-        let raw = "https://example.com/page"
-        let original = URL(string: raw)!
-        let resolved = MessageTextRenderer.resolvedLinkURL(
-            raw: raw, original: original, trackedLinks: [raw: "tok123"]
-        )
-        XCTAssertEqual(resolved.absoluteString, "https://meeshy.me/l/tok123")
+    // #9093 — la loi de rendu d'un lien, lue sur le texte RENDU (texte des
+    // runs liés + destination), pour les quatre formes écrites.
+
+    private static let staging = "https://staging.meeshy.me"
+
+    private func linkRuns(_ text: String, map: [String: String]?) -> [String] {
+        let rendered = MessageTextRenderer.attributed(text, color: .primary, trackedLinks: map, webOrigin: Self.staging)
+        return rendered.runs.compactMap { run in
+            run.link.map { "\(String(rendered[run.range].characters))->\($0.absoluteString)" }
+        }
     }
 
-    func test_resolvedLinkURL_trailingPunctuation_trimsThenMatches() {
-        // The URL regex may capture a trailing '.' the gateway excluded when it
-        // minted the token — the trimmed form must still resolve.
-        let raw = "https://example.com/page."
-        let original = URL(string: raw)!
-        let resolved = MessageTextRenderer.resolvedLinkURL(
-            raw: raw, original: original, trackedLinks: ["https://example.com/page": "tok999"]
-        )
-        XCTAssertEqual(resolved.absoluteString, "https://meeshy.me/l/tok999")
+    private func plain(_ text: String, map: [String: String]?) -> String {
+        String(MessageTextRenderer.attributed(text, color: .primary, trackedLinks: map, webOrigin: Self.staging).characters)
     }
 
-    func test_resolvedLinkURL_noMatch_keepsOriginal() {
-        let raw = "https://other.com"
-        let original = URL(string: raw)!
-        let resolved = MessageTextRenderer.resolvedLinkURL(
-            raw: raw, original: original, trackedLinks: ["https://example.com": "tok"]
-        )
-        XCTAssertEqual(resolved, original)
+    func test_law_bareMappedURL_showsShortCode_opensTrackedRedirect() {
+        let map = ["https://example.com/page": "tok123"]
+        XCTAssertEqual(linkRuns("voir https://example.com/page.", map: map), ["m+tok123->https://staging.meeshy.me/l/tok123"])
+        XCTAssertEqual(plain("voir https://example.com/page.", map: map), "voir m+tok123.")
     }
 
-    func test_resolvedLinkURL_nilOrEmptyMap_keepsOriginal() {
-        let raw = "https://example.com"
-        let original = URL(string: raw)!
-        XCTAssertEqual(MessageTextRenderer.resolvedLinkURL(raw: raw, original: original, trackedLinks: nil), original)
-        XCTAssertEqual(MessageTextRenderer.resolvedLinkURL(raw: raw, original: original, trackedLinks: [:]), original)
+    func test_law_bareUnmappedURL_keepsAddress_opensDirect() {
+        XCTAssertEqual(linkRuns("voir https://other.com/x", map: ["https://example.com": "tok"]),
+                       ["https://other.com/x->https://other.com/x"])
+    }
+
+    func test_law_labelledMappedURL_showsLabel_opensTrackedRedirect() {
+        XCTAssertEqual(linkRuns("lis [la page](https://example.com/page)", map: ["https://example.com/page": "tok123"]),
+                       ["la page->https://staging.meeshy.me/l/tok123"])
+    }
+
+    func test_law_labelledUnmappedURL_showsLabel_opensDirect() {
+        XCTAssertEqual(linkRuns("lis [la page](https://example.com/page)", map: nil),
+                       ["la page->https://example.com/page"])
+    }
+
+    func test_law_verbatimURL_showsAddressWithoutBrackets_opensDirect_evenWhenMapped() {
+        let map = ["https://example.com/page": "tok123"]
+        XCTAssertEqual(linkRuns("lis [[https://example.com/page]] !", map: map), ["https://example.com/page->https://example.com/page"])
+        XCTAssertEqual(plain("lis [[https://example.com/page]] !", map: map), "lis https://example.com/page !")
+    }
+
+    func test_law_historicShortCode_staysLiteral_opensActiveOriginRedirect() {
+        XCTAssertEqual(linkRuns("regarde m+Ab12cd", map: nil), ["m+Ab12cd->https://staging.meeshy.me/l/Ab12cd"])
     }
 
     func test_render_withTrackedLinks_doesNotCrash() {
@@ -156,8 +168,8 @@ final class MessageTextRendererTests: XCTestCase {
             case .text(let s, _): return "text(\(s))"
             case .mentionLink(let d, _, _): return "mention(\(d))"
             case .hashtagLink(let d, _, _): return "hashtag(\(d))"
-            case .meeshyTokenLink(let d, _, _): return "token(\(d))"
-            case .urlLink(let d, _): return "url(\(d))"
+            case .link(.shortCode(let token)): return "token(m+\(token))"
+            case .link(let written): return "url(\(LinkDisplayLaw.resolve(written, trackedLinks: nil)?.text ?? ""))"
             case .code(let s, _): return "code(\(s))"
             }
         }

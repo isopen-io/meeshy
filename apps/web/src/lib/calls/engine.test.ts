@@ -68,11 +68,11 @@ describe('appel sortant', () => {
     expect(h.requested).toHaveLength(0);
   });
 
-  test('CALL_ALREADY_ACTIVE : l’appel en cours de la conversation est REJOINT', async () => {
+  test('un appel en cours dans la conversation est REJOINT, sans initiate (#9111)', async () => {
     const h = harness({ acks: { [CLIENT_EVENTS.CALL_INITIATE]: { success: false, error: { code: 'CALL_ALREADY_ACTIVE' } } }, activeCallId: 'call-live' });
     await h.engine.start(DIRECT);
-    expect(h.names(h.requested)).toEqual([CLIENT_EVENTS.CALL_INITIATE, CLIENT_EVENTS.CALL_JOIN]);
-    expect(h.requested[1]?.[1]).toMatchObject({ callId: 'call-live' });
+    expect(h.names(h.requested)).toEqual([CLIENT_EVENTS.CALL_JOIN]);
+    expect(h.requested[0]?.[1]).toMatchObject({ callId: 'call-live' });
     expect(h.call()?.callId).toBe('call-live');
   });
 
@@ -276,10 +276,10 @@ describe('en appel', () => {
     expect(cleaned.call()?.phase).toMatchObject({ kind: 'ended', reason: 'remote' });
   });
 
-  test('un lien perdu dans un appel DIRECT termine l’appel sur « connexion perdue »', async () => {
+  test('un lien perdu dans un appel DIRECT passe en « reconnexion » : le pair peut revenir (#9111)', async () => {
     const h = await connected();
     h.linkState(h.links[0] as FakeLink, 'failed');
-    expect(h.call()?.phase).toMatchObject({ kind: 'ended', reason: 'connectionLost' });
+    expect(h.call()?.phase.kind).toBe('reconnecting');
   });
 
   test('une reprise ICE passe l’appel en « reconnexion » puis le rend « connecté »', async () => {
@@ -405,6 +405,19 @@ describe('appel de groupe', () => {
     h.linkState(h.links[0] as FakeLink, 'failed');
     expect(h.call()?.members['u-a']).toBeUndefined();
     expect(h.call()?.phase.kind).toBe('connected');
+  });
+
+  test('un « bye » en bande dans un groupe retire son seul émetteur, l’appel continue (#9085)', async () => {
+    const h = harness();
+    await h.engine.start({ ...DIRECT, isGroup: true });
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-2', userId: 'u-a', username: 'a' } });
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-3', userId: 'u-b', username: 'b' } });
+    for (const link of h.links) h.linkState(link, 'connected');
+    const channel = { readyState: 'open', send: () => undefined, onmessage: null as ((event: { data: string }) => void) | null, onclose: null };
+    h.links[0]?.deps.onChannel?.(channel as unknown as RTCDataChannel);
+    channel.onmessage?.({ data: '{"type":"bye","reason":"completed"}' });
+    expect(h.call()?.phase.kind).toBe('connected');
+    expect(Object.keys(h.call()?.members ?? {})).toEqual(['u-b']);
   });
 });
 
@@ -884,148 +897,5 @@ describe('les contrôles d’un appel en cours passent par le moteur (#8433, #84
     expect(h.call()?.members['u-b']?.link).toBe('ringing');
     expect(h.call()?.isGroup).toBe(true);
     expect(h.call()?.phase.kind).toBe('connected');
-  });
-});
-
-/**
- * LA CAMÉRA RÉPOND AU PREMIER TOUCHER (#8735) — couper, allumer ou retourner
- * la caméra attendait `getUserMedia`, les effets et chaque lien avant que
- * l'écran ne bouge : rien ne changeait pendant des centaines de millisecondes,
- * on touchait encore, et le second geste partait d'un état périmé. L'écran
- * bascule désormais AUSSITÔT ; un geste en vol en ignore un second ; un échec
- * rend l'état d'avant. Retourner relâche la caméra en cours quand l'appareil
- * ne sait pas en ouvrir deux, et rouvre celle d'avant si l'autre ne vient pas.
- */
-describe('la caméra bascule aussitôt, un geste à la fois (#8735)', () => {
-  type Pending = { readonly facing: string; readonly resolve: (camera: FakeTrack) => void; readonly reject: (error: Error) => void };
-
-  const deferredCameras = () => {
-    const pending: Pending[] = [];
-    const acquireCamera = (facing: string) =>
-      new Promise<MediaStreamTrack>((resolve, reject) => {
-        pending.push({ facing, resolve: (camera) => resolve(camera as unknown as MediaStreamTrack), reject });
-      });
-    return { pending, acquireCamera };
-  };
-
-  const connectedWith = async (acquireCamera: (facing: 'user' | 'environment') => Promise<MediaStreamTrack>) => {
-    const h = harness({ acquireCamera });
-    await h.engine.start(DIRECT);
-    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-2', userId: PEER, username: 'amina', displayName: 'Amina' } });
-    h.linkState(h.links[0] as FakeLink, 'connected');
-    return h;
-  };
-
-  const videoToggles = (h: Awaited<ReturnType<typeof connectedWith>>) => h.emitted.filter(([event]) => event === CLIENT_EVENTS.CALL_TOGGLE_VIDEO);
-
-  test('allumer : l’écran montre la caméra allumée AVANT que getUserMedia ne réponde, et un second toucher en vol est ignoré', async () => {
-    const cameras = deferredCameras();
-    const h = await connectedWith(cameras.acquireCamera);
-    const first = h.engine.toggleCamera();
-    expect(h.call()?.cameraOn).toBe(true);
-    const second = h.engine.toggleCamera();
-    expect(h.call()?.cameraOn).toBe(true);
-    expect(cameras.pending).toHaveLength(1);
-    const camera = track('video');
-    cameras.pending[0]?.resolve(camera);
-    await Promise.all([first, second]);
-    expect(h.call()?.cameraOn).toBe(true);
-    expect(h.call()?.localStream?.getVideoTracks()).toEqual([camera] as unknown as MediaStreamTrack[]);
-    expect(videoToggles(h)).toEqual([[CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId: 'call-1', enabled: true }]]);
-  });
-
-  test('allumer : un refus rend l’état d’avant — caméra éteinte, appel vocal, rien d’annoncé', async () => {
-    const cameras = deferredCameras();
-    const h = await connectedWith(cameras.acquireCamera);
-    const pending = h.engine.toggleCamera();
-    expect(h.call()?.cameraOn).toBe(true);
-    cameras.pending[0]?.reject(new Error('NotAllowedError'));
-    await pending;
-    expect(h.call()?.cameraOn).toBe(false);
-    expect(h.call()?.media).toBe('audio');
-    expect(videoToggles(h)).toEqual([]);
-    const retry = h.engine.toggleCamera();
-    expect(cameras.pending).toHaveLength(2);
-    cameras.pending[1]?.reject(new Error('NotAllowedError'));
-    await retry;
-  });
-
-  test('couper : l’écran montre la caméra coupée aussitôt', async () => {
-    const h = await connectedWith(async () => track('video') as unknown as MediaStreamTrack);
-    await h.engine.toggleCamera();
-    const off = h.engine.toggleCamera();
-    expect(h.call()?.cameraOn).toBe(false);
-    await off;
-    expect(h.call()?.localStream?.getVideoTracks()).toEqual([]);
-  });
-
-  test('l’appel fini pendant que la caméra s’ouvre : la caméra ouverte trop tard est relâchée', async () => {
-    const cameras = deferredCameras();
-    const h = await connectedWith(cameras.acquireCamera);
-    const pending = h.engine.toggleCamera();
-    h.engine.hangup();
-    const late = track('video');
-    cameras.pending[0]?.resolve(late);
-    await pending;
-    expect(late.readyState).toBe('ended');
-  });
-
-  test('retourner : l’écran se retourne aussitôt, un second toucher en vol est ignoré', async () => {
-    const cameras = deferredCameras();
-    const h = await connectedWith(cameras.acquireCamera);
-    const on = h.engine.toggleCamera();
-    cameras.pending[0]?.resolve(track('video'));
-    await on;
-    const flip = h.engine.switchCamera();
-    expect(h.call()?.facing).toBe('environment');
-    const again = h.engine.switchCamera();
-    expect(cameras.pending).toHaveLength(2);
-    const rear = track('video');
-    cameras.pending[1]?.resolve(rear);
-    await Promise.all([flip, again]);
-    expect(h.call()?.facing).toBe('environment');
-    expect(h.call()?.localStream?.getVideoTracks()).toEqual([rear] as unknown as MediaStreamTrack[]);
-  });
-
-  /* Un téléphone qui n'ouvre qu'une caméra à la fois refuse la seconde tant
-     que la première tourne : Retourner ne faisait RIEN, à chaque fois. */
-  const oneCameraAtATime = () => {
-    const opened: Array<{ readonly facing: string; readonly camera: FakeTrack }> = [];
-    const refusals: string[] = [];
-    const acquireCamera = async (facing: string) => {
-      if (opened.some((entry) => entry.camera.readyState === 'live')) {
-        refusals.push(facing);
-        throw new Error('NotReadableError');
-      }
-      const camera = track('video');
-      opened.push({ facing, camera });
-      return camera as unknown as MediaStreamTrack;
-    };
-    return { opened, refusals, acquireCamera };
-  };
-
-  test('retourner sur un appareil qui n’ouvre qu’une caméra : l’ancienne est relâchée, puis l’autre s’ouvre', async () => {
-    const device = oneCameraAtATime();
-    const h = await connectedWith(device.acquireCamera);
-    await h.engine.toggleCamera();
-    await h.engine.switchCamera();
-    expect(device.refusals).toEqual(['environment']);
-    expect(device.opened.map((entry) => [entry.facing, entry.camera.readyState])).toEqual([
-      ['user', 'ended'],
-      ['environment', 'live'],
-    ]);
-    expect(h.call()?.facing).toBe('environment');
-    expect(h.call()?.cameraOn).toBe(true);
-  });
-
-  test('retourner vers une caméra qui ne vient pas : celle d’avant se rouvre, et l’écran revient à elle', async () => {
-    const device = oneCameraAtATime();
-    const h = await connectedWith((facing) => (facing === 'environment' ? Promise.reject(new Error('NotFoundError')) : device.acquireCamera(facing)));
-    await h.engine.toggleCamera();
-    await h.engine.switchCamera();
-    expect(h.call()?.facing).toBe('user');
-    expect(h.call()?.cameraOn).toBe(true);
-    expect(h.call()?.localStream?.getVideoTracks()).toHaveLength(1);
-    expect(h.call()?.localStream?.getVideoTracks()[0]?.readyState).toBe('live');
   });
 });

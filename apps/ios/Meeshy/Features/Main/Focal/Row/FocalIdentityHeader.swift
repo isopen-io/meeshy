@@ -35,7 +35,7 @@ struct FocalIdentityHeader: View, Equatable {
     let senderColorHex: String
     let senderPresence: PresenceState
     /// L'auteur a l'écran de CETTE conversation ouvert (#8892).
-    var senderIsHere: Bool = false
+    var senderIsHere: ConversationHere = .absent
     let senderStoryRing: StoryRingState
     let senderMoodEmoji: String?
     /// L'auteur n'a PAS de compte (`Participant.type == "anonymous"`).

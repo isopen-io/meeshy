@@ -166,13 +166,14 @@ nonisolated enum ComposerToolFocus {
         case toolControls
     }
 
-    /// **Qu'est-ce qu'un outil OUVERT ?** Un outil du rail (dessin, texte)
-    /// — ou l'édition du FOND (#8847) : « quand on a les outils de droite
-    /// ouverts on n'a pas besoin d'afficher l'audience ou la publication ».
-    /// Les deux mettent la scène en FOCUS, et le chrome leur cède de la même
-    /// façon ; il revient au `(x)`, retour à la gestion de la scène.
-    static func toolIsOpen(railOpensTool: Bool, editsBackground: Bool) -> Bool {
-        railOpensTool || editsBackground
+    /// **Qu'est-ce qu'un outil OUVERT ?** Un outil du rail (le dessin) — ou
+    /// l'édition EN PLACE d'un objet, fond compris (#8847, #9138) : « quand on
+    /// a les outils de droite ouverts on n'a pas besoin d'afficher l'audience
+    /// ou la publication ». Les deux mettent la scène en FOCUS, et le chrome
+    /// leur cède de la même façon ; il revient au `(x)`, retour à la gestion
+    /// de la scène.
+    static func toolIsOpen(railOpensTool: Bool, editsInline: Bool) -> Bool {
+        railOpensTool || editsInline
     }
 
     static func isShown(_ chrome: Chrome, toolIsOpen: Bool) -> Bool {

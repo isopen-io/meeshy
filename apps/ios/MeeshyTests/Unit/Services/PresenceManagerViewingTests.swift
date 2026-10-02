@@ -17,6 +17,7 @@ final class PresenceManagerViewingTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        sut.activityHold = PresenceManager.defaultActivityHold
         sut.clearConversationViewers()
         sut.presenceMap.removeAll()
         sut = nil
@@ -37,6 +38,55 @@ final class PresenceManagerViewingTests: XCTestCase {
         sut.applyViewing(.arrived(change("peer", "conv-a")))
 
         XCTAssertEqual(sut.presenceState(for: "peer"), PresenceState.online)
+    }
+
+    // MARK: - Regarder, écouter, agir (#9061)
+
+    func test_applyViewing_active_makesTheHerePeerActive() {
+        sut.applyViewing(.arrived(change("peer", "conv-a")))
+        sut.applyViewing(.active(change("peer", "conv-a")))
+
+        XCTAssertTrue(sut.isHereActive(userId: "peer", conversationId: "conv-a"))
+        XCTAssertFalse(sut.isHereActive(userId: "peer", conversationId: "conv-b"))
+    }
+
+    func test_applyViewing_active_restsAfterTheHold() async throws {
+        sut.activityHold = 0.05
+        sut.applyViewing(.arrived(change("peer", "conv-a")))
+        sut.applyViewing(.active(change("peer", "conv-a")))
+
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertFalse(sut.isHereActive(userId: "peer", conversationId: "conv-a"))
+        XCTAssertTrue(sut.isHere(userId: "peer", conversationId: "conv-a"), "l'activité s'apaise, « ici » demeure")
+    }
+
+    func test_applyViewing_focus_saysFocused_thenRestsLikeActivity() async throws {
+        sut.activityHold = 0.05
+        sut.applyViewing(.arrived(change("peer", "conv-a")))
+        sut.applyViewing(.active(ConversationViewingChange(userId: "peer", conversationId: "conv-a", focus: true)))
+
+        XCTAssertEqual(sut.here(userId: "peer", conversationId: "conv-a"), .focused)
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(sut.here(userId: "peer", conversationId: "conv-a"), .here)
+    }
+
+    func test_applyViewing_repeatedActivity_extendsThePulse() async throws {
+        sut.activityHold = 0.3
+        sut.applyViewing(.active(change("peer", "conv-a")))
+        try await Task.sleep(nanoseconds: 200_000_000)
+        sut.applyViewing(.active(change("peer", "conv-a")))
+        try await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertTrue(sut.isHereActive(userId: "peer", conversationId: "conv-a"))
+    }
+
+    func test_applyViewing_left_endsActivityAtOnce() {
+        sut.applyViewing(.arrived(change("peer", "conv-a")))
+        sut.applyViewing(.active(change("peer", "conv-a")))
+        sut.applyViewing(.left(change("peer", "conv-a")))
+
+        XCTAssertFalse(sut.isHereActive(userId: "peer", conversationId: "conv-a"))
     }
 
     func test_applyViewing_left_removesThePeer() {

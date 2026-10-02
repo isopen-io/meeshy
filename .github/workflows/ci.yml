@@ -832,6 +832,18 @@ jobs:
           cd apps/web
           node scripts/check-calls-effects.mjs
 
+      # #9099 / #8471 / #8441 — les effets de ma vidéo ne coûtent aucune
+      # image : le traitement vit dans un worker. Dix secondes par passe
+      # (couleur + visage, flou par segmentation, zoom numérique), le
+      # carrousel du mode Effets glissé en continu : ≥ 28 images par seconde
+      # remises à l'envoi, < 5 % perdues, aucune tâche longue pendant un
+      # glissé, p95 du traitement d'une image ≤ 4 ms.
+      - name: Gate perf des effets d'appel (worker, flou, zoom)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-calls-effects-perf.mjs
+
       # #8433 / #8438 / #8439 / #8437 — les contrôles d'un appel en cours : le
       # pair de fixtures enregistre chaque contrôle reçu. « Réagir » part
       # (call:reaction) et monte aussitôt, la réaction du pair monte sous son

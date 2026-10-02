@@ -10,10 +10,12 @@ import type { CommentGestureFailure, CommentGestureRequest } from '@/lib/api/com
 import { commentAction, commentGestureAction, loadCommentRepliesAction, reportCommentAction, useComments } from '@/lib/api/query';
 import { flattenCommentPages, type CommentInfiniteData, type PostComment } from '@/lib/api/publication-comments';
 import { appQueryClient } from '@/lib/api/query-client';
+import { browserCommentUpload, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import type { PendingAttachment } from '@/lib/send/attachments';
 import { copyPlainText } from '@/lib/view/copy-text';
 import type { CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import { useMentionSource } from '@/lib/view/mention-source';
@@ -51,6 +53,9 @@ export type CommentThreadProps = {
   readonly onWritingChange?: (writing: boolean) => void;
   readonly foldOnSend?: boolean;
   readonly listHidden?: boolean;
+  /** Le téléversement d'une photo ou d'une vidéo jointe (#9167) — injectable
+   * pour les témoins ; la production monte en TUS, contexte `comment`. */
+  readonly uploadMedia?: CommentMediaUpload;
 };
 
 export function CommentThread({
@@ -60,6 +65,7 @@ export function CommentThread({
   onWritingChange,
   foldOnSend = false,
   listHidden = false,
+  uploadMedia = browserCommentUpload,
 }: CommentThreadProps) {
   const language = currentInterfaceLanguage();
   const online = useOnline();
@@ -142,11 +148,17 @@ export function CommentThread({
   }, []);
 
   const onSend = useCallback(
-    async (content: string): Promise<CommentComposerResult> => {
+    async (content: string, pending: readonly PendingAttachment[]): Promise<CommentComposerResult> => {
       const target = replyTarget;
+      /* LES PIÈCES MONTENT D'ABORD (#9167, miroir `CommentMediaUploader`) :
+         `attachmentIds` ne porte que des `PostMedia` déjà téléversés. Une
+         seule refusée et rien ne part — le composeur rend texte et pièces. */
+      const uploaded = pending.length === 0 ? { ok: true as const, media: [] } : await uploadCommentMedia(pending, uploadMedia);
+      if (!uploaded.ok) return { ok: false, message: 'comments.media.upload_failed' };
       const sending = commentAction({
         postId,
         content,
+        media: uploaded.media,
         ...(target === null ? {} : { parentId: target.rootId }),
         author: {
           id: viewer.id ?? '',
@@ -170,7 +182,7 @@ export function CommentThread({
         ? { ok: true, ...(result.notice === undefined ? {} : { message: result.notice }) }
         : { ok: false, message: result.message };
     },
-    [postId, viewer.id, viewer.displayName, viewer.handle, viewer.avatar, language, replyTarget],
+    [postId, viewer.id, viewer.displayName, viewer.handle, viewer.avatar, language, replyTarget, uploadMedia],
   );
 
   /**

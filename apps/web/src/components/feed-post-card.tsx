@@ -13,6 +13,8 @@ import { FeedSceneCarousel } from './feed-scene-carousel';
 import { FeedSceneMosaic } from './feed-scene-mosaic';
 import { FeedSceneSurface } from './feed-scene-surface';
 import { RichText } from './rich-text';
+import { CAPTION_SCRIM } from './feed-media-mosaic';
+import { ViewerCaption } from './viewer-caption';
 import { PrismPastille } from './message-blocks';
 import { feedCardBody, type FeedCardMedia, type FeedCardModel, type FeedCardText } from '@/lib/feed/card-model';
 import { isPagedLayout, type TiledLayoutMode } from '@/lib/feed/mosaic-layout';
@@ -69,24 +71,25 @@ function FeedMediaCarousel({ media, accent }: { readonly media: readonly FeedCar
       <div className="relative overflow-hidden" style={{ borderRadius: 12, aspectRatio: `1 / ${current.ratio}` }} data-feed-media data-feed-layout="carousel">
         <FeedMediaSurface media={current} playable />
         {current.caption !== undefined ? (
-          <p
-            /* MARQUÉE comme celle de la mosaïque (#6864) — et c'est ici que ça
-               compte le plus : le carrousel est le layout PAR DÉFAUT, donc le
-               cas le plus fréquent était aussi le seul qu'aucune recette ne
-               pouvait viser. La valeur dit d'OÙ vient la légende : `media` pour
-               la légende propre du média, `post` pour le contenu du post servi
-               en l'absence de légende propre sur un média UNIQUE. */
-            data-feed-carousel-caption={current.captionOrigin ?? 'media'}
+          /* MARQUÉE comme celle de la mosaïque (#6864) — et c'est ici que ça
+             compte le plus : le carrousel est le layout PAR DÉFAUT, donc le
+             cas le plus fréquent était aussi le seul qu'aucune recette ne
+             pouvait viser. La valeur dit d'OÙ vient la légende : `media` pour
+             la légende propre du média, `post` pour le contenu du post servi
+             en l'absence de légende propre sur un média UNIQUE.
+             La langue SERVIE (#6280, `resolveMediaCaption`), jamais la
+             langue d'interface : un lecteur d'écran qui prononce une
+             traduction française avec une voix anglaise est le défaut du
+             cycle 122 (CLAUDE.md § Prisme), rendu audible sur une légende.
+             Ses adresses s'ouvrent par `/l/` (#9074, `ViewerCaption`). */
+          <ViewerCaption
+            probe={{ 'data-feed-carousel-caption': current.captionOrigin ?? 'media' }}
+            text={current.caption}
+            trackingLinks={current.trackingLinks}
             className="absolute inset-x-0 bottom-0 px-3 py-2 text-check text-on-media"
-            style={{ background: 'linear-gradient(to top, var(--color-scrim-strong), transparent)' }}
-            /* La langue SERVIE (#6280, `resolveMediaCaption`), jamais la
-               langue d'interface : un lecteur d'écran qui prononce une
-               traduction française avec une voix anglaise est le défaut du
-               cycle 122 (CLAUDE.md § Prisme), rendu audible sur une légende. */
-            {...(current.captionLanguage !== undefined ? { lang: current.captionLanguage } : {})}
-          >
-            {current.caption}
-          </p>
+            style={CAPTION_SCRIM}
+            lang={current.captionLanguage}
+          />
         ) : null}
         {/* LE MÊME CHROME que le carrousel de scènes (`FeedCarouselChrome`,
             revue-correction #6898) : compteur, flèches à effet, pastilles

@@ -54,7 +54,9 @@ public final class StoryInlineTextEditor: UITextView {
     public func apply(textObject: StoryTextObject,
                       geometry: CanvasGeometry,
                       setText: Bool) {
-        let designFontSize = CGFloat(textObject.fontSize * textObject.scale)
+        // Taille de l'ÉDITION, comme le calque (#9139) : le champ montre la
+        // coupe que le pincement agrandira sans la recouper.
+        let designFontSize = CGFloat(textObject.fontSize)
         let renderedFontSize = StoryTextLayer.renderedFontSize(of: textObject, in: geometry)
         let resolved = StoryTextFontResolver.resolveFont(forTextObject: textObject,
                                                          size: renderedFontSize)

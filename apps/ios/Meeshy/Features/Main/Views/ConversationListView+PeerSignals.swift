@@ -20,10 +20,11 @@ extension ConversationListView {
     }
 
     /// Le pair d'une conversation directe a l'écran de CETTE conversation
-    /// ouvert (#8892). Le rafraîchissement passe par `presencePulse`, que
-    /// `PresenceManager` relance quand l'ensemble des présents change.
-    func peerIsHere(in conversation: Conversation) -> Bool {
-        guard conversation.type == .direct, let userId = conversation.participantUserId else { return false }
-        return PresenceManager.shared.isHere(userId: userId, conversationId: conversation.id)
+    /// ouvert (#8892), et s'il y est actif (#9061). Le rafraîchissement passe
+    /// par `presencePulse`, que `PresenceManager` relance quand l'ensemble des
+    /// présents change.
+    func peerIsHere(in conversation: Conversation) -> ConversationHere {
+        guard conversation.type == .direct, let userId = conversation.participantUserId else { return .absent }
+        return PresenceManager.shared.here(userId: userId, conversationId: conversation.id)
     }
 }

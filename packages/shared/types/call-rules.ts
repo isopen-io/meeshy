@@ -57,6 +57,15 @@ export const CALL_HEARTBEAT_TIMEOUT_MS = 120_000;
 export const CALL_BACKGROUND_HEARTBEAT_TIMEOUT_MS = 300_000;
 
 /**
+ * Grâce de reprise (#9111, #9109) : le temps qu'un participant coupé (réseau,
+ * plantage, relance de l'app) a pour revenir avant que le serveur ne le sorte
+ * de l'appel — et le temps qu'un appel de groupe réduit à un seul participant
+ * attend un retour avant de finir. Les clients ne raccrochent jamais avant
+ * elle : c'est le serveur qui dit la fin d'un appel qu'on peut encore rejoindre.
+ */
+export const CALL_REJOIN_GRACE_MS = 60_000;
+
+/**
  * Durée de vie d'une poussée d'appel (APNs `expiry`, FCM `ttl`, Web Push) :
  * la sonnerie, pas une seconde de plus — une poussée livrée après elle ferait
  * sonner un appel déjà manqué.

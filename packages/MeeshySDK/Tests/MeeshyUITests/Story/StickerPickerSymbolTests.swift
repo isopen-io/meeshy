@@ -58,15 +58,19 @@ final class StickerPickerSymbolTests: XCTestCase {
             let code = Self.strippingLineComments(
                 try String(contentsOf: url, encoding: .utf8))
             let ouvreLaPalette = code.contains("onOpenStickerPicker?()")
+                || code.contains("onOpenStickerPicker()")
                 || code.contains("StickerPickerView(")
             guard ouvreLaPalette else { continue }
             examinés += 1
             XCTAssertFalse(code.contains("face.smiling"),
                            "\(url.lastPathComponent) ouvre la palette et porte encore un smiley.")
         }
-        XCTAssertGreaterThan(examinés, 1,
-                             "Le balayage ne trouve presque aucun site — la garde passerait "
-                              + "au vert par omission, pas parce que la règle est tenue.")
+        // **Un seul site depuis #9189** : l'atelier ne monte plus la feuille
+        // (`StickerPickerView(`), sa porte la DEMANDE à l'app. Il reste la
+        // porte du panneau d'outils ; zéro rendrait la garde verte à vide.
+        XCTAssertGreaterThanOrEqual(examinés, 1,
+                                    "Le balayage ne trouve aucun site — la garde passerait "
+                                     + "au vert par omission, pas parce que la règle est tenue.")
     }
 
     private static var storySourcesRoot: URL {

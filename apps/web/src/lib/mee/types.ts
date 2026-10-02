@@ -1,20 +1,41 @@
 import type { Motion } from './motion';
 
 /**
- * LE CONTRAT D'UN STICKER MEE (#9034).
+ * LE CONTRAT D'UN STICKER MEE (#9034, #9058).
  *
- * Trois onglets, et la raison de leur découpage :
- * - `mee` et `meo` : un personnage SEUL, puis une partie « à deux » où CE
- *   personnage fait l'action à l'autre. D'un onglet à l'autre, l'acteur
- *   s'inverse ET la réaction du partenaire change : on n'envoie pas le même
- *   sticker depuis l'un ou l'autre côté ;
+ * Quatre onglets, et la raison de leur découpage :
+ * - `mee` et `meo` : un personnage SEUL ;
+ * - `duo` (« Mee & Meo ») : les deux ensemble. Une scène d'origine s'y joue
+ *   dans les deux sens (`duo-mee-…` : Mee fait le geste, `duo-meo-…` : Meo) et
+ *   la réaction du partenaire change : ce ne sont pas deux fois le même sticker ;
  * - `instants` : les stickers DYNAMIQUES, qui écrivent le lieu, l'heure, la
  *   météo ou un message choisis au moment de l'envoi.
+ *
+ * Dans les trois onglets de personnages, la `section` est une INTENTION — ce
+ * que l'utilisateur veut DIRE — et non plus « seul / à deux » : on cherche un
+ * sticker pour dire merci ou pour bouder, pas pour sa distribution.
  */
 
-export type MeeTab = 'mee' | 'meo' | 'instants';
+export const MEE_CHARACTER_TABS = ['mee', 'meo', 'duo'] as const;
+export type MeeCharacterTab = (typeof MEE_CHARACTER_TABS)[number];
+export type MeeTab = MeeCharacterTab | 'instants';
 
-export type MeeSection = 'solo' | 'duo' | 'meteo' | 'moment' | 'lieu' | 'message';
+/** Les intentions, dans l'ordre où le panneau les montre. */
+export const MEE_INTENTS = ['bonjour', 'amour', 'fete', 'soutien', 'rale', 'coup-de-mou', 'surprise', 'quotidien', 'humour-noir'] as const;
+export type MeeIntent = (typeof MEE_INTENTS)[number];
+
+/**
+ * Le PACK intégré d'un sticker (#9141) — l'unité que l'utilisateur installe
+ * ou retire : Mee et ses Instants, Meo et ses Instants, Mee & Meo (les duos).
+ * Les slugs sont ceux de `BUILTIN_STICKER_PACKS` (`@meeshy/shared/types/sticker-pack`).
+ */
+export const MEE_BUILTIN_PACKS = ['mee', 'meo', 'mee-et-meo'] as const;
+export type MeeBuiltinPack = (typeof MEE_BUILTIN_PACKS)[number];
+export const isMeeBuiltinPack = (slug: string): slug is MeeBuiltinPack => (MEE_BUILTIN_PACKS as readonly string[]).includes(slug);
+
+export type MeeInstantSection = 'meteo' | 'moment' | 'lieu' | 'message';
+
+export type MeeSection = MeeIntent | MeeInstantSection;
 
 /** Le sentiment qu'un sticker exprime — ou, pour les dynamiques, le contexte qu'il annonce. */
 export type MeeFeeling =
@@ -41,6 +62,9 @@ export type MeeFeeling =
   | 'lieu'
   | 'moment'
   | 'message';
+
+/** Ce qu'un PERSONNAGE exprime — les contextes des dynamiques n'en font pas partie. */
+export type MeeCharacterFeeling = Exclude<MeeFeeling, MeeInstantSection>;
 
 /** Ce qui compte comme une ÉMOTION — le reste dit bonjour, raconte le quotidien ou un contexte. */
 export const MEE_EMOTIONS: ReadonlySet<MeeFeeling> = new Set<MeeFeeling>([
@@ -70,6 +94,7 @@ export type MeeSticker = {
   /** Unique, `[a-z0-9-]` : il devient `mee.<id>` dans le `templateId` du message. */
   readonly id: string;
   readonly tab: MeeTab;
+  readonly pack: MeeBuiltinPack;
   readonly section: MeeSection;
   readonly title: string;
   readonly feeling: MeeFeeling;

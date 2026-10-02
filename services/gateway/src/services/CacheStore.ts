@@ -1,6 +1,7 @@
 import Redis from 'ioredis';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { CircuitBreakerFactory, circuitBreakerManager, CircuitState } from '../utils/circuitBreaker';
+import { readEventLoopLag, startEventLoopLagMonitor } from '../utils/eventLoopLag';
 
 const logger = enhancedLogger.child({ module: 'CacheStore' });
 
@@ -27,9 +28,10 @@ export class RedisCacheStore implements CacheStore {
   private redis: Redis | null = null;
   private memoryCache: Map<string, MemoryCacheEntry> = new Map();
   private cleanupInterval: NodeJS.Timeout | null = null;
-  private circuitBreaker = CircuitBreakerFactory.createRedisBreaker();
+  private circuitBreaker = CircuitBreakerFactory.createRedisBreaker(() => this.redisDiagnostics());
 
   constructor(redisUrl?: string) {
+    startEventLoopLagMonitor();
     const url = redisUrl ?? process.env.REDIS_URL;
 
     if (url) {
@@ -73,6 +75,19 @@ export class RedisCacheStore implements CacheStore {
       logger.warn('Redis initialization failed, using memory cache');
       this.redis = null;
     }
+  }
+
+  /**
+   * Ce que porte une ligne d'échec Redis (#8272) : un délai dépassé avec une
+   * file de commandes pleine et une boucle fluide accuse la connexion ; une
+   * boucle en retard accuse le processus, pas Redis.
+   */
+  private redisDiagnostics(): Record<string, unknown> {
+    return {
+      redisStatus: this.redis?.status ?? 'absent',
+      commandQueueLength: this.redis?.commandQueue.length ?? 0,
+      eventLoopLag: readEventLoopLag(),
+    };
   }
 
   private startMemoryCacheCleanup(): void {

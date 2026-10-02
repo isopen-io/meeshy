@@ -58,7 +58,7 @@ struct BubbleStandardLayout: View {
     let preferredTranslation: MessageTranslation?
     let showAvatar: Bool
     let presenceState: PresenceState?
-    let senderIsHere: Bool
+    let senderIsHere: ConversationHere
     let senderMoodEmoji: String?
     let senderStoryRingState: StoryRingState
     let allAudioItems: [ConversationViewModel.AudioItem]
@@ -829,7 +829,7 @@ struct BubbleStandardLayout: View {
                 // Emoji-only intentionally renders the ORIGINAL `message.content`,
                 // not the translated text — emoji bubbles are not translated.
                 Text(message.content)
-                        .font(MeeshyFont.relative(emojiFontSize))
+                        .font(MeeshyFont.emoji(emojiFontSize))
                     .fixedSize(horizontal: false, vertical: true)
 
                 compactInlineFooter
@@ -916,7 +916,7 @@ struct BubbleStandardLayout: View {
                         // card), pas s'etirer sur 70% de la largeur d'ecran. Le
                         // VStack parent gere deja l'alignement naturel a gauche.
                         Text(message.content)
-                            .font(MeeshyFont.relative(emojiFontSize))
+                            .font(MeeshyFont.emoji(emojiFontSize))
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         expandableTextView

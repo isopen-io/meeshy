@@ -374,7 +374,13 @@ export const callersIn = (contents, nsNames) => {
 // (`lib/api/admin-user-dossier.ts`) — une entrée servie de longue date par la
 // passerelle, sans lecteur jusque-là, a enfin son appelant. Valeur MESURÉE le
 // 2026-09-30.
-const BASELINE_DEAD_ENTRIES = 285;
+// 285 → 287 (#9141, 2026-10-02) : `stickerPacks.pending` et
+// `stickerPacks.bySlugReview`, les deux routes de MODÉRATION des packs de
+// stickers tiers. Mortes à la naissance PAR CONSTRUCTION : #9141 livre la
+// Boutique et la proposition de pack côté web (leurs cinq voisines ont leur
+// appelant dans `lib/api/sticker-packs.ts`) ; l'écran de modération web qui
+// lira ces deux-là est un suivi à part. Valeur MESURÉE le 2026-10-02.
+const BASELINE_DEAD_ENTRIES = 287;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

@@ -19,8 +19,8 @@ import XCTest
 ///     tests-ci REJOUENT le contrat contre le double ; c'est
 ///     `RepostIntentTests` qui garde le fait qu'aucun site n'appelle plus le
 ///     service directement.
-///  2. Kebab "Editer et republier en post" → `UnifiedPostComposer` repost-mode
-///     publish callback (verified via internal `triggerPublishForTests`).
+///  2. Kebab "Editer et republier en post" — monte `StoryRepublishComposer`
+///     depuis #5055 ; `UnifiedPostComposer` a quitté le dépôt (#9166).
 ///  3. Feed cell receives a POST whose `repost.type == "STORY"` → renders
 ///     `StoryRepostEmbedCell` (verified via `Mirror` + the documented
 ///     `isStoryRepost` predicate semantics).
@@ -151,84 +151,6 @@ final class StoryRepostFlowTests: XCTestCase {
         XCTAssertNil(mockService.lastRepostVisibility,
                      "The kebab path offers no audience picker, so it passes no visibility — " +
                      "the gateway then inherits the original's, per PostService.repost's default")
-    }
-
-    // MARK: - Flow 3: Kebab "Editer et republier" → UnifiedPostComposer
-
-    /// The kebab item "Editer et republier en post" presents a
-    /// `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
-    /// (B.7). The publish callback receives `(content, sourceStory)`; the
-    /// caller in `StoryViewerView` then forwards to `RepostPublisher` a
-    /// `RepostIntent.quoted(postId:targetType:.post, comment:)` — dont la règle
-    /// « un commentaire blanc n'est pas une citation » est celle que ce test
-    /// rejoue à la main par `content.isEmpty ? nil : content`.
-    ///
-    /// We test the full path: the composer wires the callback correctly, AND
-    /// the production callback shape (mirrored here against `MockPostService`)
-    /// translates the captured args into the right service call.
-    func test_flux3_kebabEditerEtRepublier_opensComposerPost_publishes() async throws {
-        let story = makeStoryItem(id: "story-1", content: "Original")
-        let mockService = MockPostService()
-
-        // Capture args delivered to the publish callback.
-        var capturedContent: String?
-        var capturedSourceId: String?
-        var capturedVisibility: String?
-
-        let composer = UnifiedPostComposer(
-            repostingStory: story,
-            authorHandle: "alice",
-            onPublishRepost: { content, sourceStory, visibility in
-                capturedContent = content
-                capturedSourceId = sourceStory.id
-                capturedVisibility = visibility
-            },
-            onDismiss: {}
-        )
-
-        // 3.a — `repostSourceForTests` mirrors the @State source story so we
-        // can verify it without invoking SwiftUI's body evaluation.
-        XCTAssertEqual(composer.repostSourceForTests?.id, "story-1",
-                       "Composer captured the source story for the embedded canvas")
-
-        // 3.b — `triggerPublishForTestsAwaiting` simulates the publish button
-        // tap and awaits the publish path, so the callback has run before we
-        // assert. The fire-and-forget `triggerPublishForTests` spawns a Task
-        // and would race the synchronous assertions below.
-        let published = await composer.triggerPublishForTestsAwaiting(content: "Mon commentaire")
-        XCTAssertTrue(published, "Repost publish path completed without throwing")
-
-        XCTAssertEqual(capturedContent, "Mon commentaire",
-                       "onPublishRepost receives the typed commentary verbatim")
-        XCTAssertEqual(capturedSourceId, "story-1",
-                       "onPublishRepost receives the original source story (not the clone)")
-        XCTAssertEqual(capturedVisibility, "PUBLIC",
-                       "onPublishRepost receives the composer's audience selection; PUBLIC is " +
-                       "its initial state, so an untouched picker still reports a value")
-
-        // 3.c — Replay the production-side callback contract: the caller
-        // (StoryViewerView.swift:297-316) forwards captured args to
-        // PostService.repost with the documented mapping.
-        let content = capturedContent ?? ""
-        _ = try await mockService.repost(
-            postId: capturedSourceId ?? "",
-            targetType: .post,
-            content: content.isEmpty ? nil : content,
-            isQuote: !content.isEmpty,
-            visibility: capturedVisibility
-        )
-
-        XCTAssertEqual(mockService.lastRepostPostId, "story-1")
-        XCTAssertEqual(mockService.lastRepostTargetType, .post,
-                       "Edit-and-repost ALWAYS targets POST type (not STORY)")
-        XCTAssertEqual(mockService.lastRepostContent, "Mon commentaire",
-                       "Non-empty commentary is forwarded as-is")
-        XCTAssertEqual(mockService.lastRepostIsQuote, true,
-                       "Non-empty commentary makes the repost a quote")
-        XCTAssertEqual(mockService.lastRepostVisibility, "PUBLIC",
-                       "The audience picked in the composer reaches the service call — this is " +
-                       "the whole point of the repost-visibility path; dropping it here would " +
-                       "publish a repost the author meant to restrict")
     }
 
     // MARK: - Flow 4: Feed cell renders STORY repost embed

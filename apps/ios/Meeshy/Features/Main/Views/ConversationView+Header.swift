@@ -343,10 +343,10 @@ private struct HeaderCallButtonsView: View {
                 startCallButtons
             }
         }
-        // Re-reconciles whenever the conversation changes (task id) — not on
-        // every body re-eval, which would otherwise fire on every callState
-        // tick (e.g. once a rejoin succeeds and callDuration starts ticking).
-        .task(id: conversationId) {
+        // Re-reconciles when the conversation changes OR when the local call
+        // starts/stops (#9111 — after leaving a group call that goes on, the
+        // pill must come back as « Rejoindre ») — never on every callState tick.
+        .task(id: HeaderCallReconcileKey(conversationId: conversationId, isLocalCallActive: callManager.callState.isActive)) {
             await reconcileActiveCall()
         }
         // Invalidation temps réel : le gateway fanout `call:ended` jusqu'aux
@@ -392,8 +392,10 @@ private struct HeaderCallButtonsView: View {
                     .frame(width: 7, height: 7)
                 Image(systemName: "phone.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                Text(callManager.formattedDuration)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
+                CallDurationClock {
+                    Text(callManager.formattedDuration)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
+                }
             }
             .foregroundColor(MeeshyColors.success)
             .padding(.horizontal, MeeshySpacing.smPlus)
@@ -460,9 +462,8 @@ private struct HeaderCallButtonsView: View {
         // network error and "no active call" both collapse to nil here,
         // which is the right behavior: reconciliation is best-effort and
         // silent, never surfaced as an error to the user.
-        guard let session = try? await ActiveCallService.shared.activeCall(conversationId: conversationId),
-              session.conversationId == conversationId else { return }
-        reconciledActiveCall = session
+        let session = try? await ActiveCallService.shared.activeCall(conversationId: conversationId)
+        reconciledActiveCall = session?.conversationId == conversationId ? session : nil
     }
 
     /// Bouton d'appel unique : un `Menu` qui laisse choisir vocal ou vidéo via un
@@ -562,10 +563,11 @@ private struct ConversationHeaderAvatarView: View {
 
     private var isDirect: Bool { conversation?.type == .direct }
 
-    /// Le pair a l'écran de CETTE conversation ouvert (#8892).
-    private func isHere(_ userId: String?) -> Bool {
-        guard let userId, let conversationId = conversation?.id else { return false }
-        return PresenceManager.shared.isHere(userId: userId, conversationId: conversationId)
+    /// Le pair a l'écran de CETTE conversation ouvert (#8892), et y est
+    /// peut-être actif (#9061).
+    private func isHere(_ userId: String?) -> ConversationHere {
+        guard let userId, let conversationId = conversation?.id else { return .absent }
+        return PresenceManager.shared.here(userId: userId, conversationId: conversationId)
     }
 
     private func memberStoryState(for userId: String) -> StoryRingState {
@@ -739,7 +741,7 @@ private struct ConversationHeaderAvatarView: View {
                 storyState: collapsedStoryState,
                 moodEmoji: headerMoodEmoji,
                 presenceState: headerPresenceState,
-                isHere: isDirect && isHere(conversation?.participantUserId),
+                isHere: isDirect ? isHere(conversation?.participantUserId) : .absent,
                 onTap: {
                     HapticFeedback.light()
                     onSetExpanded(true)

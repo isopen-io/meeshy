@@ -160,7 +160,7 @@ describe('Échap ferme la couche du DESSUS seule', () => {
   test('retouche + Cadre : Échap range le Cadre, puis rend la scène, puis seulement quitte la retouche', async () => {
     const cancels: string[] = [];
     const photo = pendingAttachmentOf(new File([new Uint8Array([1, 2, 3])], 'plage.png', { type: 'image/png' }));
-    const el = mountElement(<ComposerRetouch attachment={photo} onDone={() => undefined} onCancel={() => cancels.push('cancel')} render={fakeRender} />);
+    const el = mountElement(<ComposerRetouch pieces={[photo]} focus={0} onDone={() => undefined} onCancel={() => cancels.push('cancel')} render={fakeRender} />);
     await flush(() => el.querySelector('[data-story-option="frame"]') !== null);
     click(el.querySelector('[data-story-option="frame"]'));
     await flush(() => el.querySelector('[data-story-frame-panel]') !== null);

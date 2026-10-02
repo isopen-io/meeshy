@@ -24,7 +24,6 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'stories',
   'storiesMine',
   'storyCompose',
-  'story',
   'feed',
   /* LES PORTES DE COMPOSITION (#7449, #7462) — leurs raisons sont écrites
      UNE fois, sur `RouteKey` dans `session-guard.ts` ; la famille `/…/new`
@@ -154,7 +153,12 @@ describe('resolveRouteAccess — source gateway, visiteur anonyme sur une route 
   // requiredAuth : un visiteur sans compte n'y a rien à voir.
   test('stories', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'stories' })).toBe('redirect-login'));
   test('storyCompose', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'storyCompose' })).toBe('redirect-login'));
-  test('story', () => expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'story' })).toBe('redirect-login'));
+  // #9149 — UNE story NOMMÉE (`/story/:id`) est l'adresse d'un lien partagé :
+  // un visiteur sans compte y entre, voit la story si elle est publique, et
+  // l'invitation à se connecter se pose PAR-DESSUS. Le plateau (`stories`)
+  // reste privé.
+  test('story (#9149) — publique : le lecteur sert le visiteur et l’invite', () =>
+    expect(resolveRouteAccess({ sessionStatus: 'anonymous', source: 'gateway', routeKey: 'story' })).toBe('allow'));
   // #5893 — GET /social/posts?scope=home exige une session malgré
   // optionalAuth à la porte : un visiteur sans compte y recevait jusqu'ici
   // l'écran d'attente (route publique par défaut).

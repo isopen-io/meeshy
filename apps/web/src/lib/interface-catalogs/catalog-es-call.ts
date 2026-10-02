@@ -48,6 +48,7 @@ const esCall = {
   'call.ended.permission': 'Permite el micrófono para llamar',
   'call.retry': 'Reintentar',
   'call.close': 'Cerrar',
+  'call.openSettings': 'Ajustes',
   'call.waiting.from': '{caller} te está llamando',
   'call.waiting.answer': 'Responder',
   'call.waiting.decline': 'Rechazar',

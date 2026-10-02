@@ -70,16 +70,40 @@ extension CallControlsCopy {
             return String(localized: "call.moderation.failed", defaultValue: "Action impossible pour le moment", bundle: .main)
         case .removed(let name):
             return String(format: String(localized: "call.moderation.removed", defaultValue: "%@ a été retiré de l’appel", bundle: .main), name)
+        case .inviteDeclined(let name):
+            return String(format: String(localized: "call.invite.declined", defaultValue: "%@ a refusé", bundle: .main), name)
+        case .inviteUnanswered(let name):
+            return String(format: String(localized: "call.invite.unanswered", defaultValue: "%@ n’a pas répondu", bundle: .main), name)
         }
     }
 
     static var reactionsTitle: String {
         String(localized: "call.history.reactions", defaultValue: "Réactions", bundle: .main)
     }
+
+    static func reactionAuthor(_ author: CallReactionAuthor) -> String {
+        switch author {
+        case .me: return String(localized: "call.reaction.author.you", defaultValue: "Vous", bundle: .main)
+        case .peer(let name): return name
+        case .someone: return String(localized: "call.reaction.author.someone", defaultValue: "Un participant", bundle: .main)
+        }
+    }
+
+    static func reactionAnnouncement(_ reaction: CallFloatingReaction) -> String {
+        guard reaction.author != .me else {
+            return String(format: String(localized: "call.reaction.mine", defaultValue: "Vous avez réagi %@", bundle: .main), reaction.emoji.rawValue)
+        }
+        return String(
+            format: String(localized: "call.reaction.from", defaultValue: "%1$@ a réagi %2$@", bundle: .main),
+            reactionAuthor(reaction.author),
+            reaction.emoji.rawValue
+        )
+    }
 }
 
-/// L'envol des réactions : chacune monte et s'efface ; sous Réduire les
-/// animations, elle apparaît et s'efface sur place.
+/// L'envol des réactions : chacune monte avec le nom de son auteur sous
+/// l'emoji et s'efface ; sous Réduire les animations, elle apparaît et
+/// s'efface sur place. VoiceOver annonce qui a réagi.
 struct CallFloatingReactionsLayer: View, Equatable {
     let reactions: [CallFloatingReaction]
     let reduceMotion: Bool
@@ -88,7 +112,7 @@ struct CallFloatingReactionsLayer: View, Equatable {
         GeometryReader { proxy in
             ZStack {
                 ForEach(reactions) { reaction in
-                    CallFloatingReactionView(emoji: reaction.emoji, reduceMotion: reduceMotion)
+                    CallFloatingReactionView(reaction: reaction, reduceMotion: reduceMotion)
                         .position(x: proxy.size.width * reaction.lane, y: proxy.size.height * 0.62)
                 }
             }
@@ -99,19 +123,31 @@ struct CallFloatingReactionsLayer: View, Equatable {
 }
 
 private struct CallFloatingReactionView: View {
-    let emoji: CallReactionEmoji
+    let reaction: CallFloatingReaction
     let reduceMotion: Bool
     @State private var launched = false
 
     var body: some View {
-        Text(emoji.rawValue)
-            .font(MeeshyFont.relative(MeeshyFont.largeTitleSize))
-            .offset(y: launched && !reduceMotion ? -260 : 0)
-            .scaleEffect(launched && !reduceMotion ? 2.4 : 1.6)
-            .opacity(launched ? 0 : 1)
-            .onAppear {
-                withAnimation(.easeOut(duration: 2.5)) { launched = true }
-            }
+        VStack(spacing: MeeshySpacing.xs) {
+            Text(reaction.emoji.rawValue)
+                .font(MeeshyFont.relative(MeeshyFont.largeTitleSize))
+                .scaleEffect(launched && !reduceMotion ? 2.4 : 1.6, anchor: .bottom)
+            Text(CallControlsCopy.reactionAuthor(reaction.author))
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(maxWidth: 128)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .padding(.vertical, 2)
+                .callChromeGlass(in: Capsule())
+        }
+        .offset(y: launched && !reduceMotion ? -260 : 0)
+        .opacity(launched ? 0 : 1)
+        .onAppear {
+            UIAccessibility.post(notification: .announcement, argument: CallControlsCopy.reactionAnnouncement(reaction))
+            withAnimation(.easeOut(duration: 2.5)) { launched = true }
+        }
     }
 }
 

@@ -7,15 +7,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
     /// `CallManager.swift` et l'extension où `toggleTranscription()` a été
     /// sortie (#8475) : la garde suit la fonction, pas le fichier.
     private func callManagerSource() throws -> String {
-        let services = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services")
-        return try ["CallManager.swift", "CallManager+Transcription.swift"]
-            .map { try String(contentsOf: services.appendingPathComponent($0), encoding: .utf8) }
-            .joined(separator: "\n")
+        try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     func test_callManager_sourceCode_doesNotForceAudioSessionActiveBeforeBridge() throws {
@@ -241,7 +233,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
     /// concurrent teardown on CallKit's delegate queue.
     func test_scheduleStuckMutedFallback_reactivation_guardsOnAudioSessionExpectedActiveFlag() throws {
         let source = try callManagerSource()
-        guard let fnRange = source.range(of: "private func scheduleStuckMutedFallback() {") else {
+        guard let fnRange = source.range(of: "func scheduleStuckMutedFallback() {") else {
             XCTFail("scheduleStuckMutedFallback not found"); return
         }
         let end = source.range(of: "\n    }", range: fnRange.upperBound..<source.endIndex)?.upperBound ?? source.endIndex
@@ -262,10 +254,10 @@ final class CallManagerAudioSessionTests: XCTestCase {
 
     func test_configureAudioSession_setsAudioSessionExpectedActiveTrue() throws {
         let source = try callManagerSource()
-        guard let fnRange = source.range(of: "private func configureAudioSession() {") else {
+        guard let fnRange = source.range(of: "func configureAudioSession() {") else {
             XCTFail("configureAudioSession not found"); return
         }
-        let endIdx = source.range(of: "private func updateAudioSessionModeForCurrentVideoState", range: fnRange.upperBound..<source.endIndex)?.lowerBound
+        let endIdx = source.range(of: "func updateAudioSessionModeForCurrentVideoState", range: fnRange.upperBound..<source.endIndex)?.lowerBound
             ?? source.endIndex
         let fnBody = String(source[fnRange.lowerBound ..< endIdx])
 
@@ -278,7 +270,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
 
     func test_deactivateAudioSession_setsAudioSessionExpectedActiveFalse() throws {
         let source = try callManagerSource()
-        guard let fnRange = source.range(of: "private func deactivateAudioSession() {") else {
+        guard let fnRange = source.range(of: "func deactivateAudioSession() {") else {
             XCTFail("deactivateAudioSession not found"); return
         }
         let endIdx = source.index(fnRange.lowerBound, offsetBy: 900, limitedBy: source.endIndex) ?? source.endIndex
@@ -703,7 +695,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         // negotiation invariant.
         let source = try callManagerSource()
         XCTAssertTrue(
-            source.contains("static func isStaleNegotiation(incoming: Int, highWaterMark: Int)"),
+            source.contains("static func isStaleNegotiation(incoming: Int, highWaterMark: Int"),
             "isStaleNegotiation must be declared `static func` — pure epoch rule (§3.5), no side effects."
         )
     }
@@ -727,7 +719,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         // call's first offer (gen 1 < old high-water mark N) — causing a one-way silent call.
         let source = try callManagerSource()
 
-        guard let fnRange = source.range(of: "private func applyNegotiationRole()") else {
+        guard let fnRange = source.range(of: "func applyNegotiationRole()") else {
             XCTFail("applyNegotiationRole not found in CallManager.swift"); return
         }
         let endIdx = source.index(fnRange.lowerBound, offsetBy: 600, limitedBy: source.endIndex) ?? source.endIndex
@@ -1528,13 +1520,7 @@ final class CallEffectsOverlayAccessibilityTests: XCTestCase {
 final class CallManagerIdleTimerProximityTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     // MARK: - Idle timer (screen-on during calls)
@@ -1602,7 +1588,7 @@ final class CallManagerIdleTimerProximityTests: XCTestCase {
     /// occurrence fortuite du motif ailleurs dans `CallManager.swift` les
     /// satisfaisait. Borner le corps rend l'assertion réellement portante.
     private func proximityHelperBody(_ source: String) -> String? {
-        guard let decl = source.range(of: "private func updateProximityMonitoring() {") else { return nil }
+        guard let decl = source.range(of: "func updateProximityMonitoring() {") else { return nil }
         let end = source.range(of: "\n    }", range: decl.upperBound ..< source.endIndex)?.upperBound
             ?? source.endIndex
         return String(source[decl.upperBound ..< end])
@@ -1652,13 +1638,7 @@ final class CallManagerIdleTimerProximityTests: XCTestCase {
 final class CallManagerCallKitDTMFTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     private func webRTCTypesSource() throws -> String {
@@ -1728,13 +1708,7 @@ final class CallManagerCallKitDTMFTests: XCTestCase {
 final class CallManagerMediaServicesResetTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     func test_mediaServicesReset_observerIsRegistered() throws {
@@ -1856,20 +1830,14 @@ final class CallViewVoiceOverAnnouncementTests: XCTestCase {
 final class CallManagerBackgroundVideoTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     /// Corps de `applyCameraSuspension(_:cause:)` — le point de passage unique du
     /// signal caméra vers le pair depuis le lot C · C3.
     private func cameraSuspensionBody() throws -> String {
         let source = try callManagerSource()
-        guard let fnRange = source.range(of: "private func applyCameraSuspension(") else {
+        guard let fnRange = source.range(of: "func applyCameraSuspension(") else {
             XCTFail("applyCameraSuspension not found in CallManager.swift"); return ""
         }
         let after = String(source[fnRange.upperBound...])
@@ -1942,7 +1910,7 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             XCTFail("promoteRingingCallToCallKitIfNeeded not found in CallManager.swift"); return
         }
         let afterFn = String(source[fnRange.upperBound...])
-        guard let fnEnd = afterFn.range(of: "private func startBackgroundMonitoring")?.lowerBound else {
+        guard let fnEnd = afterFn.range(of: "func startBackgroundMonitoring")?.lowerBound else {
             XCTFail("Could not find promoteRingingCallToCallKitIfNeeded boundary"); return
         }
         let fnBody = String(afterFn[..<fnEnd])
@@ -2011,7 +1979,7 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             XCTFail("handleIncomingCallNotification not found in CallManager.swift"); return
         }
         let afterFn = String(source[fnRange.upperBound...])
-        guard let fnEnd = afterFn.range(of: "private func performLocalMediaStart")?.lowerBound else {
+        guard let fnEnd = afterFn.range(of: "func performLocalMediaStart")?.lowerBound else {
             XCTFail("Could not find handleIncomingCallNotification boundary"); return
         }
         let fnBody = String(afterFn[..<fnEnd])
@@ -2067,7 +2035,7 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
             XCTFail("promoteRingingCallToCallKitIfNeeded not found in CallManager.swift"); return
         }
         let afterFn = String(source[fnRange.upperBound...])
-        guard let fnEnd = afterFn.range(of: "private func startBackgroundMonitoring")?.lowerBound else {
+        guard let fnEnd = afterFn.range(of: "func startBackgroundMonitoring")?.lowerBound else {
             XCTFail("Could not find promoteRingingCallToCallKitIfNeeded boundary"); return
         }
         let fnBody = String(afterFn[..<fnEnd])
@@ -2116,7 +2084,7 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
 
     func test_endCallInternal_resetsVideoSuspendedByBackgroundFlag() throws {
         let source = try callManagerSource()
-        guard let teardownRange = source.range(of: "private func endCallInternal(reason:") else {
+        guard let teardownRange = source.range(of: "func endCallInternal(reason:") else {
             XCTFail("endCallInternal not found in CallManager.swift"); return
         }
         let teardownBody = String(source[teardownRange.upperBound...])
@@ -2209,13 +2177,7 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
 final class CallManagerSocketReconnectVideoTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     func test_socketReconnect_reEmitsVideoStateToResyncPeer() throws {
@@ -2284,13 +2246,7 @@ final class CallManagerSocketReconnectVideoTests: XCTestCase {
 final class CallManagerCameraPermissionTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     func test_cameraPermissionDenied_handledIn_toggleVideo() throws {
@@ -2404,18 +2360,12 @@ final class CallManagerCameraPermissionTests: XCTestCase {
 final class CallManagerDurationReconnectTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     func test_transitionToConnected_doesNotResetDurationOnReconnect() throws {
         let source = try callManagerSource()
-        guard let fnRange = source.range(of: "private func transitionToConnected()") else {
+        guard let fnRange = source.range(of: "func transitionToConnected()") else {
             XCTFail("transitionToConnected() not found in CallManager.swift"); return
         }
         // Find the callStartDate = Date() assignment within the function
@@ -2443,7 +2393,7 @@ final class CallManagerDurationReconnectTests: XCTestCase {
 
     func test_transitionToConnected_doesNotPlayConnectCueOnReconnect() throws {
         let source = try callManagerSource()
-        guard let fnRange = source.range(of: "private func transitionToConnected()") else {
+        guard let fnRange = source.range(of: "func transitionToConnected()") else {
             XCTFail("transitionToConnected() not found"); return
         }
         guard let cueRange = source[fnRange.upperBound...].range(of: "playConnected()") else {
@@ -2476,13 +2426,7 @@ final class CallManagerDurationReconnectTests: XCTestCase {
 final class CallManagerIceCandidateBufferTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     private func webRTCTypesSource() throws -> String {
@@ -2517,14 +2461,29 @@ final class CallManagerIceCandidateBufferTests: XCTestCase {
             "is co-located with other thresholds and documented alongside the rationale")
     }
 
+    /// La garde lisait « tout ce qui SUIT `socket.didReconnect` », et y
+    /// trouvait `emitRequestIceServers` dans le corps de
+    /// `requestFreshTurnCredentials`, écrit plus bas dans le même fichier.
+    /// Dans l'unité découpée (e7d973b06f), ce helper vit dans
+    /// `CallManager+Reconnection.swift`, lu AVANT `CallManager+Signaling.swift`
+    /// : la fenêtre ne le voyait plus, le comportement n'avait pas bougé. Les
+    /// deux maillons se vérifient donc chacun dans SON corps — le sink demande
+    /// des identifiants frais, et la demande émet bien `call:request-ice-servers`.
     func test_socketReconnect_requestsFreshTURNCredentials() throws {
         let source = try callManagerSource()
-        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
-            XCTFail("socket.didReconnect sink not found in CallManager.swift"); return
+        guard let sink = DeclarationBodyScanner.body(containing: "socket.didReconnect", in: source) else {
+            XCTFail("socket.didReconnect sink not found in the CallManager unit"); return
         }
-        let afterReconnect = String(source[reconnectRange.upperBound...])
+        guard let request = DeclarationBodyScanner.body(
+            containing: "func requestFreshTurnCredentials(callId: String)", in: source
+        ) else {
+            XCTFail("requestFreshTurnCredentials(callId:) not found in the CallManager unit"); return
+        }
         XCTAssertTrue(
-            afterReconnect.contains("emitRequestIceServers"),
+            sink.contains("self.requestFreshTurnCredentials(callId: callId)"),
+            "socket.didReconnect sink must request fresh TURN credentials after rejoining the call room")
+        XCTAssertTrue(
+            request.contains("emitRequestIceServers"),
             "socket.didReconnect sink must call emitRequestIceServers after rejoining " +
             "the call room — the socket may have been down long enough for TURN " +
             "credentials to approach expiry before the periodic 80%-of-TTL refresh " +
@@ -2537,13 +2496,7 @@ final class CallManagerIceCandidateBufferTests: XCTestCase {
 final class CallManagerMuteStateTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     /// toggleMute() must emit call:toggle-audio so the remote peer can show a
@@ -2639,13 +2592,7 @@ final class CallManagerMuteStateTests: XCTestCase {
 final class CallManagerRemoteAudioStateTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     private func callViewSource() throws -> String {
@@ -2668,14 +2615,26 @@ final class CallManagerRemoteAudioStateTests: XCTestCase {
     /// isRemoteAudioEnabled. The old guard `event.mediaType == "video"` dropped
     /// audio events silently and left isRemoteAudioEnabled permanently at true.
     func test_callMediaToggledSink_handlesAudioMediaType() throws {
+        // L'unité CallManager porte DEUX abonnements à `socket.callMediaToggled` :
+        // le relais du maillage de groupe (`CallManager+GroupMesh.swift`, qui
+        // délègue à `mesh.handleMediaToggled`) et le sink 1:1
+        // (`CallManager+Signaling.swift`). Depuis le découpage (e7d973b06f), le
+        // relais est lu le PREMIER : la garde se fixe sur le sink 1:1, seul à
+        // porter l'état distant du pair.
         let source = try callManagerSource()
-        guard let mediaToggledRange = source.range(of: "socket.callMediaToggled") else {
-            XCTFail("socket.callMediaToggled sink not found"); return
+        var oneToOneSinks: [String] = []
+        var cursor = source.startIndex
+        while let mediaToggledRange = source.range(of: "socket.callMediaToggled", range: cursor..<source.endIndex) {
+            guard let storeRange = source.range(of: ".store(in: &cancellables)", range: mediaToggledRange.upperBound..<source.endIndex) else {
+                XCTFail("Could not find .store after callMediaToggled"); return
+            }
+            let candidate = String(source[mediaToggledRange.upperBound..<storeRange.lowerBound])
+            if !candidate.contains("mesh.handleMediaToggled") { oneToOneSinks.append(candidate) }
+            cursor = storeRange.upperBound
         }
-        guard let storeRange = source.range(of: ".store(in: &cancellables)", range: mediaToggledRange.upperBound..<source.endIndex) else {
-            XCTFail("Could not find .store after callMediaToggled"); return
+        guard oneToOneSinks.count == 1, let sinkBody = oneToOneSinks.first else {
+            XCTFail("Exactly one 1:1 socket.callMediaToggled sink expected, found \(oneToOneSinks.count)"); return
         }
-        let sinkBody = String(source[mediaToggledRange.upperBound..<storeRange.lowerBound])
         XCTAssertTrue(
             sinkBody.contains("\"audio\""),
             "callMediaToggled sink must handle mediaType==\"audio\" — a guard that " +
@@ -2726,13 +2685,7 @@ final class CallManagerRemoteAudioStateTests: XCTestCase {
 final class CallManagerJoinRaceTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     private func socketManagerSource() throws -> String {
@@ -2842,13 +2795,7 @@ final class CallManagerJoinRaceTests: XCTestCase {
 final class CallManagerReconnectCallEndedRetryTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     private func socketManagerSource() throws -> String {
@@ -2998,13 +2945,7 @@ final class CallManagerReconnectCallEndedRetryTests: XCTestCase {
 final class CallManagerScreenCaptureAlertTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     private func socketManagerSource() throws -> String {
@@ -3118,13 +3059,7 @@ final class CallManagerScreenCaptureAlertTests: XCTestCase {
 final class CallManagerHardeningTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     private func p2pClientSource() throws -> String {
@@ -3374,13 +3309,7 @@ final class CallManagerHardeningTests: XCTestCase {
 final class CallManagerSurvivalHoldInteractionTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     /// applySurvivalVideoSend(enabled: true) must guard on isVideoSuspendedByHold.
@@ -3431,13 +3360,7 @@ final class CallManagerSurvivalHoldInteractionTests: XCTestCase {
 final class CallManagerHoldTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     /// CallManager must declare isVideoSuspendedByHold so hold and background
@@ -3696,13 +3619,7 @@ final class CallManagerHoldTests: XCTestCase {
 final class CallManagerAudioInterruptionHardeningTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     private func webRTCServiceSource() throws -> String {
@@ -3804,13 +3721,7 @@ final class CallManagerAudioInterruptionHardeningTests: XCTestCase {
 final class CallManagerVideoToggleConcurrencyTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     func test_toggleVideo_cancelsExistingTaskBeforeStartingNew() throws {
@@ -3878,13 +3789,7 @@ final class CallManagerVideoToggleConcurrencyTests: XCTestCase {
 final class CallManagerReconnectVideoSyncTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     func test_reconnectVideoSync_includesHoldSuspensionGuard() throws {
@@ -3948,13 +3853,7 @@ final class CallManagerReconnectVideoSyncTests: XCTestCase {
 final class CallManagerForegroundRestoreHoldGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     /// Corps de `applyCameraSuspension(_:cause:)` — depuis le lot C · C3, le
@@ -3962,7 +3861,7 @@ final class CallManagerForegroundRestoreHoldGuardTests: XCTestCase {
     /// gardes doivent vivre.
     private func cameraSuspensionBody() throws -> String {
         let source = try callManagerSource()
-        guard let fnRange = source.range(of: "private func applyCameraSuspension(") else {
+        guard let fnRange = source.range(of: "func applyCameraSuspension(") else {
             XCTFail("applyCameraSuspension not found in CallManager.swift"); return ""
         }
         let after = String(source[fnRange.upperBound...])
@@ -4017,18 +3916,12 @@ final class CallManagerForegroundRestoreHoldGuardTests: XCTestCase {
 final class CallManagerHalfOpenReArmTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     func test_transitionToConnected_bumpsConnectionEpoch() throws {
         let source = try callManagerSource()
-        guard let fnRange = source.range(of: "private func transitionToConnected()") else {
+        guard let fnRange = source.range(of: "func transitionToConnected()") else {
             XCTFail("transitionToConnected not found"); return
         }
         let fnBody = String(source[fnRange.upperBound...].prefix(4000))
@@ -4042,7 +3935,7 @@ final class CallManagerHalfOpenReArmTests: XCTestCase {
 
     func test_reliabilityMonitor_connectedBranch_evaluatesViaEpochMonitor() throws {
         let source = try callManagerSource()
-        guard let monitorRange = source.range(of: "private func startReliabilityMonitor()") else {
+        guard let monitorRange = source.range(of: "func startReliabilityMonitor()") else {
             XCTFail("startReliabilityMonitor not found"); return
         }
         let monitorBody = String(source[monitorRange.upperBound...].prefix(6000))
@@ -4066,13 +3959,7 @@ final class CallManagerHalfOpenReArmTests: XCTestCase {
 final class CallManagerBackgroundDuplicateEmitTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     /// Background entry must NOT emit a second "camera off" to the peer when a
@@ -4103,7 +3990,7 @@ final class CallManagerBackgroundDuplicateEmitTests: XCTestCase {
         // Le point de passage unique porte la garde anti-doublon. Borné
         // SÉMANTIQUEMENT (jusqu'à la fermeture de la fonction) et non par une
         // largeur fixe de 900 caractères, qui débordait sur la fonction suivante.
-        guard let fnRange = source.range(of: "private func applyCameraSuspension(") else {
+        guard let fnRange = source.range(of: "func applyCameraSuspension(") else {
             XCTFail("applyCameraSuspension not found"); return
         }
         let after = String(source[fnRange.upperBound...])
@@ -4134,13 +4021,7 @@ final class CallManagerBackgroundDuplicateEmitTests: XCTestCase {
 final class CallManagerICERestartStaleOfferTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     /// After the backoff sleep the ICE restart Task must verify we are STILL in
@@ -4152,7 +4033,7 @@ final class CallManagerICERestartStaleOfferTests: XCTestCase {
     func test_iceRestartTask_afterBackoffSleep_guardsOnReconnectingState() throws {
         let source = try callManagerSource()
 
-        guard let fnRange = source.range(of: "private func scheduleICERestart(") else {
+        guard let fnRange = source.range(of: "func scheduleICERestart(") else {
             XCTFail("scheduleICERestart() not found"); return
         }
         // Widened from 1500, then 3000 (audit finding — scheduleICERestart now also
@@ -4188,13 +4069,7 @@ final class CallManagerICERestartStaleOfferTests: XCTestCase {
 final class CallManagerSurvivalControllerReconnectGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     /// `applySurvivalVideoSend` must bail out when the call is in `.reconnecting`
@@ -4305,13 +4180,7 @@ final class WebRTCServiceAudioBitrateAdaptationTests: XCTestCase {
 final class CallManagerMediaServicesResetSetActiveGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     private func webRTCTypesSource() throws -> String {
@@ -4434,13 +4303,7 @@ final class CallManagerMediaServicesResetSetActiveGuardTests: XCTestCase {
 final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     /// `CallManager` must use `NWPathMonitor` — not a timer or socket-event
@@ -4480,7 +4343,7 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
     /// hors fenêtre alors qu'aucun comportement n'avait changé — exactement le
     /// défaut que `DeclarationBodyScanner` existe pour éliminer (cf. son en-tête).
     private func startNetworkMonitoringBody(_ source: String) throws -> String {
-        guard let body = DeclarationBodyScanner.body(containing: "private func startNetworkMonitoring()", in: source) else {
+        guard let body = DeclarationBodyScanner.body(containing: "func startNetworkMonitoring()", in: source) else {
             XCTFail("startNetworkMonitoring not found"); return ""
         }
         return body
@@ -4568,13 +4431,7 @@ final class CallManagerNetworkMonitorSourceGuardTests: XCTestCase {
 final class CallManagerMediaServicesResetMonitoringTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     func test_callManager_sourceCode_observesMediaServicesWereResetNotification() throws {
@@ -4787,13 +4644,7 @@ final class CallViewVideoWatchdogSourceGuardTests: XCTestCase {
 final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     func test_screenCaptureMonitoring_doesNotUseUIScreenMain_isCaptured() throws {
@@ -4801,7 +4652,7 @@ final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
         // startScreenCaptureMonitoring() must never use UIScreen.main.isCaptured.
         let source = try callManagerSource()
 
-        guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
+        guard let fnRange = source.range(of: "func startScreenCaptureMonitoring()") else {
             XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
             return
         }
@@ -4822,7 +4673,7 @@ final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
         // MainActor instead, which also correctly handles multi-screen (Stage Manager, Catalyst).
         let source = try callManagerSource()
 
-        guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
+        guard let fnRange = source.range(of: "func startScreenCaptureMonitoring()") else {
             XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
             return
         }
@@ -4843,7 +4694,7 @@ final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
         // NonisolatedNonsendingByDefault. The observer closure must use `_ in`.
         let source = try callManagerSource()
 
-        guard let fnRange = source.range(of: "private func startScreenCaptureMonitoring()") else {
+        guard let fnRange = source.range(of: "func startScreenCaptureMonitoring()") else {
             XCTFail("startScreenCaptureMonitoring() not found in CallManager.swift")
             return
         }
@@ -4911,19 +4762,13 @@ final class CallManagerScreenCaptureMonitoringTests: XCTestCase {
 final class CallTranscriptionSymmetrySourceGuardTests: XCTestCase {
 
     private func callManagerSource() throws -> String {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
     }
 
     private func body(of signature: String, in source: String) throws -> String {
         guard let start = source.range(of: signature),
               let end = source[start.upperBound...].range(of: "\n    }") else {
-            throw XCTSkip("\(signature) introuvable dans CallManager.swift")
+            XCTFail("\(signature) introuvable dans l'unité CallManager"); return ""
         }
         return String(source[start.lowerBound ..< end.upperBound])
     }
@@ -4952,7 +4797,11 @@ final class CallTranscriptionSymmetrySourceGuardTests: XCTestCase {
     /// et le micro reste tapé jusqu'à la fin de l'appel.
     func test_listeningIntentSignal_readsThePanel_neverTheCaptureState() throws {
         let source = try callManagerSource()
-        let fn = try body(of: "private func publishListeningIntentIfChanged()", in: source)
+        // Sortie dans `CallManager+MediaControls.swift` (e7d973b06f), la
+        // fonction a perdu son `private` pour rester appelable depuis
+        // `CallManager+Transcription.swift` : la garde suit la fonction, pas
+        // son niveau d'accès.
+        let fn = try body(of: "func publishListeningIntentIfChanged()", in: source)
 
         XCTAssertTrue(
             fn.contains("transcriptionService.isShowingOverlay"),

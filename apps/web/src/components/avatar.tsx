@@ -21,6 +21,7 @@ import { Link } from '@/routes/route-table';
  *
  *   anneau      = taille + 6        police initiales = taille x 0.38
  *   pastille    = taille x 0.26     epaisseur anneau = taille <= 32 ? 1.5 : 2.5
+ *   point « ici » = taille x 0.52 — deux fois la pastille (#9061)
  *
  * La PASTILLE DE PRESENCE se pose a 45 degres SUR LE BORD du cercle, pas dans
  * le coin de sa boite : `centre + rayon x cos(pi/4)`, soit 85,36 % du diametre.
@@ -42,6 +43,9 @@ export function Avatar({
   size,
   presence,
   here = false,
+  hereActive = false,
+  hereFocused = false,
+  hereDotRatio = HERE_DOT_RATIO,
   name,
   opacity,
   src,
@@ -62,6 +66,23 @@ export function Avatar({
    * la frappe (`api/conversation-viewing.ts`).
    */
   here?: boolean;
+  /**
+   * LE PAIR ICI REGARDE, ÉCOUTE OU AGIT EN CE MOMENT (#9061) — le point indigo
+   * PULSE tant que `viewing:activity` arrive. Sans `here`, rien ne pulse.
+   */
+  hereActive?: boolean;
+  /**
+   * LE PAIR ICI REGARDE EN PLEIN ÉCRAN UN ÉLÉMENT DE LA CONVERSATION (#9065) —
+   * le point indigo PULSE comme à l'activité, et le mood ne pulse plus qu'à peine. Sans
+   * `here`, rien.
+   */
+  hereFocused?: boolean;
+  /**
+   * La taille du point « ici », en fraction de l'avatar : `HERE_DOT_RATIO`
+   * partout, `HEADER_HERE_DOT_RATIO` dans l'en-tête de la conversation, où il
+   * se fait plus discret (#9065). Miroir de `AvatarContext.hereDotRatio` (iOS).
+   */
+  hereDotRatio?: number;
   name?: string;
   /**
    * Le fondu de SOURDINE, appliqué ICI plutôt qu'en enveloppant l'avatar
@@ -108,7 +129,13 @@ export function Avatar({
    * Taille : 0,42 × l'avatar, miroir `MeeshyAvatar.swift:186-195`. Elle RESPIRE
    * puis se pose après ~8 s (`mood-breathe`, 2 s × 4 — la borne posée par
    * l'audit de chauffe iOS du 2026-08-26), et `prefers-reduced-motion` la coupe
-   * sans la faire disparaître.
+   * sans la faire disparaître. Elle ne pulse plus qu'à peine tant que le pair
+   * regarde en plein écran (`mood-hush`, `hereFocused`, #9065).
+   *
+   * **SON CONTOUR PORTE LA PRÉSENCE QU'ELLE MASQUE** (#9065) — la silhouette
+   * DILATÉE de l'emoji (`[data-mood-outline]`, `avatar.css`), jamais un anneau
+   * de plus : indigo ici, vert en ligne, rien sinon. Le vert ne se lit que sur
+   * la présence SERVIE : aucun contour ne se fabrique d'une présence masquée.
    */
   mood?: string;
   /**
@@ -176,7 +203,7 @@ export function Avatar({
 }) {
   const showsImage = src !== undefined && src !== '';
   const resolvedSrc = showsImage ? attachmentSrc(src) : undefined;
-  const dot = size * 0.26;
+  const dot = here ? size * hereDotRatio : size * PRESENCE_DOT_RATIO;
   // 0.8536 = (1 + cos(pi/4)) / 2 — le point a 45 deg sur le cercle, en fraction
   // du diametre. On retranche la moitie de la pastille pour la CENTRER dessus.
   const offset = size * 0.8536 - dot / 2;
@@ -187,6 +214,8 @@ export function Avatar({
      amont, mais un appelant direct la laisserait passer et peindrait une
      pastille MUETTE — visible, sans rien dire. */
   const humeur = mood !== undefined && mood !== '' ? mood : undefined;
+  const motion: HereMotion = !here ? 'rest' : hereFocused ? 'focused' : hereActive ? 'active' : 'rest';
+  const moodOutline: MoodOutline | undefined = here ? 'here' : presence === 'online' ? 'online' : undefined;
 
   const corps = (
     /* `block` — et ce n'est pas décoratif : un `<span>` reste INLINE, et un
@@ -245,28 +274,19 @@ export function Avatar({
            l'ÉTAT servi (`here`/`online`/`away`/`idle`), donc « point VERT » se
            mesure vraiment plutôt que « un enfant de plus ». Le point change en
            se montrant (#9047) : `PresenceDot`. */
-        <PresenceDot state={showsDot ? (here ? 'here' : presence) : undefined} color={dotColor} size={dot} offset={offset} />
+        <PresenceDot
+          state={showsDot ? (here ? 'here' : presence) : undefined}
+          motion={motion}
+          color={dotColor}
+          size={dot}
+          offset={offset}
+        />
       ) : null}
       {humeur === undefined ? null : (
         /* `data-mood` porte l'ÉTAT servi, comme `data-presence` et
            `data-story-ring` portent les leurs — un gate qui compterait les
            enfants de `.avatar-root` mentirait sur la cause (revue #5935). */
-        <span
-          data-mood={humeur}
-          className="pointer-events-none absolute grid place-items-center rounded-chip mood-breathe"
-          style={{
-            width: Math.round(size * 0.42),
-            height: Math.round(size * 0.42),
-            right: -Math.round(size * 0.06),
-            bottom: -Math.round(size * 0.06),
-            fontSize: Math.max(10, Math.round(size * 0.42 * 0.65)),
-            background: 'var(--color-ios-surface)',
-            boxShadow: '0 0 0 1.5px var(--color-ios-surface)',
-          }}
-          aria-hidden
-        >
-          {humeur}
-        </span>
+        <MoodBadge mood={humeur} here={here} motion={motion} outline={moodOutline} size={size} />
       )}
       {storyRing === undefined ? null : (
         /* `data-story-ring` porte l'ÉTAT servi (`unseen`/`seen`), comme
@@ -342,6 +362,12 @@ export function Avatar({
   );
 }
 
+/** La pastille de présence, en fraction du diamètre — `MeeshyAvatar.onlineDotSize`. */
+const PRESENCE_DOT_RATIO = 0.26;
+/** Le point indigo « ici », deux fois la pastille (#9061) — `MeeshyAvatar.hereDotSize`. */
+const HERE_DOT_RATIO = PRESENCE_DOT_RATIO * 2;
+export const HEADER_HERE_DOT_RATIO = 0.4;
+
 /** Le temps que met le point sortant à diminuer (`presence-dot-shrink`, `avatar.css`). */
 const PRESENCE_LEAVE_MS = 220;
 
@@ -356,11 +382,13 @@ type ShownDot = { readonly state: string; readonly color: string };
  */
 function PresenceDot({
   state,
+  motion,
   color,
   size,
   offset,
 }: {
   readonly state: string | undefined;
+  readonly motion: HereMotion;
   readonly color: string;
   readonly size: number;
   readonly offset: number;
@@ -390,6 +418,8 @@ function PresenceDot({
 
   const box: CSSProperties = { width: size, height: size, left: offset, top: offset, boxShadow: '0 0 0 2px var(--ios-surface)' };
   const enters = changed.current ? ' presence-dot-enter' : '';
+  const active = state === 'here' && motion === 'active';
+  const focused = state === 'here' && motion === 'focused';
   return (
     <>
       {leaving === null ? null : (
@@ -404,11 +434,120 @@ function PresenceDot({
         <span
           key={state}
           data-presence={state}
-          className={`presence-dot absolute rounded-chip${enters}${state === 'here' ? ' presence-dot-here' : ''}`}
+          data-presence-active={active ? 'true' : undefined}
+          className={`presence-dot absolute rounded-chip${enters}${state === 'here' ? ' presence-dot-here' : ''}${active ? ' presence-dot-active' : ''}${focused ? ' presence-dot-focused' : ''}`}
           style={{ ...box, backgroundColor: color, color }}
           aria-hidden
         />
       )}
+    </>
+  );
+}
+
+/**
+ * **L'ÉCHELLE UNIQUE DU POINT ET DU MOOD** (#9065) — ici au repos : onde douce,
+ * respiration habituelle ; actif : onde vive, respiration ample ; en plein
+ * écran : onde imperceptible, pulse à peine. Le plein écran prime.
+ */
+type HereMotion = 'rest' | 'active' | 'focused';
+type MoodOutline = 'here' | 'online';
+
+const MOOD_MOTION_CLASS: Readonly<Record<HereMotion, string>> = {
+  rest: 'mood-breathe',
+  active: 'mood-stir',
+  focused: 'mood-hush',
+};
+
+const moodOutlineStyle = (outline: MoodOutline | undefined, size: number): CSSProperties | undefined =>
+  outline === undefined
+    ? undefined
+    : ({
+        '--mood-outline': outline === 'here' ? PRESENCE_HERE_HEX : PRESENCE_HEX[presenceTone('online')],
+        '--mood-outline-width': `${Math.max(1, Math.round(size * 0.07) / 2)}px`,
+      } as CSSProperties);
+
+/**
+ * **LE MOOD ARRIVE ET PART COMME LE POINT** (#9065) — même mécanique que
+ * `PresenceDot` (#9047), le mood au milieu. Arriver ici : le badge rebondit et
+ * porte l'onde indigo. Partir : le badge indigo se rétracte, puis revient en
+ * rebondissant cerné de vert (ou sans contour). Au premier rendu, rien ne
+ * bouge. L'enveloppe porte l'arrivée et le départ, le badge sa respiration.
+ */
+function MoodBadge({
+  mood,
+  here,
+  motion,
+  outline,
+  size,
+}: {
+  readonly mood: string;
+  readonly here: boolean;
+  readonly motion: HereMotion;
+  readonly outline: MoodOutline | undefined;
+  readonly size: number;
+}) {
+  const wasHere = useRef(here);
+  const settled = useRef(false);
+  const rendered = useRef(here);
+  const changed = useRef(false);
+  const [leaving, setLeaving] = useState(false);
+  if (rendered.current !== here) {
+    rendered.current = here;
+    changed.current = true;
+  }
+
+  useEffect(() => {
+    const before = wasHere.current;
+    wasHere.current = here;
+    if (!settled.current) {
+      settled.current = true;
+      return undefined;
+    }
+    if (!before || here) return undefined;
+    setLeaving(true);
+    const timer = setTimeout(() => setLeaving(false), PRESENCE_LEAVE_MS);
+    return () => clearTimeout(timer);
+  }, [here]);
+
+  const side = Math.round(size * 0.42);
+  const box: CSSProperties = {
+    width: side,
+    height: side,
+    right: -Math.round(size * 0.06),
+    bottom: -Math.round(size * 0.06),
+  };
+  const face = (motionClass: string, glyphOutline: MoodOutline | undefined) => (
+    <span
+      className={`grid size-full place-items-center rounded-chip ${motionClass}`}
+      style={{
+        fontSize: Math.max(10, Math.round(side * 0.65)),
+        background: 'var(--color-ios-surface)',
+        boxShadow: '0 0 0 1.5px var(--color-ios-surface)',
+      }}
+    >
+      <span data-mood-glyph="" data-mood-outline={glyphOutline} style={moodOutlineStyle(glyphOutline, size)}>
+        {mood}
+      </span>
+    </span>
+  );
+  const enters = changed.current ? (here ? ' mood-enter mood-arrive' : ' mood-enter') : '';
+  return (
+    <>
+      {leaving ? (
+        <span data-mood-leaving="here" className="mood-leave pointer-events-none absolute rounded-chip" style={box} aria-hidden>
+          {face('', 'here')}
+        </span>
+      ) : null}
+      <span
+        key={here ? 'here' : 'there'}
+        data-mood={mood}
+        data-mood-focused={motion === 'focused' ? 'true' : undefined}
+        className={`pointer-events-none absolute rounded-chip${enters}`}
+        style={{ ...box, '--mood-arrive': PRESENCE_HERE_HEX } as CSSProperties}
+        aria-hidden
+      >
+        {face(MOOD_MOTION_CLASS[motion], outline)}
+      </span>
     </>
   );
 }

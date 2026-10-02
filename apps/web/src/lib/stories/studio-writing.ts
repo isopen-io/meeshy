@@ -1,4 +1,4 @@
-import { sceneTextAppearance } from '@/lib/canvas/text-appearance';
+import { SCENE_TEXT_WRAP_FRACTION, sceneTextAppearance } from '@/lib/canvas/text-appearance';
 
 import { textLayerPayload, type StudioTextLayer } from './studio-text';
 
@@ -44,14 +44,14 @@ export type StudioWritingStyle = {
   readonly padding?: string;
 };
 
-/** La borne du moteur : un texte peint ne dépasse jamais 85 % de la scène. */
-const MAX_WIDTH = '85cqw';
+/** La borne du moteur : un texte peint ne dépasse jamais 88 % de la scène. */
+const MAX_WIDTH = `${SCENE_TEXT_WRAP_FRACTION * 100}cqw`;
 
 const percent = (fraction: number): string => `${Math.round(fraction * 1e6) / 1e4}%`;
 
 /** Un pixel de marge : la largeur peinte est fractionnaire, et une saisie
  * plus étroite d'un souffle couperait sa dernière ligne ailleurs. La borne
- * `85cqw` la ramène au bord exact quand le texte peint est lui-même borné. */
+ * `MAX_WIDTH` la ramène au bord exact quand le texte peint est lui-même borné. */
 const SLACK_PX = 1;
 
 export function studioWritingStyle({

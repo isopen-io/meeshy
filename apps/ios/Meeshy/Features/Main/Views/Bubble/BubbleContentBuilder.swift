@@ -20,7 +20,7 @@ extension BubbleContent {
         // (firstLinkURL → token → /l/<token>) so the leaf views stay primitive.
         let embedTrackedURL: URL? = firstLinkURL
             .flatMap { trackedLinks[$0] }
-            .flatMap { URL(string: "https://meeshy.me/l/\($0)") }
+            .flatMap { TrackedLink.redirectURL(token: $0) }
         return Text(
             raw: raw,
             isEmojiOnly: isEmojiOnly,

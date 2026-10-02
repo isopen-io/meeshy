@@ -2,14 +2,22 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// **La retouche d'une image du fil, rendue au message** (#8416).
+// **La retouche d'une pièce du fil, et la caméra de sa barre, rendues au
+// message** (#8416, #9123).
 //
 // La même scène plein écran que toute composition ; seul le socle change :
-// ni audience ni menu de formats — l'image ne se publie pas —, une capsule
-// « Terminé » qui rend le composite de la scène à l'hôte, puis referme.
+// ni audience ni menu de formats — le média ne se publie pas —, une capsule
+// « Terminé » qui rend le média à l'hôte, puis referme.
 extension MeeshyComposerHost {
 
-    var returnsImageToConversation: Bool { onReturnImage != nil }
+    var returnsToConversation: Bool { onReturnMedia != nil || onReturnSeries != nil }
+
+    /// **La caméra de la barre ouvre le viseur ARMÉ** (#9123) — la seule porte
+    /// qui le fasse : l'auteur a touché « caméra ». La règle lit l'ORIGINE.
+    func armViewfinderIfTheDoorAsks() {
+        guard ComposerConversationCapture.armsViewfinderOnOpen(origin: intent.origin) else { return }
+        armSceneCamera()
+    }
 
     /// **Les portes servies sur la scène** — toutes, sauf en retouche d'une
     /// image du fil, où ne restent que celles qui PEIGNENT l'image : ce qui
@@ -22,13 +30,13 @@ extension MeeshyComposerHost {
         // La porte « Fond » peint une COULEUR : sous un média de fond, elle
         // n'a plus d'objet — le Cadre du rail droit prend le relais.
         let utiles = sceneHasBackgroundMedia ? offertes.filter { $0 != .background } : offertes
-        guard returnsImageToConversation else { return utiles }
+        guard returnsToConversation else { return utiles }
         return utiles.filter(ComposerReturnImage.paintingDoors.contains)
     }
 
     var returnImageButton: some View {
         Button {
-            returnSceneImage()
+            returnSceneMedia()
         } label: {
             Label(ComposerDescriptionCopy.doneShort, systemImage: "checkmark")
                 .font(.body.weight(.semibold))
@@ -39,28 +47,64 @@ extension MeeshyComposerHost {
                 .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.brandPrimary)
         }
         .buttonStyle(.plain)
+        .disabled(sceneExport.isExporting)
     }
 
-    func returnSceneImage() {
-        guard let onReturnImage else { return }
+    /// **« Terminé » rend un MÉDIA** (#8416, #9123, #9124) — la loi
+    /// (`ComposerReturnMedia.action`) dit lequel ; ce site l'exécute.
+    func returnSceneMedia() {
+        if retouchSeries != nil { returnRetouchSeries(); return }
+        guard let onReturnMedia else { return }
         HapticFeedback.light()
         if viewModel.timelineIsOpen { viewModel.closeTimelinePanel() }
+        let objets = viewModel.currentSlide.effects.mediaObjects ?? []
         // **Rien n'a changé ⇒ l'image d'origine reste** (#8524). Rendre la
         // scène d'une retouche vide remplaçait l'original par un rendu : une
         // perte de définition sans le moindre geste de l'auteur.
-        guard viewModel.canUndoGlobal else {
+        switch ComposerReturnMedia.action(
+            edited: viewModel.canUndoGlobal,
+            returnsCapture: ComposerConversationCapture.returnsUntouchedMedia(origin: intent.origin),
+            sceneHoldsMedia: !objets.isEmpty,
+            sceneHasVideo: objets.contains { $0.kind == .video }
+        ) {
+        case .dismiss:
             onDismiss()
-            return
+        case .returnCapture:
+            guard let prise = sceneMediaAsTaken else { onDismiss(); return }
+            onReturnMedia(prise)
+            onDismiss()
+        case .renderImage:
+            let slide = viewModel.currentSlide
+            guard let image = StorySlideRenderer.renderComposite(
+                slide: slide,
+                bgImage: viewModel.slideImages[slide.id],
+                loadedImages: viewModel.loadedImages,
+                size: ComposerRetouchSeries.imageRenderSize(slide: slide, canvasRatio: viewModel.currentCanvasRatio)
+            ) else { return }
+            onReturnMedia(.image(image))
+            onDismiss()
+        case .renderVideo:
+            let slide = ComposerRetouchSeries.messageVideoSlide(viewModel.exportableCurrentSlide())
+            sceneExport.bakeForMessage(slide: slide, inputs: viewModel.exportInputs(for: slide)) { url in
+                onReturnMedia(.video(url))
+                onDismiss()
+            }
         }
-        let slide = viewModel.currentSlide
-        guard let image = StorySlideRenderer.renderComposite(
-            slide: slide,
-            bgImage: viewModel.slideImages[slide.id],
-            loadedImages: viewModel.loadedImages,
-            size: ComposerReturnImage.renderSize(ratio: viewModel.currentCanvasRatio)
-        ) else { return }
-        onReturnImage(image)
-        onDismiss()
+    }
+
+    /// Le média tel que le viseur ou la porte l'a rendu : son FICHIER, jamais un rendu.
+    var sceneMediaAsTaken: ComposerReturnedMedia? {
+        for media in documentContentMedia {
+            switch media.kind {
+            case .video:
+                return .video(media.sourceURL)
+            case .image:
+                if let image = UIImage(contentsOfFile: media.sourceURL.path) { return .image(image) }
+            case .audio:
+                continue
+            }
+        }
+        return nil
     }
 }
 

@@ -6,14 +6,17 @@ nonisolated struct CallFaceLandmarks: Equatable, Sendable {
     let bounds: CGRect
     let leftEye: CGPoint?
     let rightEye: CGPoint?
+    /// #9196 — centre des lèvres, exclu du masque de peau.
+    let mouth: CGPoint?
 
-    init(bounds: CGRect, leftEye: CGPoint? = nil, rightEye: CGPoint? = nil) {
+    init(bounds: CGRect, leftEye: CGPoint? = nil, rightEye: CGPoint? = nil, mouth: CGPoint? = nil) {
         self.bounds = bounds
         self.leftEye = leftEye
         self.rightEye = rightEye
+        self.mouth = mouth
     }
 
-    static func fromNormalized(boundingBox: CGRect, leftEye: CGPoint?, rightEye: CGPoint?, imageSize: CGSize) -> CallFaceLandmarks {
+    static func fromNormalized(boundingBox: CGRect, leftEye: CGPoint?, rightEye: CGPoint?, mouth: CGPoint? = nil, imageSize: CGSize) -> CallFaceLandmarks {
         let bounds = CGRect(
             x: boundingBox.minX * imageSize.width,
             y: boundingBox.minY * imageSize.height,
@@ -23,7 +26,7 @@ nonisolated struct CallFaceLandmarks: Equatable, Sendable {
         func place(_ point: CGPoint?) -> CGPoint? {
             point.map { CGPoint(x: bounds.minX + $0.x * bounds.width, y: bounds.minY + $0.y * bounds.height) }
         }
-        return CallFaceLandmarks(bounds: bounds, leftEye: place(leftEye), rightEye: place(rightEye))
+        return CallFaceLandmarks(bounds: bounds, leftEye: place(leftEye), rightEye: place(rightEye), mouth: place(mouth))
     }
 
     func smoothed(toward next: CallFaceLandmarks, factor: CGFloat) -> CallFaceLandmarks {
@@ -40,7 +43,21 @@ nonisolated struct CallFaceLandmarks: Equatable, Sendable {
             width: blend(self.bounds.width, next.bounds.width),
             height: blend(self.bounds.height, next.bounds.height)
         )
-        return CallFaceLandmarks(bounds: bounds, leftEye: blendPoint(leftEye, next.leftEye), rightEye: blendPoint(rightEye, next.rightEye))
+        return CallFaceLandmarks(
+            bounds: bounds,
+            leftEye: blendPoint(leftEye, next.leftEye),
+            rightEye: blendPoint(rightEye, next.rightEye),
+            mouth: blendPoint(mouth, next.mouth)
+        )
+    }
+    func scaled(to size: CGSize) -> CallFaceLandmarks {
+        let transform = CGAffineTransform(scaleX: size.width, y: size.height)
+        return CallFaceLandmarks(
+            bounds: bounds.applying(transform),
+            leftEye: leftEye?.applying(transform),
+            rightEye: rightEye?.applying(transform),
+            mouth: mouth?.applying(transform)
+        )
     }
 }
 
@@ -153,6 +170,9 @@ nonisolated enum CallFaceEffectBudget {
     static func allowsBloom(isDegraded: Bool) -> Bool {
         !isDegraded
     }
+
+    static let emberOpacityLevels = 5
+    static let glowReduction: CGFloat = 0.25
 
     static let landmarkSmoothing: CGFloat = 0.5
     static let missesBeforeLosingFace = 3

@@ -715,7 +715,7 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
  * Lentille (ci-dessus) : renumérotée ici, dans l'ordre réel du fichier.
  *
  * DEUX SOURCES SWIFT DISTINCTES, ni l'une ni l'autre `FocalMetrics.swift` :
- * `EmojiDetector.swift` (les trois tailles d'emoji seul, un ENUM dont
+ * `EmojiDetector.swift` (les quatre tailles d'emoji seul, un ENUM dont
  * `focalNumber` ne sait pas lire les `case` — lu par une regex DÉDIÉE, même
  * dispositif que PARTIE 8) et `BubbleSticker.swift` (le côté du sticker EN
  * BULLE et la boîte de son repli emoji — hors `FocalMetrics`, comme
@@ -730,19 +730,34 @@ for (const [swiftSource, swiftName, downstreamName, what] of MENU_MAPPINGS) {
   const messageBodyDerived = readFileSync(`${ROOT}apps/web/src/lib/view/message-body.ts`, 'utf8');
   const metricsDerived2 = readFileSync(`${ROOT}apps/web/src/lib/reading-mode/metrics.ts`, 'utf8');
 
+  // #9054 : chaque taille s'écrit « base × multiple » des deux côtés
+  // (`Self.inlineSize * 4` / `EMOJI_INLINE_SIZE * 4`) — la garde lit la base
+  // puis évalue le produit, et accepte encore un littéral.
+  const swiftInline = (() => {
+    const m = /static let inlineSize: CGFloat = (-?[0-9.]+)/.exec(emojiDetectorSwift);
+    return m === null ? null : Number(m[1]);
+  })();
+  const tsInline = (() => {
+    const m = /const EMOJI_INLINE_SIZE = (-?[0-9.]+);/.exec(messageBodyDerived);
+    return m === null ? null : Number(m[1]);
+  })();
+  const product = (base, factor) => (factor === undefined ? null : base === null ? null : base * Number(factor));
   const EMOJI_CASE_MAPPINGS = [
     ['single', 'single'],
     ['double', 'double'],
     ['triple', 'triple'],
+    ['quadruple', 'quadruple'],
   ];
   for (const [swiftCase, tsKey] of EMOJI_CASE_MAPPINGS) {
     const swiftValue = (() => {
-      const m = new RegExp(`case \\.${swiftCase}: return (-?[0-9.]+)`).exec(emojiDetectorSwift);
-      return m === null ? null : Number(m[1]);
+      const m = new RegExp(`case \\.${swiftCase}: return (?:Self\\.inlineSize \\* ([0-9.]+)|(-?[0-9.]+))`).exec(emojiDetectorSwift);
+      if (m === null) return null;
+      return m[2] !== undefined ? Number(m[2]) : product(swiftInline, m[1]);
     })();
     const derivedValue = (() => {
-      const m = new RegExp(`${tsKey}:\\s*(-?[0-9.]+)`).exec(messageBodyDerived);
-      return m === null ? null : Number(m[1]);
+      const m = new RegExp(`\\b${tsKey}:\\s*(?:EMOJI_INLINE_SIZE \\* ([0-9.]+)|(-?[0-9.]+))`).exec(messageBodyDerived);
+      if (m === null) return null;
+      return m[2] !== undefined ? Number(m[2]) : product(tsInline, m[1]);
     })();
     if (swiftValue === null) failures.push(`taille d'emoji seul (${swiftCase}) : introuvable dans EmojiDetector.swift`);
     else if (derivedValue === null) failures.push(`taille d'emoji seul (${swiftCase}) : « ${tsKey} » introuvable dans EMOJI_ONLY_FONT_SIZES`);

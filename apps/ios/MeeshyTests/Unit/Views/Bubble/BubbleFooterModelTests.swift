@@ -41,7 +41,7 @@ final class BubbleFooterModelTests: XCTestCase {
 
     // MARK: - SenderIdentity.isHere — « est dans la conversation » (#8892)
 
-    private func makeSender(isHere: Bool) -> SenderIdentity {
+    private func makeSender(isHere: ConversationHere) -> SenderIdentity {
         SenderIdentity(
             name: "Awa", username: "@awa", role: nil, avatarURL: nil,
             accentColor: "#6366F1", moodEmoji: nil, presence: .online,
@@ -51,6 +51,7 @@ final class BubbleFooterModelTests: XCTestCase {
 
     func test_senderIdentity_isHereChange_invalidatesTheFooter() {
         XCTAssertNotEqual(makeSender(isHere: false), makeSender(isHere: true))
+        XCTAssertNotEqual(makeSender(isHere: .here), makeSender(isHere: .active))
     }
 
     func test_senderIdentity_isHereOmitted_defaultsToAbsent() {
@@ -58,7 +59,7 @@ final class BubbleFooterModelTests: XCTestCase {
             name: "Awa", username: nil, role: nil, avatarURL: nil,
             accentColor: "#6366F1", moodEmoji: nil, presence: nil, storyRing: .none
         )
-        XCTAssertFalse(sender.isHere)
+        XCTAssertEqual(sender.isHere, .absent)
     }
 
     func test_make_directNonLastSent_showsTimestamp() {

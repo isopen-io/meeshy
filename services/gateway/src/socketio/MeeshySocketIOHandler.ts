@@ -55,6 +55,28 @@ export class MeeshySocketIOHandler {
   }
 
   /**
+   * Ferme le temps réel à l'arrêt de la passerelle (#8297) : les appels passent
+   * d'abord en mode arrêt — la rafale de déconnexions qui suit n'est pas un
+   * raccrochage, le média pair-à-pair continue —, puis les sockets tombent et
+   * les clients se reconnectent aussitôt à la nouvelle instance.
+   */
+  public async close(): Promise<void> {
+    const manager = this.socketIOManager;
+    if (!manager) return;
+    try {
+      const calls = manager.getCallEventsHandler();
+      calls.prepareForShutdown();
+      calls.destroy();
+      manager.getCallService().destroy();
+      logger.info('✓ Call handler set to shutdown mode (active calls preserved for reconnect)');
+    } catch (error) {
+      logger.warn('⚠️ Could not set call handler shutdown mode', error);
+    }
+    await manager.close();
+    logger.info('✓ Socket.IO closed (clients reconnect to the new instance)');
+  }
+
+  /**
    * Accès au manager Socket.IO pour des opérations avancées
    */
   public getManager(): MeeshySocketIOManager | null {

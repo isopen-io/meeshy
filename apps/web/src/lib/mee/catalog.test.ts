@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { MEE_STICKERS, findMeeSticker, meeSlotsFor, meeStickerOfTemplate, meeStickersOfTab, meeTemplateId } from './catalog';
+import { MEE_STICKERS, findMeeSticker, meeSlotsFor, meeStickerOfTemplate, meeStickersOfPack, meeStickersOfTab, meeTemplateId } from './catalog';
 import { PRIMS, motionSignature, tellsAnAction } from './motion';
 import { renderMeeSticker } from './render';
 import { MEE_EMOTIONS } from './types';
@@ -57,25 +57,23 @@ describe('le volume et les ratios', () => {
 
   test('les sentiments couvrent amour, morbide, joie, célébration, rejet, consolation, frustration, seul et à deux', () => {
     const wanted = ['amour', 'morbide', 'joie', 'celebration', 'rejet', 'consolation', 'frustration', 'tristesse', 'colere', 'peur', 'jalousie'] as const;
-    const solo = new Set(MEE_STICKERS.filter((s) => s.section === 'solo').map((s) => s.feeling));
-    const duo = new Set(MEE_STICKERS.filter((s) => s.section === 'duo').map((s) => s.feeling));
+    const solo = new Set(MEE_STICKERS.filter((s) => s.tab === 'mee' || s.tab === 'meo').map((s) => s.feeling));
+    const duo = new Set(meeStickersOfTab('duo').map((s) => s.feeling));
     expect(wanted.filter((f) => !solo.has(f) && f !== 'rejet' && f !== 'consolation')).toEqual([]);
     expect(['amour', 'morbide', 'joie', 'celebration', 'rejet', 'consolation', 'colere', 'jalousie'].filter((f) => !duo.has(f as MeeSticker['feeling']))).toEqual([]);
   });
 });
 
-describe('les onglets Mee et Meo', () => {
-  test('chaque onglet a ses stickers seuls et sa partie à deux', () => {
-    (['mee', 'meo'] as const).forEach((tab) => {
-      const list = meeStickersOfTab(tab);
-      expect(list.filter((s) => s.section === 'solo').length).toBe(30);
-      expect(list.filter((s) => s.section === 'duo').length).toBe(22);
-    });
+describe('l’onglet Mee & Meo', () => {
+  const playedBy = (actor: 'mee' | 'meo') => meeStickersOfTab('duo').filter((s) => s.id.startsWith(`duo-${actor}-`));
+
+  test('les vingt-deux scènes d’origine s’y jouent dans les deux sens', () => {
+    expect(playedBy('mee').length).toBe(22);
+    expect(playedBy('meo').length).toBe(22);
   });
 
-  test('à deux, l’acteur s’inverse ET la scène change : jamais le même sticker d’un onglet à l’autre', () => {
-    const duoOf = (tab: 'mee' | 'meo') => meeStickersOfTab(tab).filter((s) => s.section === 'duo');
-    duoOf('mee').forEach((mine) => {
+  test('à deux, l’acteur s’inverse ET la scène change : jamais le même sticker d’un sens à l’autre', () => {
+    playedBy('mee').forEach((mine) => {
       const twin = findMeeSticker(mine.id.replace('duo-mee-', 'duo-meo-'));
       expect(twin).toBeDefined();
       const a = renderMeeSticker(mine, { uid: 'x' });
@@ -145,6 +143,17 @@ describe('les stickers dynamiques', () => {
     });
   });
 
+  test('le BANDEAU se déclare — iOS le redessine en natif sur le film (#9069)', () => {
+    const banded = instants.filter((s) => s.section !== 'message');
+    banded.forEach((s) => {
+      const svg = renderMeeSticker(s);
+      expect(svg).toMatch(/<g data-mee-band><rect /);
+      expect(svg.match(/<g data-mee-band>/g)?.length).toBe(1);
+    });
+    const characters = MEE_STICKERS.filter((s) => s.tab !== 'instants');
+    expect(characters.some((s) => renderMeeSticker(s).includes('data-mee-band'))).toBe(false);
+  });
+
   test('un texte saisi ne peut pas injecter de balise', () => {
     instants.forEach((s) => {
       const svg = renderMeeSticker(s, { slots: { message: '<script>x</script>', place: '"><img onerror=1>', weather: '<b>', time: '&' } });
@@ -152,5 +161,50 @@ describe('les stickers dynamiques', () => {
       expect(svg).not.toContain('<img');
       expect(svg).not.toContain('<b>');
     });
+  });
+});
+
+describe('le dessin se lit comme un sticker mignon (#9053)', () => {
+  const sticker = MEE_STICKERS[0] as MeeSticker;
+  const svg = renderMeeSticker(sticker, { uid: 'cut', animated: false });
+
+  test('la scène entière est découpée par un contour blanc et posée sur une ombre', () => {
+    const cut = svg.match(/<filter id="([^"]+)"[^>]*>(.*?)<\/filter>/);
+    expect(cut).not.toBeNull();
+    expect(cut?.[2]).toContain('operator="dilate"');
+    expect(cut?.[2]).toContain('flood-color="#ffffff"');
+    expect(svg).toContain(`<g filter="url(#${cut?.[1]})">`);
+  });
+
+  test('la boîte de vue loge le contour qui déborde de la scène', () => {
+    const [x, y, w, h] = (svg.match(/viewBox="([^"]+)"/)?.[1] ?? '').split(' ').map(Number);
+    expect(x).toBeLessThan(0);
+    expect(y).toBeLessThan(0);
+    expect((x ?? 0) + (w ?? 0)).toBeGreaterThan(200);
+    expect((y ?? 0) + (h ?? 0)).toBeGreaterThan(200);
+  });
+
+  test('le bec reste court : sa pointe ne dépasse pas le visage', () => {
+    const beaks = MEE_STICKERS.filter((s) => s.tab === 'mee' || s.tab === 'meo').flatMap((s) =>
+      [...s.scene('t', {}).matchAll(/<path d="([^"]+)" fill="url\(#t(?:mee|meo)1k\)"/g)].map((m) => m[1] ?? ''),
+    );
+    const reach = beaks.flatMap((d) => [...d.matchAll(/(-?[0-9.]+) (-?[0-9.]+)/g)].map((m) => Number(m[1])));
+    expect(beaks.length).toBeGreaterThanOrEqual(60);
+    expect(Math.max(...reach)).toBeLessThanOrEqual(92);
+  });
+});
+
+describe('les packs intégrés (#9141)', () => {
+  test('range chaque sticker dans exactement un des trois packs — Mee, Meo, Mee & Meo', () => {
+    const counts = (['mee', 'meo', 'mee-et-meo'] as const).map((pack) => meeStickersOfPack(pack).length);
+    expect(counts.reduce((a, b) => a + b, 0)).toBe(MEE_STICKERS.length);
+    expect(counts.every((n) => n > 0)).toBe(true);
+  });
+
+  test('met les duos dans Mee & Meo et les Instants avec leur personnage', () => {
+    expect(meeStickersOfPack('mee-et-meo').every((s) => s.tab === 'duo')).toBe(true);
+    expect(meeStickersOfPack('mee').some((s) => s.tab === 'instants')).toBe(true);
+    expect(meeStickersOfPack('meo').some((s) => s.tab === 'instants')).toBe(true);
+    expect(meeStickersOfPack('mee').filter((s) => s.tab !== 'instants').every((s) => s.tab === 'mee')).toBe(true);
   });
 });

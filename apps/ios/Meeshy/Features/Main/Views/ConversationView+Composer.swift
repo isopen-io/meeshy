@@ -250,26 +250,15 @@ extension ConversationView {
         .fileImporter(isPresented: $composerState.showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
         }
-        .fullScreenCover(isPresented: $composerState.showCamera) {
-            CameraView { result in
-                switch result {
-                // **Le CINQUIÈME consommateur** de `CameraResult.photo`, élargi
-                // le 2026-09-04 pour porter les octets d'origine — donc l'EXIF
-                // (#4080). Ce chemin est celui de la CONVERSATION, qui ré-encode
-                // déjà l'image avant l'envoi : les octets ne lui servent à rien,
-                // et il les jette explicitement plutôt que de faire croire
-                // qu'il les préserve.
-                //
-                // Il m'avait échappé : `git grep` sur `.photo(` rendait quatre
-                // sites, et seul le COMPILATEUR compte les consommateurs d'un
-                // membre élargi.
-                case .photo(let image, _):
-                    handleCameraCapture(image)
-                case .video(let url):
-                    handleCameraVideo(url)
-                }
-            }
-            .ignoresSafeArea()
+        // **La caméra de la barre ouvre le composer, viseur ARMÉ** (#9123) —
+        // plus l'ancienne `CameraView` : la prise s'édite dans la scène, et
+        // « Terminé » la verse au message en attente par les mêmes chemins que
+        // l'ancienne feuille.
+        .conversationCover(isPresented: $composerState.showCamera) {
+            ConversationCaptureSceneEditor(onDone: { media in
+                composerState.showCamera = false
+                stageSceneMedia(media)
+            }, onCancel: { composerState.showCamera = false })
         }
         .sheet(isPresented: $composerState.showLocationPicker) {
             LocationPickerView(accentColor: accentColor) { place in
@@ -297,36 +286,18 @@ extension ConversationView {
     ///
     /// La feuille se FERME au choix : dans une conversation un sticker est un
     /// message à part entière, pas une décoration qu'on empile sur une scène.
-    /// Les trois injecteurs sont ceux du composer de story
-    /// (`MeeshyComposerHost+Surfaces`) — sans `storyStickerLibraryProvided`,
-    /// l'onglet « Mes stickers » n'est pas rendu ; sans `storyPasteProvided`,
-    /// sa capsule « Coller » non plus ; sans `stickerNearbyPlacesProvided`,
-    /// l'onglet « Lieu » est absent (loi 4, jamais grisé) ; sans
-    /// `storyLocationPickerProvided`, la carte l'est aussi (#7922).
+    ///
+    /// **La feuille est celle de tout le produit** (#9189) : `MeeshyStickerSheet`
+    /// porte les injecteurs et les détentes, une fois. La conversation ne dit
+    /// que sa destination — ENVOYER — et que ses gabarits partent contournés
+    /// de blanc, comme Mee (#9060).
     private func composerStickerSheet(_ content: AnyView) -> AnyView {
         AnyView(content
         .sheet(isPresented: $composerState.showStickerPicker) {
-            StickerPickerView(onStickerSelected: { emoji in
+            MeeshyStickerSheet(destination: StickerSheetDestination(diesCut: true) { choice in
                 composerState.showStickerPicker = false
-                sendEmojiSticker(emoji)
-            }, onLibraryStickerSelected: { item in
-                composerState.showStickerPicker = false
-                sendLibrarySticker(item)
-            }, onTemplateSelected: { gabarit, emplacements in
-                composerState.showStickerPicker = false
-                sendTemplateSticker(gabarit, slots: emplacements)
-            }, onLocationTemplateSelected: { lieu, gabarit in
-                composerState.showStickerPicker = false
-                sendLocationTemplateSticker(place: lieu, template: gabarit)
-            })
-            .storyPasteProvided()
-            .storyStickerLibraryProvided()
-            .stickerNearbyPlacesProvided()
-            // « Ma position… » ouvre la carte : adresse, lieu, monument
-            // nommé (#7922). Sans ce fournisseur, la puce n'est pas rendue.
-            .storyLocationPickerProvided(accentColor: accentColor)
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
+                sendStickerChoice(choice)
+            }, accentColor: accentColor)
         })
     }
 
@@ -335,121 +306,48 @@ extension ConversationView {
     /// le plus dense en types de closures distincts (un par éditeur média).
     private func composerEditingCovers(_ content: AnyView) -> AnyView {
         AnyView(content
-        // C. Tap pending image → MeeshyImageEditorView
-        //
-        // Bug fix (2026-07-09): `isPresented` used to be driven solely by
-        // `editingPendingAttachmentId != nil` while the content required a
-        // SEPARATE `pendingThumbnails[id]` lookup to succeed. Whenever that
-        // dictionary lookup missed — a since-removed attachment, a thumbnail
-        // that failed to generate, any race between the tap and the
-        // dictionaries settling — the cover still presented (isPresented was
-        // already true) but its content body evaluated to nothing, which
-        // reads to the user as the composer "crashing" on tap: a full-screen
-        // cover appears with no way to dismiss it from inside. The two must
-        // share one source of truth so the cover can never present empty.
-        .fullScreenCover(isPresented: Binding(
-            get: { scrollState.editingPendingAttachmentId != nil },
-            set: { if !$0 { closePendingImageRetouche() } }
-        )) {
-            if let id = scrollState.editingPendingAttachmentId,
-               let source = scrollState.editingPendingSource ?? composerState.pendingThumbnails[id] {
-                // **La même scène que toute composition** (#8416) : la retouche
-                // d'une image du brouillon ouvre le composer plein écran, et
-                // « Terminé » rend l'image composée ici, au message. Sa source
-                // est le fichier à 2 048 px (#8524), pas la vignette.
-                ConversationImageSceneEditor(image: source, onDone: { editedImage in
-                    Task {
-                        // **Écriture SÛRE** (#8524) : l'ancien fichier ne part
-                        // qu'une fois le nouveau écrit et vérifié ; sinon
-                        // l'image d'origine reste celle qui partira.
-                        guard let ecrit = await ConversationImageRetouche.writeEdited(editedImage) else {
-                            FeedbackToastManager.shared.showError(ComposerDocumentCopy.publishError)
-                            closePendingImageRetouche()
-                            return
-                        }
-                        let ancien = composerState.pendingMediaFiles[id]
-                        composerState.pendingThumbnails[id] = editedImage
-                        composerState.pendingMediaFiles[id] = ecrit.url
-                        if let idx = composerState.pendingAttachments.firstIndex(where: { $0.id == id }) {
-                            composerState.pendingAttachments[idx] = MessageAttachment(
-                                id: id, fileName: ecrit.fileName, originalName: ecrit.fileName,
-                                mimeType: ecrit.mimeType, fileSize: ecrit.byteCount,
-                                fileUrl: ecrit.url.absoluteString,
-                                width: Int(editedImage.size.width * editedImage.scale),
-                                height: Int(editedImage.size.height * editedImage.scale),
-                                thumbnailColor: accentColor
-                            )
-                        }
-                        if let ancien, ancien != ecrit.url { try? FileManager.default.removeItem(at: ancien) }
-                        closePendingImageRetouche()
-                    }
-                }, onCancel: { closePendingImageRetouche() })
-            } else {
-                // The thumbnail vanished out from under the presentation
-                // (attachment removed mid-race, or generation never
-                // succeeded) — never present a silently-empty cover; give the
-                // user a dismissable state instead.
-                attachmentPreviewUnavailableFallback { closePendingImageRetouche() }
-            }
-        }
-        // D. Tap pending video → VideoPreviewView
-        .fullScreenCover(isPresented: Binding(
-            get: { scrollState.videoToEdit != nil },
-            set: { if !$0 { scrollState.videoToEdit = nil } }
-        )) {
-            if let target = scrollState.videoToEdit {
-                MeeshyVideoEditorView(
-                    url: target.url,
-                    context: .message,
-                    accentColor: accentColor,
-                    onComplete: { result in
-                        // La vidéo éditée remplace la pièce jointe (#8443),
-                        // comme `applyEditedAudio` pour l'audio.
-                        if let staleURL = composerState.applyEditedVideo(attachmentId: target.id,
-                                                                         result: result) {
-                            try? FileManager.default.removeItem(at: staleURL)
-                        }
-                        scrollState.videoToEdit = nil
-                    },
-                    onCancel: { scrollState.videoToEdit = nil }
-                )
-            }
+        // C. « Éditer » sur une pièce en attente (image ou vidéo) → TOUTES les
+        // pièces du message en scènes, ouvertes sur la touchée (#9126) ;
+        // « Terminé » rend chaque scène retouchée à SA pièce, en place. La
+        // série est préparée AVANT la présentation : la couverture ne peut pas
+        // s'ouvrir vide.
+        .conversationCover(item: Binding(
+            get: { scrollState.retouchSeries },
+            set: { scrollState.retouchSeries = $0 }
+        )) { serie in
+            ConversationRetouchSeriesEditor(series: serie, onDone: { rendues in
+                replacePendingWithRetouchedPieces(rendues)
+            }, onCancel: { scrollState.retouchSeries = nil })
         }
         // D2. "Éditer" from the recent-media strip → the editor opens BEFORE
         // staging; the edited output goes through the same preparation pipeline
         // as a camera capture (the pre-edit original is never staged).
-        .fullScreenCover(isPresented: Binding(
+        .conversationCover(isPresented: Binding(
             get: { scrollState.recentImageToEdit != nil },
             set: { if !$0 { scrollState.recentImageToEdit = nil } }
         )) {
             if let image = scrollState.recentImageToEdit {
-                ConversationImageSceneEditor(image: image, onDone: { edited in
+                ConversationImageSceneEditor(image: image, staged: false, onDone: { media in
                     scrollState.recentImageToEdit = nil
-                    handleCameraCapture(edited)
+                    stageSceneMedia(media)
                 }, onCancel: {
                     scrollState.recentImageToEdit = nil
                 })
             }
         }
-        .fullScreenCover(isPresented: Binding(
+        .conversationCover(isPresented: Binding(
             get: { scrollState.recentVideoToEdit != nil },
             set: { if !$0 { scrollState.recentVideoToEdit = nil } }
         )) {
             if let url = scrollState.recentVideoToEdit {
-                MeeshyVideoEditorView(
-                    url: url,
-                    context: .message,
-                    accentColor: accentColor,
-                    onComplete: { result in
-                        scrollState.recentVideoToEdit = nil
-                        handleCameraVideo(result.url)
-                    },
-                    onCancel: { scrollState.recentVideoToEdit = nil }
-                )
+                ConversationVideoSceneEditor(url: url, staged: false, onDone: { media in
+                    scrollState.recentVideoToEdit = nil
+                    stageSceneMedia(media)
+                }, onCancel: { scrollState.recentVideoToEdit = nil })
             }
         }
         // E. Audio → MeeshyAudioEditorView
-        .fullScreenCover(item: Binding(
+        .conversationCover(item: Binding(
             get: { scrollState.audioToEdit },
             set: { scrollState.audioToEdit = $0 }
         )) { target in

@@ -2,12 +2,14 @@ import { Fragment, useMemo, type CSSProperties, type ReactNode } from 'react';
 
 import type { ContentTrackingLink } from '@meeshy/shared/types/post';
 import { hasBlockSyntax, parseBlocks, type TextBlock } from '@meeshy/shared/utils/text-blocks';
-import { segmentText, type EmphasisStyle, type InlineSegment, type TextSegment } from '@meeshy/shared/utils/text-segments';
+import { segmentText, type EmphasisStyle } from '@meeshy/shared/utils/text-segments';
 
 import { apiConfig } from '@/lib/api/config';
 import { internalPathOf } from '@/lib/links/internal-link';
+import { displaySegments, type DisplaySegment, type LinkDisplay } from '@/lib/links/link-display';
 import { webOriginOf } from '@/lib/links/web-origin';
 import { peekProfileOnClick } from '@/lib/view/profile-peek';
+import { CLAIMS_GESTURE_ATTRIBUTE } from '@/lib/view/shortcut-scope';
 import { isAppPath } from '@/routes/app-paths';
 import { Link, navigate } from '@/routes/route-table';
 
@@ -46,20 +48,14 @@ import { Link, navigate } from '@/routes/route-table';
  * cliquable là-bas installerait un lien vers un écran qui ne peut rien servir.
  */
 
-/**
- * LE LIBELLÉ D'UN LIEN COURT (#7827) — `m+Ab12cd` est un code, pas une
- * adresse : l'afficher tel quel ne dit pas au lecteur qu'il peut le suivre.
- * L'URL d'origine n'est plus dans le texte (la passerelle l'a réécrite), donc
- * le libellé montre l'adresse PUBLIQUE du lien de suivi — celle que le lien
- * ouvre, et celle qu'iOS construit (`MessageTextRenderer.swift`).
- */
-const trackedLinkLabel = (token: string): string => `meeshy.me/l/${token}`;
-
 const inAppPathOf = (href: string): string | null =>
   internalPathOf(href, {
     origins: [webOriginOf(apiConfig.base, window.location.origin), window.location.origin],
     isAppPath,
   });
+
+const CLAIMED_LINK: Readonly<Record<string, string>> = { [CLAIMS_GESTURE_ATTRIBUTE]: '' };
+const UNMARKED_LINK: Readonly<Record<string, string>> = {};
 
 /** La teinte d'un lien, quand la surface ne la donne pas. */
 const DEFAULT_LINK_COLOR = 'var(--color-ios-brand)';
@@ -78,16 +74,69 @@ type InlineHosts = {
    * pas lue deux fois, et les liens restent atteignables et nommés.
    */
   readonly plainTextHidden: boolean;
+  /** Les attributs posés sur CHAQUE lien — `data-claims-gesture` quand le
+   * texte vit sur une scène qui a son propre geste (`ViewerCaption`). */
+  readonly linkAttributes: Readonly<Record<string, string>>;
 };
 
-function inlineNodes(segments: readonly InlineSegment[], hosts: InlineHosts, keyPrefix: string): readonly ReactNode[] {
+type InlineDisplaySegment = Exclude<DisplaySegment, { readonly kind: 'emphasis' }>;
+
+/**
+ * UN LIEN, TEL QUE LA LOI L'A RÉSOLU (#9093) — `resolveLinkDisplay` a déjà dit
+ * QUOI montrer et OÙ aller ; ce rendu ne choisit que la NAVIGATION.
+ */
+function linkNode(display: LinkDisplay, key: string, hosts: InlineHosts): ReactNode {
+  const marks = hosts.linkAttributes;
+  if (display.tracked) {
+    /* INTERNE — `/l/$token` est une route de l'app (`routes/tracking-link.tsx`)
+       qui compte le clic puis ouvre la cible : même onglet, routeur. */
+    return (
+      <Link {...marks} key={key} to="trackingLink" params={{ token: display.token }} style={{ color: hosts.linkColor }} className="underline">
+        {display.text}
+      </Link>
+    );
+  }
+  /* INTERNE (#7849) — un lien Meeshy navigue DANS l'app, comme une mention :
+     même onglet, routeur, et dans la coque on ne sort pas vers le navigateur
+     externe. Les gestes « nouvel onglet » restent au navigateur. */
+  const inApp = inAppPathOf(display.href);
+  if (inApp !== null) {
+    return (
+      <a
+        {...marks}
+        key={key}
+        href={inApp}
+        style={{ color: hosts.linkColor }}
+        className="underline"
+        onClick={(event) => {
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          navigate(inApp);
+        }}
+      >
+        {display.text}
+      </a>
+    );
+  }
+  return (
+    /* `noopener noreferrer` : la page ouverte ne reçoit ni la main sur
+       l'onglet d'origine (`window.opener`) ni l'adresse d'où elle vient. */
+    <a {...marks} key={key} href={display.href} target="_blank" rel="noopener noreferrer" style={{ color: hosts.linkColor }} className="underline">
+      {display.text}
+    </a>
+  );
+}
+
+function inlineNodes(segments: readonly InlineDisplaySegment[], hosts: InlineHosts, keyPrefix: string): readonly ReactNode[] {
   const linkStyle: CSSProperties = { color: hosts.linkColor, fontWeight: 600 };
+  const marks = hosts.linkAttributes;
   return segments.map((segment, index) => {
     const key = `${keyPrefix}-${index}`;
     switch (segment.kind) {
       case 'mention':
         return (
           <Link
+            {...marks}
             key={key}
             to="userProfile"
             params={{ username: segment.username }}
@@ -98,17 +147,8 @@ function inlineNodes(segments: readonly InlineSegment[], hosts: InlineHosts, key
         );
       case 'hashtag':
         return (
-          <Link key={key} to="hashtag" params={{ tag: segment.tag }} style={linkStyle} className="hover:underline">
+          <Link {...marks} key={key} to="hashtag" params={{ tag: segment.tag }} style={linkStyle} className="hover:underline">
             {segment.text}
-          </Link>
-        );
-      case 'tracked-link':
-        /* INTERNE — `/l/$token` est une route de l'app (`routes/tracking-link.tsx`)
-           qui compte le clic puis ouvre la cible : même onglet, navigation du
-           routeur. Une URL brute suivie garde son TEXTE ; seul le lien change. */
-        return (
-          <Link key={key} to="trackingLink" params={{ token: segment.token }} style={{ color: hosts.linkColor }} className="underline">
-            {segment.url === null ? trackedLinkLabel(segment.token) : segment.text}
           </Link>
         );
       case 'code':
@@ -122,44 +162,8 @@ function inlineNodes(segments: readonly InlineSegment[], hosts: InlineHosts, key
             {segment.text}
           </code>
         );
-      case 'url': {
-        /* INTERNE (#7849) — un lien Meeshy navigue DANS l'app, comme une
-           mention : même onglet, routeur, et dans la coque on ne sort pas vers
-           le navigateur externe. Les gestes « nouvel onglet » restent au
-           navigateur. */
-        const inApp = inAppPathOf(segment.href);
-        if (inApp !== null) {
-          return (
-            <a
-              key={key}
-              href={inApp}
-              style={{ color: hosts.linkColor }}
-              className="underline"
-              onClick={(event) => {
-                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                event.preventDefault();
-                navigate(inApp);
-              }}
-            >
-              {segment.text}
-            </a>
-          );
-        }
-        return (
-          /* `noopener noreferrer` : la page ouverte ne reçoit ni la main sur
-             l'onglet d'origine (`window.opener`) ni l'adresse d'où elle vient. */
-          <a
-            key={key}
-            href={segment.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: hosts.linkColor }}
-            className="underline"
-          >
-            {segment.text}
-          </a>
-        );
-      }
+      case 'link':
+        return linkNode(segment.display, key, hosts);
       default:
         return hosts.plainTextHidden ? (
           <span key={key} aria-hidden>
@@ -191,7 +195,7 @@ const EMPHASIS_TAG = {
   strikethrough: 's',
 } as const satisfies Record<EmphasisStyle, string>;
 
-function segmentNodes(segments: readonly TextSegment[], hosts: InlineHosts): readonly ReactNode[] {
+function segmentNodes(segments: readonly DisplaySegment[], hosts: InlineHosts): readonly ReactNode[] {
   return segments.map((segment, index) => {
     if (segment.kind !== 'emphasis') return inlineNodes([segment], hosts, `s${index}`)[0];
     const Tag = EMPHASIS_TAG[segment.style];
@@ -266,6 +270,7 @@ export function RichText({
   linkColor = DEFAULT_LINK_COLOR,
   plainTextHidden = false,
   trackingLinks,
+  claimsGesture = false,
   ...rest
 }: {
   readonly text: string;
@@ -286,6 +291,9 @@ export function RichText({
   /** Les URL BRUTES que la passerelle a rendues traçables (#7827) — décodées
    * par `trackingLinksOf` ; absentes ⇒ chaque URL est un lien direct. */
   readonly trackingLinks?: readonly ContentTrackingLink[] | undefined;
+  /** `true` ⇒ chaque lien porte `data-claims-gesture` : le lecteur qui
+   * l'héberge (story, visionneuse) lui cède le geste, et à lui seul. */
+  readonly claimsGesture?: boolean;
 } & Omit<React.HTMLAttributes<HTMLParagraphElement>, 'children' | 'className' | 'lang' | 'style'>) {
   const blocks = useMemo(() => (hasBlockSyntax(text) ? parseBlocks(text) : null), [text]);
   const render = useMemo(() => {
@@ -294,8 +302,10 @@ export function RichText({
       ...(mentions === undefined ? {} : { mentions }),
       ...(trackingLinks === undefined ? {} : { trackingLinks }),
     };
-    return (content: string) => segmentNodes(segmentText(content, options), { linkColor, plainTextHidden });
-  }, [hashtags, mentions, trackingLinks, linkColor, plainTextHidden]);
+    const linkAttributes = claimsGesture ? CLAIMED_LINK : UNMARKED_LINK;
+    return (content: string) =>
+      segmentNodes(displaySegments(segmentText(content, options), trackingLinks), { linkColor, plainTextHidden, linkAttributes });
+  }, [hashtags, mentions, trackingLinks, linkColor, plainTextHidden, claimsGesture]);
   if (blocks === null) {
     return (
       <p data-rich-text="" className={className} lang={lang} style={style} {...rest}>

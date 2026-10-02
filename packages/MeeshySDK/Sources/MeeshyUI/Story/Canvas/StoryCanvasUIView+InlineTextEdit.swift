@@ -312,8 +312,8 @@ extension StoryCanvasUIView: UITextViewDelegate {
         // retrouve son fond intégral.
         layer.mask = nil
         layer.position = geometry.render(CGPoint(x: designX, y: designY))
-        layer.transform = CATransform3DMakeRotation(
-            CGFloat(textObject.rotation) * .pi / 180, 0, 0, 1)
+        layer.transform = StoryTextLayer.sceneTransform(rotationDegrees: textObject.rotation,
+                                                        scale: textObject.scale)
         CATransaction.commit()
     }
 

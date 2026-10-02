@@ -1,6 +1,7 @@
-import { sceneTextAppearance } from '@/lib/canvas/text-appearance';
+import { SCENE_TEXT_WRAP_FRACTION, sceneTextAppearance } from '@/lib/canvas/text-appearance';
 
 import {
+  backgroundShownRatio,
   loadPlanSources,
   paintCompositePlan,
   studioCompositePlan,
@@ -27,8 +28,6 @@ import { textLayerPayload } from './studio-text';
 export const STUDIO_RETOUCH_SIZE = { width: 1080, height: 1920 } as const;
 
 const JPEG_QUALITY = 0.9;
-/** La boîte d'un texte ne dépasse pas 85 % de la scène (`scene-object-text.tsx`). */
-const TEXT_MAX_WIDTH = 0.85;
 const DESIGN_WIDTH = 1080;
 const LINE_HEIGHT = 1.2;
 
@@ -90,7 +89,7 @@ function wrap(context: StudioRetouchCanvas['context'], text: string, maxWidth: n
   );
 }
 
-function paintText(canvas: StudioRetouchCanvas['context'], op: StudioTextOp, width: number, height: number): void {
+export function paintText(canvas: StudioRetouchCanvas['context'], op: StudioTextOp, width: number, height: number): void {
   const px = op.size * width;
   canvas.save();
   canvas.translate(op.x * width, op.y * height);
@@ -98,7 +97,7 @@ function paintText(canvas: StudioRetouchCanvas['context'], op: StudioTextOp, wid
   canvas.scale(op.scale, op.scale);
   canvas.font = op.font.replace('{px}', String(Math.round(px)));
   canvas.textBaseline = 'middle';
-  const lines = wrap(canvas, op.text, TEXT_MAX_WIDTH * width);
+  const lines = wrap(canvas, op.text, SCENE_TEXT_WRAP_FRACTION * width);
   const lineHeight = px * LINE_HEIGHT;
   const blockWidth = Math.max(...lines.map((line) => canvas.measureText(line).width));
   const top = (-lines.length * lineHeight) / 2;
@@ -116,7 +115,7 @@ function paintText(canvas: StudioRetouchCanvas['context'], op: StudioTextOp, wid
 
 /** Le rapport d'une image que la mesure à la sélection n'a pas encore rendu
  * (« Terminé » touché aussitôt) — relu sur l'image DÉCODÉE. */
-async function withMeasuredImages(page: StudioPage, loadImage: StudioRetouchDeps['loadImage']): Promise<StudioPage> {
+export async function withMeasuredImages(page: StudioPage, loadImage: StudioRetouchDeps['loadImage']): Promise<StudioPage> {
   const measured = async (asset: StudioVisualAsset | null): Promise<StudioVisualAsset | null> => {
     if (asset === null || asset.mediaType !== 'image' || asset.aspectRatio !== undefined) return asset;
     const image = await loadImage(asset.previewUrl);
@@ -127,19 +126,33 @@ async function withMeasuredImages(page: StudioPage, loadImage: StudioRetouchDeps
   return { ...page, background: await measured(page.background), overlay: await measured(page.overlay) };
 }
 
+/** **LA TAILLE DU RENDU** (#9136, miroir `ComposerRetouchSeries.imageRenderSize`)
+ * — le cadre RECADRÉ du fond quand l'auteur l'a recadré (un carré repart
+ * carré), grand côté 1920 ; sinon la scène 9:16. */
+export function studioRetouchSize(page: StudioPage): { readonly width: number; readonly height: number } {
+  const background = page.background;
+  if (background === null || background.crop === undefined || background.aspectRatio === undefined || background.aspectRatio <= 0) return STUDIO_RETOUCH_SIZE;
+  const ratio = backgroundShownRatio({ ...background, aspectRatio: background.aspectRatio });
+  const long = STUDIO_RETOUCH_SIZE.height;
+  return ratio >= 1 ? { width: long, height: Math.round(long / ratio) } : { width: Math.round(long * ratio), height: long };
+}
+
 /** Le JPEG de la scène — `null` quand le rendu est impossible (pas de canvas,
  * une image qui ne se décode pas, un média qui ne se dessine pas : vidéo). */
 export async function renderStudioRetouch(unmeasured: StudioPage, deps: StudioRetouchDeps): Promise<Blob | null> {
   const page = await withMeasuredImages(unmeasured, deps.loadImage);
   const hasMedia = page.background !== null || page.overlay !== null;
-  const plan: readonly StudioCompositeOp[] | null = hasMedia ? studioCompositePlan(page) : [{ kind: 'fill', color: `#${STORY_PLAIN_BACKGROUND}` }];
+  const size = studioRetouchSize(page);
+  const plan: readonly StudioCompositeOp[] | null = hasMedia
+    ? studioCompositePlan(page, { cardRatio: size.width / size.height })
+    : [{ kind: 'fill', color: `#${STORY_PLAIN_BACKGROUND}` }];
   if (plan === null) return null;
-  const { width, height } = STUDIO_RETOUCH_SIZE;
+  const { width, height } = size;
   const canvas = deps.createCanvas(width, height);
   if (canvas === null) return null;
   const sources = await loadPlanSources(plan, deps.loadImage);
   if (sources === null) return null;
-  paintCompositePlan(canvas.context, plan, sources, STUDIO_RETOUCH_SIZE);
+  paintCompositePlan(canvas.context, plan, sources, size);
   studioTextOps(page).forEach((op) => paintText(canvas.context, op, width, height));
   return canvas.toBlob('image/jpeg', JPEG_QUALITY);
 }

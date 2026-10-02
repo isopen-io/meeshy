@@ -26,16 +26,19 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
     /// relâchement : un doigt parti avant que la caméra soit prête ne prend
     /// RIEN — la photo a son propre geste, le toucher.
     func test_laLevéeSurLaScène_clotLaPrise_sansJamaisPrendreDePhoto() throws {
-        let code = try source("MeeshyComposerHost+Viewfinder.swift")
-        guard let début = code.range(of: "funchandleSceneCaptureLongPressEnded(){"),
-              let fin = code.range(of: "funcarmSceneCamera()", range: début.upperBound..<code.endIndex)
+        let hote = try source("MeeshyComposerHost+Viewfinder.swift")
+        XCTAssertTrue(hote.contains("funchandleSceneCaptureLongPressEnded(){sceneCapture.endHold()}"),
+                      "la levée de la scène est celle de la machine partagée (#9134)")
+        let code = try source("ComposerCaptureSession.swift")
+        guard let début = code.range(of: "funcendHold(){"),
+              let fin = code.range(of: "funcreleaseStaleHold()", range: début.upperBound..<code.endIndex)
         else { return XCTFail("la levée a changé de forme") }
         let corps = String(code[début.upperBound..<fin.lowerBound])
         XCTAssertTrue(corps.contains("ComposerCaptureHold.release("),
                       "la levée se lit sur le cadenas (#8671) : tenu, verrouillé ou annulé")
         XCTAssertTrue(corps.contains("case.closeTake:"))
-        XCTAssertTrue(corps.contains("closeSceneTake()"))
-        XCTAssertFalse(corps.contains("takeScenePhoto()"),
+        XCTAssertTrue(corps.contains("closeTake()"))
+        XCTAssertFalse(corps.contains("takePhoto()"),
                        "relâcher un appui long ne prend jamais de photo")
     }
 
@@ -44,32 +47,41 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
     /// sens du geste : glisser à GAUCHE ramène vers les portes du rail, ce qui
     /// veut dire autre chose.
     func test_leVerrou_vientDeLaLoi_etGardeSonSens() throws {
-        let code = try source("MeeshyComposerHost+Viewfinder.swift")
-        guard let début = code.range(of: "funchandleSceneCaptureLongPressChanged(_translation:CGPoint){"),
-              let fin = code.range(of: "funchandleSceneCaptureLongPressEnded", range: début.upperBound..<code.endIndex)
+        let hote = try source("MeeshyComposerHost+Viewfinder.swift")
+        XCTAssertTrue(hote.contains("funchandleSceneCaptureLongPressChanged(_translation:CGPoint){sceneCapture.holdChanged(translation)}"))
+        let code = try source("ComposerCaptureSession.swift")
+        guard let début = code.range(of: "funcholdChanged(_translation:CGPoint){"),
+              let fin = code.range(of: "funcendHold(){", range: début.upperBound..<code.endIndex)
         else { return XCTFail("le glissement a changé de forme") }
         let corps = String(code[début.upperBound..<fin.lowerBound])
         XCTAssertTrue(corps.contains("ComposerCaptureHold.phase(translation:translation"),
                       "le cadenas (#8671) lit la loi, qui garde le seuil et le sens de ComposerShutterGesture")
         XCTAssertTrue(corps.contains("ComposerShutterGesture.lockProgress(translationX:translation.x)"))
-        XCTAssertTrue(corps.contains("lockSceneTake()"))
-        XCTAssertTrue(corps.contains("dragSceneZoom(translationY:translation.y)"),
+        XCTAssertTrue(corps.contains("lockTake()"))
+        XCTAssertTrue(corps.contains("dragZoom(translationY:translation.y)"),
                       "le glissé vertical zoome pendant la prise (#8671)")
     }
 
     /// **L'appui long FILME dès que la session peut écrire** — sans seuil à
     /// franchir en tenant. L'attente est celle de la caméra, pas du doigt.
     func test_lAppuiLong_filmeDesQueLaCameraEstPrete() throws {
-        let code = try source("MeeshyComposerHost+Viewfinder.swift")
-        guard let début = code.range(of: "funchandleSceneCaptureLongPress(){"),
-              let fin = code.range(of: "funchandleSceneQuickTap()", range: début.upperBound..<code.endIndex)
+        let hote = try source("MeeshyComposerHost+Viewfinder.swift")
+        guard let geste = hote.range(of: "funchandleSceneCaptureLongPress(){"),
+              let finGeste = hote.range(of: "funchandleSceneQuickTap()", range: geste.upperBound..<hote.endIndex)
         else { return XCTFail("le geste a changé de forme") }
-        let corps = String(code[début.upperBound..<fin.lowerBound])
-        XCTAssertTrue(corps.contains("sceneHoldTask=Task"))
-        XCTAssertTrue(corps.contains("sceneCamera.waitUntilCaptureReady("))
-        XCTAssertTrue(corps.contains("startSceneFilming()"))
-        XCTAssertFalse(corps.contains("ComposerShutterGesture.holdToFilm"),
+        let appel = String(hote[geste.upperBound..<finGeste.lowerBound])
+        XCTAssertTrue(appel.contains("armSceneCamera()sceneCapture.beginHold()"),
+                      "le geste arme PUIS tient — la tenue est celle de la machine (#9134)")
+        XCTAssertFalse(appel.contains("ComposerShutterGesture.holdToFilm"),
                        "le seuil de l'obturateur n'appartient plus au geste de la scène")
+        let code = try source("ComposerCaptureSession.swift")
+        guard let début = code.range(of: "funcbeginHold(){"),
+              let fin = code.range(of: "funcholdChanged(", range: début.upperBound..<code.endIndex)
+        else { return XCTFail("la tenue a changé de forme") }
+        let corps = String(code[début.upperBound..<fin.lowerBound])
+        XCTAssertTrue(corps.contains("holdTask=Task"))
+        XCTAssertTrue(corps.contains("camera.waitUntilCaptureReady("))
+        XCTAssertTrue(corps.contains("startFilming()"))
     }
 
     /// **Le toucher d'une scène vide ARME le viseur, sans rien prendre**
@@ -93,15 +105,22 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
     func test_leSecondToucher_prendLaPhoto_parLaLoi() throws {
         let code = try source("MeeshyComposerHost+Viewfinder.swift")
         guard let début = code.range(of: "funchandleArmedSceneTap(){"),
-              let fin = code.range(of: "funchandleSceneCaptureLongPressChanged", range: début.upperBound..<code.endIndex)
+              let fin = code.range(of: "funchandleArmedSceneHold(){", range: début.upperBound..<code.endIndex)
         else { return XCTFail("le second toucher a disparu") }
         let corps = String(code[début.upperBound..<fin.lowerBound])
         XCTAssertTrue(corps.contains("ComposerSceneQuickCapture.armedTap("))
-        XCTAssertTrue(corps.contains("takeScenePhoto()"))
+        XCTAssertTrue(corps.contains("sceneCapture.photographWhenReady()"))
+        let machine = try source("ComposerCaptureSession.swift")
+        guard let photo = machine.range(of: "funcphotographWhenReady(){"),
+              let finPhoto = machine.range(of: "funcbeginHold(){", range: photo.upperBound..<machine.endIndex)
+        else { return XCTFail("la photo au toucher a changé de forme") }
+        XCTAssertTrue(String(machine[photo.upperBound..<finPhoto.lowerBound]).contains("takePhoto()"))
         // Depuis #8846 le toucher passe APRÈS l'appui long (qui filme), sur
-        // la même nappe.
-        XCTAssertTrue(code.contains("armedSceneHoldGesture.exclusively(before:TapGesture().onEnded{handleArmedSceneTap()})"),
+        // la même nappe — celle du chrome PARTAGÉ (#9134).
+        XCTAssertTrue(code.contains("onTap:{handleArmedSceneTap()}"),
                       "la nappe du viseur ne transmet pas le second toucher")
+        let chrome = try source("ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("holdGesture.exclusively(before:TapGesture().onEnded{onTap()})"))
     }
 
     /// **La levée sans début ne fait RIEN.** Le canvas émet sa fin même quand
@@ -110,13 +129,13 @@ final class ComposerSceneShutterWiringTests: XCTestCase {
     /// une levée poserait une photo que personne n'a armée — et sur une scène
     /// qui a déjà un fond.
     func test_uneLevéeSansDébut_neDéclencheRien() throws {
-        let code = try source("MeeshyComposerHost+Viewfinder.swift")
-        guard let début = code.range(of: "funchandleSceneCaptureLongPressEnded(){"),
+        let code = try source("ComposerCaptureSession.swift")
+        guard let début = code.range(of: "funcendHold(){"),
               let fin = code.range(of: "switchComposerCaptureHold.release", range: début.upperBound..<code.endIndex)
         else { return XCTFail("la levée a changé de forme") }
         let avant = String(code[début.upperBound..<fin.lowerBound])
-        XCTAssertTrue(avant.contains("guardsceneHoldStartedAt!=nilelse{"))
-        XCTAssertFalse(avant.contains("takeScenePhoto()"))
+        XCTAssertTrue(avant.contains("guardholdStartedAt!=nilelse{"))
+        XCTAssertFalse(avant.contains("takePhoto()"))
     }
 
     /// **Le meuble câble les DEUX bouts du geste.** Un début sans fin laisse le

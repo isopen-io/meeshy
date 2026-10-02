@@ -120,6 +120,8 @@ export const SERVER_EVENTS = {
   VIEWING_STOP: 'viewing:stop',
   /** Réponse au seul émetteur d'un `viewing:start` : les pairs déjà présents. */
   VIEWING_SNAPSHOT: 'viewing:snapshot',
+  /** Un pair ICI regarde, écoute ou agit dans la conversation (#9061) — `ViewingEvent`. */
+  VIEWING_ACTIVITY: 'viewing:activity',
   /**
    * Les points et la série qu'une conversation a rapportés à son LECTEUR ont
    * changé (#8906) — `ConversationEngagementSnapshot`, émis dans la room
@@ -247,6 +249,10 @@ export const SERVER_EVENTS = {
   CALL_RECORDING_STOPPED: 'call:recording-stopped',
   /** #8433 — une personne vient d'être invitée dans l'appel : diffusé aux participants. */
   CALL_PARTICIPANT_INVITED: 'call:participant-invited',
+  /** #8470 — la personne invitée a refusé : diffusé aux participants, sa puce « Sonne… » se résout. */
+  CALL_INVITE_DECLINED: 'call:invite-declined',
+  /** #8470 — la personne invitée n'a pas répondu dans la durée de la sonnerie d'un appel. */
+  CALL_INVITE_EXPIRED: 'call:invite-expired',
   /** #8438 — à la personne visée seulement : son micro a été coupé, elle le coupe elle-même. */
   CALL_MUTED_BY_MODERATOR: 'call:muted-by-moderator',
   /** #8439 — une réaction d'un participant, relayée aux autres participants connectés. */
@@ -615,6 +621,8 @@ export const CLIENT_EVENTS = {
   /** L'écran de la conversation est ouvert et au premier plan (#8892). */
   VIEWING_START: 'viewing:start',
   VIEWING_STOP: 'viewing:stop',
+  /** L'utilisateur ICI fait défiler, lit un média, écrit ou réagit (#9061). */
+  VIEWING_ACTIVITY: 'viewing:activity',
   // `USER_STATUS: 'user:status'` a été retiré d'ici (cycle 60) : c'est un
   // événement SERVEUR→client (`SERVER_EVENTS.USER_STATUS`, écouté par
   // `presence.service.ts`, `websocket.service.ts`, iOS `PresenceManager`), et

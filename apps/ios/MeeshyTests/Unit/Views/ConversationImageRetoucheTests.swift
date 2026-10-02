@@ -73,12 +73,12 @@ final class ConversationImageRetoucheTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main")
-        let retour = try String(contentsOf: racine.appendingPathComponent("Composer/MeeshyComposerHost+ReturnImage.swift"),
-                                encoding: .utf8)
-        XCTAssertTrue(retour.contains("guard viewModel.canUndoGlobal else {"),
+        let serie = try String(contentsOf: racine.appendingPathComponent("Composer/MeeshyComposerHost+RetouchSeries.swift"),
+                               encoding: .utf8)
+        XCTAssertTrue(serie.contains("guard !retouchees.isEmpty else { onDismiss(); return }"),
                       "Une scène que l'auteur n'a pas touchée ne doit pas remplacer l'image d'origine.")
 
-        let couverture = try String(contentsOf: racine.appendingPathComponent("Views/ConversationView+Composer.swift"),
+        let couverture = try String(contentsOf: racine.appendingPathComponent("Views/ConversationView+SceneRetouch.swift"),
                                     encoding: .utf8)
         guard let ecriture = couverture.range(of: "ConversationImageRetouche.writeEdited("),
               let suppression = couverture.range(of: "try? FileManager.default.removeItem(at: ancien)") else {

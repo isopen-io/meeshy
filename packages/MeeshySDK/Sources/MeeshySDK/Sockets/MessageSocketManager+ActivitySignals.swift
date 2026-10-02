@@ -10,13 +10,27 @@ import SocketIO
 
 /// `viewing:start` / `viewing:stop` reçus — un pair arrive dans la conversation
 /// ou la quitte (`ViewingEvent`, `packages/shared/types/socketio-events/presence.ts`).
+///
+/// `focus` (#9065), sur `viewing:activity` seulement : le pair regarde un
+/// élément ouvert en plein écran depuis la conversation — jamais lequel.
 public struct ConversationViewingChange: Decodable, Sendable, Equatable {
     public let userId: String
     public let conversationId: String
+    public let focus: Bool
 
-    public init(userId: String, conversationId: String) {
+    public init(userId: String, conversationId: String, focus: Bool = false) {
         self.userId = userId
         self.conversationId = conversationId
+        self.focus = focus
+    }
+
+    private enum CodingKeys: String, CodingKey { case userId, conversationId, focus }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        userId = try container.decode(String.self, forKey: .userId)
+        conversationId = try container.decode(String.self, forKey: .conversationId)
+        focus = (try? container.decodeIfPresent(Bool.self, forKey: .focus)) ?? false
     }
 }
 
@@ -47,14 +61,19 @@ public enum ConversationViewingEvent: Sendable, Equatable {
     case arrived(ConversationViewingChange)
     case left(ConversationViewingChange)
     case snapshot(ConversationViewingSnapshot)
+    /// `viewing:activity` (#9061) : le pair ICI regarde, écoute ou agit —
+    /// ou regarde en plein écran (`change.focus`, #9065).
+    case active(ConversationViewingChange)
     case sessionStarted
 }
 
-/// Émission de `viewing:start` / `viewing:stop`. L'orchestration — QUAND
-/// émettre (écran actif, premier plan, reconnexion) — reste côté app.
+/// Émission de `viewing:start` / `viewing:stop` / `viewing:activity`.
+/// L'orchestration — QUAND émettre (écran actif, premier plan, reconnexion,
+/// cadence de l'activité) — reste côté app.
 public protocol ConversationViewingEmitting: AnyObject {
     func emitViewingStart(conversationId: String)
     func emitViewingStop(conversationId: String)
+    func emitViewingActivity(conversationId: String, focus: Bool)
 }
 
 extension MessageSocketManager: ConversationViewingEmitting {
@@ -67,6 +86,19 @@ extension MessageSocketManager: ConversationViewingEmitting {
 
     public func emitViewingStop(conversationId: String) {
         emitActivitySignal("viewing:stop", conversationId: conversationId)
+    }
+
+    public func emitViewingActivity(conversationId: String, focus: Bool) {
+        guard focus else {
+            emitActivitySignal("viewing:activity", conversationId: conversationId)
+            return
+        }
+        guard socket?.status == .connected else { return }
+        socket?.emit("viewing:activity", ["conversationId": conversationId, "focus": true] as [String: Any])
+    }
+
+    func handleViewingActivity(_ change: ConversationViewingChange) {
+        conversationViewing.send(.active(change))
     }
 
     /// Publiée depuis le `.connect` du socket — y compris celui d'une
@@ -111,6 +143,13 @@ extension MessageSocketManager: ConversationViewingEmitting {
             guard let self else { return }
             self.decode(ConversationViewingChange.self, from: data) { [weak self] event in
                 self?.conversationViewing.send(.left(event))
+            }
+        }
+
+        socket.on("viewing:activity") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationViewingChange.self, from: data) { [weak self] event in
+                self?.handleViewingActivity(event)
             }
         }
 

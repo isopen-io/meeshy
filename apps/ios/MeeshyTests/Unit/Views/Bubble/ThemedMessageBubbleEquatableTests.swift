@@ -340,7 +340,7 @@ final class ThemedMessageBubbleEquatableTests: XCTestCase {
         updatedAt: Date = Date(timeIntervalSince1970: 0),
         isDirect: Bool = false,
         presenceState: PresenceState = .offline,
-        senderIsHere: Bool = false,
+        senderIsHere: ConversationHere = .absent,
         senderMoodEmoji: String? = nil,
         senderStoryRingState: StoryRingState = .none,
         isLastInGroup: Bool = true,

@@ -115,6 +115,25 @@ describe('les trois blocs arrivent ensemble', () => {
 });
 
 /**
+ * **LA PRÉSENCE D'UN AMI** (#9063) — la fiche peint ce que la passerelle SERT :
+ * à un ami accepté, la pastille et sa ligne ; à un tiers, rien. La loi qui
+ * tranche est serveur (`resolvePresenceVisibility`) ; la fixture la rejoue.
+ */
+describe('la présence sur la fiche', () => {
+  test('un AMI : pastille sur l’avatar et « En ligne » après le pseudo', async () => {
+    const el = await mount('bruno.laurent');
+    expect(el.querySelector('[data-user-hero] [data-presence="online"]')).not.toBeNull();
+    expect(text(el.querySelector('[data-user-presence]'))).toBe('En ligne');
+  });
+
+  test('un TIERS : ni pastille ni ligne — rien de servi, rien de peint', async () => {
+    const el = await mount('kwame-mensah');
+    expect(el.querySelector('[data-user-presence]')).toBeNull();
+    expect(el.querySelector('[data-user-hero] [data-presence="online"]')).toBeNull();
+  });
+});
+
+/**
  * **LE FILTRE NE DOIT PAS MURER LA SUITE** (revue #7083) — le filtre est
  * CLIENT, sur les pages déjà lues, et la tuile annonce un compte SERVEUR
  * (`expand=stats`). Le premier jet retirait « Charger plus » dès qu'un filtre

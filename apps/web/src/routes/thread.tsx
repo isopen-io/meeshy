@@ -32,6 +32,7 @@ import { consumeViewOnceOptimistic } from '@/lib/api/view-once';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 import { useAuthorStoryRings } from '@/lib/view/use-author-story-rings';
+import { AuthorMoodsContext, useAuthorMoods } from '@/lib/view/use-author-moods';
 import { topActiveMembers } from '@/lib/view/top-active-members';
 import { accentOf, withAccent } from '@/lib/accent';
 import { conversationStore } from '@/lib/conversation-store';
@@ -45,7 +46,16 @@ import { useMessageMenu } from '@/lib/view/use-message-menu';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { useOnline } from '@/lib/net/online';
 import { useThreadTyping } from '@/lib/view/use-thread-typing';
-import { HerePeersContext, useConversationViewing, useHereIn } from '@/lib/view/use-conversation-viewing';
+import {
+  ActivePeersContext,
+  FocusedPeersContext,
+  HerePeersContext,
+  useActiveIn,
+  useConversationActivity,
+  useConversationViewing,
+  useFocusedIn,
+  useHereIn,
+} from '@/lib/view/use-conversation-viewing';
 import { useEphemeralDestruction } from '@/lib/view/ephemeral-destruction';
 import { useLivingMessages } from '@/lib/view/ephemeral-gone';
 import { isMineOf } from '@/lib/view/message';
@@ -165,6 +175,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
   const storyRingOf = useAuthorStoryRings(viewer);
+  const moodOf = useAuthorMoods(viewer);
 
   /**
    * LE `Participant` DU LECTEUR DANS cette conversation (#5813, étape 8) —
@@ -405,8 +416,12 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
   });
   /* « EST DANS LA CONVERSATION » (#8892) — le fil ouvert s'annonce aux pairs. */
   useConversationViewing(conversationId);
-  /* … et chaque avatar d'auteur du fil dit qui l'a ouvert. */
+  /* … et chaque avatar d'auteur du fil dit qui l'a ouvert — et qui y regarde,
+     écoute ou agit en ce moment (#9061), ou regarde en plein écran (#9065). */
   const herePeers = useHereIn(conversationId);
+  const activePeers = useActiveIn(conversationId);
+  const focusedPeers = useFocusedIn(conversationId);
+  useConversationActivity(conversationId, chrome.host);
 
   /**
    * QUI ÉCRIT — LE ROSTER ENTIER (#6171, § 5 étape 0/2 de la spécification) —
@@ -669,6 +684,9 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
        le contenu puisse transiter sous la bande. */
     <ThreadMediaContext.Provider value={threadMedia}>
     <HerePeersContext.Provider value={herePeers}>
+    <ActivePeersContext.Provider value={activePeers}>
+    <FocusedPeersContext.Provider value={focusedPeers}>
+    <AuthorMoodsContext.Provider value={moodOf}>
     <div
       ref={chrome.host}
       className={`relative ${preview === undefined ? 'h-dvh' : 'h-full'} overflow-hidden`}
@@ -956,6 +974,9 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
         announce={announcer.announce}
       />
     </div>
+    </AuthorMoodsContext.Provider>
+    </FocusedPeersContext.Provider>
+    </ActivePeersContext.Provider>
     </HerePeersContext.Provider>
     </ThreadMediaContext.Provider>
   );

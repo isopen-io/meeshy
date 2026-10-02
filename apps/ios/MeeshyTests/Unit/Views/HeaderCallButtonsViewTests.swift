@@ -197,12 +197,20 @@ final class HeaderCallButtonsViewTests: XCTestCase {
         guard let range = source.range(of: "var body: some View {") else {
             XCTFail("HeaderCallButtonsView must define body"); return
         }
-        // 1300, not 700 (2026-08-13) — same window-overflow reason as
-        // `test_body_showsRejoinIndicator_whenReconciledActiveCallIsSet` above.
-        let end = source.index(range.lowerBound, offsetBy: 1300, limitedBy: source.endIndex) ?? source.endIndex
-        let body = String(source[range.lowerBound..<end])
+        // Balanced body, not a guessed character window: the doc comments
+        // above `.task` grew past every window this test used (700, then 1300).
+        guard let body = DeclarationBodyScanner.body(containing: "var body: some View {",
+                                                     in: String(source[range.lowerBound...])) else {
+            XCTFail("HeaderCallButtonsView.body is unbalanced"); return
+        }
+        // #9111 (54f616ba99) — the task id is no longer the bare conversationId:
+        // `HeaderCallReconcileKey` pairs it with `callState.isActive`, so leaving
+        // a group call that goes on brings « Rejoindre » back. The key still
+        // changes on every conversation change and never on a callState tick
+        // (its equality is pinned in CallResumePolicyTests).
         XCTAssertTrue(
-            body.contains(".task(id: conversationId)") && body.contains("await reconcileActiveCall()"),
+            body.contains(".task(id: HeaderCallReconcileKey(conversationId: conversationId, isLocalCallActive: callManager.callState.isActive))")
+                && body.contains("await reconcileActiveCall()"),
             "body must reconcile on every conversation change (task id), not on every re-render."
         )
     }

@@ -26,9 +26,39 @@ final class CallWindowPresenterTests: XCTestCase {
         func hide() { hidden += 1 }
     }
 
-    private func makeSUT() -> (sut: CallWindowPresenter, hosting: RecordingHosting) {
+    private final class RecordingViewing: ConversationViewingReporting {
+        var callScreen: [Bool] = []
+        func conversationOpened(_ conversationId: String) {}
+        func conversationClosed(_ conversationId: String) -> Bool { true }
+        func setForeground(_ isForeground: Bool) {}
+        func screenAppeared(_ conversationId: String) {}
+        func screenDisappeared(_ conversationId: String) {}
+        func coverBegan() {}
+        func coverEnded() {}
+        func setCallScreenShown(_ isShown: Bool) { callScreen.append(isShown) }
+        func activityOccurred(_ conversationId: String) {}
+        func scrollingChanged(_ isScrolling: Bool) {}
+        func touched() {}
+    }
+
+    private func makeSUT(
+        viewing: RecordingViewing = RecordingViewing()
+    ) -> (sut: CallWindowPresenter, hosting: RecordingHosting) {
         let hosting = RecordingHosting()
-        return (CallWindowPresenter(hosting: hosting), hosting)
+        return (CallWindowPresenter(hosting: hosting, viewing: viewing), hosting)
+    }
+
+    // MARK: - L'écran d'appel fait quitter la conversation (#9065)
+
+    func test_apply_callScreenShownThenHidden_tellsTheViewingReporter() {
+        let viewing = RecordingViewing()
+        let (sut, _) = makeSUT(viewing: viewing)
+        let manager = CallManager.shared
+
+        sut.apply(manager: manager, visible: true)
+        sut.apply(manager: manager, visible: false)
+
+        XCTAssertEqual(viewing.callScreen, [true, false])
     }
 
     // MARK: - La règle
@@ -188,5 +218,256 @@ final class CallPlaybackInterruptionBindingTests: XCTestCase {
         XCTAssertTrue(interruption.isActive, "Le panneau de fin recouvre encore l'écran.")
         states.send(.idle)
         XCTAssertFalse(interruption.isActive)
+    }
+}
+
+/// #8739 — un appel réduit reste atteignable par-dessus tout plein écran.
+///
+/// La pastille et la bulle vivaient dans la racine : un viewer de story, une
+/// visionneuse ou le composer (présentations modales de la fenêtre principale)
+/// les recouvraient. La bulle vit désormais dans une fenêtre passe-plat que ces
+/// témoins gouvernent.
+@MainActor
+final class CallReturnPointTests: XCTestCase {
+
+    private final class RecordingHosting: CallReturnPointHosting {
+        var shown = 0
+        var hidden = 0
+        var appearanceRefreshes = 0
+        var hasForegroundScene = true
+        func refreshAppearance() { appearanceRefreshes += 1 }
+        func show(_ manager: CallManager, coverage: CallScreenCoverage) -> Bool {
+            guard hasForegroundScene else { return false }
+            shown += 1
+            return true
+        }
+        func hide() { hidden += 1 }
+    }
+
+    private final class ScreenStub {
+        var isCovered = false
+    }
+
+    private final class PresentingStub: UIViewController {
+        var stubbedPresented: UIViewController?
+        override var presentedViewController: UIViewController? { stubbedPresented }
+    }
+
+    private final class StatusBarStub: UIViewController {
+        var hidesStatusBar = false
+        var stubbedChild: UIViewController?
+        override var prefersStatusBarHidden: Bool { hidesStatusBar }
+        override var childForStatusBarHidden: UIViewController? { stubbedChild }
+    }
+
+    private func makeSUT(covered: Bool = false) -> (sut: CallReturnPointPresenter, hosting: RecordingHosting) {
+        let hosting = RecordingHosting()
+        return (CallReturnPointPresenter(hosting: hosting, coverage: CallScreenCoverage(), probe: { covered }), hosting)
+    }
+
+    private func makeWindow(interactiveFrame: CGRect) -> CallPassthroughWindow {
+        let window = CallPassthroughWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let controller = UIViewController()
+        controller.view.backgroundColor = .clear
+        window.rootViewController = controller
+        window.interactiveFrame = interactiveFrame
+        window.isHidden = false
+        return window
+    }
+
+    // MARK: - La règle
+
+    func test_showsBubble_bubbleMode_showsTheReturnPointOverAnyScreen() {
+        XCTAssertTrue(CallReturnPoint.showsBubble(displayMode: .bubble, callState: .connected, isSystemPiPActive: false, isMainScreenCovered: false))
+        XCTAssertTrue(CallReturnPoint.showsBubble(displayMode: .bubble, callState: .connected, isSystemPiPActive: false, isMainScreenCovered: true))
+    }
+
+    func test_showsBubble_pillUnderAFullScreenCover_raisesTheBubble() {
+        XCTAssertTrue(CallReturnPoint.showsBubble(displayMode: .pip, callState: .connected, isSystemPiPActive: false, isMainScreenCovered: true))
+        XCTAssertTrue(CallReturnPoint.showsBubble(displayMode: .pip, callState: .ringing(isOutgoing: true), isSystemPiPActive: false, isMainScreenCovered: true))
+    }
+
+    func test_showsBubble_pillOnAnUncoveredScreen_leavesTheReturnPointToThePill() {
+        XCTAssertFalse(CallReturnPoint.showsBubble(displayMode: .pip, callState: .connected, isSystemPiPActive: false, isMainScreenCovered: false))
+    }
+
+    func test_showsBubble_fullScreenSystemPiPOrNoCall_showsNothing() {
+        XCTAssertFalse(CallReturnPoint.showsBubble(displayMode: .fullScreen, callState: .connected, isSystemPiPActive: false, isMainScreenCovered: true))
+        XCTAssertFalse(CallReturnPoint.showsBubble(displayMode: .bubble, callState: .connected, isSystemPiPActive: true, isMainScreenCovered: true))
+        XCTAssertFalse(CallReturnPoint.showsBubble(displayMode: .bubble, callState: .idle, isSystemPiPActive: false, isMainScreenCovered: true))
+        XCTAssertFalse(CallReturnPoint.showsBubble(displayMode: .bubble, callState: .ended(reason: .local), isSystemPiPActive: false, isMainScreenCovered: true))
+    }
+
+    func test_isWindowNeeded_onlyWhileALiveCallIsReduced() {
+        XCTAssertTrue(CallReturnPoint.isWindowNeeded(callState: .connected, displayMode: .pip))
+        XCTAssertTrue(CallReturnPoint.isWindowNeeded(callState: .connected, displayMode: .bubble))
+        XCTAssertFalse(CallReturnPoint.isWindowNeeded(callState: .connected, displayMode: .fullScreen))
+        XCTAssertFalse(CallReturnPoint.isWindowNeeded(callState: .idle, displayMode: .bubble))
+    }
+
+    // MARK: - Le recouvrement
+
+    func test_isCovered_rootPresentingAFullScreen_coversThePill() {
+        let root = PresentingStub()
+        root.stubbedPresented = UIViewController()
+        XCTAssertTrue(CallReturnPoint.isCovered(root: root))
+    }
+
+    func test_isCovered_nothingPresentedOrAnAlert_leavesThePillVisible() {
+        let root = PresentingStub()
+        XCTAssertFalse(CallReturnPoint.isCovered(root: root))
+        root.stubbedPresented = UIAlertController(title: nil, message: nil, preferredStyle: .alert)
+        XCTAssertFalse(CallReturnPoint.isCovered(root: root))
+        XCTAssertFalse(CallReturnPoint.isCovered(root: nil))
+    }
+
+    // MARK: - La barre d'état
+
+    func test_statusBarOwner_viewerPresentedOverTheRoot_ownsTheStatusBar() {
+        let root = PresentingStub()
+        let viewer = StatusBarStub()
+        viewer.hidesStatusBar = true
+        root.stubbedPresented = viewer
+
+        XCTAssertTrue(CallReturnPoint.statusBarOwner(root: root) === viewer)
+    }
+
+    func test_statusBarOwner_followsTheChildThatDecidesTheStatusBar() {
+        let root = PresentingStub()
+        let container = StatusBarStub()
+        let child = StatusBarStub()
+        container.stubbedChild = child
+        root.stubbedPresented = container
+
+        XCTAssertTrue(CallReturnPoint.statusBarOwner(root: root) === child)
+    }
+
+    func test_statusBarOwner_nothingPresented_isTheRoot() {
+        let root = PresentingStub()
+        XCTAssertTrue(CallReturnPoint.statusBarOwner(root: root) === root)
+        XCTAssertNil(CallReturnPoint.statusBarOwner(root: nil))
+    }
+
+    func test_refreshCoverage_shownWindow_followsTheAppStatusBar() {
+        let (sut, hosting) = makeSUT()
+
+        sut.apply(manager: CallManager.shared, needed: true)
+        let afterShow = hosting.appearanceRefreshes
+        sut.refreshCoverage()
+
+        XCTAssertGreaterThanOrEqual(afterShow, 1, "La fenêtre suit la barre d'état de l'app dès sa montée.")
+        XCTAssertEqual(hosting.appearanceRefreshes, afterShow + 1, "Chaque relevé recopie la barre d'état de l'écran d'en dessous.")
+    }
+
+    // MARK: - La fenêtre passe-plat
+
+    func test_windowLevel_sitsAboveEveryPresentationOfTheMainWindow_belowTheCallScreen() {
+        XCTAssertGreaterThan(CallReturnPoint.windowLevel, UIWindow.Level.normal)
+        XCTAssertLessThan(CallReturnPoint.windowLevel, CallWindowPresentation.windowLevel)
+    }
+
+    func test_hitTest_touchOutsideTheBubble_fallsThroughToTheApp() {
+        let window = makeWindow(interactiveFrame: CGRect(x: 300, y: 400, width: 80, height: 80))
+        XCTAssertNil(window.hitTest(CGPoint(x: 100, y: 100), with: nil))
+        XCTAssertNil(window.hitTest(CGPoint(x: 299, y: 440), with: nil))
+    }
+
+    func test_hitTest_touchOnTheBubble_isCaptured() {
+        let window = makeWindow(interactiveFrame: CGRect(x: 300, y: 400, width: 80, height: 80))
+        XCTAssertNotNil(window.hitTest(CGPoint(x: 340, y: 440), with: nil))
+    }
+
+    func test_hitTest_noBubbleShown_capturesNothing() {
+        let window = makeWindow(interactiveFrame: .zero)
+        XCTAssertNil(window.hitTest(CGPoint(x: 0, y: 0), with: nil))
+        XCTAssertNil(window.hitTest(CGPoint(x: 195, y: 422), with: nil))
+    }
+
+    func test_canBecomeKey_passthroughWindow_neverStealsTheKeyboard() {
+        let window = makeWindow(interactiveFrame: .zero)
+        XCTAssertFalse(window.canBecomeKey)
+        window.makeKey()
+        XCTAssertFalse(window.isKeyWindow)
+    }
+
+    func test_reduce_frameKey_keepsTheShownBubbleFrame() {
+        var value = CallReturnPointFrameKey.defaultValue
+        CallReturnPointFrameKey.reduce(value: &value) { CGRect(x: 10, y: 10, width: 56, height: 56) }
+        CallReturnPointFrameKey.reduce(value: &value) { .zero }
+        XCTAssertEqual(value, CGRect(x: 10, y: 10, width: 56, height: 56))
+    }
+
+    // MARK: - Le présentateur
+
+    func test_apply_reducedCall_showsTheReturnPointWindowOnce() {
+        let (sut, hosting) = makeSUT()
+
+        sut.apply(manager: CallManager.shared, needed: true)
+        sut.apply(manager: CallManager.shared, needed: true)
+
+        XCTAssertEqual(hosting.shown, 1)
+        XCTAssertTrue(sut.isShowing)
+    }
+
+    func test_apply_backToFullScreen_hidesTheReturnPointWindow() {
+        let (sut, hosting) = makeSUT(covered: true)
+
+        sut.apply(manager: CallManager.shared, needed: true)
+        sut.apply(manager: CallManager.shared, needed: false)
+
+        XCTAssertEqual(hosting.hidden, 1)
+        XCTAssertFalse(sut.isShowing)
+        XCTAssertFalse(sut.coverage.isMainScreenCovered)
+    }
+
+    func test_apply_shownOverACover_readsTheCoverageAtOnce() {
+        let (sut, _) = makeSUT(covered: true)
+
+        sut.apply(manager: CallManager.shared, needed: true)
+
+        XCTAssertTrue(sut.coverage.isMainScreenCovered, "La bulle se lève sans attendre le premier relevé.")
+    }
+
+    func test_apply_coverOpenedWhileReduced_raisesTheBubbleOnTheNextReading() {
+        let screen = ScreenStub()
+        let hosting = RecordingHosting()
+        let sut = CallReturnPointPresenter(hosting: hosting, coverage: CallScreenCoverage(), probe: { screen.isCovered })
+        sut.apply(manager: CallManager.shared, needed: true)
+        XCTAssertFalse(sut.coverage.isMainScreenCovered)
+
+        screen.isCovered = true
+        let raised = expectation(description: "relevé périodique")
+        let watch = sut.coverage.$isMainScreenCovered.dropFirst().sink { if $0 { raised.fulfill() } }
+        wait(for: [raised], timeout: 2)
+        watch.cancel()
+    }
+
+    func test_apply_withoutForegroundScene_showsTheWindowWhenTheSceneActivates() {
+        let (sut, hosting) = makeSUT()
+        hosting.hasForegroundScene = false
+
+        sut.apply(manager: CallManager.shared, needed: true)
+        XCTAssertFalse(sut.isShowing)
+
+        hosting.hasForegroundScene = true
+        sut.retryPendingShow()
+
+        XCTAssertTrue(sut.isShowing)
+        XCTAssertEqual(hosting.shown, 1)
+    }
+
+    // MARK: - Le câblage
+
+    func test_callPresentationLayer_mountsTheBubbleInThePassthroughWindowOnly() throws {
+        let layer = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootLayers/CallPresentationLayer.swift"))
+        XCTAssertFalse(layer.contains("CallBubbleView("), "Montée dans la racine, la bulle passe sous tout plein écran (#8739).")
+        XCTAssertTrue(layer.contains("CallReturnPointPresenter.shared.bind("), "La racine doit brancher la fenêtre du point de retour.")
+
+        let window = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootLayers/CallWindowPresenter.swift"))
+        XCTAssertTrue(window.contains("CallBubbleView(callManager: callManager"), "La fenêtre remet à la bulle la pile qu'elle observe.")
+
+        let bubble = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/CallBubbleView.swift"))
+        XCTAssertTrue(bubble.contains("CallReturnPoint.showsBubble("), "La bulle se montre selon la règle du point de retour, pastille couverte comprise.")
+        XCTAssertTrue(bubble.contains("CallReturnPointFrameKey.self"), "La bulle remonte son cadre touchable à la fenêtre passe-plat.")
     }
 }

@@ -852,7 +852,7 @@ for (const scheme of ['light', 'dark']) {
    * LE CADRE DES EMOJIS RAPIDES (#7985, directive porteur 2026-09-25, après
    * #7980) — TROIS emojis EN PERMANENCE, sur une rangée, à la hauteur de la
    * ligne de saisie, focus ou non ; la barre d'outils garde toute sa largeur
-   * (sa tonalité comprise) et aucun de ses contrôles ne glisse sous le cadre.
+   * (sa porte sticker et sa caméra comprises, #9082) et aucun de ses contrôles ne glisse sous le cadre.
    * Mesuré à 390 px et à 320 px — la largeur à laquelle l'ancienne forme
    * « cinq sur tout le côté droit » débordait (#7984).
    *
@@ -901,7 +901,7 @@ for (const scheme of ['light', 'dark']) {
           field: box(field),
           toolbarRight: rightmost,
           toolbarScrolls: toolbar === null ? false : toolbar.scrollWidth > toolbar.clientWidth + 1,
-          tone: toolbar?.querySelector('[role="img"][aria-label^="Tonalité"]') !== null,
+          doors: toolbar?.querySelector('[data-composer-sticker]') !== null && toolbar?.querySelector('[data-composer-camera]') !== null,
           pageScrolls: document.documentElement.scrollWidth > window.innerWidth + 1,
           buttons,
         };
@@ -922,7 +922,7 @@ for (const scheme of ['light', 'dark']) {
           `${tag} · aucun contrôle de la barre ne glisse sous le cadre (dernier bord ${Math.round(m.toolbarRight)}, cadre ←${Math.round(m.frame.left)})`,
         );
       }
-      expect(m.tone, `${tag} · la barre garde sa tonalité`);
+      expect(m.doors, `${tag} · la barre porte le sticker et la caméra (#9082)`);
       expect(!m.pageScrolls, `${tag} · aucun défilement horizontal de la page`);
       const tiny = m.buttons.filter((b) => b.w < 24 || b.h < 24);
       expect(tiny.length === 0, `${tag} · chaque emoji tient au moins la cible AA de 24 px (${JSON.stringify(m.buttons)})`);

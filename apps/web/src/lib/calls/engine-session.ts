@@ -15,7 +15,11 @@ export type Session = {
   iceServers: readonly RTCIceServer[];
   links: Map<string, PeerLink>;
   participantIds: Map<string, string>;
+  /** La ligne d'appel COURANTE de chaque membre : le départ d'une ancienne ligne ne retire pas un revenant (#9111). */
+  currentRows: Map<string, string>;
   ringTimer: unknown;
+  /** Le duo au lien perdu attend le retour du pair (#9111) ; passé la grâce, on quitte. */
+  lostTimer: unknown;
   heartbeat: unknown;
   qualityTimer: unknown;
   lastQualityReport: number;
@@ -36,7 +40,9 @@ export const emptySession = (): Session => ({
   iceServers: [],
   links: new Map(),
   participantIds: new Map(),
+  currentRows: new Map(),
   ringTimer: null,
+  lostTimer: null,
   heartbeat: null,
   qualityTimer: null,
   lastQualityReport: 0,

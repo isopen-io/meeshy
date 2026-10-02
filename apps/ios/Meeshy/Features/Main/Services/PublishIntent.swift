@@ -279,29 +279,35 @@ nonisolated struct PublishIntent: Equatable, Sendable {
         /// `nil` en toutes lettres.
         allowSoundExtraction: Bool?
     ) -> PublishIntent {
-        PublishIntent(
+        // La règle de composition vit dans `ReelComposition`, jamais ici —
+        // un `"REEL"`/`"POST"` codé en dur ferait diverger la surface
+        // d'atterrissage d'un document de celle d'un vocal ou d'un média.
+        // **Un type DÉCLARÉ gagne sur un type déduit** (directive porteur
+        // 2026-09-01). `ReelComposition` répond à « qu'est-ce que cette
+        // composition RESSEMBLE à être ? » — une question de médias, qui ne
+        // sait rendre que POST ou RÉEL. Depuis que la story se compose sur
+        // cette surface, l'auteur peut avoir CHOISI son format dans
+        // l'éventail : une déduction faite sur les mimes publierait alors
+        // un post là où il vient de dire « story ».
+        //
+        // `nil` laisse la déduction faire son travail — c'est le cas des
+        // portes qui n'offrent aucun choix de format.
+        let type = declaredType ?? ReelComposition.defaultType(
+            mimeTypes: localMedia.map(\.mimeType),
+            durationsMs: localMedia.map(\.durationMs),
+            forcePlainPost: forcePlainPost
+        )
+        // **Un réel sans texte publie sa légende de scène** (#9179) — les deux
+        // portes document (`DocumentComposerDoor`, la voie durable) passent
+        // ICI, donc la règle n'a qu'un site sur ce canal.
+        let servedContent = ReelPublishedContent.content(
+            type: type, text: content, captions: localMedia.map { mediaCaptions[$0.url] })
+        return PublishIntent(
             clientMutationId: ClientMutationId.generate(),
-            // La règle de composition vit dans `ReelComposition`, jamais ici —
-            // un `"REEL"`/`"POST"` codé en dur ferait diverger la surface
-            // d'atterrissage d'un document de celle d'un vocal ou d'un média.
-            // **Un type DÉCLARÉ gagne sur un type déduit** (directive porteur
-            // 2026-09-01). `ReelComposition` répond à « qu'est-ce que cette
-            // composition RESSEMBLE à être ? » — une question de médias, qui ne
-            // sait rendre que POST ou RÉEL. Depuis que la story se compose sur
-            // cette surface, l'auteur peut avoir CHOISI son format dans
-            // l'éventail : une déduction faite sur les mimes publierait alors
-            // un post là où il vient de dire « story ».
-            //
-            // `nil` laisse la déduction faire son travail — c'est le cas des
-            // portes qui n'offrent aucun choix de format.
-            type: (declaredType ?? ReelComposition.defaultType(
-                mimeTypes: localMedia.map(\.mimeType),
-                durationsMs: localMedia.map(\.durationMs),
-                forcePlainPost: forcePlainPost
-            )).rawValue,
+            type: type.rawValue,
             localMediaURLs: localMedia.map(\.url),
             localMediaMimeTypes: localMedia.map(\.mimeType),
-            content: content,
+            content: servedContent,
             visibility: visibility,
             visibilityUserIds: visibilityUserIds,
             // **E2 (#3887) — texte et média portent DEUX langues distinctes,
@@ -315,7 +321,7 @@ nonisolated struct PublishIntent: Equatable, Sendable {
             //    `mobileTranscription` ci-dessous, résolue à part (famille
             //    audio). Les conflater faisait un audio wolof retitrer le
             //    texte français, ou l'inverse.
-            originalLanguage: content == nil ? (transcription?.language ?? originalLanguage) : originalLanguage,
+            originalLanguage: servedContent == nil ? (transcription?.language ?? originalLanguage) : originalLanguage,
             mentions: mentions,
             location: location,
             discoverabilityPrecision: discoverabilityPrecision,

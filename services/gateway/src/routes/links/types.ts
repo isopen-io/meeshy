@@ -292,6 +292,17 @@ export const linkMessageSchema = {
       items: { type: 'string' },
       description: 'Usernames whose mention passed validation'
     },
+    // La carte des liens suivis (#9093, #9105) : non nommée ici, elle serait
+    // tronquée du 201 et l'auteur verrait l'adresse brute au lieu de m+token.
+    trackingLinks: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { url: { type: 'string' }, token: { type: 'string' } },
+        required: ['url', 'token']
+      },
+      description: 'Raw and markdown URLs of the content, with their /l/ tracking token'
+    },
     location: { ...sharedPlaceResponseSchema }
   }
 } as const;

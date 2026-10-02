@@ -18,18 +18,26 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 const REPO_ROOT = join(__dirname, '../../../../../..');
 
-const CALL_SIGNALING_SOURCE_FILES = [
-  'apps/ios/Meeshy/Features/Main/Services/CallManager.swift',
-  'packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift',
-  'packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager+ScreenShare.swift',
-  'apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/CallSignalManager.kt',
+const CALL_MANAGER_DIRECTORY = 'apps/ios/Meeshy/Features/Main/Services';
+
+const CALL_MANAGER_FILES = readdirSync(join(REPO_ROOT, CALL_MANAGER_DIRECTORY))
+  .filter((name) => name === 'CallManager.swift' || /^CallManager\+.+\.swift$/.test(name))
+  .map((name) => `${CALL_MANAGER_DIRECTORY}/${name}`);
+
+const CALL_SIGNALING_SOURCES: ReadonlyArray<readonly [string, ReadonlyArray<string>]> = [
+  [`${CALL_MANAGER_DIRECTORY}/CallManager(+*).swift`, CALL_MANAGER_FILES],
+  ...[
+    'packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift',
+    'packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager+ScreenShare.swift',
+    'apps/android/sdk-core/src/main/kotlin/me/meeshy/sdk/socket/CallSignalManager.kt',
+  ].map((path) => [path, [path]] as const),
 ];
 
 const sharedContract = new Set<string>([
@@ -52,10 +60,10 @@ describe('cross-platform call:* event literal contract (iOS/Android)', () => {
     expect(sharedContract.has('call:definitely-not-a-real-event')).toBe(false);
   });
 
-  it.each(CALL_SIGNALING_SOURCE_FILES)(
+  it.each(CALL_SIGNALING_SOURCES)(
     'every call:* literal in %s exists in the shared contract',
-    (relativePath) => {
-      const source = readFileSync(join(REPO_ROOT, relativePath), 'utf-8');
+    (_label, paths) => {
+      const source = paths.map((path) => readFileSync(join(REPO_ROOT, path), 'utf-8')).join('\n');
       const literals = extractCallEventLiterals(source);
 
       expect(literals.length).toBeGreaterThan(0);

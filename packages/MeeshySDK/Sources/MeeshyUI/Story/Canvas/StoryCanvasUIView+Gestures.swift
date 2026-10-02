@@ -582,20 +582,14 @@ extension StoryCanvasUIView {
             CATransaction.setDisableActions(true)
             layer.position = renderPosition(x: text.x, y: text.y)
             // Échelle LIVE pendant le pinch (user 2026-07-11 « le zoom/dézoom
-            // de texte doit être rendu en temps réel ») : le scale d'un texte
-            // est CUIT dans `fontSize` au configure (`text.fontSize ×
-            // text.scale`, cf. StoryTextLayer) — la layer restait donc FIGÉE à
-            // sa taille d'avant-geste, seul le rebuild `.ended` montrait la
-            // nouvelle taille. On applique un ratio transitoire (scale modèle
-            // courant / scale cuit lu sur `StoryTextLayer.textObject`) par-
-            // dessus la rotation ; hors geste le ratio vaut 1 (pas de
-            // double-scale — régression 2026-05-27 toujours couverte) et le
-            // rebuild de fin de geste re-rend les glyphes NETS à la taille
-            // finale.
-            let bakedScale = (layer as? StoryTextLayer)?.textObject?.scale ?? text.scale
-            layer.transform = Self.liveTextGestureTransform(rotationDegrees: text.rotation,
-                                                            modelScale: text.scale,
-                                                            bakedScale: bakedScale)
+            // de texte doit être rendu en temps réel »). Depuis le #9139 le
+            // scale d'un texte n'est plus cuit dans sa police : c'est la
+            // transformation du calque qui agrandit le cadre entier — la même
+            // que pose `StoryTextLayer.configure`, donc les lignes ne bougent
+            // ni pendant le geste ni au rebuild `.ended`, qui re-rasterise
+            // seulement NET à la taille finale.
+            layer.transform = StoryTextLayer.sceneTransform(rotationDegrees: text.rotation,
+                                                            scale: text.scale)
             CATransaction.commit()
         } else if let sticker = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
             CATransaction.begin()
@@ -609,8 +603,8 @@ extension StoryCanvasUIView {
                 // L'imposer écrasait la décoration dans un carré faux pendant
                 // tout le geste, puis la laissait sauter au rebuild de fin.
                 //
-                // Même remède que le texte et la pastille de lieu, dont la
-                // boîte est mesurée pour les mêmes raisons : un RATIO
+                // Même remède que la pastille de lieu, dont la boîte est
+                // mesurée pour les mêmes raisons : un RATIO
                 // transitoire par-dessus la rotation, la re-rasterisation nette
                 // venant à `.ended`. On ne touche pas aux bounds : les
                 // remesurer à chaque image coûterait un dessin Core Graphics
@@ -656,7 +650,10 @@ extension StoryCanvasUIView {
         }
     }
 
-    /// Transform de geste LIVE d'un texte : rotation modèle + ratio d'échelle
+    /// Transform de geste LIVE d'un objet dont l'échelle est cuite dans le
+    /// rendu (gabarit de sticker, pastille de lieu — plus le texte depuis le
+    /// #9139, mis à l'échelle par `StoryTextLayer.sceneTransform`) : rotation
+    /// modèle + ratio d'échelle
     /// transitoire (scale modèle courant ÷ scale cuit dans le rendu au dernier
     /// configure). L'échelle uniforme commute avec la rotation 2D — l'ordre de
     /// composition est donc indifférent. `bakedScale` ≤ 0 (layer jamais

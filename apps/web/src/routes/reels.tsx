@@ -5,6 +5,7 @@ import { GlyphSvg, Glyph } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { CommentsSheetPortal } from '@/components/publication-comments-sheet-lazy';
 import { ReelPage } from '@/components/reel-page';
+import { isContentRefusal, useVisitorInvitation } from '@/components/visitor-invitation';
 import { BUTTON, GLYPH_SIZE } from '@/components/ui-chrome';
 import { ViewerTopBar } from '@/components/viewer-chrome';
 import { cachedCardSeed } from '@/lib/api/card-caches';
@@ -201,6 +202,11 @@ export default function ReelsScreen() {
      `lib/view/use-viewer.ts`) : aucun des deux ne le paie deux fois. */
   const viewer = useViewer();
   const canWrite = viewer.id !== null && !viewer.isAnonymous;
+  /* LE VISITEUR D'UN LIEN PARTAGÉ (#9149) — sans compte, il lit le réel
+     NOMMÉ (`GET /posts/:id` le sert s'il est public), jamais le fil des réels
+     (`scope=reels` exige une session) : le pager ne porte que la graine, et
+     l'invitation se pose par-dessus. */
+  const visitor = !canWrite;
 
   /* Le Flux est OBSERVÉ, jamais rechargé d'ici : ses réels ouvrent le lecteur,
      et ses bascules (aimer, enregistrer) s'y reflètent. */
@@ -221,7 +227,7 @@ export default function ReelsScreen() {
     enabled: seed !== undefined,
     retry: false,
   });
-  const reels = useInfiniteQuery(reelsQuery(apiDeps, seed));
+  const reels = useInfiniteQuery({ ...reelsQuery(apiDeps, seed), enabled: !visitor });
 
   const known = useMemo(
     () => new Map([...feedPosts, ...(seedPost.data !== undefined ? [seedPost.data] : [])].map((post) => [post.id, post] as const)),
@@ -320,16 +326,22 @@ export default function ReelsScreen() {
   }, [active, count, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const seedPending = seed !== undefined && !known.has(seed) && seedPost.fetchStatus === 'fetching';
-  const coldOffline = count === 0 && reels.data === undefined && reels.fetchStatus === 'paused';
-  const failed = count === 0 && reels.data === undefined && reels.isError;
-  const loading = seedPending || (count === 0 && reels.data === undefined && !reels.isError && !coldOffline);
+  const coldOffline = !visitor && count === 0 && reels.data === undefined && reels.fetchStatus === 'paused';
+  const seedRefused = isContentRefusal(seedPost.error);
+  const failed = visitor ? count === 0 && seedPost.isError && !seedRefused : count === 0 && reels.data === undefined && reels.isError;
+  const loading = seedPending || (!visitor && count === 0 && reels.data === undefined && !reels.isError && !coldOffline);
+  const invitation = useVisitorInvitation({
+    kind: 'reel',
+    state: count > 0 ? 'served' : seed === undefined || seedRefused ? 'refused' : 'pending',
+  });
+  const ask = invitation.ask;
 
   const body = loading ? (
     <ReelsSkeleton language={language} />
   ) : failed || coldOffline ? (
-    <ReelsFailure language={language} online={online && !coldOffline} onRetry={() => void reels.refetch()} />
+    <ReelsFailure language={language} online={online && !coldOffline} onRetry={() => void (visitor ? seedPost.refetch() : reels.refetch())} />
   ) : count === 0 ? (
-    <ReelsEmpty language={language} />
+    visitor ? null : <ReelsEmpty language={language} />
   ) : (
     <>
       <div
@@ -364,11 +376,11 @@ export default function ReelsScreen() {
             language={language}
             preferredLanguages={readerLanguages}
             onToggleSound={() => setSoundOn((on) => !on)}
-            onGesture={onGesture}
-            onShare={onShare}
+            onGesture={visitor ? ask : onGesture}
+            onShare={visitor ? ask : onShare}
             onSoundBlocked={() => setSoundOn(false)}
             chromeHidden={chromeYielded}
-            {...(canWrite ? { onComment: comments.open, onRepost } : {})}
+            {...(canWrite ? { onComment: comments.open, onRepost } : { onComment: ask })}
           />
         ))}
       </div>
@@ -380,6 +392,7 @@ export default function ReelsScreen() {
     <ReelsFrame language={language} onBack={close} announcement={announcement} chromeHidden={chromeYielded}>
       {body}
       {repostConfirm}
+      {invitation.dialog}
     </ReelsFrame>
   );
 }

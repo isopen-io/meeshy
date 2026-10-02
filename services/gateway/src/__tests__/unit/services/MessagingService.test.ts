@@ -1976,7 +1976,7 @@ describe('MessagingService - Tracking Links Processing', () => {
     );
   });
 
-  it('should process double bracket [[url]] tracking links', async () => {
+  it('leaves a double bracket [[url]] untouched — no explicit rewrite (#9093)', async () => {
     const content = 'Check this out: [[https://example.com/page]]';
 
     mockPrisma.conversation.findFirst.mockResolvedValue({
@@ -1994,7 +1994,7 @@ describe('MessagingService - Tracking Links Processing', () => {
       isActive: true
     });
     mockPrisma.message.create.mockResolvedValue({
-      ...createMockMessage({ content: 'Check this out: m+xyz789' }),
+      ...createMockMessage({ content }),
       sender: { id: testUserId },
       attachments: [],
       replyTo: null
@@ -2007,14 +2007,10 @@ describe('MessagingService - Tracking Links Processing', () => {
       );
 
     expect(response.success).toBe(true);
-    // Le contenu passe par le traitement des liens explicites — c'est LUI qui
-    // trouve ou crée le lien. L'assertion portait sur `findExistingTrackingLink`,
-    // une étape INTERNE de l'algorithme que l'envoi recopiait ; il ne la recopie
-    // plus, et un test qui nomme les pas d'un algorithme se casse dès qu'on le
-    // range ailleurs.
-    expect(mockProcessExplicitLinksInContent).toHaveBeenCalledWith(
-      expect.objectContaining({ content, conversationId: testConversationId })
-    );
+    // `[[url]]` est l'écriture d'un lien affiché tel quel, sans suivi : rien
+    // ne part vers la réécriture explicite (témoin du comportement remplacé,
+    // qui attendait ici sa réécriture en m+<token>).
+    expect(mockProcessExplicitLinksInContent).not.toHaveBeenCalled();
   });
 
   it('should process angle bracket <url> tracking links', async () => {

@@ -136,6 +136,59 @@ describe('ModeCarousel', () => {
     view.done();
   });
 
+  /* LE RÉACCROCHAGE SANS GESTE (#8969) : sous `snap-mandatory`, Chromium
+     réaccroche au dernier élément accroché dès que la mise en page change
+     (chunk chargé, piste remplacée) — un défilement que PERSONNE n'a fait.
+     Choisir à chaque `scroll` appliquait alors « Naturel » sans geste. Seul
+     un doigt, une molette ou une touche qui tient la piste choisit, et le
+     choix touché tient jusqu'au `scrollend` de son centrage. */
+  test('un défilement sans geste en cours ne choisit rien, et l’élément choisi revient au centre quand il s’arrête (#8969)', async () => {
+    const view = mount();
+    await view.scrollTo(2 * PITCH);
+    await view.scrollTo(4 * PITCH);
+    view.track.dispatchEvent(new Event('scrollend'));
+    await act(frame);
+    expect(view.chosen).toEqual([]);
+    expect(view.scrolls).toEqual([0]);
+    view.done();
+  });
+
+  test('un toucher puis un réaccrochage du navigateur sur l’ancien élément : le choix touché tient (#8969)', async () => {
+    const view = mount();
+    await act(async () => (view.host.querySelector('[data-carousel-item="gold"]') as HTMLElement).click());
+    await view.scrollTo(PITCH);
+    await view.scrollTo(2 * PITCH);
+    await view.scrollTo(0);
+    view.track.dispatchEvent(new Event('scrollend'));
+    await view.scrollTo(PITCH);
+    view.track.dispatchEvent(new Event('scrollend'));
+    await act(frame);
+    expect(view.chosen).toEqual(['gold']);
+    view.done();
+  });
+
+  test('une molette sur la piste choisit en direct, puis le défilement suivant sans geste ne choisit plus (#8969)', async () => {
+    const view = mount();
+    view.track.dispatchEvent(new Event('wheel'));
+    await view.scrollTo(PITCH);
+    view.track.dispatchEvent(new Event('scrollend'));
+    await view.scrollTo(3 * PITCH);
+    expect(view.chosen).toEqual(['cover']);
+    view.done();
+  });
+
+  test('un glissé du doigt dont le dernier défilement n’a pas encore choisi : le scrollend choisit l’élément arrêté, sans le ramener à l’ancien (#8969)', async () => {
+    const view = mount();
+    view.track.dispatchEvent(new Event('pointerdown'));
+    view.track.scrollLeft = 3 * PITCH;
+    view.track.dispatchEvent(new Event('scroll'));
+    view.track.dispatchEvent(new Event('scrollend'));
+    await act(frame);
+    expect(view.chosen).toEqual(['redcarpet']);
+    expect(view.scrolls).toEqual([]);
+    view.done();
+  });
+
   const mountCapture = (options: { readonly recording?: boolean } = {}) => {
     const host = document.createElement('div');
     document.body.appendChild(host);

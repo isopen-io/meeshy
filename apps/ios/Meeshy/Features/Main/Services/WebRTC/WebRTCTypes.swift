@@ -846,17 +846,16 @@ nonisolated enum QualityThresholds {
     /// Phase 1 fix P10: cellular ACK round-trip can take 3-4s in poor signal.
     /// 5s timeout absorbs worst-case without false positives.
     static let heartbeatAckTimeoutSeconds: TimeInterval = 5.0
-    /// L6-4 (2026-08-25) — 3 → 6. Combined with `reconnectAttemptBudgetSeconds`
-    /// (10 s) this bounds the client-side reconnection window to ~60 s, which
-    /// stays under the gateway's SOCKET disconnect grace of 90 s
-    /// (`CallEventsHandler.ts:217` opens 30 s, extended 4 × 15 s at :224/:225).
-    /// At 3 the client hung up after ~30 s — a 40 s subway/lift outage the
-    /// server was still holding the call open for ended as `.connectionLost`.
-    /// The symmetry argument covers a SOCKET cut only: on a media-only failure
-    /// (dead TURN path, ICE down with signaling alive) the server sets no
-    /// deadline, so the extra 30 s is pure UX cost on the "Reconnexion…" screen
-    /// — an accepted product trade-off, not a neutral correction.
-    static let maxReconnectAttempts: Int = 6
+    /// #9111 (2026-10-02) — 6 → 8. With `reconnectAttemptBudgetSeconds` (10 s)
+    /// the attempts span 80 s: never LESS than the server's rejoin grace plus a
+    /// heartbeat (`CallRules.rejoinGrace` 60 s + 10 s) — the client must not give
+    /// up a call the gateway still holds for it — and, backoff included (~110 s),
+    /// never MORE than `CallRules.heartbeatTimeout` (120 s), the cap of the
+    /// gateway's grace extensions. At 6 (~60 s) the client hung up while the
+    /// server still held the peer's seat. On a media-only failure (ICE down,
+    /// signaling alive) the server sets no deadline: the window is then a pure
+    /// UX cost on « Reconnexion… », accepted for the call to survive.
+    static let maxReconnectAttempts: Int = 8
     /// Hard cap on the ICE candidate buffer maintained while the socket is
     /// down.  ICE can generate 50+ candidates per gathering round (host +
     /// STUN server-reflexive + TURN relayed × UDP/TCP); beyond this cap

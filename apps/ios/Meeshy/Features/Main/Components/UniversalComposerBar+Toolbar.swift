@@ -51,18 +51,16 @@ extension UniversalComposerBar {
                 permanentEffectsToggleButton
             }
 
-            // Sentiment indicator — LECTURE SEULE.
-            // C'était un `Button` dont l'action se limitait à un retour
-            // haptique : il se présentait comme actionnable (et comme tel à
-            // VoiceOver) sans mener nulle part. Rendu passif, il reste lisible
-            // par les technologies d'assistance via label + valeur.
-            Text(textAnalyzer.sentiment.emoji)
-                .font(.callout)
-                .frame(width: 30, height: 30)
-                .animation(.spring(response: 0.3, dampingFraction: 0.5), value: textAnalyzer.sentiment)
-                .accessibilityElement()
-                .accessibilityLabel(String(localized: "a11y.composer.sentiment", defaultValue: "Tonalité du message", bundle: .main))
-                .accessibilityValue(textAnalyzer.sentiment.emoji)
+            // **Le sticker à la place de l'humeur** (#9082, directive porteur
+            // 2026-10-02) : l'indicateur passif de tonalité laisse sa place à
+            // la porte du sélecteur de stickers — rendue seulement si l'hôte
+            // sait l'ouvrir (loi 4).
+            if let openStickers = onRequestStickerPicker {
+                glassDoorButton(
+                    symbol: "rectangle.portrait.on.rectangle.portrait.angled",
+                    label: String(localized: "composer.attach.sticker", defaultValue: "Sticker", bundle: .main),
+                    action: openStickers)
+            }
 
             // Language selector
             languageSelectorPill
@@ -78,9 +76,32 @@ extension UniversalComposerBar {
                 }
             }
 
-            if let fold = foldControl {
-                foldButton(fold)
-                    .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .topTrailing)))
+            // **La caméra à l'angle droit du verre** (#9082), juste avant le ⌄ ;
+            // la photothèque (images ET vidéos) à côté d'elle (#9120).
+            ForEach(ComposerGlassDoors.trailing(offersLibrary: onPhotoLibrary != nil,
+                                                offersCamera: onCamera != nil,
+                                                offersFold: resolvedFoldControl != nil), id: \.self) { door in
+                switch door {
+                case .library:
+                    if let openLibrary = onPhotoLibrary {
+                        glassDoorButton(
+                            symbol: "photo.on.rectangle.angled",
+                            label: String(localized: "composer.attach.photo", defaultValue: "Photos", bundle: .main),
+                            action: openLibrary)
+                    }
+                case .camera:
+                    if let openCamera = onCamera {
+                        glassDoorButton(
+                            symbol: "camera.fill",
+                            label: String(localized: "composer.attach.camera", defaultValue: "Caméra", bundle: .main),
+                            action: openCamera)
+                    }
+                case .fold:
+                    if let fold = resolvedFoldControl {
+                        foldButton(fold)
+                            .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .topTrailing)))
+                    }
+                }
             }
         }
     }
@@ -98,7 +119,7 @@ extension UniversalComposerBar {
         Button(action: fold.action) {
             Image(systemName: fold.symbol)
                 .font(.footnote.weight(.bold))
-                .foregroundColor(style == .dark ? .white.opacity(0.9) : servedAccent)
+                .foregroundColor(iconTint)
                 .frame(width: 30, height: 30)
                 .adaptiveLiquidGlass(in: Circle(), interactive: true)
                 .frame(width: 44, height: 44)
@@ -107,6 +128,26 @@ extension UniversalComposerBar {
         .buttonStyle(.plain)
         .padding(.vertical, -7)
         .accessibilityLabel(fold.label)
+    }
+
+    /// Une porte de la bande (#9082) : glyphe au format des outils (30 pt),
+    /// cible de 44 pt, à la couleur servie.
+    private func glassDoorButton(symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button {
+            onAnyInteraction?()
+            HapticFeedback.light()
+            action()
+        } label: {
+            Image(systemName: symbol)
+                .font(.callout.weight(ComposerGlassDoors.glyphWeight))
+                .foregroundColor(iconTint)
+                .frame(width: 30, height: 30)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, -7)
+        .accessibilityLabel(label)
     }
 
     // ========================================================================
@@ -143,12 +184,8 @@ extension UniversalComposerBar {
             .fixedSize()
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xs)
-            .adaptiveLiquidGlass(in: Capsule(), tint: style == .dark ? nil : servedAccent.opacity(0.18))
-            .foregroundColor(
-                style == .dark
-                    ? .white.opacity(0.9)
-                    : servedAccent
-            )
+            .adaptiveLiquidGlass(in: Capsule(), tint: style == .dark ? nil : iconTint.opacity(0.18))
+            .foregroundColor(iconTint)
         }
         .accessibilityLabel(String(localized: "a11y.composer.language", defaultValue: "Langue du message", bundle: .main))
         .accessibilityValue(currentLangOption.name)
@@ -187,6 +224,25 @@ extension UniversalComposerBar {
 // mis en page sur 493 pt pour un iPhone de 402 pt. La bande garde la rangée
 // telle quelle quand elle tient, et la fait DÉFILER horizontalement sinon :
 // sa largeur ne dépasse jamais celle proposée.
+
+/// **L'angle droit du verre** (#9082) : la caméra se pose juste avant le ⌄,
+/// la photothèque à côté d'elle (#9120), et chaque porte n'existe que si
+/// l'hôte sait l'ouvrir. Leur glyphe, plus grand que celui des icônes de
+/// gauche (`.caption` semibold), prend un trait `.regular` pour garder la même
+/// épaisseur perçue (#9173).
+nonisolated enum ComposerGlassDoors {
+    static let glyphWeight: Font.Weight = .regular
+
+    enum TrailingDoor: Hashable, Sendable {
+        case library
+        case camera
+        case fold
+    }
+
+    static func trailing(offersLibrary: Bool, offersCamera: Bool, offersFold: Bool) -> [TrailingDoor] {
+        (offersLibrary ? [.library] : []) + (offersCamera ? [.camera] : []) + (offersFold ? [.fold] : [])
+    }
+}
 
 /// Le repli qu'un hôte confie à la barre (#8642) : son glyphe, son libellé
 /// VoiceOver et son geste. La barre le pose ; l'hôte décide QUAND il existe.

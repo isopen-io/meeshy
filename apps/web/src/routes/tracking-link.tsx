@@ -8,7 +8,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { browserClickEnvironment, collectClickContext, type ClickContext } from '@/lib/links/click-context';
 import { shellLeave } from '@/lib/links/shell-leave';
-import { decideTrackingRedirect, isTrackingToken, type TrackingClick, type TrackingResolution } from '@/lib/links/tracking-redirect';
+import { decideTrackingRedirect, isTrackingToken, sharedContentPath, type TrackingClick, type TrackingResolution } from '@/lib/links/tracking-redirect';
 import { currentHistory } from '@/lib/reels/exit';
 import { useParams } from '@/lib/router';
 import { href, navigate } from '@/routes/route-table';
@@ -24,6 +24,9 @@ import { LinkPage, ReachFailurePage } from './link-page-parts';
  * clic est COMPTÉ et la cible RÉSOLUE en parallèle, puis
  * `decideTrackingRedirect` tranche :
  *
+ * - un CONTENU de Meeshy (réel, publication, story, humeur) → sa page
+ *   canonique par le routeur, `?via=<jeton>` compris (#9149) : la page relit
+ *   le jeton pour dire qui l'a partagé ;
  * - une adresse web → `location.replace` : le lien ne reste pas dans
  *   l'historique, et « retour » ne recompte pas le clic ;
  * - une invitation de conversation → la jonction de la v2 (`/chat/:link`) ;
@@ -99,6 +102,10 @@ export function TrackingLinkRedirect({
       }
       const [click, resolution] = await Promise.all([deps.record(token, deps.context()), deps.resolve(token)]);
       const outcome = decideTrackingRedirect({ token, click, resolution });
+      if (outcome.kind === 'open') {
+        deps.go(sharedContentPath(outcome.content, outcome.via), true);
+        return;
+      }
       if (outcome.kind === 'leave') {
         deps.leave(outcome.target);
         return;

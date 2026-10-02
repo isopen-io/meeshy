@@ -7,6 +7,7 @@ import { emitConversationMemberCountEvent } from '../../socketio/emitConversatio
 import type { ConversationRoomEmitter } from '../../socketio/emitToConversationParticipants';
 import type { AfterResponse } from '../../utils/after-response';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { differsOrUnset } from '../../utils/prisma-unset';
 
 const logger = enhancedLogger.child({ module: 'EnsureGlobalConversationMembership' });
 
@@ -257,7 +258,7 @@ async function emitMemberCountBestEffort(
       where: { conversationId: params.conversationId, isActive: true },
     });
 
-    const others = { conversationId: params.conversationId, isActive: true, NOT: { userId: params.userId } };
+    const others = { conversationId: params.conversationId, isActive: true, ...differsOrUnset('userId', params.userId) };
     const audience = memberCount <= MEMBER_COUNT_DISPLAY_CAP
       ? await deps.prisma.participant.findMany({
           where: others,
@@ -266,10 +267,14 @@ async function emitMemberCountBestEffort(
         })
       : await deps.prisma.participant.findMany({
           where: {
-            ...others,
-            OR: [
-              { role: { in: [...EXACT_COUNT_CONVERSATION_ROLES] } },
-              { user: { role: { in: [...EXACT_COUNT_PLATFORM_ROLES] } } },
+            AND: [
+              others,
+              {
+                OR: [
+                  { role: { in: [...EXACT_COUNT_CONVERSATION_ROLES] } },
+                  { user: { role: { in: [...EXACT_COUNT_PLATFORM_ROLES] } } },
+                ],
+              },
             ],
           },
           select: MEMBER_COUNT_AUDIENCE_SELECT,

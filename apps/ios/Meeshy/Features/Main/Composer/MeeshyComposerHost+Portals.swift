@@ -12,6 +12,34 @@ import MeeshyUI
 /// l'inventaire des portails vivant.
 extension MeeshyComposerHost {
 
+    /// Le portail courant, vu par UNE présentation : la feuille ne voit que
+    /// les feuilles, le plein écran que le plein écran. Une fermeture ne vide
+    /// que ce que sa présentation montrait.
+    func presentedPortal(as presentation: ComposerPortal.Presentation) -> Binding<ComposerPortal?> {
+        Binding(
+            get: { presentedPortal?.presentation == presentation ? presentedPortal : nil },
+            set: { nouveau in
+                guard nouveau != nil || presentedPortal?.presentation == presentation else { return }
+                presentedPortal = nouveau
+            })
+    }
+
+    @ViewBuilder
+    func portalView(_ portail: ComposerPortal) -> some View {
+        switch portail {
+        case .location:     documentLocationPickerSheet
+        case .emoji:        emojiPickerSheet
+        case .sticker:      stickerPickerSheet
+        case .sound:        composerSoundSheet
+        case .soundLibrary: soundLibrarySheet
+        case .reference:    referencePickerSheet
+        case .language:     documentLanguagePickerSheet
+        case .camera:       documentCameraSheet
+        case .hashtag:      composerHashtagSheet
+        case .audience:     composerAudienceSheet
+        }
+    }
+
     /// **Les PORTAILS d'ingestion appartiennent au MEUBLE, jamais à une
     /// surface** (#4120).
     ///
@@ -92,6 +120,8 @@ extension MeeshyComposerHost {
         // **La photothèque s'ouvre d'office** à la création d'un post, d'une
         // story ou d'un réel vierge (directive porteur 2026-09-28).
         .task { await presentOpeningPickerIfNeeded() }
+        // La caméra de la barre d'une conversation arrive viseur armé (#9123).
+        .task { armViewfinderIfTheDoorAsks() }
         // **Les personnes à proposer, chargées UNE fois** (#4475) — mêmes amis
         // acceptés que la bande du document, par la même source. Deux
         // chargements auraient donné deux listes à faire diverger, et deux
@@ -168,21 +198,16 @@ extension MeeshyComposerHost {
         // quand l'autorisation de localisation est refusée : c'est l'injecteur
         // qui le décide, pas la feuille.
         .stickerNearbyPlacesProvided()
-        .sheet(item: $presentedPortal,
-               onDismiss: { forgetEditedSound(); resumePendingPresentation() }) { portail in
-            switch portail {
-            case .location:     documentLocationPickerSheet
-            case .emoji:        emojiPickerSheet
-            case .sticker:      stickerPickerSheet
-            case .sound:        composerSoundSheet
-            case .soundLibrary: soundLibrarySheet
-            case .reference:    referencePickerSheet
-            case .language:     documentLanguagePickerSheet
-            case .camera:       documentCameraSheet
-            case .hashtag:      composerHashtagSheet
-            case .audience:     composerAudienceSheet
-            }
-        }
+        // **La porte « Stickers » de l'atelier ouvre la feuille du MEUBLE**
+        // (#9189) : l'atelier n'en monte plus à lui, il la demande. Une seule
+        // feuille, celle de la conversation, avec tous ses onglets.
+        .storyStickerSheetRequestProvided { presentedPortal = .sticker }
+        .sheet(item: presentedPortal(as: .sheet),
+               onDismiss: { forgetEditedSound(); resumePendingPresentation() }) { portalView($0) }
+        // **La caméra s'ouvre SEULE en plein écran** (#9125) : le même
+        // portail, sa présentation dite par `ComposerPortal.presentation`.
+        .fullScreenCover(item: presentedPortal(as: .fullScreen),
+                         onDismiss: { resumePendingPresentation() }) { portalView($0) }
         // **L'éditeur d'objet plein écran** (#4634). Il vit AU-DESSUS de
         // l'aiguillage pour la même raison que les portails : ouvert depuis la
         // scène, il doit survivre à un changement de surface.

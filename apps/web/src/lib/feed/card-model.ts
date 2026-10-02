@@ -78,6 +78,10 @@ export type FeedCardMedia = {
    * Absent quand `caption` l'est.
    */
   readonly captionOrigin?: 'media' | 'post';
+  /** LA CARTE DES ADRESSES SUIVIES DU POST (#9074) — elle couvre le corps ET
+   * chaque légende de média (#9073), donc elle voyage avec `caption` quelle
+   * que soit sa provenance. Absente sans légende ou sans carte servie. */
+  readonly trackingLinks?: readonly ContentTrackingLink[];
   /** LE TEXTE D'ACCESSIBILITÉ SERVI PAR LA PASSERELLE — `PostMedia.alt`
    * (`schema.prisma:3618`, « Accessibilité »). Il était DÉCLARÉ sur le wire
    * (`FeedMedia.alt`) et jeté par le modèle : chaque image du fil partait en
@@ -205,6 +209,9 @@ export type FeedCardModel = {
    * tout handle est cliquable ; `[]` ⇒ aucun. Voir `FeedPost.mentions`.
    */
   readonly validatedMentions?: readonly string[];
+  /** La carte des adresses suivies du post (#9074) — celle que la visionneuse
+   * plein écran remet à ses légendes. Absente quand le post n'en porte aucune. */
+  readonly trackingLinks?: readonly ContentTrackingLink[];
   readonly media: readonly FeedCardMedia[];
   readonly scene?: FeedCardScene;
   /** L'agencement CHOISI par l'auteur (#6514, `resolveMosaicLayout`) —
@@ -270,6 +277,7 @@ function resolveMedia(
    * même valeur que `model.text`) — jamais recalculé ici (D-14). Repli
    * possible pour la légende d'un média SEUL (#6864), voir plus bas. */
   soleMediaCaptionFallback: FeedCardText | undefined,
+  trackingLinks: readonly ContentTrackingLink[],
 ): readonly FeedCardMedia[] {
   const media = post.media ?? [];
   const ordered = [...media].sort((a, b) => (numberOrUndefined(a.order) ?? 0) - (numberOrUndefined(b.order) ?? 0));
@@ -338,6 +346,7 @@ function resolveMedia(
       ...(caption !== undefined
         ? { caption: caption.text, captionTranslated: caption.translated, captionOrigin: caption.origin }
         : {}),
+      ...(caption !== undefined && trackingLinks.length > 0 ? { trackingLinks } : {}),
       ...(captionLanguage !== undefined ? { captionLanguage } : {}),
       ...(altText !== undefined ? { altText } : {}),
     };
@@ -460,7 +469,7 @@ export function resolveFeedCardModel(
 
   const avatarSrc = resolveAuthorSrc(post.author?.avatar);
   const repostEmbed = resolveFeedRepostEmbed(post.repostOf, params.preferredLanguages, params.now);
-  const media = resolveMedia(post, isReel, params.preferredLanguages, text);
+  const media = resolveMedia(post, isReel, params.preferredLanguages, text, trackingLinks);
   const document = parseCanvasDocument(post.storyEffects);
   // Le PORTEUR d'une scène est fait des médias DÉJÀ résolus par le Prisme
   // (`media` ci-dessus) — jamais une seconde descente (cycle 128 du
@@ -516,6 +525,7 @@ export function resolveFeedCardModel(
     createdAt: new Date(post.createdAt).toISOString(),
     ...(repostEmbed !== undefined ? { repostOf: repostEmbed } : {}),
     ...(text !== undefined ? { text } : {}),
+    ...(trackingLinks.length > 0 ? { trackingLinks } : {}),
     // `null` et `undefined` RETOMBENT tous deux sur « le serveur ne s'est pas
     // prononcé » : la passerelle sert `null` pour un champ optionnel absent
     // (doc-comment de `FeedAuthor`), et un `[]` fabriqué ici tuerait tous les

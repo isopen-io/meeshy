@@ -303,6 +303,7 @@ struct SocialMediaGalleryContent: View {
             // servis. L'ORDRE suit celui de la déclaration — l'init l'impose.
             captionServings: lot.captionServings,
             captionMap: lot.captionMap,
+            captionLinks: lot.captionLinks,
             senderInfoMap: lot.attributions.mapValues(Self.senderInfo),
             // #7362 — pièces de POST/COMMENTAIRE, pas de `MessageAttachment` :
             // aucune consommation à reporter (cf. doc-comment de la propriété).

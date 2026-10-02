@@ -2,7 +2,6 @@ import CoreImage
 import CoreImage.CIFilterBuiltins
 import CoreVideo
 import AVFoundation
-import Vision
 import Metal
 import os
 
@@ -32,6 +31,11 @@ nonisolated struct VideoFilterConfig: Equatable, Sendable {
     var skinSmoothingIntensity: Float = 0.4
 
     var faceEffect: CallFaceEffect = .none
+
+    /// #9196 — Teint naturel : actif par défaut, imperceptible, coupé dès que
+    /// l'appareil se protège. Ne compte pas dans `hasAdvancedFilters` : ce
+    /// n'est pas un filtre qu'on a choisi, c'est la qualité de base de l'image.
+    var naturalComplexionEnabled: Bool = true
 
     var hasAdvancedFilters: Bool {
         backgroundBlurEnabled || skinSmoothingEnabled || faceEffect.isStylized
@@ -163,21 +167,21 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         set { stateLock.lock(); defer { stateLock.unlock() }; _lastFrameProcessingTime = newValue }
     }
 
-    private var _isAutoDegraded = false
-    private(set) var isAutoDegraded: Bool {
-        get { stateLock.lock(); defer { stateLock.unlock() }; return _isAutoDegraded }
-        set { stateLock.lock(); defer { stateLock.unlock() }; _isAutoDegraded = newValue }
+    // #9101 — l'échelle de dégradation remplace la coupure sèche : une surcharge
+    // descend le flou d'un palier (.balanced → .fast → 10 i/s → arrêt), et seul
+    // le dernier palier est « auto-dégradé ».
+    private var _degradation = CallVideoDegradation()
+    private var degradation: CallVideoDegradation {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _degradation }
+        set { stateLock.lock(); defer { stateLock.unlock() }; _degradation = newValue }
     }
 
-    private let context: CIContext
-    private let autoDegradeBudgetMs: Double = 25.0
-    private let autoRestoreBudgetMs: Double = 15.0
-    private var consecutiveOverBudgetFrames = 0
-    private var consecutiveUnderBudgetFrames = 0
-    private let overBudgetThreshold = 10
-    private let underBudgetThreshold = 30
+    var isAutoDegraded: Bool { degradation.isExhausted }
 
+    private let context: CIContext
     private let faceEffects: any CallFaceEffectsRendererProviding
+    private let backgroundBlur: CallBackgroundBlur
+    private let clock: @Sendable () -> CFTimeInterval
     private let isPowerConstrained: @Sendable () -> Bool
 
     // PERF-014: dedicated CVPixelBufferPool for filter output. Rendering back
@@ -189,42 +193,42 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
     private var outputPoolHeight: Int = 0
     private var outputPoolPixelFormat: OSType = 0
 
-    // `let` (eager init) plutôt que `lazy var` — Swift 6 n'autorise pas
-    // `nonisolated` sur les lazy properties, et la classe étant nonisolated,
-    // une lazy implicitement-isolated trap quand on lit la property depuis
-    // le video thread. L'init est cheap (~µs) donc l'eager init n'a pas de
-    // coût mesurable.
-    private let segmentationRequest: VNGeneratePersonSegmentationRequest = {
-        let request = VNGeneratePersonSegmentationRequest()
-        request.qualityLevel = .balanced
-        request.outputPixelFormat = kCVPixelFormatType_OneComponent8
-        return request
-    }()
-
+    /// - Parameter isPowerConstrained: économie d'énergie OU état thermique
+    ///   `.serious`/`.critical` — le flou plafonne alors au palier 10 i/s et
+    ///   l'éclaircissement automatique s'abstient.
     init(
         faceEffects: any CallFaceEffectsRendererProviding = CallFaceEffectsRenderer(),
-        isPowerConstrained: @escaping @Sendable () -> Bool = { ProcessInfo.processInfo.isLowPowerModeEnabled }
+        segmenter: any CallPersonSegmentationProviding = VisionPersonSegmenter(),
+        segmentationExecutor: any CallVisionExecuting = CallVisionQueueExecutor(label: "me.meeshy.call.segmentation"),
+        clock: @escaping @Sendable () -> CFTimeInterval = { CACurrentMediaTime() },
+        isPowerConstrained: @escaping @Sendable () -> Bool = { CallVideoDegradation.isDeviceConstrained() }
     ) {
         self.faceEffects = faceEffects
+        self.clock = clock
         self.isPowerConstrained = isPowerConstrained
+        let context = Self.makeContext()
+        self.context = context
+        self.backgroundBlur = CallBackgroundBlur(context: context, segmenter: segmenter, executor: segmentationExecutor)
+    }
+
+    private static func makeContext() -> CIContext {
         // PERF-015: explicit Metal device + disabled colorspace work. Pinning
         // CIContext to MTLCreateSystemDefaultDevice() forces GPU-backed
         // rendering and skips the implicit sRGB→working-space conversion that
         // .workingColorSpace defaults to. Saves ~3ms/frame on 720p.
-        if let device = MTLCreateSystemDefaultDevice() {
-            self.context = CIContext(mtlDevice: device, options: [
-                .useSoftwareRenderer: false,
-                .cacheIntermediates: false,
-                .priorityRequestLow: false,
-                .workingColorSpace: NSNull()
-            ])
-        } else {
-            self.context = CIContext(options: [
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            return CIContext(options: [
                 .useSoftwareRenderer: false,
                 .cacheIntermediates: false,
                 .priorityRequestLow: false
             ])
         }
+        return CIContext(mtlDevice: device, options: [
+            .useSoftwareRenderer: false,
+            .cacheIntermediates: false,
+            .priorityRequestLow: false,
+            .workingColorSpace: NSNull()
+        ])
     }
 
     func process(_ pixelBuffer: CVPixelBuffer) -> CVPixelBuffer {
@@ -248,18 +252,42 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         // #8695 — a dark scene is lifted even with no filter chosen, unless
         // the device saves power or the pipeline is already over budget.
         let hasChosenFilters = cfg.isEnabled || cfg.hasAdvancedFilters
+        let ladder = degradation
+        let isConstrained = isPowerConstrained()
         let lowLightBoost = CallVideoLowLight.boost(
             averageBrightness: averageBrightness,
-            isConstrained: isAutoDegraded || isPowerConstrained()
+            isConstrained: ladder.isExhausted || isConstrained
         )
-        guard hasChosenFilters || lowLightBoost != nil else {
-            updateAutoDegradation(elapsedMs: 0)
+        let retouchPlan = CallSkinRetouchPlan.make(config: cfg, ladder: ladder, isConstrained: isConstrained)
+        guard hasChosenFilters || lowLightBoost != nil || retouchPlan != nil else {
+            recordFrame(elapsedMs: 0, blurActive: false)
             return pixelBuffer
         }
 
+        let signposter = CallVideoSignposts.signposter
+        let signpost = signposter.beginInterval("process", id: signposter.makeSignpostID())
+        defer { signposter.endInterval("process", signpost) }
         let start = CACurrentMediaTime()
 
         var image = CIImage(cvPixelBuffer: pixelBuffer)
+
+        // 0. #9196 — Teint naturel / Peau lissée, sur l'image du capteur, avant
+        // toute colorimétrie : le masque de peau lit la chrominance d'origine.
+        // Teint naturel seul, sans visage connu : l'image repart telle quelle.
+        let retouched = retouchPlan.flatMap {
+            faceEffects.retouch(
+                image,
+                pixelBuffer: pixelBuffer,
+                rotation: rotation,
+                plan: $0,
+                isDegraded: !$0.usesFinePass
+            )
+        }
+        guard hasChosenFilters || lowLightBoost != nil || retouched != nil else {
+            recordFrame(elapsedMs: 0, blurActive: false)
+            return pixelBuffer
+        }
+        if let retouched { image = retouched }
 
         // Pipeline order per §14.2.5:
         // 1. Low-light boost (automatic)
@@ -270,20 +298,26 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
             image = applyColorControls(to: image, config: cfg)
             image = applyExposure(to: image, config: cfg)
         }
-        // 3. Background blur (if enabled and not auto-degraded)
-        if cfg.backgroundBlurEnabled && !isAutoDegraded {
-            image = applyBackgroundBlur(to: image, pixelBuffer: pixelBuffer, config: cfg)
+        // 3. Background blur, at the tier the ladder and the device allow
+        if cfg.backgroundBlurEnabled {
+            image = backgroundBlur.apply(
+                to: image,
+                pixelBuffer: pixelBuffer,
+                radius: cfg.backgroundBlurRadius,
+                tier: ladder.blurTier(isConstrained: isConstrained),
+                timestamp: clock()
+            )
         }
-        // 4. Face effect: skin smoothing (skipped when degraded) or a stylized preset
+        // 4. Stylized face preset (skin smoothing is the retouch of step 0)
         let faceEffect = cfg.activeFaceEffect
-        if faceEffect.isStylized || (faceEffect == .smoothing && !isSmoothingDegraded) {
+        if faceEffect.isStylized {
             image = faceEffects.render(
                 faceEffect,
                 on: image,
                 pixelBuffer: pixelBuffer,
                 rotation: rotation,
                 intensity: cfg.skinSmoothingIntensity,
-                isDegraded: isAutoDegraded || isSmoothingDegraded
+                isDegraded: ladder.tier != .balanced || ladder.isSmoothingDegraded || isConstrained
             )
         }
 
@@ -301,7 +335,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
 
         let elapsed = CACurrentMediaTime() - start
         lastFrameProcessingTime = elapsed
-        updateAutoDegradation(elapsedMs: elapsed * 1000)
+        recordFrame(elapsedMs: elapsed * 1000, blurActive: cfg.backgroundBlurEnabled)
 
         return output
     }
@@ -346,37 +380,20 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
 
     func reset() {
         config = .default
-        isAutoDegraded = false
-        consecutiveOverBudgetFrames = 0
-        consecutiveUnderBudgetFrames = 0
+        degradation = CallVideoDegradation()
         lastFrameProcessingTime = nil
+        backgroundBlur.reset()
         faceEffects.reset()
     }
 
     // MARK: - Auto-Degradation
 
-    private var isSmoothingDegraded: Bool {
-        consecutiveOverBudgetFrames >= overBudgetThreshold / 2
-    }
-
-    private func updateAutoDegradation(elapsedMs: Double) {
-        if elapsedMs > autoDegradeBudgetMs {
-            consecutiveOverBudgetFrames += 1
-            consecutiveUnderBudgetFrames = 0
-            if consecutiveOverBudgetFrames >= overBudgetThreshold && !isAutoDegraded {
-                isAutoDegraded = true
-                Logger.calls.warning("Video filters auto-degraded: \(elapsedMs, privacy: .public)ms exceeds \(self.autoDegradeBudgetMs)ms budget")
-            }
-        } else if elapsedMs < autoRestoreBudgetMs {
-            consecutiveUnderBudgetFrames += 1
-            if consecutiveUnderBudgetFrames >= underBudgetThreshold && isAutoDegraded {
-                isAutoDegraded = false
-                consecutiveOverBudgetFrames = 0
-                Logger.calls.info("Video filters restored from auto-degradation")
-            }
-        } else {
-            consecutiveUnderBudgetFrames = 0
-        }
+    private func recordFrame(elapsedMs: Double, blurActive: Bool) {
+        let previous = degradation
+        let next = previous.recording(elapsedMs: elapsedMs, blurActive: blurActive)
+        degradation = next
+        guard next.tier != previous.tier else { return }
+        Logger.calls.info("Video filters tier \(previous.tier.rawValue, privacy: .public) → \(next.tier.rawValue, privacy: .public) at \(elapsedMs, privacy: .public)ms")
     }
 
     // MARK: - Colorimetry Filters
@@ -429,38 +446,6 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
             "inputSaturation": 1.0 + boostFactor * 0.2
         ])
         return boosted
-    }
-
-    // MARK: - Background Blur (§14.2.2)
-
-    private func applyBackgroundBlur(to image: CIImage, pixelBuffer: CVPixelBuffer, config: VideoFilterConfig) -> CIImage {
-        let handler = VNImageRequestHandler(cvPixelBuffer: pixelBuffer, options: [:])
-        do {
-            try handler.perform([segmentationRequest])
-        } catch {
-            Logger.calls.error("Person segmentation failed: \(error.localizedDescription)")
-            return image
-        }
-
-        guard let maskPixelBuffer = segmentationRequest.results?.first?.pixelBuffer else {
-            return image
-        }
-
-        let rawMask = CIImage(cvPixelBuffer: maskPixelBuffer)
-        let maskImage = rawMask
-            .transformed(by: CGAffineTransform(
-                scaleX: image.extent.width / rawMask.extent.width,
-                y: image.extent.height / rawMask.extent.height
-            ))
-
-        let blurredBackground = image
-            .applyingGaussianBlur(sigma: config.backgroundBlurRadius)
-            .cropped(to: image.extent)
-
-        return image.applyingFilter("CIBlendWithMask", parameters: [
-            "inputBackgroundImage": blurredBackground,
-            "inputMaskImage": maskImage
-        ])
     }
 }
 

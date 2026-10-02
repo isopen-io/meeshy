@@ -770,11 +770,11 @@ class ConversationViewModel: ObservableObject {
         // guest can trigger the OS microphone permission prompt from a bubble
         // tap before the gateway's own isAnonymous check ever runs.
         guard anonymousSession == nil else { return }
-        guard isDirect, let peerUserId = participantUserId, !peerUserId.isEmpty else { return }
         if summary.isLive {
             Task { await joinOngoingCall(summary) }
             return
         }
+        guard isDirect, let peerUserId = participantUserId, !peerUserId.isEmpty else { return }
         let displayName = resolvedPeerDisplayName
             ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
         Task { @MainActor in
@@ -803,7 +803,8 @@ class ConversationViewModel: ObservableObject {
                 isVideo: summary.callType == .video,
                 currentUserId: currentUserId,
                 fallbackRemoteUserId: participantUserId,
-                fallbackDisplayName: resolvedPeerDisplayName
+                fallbackDisplayName: isDirect ? resolvedPeerDisplayName : currentConversationName,
+                isGroup: !isDirect
             )
         )
     }

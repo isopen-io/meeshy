@@ -177,13 +177,13 @@ struct ReelsPlayerView: View {
                 originalContent: reel.content,
                 originalLanguage: reel.originalLanguage,
                 originalType: reel.type,
-                media: reel.media.map { EditablePostMedia($0) },
+                media: reel.media.map { EditablePostMedia($0) }, originalStoryEffects: reel.storyEffects,
                 originalLocation: reel.location,
                 originalVisibility: reel.visibility,
                 originalVisibilityUserIds: reel.visibilityUserIds ?? [],
                 isRepost: reel.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
+                    await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
                 },
                 onDismiss: { editingReel = nil }
             )
@@ -522,12 +522,21 @@ struct ReelPageView: View {
     /// by default, the original when the translate toggle is on, or a specific
     /// available translation when a flag is tapped.
     var displayedDescription: String {
-        guard let sel = selectedLanguage?.lowercased() else { return reel.displayContent }
-        if sel == reel.originalLanguage?.lowercased() { return reel.content }
+        guard let sel = selectedLanguage?.lowercased() else { return servedDescription }
+        if sel == reel.originalLanguage?.lowercased() {
+            return ReelPublishedContent.content(type: .reel, text: reel.content,
+                                                captions: reel.media.map(\.caption)) ?? ""
+        }
         if let t = reel.translations?.first(where: { $0.key.lowercased() == sel })?.value {
             return t.text
         }
-        return reel.displayContent
+        return servedDescription
+    }
+
+    /// Un réel publié sans texte montre sa légende de scène (#9179).
+    private var servedDescription: String {
+        ReelPublishedContent.content(type: .reel, text: reel.displayContent,
+                                     captions: reel.media.map(\.caption)) ?? ""
     }
 
     /// True when this active reel is a video so the scrub bar shows only where

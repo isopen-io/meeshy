@@ -13,7 +13,7 @@ const frCallCaptions = {
   'callCaptions.mode.translated': 'Traduits dans votre langue',
   'callCaptions.mode.original': 'Dans la langue d’origine',
   'callCaptions.listening': 'Votre voix est transcrite',
-  'callCaptions.unsupported': 'Ce navigateur ne transcrit pas votre voix : vous lisez les autres',
+  'callCaptions.unsupported': 'Votre voix n’est pas transcrite sur cet appareil : vous lisez les autres',
   'callCaptions.denied': 'Reconnaissance vocale refusée : vous lisez les autres',
   'callCaptions.journal.title': 'Journal de l’appel',
   'callCaptions.participant': 'Participant',

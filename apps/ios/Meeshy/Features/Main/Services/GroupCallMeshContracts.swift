@@ -160,8 +160,16 @@ protocol GroupCallHostProviding: AnyObject {
     /// L'appel est engagé : offre envoyée, connexion en cours, établie ou en reprise.
     var isGroupCallEngaged: Bool { get }
     var isGroupPrimaryConnected: Bool { get }
+    /// #9111 — la liaison du principal est perdue (reprise ICE en cours) : un
+    /// `participant-joined` de ce principal est un RETOUR, pas un doublon.
+    var isGroupPrimaryReconnecting: Bool { get }
     var isLocalMicMuted: Bool { get }
     var isLocalVideoEnabled: Bool { get }
     var primaryRemoteVideoTrack: Any? { get }
     func primaryAudioLevel() async -> Double?
+    /// #9085 — le principal a quitté un groupe qui continue : sa liaison n'est
+    /// plus reprise, et l'appel reste établi par le maillage.
+    func groupPrimaryDidVacate()
+    /// #9091 — sans son principal, l'appel se nomme par le groupe qui continue.
+    func groupCallTitleDidChange(_ title: String)
 }

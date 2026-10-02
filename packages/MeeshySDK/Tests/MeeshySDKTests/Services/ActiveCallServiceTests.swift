@@ -70,4 +70,37 @@ final class ActiveCallServiceTests: XCTestCase {
             XCTAssertTrue(error is APIError)
         }
     }
+
+    // MARK: - #9111 — l'appel EN COURS de l'utilisateur, relu au lancement
+
+    func test_ownActiveCall_hitsTheUserScopedEndpoint() async throws {
+        let (sut, api) = makeSUT()
+        api.stub("/calls/active", result: APIResponse<ActiveCallSession>(success: true, data: makeSession(), error: nil))
+
+        let result = try await sut.ownActiveCall()
+
+        XCTAssertEqual(api.lastRequest?.path, "/calls/active")
+        XCTAssertEqual(result?.id, "call-1")
+    }
+
+    func test_ownActiveCall_whenGatewayAnswers404_returnsNil() async throws {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = APIError.serverError(404, "NO_ACTIVE_CALL")
+
+        let result = try await sut.ownActiveCall()
+
+        XCTAssertNil(result)
+    }
+
+    func test_ownActiveCall_propagatesOtherErrors() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = APIError.unauthorized
+
+        do {
+            _ = try await sut.ownActiveCall()
+            XCTFail("Expected ownActiveCall to throw")
+        } catch {
+            XCTAssertTrue(error is APIError)
+        }
+    }
 }

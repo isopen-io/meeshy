@@ -10,6 +10,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react';
 import { useStore } from 'zustand/react';
+import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
 
 import type { SceneScrubPainter } from '@/components/scene-scrub-bar';
 import { Glyph } from '@/components/glyph';
@@ -17,6 +18,7 @@ import { CommentsSheetPortal } from '@/components/publication-comments-sheet-laz
 import { PublicationViewersSheetPortal } from '@/components/publication-viewers-sheet-lazy';
 import { StoryActionRail, type StoryActionRailHandlers } from '@/components/story-action-rail';
 import { ViewerExitButton, type ViewerIdentityModel } from '@/components/viewer-chrome';
+import { isContentRefusal, useVisitorInvitation } from '@/components/visitor-invitation';
 import { useViewerSwipe } from '@/components/viewer-chrome-gestures';
 import { apiDeps } from '@/lib/api/deps';
 import { markStoryViewedAction, storyReactionAction, useStoryFeed, useStoryPost } from '@/lib/api/query';
@@ -169,10 +171,14 @@ export default function StoryScreen() {
 
   const session = useStore(sessionStore, (s) => s.session);
   const viewer = useMemo(() => resolveViewer({ source: apiDeps.source, session }), [session]);
+  /* LE VISITEUR D'UN LIEN PARTAGÉ (#9149) — sans compte, le corpus des stories
+     (`requiredAuth`) ne se lit pas : il est VIDE d'office, ce qui arme la
+     troisième marche (`useStoryPost`, `GET /posts/:id`) sur la story nommée. */
+  const visitor = viewer.id === null || viewer.isAnonymous;
   const reader = useReaderLanguages();
   const online = useOnline();
   const interfaceLanguage = currentInterfaceLanguage();
-  const feed = useStoryFeed();
+  const feed = useStoryFeed({ enabled: !visitor });
 
   /* L'ORDRE DES AUTEURS EST FIGÉ À L'OUVERTURE (`stableGroupOrder`,
      `lib/stories/playback.ts`) : le rang d'un groupe dépend de `hasUnseen`,
@@ -194,7 +200,7 @@ export default function StoryScreen() {
     [feed.data, viewer.id],
   );
   const primaryRawPosition = useMemo(() => resolvePosition(primaryGroups, currentId), [primaryGroups, currentId]);
-  const hasCorpus = feed.data !== undefined;
+  const hasCorpus = visitor || feed.data !== undefined;
   const needsFallbackFetch = hasCorpus && primaryRawPosition === null;
   const fallback = useStoryPost(currentId, { enabled: needsFallbackFetch });
 
@@ -381,10 +387,10 @@ export default function StoryScreen() {
 
   useEffect(() => {
     if (currentStory === undefined) return;
-    if (markedRef.current.has(currentStory.id)) return;
+    if (visitor || markedRef.current.has(currentStory.id)) return;
     markedRef.current.add(currentStory.id);
     void markStoryViewedAction(currentStory.id);
-  }, [currentStory]);
+  }, [currentStory, visitor]);
 
   const pause = useCallback(() => {
     setPaused((was) => {
@@ -665,6 +671,7 @@ export default function StoryScreen() {
   /* LE RAIL EST-IL PEINT ? Une seule réponse, lue par le rail ET par la
      légende qui doit lui laisser la place. */
   const railShown =
+    !visitor &&
     currentStory !== undefined && frozenRail !== null && frozenRail.storyId === currentStory.id && Object.keys(railHandlers).length > 0;
 
   const resolvedContent = useMemo(() => {
@@ -690,6 +697,10 @@ export default function StoryScreen() {
    * la règle de DÉRIVATION de `caption.ts` ne s'y applique pas : elle juge un
    * `Post.content` qui redit les calques, pas une légende qui a son sujet.
    */
+  /* LA CARTE DES ADRESSES SUIVIES (#9074), décodée UNE fois : elle couvre le
+     corps, les textes de scène et chaque légende de média de la story. */
+  const trackingLinks = useMemo(() => (currentStory === undefined ? [] : trackingLinksOf(currentStory)), [currentStory]);
+
   const resolvedMediaCaption = useMemo(
     () => resolveStoryMediaCaption({ media, preferredLanguages: reader.languages }),
     [media, reader.languages],
@@ -712,6 +723,10 @@ export default function StoryScreen() {
      fermeture que l'effet ci-dessus est en train d'exécuter. L'afficher, même
      une image, ferait clignoter un refus là où le lecteur se referme. */
   const notFound = !loading && playablePosition !== 'close' && (currentStory === undefined || group === undefined);
+  /* Refusée par la passerelle (403/404) — jamais une panne : le visiteur garde
+     alors l'état « Réessayer » ci-dessous, et le refus n'a que la modale. */
+  const visitorRefused = visitor && notFound && isContentRefusal(fallback.error);
+  const invitation = useVisitorInvitation({ kind: 'story', state: currentStory !== undefined ? 'served' : visitorRefused ? 'refused' : 'pending' });
 
   /* L'IDENTITÉ DE L'AUTEUR — la photo (#6975, même source et même loi que la
      tuile du rail qui a ouvert ce lecteur : passer d'un visage à des initiales
@@ -775,7 +790,7 @@ export default function StoryScreen() {
             <p className="text-body">Chargement…</p>
           </div>
         </div>
-      ) : notFound ? (
+      ) : visitorRefused ? null : notFound ? (
         <div role="alert" className="grid flex-1 content-center justify-items-center gap-4 px-8 text-center">
           <Glyph name="warningCircle" size={38} style={{ color: 'var(--color-on-media-3)' }} />
           <p className="text-title font-bold">{online ? 'Story introuvable' : 'Hors ligne'}</p>
@@ -787,7 +802,7 @@ export default function StoryScreen() {
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={() => void feed.refetch()}
+              onClick={() => void (visitor ? fallback.refetch() : feed.refetch())}
               className="rounded-full px-5 py-2 text-body font-semibold"
               style={{ background: 'var(--color-on-media)', color: 'var(--color-media-backdrop)', minHeight: 44 }}
             >
@@ -863,6 +878,7 @@ export default function StoryScreen() {
               hasMedia={hasMedia}
               background={sceneBackground(storyEffectsBackgroundOf(currentStory.storyEffects))}
               caption={resolvedContent}
+              trackingLinks={trackingLinks}
               onReady={() => setReadyStoryId(currentStory.id)}
               onDurationKnown={(ms) => reportMediaDuration(currentStory.id, ms)}
               onFailed={() => {
@@ -904,12 +920,20 @@ export default function StoryScreen() {
               (loi 4). La capsule n'existe que si la loi offre la réponse
               (`showsReply` : la story d'autrui, jamais la sienne). */}
           <StoryBottomBar
-            hidden={chromeYielded}
+            hidden={chromeYields({ sheetOpen: commentsOpen || viewersOpen })}
+            held={chromeHidden}
             language={interfaceLanguage}
             showsCaption={hasMedia}
             content={resolvedContent}
             mediaCaption={resolvedMediaCaption}
-            onReply={frozenRail !== null && frozenRail.storyId === currentStory.id && frozenRail.plan.showsReply ? openComments : undefined}
+            trackingLinks={trackingLinks}
+            onReply={
+              frozenRail !== null && frozenRail.storyId === currentStory.id && frozenRail.plan.showsReply
+                ? visitor
+                  ? invitation.ask
+                  : openComments
+                : undefined
+            }
             rail={
               railShown ? (
                 <StoryActionRail
@@ -950,6 +974,7 @@ export default function StoryScreen() {
           <PublicationViewersSheetPortal host={ownerRail.viewers} viewCount={currentStory?.viewCount} />
         </div>
       ) : null}
+      {invitation.dialog}
     </div>
   );
 }

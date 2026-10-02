@@ -23,6 +23,8 @@ struct MeeshyApp: App {
     @StateObject private var launchSplash = LaunchSplashController()
     @State private var hasCheckedSession = false
     @State private var activeGuestSession: GuestSession?
+    /// #9171 — le contenu d'un lien ouvert sans session, au-dessus de la connexion.
+    @StateObject private var visitorPresenter = VisitorContentPresenter.shared
     @State private var crashReportsToShow: [CrashDiagnostic] = []
     @State private var showCrashSheet = false
     @State private var hasSurfacedCrashReports = false
@@ -217,8 +219,12 @@ struct MeeshyApp: App {
                         )
                     }
                 }
+                .visitorContentCover(
+                    presenter: visitorPresenter,
+                    isEligible: !authManager.isAuthenticated && activeGuestSession == nil && launchSplash.phase != .covering
+                )
                 .fullScreenCover(isPresented: .init(
-                    get: { shouldShowOnboarding && launchSplash.phase != .covering && activeGuestSession == nil },
+                    get: { shouldShowOnboarding && launchSplash.phase != .covering && activeGuestSession == nil && visitorPresenter.request == nil },
                     set: { _ in }
                 )) {
                     WelcomeView(hasCompletedOnboarding: $hasCompletedOnboarding)
@@ -1053,7 +1059,9 @@ struct MeeshyApp: App {
             deepLinkRouter.consumePendingDeepLink()
             UIApplication.shared.open(url)
         default:
-            break
+            // #9171 — une publication ou un réel s'affiche au visiteur, SANS
+            // consommer le lien : il s'ouvrira encore après la connexion.
+            visitorPresenter.present(link)
         }
     }
 }

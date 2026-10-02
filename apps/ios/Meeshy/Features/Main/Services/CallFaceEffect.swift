@@ -56,6 +56,7 @@ nonisolated extension VideoFilterConfig {
         next.skinSmoothingEnabled = skinSmoothingEnabled
         next.skinSmoothingIntensity = skinSmoothingIntensity
         next.faceEffect = faceEffect
+        next.naturalComplexionEnabled = naturalComplexionEnabled
         return next
     }
 

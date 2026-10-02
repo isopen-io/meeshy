@@ -207,7 +207,17 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Contacts/RequestsViewModel.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Components/MessageDetail/MessageEditsDetailView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Focal/Summary/LivingSummaryView.swift",  // 8
-        "apps/ios/Meeshy/Features/Main/Services/CallManager.swift",  // 8
+        // 2026-10-02 — `CallManager.swift` découpé par responsabilité : ses clés
+        // ont suivi leur code, la liste suit les hôtes (leçon 578).
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+Answer.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+Connection.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+Hold.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+IncomingSignal.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+MediaControls.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+Outgoing.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+RemoteEvents.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+Signaling.swift",
+        "apps/ios/Meeshy/Features/Main/Services/CallManager+VideoFallback.swift",
         "apps/ios/Meeshy/Features/Main/Views/CallWaitingBannerView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StarredMessagesView.swift",  // 8
         "apps/ios/Meeshy/Features/Main/Views/StoryTrayActions.swift",  // 8
@@ -427,7 +437,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/RecentMediaStrip.swift",  // 17
         "apps/ios/Meeshy/Features/Main/ViewModels/FeedViewModel.swift",  // 17
         "apps/ios/Meeshy/Features/Main/Views/ChangePasswordView.swift",  // 17
-        "apps/ios/Meeshy/Features/Main/Components/CameraView.swift",  // 16
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel.swift",  // 15
         // #6600 — l'édition de commentaire a quitté l'hôte avec sa clé.
         "apps/ios/Meeshy/Features/Main/ViewModels/PostDetailViewModel+CommentEdit.swift",  // 1

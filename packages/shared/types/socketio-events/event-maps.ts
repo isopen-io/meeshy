@@ -107,6 +107,7 @@ import type {
   CallMuteParticipantEvent,
   CallMutedByModeratorEvent,
   CallParticipantInvitedEvent,
+  CallInviteSettledEvent,
   CallReactionEvent,
   CallReactionReceivedEvent,
 } from '../call-controls.js';
@@ -213,6 +214,7 @@ import type {
   TypingEvent,
   UserStatusEvent,
   ViewingActionData,
+  ViewingActivityData,
   ViewingEvent,
   ViewingSnapshotEvent,
 } from './presence.js';
@@ -253,6 +255,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.VIEWING_START]: (data: ViewingEvent) => void;
   [SERVER_EVENTS.VIEWING_STOP]: (data: ViewingEvent) => void;
   [SERVER_EVENTS.VIEWING_SNAPSHOT]: (data: ViewingSnapshotEvent) => void;
+  [SERVER_EVENTS.VIEWING_ACTIVITY]: (data: ViewingEvent) => void;
   [SERVER_EVENTS.ENGAGEMENT_CONVERSATION_UPDATED]: (data: ConversationEngagementSnapshot) => void;
   [SERVER_EVENTS.USER_STATUS]: (data: UserStatusEvent) => void;
   [SERVER_EVENTS.PRESENCE_SNAPSHOT]: (data: PresenceSnapshotEventData) => void;
@@ -291,6 +294,8 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_RECORDING_STARTED]: (data: CallRecordingStartedEvent) => void;
   [SERVER_EVENTS.CALL_RECORDING_STOPPED]: (data: CallRecordingStoppedEvent) => void;
   [SERVER_EVENTS.CALL_PARTICIPANT_INVITED]: (data: CallParticipantInvitedEvent) => void;
+  [SERVER_EVENTS.CALL_INVITE_DECLINED]: (data: CallInviteSettledEvent) => void;
+  [SERVER_EVENTS.CALL_INVITE_EXPIRED]: (data: CallInviteSettledEvent) => void;
   [SERVER_EVENTS.CALL_MUTED_BY_MODERATOR]: (data: CallMutedByModeratorEvent) => void;
   [SERVER_EVENTS.CALL_REACTION_RECEIVED]: (data: CallReactionReceivedEvent) => void;
   [SERVER_EVENTS.CALL_PREVIEW_REQUESTED]: (data: CallPreviewRequestedEvent) => void;
@@ -458,6 +463,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.TYPING_STOP]: (data: TypingActionData) => void;
   [CLIENT_EVENTS.VIEWING_START]: (data: ViewingActionData) => void;
   [CLIENT_EVENTS.VIEWING_STOP]: (data: ViewingActionData) => void;
+  [CLIENT_EVENTS.VIEWING_ACTIVITY]: (data: ViewingActivityData) => void;
   [CLIENT_EVENTS.AUTHENTICATE]: (data: AuthenticateData) => void;
   [CLIENT_EVENTS.REQUEST_TRANSLATION]: (data: RequestTranslationData) => void;
   /**

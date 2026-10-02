@@ -167,7 +167,8 @@ extension FeedPostCard {
                                 authorName: comment.author,
                                 authorAvatarURL: comment.authorAvatarURL,
                                 authorColor: comment.authorColor,
-                                sentAt: comment.timestamp
+                                sentAt: comment.timestamp,
+                                trackedLinks: comment.trackedLinkMap
                             )
                             .padding(.top, MeeshySpacing.xxs)
                         }

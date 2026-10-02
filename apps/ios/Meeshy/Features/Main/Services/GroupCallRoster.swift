@@ -134,6 +134,24 @@ struct GroupCallRoster: Equatable, Sendable {
         return GroupCallRoster(localUserId: localUserId, capacity: capacity, members: members + [member])
     }
 
+    /// #9091 — le nom d'un groupe qui continue sans son principal : son titre
+    /// s'il en a un, sinon ses membres restants, « Ada, Bruno +2 » comme une
+    /// ligne du journal des appels (iOS `CallsTab`, web `participantsLine`).
+    func callTitle(groupTitle: String?) -> String {
+        if let title = groupTitle?.trimmingCharacters(in: .whitespacesAndNewlines), !title.isEmpty { return title }
+        let unknown = String(localized: "call.group.tile.unknown", defaultValue: "Participant", bundle: .main)
+        let names = members.map { $0.displayName.isEmpty ? unknown : $0.displayName }
+        guard !names.isEmpty else {
+            return String(localized: "call.group.stage", defaultValue: "Participants à l'appel", bundle: .main)
+        }
+        let shown = names.prefix(Self.titledMembers).joined(separator: ", ")
+        let more = names.count - Self.titledMembers
+        guard more > 0 else { return shown }
+        return String(format: String(localized: "calls.participants.more", defaultValue: "%@ +%lld", bundle: .main), shown, more)
+    }
+
+    private static let titledMembers = 2
+
     func removing(_ userId: String) -> GroupCallRoster {
         GroupCallRoster(localUserId: localUserId, capacity: capacity, members: members.filter { $0.userId != userId })
     }

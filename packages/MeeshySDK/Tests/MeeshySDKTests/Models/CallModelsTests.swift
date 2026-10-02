@@ -154,6 +154,43 @@ struct ActiveCallSessionTests {
         #expect(p.userId == "u2")
     }
 
+    @Test func participant_decodesLeftAt_whenTheGatewayServesADepartedRow() throws {
+        let json = """
+        { "userId": "u1", "leftAt": "2026-10-02T10:00:00.000Z" }
+        """.data(using: .utf8)!
+        let p = try JSONDecoder().decode(ActiveCallParticipant.self, from: json)
+        #expect(p.leftAt == "2026-10-02T10:00:00.000Z")
+        #expect(p.hasLeft)
+    }
+
+    @Test func participant_nullOrAbsentLeftAt_isStillInTheCall() throws {
+        let json = """
+        [{ "userId": "u1", "leftAt": null }, { "userId": "u2" }]
+        """.data(using: .utf8)!
+        let ps = try JSONDecoder().decode([ActiveCallParticipant].self, from: json)
+        #expect(ps.allSatisfy { !$0.hasLeft })
+    }
+
+    @Test func remoteParticipant_skipsADepartedRow() {
+        let session = ActiveCallSession(id: "call-1", conversationId: "conv-1", mode: "p2p", status: "active", participants: [
+            ActiveCallParticipant(userId: "user-1"),
+            ActiveCallParticipant(userId: "user-2", leftAt: "2026-10-02T10:00:00.000Z"),
+            ActiveCallParticipant(userId: "user-3")
+        ])
+        #expect(session.remoteParticipant(currentUserId: "user-1")?.userId == "user-3")
+        #expect(session.hasOtherActiveParticipant(currentUserId: "user-1"))
+    }
+
+    @Test func session_whoIsStillIn_readsLiveRowsOnly() {
+        let session = ActiveCallSession(id: "call-1", conversationId: "conv-1", mode: "p2p", status: "active", participants: [
+            ActiveCallParticipant(userId: "user-1", leftAt: "2026-10-02T10:00:00.000Z"),
+            ActiveCallParticipant(userId: "user-2")
+        ])
+        #expect(!session.isStillIn(currentUserId: "user-1"))
+        #expect(session.isStillIn(currentUserId: "user-2"))
+        #expect(!session.hasOtherActiveParticipant(currentUserId: "user-2"))
+    }
+
     @Test func session_decodesWhenAParticipantUsesNestedUserIdFallback() throws {
         // A degraded payload (one participant missing top-level userId) must
         // still yield a usable remoteParticipant instead of failing the WHOLE

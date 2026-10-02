@@ -19,35 +19,42 @@ final class StoryComposerFoldTests: XCTestCase {
     func test_captionBottom_touchesTheTopOfTheMeasuredComposer() {
         let inset = StoryCaptionPlacement.bottomInset(
             composerBlockHeight: 104, composerBottomPadding: 54,
-            isComposerShown: true, fallback: 189)
+            isComposerShown: true)
         XCTAssertEqual(inset, 158, "Bord bas du texte = haut de la plaque : retrait bas + hauteur mesurée, sans écart.")
     }
 
     func test_captionBottom_followsTheComposerWhenItGrows() {
         let resting = StoryCaptionPlacement.bottomInset(
-            composerBlockHeight: 104, composerBottomPadding: 54, isComposerShown: true, fallback: 189)
+            composerBlockHeight: 104, composerBottomPadding: 54, isComposerShown: true)
         let withKeyboard = StoryCaptionPlacement.bottomInset(
-            composerBlockHeight: 104, composerBottomPadding: 336, isComposerShown: true, fallback: 189)
+            composerBlockHeight: 104, composerBottomPadding: 336, isComposerShown: true)
         XCTAssertGreaterThan(withKeyboard, resting)
         XCTAssertEqual(withKeyboard, 440)
     }
 
     func test_captionBottom_dropsOnTheFoldedButton() {
         let folded = StoryCaptionPlacement.bottomInset(
-            composerBlockHeight: 44, composerBottomPadding: 54, isComposerShown: true, fallback: 189)
+            composerBlockHeight: 44, composerBottomPadding: 54, isComposerShown: true)
         XCTAssertEqual(folded, 98, "Replié, le texte descend juste au-dessus du bouton de réouverture.")
     }
 
-    func test_captionBottom_withoutComposer_keepsItsHistoricPlace() {
+    /// #9072 — sur SA story il n'y a pas de composeur : le texte se pose au
+    /// ras du bas (zone sûre + respiration), plus à `topInset + 130`.
+    func test_captionBottom_withoutComposer_restsOnTheBottomPadding() {
         XCTAssertEqual(StoryCaptionPlacement.bottomInset(
-            composerBlockHeight: nil, composerBottomPadding: 54, isComposerShown: true, fallback: 189), 189)
+            composerBlockHeight: nil, composerBottomPadding: 54, isComposerShown: true), 54)
         XCTAssertEqual(StoryCaptionPlacement.bottomInset(
-            composerBlockHeight: 0, composerBottomPadding: 54, isComposerShown: true, fallback: 189), 189)
+            composerBlockHeight: 0, composerBottomPadding: 54, isComposerShown: true), 54)
+    }
+
+    func test_captionBottom_withoutComposerAndHiddenChrome_staysOnTheBottomPadding() {
+        XCTAssertEqual(StoryCaptionPlacement.bottomInset(
+            composerBlockHeight: nil, composerBottomPadding: 54, isComposerShown: false), 54)
     }
 
     func test_captionBottom_withHiddenChrome_reclaimsTheComposerBand() {
         XCTAssertEqual(StoryCaptionPlacement.bottomInset(
-            composerBlockHeight: 104, composerBottomPadding: 54, isComposerShown: false, fallback: 189), 54)
+            composerBlockHeight: 104, composerBottomPadding: 54, isComposerShown: false), 54)
     }
 
     // MARK: - 2 · Effets offerts en commentaire
@@ -90,13 +97,31 @@ final class StoryComposerFoldTests: XCTestCase {
         XCTAssertFalse(bar.contains("hideBlur: true"))
     }
 
-    // MARK: - 3 · Bouton ⌄ en rédaction
+    // MARK: - 3 · Bouton ⌄ visible d'emblée (#9122)
 
-    func test_foldButton_existsOnlyWhileWriting() {
-        XCTAssertTrue(StoryComposerFold.offersFoldButton(presentation: .expanded, isComposerEngaged: true))
-        XCTAssertFalse(StoryComposerFold.offersFoldButton(presentation: .expanded, isComposerEngaged: false))
-        XCTAssertFalse(StoryComposerFold.offersFoldButton(presentation: .folded, isComposerEngaged: true))
+    /// Le ⌄ n'existait qu'en RÉDACTION : au repos, rien ne disait que la barre
+    /// se repliait. Il est désormais visible PAR DÉFAUT, tant qu'elle est
+    /// dépliée.
+    func test_foldButton_isVisibleByDefault_whileExpanded() {
+        XCTAssertTrue(StoryComposerFold.offersFoldButton(presentation: .expanded))
+        XCTAssertFalse(StoryComposerFold.offersFoldButton(presentation: .folded))
         XCTAssertEqual(StoryComposerFold.foldSymbol, "chevron.down")
+    }
+
+    /// **Tout espace commentaire se replie** (#9122) : les commentaires du fil
+    /// et ceux du détail d'un post montent la même loi, par le même modificateur.
+    func test_everyCommentSpace_foldsToACommentIcon() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let views = root.appendingPathComponent("Meeshy/Features/Main/Views")
+        let sheet = try String(contentsOf: views.appendingPathComponent("FeedCommentsSheet.swift"), encoding: .utf8)
+        let detail = try String(contentsOf: views.appendingPathComponent("PostDetailView.swift"), encoding: .utf8)
+        XCTAssertTrue(sheet.contains("commentComposer.foldableComment(isReplying: replyingTo != nil)"))
+        XCTAssertTrue(detail.contains("composer.foldableComment(isReplying: viewModel.replyingTo != nil)"))
+        let bar = try String(contentsOf: root.appendingPathComponent(
+            "Meeshy/Features/Main/Components/UniversalComposerBar+Toolbar.swift"), encoding: .utf8)
+        XCTAssertTrue(bar.contains("offersFold: resolvedFoldControl != nil"), "La barre lit aussi le repli confié par l'environnement.")
     }
 
     /// **Le ⌄ vit DANS la plaque de verre, angle intérieur haut-droit** (#8642,
@@ -125,7 +150,7 @@ final class StoryComposerFoldTests: XCTestCase {
             contentsOf: components.appendingPathComponent("UniversalComposerBar+Toolbar.swift"), encoding: .utf8))
         let trailing = try XCTUnwrap(toolbar.range(of: "} trailing: {"))
         let bande = toolbar[trailing.upperBound...].prefix(900)
-        XCTAssertTrue(bande.contains("foldControl"),
+        XCTAssertTrue(bande.contains("resolvedFoldControl"),
                       "le ⌄ est au bout de la rangée d'outils, dans le verre")
         XCTAssertTrue(toolbar.contains("Image(systemName: fold.symbol)"), "le glyphe est celui que l'hôte déclare")
         XCTAssertTrue(layer.contains("symbol: StoryComposerFold.foldSymbol"))
@@ -180,6 +205,7 @@ final class StoryComposerFoldTests: XCTestCase {
         XCTAssertTrue(layer.contains("StoryComposerFold.offersFoldButton("))
         let caption = try String(contentsOf: views.appendingPathComponent("StoryViewerView+CanvasCaption.swift"), encoding: .utf8)
         XCTAssertTrue(layer.contains("StoryCaptionPlacement.bottomInset("))
+        XCTAssertFalse(layer.contains("topInset + 130"), "Sans composeur, le texte ne flotte plus à une hauteur tirée du HAUT de l'écran (#9072).")
         XCTAssertEqual(caption.components(separatedBy: ".padding(.bottom, captionBottomInset(geometry: geometry))").count - 1, 2,
                        "La légende ET la transcription se posent sur le composeur.")
         XCTAssertFalse(caption.contains(".padding(.bottom, topInset + 130)"), "Le texte ne se pose plus à une hauteur arbitraire.")

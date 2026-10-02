@@ -35,9 +35,12 @@ import type { CurseurDeListe } from '../list-cursor';
  *
  * ## Le curseur borne sur le RANG
  *
- * `rang < R` ⇔ `lastMessageAt < R` ET NON(`lastActivityAt ≥ R`). Le `NOT`
- * reste juste sur un champ ABSENT (document antérieur à #9026) : la condition
- * y est fausse, sa négation vraie — aucune ligne héritée ne disparaît.
+ * `rang < R` ⇔ `lastMessageAt < R` ET (`lastActivityAt < R` OU pas
+ * d'activité). Jamais `NOT: { lastActivityAt: { gte: R } }` : sur MongoDB,
+ * Prisma écarte de toute négation le document où la clé est ABSENTE (mesuré
+ * contre `mongo:8`, #8309) — et c'est le cas de toute conversation sans
+ * activité, que Prisma n'écrit pas. La page 2 perdait ainsi chaque
+ * conversation qui n'avait connu que des messages.
  *
  * ## La page delta garde son ordre
  *
@@ -96,7 +99,10 @@ function rankBound(bound: Date): {
   readonly byActivity: Prisma.ConversationWhereInput[];
 } {
   return {
-    byMessage: [{ lastMessageAt: { lt: bound } }, { NOT: { lastActivityAt: { gte: bound } } }],
+    byMessage: [
+      { lastMessageAt: { lt: bound } },
+      { OR: [{ lastActivityAt: { lt: bound } }, { lastActivityAt: null }, { lastActivityAt: { isSet: false } }] },
+    ],
     byActivity: [{ lastActivityAt: { lt: bound } }, { lastMessageAt: { lt: bound } }],
   };
 }

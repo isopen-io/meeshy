@@ -3,8 +3,10 @@ import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import type { MobileTranscription } from '../routes/posts/types';
 import { authorSelect, commentMediaInclude, NOT_DELETED } from './posts/postIncludes';
 import { TrackingLinkService } from './TrackingLinkService';
+import { syncCommentTrackingLinks } from './posts/publicationTrackingLinks';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace } from './location/sharedPlace';
+import { parseMessageSticker } from './stickers/messageSticker';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { applyCommentMediaOrder } from './posts/mediaOrder';
 import type { QuotedPostMedia } from './posts/quotedPostMediaSnapshot';
@@ -65,6 +67,11 @@ export class PostCommentService {
       /// Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par
       /// `parseSharedPlace` ci-dessous avant écriture.
       location?: unknown;
+      /// Sticker (#9080) — la MÊME forme que celui d'un message
+      /// (`MessageSticker`), champ dédié, jamais un `metadata` brut. Validé et
+      /// BLANCHI par `parseMessageSticker` avant écriture ; l'image rendue,
+      /// elle, arrive par `mediaIds` comme tout média de commentaire.
+      sticker?: unknown;
       /// Le média du POST COMMENTÉ que ce commentaire CITE (#6578), déjà ADMIS
       /// par `admitQuotedPostMedia` — ce service ne revalide pas l'appartenance,
       /// il n'en a pas les moyens (il ne reçoit que l'instantané). La garde vit
@@ -79,6 +86,7 @@ export class PostCommentService {
       mediaIds,
       mobileTranscription,
       location,
+      sticker,
       quotedPostMedia,
     } = options;
     // Un id répété ne doit consommer qu'une place — `Set` préserve l'ordre de
@@ -118,6 +126,7 @@ export class PostCommentService {
     // dans `metadata.location`, même décision assumée que pour message/post
     // (cf. services/location/sharedPlace.ts).
     const sharedPlace = parseSharedPlace(location);
+    const stickerDescriptor = parseMessageSticker(sticker);
 
     const comment = await this.prisma.postComment.create({
       data: {
@@ -134,14 +143,15 @@ export class PostCommentService {
           originalLanguage != null
             ? (normalizeLanguageCode(originalLanguage) ?? originalLanguage)
             : null,
-        // `metadata` porte TROIS choses aujourd'hui — le lieu, les liens tracés
-        // (écrits plus bas) et le média CITÉ. Composé en une fois : deux
-        // écritures séparées se seraient écrasées l'une l'autre, `metadata`
-        // étant un document remplacé en bloc et non fusionné.
-        ...(sharedPlace || quotedPostMedia
+        // `metadata` porte QUATRE choses aujourd'hui — le lieu, le sticker, les
+        // liens tracés (écrits plus bas) et le média CITÉ. Composé en une
+        // fois : deux écritures séparées se seraient écrasées l'une l'autre,
+        // `metadata` étant un document remplacé en bloc et non fusionné.
+        ...(sharedPlace || stickerDescriptor || quotedPostMedia
           ? {
               metadata: {
                 ...(sharedPlace ? { location: sharedPlace } : {}),
+                ...(stickerDescriptor ? { sticker: stickerDescriptor } : {}),
                 ...(quotedPostMedia ? { quotedPostMedia } : {}),
               } as unknown as Prisma.InputJsonValue,
             }
@@ -243,30 +253,12 @@ export class PostCommentService {
         })
       : [];
 
-    // Tracking des URLs brutes du commentaire : même mécanisme que les messages
-    // et les posts — mapping `url → token` rangé dans `metadata.trackingLinks`
-    // SANS réécrire le contenu (aperçu vidéo + URL lisible préservés). Le client
-    // rend le lien vers `/l/<token>`. JAMAIS bloquant : le helper avale ses
-    // erreurs (→ []) et l'écriture metadata est gardée.
-    if (content) {
-      try {
-        const trackingLinks = await this.trackingLinkService.collectContentTrackingLinks({
-          content,
-          createdBy: authorId,
-        });
-        if (trackingLinks.length > 0) {
-          const existingMetadata = (comment.metadata as Record<string, unknown> | null) ?? {};
-          const metadata = { ...existingMetadata, trackingLinks } as Prisma.InputJsonValue;
-          await this.prisma.postComment.update({
-            where: { id: comment.id },
-            data: { metadata },
-          });
-          return { ...comment, metadata, media };
-        }
-      } catch {
-        // non-bloquant : un échec de tracking ne doit pas casser le commentaire
-      }
-    }
+    // Carte `metadata.trackingLinks` (#9073) : corps + légende de son média,
+    // mapping `url → token` SANS réécrire le contenu. Jamais bloquant.
+    const trackingMetadata = await syncCommentTrackingLinks({
+      prisma: this.prisma, linkService: this.trackingLinkService, comment: { ...comment, media }, createdBy: authorId,
+    });
+    if (trackingMetadata !== undefined) return { ...comment, metadata: trackingMetadata, media };
 
     return { ...comment, media };
   }
@@ -370,7 +362,15 @@ export class PostCommentService {
       });
     }
 
-    return { ...comment, postId: existing.postId, contentChanged, media };
+    // Édition : la carte de liens suivis se recalcule (#9073) — le document
+    // rendu porte la nouvelle carte, que la diffusion socket hisse.
+    const trackingMetadata = contentChanged
+      ? await syncCommentTrackingLinks({
+          prisma: this.prisma, linkService: this.trackingLinkService, comment: { ...comment, media }, createdBy: userId,
+        })
+      : undefined;
+    const served = trackingMetadata === undefined ? comment : { ...comment, metadata: trackingMetadata };
+    return { ...served, postId: existing.postId, contentChanged, media };
   }
 
   /// Relecture d'un commentaire au FORMAT de `updateComment` — pour le rejeu

@@ -45,6 +45,7 @@ function harness(options: { refused?: boolean; alreadyInvited?: boolean } = {}) 
       record: async () => !options.alreadyInvited,
       credit,
       ring: async () => undefined,
+      armExpiry: () => undefined,
     },
     { id: 'sock-1', on: (event: string, handler: never) => handlers.set(event, handler) } as never,
     () => 'alice'

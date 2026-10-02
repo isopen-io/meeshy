@@ -31,7 +31,7 @@ final class FocalRowInputEquatableTests: XCTestCase {
         allAudioItems: [ConversationViewModel.AudioItem] = [],
         effects: MessageEffects = .none,
         senderIsAnonymous: Bool = false,
-        senderIsHere: Bool = false
+        senderIsHere: ConversationHere = .absent
     ) -> FocalRowInput {
         FocalRowInput(
             localId: "m1", serverId: "s1", content: content ?? makeContent(), density: density,
@@ -60,6 +60,7 @@ final class FocalRowInputEquatableTests: XCTestCase {
 
     func test_senderIsHereChange_areNotEqual() {
         XCTAssertNotEqual(makeInput(senderIsHere: false), makeInput(senderIsHere: true))
+        XCTAssertNotEqual(makeInput(senderIsHere: .here), makeInput(senderIsHere: .active), "l'activité (#9061) redessine la rangée")
     }
 
     func test_differentDensity_areNotEqual() {

@@ -400,6 +400,12 @@ enum DeepLink: Equatable {
     }
 }
 
+/// Une destination ET le `/l/<jeton>` qui l'a produite (#9171).
+struct TrackedLinkOrigin: Equatable {
+    let token: String
+    let link: DeepLink
+}
+
 // MARK: - Deep Link Router (ObservableObject for join/conversation deep links)
 
 @MainActor
@@ -425,6 +431,20 @@ final class DeepLinkRouter: ObservableObject {
     /// à résoudre, celui-là une IDENTITÉ déjà choisie. Les confondre ferait
     /// reprendre la résolution à zéro et reposerait la question.
     @Published var requestedGuestJoin: String?
+
+    /// Le `/l/<jeton>` d'où vient la destination en attente (#9171). La
+    /// résolution remplace le jeton par sa cible typée ; sans cette trace, un
+    /// visiteur sans compte ne pourrait plus apprendre QUI lui a partagé le
+    /// contenu. Il ne vaut que pour la destination qu'il a produite : un lien
+    /// ouvert ensuite, autrement, ne le reprend pas.
+    private(set) var trackedLinkOrigin: TrackedLinkOrigin?
+
+    /// Le jeton (`via`) du lien suivi qui a produit `link`, ou `nil` quand
+    /// `link` n'en vient pas.
+    func via(for link: DeepLink) -> String? {
+        guard let origin = trackedLinkOrigin, origin.link == link else { return nil }
+        return origin.token
+    }
 
     /// L'écran de compte que la page d'invitation a demandé, SANS compte
     /// (#7795) : « Se connecter » ou « Créer un compte ». `LoginView` le
@@ -492,7 +512,9 @@ final class DeepLinkRouter: ObservableObject {
             // n'attend son issue.
             Task { await resolver.recordClick(token: token) }
             let resolved = try? await resolver.resolve(token: token)
-            self.pendingDeepLink = Self.trackedDestination(for: resolved, token: token)
+            let destination = Self.trackedDestination(for: resolved, token: token)
+            self.trackedLinkOrigin = TrackedLinkOrigin(token: token, link: destination)
+            self.pendingDeepLink = destination
         }
     }
 
@@ -589,7 +611,9 @@ final class DeepLinkRouter: ObservableObject {
     /// résoudre un `/l/<token>`, déposer le brouillon d'un raccourci, et ne pas
     /// revendiquer ce qui n'est pas une destination (`/share`, le web externe).
     func handle(url: URL) -> Bool {
-        switch DeepLinkParser.parse(url) {
+        let parsed = DeepLinkParser.parse(url)
+        if case .trackedLink = parsed {} else { trackedLinkOrigin = nil }
+        switch parsed {
         case .trackedLink(let token):
             resolveTrackedLink(token)
             return true

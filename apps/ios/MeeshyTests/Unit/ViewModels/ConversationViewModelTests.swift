@@ -2952,6 +2952,7 @@ final class ConversationViewModelTests: XCTestCase {
         var rejoinResult = true
         private(set) var broughtUIForwardCount = 0
         private(set) var rejoinCalls: [(callId: String, conversationId: String, remoteUserId: String, remoteUsername: String, isVideo: Bool)] = []
+        private(set) var markedGroups: [String] = []
 
         var context: LiveCallJoinContext {
             LiveCallJoinContext(
@@ -2962,7 +2963,8 @@ final class ConversationViewModelTests: XCTestCase {
                 rejoinActiveCall: { [weak self] callId, conversationId, remoteUserId, remoteUsername, isVideo in
                     self?.rejoinCalls.append((callId, conversationId, remoteUserId, remoteUsername, isVideo))
                     return self?.rejoinResult ?? true
-                }
+                },
+                markGroupConversation: { [weak self] conversationId, _ in self?.markedGroups.append(conversationId) }
             )
         }
     }
@@ -3031,6 +3033,25 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(spy.rejoinCalls.first?.remoteUserId, "peer-user-1")
         XCTAssertEqual(spy.rejoinCalls.first?.remoteUsername, "Peer")
         XCTAssertEqual(spy.rejoinCalls.first?.isVideo, true)
+    }
+
+    /// #9111 — la bulle vivante d'un GROUPE n'était pas touchable : `isDirect`
+    /// était testé avant `isLive`, et le geste s'arrêtait là.
+    func test_callBack_liveBubbleInGroup_joinsTheCallThroughTheMesh() async throws {
+        let spy = LiveCallJoinSpy()
+        let service = MockActiveCallService()
+        service.result = .success(ActiveCallSession(
+            id: "call-live-1", conversationId: testConversationId, mode: "p2p", status: "active",
+            participants: [ActiveCallParticipant(userId: testUserId), ActiveCallParticipant(userId: "peer-user-1"), ActiveCallParticipant(userId: "peer-user-2")]
+        ))
+        let sut = makeSUT(isDirect: false, participantUserId: nil, activeCallService: service, liveCallJoin: spy.context)
+
+        sut.callBack(for: makeLiveCallSummary())
+        for _ in 0..<50 where spy.rejoinCalls.isEmpty { try await Task.sleep(nanoseconds: 20_000_000) }
+
+        XCTAssertEqual(spy.rejoinCalls.count, 1)
+        XCTAssertEqual(spy.rejoinCalls.first?.remoteUserId, testConversationId, "un groupe se rejoint par sa conversation : le premier qui offre devient le principal")
+        XCTAssertEqual(spy.markedGroups, [testConversationId])
     }
 
     func test_joinOngoingCall_callEndedServerSide_toastsAndNeverRejoins() async {

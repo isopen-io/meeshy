@@ -12,7 +12,8 @@ import { CallZoomStep } from './call-self-camera';
 /**
  * LE CRAN DU ZOOM DANS MA VIGNETTE (#8441) — « 1× » à côté de Retourner : un
  * toucher passe au cran suivant (1× · 2× · 5×, puis 1×), par le zoom de la
- * caméra quand elle en a un, sinon par le zoom numérique de mon seul aperçu.
+ * caméra quand elle en a un, sinon par le zoom numérique de l'image ENVOYÉE —
+ * et pas de cran du tout là où l'image envoyée ne peut pas être recadrée.
  */
 
 type FakeCamera = { kind: 'video'; readyState: 'live'; zoom: number; applied: number[]; getCapabilities: () => Record<string, unknown>; getSettings: () => Record<string, unknown>; applyConstraints: (c: { advanced: Array<{ zoom: number }> }) => Promise<void> };
@@ -90,14 +91,25 @@ describe('le cran du zoom dans ma vignette', () => {
     view.done();
   });
 
-  test('sans zoom de la caméra, le cran agrandit mon seul aperçu : rien ne part', async () => {
-    setLocalZoom('call-z', 'user', 1);
+  test('sans zoom de la caméra, le cran règle le zoom NUMÉRIQUE de l’image envoyée (#8441)', async () => {
+    const asked: number[] = [];
     const camera = fakeCamera(false);
-    const view = mount(camera);
-    act(() => view.step()?.click());
-    await act(async () => {});
+    const host = document.createElement('div');
+    const root = createRoot(host);
+    act(() => root.render(<CallZoomStep stream={streamOf(camera)} local={{ value: 1, sends: true, set: (next) => void asked.push(next) }} language="fr" Button={CallButton} rowItem="data-row-item" />));
+    const step = host.querySelector<HTMLButtonElement>('[data-call-self-control="zoom"]');
+    expect(step?.getAttribute('data-call-zoom-mode')).toBe('local');
+    act(() => step?.click());
+    expect(asked).toEqual([2]);
     expect(camera.applied).toEqual([]);
-    expect(localZoomFor(selfZoomStore.getState(), 'call-z', 'user')).toBe(2);
+    act(() => root.unmount());
+  });
+
+  test('sans zoom de la caméra ni traitement des images, aucun cran : un zoom qui ne partirait pas n’est pas offert', () => {
+    setLocalZoom('call-z', 'user', 1);
+    const view = mount(fakeCamera(false));
+    expect(view.step()).toBeNull();
+    expect(localZoomFor(selfZoomStore.getState(), 'call-z', 'user')).toBe(1);
     view.done();
   });
 });

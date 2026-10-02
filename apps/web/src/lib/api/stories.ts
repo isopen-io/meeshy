@@ -247,6 +247,10 @@ export type StoryFeedPost = {
    * (`storyEffectsV3.ts`, § 3 de la spécification `stories-lecteur`) : lu par
    * `storyEffectsBackgroundOf`/`parseCanvasDocument`, jamais un champ direct. */
   readonly storyEffects?: unknown;
+  /** La carte `{ url, token }` des adresses suivies (#9074) — `metadata.trackingLinks`
+   * en REST, hissée en `trackingLinks` par le socket ; décodée par `trackingLinksOf`. */
+  readonly metadata?: unknown;
+  readonly trackingLinks?: unknown;
 };
 
 export async function loadStoryFeed(

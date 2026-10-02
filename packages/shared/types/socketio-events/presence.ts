@@ -39,9 +39,27 @@ export interface ViewingActionData {
   readonly conversationId: string;
 }
 
+/**
+ * `viewing:activity` émis par le client (#9061). `focus` (#9065) : un élément
+ * ouvert en plein écran DEPUIS la conversation (image, vidéo, audio, story,
+ * composition) — battu toutes les 2 s tant qu'il reste affiché. Jamais QUEL
+ * élément.
+ */
+export interface ViewingActivityData extends ViewingActionData {
+  readonly focus?: boolean;
+}
+
+/**
+ * `viewing:activity` (#9061) : le lecteur ICI regarde (défile), écoute (lit un
+ * média) ou agit (écrit, enregistre, réagit). Aucune nature d'activité ne
+ * voyage — seulement « il se passe quelque chose », relayé à la même audience
+ * que `viewing:start`, et seulement pour un lecteur déjà annoncé.
+ */
 export interface ViewingEvent {
   readonly userId: string;
   readonly conversationId: string;
+  /** Sur `viewing:activity` seulement (#9065) : il regarde en plein écran. */
+  readonly focus?: boolean;
 }
 
 /** Réponse à `viewing:start`, adressée au seul émetteur : qui est déjà là. */

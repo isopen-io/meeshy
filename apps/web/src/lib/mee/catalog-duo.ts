@@ -3,14 +3,14 @@ import { act, duo } from './build';
 import type { Entry } from './build';
 import { hearts, label, many, notes, rain, shadow, sparkles, tears } from './kit';
 import { P, at, confettiBurst, speech } from './props';
-import type { MeeFeeling, MeeSticker } from './types';
+import type { MeeCharacterFeeling, MeeIntent, MeeSticker } from './types';
 
 /**
- * À DEUX (#9034) — vingt-deux scènes, chacune en DEUX versions. Dans l'onglet
- * Mee, c'est Mee qui fait le geste et Meo qui réagit ; dans l'onglet Meo,
- * l'inverse — et la réaction n'est pas la même : Meo rougit sous le bisou de
- * Mee, Mee s'évanouit sous celui de Meo. On n'envoie donc jamais le même
- * sticker d'un onglet à l'autre.
+ * À DEUX (#9034) — vingt-deux scènes, chacune en DEUX versions, toutes deux
+ * dans l'onglet « Mee & Meo » (#9058). Dans `duo-mee-…`, c'est Mee qui fait
+ * le geste et Meo qui réagit ; dans `duo-meo-…`, l'inverse — et la réaction
+ * n'est pas la même : Meo rougit sous le bisou de Mee, Mee s'évanouit sous
+ * celui de Meo. Les deux sens ne sont donc jamais le même sticker.
  *
  * Le repère : l'acteur est à gauche (corps en (50, 118), bec vers (90, 131),
  * aile tendue vers l'autre en (80, 112)), le partenaire à droite, retourné
@@ -18,6 +18,7 @@ import type { MeeFeeling, MeeSticker } from './types';
  */
 
 type Side = Omit<Entry, 'id' | 'title' | 'feeling' | 'emoji'> & {
+  readonly intent?: MeeIntent;
   readonly title?: string;
   readonly actor: BirdPose;
   readonly partner: BirdPose;
@@ -28,7 +29,8 @@ type Side = Omit<Entry, 'id' | 'title' | 'feeling' | 'emoji'> & {
 type Scene = {
   readonly id: string;
   readonly title: string;
-  readonly feeling: MeeFeeling;
+  readonly feeling: MeeCharacterFeeling;
+  readonly intent?: MeeIntent;
   readonly emoji: string;
   readonly mee: Side;
   readonly meo: Side;
@@ -467,12 +469,14 @@ const SCENES: readonly Scene[] = [
   },
 ];
 
-const side = (tab: 'mee' | 'meo', scene: Scene): MeeSticker => {
-  const s = scene[tab];
-  return duo(tab, {
-    id: `duo-${tab}-${scene.id}`,
+const side = (actor: 'mee' | 'meo', scene: Scene): MeeSticker => {
+  const s = scene[actor];
+  const intent = s.intent ?? scene.intent;
+  return duo(actor, {
+    id: `duo-${actor}-${scene.id}`,
     title: s.title ?? scene.title,
     feeling: scene.feeling,
+    ...(intent !== undefined ? { intent } : {}),
     emoji: scene.emoji,
     actor: s.actor,
     partner: s.partner,
@@ -482,5 +486,5 @@ const side = (tab: 'mee' | 'meo', scene: Scene): MeeSticker => {
   });
 };
 
-export const MEE_DUO: readonly MeeSticker[] = SCENES.map((scene) => side('mee', scene));
-export const MEO_DUO: readonly MeeSticker[] = SCENES.map((scene) => side('meo', scene));
+/** Chaque scène, jouée par Mee puis par Meo : les deux sens se voient côte à côte dans la grille. */
+export const DUO_TWINS: readonly MeeSticker[] = SCENES.flatMap((scene) => [side('mee', scene), side('meo', scene)]);

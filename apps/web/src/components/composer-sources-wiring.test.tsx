@@ -222,24 +222,21 @@ describe('Position — le lieu obtenu est VISIBLE et PART (#7280)', () => {
   });
 });
 
-describe('Caméra — la prise revient dans les pièces jointes (#7280)', () => {
-  test('un cliché devient une pièce en attente, visible avant l’envoi', async () => {
+describe('Caméra — la tuile ouvre le studio, viseur armé (#7280, #9123)', () => {
+  test('toucher la tuile ouvre la couche de capture — la prise y rejoint ensuite le message', async () => {
     const el = await mountComposer();
     await openPanel(el);
-    const input = tile(el, 'camera').querySelector<HTMLInputElement>('input[type="file"]');
-    if (input === null) throw new Error('La tuile caméra ne porte aucun champ');
-    const file = new File([new Uint8Array([1, 2, 3])], 'cliche.jpg', { type: 'image/jpeg' });
-    Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+    const camera = tile(el, 'camera');
+    expect(camera.tagName).toBe('BUTTON');
     await act(async () => {
-      input.dispatchEvent(new Event('change', { bubbles: true }));
+      camera.click();
     });
-    const piece = () => el.querySelector('button[aria-label="Supprimer cliche.jpg"]');
     const limite = Date.now() + 2000;
-    while (piece() === null && Date.now() < limite) {
+    while (document.querySelector('[data-composer-capture]') === null && Date.now() < limite) {
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
     }
-    expect(piece()).not.toBeNull();
+    expect(document.querySelector('[data-composer-capture]')).not.toBeNull();
   });
 });

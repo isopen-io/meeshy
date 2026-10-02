@@ -27,7 +27,7 @@ struct FeedPostEmbedRow: View {
     private var embedTrackedURL: URL? {
         guard let raw = LinkPreviewFetcher.firstURL(in: content),
               let token = trackedLinks[raw] else { return nil }
-        return URL(string: "https://meeshy.me/l/\(token)")
+        return TrackedLink.redirectURL(token: token)
     }
 
     var body: some View {

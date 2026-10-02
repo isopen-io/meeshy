@@ -98,3 +98,35 @@ enum ComposerProtection: Equatable, CaseIterable {
         }
     }
 }
+
+/// **UNE loi de teinte d'icône** (#9121) : un effet armé donne SA couleur à
+/// toutes les icônes de la barre — la protection dominante sa couleur d'état,
+/// un effet de message (qui n'a pas de couleur propre) la couleur de marque ;
+/// sinon, la couleur COMMUNE des icônes. Clair et sombre lisent la même loi,
+/// seule la couleur commune dépend du thème.
+enum ComposerIconTint: Equatable {
+    case protection(ComposerProtection)
+    case brand
+    case common
+
+    static func resolve(protection: ComposerProtection?, hasMessageEffect: Bool) -> ComposerIconTint {
+        if let protection { return .protection(protection) }
+        return hasMessageEffect ? .brand : .common
+    }
+
+    var hex: String? {
+        switch self {
+        case .protection(let protection): return protection.tintHex
+        case .brand: return MeeshyColors.brandPrimaryHex
+        case .common: return nil
+        }
+    }
+
+    func color(common: Color) -> Color {
+        switch self {
+        case .protection(let protection): return protection.tint
+        case .brand: return MeeshyColors.brandPrimary
+        case .common: return common
+        }
+    }
+}

@@ -289,7 +289,9 @@ final class MediaGalleryActionColumnTests: XCTestCase {
 
         XCTAssertTrue(compact(blocBas).contains("bottomMetadataOverlay(att)"),
                       "l'auteur et sa date restent en bas du cadre")
-        XCTAssertTrue(compact(blocBas).contains("captionOverlay(caption)"),
+        // #9075 : la légende porte ses adresses suivies (`/l/`) — l'appel a
+        // gagné `links:`, la légende reste dans le bloc bas.
+        XCTAssertTrue(compact(blocBas).contains("captionOverlay(caption,links:captionLinks[att.id]??[:])"),
                       "la légende dépliable aussi")
         XCTAssertTrue(compact(ligneAuteur).contains("att.fileSizeFormatted"),
                       "et la ligne format / dimensions / poids avec elle")

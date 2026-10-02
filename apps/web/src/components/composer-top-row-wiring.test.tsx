@@ -384,11 +384,38 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
     expect(protection.effectFlags).toBeUndefined();
   });
 
-  test('la tonalité est un indicateur PASSIF — aucun `<button>`, un `role="img"` labellisé', () => {
+  test('#9082 — le sticker prend la place de la tonalité : plus d’indicateur d’humeur, une porte vers la feuille', () => {
     const el = mount(() => {});
-    const el2 = el.querySelector<HTMLElement>('[data-composer-toolbar] [role="img"][aria-label^="Tonalité"]');
-    expect(el2).not.toBeNull();
-    expect(el2?.tagName).not.toBe('BUTTON');
+    expect(el.querySelector('[data-composer-toolbar] [role="img"][aria-label^="Tonalité"]')).toBeNull();
+    const sticker = el.querySelector<HTMLButtonElement>('[data-composer-toolbar] button[data-composer-sticker]');
+    expect(sticker?.getAttribute('aria-label')).toBe('Sticker');
+    expect(sticker?.className).toMatch(/min-h-11/);
+    expect(sticker?.className).toMatch(/min-w-11/);
+  });
+
+  test('#9082 — la caméra se pose à l’angle droit du verre : dernier occupant de la rangée ; #9123 — elle ouvre le studio, plus l’appareil de l’OS', () => {
+    const el = mount(() => {});
+    const toolbar = el.querySelector('[data-composer-toolbar]')!;
+    const camera = toolbar.querySelector('[data-composer-camera]');
+    expect(camera).not.toBeNull();
+    expect(toolbar.lastElementChild).toBe(camera);
+    expect(camera?.tagName).toBe('BUTTON');
+    expect(camera?.querySelector('input[type="file"]')).toBeNull();
+  });
+
+  test('#9120 — la photothèque (images ET vidéos) se pose juste avant la caméra', () => {
+    const el = mount(() => {});
+    const toolbar = el.querySelector('[data-composer-toolbar]')!;
+    const library = toolbar.querySelector('[data-composer-library]');
+    const camera = toolbar.querySelector('[data-composer-camera]');
+    expect(library).not.toBeNull();
+    expect(library?.nextElementSibling).toBe(camera);
+    const input = library?.querySelector('input[type="file"]');
+    expect(input?.getAttribute('accept')).toBe('image/*,video/*');
+    expect(input?.hasAttribute('capture')).toBe(false);
+    expect(input?.hasAttribute('multiple')).toBe(true);
+    expect(library?.className).toMatch(/min-h-11/);
+    expect(library?.className).toMatch(/min-w-11/);
   });
 
   test('les cibles éphémère/flou/effets/langue portent le plancher 44 px sur les DEUX dimensions', () => {

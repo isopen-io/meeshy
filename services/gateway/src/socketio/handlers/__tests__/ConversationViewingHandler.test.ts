@@ -403,3 +403,149 @@ describe('ConversationViewingHandler — ouvrir AVANT la fin de l’authentifica
     );
   });
 });
+
+describe('ConversationViewingHandler — l’ordre des gestes est celui du client (#9052)', () => {
+  const snapshotOf = (direct: ReadonlyArray<{ event: string; data: unknown }>) =>
+    direct.filter(d => d.event === SERVER_EVENTS.VIEWING_SNAPSHOT).map(d => d.data);
+
+  it('un viewing:stop reçu pendant que le viewing:start se résout laisse le lecteur parti', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    const bob = connect(BOB, 's-bob');
+
+    const opening = handler.handleStart(alice.socket, { conversationId: CONV });
+    const leaving = handler.handleStop(alice.socket, { conversationId: CONV });
+    await Promise.all([opening, leaving]);
+    await handler.handleStart(bob.socket, { conversationId: CONV });
+
+    expect(snapshotOf(bob.direct)).toEqual([{ conversationId: CONV, userIds: [] }]);
+    expect(startsFor(emissions).filter(e => (e.data as { userId: string }).userId === ALICE)).toHaveLength(
+      stopsFor(emissions).filter(e => (e.data as { userId: string }).userId === ALICE).length,
+    );
+  });
+
+  it('une déconnexion pendant que le viewing:start se résout ne laisse aucun fantôme', async () => {
+    const { handler, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    const bob = connect(BOB, 's-bob');
+
+    const opening = handler.handleStart(alice.socket, { conversationId: CONV });
+    const gone = handler.handleSocketDisconnecting('s-alice');
+    await Promise.all([opening, gone]);
+    await handler.handleStart(bob.socket, { conversationId: CONV });
+
+    expect(snapshotOf(bob.direct)).toEqual([{ conversationId: CONV, userIds: [] }]);
+  });
+
+  it('fermer puis rouvrir aussitôt l’image rend la présence', async () => {
+    const { handler, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    const bob = connect(BOB, 's-bob');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    const covered = handler.handleStop(alice.socket, { conversationId: CONV });
+    const back = handler.handleStart(alice.socket, { conversationId: CONV });
+    await Promise.all([covered, back]);
+    await handler.handleStart(bob.socket, { conversationId: CONV });
+
+    expect(snapshotOf(bob.direct)).toEqual([{ conversationId: CONV, userIds: [ALICE] }]);
+  });
+});
+
+const activitiesFor = (emissions: readonly Emission[]) =>
+  emissions.filter(e => e.event === SERVER_EVENTS.VIEWING_ACTIVITY);
+
+describe('ConversationViewingHandler — regarder, écouter, agir (#9061)', () => {
+  it('relaie l’activité d’un lecteur ICI à la room, sans la renvoyer à ses appareils', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: CONV });
+
+    expect(activitiesFor(emissions)).toEqual([
+      {
+        room: `conversation:${CONV}`,
+        except: ['s-alice'],
+        event: SERVER_EVENTS.VIEWING_ACTIVITY,
+        data: { userId: ALICE, conversationId: CONV },
+      },
+    ]);
+  });
+
+  it('ne relaie rien pour un socket qui n’a pas annoncé la conversation', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: OTHER_CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: CONV });
+
+    expect(activitiesFor(emissions)).toEqual([]);
+  });
+
+  it('ne relaie plus rien une fois la conversation quittée', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+    await handler.handleStop(alice.socket, { conversationId: CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: CONV });
+
+    expect(activitiesFor(emissions)).toEqual([]);
+  });
+
+  it('ne relaie rien pour qui masque sa présence — il n’est jamais annoncé ICI', async () => {
+    const { handler, emissions, connect } = makeWorld({ hidesOnlineStatus: [ALICE] });
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: CONV });
+
+    expect(activitiesFor(emissions)).toEqual([]);
+  });
+
+  it('n’atteint pas les appareils d’un pair bloqué', async () => {
+    const { handler, emissions, connect } = makeWorld({ blocks: { [ALICE]: [BOB] } });
+    connect(BOB, 's-bob');
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: CONV });
+
+    expect(activitiesFor(emissions).map(e => [...e.except].sort())).toEqual([['s-alice', 's-bob']]);
+  });
+
+  it('ignore une charge invalide', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: '' });
+
+    expect(activitiesFor(emissions)).toEqual([]);
+  });
+});
+
+describe('ConversationViewingHandler — regarder en plein écran (#9065)', () => {
+  it('relaie le plein écran ouvert depuis la conversation, sans dire quel élément', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: CONV, focus: true, attachmentId: 'a1' });
+
+    expect(activitiesFor(emissions).map(e => e.data)).toEqual([
+      { userId: ALICE, conversationId: CONV, focus: true },
+    ]);
+  });
+
+  it('ignore un drapeau de plein écran qui n’est pas un booléen', async () => {
+    const { handler, emissions, connect } = makeWorld();
+    const alice = connect(ALICE, 's-alice');
+    await handler.handleStart(alice.socket, { conversationId: CONV });
+
+    await handler.handleActivity(alice.socket, { conversationId: CONV, focus: 'oui' });
+
+    expect(activitiesFor(emissions)).toEqual([]);
+  });
+});

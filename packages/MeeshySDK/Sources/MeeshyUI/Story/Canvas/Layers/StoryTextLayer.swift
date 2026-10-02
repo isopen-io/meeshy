@@ -23,9 +23,13 @@ public final class StoryTextLayer: CATextLayer {
     /// celle du champ de saisie en ligne (#8680). Une seule écriture : le texte
     /// qu'on tape a la taille du texte qu'on publiera, et l'échelle de la carte
     /// (`SceneCardProjection`) s'applique aux deux à la fois.
+    ///
+    /// C'est la taille de l'ÉDITION : `scale` n'y entre pas. Le pincement
+    /// agrandit le cadre entier par la transformation du calque (#9139,
+    /// `sceneTransform`), il ne recoupe jamais les lignes.
     public nonisolated static func renderedFontSize(of text: StoryTextObject,
                                                     in geometry: CanvasGeometry) -> CGFloat {
-        geometry.render(CGFloat(text.fontSize * text.scale))
+        geometry.render(CGFloat(text.fontSize))
     }
 
     /// Backing layer placed behind the text glyphs when `backgroundStyle` is
@@ -107,7 +111,9 @@ public final class StoryTextLayer: CATextLayer {
         // render space (e.g. `attributed.size()` at the rendered font), font
         // hinting + sub-pixel rounding would break the iPhone↔iPad linearity
         // contract enforced by `CrossDeviceEquivalenceTests`.
-        let designFontSize = CGFloat(text.fontSize * text.scale)
+        // Mise en ligne à la taille de l'ÉDITION : `scale` agrandit ensuite le
+        // cadre entier par `transform` (#9139), il ne recoupe pas les lignes.
+        let designFontSize = CGFloat(text.fontSize)
         // `resolveFont(forTextObject:...)` respecte le `textStyle` (bold / neon
         // / typewriter / handwriting / classic) en plus de la `fontFamily`.
         // Auparavant `resolveFont(family:size:)` ignorait textStyle, donc le
@@ -125,8 +131,8 @@ public final class StoryTextLayer: CATextLayer {
         // police ; une valeur NÉGATIVE remplit ET contoure (positif = texte
         // creux). `borderWidth` est en design-px absolus → le diviser par la
         // taille de police design donne un pourcentage indépendant de la
-        // résolution ET de l'échelle (le contour garde la même épaisseur design
-        // quel que soit `text.scale`).
+        // résolution. Comme le reste du cadre, le contour grandit avec
+        // `text.scale` (#9139) : le pincement met à l'échelle la forme entière.
         let strokeAttrs = Self.strokeAttributes(for: text, designFontSize: designFontSize)
 
         // Measure in design space.
@@ -251,6 +257,11 @@ public final class StoryTextLayer: CATextLayer {
         // Render-space bounds is the linear projection of the design bounds.
         let renderedBounds = geometry.render(metrics.bounds)
         bounds = CGRect(origin: .zero, size: renderedBounds)
+        // Le cadre est agrandi par `transform` : on rasterise à la densité
+        // qu'il occupera à l'écran, pour des glyphes nets (#9139).
+        self.renderScale = Self.rasterScale(renderScale: renderScale,
+                                            objectScale: text.scale,
+                                            longestSide: max(renderedBounds.width, renderedBounds.height))
 
         // Formes path-based : tracé + zone de glyphes projetés en render-space
         // (projection uniforme — `CanvasGeometry.scaleFactor` est le même en x
@@ -288,7 +299,7 @@ public final class StoryTextLayer: CATextLayer {
         // (and tests) can read it directly without unwrapping the attributed string.
         fontSize = renderedFontSize
         alignmentMode = caTextAlignment(from: alignment)
-        contentsScale = renderScale
+        contentsScale = self.renderScale
         isWrapped = true
         // Jamais de troncature « … » : la mesure ci-dessus dimensionne `bounds`
         // pour contenir tout le texte wrappé. `.none` garantit l'absence
@@ -299,13 +310,13 @@ public final class StoryTextLayer: CATextLayer {
         let designCenterY = geometry.designHeightLength(forNormalized: CGFloat(text.y))
         position = geometry.render(CGPoint(x: designCenterX, y: designCenterY))
         anchorPoint = text.anchor
-        transform = CATransform3DMakeRotation(CGFloat(text.rotation) * .pi / 180, 0, 0, 1)
+        transform = Self.sceneTransform(rotationDegrees: text.rotation, scale: text.scale)
         zPosition = CGFloat(text.zIndex)
         name = text.id
 
         // Static text is a rasterization candidate during playback.
         shouldRasterize = mode == .play && text.isStatic
-        if shouldRasterize { rasterizationScale = renderScale }
+        if shouldRasterize { rasterizationScale = self.renderScale }
 
         // Install background fill / glass backdrop behind the text glyphs.
         // The CATextLayer renders its `string` into its OWN contents. Un

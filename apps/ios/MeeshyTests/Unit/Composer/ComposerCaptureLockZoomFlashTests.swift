@@ -219,17 +219,21 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
         XCTAssertTrue(barre.contains("ComposerSceneCameraCopy.lockHint"), "la phrase du bas dit le cadenas")
         XCTAssertTrue(barre.contains("onShutterTouched()"),
                       "toucher le déclencheur clôt un appui long dont la levée s'est perdue")
-        let hote = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift")
-        XCTAssertTrue(hote.contains("onShutterTouched: { releaseStaleSceneHold() }"))
+        // #9134 — le chrome PARTAGÉ câble le déclencheur pour les deux montages.
+        let chrome = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("onShutterTouched: { session.releaseStaleHold() }"))
     }
 
     func test_lHoteZoomeLaCameraEtRegleLaTorche() throws {
-        let hote = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift")
-        XCTAssertTrue(hote.contains("ComposerCaptureZoom.factor"))
-        XCTAssertTrue(hote.contains("ComposerCaptureHold.release"))
-        XCTAssertTrue(hote.contains("ComposerCaptureHold.verticalDrag"))
-        XCTAssertTrue(hote.contains("ComposerFlashIntensity.floorWhite"))
-        let camera = try source("Meeshy/Features/Main/Components/CameraView.swift")
+        // #9134 — la machine de capture câble les lois pour les deux montages.
+        let machine = try source("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
+        XCTAssertTrue(machine.contains("ComposerCaptureZoom.factor"))
+        XCTAssertTrue(machine.contains("ComposerCaptureHold.release"))
+        XCTAssertTrue(machine.contains("ComposerCaptureHold.verticalDrag"))
+        XCTAssertTrue(machine.contains("ComposerFlashIntensity.floorWhite"))
+        let chrome = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("ComposerCaptureHold.verticalDrag"), "le glissé de la nappe lit la même loi")
+        let camera = try source("Meeshy/Features/Main/Components/CameraModel.swift")
         XCTAssertTrue(camera.contains("setTorchModeOn(level:"))
         XCTAssertTrue(camera.contains("videoZoomFactor"))
     }

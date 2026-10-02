@@ -10,8 +10,8 @@ import { deviceLabel } from './call-analytics';
 import type { CaptionsContext, CaptionsPort } from './call-captions-controller';
 import { createCameraEffects } from './camera-effects';
 import { browserConnection, dataProfileOf, opusShapeFor, type DataProfile } from './call-data-profile';
-import { preferredInputs } from './call-devices';
-import { acquireCallMedia, acquireCamera, acquireDisplay } from './call-media';
+import { browserPreferenceStorage, preferredInputs, writeDevicePreference } from './call-devices';
+import { acquireCallMedia, acquireCamera, acquireChosenInput, acquireDisplay } from './call-media';
 import { createJournalRecorder, type JournalRecorder } from './call-network-journal-recorder';
 import { createCallJournalStore } from './call-network-journal-store';
 import { shapeOpusSdp } from './call-opus-sdp';
@@ -22,6 +22,7 @@ import { currentCallTransport } from './call-transport';
 import type { CallEngineDeps } from './engine';
 import { createPeerLink } from './peer-link';
 import { acquireRearCamera } from './rear-camera';
+import { selfZoomStore, sentZoom } from './self-zoom';
 import { browserColorSupport, videoEffectsStore } from './video-effects';
 
 /**
@@ -99,13 +100,15 @@ function lazyCaptions(ctx: CaptionsContext): CaptionsPort {
 
 /**
  * Les effets de ma vidéo (#8442) : le traitement des images est un chunk à
- * part (`budgets.json` › `call_video_effects`), chargé au premier effet de
- * couleur — jamais pour qui n'en pose aucun.
+ * part (`budgets.json` › `call_video_effects`), chargé au premier effet qui
+ * change l'image — couleur, visage, flou sans caméra qui le fasse, zoom
+ * numérique (#8441) — jamais pour qui n'en pose aucun.
  */
 const cameraEffects = createCameraEffects({
   effects: () => videoEffectsStore.getState().effects,
+  zoom: () => sentZoom(selfZoomStore.getState(), callStore.getState().call),
   colorSupported: browserColorSupport,
-  loadPipeline: () => import('./video-effects-pipeline').then((module) => (camera, effects) => module.createEffectsPipeline(camera, effects)),
+  loadPipeline: () => import('./video-effects-pipeline').then((module) => (camera, settings) => module.createEffectsPipeline(camera, settings)),
 });
 
 export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
@@ -116,6 +119,8 @@ export function loadDefaultEngineDeps(): Omit<CallEngineDeps, 'store'> {
     fetchActiveCallId: (conversationId) => fetchActiveCallId(apiDeps, conversationId),
     acquireMedia: (options) => acquireCallMedia({ ...options, ...preferredInputs(), profile: currentProfile() }),
     acquireCamera: (facing) => (facing === 'environment' ? acquireRearCamera({ profile: currentProfile() }) : acquireCamera({ facing, cameraId: preferredInputs().cameraId, profile: currentProfile() })),
+    acquireCameraDevice: (deviceId) => acquireChosenInput({ kind: 'camera', deviceId }),
+    rememberCamera: (deviceId) => void writeDevicePreference(browserPreferenceStorage(), 'camera', deviceId),
     acquireDisplay: () => acquireDisplay(),
     createLink: (link) => createPeerLink({ ...link, shapeSdp: (sdp) => shapeOpusSdp(sdp, opusShapeFor(currentProfile())) }),
     cameraEffects,

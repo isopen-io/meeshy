@@ -1,9 +1,13 @@
-import { MEE_DUO, MEO_DUO } from './catalog-duo';
+import { DUO_TWINS } from './catalog-duo';
+import { DUO_MORE } from './catalog-duo-2';
 import { INSTANTS } from './catalog-instants';
 import { MEE_SOLO } from './catalog-mee';
+import { MEE_SOLO_MORE } from './catalog-mee-2';
 import { MEO_SOLO } from './catalog-meo';
+import { MEO_SOLO_MORE } from './catalog-meo-2';
 import { MEE_TEMPLATE_PREFIX, isMeeTemplate } from './template';
-import type { MeeSlots, MeeSticker, MeeTab } from './types';
+import { MEE_CHARACTER_TABS } from './types';
+import type { MeeBuiltinPack, MeeSlots, MeeSticker, MeeTab } from './types';
 
 /**
  * LE CATALOGUE DES STICKERS MEE (#9034) — l'unique registre, que lisent la
@@ -12,7 +16,15 @@ import type { MeeSlots, MeeSticker, MeeTab } from './types';
 
 export { MEE_TEMPLATE_PREFIX };
 
-export const MEE_STICKERS: readonly MeeSticker[] = [...MEE_SOLO, ...MEE_DUO, ...MEO_SOLO, ...MEO_DUO, ...INSTANTS];
+export const MEE_STICKERS: readonly MeeSticker[] = [
+  ...MEE_SOLO,
+  ...MEE_SOLO_MORE,
+  ...MEO_SOLO,
+  ...MEO_SOLO_MORE,
+  ...DUO_TWINS,
+  ...DUO_MORE,
+  ...INSTANTS,
+];
 
 const BY_ID: ReadonlyMap<string, MeeSticker> = new Map(MEE_STICKERS.map((sticker) => [sticker.id, sticker]));
 
@@ -28,6 +40,12 @@ export function meeStickerOfTemplate(templateId: string | undefined): MeeSticker
 }
 
 export const meeStickersOfTab = (tab: MeeTab): readonly MeeSticker[] => MEE_STICKERS.filter((sticker) => sticker.tab === tab);
+
+/** L'onglet « Mee & Meo » (#9068) : tous les personnages, Mee puis Meo puis les duos — les sections les rangent ensuite par intention. */
+export const MEE_CHARACTER_STICKERS: readonly MeeSticker[] = MEE_CHARACTER_TABS.flatMap(meeStickersOfTab);
+
+/** Les stickers d'un pack intégré (#9141) — ses personnages, puis ses Instants. */
+export const meeStickersOfPack = (pack: MeeBuiltinPack): readonly MeeSticker[] => MEE_STICKERS.filter((sticker) => sticker.pack === pack);
 
 /** Les seules valeurs qu'un sticker accepte : celles qu'il déclare, non vides. */
 export function meeSlotsFor(sticker: MeeSticker, slots: MeeSlots): MeeSlots {

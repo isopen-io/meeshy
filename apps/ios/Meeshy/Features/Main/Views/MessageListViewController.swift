@@ -1163,14 +1163,14 @@ final class MessageListViewController: UIViewController {
             // pastille 22 de l'auteur + points pulsants accent SANS capsule ;
             // la capsule reste le rendu du mode bulles.
             let typingFlat = self.readingMode != .bubbles
-            let typingHere = self.conversationHereUserIds
+            let typingHere = self.conversationHere
             cell.contentConfiguration = UIHostingConfiguration {
                 TypingIndicatorBubble(
                     participants: typingRoster,
                     accentHex: typingAccent,
                     isDark: typingDark,
                     isFlat: typingFlat,
-                    hereUserIds: typingHere
+                    here: typingHere
                 )
                 .scaleEffect(x: 1, y: -1)
             }
@@ -1431,7 +1431,7 @@ final class MessageListViewController: UIViewController {
             let senderRingState: StoryRingState = isMine
                 ? .none
                 : stories.storyRingState(forUserId: senderId)
-            let senderIsHere = !isMine && self.conversationHereUserIds.contains(message.viewingKey)
+            let senderIsHere: ConversationHere = isMine ? .absent : self.conversationHere[message.viewingKey]
             let viewSenderStoryHandler = self.onViewSenderStory
 
             // Menu d'appui long — DEUX chemins par version d'OS (miroir des

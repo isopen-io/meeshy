@@ -12,11 +12,12 @@ import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { StoryFrame } from '@/lib/stories/story-document';
 import type { StudioBackgroundSection } from '@/lib/stories/studio-background-tools';
-import { pageWithVisualFilter } from '@/lib/stories/studio-page';
+import { pageWithVisualFilter, type StudioVisualAsset } from '@/lib/stories/studio-page';
 import type { StudioPageEdit } from '@/lib/stories/studio-page-edit';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { STUDIO_PLATE, StudioToolClose } from '@/routes/story-compose-chrome';
 import { StudioAltField, StudioFilterSection } from '@/routes/story-compose-media-fields';
+import { StudioCropControls, StudioSoundControls, StudioTrimControls } from '@/routes/story-compose-retouch-edits';
 
 /**
  * **LES CONTRÔLES D'UN OUTIL DU FOND, SOUS LA SCÈNE** (#8849, jumelle de
@@ -50,6 +51,9 @@ export const STUDIO_BACKGROUND_SECTION_KEYS = {
   frame: 'story.studio.tile.frame',
   filter: 'story.studio.editor.filter',
   describe: 'story.studio.background.tools.describe',
+  trim: 'story.studio.background.tools.trim',
+  sound: 'story.studio.background.tools.sound',
+  crop: 'story.studio.background.tools.crop',
 } as const satisfies Record<StudioBackgroundSection, InterfaceCatalogKey>;
 
 /** La pastille du flou : un dégradé qui dit « le média, flouté » sans en
@@ -139,6 +143,7 @@ export function StudioBackgroundToolPanel({
   onFrame,
   caption,
   media,
+  edits,
   onClose,
 }: {
   readonly lang: InterfaceLanguage;
@@ -151,6 +156,8 @@ export function StudioBackgroundToolPanel({
    * plaque écrit la page elle-même (`onPage`), pour que leur câblage vive
    * dans ce chunk à la demande, pas dans celui du studio. */
   readonly media?: { readonly alt: string; readonly filter: StoryFilterId | null; readonly onPage: StudioPageEdit };
+  /** LES ÉDITIONS DE BASE d'une pièce retouchée (#9136) — coupe, muet, recadrage. */
+  readonly edits?: { readonly asset: StudioVisualAsset; readonly onPage: StudioPageEdit };
   readonly onClose: () => void;
 }) {
   useBackDismiss(onClose, { escape: true });
@@ -188,6 +195,9 @@ export function StudioBackgroundToolPanel({
           />
         ) : null}
         {section === 'describe' && media !== undefined ? <StudioAltField lang={lang} door="visual" value={media.alt} onPage={media.onPage} /> : null}
+        {section === 'trim' && edits !== undefined ? <StudioTrimControls lang={lang} asset={edits.asset} onPage={edits.onPage} /> : null}
+        {section === 'sound' && edits !== undefined ? <StudioSoundControls lang={lang} asset={edits.asset} onPage={edits.onPage} /> : null}
+        {section === 'crop' && edits !== undefined ? <StudioCropControls lang={lang} asset={edits.asset} onPage={edits.onPage} /> : null}
       </div>
     </section>
   );

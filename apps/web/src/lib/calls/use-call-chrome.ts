@@ -11,6 +11,7 @@ import { chromeAfter, type ChromeCue, type ChromeVisibility } from './call-contr
  *   panneau, capsule de zoom, pastilles d'état ; le toucher suivant les rend ;
  * - rien d'autre ne les range : aucune attente, aucun mouvement de souris
  *   (#8988, directive porteur du 2026-10-01) ;
+ * - un GLISSÉ n'est pas un toucher (#9096) : le clic qui le suit est avalé ;
  * - le clavier les rend toujours. La touche s'écoute sur le DOCUMENT : un clic
  *   sur la scène, qui n'est pas focalisable, emporte le focus HORS de l'écran
  *   d'appel, sur le `<dialog>` qui le porte (`call-layer.tsx`, mesuré dans
@@ -59,16 +60,23 @@ export const tapTogglesChrome = (event: Event): boolean => {
   return hit === null || hit === scope || (scope instanceof Node && !scope.contains(hit));
 };
 
-type ChromeInput = { readonly videoScene: boolean; readonly root: RefObject<HTMLElement | null> };
+type ChromeInput = {
+  readonly videoScene: boolean;
+  readonly root: RefObject<HTMLElement | null>;
+  /** Vrai pour un clic qui n'est pas un toucher — celui qui suit un glissé (#9096, `use-call-swipe-down.ts`). */
+  readonly swallowTap?: () => boolean;
+};
 
 /**
  * Ce que montrent les commandes : `shown` hors d'une scène vidéo, sinon
  * l'état de `chromeAfter` — que l'écran projette en opacité et en visibilité.
  */
-export function useCallChrome({ videoScene, root }: ChromeInput): ChromeVisibility {
+export function useCallChrome({ videoScene, root, swallowTap }: ChromeInput): ChromeVisibility {
   const [visibility, setVisibility] = useState<ChromeVisibility>('shown');
   const scene = useRef(videoScene);
   scene.current = videoScene;
+  const swallow = useRef(swallowTap);
+  swallow.current = swallowTap;
 
   useEffect(() => {
     const element = root.current;
@@ -77,6 +85,7 @@ export function useCallChrome({ videoScene, root }: ChromeInput): ChromeVisibili
     const cue = (next: ChromeCue) => setVisibility((current) => chromeAfter(current, next));
     const key = () => cue('key');
     const tap = (event: Event) => {
+      if (swallow.current?.() === true) return;
       if (scene.current && tapTogglesChrome(event)) cue('tap');
     };
     page.addEventListener('keydown', key);

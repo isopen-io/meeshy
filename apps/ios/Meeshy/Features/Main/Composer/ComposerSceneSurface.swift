@@ -201,7 +201,7 @@ struct ComposerSceneSurface: View {
     /// Un outil est-il ouvert ? Lu sur `railMode`, la seule source qui le
     /// SAIT — voir `ComposerObjectChips.isServed`.
     private var toolIsOpen: Bool {
-        ComposerToolFocus.toolIsOpen(railOpensTool: railMode.opensTool, editsBackground: editsBackground)
+        ComposerToolFocus.toolIsOpen(railOpensTool: railMode.opensTool, editsInline: editsInline)
     }
 
     /// **Plus d'`activeObjectChipId`** (2026-09-05) : un jeton ouvrait une
@@ -268,10 +268,17 @@ struct ComposerSceneSurface: View {
     /// c'est-à-dire le geste qui AJOUTE — pas un objet déjà posé. Le meuble
     /// tient la distinction (`ComposerFirstView.lowZoneShowsToolOptions`).
     var toolOptions: AnyView?
-    /// **Le FOND s'édite en ligne** (#8847) : ses outils au rail droit, leurs
-    /// contrôles dans `toolOptions` — et tout le reste du chrome cède, comme à
-    /// un outil du rail (`ComposerToolFocus.toolIsOpen`).
-    var editsBackground: Bool = false
+    /// **Un objet s'édite EN PLACE** (#8847 pour le fond, #9138 pour toutes
+    /// les familles) : ses sous-outils au rail droit — et tout le reste du
+    /// chrome cède, comme à un outil du rail (`ComposerToolFocus.toolIsOpen`).
+    var editsInline: Bool = false
+    /// **Les options du sous-outil ouvert, à droite, depuis le haut** (#9138) —
+    /// le panneau entier, déjà composé et placé (`ComposerInlineToolPanel`) ;
+    /// la surface le pose sur la scène libre, à côté de la colonne droite.
+    var inlinePanel: AnyView?
+    /// Le pied du rail droit suit-il ses sous-outils, sans ressort ?
+    /// (`ComposerTrailingColumn.footFollowsOptions`)
+    var trailingFootFollowsOptions: Bool = false
 
     /// L'édition EN LIGNE, relayée au canvas : le texte se saisit à sa vraie
     /// place, dans sa vraie police, sur le vrai fond.
@@ -789,22 +796,23 @@ struct ComposerSceneSurface: View {
 
     private var chromeLayer: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ComposerTopBar(
-                slideRailSlot: slideRailSlot,
-                overflowMenu: overflowMenu,
-                onClose: onClose,
-                plateauTint: plateauTint,
-                trailingAccessory: topBarAccessory,
-                edgeMargin: isRoomy ? ComposerRailGeometry.roomyMargin : 16
-            )
-            .padding(.top, -chromeLift)
-            // **Un outil ouvert efface la barre haute** (#8652) — par l'opacité
-            // et non par le retrait : sa hauteur reste, donc la scène ne saute
-            // pas pendant le fondu, et le `(x)` de l'outil devient la seule
-            // sortie à l'écran.
-            .opacity(ComposerToolFocus.isShown(.topBar, toolIsOpen: toolIsOpen) ? 1 : 0)
-            .allowsHitTesting(ComposerToolFocus.isShown(.topBar, toolIsOpen: toolIsOpen))
-            .accessibilityHidden(!ComposerToolFocus.isShown(.topBar, toolIsOpen: toolIsOpen))
+            // **Un outil ouvert RETIRE la barre haute** (#8652, #9138) : le
+            // `(x)` de l'outil devient la seule sortie à l'écran, et la place
+            // qu'elle occupait revient à la colonne droite et au panneau
+            // d'options, qui partent alors du haut. La scène ne saute pas : elle
+            // vit dans son propre calque, cadrée sur une hauteur constante.
+            if ComposerToolFocus.isShown(.topBar, toolIsOpen: toolIsOpen) {
+                ComposerTopBar(
+                    slideRailSlot: slideRailSlot,
+                    overflowMenu: overflowMenu,
+                    onClose: onClose,
+                    plateauTint: plateauTint,
+                    trailingAccessory: topBarAccessory,
+                    edgeMargin: isRoomy ? ComposerRailGeometry.roomyMargin : 16
+                )
+                .padding(.top, -chromeLift)
+                .transition(.opacity)
+            }
 
             // **La trace du son de FOND, en tête** (#5001, #5017) : elle se lit
             // AVEC la scène, comme un titre avec ce qu'il titre. Aucun `tint:` —
@@ -909,6 +917,13 @@ struct ComposerSceneSurface: View {
             if timelinePanel == nil { composingFloors } else { friseRail }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        // **Les options du sous-outil ouvert, à droite depuis le haut** (#9138)
+        // — sur la scène libre, alignées sur le haut de la colonne droite.
+        .overlay {
+            if timelinePanel == nil, let inlinePanel {
+                inlinePanel.transition(.opacity)
+            }
+        }
     }
 
     /// « Temps » reste où il était — AU-DESSUS de l'historique (#8713) : la
@@ -952,7 +967,8 @@ struct ComposerSceneSurface: View {
                                      options: trailingOptions,
                                      onOption: onTrailingOption,
                                      onTime: toolIsOpen ? nil : onTimeButton,
-                                     timeIsOpen: timeIsOpen)
+                                     timeIsOpen: timeIsOpen,
+                                     footFollowsOptions: trailingFootFollowsOptions)
                     .padding(.top, ComposerRailGeometry.gutter)
                     .padding(.trailing, edge)
                     .padding(.bottom, ComposerRailGeometry.floatingBottomInset)

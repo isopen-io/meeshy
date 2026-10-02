@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
+import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
+
 import { Avatar } from '@/components/avatar';
 import { CommentBody } from '@/components/comment-body';
+import { CommentMedia } from '@/components/comment-media';
 import { CommentRowMenu, type CommentMenuPick } from '@/components/comment-row-menu';
 import { CommentSwipe } from '@/components/comment-swipe';
 import { MentionFieldPanel } from '@/components/mention-suggestions';
@@ -18,13 +21,17 @@ import type { ReportReason } from '@/lib/api/reports';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { STICKER_SIDE } from '@/lib/reading-mode/metrics';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { commentMenuEntries, type CommentMenuEntry } from '@/lib/view/comment-menu';
+import { commentStickerOf } from '@/lib/view/comment-sticker';
 import { replyTargetOf, type CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import { initialsOf } from '@/lib/view/conversation';
 import type { MentionSource } from '@/lib/view/mention-source';
 import { useMentionField } from '@/lib/view/use-mention-field';
 import { PrismPastille } from './message-blocks';
+import { StickerArtwork } from './message-body-blocks';
+import { RichText } from './rich-text';
 
 /**
  * **UNE RANGÉE DE COMMENTAIRE ET SES TROIS GESTES** (#7135) — miroir de
@@ -138,6 +145,8 @@ const countOf = (value: number | null | undefined): number =>
    SOUS l'icône (mesuré à la capture). `display` ne se surcharge pas en
    ajoutant `flex` derrière `grid` dans la liste de classes : c'est l'ordre de
    la FEUILLE qui tranche, pas celui de l'attribut. */
+const COMMENT_TEXT_STYLE = { color: 'var(--color-ios-ink)' } as const;
+
 const GESTURE_BUTTON =
   'inline-flex items-center justify-center gap-1 rounded-chip px-2 focus-visible:outline-2 focus-visible:outline-offset-2';
 
@@ -431,6 +440,14 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
   const lu = showingOriginal
     ? { text: comment.content, language: originalLanguage, marque: originalLanguage !== '' }
     : { text: servi.text, language: servi.language, marque: servi.translated && servi.language !== '' };
+  /* LA CARTE DES ADRESSES SUIVIES (#9074) — décodée une fois par commentaire. */
+  const trackingLinks = useMemo(() => trackingLinksOf(comment), [comment]);
+  /* LE STICKER (#9080) — peint par le MÊME rendu que la bulle d'un message ;
+     un commentaire-sticker sans texte ne monte pas de paragraphe vide. */
+  const sticker = useMemo(() => commentStickerOf(comment), [comment]);
+  /* Les photos et vidéos jointes (#9167) — sans l'image du sticker, qui est
+     son premier média (`commentStickerOf`) et qu'il peint déjà. */
+  const media = useMemo(() => (sticker === null ? comment.media ?? [] : (comment.media ?? []).slice(1)), [comment.media, sticker]);
   const photo = typeof comment.author.avatar === 'string' && comment.author.avatar !== '' ? comment.author.avatar : undefined;
   /* Une rangée EN VOL n'a pas d'adresse chez la passerelle — aucun geste. */
   const actionable = comment.pending !== true ? gestures : undefined;
@@ -576,13 +593,21 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
                  document : poser `lang` partout ferait mentir la voix sur les
                  rangées non traduites. */
               <CommentBody comment={comment} contentLength={lu.text.length}>
-                <p
-                  className="text-body break-words whitespace-pre-wrap"
-                  style={{ color: 'var(--color-ios-ink)' }}
-                  {...(lu.marque ? { lang: lu.language } : {})}
-                >
-                  {lu.text}
-                </p>
+                {sticker !== null ? (
+                  <div data-comment-sticker className="py-1">
+                    <StickerArtwork sticker={sticker.sticker} picture={sticker.picture} side={STICKER_SIDE} />
+                  </div>
+                ) : null}
+                {(sticker === null && media.length === 0) || lu.text.trim() !== '' ? (
+                  <RichText
+                    text={lu.text}
+                    trackingLinks={trackingLinks}
+                    className="text-body break-words whitespace-pre-wrap"
+                    style={COMMENT_TEXT_STYLE}
+                    {...(lu.marque ? { lang: lu.language } : {})}
+                  />
+                ) : null}
+                {media.length > 0 ? <CommentMedia media={media} /> : null}
               </CommentBody>
             )}
             {actionable !== undefined && !editing ? (

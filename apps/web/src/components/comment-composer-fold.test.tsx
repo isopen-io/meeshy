@@ -8,9 +8,9 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { CommentComposer, type CommentComposerResult } from './comment-composer';
 
 /**
- * #8643 (jumelle web de #8642) — **LE REPLI ⌄ VIT DANS LA PLAQUE, À L'ANGLE
- * HAUT-DROIT, ET N'EXISTE QU'EN RÉDACTION** (`StoryComposerFold.offersFoldButton`
- * côté iOS). Le composeur DIT à son hôte quand on écrit (`onWritingChange`) :
+ * #8643 (jumelle web de #8642), puis #9122 — **LE REPLI ⌄ VIT DANS LA PLAQUE,
+ * À L'ANGLE HAUT-DROIT, VISIBLE D'EMBLÉE** (`StoryComposerFold.offersFoldButton`
+ * côté iOS) ; il réduit la barre à une icône de commentaire, qui la rouvre. Le composeur DIT à son hôte quand on écrit (`onWritingChange`) :
  * c'est ce qui fait réduire la scène au-dessus de lui. Replier ou envoyer
  * (hôte `foldOnSend`) rend la lecture.
  */
@@ -79,10 +79,37 @@ function hote(props: { readonly writes: boolean[]; readonly result?: CommentComp
   );
 }
 
-describe('CommentComposer — le repli ⌄ dans la plaque, en rédaction seulement', () => {
-  test('au repos, aucun ⌄ : le champ n’est pas en rédaction', async () => {
+describe('CommentComposer — le repli ⌄ dans la plaque, visible d’emblée (#9122)', () => {
+  test('au repos, le ⌄ est DÉJÀ là : la barre dit qu’elle se replie', async () => {
     const host = await monter(hote({ writes: [] }));
+    expect(host.querySelector('[data-comment-fold]')).not.toBeNull();
+    expect(champ(host).style.paddingInlineEnd).toBe('44px');
+  });
+
+  test('toucher le ⌄ replie la barre en UNE icône de commentaire ; la toucher la rouvre, brouillon conservé', async () => {
+    const host = await monter(hote({ writes: [] }));
+    await taper(host, 'mon brouillon');
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-fold]')?.click());
+    expect(champ(host).closest('.hidden')).not.toBeNull();
     expect(host.querySelector('[data-comment-fold]')).toBeNull();
+    const unfold = host.querySelector<HTMLButtonElement>('[data-comment-unfold]');
+    expect(unfold?.getAttribute('aria-label')).toBe('Afficher la saisie du commentaire');
+    expect(unfold?.querySelector('[data-glyph="chatCircle"]')).not.toBeNull();
+    await act(async () => unfold?.click());
+    expect(champ(host).value).toBe('mon brouillon');
+    expect(document.activeElement).toBe(champ(host));
+  });
+
+  test('une réponse rouvre une barre repliée : sa bannière vit dedans', async () => {
+    const node = (replyTo: { commentId: string; rootId: string; authorName: string; excerpt: null; mention: null } | null) => (
+      <CommentComposer language="fr" canWrite onSend={async () => ({ ok: true })} replyTo={replyTo} />
+    );
+    const host = await monter(node(null));
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-fold]')?.click());
+    expect(host.querySelector('[data-comment-unfold]')).not.toBeNull();
+    await act(async () => root?.render(node({ commentId: 'c1', rootId: 'c1', authorName: 'Noa', excerpt: null, mention: null })));
+    expect(host.querySelector('[data-comment-unfold]')).toBeNull();
+    expect(host.querySelector('[data-comment-reply-banner]')).not.toBeNull();
   });
 
   test('le champ pris : le ⌄ paraît DANS la plaque du champ, à l’angle haut-droit, nommé', async () => {
@@ -113,13 +140,14 @@ describe('CommentComposer — le repli ⌄ dans la plaque, en rédaction seuleme
     expect(down.defaultPrevented).toBe(true);
   });
 
-  test('replier : la rédaction s’arrête, le ⌄ s’en va, le focus reste dans le fil', async () => {
+  test('replier : la rédaction s’arrête, la barre se réduit à son icône, le focus reste dans le fil', async () => {
     const writes: boolean[] = [];
     const host = await monter(hote({ writes }));
     await act(async () => champ(host).focus());
     await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-fold]')?.click());
     expect(document.activeElement).toBe(host.querySelector('[data-hote-fil]'));
     expect(host.querySelector('[data-comment-fold]')).toBeNull();
+    expect(host.querySelector('[data-comment-unfold]')).not.toBeNull();
     expect(writes.at(-1)).toBe(false);
   });
 

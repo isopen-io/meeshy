@@ -27,13 +27,13 @@ extension StoryCardView {
     }
 
     /// **Le sol du texte de la story** : le haut de la plaque du composeur
-    /// (#8431). Sans composeur (story de l'auteur), la place historique.
+    /// (#8431). Sans composeur (story de l'auteur) ou chrome caché, le ras du
+    /// bas (#9072).
     func captionBottomInset(geometry: GeometryProxy) -> CGFloat { // internal for cross-file extension access
         StoryCaptionPlacement.bottomInset(
             composerBlockHeight: composerBlockHeight,
             composerBottomPadding: composerBottomPadding(geometry),
-            isComposerShown: chromeVisible,
-            fallback: topInset + 130)
+            isComposerShown: chromeVisible)
     }
 
     @ViewBuilder
@@ -204,8 +204,7 @@ extension StoryCardView {
     /// plus au-dessus d'elle, il le CONFIE à la barre, qui le pose au bout de sa
     /// rangée d'outils. La loi qui dit QUAND il existe reste celle de #8431.
     var composerFoldControl: ComposerFoldControl? {
-        guard StoryComposerFold.offersFoldButton(presentation: composerFoldPresentation,
-                                                 isComposerEngaged: isComposerEngaged) else { return nil }
+        guard StoryComposerFold.offersFoldButton(presentation: composerFoldPresentation) else { return nil }
         return ComposerFoldControl(
             symbol: StoryComposerFold.foldSymbol,
             label: String(localized: "story.composer.fold",

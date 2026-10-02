@@ -459,6 +459,9 @@ const viewOf = (profile: PublicProfile): PublicProfileView => {
     isSelf,
     blockedByViewer: !isSelf && fixtureBlockedUsers().some((person) => person.id === profile.id),
     relationRequestId: servedRelationRequestId(profile.id, relation),
+    /* La loi du 2026-08-25, rejouée : la présence ne part qu'à un ami accepté
+       (#9063) — jamais à un tiers, jamais sur sa propre fiche. */
+    presence: !isSelf && relation === 'friend' ? { isOnline: true, lastActiveAt: null } : null,
   };
 };
 

@@ -256,32 +256,34 @@ struct FloatingCallPillView: View {
     /// est établi ; sinon le glyphe d'état pré-connexion (sonnerie/connexion en
     /// ambre, rupture réseau en rouge). Le libellé texte survit pour VoiceOver.
     private var statusLine: some View {
-        HStack(spacing: MeeshySpacing.xs) {
-            if pillStatus.isConnected {
-                TransientCallSignalGlyph(strength: signalStrength, errorTint: CallBannerContrast.errorStateTint)
-                // Blanc, pas success : #34D399 ne tient que 3.3:1 contre
-                // l'arrêt haut de l'aplat indigo — sous le seuil 4.5:1 du
-                // texte courant (CallBannerContrastTests). L'état « établi »
-                // reste porté par le glyphe signal.
-                Text(formattedDuration)
-                    .font(.caption.weight(.medium).monospacedDigit())
-                    .foregroundColor(.white)
-            } else if let glyph = pillStatus.glyphSystemName, let color = pillStatus.glyphColor {
-                Image(systemName: glyph)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(color)
+        CallDurationClock {
+            HStack(spacing: MeeshySpacing.xs) {
+                if pillStatus.isConnected {
+                    TransientCallSignalGlyph(strength: signalStrength, errorTint: CallBannerContrast.errorStateTint)
+                    // Blanc, pas success : #34D399 ne tient que 3.3:1 contre
+                    // l'arrêt haut de l'aplat indigo — sous le seuil 4.5:1 du
+                    // texte courant (CallBannerContrastTests). L'état « établi »
+                    // reste porté par le glyphe signal.
+                    Text(formattedDuration)
+                        .font(.caption.weight(.medium).monospacedDigit())
+                        .foregroundColor(.white)
+                } else if let glyph = pillStatus.glyphSystemName, let color = pillStatus.glyphColor {
+                    Image(systemName: glyph)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(color)
+                }
             }
+            .accessibilityElement(children: .combine)
+            // When connected the line otherwise reads to VoiceOver as a bare
+            // "02:34" with no hint it is the call duration. Name what the readout
+            // measures via the label and expose the running time as the value;
+            // pre-connection states keep their spoken status ("Sonnerie…").
+            .accessibilityLabel(pillStatus.isConnected
+                ? String(localized: "a11y.call.pill.duration", defaultValue: "Durée d'appel", bundle: .main)
+                : pillStatus.label)
+            .accessibilityValue(pillStatus.isConnected ? spokenDuration : "")
+            .accessibilityAddTraits(.updatesFrequently)
         }
-        .accessibilityElement(children: .combine)
-        // When connected the line otherwise reads to VoiceOver as a bare
-        // "02:34" with no hint it is the call duration. Name what the readout
-        // measures via the label and expose the running time as the value;
-        // pre-connection states keep their spoken status ("Sonnerie…").
-        .accessibilityLabel(pillStatus.isConnected
-            ? String(localized: "a11y.call.pill.duration", defaultValue: "Durée d'appel", bundle: .main)
-            : pillStatus.label)
-        .accessibilityValue(pillStatus.isConnected ? spokenDuration : "")
-        .accessibilityAddTraits(.updatesFrequently)
     }
 
     /// Status conveyed by the banner's second line — drives whether the live

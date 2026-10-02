@@ -91,6 +91,7 @@ import { useStudioBackgroundSound } from '@/routes/use-studio-background-sound';
 import { useStudioCompositeHash } from '@/routes/use-studio-composite-hash';
 import { useStudioTextBox } from '@/routes/use-studio-text-box';
 import { RETOUCH_DRAFTS, useStudioRetouchFinish, type StudioRetouch } from '@/routes/use-studio-retouch';
+import type { StudioSeededPiece } from '@/lib/stories/studio-retouch-finish';
 import { useStudioObjects } from '@/routes/use-studio-objects';
 import { ALL_DOORS, uploadKey, useStudioUploads } from '@/routes/use-studio-uploads';
 import { useStudioTimeline } from '@/routes/use-studio-timeline';
@@ -297,7 +298,16 @@ function StoryStudio({
   const [backgroundEdit, setBackgroundEdit] = useState<StudioBackgroundEdit | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [postTextOpen, setPostTextOpen] = useState(false);
-  const { finishing, retouchFailed, finishRetouch } = useStudioRetouchFinish(retouch, () => currentStudioPage(latestDraft.current));
+  /** La prise de la caméra de la barre (#9123) — rendue telle quelle si l'auteur n'y touche pas. */
+  const takenRef = useRef<File | null>(null);
+  /** Les pièces du message posées en scènes (#9126) — et la page de chacune. */
+  const seededRef = useRef<readonly StudioSeededPiece[]>([]);
+  const { finishing, retouchFailed, finishRetouch } = useStudioRetouchFinish(
+    retouch,
+    () => currentStudioPage(latestDraft.current),
+    () => takenRef.current,
+    () => ({ pages: latestDraft.current.pages, seeded: seededRef.current }),
+  );
 
   /** La page COURANTE — LE SITE UNIQUE de lecture (#7684) : tout ce qui lisait
    * `draft.texts`/`draft.background`/… lit désormais `page.X`. Son IDENTITÉ ne
@@ -363,7 +373,18 @@ function StoryStudio({
      avant de naviguer : elle devient le FOND de la page courante par la MÊME
      porte qu'un fichier choisi (montée, cadrage, publication ordinaires). */
   useEffect(() => {
-    const seed = retouch?.file ?? takeStudioSeed();
+    const series = retouch?.series;
+    if (series !== undefined) {
+      const placed = importMedia(series.files);
+      seededRef.current = series.files.flatMap((original, index) => {
+        const at = placed.find((placement) => placement.file === original);
+        return at === undefined ? [] : [{ index, pageId: at.pageId, original }];
+      });
+      const focus = seededRef.current.find((piece) => piece.index === series.focus);
+      if (focus !== undefined) setDraft((current) => withCurrentPage(current, focus.pageId));
+      return;
+    }
+    const seed = retouch !== undefined ? retouch.file : takeStudioSeed();
     if (seed !== null) place('visual', seed);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -681,12 +702,17 @@ function StoryStudio({
   });
   const tool = studioOpenTool({ editing, editsBackground: backgroundTools.active });
   const chrome = studioChrome({ tool, timelineOpen });
+  const cameraEngine = deps.camera ?? retouch?.camera;
   const quick = useStudioQuickCapture({
     lang,
     kind,
-    scene: { pageBlank: isStudioPageEmpty(page), toolOpen: tool !== null, timelineOpen, retouching, locked: publishing },
-    onTake: (file) => place('visual', file),
-    ...(deps.camera !== undefined ? { engine: deps.camera } : {}),
+    scene: { pageBlank: isStudioPageEmpty(page), toolOpen: tool !== null, timelineOpen, retouching: retouching && retouch.file !== null, locked: publishing },
+    armsOnOpen: retouch !== undefined && retouch.file === null,
+    onTake: (file) => {
+      takenRef.current = file;
+      place('visual', file);
+    },
+    ...(cameraEngine !== undefined ? { engine: cameraEngine } : {}),
   });
   const animatedToggle = <StudioAnimatedToggle lang={lang} active={animated} onToggle={toggleAnimated} disabled={publishing} />;
   /** La tuile Cadre : les outils du fond, le Cadre déjà déplié (#8849). */
@@ -767,14 +793,14 @@ function StoryStudio({
         )
       }
       rail={
-        draft.pages.length > 1 && !retouching ? (
+        draft.pages.length > 1 && (!retouching || retouch.series !== undefined) ? (
           <Suspense fallback={<span className="min-w-0 flex-1" />}>
             <StudioPageRail
               lang={lang}
               pages={draft.pages}
               currentPageId={draft.currentPage}
               onSelect={selectPage}
-              onDelete={deletePage}
+              {...(retouching ? {} : { onDelete: deletePage })}
               locked={publishing}
             />
           </Suspense>
@@ -956,7 +982,7 @@ function StoryStudio({
               className="h-12 rounded-full px-6 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
               style={{ backgroundColor: 'var(--color-ios-brand)', color: '#fff', outlineColor: 'var(--color-ios-brand)', opacity: finishing ? 0.6 : 1 }}
             >
-              {translate(lang, 'story.studio.retouch.done')}
+              {translate(lang, finishing ? 'story.studio.retouch.exporting' : 'story.studio.retouch.done')}
             </button>
           </div>
         ) : postTextOpen && kind === 'POST' ? (

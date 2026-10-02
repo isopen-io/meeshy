@@ -68,12 +68,6 @@ public struct StoryComposerView: View {
     /// code — la décision n'est connue qu'après la réponse de l'utilisateur.
     @State var showGalleryPicker = false
 
-    // MARK: - Media editor (triggered by edit button on canvas elements)
-
-    @State var editingBgImage: UIImage?
-    @State var editingElementImage: EditingMediaImage?
-    @State var editingElementVideo: EditingMediaVideo?
-
     // MARK: - Audio pickers
 
     @State var showAudioDocumentPicker = false
@@ -84,8 +78,9 @@ public struct StoryComposerView: View {
     @State var recorderFollowUp: StoryRecorderFollowUp?
     /// Sélecteur de la bibliothèque de sons — « Mes sons » et « Tendances ».
     @State var showSoundLibrary = false
-    /// C8 — picker de stickers (bouton « Stickers » du panneau Texte).
-    @State var showStickerPicker = false
+    /// La porte « Stickers » du panneau Texte DEMANDE la feuille à l'hôte
+    /// (#9189) : l'atelier ne monte plus de feuille de stickers à lui.
+    @Environment(\.storyStickerSheetRequest) var stickerSheetRequest
     /// T20 — sélecteur de lieu (chip « Lieu » du panneau Texte). La VUE du
     /// picker est injectée par l'app via `\.storyLocationPicker` : MapKit et les
     /// permissions restent app-side (SDK purity).

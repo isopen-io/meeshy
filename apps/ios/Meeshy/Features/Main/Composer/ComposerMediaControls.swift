@@ -44,6 +44,15 @@ struct ComposerMediaTrimBand: View {
         .task(id: source.url) { await measure(url: source.url) }
     }
 
+    /// L'onde d'un SON, quand elle a été analysée ; une vidéo n'en porte pas
+    /// sur le modèle — la bande montre alors ses vignettes seules.
+    @MainActor
+    static func waveform(viewModel: StoryComposerViewModel, objectId: String) -> [Float] {
+        viewModel.currentEffects.audioPlayerObjects?
+            .first(where: { $0.id == objectId })?
+            .waveformSamples ?? []
+    }
+
     private func measure(url: URL) async {
         let asset = AVURLAsset(url: url)
         guard let duree = try? await asset.load(.duration) else { return }
@@ -109,46 +118,78 @@ struct ComposerMediaActionRow: View {
     }
 }
 
-/// **Les contrôles de l'outil du FOND, sous la scène** (#8847) — à la place de
-/// ce qui y était (barre des mentions et hashtags, socle), que le mode outil
-/// masque. La plaque de verre est celle de la surface (`toolOptions`) : cette
-/// vue ne porte que le contenu de l'outil ouvert.
-struct ComposerBackgroundToolPanel: View {
+/// **LA grille de filtres d'un média** — partagée par l'éditeur d'objet et
+/// l'édition en place (#9138). La grille du SDK, telle quelle ; ce qui change
+/// est la CIBLE (retour porteur 2026-09-28 : « les modifications impactent cet
+/// objet-là et non toute la scène ») : le FOND garde le filtre de slide et son
+/// aperçu, un média POSÉ règle son propre filtre sur sa propre image.
+struct ComposerMediaFilterGrid: View {
     @ObservedObject var viewModel: StoryComposerViewModel
-    let section: ComposerObjectEditorSection
     let media: StoryMediaObject
-    let altText: Binding<String>
+    let isBackground: Bool
 
     var body: some View {
-        content
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel(Text(ComposerObjectEditorCopy.entry(section)))
+        StoryFilterGridView(viewModel: viewModel, previewImage: isBackground ? viewModel.currentSlideBackgroundImage : viewModel.loadedImages[media.id], objectId: isBackground ? nil : media.id)
+    }
+}
+
+/// **Recadrer une image du fil** (#9136, vue `2d` : « 9:16 · 4:5 · 1:1 · LIBRE ») —
+/// le cadre CENTRÉ le plus grand au rapport choisi ; « Original » le défait.
+/// Les pastilles ne calculent que sur un ratio MESURÉ (#5100) ; « Original » ne
+/// calcule rien.
+struct ComposerMediaCropPads: View {
+    @ObservedObject var viewModel: StoryComposerViewModel
+    let media: StoryMediaObject
+
+    private static let ratios: [MediaCropRatio] = [.free, .square, .portrait45, .portrait916]
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.smPlus) {
+            ForEach(Self.ratios, id: \.self) { ratio in
+                let actif = Self.isChosen(ratio, media: media)
+                Button {
+                    viewModel.setMediaCrop(id: media.id,
+                                           crop: MediaCropRule.centered(ratio: ratio,
+                                                                        sourceRatio: media.measuredAspectRatio ?? 0))
+                    HapticFeedback.light()
+                } label: {
+                    Text(Self.label(ratio))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                        .foregroundStyle(actif ? Color.white : Color.white.opacity(0.85))
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .frame(minHeight: 44)
+                        .background {
+                            if actif {
+                                Capsule().fill(MeeshyColors.brandGradient)
+                            } else {
+                                Capsule().fill(Color.white.opacity(0.12))
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(ratio.value != nil && !((media.measuredAspectRatio ?? 0) > 0))
+                .accessibilityAddTraits(actif ? [.isButton, .isSelected] : .isButton)
+            }
+            Spacer(minLength: 0)
+        }
     }
 
-    @ViewBuilder
-    private var content: some View {
-        switch section {
-        case .media(.filter):
-            // Le filtre d'un FOND est celui de la slide, prévisualisé sur le
-            // fond — la même portée que l'éditeur d'objet lui donne.
-            StoryFilterGridView(viewModel: viewModel,
-                                previewImage: viewModel.currentSlideBackgroundImage,
-                                objectId: nil)
-        case .media(.trim):
-            if let source = viewModel.sourceTrim(id: media.id) {
-                ComposerMediaTrimBand(viewModel: viewModel, objectId: media.id, source: source)
-            }
-        case .media(.actions):
-            ComposerMediaActionRow(viewModel: viewModel, media: media)
-        case .media(.altText):
-            MediaAltTextField(kind: .alt, text: altText.wrappedValue) { saisi in
-                altText.wrappedValue = saisi
-            }
-        case .media(.crop), .media(.split), .tool, .timing, .plan:
-            // Hors de `ComposerBackgroundTools.servedInline` : le rail ne les
-            // offre jamais pour un fond.
-            EmptyView()
+    static func isChosen(_ ratio: MediaCropRatio, media: StoryMediaObject) -> Bool {
+        guard ratio.value != nil else { return media.crop == nil }
+        guard let cadre = media.crop, let source = media.measuredAspectRatio else { return false }
+        let vise = MediaCropRule.centered(ratio: ratio, sourceRatio: source)
+        return abs(cadre.width - vise.width) < 0.001 && abs(cadre.height - vise.height) < 0.001
+    }
+
+    static func label(_ ratio: MediaCropRatio) -> String {
+        switch ratio {
+        case .free:
+            return String(localized: "composer.object.editor.crop.original",
+                          defaultValue: "Original", bundle: .main)
+        case .square:      return "1:1"
+        case .portrait45:  return "4:5"
+        case .portrait916: return "9:16"
         }
     }
 }

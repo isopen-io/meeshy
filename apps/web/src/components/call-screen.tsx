@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useStore } from 'zustand/react';
 
 import type { CallRowsKit } from '@/components/call-control-actions';
 import { CallControlPill } from '@/components/call-control-pill';
@@ -10,10 +11,13 @@ import { StreamAudio, StreamVideo } from '@/components/call-media-elements';
 import { CallClock, CallScreenHeader } from '@/components/call-screen-header';
 import { CallStage, selfPreviewMirrored, type SelfView } from '@/components/call-stage';
 import { Glyph, GlyphSvg } from '@/components/glyph';
+import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
 import { CALL_SCREEN_GLYPHS, type CallScreenGlyphName } from '@/components/glyphs-call-screen';
 import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
+import { FLOATING_GLYPHS } from '@/components/glyphs-floating';
 import { callActions } from '@/lib/calls/call-actions';
-import { callControlSet, flipOffered, isVideoScene } from '@/lib/calls/call-controls';
+import { callControlSet, cameraSwitchOf, isVideoScene, type CameraSwitch } from '@/lib/calls/call-controls';
+import { browserPipSupport, requestCallPip, shouldOfferPip } from '@/lib/calls/call-pip';
 import { onRowKeyDown, onRowWheel, ROW_ITEM } from '@/lib/calls/call-row-keys';
 import { CALL_ACTIONS_ID, CALL_PANEL_ID, IDLE, layerChrome, layerOffered, nextLayer, type CallLayerEvent, type CallPanelKind, type CallPanels, type CallScreenLayer, type LayerOffer } from '@/lib/calls/call-screen-layer';
 import { mineInMenu, SELF_CONTROL_GROUPS, selfControlsPlace, zoomControlIn } from '@/lib/calls/call-self-controls';
@@ -23,12 +27,16 @@ import type { CallCaption } from '@/lib/calls/call-captions';
 import { formatCallClock, type ActiveCall, type CallMember } from '@/lib/calls/call-store';
 import { callLayout, callStatusKey, type PlainCallKey, canRetry, canShareScreen, hasVideo, orderedMembers, screenSharer, STATUS_PILL_KEY, statusPills } from '@/lib/calls/call-view';
 import { useLocalZoom } from '@/lib/calls/self-zoom';
+import { swipeDownAllowed } from '@/lib/calls/call-swipe-down';
 import { useCallChrome } from '@/lib/calls/use-call-chrome';
+import { useCallSwipeDown } from '@/lib/calls/use-call-swipe-down';
 import { useCallModeration } from '@/lib/calls/use-call-moderation';
 import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered } from '@/lib/calls/video-effects';
+import { prefersReducedMotion } from '@/lib/view/reduced-motion';
+import { appSettingsOpener } from '@/lib/view/settings-recovery';
+import { blurCapable, browserColorSupport, cameraSourceOf, effectsOffered, effectsUsedOf, videoEffectsStore } from '@/lib/calls/video-effects';
 
 import type { EffectsCompanion } from './call-effects-companions';
 
@@ -45,7 +53,9 @@ import type { EffectsCompanion } from './call-effects-companions';
  * défile à l'horizontale (`call-control-actions.tsx`, #8550) ; en haut,
  * Réduire et la puce « Nom · durée » (`call-screen-header.tsx`). En vidéo,
  * toucher la scène efface TOUTES les commandes et un second toucher les rend ;
- * rien d'autre ne les efface, aucune attente (#8988, `use-call-chrome.ts`). Au-dessus
+ * rien d'autre ne les efface, aucune attente (#8988, `use-call-chrome.ts`). En
+ * duo, glisser l'écran vers le bas le réduit en bulle, ou dans l'image dans
+ * l'image quand le navigateur l'offre (#9096, `use-call-swipe-down.ts`). Au-dessus
  * d'un écran partagé, fond clair par nature, les verres prennent leur teinte
  * plus sombre.
  *
@@ -145,7 +155,21 @@ const CallPreview = lazy(() => import('./call-preview').then((module) => ({ defa
 
 const PREVIEW_KIT = { Video: StreamVideo, Audio: StreamAudio, soundOn: <GlyphSvg glyph={CALL_VIEW_GLYPHS.speakerHigh} size={22} />, soundOff: <GlyphSvg glyph={CALL_VIEW_GLYPHS.speakerSlash} size={22} /> };
 
-const ROWS_KIT: CallRowsKit = { Button: CallButton, glyphs: CALL_VIEW_GLYPHS, onRowKeyDown, onRowWheel, rowItem: ROW_ITEM, actionsId: CALL_ACTIONS_ID, panelIds: CALL_PANEL_ID };
+const useEffectsActive = (): boolean => useStore(videoEffectsStore, (state) => effectsUsedOf(state.effects).length > 0);
+
+const ROWS_KIT: CallRowsKit = {
+  Button: CallButton,
+  glyphs: CALL_VIEW_GLYPHS,
+  onRowKeyDown,
+  onRowWheel,
+  rowItem: ROW_ITEM,
+  actionsId: CALL_ACTIONS_ID,
+  panelIds: CALL_PANEL_ID,
+  useEffectsActive,
+  cameraSourceOf,
+  requestPip: requestCallPip,
+  pipGlyph: <GlyphSvg glyph={CALL_DEVICES_GLYPHS.pictureInPicture} size={22} />,
+};
 
 const CallCameraControls = lazy(() => loadActions().then((module) => ({ default: module.CallCameraControls })));
 
@@ -249,18 +273,18 @@ function useEffectsSupport(stream: MediaStream | null, forced: EffectsSupport | 
   return useMemo(() => forced ?? { color: browserColorSupport(), blur: blurCapable(sent === null ? null : cameraSourceOf(sent)) }, [forced, sent]);
 }
 
-/** Une autre caméra où se retourner — relu quand la caméra s'allume et quand un appareil arrive ou part. */
-function useCanFlip(cameraOn: boolean): boolean {
-  const [canFlip, setCanFlip] = useState(true);
+/** Retourner, choisir sa caméra, ou rien (#9094) — relu quand la caméra s'allume et quand un appareil arrive ou part. */
+function useCameraSwitch(cameraOn: boolean): CameraSwitch {
+  const [cameraSwitch, setCameraSwitch] = useState<CameraSwitch>('flip');
   useEffect(() => {
     const media = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices;
     if (media?.enumerateDevices === undefined) return undefined;
-    const read = () => void media.enumerateDevices().then((devices) => setCanFlip(flipOffered(devices)), () => undefined);
+    const read = () => void media.enumerateDevices().then((devices) => setCameraSwitch(cameraSwitchOf(devices)), () => undefined);
     read();
     media.addEventListener?.('devicechange', read);
     return () => media.removeEventListener?.('devicechange', read);
   }, [cameraOn]);
-  return canFlip;
+  return cameraSwitch;
 }
 
 const CallDeclineSheet = lazy(() =>
@@ -337,13 +361,13 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
         })
       : null;
   const sharedScreenShown = layout === 'screen' || spotlight?.screen === true;
-  const [immersive, toggleImmersive] = useImmersive(stageRef, sharedScreenShown);
+  const [immersive, toggleImmersive] = useImmersive(stageRef, layout === 'screen' || spotlight !== null);
   const videoScene = live && isVideoScene(call);
   const sharer = layout === 'screen' ? screenSharer(call.members) : null;
   const support = useEffectsSupport(call.localStream, effectsSupport);
-  const canFlip = useCanFlip(call.cameraOn);
-  const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), canFlip, videoScene });
-  const place = selfControlsPlace({ layout, selfFull, selfTileShown: call.cameraOn });
+  const cameraSwitch = useCameraSwitch(call.cameraOn);
+  const set = callControlSet({ ...call, canShare, canEffect: effectsOffered(support), cameraSwitch, canPip: shouldOfferPip(call, browserPipSupport()), videoScene });
+  const place = spotlight !== null && spotlight.featured === null ? 'top' : selfControlsPlace({ layout, selfFull, selfTileShown: call.cameraOn });
   const local = useLocalZoom(call.callId, call.facing);
   const offer: LayerOffer = {
     effects: set.mine.includes('effects'),
@@ -355,7 +379,17 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
   };
   const shown = live ? layerOffered(layer, offer) : IDLE;
   const chrome = layerChrome(shown);
-  const visibility = useCallChrome({ videoScene: videoScene && chrome.mode === null, root });
+  const swipe = useCallSwipeDown({
+    root,
+    allowed: live && swipeDownAllowed({ joined, layout, layerIdle: shown.kind === 'idle' }),
+    canPip: shouldOfferPip(call, browserPipSupport()),
+    reducedMotion: prefersReducedMotion(),
+    onOutcome: (outcome) => {
+      if (outcome === 'pip') requestCallPip();
+      callActions.minimize();
+    },
+  });
+  const visibility = useCallChrome({ videoScene: videoScene && chrome.mode === null, root, swallowTap: swipe.swallowTap });
   const send = (event: CallLayerEvent) => {
     const next = nextLayer(shown, event);
     focusNext.current = focusTarget(shown, next);
@@ -494,10 +528,16 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
     </div>
   );
 
+  const openAppSettings = appSettingsOpener();
   const endedControls = (
     <div className="flex items-start justify-center gap-10 px-8">
       <RoundButton label={t('call.close')} caption={t('call.close')} size={60} glyph={screenGlyph('arrowsInSimple', 24)} onPress={callActions.dismiss} />
       {canRetry(call) ? <RoundButton label={t('call.retry')} caption={t('call.retry')} tone="accept" size={60} glyph={<Glyph name="phone" size={26} />} onPress={callActions.retry} /> : null}
+      {/* UN REFUS DÉFINITIF DU MICRO MÈNE AUX RÉGLAGES DE L'APP (#9033, comme le
+          composeur #8882) : dans la coque Android, il ne se redemande plus. */}
+      {call.phase.kind === 'ended' && call.phase.reason === 'permission' && openAppSettings !== null ? (
+        <RoundButton label={t('call.openSettings')} caption={t('call.openSettings')} size={60} glyph={<GlyphSvg glyph={FLOATING_GLYPHS.gear} size={24} />} onPress={openAppSettings} />
+      ) : null}
     </div>
   );
 
@@ -576,8 +616,9 @@ export function CallScreen({ call, canShare = browserCanShare(), initiallyExpand
       role="dialog"
       aria-modal="true"
       aria-label={translate(language, 'call.a11y.screen', { name: call.title })}
-      className="fixed inset-0 z-[200] flex flex-col pb-safe pt-safe"
-      style={{ background: BACKDROP, color: INK }}
+      className={`fixed inset-0 z-[200] flex flex-col pb-safe pt-safe ${swipe.dragging ? '' : 'transition-transform duration-300 ease-out motion-reduce:transition-none'}`}
+      style={{ background: BACKDROP, color: INK, ...(swipe.allowed ? { touchAction: 'none' } : {}), ...(swipe.offset === 0 ? {} : { transform: `translateY(${swipe.offset}px)` }) }}
+      data-call-swipe-down={swipe.allowed ? (swipe.dragging ? 'dragging' : 'ready') : undefined}
       data-call-screen={phase}
       data-call-chrome={hidden ? 'hidden' : 'shown'}
       data-call-layer={shown.kind}

@@ -49,6 +49,9 @@ struct ComposerSceneCameraBar: View {
     /// cette vue peint.
     let size: ComposerSceneCameraSize
     let onToggleSize: () -> Void
+    /// Le viseur servi SEUL en plein écran (#9125) n'a pas de carte où
+    /// rentrer : il ne montre pas `[ ]`. La croix, elle, reste.
+    var offersSizeToggle = true
 
     let segments: [ComposerCaptureSegment]
     let onDropLastSegment: () -> Void
@@ -134,10 +137,12 @@ struct ComposerSceneCameraBar: View {
                          label: ComposerSceneCameraCopy.disarmLabel,
                          tint: .white,
                          action: onDisarm)
-            glassControl(symbol: size.toggleSymbol,
-                         label: ComposerSceneCameraCopy.sizeLabel(size),
-                         tint: .white,
-                         action: onToggleSize)
+            if offersSizeToggle {
+                glassControl(symbol: size.toggleSymbol,
+                             label: ComposerSceneCameraCopy.sizeLabel(size),
+                             tint: .white,
+                             action: onToggleSize)
+            }
             glassControl(symbol: "arrow.triangle.2.circlepath.camera",
                          label: ComposerSceneCameraCopy.flipLabel,
                          tint: .white,
@@ -244,6 +249,15 @@ struct ComposerSceneCameraBar: View {
                 .padding(.horizontal, MeeshySpacing.sm)
                 .frame(height: 24)
                 .adaptiveGlass(in: Capsule())
+                // VoiceOver lit « 0:12 » comme une heure : la minuterie se DIT
+                // en mots (#9125 — elle remplace celle de l'ancienne vue).
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(LocalizedNumber.spokenDuration(
+                    seconds: ComposerCaptureSegments.elapsed(
+                        segments: segments,
+                        live: liveDuration,
+                        recording: stage == .recording)))
+                .accessibilityAddTraits(.updatesFrequently)
 
                 Text(ComposerSceneCameraCopy.segmentCount(segments.count))
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))

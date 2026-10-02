@@ -33,6 +33,9 @@ struct EditPostDraft {
     /// `nil` reçu par un ViewModel ne dit pas si le champ est INCHANGÉ ou
     /// JAMAIS AFFICHÉ, et seule la feuille connaît la différence.
     var known: Set<PostEditField> = EditPostDraft.documentFields
+    /// Non-nil UNIQUEMENT quand l'auteur a changé l'AGENCEMENT d'un post à
+    /// plusieurs scènes (#9178) : le canvas d'origine, seul `layout` réécrit.
+    var storyEffects: StoryEffects? = nil
 
     /// Le plus large que cette feuille puisse déclarer. `save()` la RESSERRE
     /// selon ce qui a réellement été peint : le sélecteur de type n'existe pas
@@ -40,7 +43,8 @@ struct EditPostDraft {
     ///
     /// Six champs du corps n'y figurent JAMAIS — `moodEmoji`, `storyEffects`,
     /// `mediaIds`, `mentions`, `allowSoundExtraction`, `mediaAlt` — parce que
-    /// cette feuille ne les a jamais rendus. Les déclarer les rendrait
+    /// cette feuille ne les a jamais rendus. `storyEffects` n'y entre qu'au
+    /// `save()`, et seulement quand l'agencement a changé (#9178). Les déclarer les rendrait
     /// écrasables par une surface qui ne les a jamais montrés à l'auteur.
     static let documentFields: Set<PostEditField> = [
         .content, .visibility, .visibilityUserIds, .originalLanguage,
@@ -90,7 +94,7 @@ struct EditablePostMedia: Identifiable, Equatable {
     let id: String
     let kind: Kind
     let previewURL: URL?
-    /// Durée serveur-autoritaire (ms), quand connue — alimente le plancher de
+    /// Durée serveur-autoritaire, convertie en MILLISECONDES, quand connue — alimente le plancher de
     /// 3s de `ReelComposition` pour les vidéos/audios. `nil` pour les images
     /// et documents (jamais soumis à cette condition).
     let durationMs: Int?
@@ -117,7 +121,56 @@ struct EditablePostMedia: Identifiable, Equatable {
         }
         let raw = media.thumbnailUrl ?? media.url
         self.previewURL = raw.flatMap { MeeshyConfig.resolveMediaURL($0) }
-        self.durationMs = media.duration
+        // `FeedMedia.duration` est en SECONDES (`APIPost` divise par 1 000) :
+        // la lire en millisecondes pesait une vidéo de 30 s « 30 ms », sous le
+        // plancher de 3 s — et rouvrir un réel le rebasculait en POST (#9178).
+        self.durationMs = media.duration.map { $0 * 1000 }
+    }
+}
+
+/// **Le TYPE d'une publication éditée** (#9178, directive porteur 2026-10-02 :
+/// « il faut toujours permettre de choisir le type de post ; un réel devient un
+/// post, ce n'est pas bon »).
+///
+/// - le type d'ORIGINE est restauré exactement — le serveur l'a accepté, la
+///   feuille ne le juge pas plus sévèrement que lui à l'ouverture ;
+/// - le sélecteur est TOUJOURS offert (hors repost), et un réel refusé l'est
+///   AVEC sa raison : la règle de `ComposerFormatAvailability`, jamais une
+///   jumelle ;
+/// - seul un RETRAIT de média qui dé-qualifie la composition impose le post
+///   (le gateway refuse un réel non qualifiant) ;
+/// - un POST de plusieurs scènes change d'AGENCEMENT, offert là où
+///   `ComposerMosaicChoice` l'offre à la création.
+nonisolated enum PostEditTypeChoice {
+    static func initialType(originalType: String?) -> String {
+        (originalType ?? "POST").uppercased() == "REEL" ? "REEL" : "POST"
+    }
+
+    static func reelIsChoosable(originalType: String?, remainingQualifies: Bool, removedAny: Bool) -> Bool {
+        remainingQualifies || (initialType(originalType: originalType) == "REEL" && !removedAny)
+    }
+
+    static func selection(_ selected: String, reelIsChoosable: Bool) -> String {
+        selected == "REEL" && !reelIsChoosable ? "POST" : selected
+    }
+
+    static func verdicts(reelIsChoosable: Bool) -> [ComposerFormatAvailability.Verdict] {
+        ComposerFormatAvailability.verdicts(candidates: [.post, .reel],
+                                            offered: reelIsChoosable ? [.post, .reel] : [.post],
+                                            carriesMoreThanText: true)
+    }
+
+    /// Un retrait de média laisse le canvas désigner un fichier détaché : on ne
+    /// réécrit pas l'agencement dans la même édition.
+    static func offersLayout(selectedType: String, effects: StoryEffects?, removedAny: Bool) -> Bool {
+        selectedType == "POST" && !removedAny
+            && ComposerMosaicChoice.isServed(slideCount: effects?.canvasV3?.scenes.count ?? 0, format: .post)
+    }
+
+    static func effects(_ effects: StoryEffects?, layout: MosaicLayoutMode) -> StoryEffects? {
+        guard var edite = effects, let document = edite.canvasV3 else { return nil }
+        edite.canvasV3 = CanvasV3(v: document.v, scenes: document.scenes, sound: document.sound, layout: layout)
+        return edite
     }
 }
 
@@ -132,6 +185,8 @@ struct EditPostSheet: View {
     /// in `removeMediaIds`; the gateway detaches them. C'est aussi la source de
     /// la règle de composition REEL (`remainingQualifiesAsReel`).
     var media: [EditablePostMedia] = []
+    /// Le canvas publié — porte l'agencement d'un post à plusieurs scènes.
+    var originalStoryEffects: StoryEffects? = nil
     /// Position actuellement attachée au post (`FeedPost.location`) — affichée
     /// dans la sheet avec « retirer » / « changer » (picker).
     var originalLocation: SharedPlace? = nil
@@ -150,6 +205,7 @@ struct EditPostSheet: View {
     @State private var draftContent: String = ""
     @State private var selectedLanguage: String = ""
     @State private var selectedType: String = "POST"
+    @State private var selectedLayout: MosaicLayoutMode = ComposerMosaicChoice.fallback
     @State private var showLanguagePicker = false
     @FocusState private var isFocused: Bool
     @State private var isSaving: Bool = false
@@ -181,12 +237,23 @@ struct EditPostSheet: View {
         )
     }
 
-    /// Only meaningful when not a repost and either the remaining composition
-    /// qualifies as a reel, or the post already IS one (the picker then shows
-    /// the imposed switch back to POST when media removal de-qualifies it).
-    private var showTypePicker: Bool {
-        !isRepost && (remainingQualifiesAsReel || normalizedOriginalType == "REEL")
+    private var reelIsChoosable: Bool {
+        PostEditTypeChoice.reelIsChoosable(originalType: originalType,
+                                           remainingQualifies: remainingQualifiesAsReel,
+                                           removedAny: !removedMediaIds.isEmpty)
     }
+
+    /// Toujours offert hors repost (#9178) — un repost miroite sa source.
+    private var showTypePicker: Bool { !isRepost }
+
+    private var originalLayout: MosaicLayoutMode {
+        originalStoryEffects?.canvasV3?.resolvedLayout ?? ComposerMosaicChoice.fallback
+    }
+    private var offersLayout: Bool {
+        PostEditTypeChoice.offersLayout(selectedType: selectedType, effects: originalStoryEffects,
+                                        removedAny: !removedMediaIds.isEmpty)
+    }
+    private var layoutChanged: Bool { offersLayout && selectedLayout != originalLayout }
 
     private var contentChanged: Bool {
         trimmedContent != originalContent.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -208,6 +275,7 @@ struct EditPostSheet: View {
     }
     private var hasChanges: Bool {
         contentChanged || languageChanged || typeChanged || mediaChanged || locationChanged || audienceChanged
+            || layoutChanged
     }
 
     /// Position telle qu'elle sera après sauvegarde : l'édition locale prime,
@@ -335,13 +403,11 @@ struct EditPostSheet: View {
             selectedVisibility = originalVisibility
                 .flatMap { PostVisibility(rawValue: $0.uppercased()) } ?? .public
             selectedAudience = originalVisibilityUserIds
-            // Corpus hérité (E11) : un REEL existant dont la composition ne
-            // qualifie plus (ex. une seule image) est rebasculé sur POST dès
-            // l'ouverture — le picker l'affiche, et la sauvegarde envoie le
-            // changement de type (le gateway refuse un REEL non qualifiant).
-            selectedType = (normalizedOriginalType == "REEL" && !remainingQualifiesAsReel)
-                ? "POST"
-                : normalizedOriginalType
+            // Le type d'ORIGINE, exactement (#9178) : ouvrir n'est pas éditer,
+            // et le serveur a déjà accepté ce réel. Seul un retrait qui
+            // dé-qualifie la composition impose le post (`toggleRemove`).
+            selectedType = PostEditTypeChoice.initialType(originalType: originalType)
+            selectedLayout = originalLayout
             // Defer focus slightly so the keyboard rises after the sheet
             // present animation settles — otherwise the appearance jolts.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
@@ -466,22 +532,82 @@ struct EditPostSheet: View {
             .buttonStyle(.plain)
             .disabled(isSaving)
 
-            if showTypePicker {
-                Picker(String(localized: "feed.post.edit.type", defaultValue: "Type", bundle: .main), selection: $selectedType) {
-                    Text(String(localized: "feed.post.edit.type.post", defaultValue: "Publier", bundle: .main)).tag("POST")
-                    // L'option Réel n'est offerte que si la composition
-                    // restante qualifie — `toggleRemove` a déjà rebasculé la
-                    // sélection sur POST quand un retrait dé-qualifie, donc la
-                    // sélection ne pointe jamais sur un tag absent.
-                    if remainingQualifiesAsReel {
-                        Text(String(localized: "feed.post.edit.type.reel", defaultValue: "Réel", bundle: .main)).tag("REEL")
-                    }
-                }
-                .pickerStyle(.segmented)
-                .disabled(isSaving)
-            }
+            if showTypePicker { typePicker }
+
+            if offersLayout { layoutPicker }
         }
         .padding(.horizontal, MeeshySpacing.lg)
+    }
+
+    /// **Les deux types, toujours peints** (#9178) — un réel refusé est GRISÉ
+    /// avec sa raison, jamais absent (#4030).
+    private var typePicker: some View {
+        let verdicts = PostEditTypeChoice.verdicts(reelIsChoosable: reelIsChoosable)
+        return VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+            HStack(spacing: MeeshySpacing.xs) {
+                ForEach(verdicts, id: \.format) { verdict in
+                    let type = verdict.format == .reel ? "REEL" : "POST"
+                    let choisi = selectedType == type
+                    Button {
+                        HapticFeedback.light()
+                        selectedType = type
+                    } label: {
+                        Text(ComposerFormatCopy.label(verdict.format))
+                            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: choisi ? .semibold : .regular))
+                            .foregroundColor(choisi ? .white : theme.textPrimary)
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(
+                                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
+                                    .fill(choisi ? MeeshyColors.indigo500 : theme.inputBackground)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!verdict.isChoosable || isSaving)
+                    .opacity(verdict.isChoosable ? 1 : 0.45)
+                    .accessibilityAddTraits(choisi ? .isSelected : [])
+                    .accessibilityHint(Text(verdict.reason ?? ""))
+                }
+            }
+            if let refus = verdicts.first(where: { !$0.isChoosable })?.reason {
+                Text(refus)
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize))
+                    .foregroundColor(theme.textMuted)
+            }
+        }
+    }
+
+    /// L'agencement d'un post à plusieurs scènes — les mots et les glyphes de
+    /// `ComposerMosaicChoice`, ceux de la création.
+    private var layoutPicker: some View {
+        Menu {
+            Picker(ComposerMosaicChoice.sectionTitle, selection: $selectedLayout) {
+                ForEach(ComposerMosaicChoice.ordered, id: \.self) { mode in
+                    Label(ComposerMosaicChoice.label(mode), systemImage: ComposerMosaicChoice.symbol(mode))
+                        .tag(mode)
+                }
+            }
+        } label: {
+            HStack(spacing: MeeshySpacing.smPlus) {
+                Image(systemName: ComposerMosaicChoice.symbol(selectedLayout))
+                    .foregroundColor(theme.textSecondary)
+                    .accessibilityHidden(true)
+                Text(ComposerMosaicChoice.sectionTitle)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize))
+                    .foregroundColor(theme.textPrimary)
+                Spacer()
+                Text(ComposerMosaicChoice.label(selectedLayout))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
+                    .foregroundColor(theme.textSecondary)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                    .foregroundColor(theme.textMuted)
+                    .accessibilityHidden(true)
+            }
+            .padding(.vertical, MeeshySpacing.smPlus)
+            .padding(.horizontal, MeeshySpacing.mdPlus)
+            .background(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus).fill(theme.inputBackground))
+        }
+        .disabled(isSaving)
     }
 
     // MARK: - Position
@@ -647,9 +773,7 @@ struct EditPostSheet: View {
             // tant que la composition reste qualifiante (video || audio ||
             // >= 2 images). Sinon le retrait est permis mais IMPOSE le passage
             // en POST — le gateway rejette (422) un REEL non qualifiant.
-            if selectedType == "REEL" && !remainingQualifiesAsReel {
-                selectedType = "POST"
-            }
+            selectedType = PostEditTypeChoice.selection(selectedType, reelIsChoosable: reelIsChoosable)
         }
     }
 
@@ -664,6 +788,7 @@ struct EditPostSheet: View {
         var known = EditPostDraft.documentFields
         if !showTypePicker { known.remove(.type) }
         if media.isEmpty { known.remove(.removeMediaIds) }
+        if layoutChanged { known.insert(.storyEffects) }
         let draft = EditPostDraft(
             content: trimmedContent,
             language: languageChanged ? selectedLanguage : nil,
@@ -672,7 +797,8 @@ struct EditPostSheet: View {
             location: locationEdit,
             visibility: audienceChanged ? selectedVisibility.rawValue : nil,
             visibilityUserIds: audienceChanged ? draftAudience : nil,
-            known: known
+            known: known,
+            storyEffects: layoutChanged ? PostEditTypeChoice.effects(originalStoryEffects, layout: selectedLayout) : nil
         )
         await onSave(draft)
         isSaving = false

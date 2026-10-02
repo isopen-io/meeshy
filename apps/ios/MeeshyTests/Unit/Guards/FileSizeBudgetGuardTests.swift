@@ -43,10 +43,9 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// **Dette héritée, mesurée au 261i.** Cette liste ne s'ALLONGE jamais : un
     /// fichier qui la quitte (découpé, ou redescendu sous le budget) en sort pour
     /// toujours. Chaque découpe est un lot à elle seule — `CallManager.swift`
-    /// (6462 lignes) n'est pas un lot d'UI/UX.
+    /// (6462 lignes) n'était pas un lot d'UI/UX ; il a eu le sien (2026-10-02).
     private static let legacyOverBudget: Set<String> = [
         "BubbleStandardLayout.swift",
-        "CallManager.swift",
         "ConversationDashboardView.swift",
         "ConversationListView+Overlays.swift",
         "ConversationListView.swift",
@@ -573,7 +572,21 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // latérale de `FullscreenTopBarLayout` : le `.padding(.horizontal, …)` que
     // `StoryViewerView+Canvas.swift` posait autour de `StoryHeaderView` part (−1 ligne).
     // L'hôte RESTE en dette ; le plafond baisse d'exactement ce que le lot retire.
-    private static let legacyLineCeiling = 42_091
+    //
+    // #9075 — 42 091 → 41 996 (−95). Les CINQ projections jumelles
+    // `APIPostComment → FeedComment` de `StoryViewerView+Content.swift` (premier
+    // chargement, page suivante, réponses, `comment:added`, `comment:updated`)
+    // délèguent au site UNIQUE `FeedComment(api:)` — qui porte la carte des liens
+    // suivis qu'aucune d'elles ne recopiait. L'hôte RESTE en dette.
+    //
+    // 2026-10-02 — 41 996 → 35 776 (−6 220). `CallManager.swift` repasse SOUS le
+    // budget : ses responsabilités partent dans les extensions `CallManager+*.swift`
+    // (délégués CallKit et WebRTC, reconnexion, signalisation, négociation, session
+    // et interruptions audio, réponse, raccroché, attente, commandes média,
+    // démontage…), toutes sous le budget, sans changer une ligne de comportement. Il
+    // sort de `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
+    // pesait à la sortie.
+    private static let legacyLineCeiling = 35_776
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

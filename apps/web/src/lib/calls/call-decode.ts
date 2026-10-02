@@ -181,11 +181,11 @@ export function decodeIceRefresh(payload: unknown): { readonly callId: string; r
 }
 
 /** La réponse d'un accusé `{ success, data?, error? }`. */
-export function decodeAck(value: unknown): { readonly ok: true; readonly data: Json } | { readonly ok: false; readonly code: string; readonly endReason: string | null } {
-  if (!isRecord(value)) return { ok: false, code: 'NO_ACK', endReason: null };
+export function decodeAck(value: unknown): { readonly ok: true; readonly data: Json } | { readonly ok: false; readonly code: string; readonly endReason: string | null; readonly activeCallId: string | null } {
+  if (!isRecord(value)) return { ok: false, code: 'NO_ACK', endReason: null, activeCallId: null };
   if (value.success === true) return { ok: true, data: isRecord(value.data) ? value.data : {} };
   const error = isRecord(value.error) ? value.error : {};
-  return { ok: false, code: str(error.code) ?? 'UNKNOWN', endReason: str(error.endReason) };
+  return { ok: false, code: str(error.code) ?? 'UNKNOWN', endReason: str(error.endReason), activeCallId: str(error.activeCallId) };
 }
 
 /** Les membres déjà présents d'une session rendue par `call:join` (session Prisma brute). */
@@ -230,6 +230,14 @@ export function decodeParticipantInvited(payload: unknown): { readonly callId: s
   const callId = str(payload.callId);
   const invitee = personOf(payload.invitee);
   return callId === null || invitee === null ? null : { callId, invitedBy: str(payload.invitedBy), invitee };
+}
+
+/** `call:invite-declined` / `call:invite-expired` (#8470) — l'invitation de `userId` s'est résolue sans décroché. */
+export function decodeInviteSettled(payload: unknown): { readonly callId: string; readonly userId: string } | null {
+  if (!isRecord(payload)) return null;
+  const callId = str(payload.callId);
+  const userId = str(payload.userId);
+  return callId === null || userId === null ? null : { callId, userId };
 }
 
 /** `call:muted-by-moderator` (#8438) — adressé à la seule personne visée. */

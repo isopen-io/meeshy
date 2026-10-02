@@ -7,8 +7,13 @@ import {
   acquireConversationViewing,
   bindConversationViewing,
   createViewingStore,
+  focusConversationViewing,
   herePeersOf,
+  isActiveIn,
+  isFocusedIn,
   isHereIn,
+  signalConversationActivity,
+  suspendConversationViewing,
 } from './conversation-viewing';
 import type { SocketClient, SocketHandler } from '@/lib/net/socket';
 
@@ -92,6 +97,18 @@ function open(conversationId: string): () => void {
   return release;
 }
 
+function cover(): () => void {
+  const uncover = suspendConversationViewing();
+  cleanups = [...cleanups, uncover];
+  return uncover;
+}
+
+function focus(): () => void {
+  const blur = focusConversationViewing();
+  cleanups = [...cleanups, blur];
+  return blur;
+}
+
 const sent = (emitted: readonly Emitted[]) =>
   emitted.filter((e) => e.event === CLIENT_EVENTS.VIEWING_START || e.event === CLIENT_EVENTS.VIEWING_STOP);
 
@@ -147,6 +164,84 @@ describe('s’annoncer — l’écran de la conversation ouvert', () => {
   });
 });
 
+describe('suspendu — l’écran d’appel en grand fait quitter la conversation (#9065, ex-#9052)', () => {
+  const START = { event: CLIENT_EVENTS.VIEWING_START, payload: { conversationId: CONV } };
+  const STOP = { event: CLIENT_EVENTS.VIEWING_STOP, payload: { conversationId: CONV } };
+
+  test('l’écran d’appel retire la présence, le réduire la rend', () => {
+    const { emitted } = setup();
+    open(CONV);
+    const uncover = cover();
+    uncover();
+
+    expect(sent(emitted)).toEqual([START, STOP, START]);
+  });
+
+  test('deux couvertures empilées ne rendent la présence qu’à la dernière fermée', () => {
+    const { emitted } = setup();
+    open(CONV);
+    const first = cover();
+    const second = cover();
+    first();
+    expect(sent(emitted)).toEqual([START, STOP]);
+
+    second();
+    expect(sent(emitted)).toEqual([START, STOP, START]);
+  });
+
+  test('un fil ouvert SOUS une couverture ne s’annonce qu’à sa fermeture', () => {
+    const { emitted } = setup();
+    const uncover = cover();
+    open(CONV);
+    expect(sent(emitted)).toEqual([]);
+
+    uncover();
+    expect(sent(emitted)).toEqual([START]);
+  });
+
+  test('quitter le fil pendant la couverture ne renvoie pas de second viewing:stop', () => {
+    const { emitted } = setup();
+    const release = open(CONV);
+    const uncover = cover();
+    release();
+    uncover();
+
+    expect(sent(emitted)).toEqual([START, STOP]);
+  });
+
+  test('une reconnexion pendant la couverture ne ré-annonce rien', () => {
+    const { emitted, fire } = setup();
+    open(CONV);
+    cover();
+    fire('disconnect');
+    fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+    expect(sent(emitted)).toEqual([START, STOP]);
+  });
+
+  test('le retour au premier plan pendant la couverture ne ré-annonce rien', () => {
+    const { emitted, visibility } = setup();
+    open(CONV);
+    cover();
+    visibility.set('hidden');
+    visibility.set('visible');
+
+    expect(sent(emitted)).toEqual([START, STOP]);
+  });
+
+  test('la levée est idempotente', () => {
+    const { emitted } = setup();
+    open(CONV);
+    const first = cover();
+    const second = cover();
+    first();
+    first();
+    expect(sent(emitted)).toEqual([START, STOP]);
+    second();
+    expect(sent(emitted)).toEqual([START, STOP, START]);
+  });
+});
+
 describe('les pairs présents — ce que la passerelle annonce', () => {
   test('un pair qui arrive puis repart', () => {
     const { fire, store } = setup();
@@ -195,5 +290,295 @@ describe('les pairs présents — ce que la passerelle annonce', () => {
     });
     unbind();
     expect(fake.listeners()).toBe(0);
+  });
+});
+
+describe('regarder, écouter, agir (#9061)', () => {
+  const HOLD_MS = 30;
+
+  function lively({ visible = 'visible' as 'visible' | 'hidden' } = {}) {
+    const fake = fakeSocket(true);
+    const visibility = fakeVisibility(visible);
+    const store = createViewingStore();
+    let clock = 10_000;
+    const unbind = bindConversationViewing({
+      socket: fake.socket,
+      visibility: visibility.source,
+      store,
+      viewerId: () => VIEWER,
+      now: () => clock,
+      activityHoldMs: HOLD_MS,
+    });
+    cleanups = [...cleanups, unbind];
+    const advance = (ms: number): void => {
+      clock += ms;
+    };
+    const activities = () => fake.emitted.filter((e) => e.event === CLIENT_EVENTS.VIEWING_ACTIVITY);
+    return { ...fake, visibility, store, advance, activities };
+  }
+
+  test('l’activité dans une conversation ouverte s’annonce, au plus une fois toutes les deux secondes', () => {
+    const { activities, advance } = lively();
+    open(CONV);
+
+    signalConversationActivity(CONV);
+    signalConversationActivity(CONV);
+    advance(1_999);
+    signalConversationActivity(CONV);
+    expect(activities()).toEqual([{ event: CLIENT_EVENTS.VIEWING_ACTIVITY, payload: { conversationId: CONV } }]);
+
+    advance(1);
+    signalConversationActivity(CONV);
+    expect(activities()).toHaveLength(2);
+  });
+
+  test('rien ne part pour une conversation qui n’est pas ouverte, suspendue, ou en arrière-plan', () => {
+    const { activities, visibility } = lively();
+    signalConversationActivity(CONV);
+    expect(activities()).toEqual([]);
+
+    open(CONV);
+    const uncover = cover();
+    signalConversationActivity(CONV);
+    expect(activities()).toEqual([]);
+    uncover();
+
+    visibility.set('hidden');
+    signalConversationActivity(CONV);
+    expect(activities()).toEqual([]);
+  });
+
+  test('un pair actif l’est le temps de la pulsation, puis redevient simplement là', async () => {
+    const { fire, store } = lively();
+    fire(SERVER_EVENTS.VIEWING_START, { userId: BOB, conversationId: CONV });
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV });
+    expect(isActiveIn(store.getState(), CONV, BOB)).toBe(true);
+
+    await new Promise((resolve) => setTimeout(resolve, HOLD_MS + 20));
+    expect(isActiveIn(store.getState(), CONV, BOB)).toBe(false);
+    expect(isHereIn(store.getState(), CONV, BOB)).toBe(true);
+  });
+
+  test('une nouvelle activité prolonge la pulsation', async () => {
+    const { fire, store } = lively();
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV });
+    await new Promise((resolve) => setTimeout(resolve, HOLD_MS - 10));
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV });
+    await new Promise((resolve) => setTimeout(resolve, HOLD_MS - 10));
+    expect(isActiveIn(store.getState(), CONV, BOB)).toBe(true);
+  });
+
+  test('quitter la conversation ou perdre le lien éteint la pulsation sur-le-champ', () => {
+    const { fire, store } = lively();
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV });
+    fire(SERVER_EVENTS.VIEWING_STOP, { userId: BOB, conversationId: CONV });
+    expect(isActiveIn(store.getState(), CONV, BOB)).toBe(false);
+
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: CAROL, conversationId: CONV });
+    fire('disconnect');
+    expect(isActiveIn(store.getState(), CONV, CAROL)).toBe(false);
+  });
+
+  test('sa propre activité ne se rend pas', () => {
+    const { fire, store } = lively();
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: VIEWER, conversationId: CONV });
+    expect(isActiveIn(store.getState(), CONV, VIEWER)).toBe(false);
+  });
+});
+
+describe('en plein écran depuis la conversation (#9065)', () => {
+  const BEAT_MS = 2_000;
+  const HOLD_MS = 30;
+  const START = { event: CLIENT_EVENTS.VIEWING_START, payload: { conversationId: CONV } };
+  const FOCUS = { event: CLIENT_EVENTS.VIEWING_ACTIVITY, payload: { conversationId: CONV, focus: true } };
+  const STIR = { event: CLIENT_EVENTS.VIEWING_ACTIVITY, payload: { conversationId: CONV } };
+  const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  function focused({ visible = 'visible' as 'visible' | 'hidden' } = {}) {
+    const fake = fakeSocket(true);
+    const visibility = fakeVisibility(visible);
+    const store = createViewingStore();
+    let clock = 50_000;
+    let ticks: readonly { readonly ms: number; readonly tick: () => void }[] = [];
+    const unbind = bindConversationViewing({
+      socket: fake.socket,
+      visibility: visibility.source,
+      store,
+      viewerId: () => VIEWER,
+      now: () => clock,
+      activityHoldMs: HOLD_MS,
+      every: (ms, tick) => {
+        const entry = { ms, tick };
+        ticks = [...ticks, entry];
+        return () => {
+          ticks = ticks.filter((t) => t !== entry);
+        };
+      },
+    });
+    cleanups = [...cleanups, unbind];
+    const beat = (): void => {
+      clock += BEAT_MS;
+      for (const { tick } of ticks) tick();
+    };
+    const advance = (ms: number): void => {
+      clock += ms;
+    };
+    const beats = () => fake.emitted.filter((e) => e.event === CLIENT_EVENTS.VIEWING_ACTIVITY);
+    return { ...fake, visibility, store, beats, beat, advance, ticking: () => ticks.map((t) => t.ms) };
+  }
+
+  test('ouvrir une image garde la présence : aucun viewing:stop, ni à l’ouverture ni à la fermeture', () => {
+    const { emitted } = focused();
+    open(CONV);
+    const blur = focus();
+    blur();
+
+    expect(sent(emitted)).toEqual([START]);
+  });
+
+  test('le plein écran s’annonce tout de suite, bat toutes les deux secondes, et se tait à la fermeture', () => {
+    const { beats, beat, ticking } = focused();
+    open(CONV);
+    const blur = focus();
+    expect(beats()).toEqual([FOCUS]);
+    expect(ticking()).toEqual([BEAT_MS]);
+
+    beat();
+    beat();
+    expect(beats()).toEqual([FOCUS, FOCUS, FOCUS]);
+
+    blur();
+    expect(ticking()).toEqual([]);
+    expect(beats()).toEqual([FOCUS, FOCUS, FOCUS, STIR]);
+  });
+
+  test('la dernière visionneuse refermée rend le fil aussitôt, même sous la borne des deux secondes', () => {
+    const { beats } = focused();
+    open(CONV);
+    signalConversationActivity(CONV);
+    const blur = focus();
+    blur();
+
+    expect(beats()).toEqual([STIR, FOCUS, STIR]);
+  });
+
+  test('l’ouverture bat le plein écran aussitôt, même juste après une activité simple', () => {
+    const { beats, advance } = focused();
+    open(CONV);
+    signalConversationActivity(CONV);
+    advance(10);
+    focus();
+
+    expect(beats()).toEqual([STIR, FOCUS]);
+  });
+
+  test('le retour au fil compte dans la borne : une activité juste après ne repart pas', () => {
+    const { beats, advance } = focused();
+    open(CONV);
+    focus()();
+    advance(BEAT_MS - 1);
+    signalConversationActivity(CONV);
+
+    expect(beats()).toEqual([FOCUS, STIR]);
+  });
+
+  test('sans conversation ouverte, en arrière-plan ou pendant un appel, le plein écran ne dit rien', () => {
+    const { beats, beat, visibility } = focused();
+    focus()();
+    expect(beats()).toEqual([]);
+
+    open(CONV);
+    const suspended = cover();
+    const blurInCall = focus();
+    beat();
+    blurInCall();
+    expect(beats()).toEqual([]);
+    suspended();
+
+    visibility.set('hidden');
+    const blurHidden = focus();
+    beat();
+    blurHidden();
+    expect(beats()).toEqual([]);
+  });
+
+  test('deux plein écrans empilés ne battent qu’une fois et ne rendent le fil qu’au dernier fermé', () => {
+    const { beats, beat, ticking } = focused();
+    open(CONV);
+    const first = focus();
+    const second = focus();
+    expect(beats()).toEqual([FOCUS]);
+
+    first();
+    beat();
+    expect(beats()).toEqual([FOCUS, FOCUS]);
+    expect(ticking()).toEqual([BEAT_MS]);
+
+    second();
+    expect(beats()).toEqual([FOCUS, FOCUS, STIR]);
+    expect(ticking()).toEqual([]);
+  });
+
+  test('une reconnexion en plein écran ré-annonce la conversation et bat aussitôt', () => {
+    const { emitted, fire } = focused();
+    open(CONV);
+    focus();
+    fire('disconnect');
+    fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+    expect(emitted.filter((e) => e.event !== CLIENT_EVENTS.VIEWING_STOP)).toEqual([START, FOCUS, START, FOCUS]);
+  });
+
+  test('un pair en plein écran l’est tenu le temps de la pulsation, puis redevient simplement là', async () => {
+    const { fire, store } = focused();
+    fire(SERVER_EVENTS.VIEWING_START, { userId: BOB, conversationId: CONV });
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV, focus: true });
+    expect(isFocusedIn(store.getState(), CONV, BOB)).toBe(true);
+    expect(isActiveIn(store.getState(), CONV, BOB)).toBe(false);
+
+    await wait(HOLD_MS + 20);
+    expect(isFocusedIn(store.getState(), CONV, BOB)).toBe(false);
+    expect(isHereIn(store.getState(), CONV, BOB)).toBe(true);
+  });
+
+  test('un nouveau battement prolonge le plein écran du pair', async () => {
+    const { fire, store } = focused();
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV, focus: true });
+    await wait(HOLD_MS - 10);
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV, focus: true });
+    await wait(HOLD_MS - 10);
+    expect(isFocusedIn(store.getState(), CONV, BOB)).toBe(true);
+  });
+
+  test('une activité simple relâche le plein écran du pair sur-le-champ : il est revenu au fil', async () => {
+    const { fire, store } = focused();
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV, focus: true });
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV });
+    expect(isFocusedIn(store.getState(), CONV, BOB)).toBe(false);
+    expect(isActiveIn(store.getState(), CONV, BOB)).toBe(true);
+
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV, focus: true });
+    expect(isFocusedIn(store.getState(), CONV, BOB)).toBe(true);
+    expect(isActiveIn(store.getState(), CONV, BOB)).toBe(true);
+
+    await wait(HOLD_MS + 20);
+    expect(isFocusedIn(store.getState(), CONV, BOB)).toBe(false);
+  });
+
+  test('quitter la conversation ou perdre le lien efface le plein écran du pair', () => {
+    const { fire, store } = focused();
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV, focus: true });
+    fire(SERVER_EVENTS.VIEWING_STOP, { userId: BOB, conversationId: CONV });
+    expect(isFocusedIn(store.getState(), CONV, BOB)).toBe(false);
+
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: CAROL, conversationId: CONV, focus: true });
+    fire('disconnect');
+    expect(isFocusedIn(store.getState(), CONV, CAROL)).toBe(false);
+  });
+
+  test('son propre plein écran ne se rend pas', () => {
+    const { fire, store } = focused();
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: VIEWER, conversationId: CONV, focus: true });
+    expect(isFocusedIn(store.getState(), CONV, VIEWER)).toBe(false);
   });
 });

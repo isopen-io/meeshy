@@ -29,6 +29,7 @@ import { safeAreaInsets } from '@/lib/view/safe-area';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { SCENE_OPENING_EASING, SCENE_OPENING_MS, takeSceneOpening } from '@/lib/view/scene-opening';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { useConversationViewingFocus } from '@/lib/view/use-conversation-viewing';
 import { useSendSheetOpen } from '@/lib/view/use-send-sheet-open';
 import { lateralSeek } from '@/lib/view/media-transport';
 import { useAttachmentOpenReport } from '@/lib/view/use-attachment-open-report';
@@ -45,6 +46,7 @@ import { MEDIA_GLYPHS } from './glyphs-media';
 import { MediaFilmstrip } from './media-filmstrip';
 import { MediaUnavailable } from './media-unavailable';
 import { GLYPH_SIZE } from './ui-chrome';
+import { ViewerCaption } from './viewer-caption';
 import { ViewerBottomBar, ViewerTopBar, type ViewerIdentityModel } from './viewer-chrome';
 import { useViewerSwipe } from './viewer-chrome-gestures';
 import type { NoticeKey } from './viewer-media-actions';
@@ -235,9 +237,13 @@ function carrierFooter(params: {
         </div>
       ) : null}
       {hasCaption ? (
-        <p data-viewer-caption-text className="line-clamp-4 text-body" {...(captionLang !== undefined ? { lang: captionLang } : {})}>
-          {captionText}
-        </p>
+        <ViewerCaption
+          probe={{ 'data-viewer-caption-text': '' }}
+          text={captionText}
+          trackingLinks={carrier.trackingLinks}
+          className="line-clamp-4 text-body"
+          lang={captionLang}
+        />
       ) : null}
     </div>
   );
@@ -599,6 +605,7 @@ export default function MediaViewer({
   const trackRef = useRef<HTMLDivElement | null>(null);
 
   useBackDismiss(onClose);
+  useConversationViewingFocus();
 
   const [transportSlot, setTransportSlot] = useState<HTMLElement | null>(null);
   const [notice, announce] = useNotice();

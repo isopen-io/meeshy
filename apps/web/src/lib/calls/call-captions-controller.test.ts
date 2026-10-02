@@ -62,7 +62,7 @@ function harness(options: { readonly speech?: 'supported' | 'unsupported' | 'den
   const captures: Array<{ readonly language: string; readonly onResult: (result: SpeechResult) => void; stopped: boolean }> = [];
   let clock = 10_000;
   let shown = 0;
-  let byes = 0;
+  const byes: string[] = [];
   let ids = 0;
   const speech: SpeechSource | null =
     options.speech === 'unsupported'
@@ -93,7 +93,7 @@ function harness(options: { readonly speech?: 'supported' | 'unsupported' | 'den
         if (entry !== undefined) entry.stopped = true;
       },
       shown: () => void (shown += 1),
-      bye: () => void (byes += 1),
+      bye: (userId) => void byes.push(userId),
     },
     { speech, language: () => 'fr', viewerName: () => 'Moi Même', newId: () => `w-${++ids}` },
   );
@@ -106,7 +106,7 @@ function harness(options: { readonly speech?: 'supported' | 'unsupported' | 'den
     call: () => store.getState().call,
     tick: (ms: number) => void (clock += ms),
     shown: () => shown,
-    byes: () => byes,
+    byes: () => [...byes],
     say: (text: string, isFinal: boolean, confidence = 0.9) => captures.at(-1)?.onResult({ text, isFinal, confidence }),
     events: (name: string) => emitted.filter(([event]) => event === name).map(([, payload]) => payload),
   };
@@ -186,14 +186,14 @@ describe('le canal de données (B10)', () => {
     expect(h.call()?.captions[0]?.translated).toBe('Bonjour à tous');
   });
 
-  test('un « bye » du pair raccroche aussitôt ; un ping est du bruit', () => {
+  test('un « bye » du pair remonte avec son émetteur ; un ping est du bruit (#9085)', () => {
     const h = harness();
     const peer = channel();
     h.port.attach(PEER, peer as unknown as RTCDataChannel);
     peer.onmessage?.({ data: '{"type":"ping"}' });
-    expect(h.byes()).toBe(0);
+    expect(h.byes()).toEqual([]);
     peer.onmessage?.({ data: '{"type":"bye","reason":"completed"}' });
-    expect(h.byes()).toBe(1);
+    expect(h.byes()).toEqual([PEER]);
   });
 
   test('un ping part toutes les 15 s ; raccrocher envoie « bye » puis se tait', () => {

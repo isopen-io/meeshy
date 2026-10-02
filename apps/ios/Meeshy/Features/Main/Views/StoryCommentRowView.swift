@@ -43,6 +43,7 @@ struct StoryCommentRowView: View, Equatable {
         lhs.isInFlight == rhs.isInFlight &&
         lhs.comment.effectFlags == rhs.comment.effectFlags &&
         lhs.comment.content == rhs.comment.content &&
+        lhs.comment.trackedLinkMap == rhs.comment.trackedLinkMap &&
         lhs.comment.translatedContent == rhs.comment.translatedContent &&
         lhs.comment.media.first?.id == rhs.comment.media.first?.id &&
         lhs.comment.media.first?.transcription?.text == rhs.comment.media.first?.transcription?.text &&
@@ -113,7 +114,8 @@ struct StoryCommentRowView: View, Equatable {
                             authorName: comment.author,
                             authorAvatarURL: comment.authorAvatarURL,
                             authorColor: comment.authorColor,
-                            sentAt: comment.timestamp
+                            sentAt: comment.timestamp,
+                            trackedLinks: comment.trackedLinkMap
                         )
                         .padding(.top, MeeshySpacing.xxs)
                     }
@@ -235,7 +237,8 @@ struct StoryCommentRowView: View, Equatable {
             mentionColor: MeeshyColors.mentionColor(isDark: colorScheme == .dark),
             hashtagColor: MeeshyColors.hashtagColor(isDark: colorScheme == .dark),
             accentColor: textColor,
-            usesRelativeFont: true
+            usesRelativeFont: true,
+            trackedLinks: comment.trackedLinkMap
         )
             .tint(textColor)
             .lineLimit(6)

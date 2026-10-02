@@ -5,7 +5,7 @@ import { ComposerLanguagePill } from './composer-language-pill';
 import { Glyph, GlyphSvg } from './glyph';
 import { FlameEyeGlyph } from './flame-eye-glyph';
 import { EPHEMERAL_DURATIONS, characterCounterOf, ephemeralDurationLabelOf, isAfterReadChoice } from '@/lib/send/compose-protection';
-import { SENTIMENT_EMOJI, type SentimentLevel } from '@/lib/send/sentiment';
+import { COMPOSER_GLYPHS } from './glyphs-composer';
 import type { ImposedLocks } from '@/lib/send/reply-contagion';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -39,30 +39,15 @@ const armedStyle = (color: string, fill = 15, ring = 30) => ({
 const NO_LOCKS: ImposedLocks = { blurred: false, ephemeral: false };
 
 /**
- * LE LIBELLÉ FRANÇAIS DE CHAQUE NIVEAU — PROSE, jamais l'identifiant anglais
- * de `SentimentLevel` (D-13 : le CODE est en anglais, la PROSE reste en
- * français). iOS annonce « Tonalité du message » comme LABEL et l'EMOJI comme
- * VALEUR (`accessibilityLabel`/`accessibilityValue`,
- * `+Toolbar.swift:58-63`) — HTML n'a pas de second canal pour un `<span>`
- * inerte, donc ce libellé COMBINE les deux dans le nom accessible.
- */
-const SENTIMENT_LABEL_FR: Readonly<Record<SentimentLevel, string>> = {
-  veryNegative: 'très négative',
-  negative: 'négative',
-  slightlyNegative: 'légèrement négative',
-  neutral: 'neutre',
-  slightlyPositive: 'légèrement positive',
-  positive: 'positive',
-  veryPositive: 'très positive',
-};
-
-/**
  * LA RANGÉE HAUTE DU COMPOSEUR (#6175) — miroir `topToolbar`
  * (`UniversalComposerBar+Toolbar.swift:25-81`), EXTRAITE de `composer.tsx`
  * pour tenir le budget de 1000–1200 lignes (CLAUDE.md racine).
  *
  * CINQ occupants à EFFET (éphémère, flou, vue unique, effets, langue) + UN
- * indicateur PASSIF (tonalité) + UN compteur CONDITIONNEL — pas six
+ * compteur CONDITIONNEL — et deux PORTES (#9082, directive porteur
+ * 2026-10-02) : le sticker à la place de l'ancien indicateur de tonalité, la
+ * caméra à l'angle droit du verre, chacune rendue seulement si l'hôte sait
+ * l'ouvrir (loi 4) — pas six
  * contrôles égaux : la capture de référence
  * (`targets/thread.composer-top-row.{light,dark}.png`) et le code source
  * (`maxLength == nil` en conversation) corrigent le libellé initial de
@@ -76,7 +61,7 @@ const SENTIMENT_LABEL_FR: Readonly<Record<SentimentLevel, string>> = {
  * (`1.circle` / `1.circle.fill`) dit l'état : contour au repos, plein armé.
  *
  * ORDRE FIXE, jamais réordonné : éphémère · flou · vue unique · effets ·
- * tonalité · langue · spacer · compteur — le groupe MENANT d'iOS
+ * sticker · langue · spacer · compteur · photothèque · caméra — le groupe MENANT d'iOS
  * (`targets/README.md` § 1.4, `+Protections.swift:161-238` pour le rang de
  * « vue unique » entre flou et effets).
  */
@@ -92,7 +77,9 @@ export function ComposerTopRow({
   effectCount,
   effectsPanelOpen,
   onToggleEffects,
-  sentiment,
+  onOpenStickers,
+  onPickLibrary,
+  onOpenCamera,
   languageCode,
   onOpenLanguage,
   languagePillRef,
@@ -119,7 +106,14 @@ export function ComposerTopRow({
   readonly effectsPanelOpen: boolean;
   /** Tap sur la baguette : ouvre/ferme le panneau d'effets (#7980). */
   readonly onToggleEffects: () => void;
-  readonly sentiment: SentimentLevel;
+  /** La porte de la feuille de stickers (#9082) — absente ⇒ rien. */
+  readonly onOpenStickers?: () => void;
+  /** La photothèque, juste avant la caméra (#9120) — images ET vidéos ;
+   * absente ⇒ rien. */
+  readonly onPickLibrary?: (files: FileList | null) => void;
+  /** La caméra de l'angle droit (#9082) — elle ouvre le studio plein écran,
+   * viseur armé (#9123) ; absente ⇒ rien. */
+  readonly onOpenCamera?: () => void;
   readonly languageCode: string;
   readonly onOpenLanguage: () => void;
   readonly languagePillRef?: Ref<HTMLButtonElement>;
@@ -140,6 +134,11 @@ export function ComposerTopRow({
 
   return (
     <div data-composer-toolbar className="flex items-center justify-start gap-1 px-3 pt-1.5">
+      {/* LA BANDE MENANTE DÉFILE, L'ANGLE DROIT JAMAIS (#9082) — miroir
+          `ComposerToolbarStrip` : à 320 px la rangée débordait et la caméra
+          sortait de l'écran ; seuls les outils de tête glissent, le compteur
+          et la caméra restent à l'angle du verre. */}
+      <div data-composer-toolbar-leading className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
         {/* CIBLES ≥ 44×44 (dimension 5, revue-correction #6175) — `min-w-11`
             AUTANT que `min-h-11`, motif `composer-language-pill.tsx:69`. La
             première forme ne posait que la HAUTEUR : mesurée 32×44 au
@@ -155,7 +154,7 @@ export function ComposerTopRow({
           data-composer-ephemeral
           {...(locks.ephemeral ? { 'data-imposed': '' } : {})}
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2 disabled:cursor-not-allowed"
-          style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--color-ios-ink-2)' }}
+          style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--composer-icon)' }}
           aria-label={
             locks.ephemeral
               ? translate(language, 'composer.protection.imposed.ephemeral', { duration: ephemeralDuration })
@@ -186,7 +185,7 @@ export function ComposerTopRow({
           data-composer-blur
           {...(locks.blurred ? { 'data-imposed': '' } : {})}
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2 disabled:cursor-not-allowed"
-          style={blurred ? armedStyle('var(--ios-state-concealed)') : { color: 'var(--color-ios-ink-2)' }}
+          style={blurred ? armedStyle('var(--ios-state-concealed)') : { color: 'var(--composer-icon)' }}
           aria-label={
             locks.blurred
               ? translate(language, 'composer.protection.imposed.blur')
@@ -211,7 +210,7 @@ export function ComposerTopRow({
           data-composer-view-once
           data-glyph={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'}
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
-          style={viewOnce ? armedStyle('var(--ios-state-view-once)') : { color: 'var(--color-ios-ink-2)' }}
+          style={viewOnce ? armedStyle('var(--ios-state-view-once)') : { color: 'var(--composer-icon)' }}
           aria-label={translate(language, viewOnce ? 'composer.viewOnce.active' : 'composer.viewOnce.activate')}
         >
           <Glyph name={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'} size={16} />
@@ -224,26 +223,28 @@ export function ComposerTopRow({
           aria-expanded={effectsPanelOpen}
           data-composer-effects
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
-          style={effectCount > 0 ? armedStyle('var(--accent)') : { color: 'var(--color-ios-ink-2)' }}
+          style={effectCount > 0 ? armedStyle('var(--accent)') : { color: 'var(--composer-icon)' }}
           aria-label={effectCount > 0 ? `${effectCount} effet(s) actif(s)` : 'Ajouter des effets au message'}
         >
           <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={16} />
           {effectCount > 0 ? <span className="text-title font-bold">{effectCount}</span> : null}
         </button>
 
-        {/* TONALITÉ — LECTURE SEULE (§ 1.1 : « c'était un Button dont
-            l'action se limitait à un retour haptique… rendu passif »). */}
-        <span
-          role="img"
-          aria-label={`Tonalité du message : ${SENTIMENT_LABEL_FR[sentiment]}`}
-          className="grid size-11 shrink-0 place-items-center text-[17px]"
-        >
-          {SENTIMENT_EMOJI[sentiment]}
-        </span>
+        {onOpenStickers === undefined ? null : (
+          <button
+            type="button"
+            onClick={onOpenStickers}
+            data-composer-sticker
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-chip px-2"
+            style={{ color: 'var(--composer-icon)' }}
+            aria-label={translate(language, 'composer.attach.sticker')}
+          >
+            <GlyphSvg glyph={COMPOSER_GLYPHS.sticker} size={16} />
+          </button>
+        )}
 
         <ComposerLanguagePill code={languageCode} onOpen={onOpenLanguage} {...(languagePillRef ? { buttonRef: languagePillRef } : {})} />
-
-        <span className="flex-1" />
+      </div>
 
         {counter ? (
           <span
@@ -254,6 +255,43 @@ export function ComposerTopRow({
             {counter.text}
           </span>
         ) : null}
+
+        {/* LA PHOTOTHÈQUE (#9120) — images ET vidéos, à côté de la caméra
+            (miroir `ComposerGlassDoors.trailing` → [library, camera, fold]) ;
+            sans `capture`, elle ouvre la galerie, jamais l'objectif. */}
+        {onPickLibrary === undefined ? null : (
+          <label
+            data-composer-library
+            className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-chip px-2"
+            style={{ color: 'var(--composer-icon)' }}
+          >
+            <Glyph name="image" size={16} />
+            <input
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              className="sr-only"
+              aria-label={translate(language, 'composer.attach.photo.action')}
+              onChange={(e) => {
+                onPickLibrary(e.currentTarget.files);
+                e.currentTarget.value = '';
+              }}
+            />
+          </label>
+        )}
+
+        {onOpenCamera === undefined ? null : (
+          <button
+            type="button"
+            data-composer-camera
+            onClick={onOpenCamera}
+            aria-label={translate(language, 'composer.attach.camera.action')}
+            className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-chip px-2"
+            style={{ color: 'var(--composer-icon)' }}
+          >
+            <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={16} />
+          </button>
+        )}
     </div>
   );
 }

@@ -47,6 +47,7 @@ final class CallManagerHost: ObservableObject {
             GroupCallMeshBinding.shared.bind(candidate)
             CallPreviewBinding.shared.bind(candidate)
             CallNetworkJournalBinding.shared.bind(candidate)
+            CallReturnBinding.shared.bind(candidate)
         }
         return candidate
     }

@@ -67,6 +67,7 @@ import * as socketioGroup from './endpoints/socketio.js';
 import * as soundsGroup from './endpoints/sounds.js';
 import * as staticGroup from './endpoints/static.js';
 import * as statusMetricsGroup from './endpoints/status-metrics.js';
+import * as stickerPacksGroup from './endpoints/sticker-packs.js';
 import * as storiesGroup from './endpoints/stories.js';
 import * as syncGroup from './endpoints/sync.js';
 import * as trackingLinksGroup from './endpoints/tracking-links.js';
@@ -123,6 +124,7 @@ export const API_ENDPOINTS = {
   sounds: soundsGroup,
   static: staticGroup,
   statusMetrics: statusMetricsGroup,
+  stickerPacks: stickerPacksGroup,
   stories: storiesGroup,
   sync: syncGroup,
   trackingLinks: trackingLinksGroup,
@@ -548,6 +550,13 @@ export const API_PATH_TEMPLATES = [
   '/api/v1/static/:filename',
   '/api/v1/status-metrics',
   '/api/v1/status-metrics/reset',
+  '/api/v1/sticker-packs',
+  '/api/v1/sticker-packs/:slug',
+  '/api/v1/sticker-packs/:slug/install',
+  '/api/v1/sticker-packs/:slug/review',
+  '/api/v1/sticker-packs/installed',
+  '/api/v1/sticker-packs/pending',
+  '/api/v1/sticker-packs/submissions',
   '/api/v1/stories/audio',
   '/api/v1/sync',
   '/api/v1/tracking-links',
@@ -1048,6 +1057,13 @@ export const API_PATH_METHODS: Readonly<Record<ApiPath, readonly HttpMethod[]>> 
   '/api/v1/static/:filename': ['GET'],
   '/api/v1/status-metrics': ['GET'],
   '/api/v1/status-metrics/reset': ['POST'],
+  '/api/v1/sticker-packs': ['GET'],
+  '/api/v1/sticker-packs/:slug': ['GET'],
+  '/api/v1/sticker-packs/:slug/install': ['PUT', 'DELETE'],
+  '/api/v1/sticker-packs/:slug/review': ['POST'],
+  '/api/v1/sticker-packs/installed': ['GET'],
+  '/api/v1/sticker-packs/pending': ['GET'],
+  '/api/v1/sticker-packs/submissions': ['GET', 'POST'],
   '/api/v1/stories/audio': ['GET'],
   '/api/v1/sync': ['GET'],
   '/api/v1/tracking-links': ['POST'],

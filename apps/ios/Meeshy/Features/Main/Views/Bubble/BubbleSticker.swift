@@ -42,6 +42,9 @@ struct BubbleSticker: View, Equatable {
     /// La boîte d'un emoji libre — sert d'assiette aux décalages du mouvement,
     /// qui sont des FRACTIONS du côté rendu.
     static let emojiBox = CGSize(width: 60, height: 60)
+    /// Le glyphe d'un sticker EMOJI. Un sticker garde sa taille : la règle de
+    /// #9054 (×4 / ×3 / ×2) ne vise que les messages d'emojis.
+    static let emojiGlyphSize: CGFloat = 90
 
     // MARK: - Règles pures
 
@@ -50,6 +53,10 @@ struct BubbleSticker: View, Equatable {
     /// mesurable, et pour qu'aucune seconde surface n'en réécrive une version
     /// qui divergerait au premier ajustement.
     nonisolated enum RenderSource: Equatable {
+        /// Un sticker Mee ou Meo dont ce binaire embarque le FILM (#9053).
+        case mee(id: String)
+        /// Un Instant (#9069) : son film, et le texte saisi redessiné dessus.
+        case meeInstant(id: String)
         case template(id: String)
         case picture(BubbleContent.Sticker.Picture)
         case emoji(String)
@@ -58,6 +65,12 @@ struct BubbleSticker: View, Equatable {
             sticker: BubbleContent.Sticker,
             registryKnows: (String) -> Bool
         ) -> RenderSource {
+            if let mee = MeeStickerCatalog.sticker(forTemplateID: sticker.templateId) {
+                return .mee(id: mee.id)
+            }
+            if let instant = MeeInstantCatalog.instant(forTemplateID: sticker.templateId) {
+                return .meeInstant(id: instant.id)
+            }
             if let id = sticker.templateId, !id.isEmpty, registryKnows(id) {
                 return .template(id: id)
             }
@@ -121,7 +134,10 @@ struct BubbleSticker: View, Equatable {
     /// « nom du gabarit + valeurs des emplacements, ou l'emoji ». Deux
     /// écritures d'une règle de parole divergent au premier gabarit ajouté.
     static func accessibilityLabel(for sticker: BubbleContent.Sticker) -> String {
-        StoryStickerAccessibility.description(for: storyProjection(of: sticker))
+        if let mee = MeeStickerCatalog.sticker(forTemplateID: sticker.templateId) {
+            return mee.title
+        }
+        return StoryStickerAccessibility.description(for: storyProjection(of: sticker))
     }
 
     /// Le sticker de conversation vu comme un objet de scène — position et

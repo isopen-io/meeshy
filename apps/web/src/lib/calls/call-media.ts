@@ -40,6 +40,16 @@ export function videoInputConstraints(facing: Facing, cameraId: string | null, p
   return { ...rest, deviceId: { ideal: cameraId } };
 }
 
+/**
+ * L'orientation de la caméra réellement ouverte (#9094) : ce que la piste
+ * dit d'elle-même (`getSettings().facingMode`), sinon `fallback` — une
+ * webcam qui n'en dit rien est la caméra de l'utilisateur.
+ */
+export function facingOf(track: MediaStreamTrack, fallback: Facing): Facing {
+  const reported = typeof track.getSettings === 'function' ? track.getSettings().facingMode : undefined;
+  return reported === 'user' || reported === 'environment' ? reported : fallback;
+}
+
 export type MediaFailure = 'permission' | 'unavailable';
 
 export function mediaFailureOf(error: unknown): MediaFailure {
