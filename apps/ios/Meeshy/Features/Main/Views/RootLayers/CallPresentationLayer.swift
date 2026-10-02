@@ -3,7 +3,7 @@ import MeeshySDK
 import MeeshyUI
 
 /// Découple la présentation d'appel (fenêtre plein écran #8725 + pastille flottante +
-/// bulle + bannière call-waiting) du corps de `RootView` / `iPadRootView`.
+/// fenêtre du point de retour #8739 + bannière call-waiting) du corps de `RootView` / `iPadRootView`.
 ///
 /// EXTRAIT de `RootView.swift` le 2026-09-14 (#6579). `RootView.swift` dépassait
 /// le plafond dur de 1200 lignes : y ajouter le montage de la bande du haut était
@@ -174,6 +174,10 @@ struct CallPresentationLayer: ViewModifier {
                 // fenêtre, au-dessus de toute présentation (story, réels,
                 // visionneuses, composer, feuilles).
                 CallWindowPresenter.shared.bind()
+                // #8739 — la bulle d'un appel réduit vit dans une fenêtre
+                // passe-plat au-dessus de toute présentation : un viewer de
+                // story ou une visionneuse ne la recouvre plus.
+                CallReturnPointPresenter.shared.bind()
                 CallPlaybackInterruptionBinding.shared.bind()
                 #if DEBUG
                 CallDebugIncomingTrigger.arm()
@@ -205,11 +209,6 @@ struct CallPresentationLayer: ViewModifier {
                         .frame(height: 64)
                         .padding(.top, MeeshySpacing.sm)
                         .allowsHitTesting(false)
-                }
-            }
-            .overlay {
-                if let callManager {
-                    CallBubbleView(callManager: callManager)
                 }
             }
             // §7.6 — call-waiting : un 2e appel entrant pendant un appel actif.

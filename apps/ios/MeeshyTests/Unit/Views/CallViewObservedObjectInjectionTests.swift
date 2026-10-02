@@ -127,9 +127,9 @@ final class CallViewObservedObjectInjectionTests: XCTestCase {
     }
 
     func test_callPresentationLayer_injectsOwnCallManagerIntoPillAndBubble() throws {
-        let source = try source(of: "Views/RootLayers/CallPresentationLayer.swift")
+        let layer = try source(of: "Views/RootLayers/CallPresentationLayer.swift")
         XCTAssertTrue(
-            source.contains("FloatingCallPillView(callManager: callManager"),
+            layer.contains("FloatingCallPillView(callManager: callManager"),
             "`CallPresentationLayer` must pass its own `callManager` into FloatingCallPillView."
         )
         // #8739 — la bulle vit dans la fenêtre passe-plat du point de retour,
