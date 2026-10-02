@@ -131,6 +131,7 @@ import { meMeeshRoutes } from './me/meesh';
 import { meOnboardingRoutes } from './me/onboarding';
 import { meStarredMessagesRoutes } from './me/starred-messages';
 import { meStickersRoutes } from './me/stickers';
+import { stickerPacksRoutes } from './sticker-packs';
 import { accountDeletionRoutes } from './account-deletion';
 import { directoryAvailabilityRoutes } from './directory/availability';
 import { directoryPeopleRoutes } from './directory/people';
@@ -313,6 +314,9 @@ export const ROUTE_TABLE_BEFORE_ATTACHMENTS: readonly RouteRegistrationEntry[] =
   // image ou un collage. Montage AUTONOME, même patron que
   // `me-starred-messages` juste au-dessus.
   { name: 'me-stickers', prefix: `${API_PREFIX}/me`, module: meStickersRoutes },
+  // Les packs de stickers (#9141) — boutique, installation, proposition par
+  // des tiers et modération. Montage AUTONOME, même patron que `me-stickers`.
+  { name: 'sticker-packs', prefix: `${API_PREFIX}/sticker-packs`, module: stickerPacksRoutes },
   { name: 'account-deletion', prefix: `${API_PREFIX}/account/deletion`, module: accountDeletionRoutes },
   { name: 'directory-availability', prefix: `${API_PREFIX}/directory`, module: directoryAvailabilityRoutes },
   { name: 'directory-people', prefix: `${API_PREFIX}/directory`, module: directoryPeopleRoutes },

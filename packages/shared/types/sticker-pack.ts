@@ -215,7 +215,7 @@ export function validateStickerPackManifest(input: unknown): StickerPackValidati
   }
   const manifest: StickerPackManifest = parsed.data;
   const problems: readonly StickerPackProblem[] = [
-    ...(isBuiltinStickerPackSlug(manifest.slug) ? [{ path: 'slug', code: 'reserved-slug' as const }] : []),
+    ...(isReservedStickerPackSlug(manifest.slug) ? [{ path: 'slug', code: 'reserved-slug' as const }] : []),
     ...duplicates(manifest.items.map((item) => item.key)).map((i) => ({ path: `items.${i}.key`, code: 'duplicate-key' as const })),
     ...duplicates(manifest.items.map((item) => item.asset)).map((i) => ({ path: `items.${i}.asset`, code: 'duplicate-asset' as const })),
     ...manifest.items.flatMap((item, i) => itemProblems(item, `items.${i}`)),
@@ -391,6 +391,12 @@ export const BUILTIN_STICKER_PACKS: readonly BuiltinStickerPack[] = [
 export const STICKER_PACK_AUTHOR_MEESHY = 'Meeshy';
 
 export const isBuiltinStickerPackSlug = (slug: string): boolean => BUILTIN_STICKER_PACKS.some((pack) => pack.slug === slug);
+
+/** Les segments d'adresse de l'API des packs, qu'aucun slug ne peut prendre. */
+const ROUTE_SEGMENTS: ReadonlySet<string> = new Set(['submissions', 'pending', 'installed', 'mine']);
+
+/** Un slug qu'un tiers ne peut pas prendre : celui d'un pack intégré ou d'une adresse de l'API. */
+export const isReservedStickerPackSlug = (slug: string): boolean => isBuiltinStickerPackSlug(slug) || ROUTE_SEGMENTS.has(slug);
 
 /** Un pack est installé si l'utilisateur l'a installé ; sans choix de sa part, selon le défaut du pack. */
 export function isStickerPackInstalled(slug: string, choice: { readonly installed: boolean } | undefined): boolean {
