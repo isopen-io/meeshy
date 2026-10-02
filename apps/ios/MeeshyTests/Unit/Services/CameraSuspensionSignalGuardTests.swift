@@ -51,12 +51,19 @@ final class CameraSuspensionSignalGuardTests: XCTestCase {
         let code = strippingComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         )
-        guard let start = code.range(of: "UIApplication.didEnterBackgroundNotification"),
-              let end = code.range(of: "UIApplication.willEnterForegroundNotification") else {
+        // Le corps ÉQUILIBRÉ de l'observateur, pas la fenêtre « de la première
+        // mention de l'arrière-plan à la première mention de l'avant-plan » :
+        // dans l'unité découpée (e7d973b06f), `CallManager+CallPreview.swift`
+        // cite `didEnterBackgroundNotification` avant
+        // `CallManager+SystemMonitoring.swift`, et la fenêtre embrassait alors
+        // une douzaine de fichiers étrangers au handler.
+        guard code.contains("UIApplication.willEnterForegroundNotification"),
+              let handler = DeclarationBodyScanner.body(
+                containing: "forName: UIApplication.didEnterBackgroundNotification", in: code
+              ) else {
             XCTFail("CallManager doit observer les deux transitions de cycle de vie")
             return
         }
-        let handler = String(code[start.upperBound ..< end.lowerBound])
         XCTAssertFalse(
             handler.contains("emitCallToggleVideo"),
             "L'entrée en arrière-plan ne prouve RIEN sur l'état de la caméra : "

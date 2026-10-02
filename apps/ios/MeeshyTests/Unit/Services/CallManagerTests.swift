@@ -4761,11 +4761,14 @@ final class CallManagerRejoinActiveCallTests: XCTestCase {
     /// été en cause. Les gardes lisent donc du CODE, comme
     /// test_captionsCycleButton_actionIsAdvanceCaptionsMode ailleurs dans la
     /// suite.
+    /// Le corps ÉQUILIBRÉ de la méthode. La borne était le `// MARK: - VoIP
+    /// Push Incoming Call` qui la suivait dans `CallManager.swift` ; le
+    /// découpage (e7d973b06f) a posé la méthode dans `CallManager+Outgoing.swift`
+    /// et le MARK ailleurs, si bien que la fenêtre courait jusqu'à la fin de
+    /// l'unité et prêtait à `rejoinActiveCall` les transactions CallKit des
+    /// fichiers suivants.
     private func rejoinBody(_ source: String) -> String? {
-        guard let start = source.range(of: "func rejoinActiveCall(callId: String") else { return nil }
-        let end = source.range(of: "\n    // MARK: - VoIP Push Incoming Call", range: start.upperBound..<source.endIndex)?.lowerBound
-                ?? source.endIndex
-        return String(source[start.lowerBound..<end])
+        DeclarationBodyScanner.body(containing: "func rejoinActiveCall(callId: String", in: source)?
             .split(separator: "\n", omittingEmptySubsequences: false)
             .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
             .joined(separator: "\n")

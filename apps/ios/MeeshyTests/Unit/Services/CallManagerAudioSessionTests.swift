@@ -2461,14 +2461,29 @@ final class CallManagerIceCandidateBufferTests: XCTestCase {
             "is co-located with other thresholds and documented alongside the rationale")
     }
 
+    /// La garde lisait « tout ce qui SUIT `socket.didReconnect` », et y
+    /// trouvait `emitRequestIceServers` dans le corps de
+    /// `requestFreshTurnCredentials`, écrit plus bas dans le même fichier.
+    /// Dans l'unité découpée (e7d973b06f), ce helper vit dans
+    /// `CallManager+Reconnection.swift`, lu AVANT `CallManager+Signaling.swift`
+    /// : la fenêtre ne le voyait plus, le comportement n'avait pas bougé. Les
+    /// deux maillons se vérifient donc chacun dans SON corps — le sink demande
+    /// des identifiants frais, et la demande émet bien `call:request-ice-servers`.
     func test_socketReconnect_requestsFreshTURNCredentials() throws {
         let source = try callManagerSource()
-        guard let reconnectRange = source.range(of: "socket.didReconnect") else {
-            XCTFail("socket.didReconnect sink not found in CallManager.swift"); return
+        guard let sink = DeclarationBodyScanner.body(containing: "socket.didReconnect", in: source) else {
+            XCTFail("socket.didReconnect sink not found in the CallManager unit"); return
         }
-        let afterReconnect = String(source[reconnectRange.upperBound...])
+        guard let request = DeclarationBodyScanner.body(
+            containing: "func requestFreshTurnCredentials(callId: String)", in: source
+        ) else {
+            XCTFail("requestFreshTurnCredentials(callId:) not found in the CallManager unit"); return
+        }
         XCTAssertTrue(
-            afterReconnect.contains("emitRequestIceServers"),
+            sink.contains("self.requestFreshTurnCredentials(callId: callId)"),
+            "socket.didReconnect sink must request fresh TURN credentials after rejoining the call room")
+        XCTAssertTrue(
+            request.contains("emitRequestIceServers"),
             "socket.didReconnect sink must call emitRequestIceServers after rejoining " +
             "the call room — the socket may have been down long enough for TURN " +
             "credentials to approach expiry before the periodic 80%-of-TTL refresh " +
@@ -2600,14 +2615,26 @@ final class CallManagerRemoteAudioStateTests: XCTestCase {
     /// isRemoteAudioEnabled. The old guard `event.mediaType == "video"` dropped
     /// audio events silently and left isRemoteAudioEnabled permanently at true.
     func test_callMediaToggledSink_handlesAudioMediaType() throws {
+        // L'unité CallManager porte DEUX abonnements à `socket.callMediaToggled` :
+        // le relais du maillage de groupe (`CallManager+GroupMesh.swift`, qui
+        // délègue à `mesh.handleMediaToggled`) et le sink 1:1
+        // (`CallManager+Signaling.swift`). Depuis le découpage (e7d973b06f), le
+        // relais est lu le PREMIER : la garde se fixe sur le sink 1:1, seul à
+        // porter l'état distant du pair.
         let source = try callManagerSource()
-        guard let mediaToggledRange = source.range(of: "socket.callMediaToggled") else {
-            XCTFail("socket.callMediaToggled sink not found"); return
+        var oneToOneSinks: [String] = []
+        var cursor = source.startIndex
+        while let mediaToggledRange = source.range(of: "socket.callMediaToggled", range: cursor..<source.endIndex) {
+            guard let storeRange = source.range(of: ".store(in: &cancellables)", range: mediaToggledRange.upperBound..<source.endIndex) else {
+                XCTFail("Could not find .store after callMediaToggled"); return
+            }
+            let candidate = String(source[mediaToggledRange.upperBound..<storeRange.lowerBound])
+            if !candidate.contains("mesh.handleMediaToggled") { oneToOneSinks.append(candidate) }
+            cursor = storeRange.upperBound
         }
-        guard let storeRange = source.range(of: ".store(in: &cancellables)", range: mediaToggledRange.upperBound..<source.endIndex) else {
-            XCTFail("Could not find .store after callMediaToggled"); return
+        guard oneToOneSinks.count == 1, let sinkBody = oneToOneSinks.first else {
+            XCTFail("Exactly one 1:1 socket.callMediaToggled sink expected, found \(oneToOneSinks.count)"); return
         }
-        let sinkBody = String(source[mediaToggledRange.upperBound..<storeRange.lowerBound])
         XCTAssertTrue(
             sinkBody.contains("\"audio\""),
             "callMediaToggled sink must handle mediaType==\"audio\" — a guard that " +
@@ -4770,7 +4797,11 @@ final class CallTranscriptionSymmetrySourceGuardTests: XCTestCase {
     /// et le micro reste tapé jusqu'à la fin de l'appel.
     func test_listeningIntentSignal_readsThePanel_neverTheCaptureState() throws {
         let source = try callManagerSource()
-        let fn = try body(of: "private func publishListeningIntentIfChanged()", in: source)
+        // Sortie dans `CallManager+MediaControls.swift` (e7d973b06f), la
+        // fonction a perdu son `private` pour rester appelable depuis
+        // `CallManager+Transcription.swift` : la garde suit la fonction, pas
+        // son niveau d'accès.
+        let fn = try body(of: "func publishListeningIntentIfChanged()", in: source)
 
         XCTAssertTrue(
             fn.contains("transcriptionService.isShowingOverlay"),
