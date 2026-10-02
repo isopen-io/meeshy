@@ -113,6 +113,9 @@ struct ComposerSlideRail: View {
         // La diapositive est une scène : TOUJOURS 9:16 (`SceneShape.aspect`, #6896/#6904).
         .frame(width: cote * SceneShape.aspect, height: cote)
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))
+        // Le rognage ne rogne pas le TOUCHER : la mini-preview déborde, et la
+        // tuile voisine recouvrait la première (#9126).
+        .contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.xxs)
                 .strokeBorder(index == currentIndex

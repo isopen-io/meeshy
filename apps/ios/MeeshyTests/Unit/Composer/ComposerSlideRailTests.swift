@@ -94,4 +94,18 @@ final class ComposerSlideRailTests: XCTestCase {
     func test_aucuneScene_aucuneTuile() {
         XCTAssertTrue(ComposerHeaderTiles.tiles(for: []).isEmpty)
     }
+
+    /// **Une tuile se touche là où elle se VOIT** (#9126, mesuré au simulateur
+    /// le 2026-10-02) : la mini-preview déborde sa vignette de 24 pt, et sans
+    /// forme de toucher la tuile voisine couvrait la première — « Scène 1 » ne
+    /// se sélectionnait jamais.
+    func test_laTuile_restreintSonToucherASaVignette() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Composer/ComposerSlideRail.swift")
+        let code = try String(contentsOf: url, encoding: .utf8)
+        let tuile = try XCTUnwrap(code.range(of: "private func tuile("))
+        XCTAssertTrue(code[tuile.lowerBound...].contains(".contentShape(RoundedRectangle(cornerRadius: MeeshyRadius.xxs))"))
+    }
 }
