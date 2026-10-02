@@ -73,6 +73,8 @@ enum CallControlsNotice: Equatable, Sendable {
     case inviteFailed(code: String)
     case actionFailed(code: String)
     case removed(name: String)
+    case inviteDeclined(name: String)
+    case inviteUnanswered(name: String)
 }
 
 final class CallControlsController: ObservableObject {
@@ -135,6 +137,10 @@ final class CallControlsController: ObservableObject {
         switch event {
         case .participantInvited(let invited):
             addInvite(CallPendingInvite(invited.invitee))
+        case .inviteDeclined(let settled):
+            settleInvite(of: settled.userId, as: CallControlsNotice.inviteDeclined)
+        case .inviteExpired(let settled):
+            settleInvite(of: settled.userId, as: CallControlsNotice.inviteUnanswered)
         case .mutedByModerator(let muted):
             host?.applyModeratorMute()
             notice = .mutedBy(name: host?.participantName(for: muted.byUserId) ?? "")
@@ -234,6 +240,13 @@ final class CallControlsController: ObservableObject {
     private func addInvite(_ invite: CallPendingInvite) {
         guard !invites.contains(where: { $0.userId == invite.userId }) else { return }
         invites.append(invite)
+    }
+
+    /// #8470 — la tuile « Sonne… » se résout : l'invitée a refusé, ou n'a pas répondu.
+    private func settleInvite(of userId: String, as notice: (String) -> CallControlsNotice) {
+        guard let invite = invites.first(where: { $0.userId == userId }) else { return }
+        invites = invites.filter { $0.userId != userId }
+        self.notice = notice(invite.displayName)
     }
 
     private func author(of userId: String) -> CallReactionAuthor {

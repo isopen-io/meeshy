@@ -760,6 +760,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
         onPeerAlert(event, payload);
         return;
       case SERVER_EVENTS.CALL_PARTICIPANT_INVITED:
+      case SERVER_EVENTS.CALL_INVITE_DECLINED:
+      case SERVER_EVENTS.CALL_INVITE_EXPIRED:
       case SERVER_EVENTS.CALL_MUTED_BY_MODERATOR:
       case SERVER_EVENTS.CALL_REACTION_RECEIVED:
         controls.receive(event, payload);

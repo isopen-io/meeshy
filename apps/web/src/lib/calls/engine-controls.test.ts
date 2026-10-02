@@ -5,6 +5,7 @@ import { createCallNoticeStore, createCallReactionStore, REACTION_LIFETIME_MS, R
 import { createCallStore, withMember, type ActiveCall, type CallMember } from './call-store';
 import { baseCall } from './engine-session';
 import { createEngineControls, INVITE_RING_MS } from './engine-controls';
+import { CALL_RING_TIMEOUT_MS } from '@meeshy/shared/types/call-rules';
 
 /**
  * LES CONTRÔLES D'UN APPEL EN COURS, CÔTÉ MOTEUR (#8433, #8438, #8439) —
@@ -128,7 +129,7 @@ describe('inviter une personne (#8433)', () => {
     expect(Object.keys(h.call()?.members ?? {})).toEqual([PEER]);
   });
 
-  test('une invitation sans réponse cesse de sonner après INVITE_RING_MS ; un invité qui a décroché reste', async () => {
+  test('une invitation sans réponse cesse de sonner après INVITE_RING_MS et le dit ; un invité qui a décroché reste', async () => {
     const h = harness();
     await h.controls.invite(BRUNO);
     h.controls.receive(SERVER_EVENTS.CALL_PARTICIPANT_INVITED, { callId: CALL, invitee: { userId: 'u-chloe', username: 'chloe' } });
@@ -136,6 +137,46 @@ describe('inviter une personne (#8433)', () => {
     h.advance(INVITE_RING_MS);
     expect(h.call()?.members['u-bruno']).toBeUndefined();
     expect(h.call()?.members['u-chloe']?.link).toBe('connecting');
+    expect(h.notices.getState().notice).toEqual({ kind: 'invite-unanswered', name: 'Bruno' });
+  });
+
+  test('la passerelle tranche avant le filet local : sa sonnerie (45 s) finit avant INVITE_RING_MS', () => {
+    expect(INVITE_RING_MS).toBeGreaterThan(CALL_RING_TIMEOUT_MS);
+  });
+});
+
+describe('l’invitation se résout : refusée ou sans réponse (#8470)', () => {
+  test('call:invite-declined retire la puce « Sonne… » et dit « Bruno a refusé »', async () => {
+    const h = harness();
+    await h.controls.invite(BRUNO);
+
+    h.controls.receive(SERVER_EVENTS.CALL_INVITE_DECLINED, { callId: CALL, userId: 'u-bruno' });
+
+    expect(h.call()?.members['u-bruno']).toBeUndefined();
+    expect(h.notices.getState().notice).toEqual({ kind: 'invite-declined', name: 'Bruno' });
+  });
+
+  test('call:invite-expired retire la puce et dit « Bruno n’a pas répondu »', async () => {
+    const h = harness();
+    await h.controls.invite(BRUNO);
+
+    h.controls.receive(SERVER_EVENTS.CALL_INVITE_EXPIRED, { callId: CALL, userId: 'u-bruno' });
+
+    expect(h.call()?.members['u-bruno']).toBeUndefined();
+    expect(h.notices.getState().notice).toEqual({ kind: 'invite-unanswered', name: 'Bruno' });
+  });
+
+  test('un participant déjà relié, un autre appel ou une charge malformée ne changent rien', async () => {
+    const h = harness();
+    await h.controls.invite(BRUNO);
+
+    h.controls.receive(SERVER_EVENTS.CALL_INVITE_DECLINED, { callId: CALL, userId: PEER });
+    h.controls.receive(SERVER_EVENTS.CALL_INVITE_EXPIRED, { callId: 'other', userId: 'u-bruno' });
+    h.controls.receive(SERVER_EVENTS.CALL_INVITE_EXPIRED, { callId: CALL });
+
+    expect(h.call()?.members[PEER]?.link).toBe('connected');
+    expect(h.call()?.members['u-bruno']?.link).toBe('ringing');
+    expect(h.notices.getState().notice).toBeNull();
   });
 });
 

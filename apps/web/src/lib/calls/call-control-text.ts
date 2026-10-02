@@ -45,8 +45,14 @@ export function controlNoticeText(language: InterfaceLanguage, notice: CallContr
       return failureText(language, notice.code, notice.name, 'callControls.error.mute');
     case 'remove-failed':
       return t(language, 'callControls.error.remove', { name: notice.name });
+    case 'invite-declined':
+      return t(language, 'callControls.invite.declined', { name: notice.name });
+    case 'invite-unanswered':
+      return t(language, 'callControls.invite.unanswered', { name: notice.name });
   }
 }
 
-/** Une coupure imposée se DIT (statut) ; un échec de mon geste s'ANNONCE (alerte). */
-export const noticeRole = (notice: CallControlNotice): 'status' | 'alert' => (notice.kind === 'muted-by' ? 'status' : 'alert');
+const SPOKEN: ReadonlySet<CallControlNotice['kind']> = new Set(['muted-by', 'invite-declined', 'invite-unanswered']);
+
+/** Ce que les autres ont fait se DIT (statut) ; un échec de mon geste s'ANNONCE (alerte). */
+export const noticeRole = (notice: CallControlNotice): 'status' | 'alert' => (SPOKEN.has(notice.kind) ? 'status' : 'alert');

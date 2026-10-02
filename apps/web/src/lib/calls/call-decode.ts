@@ -232,6 +232,14 @@ export function decodeParticipantInvited(payload: unknown): { readonly callId: s
   return callId === null || invitee === null ? null : { callId, invitedBy: str(payload.invitedBy), invitee };
 }
 
+/** `call:invite-declined` / `call:invite-expired` (#8470) — l'invitation de `userId` s'est résolue sans décroché. */
+export function decodeInviteSettled(payload: unknown): { readonly callId: string; readonly userId: string } | null {
+  if (!isRecord(payload)) return null;
+  const callId = str(payload.callId);
+  const userId = str(payload.userId);
+  return callId === null || userId === null ? null : { callId, userId };
+}
+
 /** `call:muted-by-moderator` (#8438) — adressé à la seule personne visée. */
 export function decodeMutedByModerator(payload: unknown): { readonly callId: string; readonly byUserId: string } | null {
   if (!isRecord(payload)) return null;

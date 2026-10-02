@@ -21,6 +21,8 @@ const pt = {
   'callControls.people.you': 'Você',
   'callControls.close': 'Fechar',
   'callControls.ringing': 'Tocando…',
+  'callControls.invite.declined': '{name} recusou',
+  'callControls.invite.unanswered': '{name} não atendeu',
   'callControls.moderate.menu': 'Opções para {name}',
   'callControls.mute': 'Silenciar microfone',
   'callControls.mute.done': 'Microfone silenciado',

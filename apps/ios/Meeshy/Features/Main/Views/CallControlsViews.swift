@@ -70,6 +70,10 @@ extension CallControlsCopy {
             return String(localized: "call.moderation.failed", defaultValue: "Action impossible pour le moment", bundle: .main)
         case .removed(let name):
             return String(format: String(localized: "call.moderation.removed", defaultValue: "%@ a été retiré de l’appel", bundle: .main), name)
+        case .inviteDeclined(let name):
+            return String(format: String(localized: "call.invite.declined", defaultValue: "%@ a refusé", bundle: .main), name)
+        case .inviteUnanswered(let name):
+            return String(format: String(localized: "call.invite.unanswered", defaultValue: "%@ n’a pas répondu", bundle: .main), name)
         }
     }
 

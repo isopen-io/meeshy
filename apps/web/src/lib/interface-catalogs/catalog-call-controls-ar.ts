@@ -21,6 +21,8 @@ const ar = {
   'callControls.people.you': 'أنت',
   'callControls.close': 'إغلاق',
   'callControls.ringing': 'يرنّ…',
+  'callControls.invite.declined': 'رفض {name} المكالمة',
+  'callControls.invite.unanswered': 'لم يرد {name}',
   'callControls.moderate.menu': 'خيارات {name}',
   'callControls.mute': 'كتم الميكروفون',
   'callControls.mute.done': 'الميكروفون مكتوم',

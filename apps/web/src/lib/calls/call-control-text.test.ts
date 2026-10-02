@@ -27,6 +27,13 @@ describe('le mot d’un contrôle d’appel', () => {
     expect(controlNoticeText('fr', { kind: 'invite-failed', code: 'INTERNAL_ERROR', name: 'Bruno' }, nameOf)).toBe('Impossible d’inviter Bruno');
   });
 
+  test('une invitation qui se résout sans décroché le dit, en statut discret (#8470)', () => {
+    expect(controlNoticeText('fr', { kind: 'invite-declined', name: 'Léa' }, nameOf)).toBe('Léa a refusé');
+    expect(controlNoticeText('fr', { kind: 'invite-unanswered', name: 'Léa' }, nameOf)).toBe('Léa n’a pas répondu');
+    expect(noticeRole({ kind: 'invite-declined', name: 'Léa' })).toBe('status');
+    expect(noticeRole({ kind: 'invite-unanswered', name: 'Léa' })).toBe('status');
+  });
+
   test('un micro qu’on n’a pas pu couper, un retrait refusé', () => {
     expect(controlNoticeText('fr', { kind: 'mute-failed', code: 'PERMISSION_DENIED', name: 'Nadia' }, nameOf)).toBe('Vous n’avez pas ce droit dans cet appel');
     expect(controlNoticeText('fr', { kind: 'mute-failed', code: 'VALIDATION_ERROR', name: 'Nadia' }, nameOf)).toBe('Impossible de couper le micro de Nadia');

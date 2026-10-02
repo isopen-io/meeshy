@@ -1,7 +1,8 @@
 import type { CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
+import { CALL_RING_TIMEOUT_MS } from '@meeshy/shared/types/call-rules';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
-import { decodeControlAck, decodeMutedByModerator, decodeParticipantInvited, decodeReactionReceived, type DecodedPerson } from './call-decode';
+import { decodeControlAck, decodeInviteSettled, decodeMutedByModerator, decodeParticipantInvited, decodeReactionReceived, type DecodedPerson } from './call-decode';
 import { laneOf, REACTION_LIFETIME_MS, reactionAllowed, recentSends, showNotice, withBurst, withoutBurst, type CallNoticeStoreApi, type CallReactionStoreApi } from './call-control-state';
 import { patchMember, withMember, withoutMember, type ActiveCall, type CallMember } from './call-store';
 
@@ -13,15 +14,18 @@ import { patchMember, withMember, withoutMember, type ActiveCall, type CallMembe
  *
  * - **Inviter** : l'invité paraît AUSSITÔT, en tuile qui sonne, et un duo
  *   devient un groupe ; un accusé refusé défait les deux et dit pourquoi.
- *   `call:participant-invited` fait sonner l'invité chez tous. Sans réponse
- *   après `INVITE_RING_MS` (la sonnerie sortante d'iOS), la tuile s'en va.
+ *   `call:participant-invited` fait sonner l'invité chez tous. La passerelle
+ *   dit comment l'invitation se résout (#8470) : `call:invite-declined`
+ *   (« Léa a refusé ») ou `call:invite-expired` (« Léa n'a pas répondu »),
+ *   au bout de la sonnerie d'un appel. `INVITE_RING_MS` n'est que le filet
+ *   d'un socket qui aurait perdu ce mot : un peu plus long, il dit pareil.
  * - **Couper un micro** : la tuile se coupe aussitôt ; un refus la rend.
  * - **Être coupé** : par le chemin de MON geste, donc la piste reste coupée et
  *   les autres l'apprennent ; je peux la rouvrir.
  * - **Réagir** : la mienne s'affiche aussitôt ; au-delà du débit, rien.
  */
 
-export const INVITE_RING_MS = 45_000;
+export const INVITE_RING_MS = CALL_RING_TIMEOUT_MS + 5_000;
 
 export type EngineControlsDeps = {
   readonly read: () => ActiveCall | null;
@@ -65,9 +69,16 @@ export function createEngineControls(deps: EngineControlsDeps) {
     timers.add(handle);
   };
 
+  const settle = (userId: string, kind: 'invite-declined' | 'invite-unanswered'): void => {
+    const ringing = deps.read()?.members[userId];
+    if (ringing?.link !== 'ringing') return;
+    deps.update((call) => withoutMember(call, userId));
+    showNotice(deps.notices, { kind, name: ringing.name });
+  };
+
   const ring = (person: DecodedPerson): void => {
     deps.update((call) => ({ ...withMember(call, ringingMember(person)), isGroup: true }));
-    later(() => deps.update((call) => (call.members[person.userId]?.link === 'ringing' ? withoutMember(call, person.userId) : call)), INVITE_RING_MS);
+    later(() => settle(person.userId, 'invite-unanswered'), INVITE_RING_MS);
   };
 
   const invite = async (person: DecodedPerson): Promise<void> => {
@@ -121,6 +132,11 @@ export function createEngineControls(deps: EngineControlsDeps) {
       const invited = decodeParticipantInvited(payload);
       if (invited === null || invited.callId !== call.callId || invited.invitee.userId === deps.viewerId() || call.members[invited.invitee.userId] !== undefined) return;
       ring(invited.invitee);
+      return;
+    }
+    if (event === SERVER_EVENTS.CALL_INVITE_DECLINED || event === SERVER_EVENTS.CALL_INVITE_EXPIRED) {
+      const settled = decodeInviteSettled(payload);
+      if (settled !== null && settled.callId === call.callId) settle(settled.userId, event === SERVER_EVENTS.CALL_INVITE_DECLINED ? 'invite-declined' : 'invite-unanswered');
       return;
     }
     if (event === SERVER_EVENTS.CALL_MUTED_BY_MODERATOR) {

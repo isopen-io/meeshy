@@ -50,6 +50,18 @@ public struct CallParticipantInvitedEvent: Decodable, Sendable, Equatable {
     }
 }
 
+/// `call:invite-declined` / `call:invite-expired` (#8470) — l'invitation de
+/// `userId` s'est résolue sans décroché : refusée, ou restée sans réponse.
+public struct CallInviteSettledEvent: Decodable, Sendable, Equatable {
+    public let callId: String
+    public let userId: String
+
+    public init(callId: String, userId: String) {
+        self.callId = callId
+        self.userId = userId
+    }
+}
+
 /// `call:muted-by-moderator` — à la personne visée seulement.
 public struct CallMutedByModeratorEvent: Decodable, Sendable, Equatable {
     public let callId: String
@@ -76,12 +88,15 @@ public struct CallReactionReceivedEvent: Decodable, Sendable, Equatable {
 
 public enum CallControlSocketEvent: Sendable, Equatable {
     case participantInvited(CallParticipantInvitedEvent)
+    case inviteDeclined(CallInviteSettledEvent)
+    case inviteExpired(CallInviteSettledEvent)
     case mutedByModerator(CallMutedByModeratorEvent)
     case reactionReceived(CallReactionReceivedEvent)
 
     public var callId: String {
         switch self {
         case .participantInvited(let event): return event.callId
+        case .inviteDeclined(let event), .inviteExpired(let event): return event.callId
         case .mutedByModerator(let event): return event.callId
         case .reactionReceived(let event): return event.callId
         }
@@ -119,6 +134,16 @@ extension MessageSocketManager: CallControlsSocketProviding {
         socket.on("call:participant-invited") { [weak self] data, _ in
             self?.decode(CallParticipantInvitedEvent.self, from: data) { event in
                 CallControlSocketChannel.events.send(.participantInvited(event))
+            }
+        }
+        socket.on("call:invite-declined") { [weak self] data, _ in
+            self?.decode(CallInviteSettledEvent.self, from: data) { event in
+                CallControlSocketChannel.events.send(.inviteDeclined(event))
+            }
+        }
+        socket.on("call:invite-expired") { [weak self] data, _ in
+            self?.decode(CallInviteSettledEvent.self, from: data) { event in
+                CallControlSocketChannel.events.send(.inviteExpired(event))
             }
         }
         socket.on("call:muted-by-moderator") { [weak self] data, _ in

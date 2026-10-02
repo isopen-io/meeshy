@@ -21,6 +21,8 @@ const de = {
   'callControls.people.you': 'Sie',
   'callControls.close': 'Schließen',
   'callControls.ringing': 'Klingelt…',
+  'callControls.invite.declined': '{name} hat abgelehnt',
+  'callControls.invite.unanswered': '{name} hat nicht geantwortet',
   'callControls.moderate.menu': 'Optionen für {name}',
   'callControls.mute': 'Mikrofon stummschalten',
   'callControls.mute.done': 'Mikrofon stumm',

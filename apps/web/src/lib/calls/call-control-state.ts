@@ -35,7 +35,9 @@ export type CallControlNotice =
   | { readonly kind: 'muted-by'; readonly byUserId: string }
   | { readonly kind: 'invite-failed'; readonly code: CallControlErrorCode; readonly name: string }
   | { readonly kind: 'mute-failed'; readonly code: CallControlErrorCode; readonly name: string }
-  | { readonly kind: 'remove-failed'; readonly name: string };
+  | { readonly kind: 'remove-failed'; readonly name: string }
+  | { readonly kind: 'invite-declined'; readonly name: string }
+  | { readonly kind: 'invite-unanswered'; readonly name: string };
 
 export type CallNoticeState = { readonly notice: CallControlNotice | null; readonly seq: number };
 

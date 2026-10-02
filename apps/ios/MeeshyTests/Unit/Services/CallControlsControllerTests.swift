@@ -126,6 +126,36 @@ final class CallControlsControllerTests: XCTestCase {
         XCTAssertEqual(env.sut.invites.map(\.userId), ["u-lea"])
     }
 
+    // MARK: - Résolution de l'invitation (#8470)
+
+    func test_receive_inviteDeclined_removesTheRingingTile_andSaysWhoDeclined() async {
+        let env = makeEnv()
+        await env.sut.invite(lea)?.value
+
+        env.sut.receive(.inviteDeclined(CallInviteSettledEvent(callId: "call-1", userId: "u-lea")))
+
+        XCTAssertTrue(env.sut.invites.isEmpty)
+        XCTAssertEqual(env.sut.notice, .inviteDeclined(name: "Léa"))
+    }
+
+    func test_receive_inviteExpired_removesTheRingingTile_andSaysNoAnswer() async {
+        let env = makeEnv()
+        await env.sut.invite(lea)?.value
+
+        env.sut.receive(.inviteExpired(CallInviteSettledEvent(callId: "call-1", userId: "u-lea")))
+
+        XCTAssertTrue(env.sut.invites.isEmpty)
+        XCTAssertEqual(env.sut.notice, .inviteUnanswered(name: "Léa"))
+    }
+
+    func test_receive_inviteSettled_forSomeoneNotRinging_changesNothing() {
+        let env = makeEnv()
+
+        env.sut.receive(.inviteExpired(CallInviteSettledEvent(callId: "call-1", userId: "u-ghost")))
+
+        XCTAssertNil(env.sut.notice)
+    }
+
     func test_eventOfAnotherCall_isIgnored() {
         let env = makeEnv()
 

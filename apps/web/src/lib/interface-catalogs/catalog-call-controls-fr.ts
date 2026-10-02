@@ -25,6 +25,8 @@ const fr = {
   'callControls.people.you': 'Vous',
   'callControls.close': 'Fermer',
   'callControls.ringing': 'Sonne…',
+  'callControls.invite.declined': '{name} a refusé',
+  'callControls.invite.unanswered': '{name} n’a pas répondu',
   'callControls.moderate.menu': 'Options pour {name}',
   'callControls.mute': 'Couper le micro',
   'callControls.mute.done': 'Micro coupé',
