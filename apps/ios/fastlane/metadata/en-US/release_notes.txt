@@ -1,9 +1,9 @@
-Meeshy 1.1.1
+Meeshy 1.1.3 — create everything right on the scene
 
-• New invitation page: before joining, see who invited you, the group, its languages and what you'll be able to do there, even without an account
-• Your invitation links now have their own page: details, editing and arrivals (visits, languages, countries)
-• Tap an active participant at the top of a conversation: their unseen story opens, otherwise their profile
-• A Meeshy link you receive opens right in the app, iPad included; reels and stories open in the same player, wherever you come from
-• When you come back to the app, the list instantly shows the last message received in the background
-• Arabic keeps its ligatures, and dates follow the Gregorian calendar in every language
+• Stickers: one sheet everywhere, in your chats as well as your stories, posts and reels; Mee and Meo come to life, and a Shop installs or removes a pack in one tap
+• Composer: tap the Text tool to create your scene, then edit text, images, stickers and background right on it; pinch to enlarge your text without breaking its lines
+• Edit your photos and videos in the scene before sending: crop an image (Original, 1:1, 4:5, 9:16), trim a video, and the camera opens full screen
+• A lighter compose bar: photo library and camera in one tap, and icons in the colors of your effect
+• Calls: see when the other person turns off their camera or mic, resume an interrupted call instead of losing it, and a group call goes on when someone leaves; on video, a natural complexion and adjustable skin smoothing
+• A Meeshy link opened without an account shows the post and who shared it with you; a reel without text shows its caption, and editing a post keeps its type
 • Fixes and smoother performance
