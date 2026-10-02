@@ -11,12 +11,17 @@ import MeeshyUI
 /// passe en arrière-plan. Le serveur oublie tout à la déconnexion : chaque
 /// (re)connexion ré-émet `viewing:start` pour la conversation affichée.
 ///
-/// L'écran VISIBLE (#9052) : une galerie, une visionneuse, une story ou un
-/// écran poussé par-dessus la conversation ne démontent pas son modèle, mais
-/// l'utilisateur n'y est plus. L'écran rapporte `onAppear` / `onDisappear` ;
-/// tant qu'aucune instance de la conversation n'est visible, rien n'est
-/// annoncé. Une conversation dont l'écran n'a encore rien rapporté compte
-/// comme visible.
+/// L'écran VISIBLE (#9052) : un écran poussé par-dessus la conversation ne
+/// démonte pas son modèle, mais l'utilisateur n'y est plus. L'écran rapporte
+/// `onAppear` / `onDisappear` ; tant qu'aucune instance de la conversation
+/// n'est visible, rien n'est annoncé. Une conversation dont l'écran n'a encore
+/// rien rapporté compte comme visible.
+///
+/// Le PLEIN ÉCRAN ouvert depuis la conversation (#9065) — galerie,
+/// visionneuse, story, audio, caméra — garde l'utilisateur dans la
+/// conversation : il y REGARDE. `viewing:activity` part avec `focus` à
+/// l'ouverture puis à chaque battement, et une activité simple au retour au
+/// fil. L'écran d'APPEL, lui, fait quitter tant qu'il est affiché en grand.
 @MainActor
 protocol ConversationViewingReporting: AnyObject {
     func conversationOpened(_ conversationId: String)
@@ -27,6 +32,7 @@ protocol ConversationViewingReporting: AnyObject {
     func screenDisappeared(_ conversationId: String)
     func coverBegan()
     func coverEnded()
+    func setCallScreenShown(_ isShown: Bool)
     func activityOccurred(_ conversationId: String)
     func scrollingChanged(_ isScrolling: Bool)
     func touched()
@@ -48,6 +54,7 @@ final class ConversationViewingReporter: ConversationViewingReporting {
     private var openings: [String: Int] = [:]
     private var visibleScreens: [String: Int] = [:]
     private var covers = 0
+    private var isCallScreenShown = false
     private let now: () -> Date
     private let isBusy: () -> Bool
     private var lastActivity: (conversationId: String, at: Date)?
@@ -149,17 +156,26 @@ final class ConversationViewingReporter: ConversationViewingReporting {
         transition(from: before)
     }
 
-    /// Un plein écran présenté depuis la conversation la couvre ; comptés,
-    /// car une visionneuse peut en présenter une autre.
+    /// Un plein écran présenté depuis la conversation ; comptés, car une
+    /// visionneuse peut en présenter une autre. Le premier dit `focus` tout
+    /// de suite, le dernier refermé rend le fil sans attendre la tenue.
     func coverBegan() {
-        let before = announced
         covers += 1
-        transition(from: before)
+        guard covers == 1 else { return }
+        signalAtOnce()
     }
 
     func coverEnded() {
+        guard covers > 0 else { return }
+        covers -= 1
+        guard covers == 0 else { return }
+        signalAtOnce()
+    }
+
+    func setCallScreenShown(_ isShown: Bool) {
+        guard isCallScreenShown != isShown else { return }
         let before = announced
-        covers = max(covers - 1, 0)
+        isCallScreenShown = isShown
         transition(from: before)
     }
 
@@ -173,7 +189,13 @@ final class ConversationViewingReporter: ConversationViewingReporting {
         if let last = lastActivity, last.conversationId == conversationId,
            at.timeIntervalSince(last.at) < Self.activityThrottle { return }
         lastActivity = (conversationId, at)
-        emitter.emitViewingActivity(conversationId: conversationId)
+        emitter.emitViewingActivity(conversationId: conversationId, focus: covers > 0)
+    }
+
+    private func signalAtOnce() {
+        guard let current = announced else { return }
+        lastActivity = nil
+        activityOccurred(current)
     }
 
     /// Le doigt fait défiler le fil (regarder) : l'activité part au premier
@@ -194,7 +216,7 @@ final class ConversationViewingReporter: ConversationViewingReporting {
     /// défiler longtemps — se redit à chaque battement, tant que la
     /// conversation est annoncée.
     func heartbeat() {
-        guard let current = announced, isScrolling || isBusy() else { return }
+        guard let current = announced, covers > 0 || isScrolling || isBusy() else { return }
         activityOccurred(current)
     }
 
@@ -211,7 +233,7 @@ final class ConversationViewingReporter: ConversationViewingReporting {
     }
 
     private var announced: String? {
-        guard isForeground, covers == 0, let current = viewingConversationId, (visibleScreens[current] ?? 1) > 0 else { return nil }
+        guard isForeground, !isCallScreenShown, let current = viewingConversationId, (visibleScreens[current] ?? 1) > 0 else { return nil }
         return current
     }
 

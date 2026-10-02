@@ -483,14 +483,14 @@ final class ConversationViewingReporterTests: XCTestCase {
 
     /// Chaque plein écran présenté depuis la conversation passe par
     /// `.conversationCover` : un `fullScreenCover` brut de plus laisserait le
-    /// point « ici » allumé derrière une visionneuse.
+    /// point « ici » fixe derrière une visionneuse, au lieu de le faire pulser.
     func test_everyConversationCover_declaresItself() throws {
         let views = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Views")
         let hosts = try FileManager.default.contentsOfDirectory(atPath: views.path)
-            .filter { $0.hasPrefix("ConversationView") && $0.hasSuffix(".swift") }
+            .filter { ($0.hasPrefix("ConversationView") || $0 == "ConversationMediaViews.swift") && $0.hasSuffix(".swift") }
         XCTAssertGreaterThan(hosts.count, 3)
         var covers = 0
         for host in hosts {
@@ -498,7 +498,7 @@ final class ConversationViewingReporterTests: XCTestCase {
             XCTAssertFalse(source.contains(".fullScreenCover("), "\(host) présente un plein écran sans .conversationCover")
             covers += source.components(separatedBy: ".conversationCover(").count - 1
         }
-        XCTAssertGreaterThanOrEqual(covers, 12)
+        XCTAssertGreaterThanOrEqual(covers, 13)
     }
 
     func test_screenAppeared_beforeTheHandlerOpens_announcesNothing() {
