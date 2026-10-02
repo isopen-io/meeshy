@@ -18,7 +18,7 @@ import { avatarMenuEntries } from '@/lib/view/avatar-menu';
 import type { ActiveMember } from '@/lib/view/top-active-members';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { Link } from '@/routes/route-table';
-import { useIsHere } from '@/lib/view/use-conversation-viewing';
+import { useIsHere, useIsHereActive } from '@/lib/view/use-conversation-viewing';
 import { useConversationEngagement } from '@/lib/view/use-conversation-engagement';
 import { headerFlameShown } from '@/lib/view/header-memory';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
@@ -125,7 +125,10 @@ export function ThreadHeader({
   const peer = peerOf(conversation, viewerId);
   const peerRing = peer === undefined ? undefined : storyRingOf?.(peer.userId ?? peer.user?.id);
   /* LE PAIR A LA CONVERSATION OUVERTE (#8892) — sa pastille passe à la couleur primaire. */
-  const peerHere = useIsHere(conversation.id, peer?.userId ?? peer?.user?.id ?? undefined);
+  const peerKey = peer?.userId ?? peer?.user?.id ?? undefined;
+  const peerHere = useIsHere(conversation.id, peerKey);
+  /* … et pulse tant qu'il y regarde, écoute ou agit (#9061). */
+  const peerActive = useIsHereActive(conversation.id, peerKey);
   /* « N (M) 🔥 » (#8906) — ce que cette conversation a rapporté au lecteur ;
      dans la grappe d'actions repliée, sous le titre déplié. */
   const engagement = useConversationEngagement(conversation);
@@ -358,7 +361,7 @@ export function ThreadHeader({
               color={accent}
               size={44}
               {...(photo === undefined ? {} : { src: photo })}
-              {...(group ? {} : { presence: presenceOf(peerOf(conversation, viewerId)), here: peerHere })}
+              {...(group ? {} : { presence: presenceOf(peerOf(conversation, viewerId)), here: peerHere, hereActive: peerActive })}
             />
           </button>
         </AvatarMenuTrigger>

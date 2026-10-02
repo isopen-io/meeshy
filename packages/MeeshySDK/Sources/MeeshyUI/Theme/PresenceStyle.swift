@@ -93,12 +93,33 @@ public enum AvatarPresenceDot: Equatable, Sendable {
         self == .here
     }
 
-    /// Être dans la conversation est une activité en cours : il pulse comme `online`.
+    /// « ici » ne pulse pas de lui-même : il pulse tant que le pair regarde,
+    /// écoute ou agit (#9061) — `MeeshyAvatar.isHereActive` en décide.
     public var pulses: Bool {
         switch self {
-        case .here: return true
+        case .here: return false
         case .presence(let state): return state.pulses
         }
+    }
+
+    /// Le diamètre du point, en fraction de l'avatar : la pastille de présence
+    /// à 0,26, le point « ici » au double (#9061). Jumeau de `HERE_DOT_RATIO`
+    /// (`apps/web/src/components/avatar.tsx`).
+    public func diameter(avatarSize: CGFloat) -> CGFloat {
+        switch self {
+        case .here: return avatarSize * 0.52
+        case .presence: return avatarSize * 0.26
+        }
+    }
+
+    /// Le décalage qui pose le CENTRE du point sur le cercle de l'avatar, à
+    /// 45°, depuis l'alignement `.bottomTrailing` de son cadre (#9061). Le
+    /// cadre vaut l'avatar seul, ou l'anneau de story quand il est peint.
+    /// Sans ce calcul, un point aligné au coin du cadre tombe hors du cercle.
+    public static func centerOffset(avatarSize: CGFloat, frameSize: CGFloat, dotDiameter: CGFloat) -> CGSize {
+        let target = frameSize / 2 + avatarSize / 2 * cos(.pi / 4)
+        let delta = target - (frameSize - dotDiameter / 2)
+        return CGSize(width: delta, height: delta)
     }
 
     public var localizedLabel: String {

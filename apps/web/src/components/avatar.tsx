@@ -21,6 +21,7 @@ import { Link } from '@/routes/route-table';
  *
  *   anneau      = taille + 6        police initiales = taille x 0.38
  *   pastille    = taille x 0.26     epaisseur anneau = taille <= 32 ? 1.5 : 2.5
+ *   point « ici » = taille x 0.52 — deux fois la pastille (#9061)
  *
  * La PASTILLE DE PRESENCE se pose a 45 degres SUR LE BORD du cercle, pas dans
  * le coin de sa boite : `centre + rayon x cos(pi/4)`, soit 85,36 % du diametre.
@@ -42,6 +43,7 @@ export function Avatar({
   size,
   presence,
   here = false,
+  hereActive = false,
   name,
   opacity,
   src,
@@ -62,6 +64,11 @@ export function Avatar({
    * la frappe (`api/conversation-viewing.ts`).
    */
   here?: boolean;
+  /**
+   * LE PAIR ICI REGARDE, ÉCOUTE OU AGIT EN CE MOMENT (#9061) — le point indigo
+   * PULSE tant que `viewing:activity` arrive. Sans `here`, rien ne pulse.
+   */
+  hereActive?: boolean;
   name?: string;
   /**
    * Le fondu de SOURDINE, appliqué ICI plutôt qu'en enveloppant l'avatar
@@ -176,7 +183,7 @@ export function Avatar({
 }) {
   const showsImage = src !== undefined && src !== '';
   const resolvedSrc = showsImage ? attachmentSrc(src) : undefined;
-  const dot = size * 0.26;
+  const dot = here ? size * HERE_DOT_RATIO : size * PRESENCE_DOT_RATIO;
   // 0.8536 = (1 + cos(pi/4)) / 2 — le point a 45 deg sur le cercle, en fraction
   // du diametre. On retranche la moitie de la pastille pour la CENTRER dessus.
   const offset = size * 0.8536 - dot / 2;
@@ -245,7 +252,13 @@ export function Avatar({
            l'ÉTAT servi (`here`/`online`/`away`/`idle`), donc « point VERT » se
            mesure vraiment plutôt que « un enfant de plus ». Le point change en
            se montrant (#9047) : `PresenceDot`. */
-        <PresenceDot state={showsDot ? (here ? 'here' : presence) : undefined} color={dotColor} size={dot} offset={offset} />
+        <PresenceDot
+          state={showsDot ? (here ? 'here' : presence) : undefined}
+          active={here && hereActive}
+          color={dotColor}
+          size={dot}
+          offset={offset}
+        />
       ) : null}
       {humeur === undefined ? null : (
         /* `data-mood` porte l'ÉTAT servi, comme `data-presence` et
@@ -342,6 +355,11 @@ export function Avatar({
   );
 }
 
+/** La pastille de présence, en fraction du diamètre — `MeeshyAvatar.onlineDotSize`. */
+const PRESENCE_DOT_RATIO = 0.26;
+/** Le point indigo « ici », deux fois la pastille (#9061) — `MeeshyAvatar.hereDotSize`. */
+const HERE_DOT_RATIO = PRESENCE_DOT_RATIO * 2;
+
 /** Le temps que met le point sortant à diminuer (`presence-dot-shrink`, `avatar.css`). */
 const PRESENCE_LEAVE_MS = 220;
 
@@ -356,11 +374,13 @@ type ShownDot = { readonly state: string; readonly color: string };
  */
 function PresenceDot({
   state,
+  active,
   color,
   size,
   offset,
 }: {
   readonly state: string | undefined;
+  readonly active: boolean;
   readonly color: string;
   readonly size: number;
   readonly offset: number;
@@ -404,7 +424,8 @@ function PresenceDot({
         <span
           key={state}
           data-presence={state}
-          className={`presence-dot absolute rounded-chip${enters}${state === 'here' ? ' presence-dot-here' : ''}`}
+          data-presence-active={active ? 'true' : undefined}
+          className={`presence-dot absolute rounded-chip${enters}${state === 'here' ? ' presence-dot-here' : ''}${active ? ' presence-dot-active' : ''}`}
           style={{ ...box, backgroundColor: color, color }}
           aria-hidden
         />

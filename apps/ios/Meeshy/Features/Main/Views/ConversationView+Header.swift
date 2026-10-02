@@ -562,10 +562,11 @@ private struct ConversationHeaderAvatarView: View {
 
     private var isDirect: Bool { conversation?.type == .direct }
 
-    /// Le pair a l'écran de CETTE conversation ouvert (#8892).
-    private func isHere(_ userId: String?) -> Bool {
-        guard let userId, let conversationId = conversation?.id else { return false }
-        return PresenceManager.shared.isHere(userId: userId, conversationId: conversationId)
+    /// Le pair a l'écran de CETTE conversation ouvert (#8892), et y est
+    /// peut-être actif (#9061).
+    private func isHere(_ userId: String?) -> ConversationHere {
+        guard let userId, let conversationId = conversation?.id else { return .absent }
+        return PresenceManager.shared.here(userId: userId, conversationId: conversationId)
     }
 
     private func memberStoryState(for userId: String) -> StoryRingState {
@@ -739,7 +740,7 @@ private struct ConversationHeaderAvatarView: View {
                 storyState: collapsedStoryState,
                 moodEmoji: headerMoodEmoji,
                 presenceState: headerPresenceState,
-                isHere: isDirect && isHere(conversation?.participantUserId),
+                isHere: isDirect ? isHere(conversation?.participantUserId) : .absent,
                 onTap: {
                     HapticFeedback.light()
                     onSetExpanded(true)

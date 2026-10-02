@@ -120,6 +120,8 @@ export const SERVER_EVENTS = {
   VIEWING_STOP: 'viewing:stop',
   /** Réponse au seul émetteur d'un `viewing:start` : les pairs déjà présents. */
   VIEWING_SNAPSHOT: 'viewing:snapshot',
+  /** Un pair ICI regarde, écoute ou agit dans la conversation (#9061) — `ViewingEvent`. */
+  VIEWING_ACTIVITY: 'viewing:activity',
   /**
    * Les points et la série qu'une conversation a rapportés à son LECTEUR ont
    * changé (#8906) — `ConversationEngagementSnapshot`, émis dans la room
@@ -615,6 +617,8 @@ export const CLIENT_EVENTS = {
   /** L'écran de la conversation est ouvert et au premier plan (#8892). */
   VIEWING_START: 'viewing:start',
   VIEWING_STOP: 'viewing:stop',
+  /** L'utilisateur ICI fait défiler, lit un média, écrit ou réagit (#9061). */
+  VIEWING_ACTIVITY: 'viewing:activity',
   // `USER_STATUS: 'user:status'` a été retiré d'ici (cycle 60) : c'est un
   // événement SERVEUR→client (`SERVER_EVENTS.USER_STATUS`, écouté par
   // `presence.service.ts`, `websocket.service.ts`, iOS `PresenceManager`), et

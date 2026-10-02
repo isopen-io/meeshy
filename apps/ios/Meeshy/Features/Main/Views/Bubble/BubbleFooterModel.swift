@@ -27,7 +27,7 @@ struct SenderIdentity: Equatable, Sendable {
     let presence: PresenceState?
     let storyRing: StoryRingState
     /// L'auteur a l'écran de cette conversation ouvert (#8892).
-    var isHere: Bool = false
+    var isHere: ConversationHere = .absent
 
     /// « @pseudo » — ou rien. Le fil sert un pseudo VIDE pour un participant
     /// anonyme, et un « @ » nu sous le nom n'est pas une identité.

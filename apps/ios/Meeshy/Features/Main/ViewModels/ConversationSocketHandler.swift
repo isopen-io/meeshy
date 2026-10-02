@@ -278,6 +278,7 @@ final class ConversationSocketHandler {
         if !trimmed.isEmpty {
             startTypingEmission()
             resetIdleTimer()
+            ConversationViewingReporter.shared.activityOccurred(conversationId)
         } else {
             stopTypingEmission()
         }

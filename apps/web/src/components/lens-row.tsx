@@ -117,6 +117,8 @@ export type LensRowProps = {
    * à la couleur primaire Meeshy.
    */
   peerHere?: boolean | undefined;
+  /** … et il y regarde, écoute ou agit en ce moment : le point pulse (#9061). */
+  peerActive?: boolean | undefined;
   /**
    * « N (M) 🔥 » (#8906) — l'état d'engagement EFFECTIF de la conversation pour
    * le lecteur (servi + direct, `effectiveEngagementOf`), distribué par
@@ -139,6 +141,7 @@ function LensRowImpl({
   onRowAction,
   typists,
   peerHere = false,
+  peerActive = false,
   engagement,
   interfaceLanguage,
   now,
@@ -316,7 +319,7 @@ function LensRowImpl({
               name={title}
               opacity={chromeFade}
               {...(photo === undefined ? {} : { src: photo })}
-              {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)), here: peerHere })}
+              {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)), here: peerHere, hereActive: peerActive })}
             />
           </Link>
         ) : (
@@ -328,7 +331,7 @@ function LensRowImpl({
             opacity={chromeFade}
             profileUsername={peerHandle}
             {...(photo === undefined ? {} : { src: photo })}
-            {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)), here: peerHere })}
+            {...(group ? {} : { presence: typing ? 'online' : presenceOf(peerOf(conversation, viewerId)), here: peerHere, hereActive: peerActive })}
           />
         )}
 
@@ -583,6 +586,7 @@ export function sameRowProps(prev: LensRowProps, next: LensRowProps): boolean {
      doc-comment de `useTypistNames` promet de borner. */
   if ((prev.typists ?? []).join('\u0001') !== (next.typists ?? []).join('\u0001')) return false;
   if ((prev.peerHere ?? false) !== (next.peerHere ?? false)) return false;
+  if ((prev.peerActive ?? false) !== (next.peerActive ?? false)) return false;
   /* L'instantané d'engagement (#8906) — comparé par RÉFÉRENCE : il vient du
      magasin ou de la charge, stables tant qu'aucun geste n'est crédité. */
   if (prev.engagement !== next.engagement) return false;

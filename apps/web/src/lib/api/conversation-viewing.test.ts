@@ -9,7 +9,9 @@ import {
   coverConversationViewing,
   createViewingStore,
   herePeersOf,
+  isActiveIn,
   isHereIn,
+  signalConversationActivity,
 } from './conversation-viewing';
 import type { SocketClient, SocketHandler } from '@/lib/net/socket';
 
@@ -280,5 +282,98 @@ describe('les pairs présents — ce que la passerelle annonce', () => {
     });
     unbind();
     expect(fake.listeners()).toBe(0);
+  });
+});
+
+describe('regarder, écouter, agir (#9061)', () => {
+  const HOLD_MS = 30;
+
+  function lively({ visible = 'visible' as 'visible' | 'hidden' } = {}) {
+    const fake = fakeSocket(true);
+    const visibility = fakeVisibility(visible);
+    const store = createViewingStore();
+    let clock = 10_000;
+    const unbind = bindConversationViewing({
+      socket: fake.socket,
+      visibility: visibility.source,
+      store,
+      viewerId: () => VIEWER,
+      now: () => clock,
+      activityHoldMs: HOLD_MS,
+    });
+    cleanups = [...cleanups, unbind];
+    const advance = (ms: number): void => {
+      clock += ms;
+    };
+    const activities = () => fake.emitted.filter((e) => e.event === CLIENT_EVENTS.VIEWING_ACTIVITY);
+    return { ...fake, visibility, store, advance, activities };
+  }
+
+  test('l’activité dans une conversation ouverte s’annonce, au plus une fois toutes les deux secondes', () => {
+    const { activities, advance } = lively();
+    open(CONV);
+
+    signalConversationActivity(CONV);
+    signalConversationActivity(CONV);
+    advance(1_999);
+    signalConversationActivity(CONV);
+    expect(activities()).toEqual([{ event: CLIENT_EVENTS.VIEWING_ACTIVITY, payload: { conversationId: CONV } }]);
+
+    advance(1);
+    signalConversationActivity(CONV);
+    expect(activities()).toHaveLength(2);
+  });
+
+  test('rien ne part pour une conversation qui n’est pas ouverte, couverte, ou en arrière-plan', () => {
+    const { activities, visibility } = lively();
+    signalConversationActivity(CONV);
+    expect(activities()).toEqual([]);
+
+    open(CONV);
+    const uncover = cover();
+    signalConversationActivity(CONV);
+    expect(activities()).toEqual([]);
+    uncover();
+
+    visibility.set('hidden');
+    signalConversationActivity(CONV);
+    expect(activities()).toEqual([]);
+  });
+
+  test('un pair actif l’est le temps de la pulsation, puis redevient simplement là', async () => {
+    const { fire, store } = lively();
+    fire(SERVER_EVENTS.VIEWING_START, { userId: BOB, conversationId: CONV });
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV });
+    expect(isActiveIn(store.getState(), CONV, BOB)).toBe(true);
+
+    await new Promise((resolve) => setTimeout(resolve, HOLD_MS + 20));
+    expect(isActiveIn(store.getState(), CONV, BOB)).toBe(false);
+    expect(isHereIn(store.getState(), CONV, BOB)).toBe(true);
+  });
+
+  test('une nouvelle activité prolonge la pulsation', async () => {
+    const { fire, store } = lively();
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV });
+    await new Promise((resolve) => setTimeout(resolve, HOLD_MS - 10));
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV });
+    await new Promise((resolve) => setTimeout(resolve, HOLD_MS - 10));
+    expect(isActiveIn(store.getState(), CONV, BOB)).toBe(true);
+  });
+
+  test('quitter la conversation ou perdre le lien éteint la pulsation sur-le-champ', () => {
+    const { fire, store } = lively();
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: BOB, conversationId: CONV });
+    fire(SERVER_EVENTS.VIEWING_STOP, { userId: BOB, conversationId: CONV });
+    expect(isActiveIn(store.getState(), CONV, BOB)).toBe(false);
+
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: CAROL, conversationId: CONV });
+    fire('disconnect');
+    expect(isActiveIn(store.getState(), CONV, CAROL)).toBe(false);
+  });
+
+  test('sa propre activité ne se rend pas', () => {
+    const { fire, store } = lively();
+    fire(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: VIEWER, conversationId: CONV });
+    expect(isActiveIn(store.getState(), CONV, VIEWER)).toBe(false);
   });
 });

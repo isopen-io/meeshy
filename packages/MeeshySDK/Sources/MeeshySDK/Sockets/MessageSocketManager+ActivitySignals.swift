@@ -47,14 +47,18 @@ public enum ConversationViewingEvent: Sendable, Equatable {
     case arrived(ConversationViewingChange)
     case left(ConversationViewingChange)
     case snapshot(ConversationViewingSnapshot)
+    /// `viewing:activity` (#9061) : le pair ICI regarde, écoute ou agit.
+    case active(ConversationViewingChange)
     case sessionStarted
 }
 
-/// Émission de `viewing:start` / `viewing:stop`. L'orchestration — QUAND
-/// émettre (écran actif, premier plan, reconnexion) — reste côté app.
+/// Émission de `viewing:start` / `viewing:stop` / `viewing:activity`.
+/// L'orchestration — QUAND émettre (écran actif, premier plan, reconnexion,
+/// cadence de l'activité) — reste côté app.
 public protocol ConversationViewingEmitting: AnyObject {
     func emitViewingStart(conversationId: String)
     func emitViewingStop(conversationId: String)
+    func emitViewingActivity(conversationId: String)
 }
 
 extension MessageSocketManager: ConversationViewingEmitting {
@@ -67,6 +71,14 @@ extension MessageSocketManager: ConversationViewingEmitting {
 
     public func emitViewingStop(conversationId: String) {
         emitActivitySignal("viewing:stop", conversationId: conversationId)
+    }
+
+    public func emitViewingActivity(conversationId: String) {
+        emitActivitySignal("viewing:activity", conversationId: conversationId)
+    }
+
+    func handleViewingActivity(_ change: ConversationViewingChange) {
+        conversationViewing.send(.active(change))
     }
 
     /// Publiée depuis le `.connect` du socket — y compris celui d'une
@@ -111,6 +123,13 @@ extension MessageSocketManager: ConversationViewingEmitting {
             guard let self else { return }
             self.decode(ConversationViewingChange.self, from: data) { [weak self] event in
                 self?.conversationViewing.send(.left(event))
+            }
+        }
+
+        socket.on("viewing:activity") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationViewingChange.self, from: data) { [weak self] event in
+                self?.handleViewingActivity(event)
             }
         }
 

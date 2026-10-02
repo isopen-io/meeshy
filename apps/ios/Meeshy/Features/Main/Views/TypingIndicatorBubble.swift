@@ -26,9 +26,10 @@ struct TypingIndicatorBubble: View {
     /// trois points pulsants accent, SANS capsule ni libellé visible (mêmes
     /// timings 0.5 s / 0.18 s). `false` = capsule historique du mode bulles.
     var isFlat: Bool = false
-    /// Ceux qui ont l'écran de CETTE conversation ouvert (#8892), lus UNE fois
-    /// par l'hôte : la pastille du frappeur porte alors le point primaire.
-    var hereUserIds: Set<String> = []
+    /// Ceux qui ont l'écran de CETTE conversation ouvert (#8892), et ceux qui
+    /// y sont actifs (#9061), lus UNE fois par l'hôte : la pastille du
+    /// frappeur porte alors le point primaire, qui pulse s'il est actif.
+    var here = ConversationHereRoster()
 
     @State private var animating = false
 
@@ -58,7 +59,7 @@ struct TypingIndicatorBubble: View {
                 context: .custom(size),
                 accentColor: accentHex,
                 avatarURL: lead.avatarURL,
-                isHere: hereUserIds.contains(lead.id),
+                isHere: here[lead.id],
                 isDark: isDark
             )
         }

@@ -9,6 +9,7 @@ final class UserProfileViewModelTests: XCTestCase {
 
     private var mockAuthManager: MockAuthManager!
     private var mockBlockService: MockBlockService!
+    private var mockUserService: MockUserService!
 
     // MARK: - Lifecycle
 
@@ -16,11 +17,13 @@ final class UserProfileViewModelTests: XCTestCase {
         try await super.setUp()
         mockAuthManager = MockAuthManager()
         mockBlockService = MockBlockService()
+        mockUserService = MockUserService()
     }
 
     override func tearDown() async throws {
         mockAuthManager = nil
         mockBlockService = nil
+        mockUserService = nil
         try await super.tearDown()
     }
 
@@ -38,7 +41,8 @@ final class UserProfileViewModelTests: XCTestCase {
         return UserProfileViewModel(
             user: profileUser,
             authManager: mockAuthManager,
-            blockService: mockBlockService
+            blockService: mockBlockService,
+            userService: mockUserService
         )
     }
 
@@ -165,13 +169,30 @@ final class UserProfileViewModelTests: XCTestCase {
         XCTAssertNil(sut.fullUser)
     }
 
-    func test_loadFullProfile_skipsWhenUserIdIsNil() async {
+    /// Sans identifiant, le profil se résout par le PSEUDO (`resolvedIdentifier`) ;
+    /// il ne se saute que lorsqu'aucun des deux n'est connu. Ce témoin passait
+    /// auparavant parce que l'appel RÉSEAU réel échouait en test — le service
+    /// injecté (#9063) le fait porter sur la vraie condition.
+    func test_loadFullProfile_skipsWhenNeitherUserIdNorUsername() async {
         mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-        let sut = makeSUT(userId: nil)
+        let sut = makeSUT(userId: nil, username: "")
 
         await sut.loadFullProfile()
 
         XCTAssertNil(sut.fullUser)
+        XCTAssertEqual(mockUserService.getProfileHandleCallCount, 0)
+    }
+
+    /// #9063 — la fiche d'un AMI date sa présence : le chargement POSE la
+    /// question de la présence, la passerelle seule décide d'y répondre.
+    func test_loadFullProfile_coldCache_requestsStatsAndPresence() async {
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+        let sut = makeSUT(userId: "presence-target-\(UUID().uuidString)")
+
+        await sut.loadFullProfile()
+
+        XCTAssertEqual(mockUserService.getProfileHandleCallCount, 1)
+        XCTAssertEqual(mockUserService.lastGetProfileExpand, [.stats, .presence])
     }
 
     // MARK: - loadUserStats Tests

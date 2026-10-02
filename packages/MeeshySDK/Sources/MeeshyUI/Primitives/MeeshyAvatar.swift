@@ -249,8 +249,9 @@ public struct MeeshyAvatar: View {
     /// (vert) et away (orange) affichent une pastille.
     public var presenceState: PresenceState? = nil
     /// Le pair a l'écran de CETTE conversation ouvert (#8892) : point à la
-    /// couleur primaire, même quand `presenceState` est masqué.
-    public var isHere: Bool = false
+    /// couleur primaire, même quand `presenceState` est masqué ; `.active`
+    /// quand il y regarde, écoute ou agit (#9061) — le point pulse.
+    public var isHere: ConversationHere = .absent
     public var onTap: (() -> Void)? = nil
     public var onViewProfile: (() -> Void)? = nil
     public var onViewStory: (() -> Void)? = nil
@@ -264,7 +265,7 @@ public struct MeeshyAvatar: View {
     public init(name: String, context: AvatarContext, kind: AvatarKind = .user, accentColor: String = "",
                 secondaryColor: String? = nil, avatarURL: String? = nil, thumbHash: String? = nil,
                 storyState: StoryRingState = .none, moodEmoji: String? = nil,
-                presenceState: PresenceState? = nil, isHere: Bool = false, enablePulse: Bool? = nil,
+                presenceState: PresenceState? = nil, isHere: ConversationHere = .absent, enablePulse: Bool? = nil,
                 isDark: Bool = ThemeManager.shared.mode.isDark,
                 onTap: (() -> Void)? = nil, onViewProfile: (() -> Void)? = nil,
                 onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil,
@@ -329,7 +330,7 @@ public struct MeeshyAvatar: View {
         // Offline (>30min) : aucun dot. Le gris reste défini dans
         // PresenceState.dotColor pour les affichages labellisés, pas ici.
         // « Ici » (#8892) prime et se rend même sans présence servie.
-        return AvatarPresenceDot.resolve(presence: presenceState, isHere: isHere)
+        return AvatarPresenceDot.resolve(presence: presenceState, isHere: isHere.isHere)
     }
 
     /// VoiceOver : le nom, et « dans la conversation » quand le pair y est.
@@ -412,15 +413,22 @@ public struct MeeshyAvatar: View {
                 moodBadge(emoji: emoji)
                     .offset(badgeOffset(badgeHalfSize: context.badgeSize / 2))
             } else if let presence = effectivePresence {
-                onlineDot(for: presence)
+                let diameter = presence.diameter(avatarSize: context.size)
+                onlineDot(for: presence, diameter: diameter)
                     .overlay {
-                        if presence.arrivesWithRipple && presenceChanged && !reduceMotion {
-                            PresenceArrivalRipple(color: presence.color, diameter: context.onlineDotSize)
+                        if presence == .here && isHere.isActive && !reduceMotion {
+                            PresenceActivityPulse(color: presence.color, diameter: diameter)
+                        } else if presence.arrivesWithRipple && presenceChanged && !reduceMotion {
+                            PresenceArrivalRipple(color: presence.color, diameter: diameter)
                         }
                     }
                     .id(presence.transitionKey)
                     .transition(presenceTransition)
-                    .offset(badgeOffset(badgeHalfSize: context.onlineDotSize / 2))
+                    .offset(AvatarPresenceDot.centerOffset(
+                        avatarSize: context.size,
+                        frameSize: effectiveStoryState == .none ? context.size : context.ringSize,
+                        dotDiameter: diameter
+                    ))
             }
         }
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.42, dampingFraction: 0.5),
@@ -532,12 +540,12 @@ public struct MeeshyAvatar: View {
     }
 
     @ViewBuilder
-    private func onlineDot(for presence: AvatarPresenceDot) -> some View {
+    private func onlineDot(for presence: AvatarPresenceDot, diameter: CGFloat) -> some View {
         // Couleur via le mapping central AvatarPresenceDot.color (PresenceStyle) :
         // primaire « ici », vert online/recent, orange away, gris idle.
         let dot = Circle()
             .fill(presence.color)
-            .frame(width: context.onlineDotSize, height: context.onlineDotSize)
+            .frame(width: diameter, height: diameter)
             .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: MeeshyBorder.strong))
             .onTapGesture {
                 HapticFeedback.light()
@@ -576,25 +584,4 @@ public struct MeeshyAvatar: View {
         return parts.isEmpty ? String(name.trimmingCharacters(in: .whitespaces).prefix(1)).uppercased() : parts
     }
 
-}
-
-/// L'onde du point « ici » à son arrivée (#9047) : un anneau part du point,
-/// s'élargit et s'éteint, une fois. Transform et opacité seulement.
-private struct PresenceArrivalRipple: View {
-    let color: Color
-    let diameter: CGFloat
-    @State private var spread = false
-
-    var body: some View {
-        Circle()
-            .stroke(color, lineWidth: 2)
-            .frame(width: diameter, height: diameter)
-            .scaleEffect(spread ? 2.6 : 1)
-            .opacity(spread ? 0 : 0.9)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-            .onAppear {
-                withAnimation(.easeOut(duration: 0.8).delay(0.15)) { spread = true }
-            }
-    }
 }

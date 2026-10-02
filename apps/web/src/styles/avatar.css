@@ -62,6 +62,26 @@
   animation: presence-dot-ripple 0.8s ease-out 0.2s both;
 }
 
+/*
+ * LE POINT « ICI » VIT TANT QUE LE PAIR REGARDE, ÉCOUTE OU AGIT (#9061) : une
+ * onde part de lui, encore et encore, puis s'arrête quand l'activité se tait.
+ * Sur `::after` — le point lui-même garde son rebond d'arrivée.
+ */
+.presence-dot-here.presence-dot-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  pointer-events: none;
+  animation: presence-dot-pulse 1.4s ease-out infinite;
+}
+
+@keyframes presence-dot-pulse {
+  0% { opacity: 0.55; transform: scale(1); }
+  100% { opacity: 0; transform: scale(2.2); }
+}
+
 @keyframes presence-dot-bounce {
   0% { opacity: 0; transform: scale(0.2); }
   55% { opacity: 1; transform: scale(1.3); }
@@ -81,7 +101,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .presence-dot-enter,
-  .presence-dot-here.presence-dot-enter::after {
+  .presence-dot-here.presence-dot-enter::after,
+  .presence-dot-here.presence-dot-active::after {
     animation: none;
   }
   .presence-dot-leave {

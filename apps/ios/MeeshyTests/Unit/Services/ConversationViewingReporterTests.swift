@@ -13,12 +13,14 @@ final class ConversationViewingReporterTests: XCTestCase {
         enum Call: Equatable {
             case start(String)
             case stop(String)
+            case activity(String)
         }
         private(set) var calls: [Call] = []
         var onCall: ((Call) -> Void)?
 
         func emitViewingStart(conversationId: String) { record(.start(conversationId)) }
         func emitViewingStop(conversationId: String) { record(.stop(conversationId)) }
+        func emitViewingActivity(conversationId: String) { record(.activity(conversationId)) }
 
         private func record(_ call: Call) {
             calls.append(call)
@@ -28,7 +30,9 @@ final class ConversationViewingReporterTests: XCTestCase {
 
     private func makeSUT(
         isForeground: Bool = true,
-        reconnections: PassthroughSubject<Void, Never> = PassthroughSubject<Void, Never>()
+        reconnections: PassthroughSubject<Void, Never> = PassthroughSubject<Void, Never>(),
+        now: @escaping () -> Date = Date.init,
+        isBusy: @escaping () -> Bool = { false }
     ) -> (sut: ConversationViewingReporter, emitter: SpyViewingEmitter, connection: PassthroughSubject<Bool, Never>) {
         let emitter = SpyViewingEmitter()
         let connection = PassthroughSubject<Bool, Never>()
@@ -36,7 +40,9 @@ final class ConversationViewingReporterTests: XCTestCase {
             emitter: emitter,
             connection: connection.eraseToAnyPublisher(),
             reconnections: reconnections.eraseToAnyPublisher(),
-            isForeground: isForeground
+            isForeground: isForeground,
+            now: now,
+            isBusy: isBusy
         )
         return (sut, emitter, connection)
     }
@@ -47,6 +53,77 @@ final class ConversationViewingReporterTests: XCTestCase {
         sut.conversationOpened("conv-a")
 
         XCTAssertEqual(emitter.calls, [.start("conv-a")])
+    }
+
+    // MARK: - Regarder, écouter, agir (#9061)
+
+    func test_activityOccurred_inTheAnnouncedConversation_emitsAtMostEveryTwoSeconds() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        let (sut, emitter, _) = makeSUT(now: { clock })
+        sut.conversationOpened("conv-a")
+
+        sut.activityOccurred("conv-a")
+        sut.activityOccurred("conv-a")
+        clock.addTimeInterval(1.9)
+        sut.activityOccurred("conv-a")
+        clock.addTimeInterval(0.1)
+        sut.activityOccurred("conv-a")
+
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .activity("conv-a"), .activity("conv-a")])
+    }
+
+    func test_activityOccurred_whenNotAnnounced_emitsNothing() {
+        let (sut, emitter, _) = makeSUT()
+        sut.activityOccurred("conv-a")
+
+        sut.conversationOpened("conv-a")
+        sut.coverBegan()
+        sut.activityOccurred("conv-a")
+        sut.coverEnded()
+        sut.setForeground(false)
+        sut.activityOccurred("conv-a")
+        sut.activityOccurred("conv-b")
+
+        XCTAssertFalse(emitter.calls.contains { if case .activity = $0 { return true } else { return false } })
+    }
+
+    func test_touched_isActivityInTheAnnouncedConversation() {
+        let (sut, emitter, _) = makeSUT()
+        sut.touched()
+        sut.conversationOpened("conv-a")
+
+        sut.touched()
+
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .activity("conv-a")])
+    }
+
+    func test_heartbeat_whileListeningOrRecording_emitsActivity() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        var busy = true
+        let (sut, emitter, _) = makeSUT(now: { clock }, isBusy: { busy })
+        sut.conversationOpened("conv-a")
+
+        sut.heartbeat()
+        clock.addTimeInterval(2)
+        busy = false
+        sut.heartbeat()
+
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .activity("conv-a")])
+    }
+
+    func test_scrolling_emitsAtOnce_andKeepsTheHeartbeatAlive() {
+        var clock = Date(timeIntervalSince1970: 1_000)
+        let (sut, emitter, _) = makeSUT(now: { clock })
+        sut.conversationOpened("conv-a")
+
+        sut.scrollingChanged(true)
+        clock.addTimeInterval(2)
+        sut.heartbeat()
+        sut.scrollingChanged(false)
+        clock.addTimeInterval(2)
+        sut.heartbeat()
+
+        XCTAssertEqual(emitter.calls, [.start("conv-a"), .activity("conv-a"), .activity("conv-a")])
     }
 
     func test_conversationOpened_inBackground_emitsNothing() {

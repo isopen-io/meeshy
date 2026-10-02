@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 /// « Est dans la conversation » (#8892), côté ÉMISSION : dit au serveur quelle
 /// conversation l'utilisateur a à l'écran, au premier plan.
@@ -26,6 +27,9 @@ protocol ConversationViewingReporting: AnyObject {
     func screenDisappeared(_ conversationId: String)
     func coverBegan()
     func coverEnded()
+    func activityOccurred(_ conversationId: String)
+    func scrollingChanged(_ isScrolling: Bool)
+    func touched()
 }
 
 @MainActor
@@ -44,6 +48,15 @@ final class ConversationViewingReporter: ConversationViewingReporting {
     private var openings: [String: Int] = [:]
     private var visibleScreens: [String: Int] = [:]
     private var covers = 0
+    private let now: () -> Date
+    private let isBusy: () -> Bool
+    private var lastActivity: (conversationId: String, at: Date)?
+    private var isScrolling = false
+    private var heartbeatTimer: Timer?
+
+    /// L'écart minimal entre deux `viewing:activity` — jumeau de
+    /// `ACTIVITY_THROTTLE_MS` (`apps/web/src/lib/api/conversation-viewing.ts`).
+    static let activityThrottle: TimeInterval = 2
 
     /// `connection` : l'état de connexion du socket ; chaque passage à `true`
     /// ré-annonce la conversation affichée. `reconnections` : chaque nouvelle
@@ -55,10 +68,14 @@ final class ConversationViewingReporter: ConversationViewingReporting {
         emitter: ConversationViewingEmitting = MessageSocketManager.shared,
         connection: AnyPublisher<Bool, Never> = MessageSocketManager.shared.$isConnected.eraseToAnyPublisher(),
         reconnections: AnyPublisher<Void, Never> = MessageSocketManager.shared.didReconnect.eraseToAnyPublisher(),
-        isForeground: Bool = true
+        isForeground: Bool = true,
+        now: @escaping () -> Date = Date.init,
+        isBusy: @escaping () -> Bool = { PlaybackCoordinator.shared.isAnyPlaying || AudioRecorderManager.shared.isRecording }
     ) {
         self.emitter = emitter
         self.isForeground = isForeground
+        self.now = now
+        self.isBusy = isBusy
         connection
             .removeDuplicates()
             .filter { $0 }
@@ -146,6 +163,53 @@ final class ConversationViewingReporter: ConversationViewingReporting {
         transition(from: before)
     }
 
+    /// L'utilisateur fait défiler, écoute un média, écrit ou réagit dans la
+    /// conversation (#9061) : ses pairs voient son point pulser. Rien ne part
+    /// pour une conversation qui n'est pas annoncée, et au plus une fois toutes
+    /// les `activityThrottle` secondes.
+    func activityOccurred(_ conversationId: String) {
+        guard announced == conversationId else { return }
+        let at = now()
+        if let last = lastActivity, last.conversationId == conversationId,
+           at.timeIntervalSince(last.at) < Self.activityThrottle { return }
+        lastActivity = (conversationId, at)
+        emitter.emitViewingActivity(conversationId: conversationId)
+    }
+
+    /// Le doigt fait défiler le fil (regarder) : l'activité part au premier
+    /// mouvement, et le battement la tient tant que le défilement dure.
+    func scrollingChanged(_ isScrolling: Bool) {
+        self.isScrolling = isScrolling
+        guard isScrolling, let current = announced else { return }
+        activityOccurred(current)
+    }
+
+    /// Un geste dans le fil — réagir, lancer un audio, ouvrir un menu.
+    func touched() {
+        guard let current = announced else { return }
+        activityOccurred(current)
+    }
+
+    /// Ce qui dure sans geste — écouter un média, enregistrer un vocal,
+    /// défiler longtemps — se redit à chaque battement, tant que la
+    /// conversation est annoncée.
+    func heartbeat() {
+        guard let current = announced, isScrolling || isBusy() else { return }
+        activityOccurred(current)
+    }
+
+    private func syncHeartbeat() {
+        guard announced != nil else {
+            heartbeatTimer?.invalidate()
+            heartbeatTimer = nil
+            return
+        }
+        guard heartbeatTimer == nil else { return }
+        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: Self.activityThrottle, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.heartbeat() }
+        }
+    }
+
     private var announced: String? {
         guard isForeground, covers == 0, let current = viewingConversationId, (visibleScreens[current] ?? 1) > 0 else { return nil }
         return current
@@ -159,6 +223,7 @@ final class ConversationViewingReporter: ConversationViewingReporting {
         if let after, after != before || reannounce {
             emitter.emitViewingStart(conversationId: after)
         }
+        syncHeartbeat()
     }
 
     private func announceCurrent() {

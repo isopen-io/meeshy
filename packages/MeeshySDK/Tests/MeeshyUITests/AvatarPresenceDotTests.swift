@@ -44,8 +44,10 @@ final class AvatarPresenceDotTests: XCTestCase {
         XCTAssertEqual(AvatarPresenceDot.presence(.away).color, MeeshyColors.warning)
     }
 
-    func test_pulses_here_pulsesLikeOnline() {
-        XCTAssertTrue(AvatarPresenceDot.here.pulses)
+    /// « ici » ne pulse plus de lui-même : il pulse quand le pair regarde,
+    /// écoute ou agit (#9061) — `MeeshyAvatar.isHereActive`.
+    func test_pulses_here_isLeftToActivity_onlinePulses() {
+        XCTAssertFalse(AvatarPresenceDot.here.pulses)
         XCTAssertTrue(AvatarPresenceDot.presence(.online).pulses)
         XCTAssertFalse(AvatarPresenceDot.presence(.away).pulses)
     }
@@ -67,5 +69,30 @@ final class AvatarPresenceDotTests: XCTestCase {
     func test_arrivalRipple_onlyForHere() {
         XCTAssertTrue(AvatarPresenceDot.here.arrivesWithRipple, "le point indigo pulse en arrivant")
         XCTAssertFalse(AvatarPresenceDot.presence(.online).arrivesWithRipple)
+    }
+
+    // MARK: - Taille et place du point (#9061)
+
+    func test_diameter_here_isTwiceThePresenceDot() {
+        XCTAssertEqual(AvatarPresenceDot.here.diameter(avatarSize: 44), 44 * 0.52, accuracy: 0.001)
+        XCTAssertEqual(AvatarPresenceDot.presence(.online).diameter(avatarSize: 44), 44 * 0.26, accuracy: 0.001)
+    }
+
+    func test_centerOffset_withoutRing_putsTheDotCentreOnTheCircleAt45Degrees() {
+        assertCentreOnCircle(avatarSize: 44, frameSize: 44, dot: AvatarPresenceDot.here.diameter(avatarSize: 44))
+        assertCentreOnCircle(avatarSize: 28, frameSize: 28, dot: AvatarPresenceDot.presence(.online).diameter(avatarSize: 28))
+    }
+
+    func test_centerOffset_withStoryRing_putsTheDotCentreOnTheCircleAt45Degrees() {
+        assertCentreOnCircle(avatarSize: 44, frameSize: 50, dot: AvatarPresenceDot.here.diameter(avatarSize: 44))
+    }
+
+    private func assertCentreOnCircle(avatarSize: CGFloat, frameSize: CGFloat, dot: CGFloat, line: UInt = #line) {
+        let offset = AvatarPresenceDot.centerOffset(avatarSize: avatarSize, frameSize: frameSize, dotDiameter: dot)
+        let centreX = frameSize - dot / 2 + offset.width
+        let centreY = frameSize - dot / 2 + offset.height
+        let onCircle = frameSize / 2 + avatarSize / 2 * cos(.pi / 4)
+        XCTAssertEqual(centreX, onCircle, accuracy: 0.001, line: line)
+        XCTAssertEqual(centreY, onCircle, accuracy: 0.001, line: line)
     }
 }

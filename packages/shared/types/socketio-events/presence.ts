@@ -39,6 +39,12 @@ export interface ViewingActionData {
   readonly conversationId: string;
 }
 
+/**
+ * `viewing:activity` (#9061) : le lecteur ICI regarde (défile), écoute (lit un
+ * média) ou agit (écrit, enregistre, réagit). Aucune nature d'activité ne
+ * voyage — seulement « il se passe quelque chose », relayé à la même audience
+ * que `viewing:start`, et seulement pour un lecteur déjà annoncé.
+ */
 export interface ViewingEvent {
   readonly userId: string;
   readonly conversationId: string;

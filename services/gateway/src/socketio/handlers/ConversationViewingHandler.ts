@@ -17,7 +17,7 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { CLIENT_EVENTS, SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type { ViewingEvent } from '@meeshy/shared/types/socketio-events';
 import type { MeeshySocket as Socket } from '../typed-socket';
 import type { ServerEmitTarget } from '../serverEmit';
@@ -45,7 +45,16 @@ export interface ConversationViewingHandlerDependencies {
   userSockets: Map<string, Set<string>>;
 }
 
-type SocketViewing = { readonly userId: string; readonly conversationIds: ReadonlySet<string> };
+/**
+ * `blockRelated` est lu à l'ouverture et retenu : `viewing:activity` arrive
+ * toutes les deux secondes pendant qu'on défile ou qu'on écoute (#9061), et
+ * ne relit pas la base à chaque fois.
+ */
+type SocketViewing = {
+  readonly userId: string;
+  readonly conversationIds: ReadonlySet<string>;
+  readonly blockRelated: ReadonlySet<string>;
+};
 
 /** Ouvertures retenues au plus par socket en attente d'authentification (#9047). */
 export const MAX_PENDING_OPENINGS = 3;
@@ -87,12 +96,36 @@ export class ConversationViewingHandler {
     this.userSockets = deps.userSockets;
   }
 
+  /** Les trois gestes du client : ouvrir, quitter, être actif (#9061). */
+  listen(socket: Socket): void {
+    const logged = (event: string) => (error: unknown) =>
+      logger.error('viewing listener failed', { error, event, socketId: socket.id });
+    socket.on(CLIENT_EVENTS.VIEWING_START, data => {
+      this.handleStart(socket, data).catch(logged(CLIENT_EVENTS.VIEWING_START));
+    });
+    socket.on(CLIENT_EVENTS.VIEWING_STOP, data => {
+      this.handleStop(socket, data).catch(logged(CLIENT_EVENTS.VIEWING_STOP));
+    });
+    socket.on(CLIENT_EVENTS.VIEWING_ACTIVITY, data => {
+      this.handleActivity(socket, data).catch(logged(CLIENT_EVENTS.VIEWING_ACTIVITY));
+    });
+  }
+
   handleStart(socket: Socket, data: unknown): Promise<void> {
     return this.inOrder(socket.id, () => this.start(socket, data));
   }
 
   handleStop(socket: Socket, data: unknown): Promise<void> {
     return this.inOrder(socket.id, () => this.stop(socket, data));
+  }
+
+  /**
+   * Le lecteur ICI regarde, écoute ou agit (#9061) : relayé à la room pour que
+   * son point pulse. Rien pour un socket qui n'a pas annoncé la conversation —
+   * l'activité ne révèle jamais plus que `viewing:start`.
+   */
+  handleActivity(socket: Socket, data: unknown): Promise<void> {
+    return this.inOrder(socket.id, () => this.activity(socket, data));
   }
 
   handleAppState(socket: Socket, data: { foreground?: boolean } | undefined): Promise<void> {
@@ -166,7 +199,7 @@ export class ConversationViewingHandler {
     if (!announces) return;
 
     const wasHere = this.isHere(userId, conversationId);
-    this.track(socket.id, userId, conversationId);
+    this.track(socket.id, userId, conversationId, blockRelated);
     if (wasHere) return;
     this.broadcast(SERVER_EVENTS.VIEWING_START, { userId, conversationId }, blockRelated);
   }
@@ -177,6 +210,21 @@ export class ConversationViewingHandler {
     this.release(socket.id, validation.data.conversationId);
     const conversationId = await this.normalize(validation.data.conversationId);
     await this.retract(socket.id, [conversationId]);
+  }
+
+  private async activity(socket: Socket, data: unknown): Promise<void> {
+    const validation = validateSocketEvent(SocketViewingSchema, data);
+    if (!validation.success) return;
+    const viewing = this.bySocket.get(socket.id);
+    const userIdOrToken = this.socketToUser.get(socket.id);
+    if (!viewing || !userIdOrToken) return;
+
+    const conversationId = await this.normalize(validation.data.conversationId);
+    if (!viewing.conversationIds.has(conversationId)) return;
+    const allowed = await this.rateLimiter.checkLimit(userIdOrToken, SOCKET_RATE_LIMITS.CONVERSATION_ACTIVITY);
+    if (!allowed) return;
+
+    this.broadcast(SERVER_EVENTS.VIEWING_ACTIVITY, { userId: viewing.userId, conversationId }, viewing.blockRelated);
   }
 
   private async appState(socket: Socket, data: { foreground?: boolean } | undefined): Promise<void> {
@@ -251,7 +299,7 @@ export class ConversationViewingHandler {
   }
 
   private broadcast(
-    event: typeof SERVER_EVENTS.VIEWING_START | typeof SERVER_EVENTS.VIEWING_STOP,
+    event: typeof SERVER_EVENTS.VIEWING_START | typeof SERVER_EVENTS.VIEWING_STOP | typeof SERVER_EVENTS.VIEWING_ACTIVITY,
     payload: ViewingEvent,
     blockRelated: ReadonlySet<string>,
   ): void {
@@ -282,9 +330,9 @@ export class ConversationViewingHandler {
     return (this.byConversation.get(conversationId)?.get(userId)?.size ?? 0) > 0;
   }
 
-  private track(socketId: string, userId: string, conversationId: string): void {
+  private track(socketId: string, userId: string, conversationId: string, blockRelated: ReadonlySet<string>): void {
     const current = this.bySocket.get(socketId)?.conversationIds ?? new Set<string>();
-    this.bySocket.set(socketId, { userId, conversationIds: new Set([...current, conversationId]) });
+    this.bySocket.set(socketId, { userId, conversationIds: new Set([...current, conversationId]), blockRelated });
     const users = this.byConversation.get(conversationId) ?? new Map<string, Set<string>>();
     users.set(userId, new Set([...(users.get(userId) ?? []), socketId]));
     this.byConversation.set(conversationId, users);
@@ -299,7 +347,7 @@ export class ConversationViewingHandler {
       this.bySocket.delete(socketId);
       return;
     }
-    this.bySocket.set(socketId, { userId: viewing.userId, conversationIds: new Set(remaining) });
+    this.bySocket.set(socketId, { ...viewing, conversationIds: new Set(remaining) });
   }
 
   private untrackIndex(conversationId: string, userId: string, socketId: string): void {
