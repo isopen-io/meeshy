@@ -3,6 +3,7 @@
  * Gestion des connexions, conversations et traductions en temps réel
  */
 
+import { presenceSnapshotContactsWhere } from './presence-snapshot-contacts';
 import { Server as SocketIOServer } from 'socket.io';
 // Cycle 107 — le `Socket` vient du contrat, pas de `socket.io`. Ce module
 // CONSTRUIT le serveur (d'où l'import de `Server` ci-dessus, immédiatement
@@ -1424,13 +1425,7 @@ export class MeeshySocketIOManager {
 
           // Lister tous les autres participants (registered + anonymes) de ces conversations
           const contacts = await this.prisma.participant.findMany({
-            where: {
-              conversationId: { in: conversationIds },
-              isActive: true,
-              NOT: isAnonymous
-                ? { id: userId }
-                : { userId: userId }
-            },
+            where: presenceSnapshotContactsWhere({ conversationIds, viewerId: userId, isAnonymous }),
             select: {
               id: true,
               userId: true,
@@ -3483,8 +3478,6 @@ export class MeeshySocketIOManager {
     );
   }
 
-
-
   async healthCheck(): Promise<boolean> {
     try {
       const translationHealth = await this.translationService.healthCheck();
@@ -3496,20 +3489,21 @@ export class MeeshySocketIOManager {
   }
 
   async close(): Promise<void> {
-    try {
-      // ✅ FIX BUG #3: Ticker supprimé, plus besoin de le nettoyer
-      // Le système n'utilise plus de polling périodique
-
-      await this.agentAdminRelay?.stop();
-      await this.translationService.close();
-      // Les minuteries d'expiration des partages de position sont les seules
-      // que ce manager possède encore ; non désarmées, elles retiendraient la
-      // boucle d'événements jusqu'à 8 heures après l'arrêt.
-      this.locationHandler.dispose();
-      await this.redisAdapterHandle?.close();
-      this.io.close();
-    } catch (error) {
-      logger.error(`❌ Erreur fermeture MeeshySocketIOManager: ${error}`);
+    // Les sockets d'abord, quoi qu'il arrive ensuite (#8297) ; `engine.close()` coupe
+    // les transports sans attendre les adaptateurs, que Redis peut retenir.
+    void this.io.close();
+    this.io.engine?.close();
+    const steps: ReadonlyArray<() => unknown> = [
+      () => this.agentAdminRelay?.stop(),
+      () => this.translationService.close(),
+      // Minuteries des partages de position : sinon la boucle vit 8 h de plus.
+      () => this.locationHandler.dispose(),
+      () => this.redisAdapterHandle?.close(),
+    ];
+    for (const step of steps) {
+      await Promise.resolve()
+        .then(step)
+        .catch((error: unknown) => logger.error(`❌ Erreur fermeture MeeshySocketIOManager: ${error}`));
     }
   }
 

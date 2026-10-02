@@ -30,7 +30,9 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
 
     static let shared = GroupCallMeshCoordinator()
 
-    @Published private(set) var roster: GroupCallRoster
+    @Published private(set) var roster: GroupCallRoster {
+        didSet { retitleIfVacated() }
+    }
     @Published private(set) var speakingUserIds: Set<String> = []
     @Published private(set) var isGroupCallActive = false
     /// Change à chaque piste vidéo reçue : la grille relit `videoTrack(for:)`.
@@ -104,12 +106,72 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
 
     private var isGroupCall: Bool { isGroupConversation(host?.groupConversationId) }
 
+    /// #9085 — le principal a quitté un groupe qui continue. Son siège reste
+    /// vide jusqu'à la fin de l'appel : le maillage porte alors TOUS les
+    /// membres, l'ancien principal compris s'il revient. Promouvoir un lien du
+    /// maillage au rang de principal n'est pas possible : la PeerConnection de
+    /// `CallManager` porte la capture locale que chaque lien du maillage partage.
+    private(set) var isPrimaryVacated = false
+
+    /// Le pair que `CallManager` négocie, tant que son siège est tenu.
+    private var primaryUserId: String? {
+        isPrimaryVacated ? nil : host?.groupPrimaryUserId
+    }
+
+    /// #9085 — le principal s'en va (`participant-left` ou `bye` in-band). S'il
+    /// reste des membres, son siège se libère et l'appel continue : `true`.
+    /// Sinon `false` — un 1:1, ou plus personne : l'appel finit comme avant.
+    @discardableResult
+    func primaryDidLeave() -> Bool {
+        guard isGroupCall else { return false }
+        if isPrimaryVacated { return true }
+        guard let primary = primaryUserId, remainsAnyone(besides: primary) else { return false }
+        isPrimaryVacated = true
+        dropMember(primary)
+        host?.groupPrimaryDidVacate()
+        return true
+    }
+
+    /// #9092 — qui la passerelle dit dans l'appel, liens ouverts ou non : la
+    /// session servie au rattachement, puis `participant-joined` / `-left`.
+    /// Un départ vu ici l'emporte sur une session lue avant lui.
+    private var servedMemberIds: Set<String> = []
+    private var departedMemberIds: Set<String> = []
+
+    private func remainsAnyone(besides primary: String) -> Bool {
+        roster.members.contains { $0.userId != primary } || servedMemberIds.contains { $0 != primary }
+    }
+
+    private func noteServed(_ userId: String) {
+        guard userId != host?.groupLocalUserId else { return }
+        servedMemberIds.insert(userId)
+        departedMemberIds.remove(userId)
+    }
+
+    private func noteDeparted(_ userId: String) {
+        servedMemberIds.remove(userId)
+        departedMemberIds.insert(userId)
+    }
+
+    private var announcedTitle: String?
+
+    /// #9091 — le siège vide, l'appel se nomme par ceux qui restent ; annoncé
+    /// seulement quand le nom CHANGE (une bascule de micro ne le rejoue pas).
+    private func retitleIfVacated() {
+        guard isPrimaryVacated else { return }
+        let title = roster.callTitle(groupTitle: groupTitle(for: host?.groupConversationId))
+        guard title != announcedTitle else { return }
+        announcedTitle = title
+        host?.groupCallTitleDidChange(title)
+    }
+
     // MARK: - Événements de la passerelle
 
     func handleIncomingCall(_ event: CallOfferData) {
         // La passerelle pose `conversation.type` : tout ce qui n'est pas une
-        // conversation directe peut réunir plus de deux membres.
-        guard let type = event.conversationType, type != "direct" else { return }
+        // conversation directe peut réunir plus de deux membres — et une
+        // invitation (`isGroup`) fait d'un duo un groupe (#9084).
+        guard event.isGroupCall else { return }
         markGroupConversation(event.conversationId, title: event.conversationTitle)
         adoptIceServers(event.iceServers)
         syncWithHost()
@@ -120,7 +182,7 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         let local = host.groupLocalUserId
         guard arrival.userId != local else { return }
         adoptIceServers(event.iceServers)
-        let primary = host.groupPrimaryUserId
+        let primary = primaryUserId
         // Dans un appel direct, le seul arrivant est le principal : un tiers
         // prouve que l'appel est de groupe (appel reçu par VoIP à froid, sans
         // `call:initiated`).
@@ -130,6 +192,7 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         guard isGroupCall else { return }
         syncWithHost()
         guard boundCallId == event.callId else { return }
+        noteServed(arrival.userId)
         guard roster.contains(arrival.userId) || !roster.isFull else {
             Logger.webrtc.info("[GROUP] arrival ignored — mesh full (\(self.roster.capacity))")
             return
@@ -146,8 +209,9 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         guard let host, GroupSignalRouting.shouldOfferToArrival(
             arrivalUserId: userId,
             localUserId: host.groupLocalUserId,
-            primaryUserId: host.groupPrimaryUserId,
-            isInCall: host.isGroupCallEngaged
+            primaryUserId: primaryUserId,
+            isInCall: host.isGroupCallEngaged,
+            primaryVacated: isPrimaryVacated
         ) else { return }
         links[userId]?.close()
         links[userId] = nil
@@ -157,6 +221,8 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
 
     func handleParticipantLeft(_ event: CallParticipantData) {
         guard let host, event.callId == host.groupCallId, let userId = event.userId else { return }
+        noteDeparted(userId)
+        if userId == primaryUserId, primaryDidLeave() { return }
         dropMember(userId)
     }
 
@@ -177,8 +243,9 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         let destination = GroupSignalRouting.destination(
             from: signal.from,
             localUserId: host.groupLocalUserId,
-            primaryUserId: host.groupPrimaryUserId,
-            isGroupCall: isGroupCall
+            primaryUserId: primaryUserId,
+            isGroupCall: isGroupCall,
+            primaryVacated: isPrimaryVacated
         )
         switch destination {
         case .primary:
@@ -231,6 +298,9 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
             teardown()
             boundCallId = callId
             roster = GroupCallRoster(localUserId: host.groupLocalUserId)
+            // #9092 — lue dès la sonnerie : au décroché, la passerelle a déjà
+            // dit qui est dans l'appel, même sans aucun lien ouvert.
+            enrichNamesIfNeeded()
         }
         adoptPrimary(host)
         guard host.isGroupCallEngaged else { return }
@@ -254,7 +324,7 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
     }
 
     private func adoptPrimary(_ host: any GroupCallHostProviding) {
-        guard let primary = host.groupPrimaryUserId, !primary.isEmpty, primary != host.groupLocalUserId else { return }
+        guard let primary = primaryUserId, !primary.isEmpty, primary != host.groupLocalUserId else { return }
         links[primary]?.close()
         links[primary] = nil
         let name = host.groupPrimaryDisplayName.flatMap { $0.isEmpty ? nil : $0 }
@@ -324,7 +394,7 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
     }
 
     func videoTrack(for userId: String) -> Any? {
-        if userId == host?.groupPrimaryUserId { return host?.primaryRemoteVideoTrack }
+        if let primary = primaryUserId, userId == primary { return host?.primaryRemoteVideoTrack }
         return links[userId]?.remoteVideoTrack
     }
 
@@ -353,6 +423,9 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
     private func enrich(with session: ActiveCallSession, callId: String) {
         guard boundCallId == callId, session.id == callId else { return }
         knownSession = session
+        session.participants
+            .filter { !$0.hasLeft && !departedMemberIds.contains($0.userId) }
+            .forEach { noteServed($0.userId) }
         roster = session.participants.reduce(roster) { current, participant in
             guard current.contains(participant.userId) else { return current }
             let name = participant.user?.displayName ?? participant.user?.username
@@ -376,7 +449,7 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
 
     func sampleAudioLevels() async {
         guard let host, isGroupCallActive else { return }
-        let primary = host.groupPrimaryUserId
+        let primary = primaryUserId
         let primaryLevel = await host.primaryAudioLevel()
         let current = links
         var levels: [String: Double] = [:]
@@ -397,6 +470,10 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         links.values.forEach { $0.close() }
         links = [:]
         boundCallId = nil
+        isPrimaryVacated = false
+        announcedTitle = nil
+        servedMemberIds = []
+        departedMemberIds = []
         knownSession = nil
         pendingSignals = [:]
         pendingArrivals = []

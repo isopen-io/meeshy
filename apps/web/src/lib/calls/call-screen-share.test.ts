@@ -75,6 +75,6 @@ describe('l’écran partagé hors de l’écran d’appel', () => {
       cameraOn: false,
       phase: { kind: 'connected' },
     });
-    expect(source).toEqual({ stream: liveVideo, mirrored: false });
+    expect(source).toEqual({ stream: liveVideo, mirrored: false, fit: 'contain' });
   });
 });

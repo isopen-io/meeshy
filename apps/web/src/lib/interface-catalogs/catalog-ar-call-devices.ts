@@ -9,6 +9,7 @@ const arCallDevices = {
   'call.bubble.collapse': 'تصغير إلى فقاعة',
   'call.bubble.ongoing': 'مكالمة جارية',
   'call.bubble.moveHint': 'الأسهم تحرّك الفقاعة',
+  'call.bubble.resizeHint': 'يغيّر + و − حجمها، وكذلك Ctrl + عجلة الفأرة أو القرص بإصبعين',
   'call.pip.enter': 'صورة داخل صورة',
   'call.devices.open': 'اختيار الأجهزة',
   'call.devices.title': 'الأجهزة',

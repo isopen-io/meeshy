@@ -20,6 +20,27 @@ const logger = enhancedLogger.child({ module: 'TrackingLinkService' });
  */
 export type ContentTrackingLink = { url: string; token: string };
 
+const RAW_URL_SOURCE = String.raw`https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)`;
+
+/**
+ * Les écritures d'un lien, lues dans l'ordre du texte (#9093). À une même
+ * position, la plus longue gagne : `[[url]]` (groupe absent : jamais suivi),
+ * `[libellé](url)` (groupe 1 : suivi par la carte, jamais réécrit) puis l'URL
+ * brute (groupe 2). Sans cette lecture, la détection brute attrapait l'adresse
+ * d'un `[[…]]` et emportait la parenthèse fermante d'un lien markdown.
+ */
+const LINK_WRITINGS_SOURCE = String.raw`\[\[[^\]\n]+\]\]|\[[^\]\n]+\]\((https?:\/\/[^)\s]+)\)|(${RAW_URL_SOURCE})`;
+
+type LinkOccurrence = { readonly url: string; readonly raw: boolean };
+
+function linkOccurrences(content: string): LinkOccurrence[] {
+  return [...content.matchAll(new RegExp(LINK_WRITINGS_SOURCE, 'gi'))].flatMap((match): LinkOccurrence[] => {
+    if (match[1]) return [{ url: match[1], raw: false }];
+    if (match[2]) return [{ url: match[2], raw: true }];
+    return [];
+  });
+}
+
 /**
  * Source UNIQUE de l'URL du frontend pour bâtir les liens `/l/<token>`.
  * Fallback `meeshy.me` (domaine prod) — jamais localhost, qui casserait un lien
@@ -660,12 +681,11 @@ export class TrackingLinkService {
   }
 
   /**
-   * Traite le contenu d'un message : détecte les liens, crée des TrackingLinks, et remplace les liens par mshy://<token>
-   */
-  /**
-   * Process [[url]] and <url> syntax in message content to create tracking links
-   * This method only processes URLs wrapped in [[]] or <>, not raw URLs
-   * Reuses existing tokens for identical URLs within the same message
+   * Réécrit `<url>` en `m+<token>` suivi — la seule écriture explicite qui
+   * touche encore au contenu. `[[url]]` n'est PLUS suivi ni réécrit (#9093) :
+   * c'est l'écriture qui DEMANDE un lien affiché tel quel, sans traçage. Les
+   * liens markdown sont protégés de la réécriture ; les URL brutes relèvent de
+   * `collectContentTrackingLinks`. Un même `<url>` répété réutilise son token.
    */
   async processExplicitLinksInContent(params: {
     content: string;
@@ -691,54 +711,7 @@ export class TrackingLinkService {
       return placeholder;
     });
 
-    // STEP 2: Process [[url]] - Force tracking
-    const DOUBLE_BRACKET_REGEX = /\[\[(https?:\/\/[^\]]+)\]\]/gi;
-    const doubleBracketMatches = [...processedContent.matchAll(DOUBLE_BRACKET_REGEX)];
-
-    for (const match of doubleBracketMatches) {
-      const fullMatch = match[0];
-      const url = match[1];
-
-      try {
-        let token: string;
-
-        // Check if we already processed this URL in this message
-        if (urlTokenMap.has(url)) {
-          token = urlTokenMap.get(url)!;
-          logger.debug('Reusing token for duplicate URL', { token, url });
-        } else {
-          // Find or create tracking link
-          let trackingLink = await this.findExistingTrackingLink(url, conversationId);
-
-          if (!trackingLink) {
-            trackingLink = await this.createTrackingLink({
-              originalUrl: url,
-              conversationId,
-              messageId,
-              createdBy
-            });
-          }
-
-          token = trackingLink.token;
-          trackingLinks.push(trackingLink);
-          urlTokenMap.set(url, token);
-        }
-
-        const meeshyShortLink = `m+${token}`;
-        // Function replacer, not a string: String.prototype.replace interprets
-        // $$, $&, $` and $' in a replacement STRING (regardless of a string vs
-        // regex search), so any $-sequence in the restored URL would be mangled.
-        // A () => value replacer reinstates the text verbatim with identical
-        // first-occurrence semantics (mirror of processLinksInContent).
-        processedContent = processedContent.replace(fullMatch, () => meeshyShortLink);
-      } catch (linkError) {
-        logger.error('Error processing [[url]]', { error: linkError });
-        // On error, replace with URL without brackets
-        processedContent = processedContent.replace(fullMatch, () => url);
-      }
-    }
-
-    // STEP 3: Process <url> - Force tracking
+    // STEP 2: Process <url> - Force tracking
     const ANGLE_BRACKET_REGEX = /<(https?:\/\/[^>]+)>/gi;
     const angleBracketMatches = [...processedContent.matchAll(ANGLE_BRACKET_REGEX)];
 
@@ -780,7 +753,7 @@ export class TrackingLinkService {
       }
     }
 
-    // STEP 4: Restore protected markdown links.
+    // STEP 3: Restore protected markdown links.
     // Function replacer: `original` is user text that may contain $&, $$, $` or
     // $' — a replacement STRING would substitute those and corrupt the link
     // (e.g. "$&" would leak the __PROTECTED_MD_n__ sentinel back into content).
@@ -792,8 +765,10 @@ export class TrackingLinkService {
   }
 
   /**
-   * Détecte les URLs http(s) BRUTES d'un contenu et crée/réutilise un TrackingLink pour
-   * chacune. Généralisable à tout contenu (messages, posts, stories, commentaires).
+   * Détecte les URLs http(s) BRUTES d'un contenu, et les adresses des liens markdown
+   * `[libellé](url)`, et crée/réutilise un TrackingLink pour chacune — jamais pour
+   * `[[url]]`, l'écriture d'un lien affiché tel quel sans suivi (#9093). Généralisable
+   * à tout contenu (messages, posts, stories, commentaires).
    *
    * `rewriteToShortLink` (défaut `true`, comportement historique) : remplace l'URL par
    * `m+<token>` dans le contenu. Le passer à `false` MINT les liens mais LAISSE le contenu
@@ -811,67 +786,38 @@ export class TrackingLinkService {
   }): Promise<{ processedContent: string; trackingLinks: TrackingLink[] }> {
     const { content, conversationId, messageId, createdBy, rewriteToShortLink = true } = params;
 
-    // Regex pour détecter les liens HTTP(S)
-    const urlRegex = /(https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*))/gi;
-
     // Regex pour détecter les liens de tracking existants (à ignorer)
     // Support n'importe quel domaine avec /l/<token> (flexible pour dev, staging, production)
-    const trackingLinkRegex = /https?:\/\/[^\/]+\/l\/([a-zA-Z0-9_-]{2,50})/gi;
-    const mshyShortRegex = /\bm\+([a-zA-Z0-9_-]{2,50})\b/gi;
+    const trackingLinkRegex = /https?:\/\/[^\/]+\/l\/([a-zA-Z0-9_-]{2,50})/i;
 
-    const trackingLinks: TrackingLink[] = [];
-    let processedContent = content;
-
-    // Trouver tous les liens dans le message
-    const matches = content.match(urlRegex);
-
-    if (!matches || matches.length === 0) {
+    const occurrences = linkOccurrences(content).filter(({ url }) => !trackingLinkRegex.test(url));
+    if (occurrences.length === 0) {
       return { processedContent: content, trackingLinks: [] };
     }
 
+    const trackingLinks: TrackingLink[] = [];
+    const rawTokens = new Map<string, string>();
 
-    // Traiter chaque lien
-    for (const url of matches) {
-      // Ignorer les liens de tracking existants (n'importe quel domaine/l/<token> ou m+<token>)
-      trackingLinkRegex.lastIndex = 0;
-      mshyShortRegex.lastIndex = 0;
-
-      if (trackingLinkRegex.test(url) || mshyShortRegex.test(url)) {
-        continue;
-      }
-
+    for (const { url, raw } of occurrences) {
       try {
-        // Vérifier si un lien existe déjà pour cette URL dans cette conversation
-        let trackingLink = await this.findExistingTrackingLink(url, conversationId);
-
-        if (!trackingLink) {
-          // Créer un nouveau lien de tracking
-          trackingLink = await this.createTrackingLink({
-            originalUrl: url,
-            conversationId,
-            messageId, // Note: messageId n'est pas encore disponible, sera null
-            createdBy
-          });
-        } else {
-        }
-
+        const trackingLink =
+          (await this.findExistingTrackingLink(url, conversationId)) ??
+          (await this.createTrackingLink({ originalUrl: url, conversationId, messageId, createdBy }));
         trackingLinks.push(trackingLink);
-
-        // Remplacer le lien par m+<token> (format court) — sauf en mode mapping-only
-        // (préservation de l'aperçu vidéo + URL lisible : le client redirige vers /l/<token>
-        // via metadata.trackingLinks, sans réécriture du contenu).
-        if (rewriteToShortLink) {
-          const replacement = `m+${trackingLink.token}`;
-          // Function replacer — same $-substitution guard as processExplicitLinksInContent.
-          processedContent = processedContent.replace(url, () => replacement);
-        }
-
+        if (raw) rawTokens.set(url, trackingLink.token);
       } catch (error) {
         logger.error('Error processing link', { url, error });
-        // En cas d'erreur, on garde le lien original
       }
     }
 
+    // Seule une URL BRUTE se réécrit en m+<token>, et seulement hors mode
+    // carte : `[[url]]` et `[libellé](url)` ressortent tels qu'écrits.
+    const processedContent = rewriteToShortLink
+      ? content.replace(new RegExp(LINK_WRITINGS_SOURCE, 'gi'), (match, _target: string | undefined, raw: string | undefined) => {
+          const token = raw ? rawTokens.get(raw) : undefined;
+          return token ? `m+${token}` : match;
+        })
+      : content;
 
     return { processedContent, trackingLinks };
   }

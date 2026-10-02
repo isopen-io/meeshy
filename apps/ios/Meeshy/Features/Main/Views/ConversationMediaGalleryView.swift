@@ -54,6 +54,8 @@ struct ConversationMediaGalleryView: View {
     /// Vide, ou avec des `alternatives` vides, ⇒ aucun contrôle n'est peint
     /// (loi 4 : un contrôle sans effet est ABSENT, jamais grisé).
     var captionServings: [String: SocialMediaCaptionServing] = [:]
+    /// attachment.id → la carte des liens suivis du PORTEUR de la légende (#9075).
+    var captionLinks: [String: [String: String]] = [:]
 
     /// **Le repli de la légende est un état d'ÉCRAN, pas de média** (#4768) —
     /// mais il se REMET à chaque page. Feuilleter vers un autre média présente
@@ -265,6 +267,7 @@ struct ConversationMediaGalleryView: View {
         accentColor: String,
         captionServings: [String: SocialMediaCaptionServing] = [:],
         captionMap: [String: String] = [:],
+        captionLinks: [String: [String: String]] = [:],
         senderInfoMap: [String: ConversationViewModel.MediaSenderInfo] = [:],
         reportsAttachmentConsumption: Bool = true,
         onComposeWithMedia: ((MessageAttachment) -> Void)? = nil,
@@ -282,6 +285,7 @@ struct ConversationMediaGalleryView: View {
         self.accentColor = accentColor
         self.captionServings = captionServings
         self.captionMap = captionMap
+        self.captionLinks = captionLinks
         self.senderInfoMap = senderInfoMap
         self.reportsAttachmentConsumption = reportsAttachmentConsumption
         self.onComposeWithMedia = onComposeWithMedia
@@ -675,9 +679,10 @@ struct ConversationMediaGalleryView: View {
         }
     }
 
-    private func captionOverlay(_ text: String) -> some View {
+    private func captionOverlay(_ text: String, links: [String: String]) -> some View {
         MediaCaptionOverlay(caption: text,
                             isExpanded: captionExpanded,
+                            trackedLinks: links,
                             horizontalInset: 16,
                             maxExpandedHeight: cadreCaptionMaxHeight,
                             // **« JUSTE afficher le texte déplié avec effet
@@ -804,7 +809,7 @@ struct ConversationMediaGalleryView: View {
                     .id(att.id)
                 } else if let caption = servedCaption(att.id) {
                     captionLanguageRow(att.id)
-                    captionOverlay(caption)
+                    captionOverlay(caption, links: captionLinks[att.id] ?? [:])
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

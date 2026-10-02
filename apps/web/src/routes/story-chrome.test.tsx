@@ -304,7 +304,7 @@ describe('la barre basse de la story : légende, rail, « Répondre… »', () =
     );
     const links = [...el.querySelectorAll('[data-viewer-caption] a')];
     expect(links.map((a) => a.getAttribute('href'))).toEqual(['/l/Lac42', 'https://ailleurs.net/brume']);
-    expect(links[0]?.textContent).toBe('https://exemple.org/lac');
+    expect(links[0]?.textContent).toBe('m+Lac42');
     expect(links.every((a) => a.hasAttribute('data-claims-gesture'))).toBe(true);
     expect(el.querySelector('[data-story-media-caption] a')).not.toBeNull();
   });

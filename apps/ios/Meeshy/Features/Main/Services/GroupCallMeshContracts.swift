@@ -164,4 +164,9 @@ protocol GroupCallHostProviding: AnyObject {
     var isLocalVideoEnabled: Bool { get }
     var primaryRemoteVideoTrack: Any? { get }
     func primaryAudioLevel() async -> Double?
+    /// #9085 — le principal a quitté un groupe qui continue : sa liaison n'est
+    /// plus reprise, et l'appel reste établi par le maillage.
+    func groupPrimaryDidVacate()
+    /// #9091 — sans son principal, l'appel se nomme par le groupe qui continue.
+    func groupCallTitleDidChange(_ title: String)
 }

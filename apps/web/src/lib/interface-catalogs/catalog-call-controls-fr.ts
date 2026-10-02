@@ -63,6 +63,11 @@ const fr = {
   'callControls.selfTile.small': 'Ma vignette : petite',
   'callControls.selfTile.medium': 'Ma vignette : moyenne',
   'callControls.selfTile.large': 'Ma vignette : grande',
+  'callControls.selfTile.hint': 'Touchez pour inverser les vidéos ; faites-la glisser ou utilisez les flèches pour la déplacer',
+  'callControls.selfTile.corner.top-left': 'Ma vignette : en haut à gauche',
+  'callControls.selfTile.corner.top-right': 'Ma vignette : en haut à droite',
+  'callControls.selfTile.corner.bottom-left': 'Ma vignette : en bas à gauche',
+  'callControls.selfTile.corner.bottom-right': 'Ma vignette : en bas à droite',
 } as const;
 
 export default fr;

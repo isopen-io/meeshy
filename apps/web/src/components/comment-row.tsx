@@ -20,13 +20,16 @@ import type { ReportReason } from '@/lib/api/reports';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { STICKER_SIDE } from '@/lib/reading-mode/metrics';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { commentMenuEntries, type CommentMenuEntry } from '@/lib/view/comment-menu';
+import { commentStickerOf } from '@/lib/view/comment-sticker';
 import { replyTargetOf, type CommentReplyTarget } from '@/lib/view/comment-reply-target';
 import { initialsOf } from '@/lib/view/conversation';
 import type { MentionSource } from '@/lib/view/mention-source';
 import { useMentionField } from '@/lib/view/use-mention-field';
 import { PrismPastille } from './message-blocks';
+import { StickerArtwork } from './message-body-blocks';
 import { RichText } from './rich-text';
 
 /**
@@ -438,6 +441,9 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
     : { text: servi.text, language: servi.language, marque: servi.translated && servi.language !== '' };
   /* LA CARTE DES ADRESSES SUIVIES (#9074) — décodée une fois par commentaire. */
   const trackingLinks = useMemo(() => trackingLinksOf(comment), [comment]);
+  /* LE STICKER (#9080) — peint par le MÊME rendu que la bulle d'un message ;
+     un commentaire-sticker sans texte ne monte pas de paragraphe vide. */
+  const sticker = useMemo(() => commentStickerOf(comment), [comment]);
   const photo = typeof comment.author.avatar === 'string' && comment.author.avatar !== '' ? comment.author.avatar : undefined;
   /* Une rangée EN VOL n'a pas d'adresse chez la passerelle — aucun geste. */
   const actionable = comment.pending !== true ? gestures : undefined;
@@ -583,13 +589,20 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
                  document : poser `lang` partout ferait mentir la voix sur les
                  rangées non traduites. */
               <CommentBody comment={comment} contentLength={lu.text.length}>
-                <RichText
-                  text={lu.text}
-                  trackingLinks={trackingLinks}
-                  className="text-body break-words whitespace-pre-wrap"
-                  style={COMMENT_TEXT_STYLE}
-                  {...(lu.marque ? { lang: lu.language } : {})}
-                />
+                {sticker !== null ? (
+                  <div data-comment-sticker className="py-1">
+                    <StickerArtwork sticker={sticker.sticker} picture={sticker.picture} side={STICKER_SIDE} />
+                  </div>
+                ) : null}
+                {sticker === null || lu.text.trim() !== '' ? (
+                  <RichText
+                    text={lu.text}
+                    trackingLinks={trackingLinks}
+                    className="text-body break-words whitespace-pre-wrap"
+                    style={COMMENT_TEXT_STYLE}
+                    {...(lu.marque ? { lang: lu.language } : {})}
+                  />
+                ) : null}
               </CommentBody>
             )}
             {actionable !== undefined && !editing ? (

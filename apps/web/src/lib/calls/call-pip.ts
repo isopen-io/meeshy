@@ -54,18 +54,24 @@ export function requestCallPip(): void {
   void opener?.();
 }
 
-export type PipSource = { readonly stream: MediaStream; readonly mirrored: boolean };
+/** `contain` pour un écran partagé (#8164) : un document ou un tableau se lit ENTIER, sur le fond neutre ; une caméra reste recadrée. */
+export type PipSource = { readonly stream: MediaStream; readonly mirrored: boolean; readonly fit: 'cover' | 'contain' };
 
 type PipCall = Pick<ActiveCall, 'members' | 'remoteStreams' | 'localStream' | 'cameraOn' | 'phase' | 'facing' | 'screenSharing'>;
 
 /** Ce qui flotte : un écran partagé d'abord (#8063), puis la vidéo du premier pair qui en envoie, sinon ma caméra (dans le miroir de son aperçu, `cameraMirrored`). */
 export function pipSource(call: PipCall): PipSource | null {
   const members = Object.values(call.members);
-  const remote = [...members.filter((member) => member.screenSharing), ...members.filter((member) => member.cameraOn && !member.screenSharing)]
-    .map((member) => call.remoteStreams[member.userId])
-    .find((stream) => hasVideo(stream));
-  if (remote !== undefined) return { stream: remote, mirrored: false };
-  return call.cameraOn && call.localStream !== null && hasVideo(call.localStream) ? { stream: call.localStream, mirrored: cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing }) } : null;
+  const shown = (userId: string): MediaStream | undefined => {
+    const stream = call.remoteStreams[userId];
+    return hasVideo(stream) ? stream : undefined;
+  };
+  const screen = members.filter((member) => member.screenSharing).map((member) => shown(member.userId)).find((stream) => stream !== undefined);
+  if (screen !== undefined) return { stream: screen, mirrored: false, fit: 'contain' };
+  const camera = members.filter((member) => member.cameraOn && !member.screenSharing).map((member) => shown(member.userId)).find((stream) => stream !== undefined);
+  if (camera !== undefined) return { stream: camera, mirrored: false, fit: 'cover' };
+  if (!call.cameraOn || call.localStream === null || !hasVideo(call.localStream)) return null;
+  return { stream: call.localStream, mirrored: cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing }), fit: call.screenSharing ? 'contain' : 'cover' };
 }
 
 export function shouldOfferPip(call: PipCall, support: PipSupport): boolean {

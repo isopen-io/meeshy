@@ -575,9 +575,9 @@ public struct MediaCaptionPlainText: View {
 }
 
 public extension MediaCaptionOverlay where TextBody == MediaCaptionPlainText {
-    /// La forme historique — texte simple. Les appelants existants
-    /// (`StoryViewerView+CanvasCaption`, `ConversationMediaGalleryView`) la
-    /// gardent sans une ligne de changement.
+    /// La forme historique — texte simple. Une légende dont les adresses
+    /// doivent s'ouvrir passe par la forme `trackedLinks:` (`MediaCaptionRichText`,
+    /// #9075).
     init(caption: String,
          isExpanded: Bool,
          wordThreshold: Int = MediaCaptionOverlay.defaultWordThreshold,

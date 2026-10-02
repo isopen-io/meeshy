@@ -73,7 +73,7 @@ describe('le carrousel rend sa légende par RichText', () => {
     );
     const caption = html.slice(html.indexOf('data-feed-carousel-caption'));
     expect(caption).toContain('href="/l/Plage1"');
-    expect(caption).toContain('>https://exemple.org/plage</a>');
+    expect(caption).toContain('>m+Plage1</a>');
     expect(caption).toContain('href="https://ailleurs.net/x"');
     expect(caption).toContain('data-claims-gesture');
   });

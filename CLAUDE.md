@@ -392,6 +392,7 @@ git worktree add ../v2_meeshy-{branch-name} -b {branch-name} main
 ```
 
 ### Regles
+0. **Jamais plus de 4 worktrees ouverts à la fois, toutes sessions confondues (directive porteur 2026-10-02).** Un worktree iOS pèse 5 à 11 Go (`Build`, `SourcePackages`, `node_modules`) : au-delà, le disque sature et les sessions s'arrêtent. Le hook `.claude/hooks/worktree-limit.sh` refuse le 5e (création de worktree en shell, `EnterWorktree`, agent isolé en worktree). Avant d'en ouvrir un : rapatrier `dev` dans un worktree inactif, fusionner dans `dev` ce qui doit l'être, puis le retirer (`git worktree remove`) — un worktree fusionné et inactif ne reste jamais ouvert.
 1. Chaque worktree possede des fichiers specifiques -- JAMAIS deux worktrees sur le meme fichier
 2. project.pbxproj: gere par le DERNIER worktree a merger uniquement
 3. Ordre de merge: branches pure-UI d'abord, branches avec fichiers partages en dernier

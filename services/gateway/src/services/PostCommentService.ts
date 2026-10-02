@@ -6,6 +6,7 @@ import { TrackingLinkService } from './TrackingLinkService';
 import { syncCommentTrackingLinks } from './posts/publicationTrackingLinks';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace } from './location/sharedPlace';
+import { parseMessageSticker } from './stickers/messageSticker';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
 import { applyCommentMediaOrder } from './posts/mediaOrder';
 import type { QuotedPostMedia } from './posts/quotedPostMediaSnapshot';
@@ -66,6 +67,11 @@ export class PostCommentService {
       /// Lieu partagé — champ dédié, jamais un `metadata` brut. Validé par
       /// `parseSharedPlace` ci-dessous avant écriture.
       location?: unknown;
+      /// Sticker (#9080) — la MÊME forme que celui d'un message
+      /// (`MessageSticker`), champ dédié, jamais un `metadata` brut. Validé et
+      /// BLANCHI par `parseMessageSticker` avant écriture ; l'image rendue,
+      /// elle, arrive par `mediaIds` comme tout média de commentaire.
+      sticker?: unknown;
       /// Le média du POST COMMENTÉ que ce commentaire CITE (#6578), déjà ADMIS
       /// par `admitQuotedPostMedia` — ce service ne revalide pas l'appartenance,
       /// il n'en a pas les moyens (il ne reçoit que l'instantané). La garde vit
@@ -80,6 +86,7 @@ export class PostCommentService {
       mediaIds,
       mobileTranscription,
       location,
+      sticker,
       quotedPostMedia,
     } = options;
     // Un id répété ne doit consommer qu'une place — `Set` préserve l'ordre de
@@ -119,6 +126,7 @@ export class PostCommentService {
     // dans `metadata.location`, même décision assumée que pour message/post
     // (cf. services/location/sharedPlace.ts).
     const sharedPlace = parseSharedPlace(location);
+    const stickerDescriptor = parseMessageSticker(sticker);
 
     const comment = await this.prisma.postComment.create({
       data: {
@@ -135,14 +143,15 @@ export class PostCommentService {
           originalLanguage != null
             ? (normalizeLanguageCode(originalLanguage) ?? originalLanguage)
             : null,
-        // `metadata` porte TROIS choses aujourd'hui — le lieu, les liens tracés
-        // (écrits plus bas) et le média CITÉ. Composé en une fois : deux
-        // écritures séparées se seraient écrasées l'une l'autre, `metadata`
-        // étant un document remplacé en bloc et non fusionné.
-        ...(sharedPlace || quotedPostMedia
+        // `metadata` porte QUATRE choses aujourd'hui — le lieu, le sticker, les
+        // liens tracés (écrits plus bas) et le média CITÉ. Composé en une
+        // fois : deux écritures séparées se seraient écrasées l'une l'autre,
+        // `metadata` étant un document remplacé en bloc et non fusionné.
+        ...(sharedPlace || stickerDescriptor || quotedPostMedia
           ? {
               metadata: {
                 ...(sharedPlace ? { location: sharedPlace } : {}),
+                ...(stickerDescriptor ? { sticker: stickerDescriptor } : {}),
                 ...(quotedPostMedia ? { quotedPostMedia } : {}),
               } as unknown as Prisma.InputJsonValue,
             }

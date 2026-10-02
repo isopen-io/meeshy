@@ -235,7 +235,7 @@ describe('MediaViewer — le chrome commun des plein écrans (#8879)', () => {
     const dialog = await mount({ offers: ALL, onReply: () => {}, carrier: tracked });
     const link = dialog.querySelector<HTMLAnchorElement>('[data-viewer-caption-text] a')!;
     expect(link.getAttribute('href')).toBe('/l/Port9');
-    expect(link.textContent).toBe('https://exemple.org/port');
+    expect(link.textContent).toBe('m+Port9');
     expect(link.hasAttribute('data-claims-gesture')).toBe(true);
     link.addEventListener('click', (event) => event.preventDefault());
     act(() => {

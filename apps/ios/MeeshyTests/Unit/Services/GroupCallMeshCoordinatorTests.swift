@@ -80,8 +80,12 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         var isLocalVideoEnabled = false
         var primaryRemoteVideoTrack: Any?
         var primaryAudioLevelResult: Double?
+        private(set) var vacateCallCount = 0
+        private(set) var titles: [String] = []
 
         func primaryAudioLevel() async -> Double? { primaryAudioLevelResult }
+        func groupPrimaryDidVacate() { vacateCallCount += 1 }
+        func groupCallTitleDidChange(_ title: String) { titles.append(title) }
     }
 
     private final class ActiveCallStub: ActiveCallServiceProviding, @unchecked Sendable {
@@ -127,6 +131,11 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
     private func signal(_ type: String, from: String, sdp: String? = "v=0", callId: String = "call1") -> CallSignalPayload {
         let sdpField = sdp.map { #","sdp":"\#($0)""# } ?? ""
         return decode(CallSignalPayload.self, #"{"type":"\#(type)","from":"\#(from)","to":"me","negotiationId":1\#(sdpField)}"#)
+    }
+
+    /// Bob a lancé un appel dans un duo ; Alice, déjà dedans, m'y invite.
+    private func invitation(conversationType: String = "direct") -> CallOfferData {
+        decode(CallOfferData.self, #"{"callId":"call1","conversationId":"group1","initiator":{"userId":"b","username":"bob"},"conversationType":"\#(conversationType)","invitedBy":{"userId":"a","username":"alice"},"isGroup":true}"#)
     }
 
     private func settle() async {
@@ -389,6 +398,224 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         XCTAssertEqual(sut.roster.member("c")?.displayName, "Chloé")
     }
 
+    // MARK: - Départ du principal (#9085)
+
+    func test_participantLeft_primaryWithMembersRemaining_vacatesSeatAndKeepsCall() {
+        let (sut, host, factory, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c"))
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertTrue(sut.isPrimaryVacated)
+        XCTAssertFalse(sut.roster.contains("b"))
+        XCTAssertTrue(sut.roster.contains("c"))
+        XCTAssertEqual(factory.link(to: "c")?.closeCallCount, 0, "le départ du principal ne coupe pas les autres liens")
+        XCTAssertTrue(sut.isGroupCallActive)
+        XCTAssertEqual(host.vacateCallCount, 1, "CallManager cesse de reprendre une liaison vers un pair parti")
+    }
+
+    /// #9090 — le principal parti, chaque membre restant garde SA liaison et son
+    /// image : aucun ne dépend plus de la PeerConnection du parti.
+    func test_participantLeft_primary_remainingMembersKeepTheirMedia() {
+        let (sut, host, factory, _, _) = makeSUT()
+        host.primaryRemoteVideoTrack = "primary-track"
+        sut.handleParticipantJoined(joined("c"))
+        sut.handleParticipantJoined(joined("d"))
+        factory.link(to: "c")?.remoteVideoTrack = "c-track"
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertEqual(sut.videoTrack(for: "c") as? String, "c-track")
+        XCTAssertEqual(factory.links.map(\.closeCallCount), [0, 0])
+        XCTAssertEqual(sut.roster.members.map(\.userId), ["c", "d"])
+        XCTAssertFalse(sut.roster.members.contains { $0.isPrimary }, "plus aucune tuile ne suit la liaison du parti")
+    }
+
+    func test_participantLeft_primaryAlone_keepsTheSeat() {
+        let (sut, host, _, _, _) = makeSUT()
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertFalse(sut.isPrimaryVacated)
+        XCTAssertEqual(host.vacateCallCount, 0)
+    }
+
+    func test_primaryDidLeave_groupWithMembersRemaining_keepsTheCall() {
+        let (sut, _, _, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c"))
+
+        XCTAssertTrue(sut.primaryDidLeave())
+        XCTAssertTrue(sut.isPrimaryVacated)
+    }
+
+    func test_primaryDidLeave_directCall_endsLikeBefore() {
+        let (sut, host, _, _, _) = makeSUT(markGroup: false)
+
+        XCTAssertFalse(sut.primaryDidLeave())
+        XCTAssertEqual(host.vacateCallCount, 0)
+    }
+
+    func test_vacatedSeat_isNotReadmittedOnSync() {
+        let (sut, _, _, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c"))
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        sut.syncWithHost()
+
+        XCTAssertFalse(sut.roster.contains("b"))
+        XCTAssertNil(sut.videoTrack(for: "b"))
+    }
+
+    func test_vacatedSeat_formerPrimaryRejoining_isOfferedByTheMesh() async {
+        let (sut, _, factory, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c"))
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        sut.handleParticipantJoined(joined("b"))
+        await settle()
+
+        XCTAssertEqual(factory.link(to: "b")?.offerCallCount, 1)
+        XCTAssertTrue(sut.consume(signal: signal("answer", from: "b"), callId: "call1"))
+    }
+
+    func test_newCall_freesTheVacatedSeat() {
+        let (sut, host, _, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c"))
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        host.groupCallId = "call2"
+        sut.syncWithHost()
+
+        XCTAssertFalse(sut.isPrimaryVacated)
+        XCTAssertTrue(sut.roster.contains("b"))
+    }
+
+    // MARK: - Ce que la passerelle sait de qui reste (#9092)
+
+    private func servedSession(_ participants: [ActiveCallParticipant]) -> ActiveCallSession {
+        ActiveCallSession(id: "call1", conversationId: "group1", mode: "p2p", status: "active", participants: participants)
+    }
+
+    /// L'invité vient de décrocher : aucune offre d'un autre membre n'est encore
+    /// arrivée, mais la passerelle le sert dans l'appel.
+    func test_participantLeft_primary_gatewayServesAnotherMemberWithoutLink_keepsTheCall() async {
+        let (sut, host, factory, _, calls) = makeSUT()
+        calls.session = servedSession([
+            ActiveCallParticipant(userId: "me"),
+            ActiveCallParticipant(userId: "b"),
+            ActiveCallParticipant(userId: "c")
+        ])
+        await settle()
+        XCTAssertTrue(factory.links.isEmpty, "aucun lien de maillage encore établi")
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertTrue(sut.isPrimaryVacated)
+        XCTAssertEqual(host.vacateCallCount, 1)
+    }
+
+    func test_participantLeft_primary_gatewayServesOnlyDepartedRows_endsLikeBefore() async {
+        let (sut, host, _, _, calls) = makeSUT()
+        calls.session = servedSession([
+            ActiveCallParticipant(userId: "me"),
+            ActiveCallParticipant(userId: "b"),
+            ActiveCallParticipant(userId: "c", leftAt: "2026-10-02T10:00:00.000Z")
+        ])
+        await settle()
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertFalse(sut.isPrimaryVacated)
+        XCTAssertEqual(host.vacateCallCount, 0)
+    }
+
+    func test_participantLeft_primary_servedMemberAlreadyGone_endsLikeBefore() async {
+        let (sut, host, _, _, calls) = makeSUT()
+        calls.session = servedSession([ActiveCallParticipant(userId: "b"), ActiveCallParticipant(userId: "c")])
+        await settle()
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "c"))
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertFalse(sut.isPrimaryVacated)
+        XCTAssertEqual(host.vacateCallCount, 0)
+    }
+
+    /// Le `bye` en bande du principal passe par la même décision.
+    func test_primaryDidLeave_ringingThenAnswered_gatewayServesAnotherMember_keepsTheCall() async {
+        let (sut, host, _, _, calls) = makeSUT(engaged: false)
+        calls.session = servedSession([ActiveCallParticipant(userId: "b"), ActiveCallParticipant(userId: "c")])
+        await settle()
+        host.isGroupCallEngaged = true
+        sut.syncWithHost()
+
+        XCTAssertTrue(sut.primaryDidLeave())
+    }
+
+    func test_newCall_forgetsTheServedMembersOfThePrevious() async {
+        let (sut, host, _, _, calls) = makeSUT()
+        calls.session = servedSession([ActiveCallParticipant(userId: "b"), ActiveCallParticipant(userId: "c")])
+        await settle()
+
+        calls.session = nil
+        host.groupCallId = "call2"
+        sut.syncWithHost()
+        await settle()
+
+        XCTAssertFalse(sut.primaryDidLeave())
+    }
+
+
+    func test_participantLeft_primaryOfTitledGroup_retitlesWithTheGroupTitle() {
+        let (sut, host, _, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c", name: "Chloé"))
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertEqual(host.titles, ["Équipe"], "l'en-tête ne nomme plus le partant")
+    }
+
+    func test_participantLeft_primaryOfUntitledGroup_namesTheRemainingMembers() {
+        let (sut, host, _, _, _) = makeSUT(markGroup: false)
+        sut.markGroupConversation("group1", title: nil)
+        sut.handleParticipantJoined(joined("c", name: "Chloé"))
+        sut.handleParticipantJoined(joined("d", name: "Dia"))
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertEqual(host.titles, ["Chloé, Dia"])
+    }
+
+    func test_vacatedSeat_rosterChange_retitlesOnlyWhenTheNameChanges() {
+        let (sut, host, _, _, _) = makeSUT(markGroup: false)
+        sut.markGroupConversation("group1", title: nil)
+        sut.handleParticipantJoined(joined("c", name: "Chloé"))
+        sut.handleParticipantJoined(joined("d", name: "Dia"))
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        sut.handleMediaToggled(decode(CallMediaToggleData.self, #"{"callId":"call1","userId":"c","mediaType":"audio","enabled":false}"#))
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "d"))
+
+        XCTAssertEqual(host.titles, ["Chloé, Dia", "Chloé"])
+    }
+
+    func test_participantLeft_primaryAlone_keepsTheTitle() {
+        let (sut, host, _, _, _) = makeSUT()
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertTrue(host.titles.isEmpty)
+    }
+
+    func test_memberLeaving_whilePrimaryHoldsTheSeat_keepsTheTitle() {
+        let (sut, host, _, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c", name: "Chloé"))
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "c"))
+
+        XCTAssertTrue(host.titles.isEmpty)
+    }
+
     // MARK: - Nature de l'appel
 
     func test_incomingGroupCall_marksConversationWithTitle() {
@@ -399,6 +626,35 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
 
         XCTAssertTrue(sut.isGroupConversation("group1"))
         XCTAssertEqual(sut.groupTitle(for: "group1"), "Équipe")
+    }
+
+    /// #9084 — un duo devenu groupe garde `conversationType == "direct"` : c'est
+    /// l'invitation (`isGroup`) qui dit que l'appel réunit plus de deux membres.
+    func test_handleIncomingCall_invitationIntoDirectConversation_marksGroup() {
+        let (sut, _, _, _, _) = makeSUT(markGroup: false)
+
+        sut.handleIncomingCall(invitation())
+
+        XCTAssertTrue(sut.isGroupConversation("group1"))
+    }
+
+    /// #9084 — chez l'invité qui sonne, l'offre de l'invitant revient à la
+    /// liaison principale ; celle d'un autre membre attend le maillage au lieu
+    /// d'écraser l'offre en attente du principal.
+    func test_consume_invitationRinging_otherMemberOfferWaitsForTheMesh() async {
+        let (sut, host, factory, _, _) = makeSUT(engaged: false, markGroup: false)
+        host.groupPrimaryUserId = "a"
+        sut.handleIncomingCall(invitation())
+
+        XCTAssertFalse(sut.consume(signal: signal("offer", from: "a"), callId: "call1"))
+        XCTAssertTrue(sut.consume(signal: signal("offer", from: "b"), callId: "call1"))
+
+        host.isGroupCallEngaged = true
+        sut.syncWithHost()
+        await settle()
+
+        XCTAssertEqual(factory.link(to: "b")?.received.map(\.kind), [.offer])
+        XCTAssertNil(factory.link(to: "a"))
     }
 
     func test_incomingDirectCall_isNotMarked() {

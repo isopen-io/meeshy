@@ -25,7 +25,8 @@
  *  5. la caméra allumée, un partage puis son arrêt au bouton rendent la caméra ;
  *  6. le pair partage à son tour : son écran s'affiche en grand, ENTIER
  *     (`object-fit: contain`), des images arrivent, sous la bannière « Nadia
- *     Benali partage son écran » ; son arrêt rend l'écran d'appel ;
+ *     Benali partage son écran » ; réduit en bulle, puis dans l'image dans
+ *     l'image, il reste ENTIER (#8164) ; son arrêt rend l'écran d'appel ;
  *  7. sans `getDisplayMedia` (la WebView de la coque Android, Safari iOS),
  *     aucun bouton ne promet le partage — mais la RÉCEPTION n'en dépend pas :
  *     dans un appel VOCAL où personne n'a allumé de caméra, l'écran du pair
@@ -198,6 +199,23 @@ try {
         const banner = await page.$eval('[data-call-screen-banner]', (el) => el.textContent ?? '').catch(() => '');
         check(banner === `${PEER_NAME} partage son écran`, `${label} : la bannière nomme celui qui partage (« ${banner} »)`);
         await capture(page, `partage-recu-${slug}`);
+        await page.click('[data-call-screen] button[aria-label="Réduire l’appel"]');
+        await page.click('[data-call-pill-collapse]');
+        const bubbleFit = await page.waitForSelector('[data-call-bubble] video', { timeout: 5000 }).then((video) => video.evaluate((el) => getComputedStyle(el).objectFit), () => null);
+        check(bubbleFit === 'contain', `${label} : réduit en bulle, l'écran partagé reste ENTIER (object-fit ${bubbleFit})`);
+        await capture(page, `partage-recu-bulle-${slug}`);
+        const pipButton = await page.$('[data-call-bubble-control="pip"]');
+        if (pipButton !== null && (await page.evaluate(() => 'documentPictureInPicture' in window))) {
+          await pipButton.click();
+          const pipFit = await until(page, () => {
+            const video = window.documentPictureInPicture?.window?.document.querySelector('[data-call-pip-window] video');
+            return video !== null && video !== undefined && video.ownerDocument.defaultView?.getComputedStyle(video).objectFit === 'contain';
+          });
+          check(pipFit, `${label} : dans l'image dans l'image, l'écran partagé reste ENTIER`);
+          await page.evaluate(() => window.documentPictureInPicture?.window?.close());
+        }
+        await page.click('[data-call-bubble-body]');
+        check(await appears(page, '[data-call-shared-screen] video'), `${label} : toucher la bulle rend l'écran partagé en grand`);
         await page.evaluate(() => window.__meeshyFixtureCallPeer?.stopShare());
         const back = await page.waitForSelector('[data-call-shared-screen]', { state: 'detached', timeout: 5000 }).then(() => true, () => false);
         check(back && (await page.$('[data-call-screen="connected"]')) !== null, `${label} : la fin du partage du pair rend l'écran d'appel`);

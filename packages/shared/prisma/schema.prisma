@@ -2467,8 +2467,8 @@ model CallRecording {
   id               String    @id @default(auto()) @map("_id") @db.ObjectId
   callSessionId    String    @db.ObjectId
   requesterId      String    @db.ObjectId
-  requiredUserIds  String[]  @db.ObjectId
-  consentedUserIds String[]  @db.ObjectId
+  requiredUserIds  String[]  @default([]) @db.ObjectId
+  consentedUserIds String[]  @default([]) @db.ObjectId
   requestedAt      DateTime  @default(now())
   startedAt        DateTime?
   stoppedAt        DateTime?

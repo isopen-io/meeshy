@@ -53,7 +53,7 @@ export function StickerArtwork({
   side,
 }: {
   readonly sticker: MessageSticker;
-  readonly picture: Attachment | undefined;
+  readonly picture: Pick<Attachment, 'fileUrl'> | undefined;
   readonly side: number;
 }) {
   const alt = sticker.emoji !== undefined ? `Sticker ${sticker.emoji}` : 'Sticker';
@@ -83,7 +83,7 @@ function StickerPicture({
   alt,
 }: {
   readonly sticker: MessageSticker;
-  readonly picture: Attachment | undefined;
+  readonly picture: Pick<Attachment, 'fileUrl'> | undefined;
   readonly side: number;
   readonly alt: string;
 }) {

@@ -168,7 +168,7 @@ final class CallManager: ObservableObject {
     }
     @Published private(set) var transcriptionService = CallTranscriptionService()
     @Published var remoteUserId: String?
-    @Published private(set) var remoteUsername: String?
+    @Published var remoteUsername: String?
     /// Conversation (DM) qui héberge l'appel courant, quand elle est connue.
     /// Renseignée pour les appels sortants (`startCall`) et les appels entrants
     /// livrés par socket (`CallOfferData.conversationId`). Peut rester `nil` pour
@@ -2372,8 +2372,9 @@ final class CallManager: ObservableObject {
         // allers-retours DB du gateway avant son fanout `call:ended`. Émis
         // AVANT `endCallInternal` (qui ferme la peer connection). No-op si le
         // channel n'est pas ouvert ; le chemin socket ci-dessous reste
-        // l'autorité et le filet de sécurité.
-        webRTCService.sendHangupBye()
+        // l'autorité et le filet de sécurité. Jamais en groupe : le principal
+        // raccrocherait, la passerelle résout le départ (#9085).
+        if !isGroupMeshCall { webRTCService.sendHangupBye() }
 
         if let callId {
             if isDecliningIncoming {
@@ -3945,6 +3946,17 @@ final class CallManager: ObservableObject {
     /// (`.local`/`.missed`/`.rejected`) in the UI, the UserDefaults snapshot,
     /// and — because the gateway's last-write-wins on the call-history
     /// snapshot — the call history too.
+    /// #9085 — le principal a quitté un groupe qui continue (le maillage l'a
+    /// constaté) : sa liaison n'est plus reprise et l'appel reste établi.
+    func groupPrimaryDidVacate() {
+        iceRestartTask?.cancel()
+        iceRestartTask = nil
+        switch callState {
+        case .connecting, .reconnecting: transitionToConnected()
+        default: break
+        }
+    }
+
     private func failCall(_ reasonMessage: String) {
         guard callState.isActive else { return }
         if callUsesCallKit, let uuid = activeCallUUID {
@@ -5436,36 +5448,6 @@ extension CallManager: WebRTCServiceDelegate {
         }
     }
 
-    nonisolated func webRTCService(_ service: WebRTCService, didReceiveTranscriptionData data: Data) {
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            switch DataChannelInbound.decode(data) {
-            case .bye(let reason):
-                // Raccroché in-band du pair : coupure IMMÉDIATE, sans attendre
-                // le fanout serveur `call:ended` (qui suit et se dédup via le
-                // garde `.ended` de handleRemoteEnd).
-                guard let callId = self.currentCallId else { return }
-                Logger.calls.info("DataChannel bye received — ending call instantly (callId=\(callId))")
-                self.handleRemoteEnd(callId: callId, rawReason: reason)
-            case .transcriptEntry(let entry):
-                // Journal de transcription en P2P direct : même garde d'appel
-                // que le sink socket `callTranslatedSegmentReceived` — une
-                // entrée d'un appel déjà terminé/remplacé est ignorée, et la
-                // réception est liée au panneau (caché ⇒ désabonné, comme le
-                // chemin socket). Révisions partielles et final d'un même
-                // énoncé partagent leur `wireId` : chaque correction remplace
-                // la précédente en place, puis la traduction relayée par le
-                // gateway fusionne dans CallTranscriptionService.
-                guard self.currentCallId == entry.callId else { return }
-                guard self.transcriptionService.isShowingOverlay else { return }
-                let segment = CallManager.makeTranscriptionSegment(from: entry)
-                self.transcriptionService.receivePeerEntry(segment)
-            case .ignored:
-                break
-            }
-        }
-    }
-
     nonisolated func webRTCService(_ service: WebRTCService, didReceiveRemoteVideoTrack track: Any) {
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -5504,7 +5486,7 @@ extension CallManager: WebRTCServiceDelegate {
 
     nonisolated func webRTCService(_ service: WebRTCService, didChangeQualityLevel level: VideoQualityLevel, from previous: VideoQualityLevel) {
         Task { @MainActor [weak self] in
-            guard let self, case .connected = self.callState else { return }
+            guard let self, case .connected = self.callState, !self.isGroupPrimaryVacated else { return }
             guard UIAccessibility.isReduceMotionEnabled == false else { return }
             let generator = UINotificationFeedbackGenerator()
             switch level {
@@ -5532,8 +5514,9 @@ extension CallManager: WebRTCServiceDelegate {
             // that level to the UI, the gateway, or the survival controller while
             // the call shows "Reconnecting…" misleads users and resets the survival
             // controller's degraded-streak timer prematurely. Gate all reporting
-            // on callState == .connected.
-            guard case .connected = self.callState else { return }
+            // on callState == .connected — and never on the link of a primary
+            // that left a group which goes on (#9090).
+            guard case .connected = self.callState, !self.isGroupPrimaryVacated else { return }
             self.publishQualitySample(stats: stats, packetLossPercent: packetLossPercent)
             // #8978 — ne republier que ce qui CHANGE : chaque publication recalcule
             // tout l'écran d'appel, et ce relevé tombe toutes les 5 s.
@@ -5596,6 +5579,7 @@ extension CallManager: WebRTCServiceDelegate {
     /// `.connectionLost`).
     @MainActor
     private func attemptReconnection(escalate: Bool = false) {
+        guard !isGroupPrimaryVacated else { return }
         // FSM §3.2 — `.reconnecting` est réservé aux appels dont la négociation
         // média a commencé. Avant l'answer (.ringing/.offering) aucun ICE
         // restart n'est possible (pas de remote description) et la bascule
@@ -5629,6 +5613,7 @@ extension CallManager: WebRTCServiceDelegate {
             if callUsesCallKit, let uuid = activeCallUUID {
                 callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
             }
+            if isGroupMeshCall, let callId = currentCallId { emitCallEndReliably(callId: callId) }
             endCallInternal(reason: .connectionLost)
             return
         }

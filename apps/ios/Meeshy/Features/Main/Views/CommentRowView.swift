@@ -64,6 +64,7 @@ struct CommentRowView: View, Equatable {
         lhs.comment.effectFlags == rhs.comment.effectFlags &&
         lhs.comment.replies == rhs.comment.replies &&
         lhs.comment.content == rhs.comment.content &&
+        lhs.comment.trackedLinkMap == rhs.comment.trackedLinkMap &&
         lhs.comment.translatedContent == rhs.comment.translatedContent &&
         // Re-render quand le média (ou son enrichissement audio : transcription /
         // variantes TTS via comment:media-updated) change.
@@ -203,7 +204,8 @@ struct CommentRowView: View, Equatable {
                         mentionColor: MeeshyColors.mentionColor(isDark: theme.mode.isDark),
                         hashtagColor: MeeshyColors.hashtagColor(isDark: theme.mode.isDark),
                         accentColor: Color(hex: accentColor),
-                        usesRelativeFont: true
+                        usesRelativeFont: true,
+                        trackedLinks: comment.trackedLinkMap
                     )
                         .tint(Color(hex: accentColor))
                         .fixedSize(horizontal: false, vertical: true)
@@ -232,7 +234,8 @@ struct CommentRowView: View, Equatable {
                             authorName: comment.author,
                             authorAvatarURL: comment.authorAvatarURL,
                             authorColor: comment.authorColor,
-                            sentAt: comment.timestamp
+                            sentAt: comment.timestamp,
+                            trackedLinks: comment.trackedLinkMap
                         )
                         .padding(.top, MeeshySpacing.xxs)
                     }

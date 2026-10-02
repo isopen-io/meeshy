@@ -23,6 +23,13 @@
  *  4. on revient à la liste, on ouvre une AUTRE conversation : la bulle
  *     survit à la navigation, ne recouvre ni le champ d'écriture ni
  *     « Envoyer », et un message part pendant l'appel ;
+ *  4 bis. la bulle prend trois tailles (#8145) — aux touches + et −, à
+ *     Ctrl + molette, au pincement de deux doigts — retenues avec sa place ;
+ *     à chaque taille, en haut comme en bas de sa course, elle reste
+ *     entière à l'écran et ne recouvre ni l'en-tête ni le champ d'écriture ;
+ *  4 ter. « Choisir les périphériques » est dans la bulle là où la sortie se
+ *     choisit (`setSinkId`, #9097) : la feuille s'ouvre, Échap la ferme et
+ *     l'appel reste en bulle ;
  *  5. la bulle se déplace au doigt (clipsée à gauche) et au clavier
  *     (flèche droite), et sa place est retenue ;
  *  6. toucher la bulle rend l'écran d'appel en UN geste ; raccrocher le ferme ;
@@ -166,6 +173,83 @@ try {
       check(sent, `${label} : un message part pendant l'appel`);
       check((await page.$('[data-call-bubble]')) !== null, `${label} : l'appel continue après l'envoi`);
       await capture(page, `bulle-fil-${slug}`);
+
+      // ------------------------------------------------ 4 bis. trois tailles, jamais sur l'en-tête ni le champ d'écriture (#8145)
+      const tier = () => page.getAttribute('[data-call-bubble]', 'data-call-bubble-size');
+      const settle = () => page.waitForTimeout(260);
+      const clearance = () =>
+        page.evaluate(() => {
+          const box = (selector) => document.querySelector(selector)?.getBoundingClientRect() ?? null;
+          const bubble = box('[data-call-bubble]');
+          const header = box('.thread-header');
+          const composer = box('[data-composer]');
+          if (bubble === null || header === null || composer === null) return null;
+          return { header: Math.round(bubble.top - header.bottom), composer: Math.round(composer.top - bubble.bottom), inside: bubble.left >= 0 && bubble.right <= window.innerWidth, width: Math.round(bubble.width) };
+        });
+      const widths = [];
+      await page.focus('[data-call-bubble-body]');
+      for (const press of [null, '+', '+']) {
+        if (press !== null) await page.keyboard.press(press);
+        await settle();
+        const at = await tier();
+        for (const [end, key] of [
+          ['haut', 'ArrowUp'],
+          ['bas', 'ArrowDown'],
+        ]) {
+          for (let step = 0; step < 10; step += 1) await page.keyboard.press(key);
+          await settle();
+          const room = await clearance();
+          check(room !== null && room.header >= 0 && room.composer >= 0 && room.inside, `${label} : bulle ${at}, en ${end} — ni sur l'en-tête ni sur le champ d'écriture, entière (${JSON.stringify(room)})`);
+          if (end === 'haut') widths.push(room?.width ?? 0);
+        }
+      }
+      check(new Set(widths).size === 3 && widths[0] < widths[1] && widths[1] < widths[2], `${label} : + fait grandir la bulle par trois tailles (${JSON.stringify(widths)})`);
+      check((await tier()) === 'large' && (await stored(page, BUBBLE_KEY))?.tier === 'large', `${label} : la taille est retenue avec la place`);
+      await page.keyboard.press('-');
+      await page.keyboard.press('-');
+      check((await tier()) === 'small', `${label} : − la ramène à la plus petite`);
+      const body = await page.locator('[data-call-bubble-body]').boundingBox();
+      if (body !== null) await page.mouse.move(body.x + body.width / 2, body.y + body.height / 2);
+      await page.keyboard.down('Control');
+      await page.mouse.wheel(0, -120);
+      await page.keyboard.up('Control');
+      check(await appears(page, '[data-call-bubble-size="medium"]', 2000), `${label} : Ctrl + molette vers le haut agrandit la bulle`);
+      await page.keyboard.down('Control');
+      await page.mouse.wheel(0, 120);
+      await page.keyboard.up('Control');
+      check(await appears(page, '[data-call-bubble-size="small"]', 2000), `${label} : Ctrl + molette vers le bas la rapetisse`);
+      const pinchBox = await page.locator('[data-call-bubble-body]').boundingBox();
+      if (pinchBox !== null) {
+        const cx = pinchBox.x + pinchBox.width / 2;
+        const cy = pinchBox.y + pinchBox.height / 2;
+        const cdp = await context.newCDPSession(page);
+        const touch = (type, spread) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [ { x: cx - spread, y: cy, id: 0 }, { x: cx + spread, y: cy, id: 1 } ] });
+        await touch('touchStart', 20);
+        for (const spread of [26, 32, 38, 44]) await touch('touchMove', spread);
+        await touch('touchEnd', 0);
+        await cdp.detach();
+      }
+      check(await appears(page, '[data-call-bubble-size="large"]', 2000), `${label} : écarter deux doigts sur la bulle l'agrandit (${await tier()})`);
+      check((await page.$('[data-call-screen]')) === null, `${label} : changer la taille ne rouvre pas l'écran d'appel`);
+      await page.focus('[data-call-bubble-body]');
+      await page.keyboard.press('-');
+      await page.keyboard.press('-');
+      await settle();
+
+      // ------------------------------------------------ 4 ter. la sortie audio depuis la bulle (#9097)
+      const sinks = await page.evaluate(() => 'setSinkId' in HTMLMediaElement.prototype);
+      const output = await page.$('[data-call-bubble-control="output"]');
+      check(sinks === (output !== null), `${label} : « Choisir les périphériques » est dans la bulle là où la sortie se choisit (setSinkId : ${sinks})`);
+      if (output !== null) {
+        await output.click();
+        const outputSheet = await appears(page, '[data-call-devices] [role="dialog"]');
+        const speakers = await page.waitForSelector('[data-call-devices-group="speaker"]', { timeout: 3000 }).then(() => true, () => false);
+        check(outputSheet && speakers, `${label} : depuis la bulle, la feuille des périphériques s'ouvre sur la sortie audio`);
+        await capture(page, `bulle-sortie-${slug}`);
+        await page.keyboard.press('Escape');
+        const outputClosed = await page.waitForSelector('[data-call-devices]', { state: 'detached', timeout: 3000 }).then(() => true, () => false);
+        check(outputClosed && (await page.$('[data-call-bubble]')) !== null && (await page.$('[data-call-screen]')) === null, `${label} : Échap ferme la feuille, l'appel reste en bulle`);
+      }
 
       // ------------------------------------------------ 5. déplacer la bulle
       const box = await page.locator('[data-call-bubble-body]').boundingBox();

@@ -9,6 +9,7 @@ import type {
   PostComment as SharedPostComment,
 } from '@meeshy/shared/types/post';
 import * as postsEndpoints from '@meeshy/shared/api/endpoints/posts';
+import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 
 import { shiftedCount, withCommentCount } from '@/lib/feed/interactions';
 
@@ -18,6 +19,7 @@ import { newClientMessageId } from './client-message-id';
 import type { DataSource } from './config';
 import type { FeedAuthor, FeedMedia } from './feed-pages';
 import type { ApiResult, HttpTransport } from './http';
+import type { PostMediaUploadResult } from './post-media-upload';
 import { outcomeOf } from './outcome';
 import { postQueryKey } from './publication-detail';
 import { STORY_FEED_QUERY_KEY, storyPostQueryKey, type StoryFeedPost } from './stories';
@@ -44,9 +46,10 @@ import { mergedTranslations, nonEmpty, translationDeliveryOf } from './translati
  *  - `POST posts.byPostIdComments`
  *    (`:179`, `requiredAuth` + `registeredUser` obligatoire ⇒ 401 anonyme).
  *    Corps `CreateCommentSchema` (`routes/posts/types.ts:428`) :
- *    `content` (≤ 2000, peut être vide SI un média est joint — ce port
- *    n'envoie pas de média, donc il exige du texte), `parentId?`,
- *    `effectFlags?`, `originalLanguage?`, `attachmentIds?`.
+ *    `content` (≤ 2000, peut être vide SI un média ou un sticker est joint
+ *    — ce port n'envoie de média que l'image d'un sticker, donc il exige du
+ *    texte OU un sticker), `parentId?`, `effectFlags?`, `originalLanguage?`,
+ *    `attachmentIds?`, `sticker?` (#9080).
  *    Refus propres à cette route : 403 `COMMENTS_DISABLED` (réglage auteur,
  *    `:214-216`), 404 `POST_NOT_FOUND` (hors audience d'INTERACTION — amis
  *    stricts, plus étroite que la lecture : « un contact DM non-ami peut lire
@@ -88,6 +91,10 @@ export type PostComment = {
    * jamais lue telle quelle. Elle couvre le contenu ET la légende du média. */
   readonly metadata?: unknown;
   readonly trackingLinks?: unknown;
+  /** Le sticker (#9080) — la forme `MessageSticker` d'un message, HISSÉE de
+   * `metadata.sticker` par la passerelle (REST et socket) ; son image est le
+   * premier `media`. Décodé par `commentStickerOf`, jamais lu tel quel. */
+  readonly sticker?: unknown;
   /**
    * **LOCAL SEULEMENT** — vrai tant que la passerelle n'a pas confirmé. Aucun
    * champ de ce nom ne voyage sur le fil : c'est la marque qui permet au rendu
@@ -331,6 +338,36 @@ export const COMMENT_MAX_LENGTH = 2000;
 const mutationIdOf = (tempId: string): string => tempId.replace(/^cid_/, 'cmid_');
 
 /**
+ * **LE STICKER QU'UN COMMENTAIRE EMPORTE** (#9080) — la MÊME forme que celui
+ * d'un message (`composer.tsx`, `sendSticker`) : le descripteur
+ * `MessageSticker`, et l'image rendue DÉJÀ téléversée en `PostMedia`
+ * (`uploadPostMedia`, contexte `comment`). Sans `picture`, seul le
+ * descripteur part (un sticker emoji ou à gabarit) — la passerelle l'admet
+ * comme pour un message.
+ */
+export type CommentStickerSend = {
+  readonly sticker: MessageSticker;
+  readonly picture?: PostMediaUploadResult;
+};
+
+/** Ce que le sticker ajoute au CORPS envoyé — `sticker` et `attachmentIds`. */
+const stickerBodyOf = (send: CommentStickerSend | undefined): Readonly<Record<string, unknown>> =>
+  send === undefined
+    ? {}
+    : { sticker: send.sticker, ...(send.picture === undefined ? {} : { attachmentIds: [send.picture.postMediaId] }) };
+
+/** Ce que le sticker ajoute à la rangée PROVISOIRE — la forme que la passerelle servira. */
+const stickerRowOf = (send: CommentStickerSend | undefined): Pick<PostComment, 'sticker' | 'media'> =>
+  send === undefined
+    ? {}
+    : {
+        sticker: send.sticker,
+        ...(send.picture === undefined
+          ? {}
+          : { media: [{ id: send.picture.postMediaId, fileUrl: send.picture.fileUrl, mimeType: send.picture.mimeType }] }),
+      };
+
+/**
  * L'ENVOI — optimiste, puis l'issue, exactement la forme de
  * `performPostGesture` :
  *
@@ -351,11 +388,15 @@ export async function performComment(params: {
   /** LA RACINE à laquelle cette réponse se rattache (#8583) — absent ⇒ un
    * commentaire de premier niveau. */
   readonly parentId?: string | undefined;
+  /** Un sticker (#9080) — il suffit à rendre le commentaire non vide. */
+  readonly sticker?: CommentStickerSend | undefined;
   readonly deps: CommentDeps & { readonly queryClient: QueryClient };
 }): Promise<CommentResult> {
   const { postId, author, deps } = params;
   const content = params.content.trim();
-  if (content === '' || content.length > COMMENT_MAX_LENGTH) return { ok: false, message: COMMENT_EMPTY_MESSAGE };
+  if ((content === '' && params.sticker === undefined) || content.length > COMMENT_MAX_LENGTH) {
+    return { ok: false, message: COMMENT_EMPTY_MESSAGE };
+  }
   const parentId = typeof params.parentId === 'string' && params.parentId !== '' ? params.parentId : undefined;
   if (parentId !== undefined) return performReply({ ...params, content, parentId });
 
@@ -367,6 +408,7 @@ export async function performComment(params: {
     author,
     pending: true,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...stickerRowOf(params.sticker),
   };
 
   const key = commentsQueryKey(postId);
@@ -376,6 +418,7 @@ export async function performComment(params: {
   const body = {
     content,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...stickerBodyOf(params.sticker),
   };
 
   const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId) }).catch(() => null);
@@ -443,6 +486,7 @@ async function performReply(params: {
   readonly parentId: string;
   readonly author: FeedAuthor;
   readonly originalLanguage?: string | undefined;
+  readonly sticker?: CommentStickerSend | undefined;
   readonly deps: CommentDeps & { readonly queryClient: QueryClient };
 }): Promise<CommentResult> {
   const { postId, content, parentId, author, deps } = params;
@@ -455,6 +499,7 @@ async function performReply(params: {
     parentId,
     pending: true,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...stickerRowOf(params.sticker),
   };
 
   const key = commentRepliesQueryKey(postId, parentId);
@@ -467,6 +512,7 @@ async function performReply(params: {
     content,
     parentId,
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
+    ...stickerBodyOf(params.sticker),
   };
   const result = await sendComment(deps, { postId, body, clientMutationId: mutationIdOf(tempId) }).catch(() => null);
 

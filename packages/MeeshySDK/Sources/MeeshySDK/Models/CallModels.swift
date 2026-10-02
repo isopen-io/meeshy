@@ -278,15 +278,21 @@ public struct ActiveCallParticipantUser: Codable, Sendable, Equatable {
 public struct ActiveCallParticipant: Codable, Sendable, Equatable {
     public let userId: String
     public let user: ActiveCallParticipantUser?
+    /// The gateway keeps a departed member's row (`leftAt` set) in the session.
+    public let leftAt: String?
 
-    public init(userId: String, user: ActiveCallParticipantUser? = nil) {
+    public var hasLeft: Bool { leftAt != nil }
+
+    public init(userId: String, user: ActiveCallParticipantUser? = nil, leftAt: String? = nil) {
         self.userId = userId
         self.user = user
+        self.leftAt = leftAt
     }
 
     private enum CodingKeys: String, CodingKey {
         case userId
         case user
+        case leftAt
     }
 
     /// Resilient decode: `userId` is the gateway's top-level participant key
@@ -300,6 +306,7 @@ public struct ActiveCallParticipant: Codable, Sendable, Equatable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let nestedUser = try container.decodeIfPresent(ActiveCallParticipantUser.self, forKey: .user)
         self.user = nestedUser
+        self.leftAt = try container.decodeIfPresent(String.self, forKey: .leftAt)
         if let topLevel = try container.decodeIfPresent(String.self, forKey: .userId), !topLevel.isEmpty {
             self.userId = topLevel
         } else if let fallback = nestedUser?.id {

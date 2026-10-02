@@ -406,6 +406,19 @@ describe('appel de groupe', () => {
     expect(h.call()?.members['u-a']).toBeUndefined();
     expect(h.call()?.phase.kind).toBe('connected');
   });
+
+  test('un « bye » en bande dans un groupe retire son seul émetteur, l’appel continue (#9085)', async () => {
+    const h = harness();
+    await h.engine.start({ ...DIRECT, isGroup: true });
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-2', userId: 'u-a', username: 'a' } });
+    h.engine.handle(SERVER_EVENTS.CALL_PARTICIPANT_JOINED, { callId: 'call-1', participant: { id: 'p-3', userId: 'u-b', username: 'b' } });
+    for (const link of h.links) h.linkState(link, 'connected');
+    const channel = { readyState: 'open', send: () => undefined, onmessage: null as ((event: { data: string }) => void) | null, onclose: null };
+    h.links[0]?.deps.onChannel?.(channel as unknown as RTCDataChannel);
+    channel.onmessage?.({ data: '{"type":"bye","reason":"completed"}' });
+    expect(h.call()?.phase.kind).toBe('connected');
+    expect(Object.keys(h.call()?.members ?? {})).toEqual(['u-b']);
+  });
 });
 
 describe('partage d’écran (#8063)', () => {

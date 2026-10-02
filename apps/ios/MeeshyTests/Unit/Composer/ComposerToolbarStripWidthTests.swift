@@ -64,3 +64,31 @@ final class ComposerToolbarStripWidthTests: XCTestCase {
                       "topToolbar doit être posé dans ComposerToolbarStrip (#7997)")
     }
 }
+
+/// #9082 — directive porteur 2026-10-02 : la caméra se pose à l'angle droit du
+/// verre, juste avant le ⌄ ; le sticker prend la place de l'indicateur de
+/// tonalité. Chaque porte n'existe que si l'hôte sait l'ouvrir (loi 4).
+final class ComposerGlassDoorsTests: XCTestCase {
+
+    func test_trailing_cameraSitsJustBeforeTheFold() {
+        XCTAssertEqual(ComposerGlassDoors.trailing(offersCamera: true, offersFold: true), [.camera, .fold])
+    }
+
+    func test_trailing_withoutCameraHost_keepsOnlyTheFold() {
+        XCTAssertEqual(ComposerGlassDoors.trailing(offersCamera: false, offersFold: true), [.fold])
+        XCTAssertEqual(ComposerGlassDoors.trailing(offersCamera: true, offersFold: false), [.camera])
+        XCTAssertEqual(ComposerGlassDoors.trailing(offersCamera: false, offersFold: false), [])
+    }
+
+    func test_toolbar_stickerReplacesTheMoodIndicator() throws {
+        let toolbar = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Main/Components/UniversalComposerBar+Toolbar.swift"),
+            encoding: .utf8)
+        XCTAssertFalse(toolbar.contains("textAnalyzer.sentiment"), "L'indicateur d'humeur quitte la barre d'outils.")
+        XCTAssertTrue(toolbar.contains("onRequestStickerPicker"), "Le sticker ouvre le sélecteur de stickers.")
+        XCTAssertTrue(toolbar.contains("ComposerGlassDoors.trailing("), "L'angle droit consulte la loi.")
+    }
+}

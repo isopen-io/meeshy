@@ -35,7 +35,7 @@ export function matchesMongoWhere(row: MongoDocument, where: MongoDocument | und
       return (condition as MongoDocument[]).every((branch) => matchesMongoWhere(row, branch));
     }
     if (key === 'NOT') {
-      return matchesNot(row, condition as MongoDocument);
+      return matchesNot(row, condition as MongoDocument | MongoDocument[]);
     }
 
     // Le coeur de ce double : `{ champ: null }` exige la clé PRÉSENTE et nulle.
@@ -50,29 +50,29 @@ export function matchesMongoWhere(row: MongoDocument, where: MongoDocument | und
 }
 
 /**
- * `NOT` négocie en général toute l'algèbre booléenne (`!matchesMongoWhere`) —
- * sauf pour `has`, où c'est FAUX contre la production. Le connecteur MongoDB
- * de Prisma enveloppe un filtre de tableau (`{ field: { has } }`) d'un test
- * d'existence qu'il n'ajoute qu'à l'intérieur du filtre, jamais à la clause
- * `NOT` qui l'englobe — si bien que `NOT: { field: { has } }` REQUIERT le
- * champ, il ne se contente pas de son absence comme le ferait une négation
- * honnête (`!(exists && contains)` inclurait un champ absent). Mesuré en
- * production sur `blockedUserIds` (#6452) : 206 comptes actifs sur 246,
- * n'ayant jamais écrit cette colonne, étaient exclus par ce `NOT` — pas
- * inclus, comme l'algèbre générale l'aurait prédit.
+ * **Toute négation exige la clé PRÉSENTE** — `NOT`, `not`, `notIn`, sur un
+ * scalaire comme sur une liste. Mesuré contre `mongo:8` avec le vrai client
+ * Prisma (#8309, 2026-10-02) : `NOT: { userId: X }`, `{ userId: { not: X } }`,
+ * `{ userId: { notIn: [X] } }`, `NOT: { OR: [{ userId: X }] }` écartent tous le
+ * document SANS `userId` et gardent celui où il vaut `null` ;
+ * `NOT: { lastActivityAt: { gte } }` écarte la conversation sans la clé ;
+ * `NOT: { visibilityUserIds: { has } }` le post sans la liste. Le connecteur
+ * reproduit la logique trivaluée de SQL, où l'absence est l'inconnu : sa
+ * négation n'est pas vraie. Pour lire « absent » dans une négation, il faut une
+ * branche positive (`{ champ: { isSet: false } }`, ou `has` puis `notIn` sur
+ * une liste — `isSet` n'existe pas sur une liste scalaire).
  */
-function matchesNot(row: MongoDocument, condition: MongoDocument): boolean {
-  const entries = Object.entries(condition);
-  if (entries.length === 1) {
-    const [field, filter] = entries[0];
-    if (typeof filter === 'object' && filter !== null && !(filter instanceof Date)) {
-      const filterEntries = Object.entries(filter as MongoDocument);
-      if (filterEntries.length === 1 && filterEntries[0][0] === 'has') {
-        return has(row, field) && !matchesFieldFilter(row, field, filter as MongoDocument);
-      }
-    }
-  }
-  return !matchesMongoWhere(row, condition);
+function matchesNot(row: MongoDocument, condition: MongoDocument | MongoDocument[]): boolean {
+  const clauses = Array.isArray(condition) ? condition : [condition];
+  return clauses.every((clause) => fieldsOf(clause).every((field) => has(row, field)) && !matchesMongoWhere(row, clause));
+}
+
+function fieldsOf(clause: MongoDocument): string[] {
+  return Object.entries(clause).flatMap(([key, value]) =>
+    key === 'AND' || key === 'OR' || key === 'NOT'
+      ? (Array.isArray(value) ? value : [value]).flatMap((branch) => fieldsOf(branch as MongoDocument))
+      : [key]
+  );
 }
 
 function matchesFieldFilter(row: MongoDocument, key: string, filter: MongoDocument): boolean {
@@ -84,20 +84,18 @@ function matchesFieldFilter(row: MongoDocument, key: string, filter: MongoDocume
     }
     if (operator === 'not') {
       if (operand === null) return has(row, key) && row[key] !== null;
-      return !has(row, key) || !sameValue(row[key], operand);
+      return has(row, key) && !sameValue(row[key], operand);
     }
-    if (operator === 'gt' || operator === 'lt') {
+    if (operator === 'gt' || operator === 'lt' || operator === 'gte' || operator === 'lte') {
       const value = row[key];
       if (!(value instanceof Date) || !(operand instanceof Date)) return false;
-      return operator === 'gt'
-        ? value.getTime() > operand.getTime()
-        : value.getTime() < operand.getTime();
+      return compareDates[operator](value.getTime(), operand.getTime());
     }
     if (operator === 'in') {
       return has(row, key) && (operand as unknown[]).some((candidate) => sameValue(row[key], candidate));
     }
     if (operator === 'notIn') {
-      return !has(row, key) || !(operand as unknown[]).some((candidate) => sameValue(row[key], candidate));
+      return has(row, key) && !(operand as unknown[]).some((candidate) => sameValue(row[key], candidate));
     }
     if (operator === 'has') {
       // Un tableau ABSENT ne « contient » rien — c'est la même règle que le
@@ -107,6 +105,13 @@ function matchesFieldFilter(row: MongoDocument, key: string, filter: MongoDocume
     throw new Error(`double Mongo: opérateur non supporté « ${key}.${operator} »`);
   });
 }
+
+const compareDates = {
+  gt: (a: number, b: number) => a > b,
+  gte: (a: number, b: number) => a >= b,
+  lt: (a: number, b: number) => a < b,
+  lte: (a: number, b: number) => a <= b,
+} as const;
 
 function sameValue(left: unknown, right: unknown): boolean {
   if (left instanceof Date && right instanceof Date) return left.getTime() === right.getTime();

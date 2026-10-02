@@ -78,10 +78,10 @@ export class MessageProcessor {
   }
 
   /**
-   * Traite les liens du contenu selon les règles suivantes :
-   * - Règle 1 : Markdown [texte](url) → lien normal (pas de tracking)
-   * - Règle 2 : URLs brutes → aucun tracking automatique (cf. `buildRawUrlTrackingLinks`)
-   * - Règle 3 : [[url]] → force le tracking → m+token
+   * Traite les liens du contenu selon les règles suivantes (#9093) :
+   * - Règle 1 : Markdown [texte](url) → contenu intact, suivi par la carte (cf. `buildRawUrlTrackingLinks`)
+   * - Règle 2 : URLs brutes → contenu intact, suivies par la carte (cf. `buildRawUrlTrackingLinks`)
+   * - Règle 3 : [[url]] → contenu intact, AUCUN suivi
    * - Règle 4 : <url> → force le tracking → m+token
    *
    * Le corps de ces quatre étapes vivait ICI, en second exemplaire complet de
