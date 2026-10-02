@@ -1,16 +1,14 @@
-/**
- * LES PACKS DE STICKERS (#9141) — tranche du catalogue `catalog-pt.ts` :
- * onglets de pack, boutique, proposition d'un pack par un tiers et ses refus
- * motivés. Le catalogue la RÉPAND.
- */
+import type { StickerPacksCatalog } from '@/lib/i18n-sticker-packs-catalog';
+
+/** LE CATALOGUE DES PACKS DE STICKERS (#9141), langue `pt` — mêmes clés que le français. */
 const ptStickerPacks = {
   'stickerPacks.by': 'Por {author}',
   'stickerPacks.cancel': 'Cancelar',
   'stickerPacks.send': 'Enviar',
   'stickerPacks.count': '{count} figurinhas',
+  'stickerPacks.tab.shop': 'Loja',
   'stickerPacks.install': 'Instalar',
   'stickerPacks.uninstall': 'Remover',
-  'stickerPacks.tab.shop': 'Loja',
   'stickerPacks.shop.hint': 'Instale os pacotes que quer ver nas suas figurinhas e remova os outros. As figurinhas já enviadas continuam legíveis.',
   'stickerPacks.error.install': 'Não foi possível alterar o pacote — tente novamente',
   'stickerPacks.error.load': 'Não foi possível carregar os pacotes',
@@ -55,6 +53,6 @@ const ptStickerPacks = {
   'stickerPacks.problem.longestOverflows': 'Um texto de comprimento máximo transbordaria: aumente a área ou reduza o comprimento',
   'stickerPacks.problem.count': 'Um pacote tem entre 3 e 120 figurinhas',
   'stickerPacks.problem.packField': 'Dê ao pacote um nome, uma descrição e uma assinatura',
-};
+} satisfies StickerPacksCatalog;
 
 export default ptStickerPacks;

@@ -37,7 +37,6 @@ import itContactDiscovery from './catalog-it-contact-discovery';
 import itDownload from './catalog-it-download';
 import itPhonePrompt from './catalog-it-phone-prompt';
 import itUserProfile from './catalog-it-user-profile';
-import itStickerPacks from './catalog-it-sticker-packs';
 
 const it = {
   'announce.messageSent': 'Messaggio inviato',
@@ -1126,7 +1125,6 @@ const it = {
   ...itCommentRow,
   ...itContactDiscovery,
   ...itUserProfile,
-  ...itStickerPacks,
 } satisfies InterfaceCatalog;
 
 export default it;

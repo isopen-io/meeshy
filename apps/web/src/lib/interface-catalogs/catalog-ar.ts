@@ -37,7 +37,6 @@ import arContactDiscovery from './catalog-ar-contact-discovery';
 import arDownload from './catalog-ar-download';
 import arPhonePrompt from './catalog-ar-phone-prompt';
 import arUserProfile from './catalog-ar-user-profile';
-import arStickerPacks from './catalog-ar-sticker-packs';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -1123,7 +1122,6 @@ const ar = {
   ...arCommentRow,
   ...arContactDiscovery,
   ...arUserProfile,
-  ...arStickerPacks,
 } satisfies InterfaceCatalog;
 
 export default ar;

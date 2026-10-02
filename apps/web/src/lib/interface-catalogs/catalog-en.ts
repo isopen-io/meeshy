@@ -37,7 +37,6 @@ import enContactDiscovery from './catalog-en-contact-discovery';
 import enDownload from './catalog-en-download';
 import enPhonePrompt from './catalog-en-phone-prompt';
 import enUserProfile from './catalog-en-user-profile';
-import enStickerPacks from './catalog-en-sticker-packs';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -1126,7 +1125,6 @@ const en = {
   ...enCommentRow,
   ...enContactDiscovery,
   ...enUserProfile,
-  ...enStickerPacks,
 } satisfies InterfaceCatalog;
 
 export default en;

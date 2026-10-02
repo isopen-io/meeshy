@@ -1,16 +1,17 @@
 /**
- * LES PACKS DE STICKERS (#9141) — tranche du catalogue `catalog-fr.ts` :
- * onglets de pack, boutique, proposition d'un pack par un tiers et ses refus
- * motivés. Le catalogue la RÉPAND.
+ * LE CATALOGUE DES PACKS DE STICKERS, FRANÇAIS (#9141) — la SOURCE des clés
+ * `stickerPacks.*` : boutique, onglet d'un pack de tiers, proposition d'un
+ * pack et ses refus motivés. Chargé avec la boutique ou l'onglet d'un pack
+ * (`i18n-sticker-packs-catalog.ts`), jamais au démarrage.
  */
 const frStickerPacks = {
   'stickerPacks.by': 'Par {author}',
   'stickerPacks.cancel': 'Annuler',
   'stickerPacks.send': 'Envoyer',
   'stickerPacks.count': '{count} stickers',
+  'stickerPacks.tab.shop': 'Boutique',
   'stickerPacks.install': 'Installer',
   'stickerPacks.uninstall': 'Retirer',
-  'stickerPacks.tab.shop': 'Boutique',
   'stickerPacks.shop.hint': 'Installez les packs que vous voulez retrouver dans vos stickers, retirez les autres. Les stickers déjà envoyés restent lisibles.',
   'stickerPacks.error.install': 'Le pack n’a pas pu être modifié — réessayez',
   'stickerPacks.error.load': 'Les packs n’ont pas pu être chargés',

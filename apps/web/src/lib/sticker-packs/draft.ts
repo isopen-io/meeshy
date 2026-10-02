@@ -9,7 +9,7 @@ import type {
   StickerTextZone,
 } from '@meeshy/shared/types/sticker-pack';
 
-import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import type { PlainStickerPacksKey } from '@/lib/i18n-sticker-packs-catalog';
 
 /**
  * **LE BROUILLON D'UN PACK** (#9141) — ce que le tiers remplit dans l'éditeur,
@@ -128,7 +128,7 @@ export const draftProblems = (draft: PackDraft): readonly StickerPackProblem[] =
   return result.ok ? [] : result.problems;
 };
 
-const PROBLEM_KEYS: Readonly<Record<StickerPackProblemCode, InterfaceCatalogKey>> = {
+const PROBLEM_KEYS: Readonly<Record<StickerPackProblemCode, PlainStickerPacksKey>> = {
   invalid: 'stickerPacks.problem.invalid',
   'reserved-slug': 'stickerPacks.problem.reservedSlug',
   'duplicate-key': 'stickerPacks.problem.duplicate',
@@ -144,7 +144,7 @@ const PROBLEM_KEYS: Readonly<Record<StickerPackProblemCode, InterfaceCatalogKey>
   'longest-overflows': 'stickerPacks.problem.longestOverflows',
 };
 
-export const problemKey = (problem: StickerPackProblem): InterfaceCatalogKey => {
+export const problemKey = (problem: StickerPackProblem): PlainStickerPacksKey => {
   if (problem.code !== 'invalid') return PROBLEM_KEYS[problem.code];
   if (problem.path === 'items') return 'stickerPacks.problem.count';
   if (['name', 'description', 'author', 'slug'].includes(problem.path)) return 'stickerPacks.problem.packField';

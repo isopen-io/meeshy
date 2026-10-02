@@ -6,8 +6,8 @@ import type { StickerPackDetail, StickerTextZone } from '@meeshy/shared/types/st
 
 import { apiDeps } from '@/lib/api/deps';
 import { submitPack } from '@/lib/api/sticker-packs';
-import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
+import type { PlainStickerPacksKey } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { EMPTY_DRAFT, boxFromDrag, defaultZone, draftItemOf, draftProblems, manifestOf, problemItem, problemKey } from '@/lib/sticker-packs/draft';
 import type { DraftItem, PackDraft } from '@/lib/sticker-packs/draft';
@@ -25,7 +25,7 @@ import { renderInstantSvg } from '@/lib/sticker-packs/render';
  * qu'elle refuserait, au sticker près, avant tout envoi.
  */
 
-const CODE_KEYS: Readonly<Record<string, InterfaceCatalogKey>> = {
+const CODE_KEYS: Readonly<Record<string, PlainStickerPacksKey>> = {
   STICKER_PACK_SLUG_TAKEN: 'stickerPacks.submit.slugTaken',
   STICKER_PACK_TOO_MANY_PENDING: 'stickerPacks.submit.tooMany',
   STICKER_PACK_ASSET_REFUSED: 'stickerPacks.submit.assetRefused',
@@ -46,7 +46,7 @@ export function PackSubmitEditor({
 }) {
   const [draft, setDraft] = useState<PackDraft>(EMPTY_DRAFT);
   const [busy, setBusy] = useState(false);
-  const [refusal, setRefusal] = useState<InterfaceCatalogKey | null>(null);
+  const [refusal, setRefusal] = useState<PlainStickerPacksKey | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const counter = useRef(0);
 
@@ -86,20 +86,20 @@ export function PackSubmitEditor({
     <div data-pack-submit className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-          {translate(language, 'stickerPacks.submit.title')}
+          {translateStickerPacks(language, 'stickerPacks.submit.title')}
         </h3>
         <button type="button" data-pack-submit-back className="min-h-11 rounded-full px-3 text-body" style={{ color: 'var(--color-ios-ink)' }} onClick={onClose}>
-          {translate(language, 'stickerPacks.submit.back')}
+          {translateStickerPacks(language, 'stickerPacks.submit.back')}
         </button>
       </div>
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'stickerPacks.submit.hint')}
+        {translateStickerPacks(language, 'stickerPacks.submit.hint')}
       </p>
 
-      <Field label={translate(language, 'stickerPacks.submit.name')}>
+      <Field label={translateStickerPacks(language, 'stickerPacks.submit.name')}>
         <input data-pack-name type="text" maxLength={STICKER_PACK_LIMITS.maxNameLength} value={draft.name} onInput={(e) => patch({ name: e.currentTarget.value })} className={INPUT} style={INPUT_STYLE} />
       </Field>
-      <Field label={translate(language, 'stickerPacks.submit.description')}>
+      <Field label={translateStickerPacks(language, 'stickerPacks.submit.description')}>
         <textarea
           data-pack-description
           rows={2}
@@ -110,7 +110,7 @@ export function PackSubmitEditor({
           style={INPUT_STYLE}
         />
       </Field>
-      <Field label={translate(language, 'stickerPacks.submit.author')}>
+      <Field label={translateStickerPacks(language, 'stickerPacks.submit.author')}>
         <input data-pack-author type="text" maxLength={STICKER_PACK_LIMITS.maxAuthorLength} value={draft.author} onInput={(e) => patch({ author: e.currentTarget.value })} className={INPUT} style={INPUT_STYLE} />
       </Field>
 
@@ -121,7 +121,7 @@ export function PackSubmitEditor({
         className="min-h-11 self-start rounded-full px-4 text-body"
         style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 14%, transparent)', color: 'var(--color-ios-ink)' }}
       >
-        {translate(language, 'stickerPacks.submit.add')}
+        {translateStickerPacks(language, 'stickerPacks.submit.add')}
       </button>
       <input
         ref={fileInput}
@@ -130,7 +130,7 @@ export function PackSubmitEditor({
         accept="image/png,image/webp,image/gif,image/jpeg"
         multiple
         hidden
-        aria-label={translate(language, 'stickerPacks.submit.add')}
+        aria-label={translateStickerPacks(language, 'stickerPacks.submit.add')}
         onChange={(event) => {
           const files = Array.from(event.currentTarget.files ?? []);
           event.currentTarget.value = '';
@@ -154,7 +154,7 @@ export function PackSubmitEditor({
 
       <ProblemList keys={packProblems} language={language} />
       <p className="text-caption" role="status" aria-live="polite" style={{ color: 'var(--ios-error)' }}>
-        {refusal !== null ? translate(language, refusal) : ''}
+        {refusal !== null ? translateStickerPacks(language, refusal) : ''}
       </p>
       <button
         type="button"
@@ -164,7 +164,7 @@ export function PackSubmitEditor({
         className="min-h-11 self-end rounded-full px-5 text-body font-semibold disabled:opacity-50"
         style={{ backgroundColor: 'var(--accent)', color: 'var(--color-ios-on-brand)' }}
       >
-        {translate(language, busy ? 'stickerPacks.submit.sending' : 'stickerPacks.submit.send')}
+        {translateStickerPacks(language, busy ? 'stickerPacks.submit.sending' : 'stickerPacks.submit.send')}
       </button>
     </div>
   );
@@ -194,12 +194,12 @@ function Field({ label, children }: { readonly label: string; readonly children:
   );
 }
 
-function ProblemList({ keys, language }: { readonly keys: readonly InterfaceCatalogKey[]; readonly language: InterfaceLanguage }) {
+function ProblemList({ keys, language }: { readonly keys: readonly PlainStickerPacksKey[]; readonly language: InterfaceLanguage }) {
   if (keys.length === 0) return null;
   return (
     <ul data-pack-problems className="flex flex-col gap-0.5 text-caption" style={{ color: 'var(--ios-error)' }}>
       {keys.map((key) => (
-        <li key={key}>{translate(language, key)}</li>
+        <li key={key}>{translateStickerPacks(language, key)}</li>
       ))}
     </ul>
   );
@@ -216,7 +216,7 @@ function DraftItemRow({
   readonly item: DraftItem;
   readonly url: string;
   readonly language: InterfaceLanguage;
-  readonly problems: readonly InterfaceCatalogKey[];
+  readonly problems: readonly PlainStickerPacksKey[];
   readonly onChange: (update: Partial<DraftItem>) => void;
   readonly onRemove: () => void;
 }) {
@@ -237,7 +237,7 @@ function DraftItemRow({
           <div className="flex gap-2">
             <input
               data-draft-title
-              aria-label={translate(language, 'stickerPacks.submit.itemTitle')}
+              aria-label={translateStickerPacks(language, 'stickerPacks.submit.itemTitle')}
               type="text"
               maxLength={STICKER_PACK_LIMITS.maxTitleLength}
               value={item.title}
@@ -247,7 +247,7 @@ function DraftItemRow({
             />
             <input
               data-draft-emoji
-              aria-label={translate(language, 'stickerPacks.submit.emoji')}
+              aria-label={translateStickerPacks(language, 'stickerPacks.submit.emoji')}
               type="text"
               maxLength={8}
               value={item.emoji}
@@ -267,13 +267,13 @@ function DraftItemRow({
                   onChange({ instant, zones: instant ? (item.zones.length > 0 ? item.zones : [defaultZone(0)]) : [] });
                 }}
               />
-              {translate(language, 'stickerPacks.submit.instant')}
+              {translateStickerPacks(language, 'stickerPacks.submit.instant')}
             </label>
             <span className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
-              {translate(language, item.instant ? 'stickerPacks.kind.instant' : item.animated ? 'stickerPacks.kind.cinematic' : 'stickerPacks.kind.static')}
+              {translateStickerPacks(language, item.instant ? 'stickerPacks.kind.instant' : item.animated ? 'stickerPacks.kind.cinematic' : 'stickerPacks.kind.static')}
             </span>
             <button type="button" data-draft-remove className="min-h-11 rounded-full px-3 text-caption" style={{ color: 'var(--ios-error)' }} onClick={onRemove}>
-              {translate(language, 'stickerPacks.submit.removeItem')}
+              {translateStickerPacks(language, 'stickerPacks.submit.removeItem')}
             </button>
           </div>
         </div>
@@ -281,10 +281,10 @@ function DraftItemRow({
       {item.instant && zone !== undefined ? (
         <div className="flex flex-col gap-2">
           <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-            {translate(language, 'stickerPacks.submit.zoneHint')}
+            {translateStickerPacks(language, 'stickerPacks.submit.zoneHint')}
           </p>
           <div className="flex gap-2">
-            <Field label={translate(language, 'stickerPacks.submit.zoneDefault')}>
+            <Field label={translateStickerPacks(language, 'stickerPacks.submit.zoneDefault')}>
               <input
                 data-zone-default
                 type="text"
@@ -295,7 +295,7 @@ function DraftItemRow({
                 style={INPUT_STYLE}
               />
             </Field>
-            <Field label={translate(language, 'stickerPacks.submit.zoneLength')}>
+            <Field label={translateStickerPacks(language, 'stickerPacks.submit.zoneLength')}>
               <input
                 data-zone-length
                 type="number"

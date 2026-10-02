@@ -9,6 +9,7 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { INSTALLED_PACKS_QUERY_KEY, PACK_CATALOGUE_QUERY_KEY, resetFixturePacksForTests } from '@/lib/api/sticker-packs';
 import { STICKERS_QUERY_KEY, resetFixtureStickersForTests } from '@/lib/api/stickers';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadStickerPacksCatalog } from '@/lib/i18n-sticker-packs-catalog';
 import { STICKER_FAVORITES_KEY } from '@/lib/stickers/favorites';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -29,6 +30,7 @@ beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadInterfaceCatalog('fr');
+  await loadStickerPacksCatalog('fr');
 });
 
 afterAll(async () => {

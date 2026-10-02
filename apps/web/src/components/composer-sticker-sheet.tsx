@@ -23,6 +23,7 @@ import {
   withStickerFirst,
 } from '@/lib/api/stickers';
 import { translate } from '@/lib/i18n-catalog';
+import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { isMeeBuiltinPack } from '@/lib/mee/types';
 import { appelNatifMethode, coqueCourante } from '@/lib/native-shell';
@@ -65,6 +66,9 @@ const StickerShop = lazy(() => import('./composer-sticker-shop').then((m) => ({ 
  * ÉPINGLER : l'appui long d'iOS, ici l'évènement `contextmenu` — le navigateur
  * le lève au clic droit, à l'appui long tactile (coque Android comprise) et à
  * la touche Menu ou Maj+F10 du clavier. Le geste bascule : épingle, ou retire.
+ *
+ * Les libellés des packs (`stickerPacks.*`) arrivent AVEC la feuille
+ * (`composer.tsx`), jamais au démarrage.
  *
  * Un onglet de pack porte le SLUG du pack ; `favorites`, `mine` et `shop` sont
  * des slugs réservés (`isReservedStickerPackSlug`) — aucun pack ne les prend.
@@ -323,7 +327,7 @@ export function ComposerStickerSheet({
 const tabLabel = (tab: StickerTab, packs: readonly StickerPackDetail[], language: ReturnType<typeof currentInterfaceLanguage>): string => {
   if (tab === 'favorites') return translate(language, 'composer.sticker.tab.favorites');
   if (tab === 'mine') return translate(language, 'composer.sticker.tab.custom');
-  if (tab === 'shop') return translate(language, 'stickerPacks.tab.shop');
+  if (tab === 'shop') return translateStickerPacks(language, 'stickerPacks.tab.shop');
   return packs.find((pack) => pack.slug === tab)?.name ?? tab;
 };
 

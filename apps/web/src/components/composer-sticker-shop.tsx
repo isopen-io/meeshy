@@ -16,8 +16,8 @@ import {
   loadPackCatalogue,
   setPackInstalled,
 } from '@/lib/api/sticker-packs';
-import { translate } from '@/lib/i18n-catalog';
-import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
+import type { PlainStickerPacksKey } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { meeStickersOfPack } from '@/lib/mee/catalog';
 import { renderMeeSticker } from '@/lib/mee/render';
@@ -37,13 +37,13 @@ import { isMeeBuiltinPack } from '@/lib/mee/types';
 
 const PackSubmitEditor = lazy(() => import('./sticker-pack-submit').then((m) => ({ default: m.PackSubmitEditor })));
 
-const KIND_KEYS: Readonly<Record<StickerPackSummary['kinds'][number], InterfaceCatalogKey>> = {
+const KIND_KEYS: Readonly<Record<StickerPackSummary['kinds'][number], PlainStickerPacksKey>> = {
   static: 'stickerPacks.kind.static',
   cinematic: 'stickerPacks.kind.cinematic',
   instant: 'stickerPacks.kind.instant',
 };
 
-const STATUS_KEYS: Readonly<Record<StickerPackSummary['status'], InterfaceCatalogKey>> = {
+const STATUS_KEYS: Readonly<Record<StickerPackSummary['status'], PlainStickerPacksKey>> = {
   pending: 'stickerPacks.status.pending',
   approved: 'stickerPacks.status.approved',
   rejected: 'stickerPacks.status.rejected',
@@ -137,10 +137,10 @@ export function StickerShop({ language }: { readonly language: InterfaceLanguage
   return (
     <div data-sticker-shop className="flex flex-col gap-4">
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'stickerPacks.shop.hint')}
+        {translateStickerPacks(language, 'stickerPacks.shop.hint')}
       </p>
       <p className="text-caption" role="status" aria-live="polite" style={{ color: 'var(--ios-error)' }}>
-        {failed ? translate(language, 'stickerPacks.error.install') : catalogue.isError ? translate(language, 'stickerPacks.error.load') : ''}
+        {failed ? translateStickerPacks(language, 'stickerPacks.error.install') : catalogue.isError ? translateStickerPacks(language, 'stickerPacks.error.load') : ''}
       </p>
 
       <ul className="flex flex-col gap-2" aria-busy={catalogue.isPending}>
@@ -161,9 +161,9 @@ export function StickerShop({ language }: { readonly language: InterfaceLanguage
               </p>
               <p className="text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
                 {[
-                  translate(language, 'stickerPacks.by', { author: pack.author }),
-                  translate(language, 'stickerPacks.count', { count: String(countOf(pack)) }),
-                  ...pack.kinds.map((kind) => translate(language, KIND_KEYS[kind])),
+                  translateStickerPacks(language, 'stickerPacks.by', { author: pack.author }),
+                  translateStickerPacks(language, 'stickerPacks.count', { count: String(countOf(pack)) }),
+                  ...pack.kinds.map((kind) => translateStickerPacks(language, KIND_KEYS[kind])),
                 ].join(' · ')}
               </p>
             </div>
@@ -171,7 +171,7 @@ export function StickerShop({ language }: { readonly language: InterfaceLanguage
               type="button"
               data-shop-toggle={pack.slug}
               aria-pressed={pack.installed}
-              aria-label={`${translate(language, pack.installed ? 'stickerPacks.uninstall' : 'stickerPacks.install')} ${pack.name}`}
+              aria-label={`${translateStickerPacks(language, pack.installed ? 'stickerPacks.uninstall' : 'stickerPacks.install')} ${pack.name}`}
               onClick={() => void toggle(pack)}
               className="min-h-11 shrink-0 rounded-full px-4 text-body font-semibold"
               style={
@@ -180,7 +180,7 @@ export function StickerShop({ language }: { readonly language: InterfaceLanguage
                   : { backgroundColor: 'var(--accent)', color: 'var(--color-ios-on-brand)' }
               }
             >
-              {translate(language, pack.installed ? 'stickerPacks.uninstall' : 'stickerPacks.install')}
+              {translateStickerPacks(language, pack.installed ? 'stickerPacks.uninstall' : 'stickerPacks.install')}
             </button>
           </li>
         ))}
@@ -193,13 +193,13 @@ export function StickerShop({ language }: { readonly language: InterfaceLanguage
         className="min-h-11 self-start rounded-full px-4 text-body font-semibold"
         style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 14%, transparent)', color: 'var(--color-ios-ink)' }}
       >
-        {translate(language, 'stickerPacks.submit.open')}
+        {translateStickerPacks(language, 'stickerPacks.submit.open')}
       </button>
 
       {mine.length > 0 ? (
         <section data-shop-submissions className="flex flex-col gap-2">
           <h3 className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-            {translate(language, 'stickerPacks.mine.title')}
+            {translateStickerPacks(language, 'stickerPacks.mine.title')}
           </h3>
           <ul className="flex flex-col gap-2">
             {mine.map((pack) => (
@@ -212,7 +212,7 @@ export function StickerShop({ language }: { readonly language: InterfaceLanguage
                     className="shrink-0 rounded-full px-2 text-caption"
                     style={{ color: pack.status === 'rejected' ? 'var(--ios-error)' : 'var(--color-ios-ink-2)', backgroundColor: 'var(--color-ios-fill)' }}
                   >
-                    {translate(language, STATUS_KEYS[pack.status])}
+                    {translateStickerPacks(language, STATUS_KEYS[pack.status])}
                   </span>
                 </div>
                 {pack.reviewNote ? (

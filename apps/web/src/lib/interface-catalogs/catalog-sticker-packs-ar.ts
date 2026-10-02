@@ -1,16 +1,14 @@
-/**
- * LES PACKS DE STICKERS (#9141) — tranche du catalogue `catalog-ar.ts` :
- * onglets de pack, boutique, proposition d'un pack par un tiers et ses refus
- * motivés. Le catalogue la RÉPAND.
- */
+import type { StickerPacksCatalog } from '@/lib/i18n-sticker-packs-catalog';
+
+/** LE CATALOGUE DES PACKS DE STICKERS (#9141), langue `ar` — mêmes clés que le français. */
 const arStickerPacks = {
   'stickerPacks.by': 'بواسطة {author}',
   'stickerPacks.cancel': 'إلغاء',
   'stickerPacks.send': 'إرسال',
   'stickerPacks.count': '{count} ملصقات',
+  'stickerPacks.tab.shop': 'المتجر',
   'stickerPacks.install': 'تثبيت',
   'stickerPacks.uninstall': 'إزالة',
-  'stickerPacks.tab.shop': 'المتجر',
   'stickerPacks.shop.hint': 'ثبّت الحزم التي تريدها في ملصقاتك وأزل الباقي. تبقى الملصقات المُرسلة مقروءة.',
   'stickerPacks.error.install': 'تعذّر تعديل الحزمة — أعد المحاولة',
   'stickerPacks.error.load': 'تعذّر تحميل الحزم',
@@ -55,6 +53,6 @@ const arStickerPacks = {
   'stickerPacks.problem.longestOverflows': 'نص بالطول الأقصى سيتجاوز المنطقة: كبّر المنطقة أو قلّل الطول',
   'stickerPacks.problem.count': 'تضم الحزمة من 3 إلى 120 ملصقًا',
   'stickerPacks.problem.packField': 'امنح الحزمة اسمًا ووصفًا وتوقيعًا',
-};
+} satisfies StickerPacksCatalog;
 
 export default arStickerPacks;

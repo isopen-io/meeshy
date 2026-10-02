@@ -6,6 +6,7 @@ import type { StickerPackDetail, StickerPackItem } from '@meeshy/shared/types/st
 
 import { attachmentSrc } from '@/lib/api/media-url';
 import { translate } from '@/lib/i18n-catalog';
+import { translateStickerPacks } from '@/lib/i18n-sticker-packs-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { RasterizeSvg } from '@/lib/mee/png';
 import { packStickerFile } from '@/lib/sticker-packs/file';
@@ -76,7 +77,7 @@ export function PackStickerPanel({
   return (
     <div data-pack-panel={pack.slug} className="flex flex-col gap-3">
       <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-        {translate(language, 'stickerPacks.by', { author: pack.author })}
+        {translateStickerPacks(language, 'stickerPacks.by', { author: pack.author })}
       </p>
       <p className="text-caption" role="status" aria-live="polite" style={{ color: failed ? 'var(--ios-error)' : 'var(--color-ios-ink-3)' }}>
         {failed ? translate(language, 'composer.sticker.unavailable') : ''}
@@ -126,7 +127,7 @@ export function PackStickerPanel({
           ))}
           <div className="flex justify-end gap-2">
             <button type="button" className="min-h-11 rounded-full px-4 text-body" style={{ color: 'var(--color-ios-ink)' }} onClick={() => setOpen(null)}>
-              {translate(language, 'stickerPacks.cancel')}
+              {translateStickerPacks(language, 'stickerPacks.cancel')}
             </button>
             <button
               type="button"
@@ -136,7 +137,7 @@ export function PackStickerPanel({
               className="min-h-11 rounded-full px-5 text-body font-semibold disabled:opacity-50"
               style={{ backgroundColor: 'var(--accent)', color: 'var(--color-ios-on-brand)' }}
             >
-              {translate(language, 'stickerPacks.send')}
+              {translateStickerPacks(language, 'stickerPacks.send')}
             </button>
           </div>
         </section>

@@ -25,7 +25,7 @@
  *
  * @see schema.prisma — `StickerPack`, `StickerPackItem`, `UserStickerPack`
  */
-import { z } from 'zod';
+import * as z from 'zod/mini';
 
 export const STICKER_KINDS = ['static', 'cinematic', 'instant'] as const;
 export type StickerKind = (typeof STICKER_KINDS)[number];
@@ -108,42 +108,44 @@ export type StickerPackManifest = {
 };
 
 const L = STICKER_PACK_LIMITS;
-const text = (max: number) => z.string().trim().min(1).max(max);
+const text = (max: number) => z.string().check(z.trim(), z.minLength(1), z.maxLength(max));
+const int = (min: number, max: number) => z.int().check(z.minimum(min), z.maximum(max));
+const pattern = (regex: RegExp, max: number) => z.string().check(z.regex(regex), z.maxLength(max));
 
 const zoneSchema = z.object({
-  slot: z.string().regex(STICKER_SLOT_PATTERN).max(32),
+  slot: pattern(STICKER_SLOT_PATTERN, 32),
   label: text(24),
   box: z.object({
-    x: z.number().int().min(0).max(L.canvas),
-    y: z.number().int().min(0).max(L.canvas),
-    width: z.number().int().min(L.minZoneEdge).max(L.canvas),
-    height: z.number().int().min(L.minZoneEdge).max(L.canvas),
+    x: int(0, L.canvas),
+    y: int(0, L.canvas),
+    width: int(L.minZoneEdge, L.canvas),
+    height: int(L.minZoneEdge, L.canvas),
   }),
   defaultText: text(L.maxTextLength),
-  maxLength: z.number().int().min(1).max(L.maxTextLength),
-  maxLines: z.number().int().min(1).max(L.maxLines).default(1),
-  minFontSize: z.number().int().min(L.minFontSize).max(L.maxFontSize).default(L.minFontSize),
-  maxFontSize: z.number().int().min(L.minFontSize).max(L.maxFontSize).default(48),
-  color: z.string().regex(COLOR_PATTERN).default('#1c1941'),
-  weight: z.enum(STICKER_TEXT_WEIGHTS).default('black'),
-  align: z.enum(STICKER_TEXT_ALIGNS).default('center'),
+  maxLength: int(1, L.maxTextLength),
+  maxLines: z._default(int(1, L.maxLines), 1),
+  minFontSize: z._default(int(L.minFontSize, L.maxFontSize), L.minFontSize),
+  maxFontSize: z._default(int(L.minFontSize, L.maxFontSize), 48),
+  color: z._default(z.string().check(z.regex(COLOR_PATTERN)), '#1c1941'),
+  weight: z._default(z.enum(STICKER_TEXT_WEIGHTS), 'black'),
+  align: z._default(z.enum(STICKER_TEXT_ALIGNS), 'center'),
 });
 
 const itemSchema = z.object({
-  key: z.string().regex(STICKER_ITEM_KEY_PATTERN).max(L.maxKeyLength),
+  key: pattern(STICKER_ITEM_KEY_PATTERN, L.maxKeyLength),
   title: text(L.maxTitleLength),
   emoji: text(16),
   kind: z.enum(STICKER_KINDS),
   asset: text(120),
-  zones: z.array(zoneSchema).max(L.maxZones).optional(),
+  zones: z.optional(z.array(zoneSchema).check(z.maxLength(L.maxZones))),
 });
 
 const manifestSchema = z.object({
-  slug: z.string().regex(STICKER_PACK_SLUG_PATTERN).max(L.maxSlugLength),
+  slug: pattern(STICKER_PACK_SLUG_PATTERN, L.maxSlugLength),
   name: text(L.maxNameLength),
   description: text(L.maxDescriptionLength),
   author: text(L.maxAuthorLength),
-  items: z.array(itemSchema).min(L.minItems).max(L.maxItems),
+  items: z.array(itemSchema).check(z.minLength(L.minItems), z.maxLength(L.maxItems)),
 });
 
 /**
