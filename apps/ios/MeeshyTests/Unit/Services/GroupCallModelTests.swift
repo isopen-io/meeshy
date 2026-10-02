@@ -75,6 +75,43 @@ final class GroupCallModelTests: XCTestCase {
         XCTAssertFalse(roster.contains("b"))
     }
 
+    // MARK: - Nom d'un groupe sans son principal (#9091)
+
+    func test_callTitle_titledGroup_isTheGroupTitle() {
+        let roster = GroupCallRoster(localUserId: "me").admitting(arrival("c", name: "Chloé"))
+
+        XCTAssertEqual(roster.callTitle(groupTitle: "Équipe"), "Équipe")
+    }
+
+    func test_callTitle_untitledGroup_namesTheRemainingMembers() {
+        let roster = GroupCallRoster(localUserId: "me")
+            .admitting(arrival("c", name: "Chloé"))
+            .admitting(arrival("d", name: "Dia"))
+
+        XCTAssertEqual(roster.callTitle(groupTitle: nil), "Chloé, Dia")
+        XCTAssertEqual(roster.callTitle(groupTitle: "  "), "Chloé, Dia", "un titre blanc n'est pas un titre")
+    }
+
+    func test_callTitle_untitledGroupBeyondTwo_namesTwoAndCountsTheRest() {
+        let roster = GroupCallRoster(localUserId: "me")
+            .admitting(arrival("c", name: "Chloé"))
+            .admitting(arrival("d", name: "Dia"))
+            .admitting(arrival("e", name: "Eli"))
+
+        let title = roster.callTitle(groupTitle: nil)
+
+        XCTAssertTrue(title.hasPrefix("Chloé, Dia"), title)
+        XCTAssertTrue(title.contains("1"), title)
+        XCTAssertFalse(title.contains("Eli"), title)
+    }
+
+    func test_callTitle_unnamedOrNoMember_isNeverEmpty() {
+        let unnamed = GroupCallRoster(localUserId: "me").admitting(arrival("c"))
+
+        XCTAssertFalse(unnamed.callTitle(groupTitle: nil).isEmpty)
+        XCTAssertFalse(GroupCallRoster(localUserId: "me").callTitle(groupTitle: nil).isEmpty)
+    }
+
     // MARK: - Tri des signaux
 
     func test_destination_directCall_alwaysPrimary() {

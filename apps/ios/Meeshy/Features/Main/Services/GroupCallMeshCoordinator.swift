@@ -30,7 +30,9 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
 
     static let shared = GroupCallMeshCoordinator()
 
-    @Published private(set) var roster: GroupCallRoster
+    @Published private(set) var roster: GroupCallRoster {
+        didSet { retitleIfVacated() }
+    }
     @Published private(set) var speakingUserIds: Set<String> = []
     @Published private(set) var isGroupCallActive = false
     /// Change à chaque piste vidéo reçue : la grille relit `videoTrack(for:)`.
@@ -129,6 +131,18 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         dropMember(primary)
         host?.groupPrimaryDidVacate()
         return true
+    }
+
+    private var announcedTitle: String?
+
+    /// #9091 — le siège vide, l'appel se nomme par ceux qui restent ; annoncé
+    /// seulement quand le nom CHANGE (une bascule de micro ne le rejoue pas).
+    private func retitleIfVacated() {
+        guard isPrimaryVacated else { return }
+        let title = roster.callTitle(groupTitle: groupTitle(for: host?.groupConversationId))
+        guard title != announcedTitle else { return }
+        announcedTitle = title
+        host?.groupCallTitleDidChange(title)
     }
 
     // MARK: - Événements de la passerelle
@@ -429,6 +443,7 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         links = [:]
         boundCallId = nil
         isPrimaryVacated = false
+        announcedTitle = nil
         knownSession = nil
         pendingSignals = [:]
         pendingArrivals = []

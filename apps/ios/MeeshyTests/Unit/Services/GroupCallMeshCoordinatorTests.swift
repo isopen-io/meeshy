@@ -81,9 +81,11 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         var primaryRemoteVideoTrack: Any?
         var primaryAudioLevelResult: Double?
         private(set) var vacateCallCount = 0
+        private(set) var titles: [String] = []
 
         func primaryAudioLevel() async -> Double? { primaryAudioLevelResult }
         func groupPrimaryDidVacate() { vacateCallCount += 1 }
+        func groupCallTitleDidChange(_ title: String) { titles.append(title) }
     }
 
     private final class ActiveCallStub: ActiveCallServiceProviding, @unchecked Sendable {
@@ -486,6 +488,58 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
 
         XCTAssertFalse(sut.isPrimaryVacated)
         XCTAssertTrue(sut.roster.contains("b"))
+    }
+
+    // MARK: - L'en-tête d'un groupe qui continue (#9091)
+
+    func test_participantLeft_primaryOfTitledGroup_retitlesWithTheGroupTitle() {
+        let (sut, host, _, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c", name: "Chloé"))
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertEqual(host.titles, ["Équipe"], "l'en-tête ne nomme plus le partant")
+    }
+
+    func test_participantLeft_primaryOfUntitledGroup_namesTheRemainingMembers() {
+        let (sut, host, _, _, _) = makeSUT(markGroup: false)
+        sut.markGroupConversation("group1", title: nil)
+        sut.handleParticipantJoined(joined("c", name: "Chloé"))
+        sut.handleParticipantJoined(joined("d", name: "Dia"))
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertEqual(host.titles, ["Chloé, Dia"])
+    }
+
+    func test_vacatedSeat_rosterChange_retitlesOnlyWhenTheNameChanges() {
+        let (sut, host, _, _, _) = makeSUT(markGroup: false)
+        sut.markGroupConversation("group1", title: nil)
+        sut.handleParticipantJoined(joined("c", name: "Chloé"))
+        sut.handleParticipantJoined(joined("d", name: "Dia"))
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        sut.handleMediaToggled(decode(CallMediaToggleData.self, #"{"callId":"call1","userId":"c","mediaType":"audio","enabled":false}"#))
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "d"))
+
+        XCTAssertEqual(host.titles, ["Chloé, Dia", "Chloé"])
+    }
+
+    func test_participantLeft_primaryAlone_keepsTheTitle() {
+        let (sut, host, _, _, _) = makeSUT()
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertTrue(host.titles.isEmpty)
+    }
+
+    func test_memberLeaving_whilePrimaryHoldsTheSeat_keepsTheTitle() {
+        let (sut, host, _, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c", name: "Chloé"))
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "c"))
+
+        XCTAssertTrue(host.titles.isEmpty)
     }
 
     // MARK: - Nature de l'appel

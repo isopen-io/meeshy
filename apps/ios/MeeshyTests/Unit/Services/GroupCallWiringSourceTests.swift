@@ -115,4 +115,26 @@ final class GroupCallWiringSourceTests: XCTestCase {
 
         XCTAssertTrue(level.contains("guard let self, case .connected = self.callState, !self.isGroupPrimaryVacated else { return }"))
     }
+
+    // MARK: - #9091 — l'en-tête d'un groupe qui continue
+
+    func test_groupCallTitleDidChange_retitlesTheWholeCallChrome() throws {
+        let retitle = try body(
+            of: "func groupCallTitleDidChange(",
+            in: "Meeshy/Features/Main/Services/CallManager+GroupMesh.swift",
+            length: 300
+        )
+
+        XCTAssertTrue(retitle.contains("remoteUsername = title"), "en-tête, pastille et bulle lisent `remoteUsername`")
+    }
+
+    func test_participantName_ofADepartedPrimary_isNotTheGroupTitle() throws {
+        let name = try body(
+            of: "func participantName(for userId: String) -> String {",
+            in: "Meeshy/Features/Main/Services/CallManager+Controls.swift",
+            length: 400
+        )
+
+        XCTAssertTrue(name.contains("userId == remoteUserId, !isGroupPrimaryVacated, let name = remoteUsername"))
+    }
 }

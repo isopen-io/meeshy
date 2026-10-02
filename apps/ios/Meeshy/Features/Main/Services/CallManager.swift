@@ -168,7 +168,7 @@ final class CallManager: ObservableObject {
     }
     @Published private(set) var transcriptionService = CallTranscriptionService()
     @Published var remoteUserId: String?
-    @Published private(set) var remoteUsername: String?
+    @Published var remoteUsername: String?
     /// Conversation (DM) qui héberge l'appel courant, quand elle est connue.
     /// Renseignée pour les appels sortants (`startCall`) et les appels entrants
     /// livrés par socket (`CallOfferData.conversationId`). Peut rester `nil` pour

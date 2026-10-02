@@ -95,6 +95,13 @@ extension CallManager: GroupCallHostProviding {
         handleRemoteEnd(callId: callId, rawReason: rawReason)
     }
 
+    /// #9091 — l'en-tête, la pastille et la bulle lisent `remoteUsername` :
+    /// le principal parti, ils nomment le groupe qui continue, plus le partant.
+    func groupCallTitleDidChange(_ title: String) {
+        guard remoteUsername != title else { return }
+        remoteUsername = title
+    }
+
     /// L'appelant d'un groupe n'a pas de pair désigné : le PREMIER membre qui
     /// rejoint le devient, et les suivants passent par le maillage.
     func designateGroupPrimary(from event: CallParticipantData) {
