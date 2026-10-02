@@ -147,7 +147,13 @@ nonisolated public enum MeeStickerCatalog {
 
     @MainActor
     public static func fileURL(for sticker: MeeSticker) -> URL? {
-        let name = "mee.\(sticker.id)"
+        fileURL(id: sticker.id)
+    }
+
+    /// Le film d'un identifiant du catalogue — un personnage ou un Instant (#9069).
+    @MainActor
+    public static func fileURL(id: String) -> URL? {
+        let name = "mee.\(id)"
         return Bundle.module.url(forResource: name, withExtension: "webp")
             ?? Bundle.module.url(forResource: name, withExtension: "webp", subdirectory: "MeeStickers")
     }
@@ -156,7 +162,12 @@ nonisolated public enum MeeStickerCatalog {
     /// vignette d'un sticker FIXE, que le décodeur d'animation rend `nil`.
     @MainActor
     public static func stillImage(_ sticker: MeeSticker) -> UIImage? {
-        guard let url = fileURL(for: sticker),
+        stillImage(id: sticker.id)
+    }
+
+    @MainActor
+    public static func stillImage(id: String) -> UIImage? {
+        guard let url = fileURL(id: id),
               let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return nil }
         return UIImage(data: data)
     }

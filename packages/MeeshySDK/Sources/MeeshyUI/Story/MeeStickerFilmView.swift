@@ -10,7 +10,8 @@ import UIKit
 /// intention — `AnimatedImageView` honore les deux préférences.
 public struct MeeStickerFilmView: View {
 
-    let sticker: MeeSticker
+    let filmID: String
+    let filmAnimated: Bool
     let side: CGFloat
     let animates: Bool
     let pixelCap: Int
@@ -25,7 +26,14 @@ public struct MeeStickerFilmView: View {
     ///   entière, la baisse (`gridPixelCap`) — la mémoire d'un film croît au
     ///   carré de sa définition.
     public init(sticker: MeeSticker, side: CGFloat, animates: Bool = true, pixelCap: Int = 360) {
-        self.sticker = sticker
+        self.init(filmID: sticker.id, animated: sticker.animated, side: side, animates: animates, pixelCap: pixelCap)
+    }
+
+    /// Le film d'un identifiant du catalogue Mee — un Instant le joue sous son
+    /// texte natif (#9069).
+    public init(filmID: String, animated: Bool, side: CGFloat, animates: Bool = true, pixelCap: Int = 360) {
+        self.filmID = filmID
+        self.filmAnimated = animated
         self.side = side
         self.animates = animates
         self.pixelCap = pixelCap
@@ -62,10 +70,10 @@ public struct MeeStickerFilmView: View {
         }
         .frame(width: side, height: side)
         .contentShape(Rectangle())
-        .task(id: "\(sticker.id)|\(animates && !reduceMotion)|\(maxPixelSize)") {
-            guard let url = MeeStickerCatalog.fileURL(for: sticker) else { return }
+        .task(id: "\(filmID)|\(animates && !reduceMotion)|\(maxPixelSize)") {
+            guard let url = MeeStickerCatalog.fileURL(id: filmID) else { return }
             if still == nil { still = await MeeStickerCatalog.still(at: url, maxPixelSize: maxPixelSize) }
-            guard animates, !reduceMotion, sticker.animated else { return }
+            guard animates, !reduceMotion, filmAnimated else { return }
             // Une case qui ne fait que PASSER pendant un lancer ne décode rien :
             // sa tâche est annulée avant la fin de ce délai.
             try? await Task.sleep(for: .milliseconds(Self.filmDelayMilliseconds))

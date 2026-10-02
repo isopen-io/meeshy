@@ -7,6 +7,7 @@ import type { StickerDefinition } from '@meeshy/shared/types/sticker-definition'
 import { appQueryClient } from '@/lib/api/query-client';
 import { STICKERS_QUERY_KEY, resetFixtureStickersForTests } from '@/lib/api/stickers';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { STICKER_FAVORITES_KEY } from '@/lib/stickers/favorites';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -38,6 +39,7 @@ afterEach(() => {
   mounter.unmountAll();
   appQueryClient.clear();
   resetFixtureStickersForTests();
+  globalThis.localStorage.removeItem(STICKER_FAVORITES_KEY);
   globalThis.fetch = realFetch;
 });
 
@@ -127,11 +129,12 @@ describe('ComposerStickerSheet', () => {
     expect(host.textContent).toContain('Aucune image dans le presse-papier');
   });
 
-  test('deux onglets, comme iOS : « Mee & Meo » range tous les personnages, « Personnalisés » la bibliothèque puis les Instants', async () => {
+  test('les onglets d’iOS : « Mee & Meo » range tous les personnages, « Personnalisés » la bibliothèque puis les Instants', async () => {
     appQueryClient.setQueryData(STICKERS_QUERY_KEY, []);
     const host = await mount();
     const tabs = Array.from(host.querySelectorAll('[role="tab"]')).map((tab) => tab.getAttribute('data-sticker-tab'));
-    expect(tabs).toEqual(['mee', 'mine']);
+    expect(tabs).toEqual(['favorites', 'mee', 'mine']);
+    expect(host.querySelector('[data-sticker-tab="favorites"]')?.textContent).toBe('Favoris');
     expect(host.querySelector('[data-sticker-tab="mee"]')?.textContent).toBe('Mee & Meo');
     expect(host.querySelector('[data-sticker-tab="mine"]')?.textContent).toBe('Personnalisés');
     expect(host.querySelector('[data-sticker-tab="mine"]')?.getAttribute('aria-selected')).toBe('true');
@@ -155,5 +158,64 @@ describe('ComposerStickerSheet', () => {
     expect(host.querySelector('[data-mee-sticker="meo-salut"]')).not.toBe(null);
     expect(host.querySelector('[data-mee-sticker="duo-mee-bisou"]')).not.toBe(null);
     expect(host.querySelector('[data-mee-sticker^="instant-"]')).toBe(null);
+  });
+
+  /**
+   * LES FAVORIS (#9070) — la question du porteur : « comment mettre un sticker
+   * en favoris ? ». Le geste d'iOS : un appui long — ici l'évènement
+   * `contextmenu`, que le navigateur lève au clic droit, à l'appui long tactile
+   * et à la touche Menu (ou Maj+F10) du clavier.
+   */
+  const openTab = async (host: HTMLElement, tab: string) => {
+    await mounter.click(host.querySelector(`[data-sticker-tab="${tab}"]`));
+    await act(async () => {
+      await import('./composer-mee-stickers');
+      await settle();
+      await settle();
+    });
+  };
+  const longPress = async (target: Element | null) => {
+    await act(async () => {
+      target?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+  };
+
+  test('Favoris vide dit comment l’alimenter', async () => {
+    appQueryClient.setQueryData(STICKERS_QUERY_KEY, [sticker('s1')]);
+    const host = await mount();
+    await openTab(host, 'favorites');
+    expect(host.querySelector('[data-sticker-favorites-empty]')?.textContent).toContain('clic droit');
+  });
+
+  test('un appui long épingle un sticker de « Mes stickers » ; Favoris le montre ; un second appui long le retire', async () => {
+    appQueryClient.setQueryData(STICKERS_QUERY_KEY, [sticker('s1'), sticker('s2')]);
+    const host = await mount();
+    await act(settle);
+    const cell = host.querySelector('[data-sticker-library] [data-sticker="s2"]');
+    await longPress(cell);
+    expect(host.querySelector('[data-sticker-library] [data-sticker="s2"]')?.getAttribute('data-favorite')).toBe('true');
+    expect(host.textContent).toContain('Épinglé aux favoris');
+
+    await openTab(host, 'favorites');
+    const pinned = Array.from(host.querySelectorAll('[data-sticker-favorites] [data-sticker]')).map((b) => b.getAttribute('data-sticker'));
+    expect(pinned).toEqual(['s2']);
+
+    await longPress(host.querySelector('[data-sticker-favorites] [data-sticker="s2"]'));
+    expect(host.querySelector('[data-sticker-favorites] [data-sticker="s2"]')).toBe(null);
+    expect(host.querySelector('[data-sticker-favorites-empty]')).not.toBe(null);
+  });
+
+  test('un appui long épingle un Mee ; Favoris le rejoue, dessiné', async () => {
+    appQueryClient.setQueryData(STICKERS_QUERY_KEY, []);
+    const picked: Picked[] = [];
+    const host = await mount((p) => picked.push(p));
+    await openTab(host, 'mee');
+    await longPress(host.querySelector('[data-mee-sticker="mee-coucou"]'));
+    expect(host.querySelector('[data-mee-sticker="mee-coucou"]')?.getAttribute('data-favorite')).toBe('true');
+
+    await openTab(host, 'favorites');
+    const mee = host.querySelector('[data-sticker-favorites] [data-mee-sticker="mee-coucou"]');
+    expect(mee).not.toBe(null);
+    expect(mee?.querySelector('svg')).not.toBe(null);
   });
 });

@@ -8,6 +8,7 @@ import type { StickerDefinition, StickerOrigin } from '@meeshy/shared/types/stic
 import { GlyphSvg } from './glyph';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
 import { Sheet } from './sheet';
+import { FavoriteStar } from './sticker-favorite-star';
 import { apiDeps } from '@/lib/api/deps';
 import { attachmentSrc } from '@/lib/api/media-url';
 import {
@@ -22,6 +23,8 @@ import {
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { appelNatifMethode, coqueCourante } from '@/lib/native-shell';
+import { isFavorite, readFavorites, toggleFavorite, writeFavorites } from '@/lib/stickers/favorites';
+import type { StickerFavorite } from '@/lib/stickers/favorites';
 import { stickerFileOf, stickerRefusalKey } from '@/lib/stickers/library-file';
 import { imageFilesOf, prepareStickerSource, readClipboardImages } from '@/lib/stickers/prepare';
 
@@ -48,11 +51,16 @@ const MeeStickerPanel = lazy(() => import('./composer-mee-stickers').then((m) =>
 
 /**
  * Les onglets de la feuille, comme iOS (directive porteur 2026-10-02, #9068,
- * #9069) : « Mee & Meo » range tous les personnages par intention ;
- * « Personnalisés » porte la bibliothèque, puis les Instants — les Mee qui
- * écrivent un texte, l'heure, le lieu ou la météo.
+ * #9069, #9070) : « Favoris » rassemble ce qu'on a épinglé ; « Mee & Meo »
+ * range tous les personnages par intention ; « Personnalisés » porte la
+ * bibliothèque, puis les Instants — les Mee qui écrivent un texte, l'heure, le
+ * lieu ou la météo.
+ *
+ * ÉPINGLER : l'appui long d'iOS, ici l'évènement `contextmenu` — le navigateur
+ * le lève au clic droit, à l'appui long tactile (coque Android comprise) et à
+ * la touche Menu ou Maj+F10 du clavier. Le geste bascule : épingle, ou retire.
  */
-const STICKER_TABS = ['mee', 'mine'] as const;
+const STICKER_TABS = ['favorites', 'mee', 'mine'] as const;
 type StickerTab = (typeof STICKER_TABS)[number];
 
 /** Ce que la feuille rend à l'hôte : l'image à joindre et le descripteur du champ `sticker`. */
@@ -81,6 +89,15 @@ export function ComposerStickerSheet({
   const [managing, setManaging] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [tab, setTab] = useState<StickerTab>('mine');
+  const [favorites, setFavorites] = useState<readonly StickerFavorite[]>(() => readFavorites());
+  const [favoriteNotice, setFavoriteNotice] = useState('');
+
+  const toggle = (entry: StickerFavorite) => {
+    const next = toggleFavorite(favorites, entry);
+    writeFavorites(next);
+    setFavorites(next);
+    setFavoriteNotice(translate(language, isFavorite(next, entry) ? 'composer.sticker.favorites.pinned' : 'composer.sticker.favorites.unpinned'));
+  };
 
   const library = useQuery({
     queryKey: STICKERS_QUERY_KEY,
@@ -164,10 +181,40 @@ export function ComposerStickerSheet({
   return (
     <Sheet title={translate(language, 'composer.sticker.title')} bodyAs="div" onClose={onClose}>
       <StickerTabBar tab={tab} onSelect={setTab} language={language} />
-      {tab === 'mee' ? (
+      <p className="sr-only" role="status" aria-live="polite">
+        {favoriteNotice}
+      </p>
+      {tab === 'favorites' ? (
+        <div data-sticker-favorites className="flex flex-col gap-3 px-4 pb-4">
+          {favoriteLibrary(favorites, stickers).length === 0 && !favorites.some((entry) => entry.kind === 'mee') ? (
+            <p data-sticker-favorites-empty className="py-6 text-center text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
+              {translate(language, 'composer.sticker.favorites.empty')}
+            </p>
+          ) : (
+            <>
+              <ul className="grid grid-cols-4 gap-2">
+                {favoriteLibrary(favorites, stickers).map((sticker) => (
+                  <LibraryCell
+                    key={sticker.id}
+                    sticker={sticker}
+                    managing={false}
+                    favorite
+                    language={language}
+                    onPick={() => void pick(sticker)}
+                    onToggleFavorite={() => toggle({ kind: 'library', value: sticker.id })}
+                  />
+                ))}
+              </ul>
+              <Suspense fallback={MEE_FALLBACK}>
+                <MeeStickerPanel mode="favorites" language={language} onPick={onPick} favorites={favorites} onToggleFavorite={toggle} />
+              </Suspense>
+            </>
+          )}
+        </div>
+      ) : tab === 'mee' ? (
         <div className="px-4 pb-4">
           <Suspense fallback={MEE_FALLBACK}>
-            <MeeStickerPanel mode="characters" language={language} onPick={onPick} />
+            <MeeStickerPanel mode="characters" language={language} onPick={onPick} favorites={favorites} onToggleFavorite={toggle} />
           </Suspense>
         </div>
       ) : (
@@ -219,39 +266,15 @@ export function ComposerStickerSheet({
           ) : (
             <ul className="grid grid-cols-4 gap-2" aria-busy={library.isPending}>
               {stickers.map((sticker) => (
-                <li key={sticker.id} className="relative">
-                  <button
-                    type="button"
-                    data-sticker={sticker.id}
-                    aria-label={
-                      managing
-                        ? translate(language, 'composer.sticker.remove')
-                        : (sticker.name ?? translate(language, 'composer.sticker.item'))
-                    }
-                    className="block aspect-square w-full rounded-xl p-1"
-                    style={{ backgroundColor: 'var(--color-ios-card)' }}
-                    onClick={() => (managing ? remove(sticker) : void pick(sticker))}
-                  >
-                    <img
-                      src={attachmentSrc(sticker.fileUrl)}
-                      alt=""
-                      width={sticker.width}
-                      height={sticker.height}
-                      loading="lazy"
-                      decoding="async"
-                      className="h-full w-full object-contain"
-                    />
-                  </button>
-                  {managing ? (
-                    <span
-                      aria-hidden
-                      className="pointer-events-none absolute right-0 top-0 grid h-6 w-6 place-items-center rounded-full"
-                      style={{ backgroundColor: 'var(--color-error)', color: '#fff' }}
-                    >
-                      <GlyphSvg glyph={COMPOSER_GLYPHS.x} size={14} />
-                    </span>
-                  ) : null}
-                </li>
+                <LibraryCell
+                  key={sticker.id}
+                  sticker={sticker}
+                  managing={managing}
+                  favorite={isFavorite(favorites, { kind: 'library', value: sticker.id })}
+                  language={language}
+                  onPick={() => (managing ? remove(sticker) : void pick(sticker))}
+                  onToggleFavorite={() => toggle({ kind: 'library', value: sticker.id })}
+                />
               ))}
             </ul>
           )}
@@ -270,9 +293,79 @@ export function ComposerStickerSheet({
   );
 }
 
-/** « Mee & Meo » porte les NOMS des personnages, les mêmes dans toutes les langues ; « Personnalisés » se traduit. */
-const tabLabel = (tab: StickerTab, language: ReturnType<typeof currentInterfaceLanguage>): string =>
-  tab === 'mee' ? 'Mee & Meo' : translate(language, 'composer.sticker.tab.custom');
+/** « Mee & Meo » porte les NOMS des personnages, les mêmes dans toutes les langues ; les autres onglets se traduisent. */
+const tabLabel = (tab: StickerTab, language: ReturnType<typeof currentInterfaceLanguage>): string => {
+  switch (tab) {
+    case 'favorites':
+      return translate(language, 'composer.sticker.tab.favorites');
+    case 'mee':
+      return 'Mee & Meo';
+    case 'mine':
+      return translate(language, 'composer.sticker.tab.custom');
+  }
+};
+
+/** Les stickers de « Mes stickers » épinglés, dans l'ordre des favoris ; un sticker effacé est ignoré, jamais purgé. */
+const favoriteLibrary = (favorites: readonly StickerFavorite[], stickers: readonly StickerDefinition[]): readonly StickerDefinition[] =>
+  favorites.flatMap((entry) => {
+    const found = entry.kind === 'library' ? stickers.find((sticker) => sticker.id === entry.value) : undefined;
+    return found === undefined ? [] : [found];
+  });
+
+/** Une case de « Mes stickers » — toucher la choisit (ou la retire en gestion), l'appui long l'épingle. */
+function LibraryCell({
+  sticker,
+  managing,
+  favorite,
+  language,
+  onPick,
+  onToggleFavorite,
+}: {
+  readonly sticker: StickerDefinition;
+  readonly managing: boolean;
+  readonly favorite: boolean;
+  readonly language: ReturnType<typeof currentInterfaceLanguage>;
+  readonly onPick: () => void;
+  readonly onToggleFavorite: () => void;
+}) {
+  return (
+    <li className="relative">
+      <button
+        type="button"
+        data-sticker={sticker.id}
+        data-favorite={favorite ? 'true' : undefined}
+        aria-label={managing ? translate(language, 'composer.sticker.remove') : (sticker.name ?? translate(language, 'composer.sticker.item'))}
+        className="block aspect-square w-full rounded-xl p-1"
+        style={{ backgroundColor: 'var(--color-ios-card)' }}
+        onClick={onPick}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          onToggleFavorite();
+        }}
+      >
+        <img
+          src={attachmentSrc(sticker.fileUrl)}
+          alt=""
+          width={sticker.width}
+          height={sticker.height}
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-contain"
+        />
+      </button>
+      {favorite && !managing ? <FavoriteStar /> : null}
+      {managing ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-0 top-0 grid h-6 w-6 place-items-center rounded-full"
+          style={{ backgroundColor: 'var(--color-error)', color: '#fff' }}
+        >
+          <GlyphSvg glyph={COMPOSER_GLYPHS.x} size={14} />
+        </span>
+      ) : null}
+    </li>
+  );
+}
 
 /** Les onglets — une liste d'onglets au clavier (flèches, Début, Fin), un seul arrêt de tabulation, cibles de 44 px. */
 function StickerTabBar({

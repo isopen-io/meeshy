@@ -44,6 +44,18 @@ extension ConversationView {
         sendStickerImage(image, sticker: mee.messageSticker)
     }
 
+    /// Un Instant (#9069) : la première image du film avec le texte saisi
+    /// posé dessus — le repli des clients qui ne le redessinent pas — et
+    /// `templateId: "mee.<id>"` avec ses emplacements, que le web et iOS
+    /// rejouent animés. Le contrat est celui du web.
+    func sendMeeInstant(_ instant: MeeInstant, slots: [MeeSlot: String]) {
+        guard let image = instant.stillImage(slots: slots) else {
+            sendEmojiSticker(instant.emoji)
+            return
+        }
+        sendStickerImage(image, sticker: instant.messageSticker(slots: slots))
+    }
+
     /// « Mes stickers » : le PNG collé EST le sticker — aucun gabarit à
     /// redessiner, donc `sticker: nil` et une image ordinaire.
     func sendLibrarySticker(_ item: StoryStickerLibraryItem) {

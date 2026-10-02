@@ -143,6 +143,17 @@ describe('les stickers dynamiques', () => {
     });
   });
 
+  test('le BANDEAU se déclare — iOS le redessine en natif sur le film (#9069)', () => {
+    const banded = instants.filter((s) => s.section !== 'message');
+    banded.forEach((s) => {
+      const svg = renderMeeSticker(s);
+      expect(svg).toMatch(/<g data-mee-band><rect /);
+      expect(svg.match(/<g data-mee-band>/g)?.length).toBe(1);
+    });
+    const characters = MEE_STICKERS.filter((s) => s.tab !== 'instants');
+    expect(characters.some((s) => renderMeeSticker(s).includes('data-mee-band'))).toBe(false);
+  });
+
   test('un texte saisi ne peut pas injecter de balise', () => {
     instants.forEach((s) => {
       const svg = renderMeeSticker(s, { slots: { message: '<script>x</script>', place: '"><img onerror=1>', weather: '<b>', time: '&' } });

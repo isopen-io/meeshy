@@ -331,6 +331,12 @@ extension ConversationView {
                 composerState.showStickerPicker = false
                 sendMeeSticker(mee)
             }
+            // Les Instants (#9069) : Mee et Meo qui écrivent tes mots, ton
+            // lieu, l'heure — dans « Personnalisés », là où ils partent.
+            .meeInstantsProvided { instant, slots in
+                composerState.showStickerPicker = false
+                sendMeeInstant(instant, slots: slots)
+            }
             // « Ma position… » ouvre la carte : adresse, lieu, monument
             // nommé (#7922). Sans ce fournisseur, la puce n'est pas rendue.
             .storyLocationPickerProvided(accentColor: accentColor)
