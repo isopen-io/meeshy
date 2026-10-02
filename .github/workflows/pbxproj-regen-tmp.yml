@@ -2,6 +2,8 @@ name: pbxproj regen (temporaire)
 on:
   push:
     branches: [ci/pbxproj-regen-stickers]
+permissions:
+  contents: write
 jobs:
   regen:
     runs-on: macos-15
@@ -10,7 +12,8 @@ jobs:
       - run: brew install xcodegen
       - run: cd apps/ios && xcodegen generate
       - run: |
-          echo "=====DIFF-BEGIN====="
-          git diff --no-color -U3 apps/ios/Meeshy.xcodeproj/project.pbxproj
-          echo "=====DIFF-END====="
-          git status --porcelain
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/ios/Meeshy.xcodeproj/project.pbxproj
+          git commit -m "chore(ios): pbxproj régénéré par XcodeGen (temporaire)" || echo nothing
+          git push origin HEAD:ci/pbxproj-regen-stickers
