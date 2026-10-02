@@ -184,20 +184,36 @@ public extension MeeshyConversation {
     }
 }
 
-/// L'onde du point « ici » (#9065) : DOUCE au repos — le pair observe la
-/// conversation —, VIVE quand il défile, écoute, agit ou regarde en plein
-/// écran. Jumelle de `presence-dot-here` / `presence-dot-active`
+/// L'onde du point « ici » (#9065), une échelle partagée avec le mood :
+/// IMPERCEPTIBLE quand le pair regarde en plein écran — il s'y stabilise —,
+/// DOUCE au repos — il observe —, VIVE quand il défile, écoute ou agit.
+/// Jumelle de `presence-dot-hush` / `-rest` / `-pulse`
 /// (`apps/web/src/styles/avatar.css`).
 public struct PresenceHereWave: Equatable, Sendable {
     public let peakScale: CGFloat
     public let startOpacity: Double
     public let duration: Double
 
+    public static let hush = PresenceHereWave(peakScale: 1.25, startOpacity: 0.2, duration: 2.8)
     public static let rest = PresenceHereWave(peakScale: 1.6, startOpacity: 0.3, duration: 2.4)
     public static let vivid = PresenceHereWave(peakScale: 2.8, startOpacity: 0.8, duration: 1.2)
 
     public static func `for`(_ here: ConversationHere) -> PresenceHereWave? {
-        guard here.isHere else { return nil }
-        return here.isActive ? .vivid : .rest
+        switch here {
+        case .absent: return nil
+        case .here: return .rest
+        case .active: return .vivid
+        case .focused: return .hush
+        }
     }
+}
+
+/// L'arrivée « ici » (#9047, #9065) : le point — ou le mood — grossit en
+/// ressort, et un GROS pulse part de lui avant qu'il se stabilise. Jumelle de
+/// `presence-dot-ripple` (`apps/web/src/styles/avatar.css`).
+public enum PresenceArrival {
+    public static let peakScale: CGFloat = 3
+    public static let lineWidth: CGFloat = 3
+    public static let startOpacity: Double = 0.9
+    public static let duration: Double = 0.9
 }

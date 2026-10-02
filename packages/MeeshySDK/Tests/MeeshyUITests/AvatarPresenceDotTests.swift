@@ -46,17 +46,27 @@ final class AvatarPresenceDotTests: XCTestCase {
 
     /// « ici » garde son petit pulse au repos ; l'activité et le plein écran
     /// le rendent bien plus visible (#9065).
-    func test_hereWave_restIsGentle_activityIsMuchMoreVisible() {
+    /// Une échelle pour le point ET le mood (porteur 2026-10-02, #9065) : en
+    /// plein écran il se stabilise et pulse de manière imperceptible ; au
+    /// repos, un petit pulse ; à l'activité, un pulse bien visible.
+    func test_hereWave_ladder_focusIsImperceptible_restIsGentle_activityIsVivid() {
+        let hush = PresenceHereWave.hush
         let rest = PresenceHereWave.rest
         let vivid = PresenceHereWave.vivid
-        XCTAssertGreaterThan(rest.peakScale, 1)
+        XCTAssertGreaterThan(hush.peakScale, 1)
+        XCTAssertLessThan(hush.peakScale, rest.peakScale)
+        XCTAssertLessThan(hush.startOpacity, rest.startOpacity)
         XCTAssertGreaterThan(vivid.peakScale, rest.peakScale + 0.8)
         XCTAssertGreaterThan(vivid.startOpacity, rest.startOpacity * 2)
-        XCTAssertLessThan(vivid.duration, rest.duration)
         XCTAssertEqual(PresenceHereWave.for(.here), .rest)
         XCTAssertEqual(PresenceHereWave.for(.active), .vivid)
-        XCTAssertEqual(PresenceHereWave.for(.focused), .vivid)
+        XCTAssertEqual(PresenceHereWave.for(.focused), .hush)
         XCTAssertNil(PresenceHereWave.for(.absent))
+    }
+
+    func test_arrival_isABigPulse() {
+        XCTAssertGreaterThanOrEqual(PresenceArrival.peakScale, 3)
+        XCTAssertGreaterThanOrEqual(PresenceArrival.lineWidth, 3)
     }
 
     func test_pulses_online_keepsItsBreath_awayDoesNot() {
@@ -129,9 +139,13 @@ final class AvatarPresenceDotTests: XCTestCase {
 
     /// Dans la liste et l'en-tête, le mood respire par le pulse de l'avatar :
     /// c'est lui qui se fait à peine perceptible en plein écran (#9065).
-    func test_avatarMoodPulse_isBarelyPerceptibleWhileThePeerWatchesFullScreen() {
-        XCTAssertEqual(MeeshyAvatar.moodPulseIntensity(focused: false), 0.12, accuracy: 0.0001)
-        XCTAssertEqual(MeeshyAvatar.moodPulseIntensity(focused: true), MeeshyMoodBadge.hushedScale - 1, accuracy: 0.0001)
+    /// Le mood suit la même échelle que le point : il est au milieu, c'est
+    /// tout (#9065).
+    func test_avatarMoodPulse_followsTheDotLadder() {
+        XCTAssertEqual(MeeshyAvatar.moodPulseIntensity(.absent), 0.12, accuracy: 0.0001)
+        XCTAssertEqual(MeeshyAvatar.moodPulseIntensity(.here), 0.12, accuracy: 0.0001)
+        XCTAssertEqual(MeeshyAvatar.moodPulseIntensity(.active), 0.22, accuracy: 0.0001)
+        XCTAssertEqual(MeeshyAvatar.moodPulseIntensity(.focused), MeeshyMoodBadge.hushedScale - 1, accuracy: 0.0001)
     }
 
     func test_moodOutlineWidth_scalesWithTheBadge_neverHairline() {

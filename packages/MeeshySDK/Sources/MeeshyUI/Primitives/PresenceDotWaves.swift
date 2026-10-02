@@ -36,14 +36,14 @@ struct PresenceArrivalRipple: View {
 
     var body: some View {
         Circle()
-            .stroke(color, lineWidth: 2)
+            .stroke(color, lineWidth: PresenceArrival.lineWidth)
             .frame(width: diameter, height: diameter)
-            .scaleEffect(spread ? 2.6 : 1)
-            .opacity(spread ? 0 : 0.9)
+            .scaleEffect(spread ? PresenceArrival.peakScale : 1)
+            .opacity(spread ? 0 : PresenceArrival.startOpacity)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
             .onAppear {
-                withAnimation(.easeOut(duration: 0.8).delay(0.15)) { spread = true }
+                withAnimation(.easeOut(duration: PresenceArrival.duration).delay(0.15)) { spread = true }
             }
     }
 }

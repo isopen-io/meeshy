@@ -419,7 +419,17 @@ public struct MeeshyAvatar: View {
         }
         .overlay(alignment: .bottomTrailing) {
             if let emoji = effectiveMoodEmoji, !emoji.isEmpty {
+                // Le mood vit les transitions du point (#9065) : il grossit en
+                // ressort à l'arrivée « ici » avec son gros pulse, se rétracte
+                // au départ puis revient cerné de vert.
                 moodBadge(emoji: emoji)
+                    .overlay {
+                        if effectivePresence == .here && presenceChanged && !reduceMotion {
+                            PresenceArrivalRipple(color: PresenceStyle.hereDotColor, diameter: context.badgeSize)
+                        }
+                    }
+                    .id("mood.\(effectivePresence?.transitionKey ?? "none")")
+                    .transition(presenceTransition)
                     .offset(badgeOffset(badgeHalfSize: context.badgeSize / 2))
             } else if let presence = effectivePresence {
                 let diameter = presence.diameter(avatarSize: context.size, hereRatio: context.hereDotRatio)
@@ -541,11 +551,11 @@ public struct MeeshyAvatar: View {
     /// fois — et, depuis l'extraction, derrière le portillon Reduce Motion
     /// que cette écriture-ci n'a jamais consulté.
     ///
-    /// En plein écran (#9065), le pulse se fait à peine perceptible : deux
-    /// branches, pour que l'effet reparte à son amplitude nouvelle.
-    @ViewBuilder
+    /// L'amplitude du pulse suit ce que fait le pair (#9065) — UNE branche :
+    /// changer d'amplitude ne doit pas recréer le badge, qui rejouerait son
+    /// arrivée.
     private func moodBadge(emoji: String) -> some View {
-        let badge = MeeshyMoodBadge(
+        MeeshyMoodBadge(
             emoji: emoji,
             diameter: context.badgeSize,
             animates: context.animatesMoodBadge,
@@ -553,17 +563,17 @@ public struct MeeshyAvatar: View {
             hushed: isHere.isFocused,
             onTap: onMoodTap
         )
-        if !enablePulse {
-            badge
-        } else if isHere.isFocused {
-            badge.pulse(intensity: Self.moodPulseIntensity(focused: true))
-        } else {
-            badge.pulse(intensity: Self.moodPulseIntensity(focused: false))
-        }
+        .ifTrue(enablePulse) { $0.pulse(intensity: Self.moodPulseIntensity(isHere)) }
     }
 
-    public nonisolated static func moodPulseIntensity(focused: Bool) -> CGFloat {
-        focused ? MeeshyMoodBadge.hushedScale - 1 : 0.12
+    /// L'échelle du point, portée par le mood (#9065) : imperceptible en plein
+    /// écran, habituelle au repos, ample à l'activité.
+    public nonisolated static func moodPulseIntensity(_ here: ConversationHere) -> CGFloat {
+        switch here {
+        case .focused: return MeeshyMoodBadge.hushedScale - 1
+        case .active: return 0.22
+        case .here, .absent: return 0.12
+        }
     }
 
     @ViewBuilder
