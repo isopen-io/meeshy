@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
-import { UnifiedAuthRequest, requirePublishingGrace } from '../../middleware/auth';
+import { UnifiedAuthRequest, requirePublishingGrace, createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
@@ -171,7 +171,7 @@ export function registerCoreRoutes(
   // #9149 — la porte d'un LIEN PARTAGÉ : `GET /posts/:postId` laisse entrer un
   // visiteur sans compte, que `anonymousPostGate` juge. Absente, la route reste
   // fermée comme avant (fail-closed) : seul `postRoutes` la câble.
-  optionalAuth: any = requiredAuth
+  optionalAuth: ReturnType<typeof createUnifiedAuthMiddleware> = requiredAuth
 ) {
   const postService = new PostService(prisma);
   // #4147 critère 2 — seau PARTAGÉ avec POST /posts/:postId/repost
