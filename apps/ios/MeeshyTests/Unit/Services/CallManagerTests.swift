@@ -5416,7 +5416,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
     // call's reconnection history, not just the live FSM retry budget.
 
     private func attemptReconnectionBody(in source: String) -> String? {
-        guard let funcRange = source.range(of: "private func attemptReconnection(escalate:") else { return nil }
+        guard let funcRange = source.range(of: "func attemptReconnection(escalate:") else { return nil }
         let bodyEnd = source.range(of: "\n    private func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound
             ?? source.endIndex
         return String(source[funcRange.lowerBound..<bodyEnd])
@@ -6177,7 +6177,7 @@ final class LocalTeardownServerReconciliationTests: XCTestCase {
 
     func test_emitCallEndReliably_defersWhenSocketDown_andReconcilesOnReconnect() throws {
         let source = try callManagerSource()
-        guard let body = functionBody(of: "private func emitCallEndReliably(", in: source) else {
+        guard let body = functionBody(of: "func emitCallEndReliably(", in: source) else {
             XCTFail(
                 "emitCallEndReliably(callId:) missing — every local teardown must materialise " +
                 "server-side (ACK + fallback), and a hang-up during a signaling outage must be " +
@@ -6199,24 +6199,23 @@ final class LocalTeardownServerReconciliationTests: XCTestCase {
         )
     }
 
-    func test_failCall_emitsCallEndToServer_beforeLocalTeardown() throws {
+    /// #9111 — failCall informe toujours la passerelle, mais par la politique de
+    /// reprise : `call:end` pour un appel jamais décroché, `call:leave` ou rien
+    /// pour un appel décroché (`CallResumePolicyTests`).
+    func test_failCall_informsTheServerThroughTheResumePolicy_beforeLocalTeardown() throws {
         let source = try callManagerSource()
         guard let body = functionBody(of: "private func failCall(", in: source) else {
             XCTFail("failCall not found"); return
         }
-        XCTAssertTrue(
-            body.contains("emitCallEndReliably("),
-            "failCall must inform the gateway — a silent local teardown leaves the peer in a " +
-            "zombie call the gateway keeps relaying re-joins for"
-        )
-        guard let emitRange = body.range(of: "emitCallEndReliably("),
+        guard let emitRange = body.range(of: "abandonOnServer(cause: .failure)"),
               let teardownRange = body.range(of: "endCallInternal(reason: .failed(") else {
-            XCTFail("expected both the server emit and the local teardown in failCall"); return
+            XCTFail("expected both the server signal and the local teardown in failCall"); return
         }
         XCTAssertLessThan(
             emitRange.lowerBound, teardownRange.lowerBound,
-            "the emit must capture currentCallId BEFORE endCallInternal nils it"
+            "the signal must capture currentCallId BEFORE endCallInternal nils it"
         )
+        XCTAssertFalse(body.contains("emitCallEndReliably("), "failCall never ends a call for everyone on its own")
     }
 
     func test_endCall_usesSharedReliableEmit() throws {
@@ -6252,7 +6251,7 @@ final class AckFailureReconciliationTests: XCTestCase {
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
-        guard let fnRange = source.range(of: "private func emitCallEndReliably(") else {
+        guard let fnRange = source.range(of: "func emitCallEndReliably(") else {
             XCTFail("emitCallEndReliably not found"); return
         }
         let body = String(source[fnRange.lowerBound...].prefix(1600))
@@ -6711,7 +6710,7 @@ final class CallManagerBubblePositionTests: XCTestCase {
     /// unconditionally, not only in the conditional settle-window path.
     func test_endCallInternal_resetsBubblePositionUnconditionally() throws {
         let source = try callManagerSource()
-        guard let range = source.range(of: "private func endCallInternal(reason: CallEndReason) {") else {
+        guard let range = source.range(of: "func endCallInternal(reason: CallEndReason) {") else {
             XCTFail("endCallInternal not found in CallManager.swift"); return
         }
         let bodyEnd = source.range(
@@ -7509,7 +7508,7 @@ final class FailCallActiveGuardTests: XCTestCase {
     private func failCallBody(in source: String) -> String? {
         guard let funcRange = source.range(of: "private func failCall(") else { return nil }
         let bodyEnd = source.range(
-            of: "\n    private func endCallInternal",
+            of: "\n    func endCallInternal",
             range: funcRange.upperBound..<source.endIndex
         )?.lowerBound ?? source.endIndex
         return String(source[funcRange.lowerBound..<bodyEnd])
@@ -7545,8 +7544,8 @@ final class FailCallActiveGuardTests: XCTestCase {
         guard let reportRange = body.range(of: "callProvider.reportCall") else {
             XCTFail("callProvider.reportCall not found in failCall body"); return
         }
-        guard let emitRange = body.range(of: "emitCallEndReliably") else {
-            XCTFail("emitCallEndReliably not found in failCall body"); return
+        guard let emitRange = body.range(of: "abandonOnServer(cause:") else {
+            XCTFail("abandonOnServer not found in failCall body"); return
         }
         XCTAssertLessThan(
             guardRange.lowerBound, reportRange.lowerBound,
@@ -7554,7 +7553,7 @@ final class FailCallActiveGuardTests: XCTestCase {
         )
         XCTAssertLessThan(
             guardRange.lowerBound, emitRange.lowerBound,
-            "the isActive guard must precede the call:end re-emit"
+            "the isActive guard must precede the server signal"
         )
     }
 }

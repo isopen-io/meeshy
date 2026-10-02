@@ -77,7 +77,7 @@ final class GroupCallWiringSourceTests: XCTestCase {
     }
 
     func test_attemptReconnection_neverChasesADepartedPrimary() throws {
-        let reconnect = try body(of: "private func attemptReconnection(escalate: Bool = false) {", in: manager, length: 300)
+        let reconnect = try body(of: "func attemptReconnection(escalate: Bool = false) {", in: manager, length: 300)
 
         XCTAssertTrue(reconnect.contains("guard !isGroupPrimaryVacated else { return }"))
     }
@@ -89,13 +89,17 @@ final class GroupCallWiringSourceTests: XCTestCase {
         XCTAssertTrue(vacate.contains("transitionToConnected()"))
     }
 
-    func test_connectionLost_groupCall_tellsTheGateway() throws {
-        let reconnect = try body(of: "private func attemptReconnection(escalate: Bool = false) {", in: manager, length: 3_000)
+    /// #9111 — le plafond de reconnexion d'un groupe QUITTE (`call:leave`) au
+    /// lieu de terminer l'appel pour tous : la décision est
+    /// `CallResumePolicy.teardownSignal(for: .reconnectCeiling, …)`.
+    func test_connectionLost_groupCall_tellsTheGatewayWithoutEndingTheGroup() throws {
+        let reconnect = try body(of: "func attemptReconnection(escalate: Bool = false) {", in: manager, length: 3_000)
 
         XCTAssertTrue(
-            reconnect.contains("if isGroupMeshCall, let callId = currentCallId { emitCallEndReliably(callId: callId) }"),
-            "sans `call:end`, les autres membres gardent une tuile fantôme jusqu'au nettoyage serveur"
+            reconnect.contains("abandonOnServer(cause: .reconnectCeiling)"),
+            "sans un mot au serveur, les autres membres gardent une tuile fantôme jusqu'au nettoyage serveur"
         )
+        XCTAssertFalse(reconnect.contains("emitCallEndReliably(callId: callId)"), "jamais `call:end` au plafond")
     }
 
     // MARK: - #9090 — la liaison du principal parti ne dégrade plus les autres

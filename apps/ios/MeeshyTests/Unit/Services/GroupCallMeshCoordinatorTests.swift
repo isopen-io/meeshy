@@ -76,6 +76,7 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         var isGroupCallLive = true
         var isGroupCallEngaged = true
         var isGroupPrimaryConnected = true
+        var isGroupPrimaryReconnecting = false
         var isLocalMicMuted = false
         var isLocalVideoEnabled = false
         var primaryRemoteVideoTrack: Any?
@@ -476,6 +477,36 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(factory.link(to: "b")?.offerCallCount, 1)
         XCTAssertTrue(sut.consume(signal: signal("answer", from: "b"), callId: "call1"))
+    }
+
+    // MARK: - #9111 — le principal revient pendant que sa liaison se cherche
+
+    func test_participantJoined_formerPrimaryReturning_vacatesTheSeatAndTheMeshOffersOnce() async {
+        let (sut, host, factory, _, _) = makeSUT()
+        host.isGroupPrimaryConnected = false
+        host.isGroupPrimaryReconnecting = true
+
+        sut.handleParticipantJoined(joined("b"))
+        sut.handleParticipantJoined(joined("b"))
+        await settle()
+
+        XCTAssertTrue(sut.isPrimaryVacated)
+        XCTAssertEqual(host.vacateCallCount, 1)
+        XCTAssertEqual(factory.links.filter { $0.remoteUserId == "b" }.count, 1, "deux participant-joined du même retour : une seule liaison")
+        XCTAssertEqual(factory.link(to: "b")?.offerCallCount, 1)
+        XCTAssertEqual(sut.roster.member("b")?.isPrimary, false)
+        XCTAssertTrue(sut.consume(signal: signal("answer", from: "b"), callId: "call1"), "la réponse du revenant va au maillage")
+    }
+
+    func test_participantJoined_primaryWhileItsLinkIsHealthy_keepsTheSeat() async {
+        let (sut, host, factory, _, _) = makeSUT()
+        host.isGroupPrimaryReconnecting = false
+
+        sut.handleParticipantJoined(joined("b"))
+        await settle()
+
+        XCTAssertFalse(sut.isPrimaryVacated)
+        XCTAssertNil(factory.link(to: "b"))
     }
 
     func test_newCall_freesTheVacatedSeat() {

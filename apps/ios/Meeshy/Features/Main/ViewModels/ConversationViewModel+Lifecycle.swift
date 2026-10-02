@@ -62,6 +62,8 @@ struct LiveCallJoinContext {
         _ remoteUsername: String,
         _ isVideo: Bool
     ) -> Bool
+    /// #9111 — un groupe rejoint passe par le maillage, qui doit le savoir avant la reprise.
+    var markGroupConversation: (_ conversationId: String, _ title: String?) -> Void = { _, _ in }
 
     static let live = LiveCallJoinContext(
         currentCallId: { CallManager.shared.currentCallId },
@@ -76,7 +78,8 @@ struct LiveCallJoinContext {
                 remoteUsername: remoteUsername,
                 isVideo: isVideo
             )
-        }
+        },
+        markGroupConversation: { GroupCallMeshCoordinator.shared.markGroupConversation($0, title: $1) }
     )
 }
 

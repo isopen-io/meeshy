@@ -171,6 +171,26 @@ struct ActiveCallSessionTests {
         #expect(ps.allSatisfy { !$0.hasLeft })
     }
 
+    @Test func remoteParticipant_skipsADepartedRow() {
+        let session = ActiveCallSession(id: "call-1", conversationId: "conv-1", mode: "p2p", status: "active", participants: [
+            ActiveCallParticipant(userId: "user-1"),
+            ActiveCallParticipant(userId: "user-2", leftAt: "2026-10-02T10:00:00.000Z"),
+            ActiveCallParticipant(userId: "user-3")
+        ])
+        #expect(session.remoteParticipant(currentUserId: "user-1")?.userId == "user-3")
+        #expect(session.hasOtherActiveParticipant(currentUserId: "user-1"))
+    }
+
+    @Test func session_whoIsStillIn_readsLiveRowsOnly() {
+        let session = ActiveCallSession(id: "call-1", conversationId: "conv-1", mode: "p2p", status: "active", participants: [
+            ActiveCallParticipant(userId: "user-1", leftAt: "2026-10-02T10:00:00.000Z"),
+            ActiveCallParticipant(userId: "user-2")
+        ])
+        #expect(!session.isStillIn(currentUserId: "user-1"))
+        #expect(session.isStillIn(currentUserId: "user-2"))
+        #expect(!session.hasOtherActiveParticipant(currentUserId: "user-2"))
+    }
+
     @Test func session_decodesWhenAParticipantUsesNestedUserIdFallback() throws {
         // A degraded payload (one participant missing top-level userId) must
         // still yield a usable remoteParticipant instead of failing the WHOLE

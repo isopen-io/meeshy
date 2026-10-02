@@ -192,18 +192,36 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         guard isGroupCall else { return }
         syncWithHost()
         guard boundCallId == event.callId else { return }
+        if arrival.userId == primary, host.isGroupPrimaryReconnecting { primaryDidReturn(arrival.userId) }
         noteServed(arrival.userId)
         guard roster.contains(arrival.userId) || !roster.isFull else {
             Logger.webrtc.info("[GROUP] arrival ignored — mesh full (\(self.roster.capacity))")
             return
         }
-        roster = roster.admitting(arrival, isPrimary: arrival.userId == primary)
+        roster = roster.admitting(arrival, isPrimary: arrival.userId == primaryUserId)
         guard isGroupCallActive else {
             pendingArrivals = pendingArrivals.filter { $0 != arrival.userId } + [arrival.userId]
             return
         }
         offer(to: arrival.userId)
     }
+
+    /// #9111 — le principal revient (plantage, coupure) pendant que sa liaison
+    /// se cherche : son ancienne PeerConnection ne le reverra jamais. Son siège
+    /// se libère et le maillage lui offre à neuf, comme à tout membre — sans
+    /// exiger qu'il reste quelqu'un d'autre, à la différence d'un départ.
+    private func primaryDidReturn(_ primary: String) {
+        guard !isPrimaryVacated else { return }
+        isPrimaryVacated = true
+        dropMember(primary)
+        host?.groupPrimaryDidVacate()
+    }
+
+    /// Deux `participant-joined` d'un même retour (reconnexion du socket, puis
+    /// « Rejoindre ») ne font qu'UNE offre : la seconde trouverait la première
+    /// en pleine négociation et la casserait.
+    private var lastOfferAt: [String: Date] = [:]
+    private static let offerDebounce: TimeInterval = 3
 
     private func offer(to userId: String) {
         guard let host, GroupSignalRouting.shouldOfferToArrival(
@@ -213,9 +231,11 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
             isInCall: host.isGroupCallEngaged,
             primaryVacated: isPrimaryVacated
         ) else { return }
+        if links[userId] != nil, let last = lastOfferAt[userId], now().timeIntervalSince(last) < Self.offerDebounce { return }
         links[userId]?.close()
         links[userId] = nil
         guard let link = makeLink(to: userId) else { return }
+        lastOfferAt[userId] = now()
         Task { await link.offer() }
     }
 
@@ -471,6 +491,7 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         links = [:]
         boundCallId = nil
         isPrimaryVacated = false
+        lastOfferAt = [:]
         announcedTitle = nil
         servedMemberIds = []
         departedMemberIds = []

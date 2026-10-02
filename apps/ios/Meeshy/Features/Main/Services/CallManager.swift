@@ -1074,7 +1074,7 @@ final class CallManager: ObservableObject {
             ) { MediaPermissionCoordinator.openSettings() }
         }
 
-        return startCall(conversationId: conversationId, userId: userId, displayName: displayName, isVideo: video)
+        return await startOrJoinLiveCall(conversationId: conversationId, userId: userId, displayName: displayName, isVideo: video)
     }
 
     /// Starts an outgoing call. Returns `false` (no-op) if a call is already
@@ -1334,6 +1334,7 @@ final class CallManager: ObservableObject {
 
         analyticsCallInitiatedDate = Date()
         currentCallId = callId
+        CallResumeLedger.shared.begin(callId)
         self.remoteUserId = remoteUserId
         self.remoteUsername = remoteUsername
         self.conversationId = conversationId
@@ -1910,7 +1911,7 @@ final class CallManager: ObservableObject {
         }
         // §3.5 — drop offers from an older negotiation epoch (churned socket /
         // replayed buffer). The newest generation always wins.
-        guard acceptIncomingNegotiation(generation) else { return }
+        guard acceptIncomingNegotiation(generation, isOffer: true) else { return }
         guard let userId = remoteUserId else { return }
 
         switch callState {
@@ -2312,7 +2313,7 @@ final class CallManager: ObservableObject {
         pendingEndReconciliations.append((callId: callId, reason: reason))
     }
 
-    private func emitCallEndReliably(callId: String) {
+    func emitCallEndReliably(callId: String) {
         guard MessageSocketManager.shared.isConnected else {
             armPendingEndReconciliation(callId: callId, reason: nil)
             Logger.calls.warning("call:end deferred — socket down, will reconcile on reconnect (callId=\(callId))")
@@ -3121,7 +3122,8 @@ final class CallManager: ObservableObject {
                     let elapsed = Date().timeIntervalSince(since)
                     switch CallReliabilityPolicy.evaluateConnecting(
                         secondsInConnecting: elapsed,
-                        didAttemptRestart: didAttemptConnectingRestart
+                        didAttemptRestart: didAttemptConnectingRestart,
+                        failAfterSeconds: self.connectingFailBudget
                     ) {
                     case .waiting:
                         break
@@ -3962,16 +3964,11 @@ final class CallManager: ObservableObject {
         if callUsesCallKit, let uuid = activeCallUUID {
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
         }
-        // Capture BEFORE endCallInternal nils it — the gateway must learn of
-        // this teardown or the peer stays in a zombie call (see
-        // emitCallEndReliably).
-        if let callId = currentCallId {
-            emitCallEndReliably(callId: callId)
-        }
+        abandonOnServer(cause: .failure)
         endCallInternal(reason: .failed(reasonMessage))
     }
 
-    private func endCallInternal(reason: CallEndReason) {
+    func endCallInternal(reason: CallEndReason) {
         // CALL-FIX 2026-06-06 — stop any ringing loop + play the "ended" cue, but
         // ONLY if the call was actually active (ringing/connecting/connected). The
         // `isActive` guard means a re-entrant endCallInternal (already .ended/.idle)
@@ -4657,6 +4654,7 @@ final class CallManager: ObservableObject {
                     }
                     return
                 }
+                if CallResumePolicy.isTransientDuringResume(code: event.code, isResuming: self.isResumingCall) { return }
                 FeedbackToastManager.shared.showError(message)
                 // Ne teardown que si un appel est réellement en vol (ringing →
                 // reconnecting). Une erreur hors-appel ne fait qu'afficher le toast.
@@ -5003,20 +5001,22 @@ final class CallManager: ObservableObject {
     /// §3.5 — accept an incoming signal of `generation` unless it is stale
     /// (older than the high-water mark). Advances the mark on accept. The first
     /// signal of a call (generation 0 or 1) is always accepted.
-    private func acceptIncomingNegotiation(_ generation: Int) -> Bool {
-        if Self.isStaleNegotiation(incoming: generation, highWaterMark: negotiationId) {
+    private func acceptIncomingNegotiation(_ generation: Int, isOffer: Bool = false) -> Bool {
+        if Self.isStaleNegotiation(incoming: generation, highWaterMark: negotiationId, isOffer: isOffer) {
             Logger.calls.info("[CALL-DIAG] dropping stale signal gen=\(generation) < current=\(self.negotiationId)")
             return false
         }
+        let freshLink = Self.isFreshLinkOffer(incoming: generation, highWaterMark: negotiationId, isOffer: isOffer)
         negotiationId = max(negotiationId, generation)
+        if freshLink { negotiationId = generation }
         return true
     }
 
     /// Pure, testable epoch rule (§3.5): a signal is stale when its generation
     /// is strictly older than the highest already seen-or-sent. Equal/newer is
     /// accepted (offer, its answer, and the matching ICE share a generation).
-    static func isStaleNegotiation(incoming: Int, highWaterMark: Int) -> Bool {
-        incoming < highWaterMark
+    static func isStaleNegotiation(incoming: Int, highWaterMark: Int, isOffer: Bool = false) -> Bool {
+        incoming < highWaterMark && !isFreshLinkOffer(incoming: incoming, highWaterMark: highWaterMark, isOffer: isOffer)
     }
 
     /// §3.5 — begin a new outgoing negotiation: bump the epoch and return it to
@@ -5578,7 +5578,7 @@ extension CallManager: WebRTCServiceDelegate {
     /// `escalate: true` to advance the budget (and eventually trip the cap →
     /// `.connectionLost`).
     @MainActor
-    private func attemptReconnection(escalate: Bool = false) {
+    func attemptReconnection(escalate: Bool = false) {
         guard !isGroupPrimaryVacated else { return }
         // FSM §3.2 — `.reconnecting` est réservé aux appels dont la négociation
         // média a commencé. Avant l'answer (.ringing/.offering) aucun ICE
@@ -5613,7 +5613,7 @@ extension CallManager: WebRTCServiceDelegate {
             if callUsesCallKit, let uuid = activeCallUUID {
                 callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
             }
-            if isGroupMeshCall, let callId = currentCallId { emitCallEndReliably(callId: callId) }
+            abandonOnServer(cause: .reconnectCeiling)
             endCallInternal(reason: .connectionLost)
             return
         }
@@ -5832,7 +5832,7 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
             rtc.unlockForConfiguration()
         }
         Task { @MainActor [weak self] in
-            self?.manager?.endCall()
+            self?.manager?.abandonAfterSystemReset()
         }
     }
 

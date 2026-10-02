@@ -40,6 +40,10 @@ extension CallManager: GroupCallHostProviding {
     }
 
     var isGroupPrimaryConnected: Bool { callState == .connected }
+    var isGroupPrimaryReconnecting: Bool {
+        if case .reconnecting = callState { return true }
+        return false
+    }
     var isLocalMicMuted: Bool { isMuted }
     var isLocalVideoEnabled: Bool { isVideoEnabled }
     var primaryRemoteVideoTrack: Any? { webRTCService.remoteVideoTrack }

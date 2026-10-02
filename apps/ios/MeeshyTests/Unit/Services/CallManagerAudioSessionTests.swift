@@ -703,7 +703,7 @@ final class CallManagerAudioSessionTests: XCTestCase {
         // negotiation invariant.
         let source = try callManagerSource()
         XCTAssertTrue(
-            source.contains("static func isStaleNegotiation(incoming: Int, highWaterMark: Int)"),
+            source.contains("static func isStaleNegotiation(incoming: Int, highWaterMark: Int"),
             "isStaleNegotiation must be declared `static func` — pure epoch rule (§3.5), no side effects."
         )
     }
@@ -2116,7 +2116,7 @@ final class CallManagerBackgroundVideoTests: XCTestCase {
 
     func test_endCallInternal_resetsVideoSuspendedByBackgroundFlag() throws {
         let source = try callManagerSource()
-        guard let teardownRange = source.range(of: "private func endCallInternal(reason:") else {
+        guard let teardownRange = source.range(of: "func endCallInternal(reason:") else {
             XCTFail("endCallInternal not found in CallManager.swift"); return
         }
         let teardownBody = String(source[teardownRange.upperBound...])

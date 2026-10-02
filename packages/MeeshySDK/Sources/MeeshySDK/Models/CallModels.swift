@@ -350,11 +350,23 @@ public struct ActiveCallSession: Codable, Identifiable, Sendable, Equatable {
     /// as audio) and stays only as a forward-compatibility fallback.
     public var isVideo: Bool { (metadata?.type ?? mode) == "video" }
 
-    /// The other participant in a direct call — the first entry whose
-    /// `userId` isn't `currentUserId`. `nil` for group calls or if the
-    /// participant list hasn't been populated.
+    /// The other participant in a direct call — the first entry still IN the
+    /// call whose `userId` isn't `currentUserId`. A departed row (`leftAt`) is
+    /// never the peer to rejoin (#9111). `nil` if nobody else is left.
     public func remoteParticipant(currentUserId: String) -> ActiveCallParticipant? {
-        participants.first { $0.userId != currentUserId }
+        participants.first { $0.userId != currentUserId && !$0.hasLeft }
+    }
+
+    /// Someone other than `currentUserId` is still in the call — the call is
+    /// worth JOINING rather than starting a new one (#9111).
+    public func hasOtherActiveParticipant(currentUserId: String) -> Bool {
+        remoteParticipant(currentUserId: currentUserId) != nil
+    }
+
+    /// `currentUserId` still holds a live row — the server keeps them in the
+    /// call (reconnect grace), so a relaunched app resumes it (#9111).
+    public func isStillIn(currentUserId: String) -> Bool {
+        participants.contains { $0.userId == currentUserId && !$0.hasLeft }
     }
 }
 

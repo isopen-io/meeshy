@@ -160,6 +160,9 @@ protocol GroupCallHostProviding: AnyObject {
     /// L'appel est engagé : offre envoyée, connexion en cours, établie ou en reprise.
     var isGroupCallEngaged: Bool { get }
     var isGroupPrimaryConnected: Bool { get }
+    /// #9111 — la liaison du principal est perdue (reprise ICE en cours) : un
+    /// `participant-joined` de ce principal est un RETOUR, pas un doublon.
+    var isGroupPrimaryReconnecting: Bool { get }
     var isLocalMicMuted: Bool { get }
     var isLocalVideoEnabled: Bool { get }
     var primaryRemoteVideoTrack: Any? { get }

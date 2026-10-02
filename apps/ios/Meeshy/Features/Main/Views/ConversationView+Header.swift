@@ -343,10 +343,10 @@ private struct HeaderCallButtonsView: View {
                 startCallButtons
             }
         }
-        // Re-reconciles whenever the conversation changes (task id) — not on
-        // every body re-eval, which would otherwise fire on every callState
-        // tick (e.g. once a rejoin succeeds and callDuration starts ticking).
-        .task(id: conversationId) {
+        // Re-reconciles when the conversation changes OR when the local call
+        // starts/stops (#9111 — after leaving a group call that goes on, the
+        // pill must come back as « Rejoindre ») — never on every callState tick.
+        .task(id: HeaderCallReconcileKey(conversationId: conversationId, isLocalCallActive: callManager.callState.isActive)) {
             await reconcileActiveCall()
         }
         // Invalidation temps réel : le gateway fanout `call:ended` jusqu'aux
@@ -460,9 +460,8 @@ private struct HeaderCallButtonsView: View {
         // network error and "no active call" both collapse to nil here,
         // which is the right behavior: reconciliation is best-effort and
         // silent, never surfaced as an error to the user.
-        guard let session = try? await ActiveCallService.shared.activeCall(conversationId: conversationId),
-              session.conversationId == conversationId else { return }
-        reconciledActiveCall = session
+        let session = try? await ActiveCallService.shared.activeCall(conversationId: conversationId)
+        reconciledActiveCall = session?.conversationId == conversationId ? session : nil
     }
 
     /// Bouton d'appel unique : un `Menu` qui laisse choisir vocal ou vidéo via un
