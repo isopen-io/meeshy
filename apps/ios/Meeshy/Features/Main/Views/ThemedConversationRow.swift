@@ -611,7 +611,7 @@ private struct ConversationAvatarView: View {
                 avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
                 storyState: storyRingState,
                 moodEmoji: moodStatus?.moodEmoji,
-                presenceState: (isDirect && moodStatus == nil) ? presenceState : nil,
+                presenceState: isDirect ? presenceState : nil,
                 isHere: isDirect ? isPeerHere : .absent,
                 // DM : tap → story (si non lue) sinon profil, via handleTap() de MeeshyAvatar.
                 //   Le handler profil passe par `onTap` (et NON `onViewProfile`) pour

@@ -643,7 +643,7 @@ private struct LentilleRowAvatar: View {
             // dot de présence agrégée qu'un DM. `presenceState` porte déjà
             // `.offline` = aucun dot (contrat §4.3 « offline = aucun dot »,
             // verrouillé par MeeshyAvatar, pas ici).
-            presenceState: moodStatus == nil ? presenceState : nil,
+            presenceState: presenceState,
             isHere: isDirect ? isPeerHere : .absent,
             onTap: isDirect ? onViewProfile : onViewConversationInfo,
             onViewProfile: nil,

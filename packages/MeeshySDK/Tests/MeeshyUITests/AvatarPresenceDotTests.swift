@@ -127,6 +127,13 @@ final class AvatarPresenceDotTests: XCTestCase {
         XCTAssertLessThanOrEqual(MeeshyMoodBadge.hushedScale - 1, (MeeshyMoodBadge.pulsedScale - 1) / 3)
     }
 
+    /// Dans la liste et l'en-tête, le mood respire par le pulse de l'avatar :
+    /// c'est lui qui se fait à peine perceptible en plein écran (#9065).
+    func test_avatarMoodPulse_isBarelyPerceptibleWhileThePeerWatchesFullScreen() {
+        XCTAssertEqual(MeeshyAvatar.moodPulseIntensity(focused: false), 0.12, accuracy: 0.0001)
+        XCTAssertEqual(MeeshyAvatar.moodPulseIntensity(focused: true), MeeshyMoodBadge.hushedScale - 1, accuracy: 0.0001)
+    }
+
     func test_moodOutlineWidth_scalesWithTheBadge_neverHairline() {
         XCTAssertEqual(MeeshyMoodBadge.outlineWidth(diameter: 10), 1.5, accuracy: 0.001)
         XCTAssertEqual(MeeshyMoodBadge.outlineWidth(diameter: 32), 32 * 0.07, accuracy: 0.001)

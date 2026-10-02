@@ -501,6 +501,19 @@ final class ConversationViewingReporterTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(covers, 13)
     }
 
+    /// Le mood remplace le point mais porte la présence en CONTOUR (#9065) :
+    /// une rangée qui retire la présence sous un mood efface ce contour.
+    func test_conversationRows_keepThePresenceUnderAMood() throws {
+        let main = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main")
+        for row in ["Views/ThemedConversationRow.swift", "Lentille/Row/LentilleConversationRow.swift"] {
+            let source = AppSourceGuard.stripComments(try String(contentsOf: main.appendingPathComponent(row), encoding: .utf8))
+            XCTAssertFalse(source.contains("moodStatus == nil"), "\(row) retire la présence sous un mood")
+        }
+    }
+
     func test_screenAppeared_beforeTheHandlerOpens_announcesNothing() {
         let (sut, emitter, _) = makeSUT()
 

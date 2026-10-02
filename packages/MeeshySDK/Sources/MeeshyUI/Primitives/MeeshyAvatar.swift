@@ -540,8 +540,12 @@ public struct MeeshyAvatar: View {
     /// `repeatForever` et sa garde anti-double-animation y vivent une seule
     /// fois — et, depuis l'extraction, derrière le portillon Reduce Motion
     /// que cette écriture-ci n'a jamais consulté.
+    ///
+    /// En plein écran (#9065), le pulse se fait à peine perceptible : deux
+    /// branches, pour que l'effet reparte à son amplitude nouvelle.
+    @ViewBuilder
     private func moodBadge(emoji: String) -> some View {
-        MeeshyMoodBadge(
+        let badge = MeeshyMoodBadge(
             emoji: emoji,
             diameter: context.badgeSize,
             animates: context.animatesMoodBadge,
@@ -549,7 +553,17 @@ public struct MeeshyAvatar: View {
             hushed: isHere.isFocused,
             onTap: onMoodTap
         )
-        .ifTrue(enablePulse && !isHere.isFocused) { $0.pulse(intensity: 0.12) }
+        if !enablePulse {
+            badge
+        } else if isHere.isFocused {
+            badge.pulse(intensity: Self.moodPulseIntensity(focused: true))
+        } else {
+            badge.pulse(intensity: Self.moodPulseIntensity(focused: false))
+        }
+    }
+
+    public nonisolated static func moodPulseIntensity(focused: Bool) -> CGFloat {
+        focused ? MeeshyMoodBadge.hushedScale - 1 : 0.12
     }
 
     @ViewBuilder

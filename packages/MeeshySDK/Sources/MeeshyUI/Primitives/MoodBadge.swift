@@ -52,7 +52,7 @@ public struct MeeshyMoodBadge: View {
     public static let restingScale: CGFloat = 1.0
     public static let pulsedScale: CGFloat = 1.18
     /// Le pulse à peine perceptible du plein écran, et sa période.
-    public static let hushedScale: CGFloat = 1.05
+    public nonisolated static let hushedScale: CGFloat = 1.05
     public static let hushedDuration: Double = 1.6
     public static let springResponse: Double = 0.5
     public static let springDamping: Double = 0.4
@@ -136,7 +136,15 @@ public struct MeeshyMoodBadge: View {
                     withTransaction(Transaction(animation: nil)) { scale = Self.restingScale }
                     switch currentMotion {
                     case .still: return
-                    case .hush: hushPulse(); return
+                    case .hush:
+                        // Un ressort lancé dans la passe même où la vue paraît
+                        // est absorbé par sa transition (mesuré au simulateur) :
+                        // la respiration y échappe par son départ décalé, le
+                        // pulse discret par ce battement.
+                        try? await Task.sleep(for: .milliseconds(80))
+                        guard !Task.isCancelled else { return }
+                        hushPulse()
+                        return
                     case .breathe: break
                     }
                     startPulse()
