@@ -199,7 +199,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// simple photo — un prompt sans motif visible, souvent refusé
     /// définitivement. Il doit désormais arriver au passage en mode Vidéo.
     func test_cameraSession_doesNotAddAudioInputEagerly() throws {
-        let src = try source("Meeshy/Features/Main/Components/CameraView.swift")
+        let src = try source("Meeshy/Features/Main/Components/CameraModel.swift")
         let setup = try body(from: "private func setupSession() {", to: "func enableAudioCaptureIfNeeded", in: src)
 
         XCTAssertFalse(

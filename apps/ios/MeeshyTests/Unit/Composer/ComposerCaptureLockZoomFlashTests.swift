@@ -229,7 +229,7 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
         XCTAssertTrue(hote.contains("ComposerCaptureHold.release"))
         XCTAssertTrue(hote.contains("ComposerCaptureHold.verticalDrag"))
         XCTAssertTrue(hote.contains("ComposerFlashIntensity.floorWhite"))
-        let camera = try source("Meeshy/Features/Main/Components/CameraView.swift")
+        let camera = try source("Meeshy/Features/Main/Components/CameraModel.swift")
         XCTAssertTrue(camera.contains("setTorchModeOn(level:"))
         XCTAssertTrue(camera.contains("videoZoomFactor"))
     }
