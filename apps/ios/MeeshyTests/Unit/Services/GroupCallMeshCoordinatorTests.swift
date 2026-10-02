@@ -490,7 +490,81 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         XCTAssertTrue(sut.roster.contains("b"))
     }
 
-    // MARK: - L'en-tête d'un groupe qui continue (#9091)
+    // MARK: - Ce que la passerelle sait de qui reste (#9092)
+
+    private func servedSession(_ participants: [ActiveCallParticipant]) -> ActiveCallSession {
+        ActiveCallSession(id: "call1", conversationId: "group1", mode: "p2p", status: "active", participants: participants)
+    }
+
+    /// L'invité vient de décrocher : aucune offre d'un autre membre n'est encore
+    /// arrivée, mais la passerelle le sert dans l'appel.
+    func test_participantLeft_primary_gatewayServesAnotherMemberWithoutLink_keepsTheCall() async {
+        let (sut, host, factory, _, calls) = makeSUT()
+        calls.session = servedSession([
+            ActiveCallParticipant(userId: "me"),
+            ActiveCallParticipant(userId: "b"),
+            ActiveCallParticipant(userId: "c")
+        ])
+        await settle()
+        XCTAssertTrue(factory.links.isEmpty, "aucun lien de maillage encore établi")
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertTrue(sut.isPrimaryVacated)
+        XCTAssertEqual(host.vacateCallCount, 1)
+    }
+
+    func test_participantLeft_primary_gatewayServesOnlyDepartedRows_endsLikeBefore() async {
+        let (sut, host, _, _, calls) = makeSUT()
+        calls.session = servedSession([
+            ActiveCallParticipant(userId: "me"),
+            ActiveCallParticipant(userId: "b"),
+            ActiveCallParticipant(userId: "c", leftAt: "2026-10-02T10:00:00.000Z")
+        ])
+        await settle()
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertFalse(sut.isPrimaryVacated)
+        XCTAssertEqual(host.vacateCallCount, 0)
+    }
+
+    func test_participantLeft_primary_servedMemberAlreadyGone_endsLikeBefore() async {
+        let (sut, host, _, _, calls) = makeSUT()
+        calls.session = servedSession([ActiveCallParticipant(userId: "b"), ActiveCallParticipant(userId: "c")])
+        await settle()
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "c"))
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertFalse(sut.isPrimaryVacated)
+        XCTAssertEqual(host.vacateCallCount, 0)
+    }
+
+    /// Le `bye` en bande du principal passe par la même décision.
+    func test_primaryDidLeave_ringingThenAnswered_gatewayServesAnotherMember_keepsTheCall() async {
+        let (sut, host, _, _, calls) = makeSUT(engaged: false)
+        calls.session = servedSession([ActiveCallParticipant(userId: "b"), ActiveCallParticipant(userId: "c")])
+        await settle()
+        host.isGroupCallEngaged = true
+        sut.syncWithHost()
+
+        XCTAssertTrue(sut.primaryDidLeave())
+    }
+
+    func test_newCall_forgetsTheServedMembersOfThePrevious() async {
+        let (sut, host, _, _, calls) = makeSUT()
+        calls.session = servedSession([ActiveCallParticipant(userId: "b"), ActiveCallParticipant(userId: "c")])
+        await settle()
+
+        calls.session = nil
+        host.groupCallId = "call2"
+        sut.syncWithHost()
+        await settle()
+
+        XCTAssertFalse(sut.primaryDidLeave())
+    }
+
 
     func test_participantLeft_primaryOfTitledGroup_retitlesWithTheGroupTitle() {
         let (sut, host, _, _, _) = makeSUT()
