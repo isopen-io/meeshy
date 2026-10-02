@@ -51,6 +51,7 @@ import { isAdult } from '@meeshy/shared/utils/age';
 import { translationTargetId } from './zmq-translation/utils/zmq-helpers';
 import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
 import { parseAttachmentTranscription } from '@meeshy/shared/utils/attachment-validators';
+import { detectContentLanguage } from '../utils/content-language';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -74,26 +75,6 @@ interface StoryTextObjectRaw {
  */
 function computeExpiresAt(type: PostType): Date | undefined {
   return ephemeralExpiresAt(type, new Date());
-}
-
-// Minimal language detection (first word heuristics + fallback)
-function detectLanguage(text: string): string {
-  if (!text) return 'en';
-  const lower = text.toLowerCase();
-  // Simple heuristic based on common words
-  const langPatterns: Record<string, RegExp> = {
-    fr: /\b(le|la|les|un|une|des|je|tu|il|nous|vous|est|sont|avec|pour|dans|que|qui|pas|mais)\b/,
-    es: /\b(el|la|los|las|un|una|es|son|con|para|en|que|por|del|como|pero|más)\b/,
-    de: /\b(der|die|das|ein|eine|ist|sind|mit|für|und|ich|nicht|auf|dem|den)\b/,
-    pt: /\b(o|a|os|as|um|uma|é|são|com|para|em|que|por|do|da|não|mas)\b/,
-    ar: /[\u0600-\u06FF]/,
-    zh: /[\u4e00-\u9fff]/,
-    ja: /[\u3040-\u309F\u30A0-\u30FF]/,
-  };
-  for (const [lang, pattern] of Object.entries(langPatterns)) {
-    if (pattern.test(lower)) return lang;
-  }
-  return 'en';
 }
 
 // postInclude is shared — see ./posts/postIncludes for the single source of truth.
@@ -189,12 +170,12 @@ export class PostService {
     const expiresAt = ephemeralExpiresAt(data.type, now);
 
     // Canonicalize the client claim at the write boundary — clients send the raw
-    // platform locale (iOS `fr_FR`, web `fr-FR`). `detectLanguage` already returns
+    // platform locale (iOS `fr_FR`, web `fr-FR`). `detectContentLanguage` already returns
     // canonical codes, so only the claim path needs normalization. Irreducible
     // codes (`bas`) fall back verbatim. Mirrors the message funnel (218/219).
     const originalLanguage = data.originalLanguage
       ? (normalizeLanguageCode(data.originalLanguage) ?? data.originalLanguage)
-      : (data.content ? detectLanguage(data.content) : undefined);
+      : (data.content ? detectContentLanguage(data.content) : undefined);
 
     // `detectedLanguage` (#5349/#5422) est déjà de l'ISO 639-1 mesuré
     // (`detectMeasuredLanguage`, tinyld) — normalisée par sûreté, comme la
@@ -512,7 +493,7 @@ export class PostService {
     try {
       // An explicit source (e.g. the language chosen when editing a post) wins
       // over the heuristic detector, which only guesses from word patterns.
-      const sourceLanguage = sourceLanguageOverride ?? detectLanguage(content);
+      const sourceLanguage = sourceLanguageOverride ?? detectContentLanguage(content);
 
       // 1. Résoudre les langues cibles depuis les contacts de l'auteur, hors
       // la langue source elle-même — même garde que le sibling
@@ -656,7 +637,7 @@ export class PostService {
         return;
       }
 
-      const sourceLanguage = obj.sourceLanguage ?? detectLanguage(text);
+      const sourceLanguage = obj.sourceLanguage ?? detectContentLanguage(text);
       const targetLanguages = allTargetLanguages.filter(l => l !== sourceLanguage);
 
       if (targetLanguages.length === 0) {
@@ -2287,7 +2268,7 @@ export class PostService {
     const content = opts.content;
     const isQuote = opts.isQuote ?? false;
 
-    const originalLanguage = content ? detectLanguage(content) : undefined;
+    const originalLanguage = content ? detectContentLanguage(content) : undefined;
 
     const originalRepostOfId = original.originalRepostOfId
       ?? original.repostOfId
