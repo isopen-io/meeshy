@@ -1290,18 +1290,14 @@ final class CallViewHintContrastTests: XCTestCase {
         )
     }
 
-    func test_videoConnectingSlowHint_meetsContrastThreshold() throws {
+    /// #8788 — l'indice « L'audio est peut-être déjà actif » (et son
+    /// contraste) a disparu avec l'état « vidéo lente » : passé le délai, le
+    /// pair s'affiche caméra coupée. La garde suit la conclusion qui l'a remplacé.
+    func test_videoConnectingWatchdog_concludesOnCameraOff_neverASlowHint() throws {
         let source = try callViewSource()
-        guard let range = source.range(of: "call.video.connecting.slow.hint") else {
-            XCTFail("call.video.connecting.slow.hint not found"); return
-        }
-        let endIdx = source.index(range.upperBound, offsetBy: 200, limitedBy: source.endIndex) ?? source.endIndex
-        let vicinity = String(source[range.lowerBound..<endIdx])
-        XCTAssertFalse(
-            vicinity.contains(".opacity(0.45)"),
-            "the video-connecting-slow hint at .white.opacity(0.45) computes to ~4.4:1 contrast on the " +
-            "near-black call background, just under WCAG AA's 4.5:1 threshold for small text."
-        )
+        XCTAssertFalse(source.contains("call.video.connecting.slow"),
+                       "plus d'état « vidéo lente » : un pair sans image s'affiche caméra coupée")
+        XCTAssertTrue(source.contains("remoteVideoWaitElapsedCallId = callManager.currentCallId"))
     }
 }
 
