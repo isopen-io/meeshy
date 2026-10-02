@@ -106,7 +106,7 @@ const mongoLikePrisma = (rows: Row[]) => {
           bytesSent: null,
           bytesReceived: null,
           metadata: null,
-          conversation: { type: 'direct', title: null, avatar: null },
+          conversation: { type: 'direct', title: null, avatar: null, participants: [{ id: 'p-reader' }] },
         }))
     ),
     updateMany: jest.fn(async (args: { where: Where; data: { hiddenForUserIds: { push: string } } }) => {
