@@ -108,8 +108,9 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
 
     func handleIncomingCall(_ event: CallOfferData) {
         // La passerelle pose `conversation.type` : tout ce qui n'est pas une
-        // conversation directe peut réunir plus de deux membres.
-        guard let type = event.conversationType, type != "direct" else { return }
+        // conversation directe peut réunir plus de deux membres — et une
+        // invitation (`isGroup`) fait d'un duo un groupe (#9084).
+        guard event.isGroupCall else { return }
         markGroupConversation(event.conversationId, title: event.conversationTitle)
         adoptIceServers(event.iceServers)
         syncWithHost()

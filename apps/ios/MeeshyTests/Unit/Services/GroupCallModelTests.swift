@@ -229,4 +229,38 @@ final class GroupCallModelTests: XCTestCase {
         XCTAssertTrue(GroupCallStage.isShown(isMeshActive: true, roster: two))
         XCTAssertFalse(GroupCallStage.isShown(isMeshActive: false, roster: two))
     }
+
+    // MARK: - Invitation (#9084)
+
+    private func offer(_ json: String) throws -> CallOfferData {
+        try JSONDecoder().decode(CallOfferData.self, from: Data(json.utf8))
+    }
+
+    /// L'invitant est celui qui offrira à l'invité : c'est lui le principal,
+    /// et la réponse de l'invité doit lui revenir — pas à l'initiateur.
+    func test_principalUserId_invitation_isTheInviter() throws {
+        let event = try offer(#"{"callId":"c1","conversationId":"dm","initiator":{"userId":"b","username":"bob"},"conversationType":"direct","invitedBy":{"userId":"a","username":"alice"},"isGroup":true}"#)
+
+        XCTAssertEqual(event.principalUserId, "a")
+        XCTAssertTrue(event.isGroupCall)
+    }
+
+    func test_principalUserId_plainDirectCall_isTheInitiator() throws {
+        let event = try offer(#"{"callId":"c1","conversationId":"dm","initiator":{"userId":"b","username":"bob"},"conversationType":"direct"}"#)
+
+        XCTAssertEqual(event.principalUserId, "b")
+        XCTAssertFalse(event.isGroupCall)
+    }
+
+    func test_isGroupCall_groupConversationWithoutInvitation_isGroup() throws {
+        let event = try offer(#"{"callId":"c1","conversationId":"g","initiator":{"userId":"b","username":"bob"},"conversationType":"group"}"#)
+
+        XCTAssertTrue(event.isGroupCall)
+    }
+
+    func test_isGroupCall_oldGatewayWithoutType_isNotGroup() throws {
+        let event = try offer(#"{"callId":"c1","conversationId":"dm","initiator":{"userId":"b","username":"bob"}}"#)
+
+        XCTAssertFalse(event.isGroupCall)
+    }
 }

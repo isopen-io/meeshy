@@ -129,6 +129,11 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         return decode(CallSignalPayload.self, #"{"type":"\#(type)","from":"\#(from)","to":"me","negotiationId":1\#(sdpField)}"#)
     }
 
+    /// Bob a lancé un appel dans un duo ; Alice, déjà dedans, m'y invite.
+    private func invitation(conversationType: String = "direct") -> CallOfferData {
+        decode(CallOfferData.self, #"{"callId":"call1","conversationId":"group1","initiator":{"userId":"b","username":"bob"},"conversationType":"\#(conversationType)","invitedBy":{"userId":"a","username":"alice"},"isGroup":true}"#)
+    }
+
     private func settle() async {
         for _ in 0..<8 { await Task.yield() }
     }
@@ -399,6 +404,35 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
 
         XCTAssertTrue(sut.isGroupConversation("group1"))
         XCTAssertEqual(sut.groupTitle(for: "group1"), "Équipe")
+    }
+
+    /// #9084 — un duo devenu groupe garde `conversationType == "direct"` : c'est
+    /// l'invitation (`isGroup`) qui dit que l'appel réunit plus de deux membres.
+    func test_handleIncomingCall_invitationIntoDirectConversation_marksGroup() {
+        let (sut, _, _, _, _) = makeSUT(markGroup: false)
+
+        sut.handleIncomingCall(invitation())
+
+        XCTAssertTrue(sut.isGroupConversation("group1"))
+    }
+
+    /// #9084 — chez l'invité qui sonne, l'offre de l'invitant revient à la
+    /// liaison principale ; celle d'un autre membre attend le maillage au lieu
+    /// d'écraser l'offre en attente du principal.
+    func test_consume_invitationRinging_otherMemberOfferWaitsForTheMesh() async {
+        let (sut, host, factory, _, _) = makeSUT(engaged: false, markGroup: false)
+        host.groupPrimaryUserId = "a"
+        sut.handleIncomingCall(invitation())
+
+        XCTAssertFalse(sut.consume(signal: signal("offer", from: "a"), callId: "call1"))
+        XCTAssertTrue(sut.consume(signal: signal("offer", from: "b"), callId: "call1"))
+
+        host.isGroupCallEngaged = true
+        sut.syncWithHost()
+        await settle()
+
+        XCTAssertEqual(factory.link(to: "b")?.received.map(\.kind), [.offer])
+        XCTAssertNil(factory.link(to: "a"))
     }
 
     func test_incomingDirectCall_isNotMarked() {
