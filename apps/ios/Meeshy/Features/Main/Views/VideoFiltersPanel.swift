@@ -156,6 +156,26 @@ struct VideoFiltersPanel: View {
             }
 
             HStack {
+                Image(systemName: "sparkles")
+                    .font(MeeshyFont.relative(12, weight: .medium))
+                    .foregroundColor(MeeshyColors.indigo400)
+                    .frame(width: 18)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(String(localized: "video.filter.naturalComplexion", defaultValue: "Teint naturel", bundle: .main))
+                        .font(MeeshyFont.relative(13, weight: .medium))
+                    Text(String(localized: "video.filter.naturalComplexion.hint", defaultValue: "Unifie et illumine le teint, sans retouche visible", bundle: .main))
+                        .font(MeeshyFont.relative(11))
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Toggle("", isOn: $filterConfig.naturalComplexionEnabled)
+                    .tint(MeeshyColors.indigo500)
+                    .labelsHidden()
+                    .accessibilityLabel(String(localized: "video.filter.naturalComplexion", defaultValue: "Teint naturel", bundle: .main))
+                    .accessibilityHint(String(localized: "video.filter.naturalComplexion.hint", defaultValue: "Unifie et illumine le teint, sans retouche visible", bundle: .main))
+            }
+
+            HStack {
                 Image(systemName: "face.dashed")
                     .font(MeeshyFont.relative(12, weight: .medium))
                     .foregroundColor(MeeshyColors.indigo400)
