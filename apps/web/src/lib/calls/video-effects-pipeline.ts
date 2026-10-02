@@ -106,7 +106,7 @@ function workerPipeline(output: MediaStreamTrack, worker: WorkerPort, unwatch: (
 
 type Handoff = { readonly start: (worker: WorkerPort, reducedMotion: boolean) => MediaStreamTrack | null; readonly abandon: () => void };
 
-async function inWorker(handoff: Handoff, settings: FrameSettings, env: PipelineEnv & { readonly worker: () => WorkerPort }): Promise<EffectsPipeline | null> {
+async function inWorker(handoff: Handoff, env: PipelineEnv & { readonly worker: () => WorkerPort }): Promise<EffectsPipeline | null> {
   const worker = env.worker();
   const reducedMotion = env.motion?.read() ?? false;
   const word = firstWord(worker, env);
@@ -225,7 +225,7 @@ export async function createEffectsPipeline(camera: MediaStreamTrack, settings: 
   const spawn = env.worker;
   if (spawn !== null) {
     const handoff = env.frames !== null ? streamsHandoff(camera, settings, env.frames) : trackHandoff(camera, settings);
-    const pipeline = await inWorker(handoff, settings, { ...env, worker: spawn });
+    const pipeline = await inWorker(handoff, { ...env, worker: spawn });
     if (pipeline !== null) return pipeline;
   }
   if (env.frames === null && env.canvas === null) throw new Error('video-effects: no pipeline');
