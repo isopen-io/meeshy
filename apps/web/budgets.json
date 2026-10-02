@@ -214,17 +214,9 @@
       "pattern": "^assets/video-effects-segmentation-[A-Za-z0-9_-]{8}\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 46,
+        "value": 91,
         "status": "CIBLE -- MESUREE PAR #8471, NON ARBITREE",
-        "source": "Mesure du 2026-10-02 (`vite build` puis gzip -9, avant la directive qui renvoie les builds a la CI) : 44,94 Ko (44,47 dans le worker + 0,47 pour le module du repli, dont MediaPipe vit dans `call_video_mediapipe`) -- le flou d arriere-plan par segmentation (#8471, `lib/calls/video-effects-segmentation.ts`) et `@mediapipe/tasks-vision` 1.0.1 (Apache-2.0). Charge A LA DEMANDE au premier flou que la camera ne fait pas (`backgroundBlur` reste prioritaire), et JAMAIS precache (`vite.config.ts` > globIgnores). A cote, hors JS : le chargeur et le binaire WebAssembly (`assets/vision_wasm_module_internal-*` : 76 Ko + 3,4 Mo gzip, 11,8 Mo bruts) et le modele selfie segmenter float16 (`assets/selfie-segmenter-*.tflite`, 244 Ko), tous servis par Meeshy, telecharges a ce moment-la seulement. Arrondi au Ko SUPERIEUR (45) + 1 Ko de marge."
-      }
-    },
-    "call_video_mediapipe": {
-      "pattern": "^assets/mediapipe-[A-Za-z0-9_-]{8}\\.js$",
-      "kb": {
-        "value": 46,
-        "status": "CIBLE -- ESTIMEE PAR #8471 (copie de la mesure du worker), A REMESURER PAR LA CI",
-        "source": "Estimation du 2026-10-02 : ~44,5 Ko -- `@mediapipe/tasks-vision` 1.0.1 (Apache-2.0) pour le REPLI du fil principal (Firefox, ou tout navigateur dont le worker refuse) : nomme dans `vite.config.ts` > manualChunks, sans quoi la regle par defaut le rangeait dans `core`, la premiere peinture de tous. Importe STATIQUEMENT par le seul chunk de segmentation du repli (d ou l absence de `dynamic_only`), lui-meme charge en `import()` au premier flou sans flou de camera ; jamais precache. Le worker en porte sa propre copie (`call_video_segmentation`) : un lecteur n en telecharge qu une. Arrondi au Ko SUPERIEUR (45) + 1 Ko de marge."
+        "source": "Mesure du 2026-10-02 (`vite build` puis gzip -9) : DEUX copies, ~44,5 Ko chacune -- celle du worker et celle du repli du fil principal (Firefox, ou un worker qui refuse) ; un lecteur n en telecharge qu UNE. Mesure CI du 2026-10-02 : 44,02 Ko pour la copie du worker, 43,94 pour celle du repli. -- le flou d arriere-plan par segmentation (#8471, `lib/calls/video-effects-segmentation.ts`) et `@mediapipe/tasks-vision` 1.0.1 (Apache-2.0). Charge A LA DEMANDE au premier flou que la camera ne fait pas (`backgroundBlur` reste prioritaire), et JAMAIS precache (`vite.config.ts` > globIgnores). A cote, hors JS : le chargeur et le binaire WebAssembly (`assets/vision_wasm_module_internal-*` : 76 Ko + 3,4 Mo gzip, 11,8 Mo bruts) et le modele selfie segmenter float16 (`assets/selfie-segmenter-*.tflite`, 244 Ko), tous servis par Meeshy, telecharges a ce moment-la seulement. Somme des deux arrondie au Ko SUPERIEUR (89) + 2 Ko de marge."
       }
     },
     "call_video_effects_rules": {
