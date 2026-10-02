@@ -62,14 +62,14 @@ extension MeeshyComposerHost {
         // perte de définition sans le moindre geste de l'auteur.
         switch ComposerReturnMedia.action(
             edited: viewModel.canUndoGlobal,
-            returnsCapture: ComposerConversationCapture.returnsUneditedCapture(origin: intent.origin),
+            returnsCapture: ComposerConversationCapture.returnsUntouchedMedia(origin: intent.origin),
             sceneHoldsMedia: !objets.isEmpty,
             sceneHasVideo: objets.contains { $0.kind == .video }
         ) {
         case .dismiss:
             onDismiss()
         case .returnCapture:
-            guard let prise = sceneCaptureAsTaken else { onDismiss(); return }
+            guard let prise = sceneMediaAsTaken else { onDismiss(); return }
             onReturnMedia(prise)
             onDismiss()
         case .renderImage:
@@ -91,8 +91,8 @@ extension MeeshyComposerHost {
         }
     }
 
-    /// La prise telle que le viseur l'a rendue : son FICHIER, jamais un rendu.
-    var sceneCaptureAsTaken: ComposerReturnedMedia? {
+    /// Le média tel que le viseur ou la porte l'a rendu : son FICHIER, jamais un rendu.
+    var sceneMediaAsTaken: ComposerReturnedMedia? {
         for media in documentContentMedia {
             switch media.kind {
             case .video:

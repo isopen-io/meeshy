@@ -13,11 +13,13 @@ nonisolated enum ComposerConversationCapture {
         isCaptureDoor(origin)
     }
 
-    /// Une prise que l'auteur n'a pas retouchée repart TELLE QUELLE — le
-    /// message n'en a aucune autre copie. Une retouche intacte, elle, garde la
-    /// pièce d'origine déjà en attente.
-    static func returnsUneditedCapture(origin: ComposerOrigin) -> Bool {
-        isCaptureDoor(origin)
+    /// Un média que l'auteur n'a pas retouché repart TEL QUEL quand le message
+    /// n'en a aucune autre copie — la prise de la caméra, la pièce de la bande
+    /// des médias récents (#9124). Une retouche intacte d'une pièce DÉJÀ en
+    /// attente, elle, la laisse en place.
+    static func returnsUntouchedMedia(origin: ComposerOrigin) -> Bool {
+        if case .conversationDraftMedia(let staged) = origin { return !staged }
+        return isCaptureDoor(origin)
     }
 
     private static func isCaptureDoor(_ origin: ComposerOrigin) -> Bool {
@@ -25,7 +27,7 @@ nonisolated enum ComposerConversationCapture {
         case .conversationCapture:
             return true
         case .storyTray, .feedComposer, .moodChip, .repost, .edit, .draft, .share,
-             .conversationMedia, .socialMedia, .conversationDraftImage:
+             .conversationMedia, .socialMedia, .conversationDraftMedia:
             return false
         }
     }

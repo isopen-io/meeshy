@@ -16,11 +16,11 @@ final class ComposerConversationImageTests: XCTestCase {
     /// L'origine ne propose AUCUN format : l'image repart dans le fil, elle ne
     /// se publie pas. Un choix de format serait une question sans objet.
     func test_laRetoucheDUneImageDuFil_neProposeQueLaScene() {
-        let profil = ComposerProfile.profile(for: .conversationDraftImage)
+        let profil = ComposerProfile.profile(for: .conversationDraftMedia(staged: true))
         XCTAssertEqual(profil.offeredFormats, [.story])
         XCTAssertEqual(profil.opensWith, .mediaSeeded)
-        XCTAssertNil(ComposerOrigin.conversationDraftImage.resumedDraftId)
-        XCTAssertNil(ComposerOrigin.conversationDraftImage.repostedPostId)
+        XCTAssertNil(ComposerOrigin.conversationDraftMedia(staged: true).resumedDraftId)
+        XCTAssertNil(ComposerOrigin.conversationDraftMedia(staged: true).repostedPostId)
     }
 
     /// Le composite rendu garde le FORMAT de la scène — une photo paysage

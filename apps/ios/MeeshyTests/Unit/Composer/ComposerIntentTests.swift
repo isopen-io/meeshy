@@ -44,7 +44,7 @@ final class ComposerIntentTests: XCTestCase {
         .share,
         .conversationMedia(messageId: "msg-7", attachmentId: "piece-3"),
         .socialMedia(postId: "post-9", mediaId: "media-2"),
-        .conversationDraftImage,
+        .conversationDraftMedia(staged: true),
         .conversationCapture
     ]
 
@@ -59,7 +59,7 @@ final class ComposerIntentTests: XCTestCase {
         case .share: return "share"
         case .conversationMedia: return "conversationMedia"
         case .socialMedia: return "socialMedia"
-        case .conversationDraftImage: return "conversationDraftImage"
+        case .conversationDraftMedia: return "conversationDraftMedia"
         case .conversationCapture: return "conversationCapture"
         }
     }
@@ -320,7 +320,7 @@ final class ComposerIntentTests: XCTestCase {
         XCTAssertEqual(
             noms.count, 11,
             "Onze portes sont spécifiées (#6085 a ajouté `.socialMedia`, le média d'un post ou la "
-            + "slide d'une story ; #8416 `.conversationDraftImage`, la retouche d'une image du fil ; "
+            + "slide d'une story ; #8416 `.conversationDraftMedia`, la retouche d'une image du fil ; "
             + "#9123 `.conversationCapture`, la caméra de la barre de composition). "
             + "Une porte ajoutée à `ComposerOrigin` doit entrer ici avec son profil, jamais s'ajouter "
             + "en silence."
@@ -368,7 +368,7 @@ final class ComposerIntentTests: XCTestCase {
         case .repost, .edit:
             return true
         case .storyTray, .feedComposer, .moodChip, .draft, .share, .conversationMedia, .socialMedia,
-             .conversationDraftImage, .conversationCapture:
+             .conversationDraftMedia, .conversationCapture:
             return false
         }
     }
@@ -477,7 +477,7 @@ final class ComposerIntentTests: XCTestCase {
         case .draft, .share, .edit:
             return true
         case .storyTray, .feedComposer, .moodChip, .repost, .conversationMedia, .socialMedia,
-             .conversationDraftImage, .conversationCapture:
+             .conversationDraftMedia, .conversationCapture:
             return false
         }
     }
@@ -648,7 +648,7 @@ final class ComposerIntentTests: XCTestCase {
             serviesParLeMeuble,
             // #8416 : la retouche d'une image du fil monte le meuble, elle aussi.
             ["storyTray", "feedComposer", "moodChip", "draft", "share", "conversationMedia",
-             "socialMedia", "repost", "conversationDraftImage", "conversationCapture"],
+             "socialMedia", "repost", "conversationDraftMedia", "conversationCapture"],
             "Périmètre après #6085 : le tray, LE FIL, les réels, LE MOOD, le brouillon, le partage, le "
             + "média de conversation, LE MÉDIA SOCIAL (post / story) — et le REPOST. `edit` n'y figure pas parce "
             + "que le corpus l'instancie sur un format de DOCUMENT (post/réel), toujours servi par "

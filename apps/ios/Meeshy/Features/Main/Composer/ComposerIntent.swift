@@ -120,11 +120,14 @@ nonisolated enum ComposerOrigin: Equatable {
     /// `mediaId` est optionnel, comme `attachmentId` ci-dessus : une story ou un
     /// post sans média sème sa seule description.
     case socialMedia(postId: String, mediaId: String?)
-    /// **La retouche d'une image du BROUILLON d'un message** (#8416) : elle
-    /// s'ouvre dans la même scène plein écran que toute composition, et
-    /// « Terminé » la rend au message (`MeeshyComposerHost.onReturnMedia`) —
-    /// elle ne se publie jamais.
-    case conversationDraftImage
+    /// **La retouche d'une image ou d'une vidéo du BROUILLON d'un message**
+    /// (#8416, #9124) : elle s'ouvre dans la même scène plein écran que toute
+    /// composition, et « Terminé » la rend au message
+    /// (`MeeshyComposerHost.onReturnMedia`) — elle ne se publie jamais.
+    /// `staged` : la pièce est DÉJÀ en attente (intacte ⇒ elle reste) ; sinon
+    /// elle vient de la bande des médias récents (intacte ⇒ elle repart telle
+    /// quelle, `ComposerConversationCapture.returnsUntouchedMedia`).
+    case conversationDraftMedia(staged: Bool)
     /// **La caméra de la barre de composition d'une conversation** (#9123) :
     /// le composer plein écran, viseur ARMÉ dès l'ouverture — le geste de
     /// l'auteur a déjà dit « prendre ». La prise s'édite dans la scène et
@@ -177,7 +180,7 @@ nonisolated extension ComposerOrigin {
         case .repost(let postId, _):
             return postId
         case .storyTray, .feedComposer, .moodChip, .edit, .draft, .share, .conversationMedia, .socialMedia,
-             .conversationDraftImage, .conversationCapture:
+             .conversationDraftMedia, .conversationCapture:
             return nil
         }
     }
@@ -206,7 +209,7 @@ nonisolated extension ComposerOrigin {
         case .draft(let id):
             return id
         case .storyTray, .feedComposer, .moodChip, .edit, .repost, .share, .conversationMedia, .socialMedia,
-             .conversationDraftImage, .conversationCapture:
+             .conversationDraftMedia, .conversationCapture:
             return nil
         }
     }
@@ -831,8 +834,8 @@ nonisolated extension ComposerProfile {
                 routesToLegacy: nil
             )
 
-        case .conversationDraftImage:
-            // Une image, et aucun format : elle repart dans le fil. Les
+        case .conversationDraftMedia:
+            // Un média, et aucun format : elle repart dans le fil. Les
             // diapositives suivent le FORMAT (loi éprouvée) ; c'est le mode
             // retouche du meuble qui retire « nouvelle slide » (`onReturnMedia`).
             return ComposerProfile(

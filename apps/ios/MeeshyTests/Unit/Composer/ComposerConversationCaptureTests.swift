@@ -18,7 +18,7 @@ final class ComposerConversationCaptureTests: XCTestCase {
         .draft(id: "d"), .share,
         .conversationMedia(messageId: "m", attachmentId: "a"),
         .socialMedia(postId: "p", mediaId: "m"),
-        .conversationDraftImage
+        .conversationDraftMedia(staged: true)
     ]
 
     func test_profile_conversationCapture_opensTheSceneWithCaptureAndNoFormatChoice() {
@@ -80,9 +80,9 @@ final class ComposerConversationCaptureTests: XCTestCase {
     }
 
     func test_returnsUneditedCapture_onlyForTheCaptureDoor() {
-        XCTAssertTrue(ComposerConversationCapture.returnsUneditedCapture(origin: .conversationCapture))
+        XCTAssertTrue(ComposerConversationCapture.returnsUntouchedMedia(origin: .conversationCapture))
         for origine in Self.autresPortes {
-            XCTAssertFalse(ComposerConversationCapture.returnsUneditedCapture(origin: origine), "\(origine)")
+            XCTAssertFalse(ComposerConversationCapture.returnsUntouchedMedia(origin: origine), "\(origine)")
         }
     }
 
@@ -97,6 +97,14 @@ final class ComposerConversationCaptureTests: XCTestCase {
                                                       resumesDraft: false, isSeeded: true,
                                                       opensOnMood: false, returnsToConversation: true),
                        .disabled)
+    }
+
+    /// **Une pièce NON encore en attente** (« Éditer » de la bande des médias
+    /// récents, #9124) repart telle quelle si l'auteur n'y touche pas : sans
+    /// cela, « Terminé » refermait sans rien poser dans le message.
+    func test_returnsUntouchedMedia_unstagedDraftMedia_returnsTrue() {
+        XCTAssertTrue(ComposerConversationCapture.returnsUntouchedMedia(origin: .conversationDraftMedia(staged: false)))
+        XCTAssertFalse(ComposerConversationCapture.returnsUntouchedMedia(origin: .conversationDraftMedia(staged: true)))
     }
 
     // MARK: - Câblage
@@ -117,6 +125,16 @@ final class ComposerConversationCaptureTests: XCTestCase {
                        "La caméra de la barre ouvrait l'ancienne CameraView : elle ouvre la scène (#9123).")
         XCTAssertTrue(code.contains("ConversationCaptureSceneEditor("),
                       "La caméra de la barre ouvre le composer, viseur armé.")
+    }
+
+    /// **Une vidéo prise ou jointe s'édite dans la SCÈNE** (#9124) : plus
+    /// aucune couverture `MeeshyVideoEditorView` dans la conversation.
+    func test_conversationVideos_openTheScene_notTheOldVideoEditor() throws {
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
+        XCTAssertFalse(code.contains("MeeshyVideoEditorView("),
+                       "La vidéo en attente et la vidéo récente s'éditent dans la scène (#9124).")
+        XCTAssertEqual(code.components(separatedBy: "ConversationVideoSceneEditor(").count - 1, 2,
+                       "La vidéo EN ATTENTE et la vidéo RÉCENTE ouvrent toutes deux la scène.")
     }
 }
 
