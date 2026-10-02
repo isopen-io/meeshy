@@ -60,4 +60,14 @@ final class StoryComposerMediaCropTests: XCTestCase {
         XCTAssertEqual(montre.size.width * montre.scale, 400, accuracy: 1)
         XCTAssertEqual(montre.size.height * montre.scale, 150, accuracy: 1)
     }
+
+    func test_undo_afterACrop_showsTheWholeImageAgain() throws {
+        let (vm, id) = try composerWithImage(width: 400, height: 300)
+        vm.seedHistory()
+        vm.setMediaCrop(id: id, crop: MediaCropRect(x: 0.125, y: 0, width: 0.75, height: 1))
+        vm.pushHistorySnapshot()
+        XCTAssertTrue(vm.undoGlobal())
+        let montre = try XCTUnwrap(vm.loadedImages[id])
+        XCTAssertEqual(montre.size.width / montre.size.height, 4.0 / 3.0, accuracy: 0.01)
+    }
 }

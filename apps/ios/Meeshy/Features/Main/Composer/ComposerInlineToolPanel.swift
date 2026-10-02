@@ -98,8 +98,13 @@ struct ComposerInlineToolPanel: View {
                     altText.wrappedValue = saisi
                 }
             }
-        case .media(.crop), .media(.split):
-            // Hors de `MediaEditTool.served` : aucune famille ne les offre.
+        case .media(.crop):
+            // Servi au seul fond image d'une retouche (#9136).
+            if let media {
+                ComposerMediaCropPads(viewModel: viewModel, media: media)
+            }
+        case .media(.split):
+            // Hors de `MediaEditTool.served` : aucune famille ne l'offre.
             EmptyView()
         }
     }

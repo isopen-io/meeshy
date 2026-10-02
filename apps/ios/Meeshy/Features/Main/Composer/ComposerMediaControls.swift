@@ -132,3 +132,64 @@ struct ComposerMediaFilterGrid: View {
         StoryFilterGridView(viewModel: viewModel, previewImage: isBackground ? viewModel.currentSlideBackgroundImage : viewModel.loadedImages[media.id], objectId: isBackground ? nil : media.id)
     }
 }
+
+/// **Recadrer une image du fil** (#9136, vue `2d` : « 9:16 · 4:5 · 1:1 · LIBRE ») —
+/// le cadre CENTRÉ le plus grand au rapport choisi ; « Original » le défait.
+/// Les pastilles ne calculent que sur un ratio MESURÉ (#5100) ; « Original » ne
+/// calcule rien.
+struct ComposerMediaCropPads: View {
+    @ObservedObject var viewModel: StoryComposerViewModel
+    let media: StoryMediaObject
+
+    private static let ratios: [MediaCropRatio] = [.free, .square, .portrait45, .portrait916]
+
+    var body: some View {
+        HStack(spacing: MeeshySpacing.smPlus) {
+            ForEach(Self.ratios, id: \.self) { ratio in
+                let actif = Self.isChosen(ratio, media: media)
+                Button {
+                    viewModel.setMediaCrop(id: media.id,
+                                           crop: MediaCropRule.centered(ratio: ratio,
+                                                                        sourceRatio: media.measuredAspectRatio ?? 0))
+                    HapticFeedback.light()
+                } label: {
+                    Text(Self.label(ratio))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                        .foregroundStyle(actif ? Color.white : Color.white.opacity(0.85))
+                        .padding(.horizontal, MeeshySpacing.mdPlus)
+                        .frame(minHeight: 44)
+                        .background {
+                            if actif {
+                                Capsule().fill(MeeshyColors.brandGradient)
+                            } else {
+                                Capsule().fill(Color.white.opacity(0.12))
+                            }
+                        }
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .disabled(ratio.value != nil && !((media.measuredAspectRatio ?? 0) > 0))
+                .accessibilityAddTraits(actif ? [.isButton, .isSelected] : .isButton)
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    static func isChosen(_ ratio: MediaCropRatio, media: StoryMediaObject) -> Bool {
+        guard ratio.value != nil else { return media.crop == nil }
+        guard let cadre = media.crop, let source = media.measuredAspectRatio else { return false }
+        let vise = MediaCropRule.centered(ratio: ratio, sourceRatio: source)
+        return abs(cadre.width - vise.width) < 0.001 && abs(cadre.height - vise.height) < 0.001
+    }
+
+    static func label(_ ratio: MediaCropRatio) -> String {
+        switch ratio {
+        case .free:
+            return String(localized: "composer.object.editor.crop.original",
+                          defaultValue: "Original", bundle: .main)
+        case .square:      return "1:1"
+        case .portrait45:  return "4:5"
+        case .portrait916: return "9:16"
+        }
+    }
+}

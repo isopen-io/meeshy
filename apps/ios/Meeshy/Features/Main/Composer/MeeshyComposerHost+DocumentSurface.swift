@@ -225,7 +225,9 @@ extension MeeshyComposerHost {
             slideImages: viewModel.slideImages,
             loadedImages: viewModel.loadedImages,
             imagesVersion: viewModel.loadedImagesVersion,
-            onSelect: { viewModel.selectSlide(at: $0) },
+            onSelect: { index in
+                if retouchSeries != nil { selectRetouchScene(at: index) } else { viewModel.selectSlide(at: index) }
+            },
             // En retouche, une scène EST une pièce du message : elle ne se jette pas ici.
             onDelete: returnsToConversation ? nil : { retractScene(at: $0) }))
     }

@@ -98,11 +98,17 @@ nonisolated enum ComposerInlineEditing {
     /// réglage n'écrit que sur un objet texte (`ComposerObjectTimingControls`),
     /// et les offrir ailleurs serait servir un contrôle sans effet — ce que la
     /// loi 4 bannit. Un fond, lui, dure la slide entière.
+    ///
+    /// **Une RETOUCHE d'image du fil se recadre, d'abord** (#9136) : le
+    /// recadrage n'est servi qu'au FOND IMAGE d'une pièce retouchée — c'est là
+    /// qu'il se cuit dans la pièce rendue. Ailleurs, le lecteur ne recadre pas
+    /// un fond : l'offrir serait un contrôle sans effet.
     static func sections(for family: ComposerInlineFamily,
-                         hasTrimmableSource: Bool) -> [ComposerObjectEditorSection] {
-        ComposerObjectEditorRail.entries(for: family.sceneKind,
-                                         hasTrimmableSource: hasTrimmableSource,
-                                         offersFilter: !family.isVideo)
+                         hasTrimmableSource: Bool,
+                         retouching: Bool = false) -> [ComposerObjectEditorSection] {
+        let servies = ComposerObjectEditorRail.entries(for: family.sceneKind,
+                                                       hasTrimmableSource: hasTrimmableSource,
+                                                       offersFilter: !family.isVideo)
             .filter { section in
                 switch section {
                 case .timing, .plan:  return family == .text
@@ -110,6 +116,8 @@ nonisolated enum ComposerInlineEditing {
                 case .tool:           return true
                 }
             }
+        let recadre = retouching && family == .background(isVideo: false)
+        return (recadre ? [.media(.crop)] : []) + servies
     }
 
     /// **Une demande d'édition, sur la scène, devient l'édition en place.** La
@@ -119,9 +127,10 @@ nonisolated enum ComposerInlineEditing {
                       family: ComposerInlineFamily,
                       onSceneSurface: Bool,
                       requested: ComposerObjectEditorSection?,
-                      hasTrimmableSource: Bool) -> ComposerInlineEdit? {
+                      hasTrimmableSource: Bool,
+                      retouching: Bool = false) -> ComposerInlineEdit? {
         guard onSceneSurface else { return nil }
-        let servies = sections(for: family, hasTrimmableSource: hasTrimmableSource)
+        let servies = sections(for: family, hasTrimmableSource: hasTrimmableSource, retouching: retouching)
         return ComposerInlineEdit(objectId: objectId,
                                   family: family,
                                   openSection: requested.flatMap { servies.contains($0) ? $0 : nil })

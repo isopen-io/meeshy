@@ -75,6 +75,28 @@ final class ComposerInlineEditTests: XCTestCase {
         }
     }
 
+    func test_sections_retouchedBackgroundImage_opensOnCrop() {
+        let sections = ComposerInlineEditing.sections(for: .background(isVideo: false), hasTrimmableSource: false,
+                                                      retouching: true)
+        XCTAssertEqual(sections.first, .media(.crop), "Une image du fil se RECADRE d'abord (#9136)")
+    }
+
+    func test_sections_cropIsServedOnlyToARetouchedImageBackground() {
+        XCTAssertFalse(ComposerInlineEditing.sections(for: .background(isVideo: false), hasTrimmableSource: false)
+            .contains(.media(.crop)), "Hors retouche, le lecteur ne recadre pas un fond : rien à offrir")
+        XCTAssertFalse(ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true,
+                                                      retouching: true).contains(.media(.crop)))
+        XCTAssertFalse(ComposerInlineEditing.sections(for: .image, hasTrimmableSource: false, retouching: true)
+            .contains(.media(.crop)))
+    }
+
+    func test_sections_retouchedBackgroundVideo_trimsAndMutes() {
+        let sections = ComposerInlineEditing.sections(for: .background(isVideo: true), hasTrimmableSource: true,
+                                                      retouching: true)
+        XCTAssertTrue(sections.contains(.media(.trim)))
+        XCTAssertTrue(sections.contains(.media(.actions)), "Le muet vit dans les actions du média")
+    }
+
     func test_sections_stickerEtLieu_aucunSousOutil_seulementLeursActions() {
         XCTAssertEqual(ComposerInlineEditing.sections(for: .sticker, hasTrimmableSource: false), [])
         XCTAssertEqual(ComposerInlineEditing.sections(for: .place, hasTrimmableSource: false), [])

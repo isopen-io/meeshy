@@ -41,7 +41,22 @@ extension MeeshyComposerHost {
                 }
             }
             viewModel.seedHistory()
+            openRetouchedPieceTools()
         }
+    }
+
+    /// **Une pièce s'ouvre sur SES éditions** (#9136) — couper et taire une
+    /// vidéo, recadrer une image : les outils du fond, d'emblée, sur la scène
+    /// de la pièce touchée comme sur celle qu'on choisit au rail. Le `(x)` rend
+    /// la scène et ses portes (texte, dessin, stickers).
+    func openRetouchedPieceTools() {
+        guard retouchSeries != nil, let fond = sceneBackgroundMedia else { return }
+        beginInlineEdit(fond.id)
+    }
+
+    func selectRetouchScene(at index: Int) {
+        viewModel.selectSlide(at: index)
+        openRetouchedPieceTools()
     }
 
     func returnRetouchSeries() {
