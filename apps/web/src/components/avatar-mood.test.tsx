@@ -166,21 +166,31 @@ describe('le contour du mood dit la présence (#9065)', () => {
   });
 });
 
-describe('le mood s’immobilise quand le pair regarde en plein écran (#9065)', () => {
+describe('le mood pulse à peine quand le pair regarde en plein écran (#9065)', () => {
   test('il respire quand le pair est ici ou actif', () => {
     expect(avatar({ mood: '😴', here: true })).toContain('mood-breathe');
     expect(avatar({ mood: '😴', here: true, hereActive: true })).toContain('mood-breathe');
   });
 
-  test('il se tient immobile tant que le pair est en plein écran', () => {
+  test('en plein écran, il quitte sa respiration pour un pulse à peine perceptible', () => {
     const html = avatar({ mood: '😴', here: true, hereFocused: true });
 
     expect(html).not.toContain('mood-breathe');
+    expect(html).toContain('mood-hush');
     expect(html).toContain('data-mood-focused="true"');
     expect(glyph(html)).toContain('data-mood-outline="here"');
   });
 
-  test('un focus sans « ici » ne fige rien', () => {
+  test('le pulse du plein écran est à peine perceptible et se tait en mouvement réduit', () => {
+    const css = readFileSync(new URL('../styles/app.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.mood-hush\s*\{[^}]*animation-name:\s*moodHush[^}]*infinite/);
+    const peak = Number(/@keyframes moodHush[\s\S]*?scale\(([\d.]+)\)\s*;?\s*\}\s*\}/.exec(css)?.[1]);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(1.06);
+    expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{[^@]*\.mood-hush/);
+  });
+
+  test('un focus sans « ici » ne change rien', () => {
     expect(avatar({ mood: '😴', hereFocused: true })).toContain('mood-breathe');
   });
 });

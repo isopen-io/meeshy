@@ -116,10 +116,15 @@ final class AvatarPresenceDotTests: XCTestCase {
         XCTAssertNil(AvatarPresenceDot.presence(.idle).moodOutline)
     }
 
-    func test_moodBreathes_asUsual_butHoldsStillWhileThePeerWatchesFullScreen() {
-        XCTAssertTrue(MeeshyMoodBadge.shouldBreathe(animates: true, reduceMotion: false, holdsStill: false))
-        XCTAssertFalse(MeeshyMoodBadge.shouldBreathe(animates: true, reduceMotion: false, holdsStill: true))
-        XCTAssertFalse(MeeshyMoodBadge.shouldBreathe(animates: true, reduceMotion: true, holdsStill: false))
+    /// En plein écran, le mood ne s'immobilise pas : il pulse à peine (porteur
+    /// 2026-10-02, #9065).
+    func test_moodBreathes_asUsual_butBarelyPulsesWhileThePeerWatchesFullScreen() {
+        XCTAssertEqual(MeeshyMoodBadge.motion(animates: true, reduceMotion: false, hushed: false), .breathe)
+        XCTAssertEqual(MeeshyMoodBadge.motion(animates: true, reduceMotion: false, hushed: true), .hush)
+        XCTAssertEqual(MeeshyMoodBadge.motion(animates: true, reduceMotion: true, hushed: true), .still)
+        XCTAssertEqual(MeeshyMoodBadge.motion(animates: false, reduceMotion: false, hushed: false), .still)
+        XCTAssertGreaterThan(MeeshyMoodBadge.hushedScale, MeeshyMoodBadge.restingScale)
+        XCTAssertLessThanOrEqual(MeeshyMoodBadge.hushedScale - 1, (MeeshyMoodBadge.pulsedScale - 1) / 3)
     }
 
     func test_moodOutlineWidth_scalesWithTheBadge_neverHairline() {

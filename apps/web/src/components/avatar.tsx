@@ -73,7 +73,7 @@ export function Avatar({
   hereActive?: boolean;
   /**
    * LE PAIR ICI REGARDE EN PLEIN ÉCRAN UN ÉLÉMENT DE LA CONVERSATION (#9065) —
-   * le point indigo PULSE comme à l'activité, et le mood s'IMMOBILISE. Sans
+   * le point indigo PULSE comme à l'activité, et le mood ne pulse plus qu'à peine. Sans
    * `here`, rien.
    */
   hereFocused?: boolean;
@@ -129,8 +129,8 @@ export function Avatar({
    * Taille : 0,42 × l'avatar, miroir `MeeshyAvatar.swift:186-195`. Elle RESPIRE
    * puis se pose après ~8 s (`mood-breathe`, 2 s × 4 — la borne posée par
    * l'audit de chauffe iOS du 2026-08-26), et `prefers-reduced-motion` la coupe
-   * sans la faire disparaître. Elle se tient IMMOBILE tant que le pair regarde
-   * en plein écran (`hereFocused`, #9065).
+   * sans la faire disparaître. Elle ne pulse plus qu'à peine tant que le pair
+   * regarde en plein écran (`mood-hush`, `hereFocused`, #9065).
    *
    * **SON CONTOUR PORTE LA PRÉSENCE QU'ELLE MASQUE** (#9065) — la silhouette
    * DILATÉE de l'emoji (`[data-mood-outline]`, `avatar.css`), jamais un anneau
@@ -296,7 +296,7 @@ export function Avatar({
         <span
           data-mood={humeur}
           data-mood-focused={focused ? 'true' : undefined}
-          className={`pointer-events-none absolute grid place-items-center rounded-chip${focused ? '' : ' mood-breathe'}`}
+          className={`pointer-events-none absolute grid place-items-center rounded-chip ${focused ? 'mood-hush' : 'mood-breathe'}`}
           style={{
             width: Math.round(size * 0.42),
             height: Math.round(size * 0.42),

@@ -10,7 +10,7 @@ import Foundation
 /// #9065) : absente, ICI (l'écran ouvert, point fixe), ici ET active — elle
 /// défile, écoute ou agit — ou ici et en PLEIN ÉCRAN sur un élément ouvert
 /// depuis la conversation. Le point pulse dans les deux derniers cas ; son
-/// mood, lui, s'immobilise en plein écran. Un littéral booléen vaut « ici »
+/// mood, lui, n'y pulse plus qu'à peine. Un littéral booléen vaut « ici »
 /// ou « absente ».
 public enum ConversationHere: Equatable, Sendable, ExpressibleByBooleanLiteral {
     case absent

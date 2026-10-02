@@ -39,8 +39,9 @@ public struct MeeshyMoodBadge: View {
     /// aurait dite : indigo « ici », vert « en ligne ». `nil` ⇒ aucun contour.
     public var outline: Color?
     /// Le pair regarde un élément en plein écran depuis la conversation : la
-    /// pastille se pose et ne respire plus, jusqu'à son retour au fil.
-    public var holdsStill: Bool
+    /// pastille quitte sa respiration pour un pulse à peine perceptible,
+    /// jusqu'à son retour au fil.
+    public var hushed: Bool
 
     // MARK: - Trame et loi du ressort
     //
@@ -50,6 +51,9 @@ public struct MeeshyMoodBadge: View {
 
     public static let restingScale: CGFloat = 1.0
     public static let pulsedScale: CGFloat = 1.18
+    /// Le pulse à peine perceptible du plein écran, et sa période.
+    public static let hushedScale: CGFloat = 1.05
+    public static let hushedDuration: Double = 1.6
     public static let springResponse: Double = 0.5
     public static let springDamping: Double = 0.4
     /// Départ décalé au hasard : sans lui, N pastilles montées ensemble
@@ -76,8 +80,11 @@ public struct MeeshyMoodBadge: View {
         animates && !reduceMotion
     }
 
-    public nonisolated static func shouldBreathe(animates: Bool, reduceMotion: Bool, holdsStill: Bool) -> Bool {
-        shouldAnimate(animates: animates, reduceMotion: reduceMotion) && !holdsStill
+    public enum Motion: Equatable, Sendable { case breathe, hush, still }
+
+    public nonisolated static func motion(animates: Bool, reduceMotion: Bool, hushed: Bool) -> Motion {
+        guard shouldAnimate(animates: animates, reduceMotion: reduceMotion) else { return .still }
+        return hushed ? .hush : .breathe
     }
 
     /// L'épaisseur du contour : proportionnelle à la pastille, jamais un filet.
@@ -90,14 +97,14 @@ public struct MeeshyMoodBadge: View {
         diameter: CGFloat,
         animates: Bool,
         outline: Color? = nil,
-        holdsStill: Bool = false,
+        hushed: Bool = false,
         onTap: ((CGPoint) -> Void)? = nil
     ) {
         self.emoji = emoji
         self.diameter = diameter
         self.animates = animates
         self.outline = outline
-        self.holdsStill = holdsStill
+        self.hushed = hushed
         self.onTap = onTap
     }
 
@@ -123,9 +130,15 @@ public struct MeeshyMoodBadge: View {
                 // `.onAppear` re-tiré par re-parenting relancerait un ressort
                 // qu'aucun apaisement ne viendrait plus clore.
                 // Relancée quand le plein écran du pair commence ou finit :
-                // elle pose la pastille, puis la refait respirer à son retour.
-                .task(id: holdsStill) {
-                    guard !holdsStill else { settlePulse(); return }
+                // elle passe au pulse à peine perceptible, puis refait
+                // respirer la pastille à son retour.
+                .task(id: hushed) {
+                    withTransaction(Transaction(animation: nil)) { scale = Self.restingScale }
+                    switch currentMotion {
+                    case .still: return
+                    case .hush: hushPulse(); return
+                    case .breathe: break
+                    }
                     startPulse()
                     try? await Task.sleep(for: .seconds(Self.maximumStartDelay + Self.breathingDuration))
                     guard !Task.isCancelled else { return }
@@ -166,12 +179,22 @@ public struct MeeshyMoodBadge: View {
     /// jamais et chaque frame les évalue tous, pour toujours (hog device
     /// 2026-07-03 : `DefaultCombiningAnimation` à ~90 % du thread
     /// `ViewGraphDisplayLink`).
-    private func startPulse() {
-        let reduceMotion = MeeshyMotion.shouldReduce(
-            system: systemReduceMotion,
-            userForced: userForcedReduceMotion
+    private var currentMotion: Motion {
+        Self.motion(
+            animates: animates,
+            reduceMotion: MeeshyMotion.shouldReduce(system: systemReduceMotion, userForced: userForcedReduceMotion),
+            hushed: hushed
         )
-        guard Self.shouldBreathe(animates: animates, reduceMotion: reduceMotion, holdsStill: holdsStill) else { return }
+    }
+
+    private func hushPulse() {
+        withAnimation(.easeInOut(duration: Self.hushedDuration).repeatForever(autoreverses: true)) {
+            scale = Self.hushedScale
+        }
+    }
+
+    private func startPulse() {
+        guard currentMotion == .breathe else { return }
         guard scale == Self.restingScale else { return }
         withAnimation(
             .spring(response: Self.springResponse, dampingFraction: Self.springDamping)

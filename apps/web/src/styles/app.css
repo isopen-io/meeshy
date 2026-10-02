@@ -694,8 +694,29 @@
   animation-fill-mode: both;
 }
 
+/* LE PLEIN ÉCRAN DU PAIR (#9065) : le mood quitte sa respiration pour un
+   pulse à peine perceptible, tant que le pair regarde. Miroir de
+   `MeeshyMoodBadge.hushedScale` (iOS). */
+@keyframes moodHush {
+  0% {
+    transform: scale(1);
+  }
+  100% {
+    transform: scale(1.05);
+  }
+}
+
+.mood-hush {
+  animation-name: moodHush;
+  animation-duration: 1.6s;
+  animation-direction: alternate;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .mood-breathe {
+  .mood-breathe,
+  .mood-hush {
     animation: none;
   }
 }
