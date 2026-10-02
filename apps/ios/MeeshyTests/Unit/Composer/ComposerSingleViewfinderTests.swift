@@ -84,6 +84,9 @@ final class ComposerSingleViewfinderTests: XCTestCase {
         let viseur = try code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
         XCTAssertTrue(viseur.contains("size: .fullScreen"))
         XCTAssertTrue(viseur.contains("offersSizeToggle: false"))
-        XCTAssertTrue(viseur.contains("CameraPermissionPanel()"), "un refus rend le panneau, pas un aperçu noir")
+        XCTAssertTrue(viseur.contains("ComposerCapturePreview(session: capture"),
+                      "l'aperçu partagé rend le panneau de refus, pas un aperçu noir (#9134)")
+        let vues = try code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(vues.contains("CameraPermissionPanel()"), "un refus rend le panneau, pas un aperçu noir")
     }
 }

@@ -115,8 +115,10 @@ final class ComposerSceneQuickCaptureTests: XCTestCase {
     /// La nappe du viseur armé câble l'appui long vers la prise vidéo.
     func test_nappeDuViseurArme_cableLAppuiLongVersLaVideo() throws {
         let hote = try source("Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift")
-        XCTAssertTrue(hote.contains("handleArmedSceneHold()"), "l'appui long de la nappe ne démarre rien")
-        XCTAssertTrue(hote.contains("handleArmedSceneHoldEnded()"), "relâcher n'arrête pas la prise")
+        XCTAssertTrue(hote.contains("onHold: { handleArmedSceneHold() }"), "l'appui long de la nappe ne démarre rien")
+        // #9134 — la nappe est celle du chrome PARTAGÉ : sa levée est celle de la machine.
+        let chrome = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains(".onEnded { _ in session.endHold() }"), "relâcher n'arrête pas la prise")
     }
 
     /// La levée d'un appui long se lit désormais sur le cadenas (#8671) —
