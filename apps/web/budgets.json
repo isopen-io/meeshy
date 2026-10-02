@@ -220,11 +220,11 @@
       }
     },
     "call_video_effects_rules": {
-      "pattern": "^assets/video-effects-[A-Za-z0-9_-]{8}\\.js$",
+      "pattern": "^assets/(video-effects|self-zoom)-[A-Za-z0-9_-]{8}\\.js$",
       "kb": {
         "value": 2,
-        "status": "REMESUREE PAR #8439",
-        "source": "Mesure de measure-weight.mjs le 2026-09-28 (`bun run build` puis gzip -9) : 1,07 Ko -- Rolldown y range, avec les regles et l etat des effets de ma video (`lib/calls/video-effects.ts`), les deux magasins des controles d un appel et leurs regles pures (`lib/calls/call-control-state.ts` : reactions affichees, debit, mot bref) : memes importateurs (le moteur, l ecran d appel et un panneau charge a part). Arrondi au Ko SUPERIEUR (2), sans marge supplementaire. HISTORIQUE : Mesure de measure-weight.mjs le 2026-09-27 (`bun run build` puis gzip -9) : 0,88 Ko -- les regles et l'etat des effets de ma video (`lib/calls/video-effects.ts` : prereglages, filtre, detection, store). Chunk PARTAGE par le moteur, l'ecran d'appel et le panneau : Rollup le sort seul, ce qui garde chacun des trois sous son plafond. Arrondi au Ko SUPERIEUR (1) + 1 Ko de marge."
+        "status": "REMESUREE PAR #8441",
+        "source": "Mesure CI du 2026-10-02 (`vite build` puis gzip -9) : 1,57 Ko -- le chunk partage prend le nom de `lib/calls/self-zoom.ts` : le zoom numerique de ma camera recadre desormais l image ENVOYEE (#8441), donc son magasin est lu par le moteur (`sentZoom`, `engine-defaults.ts`) ET par l ecran d appel, comme les regles des effets (`video-effects.ts`, qu il lit pour savoir si l image peut etre recadree) et les magasins des controles (`call-control-state.ts`) : memes importateurs, un seul chunk, que Rolldown nomme d apres le premier. Le motif accepte les deux noms. Sous le plafond de 2 : inchange. HISTORIQUE : Mesure de measure-weight.mjs le 2026-09-28 (`bun run build` puis gzip -9) : 1,07 Ko -- Rolldown y range, avec les regles et l etat des effets de ma video (`lib/calls/video-effects.ts`), les deux magasins des controles d un appel et leurs regles pures (`lib/calls/call-control-state.ts` : reactions affichees, debit, mot bref) : memes importateurs (le moteur, l ecran d appel et un panneau charge a part). Arrondi au Ko SUPERIEUR (2), sans marge supplementaire. HISTORIQUE : Mesure de measure-weight.mjs le 2026-09-27 (`bun run build` puis gzip -9) : 0,88 Ko -- les regles et l'etat des effets de ma video (`lib/calls/video-effects.ts` : prereglages, filtre, detection, store). Chunk PARTAGE par le moteur, l'ecran d'appel et le panneau : Rollup le sort seul, ce qui garde chacun des trois sous son plafond. Arrondi au Ko SUPERIEUR (1) + 1 Ko de marge."
       }
     },
     "call_captions": {
