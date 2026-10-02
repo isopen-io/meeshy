@@ -41,7 +41,7 @@ extension StickerPickerView {
             //
             // Ce qui sépare deux sections est désormais l'ESPACE et la graisse
             // du titre — la même grammaire que la fiche de création audio.
-            LazyVStack(alignment: .leading, spacing: MeeshySpacing.xxl) {
+            LazyVStack(alignment: .leading, spacing: Self.rowSpacing(for: selectedTab)) {
                 switch selectedTab {
                 case .search:    searchTabContent
                 case .favorites: usageSections(usage.favorites, vide: .favorites)
@@ -125,6 +125,13 @@ extension StickerPickerView {
         guard !requete.isEmpty else { return true }
         return tabTitle(onglet).range(of: requete,
                                       options: [.caseInsensitive, .diacriticInsensitive]) != nil
+    }
+
+    /// L'espace entre deux enfants de la pile : celui d'une SECTION, sauf
+    /// sur la planche Mee & Meo, dont les enfants sont des RANGÉES — ses
+    /// titres reprennent l'aération d'une section par leur propre marge.
+    static func rowSpacing(for onglet: StickerSheetTab) -> CGFloat {
+        onglet == .meeAndMeo ? 8 : MeeshySpacing.xxl
     }
 
     // MARK: - Favoris et récents

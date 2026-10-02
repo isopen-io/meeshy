@@ -40,6 +40,26 @@ final class MeeStickerCatalogTests: XCTestCase {
         }
     }
 
+    /// **La planche défile en RANGÉES, pas en grilles imbriquées** (retour
+    /// porteur 2026-10-02 : « quand je défile sur toute la planche, ça plante
+    /// et le défilement ne fonctionne plus »). Une grille paresseuse par
+    /// intention, dans la pile paresseuse de la feuille, créait toutes ses
+    /// cases d'un coup et faisait osciller la hauteur du contenu sans fin.
+    /// Chaque ligne de la pile est désormais un titre OU une rangée d'au plus
+    /// `columns` stickers — l'ordre des sections, sans rien perdre ni doubler.
+    func test_rows_areATitleThenRowsOfAtMostThreeStickers_inSectionOrder() {
+        let rows = MeeStickerCatalog.rows(columns: 3)
+        var attendu: [MeeStickerCatalog.Row] = []
+        for section in MeeStickerCatalog.sections {
+            attendu.append(.title(section.intent))
+            attendu += stride(from: 0, to: section.stickers.count, by: 3).map {
+                .stickers(Array(section.stickers[$0..<min($0 + 3, section.stickers.count)]))
+            }
+        }
+        XCTAssertEqual(rows, attendu)
+        XCTAssertEqual(Set(rows.map(\.id)).count, rows.count, "un identifiant par ligne, sinon la pile recycle la mauvaise")
+    }
+
     /// Chaque intention a un titre ET une explication — sinon la section se
     /// lirait comme un mot-clé, pas comme un « quand l'employer ».
     func test_everyIntent_hasATitleAndAHint() {

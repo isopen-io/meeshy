@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import ImageIO
 import MeeshySDK
 
 // MARK: - Mee et Meo, les deux colibris (#9053)
@@ -96,6 +97,30 @@ nonisolated public enum MeeStickerCatalog {
         return stickers.isEmpty ? nil : SectionGroup(intent: intent, stickers: stickers)
     }
 
+    /// **Une ligne de la planche** : le titre d'une intention, ou une rangée
+    /// de stickers. La planche défile en RANGÉES de hauteur fixe dans la pile
+    /// paresseuse de la feuille — jamais en grilles imbriquées, qui créaient
+    /// toutes leurs cases d'un coup et figeaient le défilement (2026-10-02).
+    nonisolated public enum Row: Hashable, Identifiable, Sendable {
+        case title(MeeSticker.Intent)
+        case stickers([MeeSticker])
+
+        public var id: String {
+            switch self {
+            case .title(let intent): "title.\(intent.rawValue)"
+            case .stickers(let stickers): "row.\(stickers.first?.id ?? "")"
+            }
+        }
+    }
+
+    public static func rows(columns: Int) -> [Row] {
+        sections.flatMap { section in
+            [Row.title(section.intent)] + stride(from: 0, to: section.stickers.count, by: columns).map {
+                Row.stickers(Array(section.stickers[$0..<min($0 + columns, section.stickers.count)]))
+            }
+        }
+    }
+
     /// Le Mee qu'une entrée de favori ou de récent désigne — `nil` si elle
     /// n'en est pas un, ou s'il a quitté le catalogue (#9067).
     public static func sticker(for entry: StickerUsageEntry) -> MeeSticker? {
@@ -136,6 +161,25 @@ nonisolated public enum MeeStickerCatalog {
         return UIImage(data: data)
     }
 
+    /// **La première image, réduite à la case et décodée HORS du fil
+    /// principal** — la vignette d'une case pendant que son film se prépare.
+    /// Lire le WebP plein (`stillImage`) sur le rendu de chaque case qui
+    /// entre pendant un lancer coûtait une image par case.
+    @concurrent
+    public static func still(at url: URL, maxPixelSize: Int) async -> UIImage? {
+        let key = "\(url.lastPathComponent)|\(maxPixelSize)" as NSString
+        if let hit = stills.object(forKey: key) { return hit }
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                  kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+                  kCGImageSourceShouldCacheImmediately: true,
+              ] as CFDictionary) else { return nil }
+        let still = UIImage(cgImage: image)
+        stills.setObject(still, forKey: key, cost: image.bytesPerRow * image.height)
+        return still
+    }
+
     /// Le film décodé, lu dans le cache ou décodé sur place.
     @MainActor
     public static func decoded(_ sticker: MeeSticker, maxPixelSize: Int) -> AnimatedImageDecoder.Decoded? {
@@ -143,23 +187,30 @@ nonisolated public enum MeeStickerCatalog {
         return decode(url: url, maxPixelSize: maxPixelSize)
     }
 
-    /// **Le film décodé HORS du fil principal.** Un film de 48 images décodé
-    /// sur le rendu ferait sauter des images au défilement. `Decoded` n'étant
-    /// pas `Sendable`, la tâche de fond REMPLIT le cache, et la vue y lit
-    /// ensuite (`decoded`) sur son propre fil.
+    /// **Le film décodé HORS du fil principal, et RENDU à l'appelant.** Le
+    /// relire ensuite dans le cache pouvait le trouver déjà évincé par les
+    /// voisins préparés pendant un défilement — et le redécoder alors SUR LE
+    /// FIL PRINCIPAL, 48 images d'un coup (2026-10-02). `FilmEntry` est une
+    /// valeur immuable : elle traverse les acteurs.
     @concurrent
-    public static func prepareFilm(at url: URL, maxPixelSize: Int) async {
-        _ = decode(url: url, maxPixelSize: maxPixelSize)
+    public static func film(at url: URL, maxPixelSize: Int) async -> FilmEntry? {
+        guard !Task.isCancelled else { return nil }
+        return decodeEntry(url: url, maxPixelSize: maxPixelSize)
     }
 
     private static func decode(url: URL, maxPixelSize: Int) -> AnimatedImageDecoder.Decoded? {
+        decodeEntry(url: url, maxPixelSize: maxPixelSize)?.decoded
+    }
+
+    private static func decodeEntry(url: URL, maxPixelSize: Int) -> FilmEntry? {
         let key = "\(url.lastPathComponent)|\(maxPixelSize)" as NSString
-        if let hit = films.object(forKey: key) { return hit.decoded }
+        if let hit = films.object(forKey: key) { return hit }
         guard let bytes = try? Data(contentsOf: url, options: .mappedIfSafe),
               let decoded = AnimatedImageDecoder.decode(bytes, maxPixelSize: maxPixelSize) else { return nil }
         let cost = decoded.frames.reduce(0) { $0 + $1.bytesPerRow * $1.height }
-        films.setObject(FilmEntry(decoded), forKey: key, cost: cost)
-        return decoded
+        let entry = FilmEntry(decoded)
+        films.setObject(entry, forKey: key, cost: cost)
+        return entry
     }
 
     /// `NSCache` est sûr entre fils (même choix que `StoryFilterProcessor`).
@@ -172,11 +223,17 @@ nonisolated public enum MeeStickerCatalog {
         return cache
     }()
 
+    nonisolated(unsafe) private static let stills: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.totalCostLimit = 24 * 1024 * 1024
+        return cache
+    }()
+
     /// `nonisolated deinit` : `NSCache` évince sur le fil qu'il choisit, et une
     /// deinit isolée au `MainActor` double-libère sur iOS 26.1 (voir
     /// `AnimatedImageMemo.Entry`).
-    nonisolated private final class FilmEntry {
-        let decoded: AnimatedImageDecoder.Decoded
+    nonisolated public final class FilmEntry: @unchecked Sendable {
+        public let decoded: AnimatedImageDecoder.Decoded
         init(_ decoded: AnimatedImageDecoder.Decoded) { self.decoded = decoded }
         nonisolated deinit {}
     }
