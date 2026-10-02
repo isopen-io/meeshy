@@ -137,6 +137,19 @@ final class ComposerAtelierHasOneMountSiteTests: XCTestCase {
         }
     }
 
+    /// **L'éditeur d'image plein écran ne sert plus que l'AVATAR** (#9170) : la
+    /// citation, le fond et l'image de premier plan de l'atelier s'éditent dans
+    /// la scène. Le profil et le choix d'image d'une entité gardent leur
+    /// recadrage ; aucun autre site ne le monte.
+    func test_lEditeurDImagePleinEcran_neSertPlusQueLAvatar() {
+        let sites = (sourcesDeLApp() + sourcesDuSDK()).compactMap { url -> String? in
+            guard let brut = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+            return AppSourceGuard.stripComments(brut).contains("MeeshyImageEditorView(") ? url.lastPathComponent : nil
+        }.sorted()
+        XCTAssertEqual(sites, ["EntityImagePickerFlow.swift", "ProfileView.swift"],
+                       "`MeeshyImageEditorView` ne se monte que pour l'avatar : \(sites)")
+    }
+
     // MARK: - 3 · Le meuble reste atteignable
 
     /// **La moitié qui empêche de « réussir » en cassant tout.** Les deux

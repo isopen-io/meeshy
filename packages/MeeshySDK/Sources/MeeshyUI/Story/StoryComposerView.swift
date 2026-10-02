@@ -68,11 +68,6 @@ public struct StoryComposerView: View {
     /// code — la décision n'est connue qu'après la réponse de l'utilisateur.
     @State var showGalleryPicker = false
 
-    // MARK: - Media editor (triggered by edit button on canvas elements)
-
-    @State var editingBgImage: UIImage?
-    @State var editingElementImage: EditingMediaImage?
-
     // MARK: - Audio pickers
 
     @State var showAudioDocumentPicker = false

@@ -15,12 +15,10 @@ import MeeshyUI
 // suffire, parce que ce qui restait n'était pas gros par accident mais DEUX
 // choses dans un même fichier.
 //
-// **Le retrait de la feuille, lui, reste INTERDIT** tant que cinq capacités
-// n'ont pas rejoint le meuble — progression, références, dépôt, éditeur
-// d'image, son emprunté. `FeedComposerSheetRetirementInventoryTests` les tient
-// nommément, et sait désormais QUEL fichier porte chaque ancre : quatre ici,
-// une restée dans l'extension (`feedDeclaredReferences`, que les deux
-// publications audio survivantes lisent).
+// **Le retrait de la feuille, lui, reste INTERDIT** tant que trois capacités
+// n'ont pas rejoint le meuble — progression, dépôt, son emprunté.
+// `FeedComposerSheetRetirementInventoryTests` les tient nommément. Ses
+// images et ses vidéos s'éditent déjà dans la scène du meuble (#9166, #9170).
 
 // MARK: - Feed Composer Sheet (Fullscreen from ThemedFeedOverlay)
 struct FeedComposerSheet: View {
@@ -36,7 +34,7 @@ struct FeedComposerSheet: View {
     @ObservedObject private var authManager = AuthManager.shared
     @State private var composerText = ""
     @FocusState private var isFocused: Bool
-    @State private var editingAttachmentId: String?
+    @State private var editingImage: EditingAttachmentItem?
     @State private var videosToPreview: [URL] = []
     @State private var editingVideo: PendingVideoEdit?
 
@@ -479,42 +477,18 @@ struct FeedComposerSheet: View {
                 handleLocationSelection(place)
             }
         }
-        .fullScreenCover(item: Binding<EditingAttachmentItem?>(
-            get: {
-                guard let id = editingAttachmentId, let image = pendingThumbnails[id] else { return nil }
-                return EditingAttachmentItem(id: id, image: image)
-            },
-            set: { editingAttachmentId = $0?.id }
-        )) { item in
-            MeeshyImageEditorView(image: item.image, context: .post) { editedImage in
-                pendingThumbnails[item.id] = editedImage
-                Task {
-                    let result = await MediaCompressor.shared.compressImage(editedImage)
-                    let fileName = "edited_\(UUID().uuidString).\(result.fileExtension)"
-                    let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                    try? result.data.write(to: tempURL)
-                    await MainActor.run {
-                        if let oldURL = pendingMediaFiles[item.id] {
-                            try? FileManager.default.removeItem(at: oldURL)
-                        }
-                        pendingMediaFiles[item.id] = tempURL
-                        if let idx = pendingAttachments.firstIndex(where: { $0.id == item.id }) {
-                            pendingAttachments[idx] = MessageAttachment(
-                                id: item.id,
-                                fileName: fileName,
-                                originalName: fileName,
-                                mimeType: result.mimeType,
-                                fileSize: result.data.count,
-                                fileUrl: tempURL.absoluteString,
-                                width: Int(editedImage.size.width),
-                                height: Int(editedImage.size.height),
-                                thumbnailColor: pendingAttachments[idx].thumbnailColor
-                            )
-                        }
-                    }
+        .fullScreenCover(item: $editingImage) { item in
+            // L'image en attente s'édite dans la SCÈNE, comme ses vidéos et
+            // les pièces d'un commentaire (#9170).
+            ConversationImageSceneEditor(image: item.image, staged: true, onDone: { media in
+                editingImage = nil
+                switch media {
+                case .image(let rendue): replaceSheetImage(id: item.id, with: rendue)
+                case .video(let rendue):
+                    removeSheetAttachment(id: item.id)
+                    handleCameraVideo(rendue)
                 }
-            }
-            .ignoresSafeArea()
+            }, onCancel: { editingImage = nil })
         }
         // Une vidéo choisie s'ouvre dans la SCÈNE avant de rejoindre la
         // citation, et la vignette d'une vidéo en attente aussi (#9166) — la
@@ -611,7 +585,7 @@ struct FeedComposerSheet: View {
                         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
                         .onTapGesture {
                             if attachment.type == .image {
-                                editingAttachmentId = attachment.id
+                                openSheetImageScene(attachment)
                             } else if attachment.type == .video {
                                 if let url = pendingMediaFiles[attachment.id] {
                                     editingVideo = PendingVideoEdit(id: attachment.id, url: url)
@@ -642,12 +616,7 @@ struct FeedComposerSheet: View {
                 Button {
                     HapticFeedback.light()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        let id = attachment.id
-                        pendingAttachments.removeAll { $0.id == id }
-                        if let url = pendingMediaFiles.removeValue(forKey: id) {
-                            try? FileManager.default.removeItem(at: url)
-                        }
-                        pendingThumbnails.removeValue(forKey: id)
+                        removeSheetAttachment(id: attachment.id)
                     }
                 } label: {
                     // Glyphe chrome dans un cadre de tap fixe 20×20 : figé (doctrine 82i) ; le libellé porte le sens
@@ -749,6 +718,43 @@ struct FeedComposerSheet: View {
                 trackSheetPreparation(prep)
             }
         }
+    }
+
+    /// La scène part du FICHIER borné à 2 048 px (#8524) — la vignette du
+    /// plateau ne sert qu'à défaut ; un GIF ne s'y ouvre pas.
+    private func openSheetImageScene(_ attachment: MessageAttachment) {
+        guard ConversationImageRetouche.offersRetouche(mimeType: attachment.mimeType) else { return }
+        let id = attachment.id
+        Task {
+            var source: UIImage?
+            if let url = pendingMediaFiles[id] { source = await ConversationImageRetouche.loadSource(fileURL: url) }
+            guard let image = source ?? pendingThumbnails[id] else { return }
+            editingImage = EditingAttachmentItem(id: id, image: image)
+        }
+    }
+
+    /// **Écriture SÛRE** : la retouche n'entre au plateau qu'écrite et
+    /// vérifiée ; sinon la pièce d'origine reste celle qui partira.
+    private func replaceSheetImage(id: String, with image: UIImage) {
+        Task {
+            guard let ecrit = await ConversationImageRetouche.writeEdited(image) else { return }
+            let issue = PendingImageEditReplacement.apply(ecrit, size: image.size, to: id,
+                                                          files: pendingMediaFiles, attachments: pendingAttachments)
+            pendingMediaFiles = issue.files
+            pendingAttachments = issue.attachments
+            if issue.files[id] == ecrit.url { pendingThumbnails[id] = image } else {
+                try? FileManager.default.removeItem(at: ecrit.url)
+            }
+            if let stale = issue.staleURL { try? FileManager.default.removeItem(at: stale) }
+        }
+    }
+
+    private func removeSheetAttachment(id: String) {
+        pendingAttachments.removeAll { $0.id == id }
+        if let url = pendingMediaFiles.removeValue(forKey: id) {
+            try? FileManager.default.removeItem(at: url)
+        }
+        pendingThumbnails.removeValue(forKey: id)
     }
 
     private func handleCameraCapture(_ image: UIImage) {

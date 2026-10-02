@@ -199,52 +199,6 @@ extension StoryComposerView {
             .presentationDetents([.medium])
             .presentationDragIndicator(.visible)
         }
-        .fullScreenCover(item: Binding(
-            get: { editingBgImage.map { PendingImageWrapper(image: $0) } },
-            set: { if $0 == nil { editingBgImage = nil } }
-        )) { wrapper in
-            MeeshyImageEditorView(
-                image: wrapper.image,
-                context: .story,
-                onAccept: { edited in
-                    selectedImage = edited
-                    viewModel.hasBackgroundImage = true
-                    viewModel.setImage(edited, for: viewModel.currentSlide.id)
-                    editingBgImage = nil
-                },
-                onCancel: { editingBgImage = nil }
-            )
-        }
-        .fullScreenCover(item: $editingElementImage) { item in
-            MeeshyImageEditorView(
-                image: item.image,
-                context: .story,
-                onAccept: { edited in
-                    viewModel.loadedImages[item.elementId] = edited
-                    // Un recadrage change le ratio de l'image : sans réécrire
-                    // `mediaAspectRatios`, la layer ré-affichait le NOUVEAU bitmap
-                    // mais étiré au ratio d'ORIGINE → la modification (crop)
-                    // n'apparaissait pas géométriquement dans le canvas (#1).
-                    let editedSize = edited.size
-                    if editedSize.width > 0, editedSize.height > 0 {
-                        viewModel.setMediaAspectRatio(
-                            id: item.elementId,
-                            aspectRatio: Double(editedSize.width / editedSize.height),
-                            slideId: viewModel.currentSlide.id
-                        )
-                    }
-                    // Bump version pour signaler au `StoryComposerCanvasView`
-                    // qu'un bitmap intra-clé a muté. SwiftUI ne peut pas
-                    // détecter ce genre de mutation sur un `[String: UIImage]`
-                    // (UIImage non Equatable). Sans ce bump, le main canvas
-                    // ne re-stampait jamais l'image éditée et restait stale
-                    // (bug 2026-05-27). Cf. `StoryComposerCanvasView.Coordinator`.
-                    viewModel.loadedImagesVersion &+= 1
-                    editingElementImage = nil
-                },
-                onCancel: { editingElementImage = nil }
-            )
-        }
     }
 
     func handleForegroundMediaSelection(from item: PhotosPickerItem?) {
@@ -586,17 +540,11 @@ extension StoryComposerView {
     }
 
     func openMediaEditor(elementId: String) {
-        let mediaObj = viewModel.currentEffects.mediaObjects?.first(where: { $0.id == elementId })
-        guard let mediaObj else { return }
-
-        // Une vidéo s'édite dans la SCÈNE de l'hôte (#9166) : coupe, muet,
-        // recadrage, filtre — l'ancien éditeur vidéo plein écran a quitté le
-        // dépôt.
-        if mediaObj.kind == .video {
-            onEditSceneObject?(elementId)
-        } else if let image = viewModel.loadedImages[elementId] {
-            editingElementImage = EditingMediaImage(elementId: elementId, image: image)
-        }
+        // Image comme vidéo, un média s'édite dans la SCÈNE de l'hôte (#9166,
+        // #9170) : recadrage et filtre, plus coupe et muet pour une vidéo —
+        // les éditeurs plein écran ne servent plus la composition.
+        guard viewModel.currentEffects.mediaObjects?.contains(where: { $0.id == elementId }) == true else { return }
+        onEditSceneObject?(elementId)
     }
 
     /// **Le corps a migré sur le MODÈLE** (#4092,

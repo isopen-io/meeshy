@@ -63,8 +63,6 @@ extension StoryComposerView {
         // Picker / editor scratch state — would otherwise resurrect
         // half-finished media flows on the freshly reset canvas.
         fgMediaItem = nil
-        editingBgImage = nil
-        editingElementImage = nil
         confirmedMediaAudioURL = nil
         lostMediaCount = 0
         // Le cover caméra a DEUX écrivains légitimes (ce binding SDK et le
