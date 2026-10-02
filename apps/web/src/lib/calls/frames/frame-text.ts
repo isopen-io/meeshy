@@ -41,6 +41,9 @@ const hasText = (value: string | null): value is string => value !== null && val
  * Le texte d'un titre ou d'un sous-titre. `group` hors groupe (ou sans nom
  * de groupe) ⇒ les noms : un duo n'a pas de nom de groupe à afficher, et un
  * titre vide ne serait pas un choix. La marque ne passe jamais en capitales.
+ * Les sources de l'heure, du lieu, du monument et de l'émotion (#9197) n'écrivent
+ * rien tant que leur moteur n'est pas là (doc 06, étape 3.3) : un texte vide se
+ * tait, il ne remplace pas la donnée par une autre.
  */
 export function titleText(source: FrameTitle['source'], context: TitleContext, textCase: FrameTitle['case'] = 'as-is'): string {
   const raw = ((): string => {
@@ -54,6 +57,12 @@ export function titleText(source: FrameTitle['source'], context: TitleContext, t
       case 'date':
         return context.texts.date.trim();
       case 'none':
+        return '';
+      case 'time':
+      case 'datetime':
+      case 'place':
+      case 'landmark':
+      case 'emotion':
         return '';
     }
   })();

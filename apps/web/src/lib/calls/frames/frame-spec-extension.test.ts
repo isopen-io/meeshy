@@ -2,6 +2,10 @@ import { describe, expect, test } from 'bun:test';
 
 import { captureFrames, RAW_MOOD_FILES } from './frame-catalogue';
 import { expandMotif } from './frame-filter';
+import { paintFrame } from './frame-paint';
+import { medallionRect, polaroidWindow, tornPoints } from './frame-paint-shapes';
+import { drewBrandDashes, recorder, written } from './frame-recorder.test-support';
+import { titleText } from './frame-text';
 import { FrameMoodFileSchema, FrameMotifSchema, TEXT_FORMS_BY_SOURCE, servedSurfaces, type FrameMotif } from './frame-spec';
 
 /**
@@ -88,7 +92,7 @@ describe('l’extension du format des cadres', () => {
   });
 
   test('les trois nouvelles formes de case', () => {
-    ['torn', 'polaroid', 'frame-oval'].forEach((shape) => expect(parses(motif({}, { slot: { shape, tilt: 'none', tone: 'color' } })), shape).toBe(true));
+    ['torn', 'polaroid', 'frame-oval'].forEach((shape) => expect(parses(motif({}, { slot: { shape, tilt: 'none', tone: 'color' } }))).toBe(true));
   });
 
   test('deux looks au plus, pris dans la bibliothèque Meeshy', () => {
@@ -106,7 +110,7 @@ describe('l’extension du format des cadres', () => {
 
   test('une forme n’est admise que pour SA source', () => {
     const subtitle = (source: string, form: string): Record<string, unknown> => ({ subtitle: { source, form, font: 'elegant', color: '#fff', place: 'top', size: 's' } });
-    Object.entries(TEXT_FORMS_BY_SOURCE).forEach(([source, forms]) => forms.forEach((form) => expect(parses(motif({}, subtitle(source, form))), `${source}.${form}`).toBe(true)));
+    Object.entries(TEXT_FORMS_BY_SOURCE).forEach(([source, forms]) => forms.forEach((form) => expect(parses(motif({}, subtitle(source, form)))).toBe(true)));
     expect(parses(motif({}, subtitle('time', 'city')))).toBe(false);
     expect(parses(motif({}, subtitle('group', 'digital')))).toBe(false);
   });
@@ -120,7 +124,7 @@ describe('l’extension du format des cadres', () => {
   test('le filigrane : orientations fermées, opacité plafonnée à 8 %, réservé au placement filigrane', () => {
     const brand = (place: string, watermark: unknown): Record<string, unknown> => ({ brand: { mark: 'wordmark', place, color: '#fff', size: 's', watermark } });
     ['diagonal-up', 'diagonal-down', 'horizontal', 'vertical', 'cross'].forEach((orientation) =>
-      expect(parses(motif({}, brand('watermark', { content: 'brand', orientation, opacity: 0.08 }))), orientation).toBe(true),
+      expect(parses(motif({}, brand('watermark', { content: 'brand', orientation, opacity: 0.08 })))).toBe(true),
     );
     expect(parses(motif({}, brand('watermark', { content: 'brand', orientation: 'horizontal', opacity: 0.09 })))).toBe(false);
     expect(parses(motif({}, brand('watermark', { content: 'logo', orientation: 'horizontal', opacity: 0.05 })))).toBe(false);
@@ -164,5 +168,78 @@ describe('l’extension du format des cadres', () => {
   test('les paliers de repli ne déclarent que leurs substitutions', () => {
     const fallbacks = { reduced: { still: [{ layer: 'flames', src: 'assets/sprites/flames-lite.json' }] }, minimal: { hide: ['flames'] } };
     expect(parses(motif({}, { fallbacks }))).toBe(true);
+  });
+});
+
+describe('un cadre étendu se peint comme un cadre d’aujourd’hui', () => {
+  const people = [
+    { id: 'a', name: 'Awa', handle: 'awa', isSelf: true },
+    { id: 'k', name: 'Karim', handle: 'karim', isSelf: false },
+  ];
+  const texts = { groupName: null, isGroup: false, date: '2 oct. 2026', accent: null };
+  const faces = people.map(() => ({ source: {} as CanvasImageSource, size: { width: 1280, height: 720 } }));
+  const paint = (raw: Record<string, unknown>) => {
+    const [frame] = expandMotif(FrameMotifSchema.parse(raw) as FrameMotif);
+    const { log, context } = recorder();
+    if (frame !== undefined) paintFrame(context, frame, people, faces, texts, { width: 1080, height: 1920 });
+    return log;
+  };
+
+  test('sans signature déclarée, aucune marque n’est tracée — et le reste se peint', () => {
+    const look = { ...base(), title: { source: 'names', font: 'elegant', color: '#fff', place: 'top', size: 'm' } };
+    delete look.brand;
+    const log = paint({ ...motif(), base: look });
+    expect(written(log).includes('meeshy')).toBe(false);
+    expect(drewBrandDashes(log)).toBe(false);
+    expect(written(log).some((text) => text.includes('Awa'))).toBe(true);
+  });
+
+  test('l’exemple du doc 06 se peint, signé', () => {
+    const log = paint(GALA);
+    expect(drewBrandDashes(log) || written(log).includes('meeshy')).toBe(true);
+  });
+
+  test('les trois nouvelles formes découpent une case', () => {
+    ['torn', 'polaroid', 'frame-oval'].forEach((shape) => {
+      const log = paint(motif({}, { slot: { shape, tilt: 'none', tone: 'color' } }));
+      expect(log.filter((entry) => entry.key === 'clip').length).toBeGreaterThanOrEqual(2);
+    });
+  });
+});
+
+describe('les nouvelles sources de texte attendent leur moteur (étape 3.3)', () => {
+  test('elles n’écrivent rien encore : un titre vide se tait, il ne ment pas', () => {
+    const context = { people: [{ id: 'a', name: 'Awa', handle: 'awa', isSelf: true }], texts: { groupName: null, isGroup: false, date: '2 oct.', accent: null } };
+    expect((['time', 'datetime', 'place', 'landmark', 'emotion'] as const).map((source) => titleText(source, context))).toEqual(['', '', '', '', '']);
+  });
+});
+
+describe('les trois nouvelles formes de case se tracent DANS leur rectangle', () => {
+  const rect = { x: 10, y: 20, width: 200, height: 300 };
+  const inside = ([x, y]: readonly [number, number]): boolean => x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height;
+
+  test('torn : un bord rongé, déterministe pour une même case, différent d’une case à l’autre', () => {
+    const points = tornPoints(rect, 3);
+    expect(points.length).toBeGreaterThan(20);
+    expect(points.every(inside)).toBe(true);
+    expect(tornPoints(rect, 3)).toEqual(points);
+    expect(tornPoints(rect, 4)).not.toEqual(points);
+  });
+
+  test('polaroid : une photo carrée, la marge du bas plus épaisse que les autres', () => {
+    const photo = polaroidWindow(rect);
+    expect(photo.width).toBeCloseTo(photo.height);
+    const top = photo.y - rect.y;
+    const bottom = rect.y + rect.height - (photo.y + photo.height);
+    expect(bottom).toBeGreaterThan(top * 2);
+    expect(photo.x - rect.x).toBeCloseTo(rect.x + rect.width - (photo.x + photo.width));
+  });
+
+  test('frame-oval : un médaillon de proportion 3:4, centré, qui ne déborde pas', () => {
+    const medallion = medallionRect(rect);
+    expect(medallion.width / medallion.height).toBeCloseTo(0.75);
+    expect(medallion.width).toBeLessThanOrEqual(rect.width);
+    expect(medallion.height).toBeLessThanOrEqual(rect.height);
+    expect(medallion.x + medallion.width / 2).toBeCloseTo(rect.x + rect.width / 2);
   });
 });
