@@ -186,7 +186,8 @@ public extension MeeshyConversation {
 
 /// L'onde du point « ici » (#9065), une échelle partagée avec le mood :
 /// IMPERCEPTIBLE quand le pair regarde en plein écran — il s'y stabilise —,
-/// DOUCE au repos — il observe —, VIVE quand il défile, écoute ou agit.
+/// DOUCE au repos — il observe —, à peine plus ample quand il défile,
+/// écoute ou agit. Seule l'arrivée pulse franchement (`PresenceArrival`).
 /// Jumelle de `presence-dot-hush` / `-rest` / `-pulse`
 /// (`apps/web/src/styles/avatar.css`).
 public struct PresenceHereWave: Equatable, Sendable {
@@ -196,7 +197,7 @@ public struct PresenceHereWave: Equatable, Sendable {
 
     public static let hush = PresenceHereWave(peakScale: 1.25, startOpacity: 0.2, duration: 2.8)
     public static let rest = PresenceHereWave(peakScale: 1.6, startOpacity: 0.3, duration: 2.4)
-    public static let vivid = PresenceHereWave(peakScale: 2.8, startOpacity: 0.8, duration: 1.2)
+    public static let vivid = PresenceHereWave(peakScale: 1.9, startOpacity: 0.4, duration: 1.8)
 
     public static func `for`(_ here: ConversationHere) -> PresenceHereWave? {
         switch here {

@@ -567,11 +567,11 @@ public struct MeeshyAvatar: View {
     }
 
     /// L'échelle du point, portée par le mood (#9065) : imperceptible en plein
-    /// écran, habituelle au repos, ample à l'activité.
+    /// écran, habituelle au repos, à peine plus ample à l'activité.
     public nonisolated static func moodPulseIntensity(_ here: ConversationHere) -> CGFloat {
         switch here {
         case .focused: return MeeshyMoodBadge.hushedScale - 1
-        case .active: return 0.22
+        case .active: return 0.16
         case .here, .absent: return 0.12
         }
     }

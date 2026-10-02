@@ -48,7 +48,8 @@ final class AvatarPresenceDotTests: XCTestCase {
     /// le rendent bien plus visible (#9065).
     /// Une échelle pour le point ET le mood (porteur 2026-10-02, #9065) : en
     /// plein écran il se stabilise et pulse de manière imperceptible ; au
-    /// repos, un petit pulse ; à l'activité, un pulse bien visible.
+    /// repos, un petit pulse ; à l'activité, une respiration à peine plus
+    /// élevée. Seule l'arrivée pulse bien visiblement.
     func test_hereWave_ladder_focusIsImperceptible_restIsGentle_activityIsVivid() {
         let hush = PresenceHereWave.hush
         let rest = PresenceHereWave.rest
@@ -56,8 +57,10 @@ final class AvatarPresenceDotTests: XCTestCase {
         XCTAssertGreaterThan(hush.peakScale, 1)
         XCTAssertLessThan(hush.peakScale, rest.peakScale)
         XCTAssertLessThan(hush.startOpacity, rest.startOpacity)
-        XCTAssertGreaterThan(vivid.peakScale, rest.peakScale + 0.8)
-        XCTAssertGreaterThan(vivid.startOpacity, rest.startOpacity * 2)
+        XCTAssertGreaterThan(vivid.peakScale, rest.peakScale)
+        XCTAssertLessThan(vivid.peakScale, rest.peakScale + 0.5, "l'activité respire à peine plus fort que le repos")
+        XCTAssertGreaterThan(vivid.startOpacity, rest.startOpacity)
+        XCTAssertLessThanOrEqual(vivid.startOpacity, 0.4)
         XCTAssertEqual(PresenceHereWave.for(.here), .rest)
         XCTAssertEqual(PresenceHereWave.for(.active), .vivid)
         XCTAssertEqual(PresenceHereWave.for(.focused), .hush)
@@ -144,7 +147,7 @@ final class AvatarPresenceDotTests: XCTestCase {
     func test_avatarMoodPulse_followsTheDotLadder() {
         XCTAssertEqual(MeeshyAvatar.moodPulseIntensity(.absent), 0.12, accuracy: 0.0001)
         XCTAssertEqual(MeeshyAvatar.moodPulseIntensity(.here), 0.12, accuracy: 0.0001)
-        XCTAssertEqual(MeeshyAvatar.moodPulseIntensity(.active), 0.22, accuracy: 0.0001)
+        XCTAssertEqual(MeeshyAvatar.moodPulseIntensity(.active), 0.16, accuracy: 0.0001)
         XCTAssertEqual(MeeshyAvatar.moodPulseIntensity(.focused), MeeshyMoodBadge.hushedScale - 1, accuracy: 0.0001)
     }
 
