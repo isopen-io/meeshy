@@ -366,7 +366,7 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // CONSTRUCTION : #9141 livre les routes gateway et la Boutique WEB ; les
 // onglets par pack côté iOS sont un suivi à part, qui n'existe pas encore.
 // Valeur MESURÉE le 2026-10-02.
-const BASELINE_DEAD_ENTRIES = 292;
+const BASELINE_DEAD_ENTRIES = 289;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de
