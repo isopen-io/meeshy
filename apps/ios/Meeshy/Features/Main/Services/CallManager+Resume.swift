@@ -13,6 +13,8 @@ import os
 /// la grâce du serveur décide.
 @MainActor
 final class CallResumeLedger {
+    nonisolated deinit {}
+
     static let shared = CallResumeLedger()
 
     private(set) var resumingCallId: String?

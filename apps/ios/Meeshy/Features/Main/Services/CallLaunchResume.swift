@@ -13,6 +13,8 @@ import MeeshySDK
 /// construit que lorsqu'un appel est effectivement à reprendre.
 @MainActor
 final class CallLaunchResume {
+    nonisolated deinit {}
+
     static let shared = CallLaunchResume()
 
     private let isConnected: AnyPublisher<Bool, Never>
