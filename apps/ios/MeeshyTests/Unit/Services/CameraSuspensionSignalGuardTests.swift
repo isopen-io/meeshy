@@ -49,7 +49,7 @@ final class CameraSuspensionSignalGuardTests: XCTestCase {
     /// transition et `willStartPictureInPicture` peut arriver après.
     func test_backgroundObserver_neverEmitsCameraOffToThePeer() throws {
         let code = strippingComments(
-            try source("Meeshy/Features/Main/Services/CallManager.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         )
         guard let start = code.range(of: "UIApplication.didEnterBackgroundNotification"),
               let end = code.range(of: "UIApplication.willEnterForegroundNotification") else {
@@ -73,7 +73,7 @@ final class CameraSuspensionSignalGuardTests: XCTestCase {
     /// l'avatar jusqu'à la fin de l'appel.
     func test_foregroundObserver_stillLiftsTheSuspension() throws {
         let code = strippingComments(
-            try source("Meeshy/Features/Main/Services/CallManager.swift")
+            try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         )
         guard let start = code.range(of: "UIApplication.willEnterForegroundNotification") else {
             XCTFail("CallManager doit observer le retour en avant-plan")

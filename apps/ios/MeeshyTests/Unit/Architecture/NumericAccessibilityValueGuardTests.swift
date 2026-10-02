@@ -246,7 +246,9 @@ final class NumericAccessibilityValueGuardTests: XCTestCase {
             "Features/Main/Components/UniversalComposerBar+Recording.swift",
             "Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",
             "Features/Main/Components/MessageDetail/MessageViewsDetailView.swift",
-            "Features/Main/Services/CallManager.swift",
+            // La durée d'appel a quitté `CallManager.swift` avec son découpage
+            // (2026-10-02) : la liste suit l'hôte.
+            "Features/Main/Services/CallManager+Duration.swift",
             "Features/Main/Views/AudioPostComposerView.swift",
             "Features/Main/Views/MagicLinkView.swift",
             // #7548 — la minuterie de la ligne de liste a DÉMÉNAGÉ : la ligne

@@ -1213,6 +1213,29 @@
 		732D8331B7A1D64640FDEBCC /* QuickEmojiGrid.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8A1529BF608BCA5D7924678 /* QuickEmojiGrid.swift */; };
 		7337FCFF0281DC99F757F5D3 /* BubbleLocationRenderingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D56640F01E442F120C2B2665 /* BubbleLocationRenderingTests.swift */; };
 		733E277A88AFABB7F12A7DE5 /* CallManager+Resume.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8B723EF88612B92F99EFC8C /* CallManager+Resume.swift */; };
+		816C121CCC30629B9930607F /* CallManager+AudioInterruptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E153B594D6DE3E9B3364D586 /* CallManager+AudioInterruptions.swift */; };
+		F37692139EB9CBEE7B42FA02 /* CallManager+Outgoing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8169D7CA12DE8EA589EFFAC5 /* CallManager+Outgoing.swift */; };
+		6DEEFA8EF2804455657E8048 /* CallManager+IncomingCall.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5DEE46FA255797B4245A3AF /* CallManager+IncomingCall.swift */; };
+		3BD9233F667B003F3C535622 /* CallManager+IncomingSignal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49D030A949AC02FB280615C7 /* CallManager+IncomingSignal.swift */; };
+		7EEDD2CAD43707C9FD3E8F16 /* CallManager+Answer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AF6F5981710D618F2EBD1B3 /* CallManager+Answer.swift */; };
+		0EB3FE6CA545818C5A96359D /* CallManager+Hangup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7AF5D39F811A24398E97B0C6 /* CallManager+Hangup.swift */; };
+		1D40F39341D65205CEB3CAB6 /* CallManager+MediaControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD285CF57C98B5B891303EFD /* CallManager+MediaControls.swift */; };
+		FF96C54733F79ECFEF4EF664 /* CallManager+CallWaiting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A53FAC837A44F1CBEBF16C5 /* CallManager+CallWaiting.swift */; };
+		7C9A455468B3EA7D76124D99 /* CallManager+RemoteEvents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34C676A092047D9160FCF505 /* CallManager+RemoteEvents.swift */; };
+		D3C46A843CFD4C829A2C507A /* CallManager+Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31DF71B02704BD686DCF418 /* CallManager+Connection.swift */; };
+		39486B52AA5694DA70B0D1F5 /* CallManager+SystemMonitoring.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DB2689AC708BDBC695B9B6C /* CallManager+SystemMonitoring.swift */; };
+		05CF31B14B0D005BBBA6ACB1 /* CallManager+Hold.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AA6D44DA6B61D5019E37FB6 /* CallManager+Hold.swift */; };
+		EAA33A853B0615677AD4D791 /* CallManager+NetworkMonitoring.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BA2ED3A6929BDB9A1196CFB /* CallManager+NetworkMonitoring.swift */; };
+		D8F8D5EF223F5302F71313AC /* CallManager+Teardown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A23C4877A2591B0419B0569 /* CallManager+Teardown.swift */; };
+		23AB271F780E66574F74E8BB /* CallManager+AudioSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EE9E20846631BF1D33E80F9 /* CallManager+AudioSession.swift */; };
+		D33D58BFA926A89CA9057B30 /* CallManager+Signaling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 147BF31EEA6BB991AAC8ABDB /* CallManager+Signaling.swift */; };
+		C6F72464842D12B7EF28EC9A /* CallManager+Negotiation.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC74AD52FDB057AA457C827A /* CallManager+Negotiation.swift */; };
+		C0C61971D1CCF63F98E00B2D /* CallManager+Duration.swift in Sources */ = {isa = PBXBuildFile; fileRef = D783C4C57CC0BAB39F02FC04 /* CallManager+Duration.swift */; };
+		6EB5F4AB3BBD48F854197A6F /* CallManager+Thermal.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0CA5FFA4206D1E12333589A /* CallManager+Thermal.swift */; };
+		15693D12786BB60ACADCDDCE /* CallManager+WebRTCDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 983EC413C8367B902EBA08B0 /* CallManager+WebRTCDelegate.swift */; };
+		5D15A71C445214C6BC7C9E93 /* CallManager+Reconnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 871BDCF6708FDE665117896F /* CallManager+Reconnection.swift */; };
+		A9032A3D32080F71687ADFBB /* CallManager+VideoSurvival.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85F6F7B4FAA054F1BDE39B46 /* CallManager+VideoSurvival.swift */; };
+		3B0486BBF78CC48CFD083A50 /* CallManager+CallKitProxy.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCB41CA2FB2BC6F792DA20A4 /* CallManager+CallKitProxy.swift */; };
 		7348297A8DFF1C29EF6FCA3C /* SocialFullscreenRouteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 391A91E4CD77A5B72F5C91D6 /* SocialFullscreenRouteTests.swift */; };
 		734DFD8ED8E7ACE32BDA90B4 /* PresenceManagerViewingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3574EFB0D005027D520E4088 /* PresenceManagerViewingTests.swift */; };
 		736C6532F16785151F83F39F /* FocalSystemRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = D52187EAEE5A961CEDAE9CA5 /* FocalSystemRows.swift */; };
@@ -5349,6 +5372,29 @@
 		F887DBB934C6AD61491784AC /* AudioTapFormatReadiness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioTapFormatReadiness.swift; sourceTree = "<group>"; };
 		F8A6A552D12BDFB84C955C92 /* MessageListViewControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageListViewControllerTests.swift; sourceTree = "<group>"; };
 		F8B723EF88612B92F99EFC8C /* CallManager+Resume.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Resume.swift"; sourceTree = "<group>"; };
+		E153B594D6DE3E9B3364D586 /* CallManager+AudioInterruptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+AudioInterruptions.swift"; sourceTree = "<group>"; };
+		8169D7CA12DE8EA589EFFAC5 /* CallManager+Outgoing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Outgoing.swift"; sourceTree = "<group>"; };
+		C5DEE46FA255797B4245A3AF /* CallManager+IncomingCall.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+IncomingCall.swift"; sourceTree = "<group>"; };
+		49D030A949AC02FB280615C7 /* CallManager+IncomingSignal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+IncomingSignal.swift"; sourceTree = "<group>"; };
+		9AF6F5981710D618F2EBD1B3 /* CallManager+Answer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Answer.swift"; sourceTree = "<group>"; };
+		7AF5D39F811A24398E97B0C6 /* CallManager+Hangup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Hangup.swift"; sourceTree = "<group>"; };
+		DD285CF57C98B5B891303EFD /* CallManager+MediaControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+MediaControls.swift"; sourceTree = "<group>"; };
+		5A53FAC837A44F1CBEBF16C5 /* CallManager+CallWaiting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+CallWaiting.swift"; sourceTree = "<group>"; };
+		34C676A092047D9160FCF505 /* CallManager+RemoteEvents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+RemoteEvents.swift"; sourceTree = "<group>"; };
+		D31DF71B02704BD686DCF418 /* CallManager+Connection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Connection.swift"; sourceTree = "<group>"; };
+		5DB2689AC708BDBC695B9B6C /* CallManager+SystemMonitoring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+SystemMonitoring.swift"; sourceTree = "<group>"; };
+		2AA6D44DA6B61D5019E37FB6 /* CallManager+Hold.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Hold.swift"; sourceTree = "<group>"; };
+		1BA2ED3A6929BDB9A1196CFB /* CallManager+NetworkMonitoring.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+NetworkMonitoring.swift"; sourceTree = "<group>"; };
+		8A23C4877A2591B0419B0569 /* CallManager+Teardown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Teardown.swift"; sourceTree = "<group>"; };
+		6EE9E20846631BF1D33E80F9 /* CallManager+AudioSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+AudioSession.swift"; sourceTree = "<group>"; };
+		147BF31EEA6BB991AAC8ABDB /* CallManager+Signaling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Signaling.swift"; sourceTree = "<group>"; };
+		DC74AD52FDB057AA457C827A /* CallManager+Negotiation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Negotiation.swift"; sourceTree = "<group>"; };
+		D783C4C57CC0BAB39F02FC04 /* CallManager+Duration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Duration.swift"; sourceTree = "<group>"; };
+		C0CA5FFA4206D1E12333589A /* CallManager+Thermal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Thermal.swift"; sourceTree = "<group>"; };
+		983EC413C8367B902EBA08B0 /* CallManager+WebRTCDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+WebRTCDelegate.swift"; sourceTree = "<group>"; };
+		871BDCF6708FDE665117896F /* CallManager+Reconnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+Reconnection.swift"; sourceTree = "<group>"; };
+		85F6F7B4FAA054F1BDE39B46 /* CallManager+VideoSurvival.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+VideoSurvival.swift"; sourceTree = "<group>"; };
+		BCB41CA2FB2BC6F792DA20A4 /* CallManager+CallKitProxy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallManager+CallKitProxy.swift"; sourceTree = "<group>"; };
 		F8C8FCB77D28C791EA11A786 /* StoryExportShareViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryExportShareViewModelTests.swift; sourceTree = "<group>"; };
 		F8EFC95C0FF653255E36C2CC /* ShareMediaStaging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareMediaStaging.swift; sourceTree = "<group>"; };
 		F912F556E396482AA1533501 /* UserNotificationsUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UserNotificationsUI.framework; path = System/Library/Frameworks/UserNotificationsUI.framework; sourceTree = SDKROOT; };
@@ -8262,6 +8308,29 @@
 				60EA41E6DA366B5A3E10E37A /* CallManager+MuteSync.swift */,
 				13C826319F11FAA36F7622AF /* CallManager+Recording.swift */,
 				F8B723EF88612B92F99EFC8C /* CallManager+Resume.swift */,
+				E153B594D6DE3E9B3364D586 /* CallManager+AudioInterruptions.swift */,
+				8169D7CA12DE8EA589EFFAC5 /* CallManager+Outgoing.swift */,
+				C5DEE46FA255797B4245A3AF /* CallManager+IncomingCall.swift */,
+				49D030A949AC02FB280615C7 /* CallManager+IncomingSignal.swift */,
+				9AF6F5981710D618F2EBD1B3 /* CallManager+Answer.swift */,
+				7AF5D39F811A24398E97B0C6 /* CallManager+Hangup.swift */,
+				DD285CF57C98B5B891303EFD /* CallManager+MediaControls.swift */,
+				5A53FAC837A44F1CBEBF16C5 /* CallManager+CallWaiting.swift */,
+				34C676A092047D9160FCF505 /* CallManager+RemoteEvents.swift */,
+				D31DF71B02704BD686DCF418 /* CallManager+Connection.swift */,
+				5DB2689AC708BDBC695B9B6C /* CallManager+SystemMonitoring.swift */,
+				2AA6D44DA6B61D5019E37FB6 /* CallManager+Hold.swift */,
+				1BA2ED3A6929BDB9A1196CFB /* CallManager+NetworkMonitoring.swift */,
+				8A23C4877A2591B0419B0569 /* CallManager+Teardown.swift */,
+				6EE9E20846631BF1D33E80F9 /* CallManager+AudioSession.swift */,
+				147BF31EEA6BB991AAC8ABDB /* CallManager+Signaling.swift */,
+				DC74AD52FDB057AA457C827A /* CallManager+Negotiation.swift */,
+				D783C4C57CC0BAB39F02FC04 /* CallManager+Duration.swift */,
+				C0CA5FFA4206D1E12333589A /* CallManager+Thermal.swift */,
+				983EC413C8367B902EBA08B0 /* CallManager+WebRTCDelegate.swift */,
+				871BDCF6708FDE665117896F /* CallManager+Reconnection.swift */,
+				85F6F7B4FAA054F1BDE39B46 /* CallManager+VideoSurvival.swift */,
+				BCB41CA2FB2BC6F792DA20A4 /* CallManager+CallKitProxy.swift */,
 				365D252ED587CA8D290E1241 /* CallManager+ScreenShare.swift */,
 				B4AC456C140D1D39CAECD88D /* CallManager+Speaker.swift */,
 				FCF69E971719DC224002B12B /* CallManager+SystemPiP.swift */,
@@ -9573,6 +9642,29 @@
 				98CBA493D4494915EE12CDB4 /* CallManager+MuteSync.swift in Sources */,
 				2FF33CDD8C9B0DCBDE485FCA /* CallManager+Recording.swift in Sources */,
 				733E277A88AFABB7F12A7DE5 /* CallManager+Resume.swift in Sources */,
+				816C121CCC30629B9930607F /* CallManager+AudioInterruptions.swift in Sources */,
+				F37692139EB9CBEE7B42FA02 /* CallManager+Outgoing.swift in Sources */,
+				6DEEFA8EF2804455657E8048 /* CallManager+IncomingCall.swift in Sources */,
+				3BD9233F667B003F3C535622 /* CallManager+IncomingSignal.swift in Sources */,
+				7EEDD2CAD43707C9FD3E8F16 /* CallManager+Answer.swift in Sources */,
+				0EB3FE6CA545818C5A96359D /* CallManager+Hangup.swift in Sources */,
+				1D40F39341D65205CEB3CAB6 /* CallManager+MediaControls.swift in Sources */,
+				FF96C54733F79ECFEF4EF664 /* CallManager+CallWaiting.swift in Sources */,
+				7C9A455468B3EA7D76124D99 /* CallManager+RemoteEvents.swift in Sources */,
+				D3C46A843CFD4C829A2C507A /* CallManager+Connection.swift in Sources */,
+				39486B52AA5694DA70B0D1F5 /* CallManager+SystemMonitoring.swift in Sources */,
+				05CF31B14B0D005BBBA6ACB1 /* CallManager+Hold.swift in Sources */,
+				EAA33A853B0615677AD4D791 /* CallManager+NetworkMonitoring.swift in Sources */,
+				D8F8D5EF223F5302F71313AC /* CallManager+Teardown.swift in Sources */,
+				23AB271F780E66574F74E8BB /* CallManager+AudioSession.swift in Sources */,
+				D33D58BFA926A89CA9057B30 /* CallManager+Signaling.swift in Sources */,
+				C6F72464842D12B7EF28EC9A /* CallManager+Negotiation.swift in Sources */,
+				C0C61971D1CCF63F98E00B2D /* CallManager+Duration.swift in Sources */,
+				6EB5F4AB3BBD48F854197A6F /* CallManager+Thermal.swift in Sources */,
+				15693D12786BB60ACADCDDCE /* CallManager+WebRTCDelegate.swift in Sources */,
+				5D15A71C445214C6BC7C9E93 /* CallManager+Reconnection.swift in Sources */,
+				A9032A3D32080F71687ADFBB /* CallManager+VideoSurvival.swift in Sources */,
+				3B0486BBF78CC48CFD083A50 /* CallManager+CallKitProxy.swift in Sources */,
 				B75F508CB2BC4289529EF426 /* CallManager+ScreenShare.swift in Sources */,
 				06CC5B135CAF293E0E0EE356 /* CallManager+Speaker.swift in Sources */,
 				7F43878244EC9E2AD8F2EB93 /* CallManager+SystemPiP.swift in Sources */,

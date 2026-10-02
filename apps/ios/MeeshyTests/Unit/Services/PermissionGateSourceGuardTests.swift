@@ -86,7 +86,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// vide sans jamais comprendre. Le chemin CallKit ne permet aucune demande
     /// en amont, d'où la garde ici.
     func test_answerCall_endsCallWhenMicrophoneMissing() throws {
-        let src = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         let fn = try body(from: "func answerCall() {", to: "ringbackPlayer.stop()", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
@@ -104,7 +104,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// sans toast ni raccroché : miroir exact du bug déjà corrigé sur
     /// `answerCall()`, resté ouvert sur son propre point d'entrée.
     func test_answerCallReady_endsCallWhenMicrophoneMissing() throws {
-        let src = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         let fn = try body(from: "func answerCallReady() async {", to: "// MARK: - Reject Call", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
@@ -137,7 +137,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// silencieux au tap sur « rejoindre » — miroir exact du bug déjà corrigé
     /// sur les deux autres points d'entrée, resté ouvert sur celui-ci.
     func test_rejoinActiveCall_refusesWhenMicrophoneMissing() throws {
-        let src = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         let fn = try body(from: "func rejoinActiveCall(callId: String", to: "// MARK: - VoIP Push Incoming Call", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),

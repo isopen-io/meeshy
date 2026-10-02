@@ -146,8 +146,8 @@ final class CallScreenFirstTouchGuardTests: XCTestCase {
     // MARK: - Haptique pendant l'appel
 
     func test_callAudioSession_allowsHapticsDuringRecording() throws {
-        let manager = try code("Meeshy/Features/Main/Services/CallManager.swift")
-        let configure = try block("private func configureAudioSession() {", until: "private func updateAudioSessionModeForCurrentVideoState()", in: manager)
+        let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
+        let configure = try block("func configureAudioSession() {", until: "func updateAudioSessionModeForCurrentVideoState()", in: manager)
         XCTAssertTrue(configure.contains("setAllowHapticsAndSystemSoundsDuringRecording(true)"),
                       "Sans ce choix, iOS tait tout retour haptique pendant que l'appel enregistre le micro")
     }
