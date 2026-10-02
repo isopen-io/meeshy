@@ -158,7 +158,14 @@ try {
           const under = await page.evaluate(([px, py]) => {
             const hit = document.elementFromPoint(px, py);
             const name = (el) => (el === null ? null : `${el.tagName.toLowerCase()}${[...el.attributes].filter((a) => a.name !== 'class' && a.name !== 'style').map((a) => `[${a.name}=${a.value.slice(0, 24)}]`).join('')}`);
-            return { hit: name(hit), interactive: name(hit?.closest('button, a[href], [role], [tabindex]') ?? null) };
+            const chain = [];
+            for (let el = hit; el !== null && chain.length < 6; el = el.parentElement) chain.push(name(el));
+            const keep = hit?.closest('[data-call-header], [data-call-chrome-keep], label, summary, input, [role="toolbar"]') ?? null;
+            const box = (sel) => {
+              const r = document.querySelector(sel)?.getBoundingClientRect();
+              return r === undefined ? null : [Math.round(r.top), Math.round(r.bottom)];
+            };
+            return { chain, keep: name(keep), header: box('[data-call-header]'), pill: box('[data-call-control-pill]'), controls: box('[data-call-controls]') };
           }, [x, y]);
           await page.mouse.move(x, y);
           await page.mouse.down();
