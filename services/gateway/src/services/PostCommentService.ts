@@ -3,6 +3,7 @@ import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import type { MobileTranscription } from '../routes/posts/types';
 import { authorSelect, commentMediaInclude, NOT_DELETED } from './posts/postIncludes';
 import { TrackingLinkService } from './TrackingLinkService';
+import { syncCommentTrackingLinks } from './posts/publicationTrackingLinks';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { parseSharedPlace } from './location/sharedPlace';
 import { claimableMediaWhere, describeClaimShortfall } from './posts/mediaOwnership';
@@ -243,30 +244,12 @@ export class PostCommentService {
         })
       : [];
 
-    // Tracking des URLs brutes du commentaire : même mécanisme que les messages
-    // et les posts — mapping `url → token` rangé dans `metadata.trackingLinks`
-    // SANS réécrire le contenu (aperçu vidéo + URL lisible préservés). Le client
-    // rend le lien vers `/l/<token>`. JAMAIS bloquant : le helper avale ses
-    // erreurs (→ []) et l'écriture metadata est gardée.
-    if (content) {
-      try {
-        const trackingLinks = await this.trackingLinkService.collectContentTrackingLinks({
-          content,
-          createdBy: authorId,
-        });
-        if (trackingLinks.length > 0) {
-          const existingMetadata = (comment.metadata as Record<string, unknown> | null) ?? {};
-          const metadata = { ...existingMetadata, trackingLinks } as Prisma.InputJsonValue;
-          await this.prisma.postComment.update({
-            where: { id: comment.id },
-            data: { metadata },
-          });
-          return { ...comment, metadata, media };
-        }
-      } catch {
-        // non-bloquant : un échec de tracking ne doit pas casser le commentaire
-      }
-    }
+    // Carte `metadata.trackingLinks` (#9073) : corps + légende de son média,
+    // mapping `url → token` SANS réécrire le contenu. Jamais bloquant.
+    const trackingMetadata = await syncCommentTrackingLinks({
+      prisma: this.prisma, linkService: this.trackingLinkService, comment: { ...comment, media }, createdBy: authorId,
+    });
+    if (trackingMetadata !== undefined) return { ...comment, metadata: trackingMetadata, media };
 
     return { ...comment, media };
   }
@@ -370,7 +353,15 @@ export class PostCommentService {
       });
     }
 
-    return { ...comment, postId: existing.postId, contentChanged, media };
+    // Édition : la carte de liens suivis se recalcule (#9073) — le document
+    // rendu porte la nouvelle carte, que la diffusion socket hisse.
+    const trackingMetadata = contentChanged
+      ? await syncCommentTrackingLinks({
+          prisma: this.prisma, linkService: this.trackingLinkService, comment: { ...comment, media }, createdBy: userId,
+        })
+      : undefined;
+    const served = trackingMetadata === undefined ? comment : { ...comment, metadata: trackingMetadata };
+    return { ...served, postId: existing.postId, contentChanged, media };
   }
 
   /// Relecture d'un commentaire au FORMAT de `updateComment` — pour le rejeu
