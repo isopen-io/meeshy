@@ -174,8 +174,12 @@ struct ReelFeedCard: View, Equatable {
     private var displayAuthor: String { repostedReel?.author ?? post.author }
     private var displayAuthorColor: String { repostedReel?.authorColor ?? accentHex }
     private var displayAvatarURL: String? { repostedReel?.authorAvatarURL ?? post.authorAvatarURL }
+    /// Un réel publié sans texte montre la légende de sa scène (#9179), comme
+    /// le lecteur de réels — une seule règle, `ReelPublishedContent`.
     private var displayCaption: String {
-        post.content.isEmpty ? (repostedReel?.content ?? "") : post.displayContent
+        if post.content.isEmpty, let repostedReel { return repostedReel.content }
+        return ReelPublishedContent.content(type: .reel, text: post.displayContent,
+                                            captions: post.media.map(\.caption)) ?? ""
     }
 
     private var kind: ReelMediaKind {

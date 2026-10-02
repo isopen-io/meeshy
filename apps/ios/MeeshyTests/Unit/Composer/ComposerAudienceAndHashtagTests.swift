@@ -286,4 +286,16 @@ final class ComposerAudienceAndHashtagTests: XCTestCase {
         XCTAssertEqual(ReelPublishedContent.content(type: .post, text: "", captions: ["Plage"]), "")
         XCTAssertNil(ReelPublishedContent.content(type: .story, text: nil, captions: ["Plage"]))
     }
+
+    func test_lesSurfacesDuReel_lisentLaMemeRegle() throws {
+        let views = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views")
+        for fichier in ["ReelFeedCard.swift", "ReelsPlayerView.swift"] {
+            let source = try String(contentsOf: views.appendingPathComponent(fichier), encoding: .utf8)
+            XCTAssertTrue(source.contains("ReelPublishedContent.content(type: .reel"),
+                          "\(fichier) montre la légende d'un réel sans texte par la règle unique.")
+        }
+    }
 }

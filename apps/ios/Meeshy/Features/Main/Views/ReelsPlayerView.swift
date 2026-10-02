@@ -523,7 +523,10 @@ struct ReelPageView: View {
     /// available translation when a flag is tapped.
     var displayedDescription: String {
         guard let sel = selectedLanguage?.lowercased() else { return servedDescription }
-        if sel == reel.originalLanguage?.lowercased() { return reel.content }
+        if sel == reel.originalLanguage?.lowercased() {
+            return ReelPublishedContent.content(type: .reel, text: reel.content,
+                                                captions: reel.media.map(\.caption)) ?? ""
+        }
         if let t = reel.translations?.first(where: { $0.key.lowercased() == sel })?.value {
             return t.text
         }
