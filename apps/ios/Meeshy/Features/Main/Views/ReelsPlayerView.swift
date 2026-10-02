@@ -177,13 +177,13 @@ struct ReelsPlayerView: View {
                 originalContent: reel.content,
                 originalLanguage: reel.originalLanguage,
                 originalType: reel.type,
-                media: reel.media.map { EditablePostMedia($0) },
+                media: reel.media.map { EditablePostMedia($0) }, originalStoryEffects: reel.storyEffects,
                 originalLocation: reel.location,
                 originalVisibility: reel.visibility,
                 originalVisibilityUserIds: reel.visibilityUserIds ?? [],
                 isRepost: reel.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
+                    await viewModel.updatePost(reel.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
                 },
                 onDismiss: { editingReel = nil }
             )
