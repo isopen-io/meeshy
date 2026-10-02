@@ -33,7 +33,7 @@ import {
   type ComposeProtection,
   type VeilState,
 } from '@/lib/send/compose-protection';
-import { composerChromeAccentStyle } from '@/lib/send/composer-accent';
+import { composerChromeAccentStyle, composerIconTintStyle } from '@/lib/send/composer-accent';
 import type { ComposerDraft } from '@/lib/send/draft-store';
 import type { StickyProtection } from '@/lib/send/protection-preference';
 import { NO_IMPOSED_PROTECTION, contaminatedComposeProtection, imposedLocksOf } from '@/lib/send/reply-contagion';
@@ -337,7 +337,7 @@ export const Composer = memo(function Composer({
    * mécanisme que `withAccent` au niveau de l'écran (`thread.tsx`).
    */
   const accentState = composerAccentOf(effective);
-  const chromeAccentStyle = composerChromeAccentStyle(accentState);
+  const chromeAccentStyle = { ...composerChromeAccentStyle(accentState), ...composerIconTintStyle(accentState) };
   /** La couleur ne se voit pas au lecteur d'écran : le champ DIT la
    * protection dominante (#7667, miroir `accessibilityHint` iOS). */
   const protectionAnnouncement =
@@ -870,7 +870,7 @@ export const Composer = memo(function Composer({
             style={{
               backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
               border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
-              color: 'var(--accent)',
+              color: 'var(--composer-icon)',
             }}
             aria-label={panelOpen ? 'Fermer le menu des pièces jointes' : 'Ouvrir le menu des pièces jointes'}
           >
@@ -895,7 +895,7 @@ export const Composer = memo(function Composer({
                 onClick={() => recorder.start()}
                 aria-busy={recorder.state.status === 'requesting'}
                 className="grid size-9 shrink-0 place-items-center self-end"
-                style={{ marginBottom: 4, marginLeft: 4, color: 'var(--color-ios-ink-2)' }}
+                style={{ marginBottom: 4, marginLeft: 4, color: 'var(--composer-icon)' }}
                 aria-label="Enregistrer un message vocal"
               >
                 <Glyph

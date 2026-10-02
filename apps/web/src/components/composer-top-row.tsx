@@ -155,7 +155,7 @@ export function ComposerTopRow({
           data-composer-ephemeral
           {...(locks.ephemeral ? { 'data-imposed': '' } : {})}
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2 disabled:cursor-not-allowed"
-          style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--color-ios-ink-2)' }}
+          style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--composer-icon)' }}
           aria-label={
             locks.ephemeral
               ? translate(language, 'composer.protection.imposed.ephemeral', { duration: ephemeralDuration })
@@ -186,7 +186,7 @@ export function ComposerTopRow({
           data-composer-blur
           {...(locks.blurred ? { 'data-imposed': '' } : {})}
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2 disabled:cursor-not-allowed"
-          style={blurred ? armedStyle('var(--ios-state-concealed)') : { color: 'var(--color-ios-ink-2)' }}
+          style={blurred ? armedStyle('var(--ios-state-concealed)') : { color: 'var(--composer-icon)' }}
           aria-label={
             locks.blurred
               ? translate(language, 'composer.protection.imposed.blur')
@@ -211,7 +211,7 @@ export function ComposerTopRow({
           data-composer-view-once
           data-glyph={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'}
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
-          style={viewOnce ? armedStyle('var(--ios-state-view-once)') : { color: 'var(--color-ios-ink-2)' }}
+          style={viewOnce ? armedStyle('var(--ios-state-view-once)') : { color: 'var(--composer-icon)' }}
           aria-label={translate(language, viewOnce ? 'composer.viewOnce.active' : 'composer.viewOnce.activate')}
         >
           <Glyph name={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'} size={16} />
@@ -224,7 +224,7 @@ export function ComposerTopRow({
           aria-expanded={effectsPanelOpen}
           data-composer-effects
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
-          style={effectCount > 0 ? armedStyle('var(--accent)') : { color: 'var(--color-ios-ink-2)' }}
+          style={effectCount > 0 ? armedStyle('var(--accent)') : { color: 'var(--composer-icon)' }}
           aria-label={effectCount > 0 ? `${effectCount} effet(s) actif(s)` : 'Ajouter des effets au message'}
         >
           <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={16} />
@@ -237,7 +237,7 @@ export function ComposerTopRow({
             onClick={onOpenStickers}
             data-composer-sticker
             className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-chip px-2"
-            style={{ color: 'var(--color-ios-ink-2)' }}
+            style={{ color: 'var(--composer-icon)' }}
             aria-label={translate(language, 'composer.attach.sticker')}
           >
             <GlyphSvg glyph={COMPOSER_GLYPHS.sticker} size={16} />
@@ -264,7 +264,7 @@ export function ComposerTopRow({
           <label
             data-composer-library
             className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-chip px-2"
-            style={{ color: 'var(--color-ios-ink-2)' }}
+            style={{ color: 'var(--composer-icon)' }}
           >
             <Glyph name="image" size={16} />
             <input
@@ -285,7 +285,7 @@ export function ComposerTopRow({
           <label
             data-composer-camera
             className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-chip px-2"
-            style={{ color: 'var(--color-ios-ink-2)' }}
+            style={{ color: 'var(--composer-icon)' }}
           >
             <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={16} />
             <input
