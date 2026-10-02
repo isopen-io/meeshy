@@ -5486,7 +5486,7 @@ extension CallManager: WebRTCServiceDelegate {
 
     nonisolated func webRTCService(_ service: WebRTCService, didChangeQualityLevel level: VideoQualityLevel, from previous: VideoQualityLevel) {
         Task { @MainActor [weak self] in
-            guard let self, case .connected = self.callState else { return }
+            guard let self, case .connected = self.callState, !self.isGroupPrimaryVacated else { return }
             guard UIAccessibility.isReduceMotionEnabled == false else { return }
             let generator = UINotificationFeedbackGenerator()
             switch level {
@@ -5514,8 +5514,9 @@ extension CallManager: WebRTCServiceDelegate {
             // that level to the UI, the gateway, or the survival controller while
             // the call shows "Reconnecting…" misleads users and resets the survival
             // controller's degraded-streak timer prematurely. Gate all reporting
-            // on callState == .connected.
-            guard case .connected = self.callState else { return }
+            // on callState == .connected — and never on the link of a primary
+            // that left a group which goes on (#9090).
+            guard case .connected = self.callState, !self.isGroupPrimaryVacated else { return }
             self.publishQualitySample(stats: stats, packetLossPercent: packetLossPercent)
             // #8978 — ne republier que ce qui CHANGE : chaque publication recalcule
             // tout l'écran d'appel, et ce relevé tombe toutes les 5 s.

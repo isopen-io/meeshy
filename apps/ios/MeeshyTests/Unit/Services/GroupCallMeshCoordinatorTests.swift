@@ -412,6 +412,23 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         XCTAssertEqual(host.vacateCallCount, 1, "CallManager cesse de reprendre une liaison vers un pair parti")
     }
 
+    /// #9090 — le principal parti, chaque membre restant garde SA liaison et son
+    /// image : aucun ne dépend plus de la PeerConnection du parti.
+    func test_participantLeft_primary_remainingMembersKeepTheirMedia() {
+        let (sut, host, factory, _, _) = makeSUT()
+        host.primaryRemoteVideoTrack = "primary-track"
+        sut.handleParticipantJoined(joined("c"))
+        sut.handleParticipantJoined(joined("d"))
+        factory.link(to: "c")?.remoteVideoTrack = "c-track"
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertEqual(sut.videoTrack(for: "c") as? String, "c-track")
+        XCTAssertEqual(factory.links.map(\.closeCallCount), [0, 0])
+        XCTAssertEqual(sut.roster.members.map(\.userId), ["c", "d"])
+        XCTAssertFalse(sut.roster.members.contains { $0.isPrimary }, "plus aucune tuile ne suit la liaison du parti")
+    }
+
     func test_participantLeft_primaryAlone_keepsTheSeat() {
         let (sut, host, _, _, _) = makeSUT()
 

@@ -97,4 +97,22 @@ final class GroupCallWiringSourceTests: XCTestCase {
             "sans `call:end`, les autres membres gardent une tuile fantôme jusqu'au nettoyage serveur"
         )
     }
+
+    // MARK: - #9090 — la liaison du principal parti ne dégrade plus les autres
+
+    func test_collectedStats_ofAVacatedPrimary_driveNoQualitySignal() throws {
+        let stats = try body(of: "didCollectStats stats: CallStats", in: manager, length: 1_400)
+
+        XCTAssertTrue(
+            stats.contains("guard case .connected = self.callState, !self.isGroupPrimaryVacated else { return }"),
+            "les relevés d'une liaison vers un pair parti diraient « connexion faible » à tout le "
+            + "groupe et pousseraient la survie vidéo, alors que le maillage se porte bien"
+        )
+    }
+
+    func test_qualityLevelChange_ofAVacatedPrimary_playsNoHaptic() throws {
+        let level = try body(of: "didChangeQualityLevel level: VideoQualityLevel", in: manager, length: 400)
+
+        XCTAssertTrue(level.contains("guard let self, case .connected = self.callState, !self.isGroupPrimaryVacated else { return }"))
+    }
 }
