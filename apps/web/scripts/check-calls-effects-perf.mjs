@@ -325,4 +325,4 @@ if (failures.length > 0) {
   for (const f of failures) console.error(`    · ${f}`);
   process.exit(REPORT_ONLY ? 0 : 1);
 }
-console.log('\n  Les effets, le flou et le zoom de ma vidéo tiennent 30 images par seconde sans tâche longue pendant un glissé : le traitement vit hors du fil principal.\n');
+console.log(`\n  Les effets, le flou et le zoom de ma vidéo ne coûtent aucune tâche longue pendant un glissé : le traitement vit hors du fil principal${hardwareChecks ? ', à 30 images par seconde' : ' (cadence et coût rapportés : WebGL logiciel)'}.\n`);
