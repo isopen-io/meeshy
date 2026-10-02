@@ -219,7 +219,10 @@ try {
   await page.click('[data-carousel-item="none"]');
   await page.click('[data-call-effects-category="color"]');
   await page.click('[data-carousel-item="natural"]');
+  await until(page, () => (document.querySelector('[data-call-mode-preview] video')?.videoWidth ?? 0) > 0);
+  await page.waitForTimeout(500);
   const sharp = await sharpness(page);
+  check(sharp !== null && sharp > 0, `la netteté de l’image envoyée se mesure sans flou (${sharp})`);
   await capture(page, 'perf-sans-flou');
   await page.click('[data-call-effects-settings-toggle]');
   const offered = await appears(page, '[data-call-effects-blur]', 3000);

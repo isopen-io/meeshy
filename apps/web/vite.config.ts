@@ -659,6 +659,7 @@ export default defineConfig({
                    et son chargeur WebAssembly ne se téléchargent qu'au premier
                    flou que la caméra ne fait pas — jamais à l'installation. */
                 'assets/video-effects-segmentation-*.js',
+                'assets/mediapipe-*.js',
                 'assets/vision_wasm_*',
               ],
               /**
@@ -896,6 +897,16 @@ export default defineConfig({
              * du socle ne lit.
              */
             if (id.includes('/node_modules/zod/') || id.includes('/zod@')) return 'zod';
+            /**
+             * MEDIAPIPE (#8471) — ~44 Ko gzip, atteint UNIQUEMENT par
+             * `lib/calls/video-effects-segmentation.ts`, chargé au premier
+             * flou d'arrière-plan que la caméra ne fait pas. Sans ce nom, la
+             * règle par défaut le rangeait dans `core` — dans la première
+             * peinture de tout le monde. Nommé (`budgets.json` ›
+             * `call_video_mediapipe`), et hors du précache (`globIgnores`).
+             * Le worker a sa propre copie, dans son chunk de segmentation.
+             */
+            if (id.includes('@mediapipe/tasks-vision')) return 'mediapipe';
             return 'core';
           }
           /**

@@ -188,8 +188,43 @@
       "dynamic_only": true,
       "kb": {
         "value": 4,
-        "status": "REMESUREE PAR #9100",
-        "source": "Mesure du 2026-10-02 (`bun run build` puis gzip -9) : 3,73 Ko -- le calque des effets de visage ne coute plus que le rectangle du visage et des sprites (#9100) : lissage a demi-resolution sur une surface de travail, lueurs (halo, eclat, yeux du demon, lave) et cornes dessinees UNE fois en sprites quantifies en cache, mouvement reduit, budget mesure sur le temps reel d une image. +1,5 Ko de code pour -37 % (lissage) et -28 % (eruption) par image, mesure dans Chromium. Plafond releve de 3 a 4. HISTORIQUE : Mesure de measure-weight.mjs le 2026-09-28 (`bun run build` puis gzip -9) : 2,41 Ko -- le traitement des images envoyees (`lib/calls/video-effects-pipeline.ts`) et, depuis #8551, le CALQUE des effets de visage (`lib/calls/face-effects-draw.ts` : lissage de peau, crapaud, ange, demon, eruption, traces a la main sur le canevas, sans aucune image ni modele). Charge A LA DEMANDE par `camera-effects.ts` au premier effet de couleur OU de visage : qui n en pose aucun ne le telecharge. La geometrie des effets et le suivi du visage vivent dans `call_face_tracker`, partage avec la capture. Arrondi au Ko SUPERIEUR (3), sans marge supplementaire. HISTORIQUE : 0,99 Ko a #8442 (couleur seule)."
+        "status": "REMESUREE PAR #9099",
+        "source": "Mesure du 2026-10-02 (`vite build` puis gzip -9, avant la directive qui renvoie les builds a la CI) : 2,82 Ko -- le chunk ne porte plus le traitement : il remet la camera au WORKER (#9099, `call_video_effects_worker` : flux transferes chez Chrome et la coque, copie de la piste chez Safari), attend son premier mot, relaie le mouvement reduit et publie le cout par image ; le repli du fil principal (le meme traitement, `call_video_effects_fallback`) n est charge que si le worker manque ou refuse. Sous le plafond de 4 : inchange. HISTORIQUE : Mesure du 2026-10-02 (`bun run build` puis gzip -9) : 3,73 Ko -- le calque des effets de visage ne coute plus que le rectangle du visage et des sprites (#9100) : lissage a demi-resolution sur une surface de travail, lueurs (halo, eclat, yeux du demon, lave) et cornes dessinees UNE fois en sprites quantifies en cache, mouvement reduit, budget mesure sur le temps reel d une image. +1,5 Ko de code pour -37 % (lissage) et -28 % (eruption) par image, mesure dans Chromium. Plafond releve de 3 a 4. HISTORIQUE : Mesure de measure-weight.mjs le 2026-09-28 (`bun run build` puis gzip -9) : 2,41 Ko -- le traitement des images envoyees (`lib/calls/video-effects-pipeline.ts`) et, depuis #8551, le CALQUE des effets de visage (`lib/calls/face-effects-draw.ts` : lissage de peau, crapaud, ange, demon, eruption, traces a la main sur le canevas, sans aucune image ni modele). Charge A LA DEMANDE par `camera-effects.ts` au premier effet de couleur OU de visage : qui n en pose aucun ne le telecharge. La geometrie des effets et le suivi du visage vivent dans `call_face_tracker`, partage avec la capture. Arrondi au Ko SUPERIEUR (3), sans marge supplementaire. HISTORIQUE : 0,99 Ko a #8442 (couleur seule)."
+      }
+    },
+    "call_video_effects_worker": {
+      "pattern": "^assets/video-effects-worker-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 10,
+        "status": "CIBLE -- MESUREE PAR #9099, NON ARBITREE",
+        "source": "Mesure du 2026-10-02 (`vite build` puis gzip -9, avant la directive qui renvoie les builds a la CI) : 8,46 Ko -- le WORKER des effets de ma video (#9099, `lib/calls/video-effects-worker.ts` : l hote `video-effects-host.ts`, le traitement d une image `video-effects-frames.ts` -- recadrage du zoom numerique #8441, couleur, calque des effets de visage --, le flou par segmentation `video-effects-blur.ts` et son compositeur WebGL2 `video-effects-compositor.ts` #8471). Construit par Vite en worker MODULE (`new Worker(new URL(...))` dans `call_video_effects`) : aucun import ne l atteint, il ne se telecharge qu au premier effet qui change l image. Le modele n y est pas (`call_video_segmentation`). Arrondi au Ko SUPERIEUR (9) + 1 Ko de marge."
+      }
+    },
+    "call_video_effects_fallback": {
+      "pattern": "^assets/video-effects-browser-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 7,
+        "status": "CIBLE -- MESUREE PAR #9099, NON ARBITREE",
+        "source": "Mesure du 2026-10-02 (`vite build` puis gzip -9, avant la directive qui renvoie les builds a la CI) : 5,63 Ko -- le REPLI du fil principal (#9099, `lib/calls/video-effects-browser.ts` : le meme traitement que le worker -- canevas de travail, calque de visage, flou -- pour un navigateur sans worker ou un worker qui refuse). Charge par `call_video_effects` dans ce seul cas. Arrondi au Ko SUPERIEUR (6) + 1 Ko de marge."
+      }
+    },
+    "call_video_segmentation": {
+      "pattern": "^assets/video-effects-segmentation-[A-Za-z0-9_-]{8}\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 46,
+        "status": "CIBLE -- MESUREE PAR #8471, NON ARBITREE",
+        "source": "Mesure du 2026-10-02 (`vite build` puis gzip -9, avant la directive qui renvoie les builds a la CI) : 44,94 Ko (44,47 dans le worker + 0,47 pour le module du repli, dont MediaPipe vit dans `call_video_mediapipe`) -- le flou d arriere-plan par segmentation (#8471, `lib/calls/video-effects-segmentation.ts`) et `@mediapipe/tasks-vision` 1.0.1 (Apache-2.0). Charge A LA DEMANDE au premier flou que la camera ne fait pas (`backgroundBlur` reste prioritaire), et JAMAIS precache (`vite.config.ts` > globIgnores). A cote, hors JS : le chargeur et le binaire WebAssembly (`assets/vision_wasm_module_internal-*` : 76 Ko + 3,4 Mo gzip, 11,8 Mo bruts) et le modele selfie segmenter float16 (`assets/selfie-segmenter-*.tflite`, 244 Ko), tous servis par Meeshy, telecharges a ce moment-la seulement. Arrondi au Ko SUPERIEUR (45) + 1 Ko de marge."
+      }
+    },
+    "call_video_mediapipe": {
+      "pattern": "^assets/mediapipe-[A-Za-z0-9_-]{8}\\.js$",
+      "kb": {
+        "value": 46,
+        "status": "CIBLE -- ESTIMEE PAR #8471 (copie de la mesure du worker), A REMESURER PAR LA CI",
+        "source": "Estimation du 2026-10-02 : ~44,5 Ko -- `@mediapipe/tasks-vision` 1.0.1 (Apache-2.0) pour le REPLI du fil principal (Firefox, ou tout navigateur dont le worker refuse) : nomme dans `vite.config.ts` > manualChunks, sans quoi la regle par defaut le rangeait dans `core`, la premiere peinture de tous. Importe STATIQUEMENT par le seul chunk de segmentation du repli (d ou l absence de `dynamic_only`), lui-meme charge en `import()` au premier flou sans flou de camera ; jamais precache. Le worker en porte sa propre copie (`call_video_segmentation`) : un lecteur n en telecharge qu une. Arrondi au Ko SUPERIEUR (45) + 1 Ko de marge."
       }
     },
     "call_video_effects_rules": {
