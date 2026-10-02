@@ -27,14 +27,15 @@ jest.mock('../../../utils/session-token', () => ({
   hashSessionToken: jest.fn((token: string) => 'hashed-' + token),
 }));
 
-const mockProcessMessageLinks = jest.fn<any>().mockResolvedValue({
-  processedContent: 'Hello!',
-  trackingLinks: [],
-});
+const mockProcessExplicitLinksInContent = jest.fn<any>().mockImplementation(
+  async ({ content }: { content: string }) => ({ processedContent: content, trackingLinks: [] })
+);
+const mockCollectContentTrackingLinks = jest.fn<any>().mockResolvedValue([]);
 const mockUpdateTrackingLinksMessageId = jest.fn<any>().mockResolvedValue(undefined);
 jest.mock('../../../services/TrackingLinkService', () => ({
   TrackingLinkService: jest.fn().mockImplementation(() => ({
-    processMessageLinks: (...a: any[]) => mockProcessMessageLinks(...a),
+    processExplicitLinksInContent: (...a: any[]) => mockProcessExplicitLinksInContent(...a),
+    collectContentTrackingLinks: (...a: any[]) => mockCollectContentTrackingLinks(...a),
     updateTrackingLinksMessageId: (...a: any[]) => mockUpdateTrackingLinksMessageId(...a),
   })),
 }));
@@ -580,17 +581,51 @@ describe('POST /links/:id/messages — anonymous: with tracking links', () => {
   beforeAll(async () => { app = await buildApp(); });
   afterAll(async () => { await app.close(); });
 
-  it('calls updateTrackingLinksMessageId when trackingLinks is non-empty', async () => {
-    mockProcessMessageLinks.mockResolvedValueOnce({
-      processedContent: 'Hi [tracked]!',
-      trackingLinks: [{ token: 'tok-1' }, { token: 'tok-2' }],
+  it('stores the raw address untouched and its token in metadata.trackingLinks', async () => {
+    mockCollectContentTrackingLinks.mockResolvedValueOnce([
+      { url: 'https://example.com/a', token: 'tok-1' },
+    ]);
+    const prisma = makePrisma();
+    const linkApp = await buildApp({ prisma });
+    const res = await linkApp.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: { ...VALID_BODY, content: 'Vois https://example.com/a' },
     });
+    await linkApp.close();
+    expect(res.statusCode).toBe(201);
+    expect(prisma.message.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        content: 'Vois https://example.com/a',
+        metadata: { trackingLinks: [{ url: 'https://example.com/a', token: 'tok-1' }] },
+      }),
+    }));
+    expect(mockUpdateTrackingLinksMessageId).toHaveBeenCalledWith(['tok-1'], MSG_ID);
+    expect(res.json().data.message.trackingLinks).toEqual([{ url: 'https://example.com/a', token: 'tok-1' }]);
+  });
+
+  it('collects the map from the content as stored, after the explicit <url> rewrite', async () => {
+    mockProcessExplicitLinksInContent.mockResolvedValueOnce({ processedContent: 'Vois m+abc', trackingLinks: [] });
     const res = await app.inject({
+      method: 'POST', url: `/links/${MSHY_ID}/messages`,
+      headers: ANON_HEADERS, payload: { ...VALID_BODY, content: 'Vois <https://example.com/a>' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(mockCollectContentTrackingLinks).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'Vois m+abc' })
+    );
+  });
+
+  it('writes no trackingLinks key when the content carries no address', async () => {
+    const prisma = makePrisma();
+    const linkApp = await buildApp({ prisma });
+    await linkApp.inject({
       method: 'POST', url: `/links/${MSHY_ID}/messages`,
       headers: ANON_HEADERS, payload: VALID_BODY,
     });
-    expect(res.statusCode).toBe(201);
-    expect(mockUpdateTrackingLinksMessageId).toHaveBeenCalledWith(['tok-1', 'tok-2'], MSG_ID);
+    await linkApp.close();
+    const data = (prisma.message.create as jest.Mock<any>).mock.calls[0][0].data;
+    expect(data.metadata?.trackingLinks).toBeUndefined();
+    expect(mockUpdateTrackingLinksMessageId).not.toHaveBeenCalledWith([], expect.anything());
   });
 });
 
@@ -1034,8 +1069,8 @@ describe.each([
     );
   });
 
-  it('traduit le contenu STOCKÉ (URLs réécrites), pas le corps reçu', async () => {
-    mockProcessMessageLinks.mockResolvedValueOnce({
+  it('traduit le contenu STOCKÉ (<url> réécrite), pas le corps reçu', async () => {
+    mockProcessExplicitLinksInContent.mockResolvedValueOnce({
       processedContent: 'Regarde https://mshy.link/t/tok',
       trackingLinks: [],
     });
@@ -1047,7 +1082,7 @@ describe.each([
 
     const { translationService } = await post({
       prisma,
-      body: { content: 'Regarde https://example.com/article' },
+      body: { content: 'Regarde <https://example.com/article>' },
     });
 
     expect(translationService.handleNewMessage).toHaveBeenCalledWith(
