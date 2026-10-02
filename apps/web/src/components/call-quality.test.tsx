@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { ActiveCall, CallMember, CallQuality } from '@/lib/calls/call-store';
+import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 
 import { CallPeerAlerts, CallQualityChip } from './call-quality';
@@ -17,6 +18,7 @@ import { CallScreen } from './call-screen';
 
 beforeAll(async () => {
   await loadInterfaceCatalog('en');
+  await loadCallControlsCatalog('fr');
 });
 
 const quality = (overrides: Partial<CallQuality> = {}): CallQuality => ({ level: 'good', packetLoss: 1.24, rtt: 142.6, jitter: 8.3, audioKbps: 31.6, videoKbps: 812.2, survival: 'sending', ...overrides });
@@ -98,6 +100,17 @@ describe('l’indicateur de qualité (#8047), dans la puce « Nom · durée » (
     const en = renderToStaticMarkup(<CallQualityDetail quality={quality()} language="en" onClose={() => undefined} />);
     expect(en).toContain('Packet loss');
     expect(en).toContain('1.2%');
+  });
+
+  test('chaque mesure du détail porte le niveau d’iOS, vu ET dit : gigue 30/50 ms, perte 3/5 %, latence 300/450 ms (#8209)', () => {
+    const html = renderToStaticMarkup(<CallQualityDetail quality={quality({ packetLoss: 4, rtt: 120, jitter: 55 })} language="fr" onClose={() => undefined} />);
+    expect(html).toMatch(/data-call-quality-row="call.quality.loss"[^>]*data-call-quality-grade="medium"/);
+    expect(html).toMatch(/data-call-quality-row="call.quality.latency"[^>]*data-call-quality-grade="good"/);
+    expect(html).toMatch(/data-call-quality-row="call.quality.jitter"[^>]*data-call-quality-grade="poor"/);
+    expect(html).not.toMatch(/data-call-quality-row="call.quality.audioRate"[^>]*data-call-quality-grade/);
+    expect(html).toMatch(/55\s?ms[\s\S]*?faible/);
+    const borderline = renderToStaticMarkup(<CallQualityDetail quality={quality({ jitter: 30 })} language="fr" onClose={() => undefined} />);
+    expect(borderline).toMatch(/data-call-quality-row="call.quality.jitter"[^>]*data-call-quality-grade="medium"/);
   });
 
   test('le détail dit le profil de données et ce qu’il permet d’envoyer ; un lien mauvais baisse la voix (#8697)', () => {
