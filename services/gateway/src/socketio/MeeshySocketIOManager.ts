@@ -3,6 +3,7 @@
  * Gestion des connexions, conversations et traductions en temps réel
  */
 
+import { presenceSnapshotContactsWhere } from './presence-snapshot-contacts';
 import { Server as SocketIOServer } from 'socket.io';
 // Cycle 107 — le `Socket` vient du contrat, pas de `socket.io`. Ce module
 // CONSTRUIT le serveur (d'où l'import de `Server` ci-dessus, immédiatement
@@ -1424,13 +1425,7 @@ export class MeeshySocketIOManager {
 
           // Lister tous les autres participants (registered + anonymes) de ces conversations
           const contacts = await this.prisma.participant.findMany({
-            where: {
-              conversationId: { in: conversationIds },
-              isActive: true,
-              NOT: isAnonymous
-                ? { id: userId }
-                : { userId: userId }
-            },
+            where: presenceSnapshotContactsWhere({ conversationIds, viewerId: userId, isAnonymous }),
             select: {
               id: true,
               userId: true,
