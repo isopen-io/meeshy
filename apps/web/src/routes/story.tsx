@@ -904,7 +904,8 @@ export default function StoryScreen() {
               (loi 4). La capsule n'existe que si la loi offre la réponse
               (`showsReply` : la story d'autrui, jamais la sienne). */}
           <StoryBottomBar
-            hidden={chromeYielded}
+            hidden={chromeYields({ sheetOpen: commentsOpen || viewersOpen })}
+            held={chromeHidden}
             language={interfaceLanguage}
             showsCaption={hasMedia}
             content={resolvedContent}

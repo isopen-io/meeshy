@@ -19,35 +19,42 @@ final class StoryComposerFoldTests: XCTestCase {
     func test_captionBottom_touchesTheTopOfTheMeasuredComposer() {
         let inset = StoryCaptionPlacement.bottomInset(
             composerBlockHeight: 104, composerBottomPadding: 54,
-            isComposerShown: true, fallback: 189)
+            isComposerShown: true)
         XCTAssertEqual(inset, 158, "Bord bas du texte = haut de la plaque : retrait bas + hauteur mesurée, sans écart.")
     }
 
     func test_captionBottom_followsTheComposerWhenItGrows() {
         let resting = StoryCaptionPlacement.bottomInset(
-            composerBlockHeight: 104, composerBottomPadding: 54, isComposerShown: true, fallback: 189)
+            composerBlockHeight: 104, composerBottomPadding: 54, isComposerShown: true)
         let withKeyboard = StoryCaptionPlacement.bottomInset(
-            composerBlockHeight: 104, composerBottomPadding: 336, isComposerShown: true, fallback: 189)
+            composerBlockHeight: 104, composerBottomPadding: 336, isComposerShown: true)
         XCTAssertGreaterThan(withKeyboard, resting)
         XCTAssertEqual(withKeyboard, 440)
     }
 
     func test_captionBottom_dropsOnTheFoldedButton() {
         let folded = StoryCaptionPlacement.bottomInset(
-            composerBlockHeight: 44, composerBottomPadding: 54, isComposerShown: true, fallback: 189)
+            composerBlockHeight: 44, composerBottomPadding: 54, isComposerShown: true)
         XCTAssertEqual(folded, 98, "Replié, le texte descend juste au-dessus du bouton de réouverture.")
     }
 
-    func test_captionBottom_withoutComposer_keepsItsHistoricPlace() {
+    /// #9072 — sur SA story il n'y a pas de composeur : le texte se pose au
+    /// ras du bas (zone sûre + respiration), plus à `topInset + 130`.
+    func test_captionBottom_withoutComposer_restsOnTheBottomPadding() {
         XCTAssertEqual(StoryCaptionPlacement.bottomInset(
-            composerBlockHeight: nil, composerBottomPadding: 54, isComposerShown: true, fallback: 189), 189)
+            composerBlockHeight: nil, composerBottomPadding: 54, isComposerShown: true), 54)
         XCTAssertEqual(StoryCaptionPlacement.bottomInset(
-            composerBlockHeight: 0, composerBottomPadding: 54, isComposerShown: true, fallback: 189), 189)
+            composerBlockHeight: 0, composerBottomPadding: 54, isComposerShown: true), 54)
+    }
+
+    func test_captionBottom_withoutComposerAndHiddenChrome_staysOnTheBottomPadding() {
+        XCTAssertEqual(StoryCaptionPlacement.bottomInset(
+            composerBlockHeight: nil, composerBottomPadding: 54, isComposerShown: false), 54)
     }
 
     func test_captionBottom_withHiddenChrome_reclaimsTheComposerBand() {
         XCTAssertEqual(StoryCaptionPlacement.bottomInset(
-            composerBlockHeight: 104, composerBottomPadding: 54, isComposerShown: false, fallback: 189), 54)
+            composerBlockHeight: 104, composerBottomPadding: 54, isComposerShown: false), 54)
     }
 
     // MARK: - 2 · Effets offerts en commentaire
@@ -180,6 +187,7 @@ final class StoryComposerFoldTests: XCTestCase {
         XCTAssertTrue(layer.contains("StoryComposerFold.offersFoldButton("))
         let caption = try String(contentsOf: views.appendingPathComponent("StoryViewerView+CanvasCaption.swift"), encoding: .utf8)
         XCTAssertTrue(layer.contains("StoryCaptionPlacement.bottomInset("))
+        XCTAssertFalse(layer.contains("topInset + 130"), "Sans composeur, le texte ne flotte plus à une hauteur tirée du HAUT de l'écran (#9072).")
         XCTAssertEqual(caption.components(separatedBy: ".padding(.bottom, captionBottomInset(geometry: geometry))").count - 1, 2,
                        "La légende ET la transcription se posent sur le composeur.")
         XCTAssertFalse(caption.contains(".padding(.bottom, topInset + 130)"), "Le texte ne se pose plus à une hauteur arbitraire.")
