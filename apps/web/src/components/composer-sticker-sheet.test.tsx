@@ -171,26 +171,30 @@ describe('ComposerStickerSheet', () => {
     expect(host.querySelector('[data-mee-sticker="mee-coucou"]')).toBe(null);
   });
 
+  /** Attend qu'une condition tienne — le chunk de la boutique et sa requête arrivent à leur rythme, jamais en deux tours fixes. */
+  const until = async (ready: () => boolean) => {
+    for (let i = 0; i < 50 && !ready(); i += 1) await act(settle);
+    expect(ready()).toBe(true);
+  };
+
   test('retirer un pack dans la Boutique le retire des onglets AU GESTE ; le réinstaller le rend', async () => {
     appQueryClient.setQueryData(STICKERS_QUERY_KEY, []);
     const host = await mount();
     await mounter.click(host.querySelector('[data-sticker-tab="shop"]'));
-    await settleLazy(import('./composer-sticker-shop'));
+    await until(() => host.querySelectorAll('[data-shop-pack]').length === 3);
 
     const rows = Array.from(host.querySelectorAll('[data-shop-pack]')).map((row) => row.getAttribute('data-shop-pack'));
     expect(rows).toEqual(['mee', 'meo', 'mee-et-meo']);
     expect(host.querySelector('[data-shop-toggle="meo"]')?.getAttribute('aria-pressed')).toBe('true');
 
     await mounter.click(host.querySelector('[data-shop-toggle="meo"]'));
-    await act(settle);
-    expect(host.querySelector('[data-sticker-tab="meo"]')).toBe(null);
+    await until(() => host.querySelector('[data-sticker-tab="meo"]') === null);
     expect(host.querySelector('[data-shop-toggle="meo"]')?.textContent).toBe('Installer');
     const installed = appQueryClient.getQueryData<readonly StickerPackDetail[]>(INSTALLED_PACKS_QUERY_KEY)?.map((pack) => pack.slug);
     expect(installed).toEqual(['mee', 'mee-et-meo']);
 
     await mounter.click(host.querySelector('[data-shop-toggle="meo"]'));
-    await act(settle);
-    expect(host.querySelector('[data-sticker-tab="meo"]')).not.toBe(null);
+    await until(() => host.querySelector('[data-sticker-tab="meo"]') !== null);
     const catalogue = appQueryClient.getQueryData<readonly StickerPackSummary[]>(PACK_CATALOGUE_QUERY_KEY);
     expect(catalogue?.find((pack) => pack.slug === 'meo')?.installed).toBe(true);
   });
@@ -246,9 +250,9 @@ describe('ComposerStickerSheet', () => {
     expect(host.querySelector('[data-sticker-tab="mee"]')).toBe(null);
 
     await mounter.click(host.querySelector('[data-sticker-tab="chats-de-paris"]'));
-    await settleLazy(import('./composer-pack-stickers'));
+    await until(() => host.querySelector('[data-pack-sticker="dodo"]') !== null);
     await mounter.click(host.querySelector('[data-pack-sticker="dodo"]'));
-    await act(settle);
+    await until(() => picked.length === 1);
     expect(picked.map((p) => p.sticker)).toEqual([{ templateId: 'pack.chats-de-paris.dodo', emoji: '😴' }]);
     expect(picked[0]?.file.type).toBe('image/png');
 
