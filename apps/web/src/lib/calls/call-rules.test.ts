@@ -40,7 +40,8 @@ describe('décodage', () => {
   });
 
   test('un accusé en échec porte son code et le motif de fin', () => {
-    expect(decodeAck({ success: false, error: { code: 'CALL_ENDED', endReason: 'missed' } })).toEqual({ ok: false, code: 'CALL_ENDED', endReason: 'missed' });
+    expect(decodeAck({ success: false, error: { code: 'CALL_ENDED', endReason: 'missed' } })).toEqual({ ok: false, code: 'CALL_ENDED', endReason: 'missed', activeCallId: null });
+    expect(decodeAck({ success: false, error: { code: 'CALL_ALREADY_ACTIVE', activeCallId: 'call-live' } })).toMatchObject({ code: 'CALL_ALREADY_ACTIVE', activeCallId: 'call-live' });
     expect(decodeAck(undefined)).toMatchObject({ ok: false, code: 'NO_ACK' });
     expect(decodeAck({ success: true, data: { callId: 'c' } })).toEqual({ ok: true, data: { callId: 'c' } });
   });

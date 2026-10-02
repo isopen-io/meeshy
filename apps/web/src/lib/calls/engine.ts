@@ -1,4 +1,5 @@
 import type { CallReactionEmoji } from '@meeshy/shared/types/call-control-law';
+import { CALL_REJOIN_GRACE_MS } from '@meeshy/shared/types/call-rules';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
 import {
@@ -77,6 +78,8 @@ export const ENDED_SCREEN_MS = 2_500;
 export const ENDED_RETRY_SCREEN_MS = 8_000;
 export const QUALITY_INTERVAL_MS = 2_000;
 export const QUALITY_REPORT_MS = 5_000;
+/** Un duo dont le lien est perdu attend le retour du pair le temps de la grâce du serveur, plus une marge (#9111). */
+export const REJOIN_GIVE_UP_MS = CALL_REJOIN_GRACE_MS + 15_000;
 
 export type StartCallRequest = {
   readonly conversationId: string;
@@ -161,7 +164,6 @@ export type CallEngine = {
   readonly react: (emoji: CallReactionEmoji) => boolean;
   readonly handle: (event: string, payload: unknown) => void;
   readonly reauthenticated: () => void;
-  readonly pageHidden: () => void;
   readonly dispose: () => void;
 };
 
@@ -198,6 +200,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
 
   const stopTimers = (): void => {
     session.ringTimer = clear(session.ringTimer);
+    session.lostTimer = clear(session.lostTimer);
     if (session.heartbeat !== null) deps.stopRepeat(session.heartbeat);
     session.heartbeat = null;
     if (session.qualityTimer !== null) deps.stopRepeat(session.qualityTimer);
@@ -280,6 +283,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       deps.tones.stop();
       if (call.connectedAt === null) deps.tones.cue('connected');
       session.ringTimer = clear(session.ringTimer);
+      session.lostTimer = clear(session.lostTimer);
       write({ ...call, phase: { kind: 'connected' }, connectedAt: call.connectedAt ?? deps.now() });
       preview.close();
       if (session.mutedWhileRinging && call.micMuted) toggleMic();
@@ -303,6 +307,7 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
   const remember = (person: DecodedPerson, participantId: string | null, flags?: { readonly micMuted?: boolean; readonly cameraOn?: boolean }): void => {
     if (person.userId === deps.viewerId()) return;
     if (participantId !== null) session.participantIds.set(participantId, person.userId);
+    if (participantId !== null) session.currentRows.set(person.userId, participantId);
     update((call) => {
       const current = call.members[person.userId];
       return withMember(call, {
@@ -330,11 +335,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (call === null || call.phase.kind === 'ended') return;
     if (state === 'failed') {
       const others = [...session.links.keys()].filter((id) => id !== userId);
-      if (!call.isGroup || others.length === 0) {
-        hangupWith('connectionLost');
-        return;
-      }
-      dropPeer(userId);
+      if (call.isGroup && others.length > 0) dropPeer(userId);
+      else awaitRejoin(userId);
       return;
     }
     const before = call.members[userId]?.link;
@@ -348,6 +350,25 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       emit(CLIENT_EVENTS.CALL_RECONNECTED, { callId, participantId: deps.viewerId() });
     }
     refreshPhase();
+  };
+
+  /** Un lien perdu en duo n'est pas une fin (#9111) : le pair peut revenir tant que la grâce du serveur court ; passé elle, on QUITTE. */
+  const awaitRejoin = (userId: string): void => {
+    session.troubled = true;
+    update((current) => patchMember({ ...current, phase: { kind: 'reconnecting' } }, userId, { link: 'reconnecting' }));
+    session.lostTimer ??= deps.schedule(() => {
+      session.lostTimer = null;
+      if (read()?.phase.kind === 'reconnecting') hangupWith('connectionLost', CLIENT_EVENTS.CALL_LEAVE);
+    }, REJOIN_GIVE_UP_MS);
+  };
+
+  /** Une reconnexion du socket : les pairs nous offrent à neuf, les anciens liens (et leur époque) s'effacent. */
+  const renewLinks = (): void => {
+    for (const [userId, link] of session.links) {
+      link.close();
+      update((current) => patchMember(current, userId, { link: 'connecting' }));
+    }
+    session.links.clear();
   };
 
   const linkTo = (userId: string): PeerLink | null => {
@@ -382,14 +403,14 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
 
   const preview = createEnginePreview({ read, update, emit, viewerId: deps.viewerId, createLink: deps.createLink, createStream: deps.createStream, localStream: () => localStream, iceServers: () => session.iceServers, silenceRing: deps.tones.stop });
 
-  const leaveServer = (reason?: string): void => {
+  const leaveServer = (event: string = CLIENT_EVENTS.CALL_END): void => {
     const callId = read()?.callId ?? null;
     if (callId === null) return;
-    void request(CLIENT_EVENTS.CALL_END, reason === undefined ? { callId } : { callId, reason });
+    void request(event, { callId });
   };
 
-  const hangupWith = (reason: CallEndReason): void => {
-    leaveServer();
+  const hangupWith = (reason: CallEndReason, event?: string): void => {
+    leaveServer(event);
     finish(reason);
   };
 
@@ -498,6 +519,14 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (afterJoinAck(ack)) startHeartbeat(callId);
   };
 
+  /** « Appeler » une conversation dont l'appel est en cours le REJOINT (#9111) — sans force-leave, qui quitterait sa propre ligne. */
+  const joinLive = async (callId: string, stream: MediaStream, token: number): Promise<void> => {
+    const ack = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId, settings: mediaSettings(stream) }));
+    if (token !== generation) return;
+    update((call) => ({ ...call, callId, phase: { kind: 'connecting' } }));
+    if (afterJoinAck(ack)) startHeartbeat(callId);
+  };
+
   const start = async (callRequest: StartCallRequest): Promise<void> => {
     deps.tones.prime();
     if (isCallLive(read())) {
@@ -510,9 +539,13 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     session.retry = callRequest;
     session.telemetry = createTelemetry(deps.now());
     write(baseCall(callRequest, 'outgoing', { kind: 'outgoing' }));
-    const stream = await acquire(callRequest.media === 'video', 'user');
+    const [stream, liveId] = await Promise.all([acquire(callRequest.media === 'video', 'user'), deps.fetchActiveCallId(callRequest.conversationId).catch(() => null)]);
     if (stream === null || token !== generation) return;
     update((call) => ({ ...call, localStream: stream, cameraOn: stream.getVideoTracks().length > 0 }));
+    if (liveId !== null) {
+      await joinLive(liveId, stream, token);
+      return;
+    }
     emit(CLIENT_EVENTS.CALL_FORCE_LEAVE, { conversationId: callRequest.conversationId });
     const ack = decodeAck(
       await request(CLIENT_EVENTS.CALL_INITIATE, {
@@ -524,12 +557,9 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (token !== generation || read()?.phase.kind === 'ended') return;
     if (!ack.ok) {
       if (ack.code === 'CALL_ALREADY_ACTIVE') {
-        const activeId = await deps.fetchActiveCallId(callRequest.conversationId).catch(() => null);
+        const activeId = ack.activeCallId ?? (await deps.fetchActiveCallId(callRequest.conversationId).catch(() => null));
         if (activeId !== null && token === generation) {
-          const ackJoin = decodeAck(await request(CLIENT_EVENTS.CALL_JOIN, { callId: activeId, settings: mediaSettings(stream) }));
-          if (token !== generation) return;
-          update((call) => ({ ...call, callId: activeId, phase: { kind: 'connecting' } }));
-          if (afterJoinAck(ackJoin)) startHeartbeat(activeId);
+          await joinLive(activeId, stream, token);
           return;
         }
       }
@@ -682,6 +712,8 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     if (left === null || call === null || call.callId !== left.callId) return;
     const userId = left.userId ?? (left.participantId === null ? null : (session.participantIds.get(left.participantId) ?? null));
     if (userId === null || userId === deps.viewerId()) return;
+    const currentRow = session.currentRows.get(userId);
+    if (left.participantId !== null && currentRow !== undefined && currentRow !== left.participantId) return;
     dropPeer(userId);
     const after = read();
     if (after !== null && !after.isGroup && after.phase.kind !== 'ended' && after.phase.kind !== 'outgoing') finish('remote');
@@ -952,11 +984,6 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     void request(CLIENT_EVENTS.CALL_END, { callId: waiting.callId, reason: 'rejected' });
   };
 
-  const onPageHide = (): void => {
-    const call = read();
-    if (call?.callId != null && call.phase.kind !== 'incoming' && isCallLive(call)) emit(CLIENT_EVENTS.CALL_END, { callId: call.callId });
-  };
-
   const unlisten = listenCallEvents(handle, () => {
     const call = read();
     if (call === null || call.callId === null || !isCallLive(call) || call.phase.kind === 'incoming') return;
@@ -965,7 +992,9 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
       const ack = decodeAck(raw);
       if (read()?.callId !== callId) return;
       if (!ack.ok && ack.code === 'CALL_ENDED') finish(mapServerEndReason(ack.endReason ?? 'completed'));
-      if (ack.ok) session.iceServers = decodeIceServers(ack.data.iceServers) ?? session.iceServers;
+      if (!ack.ok) return;
+      session.iceServers = decodeIceServers(ack.data.iceServers) ?? session.iceServers;
+      renewLinks();
     });
   });
 
@@ -1017,7 +1046,6 @@ export function createCallEngine(deps: CallEngineDeps): CallEngine {
     },
     handle,
     reauthenticated: () => undefined,
-    pageHidden: onPageHide,
     dispose: () => {
       unlisten();
       resetToIdle();
@@ -1033,6 +1061,5 @@ export async function defaultCallEngine(): Promise<CallEngine> {
   const deps = loadDefaultEngineDeps();
   const engine = createCallEngine({ ...deps, store: callStore });
   singleton = engine;
-  if (typeof window !== 'undefined') window.addEventListener('pagehide', engine.pageHidden);
   return engine;
 }

@@ -181,11 +181,11 @@ export function decodeIceRefresh(payload: unknown): { readonly callId: string; r
 }
 
 /** La réponse d'un accusé `{ success, data?, error? }`. */
-export function decodeAck(value: unknown): { readonly ok: true; readonly data: Json } | { readonly ok: false; readonly code: string; readonly endReason: string | null } {
-  if (!isRecord(value)) return { ok: false, code: 'NO_ACK', endReason: null };
+export function decodeAck(value: unknown): { readonly ok: true; readonly data: Json } | { readonly ok: false; readonly code: string; readonly endReason: string | null; readonly activeCallId: string | null } {
+  if (!isRecord(value)) return { ok: false, code: 'NO_ACK', endReason: null, activeCallId: null };
   if (value.success === true) return { ok: true, data: isRecord(value.data) ? value.data : {} };
   const error = isRecord(value.error) ? value.error : {};
-  return { ok: false, code: str(error.code) ?? 'UNKNOWN', endReason: str(error.endReason) };
+  return { ok: false, code: str(error.code) ?? 'UNKNOWN', endReason: str(error.endReason), activeCallId: str(error.activeCallId) };
 }
 
 /** Les membres déjà présents d'une session rendue par `call:join` (session Prisma brute). */

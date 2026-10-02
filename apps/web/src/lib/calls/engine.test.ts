@@ -68,11 +68,11 @@ describe('appel sortant', () => {
     expect(h.requested).toHaveLength(0);
   });
 
-  test('CALL_ALREADY_ACTIVE : l’appel en cours de la conversation est REJOINT', async () => {
+  test('un appel en cours dans la conversation est REJOINT, sans initiate (#9111)', async () => {
     const h = harness({ acks: { [CLIENT_EVENTS.CALL_INITIATE]: { success: false, error: { code: 'CALL_ALREADY_ACTIVE' } } }, activeCallId: 'call-live' });
     await h.engine.start(DIRECT);
-    expect(h.names(h.requested)).toEqual([CLIENT_EVENTS.CALL_INITIATE, CLIENT_EVENTS.CALL_JOIN]);
-    expect(h.requested[1]?.[1]).toMatchObject({ callId: 'call-live' });
+    expect(h.names(h.requested)).toEqual([CLIENT_EVENTS.CALL_JOIN]);
+    expect(h.requested[0]?.[1]).toMatchObject({ callId: 'call-live' });
     expect(h.call()?.callId).toBe('call-live');
   });
 
@@ -276,10 +276,10 @@ describe('en appel', () => {
     expect(cleaned.call()?.phase).toMatchObject({ kind: 'ended', reason: 'remote' });
   });
 
-  test('un lien perdu dans un appel DIRECT termine l’appel sur « connexion perdue »', async () => {
+  test('un lien perdu dans un appel DIRECT passe en « reconnexion » : le pair peut revenir (#9111)', async () => {
     const h = await connected();
     h.linkState(h.links[0] as FakeLink, 'failed');
-    expect(h.call()?.phase).toMatchObject({ kind: 'ended', reason: 'connectionLost' });
+    expect(h.call()?.phase.kind).toBe('reconnecting');
   });
 
   test('une reprise ICE passe l’appel en « reconnexion » puis le rend « connecté »', async () => {
