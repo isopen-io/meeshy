@@ -375,7 +375,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   { method: 'GET', url: '/api/v1/links/:identifier/messages', why: 'accès conditionné à un match membre/participant anonyme vérifié dans le handler' },
   { method: 'POST', url: '/api/v1/tracking-links', why: "création d'un lien de suivi NON rattaché : ouverte par conception. Le rattachement à une conversation (`conversationId` dans le corps) exige désormais d'y participer, vérifié dans le handler — c'était le trou." },
   { method: 'GET', url: '/api/v1/tracking-links/:token', why: 'résolution publique de lien court (design assumé, commentaire explicite dans le code)' },
-  { method: 'GET', url: '/api/v1/tracking-links/:token/resolve', why: 'idem, aucune donnée sensible exposée' },
+  { method: 'GET', url: '/api/v1/tracking-links/:token/resolve', why: "idem ; `sharer` (#9149) n'expose que nom affiché, pseudo et avatar du partageur d'un CONTENU (link-sharer.ts, resolve-sharer.test.ts)" },
   { method: 'GET', url: '/api/v1/l/:token', why: 'redirection publique de lien court' },
   { method: 'POST', url: '/api/v1/tracking-links/:token/click', why: "comptage de clic public par design" },
   { method: 'POST', url: '/api/v1/tracking-links/:token/redirect-status', why: "signal sendBeacon, explicitement documenté \"No authentication required\"" },
@@ -396,6 +396,7 @@ const PUBLIC_ROUTES: Array<{ method: string; url: string; why: string }> = [
   //     appelants anonymes (vérifié par lecture de PostFeedService/PostService) ---
   { method: 'GET', url: '/api/v1/posts/user/:userId', why: 'optionalAuth ; PostFeedService.getUserPosts applique buildVisibilityFilter — un anonyme ne voit que le PUBLIC' },
   { method: 'GET', url: '/api/v1/posts/community/:communityId', why: 'idem' },
+  { method: 'GET', url: '/api/v1/posts/:postId', why: "optionalAuth (#9149) — le lien partagé d'un visiteur ; anonymousPostGate ne sert que le PUBLIC vivant d'un auteur actif (original compris), le reste rend le 404 d'une publication inexistante (prouvé par unit/routes/posts/anonymous-post-read.test.ts)" },
   // #4149 — `GET /api/v1/social/posts` remplace neuf routes de fil social.
   // Elle est ici pour la MEME raison que les deux lignes ci-dessus : optionalAuth,
   // et PostFeedService applique `buildVisibilityFilter`, donc un anonyme ne voit

@@ -29,6 +29,7 @@ import {
 // masque.
 import { protectedPreview, maskedAttachment } from '../../services/notifications/notification-preview';
 import { canAccessConversation } from '../conversations/utils/access-control';
+import { mayServePostToAnonymous } from './anonymousPostGate';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
@@ -166,7 +167,11 @@ function rejectUnclaimedCanvasMedia(
 export function registerCoreRoutes(
   fastify: FastifyInstance,
   prisma: PrismaClient,
-  requiredAuth: any
+  requiredAuth: any,
+  // #9149 — la porte d'un LIEN PARTAGÉ : `GET /posts/:postId` laisse entrer un
+  // visiteur sans compte, que `anonymousPostGate` juge. Absente, la route reste
+  // fermée comme avant (fail-closed) : seul `postRoutes` la câble.
+  optionalAuth: any = requiredAuth
 ) {
   const postService = new PostService(prisma);
   // #4147 critère 2 — seau PARTAGÉ avec POST /posts/:postId/repost
@@ -479,12 +484,20 @@ export function registerCoreRoutes(
   // GET /posts/:postId — Get post by ID
   fastify.get('/posts/:postId', {
     schema: { params: postIdParamsSchema },
-    preValidation: [requiredAuth],
+    preValidation: [optionalAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       const viewerUserId = authContext?.registeredUser?.id;
       const { postId } = request.params;
+
+      // #9149 — un visiteur SANS COMPTE (aucune session, ou l'invité d'un lien
+      // de conversation) ne lit que ce que `anonymousPostGate` autorise :
+      // public, vivant, d'un auteur actif, original compris. Refusé, il reçoit
+      // le même 404 qu'une publication inexistante.
+      if (viewerUserId === undefined && !(await mayServePostToAnonymous(prisma, postId))) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
 
       const post = await postService.getPostById(postId, viewerUserId);
       if (!post) {
