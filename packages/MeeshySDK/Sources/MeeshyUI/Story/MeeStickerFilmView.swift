@@ -47,7 +47,11 @@ public struct MeeStickerFilmView: View {
     public var body: some View {
         Group {
             if let film, animates, !reduceMotion {
+                // Transparente aux touchers : un Mee ne change pas la bulle qui
+                // le porte — appui long, double tap, glisser-répondre partent
+                // comme sur un gabarit (retour porteur 2026-10-01).
                 AnimatedImageView(decoded: film)
+                    .allowsHitTesting(false)
             } else if let still {
                 Image(uiImage: still).resizable().scaledToFit()
             } else {
@@ -55,6 +59,7 @@ public struct MeeStickerFilmView: View {
             }
         }
         .frame(width: side, height: side)
+        .contentShape(Rectangle())
         .task(id: "\(sticker.id)|\(animates && !reduceMotion)|\(maxPixelSize)") {
             if still == nil { still = MeeStickerCatalog.stillImage(sticker) }
             guard animates, !reduceMotion, sticker.animated,
