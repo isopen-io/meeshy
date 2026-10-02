@@ -18,8 +18,10 @@ final class MeeInstantCatalogTests: XCTestCase {
 
     // MARK: - L'index et ses films
 
-    func test_everyInstant_hasItsFilmInTheBundle() {
-        XCTAssertEqual(MeeInstantCatalog.all.count, 100)
+    /// L'index ne liste que les Instants FILMÉS (le tournage avance par
+    /// lots) — et chacun d'eux a son film dans le bundle.
+    func test_everyIndexedInstant_hasItsFilmInTheBundle() {
+        XCTAssertFalse(MeeInstantCatalog.all.isEmpty)
         let sansFilm = MeeInstantCatalog.all.filter { MeeStickerCatalog.fileURL(id: $0.id) == nil }
         XCTAssertEqual(sansFilm.map(\.id), [])
     }
@@ -27,7 +29,8 @@ final class MeeInstantCatalogTests: XCTestCase {
     /// Les sections de « Personnalisés », dans l'ordre du web, jamais vides.
     func test_sections_followTheWebOrder_andHoldEveryInstant() {
         let sections = MeeInstantCatalog.sections
-        XCTAssertEqual(sections.map(\.kind), [.message, .moment, .lieu, .meteo])
+        let order = sections.map(\.kind)
+        XCTAssertEqual(order, MeeInstant.Kind.allCases.filter(order.contains))
         XCTAssertTrue(sections.allSatisfy { !$0.instants.isEmpty })
         XCTAssertEqual(sections.flatMap(\.instants).count, MeeInstantCatalog.all.count)
     }

@@ -218,6 +218,14 @@ const entry = (sticker: MeeSticker): string => {
   return `        MeeInstant(id: ${JSON.stringify(sticker.id)}, kind: .${sticker.section}, title: ${JSON.stringify(sticker.title)}, emoji: ${JSON.stringify(sticker.emoji)}, animated: ${sticker.motion !== null}, slots: [${sticker.slots.map((slot) => `.${slot}`).join(', ')}], defaults: ${swiftSlots(sticker.defaults)}, band: ${bandSwift}, texts: [${textSwift.join(', ')}]),`;
 };
 
+/**
+ * L'index ne liste que les Instants FILMÉS : un Instant sans film ne s'offre
+ * pas dans la feuille, et une bulle qui le reçoit sert le PNG de l'expéditeur
+ * — la règle de tout sticker que ce binaire ne sait pas redessiner. Relancer le
+ * script quand le tournage avance suffit à les ajouter.
+ */
+const filmed = instants.filter((sticker) => hasFilm(sticker.id));
+
 const [vx, vy, vw, vh] = MEE_VIEWBOX.split(' ').map(Number);
 const index = `// GÉNÉRÉ par apps/web/scripts/mee-ios-instants.ts — ne pas modifier à la main (#9069).
 
@@ -228,9 +236,9 @@ extension MeeInstantCatalog {
     nonisolated public static let viewBox = CGRect(x: ${vx}, y: ${vy}, width: ${vw}, height: ${vh})
 
     nonisolated public static let all: [MeeInstant] = [
-${instants.map(entry).join('\n')}
+${filmed.map(entry).join('\n')}
     ]
 }
 `;
 writeFileSync(join(STORY, 'MeeInstantCatalog+Index.swift'), index);
-process.stdout.write(`\n${instants.length} instants → ${OUT}\n`);
+process.stdout.write(`\n${filmed.length}/${instants.length} instants filmés → ${OUT}\n`);
