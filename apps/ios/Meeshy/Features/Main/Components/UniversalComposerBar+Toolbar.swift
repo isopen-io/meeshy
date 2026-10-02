@@ -76,10 +76,19 @@ extension UniversalComposerBar {
                 }
             }
 
-            // **La caméra à l'angle droit du verre** (#9082), juste avant le ⌄.
-            ForEach(ComposerGlassDoors.trailing(offersCamera: onCamera != nil,
+            // **La caméra à l'angle droit du verre** (#9082), juste avant le ⌄ ;
+            // la photothèque (images ET vidéos) à côté d'elle (#9120).
+            ForEach(ComposerGlassDoors.trailing(offersLibrary: onPhotoLibrary != nil,
+                                                offersCamera: onCamera != nil,
                                                 offersFold: foldControl != nil), id: \.self) { door in
                 switch door {
+                case .library:
+                    if let openLibrary = onPhotoLibrary {
+                        glassDoorButton(
+                            symbol: "photo.on.rectangle.angled",
+                            label: String(localized: "composer.attach.photo", defaultValue: "Photos", bundle: .main),
+                            action: openLibrary)
+                    }
                 case .camera:
                     if let openCamera = onCamera {
                         glassDoorButton(
@@ -221,15 +230,17 @@ extension UniversalComposerBar {
 // sa largeur ne dépasse jamais celle proposée.
 
 /// **L'angle droit du verre** (#9082) : la caméra se pose juste avant le ⌄,
-/// et chaque porte n'existe que si l'hôte sait l'ouvrir.
+/// la photothèque à côté d'elle (#9120), et chaque porte n'existe que si
+/// l'hôte sait l'ouvrir.
 nonisolated enum ComposerGlassDoors {
     enum TrailingDoor: Hashable, Sendable {
+        case library
         case camera
         case fold
     }
 
-    static func trailing(offersCamera: Bool, offersFold: Bool) -> [TrailingDoor] {
-        (offersCamera ? [.camera] : []) + (offersFold ? [.fold] : [])
+    static func trailing(offersLibrary: Bool, offersCamera: Bool, offersFold: Bool) -> [TrailingDoor] {
+        (offersLibrary ? [.library] : []) + (offersCamera ? [.camera] : []) + (offersFold ? [.fold] : [])
     }
 }
 

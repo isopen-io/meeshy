@@ -71,13 +71,30 @@ final class ComposerToolbarStripWidthTests: XCTestCase {
 final class ComposerGlassDoorsTests: XCTestCase {
 
     func test_trailing_cameraSitsJustBeforeTheFold() {
-        XCTAssertEqual(ComposerGlassDoors.trailing(offersCamera: true, offersFold: true), [.camera, .fold])
+        XCTAssertEqual(ComposerGlassDoors.trailing(offersLibrary: false, offersCamera: true, offersFold: true), [.camera, .fold])
     }
 
     func test_trailing_withoutCameraHost_keepsOnlyTheFold() {
-        XCTAssertEqual(ComposerGlassDoors.trailing(offersCamera: false, offersFold: true), [.fold])
-        XCTAssertEqual(ComposerGlassDoors.trailing(offersCamera: true, offersFold: false), [.camera])
-        XCTAssertEqual(ComposerGlassDoors.trailing(offersCamera: false, offersFold: false), [])
+        XCTAssertEqual(ComposerGlassDoors.trailing(offersLibrary: false, offersCamera: false, offersFold: true), [.fold])
+        XCTAssertEqual(ComposerGlassDoors.trailing(offersLibrary: false, offersCamera: true, offersFold: false), [.camera])
+        XCTAssertEqual(ComposerGlassDoors.trailing(offersLibrary: false, offersCamera: false, offersFold: false), [])
+    }
+
+    /// #9120 — la photothèque (images ET vidéos) se pose À CÔTÉ de la caméra.
+    func test_trailing_librarySitsJustBeforeTheCamera() {
+        XCTAssertEqual(ComposerGlassDoors.trailing(offersLibrary: true, offersCamera: true, offersFold: true), [.library, .camera, .fold])
+        XCTAssertEqual(ComposerGlassDoors.trailing(offersLibrary: true, offersCamera: false, offersFold: false), [.library])
+    }
+
+    func test_toolbar_libraryDoorOpensThePhotoLibrary() throws {
+        let toolbar = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Main/Components/UniversalComposerBar+Toolbar.swift"),
+            encoding: .utf8)
+        XCTAssertTrue(toolbar.contains("offersLibrary: onPhotoLibrary != nil"), "La porte n'existe que si l'hôte sait ouvrir la photothèque.")
+        XCTAssertTrue(toolbar.contains("case .library:"), "La bande rend la porte photothèque.")
     }
 
     func test_toolbar_stickerReplacesTheMoodIndicator() throws {
