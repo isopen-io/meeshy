@@ -17,6 +17,7 @@ const frCommentRow = {
   'comments.reply.to': 'Répondre à {name}',
   'comments.reply.cancel': 'Annuler la réponse',
   'comments.composer.fold': 'Replier la saisie du commentaire',
+  'comments.composer.unfold': 'Afficher la saisie du commentaire',
   'comments.replies.show': 'Voir les réponses ({count})',
   'comments.replies.hide': 'Masquer les réponses',
   'comments.replies.more': 'Voir plus de réponses',

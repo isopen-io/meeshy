@@ -13,6 +13,7 @@ const enCommentRow = {
   'comments.reply.to': 'Replying to {name}',
   'comments.reply.cancel': 'Cancel reply',
   'comments.composer.fold': 'Fold the comment field',
+  'comments.composer.unfold': 'Show the comment field',
   'comments.replies.show': 'View replies ({count})',
   'comments.replies.hide': 'Hide replies',
   'comments.replies.more': 'View more replies',

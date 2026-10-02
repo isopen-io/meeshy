@@ -13,6 +13,7 @@ const itCommentRow = {
   'comments.reply.to': 'Risposta a {name}',
   'comments.reply.cancel': 'Annulla la risposta',
   'comments.composer.fold': 'Chiudi il campo del commento',
+  'comments.composer.unfold': 'Mostra il campo del commento',
   'comments.replies.show': 'Vedi risposte ({count})',
   'comments.replies.hide': 'Nascondi risposte',
   'comments.replies.more': 'Vedi altre risposte',

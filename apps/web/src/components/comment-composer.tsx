@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 
-import { Glyph } from '@/components/glyph';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { MentionFieldPanel } from '@/components/mention-suggestions';
 import { COMMENT_MAX_LENGTH } from '@/lib/api/publication-comments';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
@@ -122,16 +123,34 @@ export function CommentComposer({
   const fieldId = useId();
   const mention = useMentionField({ text, fieldRef, onText: setText, source: mentionSource });
   const formRef = useRef<HTMLFormElement | null>(null);
+  const [userFolded, setUserFolded] = useState(false);
+  const folded = userFolded && replyTo === null;
   const writing = useComposerWriting(formRef, onWritingChange, canWrite);
 
-  /* REPLIER (⌄, ou un envoi réussi chez un hôte `foldOnSend`) : le focus
-     quitte le composeur pour le FIL qui le porte (sa racine `tabIndex=-1`),
-     jamais pour `<body>` — au clavier, on repartirait du haut du document. */
-  const fold = useCallback(() => {
+  /* RENDRE LA LECTURE (un envoi réussi chez un hôte `foldOnSend`, ou le ⌄) :
+     le focus quitte le composeur pour le FIL qui le porte (sa racine
+     `tabIndex=-1`), jamais pour `<body>` — au clavier, on repartirait du haut
+     du document. */
+  const release = useCallback(() => {
     const thread = formRef.current?.parentElement?.closest<HTMLElement>('[tabindex="-1"]') ?? null;
     if (thread !== null) thread.focus();
     else if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   }, []);
+
+  /* LE REPLI (#9122, miroir `StoryComposerFold`) — le ⌄, visible d'emblée,
+     réduit la barre à UNE icône de commentaire ; le brouillon reste dans
+     `text`. Une réponse en cours la rouvre : sa bannière vit dedans. */
+  const fold = useCallback(() => {
+    release();
+    setUserFolded(true);
+  }, [release]);
+  const unfold = useCallback(() => {
+    setUserFolded(false);
+    requestAnimationFrame(() => fieldRef.current?.focus());
+  }, []);
+  useEffect(() => {
+    if (replyTo !== null) setUserFolded(false);
+  }, [replyTo]);
 
   /* LA MENTION PRÉREMPLIE SUIT LA CIBLE — posée pour une réponse à une
      réponse, retirée quand la cible change ou disparaît, jamais cumulée
@@ -167,8 +186,8 @@ export function CommentComposer({
       fieldRef.current?.focus();
       return;
     }
-    if (foldOnSend) fold();
-  }, [text, sending, onSend, language, foldOnSend, fold]);
+    if (foldOnSend) release();
+  }, [text, sending, onSend, language, foldOnSend, release]);
 
   if (!canWrite) {
     return (
@@ -191,6 +210,24 @@ export function CommentComposer({
         void submit();
       }}
     >
+      {/* REPLIÉE (#9122), la barre n'est plus qu'une icône de commentaire ; le
+          champ reste MONTÉ, caché — miroir de la plaque iOS gardée à hauteur
+          nulle : le brouillon ne dépend d'aucun démontage. */}
+      {folded ? (
+        <button
+          type="button"
+          data-comment-unfold=""
+          aria-label={translate(language, 'comments.composer.unfold')}
+          onClick={unfold}
+          className="grid place-items-center self-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ width: FOLD_TARGET_PX, height: FOLD_TARGET_PX, background: 'var(--color-ios-card)', color: 'var(--color-ios-ink)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          <span data-glyph="chatCircle" className="inline-flex">
+            <GlyphSvg glyph={FEED_GLYPHS.chatCircle} size={20} />
+          </span>
+        </button>
+      ) : null}
+      <div data-comment-composer-body="" className={folded ? 'hidden' : 'contents'}>
       {replyTo === null ? null : (
         <div data-comment-reply-banner={replyTo.commentId} className="flex items-center gap-2 pb-1">
           <span aria-hidden className="shrink-0 rounded-full" style={{ width: 3, height: 32, background: 'var(--color-ios-brand)' }} />
@@ -235,8 +272,8 @@ export function CommentComposer({
         {translate(language, 'comments.placeholder')}
       </label>
       {/* LA PLAQUE DU CHAMP (#8643) — le ⌄ vit DEDANS, à l'angle haut-droit
-          (haut-gauche en RTL : `insetInlineEnd`), et n'existe qu'en rédaction
-          (`StoryComposerFold.offersFoldButton` côté iOS). */}
+          (haut-gauche en RTL : `insetInlineEnd`), visible d'emblée (#9122,
+          `StoryComposerFold.offersFoldButton` côté iOS). */}
       <div data-comment-plate="" className="relative flex min-w-0 flex-1">
       <textarea
         id={fieldId}
@@ -275,26 +312,26 @@ export function CommentComposer({
           background: 'var(--color-ios-card)',
           color: 'var(--color-ios-ink)',
           outlineColor: 'var(--color-ios-brand)',
-          ...(writing ? { paddingInlineEnd: FOLD_TARGET_PX } : {}),
+          paddingInlineEnd: FOLD_TARGET_PX,
         }}
       />
-      {writing ? (
-        <button
-          type="button"
-          data-comment-fold=""
-          aria-label={translate(language, 'comments.composer.fold')}
-          /* Le doigt ne VOLE pas le focus au champ avant le clic : sans cela,
-             le champ perdrait la rédaction au `pointerdown` et le ⌄ se
-             démonterait avant de recevoir son propre clic. */
-          onPointerDown={(e) => e.preventDefault()}
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={fold}
-          className="absolute grid place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-[-2px]"
-          style={{ top: 0, insetInlineEnd: '0px', width: FOLD_TARGET_PX, height: FOLD_TARGET_PX, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
-        >
-          <Glyph name="caretDown" size={14} />
-        </button>
-      ) : null}
+      {folded ? null : (
+      <button
+        type="button"
+        data-comment-fold=""
+        aria-label={translate(language, 'comments.composer.fold')}
+        /* Le doigt ne VOLE pas le focus au champ avant le clic : sans cela,
+           le champ perdrait la rédaction au `pointerdown` et le ⌄ se
+           démonterait avant de recevoir son propre clic. */
+        onPointerDown={(e) => e.preventDefault()}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={fold}
+        className="absolute grid place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-[-2px]"
+        style={{ top: 0, insetInlineEnd: '0px', width: FOLD_TARGET_PX, height: FOLD_TARGET_PX, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
+      >
+        <Glyph name="caretDown" size={14} />
+      </button>
+      )}
       </div>
       <button
         type="submit"
@@ -348,6 +385,7 @@ export function CommentComposer({
           {notice.text}
         </p>
       )}
+      </div>
     </form>
   );
 }
