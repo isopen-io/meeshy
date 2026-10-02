@@ -4,6 +4,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { invalidateParticipantLookup } from '../../utils/participant-lookup-cache';
+import { differsOrUnset } from '../../utils/prisma-unset';
 import { postJoinSystemMessage } from '../../services/conversations/joinSystemMessage';
 import { noticeActor } from '../../services/conversations/conversationNotice';
 import type { NoticeActor } from '@meeshy/shared/utils/conversation-notice';
@@ -372,7 +373,7 @@ export function registerParticipantWriteRoutes(
       // `CONVERSATION_NEW` ci-dessous, dont l'effectif vient du serveur et le
       // compte DÉJÀ. L'incrémenter en plus le mettrait en trop.
       const audience = await prisma.participant.findMany({
-        where: { conversationId, isActive: true, NOT: { userId } },
+        where: { conversationId, isActive: true, ...differsOrUnset('userId', userId) },
         // `role` et `user.role` en plus : les deux titres qui ouvrent
         // l'effectif ENTIER (`canViewExactMemberCount`), que le fanout doit
         // connaître PAR DESTINATAIRE — un broadcast ne portait qu'une

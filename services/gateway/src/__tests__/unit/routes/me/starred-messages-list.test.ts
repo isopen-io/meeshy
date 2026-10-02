@@ -40,6 +40,7 @@ import {
   starRow,
   type Store,
 } from './starred-messages-harness';
+import { matchesMongoWhere, type MongoDocument } from '../../../helpers/mongo-where';
 
 async function list(store: Store, query = '', options: { authContext?: Record<string, unknown> } = {}) {
   const app = await buildApp(makePrisma(store), options);
@@ -154,6 +155,40 @@ describe('GET /starred-messages — la ligne sert le message VIVANT', () => {
       name: 'Ada',
       avatar: 'https://cdn.example/ada.png',
     });
+  });
+});
+
+/**
+ * #9106 — l'autre participant d'une conversation directe peut être un invité
+ * par lien : Prisma n'écrit pas sa clé `userId`, et sur MongoDB une négation
+ * écarte la clé ABSENTE. Le double rejoue ici les sémantiques mesurées
+ * (`helpers/mongo-where.ts`) sur les participations.
+ */
+describe('GET — le pair d’une conversation directe peut être un invité par lien', () => {
+  const absent = (row: Record<string, unknown>, ...keys: string[]) =>
+    Object.fromEntries(Object.entries(row).filter(([key]) => !keys.includes(key)));
+
+  it('nomme la conversation par l’invité, dont la participation n’a pas de userId', async () => {
+    const store = oneStarStore({
+      messages: [messageRow({ conversationId: CONV_DIRECT })],
+      participants: [
+        absent(participantRow({ conversationId: CONV_DIRECT }), 'bannedAt'),
+        absent(participantRow({ id: '68b000000000000000000012', conversationId: CONV_DIRECT, displayName: 'Invitée Ada', user: null }), 'bannedAt', 'userId'),
+      ],
+      conversations: [conversationRow({ id: CONV_DIRECT, identifier: 'direct_x', type: 'direct', title: null, avatar: null })],
+      stars: [starRow({ conversationId: CONV_DIRECT })],
+    });
+    const prisma = makePrisma(store);
+    const harnessFindMany = prisma.participant.findMany;
+    prisma.participant.findMany = async (args) =>
+      (await harnessFindMany(args)).filter((row) => matchesMongoWhere(row as MongoDocument, args.where as MongoDocument));
+    const app = await buildApp(prisma);
+    try {
+      const body = (await app.inject({ method: 'GET', url: '/starred-messages' })).json();
+      expect(body.data[0].conversation.name).toBe('Invitée Ada');
+    } finally {
+      await app.close();
+    }
   });
 });
 
