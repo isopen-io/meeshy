@@ -1,7 +1,7 @@
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
 import { ActiveMembersStack } from './active-members-stack';
-import { Avatar } from './avatar';
+import { Avatar, HEADER_HERE_DOT_RATIO } from './avatar';
 import { AvatarMenuTrigger } from './avatar-menu';
 import { PersonName } from './person-name';
 import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from './chrome-action';
@@ -363,7 +363,7 @@ export function ThreadHeader({
               color={accent}
               size={44}
               {...(photo === undefined ? {} : { src: photo })}
-              {...(group ? {} : { presence: presenceOf(peerOf(conversation, viewerId)), here: peerHere, hereActive: peerActive, hereFocused: peerFocused })}
+              {...(group ? {} : { presence: presenceOf(peerOf(conversation, viewerId)), here: peerHere, hereActive: peerActive, hereFocused: peerFocused, hereDotRatio: HEADER_HERE_DOT_RATIO })}
             />
           </button>
         </AvatarMenuTrigger>

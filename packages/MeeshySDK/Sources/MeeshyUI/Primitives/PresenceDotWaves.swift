@@ -4,24 +4,25 @@ import SwiftUI
 // la garde `MoodBadgeTests` y interdit toute animation infinie. Les deux ne
 // sont montées que hors Reduce Motion (`MeeshyAvatar.body`).
 
-/// Le point « ici » VIT tant que le pair regarde, écoute ou agit (#9061) : une
-/// onde part de lui, encore et encore, et s'arrête avec l'activité (la vue est
-/// retirée). Transform et opacité seulement.
-struct PresenceActivityPulse: View {
+/// Le point « ici » VIT tant que le pair est là (#9065) : une onde part de
+/// lui, encore et encore — douce s'il observe, vive s'il agit ou regarde en
+/// plein écran. Transform et opacité seulement.
+struct PresenceHereWaveView: View {
     let color: Color
     let diameter: CGFloat
+    let wave: PresenceHereWave
     @State private var spread = false
 
     var body: some View {
         Circle()
             .fill(color)
             .frame(width: diameter, height: diameter)
-            .scaleEffect(spread ? 2.2 : 1)
-            .opacity(spread ? 0 : 0.55)
+            .scaleEffect(spread ? wave.peakScale : 1)
+            .opacity(spread ? 0 : wave.startOpacity)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
             .onAppear {
-                withAnimation(.easeOut(duration: 1.4).repeatForever(autoreverses: false)) { spread = true }
+                withAnimation(.easeOut(duration: wave.duration).repeatForever(autoreverses: false)) { spread = true }
             }
     }
 }

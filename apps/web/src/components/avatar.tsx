@@ -45,6 +45,7 @@ export function Avatar({
   here = false,
   hereActive = false,
   hereFocused = false,
+  hereDotRatio = HERE_DOT_RATIO,
   name,
   opacity,
   src,
@@ -76,6 +77,12 @@ export function Avatar({
    * `here`, rien.
    */
   hereFocused?: boolean;
+  /**
+   * La taille du point « ici », en fraction de l'avatar : `HERE_DOT_RATIO`
+   * partout, `HEADER_HERE_DOT_RATIO` dans l'en-tête de la conversation, où il
+   * se fait plus discret (#9065). Miroir de `AvatarContext.hereDotRatio` (iOS).
+   */
+  hereDotRatio?: number;
   name?: string;
   /**
    * Le fondu de SOURDINE, appliqué ICI plutôt qu'en enveloppant l'avatar
@@ -196,7 +203,7 @@ export function Avatar({
 }) {
   const showsImage = src !== undefined && src !== '';
   const resolvedSrc = showsImage ? attachmentSrc(src) : undefined;
-  const dot = here ? size * HERE_DOT_RATIO : size * PRESENCE_DOT_RATIO;
+  const dot = here ? size * hereDotRatio : size * PRESENCE_DOT_RATIO;
   // 0.8536 = (1 + cos(pi/4)) / 2 — le point a 45 deg sur le cercle, en fraction
   // du diametre. On retranche la moitie de la pastille pour la CENTRER dessus.
   const offset = size * 0.8536 - dot / 2;
@@ -384,6 +391,7 @@ export function Avatar({
 const PRESENCE_DOT_RATIO = 0.26;
 /** Le point indigo « ici », deux fois la pastille (#9061) — `MeeshyAvatar.hereDotSize`. */
 const HERE_DOT_RATIO = PRESENCE_DOT_RATIO * 2;
+export const HEADER_HERE_DOT_RATIO = 0.4;
 
 /** Le temps que met le point sortant à diminuer (`presence-dot-shrink`, `avatar.css`). */
 const PRESENCE_LEAVE_MS = 220;

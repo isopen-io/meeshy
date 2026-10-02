@@ -195,6 +195,15 @@ public enum AvatarContext: Sendable {
         }
     }
     public var onlineDotSize: CGFloat { size * 0.26 }
+
+    /// Le point « ici » se fait plus discret dans l'en-tête de la conversation,
+    /// où l'avatar est petit et seul en haut à droite (#9065).
+    public var hereDotRatio: CGFloat {
+        switch self {
+        case .conversationHeaderCollapsed, .conversationHeaderExpanded, .conversationHeaderStacked: return 0.40
+        default: return AvatarPresenceDot.hereRatio
+        }
+    }
 }
 
 // MARK: - Story Ring State
@@ -413,12 +422,14 @@ public struct MeeshyAvatar: View {
                 moodBadge(emoji: emoji)
                     .offset(badgeOffset(badgeHalfSize: context.badgeSize / 2))
             } else if let presence = effectivePresence {
-                let diameter = presence.diameter(avatarSize: context.size)
+                let diameter = presence.diameter(avatarSize: context.size, hereRatio: context.hereDotRatio)
                 onlineDot(for: presence, diameter: diameter)
                     .overlay {
-                        if presence == .here && isHere.isActive && !reduceMotion {
-                            PresenceActivityPulse(color: presence.color, diameter: diameter)
-                        } else if presence.arrivesWithRipple && presenceChanged && !reduceMotion {
+                        if presence == .here, !reduceMotion, let wave = PresenceHereWave.for(isHere) {
+                            PresenceHereWaveView(color: presence.color, diameter: diameter, wave: wave)
+                                .id(wave.duration)
+                        }
+                        if presence.arrivesWithRipple && presenceChanged && !reduceMotion {
                             PresenceArrivalRipple(color: presence.color, diameter: diameter)
                         }
                     }

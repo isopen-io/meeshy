@@ -44,10 +44,22 @@ final class AvatarPresenceDotTests: XCTestCase {
         XCTAssertEqual(AvatarPresenceDot.presence(.away).color, MeeshyColors.warning)
     }
 
-    /// « ici » ne pulse plus de lui-même : il pulse quand le pair regarde,
-    /// écoute ou agit (#9061) — `MeeshyAvatar.isHereActive`.
-    func test_pulses_here_isLeftToActivity_onlinePulses() {
-        XCTAssertFalse(AvatarPresenceDot.here.pulses)
+    /// « ici » garde son petit pulse au repos ; l'activité et le plein écran
+    /// le rendent bien plus visible (#9065).
+    func test_hereWave_restIsGentle_activityIsMuchMoreVisible() {
+        let rest = PresenceHereWave.rest
+        let vivid = PresenceHereWave.vivid
+        XCTAssertGreaterThan(rest.peakScale, 1)
+        XCTAssertGreaterThan(vivid.peakScale, rest.peakScale + 0.8)
+        XCTAssertGreaterThan(vivid.startOpacity, rest.startOpacity * 2)
+        XCTAssertLessThan(vivid.duration, rest.duration)
+        XCTAssertEqual(PresenceHereWave.for(.here), .rest)
+        XCTAssertEqual(PresenceHereWave.for(.active), .vivid)
+        XCTAssertEqual(PresenceHereWave.for(.focused), .vivid)
+        XCTAssertNil(PresenceHereWave.for(.absent))
+    }
+
+    func test_pulses_online_keepsItsBreath_awayDoesNot() {
         XCTAssertTrue(AvatarPresenceDot.presence(.online).pulses)
         XCTAssertFalse(AvatarPresenceDot.presence(.away).pulses)
     }
@@ -76,6 +88,14 @@ final class AvatarPresenceDotTests: XCTestCase {
     func test_diameter_here_isTwiceThePresenceDot() {
         XCTAssertEqual(AvatarPresenceDot.here.diameter(avatarSize: 44), 44 * 0.52, accuracy: 0.001)
         XCTAssertEqual(AvatarPresenceDot.presence(.online).diameter(avatarSize: 44), 44 * 0.26, accuracy: 0.001)
+    }
+
+    func test_diameter_inTheConversationHeader_isSmaller() {
+        XCTAssertEqual(AvatarContext.conversationHeaderCollapsed.hereDotRatio, 0.40, accuracy: 0.001)
+        XCTAssertEqual(AvatarContext.conversationHeaderExpanded.hereDotRatio, 0.40, accuracy: 0.001)
+        XCTAssertEqual(AvatarContext.messageBubble.hereDotRatio, 0.52, accuracy: 0.001)
+        XCTAssertEqual(AvatarPresenceDot.here.diameter(avatarSize: 44, hereRatio: 0.40), 44 * 0.40, accuracy: 0.001)
+        XCTAssertEqual(AvatarPresenceDot.presence(.online).diameter(avatarSize: 44, hereRatio: 0.40), 44 * 0.26, accuracy: 0.001)
     }
 
     func test_centerOffset_withoutRing_putsTheDotCentreOnTheCircleAt45Degrees() {

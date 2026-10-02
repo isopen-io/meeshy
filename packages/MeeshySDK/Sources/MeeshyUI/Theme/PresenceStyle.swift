@@ -103,8 +103,8 @@ public enum AvatarPresenceDot: Equatable, Sendable {
         }
     }
 
-    /// « ici » ne pulse pas de lui-même : il pulse tant que le pair regarde,
-    /// écoute ou agit (#9061) — `MeeshyAvatar.isHereActive` en décide.
+    /// La respiration d'échelle des pastilles de présence. « ici » a la sienne,
+    /// son onde (`PresenceHereWave`, #9065).
     public var pulses: Bool {
         switch self {
         case .here: return false
@@ -115,12 +115,14 @@ public enum AvatarPresenceDot: Equatable, Sendable {
     /// Le diamètre du point, en fraction de l'avatar : la pastille de présence
     /// à 0,26, le point « ici » au double (#9061). Jumeau de `HERE_DOT_RATIO`
     /// (`apps/web/src/components/avatar.tsx`).
-    public func diameter(avatarSize: CGFloat) -> CGFloat {
+    public func diameter(avatarSize: CGFloat, hereRatio: CGFloat = AvatarPresenceDot.hereRatio) -> CGFloat {
         switch self {
-        case .here: return avatarSize * 0.52
+        case .here: return avatarSize * hereRatio
         case .presence: return avatarSize * 0.26
         }
     }
+
+    public static let hereRatio: CGFloat = 0.52
 
     /// Le décalage qui pose le CENTRE du point sur le cercle de l'avatar, à
     /// 45°, depuis l'alignement `.bottomTrailing` de son cadre (#9061). Le
@@ -179,5 +181,23 @@ public extension MeeshyConversation {
             defaultValue: "Vu il y a \(Int(elapsed / 86400))j",
             bundle: .module
         )
+    }
+}
+
+/// L'onde du point « ici » (#9065) : DOUCE au repos — le pair observe la
+/// conversation —, VIVE quand il défile, écoute, agit ou regarde en plein
+/// écran. Jumelle de `presence-dot-here` / `presence-dot-active`
+/// (`apps/web/src/styles/avatar.css`).
+public struct PresenceHereWave: Equatable, Sendable {
+    public let peakScale: CGFloat
+    public let startOpacity: Double
+    public let duration: Double
+
+    public static let rest = PresenceHereWave(peakScale: 1.6, startOpacity: 0.3, duration: 2.4)
+    public static let vivid = PresenceHereWave(peakScale: 2.8, startOpacity: 0.8, duration: 1.2)
+
+    public static func `for`(_ here: ConversationHere) -> PresenceHereWave? {
+        guard here.isHere else { return nil }
+        return here.isActive ? .vivid : .rest
     }
 }

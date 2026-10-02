@@ -5,7 +5,7 @@ import type { UserPresenceStatus } from '@/lib/api/types';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { Avatar } from './avatar';
+import { Avatar, HEADER_HERE_DOT_RATIO } from './avatar';
 
 /**
  * **LE POINT DE PRÉSENCE CHANGE EN SE MONTRANT** (#9047) — demande porteur du
@@ -33,6 +33,7 @@ const avatar = (state: {
   readonly here?: boolean;
   readonly hereActive?: boolean;
   readonly hereFocused?: boolean;
+  readonly hereDotRatio?: number;
   readonly presence?: UserPresenceStatus;
 }) => (
   <Avatar initials="AD" color="#4F46E5" size={44} {...state} />
@@ -81,7 +82,7 @@ describe('le point de présence en mouvement', () => {
   test('les animations ne touchent que transform et opacity, et se taisent en mouvement réduit', () => {
     const css = readFileSync(new URL('../styles/avatar.css', import.meta.url), 'utf8');
     const keyframes = [...css.matchAll(/@keyframes presence-dot[^{]+\{([\s\S]*?)\n\}/g)].map((match) => match[1] ?? '');
-    expect(keyframes.length).toBe(4);
+    expect(keyframes.length).toBe(5);
     const animated = keyframes.flatMap((body) => [...body.matchAll(/([a-z-]+)\s*:/g)].map((match) => match[1]));
     expect(new Set(animated)).toEqual(new Set(['transform', 'opacity']));
     expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{[^@]*presence-dot/);
@@ -136,6 +137,20 @@ describe('le point indigo « ici »', () => {
   test('l’activité seule, sans « ici », ne fait rien pulser', async () => {
     const host = await mounter.mount(avatar({ presence: 'online', hereActive: true }));
     expect(host.querySelector('[data-presence]')?.className).not.toContain('presence-dot-active');
+  });
+
+  test('au repos, « ici » garde un petit pulse ; actif, il pulse bien plus fort (#9065)', () => {
+    const css = readFileSync(new URL('../styles/avatar.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.presence-dot-here::before\s*\{[^}]*animation:\s*presence-dot-rest[^;]*infinite/);
+    const peak = (name: string) => Number(new RegExp(`@keyframes ${name}[\\s\\S]*?100%[^}]*scale\\(([\\d.]+)\\)`).exec(css)?.[1]);
+    expect(peak('presence-dot-pulse')).toBeGreaterThan(peak('presence-dot-rest') + 0.8);
+    expect(css).toMatch(/\.presence-dot-active::before\s*\{[^}]*animation:\s*none/);
+  });
+
+  test('dans l’en-tête, le point « ici » est plus discret (#9065)', async () => {
+    const host = await mounter.mount(avatar({ here: true, hereDotRatio: HEADER_HERE_DOT_RATIO }));
+    const width = Number.parseFloat((host.querySelector('[data-presence="here"]') as HTMLElement).style.width);
+    expect(width).toBeCloseTo(44 * 0.4, 1);
   });
 
   test('la pulsation se répète et se tait en mouvement réduit', () => {
