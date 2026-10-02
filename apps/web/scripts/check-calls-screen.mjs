@@ -167,13 +167,22 @@ try {
             };
             return { chain, keep: name(keep), header: box('[data-call-header]'), pill: box('[data-call-control-pill]'), controls: box('[data-call-controls]') };
           }, [x, y]);
+          await page.evaluate(() => {
+            window.__swipeSeen = [];
+            if (window.__swipeRecording === true) return;
+            window.__swipeRecording = true;
+            for (const type of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'dragstart', 'selectstart', 'lostpointercapture']) {
+              document.addEventListener(type, (event) => window.__swipeSeen.push(`${type}${event.defaultPrevented ? '!' : ''}:${event.target?.tagName?.toLowerCase() ?? '?'}`), { capture: true });
+            }
+          });
           await page.mouse.move(x, y);
           await page.mouse.down();
           await page.mouse.move(x, y + distance / 2, { steps: 8 });
           await page.mouse.move(x, y + distance, { steps: 8 });
           const held = await page.evaluate(() => {
             const screen = document.querySelector('[data-call-screen]');
-            return screen === null ? null : { swipe: screen.getAttribute('data-call-swipe-down'), transform: screen.style.transform, height: innerHeight };
+            const seen = (window.__swipeSeen ?? []).reduce((acc, entry) => (acc.length > 0 && acc[acc.length - 1].startsWith(`${entry}×`) ? [...acc.slice(0, -1), `${entry}×${Number(acc[acc.length - 1].split('×')[1]) + 1}`] : [...acc, `${entry}×1`]), []);
+            return screen === null ? null : { swipe: screen.getAttribute('data-call-swipe-down'), transform: screen.style.transform, height: innerHeight, seen };
           });
           await page.waitForTimeout(150);
           await page.mouse.up();
