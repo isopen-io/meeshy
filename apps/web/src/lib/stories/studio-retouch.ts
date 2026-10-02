@@ -1,6 +1,7 @@
 import { sceneTextAppearance } from '@/lib/canvas/text-appearance';
 
 import {
+  backgroundShownRatio,
   loadPlanSources,
   paintCompositePlan,
   studioCompositePlan,
@@ -127,19 +128,33 @@ export async function withMeasuredImages(page: StudioPage, loadImage: StudioReto
   return { ...page, background: await measured(page.background), overlay: await measured(page.overlay) };
 }
 
+/** **LA TAILLE DU RENDU** (#9136, miroir `ComposerRetouchSeries.imageRenderSize`)
+ * — le cadre RECADRÉ du fond quand l'auteur l'a recadré (un carré repart
+ * carré), grand côté 1920 ; sinon la scène 9:16. */
+export function studioRetouchSize(page: StudioPage): { readonly width: number; readonly height: number } {
+  const background = page.background;
+  if (background === null || background.crop === undefined || background.aspectRatio === undefined || background.aspectRatio <= 0) return STUDIO_RETOUCH_SIZE;
+  const ratio = backgroundShownRatio({ ...background, aspectRatio: background.aspectRatio });
+  const long = STUDIO_RETOUCH_SIZE.height;
+  return ratio >= 1 ? { width: long, height: Math.round(long / ratio) } : { width: Math.round(long * ratio), height: long };
+}
+
 /** Le JPEG de la scène — `null` quand le rendu est impossible (pas de canvas,
  * une image qui ne se décode pas, un média qui ne se dessine pas : vidéo). */
 export async function renderStudioRetouch(unmeasured: StudioPage, deps: StudioRetouchDeps): Promise<Blob | null> {
   const page = await withMeasuredImages(unmeasured, deps.loadImage);
   const hasMedia = page.background !== null || page.overlay !== null;
-  const plan: readonly StudioCompositeOp[] | null = hasMedia ? studioCompositePlan(page) : [{ kind: 'fill', color: `#${STORY_PLAIN_BACKGROUND}` }];
+  const size = studioRetouchSize(page);
+  const plan: readonly StudioCompositeOp[] | null = hasMedia
+    ? studioCompositePlan(page, { cardRatio: size.width / size.height })
+    : [{ kind: 'fill', color: `#${STORY_PLAIN_BACKGROUND}` }];
   if (plan === null) return null;
-  const { width, height } = STUDIO_RETOUCH_SIZE;
+  const { width, height } = size;
   const canvas = deps.createCanvas(width, height);
   if (canvas === null) return null;
   const sources = await loadPlanSources(plan, deps.loadImage);
   if (sources === null) return null;
-  paintCompositePlan(canvas.context, plan, sources, STUDIO_RETOUCH_SIZE);
+  paintCompositePlan(canvas.context, plan, sources, size);
   studioTextOps(page).forEach((op) => paintText(canvas.context, op, width, height));
   return canvas.toBlob('image/jpeg', JPEG_QUALITY);
 }

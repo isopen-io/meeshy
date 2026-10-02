@@ -44,8 +44,8 @@ function bench(frames = 3) {
       frame: { src } as unknown as CanvasImageSource,
       aspectRatio: 9 / 16,
       audioTracks: [audio],
-      play: async (onFrame) => {
-        journal.push('play');
+      play: async (onFrame, window) => {
+        journal.push(window === null ? 'play' : `play:${window.start}-${window.end}`);
         Array.from({ length: frames }).forEach(() => onFrame());
       },
       release: () => journal.push('release'),
@@ -68,6 +68,18 @@ describe('renderStudioRetouchVideo', () => {
     expect(journal.filter((entry) => entry === 'fillText:Bonjour').length).toBe(4);
     expect(journal.filter((entry) => entry === 'drawImage').length).toBeGreaterThanOrEqual(4);
     expect(journal.at(-1)).toBe('release');
+  });
+
+  test('une vidéo COUPÉE ne joue que sa fenêtre (#9136)', async () => {
+    const { deps, journal } = bench(2);
+    await renderStudioRetouchVideo({ ...emptyStudioPage('p', 't', 'fr'), background: video({ trim: { start: 2, end: 5 } }) }, deps);
+    expect(journal).toContain('play:2-5');
+  });
+
+  test('une vidéo MUETTE part sans piste audio (#9136)', async () => {
+    const { deps, journal } = bench(2);
+    await renderStudioRetouchVideo({ ...emptyStudioPage('p', 't', 'fr'), background: video({ muted: true }) }, deps);
+    expect(journal[0]).toBe('record:video');
   });
 
   test('sans vidéo dans la scène, ou sans enregistreur, rien n’est rendu', async () => {
