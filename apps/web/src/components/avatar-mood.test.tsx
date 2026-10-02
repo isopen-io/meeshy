@@ -167,9 +167,38 @@ describe('le contour du mood dit la présence (#9065)', () => {
 });
 
 describe('le mood pulse à peine quand le pair regarde en plein écran (#9065)', () => {
-  test('il respire quand le pair est ici ou actif', () => {
-    expect(avatar({ mood: '😴', here: true })).toContain('mood-breathe');
-    expect(avatar({ mood: '😴', here: true, hereActive: true })).toContain('mood-breathe');
+  test('ici au repos, il respire comme d’habitude', () => {
+    const html = avatar({ mood: '😴', here: true });
+    expect(html).toContain('mood-breathe');
+    expect(html).not.toContain('mood-stir');
+    expect(html).not.toContain('mood-hush');
+  });
+
+  test('actif sans plein écran, il respire plus amplement', () => {
+    const html = avatar({ mood: '😴', here: true, hereActive: true });
+    expect(html).toContain('mood-stir');
+    expect(html).not.toContain('mood-breathe');
+    expect(html).not.toContain('mood-hush');
+  });
+
+  test('le plein écran prime sur l’activité', () => {
+    const html = avatar({ mood: '😴', here: true, hereActive: true, hereFocused: true });
+    expect(html).toContain('mood-hush');
+    expect(html).not.toContain('mood-stir');
+  });
+
+  test('l’activité sans « ici » ne change rien', () => {
+    expect(avatar({ mood: '😴', hereActive: true })).toContain('mood-breathe');
+  });
+
+  test('une seule échelle : à peine < respiration < ample, et le mouvement réduit coupe tout', () => {
+    const css = readFileSync(new URL('../styles/app.css', import.meta.url), 'utf8');
+    const peak = (name: string) => Math.max(...[...(new RegExp(`@keyframes ${name}\\s*\\{([\\s\\S]*?)\\n\\}`).exec(css)?.[1] ?? '').matchAll(/scale\(([\d.]+)\)/g)].map((m) => Number(m[1])));
+    expect(peak('moodHush')).toBeLessThan(peak('moodBreathe'));
+    expect(peak('moodBreathe')).toBeLessThan(peak('moodStir'));
+    expect(peak('moodStir')).toBeCloseTo(1.22, 5);
+    expect(css).toMatch(/\.mood-stir\s*\{[^}]*animation-name:\s*moodStir[^}]*animation-duration:\s*1\.4s[^}]*infinite/);
+    expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{[^@]*\.mood-stir/);
   });
 
   test('en plein écran, il quitte sa respiration pour un pulse à peine perceptible', () => {

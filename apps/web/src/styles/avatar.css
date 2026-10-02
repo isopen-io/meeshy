@@ -57,9 +57,9 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  border: 2px solid currentColor;
+  border: 3px solid currentColor;
   pointer-events: none;
-  animation: presence-dot-ripple 0.8s ease-out 0.2s both;
+  animation: presence-dot-ripple 0.9s ease-out 0.2s both;
 }
 
 /*
@@ -97,6 +97,44 @@
 }
 
 /*
+ * … ET SE STABILISE EN PLEIN ÉCRAN (#9065) : le pair regarde ce que la
+ * conversation lui montre — une onde IMPERCEPTIBLE, la plus petite de
+ * l'échelle (imperceptible < repos < vive). Le plein écran prime sur l'activité.
+ */
+.presence-dot-here.presence-dot-focused::before {
+  animation: presence-dot-hush 2.8s ease-out infinite;
+}
+
+.presence-dot-here.presence-dot-focused::after {
+  animation: none;
+  opacity: 0;
+}
+
+/*
+ * LE MOOD ARRIVE ET PART COMME LE POINT (#9065) — même chorégraphie, le mood
+ * au milieu. L'enveloppe du badge porte l'arrivée et le départ ; sa
+ * respiration vit sur le badge lui-même, deux transformations qui ne se
+ * disputent rien.
+ */
+.mood-enter {
+  animation: presence-dot-bounce 0.5s ease-out 0.12s both;
+}
+
+.mood-leave {
+  animation: presence-dot-shrink 0.22s ease-in both;
+}
+
+.mood-arrive::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 3px solid var(--mood-arrive);
+  pointer-events: none;
+  animation: presence-dot-ripple 0.9s ease-out 0.2s both;
+}
+
+/*
  * LE CONTOUR DU MOOD PORTE LA PRÉSENCE QU'IL MASQUE (#9065) — la silhouette
  * de l'emoji DILATÉE par quatre ombres nettes dans la couleur servie, jamais un
  * anneau : indigo « ici », vert en ligne. Statique : rien ne s'anime ici.
@@ -112,6 +150,11 @@
 @keyframes presence-dot-rest {
   0% { opacity: 0.3; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.6); }
+}
+
+@keyframes presence-dot-hush {
+  0% { opacity: 0.2; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.25); }
 }
 
 @keyframes presence-dot-pulse {
@@ -133,17 +176,21 @@
 
 @keyframes presence-dot-ripple {
   0% { opacity: 0.9; transform: scale(1); }
-  100% { opacity: 0; transform: scale(2.6); }
+  100% { opacity: 0; transform: scale(3); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .presence-dot-enter,
   .presence-dot-here.presence-dot-enter::after,
   .presence-dot-here.presence-dot-active::after,
-  .presence-dot-here::before {
+  .presence-dot-here::before,
+  .presence-dot-here.presence-dot-focused::before,
+  .mood-enter,
+  .mood-arrive::after {
     animation: none;
   }
-  .presence-dot-leave {
+  .presence-dot-leave,
+  .mood-leave {
     animation: none;
     opacity: 0;
   }

@@ -35,6 +35,7 @@ const avatar = (state: {
   readonly hereFocused?: boolean;
   readonly hereDotRatio?: number;
   readonly presence?: UserPresenceStatus;
+  readonly mood?: string;
 }) => (
   <Avatar initials="AD" color="#4F46E5" size={44} {...state} />
 );
@@ -82,7 +83,7 @@ describe('le point de présence en mouvement', () => {
   test('les animations ne touchent que transform et opacity, et se taisent en mouvement réduit', () => {
     const css = readFileSync(new URL('../styles/avatar.css', import.meta.url), 'utf8');
     const keyframes = [...css.matchAll(/@keyframes presence-dot[^{]+\{([\s\S]*?)\n\}/g)].map((match) => match[1] ?? '');
-    expect(keyframes.length).toBe(5);
+    expect(keyframes.length).toBe(6);
     const animated = keyframes.flatMap((body) => [...body.matchAll(/([a-z-]+)\s*:/g)].map((match) => match[1]));
     expect(new Set(animated)).toEqual(new Set(['transform', 'opacity']));
     expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{[^@]*presence-dot/);
@@ -126,12 +127,34 @@ describe('le point indigo « ici »', () => {
     expect(host.querySelector('[data-presence="here"]')?.className).not.toContain('presence-dot-active');
   });
 
-  test('il pulse tant que le pair regarde en plein écran (#9065), et redevient fixe après', async () => {
-    const host = await mounter.mount(avatar({ here: true, hereFocused: true }));
-    expect(host.querySelector('[data-presence="here"]')?.className).toContain('presence-dot-active');
+  test('en plein écran, il se stabilise et pulse imperceptiblement — le plein écran prime sur l’activité', async () => {
+    const host = await mounter.mount(avatar({ here: true, hereActive: true, hereFocused: true }));
+    const dot = host.querySelector('[data-presence="here"]');
+    expect(dot?.className).toContain('presence-dot-focused');
+    expect(dot?.className).not.toContain('presence-dot-active');
 
     await mounter.rerender(host, avatar({ here: true }));
-    expect(host.querySelector('[data-presence="here"]')?.className).not.toContain('presence-dot-active');
+    expect(host.querySelector('[data-presence="here"]')?.className).not.toContain('presence-dot-focused');
+  });
+
+  test('une seule échelle d’onde : imperceptible < repos < vive', () => {
+    const css = readFileSync(new URL('../styles/avatar.css', import.meta.url), 'utf8');
+    const peak = (name: string) => Number(new RegExp(`@keyframes ${name}[\\s\\S]*?100%[^}]*scale\\(([\\d.]+)\\)`).exec(css)?.[1]);
+    const start = (name: string) => Number(new RegExp(`@keyframes ${name}[\\s\\S]*?0%[^}]*opacity:\\s*([\\d.]+)`).exec(css)?.[1]);
+    expect(peak('presence-dot-hush')).toBeCloseTo(1.25, 5);
+    expect(start('presence-dot-hush')).toBeCloseTo(0.2, 5);
+    expect(peak('presence-dot-hush')).toBeLessThan(peak('presence-dot-rest'));
+    expect(peak('presence-dot-rest')).toBeLessThan(peak('presence-dot-pulse'));
+    expect(start('presence-dot-hush')).toBeLessThan(start('presence-dot-rest'));
+    expect(css).toMatch(/\.presence-dot-focused::before\s*\{[^}]*animation:\s*presence-dot-hush 2\.8s[^;]*infinite/);
+    expect(css).toMatch(/\.presence-dot-focused::after\s*\{[^}]*animation:\s*none/);
+    expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{[^@]*presence-dot-focused/);
+  });
+
+  test('l’arrivée ici est un gros pulse : anneau de 3 px, ×3 en 0,9 s', () => {
+    const css = readFileSync(new URL('../styles/avatar.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.presence-dot-here\.presence-dot-enter::after\s*\{[^}]*border:\s*3px[^}]*animation:\s*presence-dot-ripple 0\.9s/);
+    expect(Number(/@keyframes presence-dot-ripple[\s\S]*?100%[^}]*scale\(([\d.]+)\)/.exec(css)?.[1])).toBeCloseTo(3, 5);
   });
 
   test('l’activité seule, sans « ici », ne fait rien pulser', async () => {
@@ -157,5 +180,58 @@ describe('le point indigo « ici »', () => {
     const css = readFileSync(new URL('../styles/avatar.css', import.meta.url), 'utf8');
     expect(css).toMatch(/\.presence-dot-active::after\s*\{[^}]*animation:\s*presence-dot-pulse[^;]*infinite/);
     expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{[^@]*presence-dot-active/);
+  });
+});
+
+/**
+ * **LE MOOD ARRIVE ET PART COMME LE POINT** (#9065, demande porteur 2026-10-02) :
+ * même chorégraphie, le mood au milieu.
+ */
+describe('le mood en mouvement avec « ici »', () => {
+  test('au premier rendu, rien ne bouge', async () => {
+    const host = await mounter.mount(avatar({ here: true, mood: '☕' }));
+    expect(host.querySelector('[data-mood]')?.className).not.toContain('mood-enter');
+    expect(host.querySelector('[data-mood-leaving]')).toBeNull();
+  });
+
+  test('l’arrivée ici : le badge rebondit et porte l’onde indigo', async () => {
+    const host = await mounter.mount(avatar({ presence: 'online', mood: '☕' }));
+    await mounter.rerender(host, avatar({ here: true, presence: 'online', mood: '☕' }));
+    const badge = host.querySelector('[data-mood]');
+    expect(badge?.className).toContain('mood-enter');
+    expect(badge?.className).toContain('mood-arrive');
+    expect(host.querySelector('[data-mood-glyph]')?.getAttribute('data-mood-outline')).toBe('here');
+  });
+
+  test('le départ : le badge indigo se rétracte, puis revient en rebondissant, cerné de vert', async () => {
+    const host = await mounter.mount(avatar({ here: true, presence: 'online', mood: '☕' }));
+    await mounter.rerender(host, avatar({ presence: 'online', mood: '☕' }));
+    const leaving = host.querySelector('[data-mood-leaving]');
+    expect(leaving?.className).toContain('mood-leave');
+    expect(leaving?.querySelector('[data-mood-glyph]')?.getAttribute('data-mood-outline')).toBe('here');
+    const badge = host.querySelector('[data-mood]');
+    expect(badge?.className).toContain('mood-enter');
+    expect(badge?.className).not.toContain('mood-arrive');
+    expect(host.querySelector('[data-mood] [data-mood-glyph]')?.getAttribute('data-mood-outline')).toBe('online');
+
+    await new Promise((resolve) => setTimeout(resolve, 260));
+    expect(host.querySelector('[data-mood-leaving]')).toBeNull();
+  });
+
+  test('un changement d’activité seul ne rejoue pas l’arrivée', async () => {
+    const host = await mounter.mount(avatar({ here: true, mood: '☕' }));
+    await mounter.rerender(host, avatar({ here: true, hereActive: true, mood: '☕' }));
+    expect(host.querySelector('[data-mood]')?.className).not.toContain('mood-enter');
+  });
+
+  test('transform et opacité seulement, et le mouvement réduit coupe l’arrivée et le départ', () => {
+    const css = readFileSync(new URL('../styles/avatar.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.mood-enter\s*\{[^}]*animation:\s*presence-dot-bounce/);
+    expect(css).toMatch(/\.mood-leave\s*\{[^}]*animation:\s*presence-dot-shrink/);
+    expect(css).toMatch(/\.mood-arrive::after\s*\{[^}]*border:\s*3px[^}]*animation:\s*presence-dot-ripple 0\.9s/);
+    const reduced = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*)\n\}/.exec(css)?.[1] ?? '';
+    expect(reduced).toContain('.mood-enter');
+    expect(reduced).toContain('.mood-leave');
+    expect(reduced).toContain('.mood-arrive::after');
   });
 });

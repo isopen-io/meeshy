@@ -714,8 +714,29 @@
   animation-timing-function: ease-in-out;
 }
 
+/* LE PAIR ACTIF (#9065) : la respiration se fait plus AMPLE tant qu'il
+   défile, écoute ou agit — le même cran que l'onde vive du point « ici ».
+   Miroir de `MeeshyMoodBadge` (iOS). */
+@keyframes moodStir {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.22);
+  }
+}
+
+.mood-stir {
+  animation-name: moodStir;
+  animation-duration: 1.4s;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mood-breathe,
+  .mood-stir,
   .mood-hush {
     animation: none;
   }

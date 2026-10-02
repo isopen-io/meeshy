@@ -214,15 +214,8 @@ export function Avatar({
      amont, mais un appelant direct la laisserait passer et peindrait une
      pastille MUETTE — visible, sans rien dire. */
   const humeur = mood !== undefined && mood !== '' ? mood : undefined;
-  const focused = here && hereFocused;
-  const moodOutline = here ? 'here' : presence === 'online' ? 'online' : undefined;
-  const moodOutlineStyle =
-    moodOutline === undefined
-      ? undefined
-      : ({
-          '--mood-outline': moodOutline === 'here' ? PRESENCE_HERE_HEX : PRESENCE_HEX[presenceTone('online')],
-          '--mood-outline-width': `${Math.max(1, Math.round(size * 0.07) / 2)}px`,
-        } as CSSProperties);
+  const motion: HereMotion = !here ? 'rest' : hereFocused ? 'focused' : hereActive ? 'active' : 'rest';
+  const moodOutline: MoodOutline | undefined = here ? 'here' : presence === 'online' ? 'online' : undefined;
 
   const corps = (
     /* `block` — et ce n'est pas décoratif : un `<span>` reste INLINE, et un
@@ -283,7 +276,7 @@ export function Avatar({
            se montrant (#9047) : `PresenceDot`. */
         <PresenceDot
           state={showsDot ? (here ? 'here' : presence) : undefined}
-          active={here && (hereActive || hereFocused)}
+          motion={motion}
           color={dotColor}
           size={dot}
           offset={offset}
@@ -293,25 +286,7 @@ export function Avatar({
         /* `data-mood` porte l'ÉTAT servi, comme `data-presence` et
            `data-story-ring` portent les leurs — un gate qui compterait les
            enfants de `.avatar-root` mentirait sur la cause (revue #5935). */
-        <span
-          data-mood={humeur}
-          data-mood-focused={focused ? 'true' : undefined}
-          className={`pointer-events-none absolute grid place-items-center rounded-chip ${focused ? 'mood-hush' : 'mood-breathe'}`}
-          style={{
-            width: Math.round(size * 0.42),
-            height: Math.round(size * 0.42),
-            right: -Math.round(size * 0.06),
-            bottom: -Math.round(size * 0.06),
-            fontSize: Math.max(10, Math.round(size * 0.42 * 0.65)),
-            background: 'var(--color-ios-surface)',
-            boxShadow: '0 0 0 1.5px var(--color-ios-surface)',
-          }}
-          aria-hidden
-        >
-          <span data-mood-glyph="" data-mood-outline={moodOutline} style={moodOutlineStyle}>
-            {humeur}
-          </span>
-        </span>
+        <MoodBadge mood={humeur} here={here} motion={motion} outline={moodOutline} size={size} />
       )}
       {storyRing === undefined ? null : (
         /* `data-story-ring` porte l'ÉTAT servi (`unseen`/`seen`), comme
@@ -407,13 +382,13 @@ type ShownDot = { readonly state: string; readonly color: string };
  */
 function PresenceDot({
   state,
-  active,
+  motion,
   color,
   size,
   offset,
 }: {
   readonly state: string | undefined;
-  readonly active: boolean;
+  readonly motion: HereMotion;
   readonly color: string;
   readonly size: number;
   readonly offset: number;
@@ -443,6 +418,8 @@ function PresenceDot({
 
   const box: CSSProperties = { width: size, height: size, left: offset, top: offset, boxShadow: '0 0 0 2px var(--ios-surface)' };
   const enters = changed.current ? ' presence-dot-enter' : '';
+  const active = state === 'here' && motion === 'active';
+  const focused = state === 'here' && motion === 'focused';
   return (
     <>
       {leaving === null ? null : (
@@ -458,11 +435,119 @@ function PresenceDot({
           key={state}
           data-presence={state}
           data-presence-active={active ? 'true' : undefined}
-          className={`presence-dot absolute rounded-chip${enters}${state === 'here' ? ' presence-dot-here' : ''}${active ? ' presence-dot-active' : ''}`}
+          className={`presence-dot absolute rounded-chip${enters}${state === 'here' ? ' presence-dot-here' : ''}${active ? ' presence-dot-active' : ''}${focused ? ' presence-dot-focused' : ''}`}
           style={{ ...box, backgroundColor: color, color }}
           aria-hidden
         />
       )}
+    </>
+  );
+}
+
+/**
+ * **L'ÉCHELLE UNIQUE DU POINT ET DU MOOD** (#9065) — ici au repos : onde douce,
+ * respiration habituelle ; actif : onde vive, respiration ample ; en plein
+ * écran : onde imperceptible, pulse à peine. Le plein écran prime.
+ */
+type HereMotion = 'rest' | 'active' | 'focused';
+type MoodOutline = 'here' | 'online';
+
+const MOOD_MOTION_CLASS: Readonly<Record<HereMotion, string>> = {
+  rest: 'mood-breathe',
+  active: 'mood-stir',
+  focused: 'mood-hush',
+};
+
+const moodOutlineStyle = (outline: MoodOutline | undefined, size: number): CSSProperties | undefined =>
+  outline === undefined
+    ? undefined
+    : ({
+        '--mood-outline': outline === 'here' ? PRESENCE_HERE_HEX : PRESENCE_HEX[presenceTone('online')],
+        '--mood-outline-width': `${Math.max(1, Math.round(size * 0.07) / 2)}px`,
+      } as CSSProperties);
+
+/**
+ * **LE MOOD ARRIVE ET PART COMME LE POINT** (#9065) — même mécanique que
+ * `PresenceDot` (#9047), le mood au milieu. Arriver ici : le badge rebondit et
+ * porte l'onde indigo. Partir : le badge indigo se rétracte, puis revient en
+ * rebondissant cerné de vert (ou sans contour). Au premier rendu, rien ne
+ * bouge. L'enveloppe porte l'arrivée et le départ, le badge sa respiration.
+ */
+function MoodBadge({
+  mood,
+  here,
+  motion,
+  outline,
+  size,
+}: {
+  readonly mood: string;
+  readonly here: boolean;
+  readonly motion: HereMotion;
+  readonly outline: MoodOutline | undefined;
+  readonly size: number;
+}) {
+  const wasHere = useRef(here);
+  const settled = useRef(false);
+  const rendered = useRef(here);
+  const changed = useRef(false);
+  const [leaving, setLeaving] = useState(false);
+  if (rendered.current !== here) {
+    rendered.current = here;
+    changed.current = true;
+  }
+
+  useEffect(() => {
+    const before = wasHere.current;
+    wasHere.current = here;
+    if (!settled.current) {
+      settled.current = true;
+      return undefined;
+    }
+    if (!before || here) return undefined;
+    setLeaving(true);
+    const timer = setTimeout(() => setLeaving(false), PRESENCE_LEAVE_MS);
+    return () => clearTimeout(timer);
+  }, [here]);
+
+  const side = Math.round(size * 0.42);
+  const box: CSSProperties = {
+    width: side,
+    height: side,
+    right: -Math.round(size * 0.06),
+    bottom: -Math.round(size * 0.06),
+  };
+  const face = (motionClass: string, glyphOutline: MoodOutline | undefined) => (
+    <span
+      className={`grid size-full place-items-center rounded-chip ${motionClass}`}
+      style={{
+        fontSize: Math.max(10, Math.round(side * 0.65)),
+        background: 'var(--color-ios-surface)',
+        boxShadow: '0 0 0 1.5px var(--color-ios-surface)',
+      }}
+    >
+      <span data-mood-glyph="" data-mood-outline={glyphOutline} style={moodOutlineStyle(glyphOutline, size)}>
+        {mood}
+      </span>
+    </span>
+  );
+  const enters = changed.current ? (here ? ' mood-enter mood-arrive' : ' mood-enter') : '';
+  return (
+    <>
+      {leaving ? (
+        <span data-mood-leaving="here" className="mood-leave pointer-events-none absolute rounded-chip" style={box} aria-hidden>
+          {face('', 'here')}
+        </span>
+      ) : null}
+      <span
+        key={here ? 'here' : 'there'}
+        data-mood={mood}
+        data-mood-focused={motion === 'focused' ? 'true' : undefined}
+        className={`pointer-events-none absolute rounded-chip${enters}`}
+        style={{ ...box, '--mood-arrive': PRESENCE_HERE_HEX } as CSSProperties}
+        aria-hidden
+      >
+        {face(MOOD_MOTION_CLASS[motion], outline)}
+      </span>
     </>
   );
 }
