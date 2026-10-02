@@ -104,3 +104,75 @@ describe('caméra du studio refusée (#9032)', () => {
     expect(settingsButton(host)).toBeNull();
   });
 });
+
+/**
+ * AU RETOUR DES RÉGLAGES, LA CAMÉRA SE RALLUME (#9193) — « Réglages » sort de
+ * l'app ; l'utilisateur y autorise la caméra et revient. Sans relecture au
+ * retour au premier plan, l'écran restait « indisponible » jusqu'à fermer le
+ * studio : la sortie de secours de #9032 ne menait nulle part.
+ */
+
+function grantedAfterRefusal(): { readonly engine: CameraEngine; readonly opens: () => number } {
+  let count = 0;
+  const engine: CameraEngine = {
+    ...refusedEngine,
+    open: async () => {
+      count += 1;
+      return count === 1 ? { ok: false } : { ok: true, stream: new MediaStream(), torch: false, zoom: { mode: 'hardware', min: 1, max: 8, step: 0.1 } };
+    },
+  };
+  return { engine, opens: () => count };
+}
+
+async function settle(): Promise<void> {
+  for (let i = 0; i < 6; i += 1) {
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+}
+
+async function cameraWith(engine: CameraEngine): Promise<HTMLElement> {
+  const host = await mounter.mount(
+    <StudioCamera lang="fr" kind="STORY" intent="manual" holding={false} flash={false} onFlash={() => undefined} engine={engine} onTake={() => undefined} onClose={() => undefined} />,
+  );
+  await settle();
+  return host;
+}
+
+async function backToForeground(): Promise<void> {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+  await act(async () => {
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  Reflect.deleteProperty(document, 'visibilityState');
+  await settle();
+}
+
+const cameraState = (host: ParentNode) => host.querySelector('[data-story-camera]')?.getAttribute('data-story-camera');
+
+describe('retour des réglages (#9193)', () => {
+  test('caméra refusée puis autorisée dans les réglages ⇒ elle se rallume au retour, sans fermer le studio', async () => {
+    androidShell();
+    const { engine, opens } = grantedAfterRefusal();
+    const host = await cameraWith(engine);
+    expect(cameraState(host)).toBe('unavailable');
+    await backToForeground();
+    expect(opens()).toBe(2);
+    expect(cameraState(host)).toBe('live');
+  });
+
+  test('une caméra déjà en direct n’est pas rouverte au retour au premier plan', async () => {
+    let opens = 0;
+    const host = await cameraWith({
+      ...refusedEngine,
+      open: async () => {
+        opens += 1;
+        return { ok: true, stream: new MediaStream(), torch: false, zoom: { mode: 'hardware', min: 1, max: 8, step: 0.1 } };
+      },
+    });
+    expect(cameraState(host)).toBe('live');
+    await backToForeground();
+    expect(opens).toBe(1);
+  });
+});
