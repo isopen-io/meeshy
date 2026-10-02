@@ -64,7 +64,8 @@ import { callErrorMessageOf, parseCallHandlerError } from './utils/call-error-pa
 import { buildTranslatedSegment } from './utils/call-translated-segment';
 import { buildCallSilentPush, shouldMirrorAnsweredElsewhere } from '../services/call-push-mirroring';
 import { ringableCallees } from '../services/calls/callRingPolicy';
-import { sendMissedCallNotifications } from './call-missed-notifications';
+import { sendMissedCallNotifications, sendNeverJoinedCancellationPushes } from './call-missed-notifications';
+import { createCallInvitationLifecycle, type CallInvitationLifecycle } from './call-invite-lifecycle';
 import { resolveParticipantAvatar } from '@meeshy/shared/utils/participant-helpers';
 import { validateSocketEvent, isValidationFailure } from '../middleware/validation';
 import {
@@ -127,6 +128,7 @@ export class CallEventsHandler {
   private notificationService: NotificationService | null = null;
   private readonly callRecording: CallRecordingService;
   private pushService: PushNotificationService | null = null;
+  private readonly callInvitations: CallInvitationLifecycle;
   private zmqClient: ZmqTranslationClient | null = null;
   /** Periodic sweep handle for `bufferedOffers` TTL eviction. */
   private bufferCleanupInterval: ReturnType<typeof setInterval> | null = null;
@@ -300,6 +302,7 @@ export class CallEventsHandler {
 
   constructor(private prisma: PrismaClient, callService?: CallService) {
     this.callService = callService ?? new CallService(prisma);
+    this.callInvitations = createCallInvitationLifecycle({ prisma, pushService: () => this.pushService, notificationService: () => this.notificationService });
     this.callRecording = new CallRecordingService({ repository: prismaCallRecordingRepository(prisma), roster: callRosterFrom(this.callService), now: () => new Date() });
     // Defensive TTL sweep: runs every 60s to evict stale offer entries whose
     // call ended via a path that skipped clearBufferedOffer (error branches,
@@ -427,20 +430,10 @@ export class CallEventsHandler {
     const rooms = await resolveCallEndedRooms(this.prisma, callId, conversationId);
     io.to(rooms).emit(CALL_EVENTS.ENDED, endedEvent);
     await this.sendCallCancellationPushes(callId, conversationId, endedEvent);
+    await this.callInvitations.callEnded(io, callId);
   }
 
-  /**
-   * Sonnerie fantôme (app suspendue) — le fanout socket ci-dessus n'atteint
-   * pas un appelé dont le socket n'est JAMAIS monté (réseau pauvre : la push
-   * VoIP passe par APNs mais le WebSocket ne s'établit pas ; le freshness
-   * check REST a déjà validé l'appel au moment du push). Quand l'appel se
-   * termine SANS avoir été décroché (missed/rejected), on envoie aux membres
-   * n'ayant jamais rejoint la call room une push APNs **background**
-   * `call_cancel` qui coupe CallKit. JAMAIS en type voip : chaque push VoIP
-   * exige un reportNewIncomingCall (sinon kill) — c'est précisément pourquoi
-   * la cancellation passe par une push standard silencieuse. Best-effort :
-   * aucun échec ne doit casser le chemin terminal.
-   */
+  /** Sonnerie fantôme — la doctrine vit avec le fan-out (`call-missed-notifications.ts`) ; ici, la seule déduplication par appel. */
   private async sendCallCancellationPushes(
     callId: string,
     conversationId: string | undefined,
@@ -455,47 +448,7 @@ export class CallEventsHandler {
       return;
     }
     this.callCancellationPushSentAt.set(callId, Date.now());
-
-    try {
-      const [members, joined] = await Promise.all([
-        this.prisma.participant.findMany({
-          where: { conversationId, isActive: true, userId: { not: null } },
-          select: { userId: true }
-        }),
-        this.prisma.callParticipant.findMany({
-          where: { callSessionId: callId },
-          select: { participant: { select: { userId: true } } }
-        })
-      ]);
-
-      const excluded = new Set<string>(
-        joined.map((p) => p.participant?.userId).filter((uid): uid is string => !!uid)
-      );
-      if (endedEvent.endedBy) excluded.add(endedEvent.endedBy);
-
-      const targets = members
-        .map((m) => m.userId)
-        .filter((uid): uid is string => !!uid && !excluded.has(uid));
-      if (targets.length === 0) return;
-
-      // Cross-platform mobile (audit 2026-07-11 #2) — le hardcode
-      // apns/ios laissait un Android backgrounded (socket mort) sonner
-      // dans le vide après un missed/rejected.
-      await Promise.all(targets.map((uid) =>
-        this.pushService!.sendToUser(
-          buildCallSilentPush({ userId: uid, type: 'call_cancel', callId })
-        ).catch((error) => {
-          logger.error('call_cancel push failed', { callId, userId: uid, error });
-        })
-      ));
-
-      logger.info('📲 call_cancel background push sent to never-joined members', {
-        callId,
-        targets
-      });
-    } catch (error) {
-      logger.error('call_cancel push fanout failed — terminal path unaffected', { callId, error });
-    }
+    await sendNeverJoinedCancellationPushes({ prisma: this.prisma, pushService: this.pushService }, { callId, conversationId, endedBy: endedEvent.endedBy });
   }
 
   private buildRingingTimeoutHandler(io: SocketIOServer, callId: string): () => Promise<void> {
@@ -3254,6 +3207,11 @@ export class CallEventsHandler {
           && !!endParticipantDetail
           && !endParticipantDetail.isDirectCall
           && endParticipantDetail.hasOtherActiveParticipants;
+        // #8470 — une personne INVITÉE qui refuse n'a pas de participation : son refus se dit à l'appel, qui continue.
+        if (!endParticipantId && data.reason === 'rejected' && await this.callInvitations.decline(io, { callId: data.callId, userId })) {
+          ack?.({ success: true });
+          return;
+        }
         if (!endParticipantId) {
           // Failing here means `userId` has no active CallParticipant row
           // for THIS call — either no conversation membership at all, or a
@@ -3338,6 +3296,7 @@ export class CallEventsHandler {
         // the other invitees. The decliner still gets a clean ack so their
         // own UI dismisses the incoming-call sheet.
         if (preJoinDecline && !(CALL_TERMINAL_STATUSES as readonly string[]).includes(callSession.status)) {
+          await this.callInvitations.decline(io, { callId: data.callId, userId });
           ack?.({ success: true });
           logger.info('Pre-join decline acknowledged — group call continues for other invitees', {
             callId: data.callId, declinedBy: userId
@@ -3936,7 +3895,7 @@ export class CallEventsHandler {
     // `participantId` du client n'est jamais cru sur parole — y est écrite.
     registerCallClientReportEvents(this.clientReportDependencies(), socket, { getUserId, rememberAuth });
     registerCallRecordingEvents({ io, authority: this.callRecording, rateLimiter: this.rateLimiter }, socket, getUserId);
-    registerCallControlEvents({ io, prisma: this.prisma, callService: this.callService, rateLimiter: this.rateLimiter, pushService: () => this.pushService }, socket, getUserId);
+    registerCallControlEvents({ io, prisma: this.prisma, callService: this.callService, rateLimiter: this.rateLimiter, pushService: () => this.pushService, invitations: this.callInvitations }, socket, getUserId);
 
     /**
      * Handle disconnect - auto-leave any active calls

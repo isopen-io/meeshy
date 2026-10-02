@@ -6,6 +6,7 @@ import type { SocketRateLimiter } from '../utils/socket-rate-limiter';
 import { recordCallReaction } from '../services/calls/callReactions';
 import { resolveActiveCallParticipant } from './call-participants';
 import { callInviteDependencies, registerCallInviteEvents } from './call-invite-events';
+import type { CallInvitationLifecycle } from './call-invite-lifecycle';
 import { registerCallModerationEvents } from './call-moderation-events';
 import { registerCallReactionEvents } from './call-reaction-events';
 import { callPreviewDependencies, registerCallPreviewEvents } from './call-preview-events';
@@ -22,6 +23,7 @@ export type CallControlDeps = {
   readonly callService: CallService;
   readonly rateLimiter: Pick<SocketRateLimiter, 'checkLimit'>;
   readonly pushService: () => PushNotificationService | null;
+  readonly invitations: CallInvitationLifecycle;
 };
 
 export function registerCallControlEvents(

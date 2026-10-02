@@ -67,6 +67,16 @@ export type CallParticipantInvitedEvent = {
 };
 
 /**
+ * Serveur → les participants : l'invitation de `userId` s'est résolue sans
+ * décroché — refusée (`call:invite-declined`) ou restée sans réponse
+ * (`call:invite-expired`). Sa puce « Sonne… » s'en va et l'inviteur le lit.
+ */
+export type CallInviteSettledEvent = {
+  readonly callId: string;
+  readonly userId: string;
+};
+
+/**
  * Serveur → la personne visée SEULEMENT : son micro a été coupé par
  * `byUserId`. Le client coupe lui-même sa piste ; il peut la rouvrir.
  */

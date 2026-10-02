@@ -17,6 +17,7 @@ import { ACCEPTED, gatedCallControl, refused } from './call-control-gate';
 import { logger } from '../utils/logger';
 import { EngagementService } from '../services/engagement/EngagementService';
 import { creditCallInvitation } from '../services/calls/callEngagementCredits';
+import type { CallInvitationLifecycle, PendingCallInvitation } from './call-invite-lifecycle';
 
 /**
  * `call:invite-participant` (#8433) — un participant connecté fait sonner un
@@ -54,6 +55,8 @@ export type CallInviteEventDeps = {
   /** #8959 `conversation.call_participant_added` — l'inviteur, sur une invitation nouvelle. */
   readonly credit: (invitation: { readonly inviterUserId: string; readonly callId: string; readonly conversationId: string }) => void;
   readonly ring: (ring: CallInviteRing) => Promise<void>;
+  /** #8470 · #8467 — l'échéance de l'invitation : sans réponse, elle se solde (`call-invite-lifecycle.ts`). */
+  readonly armExpiry: (invitation: PendingCallInvitation) => void;
 };
 
 export function callInviteDependencies(input: {
@@ -62,6 +65,7 @@ export function callInviteDependencies(input: {
   readonly callService: Pick<CallService, 'getCallSession' | 'generateIceServers'>;
   readonly rateLimiter: Pick<SocketRateLimiter, 'checkLimit'>;
   readonly pushService: () => PushNotificationService | null;
+  readonly invitations: CallInvitationLifecycle;
 }): CallInviteEventDeps {
   const { io, prisma, callService } = input;
   let engagement: EngagementService | null = null;
@@ -76,6 +80,7 @@ export function callInviteDependencies(input: {
         ...invitation,
         onError: (error) => logger.warn('call-invite: engagement credit failed', { callId: invitation.callId, error }),
       }),
+    armExpiry: (invitation) => input.invitations.arm(io, invitation),
     ring: async (ring) => {
       const { foregroundUserIds } = await ringCalleeSockets(
         { io, prisma, callService },
@@ -150,6 +155,13 @@ export function registerCallInviteEvents(
             event,
           })
           .catch((error: unknown) => logger.error('call-invite: ring failed', { callId, inviteeUserId, error }));
+        deps.armExpiry({
+          callId,
+          conversationId: grant.session.conversationId,
+          inviterUserId,
+          inviteeUserId,
+          callType: event.type === 'video' ? 'video' : 'audio',
+        });
         return ACCEPTED;
       },
     })

@@ -249,6 +249,10 @@ export const SERVER_EVENTS = {
   CALL_RECORDING_STOPPED: 'call:recording-stopped',
   /** #8433 — une personne vient d'être invitée dans l'appel : diffusé aux participants. */
   CALL_PARTICIPANT_INVITED: 'call:participant-invited',
+  /** #8470 — la personne invitée a refusé : diffusé aux participants, sa puce « Sonne… » se résout. */
+  CALL_INVITE_DECLINED: 'call:invite-declined',
+  /** #8470 — la personne invitée n'a pas répondu dans la durée de la sonnerie d'un appel. */
+  CALL_INVITE_EXPIRED: 'call:invite-expired',
   /** #8438 — à la personne visée seulement : son micro a été coupé, elle le coupe elle-même. */
   CALL_MUTED_BY_MODERATOR: 'call:muted-by-moderator',
   /** #8439 — une réaction d'un participant, relayée aux autres participants connectés. */
