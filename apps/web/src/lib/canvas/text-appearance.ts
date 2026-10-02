@@ -24,6 +24,11 @@ import { FLAT_TEXT_SHADOW, parseTextEffect, textEffectShadow } from './text-effe
  * l'axe EFFET (`text-effect.ts`, vingt-cinq ombres en `em`), la couleur, la
  * graisse, l'alignement, la pastille, le cadre et le contour des glyphes.
  */
+/** La coupe d'un texte de scène : 88 % de la largeur de la scène, comme iOS
+ * (`StoryTextLayer.widthFraction`, #9140). Le rendu, la saisie du studio et la
+ * retouche rasterisée la lisent ici, pour couper les lignes au même endroit. */
+export const SCENE_TEXT_WRAP_FRACTION = 0.88;
+
 export type SceneTextAppearance = {
   readonly fontFamily?: string;
   readonly fontWeight?: number;

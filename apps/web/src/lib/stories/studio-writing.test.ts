@@ -48,19 +48,30 @@ describe('studioWritingStyle — la saisie a la taille du texte publié, rapport
     expect(style.transform).toBe('translate(-50%, -50%) rotate(-30deg) scale(1.2)');
   });
 
-  test('un texte NEUF (rien de peint) : l’invite s’écrit à SA place, sur 85 % de la scène, jamais dans la boîte d’un autre texte', () => {
+  test('un texte NEUF (rien de peint) : l’invite s’écrit à SA place, sur 88 % de la scène, jamais dans la boîte d’un autre texte', () => {
     const style = studioWritingStyle({ layer: layer({ pose: { x: 0.5, y: 0.5, scale: 1, rotation: 0 } }), widthFraction: WIDTH_FRACTION, box: null });
-    expect(style.width).toBe('85cqw');
+    expect(style.width).toBe('88cqw');
     expect(style.height).toBeUndefined();
     expect(style.left).toBe('50%');
     expect(style.top).toBe('50%');
   });
 
-  test('un texte peint : la saisie adopte sa boîte AVANT transformation, bornée comme lui à 85 % de la scène', () => {
+  test('un texte peint : la saisie adopte sa boîte AVANT transformation, bornée comme lui à 88 % de la scène', () => {
     const style = studioWritingStyle({ layer: layer(), widthFraction: WIDTH_FRACTION, box: { width: 120.4, height: 33.6 } });
     expect(style.width).toBe('121.4px');
-    expect(style.maxWidth).toBe('85cqw');
+    expect(style.maxWidth).toBe('88cqw');
     expect(style.height).toBe('33.6px');
+  });
+
+  test('le pincement agrandit le cadre sans recouper les lignes : la coupe et la police ne dépendent pas de l’échelle (#9140)', () => {
+    const at = (scale: number) =>
+      studioWritingStyle({ layer: layer({ pose: { x: 0.5, y: 0.5, scale, rotation: 0 } }), widthFraction: WIDTH_FRACTION, box: { width: 120.4, height: 33.6 } });
+    const [small, base, large] = [at(0.5), at(1), at(2)];
+    for (const style of [small, large]) {
+      expect(style.width).toBe(base.width);
+      expect(style.maxWidth).toBe(base.maxWidth);
+      expect(style.fontSize).toBe(base.fontSize);
+    }
   });
 
   test('la TYPOGRAPHIE est celle que le moteur peint : famille, graisse, italique, alignement, marge de pastille', () => {

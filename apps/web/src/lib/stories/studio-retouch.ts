@@ -1,4 +1,4 @@
-import { sceneTextAppearance } from '@/lib/canvas/text-appearance';
+import { SCENE_TEXT_WRAP_FRACTION, sceneTextAppearance } from '@/lib/canvas/text-appearance';
 
 import {
   backgroundShownRatio,
@@ -28,8 +28,6 @@ import { textLayerPayload } from './studio-text';
 export const STUDIO_RETOUCH_SIZE = { width: 1080, height: 1920 } as const;
 
 const JPEG_QUALITY = 0.9;
-/** La boîte d'un texte ne dépasse pas 85 % de la scène (`scene-object-text.tsx`). */
-const TEXT_MAX_WIDTH = 0.85;
 const DESIGN_WIDTH = 1080;
 const LINE_HEIGHT = 1.2;
 
@@ -99,7 +97,7 @@ export function paintText(canvas: StudioRetouchCanvas['context'], op: StudioText
   canvas.scale(op.scale, op.scale);
   canvas.font = op.font.replace('{px}', String(Math.round(px)));
   canvas.textBaseline = 'middle';
-  const lines = wrap(canvas, op.text, TEXT_MAX_WIDTH * width);
+  const lines = wrap(canvas, op.text, SCENE_TEXT_WRAP_FRACTION * width);
   const lineHeight = px * LINE_HEIGHT;
   const blockWidth = Math.max(...lines.map((line) => canvas.measureText(line).width));
   const top = (-lines.length * lineHeight) / 2;
