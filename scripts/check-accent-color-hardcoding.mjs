@@ -206,8 +206,17 @@
 // `surfaceDarkInput` / `surfaceLightInput` ; deux `Color(hex: MeeshyColors.…Hex)`
 // deviennent le jeton `Color` lui-même, et le contour « j'ai réagi » à la couleur
 // de l'auteur quitte le rail de la story avec le chrome plein écran (#8878).
+//
+// 2026-10-02 (#9069) — variables inconnues 438 → 443 : les cinq
+// `Color(hex: band.fill | band.stroke | band.ink | text.fill)` de
+// `MeeInstantView` (MeeshyUI/Story). Ce ne sont PAS des couleurs d'accent : ce
+// sont les couleurs du DESSIN d'un Instant de Mee et Meo, mesurées dans le SVG
+// du web par `apps/web/scripts/mee-ios-instants.ts` et écrites dans l'index
+// généré, pour que le bandeau et le texte redessinés en natif soient
+// identiques au web (une seule source de dessin). Les rapporter à
+// `accentColor` changerait le sticker selon la conversation.
 const REFERENCE_LITERAL_COLOR_COUNT = 65;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 438;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 443;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';
