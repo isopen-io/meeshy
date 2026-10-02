@@ -39,4 +39,62 @@ final class GroupCallWiringSourceTests: XCTestCase {
             + "principal, sinon sa réponse part à l'initiateur et une seule liaison s'établit"
         )
     }
+
+    // MARK: - #9085 — un départ ne rompt pas le groupe
+
+    private let manager = "Meeshy/Features/Main/Services/CallManager.swift"
+
+    func test_endCall_groupCall_sendsNoInBandBye() throws {
+        let hangup = try body(of: "func endCall() {", in: manager, length: 4_000)
+
+        XCTAssertTrue(
+            hangup.contains("if !isGroupMeshCall { webRTCService.sendHangupBye() }"),
+            "en groupe, le bye in-band ferait raccrocher le principal : la passerelle "
+            + "résout le départ en `participant-left`"
+        )
+    }
+
+    func test_inBandBye_goesThroughTheGroupAwareHandler() throws {
+        let channel = try body(
+            of: "didReceiveTranscriptionData data: Data",
+            in: "Meeshy/Features/Main/Services/CallManager+DataChannel.swift",
+            length: 800
+        )
+
+        XCTAssertTrue(channel.contains("self.handleRemoteBye(callId: callId, rawReason: reason)"))
+        XCTAssertFalse(channel.contains("handleRemoteEnd("), "un bye du principal ne finit pas un groupe qui continue")
+    }
+
+    func test_handleRemoteBye_endsOnlyWhenTheGroupDoesNotContinue() throws {
+        let bye = try body(
+            of: "func handleRemoteBye(",
+            in: "Meeshy/Features/Main/Services/CallManager+GroupMesh.swift",
+            length: 500
+        )
+
+        XCTAssertTrue(bye.contains("primaryDidLeave() == true"))
+        XCTAssertTrue(bye.contains("handleRemoteEnd(callId: callId, rawReason: rawReason)"), "le 1:1 finit comme avant")
+    }
+
+    func test_attemptReconnection_neverChasesADepartedPrimary() throws {
+        let reconnect = try body(of: "private func attemptReconnection(escalate: Bool = false) {", in: manager, length: 300)
+
+        XCTAssertTrue(reconnect.contains("guard !isGroupPrimaryVacated else { return }"))
+    }
+
+    func test_groupPrimaryDidVacate_settlesTheCallAsConnected() throws {
+        let vacate = try body(of: "func groupPrimaryDidVacate() {", in: manager, length: 600)
+
+        XCTAssertTrue(vacate.contains("iceRestartTask?.cancel()"))
+        XCTAssertTrue(vacate.contains("transitionToConnected()"))
+    }
+
+    func test_connectionLost_groupCall_tellsTheGateway() throws {
+        let reconnect = try body(of: "private func attemptReconnection(escalate: Bool = false) {", in: manager, length: 3_000)
+
+        XCTAssertTrue(
+            reconnect.contains("if isGroupMeshCall, let callId = currentCallId { emitCallEndReliably(callId: callId) }"),
+            "sans `call:end`, les autres membres gardent une tuile fantôme jusqu'au nettoyage serveur"
+        )
+    }
 }

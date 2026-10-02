@@ -80,8 +80,10 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         var isLocalVideoEnabled = false
         var primaryRemoteVideoTrack: Any?
         var primaryAudioLevelResult: Double?
+        private(set) var vacateCallCount = 0
 
         func primaryAudioLevel() async -> Double? { primaryAudioLevelResult }
+        func groupPrimaryDidVacate() { vacateCallCount += 1 }
     }
 
     private final class ActiveCallStub: ActiveCallServiceProviding, @unchecked Sendable {
@@ -392,6 +394,81 @@ final class GroupCallMeshCoordinatorTests: XCTestCase {
         await settle()
 
         XCTAssertEqual(sut.roster.member("c")?.displayName, "Chloé")
+    }
+
+    // MARK: - Départ du principal (#9085)
+
+    func test_participantLeft_primaryWithMembersRemaining_vacatesSeatAndKeepsCall() {
+        let (sut, host, factory, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c"))
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertTrue(sut.isPrimaryVacated)
+        XCTAssertFalse(sut.roster.contains("b"))
+        XCTAssertTrue(sut.roster.contains("c"))
+        XCTAssertEqual(factory.link(to: "c")?.closeCallCount, 0, "le départ du principal ne coupe pas les autres liens")
+        XCTAssertTrue(sut.isGroupCallActive)
+        XCTAssertEqual(host.vacateCallCount, 1, "CallManager cesse de reprendre une liaison vers un pair parti")
+    }
+
+    func test_participantLeft_primaryAlone_keepsTheSeat() {
+        let (sut, host, _, _, _) = makeSUT()
+
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        XCTAssertFalse(sut.isPrimaryVacated)
+        XCTAssertEqual(host.vacateCallCount, 0)
+    }
+
+    func test_primaryDidLeave_groupWithMembersRemaining_keepsTheCall() {
+        let (sut, _, _, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c"))
+
+        XCTAssertTrue(sut.primaryDidLeave())
+        XCTAssertTrue(sut.isPrimaryVacated)
+    }
+
+    func test_primaryDidLeave_directCall_endsLikeBefore() {
+        let (sut, host, _, _, _) = makeSUT(markGroup: false)
+
+        XCTAssertFalse(sut.primaryDidLeave())
+        XCTAssertEqual(host.vacateCallCount, 0)
+    }
+
+    func test_vacatedSeat_isNotReadmittedOnSync() {
+        let (sut, _, _, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c"))
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        sut.syncWithHost()
+
+        XCTAssertFalse(sut.roster.contains("b"))
+        XCTAssertNil(sut.videoTrack(for: "b"))
+    }
+
+    func test_vacatedSeat_formerPrimaryRejoining_isOfferedByTheMesh() async {
+        let (sut, _, factory, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c"))
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        sut.handleParticipantJoined(joined("b"))
+        await settle()
+
+        XCTAssertEqual(factory.link(to: "b")?.offerCallCount, 1)
+        XCTAssertTrue(sut.consume(signal: signal("answer", from: "b"), callId: "call1"))
+    }
+
+    func test_newCall_freesTheVacatedSeat() {
+        let (sut, host, _, _, _) = makeSUT()
+        sut.handleParticipantJoined(joined("c"))
+        sut.handleParticipantLeft(CallParticipantData(callId: "call1", userId: "b"))
+
+        host.groupCallId = "call2"
+        sut.syncWithHost()
+
+        XCTAssertFalse(sut.isPrimaryVacated)
+        XCTAssertTrue(sut.roster.contains("b"))
     }
 
     // MARK: - Nature de l'appel

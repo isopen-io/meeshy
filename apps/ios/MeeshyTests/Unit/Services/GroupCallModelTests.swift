@@ -113,6 +113,19 @@ final class GroupCallModelTests: XCTestCase {
         XCTAssertFalse(GroupSignalRouting.shouldOfferToArrival(arrivalUserId: "c", localUserId: "me", primaryUserId: nil, isInCall: true))
     }
 
+    /// #9085 — le siège du principal libéré : tout le groupe passe par le maillage,
+    /// l'ancien principal compris s'il revient.
+    func test_destination_vacatedPrimary_everyMemberGoesToMesh() {
+        XCTAssertEqual(GroupSignalRouting.destination(from: "b", localUserId: "me", primaryUserId: nil, isGroupCall: true, primaryVacated: true), .mesh(userId: "b"))
+        XCTAssertEqual(GroupSignalRouting.destination(from: "me", localUserId: "me", primaryUserId: nil, isGroupCall: true, primaryVacated: true), .ignore)
+        XCTAssertEqual(GroupSignalRouting.destination(from: "b", localUserId: "me", primaryUserId: nil, isGroupCall: false, primaryVacated: true), .primary)
+    }
+
+    func test_shouldOfferToArrival_vacatedPrimary_offersToEveryArrival() {
+        XCTAssertTrue(GroupSignalRouting.shouldOfferToArrival(arrivalUserId: "b", localUserId: "me", primaryUserId: nil, isInCall: true, primaryVacated: true))
+        XCTAssertFalse(GroupSignalRouting.shouldOfferToArrival(arrivalUserId: "me", localUserId: "me", primaryUserId: nil, isInCall: true, primaryVacated: true))
+    }
+
     // MARK: - Grille
 
     func test_layout_growsWithTileCount() {
@@ -222,12 +235,22 @@ final class GroupCallModelTests: XCTestCase {
     }
 
     func test_stage_shownOnlyFromTwoRemoteMembers() {
-        let one = GroupCallRoster(localUserId: "me").admitting(arrival("b"))
+        let one = GroupCallRoster(localUserId: "me").admitting(arrival("b"), isPrimary: true)
         let two = one.admitting(arrival("c"))
 
         XCTAssertFalse(GroupCallStage.isShown(isMeshActive: true, roster: one))
         XCTAssertTrue(GroupCallStage.isShown(isMeshActive: true, roster: two))
         XCTAssertFalse(GroupCallStage.isShown(isMeshActive: false, roster: two))
+    }
+
+    /// #9085 — le principal parti, il peut ne rester qu'UN membre, tenu par le
+    /// maillage : l'écran 1:1 ne montre que le principal, la grille doit rester.
+    func test_stage_shownForASingleMeshMember() {
+        let meshOnly = GroupCallRoster(localUserId: "me").admitting(arrival("c"))
+        let primaryOnly = GroupCallRoster(localUserId: "me").admitting(arrival("b"), isPrimary: true)
+
+        XCTAssertTrue(GroupCallStage.isShown(isMeshActive: true, roster: meshOnly))
+        XCTAssertFalse(GroupCallStage.isShown(isMeshActive: true, roster: primaryOnly))
     }
 
     // MARK: - Invitation (#9084)

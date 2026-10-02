@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import MeeshySDK
+import os
 
 // L'appel de groupe côté `CallManager` (#3585). `CallManager` garde UN pair —
 // le « principal » — et tout le reste du groupe vit dans le maillage de
@@ -70,10 +71,28 @@ extension CallManager: GroupCallHostProviding {
 
     /// La caméra ou le micro d'un membre du maillage n'est pas celui du pair
     /// principal : `isRemoteVideoEnabled` / `isRemoteAudioEnabled` restent à lui.
+    /// Son siège libéré (#9085), tout membre est du maillage.
     func isGroupMeshMediaToggle(_ event: CallMediaToggleData) -> Bool {
         guard let mesh = groupMesh, mesh.isGroupConversation(conversationId),
               let userId = event.userId, !userId.isEmpty else { return false }
-        return userId != groupPrimaryUserId
+        return mesh.isPrimaryVacated || userId != groupPrimaryUserId
+    }
+
+    /// Un appel de groupe tenu par le maillage — le 1:1 n'y entre jamais.
+    var isGroupMeshCall: Bool { groupMesh?.isGroupConversation(conversationId) ?? false }
+
+    /// #9085 — le principal est parti, le groupe continue sans lui.
+    var isGroupPrimaryVacated: Bool { groupMesh?.isPrimaryVacated ?? false }
+
+    /// #9085 — le `bye` in-band vient toujours du principal. En groupe, s'il
+    /// reste des membres, il libère son siège sans finir l'appel ; sinon
+    /// (1:1, ou plus personne) l'appel finit comme avant.
+    func handleRemoteBye(callId: String, rawReason: String?) {
+        if groupMesh?.primaryDidLeave() == true {
+            Logger.calls.info("[GROUP] bye from the primary — seat vacated, call continues")
+            return
+        }
+        handleRemoteEnd(callId: callId, rawReason: rawReason)
     }
 
     /// L'appelant d'un groupe n'a pas de pair désigné : le PREMIER membre qui
@@ -169,4 +188,8 @@ final class GroupCallMeshBinding {
             .sink { [weak self] in self?.mesh.syncWithHost() }
             .store(in: &cancellables)
     }
+}
+
+private extension Logger {
+    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
 }
