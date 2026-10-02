@@ -99,7 +99,7 @@ export function BackgroundLayer({
   const cropped = (media: (style: Record<string, string> | undefined, className: string) => ReactNode): ReactNode =>
     crop !== null && ratio !== undefined ? (
       <CroppedBox crop={crop} ratio={ratio} fill={framing !== 'fit'}>
-        {(cropStyle) => media(cropStyle, 'block object-fill')}
+        {(cropStyle) => media(cropStyle, 'block max-w-none object-fill')}
       </CroppedBox>
     ) : (
       media(undefined, `absolute inset-0 size-full ${fit}`)

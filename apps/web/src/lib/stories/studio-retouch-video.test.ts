@@ -44,6 +44,9 @@ function bench(frames = 3) {
       frame: { src } as unknown as CanvasImageSource,
       aspectRatio: 9 / 16,
       audioTracks: [audio],
+      seek: async (seconds) => {
+        journal.push(`seek:${seconds}`);
+      },
       play: async (onFrame, window) => {
         journal.push(window === null ? 'play' : `play:${window.start}-${window.end}`);
         Array.from({ length: frames }).forEach(() => onFrame());
@@ -74,6 +77,7 @@ describe('renderStudioRetouchVideo', () => {
     const { deps, journal } = bench(2);
     await renderStudioRetouchVideo({ ...emptyStudioPage('p', 't', 'fr'), background: video({ trim: { start: 2, end: 5 } }) }, deps);
     expect(journal).toContain('play:2-5');
+    expect(journal.indexOf('seek:2')).toBeLessThan(journal.findIndex((entry) => entry.startsWith('record:')));
   });
 
   test('une vidéo MUETTE part sans piste audio (#9136)', async () => {

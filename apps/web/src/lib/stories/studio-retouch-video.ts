@@ -19,8 +19,12 @@ export type StudioRetouchVideoSource = {
   readonly frame: CanvasImageSource;
   readonly aspectRatio: number;
   readonly audioTracks: readonly MediaStreamTrack[];
-  /** Joue la vidéo — de bout en bout, ou sa seule fenêtre coupée (#9136) —,
-   * `onFrame` à chaque image ; résolue à la fin. */
+  /** Place la lecture au début de la fenêtre coupée (#9136) — AVANT que
+   * l'enregistrement ne commence, sans quoi sa première image serait celle du
+   * début du fichier. */
+  readonly seek: (seconds: number) => Promise<void>;
+  /** Joue la vidéo — de bout en bout, ou jusqu'à la fin de sa fenêtre coupée
+   * (#9136) —, `onFrame` à chaque image ; résolue à la fin. */
   readonly play: (onFrame: () => void, window: StudioMediaTrim | null) => Promise<void>;
   readonly release: () => void;
 };
@@ -50,6 +54,7 @@ export async function renderStudioRetouchVideo(unmeasured: StudioPage, deps: Stu
     if (plan === null || surface === null) return null;
     const sources = await loadPlanSources(plan, (src) => (src === asset.previewUrl ? Promise.resolve(source.frame) : deps.loadImage(src)));
     if (sources === null) return null;
+    if (asset.trim !== undefined) await source.seek(asset.trim.start);
     const recorder = deps.record([...surface.videoTracks(), ...(asset.muted === true ? [] : source.audioTracks)]);
     if (recorder === null) return null;
     const texts = studioTextOps(page);
@@ -130,14 +135,17 @@ export const browserRetouchVideoDeps: StudioRetouchVideoDeps = {
             onFrame();
             requestAnimationFrame(tick);
           };
-          const start = () => video.play().then(() => requestAnimationFrame(tick), finish);
           video.onended = finish;
-          if (window === null || window.start <= 0) return void start();
+          video.play().then(() => requestAnimationFrame(tick), finish);
+        }),
+      seek: (seconds) =>
+        new Promise<void>((resolve) => {
+          if (seconds <= 0) return resolve();
           video.onseeked = () => {
             video.onseeked = null;
-            void start();
+            resolve();
           };
-          video.currentTime = window.start;
+          video.currentTime = seconds;
         }),
       release: () => {
         video.pause();

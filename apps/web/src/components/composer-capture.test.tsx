@@ -225,7 +225,7 @@ describe('#9124 — « Terminé » sur une vidéo retouchée rend une VIDÉO', (
           renderVideo: {
             createSurface: () => ({ context: new Proxy({}, { get: (_t, key) => (key === 'measureText' ? () => ({ width: 1 }) : () => undefined), set: () => true }) as never, videoTracks: () => [] }),
             loadImage: async () => null,
-            loadVideo: async () => ({ frame: {} as CanvasImageSource, aspectRatio: 9 / 16, audioTracks: [], play: async () => undefined, release: () => undefined }),
+            loadVideo: async () => ({ frame: {} as CanvasImageSource, aspectRatio: 9 / 16, audioTracks: [], seek: async () => undefined, play: async () => undefined, release: () => undefined }),
             record: () => ({ mimeType: 'video/mp4', stop: async () => new Blob(['mp4'], { type: 'video/mp4' }) }),
           },
         },
