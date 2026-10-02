@@ -85,45 +85,47 @@ extension CallView {
     }
 
     private var durationChip: some View {
-        HStack(spacing: MeeshySpacing.xsPlus) {
-            TransientCallSignalGlyph(strength: signalStrength)
-            Text(callManager.formattedDuration)
-                .font(.caption2.weight(.medium).monospacedDigit())
-                .foregroundColor(.white)
-            if callManager.isRemoteQualityDegraded {
-                Image(systemName: "wifi.exclamationmark")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(MeeshyColors.warning)
+        CallDurationClock {
+            HStack(spacing: MeeshySpacing.xsPlus) {
+                TransientCallSignalGlyph(strength: signalStrength)
+                Text(callManager.formattedDuration)
+                    .font(.caption2.weight(.medium).monospacedDigit())
+                    .foregroundColor(.white)
+                if callManager.isRemoteQualityDegraded {
+                    Image(systemName: "wifi.exclamationmark")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(MeeshyColors.warning)
+                }
+                // §4.3 — même remplacement pill-compacte qu'en audio
+                // (voir audioCallLayout) : pas de bandeau plein-écran.
+                // No per-icon .accessibilityLabel — the badge is one
+                // opaque element (children: .ignore below); this
+                // state is folded into videoDurationBadgeAccessibilityLabel.
+                if case .reconnecting = callManager.callState {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(MeeshyColors.warning)
+                        .accessibilityHidden(true)
+                }
             }
-            // §4.3 — même remplacement pill-compacte qu'en audio
-            // (voir audioCallLayout) : pas de bandeau plein-écran.
-            // No per-icon .accessibilityLabel — the badge is one
-            // opaque element (children: .ignore below); this
-            // state is folded into videoDurationBadgeAccessibilityLabel.
-            if case .reconnecting = callManager.callState {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(MeeshyColors.warning)
-                    .accessibilityHidden(true)
-            }
+            // The parent's own .accessibilityLabel below already makes this
+            // whole badge one opaque VoiceOver element (children: .ignore) —
+            // every child label is discarded regardless, so hiding them here
+            // is a no-op today. Kept explicit so a future removal of the
+            // parent label doesn't silently re-expose fragmented per-child
+            // announcements (glyph, then digits, then icon) instead of the
+            // single composed sentence `videoDurationBadgeAccessibilityLabel`.
+            .accessibilityElement(children: .ignore)
+            .padding(.horizontal, MeeshySpacing.smPlus)
+            .padding(.vertical, MeeshySpacing.xs)
+            // Verre adaptatif à fond sombre (#8394) : lisible sur un flux clair.
+            .callChromeGlass(in: Capsule())
+            .clipShape(Capsule())
+            .frame(height: 44)
+            .accessibilityLabel(videoDurationBadgeAccessibilityLabel)
+            .accessibilityValue(callManager.spokenDuration)
+            .accessibilityAddTraits(.updatesFrequently)
         }
-        // The parent's own .accessibilityLabel below already makes this
-        // whole badge one opaque VoiceOver element (children: .ignore) —
-        // every child label is discarded regardless, so hiding them here
-        // is a no-op today. Kept explicit so a future removal of the
-        // parent label doesn't silently re-expose fragmented per-child
-        // announcements (glyph, then digits, then icon) instead of the
-        // single composed sentence `videoDurationBadgeAccessibilityLabel`.
-        .accessibilityElement(children: .ignore)
-        .padding(.horizontal, MeeshySpacing.smPlus)
-        .padding(.vertical, MeeshySpacing.xs)
-        // Verre adaptatif à fond sombre (#8394) : lisible sur un flux clair.
-        .callChromeGlass(in: Capsule())
-        .clipShape(Capsule())
-        .frame(height: 44)
-        .accessibilityLabel(videoDurationBadgeAccessibilityLabel)
-        .accessibilityValue(callManager.spokenDuration)
-        .accessibilityAddTraits(.updatesFrequently)
         .callQualityDetailTrigger(isPresented: $showQualityDetail)
     }
 

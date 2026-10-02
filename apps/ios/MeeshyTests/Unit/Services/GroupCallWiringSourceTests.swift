@@ -16,7 +16,7 @@ final class GroupCallWiringSourceTests: XCTestCase {
     }
 
     private func body(of signature: String, in path: String, length: Int = 2_400) throws -> String {
-        let text = try source(path)
+        let text = try path == manager ? AppSourceGuard.unit(path) : source(path)
         guard let start = text.range(of: signature) else {
             XCTFail("\(signature) introuvable dans \(path)")
             return ""

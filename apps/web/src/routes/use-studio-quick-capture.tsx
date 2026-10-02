@@ -38,6 +38,7 @@ export function useStudioQuickCapture({
   scene,
   onTake,
   engine,
+  armsOnOpen = false,
 }: {
   readonly lang: InterfaceLanguage;
   readonly kind: PublicationKind;
@@ -46,6 +47,9 @@ export function useStudioQuickCapture({
   readonly onTake: (file: File) => void;
   /** Injectable pour les témoins ; la production prend le moteur navigateur. */
   readonly engine?: CameraEngine;
+  /** LA CAMÉRA DE LA BARRE (#9123) : le viseur s'ouvre ARMÉ, le geste de
+   * l'auteur a déjà dit « prendre » — règle d'ORIGINE, distincte de #4851. */
+  readonly armsOnOpen?: boolean;
 }): {
   readonly capture: StudioSceneCapture | null;
   readonly cameraOpen: boolean;
@@ -54,7 +58,7 @@ export function useStudioQuickCapture({
    * déjà un fond : la prise le remplace, la sortie le laisse intact. */
   readonly retake: () => void;
 } {
-  const [intent, setIntent] = useState<StudioCameraIntent | null>(null);
+  const [intent, setIntent] = useState<StudioCameraIntent | null>(armsOnOpen ? 'arm' : null);
   const [holding, setHolding] = useState(false);
   const [flash, setFlash] = useState(false);
   const [intensity, setIntensity] = useState(() => readFlashIntensity(viewerStorage()));

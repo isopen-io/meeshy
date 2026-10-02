@@ -332,8 +332,14 @@ extension MeeshyComposerHost {
                 // compris : sa « Création audio » est désormais l'entrée
                 // « Modifier » de la colonne, comme pour les quatre autres
                 // familles, au lieu de s'ouvrir sous le doigt (#4671).
-                selectedSceneItemId = id
-                selectedSceneItemKind = kind
+                //
+                // **Et le met en ÉDITION EN PLACE** (#9138) : toucher, créer,
+                // double-toucher et « Modifier » mènent au même état — ses
+                // sous-outils à droite, puis `(x)`.
+                if !beginInlineEdit(id) {
+                    selectedSceneItemId = id
+                    selectedSceneItemKind = kind
+                }
             },
             // **« Modifier »** — le double toucher et l'action VoiceOver du même
             // nom ouvrent la même édition que la colonne droite
@@ -508,8 +514,8 @@ extension MeeshyComposerHost {
             onPickBandFitMode: { applySceneFitMode($0) },
             onPickBandBackdrop: { applySceneBackdrop($0) },
             // Le `(+)` d'une nouvelle scène, à la place de l'éclair (#8713).
-            topBarAccessory: returnsImageToConversation ? nil : sceneAddSlideButton,
-            onTimeButton: sceneIsAnimated && !returnsImageToConversation ? { toggleSceneFrise() } : nil,
+            topBarAccessory: returnsToConversation ? nil : sceneAddSlideButton,
+            onTimeButton: sceneIsAnimated && !returnsToConversation ? { toggleSceneFrise() } : nil,
             timeIsOpen: viewModel.timelineIsOpen,
             timelinePanel: sceneTimelinePanel,
             timelineBridge: viewModel.canvasTimelineBridge,
@@ -535,11 +541,17 @@ extension MeeshyComposerHost {
             // dire ICI aussi tient la loi des DEUX côtés, comme les deux
             // bandes le faisaient avant leur retrait.
             // **Les contrôles de l'outil du FOND prennent la même place** (#8847).
-            toolOptions: sceneBackgroundToolPanel ?? (ComposerFirstView.lowZoneShowsToolOptions(
+            // **Les options d'un objet en ÉDITION EN PLACE ne passent plus par
+            // le bas** (#9138) : elles s'ouvrent à droite, depuis le haut
+            // (`inlinePanel`), et la scène ne remonte plus pour elles. Le bas
+            // ne sert plus que le dessin.
+            toolOptions: ComposerFirstView.lowZoneShowsToolOptions(
                 drawing: viewModel.isDrawingActive,
-                textEditing: sceneTextEditing)
-                ? AnyView(MeeshyToolOptionsPanel(viewModel: viewModel)) : nil),
-            editsBackground: activeBackgroundEdit != nil,
+                textEditing: sceneTextEditing && activeInlineEdit == nil)
+                ? AnyView(MeeshyToolOptionsPanel(viewModel: viewModel)) : nil,
+            editsInline: activeInlineEdit != nil,
+            inlinePanel: sceneInlinePanel,
+            trailingFootFollowsOptions: sceneTrailingFootFollowsOptions,
             editingTextId: viewModel.textEditingMode.activeTextId,
             // **Le canvas reçoit de nouveau la frappe** (2026-09-28) : la porte
             // TEXTE y ouvre la saisie en ligne. La requête `@` reste nourrie
@@ -572,7 +584,7 @@ extension MeeshyComposerHost {
                 guard editedObject == nil else { return }
                 viewModel.exitTextEditingMode()
             },
-            descriptionPanel: returnsImageToConversation ? nil : sceneDescriptionPanel,
+            descriptionPanel: returnsToConversation ? nil : sceneDescriptionPanel,
             // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
             // reste : le canvas garde son calque persisté, il continue de
             // recevoir les touches, et aucune surface ne se pose dessus.
@@ -641,6 +653,9 @@ extension MeeshyComposerHost {
             guard id != nil, sceneCameraStage != .off,
                   let url = sceneCamera.capturedVideoURL else { return }
             collectSceneSegment(url)
+        }
+        .adaptiveOnChange(of: viewModel.textEditingMode.activeTextId) { _, id in
+            if id == nil { settleTextSceneAfterEditing() }
         }
     }
     static let descriptionLayerHeaderClearance: CGFloat = 76
@@ -1058,7 +1073,10 @@ extension MeeshyComposerHost {
     var sceneRailMode: ComposerRailMode {
         ComposerRailMode.resolve(
             drawing: viewModel.isDrawingActive,
-            textEditing: ComposerFirstView.railShowsTextTools(textEditing: sceneTextEditing),
+            // Un texte en ÉDITION EN PLACE montre ses sous-outils par la
+            // colonne de l'objet (#9138), jamais par le mode du rail.
+            textEditing: ComposerFirstView.railShowsTextTools(
+                textEditing: sceneTextEditing && activeInlineEdit == nil),
             expandedDrawingTool: viewModel.drawingEditingMode.expandedTool,
             expandedTextTool: viewModel.textEditingMode.expandedTool,
             doors: sceneDoors)
@@ -1069,7 +1087,7 @@ extension MeeshyComposerHost {
     var sceneToolOwnsScreen: Bool {
         mountedComposerView == .scene
             && ComposerToolFocus.toolIsOpen(railOpensTool: sceneRailMode.opensTool,
-                                             editsBackground: activeBackgroundEdit != nil)
+                                             editsInline: activeInlineEdit != nil)
     }
 
     /// **L'indication grise de la capture rapide** (#8653) — la MÊME question

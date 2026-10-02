@@ -392,8 +392,10 @@ private struct HeaderCallButtonsView: View {
                     .frame(width: 7, height: 7)
                 Image(systemName: "phone.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                Text(callManager.formattedDuration)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
+                CallDurationClock {
+                    Text(callManager.formattedDuration)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
+                }
             }
             .foregroundColor(MeeshyColors.success)
             .padding(.horizontal, MeeshySpacing.smPlus)

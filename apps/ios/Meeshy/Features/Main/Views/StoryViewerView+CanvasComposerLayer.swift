@@ -204,8 +204,7 @@ extension StoryCardView {
     /// plus au-dessus d'elle, il le CONFIE à la barre, qui le pose au bout de sa
     /// rangée d'outils. La loi qui dit QUAND il existe reste celle de #8431.
     var composerFoldControl: ComposerFoldControl? {
-        guard StoryComposerFold.offersFoldButton(presentation: composerFoldPresentation,
-                                                 isComposerEngaged: isComposerEngaged) else { return nil }
+        guard StoryComposerFold.offersFoldButton(presentation: composerFoldPresentation) else { return nil }
         return ComposerFoldControl(
             symbol: StoryComposerFold.foldSymbol,
             label: String(localized: "story.composer.fold",

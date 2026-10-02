@@ -61,6 +61,7 @@ extension StoryComposerViewModel {
         // le View reset le band via ses hooks existants au changement d'état.
         selectedElementId = nil
         restoreRetiredResources(for: decoded)
+        refreshStaleCropPreviews(in: decoded)
         // Le z-order VM se réhydrate depuis les champs persistés des objets
         // restaurés (mécanisme existant du changement de slide).
         rehydrateZIndexMapFromSlide()

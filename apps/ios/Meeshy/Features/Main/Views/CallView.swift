@@ -57,10 +57,14 @@ struct CallView: View {
     // the PiP toggles it.
     @State var swapStreams = false
     @State var screenSharePicker = ScreenSharePickerLauncher()
-    // §7.2/f — watchdog: after a delay with no remote video, the "Connexion
-    // vidéo…" spinner turns into a calmer, informative state instead of
-    // spinning forever (the media auto-repair / ICE-restart is §5.8).
-    @State var videoConnectSlow = false
+    // §7.2/f, #8788 — watchdog: after a delay with no remote video, the
+    // "Connexion vidéo…" spinner gives way to the peer's avatar and « Caméra
+    // désactivée » — a peer who sends no image is not loading. Keyed by call
+    // so the next call starts waiting afresh.
+    @State var remoteVideoWaitElapsedCallId: String?
+    // #8410 — la scène de groupe est-elle en hauteur compacte ? Mesurée par
+    // préférence (`noteGroupStageHeight`), jamais lue sur la fenêtre.
+    @State var isStageCompactHeight = false
     let videoConnectWatchdogSeconds: UInt64 = 12
     // §H2 — After 6s in .offering with no answer, surface a calmer label
     // so the user knows the call is ringing, not stuck.

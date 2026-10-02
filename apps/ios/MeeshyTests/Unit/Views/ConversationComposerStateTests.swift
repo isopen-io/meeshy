@@ -146,10 +146,10 @@ final class ConversationComposerStateTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Views/ConversationView+Composer.swift")
-        let code = try String(contentsOf: url, encoding: .utf8)
-        XCTAssertFalse(code.contains("onComplete: { _ in scrollState.videoToEdit = nil }"),
-                       "Le résultat de l'éditeur vidéo est jeté : la vidéo d'origine partirait.")
-        XCTAssertTrue(code.contains("applyEditedVideo(attachmentId: target.id"))
+        let retouche = try String(contentsOf: url.deletingLastPathComponent()
+            .appendingPathComponent("ConversationView+SceneRetouch.swift"), encoding: .utf8)
+        XCTAssertTrue(retouche.contains("composerState.applyEditedVideo(attachmentId: id"),
+                      "La vidéo retouchée dans la scène remplace SA pièce (#9124, #9126).")
 
         // Jumeau #8523 : la citation d'un post jetait aussi le résultat.
         let citation = try String(contentsOf: url.deletingLastPathComponent()
@@ -157,5 +157,10 @@ final class ConversationComposerStateTests: XCTestCase {
         XCTAssertFalse(citation.contains("onComplete: { _ in editingVideoURL = nil }"),
                        "La citation d'un post jette le résultat de l'éditeur vidéo.")
         XCTAssertTrue(citation.contains("PendingVideoEditReplacement.apply(result, to: target.id"))
+        // #9166 — la scène se retire elle-même et sa fermeture vide la file
+        // avant « Terminé » : `removeFirst()` sur une file vide abattait l'app
+        // (mesuré au simulateur).
+        XCTAssertFalse(citation.contains("videosToPreview.removeFirst()"),
+                       "la tête de la file des vidéos se retire sans supposer qu'elle existe")
     }
 }

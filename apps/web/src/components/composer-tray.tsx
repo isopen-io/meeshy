@@ -5,13 +5,18 @@ import { ComposerAttachmentPanel, type ComposerAttachmentPanelProps } from './co
 
 /** « Éditer » une image en attente (#8416) — le studio en retouche, à la demande. */
 const ComposerRetouch = lazy(() => import('./composer-retouch'));
+/** « Éditer » un audio en attente (#9136) — sa coupe, à la demande. */
+const ComposerAudioTrim = lazy(() => import('./composer-audio-trim'));
 import { Glyph, GlyphSvg } from './glyph';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { previewUrlFor } from '@/lib/send/attachment-preview-url';
+import { pendingTileGlyph } from '@/lib/send/pending-tile-glyph';
 import { type PendingAttachment } from '@/lib/send/attachments';
+import { retouchSeriesOf } from '@/lib/stories/studio-retouch-series';
 import type { SharedPlace } from '@/lib/send/shared-place';
+import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { MIN_SENDABLE_DURATION_MS, type RecorderState } from '@/lib/view/use-recorder';
 import { interpolatedLevel, waveformBarCount } from '@/lib/view/waveform';
 
@@ -266,8 +271,8 @@ function PreviewTile({
 }: {
   readonly attachment: PendingAttachment;
   readonly onRemove: () => void;
-  /** « Éditer » (#8416) — une IMAGE seulement : toucher sa vignette ouvre le
-   * studio en retouche. */
+  /** « Éditer » (#8416, #9119) — toucher la vignette d'une image, d'une
+   * vidéo ou d'un audio l'ÉDITE ; son centre le dit (`pendingTileGlyph`). */
   readonly onEdit?: () => void;
 }) {
   /**
@@ -282,29 +287,59 @@ function PreviewTile({
    * pièce AVANT l'envoi (`onRemove`, `composer.tsx § removeAttachment`).
    */
   const previewUrl = useMemo(
-    () => (attachment.kind === 'image' ? previewUrlFor(attachment.localId, attachment.file) : undefined),
+    () => (attachment.kind === 'image' || attachment.kind === 'video' ? previewUrlFor(attachment.localId, attachment.file) : undefined),
     [attachment.localId, attachment.file, attachment.kind],
+  );
+  const glyph = onEdit === undefined ? null : pendingTileGlyph({ kind: attachment.kind, mimeType: attachment.file.type });
+
+  const face = (
+    <div
+      className="relative grid size-14 place-items-center overflow-hidden rounded-[10px]"
+      style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 12%, transparent)' }}
+    >
+      {previewUrl !== undefined && attachment.kind === 'image' ? <img src={previewUrl} alt="" className="size-full object-cover" /> : null}
+      {previewUrl !== undefined && attachment.kind === 'video' ? (
+        <video src={previewUrl} muted playsInline preload="metadata" className="size-full object-cover" aria-hidden />
+      ) : null}
+      {previewUrl === undefined && glyph === null ? (
+        <Glyph name={attachment.kind === 'audio' ? 'microphone' : 'file'} size={22} style={{ color: 'var(--accent)' }} />
+      ) : null}
+      {glyph === 'edit' ? (
+        <span data-pending-glyph="edit" className="absolute inset-0 grid place-items-center" aria-hidden>
+          <span className="grid size-[26px] place-items-center rounded-full text-white" style={{ backgroundColor: 'rgb(0 0 0 / 0.45)' }}>
+            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 20h4L19 9l-4-4L4 16z" />
+            </svg>
+          </span>
+        </span>
+      ) : null}
+    </div>
   );
 
   return (
     <div className="relative shrink-0" style={{ width: 56 }}>
-      <div
-        className="grid size-14 place-items-center overflow-hidden rounded-[10px]"
-        style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 12%, transparent)' }}
-      >
-        {previewUrl !== undefined ? (
-          <img src={previewUrl} alt="" className="size-full object-cover" />
-        ) : (
-          <Glyph name={attachment.kind === 'audio' ? 'microphone' : 'file'} size={22} style={{ color: 'var(--accent)' }} />
-        )}
-      </div>
-      {/* Cible de 44 px (dimension 5) INVISIBLE, CONTENANT le badge visuel de
-          18 px — jamais un pseudo-élément sur un bouton déjà `absolute`
-          (voir le doc-comment de `tap-target-32`, `app.css`). */}
+      {/* « ÉDITER » (#9119) — TOUTE la vignette est le geste, le crayon en
+          son centre le nomme (miroir de la tuile iOS). */}
+      {glyph === 'edit' && onEdit !== undefined ? (
+        <button
+          type="button"
+          data-composer-edit
+          onClick={onEdit}
+          aria-label={translate(currentInterfaceLanguage(), 'composer.attachment.edit', { name: attachment.name })}
+          className="block rounded-[10px]"
+        >
+          {face}
+        </button>
+      ) : (
+        face
+      )}
+      {/* « Supprimer » — cible de 32 px au coin, AU-DESSUS de la vignette :
+          elle ne couvre plus le centre, qui appartient à « Éditer » (une
+          cible de 44 px y débordait jusqu'au milieu d'une vignette de 56). */}
       <button
         type="button"
         onClick={onRemove}
-        className="absolute -right-2.5 -top-2.5 grid size-11 place-items-center"
+        className="absolute -right-2 -top-2 z-10 grid size-8 place-items-center"
         aria-label={`Supprimer ${attachment.name}`}
       >
         <span
@@ -315,29 +350,44 @@ function PreviewTile({
           <Glyph name="x" size={10} />
         </span>
       </button>
-      {/* « ÉDITER » (#8416) — un badge au coin OPPOSÉ à « Supprimer », cible de
-          44 px elle aussi. Posé APRÈS lui : là où les deux cibles se
-          recouvrent (le centre de la vignette), c'est le geste qui ne détruit
-          rien qui l'emporte — mesuré au navigateur, la cible de « Supprimer »
-          couvrait tout le centre d'une vignette de 56 px. */}
-      {onEdit !== undefined ? (
-        <button
-          type="button"
-          data-composer-edit
-          onClick={onEdit}
-          aria-label={translate(currentInterfaceLanguage(), 'composer.attachment.edit', { name: attachment.name })}
-          className="absolute -bottom-2.5 -left-2.5 grid size-11 place-items-center"
-        >
-          <span className="grid size-[22px] place-items-center rounded-full text-white" style={{ backgroundColor: 'var(--accent)' }} aria-hidden>
-            <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M4 20h4L19 9l-4-4L4 16z" />
-            </svg>
-          </span>
-        </button>
-      ) : null}
       <span className="mt-1 block truncate text-check" style={{ width: 60 }}>
         {attachment.name}
       </span>
+    </div>
+  );
+}
+
+/**
+ * L'ÉCOUTE / LE VISIONNAGE D'UNE PIÈCE EN ATTENTE (#9119) — la vidéo et
+ * l'audio n'ont pas encore d'éditeur de scène sur le web (#9124) : toucher
+ * leur vignette ouvre leur lecteur, en couche, sans quitter le brouillon.
+ */
+function PendingMediaPreview({ attachment, onClose }: { readonly attachment: PendingAttachment; readonly onClose: () => void }) {
+  useBackDismiss(onClose, { escape: true });
+  const url = previewUrlFor(attachment.localId, attachment.file);
+  return (
+    <div
+      data-composer-media-preview
+      role="dialog"
+      aria-modal="true"
+      aria-label={attachment.name}
+      className="fixed inset-0 z-50 grid place-items-center bg-black/90 p-4"
+    >
+      {attachment.kind === 'video' ? (
+        <video src={url} controls autoPlay playsInline className="max-h-full max-w-full" />
+      ) : (
+        <audio src={url} controls autoPlay className="w-full max-w-md" />
+      )}
+      <button
+        type="button"
+        data-composer-media-preview-close
+        onClick={onClose}
+        className="absolute right-3 top-3 grid size-11 place-items-center rounded-full text-white"
+        style={{ top: 'max(12px, env(safe-area-inset-top))', backgroundColor: 'rgb(255 255 255 / 0.15)' }}
+        aria-label={translate(currentInterfaceLanguage(), 'common.close')}
+      >
+        <Glyph name="x" size={16} />
+      </button>
     </div>
   );
 }
@@ -354,7 +404,22 @@ function PreviewStrip({
   /** L'image en RETOUCHE (#8416) — la couche vit en PORTAIL sur `body` : le
    * plateau peut être posé dans un conteneur qui romprait `position: fixed`. */
   const [retouching, setRetouching] = useState<string | null>(null);
-  const target = pending.find((attachment) => attachment.localId === retouching) ?? null;
+  const [previewing, setPreviewing] = useState<string | null>(null);
+  const [trimming, setTrimming] = useState<string | null>(null);
+  const trimmed = pending.find((attachment) => attachment.localId === trimming) ?? null;
+  /** TOUTES les pièces du message en scènes, ouvertes sur la touchée (#9126). */
+  const series = retouching === null ? null : retouchSeriesOf(pending, retouching);
+  const previewed = pending.find((attachment) => attachment.localId === previewing) ?? null;
+  const editOf = (attachment: PendingAttachment): (() => void) | undefined => {
+    /* Une VIDÉO s'édite dans la scène, comme une image (#9124) — plus le lecteur. */
+    if (attachment.kind === 'image' || (attachment.kind === 'video' && onReplace !== undefined)) {
+      return onReplace === undefined ? undefined : () => setRetouching(attachment.localId);
+    }
+    /* Un AUDIO se coupe dans son éditeur (#9136) — un son n'a pas de scène. */
+    if (attachment.kind === 'audio' && onReplace !== undefined) return () => setTrimming(attachment.localId);
+    if (attachment.kind === 'video' || attachment.kind === 'audio') return () => setPreviewing(attachment.localId);
+    return undefined;
+  };
   return (
     <>
       <div
@@ -369,23 +434,27 @@ function PreviewStrip({
           border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
         }}
       >
-        {pending.map((attachment) => (
-          <PreviewTile
-            key={attachment.localId}
-            attachment={attachment}
-            onRemove={() => onRemove(attachment.localId)}
-            {...(onReplace !== undefined && attachment.kind === 'image' ? { onEdit: () => setRetouching(attachment.localId) } : {})}
-          />
-        ))}
+        {pending.map((attachment) => {
+          const onEdit = editOf(attachment);
+          return (
+            <PreviewTile
+              key={attachment.localId}
+              attachment={attachment}
+              onRemove={() => onRemove(attachment.localId)}
+              {...(onEdit !== undefined ? { onEdit } : {})}
+            />
+          );
+        })}
       </div>
-      {target !== null && onReplace !== undefined
+      {series !== null && onReplace !== undefined
         ? createPortal(
             <Suspense fallback={null}>
               <ComposerRetouch
-                attachment={target}
+                pieces={series.pieces}
+                focus={series.focus}
                 onCancel={() => setRetouching(null)}
-                onDone={(file) => {
-                  onReplace(target.localId, file);
+                onDone={(replaced) => {
+                  replaced.forEach(({ localId, file }) => onReplace(localId, file));
                   setRetouching(null);
                 }}
               />
@@ -393,6 +462,22 @@ function PreviewStrip({
             document.body,
           )
         : null}
+      {trimmed !== null && onReplace !== undefined
+        ? createPortal(
+            <Suspense fallback={null}>
+              <ComposerAudioTrim
+                attachment={trimmed}
+                onCancel={() => setTrimming(null)}
+                onDone={(file) => {
+                  onReplace(trimmed.localId, file);
+                  setTrimming(null);
+                }}
+              />
+            </Suspense>,
+            document.body,
+          )
+        : null}
+      {previewed !== null ? createPortal(<PendingMediaPreview attachment={previewed} onClose={() => setPreviewing(null)} />, document.body) : null}
     </>
   );
 }

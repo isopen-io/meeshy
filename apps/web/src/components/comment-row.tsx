@@ -4,6 +4,7 @@ import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
 
 import { Avatar } from '@/components/avatar';
 import { CommentBody } from '@/components/comment-body';
+import { CommentMedia } from '@/components/comment-media';
 import { CommentRowMenu, type CommentMenuPick } from '@/components/comment-row-menu';
 import { CommentSwipe } from '@/components/comment-swipe';
 import { MentionFieldPanel } from '@/components/mention-suggestions';
@@ -444,6 +445,9 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
   /* LE STICKER (#9080) — peint par le MÊME rendu que la bulle d'un message ;
      un commentaire-sticker sans texte ne monte pas de paragraphe vide. */
   const sticker = useMemo(() => commentStickerOf(comment), [comment]);
+  /* Les photos et vidéos jointes (#9167) — sans l'image du sticker, qui est
+     son premier média (`commentStickerOf`) et qu'il peint déjà. */
+  const media = useMemo(() => (sticker === null ? comment.media ?? [] : (comment.media ?? []).slice(1)), [comment.media, sticker]);
   const photo = typeof comment.author.avatar === 'string' && comment.author.avatar !== '' ? comment.author.avatar : undefined;
   /* Une rangée EN VOL n'a pas d'adresse chez la passerelle — aucun geste. */
   const actionable = comment.pending !== true ? gestures : undefined;
@@ -594,7 +598,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
                     <StickerArtwork sticker={sticker.sticker} picture={sticker.picture} side={STICKER_SIDE} />
                   </div>
                 ) : null}
-                {sticker === null || lu.text.trim() !== '' ? (
+                {(sticker === null && media.length === 0) || lu.text.trim() !== '' ? (
                   <RichText
                     text={lu.text}
                     trackingLinks={trackingLinks}
@@ -603,6 +607,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
                     {...(lu.marque ? { lang: lu.language } : {})}
                   />
                 ) : null}
+                {media.length > 0 ? <CommentMedia media={media} /> : null}
               </CommentBody>
             )}
             {actionable !== undefined && !editing ? (

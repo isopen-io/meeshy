@@ -6,7 +6,6 @@ import { Glyph, GlyphSvg } from './glyph';
 import { FlameEyeGlyph } from './flame-eye-glyph';
 import { EPHEMERAL_DURATIONS, characterCounterOf, ephemeralDurationLabelOf, isAfterReadChoice } from '@/lib/send/compose-protection';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
-import { developShots } from '@/lib/media/develop-shots';
 import type { ImposedLocks } from '@/lib/send/reply-contagion';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -62,7 +61,7 @@ const NO_LOCKS: ImposedLocks = { blurred: false, ephemeral: false };
  * (`1.circle` / `1.circle.fill`) dit l'état : contour au repos, plein armé.
  *
  * ORDRE FIXE, jamais réordonné : éphémère · flou · vue unique · effets ·
- * sticker · langue · spacer · compteur · caméra — le groupe MENANT d'iOS
+ * sticker · langue · spacer · compteur · photothèque · caméra — le groupe MENANT d'iOS
  * (`targets/README.md` § 1.4, `+Protections.swift:161-238` pour le rang de
  * « vue unique » entre flou et effets).
  */
@@ -79,7 +78,8 @@ export function ComposerTopRow({
   effectsPanelOpen,
   onToggleEffects,
   onOpenStickers,
-  onPickCamera,
+  onPickLibrary,
+  onOpenCamera,
   languageCode,
   onOpenLanguage,
   languagePillRef,
@@ -108,9 +108,12 @@ export function ComposerTopRow({
   readonly onToggleEffects: () => void;
   /** La porte de la feuille de stickers (#9082) — absente ⇒ rien. */
   readonly onOpenStickers?: () => void;
-  /** La caméra de l'angle droit (#9082) — mêmes fichiers que la tuile du
-   * panneau (`developShots`) ; absente ⇒ rien. */
-  readonly onPickCamera?: (files: readonly File[]) => void;
+  /** La photothèque, juste avant la caméra (#9120) — images ET vidéos ;
+   * absente ⇒ rien. */
+  readonly onPickLibrary?: (files: FileList | null) => void;
+  /** La caméra de l'angle droit (#9082) — elle ouvre le studio plein écran,
+   * viseur armé (#9123) ; absente ⇒ rien. */
+  readonly onOpenCamera?: () => void;
   readonly languageCode: string;
   readonly onOpenLanguage: () => void;
   readonly languagePillRef?: Ref<HTMLButtonElement>;
@@ -151,7 +154,7 @@ export function ComposerTopRow({
           data-composer-ephemeral
           {...(locks.ephemeral ? { 'data-imposed': '' } : {})}
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2 disabled:cursor-not-allowed"
-          style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--color-ios-ink-2)' }}
+          style={ephemeralSeconds !== undefined ? armedStyle('var(--color-error)') : { color: 'var(--composer-icon)' }}
           aria-label={
             locks.ephemeral
               ? translate(language, 'composer.protection.imposed.ephemeral', { duration: ephemeralDuration })
@@ -182,7 +185,7 @@ export function ComposerTopRow({
           data-composer-blur
           {...(locks.blurred ? { 'data-imposed': '' } : {})}
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2 disabled:cursor-not-allowed"
-          style={blurred ? armedStyle('var(--ios-state-concealed)') : { color: 'var(--color-ios-ink-2)' }}
+          style={blurred ? armedStyle('var(--ios-state-concealed)') : { color: 'var(--composer-icon)' }}
           aria-label={
             locks.blurred
               ? translate(language, 'composer.protection.imposed.blur')
@@ -207,7 +210,7 @@ export function ComposerTopRow({
           data-composer-view-once
           data-glyph={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'}
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
-          style={viewOnce ? armedStyle('var(--ios-state-view-once)') : { color: 'var(--color-ios-ink-2)' }}
+          style={viewOnce ? armedStyle('var(--ios-state-view-once)') : { color: 'var(--composer-icon)' }}
           aria-label={translate(language, viewOnce ? 'composer.viewOnce.active' : 'composer.viewOnce.activate')}
         >
           <Glyph name={viewOnce ? 'numberCircleOneFill' : 'numberCircleOne'} size={16} />
@@ -220,7 +223,7 @@ export function ComposerTopRow({
           aria-expanded={effectsPanelOpen}
           data-composer-effects
           className="flex min-h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-chip px-2"
-          style={effectCount > 0 ? armedStyle('var(--accent)') : { color: 'var(--color-ios-ink-2)' }}
+          style={effectCount > 0 ? armedStyle('var(--accent)') : { color: 'var(--composer-icon)' }}
           aria-label={effectCount > 0 ? `${effectCount} effet(s) actif(s)` : 'Ajouter des effets au message'}
         >
           <GlyphSvg glyph={THREAD_MENU_GLYPHS.magicWand} size={16} />
@@ -233,7 +236,7 @@ export function ComposerTopRow({
             onClick={onOpenStickers}
             data-composer-sticker
             className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-chip px-2"
-            style={{ color: 'var(--color-ios-ink-2)' }}
+            style={{ color: 'var(--composer-icon)' }}
             aria-label={translate(language, 'composer.attach.sticker')}
           >
             <GlyphSvg glyph={COMPOSER_GLYPHS.sticker} size={16} />
@@ -253,25 +256,41 @@ export function ComposerTopRow({
           </span>
         ) : null}
 
-        {onPickCamera === undefined ? null : (
+        {/* LA PHOTOTHÈQUE (#9120) — images ET vidéos, à côté de la caméra
+            (miroir `ComposerGlassDoors.trailing` → [library, camera, fold]) ;
+            sans `capture`, elle ouvre la galerie, jamais l'objectif. */}
+        {onPickLibrary === undefined ? null : (
           <label
-            data-composer-camera
+            data-composer-library
             className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-chip px-2"
-            style={{ color: 'var(--color-ios-ink-2)' }}
+            style={{ color: 'var(--composer-icon)' }}
           >
-            <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={16} />
+            <Glyph name="image" size={16} />
             <input
               type="file"
-              accept="image/*"
-              capture="environment"
+              accept="image/*,video/*"
+              multiple
               className="sr-only"
-              aria-label={translate(language, 'composer.attach.camera.action')}
+              aria-label={translate(language, 'composer.attach.photo.action')}
               onChange={(e) => {
-                void developShots([...(e.currentTarget.files ?? [])]).then(onPickCamera);
+                onPickLibrary(e.currentTarget.files);
                 e.currentTarget.value = '';
               }}
             />
           </label>
+        )}
+
+        {onOpenCamera === undefined ? null : (
+          <button
+            type="button"
+            data-composer-camera
+            onClick={onOpenCamera}
+            aria-label={translate(language, 'composer.attach.camera.action')}
+            className="flex min-h-11 min-w-11 shrink-0 cursor-pointer items-center justify-center rounded-chip px-2"
+            style={{ color: 'var(--composer-icon)' }}
+          >
+            <GlyphSvg glyph={COMPOSER_GLYPHS.camera} size={16} />
+          </button>
         )}
     </div>
   );

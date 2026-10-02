@@ -97,13 +97,31 @@ final class StoryComposerFoldTests: XCTestCase {
         XCTAssertFalse(bar.contains("hideBlur: true"))
     }
 
-    // MARK: - 3 · Bouton ⌄ en rédaction
+    // MARK: - 3 · Bouton ⌄ visible d'emblée (#9122)
 
-    func test_foldButton_existsOnlyWhileWriting() {
-        XCTAssertTrue(StoryComposerFold.offersFoldButton(presentation: .expanded, isComposerEngaged: true))
-        XCTAssertFalse(StoryComposerFold.offersFoldButton(presentation: .expanded, isComposerEngaged: false))
-        XCTAssertFalse(StoryComposerFold.offersFoldButton(presentation: .folded, isComposerEngaged: true))
+    /// Le ⌄ n'existait qu'en RÉDACTION : au repos, rien ne disait que la barre
+    /// se repliait. Il est désormais visible PAR DÉFAUT, tant qu'elle est
+    /// dépliée.
+    func test_foldButton_isVisibleByDefault_whileExpanded() {
+        XCTAssertTrue(StoryComposerFold.offersFoldButton(presentation: .expanded))
+        XCTAssertFalse(StoryComposerFold.offersFoldButton(presentation: .folded))
         XCTAssertEqual(StoryComposerFold.foldSymbol, "chevron.down")
+    }
+
+    /// **Tout espace commentaire se replie** (#9122) : les commentaires du fil
+    /// et ceux du détail d'un post montent la même loi, par le même modificateur.
+    func test_everyCommentSpace_foldsToACommentIcon() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let views = root.appendingPathComponent("Meeshy/Features/Main/Views")
+        let sheet = try String(contentsOf: views.appendingPathComponent("FeedCommentsSheet.swift"), encoding: .utf8)
+        let detail = try String(contentsOf: views.appendingPathComponent("PostDetailView.swift"), encoding: .utf8)
+        XCTAssertTrue(sheet.contains("commentComposer.foldableComment(isReplying: replyingTo != nil)"))
+        XCTAssertTrue(detail.contains("composer.foldableComment(isReplying: viewModel.replyingTo != nil)"))
+        let bar = try String(contentsOf: root.appendingPathComponent(
+            "Meeshy/Features/Main/Components/UniversalComposerBar+Toolbar.swift"), encoding: .utf8)
+        XCTAssertTrue(bar.contains("offersFold: resolvedFoldControl != nil"), "La barre lit aussi le repli confié par l'environnement.")
     }
 
     /// **Le ⌄ vit DANS la plaque de verre, angle intérieur haut-droit** (#8642,
@@ -132,7 +150,7 @@ final class StoryComposerFoldTests: XCTestCase {
             contentsOf: components.appendingPathComponent("UniversalComposerBar+Toolbar.swift"), encoding: .utf8))
         let trailing = try XCTUnwrap(toolbar.range(of: "} trailing: {"))
         let bande = toolbar[trailing.upperBound...].prefix(900)
-        XCTAssertTrue(bande.contains("foldControl"),
+        XCTAssertTrue(bande.contains("resolvedFoldControl"),
                       "le ⌄ est au bout de la rangée d'outils, dans le verre")
         XCTAssertTrue(toolbar.contains("Image(systemName: fold.symbol)"), "le glyphe est celui que l'hôte déclare")
         XCTAssertTrue(layer.contains("symbol: StoryComposerFold.foldSymbol"))

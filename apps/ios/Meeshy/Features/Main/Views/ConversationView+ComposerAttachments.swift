@@ -57,24 +57,6 @@ extension ConversationView {
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: 56, height: 56)
                                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-
-                            if attachment.type == .video {
-                                Image(systemName: "play.circle.fill")
-                                    // Doctrine 86i : overlay décoratif borné par la tuile fixe 56×56 → figé + masqué.
-                                    .font(.system(size: 20))
-                                    .foregroundStyle(MeeshyColors.mediaChromeForeground, MeeshyColors.mediaChromeFill)
-                                    .accessibilityHidden(true)
-                            } else if attachment.type == .image {
-                                Image(systemName: "eye.fill")
-                                    // Doctrine 86i : indicateur décoratif borné par la tuile fixe 56×56 → figé + masqué.
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(MeeshySpacing.xs)
-                                    .background(Circle().fill(MeeshyColors.mediaChromeFill))
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                                    .padding(MeeshySpacing.xxs)
-                                    .accessibilityHidden(true)
-                            }
                         } else if attachment.type == .audio {
                             PendingAudioTile(attachment: attachment, player: pendingAudioPlayer)
                         } else if attachment.type == .location {
@@ -90,17 +72,28 @@ extension ConversationView {
                                 )
                                 .frame(width: 56, height: 56)
 
-                            Image(systemName: attachment.type.composerGlyph)
-                                // Doctrine 86i : glyphe de type décoratif borné par la tuile fixe 56×56 → figé + masqué
-                                // (le libellé sous la tuile porte le nom du fichier).
-                                .font(.system(size: 22))
-                                .foregroundColor(.white)
+                            if ComposerPendingTileGlyph.center(for: attachment.type, mimeType: attachment.mimeType) == nil {
+                                Image(systemName: attachment.type.composerGlyph)
+                                    // Doctrine 86i : glyphe de type décoratif borné par la tuile fixe 56×56 → figé + masqué
+                                    // (le libellé sous la tuile porte le nom du fichier).
+                                    .font(.system(size: 22))
+                                    .foregroundColor(.white)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        if let glyph = ComposerPendingTileGlyph.center(for: attachment.type, mimeType: attachment.mimeType) {
+                            Image(systemName: glyph)
+                                // Doctrine 86i : glyphe borné par la tuile fixe 56×56 → figé ; le bouton porte le libellé.
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(MeeshyColors.mediaChromeForeground)
+                                .frame(width: 26, height: 26)
+                                .background(Circle().fill(MeeshyColors.mediaChromeFill))
                                 .accessibilityHidden(true)
                         }
                     }
                     .frame(width: 56, height: 56)
                 }
-                .accessibilityLabel(String(localized: "conversation.composer.attachment.preview", defaultValue: "Aperçu \(labelForAttachment(attachment))", bundle: .main))
+                .accessibilityLabel(pendingTileAccessibilityLabel(attachment))
 
                 // Delete button — top-right corner
                 Button {
@@ -177,68 +170,17 @@ extension ConversationView {
         composerState.preparingAttachments.removeAll { $0.id == prep.id }
     }
 
-    /// Ferme la retouche et oublie sa source décodée (#8524) — l'image à
-    /// 2 048 px ne survit pas à la couverture.
-    func closePendingImageRetouche() {
-        scrollState.editingPendingAttachmentId = nil
-        scrollState.editingPendingSource = nil
-    }
-
     // MARK: - Attachment Preview Tap Handler
     func handleAttachmentPreviewTap(_ attachment: MessageAttachment) {
         switch attachment.type {
-        case .image:
-            // Guard at the source: only open the editor when a thumbnail
-            // genuinely exists to show. The fullScreenCover below has its own
-            // defense-in-depth fallback for the (rarer) case where the
-            // thumbnail vanishes AFTER presentation starts, but there is no
-            // reason to open the cover at all for an id that has none now.
-            guard let vignette = composerState.pendingThumbnails[attachment.id],
-                  ConversationImageRetouche.offersRetouche(mimeType: attachment.mimeType) else { return }
-            let id = attachment.id
-            let fichier = composerState.pendingMediaFiles[id]
-            Task {
-                var source: UIImage?
-                if let fichier { source = await ConversationImageRetouche.loadSource(fileURL: fichier) }
-                scrollState.editingPendingSource = source ?? vignette
-                scrollState.editingPendingAttachmentId = id
-            }
-        case .video:
-            if let url = composerState.pendingMediaFiles[attachment.id] {
-                scrollState.videoToEdit = PendingVideoEdit(id: attachment.id, url: url)
-            }
+        case .image, .video:
+            openRetouchSeries(focusId: attachment.id)
         case .audio:
             if let url = composerState.pendingMediaFiles[attachment.id] {
                 scrollState.audioToEdit = PendingAudioEdit(id: attachment.id, url: url)
             }
         default:
             break
-        }
-    }
-
-    /// Dismissable full-screen fallback for the (rare) race where a pending
-    /// attachment's thumbnail is gone by the time its editor cover presents —
-    /// see the doc-comment on the "C. Tap pending image" fullScreenCover.
-    func attachmentPreviewUnavailableFallback(onDismiss: @escaping () -> Void) -> some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            VStack(spacing: MeeshySpacing.lg) {
-                Image(systemName: "photo.badge.exclamationmark")
-                    .font(.system(size: 40))
-                    .foregroundColor(.white.opacity(MeeshyOpacity.heavy))
-                Text(String(localized: "conversation.view.composer.attachmentUnavailable",
-                            defaultValue: "Pièce jointe indisponible", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                    .foregroundColor(.white)
-                Button(action: onDismiss) {
-                    Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, MeeshySpacing.xxl)
-                        .padding(.vertical, MeeshySpacing.smPlus)
-                        .background(Capsule().fill(.white.opacity(MeeshyOpacity.light)))
-                }
-            }
         }
     }
 
@@ -314,6 +256,14 @@ extension ConversationView {
         }
     }
 
+    private func pendingTileAccessibilityLabel(_ attachment: MessageAttachment) -> String {
+        let label = labelForAttachment(attachment)
+        guard ComposerPendingTileGlyph.center(for: attachment.type, mimeType: attachment.mimeType) != nil else {
+            return String(localized: "conversation.composer.attachment.preview", defaultValue: "Aperçu \(label)", bundle: .main)
+        }
+        return String(localized: "conversation.composer.attachment.edit", defaultValue: "Éditer \(label)", bundle: .main)
+    }
+
     func labelForAttachment(_ attachment: MessageAttachment) -> String {
         MediaKindLabel.attachmentLabel(for: attachment)
     }
@@ -360,12 +310,6 @@ struct PendingAudioTile: View {
                     }
                 }
                 .frame(height: 20)
-
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    // Doctrine 86i : glyphe décoratif borné par la tuile fixe 56×56 → figé + masqué.
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white.opacity(MeeshyOpacity.intense))
-                    .accessibilityHidden(true)
             }
         }
     }

@@ -86,7 +86,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// vide sans jamais comprendre. Le chemin CallKit ne permet aucune demande
     /// en amont, d'où la garde ici.
     func test_answerCall_endsCallWhenMicrophoneMissing() throws {
-        let src = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         let fn = try body(from: "func answerCall() {", to: "ringbackPlayer.stop()", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
@@ -104,7 +104,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// sans toast ni raccroché : miroir exact du bug déjà corrigé sur
     /// `answerCall()`, resté ouvert sur son propre point d'entrée.
     func test_answerCallReady_endsCallWhenMicrophoneMissing() throws {
-        let src = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         let fn = try body(from: "func answerCallReady() async {", to: "// MARK: - Reject Call", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
@@ -137,7 +137,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// silencieux au tap sur « rejoindre » — miroir exact du bug déjà corrigé
     /// sur les deux autres points d'entrée, resté ouvert sur celui-ci.
     func test_rejoinActiveCall_refusesWhenMicrophoneMissing() throws {
-        let src = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let src = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         let fn = try body(from: "func rejoinActiveCall(callId: String", to: "// MARK: - VoIP Push Incoming Call", in: src)
 
         XCTAssertTrue(fn.contains("MediaPermissionState.microphone.isUsable"),
@@ -199,7 +199,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// simple photo — un prompt sans motif visible, souvent refusé
     /// définitivement. Il doit désormais arriver au passage en mode Vidéo.
     func test_cameraSession_doesNotAddAudioInputEagerly() throws {
-        let src = try source("Meeshy/Features/Main/Components/CameraView.swift")
+        let src = try source("Meeshy/Features/Main/Components/CameraModel.swift")
         let setup = try body(from: "private func setupSession() {", to: "func enableAudioCaptureIfNeeded", in: src)
 
         XCTAssertFalse(
@@ -226,13 +226,17 @@ final class PermissionGateSourceGuardTests: XCTestCase {
 
     /// Le panneau de refus (et son bouton Réglages) est la seule chose qui
     /// distingue « caméra refusée » d'un bug d'affichage.
+    /// #9125 — l'ancienne `CameraView` a quitté le dépôt : le viseur du
+    /// composeur, servi seul en plein écran, porte la même promesse.
     func test_cameraView_rendersDeniedPanelInsteadOfBlackPreview() throws {
-        let src = try source("Meeshy/Features/Main/Components/CameraView.swift")
-        XCTAssertTrue(src.contains("permissionDeniedPanel"),
-                      "CameraView doit exposer un panneau de refus.")
-        XCTAssertTrue(src.contains("camera.permission.needsSettingsRedirect"),
+        // #9134 — l'aperçu est PARTAGÉ par les deux montages du viseur.
+        let src = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(src.contains("CameraPermissionPanel()"),
+                      "Le viseur doit exposer un panneau de refus.")
+        XCTAssertTrue(src.contains("ComposerSceneCameraSurface.shown(stage: session.stage, permission: session.camera.permission)"),
                       "Le rendu doit basculer sur l'état d'autorisation publié par le modèle.")
-        XCTAssertTrue(src.contains("MediaPermissionCoordinator.openSettings()"),
+        let panneau = try source("Meeshy/Features/Main/Components/CameraPermissionPanel.swift")
+        XCTAssertTrue(panneau.contains("MediaPermissionCoordinator.openSettings()"),
                       "Le panneau doit offrir l'ouverture des Réglages.")
     }
 

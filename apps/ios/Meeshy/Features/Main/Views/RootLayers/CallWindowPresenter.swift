@@ -165,3 +165,277 @@ final class CallOverlayWindowHost: CallWindowHosting {
         } completion: { _ in finish() }
     }
 }
+
+// MARK: - Le point de retour d'un appel réduit (#8739)
+
+/// **Un appel réduit reste atteignable par-dessus tout plein écran (#8739).**
+///
+/// Réduit, l'appel retombait sur la pastille et la bulle montées dans la
+/// racine : un viewer de story, une visionneuse image / vidéo ou le composer —
+/// des présentations modales de la fenêtre principale — les recouvraient.
+/// L'appel continuait, mais on ne pouvait y revenir qu'en fermant le plein
+/// écran. La bulle vit désormais dans une fenêtre PASSE-PLAT au-dessus de la
+/// fenêtre principale : elle ne capte que les touches posées sur elle, ne
+/// devient jamais fenêtre clé, et la pastille couverte se replie en bulle.
+enum CallReturnPoint {
+    /// La fenêtre existe tant qu'un appel vivant est réduit.
+    static func isWindowNeeded(callState: CallState, displayMode: CallDisplayMode) -> Bool {
+        callState.isActive && displayMode != .fullScreen
+    }
+
+    /// La bulle se montre en mode bulle, et en mode pastille quand un plein
+    /// écran recouvre la pastille. Jamais pendant le PiP système, qui est
+    /// lui-même le point de retour.
+    static func showsBubble(
+        displayMode: CallDisplayMode,
+        callState: CallState,
+        isSystemPiPActive: Bool,
+        isMainScreenCovered: Bool
+    ) -> Bool {
+        guard callState.isActive, !isSystemPiPActive else { return false }
+        switch displayMode {
+        case .bubble: return true
+        case .pip: return isMainScreenCovered
+        case .fullScreen: return false
+        }
+    }
+
+    /// Une présentation modale de la racine recouvre la pastille ; une alerte
+    /// ne la recouvre pas.
+    static func isCovered(root: UIViewController?) -> Bool {
+        guard let presented = root?.presentedViewController else { return false }
+        return !(presented is UIAlertController)
+    }
+
+    /// Le contrôleur qui décide de la barre d'état de l'app : la présentation
+    /// la plus haute, puis l'enfant auquel elle délègue. Une fenêtre posée
+    /// au-dessus prend la main sur la barre d'état — sans ce relais, la bulle
+    /// ferait reparaître l'heure par-dessus une visionneuse qui la cache.
+    static func statusBarOwner(root: UIViewController?) -> UIViewController? {
+        guard var owner = root else { return nil }
+        while let presented = owner.presentedViewController, !(presented is UIAlertController) {
+            owner = presented
+        }
+        while let child = owner.childForStatusBarHidden {
+            owner = child
+        }
+        return owner
+    }
+
+    /// Au-dessus de la fenêtre principale et de ses présentations, sous la
+    /// vue d'appel plein écran.
+    static let windowLevel = UIWindow.Level(rawValue: CallWindowPresentation.windowLevel.rawValue - 1)
+}
+
+/// Fenêtre passe-plat : seules les touches posées dans `interactiveFrame` lui
+/// reviennent, toutes les autres descendent à l'app. Elle ne devient jamais
+/// fenêtre clé : le clavier et le focus restent sur l'app.
+final class CallPassthroughWindow: UIWindow {
+    nonisolated deinit {}
+    var interactiveFrame: CGRect = .zero
+
+    override var canBecomeKey: Bool { false }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard interactiveFrame.contains(point) else { return nil }
+        return super.hitTest(point, with: event)
+    }
+}
+
+/// Le cadre touchable de la bulle, remonté par la mise en page — jamais lu
+/// sur une fenêtre pendant le rendu (#8772).
+struct CallReturnPointFrameKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        guard !next.isEmpty else { return }
+        value = next
+    }
+}
+
+/// Ce que l'écran de l'app montre en dessous : un plein écran recouvre-t-il
+/// la pastille ?
+@MainActor
+final class CallScreenCoverage: ObservableObject {
+    nonisolated deinit {}
+    @Published private(set) var isMainScreenCovered = false
+
+    func update(_ isCovered: Bool) {
+        guard isCovered != isMainScreenCovered else { return }
+        isMainScreenCovered = isCovered
+    }
+}
+
+@MainActor
+final class CallReturnPointFrameSink {
+    nonisolated deinit {}
+    private weak var window: CallPassthroughWindow?
+
+    init(window: CallPassthroughWindow?) {
+        self.window = window
+    }
+
+    func update(_ frame: CGRect) {
+        window?.interactiveFrame = frame
+    }
+}
+
+struct CallReturnPointRoot: View {
+    @ObservedObject var callManager: CallManager
+    @ObservedObject var coverage: CallScreenCoverage
+    let frameSink: CallReturnPointFrameSink
+
+    var body: some View {
+        CallBubbleView(callManager: callManager, isMainScreenCovered: coverage.isMainScreenCovered)
+            .onPreferenceChange(CallReturnPointFrameKey.self) { frameSink.update($0) }
+    }
+}
+
+@MainActor
+protocol CallReturnPointHosting: AnyObject {
+    func show(_ manager: CallManager, coverage: CallScreenCoverage) -> Bool
+    func hide()
+    /// Recopie la barre d'état de l'écran d'en dessous.
+    func refreshAppearance()
+}
+
+/// Le contrôleur de la fenêtre passe-plat ne décide pas de la barre d'état :
+/// il rend celle de l'écran que l'app montre en dessous.
+final class CallReturnPointController: UIHostingController<CallReturnPointRoot> {
+    nonisolated deinit {}
+    private var followed: (hidden: Bool, style: UIStatusBarStyle)?
+
+    private var appOwner: UIViewController? {
+        CallReturnPoint.statusBarOwner(root: DeviceLayout.measurementWindow?.rootViewController)
+    }
+
+    override var prefersStatusBarHidden: Bool { appOwner?.prefersStatusBarHidden ?? false }
+    override var preferredStatusBarStyle: UIStatusBarStyle { appOwner?.preferredStatusBarStyle ?? .default }
+
+    func followAppStatusBar() {
+        let owner = appOwner
+        let current = (hidden: owner?.prefersStatusBarHidden ?? false, style: owner?.preferredStatusBarStyle ?? .default)
+        guard followed.map({ $0.hidden != current.hidden || $0.style != current.style }) ?? true else { return }
+        followed = current
+        setNeedsStatusBarAppearanceUpdate()
+    }
+}
+
+/// Monte la fenêtre passe-plat tant qu'un appel est réduit. Le recouvrement
+/// de la pastille se relit à la cadence de `coveragePollInterval` : un
+/// plein écran SwiftUI ne prévient pas l'écran qu'il recouvre (#9052).
+@MainActor
+final class CallReturnPointPresenter {
+    nonisolated deinit {}
+    static let shared = CallReturnPointPresenter()
+    static let coveragePollInterval: TimeInterval = 0.3
+
+    let coverage: CallScreenCoverage
+    private let hosting: CallReturnPointHosting
+    private let probe: @MainActor () -> Bool
+    private var subscription: AnyCancellable?
+    private var activation: AnyCancellable?
+    private var polling: AnyCancellable?
+    private weak var pendingManager: CallManager?
+    private(set) var isShowing = false
+
+    init(
+        hosting: CallReturnPointHosting = CallReturnPointWindowHost(),
+        coverage: CallScreenCoverage = CallScreenCoverage(),
+        probe: @escaping @MainActor () -> Bool = {
+            CallReturnPoint.isCovered(root: DeviceLayout.measurementWindow?.rootViewController)
+        }
+    ) {
+        self.hosting = hosting
+        self.coverage = coverage
+        self.probe = probe
+    }
+
+    var isBound: Bool { subscription != nil }
+
+    func bind(host: CallManagerHost = .shared) {
+        guard subscription == nil else { return }
+        subscription = host.$manager
+            .map { manager -> AnyPublisher<(CallManager, Bool)?, Never> in
+                guard let manager else { return Just(nil).eraseToAnyPublisher() }
+                return manager.$callState
+                    .combineLatest(manager.$displayMode)
+                    .map { (manager, CallReturnPoint.isWindowNeeded(callState: $0, displayMode: $1)) }
+                    .eraseToAnyPublisher()
+            }
+            .switchToLatest()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] update in
+                self?.apply(manager: update?.0, needed: update?.1 ?? false)
+            }
+        activation = NotificationCenter.default
+            .publisher(for: UIScene.didActivateNotification)
+            .sink { [weak self] _ in self?.retryPendingShow() }
+    }
+
+    func retryPendingShow() {
+        guard let manager = pendingManager else { return }
+        apply(manager: manager, needed: true)
+    }
+
+    func apply(manager: CallManager?, needed: Bool) {
+        guard let manager, needed else {
+            pendingManager = nil
+            guard isShowing else { return }
+            isShowing = false
+            polling = nil
+            coverage.update(false)
+            hosting.hide()
+            return
+        }
+        guard !isShowing else { return }
+        isShowing = hosting.show(manager, coverage: coverage)
+        pendingManager = isShowing ? nil : manager
+        guard isShowing else { return }
+        refreshCoverage()
+        polling = Timer.publish(every: Self.coveragePollInterval, tolerance: 0.1, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in self?.refreshCoverage() }
+    }
+
+    func refreshCoverage() {
+        coverage.update(probe())
+        hosting.refreshAppearance()
+    }
+}
+
+@MainActor
+final class CallReturnPointWindowHost: CallReturnPointHosting {
+    nonisolated deinit {}
+    private var window: CallPassthroughWindow?
+
+    func refreshAppearance() {
+        (window?.rootViewController as? CallReturnPointController)?.followAppStatusBar()
+    }
+
+    func show(_ manager: CallManager, coverage: CallScreenCoverage) -> Bool {
+        guard window == nil else { return true }
+        guard let scene = DeviceLayout.activeWindowScene else { return false }
+        let overlay = CallPassthroughWindow(windowScene: scene)
+        let root = CallReturnPointRoot(
+            callManager: manager,
+            coverage: coverage,
+            frameSink: CallReturnPointFrameSink(window: overlay)
+        )
+        let controller = CallReturnPointController(rootView: root)
+        controller.view.backgroundColor = .clear
+        overlay.windowLevel = CallReturnPoint.windowLevel
+        overlay.overrideUserInterfaceStyle = DeviceLayout.measurementWindow?.overrideUserInterfaceStyle ?? .unspecified
+        overlay.rootViewController = controller
+        overlay.isHidden = false
+        window = overlay
+        return true
+    }
+
+    func hide() {
+        guard let overlay = window else { return }
+        window = nil
+        overlay.isHidden = true
+        overlay.rootViewController = nil
+    }
+}

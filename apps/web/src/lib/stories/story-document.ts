@@ -1,4 +1,5 @@
 import type { CanvasV3, ObjectV3 } from '@meeshy/shared/types/canvas-v3';
+import type { MediaCropRect } from '@meeshy/shared/utils/media-crop';
 
 import type { StoryFilterId } from '@/lib/canvas/media-filter';
 import { sceneTransitionWire, type SceneTransition } from '@/lib/canvas/scene-transition';
@@ -6,6 +7,7 @@ import { DEFAULT_SCENE_BACKDROP, DEFAULT_SCENE_FIT_MODE, type SceneBackdrop, typ
 import { parseCanvasDocument, type CanvasDocument } from '@/lib/canvas/document';
 import type { MosaicLayoutMode } from '@/lib/feed/mosaic-layout';
 
+import type { StudioMediaTrim } from './studio-page';
 import type { StudioPose } from './studio-pose';
 import { textLayerPayload, type StudioTextLayer, type StudioTiming } from './studio-text';
 
@@ -79,6 +81,12 @@ export type StoryVisual = {
   /** LE FILTRE de CE média (lot 7, #8474) — `payload.filter` de SON objet,
    * aux valeurs de `StoryFilter` ; il ne peint que lui. */
   readonly filter?: StoryFilterId;
+  /** LES ÉDITIONS DE BASE d'une pièce retouchée (#9136) — la coupe et le son
+   * coupé d'une vidéo, le recadrage d'une image : `sourceStart`/`sourceEnd`,
+   * `muted`, `cropX…cropH` de SON objet. */
+  readonly trim?: StudioMediaTrim;
+  readonly muted?: true;
+  readonly crop?: MediaCropRect;
 };
 
 export type StoryFrame = { readonly fitMode: SceneFitMode; readonly backdrop: SceneBackdrop };
@@ -205,7 +213,11 @@ function composeObjects(input: StoryComposition): ObjectV3[] {
               transform: frameTransform(background.frame),
               ...(background.aspectRatio !== undefined ? { aspectRatio: background.aspectRatio } : {}),
               ...(background.filter !== undefined ? { filter: background.filter } : {}),
-              ...(mutesVideo ? { muted: true, volume: 0 } : {}),
+              ...(mutesVideo || background.muted === true ? { muted: true, volume: 0 } : {}),
+              ...(background.trim !== undefined ? { sourceStart: background.trim.start, sourceEnd: background.trim.end } : {}),
+              ...(background.crop !== undefined
+                ? { cropX: background.crop.x, cropY: background.crop.y, cropW: background.crop.width, cropH: background.crop.height }
+                : {}),
             },
           } satisfies ObjectV3,
         ]
@@ -297,6 +309,9 @@ type VisualSlot<A> = {
   readonly aspectRatio?: number;
   readonly frame?: StoryFrame;
   readonly filter?: StoryFilterId;
+  readonly trim?: StudioMediaTrim;
+  readonly muted?: true;
+  readonly crop?: MediaCropRect;
 };
 type OverlaySlot<A> = VisualSlot<A> & { readonly pose: StudioPose; readonly timing?: StudioTiming };
 type SoundSlot<A> = { readonly source: A; readonly plane: StudioPlane };
@@ -324,6 +339,9 @@ function storyCompositionOf<A>(
     ...(slot.aspectRatio !== undefined ? { aspectRatio: slot.aspectRatio } : {}),
     ...(slot.frame !== undefined ? { frame: slot.frame } : {}),
     ...(slot.filter !== undefined ? { filter: slot.filter } : {}),
+    ...(slot.trim !== undefined ? { trim: slot.trim } : {}),
+    ...(slot.muted !== undefined ? { muted: slot.muted } : {}),
+    ...(slot.crop !== undefined ? { crop: slot.crop } : {}),
   });
   return {
     texts: params.texts,

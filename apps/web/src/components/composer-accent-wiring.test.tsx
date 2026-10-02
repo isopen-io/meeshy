@@ -168,4 +168,21 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
     const field = el.querySelector<HTMLTextAreaElement>('[aria-label="Écrire un message"]')!;
     expect(field.hasAttribute('aria-description')).toBe(false);
   });
+
+  test('#9121 — toutes les icônes de la barre lisent `--composer-icon` : commune au repos, la couleur de l’effet armé sinon', () => {
+    const el = mount(() => {});
+    const root = el.querySelector<HTMLElement>('[data-composer]')!;
+    expect(root.style.getPropertyValue('--composer-icon')).toBe('var(--color-ios-ink-2)');
+    for (const selector of ['[data-composer-ephemeral]', '[data-composer-blur]', '[data-composer-view-once]', '[data-composer-effects]', '[data-composer-sticker]', '[data-composer-library]', '[data-composer-camera]']) {
+      expect(el.querySelector<HTMLElement>(selector)?.style.color).toBe('var(--composer-icon)');
+    }
+    act(() => {
+      el.querySelector<HTMLButtonElement>('[data-composer-ephemeral]')!.click();
+    });
+    act(() => {
+      [...el.querySelectorAll<HTMLButtonElement>('[data-composer-ephemeral-picker] button')][1]!.click();
+    });
+    expect(root.style.getPropertyValue('--composer-icon')).toBe('var(--color-error)');
+    expect(el.querySelector<HTMLElement>('[data-composer-blur]')?.style.color).toBe('var(--composer-icon)');
+  });
 });

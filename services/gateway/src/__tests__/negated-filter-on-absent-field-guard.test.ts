@@ -37,9 +37,6 @@ const SCHEMA = join(__dirname, '../../../../packages/shared/prisma/schema.prisma
 const SITES_JUSTIFIES: Readonly<Record<string, string>> = {
   'routes/conversations/messages-search.ts#content': 'Message.content est requis ; seul Post.content est optionnel.',
   'routes/conversations/messages-list-views.ts#content': 'Message.content est requis ; seul Post.content est optionnel.',
-  'routes/conversations/participants-writes.ts#userId': 'Écarte les invités anonymes — #9106.',
-  'services/conversations/ensureGlobalConversationMembership.ts#userId': 'Écarte les invités anonymes — #9106.',
-  'services/messaging/messageStars/StarredMessagesReader.ts#userId': 'Écarte les invités anonymes — #9106.',
 };
 
 type Declaration = { readonly kind: 'list' | 'optional' | 'required'; readonly attributes: string };

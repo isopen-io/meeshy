@@ -170,7 +170,7 @@ final class CallStackLazyInstantiationTests: XCTestCase {
     // MARK: - La pile, une fois réveillée, reste légère hors d'un appel vidéo
 
     func test_heavyCallPieces_areBuiltOnFirstUse_notWithTheirOwner() throws {
-        let manager = AppSourceGuard.stripComments(try appSource("Features/Main/Services/CallManager.swift"))
+        let manager = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift"))
         XCTAssertTrue(manager.contains("lazy var pip: PiPCallProviding = PiPCallController.shared"))
         XCTAssertFalse(manager.contains("private let webRTCService: WebRTCService"))
         guard let initRange = manager.range(of: "private init() {"),

@@ -203,7 +203,7 @@ final class CallHangupFastPathTests: XCTestCase {
     }
 
     func test_endCall_sendsInBandBye_beforeLocalTeardown() throws {
-        let manager = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         guard let endCallRange = manager.range(of: "func endCall()") else {
             XCTFail("CallManager must define endCall()")
             return
@@ -574,7 +574,7 @@ final class CallHangupFastPathTests: XCTestCase {
             "now gated on the panel being visible, so nothing can arrive while it is hidden."
         )
 
-        let manager = try source("Meeshy/Features/Main/Services/CallManager.swift")
+        let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         let gate = "guard self.transcriptionService.isShowingOverlay else { return }"
 
         guard let socketRange = manager.range(of: "socket.callTranslatedSegmentReceived") else {

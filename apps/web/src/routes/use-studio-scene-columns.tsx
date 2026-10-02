@@ -29,7 +29,7 @@ import { FrameMark, RedoMark, UndoMark } from '@/routes/story-compose-chrome';
 import type { StudioObjectAction } from '@/routes/story-compose-object-menu';
 import { TimeMark } from '@/routes/story-compose-parts';
 import { StudioTrailingColumn, type StudioColumnTile } from '@/routes/story-compose-scene-rails';
-import { DescribeMark, EffectMark, ObjectActionMark, VisualEffectMark } from '@/routes/story-compose-scene-marks';
+import { CropMark, DescribeMark, EffectMark, ObjectActionMark, SoundMark, TrimMark, VisualEffectMark } from '@/routes/story-compose-scene-marks';
 import type { StudioSceneObjectAction } from '@/routes/use-studio-objects';
 import { useStudioRehearsal } from '@/routes/use-studio-rehearsal';
 
@@ -49,12 +49,18 @@ const SECTION_LABELS = {
   frame: 'story.studio.tile.frame',
   filter: 'story.studio.editor.filter',
   describe: 'story.studio.background.tools.describe',
+  trim: 'story.studio.background.tools.trim',
+  sound: 'story.studio.background.tools.sound',
+  crop: 'story.studio.background.tools.crop',
 } as const satisfies Record<StudioBackgroundSection, InterfaceCatalogKey>;
 
 const SECTION_GLYPHS: Record<StudioBackgroundSection, () => ReactNode> = {
   frame: () => <FrameMark size={20} />,
   filter: () => <VisualEffectMark size={20} />,
   describe: () => <DescribeMark size={20} />,
+  trim: () => <TrimMark size={20} />,
+  sound: () => <SoundMark size={20} />,
+  crop: () => <CropMark size={20} />,
 };
 
 const FOOT_LABELS = { time: 'story.studio.tile.time', undo: 'story.studio.undo', redo: 'story.studio.redo' } as const;

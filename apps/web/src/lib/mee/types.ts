@@ -24,6 +24,15 @@ export type MeeTab = MeeCharacterTab | 'instants';
 export const MEE_INTENTS = ['bonjour', 'amour', 'fete', 'soutien', 'rale', 'coup-de-mou', 'surprise', 'quotidien', 'humour-noir'] as const;
 export type MeeIntent = (typeof MEE_INTENTS)[number];
 
+/**
+ * Le PACK intégré d'un sticker (#9141) — l'unité que l'utilisateur installe
+ * ou retire : Mee et ses Instants, Meo et ses Instants, Mee & Meo (les duos).
+ * Les slugs sont ceux de `BUILTIN_STICKER_PACKS` (`@meeshy/shared/types/sticker-pack`).
+ */
+export const MEE_BUILTIN_PACKS = ['mee', 'meo', 'mee-et-meo'] as const;
+export type MeeBuiltinPack = (typeof MEE_BUILTIN_PACKS)[number];
+export const isMeeBuiltinPack = (slug: string): slug is MeeBuiltinPack => (MEE_BUILTIN_PACKS as readonly string[]).includes(slug);
+
 export type MeeInstantSection = 'meteo' | 'moment' | 'lieu' | 'message';
 
 export type MeeSection = MeeIntent | MeeInstantSection;
@@ -85,6 +94,7 @@ export type MeeSticker = {
   /** Unique, `[a-z0-9-]` : il devient `mee.<id>` dans le `templateId` du message. */
   readonly id: string;
   readonly tab: MeeTab;
+  readonly pack: MeeBuiltinPack;
   readonly section: MeeSection;
   readonly title: string;
   readonly feeling: MeeFeeling;

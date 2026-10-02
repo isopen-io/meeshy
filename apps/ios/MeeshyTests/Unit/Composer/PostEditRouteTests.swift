@@ -73,4 +73,81 @@ final class PostEditRouteTests: XCTestCase {
             )
         }
     }
+    // MARK: - #9178 — le TYPE d'une publication éditée
+
+    /// **La cause du « réel qui devient un post ».** `FeedMedia.duration` est en
+    /// SECONDES (`APIPost` divise par 1 000) ; la feuille la lisait comme des
+    /// millisecondes, si bien qu'une vidéo de 30 s pesait « 30 ms » sous le
+    /// plancher de 3 000 ms — et l'ouverture rebasculait le réel en POST.
+    @MainActor
+    func test_laDureeDUnMediaEdite_estConvertieEnMillisecondes() {
+        let video = EditablePostMedia(FeedMedia.video(duration: 30))
+        XCTAssertEqual(video.durationMs, 30_000)
+        XCTAssertTrue(ReelComposition.qualifiesAsReel(
+            mediaKinds: [(kind: video.feedMediaType, durationMs: video.durationMs)]))
+    }
+
+    func test_lOuverture_restaureLeTypeDOrigine_exactement() {
+        XCTAssertEqual(PostEditTypeChoice.initialType(originalType: "REEL"), "REEL")
+        XCTAssertEqual(PostEditTypeChoice.initialType(originalType: "reel"), "REEL")
+        XCTAssertEqual(PostEditTypeChoice.initialType(originalType: "POST"), "POST")
+        XCTAssertEqual(PostEditTypeChoice.initialType(originalType: nil), "POST")
+    }
+
+    /// Le serveur a accepté ce réel : tant que l'auteur n'a rien retiré, la
+    /// feuille ne le juge pas plus sévèrement que lui (durée inconnue, corpus
+    /// hérité).
+    func test_unReelIntact_resteChoisissable_memeSiLaCompositionNeSeJugePasIci() {
+        XCTAssertTrue(PostEditTypeChoice.reelIsChoosable(
+            originalType: "REEL", remainingQualifies: false, removedAny: false))
+        XCTAssertFalse(PostEditTypeChoice.reelIsChoosable(
+            originalType: "REEL", remainingQualifies: false, removedAny: true))
+        XCTAssertTrue(PostEditTypeChoice.reelIsChoosable(
+            originalType: "POST", remainingQualifies: true, removedAny: false))
+        XCTAssertFalse(PostEditTypeChoice.reelIsChoosable(
+            originalType: "POST", remainingQualifies: false, removedAny: false))
+    }
+
+    func test_unRetraitQuiDequalifie_imposeLePost_sansToucherAuReste() {
+        XCTAssertEqual(PostEditTypeChoice.selection("REEL", reelIsChoosable: false), "POST")
+        XCTAssertEqual(PostEditTypeChoice.selection("REEL", reelIsChoosable: true), "REEL")
+        XCTAssertEqual(PostEditTypeChoice.selection("POST", reelIsChoosable: false), "POST")
+    }
+
+    /// **Le sélecteur est TOUJOURS offert, le réel refusé l'est AVEC sa raison**
+    /// — la règle de `ComposerFormatAvailability`, jamais une jumelle.
+    func test_leSelecteur_offreLesDeuxTypes_etDitPourquoiLeReelEstRefuse() {
+        let refuse = PostEditTypeChoice.verdicts(reelIsChoosable: false)
+        XCTAssertEqual(refuse.map(\.format), [.post, .reel])
+        XCTAssertEqual(refuse.map(\.isChoosable), [true, false])
+        XCTAssertEqual(refuse.last?.reason,
+                       ComposerFormatAvailability.reason(for: .reel, carriesMoreThanText: true))
+        XCTAssertEqual(PostEditTypeChoice.verdicts(reelIsChoosable: true).map(\.isChoosable), [true, true])
+    }
+
+    private func canvas(scenes: Int, layout: MosaicLayoutMode? = nil) -> StoryEffects {
+        var effects = StoryEffects()
+        effects.canvasV3 = CanvasV3(scenes: (0..<scenes).map { SceneV3(id: "s\($0 + 1)", objects: []) },
+                                    layout: layout)
+        return effects
+    }
+
+    /// **L'agencement d'un POST se change à l'édition** — offert exactement là
+    /// où `ComposerMosaicChoice` l'offre à la création : plusieurs scènes, un
+    /// post.
+    func test_lAgencement_nEstOffertQuAUnPostDePlusieursScenes() {
+        XCTAssertTrue(PostEditTypeChoice.offersLayout(selectedType: "POST", effects: canvas(scenes: 2), removedAny: false))
+        XCTAssertFalse(PostEditTypeChoice.offersLayout(selectedType: "REEL", effects: canvas(scenes: 2), removedAny: false))
+        XCTAssertFalse(PostEditTypeChoice.offersLayout(selectedType: "POST", effects: canvas(scenes: 1), removedAny: false))
+        XCTAssertFalse(PostEditTypeChoice.offersLayout(selectedType: "POST", effects: nil, removedAny: false))
+        XCTAssertFalse(PostEditTypeChoice.offersLayout(selectedType: "POST", effects: canvas(scenes: 2), removedAny: true))
+    }
+
+    func test_changerLAgencement_reecritLeSeulLayout_etGardeLesScenes() throws {
+        let origine = canvas(scenes: 3, layout: .carousel)
+        let edite = try XCTUnwrap(PostEditTypeChoice.effects(origine, layout: .wave))
+        XCTAssertEqual(edite.canvasV3?.layout, .wave)
+        XCTAssertEqual(edite.canvasV3?.scenes.map(\.id), origine.canvasV3?.scenes.map(\.id))
+        XCTAssertNil(PostEditTypeChoice.effects(StoryEffects(), layout: .wave))
+    }
 }

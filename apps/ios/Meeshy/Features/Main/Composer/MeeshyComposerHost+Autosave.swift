@@ -29,7 +29,8 @@ extension MeeshyComposerHost {
             isHydrated: hydration != nil,
             resumesDraft: draftId != nil,
             isSeeded: mediaSeed != nil || moodSeed != nil,
-            opensOnMood: selectedFormat == .status
+            opensOnMood: selectedFormat == .status,
+            returnsToConversation: returnsToConversation
         )
     }
 

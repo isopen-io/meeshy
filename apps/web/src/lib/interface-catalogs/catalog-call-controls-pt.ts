@@ -72,6 +72,8 @@ const pt = {
   'callControls.selfTile.corner.top-right': 'Minha miniatura: no alto à direita',
   'callControls.selfTile.corner.bottom-left': 'Minha miniatura: embaixo à esquerda',
   'callControls.selfTile.corner.bottom-right': 'Minha miniatura: embaixo à direita',
+  'callControls.spotlight.self': 'Destacar minha imagem',
+  'callControls.screenZoom.hint': 'Tela compartilhada: pince ou Ctrl + roda para ampliar, toque duas vezes para vê-la inteira',
 } satisfies CallControlsCatalog;
 
 export default pt;

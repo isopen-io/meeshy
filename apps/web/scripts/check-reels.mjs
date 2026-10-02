@@ -667,6 +667,10 @@ try {
       // LE COMPTEUR DU RAIL SUIT L'ENVOI EN OPTIMISTE (#6484, C2) — lu sur le
       // rail lui-même, la caisse que le lecteur peint, pas sur un cache voisin.
       const commentBefore = (await countOf(page, commentSel));
+      // Le ⌄ a replié la barre en son icône (#9122) : la rouvrir d'abord.
+      if ((await page.$('[data-story-comments-sheet] [data-comment-unfold]')) !== null) {
+        await page.click('[data-story-comments-sheet] [data-comment-unfold]');
+      }
       await page.fill('[data-story-comments-sheet] textarea', 'Bien vu');
       await page.click('[data-story-comments-sheet] [data-comment-send]');
       const countFollowed = await page

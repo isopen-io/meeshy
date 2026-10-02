@@ -207,6 +207,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     private var persistedSegments: [TranscriptionSegment] = []
 
     private let audioEngine = AVAudioEngine()
+    private nonisolated static let engineTeardownQueue = DispatchQueue(label: "me.meeshy.calls.transcription-engine-teardown")
     /// Guards every `audioEngine`/tap touch in `stopLocalCapture()`. Merely
     /// *accessing* `audioEngine.inputNode` for the first time lazily
     /// activates the process's audio session — safe on a real device, but an
@@ -418,6 +419,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// Discovered via the Task 1 spike (2026-07-10, crash report
     /// `Meeshy-2026-07-10-173828.ips`) — do not revert this pattern.
     private func startLocalCapture() throws {
+        awaitEngineTeardown()
         let newRequest = SFSpeechAudioBufferRecognitionRequest()
         newRequest.shouldReportPartialResults = true
         newRequest.addsPunctuation = true
@@ -467,11 +469,28 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         // startLocalCapture()'s installTap(onBus: 0, …) on an already-tapped
         // bus raises an uncatchable NSInternalInconsistencyException. Apple
         // documents removeTap as safe to call even with no tap installed.
-        audioEngine.inputNode.removeTap(onBus: 0)
-        if audioEngine.isRunning {
-            audioEngine.stop()
-        }
+        //
+        // #8989 — the teardown runs on `engineTeardownQueue`, off the main
+        // thread: `removeTap` and `stop()` can block, and muting the mic with
+        // captions on used to pay for them in the gesture itself.
         isCaptureActive = false
+        nonisolated(unsafe) let engine = audioEngine
+        let teardown: @Sendable () -> Void = {
+            engine.inputNode.removeTap(onBus: 0)
+            if engine.isRunning {
+                engine.stop()
+            }
+        }
+        Self.engineTeardownQueue.async(execute: teardown)
+    }
+
+    /// #8989 — tout ce qui touche de nouveau le moteur attend d'abord la fin
+    /// d'un démontage en vol : un `installTap` sur un bus encore équipé lève
+    /// une exception irrattrapable. Le fil principal n'attend que si un
+    /// démontage est réellement en cours (rallumage immédiat du micro).
+    private func awaitEngineTeardown() {
+        let barrier: @Sendable () -> Void = {}
+        Self.engineTeardownQueue.sync(execute: barrier)
     }
 
     /// A route change mid-capture (Bluetooth connect/disconnect, headphones,
@@ -614,6 +633,7 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     /// s'arrêter. Pas de `@discardableResult` : ignorer ce verdict doit faire
     /// rougir le compilateur, pas passer inaperçu.
     private func reinstallTap(for newRequest: SFSpeechAudioBufferRecognitionRequest) -> Bool {
+        awaitEngineTeardown()
         audioEngine.inputNode.removeTap(onBus: 0)
         let format = audioEngine.inputNode.outputFormat(forBus: 0)
         guard AudioTapFormatReadiness.mayInstall(sampleRate: format.sampleRate,

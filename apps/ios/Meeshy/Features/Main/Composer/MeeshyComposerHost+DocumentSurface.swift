@@ -159,13 +159,11 @@ extension MeeshyComposerHost {
         )
     }
 
-    /// La capture caméra du document (T2.3), montée ICI plutôt que sous la
-    /// scène : le document n'a pas d'atelier, donc pas d'environnement
-    /// `storyCameraCaptureProvided` à réutiliser — `CameraView` est montée
-    /// telle quelle, le même composant que la scène emprunte par
-    /// environnement.
+    /// La capture caméra du document (T2.3) : le viseur du composeur, servi
+    /// SEUL en plein écran (#9125) — un statut n'a pas de scène où l'armer.
+    /// C'est le même viseur que la page blanche emprunte par environnement.
     var documentCameraSheet: some View {
-        CameraView(initialMode: pendingCameraMode) { result in
+        ComposerViewfinder(initialMode: pendingCameraMode) { result in
             Task { await ingestCameraCapture(result) }
         }
     }
@@ -227,8 +225,50 @@ extension MeeshyComposerHost {
             slideImages: viewModel.slideImages,
             loadedImages: viewModel.loadedImages,
             imagesVersion: viewModel.loadedImagesVersion,
-            onSelect: { viewModel.selectSlide(at: $0) },
-            onDelete: { retractScene(at: $0) }))
+            onSelect: { index in
+                if retouchSeries != nil { selectRetouchScene(at: index) } else { viewModel.selectSlide(at: index) }
+            },
+            // En retouche, une scène EST une pièce du message : elle ne se jette pas ici.
+            onDelete: returnsToConversation ? nil : { retractScene(at: $0) }))
+    }
+
+    /// **L'outil Texte du document : la scène, le texte posé, le clavier — un
+    /// seul geste** (#9137). Le fond suit le chemin de la palette, la saisie
+    /// celui de la porte Texte de la scène (`handleRailDoor(.text)`).
+    func openTextScene() {
+        guard let fond = ComposerTextSceneDoor.background(
+            chosen: documentBackground, palette: StoryBackgroundPalette.colors
+        ) else { return }
+        HapticFeedback.light()
+        textSceneImplicitBackground = ComposerTextSceneDoor.implicitBackground(
+            chosen: documentBackground, posed: fond)
+        documentBackground = fond
+        viewModel.applyBackground(hex: fond)
+        // Le texte se pose au tour suivant : la scène vient d'être montée, et un
+        // canvas sans taille ni fenêtre ouvrirait une saisie invisible, sans
+        // clavier — mesuré au simulateur.
+        DispatchQueue.main.async {
+            guard documentBackground == fond, let objet = viewModel.addText() else { return }
+            beginSceneTextEditing(objet.id)
+        }
+    }
+
+    /// La saisie se ferme : une scène restée nue rend le document — le texte
+    /// vide est déjà retiré par `exitTextEditingMode`, le fond implicite part.
+    func settleTextSceneAfterEditing() {
+        guard let implicite = textSceneImplicitBackground else { return }
+        textSceneImplicitBackground = nil
+        guard ComposerTextSceneDoor.returnsToDocument(
+            implicitBackground: implicite,
+            currentBackground: documentBackground,
+            foundedSlides: slideIdByMediaURL.count,
+            sceneObjectCount: viewModel.currentSlide.sceneObjects.count,
+            slideCount: viewModel.slides.count
+        ) else { return }
+        documentBackground = nil
+        viewModel.clearBackground()
+        selectedSceneItemId = nil
+        selectedSceneItemKind = nil
     }
 
     var documentContentMedia: [ComposerContentMedia] {

@@ -76,10 +76,19 @@ extension UniversalComposerBar {
                 }
             }
 
-            // **La caméra à l'angle droit du verre** (#9082), juste avant le ⌄.
-            ForEach(ComposerGlassDoors.trailing(offersCamera: onCamera != nil,
-                                                offersFold: foldControl != nil), id: \.self) { door in
+            // **La caméra à l'angle droit du verre** (#9082), juste avant le ⌄ ;
+            // la photothèque (images ET vidéos) à côté d'elle (#9120).
+            ForEach(ComposerGlassDoors.trailing(offersLibrary: onPhotoLibrary != nil,
+                                                offersCamera: onCamera != nil,
+                                                offersFold: resolvedFoldControl != nil), id: \.self) { door in
                 switch door {
+                case .library:
+                    if let openLibrary = onPhotoLibrary {
+                        glassDoorButton(
+                            symbol: "photo.on.rectangle.angled",
+                            label: String(localized: "composer.attach.photo", defaultValue: "Photos", bundle: .main),
+                            action: openLibrary)
+                    }
                 case .camera:
                     if let openCamera = onCamera {
                         glassDoorButton(
@@ -88,7 +97,7 @@ extension UniversalComposerBar {
                             action: openCamera)
                     }
                 case .fold:
-                    if let fold = foldControl {
+                    if let fold = resolvedFoldControl {
                         foldButton(fold)
                             .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .topTrailing)))
                     }
@@ -110,7 +119,7 @@ extension UniversalComposerBar {
         Button(action: fold.action) {
             Image(systemName: fold.symbol)
                 .font(.footnote.weight(.bold))
-                .foregroundColor(style == .dark ? .white.opacity(0.9) : servedAccent)
+                .foregroundColor(iconTint)
                 .frame(width: 30, height: 30)
                 .adaptiveLiquidGlass(in: Circle(), interactive: true)
                 .frame(width: 44, height: 44)
@@ -130,8 +139,8 @@ extension UniversalComposerBar {
             action()
         } label: {
             Image(systemName: symbol)
-                .font(.callout.weight(.semibold))
-                .foregroundColor(style == .dark ? .white.opacity(0.9) : servedAccent)
+                .font(.callout.weight(ComposerGlassDoors.glyphWeight))
+                .foregroundColor(iconTint)
                 .frame(width: 30, height: 30)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
@@ -175,12 +184,8 @@ extension UniversalComposerBar {
             .fixedSize()
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xs)
-            .adaptiveLiquidGlass(in: Capsule(), tint: style == .dark ? nil : servedAccent.opacity(0.18))
-            .foregroundColor(
-                style == .dark
-                    ? .white.opacity(0.9)
-                    : servedAccent
-            )
+            .adaptiveLiquidGlass(in: Capsule(), tint: style == .dark ? nil : iconTint.opacity(0.18))
+            .foregroundColor(iconTint)
         }
         .accessibilityLabel(String(localized: "a11y.composer.language", defaultValue: "Langue du message", bundle: .main))
         .accessibilityValue(currentLangOption.name)
@@ -221,15 +226,21 @@ extension UniversalComposerBar {
 // sa largeur ne dépasse jamais celle proposée.
 
 /// **L'angle droit du verre** (#9082) : la caméra se pose juste avant le ⌄,
-/// et chaque porte n'existe que si l'hôte sait l'ouvrir.
+/// la photothèque à côté d'elle (#9120), et chaque porte n'existe que si
+/// l'hôte sait l'ouvrir. Leur glyphe, plus grand que celui des icônes de
+/// gauche (`.caption` semibold), prend un trait `.regular` pour garder la même
+/// épaisseur perçue (#9173).
 nonisolated enum ComposerGlassDoors {
+    static let glyphWeight: Font.Weight = .regular
+
     enum TrailingDoor: Hashable, Sendable {
+        case library
         case camera
         case fold
     }
 
-    static func trailing(offersCamera: Bool, offersFold: Bool) -> [TrailingDoor] {
-        (offersCamera ? [.camera] : []) + (offersFold ? [.fold] : [])
+    static func trailing(offersLibrary: Bool, offersCamera: Bool, offersFold: Bool) -> [TrailingDoor] {
+        (offersLibrary ? [.library] : []) + (offersCamera ? [.camera] : []) + (offersFold ? [.fold] : [])
     }
 }
 

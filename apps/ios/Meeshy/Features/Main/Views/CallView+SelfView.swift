@@ -78,6 +78,11 @@ extension CallView {
                             .stroke(Color.white.opacity(MeeshyOpacity.medium), lineWidth: 1)
                     )
                     .overlay(alignment: .topTrailing) { selfTileZoomSlot(tileSize: size) }
+                    .overlay(alignment: .bottomLeading) {
+                        if showsPeerMutedBadge && effectiveSwapStreams {
+                            CallPeerMutedBadge(compact: true).padding(MeeshySpacing.xs)
+                        }
+                    }
                     .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 8, y: 4)
                     .position(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height)
                     .gesture(

@@ -1,4 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
+
+import { effectiveMediaRatio, mediaCropStyle, readMediaCrop, type MediaCropRect } from '@meeshy/shared/utils/media-crop';
 
 import { backgroundCss, type BackgroundFraming } from '@/lib/canvas/background';
 import { mediaFilterCss } from '@/lib/canvas/media-filter';
@@ -92,6 +94,16 @@ export function BackgroundLayer({
   const awaitsContent = callbacks.current.onContentReady !== undefined;
   // `aspectFill` par défaut, `aspect` sur « fit » déclaré (`background.ts`).
   const fit = framing === 'fit' ? 'object-contain' : 'object-cover';
+  const crop = readMediaCrop(payload);
+  const ratio = typeof payload.aspectRatio === 'number' && payload.aspectRatio > 0 ? payload.aspectRatio : undefined;
+  const cropped = (media: (style: Record<string, string> | undefined, className: string) => ReactNode): ReactNode =>
+    crop !== null && ratio !== undefined ? (
+      <CroppedBox crop={crop} ratio={ratio} fill={framing !== 'fit'}>
+        {(cropStyle) => media(cropStyle, 'block max-w-none object-fill')}
+      </CroppedBox>
+    ) : (
+      media(undefined, `absolute inset-0 size-full ${fit}`)
+    );
 
   const ready = () => callbacks.current.onContentReady?.();
 
@@ -165,21 +177,23 @@ export function BackgroundLayer({
     return (
       <>
         {letterboxFill}
-        <video
-          ref={videoRef}
-          key={src}
-          src={src}
-          muted={muted || authorMuted}
-          loop
-          playsInline
-          preload={awaitsContent ? 'auto' : 'none'}
-          {...(poster !== undefined ? { poster } : {})}
-          onLoadedMetadata={(event) => callbacks.current.onDurationKnown?.(event.currentTarget.duration * 1000)}
-          onLoadedData={ready}
-          onError={ready}
-          className={`absolute inset-0 size-full ${fit}`}
-          style={mediaStyle}
-        />
+        {cropped((cropStyle, className) => (
+          <video
+            ref={videoRef}
+            key={src}
+            src={src}
+            muted={muted || authorMuted}
+            loop
+            playsInline
+            preload={awaitsContent ? 'auto' : 'none'}
+            {...(poster !== undefined ? { poster } : {})}
+            onLoadedMetadata={(event) => callbacks.current.onDurationKnown?.(event.currentTarget.duration * 1000)}
+            onLoadedData={ready}
+            onError={ready}
+            className={className}
+            style={{ ...mediaStyle, ...cropStyle }}
+          />
+        ))}
       </>
     );
   }
@@ -187,22 +201,44 @@ export function BackgroundLayer({
     return (
       <>
         {letterboxFill}
-        {/* eslint-disable-next-line jsx-a11y/alt-text */}
-        <img
-          ref={imageRef}
-          src={src}
-          alt=""
-          aria-hidden="true"
-          loading={awaitsContent ? 'eager' : 'lazy'}
-          onLoad={ready}
-          onError={ready}
-          className={`absolute inset-0 size-full ${fit}`}
-          style={mediaStyle}
-        />
+        {cropped((cropStyle, className) => (
+          // eslint-disable-next-line jsx-a11y/alt-text
+          <img
+            ref={imageRef}
+            src={src}
+            alt=""
+            aria-hidden="true"
+            loading={awaitsContent ? 'eager' : 'lazy'}
+            onLoad={ready}
+            onError={ready}
+            className={className}
+            style={{ ...mediaStyle, ...cropStyle }}
+          />
+        ))}
       </>
     );
   }
   return <span className="absolute inset-0 block" style={{ backgroundColor: backgroundCss(background, 'var(--color-ios-card)') }} />;
+}
+
+const CARD_RATIO = 9 / 16;
+
+/** **Un fond RECADRÉ** (#9136) — la boîte prend le rapport du recadrage, posée
+ * ajustée (ou remplie) dans la carte 9:16 comme le média entier l'aurait été ;
+ * le média s'y agrandit et s'y décale (`mediaCropStyle`), sans ré-encodage. */
+function CroppedBox({ crop, ratio, fill, children }: { readonly crop: MediaCropRect; readonly ratio: number; readonly fill: boolean; readonly children: (style: Record<string, string>) => ReactNode }) {
+  const shown = effectiveMediaRatio(ratio, crop);
+  const wider = shown > CARD_RATIO;
+  const [width, height] = wider === fill ? [(shown / CARD_RATIO) * 100, 100] : [100, (CARD_RATIO / shown) * 100];
+  return (
+    <span
+      data-scene-background-crop
+      className="absolute block overflow-hidden"
+      style={{ width: `${width}%`, height: `${height}%`, left: `${(100 - width) / 2}%`, top: `${(100 - height) / 2}%` }}
+    >
+      {children({ ...mediaCropStyle(crop), position: 'absolute' })}
+    </span>
+  );
 }
 
 /** Une scène SANS objet de fond : l'aplat de carte, prêt dès le montage. */

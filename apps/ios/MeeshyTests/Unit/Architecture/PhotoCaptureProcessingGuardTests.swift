@@ -61,7 +61,7 @@ final class PhotoCaptureProcessingGuardTests: XCTestCase {
     func test_swiftSources_scanFindsTheSdkService() {
         let names = swiftSources().map(\.lastPathComponent)
         XCTAssertTrue(names.contains("PhotoCaptureProcessor.swift"), "Le balayage doit voir le SDK, sinon la garde ne garde rien.")
-        XCTAssertTrue(names.contains("CameraView.swift"))
+        XCTAssertTrue(names.contains("CameraModel.swift"))
     }
 
     func test_photoCaptureSites_allGoThroughTheSingleProcessor() {
@@ -78,12 +78,12 @@ final class PhotoCaptureProcessingGuardTests: XCTestCase {
         let sites = swiftSources().filter { url in
             code(of: url).map { code in Self.captureMarkers.contains(where: code.contains) } ?? false
         }
-        XCTAssertEqual(sites.map(\.lastPathComponent), ["CameraView.swift"],
+        XCTAssertEqual(sites.map(\.lastPathComponent), ["CameraModel.swift"],
                        "Un NOUVEAU site de prise photo : le brancher sur \(Self.processorName), puis mettre cette liste à jour.")
     }
 
     func test_cameraDelegate_publishesTheProcessedPhoto() throws {
-        let url = try XCTUnwrap(swiftSources().first { $0.lastPathComponent == "CameraView.swift" })
+        let url = try XCTUnwrap(swiftSources().first { $0.lastPathComponent == "CameraModel.swift" })
         let code = try XCTUnwrap(code(of: url))
         let start = try XCTUnwrap(code.range(of: "didFinishProcessingPhoto"))
         let body = String(code[start.upperBound...].prefix(1500))

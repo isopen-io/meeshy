@@ -370,6 +370,11 @@ struct UniversalComposerBar: View {
     var theme: ThemeManager { ThemeManager.shared }
 
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    /// Le repli confié par l'ENVIRONNEMENT (#9122) — `foldableComment` le pose
+    /// sur un espace commentaire sans toucher à l'appel de la barre.
+    @Environment(\.composerFoldControl) var environmentFoldControl
+
+    var resolvedFoldControl: ComposerFoldControl? { foldControl ?? environmentFoldControl }
 
     /// Tracks the system keyboard so the attachment carousel can be sized to the
     /// exact space the keyboard last occupied (seamless keyboard <-> carousel swap).

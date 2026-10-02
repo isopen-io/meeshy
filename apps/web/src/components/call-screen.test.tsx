@@ -485,6 +485,62 @@ describe('CallScreen — les gestes de la vue « C adapté » (#8391)', () => {
     view.done();
   });
 
+  const swipeDown = (host: HTMLElement, to: number) => {
+    const stage = host.querySelector('[data-call-screen]') as HTMLElement;
+    const at = { now: 0 };
+    const pointer = (type: string, y: number) => {
+      at.now += 16;
+      const event = new PointerEvent(type, { bubbles: true, clientX: 200, clientY: y, pointerId: 7, isPrimary: true, button: 0, pointerType: 'touch' });
+      Object.defineProperty(event, 'timeStamp', { value: at.now });
+      act(() => void stage.dispatchEvent(event));
+    };
+    pointer('pointerdown', 100);
+    pointer('pointermove', 100 + to / 2);
+    pointer('pointermove', 100 + to);
+    pointer('pointerup', 100 + to);
+  };
+
+  const spyMinimize = () => {
+    const original = callActions.minimize;
+    const minimized: number[] = [];
+    callActions.minimize = () => void minimized.push(1);
+    return { minimized, restore: () => void (callActions.minimize = original) };
+  };
+
+  test('en duo, glisser l’écran d’appel vers le bas le réduit en bulle, comme sur iOS (#9096)', () => {
+    const spy = spyMinimize();
+    const view = mount({ members: { 'u-peer': member() } });
+    expect(view.find('[data-call-screen]')?.getAttribute('data-call-swipe-down')).toBe('ready');
+    swipeDown(view.host, 280);
+    expect(spy.minimized).toHaveLength(1);
+    spy.restore();
+    view.done();
+  });
+
+  test('en groupe, ou le menu ouvert, le glissé n’existe pas : la scène et les rangées gardent leurs gestes (#9096)', () => {
+    const spy = spyMinimize();
+    const group = mount({ isGroup: true, members: peers });
+    expect(group.find('[data-call-screen]')?.hasAttribute('data-call-swipe-down')).toBe(false);
+    swipeDown(group.host, 280);
+    group.done();
+    const menu = mount({ members: { 'u-peer': member() } });
+    menu.press('[data-call-more]');
+    expect(menu.find('[data-call-screen]')?.hasAttribute('data-call-swipe-down')).toBe(false);
+    swipeDown(menu.host, 280);
+    menu.done();
+    expect(spy.minimized).toHaveLength(0);
+    spy.restore();
+  });
+
+  test('en groupe, MA tuile passe à la une : les commandes de ma caméra quittent le menu pour le haut de la scène (#9098)', () => {
+    const view = mount({ isGroup: true, members: peers, cameraOn: true });
+    view.press('[data-call-tile-self]');
+    expect(view.find('[data-call-spotlight]')?.getAttribute('data-call-spotlight')).toBe('self');
+    expect(view.find('[data-call-self-featured-controls] [data-call-self-controls-holder="top"]')).not.toBeNull();
+    expect(view.find('[data-call-fullscreen]')).not.toBeNull();
+    view.done();
+  });
+
   test('Échap, un panneau ouvert, le ferme SANS réduire l’appel — même quand le focus a quitté le panneau (#8618)', async () => {
     const original = callActions.minimize;
     const minimized: number[] = [];

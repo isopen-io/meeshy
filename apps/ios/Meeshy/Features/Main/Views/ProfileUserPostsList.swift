@@ -282,13 +282,13 @@ struct ProfileUserPostsList: View {
                 originalContent: post.content,
                 originalLanguage: post.originalLanguage,
                 originalType: post.type,
-                media: post.media.map { EditablePostMedia($0) },
+                media: post.media.map { EditablePostMedia($0) }, originalStoryEffects: post.storyEffects,
                 originalLocation: post.location,
                 originalVisibility: post.visibility,
                 originalVisibilityUserIds: post.visibilityUserIds ?? [],
                 isRepost: post.repost != nil,
                 onSave: { draft in
-                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known)
+                    await viewModel.updatePost(post.id, content: draft.content, language: draft.language, type: draft.type, removeMediaIds: draft.removeMediaIds.isEmpty ? nil : draft.removeMediaIds, location: draft.location, visibility: draft.visibility, visibilityUserIds: draft.visibilityUserIds, known: draft.known, storyEffects: draft.storyEffects)
                 },
                 onDismiss: { editingPost = nil }
             )
@@ -1040,7 +1040,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
         visibilityUserIds: [String]? = nil,
-        known: Set<PostEditField> = EditPostDraft.documentFields
+        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil
     ) async {
         guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
         let snapshot = posts[idx]
@@ -1064,7 +1064,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
             // champ non déclaré est OMIS, et le serveur préserve le sien.
             let updated = try await postService.update(postId: postId, known: known, draft: PostEditDraft(
                 content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
-                originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects,
                 location: location
             ))
             if let newIdx = posts.firstIndex(where: { $0.id == postId }) {

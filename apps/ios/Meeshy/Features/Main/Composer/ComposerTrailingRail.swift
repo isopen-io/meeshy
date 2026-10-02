@@ -91,6 +91,13 @@ struct ComposerTrailingRail: View {
     var onTime: (() -> Void)? = nil
     var timeIsOpen: Bool = false
 
+    /// **Le pied SUIT les options, sans ressort** (#9138) — pendant l'édition
+    /// en place d'un objet : « les boutons du rail droit ne laissent pas de
+    /// trous ». La colonne se lit d'un bloc, en haut, à côté du panneau
+    /// d'options qui s'ouvre depuis le haut. `false` ⇒ l'historique reste au
+    /// pouce (#8713), comme pour le dessin.
+    var footFollowsOptions: Bool = false
+
     @State private var lastTapped: String?
 
     /// **Le rail n'existe que s'il porte quelque chose** : une option, un
@@ -128,7 +135,9 @@ struct ComposerTrailingRail: View {
                 VStack(spacing: ComposerRailGeometry.floatingEntrySpacing) {
                     optionStack
                     exitStack
-                    Spacer(minLength: ComposerRailGeometry.floatingEntrySpacing)
+                    if !footFollowsOptions {
+                        Spacer(minLength: ComposerRailGeometry.floatingEntrySpacing)
+                    }
                     footStack
                 }
                 VStack(spacing: ComposerRailGeometry.floatingEntrySpacing) {
@@ -409,9 +418,6 @@ struct ComposerTrailingColumnPaint {
         if options.contains(where: { if case .sceneEffect = $0 { return true }; return false }) {
             return ComposerSceneEffectCopy.column
         }
-        if options.contains(where: { if case .backgroundSection = $0 { return true }; return false }) {
-            return ComposerBackgroundToolsCopy.entered
-        }
         if options.contains(.exitTool) { return ComposerRailCopy.toolRailLabel }
         return ComposerTrailingRailCopy.railLabel
     }
@@ -429,12 +435,7 @@ struct ComposerTrailingColumnPaint {
             label = ComposerSceneEffectCopy.label(effet)
             isOn = ouvert
             tint = neutre
-        case .editorSection(let section):
-            symbol = ComposerObjectEditorRail.symbolName(section)
-            label = ComposerObjectEditorCopy.entry(section)
-            isOn = false
-            tint = neutre
-        case .backgroundSection(let section, let ouvert):
+        case .editorSection(let section, let ouvert):
             symbol = ComposerObjectEditorRail.symbolName(section)
             label = ComposerObjectEditorCopy.entry(section)
             isOn = ouvert

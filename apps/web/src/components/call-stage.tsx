@@ -242,7 +242,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
     <div role="group" aria-label={stageLabel} className="absolute inset-0" data-call-duo-stage="">
       {mainOn ? (
         <div className="absolute inset-0 overflow-hidden">
-          <StreamVideo stream={main} mirrored={swapped && selfMirrored} zoom={swapped ? local.value : 1} className="absolute inset-0 size-full" label={swapped ? you : call.title} member={swapped ? undefined : firstPeer?.userId} self={swapped} />
+          <StreamVideo stream={main} mirrored={swapped && selfMirrored} className="absolute inset-0 size-full" label={swapped ? you : call.title} member={swapped ? undefined : firstPeer?.userId} self={swapped} />
         </div>
       ) : (
         <div className="absolute inset-0 grid place-items-center">
@@ -290,7 +290,7 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
             data-call-corner=""
             data-call-self-tile={swapped ? undefined : String(scale)}
           >
-            {cornerVideo ? <StreamVideo stream={cornerStream} mirrored={!swapped && selfMirrored} zoom={swapped ? 1 : local.value} className="size-full" member={swapped ? firstPeer?.userId : undefined} self={!swapped} /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} />}
+            {cornerVideo ? <StreamVideo stream={cornerStream} mirrored={!swapped && selfMirrored} className="size-full" member={swapped ? firstPeer?.userId : undefined} self={!swapped} /> : <Portrait name={call.title} avatar={call.avatar} size={Math.round(size.width / 2)} pulse={false} />}
             {peerMuted && swapped ? <PeerMuted where="corner" /> : null}
           </button>
           {rows?.camera ? (
@@ -316,7 +316,8 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
       <CallGrid
         members={orderedMembers(call.members)}
         remoteStreams={call.remoteStreams}
-        self={{ stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call) }}
+        self={{ stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call), micMuted: call.micMuted }}
+        selfControls={self.controls ? self.row() : null}
         choice={choice}
         onChoose={onChoose}
         immersive={immersive}

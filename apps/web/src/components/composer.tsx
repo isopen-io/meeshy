@@ -1,4 +1,5 @@
 import { Suspense, lazy, memo, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { ParticipantPermissions } from '@meeshy/shared/types/participant';
 
@@ -33,7 +34,7 @@ import {
   type ComposeProtection,
   type VeilState,
 } from '@/lib/send/compose-protection';
-import { composerChromeAccentStyle } from '@/lib/send/composer-accent';
+import { composerChromeAccentStyle, composerIconTintStyle } from '@/lib/send/composer-accent';
 import type { ComposerDraft } from '@/lib/send/draft-store';
 import type { StickyProtection } from '@/lib/send/protection-preference';
 import { NO_IMPOSED_PROTECTION, contaminatedComposeProtection, imposedLocksOf } from '@/lib/send/reply-contagion';
@@ -90,6 +91,8 @@ const LanguageSheet = lazy(() => import('./language-sheet').then((m) => ({ defau
  */
 
 const ComposerTray = lazy(() => import('./composer-tray'));
+/** La caméra de la barre (#9123) — le studio viseur armé, chargé à la demande. */
+const ComposerCapture = lazy(() => import('./composer-retouch').then((m) => ({ default: m.ComposerCapture })));
 
 /**
  * LA PALETTE D'EMOJIS, CHARGÉE À LA DEMANDE (#7280) — même discipline que
@@ -101,7 +104,10 @@ const ComposerEmojiSheet = lazy(() =>
   import('./composer-emoji-sheet').then((m) => ({ default: m.ComposerEmojiSheet })),
 );
 const ComposerStickerSheet = lazy(() =>
-  import('./composer-sticker-sheet').then((m) => ({ default: m.ComposerStickerSheet })),
+  Promise.all([
+    import('./composer-sticker-sheet'),
+    import('@/lib/i18n-sticker-packs-catalog').then((m) => m.loadStickerPacksCatalog(currentInterfaceLanguage())),
+  ]).then(([m]) => ({ default: m.ComposerStickerSheet })),
 );
 
 /** IDENTITÉ STABLE pour l'appelant qui omet `preferred` (les témoins, surtout)
@@ -234,6 +240,7 @@ export const Composer = memo(function Composer({
   const locator = useLocationRequest();
   const [emojiSheetOpen, setEmojiSheetOpen] = useState(false);
   const [stickerSheetOpen, setStickerSheetOpen] = useState(false);
+  const [capturing, setCapturing] = useState(false);
   const field = useRef<HTMLTextAreaElement>(null);
   /** LA MENTION (#7826, #7846) — le mécanisme PARTAGÉ par tous les champs
    * qui mentionnent (`use-mention-field.ts`) : curseur, clavier de la liste,
@@ -337,7 +344,7 @@ export const Composer = memo(function Composer({
    * mécanisme que `withAccent` au niveau de l'écran (`thread.tsx`).
    */
   const accentState = composerAccentOf(effective);
-  const chromeAccentStyle = composerChromeAccentStyle(accentState);
+  const chromeAccentStyle = { ...composerChromeAccentStyle(accentState), ...composerIconTintStyle(accentState) };
   /** La couleur ne se voit pas au lecteur d'écran : le champ DIT la
    * protection dominante (#7667, miroir `accessibilityHint` iOS). */
   const protectionAnnouncement =
@@ -795,7 +802,8 @@ export const Composer = memo(function Composer({
                   setPanelOpen(false);
                   setStickerSheetOpen(true);
                 },
-                onPickCamera: addFiles,
+                onPickLibrary: addFiles,
+                onOpenCamera: () => setCapturing(true),
               }
             : {})}
           languageCode={compose.language}
@@ -836,6 +844,21 @@ export const Composer = memo(function Composer({
         </Suspense>
       ) : null}
 
+      {capturing
+        ? createPortal(
+            <Suspense fallback={null}>
+              <ComposerCapture
+                onCancel={() => setCapturing(false)}
+                onDone={(file) => {
+                  setCapturing(false);
+                  addFiles([file]);
+                }}
+              />
+            </Suspense>,
+            document.body,
+          )
+        : null}
+
       {isRecording ? (
         <Suspense fallback={<div style={{ minHeight: 56 }} aria-hidden />}>
           <ComposerTray
@@ -869,7 +892,7 @@ export const Composer = memo(function Composer({
             style={{
               backgroundColor: 'color-mix(in srgb, var(--accent) 10%, transparent)',
               border: '1px solid color-mix(in srgb, var(--accent) 20%, transparent)',
-              color: 'var(--accent)',
+              color: 'var(--composer-icon)',
             }}
             aria-label={panelOpen ? 'Fermer le menu des pièces jointes' : 'Ouvrir le menu des pièces jointes'}
           >
@@ -894,7 +917,7 @@ export const Composer = memo(function Composer({
                 onClick={() => recorder.start()}
                 aria-busy={recorder.state.status === 'requesting'}
                 className="grid size-9 shrink-0 place-items-center self-end"
-                style={{ marginBottom: 4, marginLeft: 4, color: 'var(--color-ios-ink-2)' }}
+                style={{ marginBottom: 4, marginLeft: 4, color: 'var(--composer-icon)' }}
                 aria-label="Enregistrer un message vocal"
               >
                 <Glyph
@@ -1022,6 +1045,10 @@ export const Composer = memo(function Composer({
                même `addFiles` applique les mêmes droits, les mêmes bornes de
                taille et le même refus DIT (`acceptPendingFiles`). */
             onPickCamera={addFiles}
+            onOpenCamera={() => {
+              setPanelOpen(false);
+              setCapturing(true);
+            }}
             onPickFile={addFiles}
             onRequestLocation={() => {
               setPanelOpen(false);

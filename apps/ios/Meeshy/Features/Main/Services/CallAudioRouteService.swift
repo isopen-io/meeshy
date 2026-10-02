@@ -3,7 +3,7 @@ import Combine
 
 // MARK: - Call Audio Port Kind
 
-enum CallAudioPortKind: Equatable, Sendable {
+nonisolated enum CallAudioPortKind: Equatable, Sendable {
     case builtInMicrophone
     case receiver
     case speaker
@@ -50,13 +50,13 @@ enum CallAudioPortKind: Equatable, Sendable {
 
 // MARK: - Call Audio Port
 
-struct CallAudioPort: Equatable, Identifiable, Sendable {
+nonisolated struct CallAudioPort: Equatable, Identifiable, Sendable {
     let id: String
     let name: String
     let kind: CallAudioPortKind
 }
 
-extension CallAudioPort {
+nonisolated extension CallAudioPort {
     init(description: AVAudioSessionPortDescription) {
         self.init(id: description.uid, name: description.portName, kind: CallAudioPortKind(portType: description.portType))
     }
@@ -64,7 +64,7 @@ extension CallAudioPort {
 
 // MARK: - Call Audio Route State
 
-struct CallAudioRouteState: Equatable, Sendable {
+nonisolated struct CallAudioRouteState: Equatable, Sendable {
     let inputs: [CallAudioPort]
     let selectedInputId: String?
     let output: CallAudioPort?
@@ -94,26 +94,23 @@ struct CallAudioRouteState: Equatable, Sendable {
     }
 }
 
-enum CallAudioRouteError: Error, Equatable {
+nonisolated enum CallAudioRouteError: Error, Equatable {
     case inputUnavailable
 }
 
 // MARK: - Call Audio Route Service
 
+/// #8989 — lire ou changer la route audio touche `AVAudioSession`, qui peut
+/// bloquer : jamais sur le fil principal, ni au toucher ni à la réapparition
+/// du bouton « Sortie ».
 protocol CallAudioRouteProviding: AnyObject {
     var routeChanges: AnyPublisher<Void, Never> { get }
-    func currentRoute() -> CallAudioRouteState
-    func selectInput(id: String) throws
+    func currentRoute() async -> CallAudioRouteState
+    func selectInput(id: String) async throws
 }
 
 final class CallAudioRouteService: CallAudioRouteProviding {
     static let shared = CallAudioRouteService()
-
-    private let session: AVAudioSession
-
-    init(session: AVAudioSession = .sharedInstance()) {
-        self.session = session
-    }
 
     nonisolated deinit {}
 
@@ -124,7 +121,16 @@ final class CallAudioRouteService: CallAudioRouteProviding {
             .eraseToAnyPublisher()
     }
 
-    func currentRoute() -> CallAudioRouteState {
+    func currentRoute() async -> CallAudioRouteState {
+        await Self.readRoute()
+    }
+
+    func selectInput(id: String) async throws {
+        try await Self.applyPreferredInput(id: id)
+    }
+
+    @concurrent nonisolated static func readRoute() async -> CallAudioRouteState {
+        let session = AVAudioSession.sharedInstance()
         let route = session.currentRoute
         return CallAudioRouteState(
             inputs: (session.availableInputs ?? []).map(CallAudioPort.init(description:)),
@@ -133,7 +139,8 @@ final class CallAudioRouteService: CallAudioRouteProviding {
         )
     }
 
-    func selectInput(id: String) throws {
+    @concurrent nonisolated static func applyPreferredInput(id: String) async throws {
+        let session = AVAudioSession.sharedInstance()
         guard let port = session.availableInputs?.first(where: { $0.uid == id }) else {
             throw CallAudioRouteError.inputUnavailable
         }

@@ -63,7 +63,7 @@ nonisolated enum ComposerScenePicking {
         case .storyTray, .feedComposer:
             return true
         case .moodChip, .repost, .edit, .draft, .share, .conversationMedia, .socialMedia,
-             .conversationDraftImage:
+             .conversationDraftMedia, .conversationCapture:
             return false
         }
     }
@@ -259,5 +259,35 @@ nonisolated enum ComposerScenePresence {
                          foundedSlides: Int,
                          sceneObjectCount: Int) -> Bool {
         backgroundHex != nil || foundedSlides > 0 || sceneObjectCount > 0
+    }
+}
+
+/// **La scène que l'outil Texte du document fait naître** (#9137) — d'un
+/// toucher, et sans laisser de fantôme quand le texte reste vide.
+///
+/// Le fond que l'outil pose est IMPLICITE : l'auteur a demandé un texte, pas
+/// une couleur. Il ne survit donc qu'à ce que la scène porte réellement — un
+/// texte saisi, un autre objet, un média fondateur, une seconde scène, ou une
+/// couleur choisie ensuite à la palette.
+nonisolated enum ComposerTextSceneDoor {
+
+    /// Le fond déjà choisi, sinon la première couleur de la palette du document.
+    static func background(chosen: String?, palette: [String]) -> String? {
+        chosen ?? palette.first
+    }
+
+    /// Le fond que l'outil a posé DE LUI-MÊME — `nil` quand l'auteur en avait
+    /// déjà choisi un.
+    static func implicitBackground(chosen: String?, posed: String) -> String? {
+        chosen == nil ? posed : nil
+    }
+
+    static func returnsToDocument(implicitBackground: String?,
+                                  currentBackground: String?,
+                                  foundedSlides: Int,
+                                  sceneObjectCount: Int,
+                                  slideCount: Int) -> Bool {
+        guard let implicitBackground, implicitBackground == currentBackground else { return false }
+        return foundedSlides == 0 && sceneObjectCount == 0 && slideCount <= 1
     }
 }

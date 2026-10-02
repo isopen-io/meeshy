@@ -15,6 +15,7 @@ import {
   ensureGlobalConversationMembership,
   type GlobalMembershipSocketManager,
 } from '../../../../services/conversations/ensureGlobalConversationMembership';
+import { matchesMongoWhere, type MongoDocument } from '../../../helpers/mongo-where';
 
 const GLOBAL_CONV = { id: 'conv-global', identifier: 'meeshy' };
 const USER_ID = 'user-new';
@@ -300,8 +301,33 @@ describe('ensureGlobalConversationMembership', () => {
     // plafond, tout lecteur non autorisé à l'effectif exact reçoit une charge
     // IDENTIQUE à celle de la room de conversation, donc sa room personnelle
     // n'apporte rien.
-    expect(Array.isArray(where.OR)).toBe(true);
-    expect(where.OR).toHaveLength(2);
+    const titles = where.AND?.find((clause: any) => clause.OR?.some((branch: any) => 'role' in branch));
+    expect(titles?.OR).toHaveLength(2);
+  });
+
+  // #9106 — un invité par lien n'a pas de clé `userId`, et sur MongoDB une
+  // négation écarte la clé ABSENTE : `NOT: { userId }` seul le retirait de
+  // l'audience. Le double évalue le `where` avec les sémantiques mesurées.
+  it('adresse l\'effectif aux invités par lien, nommés par leur Participant.id', async () => {
+    const { io, broadcast } = makeIo();
+    const rows: MongoDocument[] = [
+      { id: 'p-member', conversationId: GLOBAL_CONV.id, isActive: true, userId: 'user-member', role: 'member', user: null },
+      { id: 'p-guest', conversationId: GLOBAL_CONV.id, isActive: true, role: 'member', user: null },
+      { id: 'part-new', conversationId: GLOBAL_CONV.id, isActive: true, userId: USER_ID, role: 'member', user: null },
+    ];
+    h.prisma.participant.findMany.mockImplementation(async (args: any) =>
+      rows.filter((row) => matchesMongoWhere(row, args.where)).map((row) => ({ userId: null, ...row })),
+    );
+    const resolveSocketManager = jest.fn<any>().mockReturnValue({
+      broadcastMessage: jest.fn<any>().mockResolvedValue(undefined),
+      getIO: () => io,
+    } as GlobalMembershipSocketManager);
+
+    await ensureGlobalConversationMembership({ prisma: h.prisma as never, resolveSocketManager }, baseInput);
+
+    const rooms = [...io.to.mock.calls, ...broadcast.to.mock.calls].map((call) => call[0]);
+    expect(rooms).toEqual(expect.arrayContaining(['user:user-member', 'user:p-guest']));
+    expect(rooms).not.toContain(`user:${USER_ID}`);
   });
 
   it('AVALE une panne de l\'effectif temps réel — accessoire, jamais une condition de l\'ajout', async () => {

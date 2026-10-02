@@ -36,7 +36,7 @@ const openOffer = async (kind: PublicationKind = 'POST') => {
   const el = mount(bench.deps, kind);
   await flush(() => publishButton(el) !== null);
   act(() => publishButton(el)!.click());
-  await flush();
+  await flush(() => offer() !== null || bench.posts.length > 0);
   return { bench, el };
 };
 
@@ -71,7 +71,7 @@ describe('studio — Publier un post à une seule vidéo ouvre « Publier en ré
   test('Annuler ferme le modal sans rien publier', async () => {
     const { bench } = await openOffer();
     act(() => choice('cancel')!.click());
-    await flush();
+    await flush(() => offer() === null);
     expect(offer()).toBeNull();
     expect(bench.posts).toHaveLength(0);
   });

@@ -393,13 +393,29 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
     expect(sticker?.className).toMatch(/min-w-11/);
   });
 
-  test('#9082 — la caméra se pose à l’angle droit du verre : dernier occupant de la rangée, appareil arrière', () => {
+  test('#9082 — la caméra se pose à l’angle droit du verre : dernier occupant de la rangée ; #9123 — elle ouvre le studio, plus l’appareil de l’OS', () => {
     const el = mount(() => {});
     const toolbar = el.querySelector('[data-composer-toolbar]')!;
     const camera = toolbar.querySelector('[data-composer-camera]');
     expect(camera).not.toBeNull();
     expect(toolbar.lastElementChild).toBe(camera);
-    expect(camera?.querySelector('input[type="file"]')?.getAttribute('capture')).toBe('environment');
+    expect(camera?.tagName).toBe('BUTTON');
+    expect(camera?.querySelector('input[type="file"]')).toBeNull();
+  });
+
+  test('#9120 — la photothèque (images ET vidéos) se pose juste avant la caméra', () => {
+    const el = mount(() => {});
+    const toolbar = el.querySelector('[data-composer-toolbar]')!;
+    const library = toolbar.querySelector('[data-composer-library]');
+    const camera = toolbar.querySelector('[data-composer-camera]');
+    expect(library).not.toBeNull();
+    expect(library?.nextElementSibling).toBe(camera);
+    const input = library?.querySelector('input[type="file"]');
+    expect(input?.getAttribute('accept')).toBe('image/*,video/*');
+    expect(input?.hasAttribute('capture')).toBe(false);
+    expect(input?.hasAttribute('multiple')).toBe(true);
+    expect(library?.className).toMatch(/min-h-11/);
+    expect(library?.className).toMatch(/min-w-11/);
   });
 
   test('les cibles éphémère/flou/effets/langue portent le plancher 44 px sur les DEUX dimensions', () => {

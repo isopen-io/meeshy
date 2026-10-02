@@ -13,8 +13,9 @@ import XCTest
 ///   inline iPad (T3.4) est DESCOPÉ — nommé + gardé par T3.3, pas migré. Les
 ///   deux CITATIONS restent, condition de levée **7.5** (un écrivain durable du
 ///   repost, §A.4).
-/// - **capacités tenues** : quatre manquent au meuble et vivent encore SUR la
-///   feuille — progression, dépôt, éditeur d'image, son emprunté.
+/// - **capacités tenues** : trois manquent au meuble et vivent encore SUR la
+///   feuille — progression, dépôt, son emprunté. L'éditeur d'image en est
+///   sorti (#9170) : la feuille ouvre la scène, celle du meuble.
 ///   Les retirer avec la feuille les retirerait à l'utilisateur.
 final class FeedComposerSheetRetirementInventoryTests: XCTestCase {
 
@@ -78,7 +79,6 @@ final class FeedComposerSheetRetirementInventoryTests: XCTestCase {
         let capacites: [(nom: String, ancre: String, chez: String, source: String)] = [
             ("progression",       "uploadProgress",         "FeedComposerSheet",     feuille),
             ("dépôt",              "TusUploadManager(",      "FeedComposerSheet",     feuille),
-            ("éditeur d'image",    "MeeshyImageEditorView(", "FeedComposerSheet",     feuille),
             ("son emprunté",       "publishBorrowedSoundPost", "FeedComposerSheet",   feuille)
         ]
         for capacite in capacites {
@@ -92,8 +92,8 @@ final class FeedComposerSheetRetirementInventoryTests: XCTestCase {
         }
         XCTAssertEqual(
             Set(capacites.map(\.nom)),
-            ["progression", "dépôt", "éditeur d'image", "son emprunté"],
-            "Quatre capacités manquent encore au meuble et vivent SUR la feuille. Le retrait reste INTERDIT "
+            ["progression", "dépôt", "son emprunté"],
+            "Trois capacités manquent encore au meuble et vivent SUR la feuille. Le retrait reste INTERDIT "
                 + "tant qu'elles ne sont pas migrées ; ce test dit LESQUELLES, pour qu'un lot suivant sache "
                 + "quoi lever plutôt que de recompter."
         )

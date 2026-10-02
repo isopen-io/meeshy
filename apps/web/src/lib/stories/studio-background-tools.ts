@@ -16,7 +16,7 @@ import { studioBackgroundMenuActions } from './studio-scene-menu';
  * chacun ouvrant ses seuls contrôles sous la scène. Règles pures ; l'écran
  * (`use-studio-background-tools.tsx`) les relaie.
  */
-export type StudioBackgroundSection = 'frame' | 'filter' | 'describe';
+export type StudioBackgroundSection = 'frame' | 'filter' | 'describe' | 'trim' | 'sound' | 'crop';
 
 /** L'édition du fond en cours — `open` nul : seul le rail montre ses outils. */
 export type StudioBackgroundEdit = { readonly open: StudioBackgroundSection | null };
@@ -26,9 +26,11 @@ export type StudioBackgroundEdit = { readonly open: StudioBackgroundSection | nu
 export type StudioBackgroundToolAction = 'retake' | 'forward' | 'remove';
 
 /** Le filtre ne se cuit que dans une IMAGE (#8798) ; une retouche ne décrit
- * ni ne filtre l'image qu'elle rend — le fil la publie ailleurs. */
+ * ni ne filtre l'image qu'elle rend — le fil la publie ailleurs. Elle sert les
+ * ÉDITIONS DE BASE d'une pièce (#9136) : une image se recadre, une vidéo se
+ * coupe et se tait. */
 export function studioBackgroundSections({ mediaType, retouching }: { readonly mediaType: StudioMediaKind; readonly retouching: boolean }): readonly StudioBackgroundSection[] {
-  if (retouching) return ['frame'];
+  if (retouching) return mediaType === 'image' ? ['frame', 'crop'] : ['frame', 'trim', 'sound'];
   return mediaType === 'image' ? ['frame', 'filter', 'describe'] : ['frame', 'describe'];
 }
 

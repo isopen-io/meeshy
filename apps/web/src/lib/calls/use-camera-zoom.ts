@@ -10,11 +10,11 @@ import { cameraSourceOf } from './video-effects';
  *
  * - `device` : la caméra DERRIÈRE ma piste envoyée propose `zoom` — le zoom
  *   de l'appareil (optique, puis numérique), et c'est ce que l'autre voit ;
- * - `local` : elle n'en propose pas — mon seul aperçu s'agrandit
- *   (`self-zoom.ts`, remis par l'écran d'appel), rien ne change dans ce qui
- *   part.
+ * - `local` : elle n'en propose pas — le zoom NUMÉRIQUE recadre l'image
+ *   envoyée (`self-zoom.ts`, remis par l'écran d'appel) : l'autre la voit.
  *
- * `null` : caméra coupée.
+ * `null` : caméra coupée, ou ni zoom de la caméra ni image recadrable — un
+ * zoom qui ne partirait pas n'est pas offert.
  */
 
 export type ZoomMode = 'device' | 'local';
@@ -32,7 +32,7 @@ export function useCameraZoom({ stream, local }: ZoomSource): CameraZoom | null 
     if (camera !== null && range !== null) setValue(currentZoom(camera, range));
   }, [camera, range]);
   if (camera === null) return null;
-  if (range === null) return { mode: 'local', range: LOCAL_ZOOM_RANGE, value: local.value, set: (next) => local.set(clampZoom(LOCAL_ZOOM_RANGE, next)) };
+  if (range === null) return local.sends === true ? { mode: 'local', range: LOCAL_ZOOM_RANGE, value: local.value, set: (next) => local.set(clampZoom(LOCAL_ZOOM_RANGE, next)) } : null;
   return {
     mode: 'device',
     range,

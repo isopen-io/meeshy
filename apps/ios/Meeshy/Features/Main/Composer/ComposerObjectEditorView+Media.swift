@@ -70,12 +70,8 @@ extension ComposerObjectEditorView {
                 // Un média POSÉ règle son propre `filter`, prévisualisé sur sa
                 // propre image ; seul le FOND garde le filtre de slide.
                 section(ComposerObjectEditorCopy.media(.filter), .media(.filter)) {
-                    StoryFilterGridView(
-                        viewModel: viewModel,
-                        previewImage: media.isBackground
-                            ? viewModel.currentSlideBackgroundImage
-                            : viewModel.loadedImages[media.id],
-                        objectId: media.isBackground ? nil : media.id)
+                    ComposerMediaFilterGrid(viewModel: viewModel, media: media,
+                                            isBackground: media.isBackground)
                 }
                 if let source = viewModel.sourceTrim(id: objectId) {
                     section(ComposerObjectEditorCopy.trim, .media(.trim)) {
@@ -138,9 +134,7 @@ extension ComposerObjectEditorView {
     /// tout le monde — ce que ce fichier faisait — perdait, sur un son, le seul
     /// repère visuel qu'il ait.
     private var trimWaveform: [Float] {
-        viewModel.currentEffects.audioPlayerObjects?
-            .first(where: { $0.id == objectId })?
-            .waveformSamples ?? []
+        ComposerMediaTrimBand.waveform(viewModel: viewModel, objectId: objectId)
     }
 
     /// La bande PARTAGÉE avec la scène (`ComposerMediaTrimBand`, #8847) : le

@@ -7,7 +7,7 @@
  * Les témoins `bun test` prouvent les règles avec des doublures de WebRTC et
  * de caméra. Aucun ne prouve qu'un effet posé dans Chromium arrive au PAIR
  * sans couper son image, que le micro coupé le reste quand la piste vidéo
- * change sous lui, ni qu'une caméra SANS zoom ne zoome que mon aperçu. Ce gate le
+ * change sous lui, ni qu'une caméra SANS zoom recadre l'image qu'elle envoie. Ce gate le
  * mesure sur le `dist` construit (source fixtures), avec le pair qui décroche
  * (`fixtures-call-peer.ts`) et la caméra simulée de Chromium, en clair et en
  * sombre et aux deux gabarits (390 × 844, 320 × 568) :
@@ -35,7 +35,8 @@
  *  6. Valider garde les effets et rend l'écran d'appel ; Échap (✕) quitte le
  *     mode en rendant les effets d'avant, sans réduire l'appel ;
  *  7. la caméra simulée n'offre pas de zoom : pas de capsule, mais le cran
- *     de ma vignette agrandit mon seul aperçu, puis revient à 1× (#8441) ;
+ *     de ma vignette règle le zoom NUMÉRIQUE, qui recadre l'image envoyée —
+ *     mon aperçu n'est pas agrandi à part —, puis revient à 1× (#8441) ;
  *     une caméra qui l'offre (capacité injectée) ne montre la capsule « 1× »
  *     que quand MON image est en plein écran (#8576), et « Zoomer » la règle ;
  *  8. « Capturer » entre dans le MODE Montage (#8578, #8580) : l'aperçu plein
@@ -394,15 +395,17 @@ try {
       await page.click('[data-call-mode-quit]');
       await vanishes(page, '[data-call-mode]');
 
-      // ------------------------------------------------ 7. pas de zoom proposé : le zoom numérique de mon seul aperçu
+      // ------------------------------------------------ 7. pas de zoom de caméra : le zoom numérique recadre l'image ENVOYÉE
       check((await page.$('[data-call-zoom]')) === null, `${label} : une caméra sans zoom n'affiche pas de capsule sur ma vignette`);
       const step = '[data-call-corner-frame] [data-call-self-row="camera"] [data-call-self-control="zoom"]';
-      check((await page.getAttribute(step, 'data-call-zoom-mode').catch(() => null)) === 'local', `${label} : le cran de ma vignette zoome mon seul aperçu (#8441)`);
+      check((await page.getAttribute(step, 'data-call-zoom-mode').catch(() => null)) === 'local', `${label} : le cran de ma vignette règle le zoom numérique (#8441)`);
       await page.$eval(step, (button) => button.click());
-      check(await until(page, () => (document.querySelector('[data-call-corner] video')?.style.transform ?? '').includes('scale(2)')), `${label} : un cran agrandit mon image à 2×, à l'écran seulement`);
+      check(await until(page, () => document.querySelector('[data-call-self-control="zoom"]')?.getAttribute('aria-label')?.endsWith('2×') === true), `${label} : un cran passe à 2×`);
+      check(!((await page.$eval('[data-call-corner] video', (video) => video.style.transform).catch(() => '')) ?? '').includes('scale('), `${label} : mon aperçu n'est pas agrandi à l'écran — c'est l'image envoyée qui est recadrée`);
+      check(await peerReceives(page), `${label} : le pair décode toujours des images, zoom posé`);
       await page.$eval(step, (button) => button.click());
       await page.$eval(step, (button) => button.click());
-      check(await until(page, () => !(document.querySelector('[data-call-corner] video')?.style.transform ?? '').includes('scale(')), `${label} : après le dernier cran, mon image revient à 1×`);
+      check(await until(page, () => document.querySelector('[data-call-self-control="zoom"]')?.getAttribute('aria-label')?.endsWith('1×') === true), `${label} : après le dernier cran, retour à 1×`);
 
       // ------------------------------------------------ 8. le mode Montage
       await openActions(page);

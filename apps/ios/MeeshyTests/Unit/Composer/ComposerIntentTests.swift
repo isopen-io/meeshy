@@ -44,7 +44,8 @@ final class ComposerIntentTests: XCTestCase {
         .share,
         .conversationMedia(messageId: "msg-7", attachmentId: "piece-3"),
         .socialMedia(postId: "post-9", mediaId: "media-2"),
-        .conversationDraftImage
+        .conversationDraftMedia(staged: true),
+        .conversationCapture
     ]
 
     private func nom(de origin: ComposerOrigin) -> String {
@@ -58,7 +59,8 @@ final class ComposerIntentTests: XCTestCase {
         case .share: return "share"
         case .conversationMedia: return "conversationMedia"
         case .socialMedia: return "socialMedia"
-        case .conversationDraftImage: return "conversationDraftImage"
+        case .conversationDraftMedia: return "conversationDraftMedia"
+        case .conversationCapture: return "conversationCapture"
         }
     }
 
@@ -316,9 +318,10 @@ final class ComposerIntentTests: XCTestCase {
             "Deux entrées du corpus désignent la même porte : une porte resterait sans profil éprouvé."
         )
         XCTAssertEqual(
-            noms.count, 10,
-            "Dix portes sont spécifiées (#6085 a ajouté `.socialMedia`, le média d'un post ou la "
-            + "slide d'une story ; #8416 `.conversationDraftImage`, la retouche d'une image du fil). "
+            noms.count, 11,
+            "Onze portes sont spécifiées (#6085 a ajouté `.socialMedia`, le média d'un post ou la "
+            + "slide d'une story ; #8416 `.conversationDraftMedia`, la retouche d'une image du fil ; "
+            + "#9123 `.conversationCapture`, la caméra de la barre de composition). "
             + "Une porte ajoutée à `ComposerOrigin` doit entrer ici avec son profil, jamais s'ajouter "
             + "en silence."
         )
@@ -365,7 +368,7 @@ final class ComposerIntentTests: XCTestCase {
         case .repost, .edit:
             return true
         case .storyTray, .feedComposer, .moodChip, .draft, .share, .conversationMedia, .socialMedia,
-             .conversationDraftImage:
+             .conversationDraftMedia, .conversationCapture:
             return false
         }
     }
@@ -401,14 +404,15 @@ final class ComposerIntentTests: XCTestCase {
     }
 
     /// Deux portes seulement mettent l'appareil dans la main tout de suite : le
-    /// tray (photo) et l'onglet réels (vidéo). Partout ailleurs, ouvrir sur la
+    /// tray (photo) et la caméra de la barre d'une conversation (#9123 — le
+    /// geste de l'auteur a dit « prendre »). Partout ailleurs, ouvrir sur la
     /// caméra écraserait ce que la porte vient d'apporter — ou réclamerait un
     /// geste que l'utilisateur n'a pas demandé.
     func test_ouverturesCamera_appartiennentAuxSeulesPortesDeCaptureDirecte() {
         for origin in Self.toutesLesOrigines {
             let profil = profil(origin)
             let estCamera = profil.opensWith == .cameraReady || profil.opensWith == .videoCameraReady
-            let estPorteDeCapture = nom(de: origin) == "storyTray"
+            let estPorteDeCapture = ["storyTray", "conversationCapture"].contains(nom(de: origin))
 
             XCTAssertEqual(
                 estCamera, estPorteDeCapture,
@@ -473,7 +477,7 @@ final class ComposerIntentTests: XCTestCase {
         case .draft, .share, .edit:
             return true
         case .storyTray, .feedComposer, .moodChip, .repost, .conversationMedia, .socialMedia,
-             .conversationDraftImage:
+             .conversationDraftMedia, .conversationCapture:
             return false
         }
     }
@@ -644,7 +648,7 @@ final class ComposerIntentTests: XCTestCase {
             serviesParLeMeuble,
             // #8416 : la retouche d'une image du fil monte le meuble, elle aussi.
             ["storyTray", "feedComposer", "moodChip", "draft", "share", "conversationMedia",
-             "socialMedia", "repost", "conversationDraftImage"],
+             "socialMedia", "repost", "conversationDraftMedia", "conversationCapture"],
             "Périmètre après #6085 : le tray, LE FIL, les réels, LE MOOD, le brouillon, le partage, le "
             + "média de conversation, LE MÉDIA SOCIAL (post / story) — et le REPOST. `edit` n'y figure pas parce "
             + "que le corpus l'instancie sur un format de DOCUMENT (post/réel), toujours servi par "

@@ -34,7 +34,7 @@ export type PendingCallInvitation = {
 };
 
 export type CallInvitationLifecycleDeps = {
-  readonly prisma: Pick<PrismaClient, 'callSession' | 'participant'>;
+  readonly prisma: Pick<PrismaClient, 'callSession' | 'participant' | 'conversation'>;
   readonly pushService: () => Pick<PushNotificationService, 'sendToUser'> | null;
   readonly notificationService: () => Pick<NotificationService, 'createMissedCallNotification'> | null;
   readonly ringMs?: number;
@@ -87,14 +87,38 @@ export function createCallInvitationLifecycle(deps: CallInvitationLifecycleDeps)
     await deps.pushService()?.sendToUser(buildCallSilentPush({ userId, type: 'call_cancel', callId }));
   };
 
-  /** Un membre actif d'un appel jamais décroché a déjà son annulation et son appel manqué par le chemin des membres. */
-  const coveredAsMember = async (session: InvitationSession, invitation: PendingCallInvitation): Promise<boolean> => {
-    if (!UNANSWERED_ENDINGS.has(session.status)) return false;
-    const member = await deps.prisma.participant.findFirst({
+  const isMember = async (invitation: PendingCallInvitation): Promise<boolean> =>
+    (await deps.prisma.participant.findFirst({
       where: { conversationId: invitation.conversationId, userId: invitation.inviteeUserId, isActive: true },
       select: { id: true },
+    })) !== null;
+
+  /** Un membre actif d'un appel jamais décroché a déjà son annulation et son appel manqué par le chemin des membres. */
+  const coveredAsMember = async (session: InvitationSession, invitation: PendingCallInvitation): Promise<boolean> =>
+    UNANSWERED_ENDINGS.has(session.status) && (await isMember(invitation));
+
+  /**
+   * Où mène l'appel manqué (#9115). Une invitée NON membre n'a, dans la
+   * conversation de l'appel, qu'une participation `call-guest` inactive : y
+   * mener ouvrirait un fil qu'elle ne peut pas lire, et la notification en
+   * porterait le titre. Elle est menée à sa conversation directe avec
+   * l'inviteur — une amie acceptée, condition de l'invitation —, la plus
+   * récemment active ; sans elle, la notification ne nomme aucune conversation.
+   */
+  const missedCallConversationId = async (invitation: PendingCallInvitation): Promise<string | null> => {
+    if (await isMember(invitation)) return invitation.conversationId;
+    const direct = await deps.prisma.conversation.findFirst({
+      where: {
+        type: 'direct',
+        AND: [
+          { participants: { some: { userId: invitation.inviteeUserId, isActive: true } } },
+          { participants: { some: { userId: invitation.inviterUserId, isActive: true } } },
+        ],
+      },
+      orderBy: { lastMessageAt: 'desc' },
+      select: { id: true },
     });
-    return member !== null;
+    return direct?.id ?? null;
   };
 
   const settleUnanswered = async (io: MeeshyIOServer, invitation: PendingCallInvitation): Promise<void> => {
@@ -111,20 +135,20 @@ export function createCallInvitationLifecycle(deps: CallInvitationLifecycleDeps)
     await deps.notificationService()?.createMissedCallNotification({
       recipientUserId: inviteeUserId,
       callerId: invitation.inviterUserId,
-      conversationId: invitation.conversationId,
+      conversationId: await missedCallConversationId(invitation),
       callSessionId: callId,
       callType: invitation.callType,
     });
   };
 
-  const settle = (io: MeeshyIOServer, invitation: PendingCallInvitation): Promise<void> =>
-    settleUnanswered(io, invitation).catch((error: unknown) =>
+  const reportSettlementFailure =
+    (invitation: PendingCallInvitation) =>
+    (error: unknown): void =>
       logger.error('call-invite: unanswered invitation settlement failed', {
         callId: invitation.callId,
         inviteeUserId: invitation.inviteeUserId,
         error,
-      })
-    );
+      });
 
   return {
     /** L'invitation sonne : son échéance est celle de la sonnerie d'un appel. Ré-inviter la réarme. */
@@ -132,7 +156,7 @@ export function createCallInvitationLifecycle(deps: CallInvitationLifecycleDeps)
       take(invitation.callId, invitation.inviteeUserId);
       const handle = schedule(() => {
         pending.delete(keyOf(invitation.callId, invitation.inviteeUserId));
-        void settle(io, invitation);
+        void settleUnanswered(io, invitation).catch(reportSettlementFailure(invitation));
       }, ringMs);
       pending.set(keyOf(invitation.callId, invitation.inviteeUserId), { invitation, handle });
     },
@@ -158,7 +182,9 @@ export function createCallInvitationLifecycle(deps: CallInvitationLifecycleDeps)
       const due = [...pending.values()]
         .filter((entry) => entry.invitation.callId === callId)
         .flatMap((entry) => take(entry.invitation.callId, entry.invitation.inviteeUserId) ?? []);
-      await Promise.all(due.map((invitation) => settle(io, invitation)));
+      await Promise.all(
+        due.map((invitation) => settleUnanswered(io, invitation).catch(reportSettlementFailure(invitation)))
+      );
     },
   };
 }

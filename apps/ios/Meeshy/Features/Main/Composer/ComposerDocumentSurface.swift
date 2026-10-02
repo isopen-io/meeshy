@@ -725,7 +725,10 @@ struct ComposerDocumentSurface: View {
                         // La porte du FOND garde sa place derrière l'emoji — sa
                         // position fut mesurée (elle fait NAÎTRE la scène, vue
                         // `1b`), et passer en colonne ne change pas cette raison.
-                        if tool == .emoji, onPickBackground != nil {
+                        // Le Texte, l'autre naissance de la scène, s'y intercale
+                        // (#9137).
+                        if tool == ComposerDocumentTool.paletteAnchor(in: tools),
+                           onPickBackground != nil {
                             backgroundColorToggle
                         }
                     }

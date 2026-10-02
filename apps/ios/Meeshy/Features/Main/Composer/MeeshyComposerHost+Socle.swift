@@ -42,7 +42,7 @@ extension MeeshyComposerHost {
 
     var socle: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
-            if returnsImageToConversation { Spacer(); returnImageButton } else {
+            if returnsToConversation { Spacer(); returnImageButton } else {
                 if paintedSocleZones.contains(.audience) { audienceChip }
                 Spacer()
                 if socleServesPostText { postTextButton }

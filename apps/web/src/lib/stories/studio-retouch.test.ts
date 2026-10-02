@@ -63,6 +63,25 @@ describe('renderStudioRetouch', () => {
     expect(calls.indexOf('fillText:Salut')).toBeGreaterThan(calls.lastIndexOf('drawImage'));
   });
 
+  test('une image RECADRÉE repart au cadre de son recadrage, ses pixels gardés seuls (#9136)', async () => {
+    const { context } = recordingCanvas();
+    const drawn: number[][] = [];
+    (context as unknown as { drawImage: (...args: unknown[]) => void }).drawImage = (_image, ...rest) => drawn.push(rest as number[]);
+    let size: readonly number[] = [];
+    const crop = { x: 0.125, y: 0, width: 0.75, height: 1 };
+    const page = pageWithVisual(emptyStudioPage('page-1', 'text-1', 'fr'), 'visual', asset({ crop }));
+    await renderStudioRetouch(page, {
+      createCanvas: (width, height) => {
+        size = [width, height];
+        return { context, toBlob: async (type) => new Blob(['jpeg'], { type }) };
+      },
+      loadImage: async () => ({ naturalWidth: 400, naturalHeight: 300 }) as unknown as CanvasImageSource,
+    });
+    expect(size).toEqual([1920, 1920]);
+    const net = drawn.find((args) => args.length === 8);
+    expect(net?.slice(0, 4)).toEqual([50, 0, 300, 300]);
+  });
+
   test('sans canvas, aucun rendu inventé', async () => {
     const page = pageWithVisual(emptyStudioPage('page-1', 'text-1', 'fr'), 'visual', asset());
     expect(await renderStudioRetouch(page, { createCanvas: () => null, loadImage: async () => null })).toBeNull();

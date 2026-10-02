@@ -614,7 +614,7 @@ class PostDetailViewModel: ObservableObject {
         location: PostLocationUpdate? = nil,
         visibility: String? = nil,
         visibilityUserIds: [String]? = nil,
-        known: Set<PostEditField> = EditPostDraft.documentFields
+        known: Set<PostEditField> = EditPostDraft.documentFields, storyEffects: StoryEffects? = nil
     ) async {
         guard let snapshot = post else { return }
         var optimistic = snapshot
@@ -640,7 +640,7 @@ class PostDetailViewModel: ObservableObject {
             // champ non déclaré est OMIS, et le serveur préserve le sien.
             let updated = try await postService.update(postId: snapshot.id, known: known, draft: PostEditDraft(
                 content: content, visibility: visibility, visibilityUserIds: visibilityUserIds,
-                originalLanguage: language, type: type, removeMediaIds: removeMediaIds,
+                originalLanguage: language, type: type, removeMediaIds: removeMediaIds, storyEffects: storyEffects,
                 location: location
             ))
             self.post = updated.toFeedPost(preferredLanguages: preferredLanguages)

@@ -74,12 +74,12 @@ nonisolated enum ComposerTrailingColumn {
         /// un fond média (#8712), l'effet dont le carrousel est ouvert marqué.
         case scene(effects: [ComposerSceneEffect], open: ComposerSceneEffect?)
         case tool([ComposerToolControl])
+        /// **Un objet en édition en place** (#9138) — toutes familles, le fond
+        /// compris (#8847) : ses sous-outils, celui dont les options sont
+        /// ouvertes marqué, puis ses actions, puis le `(x)`.
         case object(sections: [ComposerObjectEditorSection],
+                    open: ComposerObjectEditorSection?,
                     actions: [StoryCanvasContextAction])
-        /// **L'édition du FOND** (#8847) : ses outils seuls, celui dont les
-        /// contrôles sont ouverts sous la scène marqué, puis le `(x)`.
-        case backgroundTools(sections: [ComposerObjectEditorSection],
-                             open: ComposerObjectEditorSection?)
     }
 
     enum Entry: Equatable, Identifiable {
@@ -87,10 +87,9 @@ nonisolated enum ComposerTrailingColumn {
         /// Une catégorie d'effets de la scène (#8712) — la toucher ouvre son
         /// carrousel en bas, à la place de l'audience et de Publier.
         case sceneEffect(ComposerSceneEffect, isOpen: Bool)
-        case editorSection(ComposerObjectEditorSection)
-        /// Un outil du FOND (#8847) — le toucher ouvre ses contrôles SOUS la
-        /// scène, jamais l'éditeur plein écran.
-        case backgroundSection(ComposerObjectEditorSection, isOpen: Bool)
+        /// Un sous-outil de l'objet (#9138) — le toucher ouvre ses options à
+        /// droite, depuis le haut, jamais l'éditeur plein écran.
+        case editorSection(ComposerObjectEditorSection, isOpen: Bool)
         case objectAction(StoryCanvasContextAction)
         /// Le `(x)` d'un outil : il le termine et rend les portes.
         case exitTool
@@ -102,8 +101,7 @@ nonisolated enum ComposerTrailingColumn {
             switch self {
             case .toolControl(let control):   return "tool.\(control.id)"
             case .sceneEffect(let effet, _):  return "effect.\(effet.rawValue)"
-            case .editorSection(let section): return "section.\(section.identifier)"
-            case .backgroundSection(let section, _): return "background.\(section.identifier)"
+            case .editorSection(let section, _): return "section.\(section.identifier)"
             case .objectAction(let action):   return "action.\(String(describing: action))"
             case .exitTool:                   return "exit.tool"
             case .exitObject:                 return "exit.object"
@@ -114,7 +112,7 @@ nonisolated enum ComposerTrailingColumn {
         var isExit: Bool {
             switch self {
             case .exitTool, .exitObject:                          return true
-            case .toolControl, .sceneEffect, .editorSection, .backgroundSection, .objectAction:
+            case .toolControl, .sceneEffect, .editorSection, .objectAction:
                 return false
             }
         }
@@ -132,19 +130,15 @@ nonisolated enum ComposerTrailingColumn {
 
     static func focus(railMode: ComposerRailMode,
                       selection: (sections: [ComposerObjectEditorSection],
+                                  open: ComposerObjectEditorSection?,
                                   actions: [StoryCanvasContextAction])?,
                       effects: [ComposerSceneEffect] = [],
-                      openEffect: ComposerSceneEffect? = nil,
-                      backgroundTools: (sections: [ComposerObjectEditorSection],
-                                        open: ComposerObjectEditorSection?)? = nil) -> Focus {
+                      openEffect: ComposerSceneEffect? = nil) -> Focus {
         if case .tool(let controls) = railMode { return .tool(controls) }
-        if let backgroundTools {
-            return .backgroundTools(sections: backgroundTools.sections, open: backgroundTools.open)
-        }
         guard let selection else {
             return .scene(effects: effects, open: openEffect.flatMap { effects.contains($0) ? $0 : nil })
         }
-        return .object(sections: selection.sections, actions: selection.actions)
+        return .object(sections: selection.sections, open: selection.open, actions: selection.actions)
     }
 
     /// **Les options, de HAUT en bas, le `(x)` en dernier.**
@@ -159,15 +153,13 @@ nonisolated enum ComposerTrailingColumn {
             return effects.map { Entry.sceneEffect($0, isOpen: $0 == open) }
         case .tool(let controls):
             return controls.map(Entry.toolControl) + [.exitTool]
-        case .backgroundTools(let sections, let open):
-            return sections.map { Entry.backgroundSection($0, isOpen: $0 == open) } + [.exitTool]
-        case .object(let sections, let actions):
+        case .object(let sections, let open, let actions):
             let modifier = actions.contains(.edit) ? [Entry.objectAction(.edit)] : []
             let reste = actions.filter { action in
                 action != .edit && !(action == .trim && sections.contains(.media(.trim)))
             }
             return modifier
-                + sections.map(Entry.editorSection)
+                + sections.map { Entry.editorSection($0, isOpen: $0 == open) }
                 + reste.map(Entry.objectAction)
                 + [.exitObject]
         }
@@ -175,10 +167,22 @@ nonisolated enum ComposerTrailingColumn {
 
     static func foot(for focus: Focus, timeServed: Bool) -> [Foot] {
         switch focus {
-        case .tool, .backgroundTools:
+        case .tool, .object:
             return [.undo, .redo]
-        case .scene, .object:
+        case .scene:
             return (timeServed ? [.time] : []) + [.undo, .redo]
+        }
+    }
+
+    /// **Le pied suit les sous-outils, sans ressort, pendant une édition en
+    /// place** (#9138) : « les boutons du rail droit ne laissent pas de trous ».
+    /// La colonne se lit d'un bloc à côté du panneau qui s'ouvre depuis le haut.
+    /// Le dessin, lui, garde l'historique au pouce (#8713) : il trace sur toute
+    /// la scène, et aucun panneau ne voisine sa colonne.
+    static func footFollowsOptions(for focus: Focus) -> Bool {
+        switch focus {
+        case .object:        return true
+        case .tool, .scene:  return false
         }
     }
 
