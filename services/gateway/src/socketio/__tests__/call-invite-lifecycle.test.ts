@@ -17,12 +17,15 @@ const invitation = (): PendingCallInvitation => ({
   callType: 'video',
 });
 
-const harness = (options: { status?: string; joined?: readonly string[]; invited?: readonly string[]; member?: boolean } = {}) => {
+const DIRECT = '64b7f0c2a1b2c3d4e5f6071b';
+
+const harness = (options: { status?: string; joined?: readonly string[]; invited?: readonly string[]; member?: boolean; direct?: string | null } = {}) => {
   const state = { status: options.status ?? 'active', joined: [...(options.joined ?? [])] };
   const emitted: Emission[] = [];
   const pushes: unknown[] = [];
   const missed: unknown[] = [];
   const timers: { fn: () => void; ms: number; cancelled: boolean }[] = [];
+  const conversationReads: unknown[] = [];
   const lifecycle = createCallInvitationLifecycle({
     prisma: {
       callSession: {
@@ -33,6 +36,13 @@ const harness = (options: { status?: string; joined?: readonly string[]; invited
         }),
       },
       participant: { findFirst: async () => (options.member ? { id: 'p-lea' } : null) },
+      conversation: {
+        findFirst: async (args: { where: unknown }) => {
+          conversationReads.push(args.where);
+          const direct = options.direct === undefined ? DIRECT : options.direct;
+          return direct ? { id: direct } : null;
+        },
+      },
     } as never,
     pushService: () => ({ sendToUser: async (push: unknown) => void pushes.push(push) }) as never,
     notificationService: () => ({ createMissedCallNotification: async (params: unknown) => { missed.push(params); return null; } }) as never,
@@ -51,7 +61,7 @@ const harness = (options: { status?: string; joined?: readonly string[]; invited
     live.forEach((t) => t.fn());
     await new Promise((resolve) => setImmediate(resolve));
   };
-  return { lifecycle, io, state, emitted, pushes, missed, timers, fire };
+  return { lifecycle, io, state, emitted, pushes, missed, timers, fire, conversationReads };
 };
 
 const cancelPushTo = (userId: string) =>
@@ -78,7 +88,7 @@ describe('une invitation d’appel se résout toujours : décroché, refusé ou 
     ]);
     expect(h.pushes).toEqual([cancelPushTo(LEA)]);
     expect(h.missed).toEqual([
-      { recipientUserId: LEA, callerId: 'alice', conversationId: CONV, callSessionId: CALL, callType: 'video' },
+      { recipientUserId: LEA, callerId: 'alice', conversationId: DIRECT, callSessionId: CALL, callType: 'video' },
     ]);
   });
 
@@ -142,6 +152,38 @@ describe('une invitation d’appel se résout toujours : décroché, refusé ou 
 
     expect(h.pushes).toEqual([]);
     expect(h.missed).toEqual([]);
+  });
+
+  describe('l’appel manqué d’une invitée mène à un lieu qu’elle peut lire (#9115)', () => {
+    it('une invitée NON membre est menée à sa conversation directe avec l’inviteur, jamais à la conversation de l’appel', async () => {
+      const h = harness();
+      h.lifecycle.arm(h.io, invitation());
+
+      await h.fire();
+
+      expect(h.missed).toEqual([expect.objectContaining({ conversationId: DIRECT, callerId: 'alice' })]);
+      expect(JSON.stringify(h.conversationReads)).toContain(LEA);
+      expect(JSON.stringify(h.conversationReads)).toContain('alice');
+    });
+
+    it('sans conversation directe avec l’inviteur, l’appel manqué ne nomme AUCUNE conversation', async () => {
+      const h = harness({ direct: null });
+      h.lifecycle.arm(h.io, invitation());
+
+      await h.fire();
+
+      expect(h.missed).toEqual([expect.objectContaining({ conversationId: null })]);
+    });
+
+    it('une invitée MEMBRE de la conversation y est menée, comme tout membre', async () => {
+      const h = harness({ member: true });
+      h.lifecycle.arm(h.io, invitation());
+
+      await h.fire();
+
+      expect(h.missed).toEqual([expect.objectContaining({ conversationId: CONV })]);
+      expect(h.conversationReads).toEqual([]);
+    });
   });
 
   it('ré-inviter la même personne réarme le minuteur au lieu d’en empiler deux', () => {

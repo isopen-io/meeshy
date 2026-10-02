@@ -2045,7 +2045,7 @@ export class NotificationService {
   async createMissedCallNotification(params: {
     recipientUserId: string;
     callerId: string;
-    conversationId: string;
+    conversationId: string | null;
     callSessionId: string;
     callType: 'audio' | 'video';
   }): Promise<Notification | null> {
@@ -2054,7 +2054,7 @@ export class NotificationService {
         where: { id: params.callerId },
         select: { username: true, displayName: true, avatar: true },
       }),
-      this.prisma.conversation.findUnique({
+      params.conversationId === null ? null : this.prisma.conversation.findUnique({
         where: { id: params.conversationId },
         select: { title: true, type: true },
       }),
@@ -2082,7 +2082,7 @@ export class NotificationService {
       },
 
       context: {
-        conversationId: params.conversationId,
+        conversationId: params.conversationId ?? undefined,
         conversationTitle: conversation?.title,
         conversationType: conversation?.type as any,
         callSessionId: params.callSessionId,
