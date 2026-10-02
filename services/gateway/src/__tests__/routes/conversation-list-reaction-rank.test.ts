@@ -17,6 +17,8 @@ import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
+import { matchesMongoWhere } from '../helpers/mongo-where';
+
 const VIEWER = '507f1f77bcf86cd799439001';
 const THIRD = '507f1f77bcf86cd799439003';
 const OTHER_CONV = '507f1f77bcf86cd799439101';
@@ -80,30 +82,27 @@ function conversation(row: Row) {
 
 type Where = Record<string, unknown>;
 
-function compare(value: unknown, filter: unknown): boolean {
-  if (filter === null || typeof filter !== 'object' || filter instanceof Date) {
-    return value === filter || (value instanceof Date && filter instanceof Date && value.getTime() === filter.getTime());
-  }
-  const ops = filter as Record<string, unknown>;
-  const ms = value instanceof Date ? value.getTime() : null;
-  if ('in' in ops) return (ops.in as unknown[]).includes(value);
-  if ('not' in ops && ops.not === null) return value !== null && value !== undefined;
-  if ('lt' in ops) return ms !== null && ms < (ops.lt as Date).getTime();
-  if ('gte' in ops) return ms !== null && ms >= (ops.gte as Date).getTime();
-  if ('gt' in ops) return ms !== null && ms > (ops.gt as Date).getTime();
-  return true;
-}
-
+/**
+ * Le `where` de la route, réduit aux colonnes que ce double porte, puis évalué
+ * avec les sémantiques MESURÉES contre `mongo:8` (`helpers/mongo-where.ts`,
+ * #8309) : une clé ABSENTE n'est pas une clé nulle, et c'est elle que porte une
+ * conversation sans activité.
+ */
 const FIELDS = new Set(['id', 'lastMessageAt', 'lastReactionAt', 'lastReactionTargetKey', 'lastActivityAt', 'updatedAt']);
 
+function rankWhere(where: Where): Where {
+  return Object.fromEntries(
+    Object.entries(where).flatMap(([key, filter]): Array<[string, unknown]> => {
+      if (key === 'AND' || key === 'OR' || key === 'NOT') {
+        return [[key, Array.isArray(filter) ? (filter as Where[]).map(rankWhere) : rankWhere(filter as Where)]];
+      }
+      return FIELDS.has(key) ? [[key, filter]] : [];
+    })
+  );
+}
+
 function matches(row: Record<string, unknown>, where: Where | undefined): boolean {
-  if (!where) return true;
-  return Object.entries(where).every(([key, filter]) => {
-    if (key === 'AND') return (filter as Where[]).every((w) => matches(row, w));
-    if (key === 'NOT') return !matches(row, filter as Where);
-    if (!FIELDS.has(key)) return true;
-    return compare(row[key] ?? null, filter);
-  });
+  return matchesMongoWhere(row, where && rankWhere(where));
 }
 
 function sortBy(rows: Array<Record<string, unknown>>, orderBy: unknown): Array<Record<string, unknown>> {
