@@ -2,7 +2,8 @@ import { useState } from 'react';
 
 import { createStudioDraftStore } from '@/lib/stories/studio-draft-store';
 import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
-import { isStudioPageEmpty, type StudioPage } from '@/lib/stories/studio-page';
+import type { StudioRetouchVideoDeps } from '@/lib/stories/studio-retouch-video';
+import type { StudioPage } from '@/lib/stories/studio-page';
 import type { StudioRetouchDeps } from '@/lib/stories/studio-retouch';
 
 /**
@@ -23,38 +24,9 @@ export type StudioRetouch = {
   readonly render?: StudioRetouchDeps;
   /** Injectable pour les témoins ; la production prend le moteur navigateur. */
   readonly camera?: CameraEngine;
+  /** Injectable pour les témoins ; la production enregistre un canvas (#9124). */
+  readonly renderVideo?: StudioRetouchVideoDeps;
 };
-
-/** Ce que « Terminé » rend (miroir `ComposerReturnMedia.action`) : la
- * retouche d'une pièce rend le composite ; la caméra rend la prise INTACTE
- * telle quelle (pleine définition), un studio resté vide n'a rien à rendre. */
-export type StudioRetouchReturn = 'render' | 'return-capture' | 'cancel';
-
-export function studioRetouchReturn({
-  capturing,
-  page,
-  taken,
-}: {
-  readonly capturing: boolean;
-  readonly page: StudioPage;
-  readonly taken: File | null;
-}): StudioRetouchReturn {
-  if (!capturing) return 'render';
-  if (taken !== null && capturedPageUntouched(page, taken)) return 'return-capture';
-  return isStudioPageEmpty(page) ? 'cancel' : 'render';
-}
-
-function capturedPageUntouched(page: StudioPage, taken: File): boolean {
-  const background = page.background;
-  return (
-    background !== null &&
-    background.file === taken &&
-    background.frame === undefined &&
-    background.filter === undefined &&
-    page.overlay === null &&
-    page.texts.every((layer) => layer.text.trim() === '')
-  );
-}
 
 /** Le magasin d'une retouche : EN MÉMOIRE, jamais le brouillon de story. */
 export const RETOUCH_DRAFTS = createStudioDraftStore(null);
@@ -67,20 +39,27 @@ export function useStudioRetouchFinish(retouch: StudioRetouch | undefined, curre
   const [retouchFailed, setRetouchFailed] = useState(false);
   const finishRetouch = async () => {
     if (retouch === undefined || finishing) return;
-    const prise = taken();
-    const decision = studioRetouchReturn({ capturing: retouch.file === null, page: currentPage(), taken: prise });
-    if (decision === 'cancel') return retouch.onCancel();
-    if (decision === 'return-capture' && prise !== null) return retouch.onDone(prise);
     setFinishing(true);
     setRetouchFailed(false);
-    const { renderStudioRetouch, browserRetouchDeps, retouchedFileName } = await import('@/lib/stories/studio-retouch');
-    const blob = await renderStudioRetouch(currentPage(), retouch.render ?? browserRetouchDeps);
+    const original = retouch.file ?? taken();
+    const { studioRetouchReturn, renderedImage, renderedVideo } = await import('@/lib/stories/studio-retouch-finish');
+    const decision = studioRetouchReturn({ capturing: retouch.file === null, page: currentPage(), original });
+    if (decision === 'cancel') {
+      setFinishing(false);
+      return retouch.onCancel();
+    }
+    if (decision === 'return-original' && original !== null) {
+      setFinishing(false);
+      return retouch.onDone(original);
+    }
+    const file = decision === 'render-video' ? await renderedVideo(retouch, currentPage(), original) : await renderedImage(retouch, currentPage(), original);
     setFinishing(false);
-    if (blob === null) {
+    if (file === null) {
       setRetouchFailed(true);
       return;
     }
-    retouch.onDone(new File([blob], retouchedFileName((retouch.file ?? prise)?.name ?? 'photo.jpg'), { type: 'image/jpeg' }));
+    retouch.onDone(file);
   };
   return { finishing, retouchFailed, finishRetouch };
 }
+

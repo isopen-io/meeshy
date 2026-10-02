@@ -118,6 +118,12 @@ export function isStudioPageEmpty(page: StudioPage): boolean {
   return page.texts.every((layer) => layer.text.trim() === '') && page.background === null && page.overlay === null && page.sound === null;
 }
 
+/** La VIDÉO de la page (#9124) — le fond d'abord, sinon le calque. */
+export function studioPageVideo(page: StudioPage): StudioVisualAsset | null {
+  if (page.background?.mediaType === 'video') return page.background;
+  return page.overlay?.mediaType === 'video' ? page.overlay : null;
+}
+
 /** Une page ne peut pas partir si un de ses trois assets a ÉCHOUÉ — l'auteur
  * le retire ou réessaie d'abord (loi 4). */
 export function isStudioPagePublishable(page: StudioPage): boolean {

@@ -405,7 +405,10 @@ function PreviewStrip({
   const target = pending.find((attachment) => attachment.localId === retouching) ?? null;
   const previewed = pending.find((attachment) => attachment.localId === previewing) ?? null;
   const editOf = (attachment: PendingAttachment): (() => void) | undefined => {
-    if (attachment.kind === 'image') return onReplace === undefined ? undefined : () => setRetouching(attachment.localId);
+    /* Une VIDÉO s'édite dans la scène, comme une image (#9124) — plus le lecteur. */
+    if (attachment.kind === 'image' || (attachment.kind === 'video' && onReplace !== undefined)) {
+      return onReplace === undefined ? undefined : () => setRetouching(attachment.localId);
+    }
     if (attachment.kind === 'video' || attachment.kind === 'audio') return () => setPreviewing(attachment.localId);
     return undefined;
   };

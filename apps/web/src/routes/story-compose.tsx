@@ -963,7 +963,7 @@ function StoryStudio({
               className="h-12 rounded-full px-6 text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2"
               style={{ backgroundColor: 'var(--color-ios-brand)', color: '#fff', outlineColor: 'var(--color-ios-brand)', opacity: finishing ? 0.6 : 1 }}
             >
-              {translate(lang, 'story.studio.retouch.done')}
+              {translate(lang, finishing ? 'story.studio.retouch.exporting' : 'story.studio.retouch.done')}
             </button>
           </div>
         ) : postTextOpen && kind === 'POST' ? (

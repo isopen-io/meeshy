@@ -90,7 +90,7 @@ function wrap(context: StudioRetouchCanvas['context'], text: string, maxWidth: n
   );
 }
 
-function paintText(canvas: StudioRetouchCanvas['context'], op: StudioTextOp, width: number, height: number): void {
+export function paintText(canvas: StudioRetouchCanvas['context'], op: StudioTextOp, width: number, height: number): void {
   const px = op.size * width;
   canvas.save();
   canvas.translate(op.x * width, op.y * height);
@@ -116,7 +116,7 @@ function paintText(canvas: StudioRetouchCanvas['context'], op: StudioTextOp, wid
 
 /** Le rapport d'une image que la mesure à la sélection n'a pas encore rendu
  * (« Terminé » touché aussitôt) — relu sur l'image DÉCODÉE. */
-async function withMeasuredImages(page: StudioPage, loadImage: StudioRetouchDeps['loadImage']): Promise<StudioPage> {
+export async function withMeasuredImages(page: StudioPage, loadImage: StudioRetouchDeps['loadImage']): Promise<StudioPage> {
   const measured = async (asset: StudioVisualAsset | null): Promise<StudioVisualAsset | null> => {
     if (asset === null || asset.mediaType !== 'image' || asset.aspectRatio !== undefined) return asset;
     const image = await loadImage(asset.previewUrl);

@@ -183,15 +183,21 @@ describe('ComposerTray — chaque pièce porte « Éditer » en son centre (#911
     }
   });
 
-  test('toucher une vidéo ou un audio ouvre son lecteur ; Fermer le referme', () => {
+  test('#9124 — toucher une VIDÉO ouvre la scène en retouche ; un audio ouvre son lecteur, Fermer le referme', async () => {
+    await import('./composer-retouch');
     const el = mountAbove([fileOf('clip.mp4', 'video/mp4'), fileOf('note.webm', 'audio/webm')]);
     const [video, audio] = [...el.querySelectorAll<HTMLButtonElement>('[data-composer-edit]')];
     act(() => video!.click());
-    expect(document.querySelector('[data-composer-media-preview] video')).not.toBeNull();
-    act(() => document.querySelector<HTMLButtonElement>('[data-composer-media-preview-close]')!.click());
-    expect(document.querySelector('[data-composer-media-preview]')).toBeNull();
+    for (let tour = 0; tour < 50 && document.querySelector('[data-composer-retouch]') === null; tour += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+    }
+    expect(document.querySelector('[data-composer-retouch]')).not.toBeNull();
+    expect(document.querySelector('[data-composer-media-preview] video')).toBeNull();
     act(() => audio!.click());
     expect(document.querySelector('[data-composer-media-preview] audio')).not.toBeNull();
     act(() => document.querySelector<HTMLButtonElement>('[data-composer-media-preview-close]')!.click());
+    expect(document.querySelector('[data-composer-media-preview]')).toBeNull();
   });
 });

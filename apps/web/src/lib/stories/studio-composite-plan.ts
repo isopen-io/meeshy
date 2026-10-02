@@ -51,10 +51,11 @@ function fitted(ratio: number, cover: boolean): { readonly width: number; readon
   return wider === cover ? { width: ratio / CARD_RATIO, height: 1 } : { width: 1, height: CARD_RATIO / ratio };
 }
 
-const drawable = (asset: StudioVisualAsset | null): asset is StudioVisualAsset & { readonly aspectRatio: number } =>
-  asset !== null && asset.mediaType === 'image' && asset.aspectRatio !== undefined && asset.aspectRatio > 0;
-
-export function studioCompositePlan(page: StudioPage): readonly StudioCompositeOp[] | null {
+/** `video` : la retouche d'une VIDÉO (#9124) peint l'image courante d'un
+ * `<video>` qui joue — le hash du sol, lui, n'en dessine aucune. */
+export function studioCompositePlan(page: StudioPage, { video = false }: { readonly video?: boolean } = {}): readonly StudioCompositeOp[] | null {
+  const drawable = (asset: StudioVisualAsset | null): asset is StudioVisualAsset & { readonly aspectRatio: number } =>
+    asset !== null && (asset.mediaType === 'image' || (video && asset.mediaType === 'video')) && asset.aspectRatio !== undefined && asset.aspectRatio > 0;
   const { background, overlay } = page;
   if (background === null && overlay === null) return null;
   if ((background !== null && !drawable(background)) || (overlay !== null && !drawable(overlay))) return null;

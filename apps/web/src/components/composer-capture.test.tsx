@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
 import type { StudioRetouchDeps } from '@/lib/stories/studio-retouch';
-import { studioRetouchReturn } from '@/routes/use-studio-retouch';
+import { studioRetouchReturn } from '@/lib/stories/studio-retouch-finish';
 import { emptyStudioPage, type StudioPage, type StudioVisualAsset } from '@/lib/stories/studio-page';
 import { flush, registerStudioBench } from '@/test-support/story-studio-bench';
 
@@ -103,17 +103,26 @@ describe('ce que « Terminé » rend (studioRetouchReturn)', () => {
   });
   const page = (over: Partial<StudioPage> = {}): StudioPage => ({ ...emptyStudioPage('p', 't', 'fr'), ...over });
 
-  test('la retouche d’une pièce rend toujours le composite', () => {
-    expect(studioRetouchReturn({ capturing: false, page: page({ background: visual(taken) }), taken: null })).toBe('render');
+  const clip = new File(['mp4'], 'clip.mp4', { type: 'video/mp4' });
+  const written = (base: StudioPage): StudioPage => ({ ...base, texts: base.texts.map((layer) => ({ ...layer, text: 'Bonjour' })) });
+
+  test('la retouche d’une IMAGE rend toujours le composite', () => {
+    expect(studioRetouchReturn({ capturing: false, page: page({ background: visual(taken) }), original: taken })).toBe('render-image');
   });
 
   test('la caméra : prise intacte ⇒ la prise ; rien ⇒ annuler ; retouchée ⇒ composite', () => {
-    expect(studioRetouchReturn({ capturing: true, page: page({ background: visual(taken) }), taken })).toBe('return-capture');
-    expect(studioRetouchReturn({ capturing: true, page: page(), taken: null })).toBe('cancel');
-    const written = page({ background: visual(taken) });
-    const withText = { ...written, texts: written.texts.map((layer) => ({ ...layer, text: 'Bonjour' })) };
-    expect(studioRetouchReturn({ capturing: true, page: withText, taken })).toBe('render');
-    expect(studioRetouchReturn({ capturing: true, page: page({ background: visual(taken, { filter: 'bw' }) }), taken })).toBe('render');
+    expect(studioRetouchReturn({ capturing: true, page: page({ background: visual(taken) }), original: taken })).toBe('return-original');
+    expect(studioRetouchReturn({ capturing: true, page: page(), original: null })).toBe('cancel');
+    expect(studioRetouchReturn({ capturing: true, page: written(page({ background: visual(taken) })), original: taken })).toBe('render-image');
+    expect(studioRetouchReturn({ capturing: true, page: page({ background: visual(taken, { filter: 'bw' }) }), original: taken })).toBe('render-image');
+  });
+
+  test('#9124 — une VIDÉO : intacte en attente ⇒ elle reste ; retouchée ⇒ une vidéo bakée', () => {
+    const video = visual(clip, { mediaType: 'video' });
+    expect(studioRetouchReturn({ capturing: false, page: page({ background: video }), original: clip })).toBe('cancel');
+    expect(studioRetouchReturn({ capturing: false, page: written(page({ background: video })), original: clip })).toBe('render-video');
+    expect(studioRetouchReturn({ capturing: true, page: written(page({ background: video })), original: clip })).toBe('render-video');
+    expect(studioRetouchReturn({ capturing: true, page: page({ background: video }), original: clip })).toBe('return-original');
   });
 });
 
@@ -167,5 +176,69 @@ describe('la tuile caméra du panneau suit la barre', () => {
     expect(tile).not.toBeNull();
     act(() => tile!.click());
     expect(opened).toBe(1);
+  });
+});
+
+describe('#9124 — « Terminé » sur une vidéo retouchée rend une VIDÉO', () => {
+  test('la scène qui porte une vidéo et un texte part bakée, nommée d’après la pièce', async () => {
+    const { useStudioRetouchFinish } = await import('@/routes/use-studio-retouch');
+    const clip = new File(['mp4'], 'clip.mov', { type: 'video/quicktime' });
+    const base = emptyStudioPage('p', 't', 'fr');
+    const scene: StudioPage = {
+      ...base,
+      texts: base.texts.map((layer) => ({ ...layer, text: 'Bonjour' })),
+      background: { file: clip, previewUrl: 'blob:clip', mediaType: 'video', upload: { phase: 'uploading', progress: 0 }, caption: '', pose: { x: 0.5, y: 0.5, scale: 1, rotation: 0 } },
+    };
+    let done: File | null = null;
+    let finish: (() => Promise<void>) | null = null;
+    function Probe() {
+      finish = useStudioRetouchFinish(
+        {
+          file: clip,
+          onDone: (file) => (done = file),
+          onCancel: () => undefined,
+          renderVideo: {
+            createSurface: () => null,
+            loadImage: async () => null,
+            loadVideo: async () => null,
+            record: () => null,
+          },
+        },
+        () => scene,
+        () => null,
+      ).finishRetouch;
+      return null;
+    }
+    mount(<Probe />);
+    await act(async () => {
+      await finish!();
+    });
+    expect(done).toBeNull();
+
+    let baked: File | null = null;
+    function Baking() {
+      finish = useStudioRetouchFinish(
+        {
+          file: clip,
+          onDone: (file) => (baked = file),
+          onCancel: () => undefined,
+          renderVideo: {
+            createSurface: () => ({ context: new Proxy({}, { get: (_t, key) => (key === 'measureText' ? () => ({ width: 1 }) : () => undefined), set: () => true }) as never, videoTracks: () => [] }),
+            loadImage: async () => null,
+            loadVideo: async () => ({ frame: {} as CanvasImageSource, aspectRatio: 9 / 16, audioTracks: [], play: async () => undefined, release: () => undefined }),
+            record: () => ({ mimeType: 'video/mp4', stop: async () => new Blob(['mp4'], { type: 'video/mp4' }) }),
+          },
+        },
+        () => scene,
+        () => null,
+      ).finishRetouch;
+      return null;
+    }
+    mount(<Baking />);
+    await act(async () => {
+      await finish!();
+    });
+    expect((baked as File | null)?.name).toBe('clip-retouche.mp4');
+    expect((baked as File | null)?.type).toBe('video/mp4');
   });
 });
