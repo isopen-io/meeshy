@@ -616,6 +616,10 @@ struct MeeshyComposerHost: View {
     /// du canvas DANS l'écran document, restant à livrer.
     @State var documentBackground: String?
 
+    /// Le fond que l'outil Texte du document a posé de lui-même (#9137) — il
+    /// repart si la saisie se ferme sur une scène restée nue.
+    @State var textSceneImplicitBackground: String?
+
     /// **Lot 3A du composer unifié (#4035) — la sélection sur la scène
     /// incrustée.** Alimentée par `onSceneItemTapped`/`onSceneBackgroundTapped`
     /// (Phase 1/2, `EmbeddedSceneCanvas`) : `nil` ⇒ aucun objet sélectionné ⇒

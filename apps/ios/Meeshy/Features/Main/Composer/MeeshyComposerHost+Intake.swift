@@ -521,6 +521,8 @@ extension MeeshyComposerHost {
         case .attachesLocation:
             HapticFeedback.light()
             presentedPortal = .location
+        case .composesTextScene:
+            openTextScene()
         case .attachesTranscribedAudio:
             HapticFeedback.light()
             // **La MÊME feuille que « Ajouter un son » (#4657).** Ce qui
