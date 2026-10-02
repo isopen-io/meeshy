@@ -80,6 +80,7 @@ export function StoryTopBar({
 
 export function StoryBottomBar({
   hidden,
+  held = false,
   language,
   content,
   mediaCaption,
@@ -88,6 +89,8 @@ export function StoryBottomBar({
   onReply,
 }: {
   readonly hidden: boolean;
+  /** Appui long (#9072) : les contrôles cèdent, la légende reste et redescend — comme iOS. */
+  readonly held?: boolean;
   readonly language: InterfaceLanguage;
   /** `Post.content` servi par le Prisme. */
   readonly content: StoryCaption | null;
@@ -107,6 +110,7 @@ export function StoryBottomBar({
       /* Le voile ne tient que la LÉGENDE lisible : sans elle, le rail et la capsule sont du verre, et le fond de l'AUTEUR reste intact. */
       scrim={hasCaption ? 'soft' : 'none'}
       hidden={hidden}
+      held={held}
       {...(hasCaption
         ? {
             caption: (
