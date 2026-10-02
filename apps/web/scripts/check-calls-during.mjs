@@ -176,7 +176,27 @@ try {
 
       // ------------------------------------------------ 4 bis. trois tailles, jamais sur l'en-tête ni le champ d'écriture (#8145)
       const tier = () => page.getAttribute('[data-call-bubble]', 'data-call-bubble-size');
-      const settle = () => page.waitForTimeout(260);
+      /* La bulle est posée quand sa boîte ne bouge plus et qu'aucune animation n'y court — un fait, pas une durée (#7176). */
+      const settle = () =>
+        page.evaluate(
+          () =>
+            new Promise((resolve) => {
+              const deadline = performance.now() + 3000;
+              let last = '';
+              let still = 0;
+              const tick = () => {
+                const bubble = document.querySelector('[data-call-bubble]');
+                const rect = bubble?.getBoundingClientRect();
+                const at = rect === undefined ? '' : `${rect.left},${rect.top},${rect.width},${rect.height}`;
+                const running = bubble?.getAnimations({ subtree: true }).some((animation) => animation.playState === 'running') ?? false;
+                still = at === last && !running ? still + 1 : 0;
+                last = at;
+                if (still >= 3 || performance.now() > deadline) resolve(undefined);
+                else requestAnimationFrame(tick);
+              };
+              requestAnimationFrame(tick);
+            }),
+        );
       const clearance = () =>
         page.evaluate(() => {
           const box = (selector) => document.querySelector(selector)?.getBoundingClientRect() ?? null;
