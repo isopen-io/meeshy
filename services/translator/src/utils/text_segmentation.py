@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Pattern ULTRA-ROBUSTE pour tous les types d'emojis
 # Inclut tous les ranges Unicode emoji + modificateurs + ZWJ sequences
-EMOJI_PATTERN = re.compile(
+_EMOJI_UNIT = (
     "(?:"
     # Emojis avec modificateurs de peau (skin tone) et ZWJ
     "[\U0001F3FB-\U0001F3FF]|"  # Modificateurs de peau
@@ -32,7 +32,7 @@ EMOJI_PATTERN = re.compile(
     # Enclosed Alphanumeric/Ideographic Supplement — NE PAS écrire
     # "[\U000024C2-\U0001F251]" : cette PLAGE U+24C2..U+1F251 traverse les blocs
     # CJK (U+4E00..U+9FFF), Kana (U+3040..U+30FF) et Hangul (U+AC00..U+D7AF), donc
-    # extract_emojis() extrayait des phrases entières chinoises/japonaises/coréennes
+    # l'extraction des émojis prenait des phrases entières chinoises/japonaises/coréennes
     # comme « emoji » et les remplaçait par des placeholders → texte CJK jamais
     # traduit. Les code points encadrés hors supplément (Ⓜ U+24C2, ㊗ U+3297,
     # ㊙ U+3299, indicateurs régionaux) sont déjà couverts par d'autres branches.
@@ -77,16 +77,112 @@ EMOJI_PATTERN = re.compile(
     "[\U0001FAB0-\U0001FAB6]|"
     "[\U0001FAC0-\U0001FAC2]|"
     "[\U0001FAD0-\U0001FAD6]"
-    ")+",
-    flags=re.UNICODE
+    ")"
+)
+EMOJI_PATTERN = re.compile(_EMOJI_UNIT + "+", flags=re.UNICODE)
+# Un émoji collé à un marqueur ne doit pas avaler son 🔹 (lui-même un émoji).
+_EMOJI_RUN_OUTSIDE_PLACEHOLDERS = rf"(?:(?!🔹EMOJI_\d+🔹){_EMOJI_UNIT})+"
+
+# Marqueur UNIQUE de tout ce que la traduction ne doit pas toucher : émojis,
+# adresses, mentions, hashtags (#9086). Format: 🔹EMOJI_X🔹 où X est l'index.
+# 🔹 appartient au vocabulaire NLLB, qui le RECOPIE ; le marqueur 🔗X🔗 qui
+# protégeait les URL avant #9086 était un jeton <unk> — détruit dès
+# l'encodage, l'adresse disparaissait de chaque traduction. Le texte du
+# marqueur ne change pas : les segments déjà en cache restent valides.
+PROTECTED_PLACEHOLDER = "🔹EMOJI_{index}🔹"
+_PLACEHOLDER_PATTERN = re.compile(r"🔹EMOJI_(\d+)🔹")
+
+# Ce qu'un lecteur doit retrouver à l'identique dans chaque traduction. L'ordre
+# des branches compte : à une même position, la forme la plus longue gagne.
+#   [[url]]            le bloc entier (lien affiché tel quel, sans suivi)
+#   [libellé](cible)   le LIBELLÉ reste dans le texte à traduire, `(cible)` est protégée
+#   <url>              chevrons compris
+#   url brute          http(s):// ou www., sans la ponctuation finale de phrase
+#   m+<token>          lien court suivi
+#   @pseudo, #hashtag  (une adresse e-mail n'est pas une mention)
+PROTECTED_ENTITY_PATTERN = re.compile(
+    r"(?P<placeholder>🔹EMOJI_\d+🔹)"
+    r"|(?P<raw_block>\[\[[^\[\]\n]+\]\])"
+    r"|\[(?P<md_label>[^\[\]\n]+)\](?P<md_target>\([^()\s]+\))"
+    r"|(?P<angle><(?:https?://|www\.)[^\s<>]+>)"
+    r"|(?P<url>(?:https?://|(?<![\w/.@])www\.)[^\s<>]*[^\s<>.,;:!?'\"»)\]])"
+    r"|(?P<short_link>(?<![\w+])m\+[A-Za-z0-9_-]{2,50})"
+    r"|(?P<mention>(?<![\w@])@[\w-]{1,30})"
+    r"|(?P<hashtag>(?<![\w#&])#\w+)"
+    rf"|(?P<emoji>{_EMOJI_RUN_OUTSIDE_PLACEHOLDERS})",
+    flags=re.UNICODE,
 )
 
-# Marqueur spécial pour les emojis - Format ULTRA-ROBUSTE
-# Format: 🔹EMOJI_X🔹 où X est l'index
-# Utilisation de marqueurs Unicode spéciaux qui ne sont JAMAIS traduits par les modèles ML
-# Le caractère 🔹 est rare et facilement détectable, pas confondu avec du texte
-# AMÉLIORATION: Plus résistant que XML/HTML aux modifications du modèle ML
-EMOJI_PLACEHOLDER = "🔹EMOJI_{index}🔹"
+
+def protect_entities(text: str) -> Tuple[str, Dict[int, str]]:
+    """Remplace chaque entité protégée par un marqueur 🔹EMOJI_n🔹.
+
+    Retourne `(texte_masqué, index → entité d'origine)`. Les marqueurs déjà
+    présents sont opaques et la numérotation reprend après le plus grand : un
+    texte peut être protégé deux fois (segmenteur puis moteur) sans collision.
+    """
+    existing = [int(index) for index in _PLACEHOLDER_PATTERN.findall(text)]
+    next_index = max(existing, default=-1) + 1
+    entities: Dict[int, str] = {}
+
+    def _mask(value: str) -> str:
+        nonlocal next_index
+        index = next_index
+        entities[index] = value
+        next_index += 1
+        return PROTECTED_PLACEHOLDER.format(index=index)
+
+    def _replace(match: "re.Match[str]") -> str:
+        if match.group("placeholder"):
+            return match.group(0)
+        if match.group("md_target"):
+            label = PROTECTED_ENTITY_PATTERN.sub(_replace, match.group("md_label"))
+            return f"[{label}]{_mask(match.group('md_target'))}"
+        return _mask(match.group(0))
+
+    masked = PROTECTED_ENTITY_PATTERN.sub(_replace, text)
+    if entities:
+        logger.debug(f"[SEGMENTER] {len(entities)} entités protégées: {list(entities.values())}")
+    return masked, entities
+
+
+def restore_entities(text: str, entities: Dict[int, str]) -> str:
+    """Réinjecte chaque entité à la place de son marqueur.
+
+    Tolère les espaces que NLLB insère dans un marqueur. Une entité dont le
+    marqueur a disparu de la sortie du modèle est rajoutée en fin de texte :
+    une adresse ne se perd jamais en traduction (#9086).
+    """
+    result = text
+    dropped: List[str] = []
+    for index, value in sorted(entities.items()):
+        marker = re.compile(r"🔹\s*EMOJI_\s*" + str(index) + r"\s*🔹")
+        if marker.search(result) is None:
+            dropped.append(value)
+            continue
+        result = marker.sub(lambda _m: value, result)
+
+    if dropped:
+        logger.warning(f"[SEGMENTER] ⚠️  {len(dropped)} marqueurs perdus par le modèle, réinjectés en fin: {dropped}")
+        result = " ".join([result.rstrip(), *dropped]) if result.strip() else " ".join(dropped)
+    return result
+
+
+def strip_entities(text: str) -> str:
+    """Le texte sans ce que la détection de langue ne doit pas lire.
+
+    Une adresse, une mention ou un hashtag n'est écrit dans aucune langue ; le
+    libellé d'un lien markdown, lui, l'est et reste.
+    """
+    def _replace(match: "re.Match[str]") -> str:
+        return f" {match.group('md_label')} " if match.group("md_target") else " "
+
+    return PROTECTED_ENTITY_PATTERN.sub(_replace, text)
+
+
+def has_translatable_text(masked: str) -> bool:
+    """Un texte masqué qui ne contient plus aucune lettre n'a rien à traduire."""
+    return any(char.isalpha() for char in _PLACEHOLDER_PATTERN.sub("", masked))
 
 # Marqueur pour les sauts de ligne (pour préservation explicite)
 NEWLINE_MARKER = "__NL__"
@@ -100,88 +196,6 @@ class TextSegmenter:
             max_segment_length: Nombre maximum de caractères par segment (en dessous de max_length du modèle)
         """
         self.max_segment_length = max_segment_length
-
-    def extract_emojis(self, text: str) -> Tuple[str, Dict[int, str]]:
-        """
-        Extrait TOUS les emojis (y compris complexes avec ZWJ, modificateurs de peau, etc.)
-        et les remplace par des marqueurs robustes
-
-        Returns:
-            (texte_sans_emojis, mapping_index_vers_emoji)
-        """
-        emojis_map = {}
-        emoji_index = 0
-
-        # Log du texte avant extraction
-        logger.debug(f"[SEGMENTER] Texte avant extraction emojis: {repr(text[:100])}")
-
-        def replacer(match):
-            nonlocal emoji_index
-            emoji = match.group(0)
-            # Log chaque emoji extrait avec son code Unicode pour debug
-            emoji_codes = ' '.join([f'U+{ord(c):04X}' for c in emoji])
-            logger.debug(f"[SEGMENTER] Emoji {emoji_index} extrait: {emoji} ({emoji_codes})")
-
-            emojis_map[emoji_index] = emoji
-            placeholder = EMOJI_PLACEHOLDER.format(index=emoji_index)
-            emoji_index += 1
-            return placeholder
-
-        text_without_emojis = EMOJI_PATTERN.sub(replacer, text)
-
-        if emojis_map:
-            logger.info(f"[SEGMENTER] ✅ Extracted {len(emojis_map)} emojis: {list(emojis_map.values())}")
-        else:
-            logger.debug(f"[SEGMENTER] ℹ️  No emojis found in text")
-
-        # Vérification: s'assurer qu'aucun emoji n'est resté
-        remaining_emojis = EMOJI_PATTERN.findall(text_without_emojis)
-        if remaining_emojis:
-            logger.warning(f"[SEGMENTER] ⚠️  {len(remaining_emojis)} emojis NOT extracted: {remaining_emojis}")
-
-        return text_without_emojis, emojis_map
-
-    def restore_emojis(self, text: str, emojis_map: Dict[int, str]) -> str:
-        """
-        Restaure TOUS les emojis à partir des marqueurs
-
-        PRINCIPE SIMPLE:
-        - Remplacer chaque placeholder par son emoji
-        - NE PAS toucher aux emojis (même s'ils sont collés aux mots)
-        - FOCUS: Préservation de la structure verticale
-        """
-        result = text
-        restored_count = 0
-        not_found_placeholders = []
-
-        # Restaurer les placeholders
-        for index, emoji in emojis_map.items():
-            placeholder = EMOJI_PLACEHOLDER.format(index=index)
-
-            # Vérifier si le placeholder est présent
-            if placeholder in result:
-                result = result.replace(placeholder, emoji)
-                restored_count += 1
-                logger.debug(f"[SEGMENTER] Emoji {index} restauré: {emoji}")
-            else:
-                not_found_placeholders.append((index, emoji, placeholder))
-                logger.warning(f"[SEGMENTER] ⚠️  Placeholder {placeholder} NOT FOUND for emoji {emoji}")
-
-        # Log final
-        if emojis_map:
-            logger.info(f"[SEGMENTER] ✅ Restored {restored_count}/{len(emojis_map)} emojis")
-
-        if not_found_placeholders:
-            logger.error(f"[SEGMENTER] ❌ {len(not_found_placeholders)} emojis NOT restored:")
-            for idx, emoji, placeholder in not_found_placeholders:
-                logger.error(f"    - Index {idx}: {emoji} (placeholder: {placeholder})")
-
-        # Vérification finale: s'assurer qu'il ne reste aucun placeholder
-        remaining_placeholders = re.findall(r'🔹EMOJI_\d+🔹', result)
-        if remaining_placeholders:
-            logger.error(f"[SEGMENTER] ❌ {len(remaining_placeholders)} placeholders NOT replaced: {remaining_placeholders}")
-
-        return result
 
     def is_list_item(self, line: str) -> bool:
         """
@@ -314,18 +328,18 @@ class TextSegmenter:
         Segmente le texte intelligemment en préservant la structure
 
         Returns:
-            (liste_segments, mapping_emojis)
+            (liste_segments, mapping_entités_protégées)
             Chaque segment est un dict: {
                 'text': str,
                 'type': 'sentence' | 'list_item' | 'paragraph_break',
                 'index': int
             }
         """
-        # 1. Extraire les emojis
-        text_no_emojis, emojis_map = self.extract_emojis(text)
+        # 1. Protéger émojis, adresses, mentions et hashtags (#9086)
+        masked_text, entities = protect_entities(text)
 
         # 2. Segmenter intelligemment (phrases + listes)
-        parts = self.segment_by_sentences_and_lines(text_no_emojis)
+        parts = self.segment_by_sentences_and_lines(masked_text)
 
         # 3. Créer les segments
         segments = []
@@ -339,10 +353,10 @@ class TextSegmenter:
             })
             segment_index += 1
 
-        logger.info(f"[SEGMENTER] Text segmented into {len(segments)} parts ({len([s for s in segments if s['type'] == 'line'])} translatable lines) with {len(emojis_map)} emojis")
-        return segments, emojis_map
+        logger.info(f"[SEGMENTER] Text segmented into {len(segments)} parts ({len([s for s in segments if s['type'] == 'line'])} translatable lines) with {len(entities)} protected entities")
+        return segments, entities
 
-    def reassemble_text(self, translated_segments: List[Dict], emojis_map: Dict[int, str]) -> str:
+    def reassemble_text(self, translated_segments: List[Dict], entities: Dict[int, str]) -> str:
         """
         ALGORITHME SIMPLIFIÉ : Réassemble en respectant exactement les séparateurs mémorisés
 
@@ -350,11 +364,11 @@ class TextSegmenter:
         1. Pour chaque segment de type 'line' : ajouter le texte traduit
         2. Pour chaque segment de type 'code' : ajouter le code non traduit
         3. Pour chaque segment de type 'separator' : ajouter exactement les \n mémorisés
-        4. Restaurer les emojis à la fin
+        4. Réinjecter les entités protégées à la fin
 
         Args:
             translated_segments: Liste de segments avec 'text' et 'type'
-            emojis_map: Mapping des emojis à restaurer
+            entities: Mapping des entités protégées à réinjecter
         """
         result_parts = []
 
@@ -375,8 +389,8 @@ class TextSegmenter:
         # Joindre toutes les parties
         reassembled = ''.join(result_parts)
 
-        # Restaurer les emojis avec post-traitement robuste
-        final_text = self.restore_emojis(reassembled, emojis_map)
+        # Réinjecter émojis, adresses, mentions et hashtags
+        final_text = restore_entities(reassembled, entities)
 
         logger.info(f"[SEGMENTER] Text reassembled: {len(final_text)} chars from {len(translated_segments)} segments")
         return final_text
