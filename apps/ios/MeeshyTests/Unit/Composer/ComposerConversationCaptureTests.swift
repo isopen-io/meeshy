@@ -86,6 +86,19 @@ final class ComposerConversationCaptureTests: XCTestCase {
         }
     }
 
+    /// Un média rendu au message ne reprend NI n'écrase le brouillon de
+    /// création : la caméra de la barre ouvrait la story autosauvegardée.
+    func test_autosaveOpening_returnsToConversation_isDisabled() {
+        XCTAssertEqual(ComposerAutosaveOpening.decide(opensOnAtelier: false, isHydrated: false,
+                                                      resumesDraft: false, isSeeded: false,
+                                                      opensOnMood: false, returnsToConversation: true),
+                       .disabled)
+        XCTAssertEqual(ComposerAutosaveOpening.decide(opensOnAtelier: false, isHydrated: false,
+                                                      resumesDraft: false, isSeeded: true,
+                                                      opensOnMood: false, returnsToConversation: true),
+                       .disabled)
+    }
+
     // MARK: - Câblage
 
     func test_host_armsTheViewfinderThroughTheOriginRule() throws {
@@ -94,6 +107,8 @@ final class ComposerConversationCaptureTests: XCTestCase {
         XCTAssertTrue(code.contains("ComposerConversationCapture.armsViewfinderOnOpen(origin:intent.origin)"),
                       "Le meuble arme le viseur par la règle d'origine, jamais par un littéral.")
         XCTAssertTrue(code.contains("returnSceneMedia()"), "« Terminé » rend un MÉDIA, image ou vidéo.")
+        XCTAssertTrue(code.contains("returnsToConversation:returnsToConversation"),
+                      "Le brouillon de création reste hors de la retouche et de la caméra du fil.")
     }
 
     func test_conversationCamera_opensTheSceneViewfinder_notTheOldCameraSheet() throws {

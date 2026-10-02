@@ -155,8 +155,11 @@ nonisolated enum ComposerAutosaveOpening: Equatable, Sendable {
                        isHydrated: Bool,
                        resumesDraft: Bool,
                        isSeeded: Bool,
-                       opensOnMood: Bool) -> ComposerAutosaveOpening {
-        if opensOnAtelier || isHydrated || resumesDraft { return .disabled }
+                       opensOnMood: Bool,
+                       returnsToConversation: Bool = false) -> ComposerAutosaveOpening {
+        // Un média rendu au message (retouche, caméra du fil — #9123) ne
+        // reprend ni n'écrase la création en cours.
+        if opensOnAtelier || isHydrated || resumesDraft || returnsToConversation { return .disabled }
         if isSeeded || opensOnMood { return .preservesStoredDraft }
         return .restores
     }
