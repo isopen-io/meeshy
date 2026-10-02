@@ -233,7 +233,9 @@ final class CallReturnPointTests: XCTestCase {
     private final class RecordingHosting: CallReturnPointHosting {
         var shown = 0
         var hidden = 0
+        var appearanceRefreshes = 0
         var hasForegroundScene = true
+        func refreshAppearance() { appearanceRefreshes += 1 }
         func show(_ manager: CallManager, coverage: CallScreenCoverage) -> Bool {
             guard hasForegroundScene else { return false }
             shown += 1
@@ -242,9 +244,20 @@ final class CallReturnPointTests: XCTestCase {
         func hide() { hidden += 1 }
     }
 
+    private final class ScreenStub {
+        var isCovered = false
+    }
+
     private final class PresentingStub: UIViewController {
         var stubbedPresented: UIViewController?
         override var presentedViewController: UIViewController? { stubbedPresented }
+    }
+
+    private final class StatusBarStub: UIViewController {
+        var hidesStatusBar = false
+        var stubbedChild: UIViewController?
+        override var prefersStatusBarHidden: Bool { hidesStatusBar }
+        override var childForStatusBarHidden: UIViewController? { stubbedChild }
     }
 
     private func makeSUT(covered: Bool = false) -> (sut: CallReturnPointPresenter, hosting: RecordingHosting) {
@@ -306,6 +319,44 @@ final class CallReturnPointTests: XCTestCase {
         root.stubbedPresented = UIAlertController(title: nil, message: nil, preferredStyle: .alert)
         XCTAssertFalse(CallReturnPoint.isCovered(root: root))
         XCTAssertFalse(CallReturnPoint.isCovered(root: nil))
+    }
+
+    // MARK: - La barre d'état
+
+    func test_statusBarOwner_viewerPresentedOverTheRoot_ownsTheStatusBar() {
+        let root = PresentingStub()
+        let viewer = StatusBarStub()
+        viewer.hidesStatusBar = true
+        root.stubbedPresented = viewer
+
+        XCTAssertTrue(CallReturnPoint.statusBarOwner(root: root) === viewer)
+    }
+
+    func test_statusBarOwner_followsTheChildThatDecidesTheStatusBar() {
+        let root = PresentingStub()
+        let container = StatusBarStub()
+        let child = StatusBarStub()
+        container.stubbedChild = child
+        root.stubbedPresented = container
+
+        XCTAssertTrue(CallReturnPoint.statusBarOwner(root: root) === child)
+    }
+
+    func test_statusBarOwner_nothingPresented_isTheRoot() {
+        let root = PresentingStub()
+        XCTAssertTrue(CallReturnPoint.statusBarOwner(root: root) === root)
+        XCTAssertNil(CallReturnPoint.statusBarOwner(root: nil))
+    }
+
+    func test_refreshCoverage_shownWindow_followsTheAppStatusBar() {
+        let (sut, hosting) = makeSUT()
+
+        sut.apply(manager: CallManager.shared, needed: true)
+        let afterShow = hosting.appearanceRefreshes
+        sut.refreshCoverage()
+
+        XCTAssertGreaterThanOrEqual(afterShow, 1, "La fenêtre suit la barre d'état de l'app dès sa montée.")
+        XCTAssertEqual(hosting.appearanceRefreshes, afterShow + 1, "Chaque relevé recopie la barre d'état de l'écran d'en dessous.")
     }
 
     // MARK: - La fenêtre passe-plat
@@ -378,13 +429,13 @@ final class CallReturnPointTests: XCTestCase {
     }
 
     func test_apply_coverOpenedWhileReduced_raisesTheBubbleOnTheNextReading() {
-        var covered = false
+        let screen = ScreenStub()
         let hosting = RecordingHosting()
-        let sut = CallReturnPointPresenter(hosting: hosting, coverage: CallScreenCoverage(), probe: { covered })
+        let sut = CallReturnPointPresenter(hosting: hosting, coverage: CallScreenCoverage(), probe: { screen.isCovered })
         sut.apply(manager: CallManager.shared, needed: true)
         XCTAssertFalse(sut.coverage.isMainScreenCovered)
 
-        covered = true
+        screen.isCovered = true
         let raised = expectation(description: "relevé périodique")
         let watch = sut.coverage.$isMainScreenCovered.dropFirst().sink { if $0 { raised.fulfill() } }
         wait(for: [raised], timeout: 2)
