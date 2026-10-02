@@ -3326,7 +3326,7 @@ export class CallEventsHandler {
 
         const callSession = await this.callService.endCall(
           data.callId, userId, endParticipantId, isAnonymous, data.reason,
-          { preJoinDecline: Boolean(preJoinDecline) }
+          { preJoinDecline: Boolean(preJoinDecline), session: endParticipantDetail?.session }
         );
 
         // Group pre-join decline (2026-08-15): CallService.endCall() no-ops
