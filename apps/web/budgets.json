@@ -187,9 +187,9 @@
       "pattern": "^assets/video-effects-pipeline-[A-Za-z0-9_-]{8}\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 3,
-        "status": "REMESUREE PAR #8551",
-        "source": "Mesure de measure-weight.mjs le 2026-09-28 (`bun run build` puis gzip -9) : 2,41 Ko -- le traitement des images envoyees (`lib/calls/video-effects-pipeline.ts`) et, depuis #8551, le CALQUE des effets de visage (`lib/calls/face-effects-draw.ts` : lissage de peau, crapaud, ange, demon, eruption, traces a la main sur le canevas, sans aucune image ni modele). Charge A LA DEMANDE par `camera-effects.ts` au premier effet de couleur OU de visage : qui n en pose aucun ne le telecharge. La geometrie des effets et le suivi du visage vivent dans `call_face_tracker`, partage avec la capture. Arrondi au Ko SUPERIEUR (3), sans marge supplementaire. HISTORIQUE : 0,99 Ko a #8442 (couleur seule)."
+        "value": 4,
+        "status": "REMESUREE PAR #9100",
+        "source": "Mesure du 2026-10-02 (`bun run build` puis gzip -9) : 3,73 Ko -- le calque des effets de visage ne coute plus que le rectangle du visage et des sprites (#9100) : lissage a demi-resolution sur une surface de travail, lueurs (halo, eclat, yeux du demon, lave) et cornes dessinees UNE fois en sprites quantifies en cache, mouvement reduit, budget mesure sur le temps reel d une image. +1,5 Ko de code pour -37 % (lissage) et -28 % (eruption) par image, mesure dans Chromium. Plafond releve de 3 a 4. HISTORIQUE : Mesure de measure-weight.mjs le 2026-09-28 (`bun run build` puis gzip -9) : 2,41 Ko -- le traitement des images envoyees (`lib/calls/video-effects-pipeline.ts`) et, depuis #8551, le CALQUE des effets de visage (`lib/calls/face-effects-draw.ts` : lissage de peau, crapaud, ange, demon, eruption, traces a la main sur le canevas, sans aucune image ni modele). Charge A LA DEMANDE par `camera-effects.ts` au premier effet de couleur OU de visage : qui n en pose aucun ne le telecharge. La geometrie des effets et le suivi du visage vivent dans `call_face_tracker`, partage avec la capture. Arrondi au Ko SUPERIEUR (3), sans marge supplementaire. HISTORIQUE : 0,99 Ko a #8442 (couleur seule)."
       }
     },
     "call_video_effects_rules": {
