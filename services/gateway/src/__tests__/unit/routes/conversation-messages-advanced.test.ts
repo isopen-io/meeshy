@@ -631,7 +631,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       // donc un texte réellement réécrit ; le cas de l'URL brute seule est
       // couvert par le test suivant.
       await getEditHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir [[https://b.com]]' } }),
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir <https://b.com>' } }),
         makeReply()
       );
 
@@ -722,12 +722,12 @@ describe('registerMessagesAdvancedRoutes', () => {
         metadata: { trackingLinks: [{ url: 'https://a.com', token: 'tokA' }] },
       }));
       mockProcessExplicitLinksInContent.mockRejectedValue(new Error('link error'));
-      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'voir [[https://a.com]]', validatedMentions: [], translations: null });
+      prisma.message.update.mockResolvedValue({ id: MSG_ID, content: 'voir <https://a.com>', validatedMentions: [], translations: null });
 
       // Syntaxe explicite : c'est elle qui fait appeler le service, donc la
       // seule façon d'atteindre la panne qu'on veut éprouver.
       await getEditHandler(fastify)(
-        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir [[https://a.com]]' } }),
+        makeRequest({ params: { id: CONV_ID, messageId: MSG_ID }, body: { content: 'voir <https://a.com>' } }),
         makeReply()
       );
 
@@ -735,7 +735,7 @@ describe('registerMessagesAdvancedRoutes', () => {
       expect(updateArg.data).not.toHaveProperty('metadata');
       // Le texte de l'utilisateur, lui, est persisté : son édition n'est pas
       // annulée par une panne de tracking.
-      expect(updateArg.data.content).toBe('voir [[https://a.com]]');
+      expect(updateArg.data.content).toBe('voir <https://a.com>');
     });
 
     it('processes mentions when mentionService is available', async () => {
