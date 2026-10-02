@@ -157,5 +157,10 @@ final class ConversationComposerStateTests: XCTestCase {
         XCTAssertFalse(citation.contains("onComplete: { _ in editingVideoURL = nil }"),
                        "La citation d'un post jette le résultat de l'éditeur vidéo.")
         XCTAssertTrue(citation.contains("PendingVideoEditReplacement.apply(result, to: target.id"))
+        // #9166 — la scène se retire elle-même et sa fermeture vide la file
+        // avant « Terminé » : `removeFirst()` sur une file vide abattait l'app
+        // (mesuré au simulateur).
+        XCTAssertFalse(citation.contains("videosToPreview.removeFirst()"),
+                       "la tête de la file des vidéos se retire sans supposer qu'elle existe")
     }
 }

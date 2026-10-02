@@ -524,13 +524,15 @@ struct FeedComposerSheet: View {
             set: { if !$0 { videosToPreview.removeAll() } }
         )) {
             if let url = videosToPreview.first {
+                // La scène se retire elle-même : sa fermeture a pu vider la
+                // file avant ce rappel — on n'enlève qu'une tête qui existe.
                 ConversationVideoSceneEditor(url: url, staged: false, onDone: { media in
-                    videosToPreview.removeFirst()
+                    videosToPreview = Array(videosToPreview.dropFirst())
                     switch media {
                     case .video(let rendue): handleCameraVideo(rendue)
                     case .image(let image): handleCameraCapture(image)
                     }
-                }, onCancel: { videosToPreview.removeFirst() })
+                }, onCancel: { videosToPreview = Array(videosToPreview.dropFirst()) })
             }
         }
         .fullScreenCover(isPresented: Binding(
