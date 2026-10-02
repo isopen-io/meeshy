@@ -47,7 +47,13 @@ final class CallControlsControllerTests: XCTestCase {
         var moderatorMutes = 0
 
         func applyModeratorMute() { moderatorMutes += 1 }
-        func participantName(for userId: String) -> String { userId == "u-admin" ? "Sam" : userId }
+        func participantName(for userId: String) -> String {
+            switch userId {
+            case "u-admin": return "Sam"
+            case "u-ghost": return ""
+            default: return userId
+            }
+        }
     }
 
     private struct Env {
@@ -221,6 +227,38 @@ final class CallControlsControllerTests: XCTestCase {
         env.sut.receive(.reactionReceived(CallReactionReceivedEvent(callId: "call-1", userId: "u-lea", emoji: .heart)))
 
         XCTAssertEqual(env.sut.reactions.map(\.emoji), [.heart])
+    }
+
+    func test_reactionReceived_carriesItsAuthorsName() {
+        let env = makeEnv()
+
+        env.sut.receive(.reactionReceived(CallReactionReceivedEvent(callId: "call-1", userId: "u-admin", emoji: .heart)))
+
+        XCTAssertEqual(env.sut.reactions.map(\.author), [.peer(name: "Sam")])
+    }
+
+    func test_react_carriesMeAsItsAuthor() {
+        let env = makeEnv()
+
+        env.sut.react(.fire)
+
+        XCTAssertEqual(env.sut.reactions.map(\.author), [.me])
+    }
+
+    func test_reactionReceived_fromMyOwnId_isMine() {
+        let env = makeEnv()
+
+        env.sut.receive(.reactionReceived(CallReactionReceivedEvent(callId: "call-1", userId: "u-me", emoji: .clap)))
+
+        XCTAssertEqual(env.sut.reactions.map(\.author), [.me])
+    }
+
+    func test_reactionReceived_fromAnUnnamedParticipant_isSomeone() {
+        let env = makeEnv()
+
+        env.sut.receive(.reactionReceived(CallReactionReceivedEvent(callId: "call-1", userId: "u-ghost", emoji: .laugh)))
+
+        XCTAssertEqual(env.sut.reactions.map(\.author), [.someone])
     }
 
     func test_reaction_fadesAwayAfterItsFlight() async {
