@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { chooseGrid, chooseMember, resolveSpotlight, type SpotlightChoice } from './call-spotlight';
+import { chooseGrid, chooseMember, chooseSelf, resolveSpotlight, SCREEN_MAX_ZOOM, screenZoomAfterPinch, screenZoomAfterWheel, type SpotlightChoice } from './call-spotlight';
 import type { CallMember } from './call-store';
 
 /**
@@ -68,5 +68,30 @@ describe('la montée automatique d’un partage', () => {
 
   test('« Grille » sans partage en cours reste la grille', () => {
     expect(view([awa, bintou], chooseGrid(null))).toBeNull();
+  });
+});
+
+describe('ma tuile à la une (#9098, comme `GroupCallSpotlight.featuresLocal` sur iOS)', () => {
+  test('toucher ma tuile la met à la une : `featured` nul dit « moi », tous les pairs passent en bandeau', () => {
+    expect(view([awa, bintou], chooseSelf())).toEqual({ featured: null, others: [awa, bintou], screen: false, automatic: false });
+  });
+
+  test('ma tuile choisie l’emporte sur un partage, comme tout choix manuel', () => {
+    expect(view([awa, sharing], chooseSelf())?.featured).toBeNull();
+  });
+});
+
+describe('le zoom d’un écran partagé (#9098, `GroupCallSpotlight.clampedZoom`)', () => {
+  test('pincer multiplie le zoom, borné entre 1 et 4', () => {
+    expect(screenZoomAfterPinch(1, 2)).toBe(2);
+    expect(screenZoomAfterPinch(3, 2)).toBe(SCREEN_MAX_ZOOM);
+    expect(screenZoomAfterPinch(1.5, 0.2)).toBe(1);
+  });
+
+  test('Ctrl + molette zoome d’un cran, vers le haut grandit', () => {
+    expect(screenZoomAfterWheel(1, -100)).toBeGreaterThan(1);
+    expect(screenZoomAfterWheel(2, 100)).toBeLessThan(2);
+    expect(screenZoomAfterWheel(1, 100)).toBe(1);
+    expect(screenZoomAfterWheel(SCREEN_MAX_ZOOM, -100)).toBe(SCREEN_MAX_ZOOM);
   });
 });

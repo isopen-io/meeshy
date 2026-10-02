@@ -15,6 +15,8 @@
  * gabarits (390 × 844, 320 × 568) :
  *
  *  1. un appel VOCAL se connecte au pair ;
+ *  1 bis. glisser l'écran vers le bas (#9096) : un petit glissé le laisse en
+ *     place, un glissé aux trois quarts le réduit en pastille, qui le rend ;
  *  2. le bouton « Partager l’écran » est offert, cible de 44, derrière le (…)
  *     de la pilule qui déplie les actions (#8391) ;
  *  3. le toucher annonce le partage, et le pair DÉCODE des images de l'écran
@@ -147,6 +149,28 @@ try {
       try {
         // ------------------------------------------------ 1. un appel vocal connecté
         check(await startConnectedAudioCall(page), `${label} : l'appel vocal se connecte au pair`);
+
+        // ------------------------------------------------ 1 bis. glisser vers le bas réduit l'appel (#9096)
+        check((await page.getAttribute('[data-call-screen]', 'data-call-swipe-down')) === 'ready', `${label} : en duo connecté, l'écran d'appel se glisse vers le bas`);
+        const drag = async (distance) => {
+          const x = Math.round(width / 2);
+          const y = Math.round(height * 0.25);
+          await page.mouse.move(x, y);
+          await page.mouse.down();
+          await page.mouse.move(x, y + distance / 2, { steps: 8 });
+          await page.mouse.move(x, y + distance, { steps: 8 });
+          await page.waitForTimeout(150);
+          await page.mouse.up();
+        };
+        await drag(30);
+        await page.waitForTimeout(300);
+        check((await page.$('[data-call-screen="connected"]')) !== null && (await page.$('[data-call-pill-bar]')) === null, `${label} : un toucher ou un petit glissé laisse l'écran d'appel en place`);
+        await drag(Math.min(280, height - Math.round(height * 0.25) - 20));
+        check(await appears(page, '[data-call-pill-bar]', 3000), `${label} : glissé aux trois quarts et relâché, l'appel se réduit`);
+        check((await page.$('[data-call-screen]')) === null, `${label} : réduit, l'écran d'appel a quitté le plein écran`);
+        await capture(page, `glisse-reduit-${slug}`);
+        await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
+        check(await appears(page, '[data-call-screen="connected"]'), `${label} : la pastille rend l'écran d'appel`);
 
         // ------------------------------------------------ 2. le bouton
         await openActions(page);

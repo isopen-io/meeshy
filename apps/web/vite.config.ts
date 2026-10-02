@@ -316,6 +316,69 @@ const dropWebOnlyAssets = (): Plugin => ({
  */
 const FIXTURE_MODULE = /\/src\/lib\/api\/fixtures[\w-]*\.ts$/;
 
+/**
+ * UN `.env` HÉRITÉ NE FAIT PLUS D'UN `vite build` UN BUILD DE DÉVELOPPEMENT
+ * (#9176).
+ *
+ * Le legacy Next.js a laissé, non suivi, `apps/web/.env` avec
+ * `NODE_ENV=development`. Pour Vite, c'est la manière DOCUMENTÉE de demander un
+ * build de développement : le bundle sortait en silence avec
+ * `import.meta.env.PROD` faux — sans service worker, avec `dev-harness` — et
+ * faussait chaque gate local qui lit un comportement de production (#9118).
+ *
+ * Seul le SHELL demande désormais un build de développement
+ * (`NODE_ENV=development vite build`). Un `NODE_ENV` venu d'un fichier est
+ * écarté AVANT que Vite ne lise ses fichiers : `loadEnv` ne recopie
+ * `NODE_ENV` dans `VITE_USER_NODE_ENV` que si cette dernière est absente, et
+ * une chaîne vide n'y bascule rien. Les `VITE_*` du fichier restent lus. Puis
+ * `configResolved` VÉRIFIE le résultat : si une version de Vite changeait ce
+ * mécanisme, le build échouerait plutôt que de repartir en silence.
+ */
+const ENV_FILE_NODE_ENV = /^\s*(?:export\s+)?NODE_ENV\s*=\s*["']?([^"'\s#]*)/gm;
+
+const declaredNodeEnv = (dir: string, name: string): string | undefined => {
+  const text = (() => {
+    try {
+      return readFileSync(join(dir, name), 'utf8');
+    } catch {
+      return undefined;
+    }
+  })();
+  return text === undefined ? undefined : [...text.matchAll(ENV_FILE_NODE_ENV)].at(-1)?.[1];
+};
+
+const productionBuildGuard = (): Plugin => {
+  const state: { shellAsksDevelopment: boolean } = { shellAsksDevelopment: false };
+  return {
+    name: 'meeshy-production-build-guard',
+    enforce: 'pre',
+    config(userConfig, { command, mode }) {
+      if (command !== 'build') return;
+      state.shellAsksDevelopment = process.env.NODE_ENV === 'development';
+      if (state.shellAsksDevelopment) return;
+      const envDir = resolve(userConfig.root ?? process.cwd(), typeof userConfig.envDir === 'string' ? userConfig.envDir : '');
+      const inherited = ['.env', '.env.local', `.env.${mode}`, `.env.${mode}.local`].filter(
+        (name) => declaredNodeEnv(envDir, name) === 'development',
+      );
+      if (inherited.length === 0) return;
+      process.env.VITE_USER_NODE_ENV = '';
+      console.warn(
+        `[meeshy] NODE_ENV=development ignoré dans ${inherited.map((name) => join(envDir, name)).join(', ')} : ` +
+          'ce build reste de PRODUCTION. Un build de développement se demande depuis le shell ' +
+          '(NODE_ENV=development vite build) ; le fichier, hérité du legacy Next.js, peut être supprimé.',
+      );
+    },
+    configResolved(config) {
+      if (config.command !== 'build' || config.isProduction || state.shellAsksDevelopment) return;
+      throw new Error(
+        `vite build produirait un build de DÉVELOPPEMENT (NODE_ENV=${process.env.NODE_ENV}) sans que le shell l'ait ` +
+          'demandé — un fichier .env le pose. Retirez NODE_ENV de ce fichier, ou lancez ' +
+          'NODE_ENV=development vite build si c’est voulu (#9176).',
+      );
+    },
+  };
+};
+
 const proxyTarget = process.env.MEESHY_PROXY_TARGET ?? 'https://gate.staging.meeshy.me';
 
 export default defineConfig({
@@ -439,6 +502,7 @@ export default defineConfig({
     ],
   },
   plugins: [
+    productionBuildGuard(),
     tailwind(),
     inlineSchemeBootstrap(),
     inlineInterfaceLanguageBootstrap(),

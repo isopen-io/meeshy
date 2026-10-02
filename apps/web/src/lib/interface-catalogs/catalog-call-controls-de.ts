@@ -72,6 +72,8 @@ const de = {
   'callControls.selfTile.corner.top-right': 'Mein Vorschaubild: oben rechts',
   'callControls.selfTile.corner.bottom-left': 'Mein Vorschaubild: unten links',
   'callControls.selfTile.corner.bottom-right': 'Mein Vorschaubild: unten rechts',
+  'callControls.spotlight.self': 'Mein Bild hervorheben',
+  'callControls.screenZoom.hint': 'Geteilter Bildschirm: zum Zoomen zusammenziehen oder Strg + Mausrad, zweimal tippen für die ganze Ansicht',
 } satisfies CallControlsCatalog;
 
 export default de;

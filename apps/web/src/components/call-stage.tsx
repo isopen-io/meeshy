@@ -316,7 +316,8 @@ export function CallStage({ call, layout, language, choice, onChoose, immersive,
       <CallGrid
         members={orderedMembers(call.members)}
         remoteStreams={call.remoteStreams}
-        self={{ stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call) }}
+        self={{ stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call), micMuted: call.micMuted }}
+        selfControls={self.controls ? self.row() : null}
         choice={choice}
         onChoose={onChoose}
         immersive={immersive}

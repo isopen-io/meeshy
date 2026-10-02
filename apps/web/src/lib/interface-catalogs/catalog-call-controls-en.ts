@@ -72,6 +72,8 @@ const en = {
   'callControls.selfTile.corner.top-right': 'My thumbnail: top right',
   'callControls.selfTile.corner.bottom-left': 'My thumbnail: bottom left',
   'callControls.selfTile.corner.bottom-right': 'My thumbnail: bottom right',
+  'callControls.spotlight.self': 'Show my video in the spotlight',
+  'callControls.screenZoom.hint': 'Shared screen: pinch or Ctrl + scroll to zoom, double-tap to see it whole again',
 } satisfies CallControlsCatalog;
 
 export default en;

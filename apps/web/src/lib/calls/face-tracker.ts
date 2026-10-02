@@ -7,7 +7,9 @@ import { heuristicFaceBox, shouldDetect, smoothFaceBox, type Box } from './face-
  * `FaceDetector` : Chrome sur Android et macOS, la coque) ; aucun modèle
  * n'est téléchargé. Il tourne une image sur `FACE_DETECT_EVERY`, sans jamais
  * faire attendre l'image courante : elle se dessine avec la dernière boîte
- * connue, lissée. Sans détecteur, ou quand il échoue, la boîte supposée.
+ * connue, lissée. Sans détecteur, ou quand il échoue, la boîte supposée. Il
+ * lit une image RÉDUITE à `DETECT_WIDTH` (#9100), et sa boîte revient à
+ * l'échelle de l'image.
  */
 
 type Detected = { readonly boundingBox: { readonly x: number; readonly y: number; readonly width: number; readonly height: number } };
@@ -36,14 +38,46 @@ const boxOf = (found: readonly Detected[]): Box | null => {
 
 export type FaceTracker = { readonly next: (source: CanvasImageSource, frame: { readonly width: number; readonly height: number }, frameIndex: number) => Box };
 
-export function createFaceTracker(detector: FaceDetectorPort | null): FaceTracker {
+/** La largeur de l'image que lit le détecteur (#9100) : un visage s'y trouve, et la relecture GPU → CPU d'une image 720p ne se paie plus. */
+export const DETECT_WIDTH = 320;
+
+type Reduced = { readonly image: CanvasImageSource; readonly width: number; readonly close: () => void };
+
+/** Réduit `source` (large de `from`) à `to` pixels de large ; rend l'image et sa largeur réelle. */
+export type ResizePort = (source: CanvasImageSource, size: { readonly from: number; readonly to: number }) => Promise<Reduced>;
+
+type BitmapScope = { readonly createImageBitmap?: (source: CanvasImageSource, options: { readonly resizeWidth: number; readonly resizeQuality: 'low' }) => Promise<ImageBitmap> };
+
+/** La réduction du navigateur (`createImageBitmap`, aussi dans un Worker), ou l'image telle quelle là où elle n'existe pas. */
+export function browserResize(scope: BitmapScope = globalThis as BitmapScope): ResizePort {
+  const create = scope.createImageBitmap;
+  if (typeof create !== 'function') return async (image, { from }) => ({ image, width: from, close: () => undefined });
+  return async (image, { to }) => {
+    const bitmap = await create.call(scope, image, { resizeWidth: to, resizeQuality: 'low' });
+    return { image: bitmap, width: bitmap.width, close: () => bitmap.close() };
+  };
+}
+
+const scaled = (box: Box | null, factor: number): Box | null => (box === null || factor === 1 ? box : { x: box.x * factor, y: box.y * factor, width: box.width * factor, height: box.height * factor });
+
+export function createFaceTracker(detector: FaceDetectorPort | null, options: { readonly resize?: ResizePort } = {}): FaceTracker {
+  const resize = options.resize ?? browserResize();
   const state: { seen: Box | null; shown: Box | null; busy: boolean } = { seen: null, shown: null, busy: false };
-  const ask = (source: CanvasImageSource): void => {
+  const read = async (port: FaceDetectorPort, source: CanvasImageSource, width: number): Promise<Box | null> => {
+    if (width <= DETECT_WIDTH) return boxOf(await port.detect(source));
+    const reduced = await resize(source, { from: width, to: DETECT_WIDTH });
+    try {
+      return scaled(boxOf(await port.detect(reduced.image)), width / reduced.width);
+    } finally {
+      reduced.close();
+    }
+  };
+  const ask = (source: CanvasImageSource, width: number): void => {
     if (detector === null || state.busy) return;
     state.busy = true;
-    detector.detect(source).then(
-      (found) => {
-        state.seen = boxOf(found);
+    read(detector, source, width).then(
+      (box) => {
+        state.seen = box;
         state.busy = false;
       },
       () => {
@@ -54,7 +88,7 @@ export function createFaceTracker(detector: FaceDetectorPort | null): FaceTracke
   };
   return {
     next: (source, frame, frameIndex) => {
-      if (shouldDetect(frameIndex)) ask(source);
+      if (shouldDetect(frameIndex)) ask(source, frame.width);
       const target = state.seen ?? heuristicFaceBox(frame);
       state.shown = state.seen === null ? target : smoothFaceBox(state.shown, target);
       return state.shown;
