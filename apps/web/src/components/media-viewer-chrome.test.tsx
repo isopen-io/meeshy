@@ -75,7 +75,7 @@ afterEach(() => {
   container.remove();
 });
 
-async function mount(params: { readonly offers: MediaPageOffers; readonly onReply?: () => void; readonly onClose?: () => void; readonly withCarrier?: boolean }): Promise<HTMLElement> {
+async function mount(params: { readonly offers: MediaPageOffers; readonly onReply?: () => void; readonly onClose?: () => void; readonly withCarrier?: boolean; readonly carrier?: MediaCarrier }): Promise<HTMLElement> {
   const items = [photo('a'), photo('b')];
   container = document.createElement('div');
   container.id = 'root';
@@ -89,7 +89,7 @@ async function mount(params: { readonly offers: MediaPageOffers; readonly onRepl
         onClose={params.onClose ?? (() => {})}
         languages={['fr']}
         fallbackLanguage="fr"
-        {...(params.withCarrier === false ? {} : { carrier })}
+        {...(params.withCarrier === false ? {} : { carrier: params.carrier ?? carrier })}
         actionsAt={(index) => pageOf(items[index]!, params.offers, params.onReply)}
       />,
     );
@@ -224,5 +224,23 @@ describe('MediaViewer — le chrome commun des plein écrans (#8879)', () => {
     expect(bars).toHaveLength(2);
     expect(bars.map((bar) => bar.getAttribute('data-chrome-yields'))).toEqual(['hidden', 'hidden']);
     expect(bars.every((bar) => bar.hasAttribute('inert'))).toBe(true);
+  });
+
+  test('#9074 — la légende du pied ouvre ses adresses : la carte par /l/, le lien garde le geste, le plateau ne l’entend pas', async () => {
+    const tracked: MediaCarrier = {
+      ...carrier,
+      caption: { text: 'Le port https://exemple.org/port', language: 'fr', translated: false },
+      trackingLinks: [{ url: 'https://exemple.org/port', token: 'Port9' }],
+    };
+    const dialog = await mount({ offers: ALL, onReply: () => {}, carrier: tracked });
+    const link = dialog.querySelector<HTMLAnchorElement>('[data-viewer-caption-text] a')!;
+    expect(link.getAttribute('href')).toBe('/l/Port9');
+    expect(link.textContent).toBe('https://exemple.org/port');
+    expect(link.hasAttribute('data-claims-gesture')).toBe(true);
+    link.addEventListener('click', (event) => event.preventDefault());
+    act(() => {
+      link.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    expect(dialog.querySelector('[data-viewer-top-bar]')!.getAttribute('data-chrome-yields')).toBe('shown');
   });
 });
