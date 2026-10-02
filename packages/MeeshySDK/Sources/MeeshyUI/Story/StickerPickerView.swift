@@ -51,7 +51,9 @@ public struct StickerPickerView: View {
     /// raisonnement complet vit dans `StickerSheetTab`, avec ce que le
     /// remplacement corrige : dix-huit sections toutes également lointaines,
     /// où la deuxième visite coûtait autant que la première.
-    @State var selectedTab: StickerSheetTab = .search
+    ///
+    /// Depuis #9190 une PAGE : un onglet fixe, un pack installé ou la Boutique.
+    @State var selectedPage: StickerSheetPage = .fixed(.search)
     /// Les mots tapés dans l'onglet RECHERCHE — ils filtrent le catalogue à la
     /// frappe (loi 7), et ne survivent pas à la fermeture : une recherche est
     /// une intention du moment, pas une préférence.
@@ -73,6 +75,9 @@ public struct StickerPickerView: View {
     @Environment(\.stickerNearbyPlaces) var nearbyPlaces
     @Environment(\.meeStickerPick) var meeStickerPick
     @Environment(\.meeInstantPick) var meeInstantPick
+    /// Les packs installés et la Boutique, servis par l'app (#9190). `nil` :
+    /// ni pack de tiers ni Boutique, les intégrés installés par défaut.
+    @Environment(\.stickerPackShelf) var packShelf
     @Environment(\.stickerPaletteClock) private var clock
 
     @State var libraryItems: [StoryStickerLibraryItem] = []
@@ -159,8 +164,7 @@ public struct StickerPickerView: View {
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.top, MeeshySpacing.lg)
                     .padding(.bottom, MeeshySpacing.md)
-                StickerSheetTabBar(selection: $selectedTab,
-                                   tabs: StickerSheetTab.offered(hasMee: meeStickerPick != nil))
+                StickerSheetTabBar(selection: displayedPageBinding, entries: tabEntries)
                     .padding(.bottom, MeeshySpacing.sm)
                 tabbedContent
             }

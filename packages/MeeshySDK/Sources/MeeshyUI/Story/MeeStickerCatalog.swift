@@ -121,6 +121,30 @@ nonisolated public enum MeeStickerCatalog {
         }
     }
 
+    /// **La planche d'un pack intégré** (#9190) : les mêmes rangées, réduites
+    /// à SA distribution — Mee seule, Meo seul, ou leurs duos. Une intention
+    /// qu'elle ne joue pas ne laisse aucun titre orphelin.
+    public static func rows(columns: Int, cast: MeeSticker.Character) -> [Row] {
+        intentOrder.flatMap { intent -> [Row] in
+            let stickers = all.filter { $0.tab == cast && $0.intent == intent }
+            guard !stickers.isEmpty else { return [] }
+            return [Row.title(intent)] + stride(from: 0, to: stickers.count, by: columns).map {
+                Row.stickers(Array(stickers[$0..<min($0 + columns, stickers.count)]))
+            }
+        }
+    }
+
+    /// La distribution d'un pack intégré (`BUILTIN_STICKER_PACKS` du shared) —
+    /// `nil` pour un pack de tiers.
+    public static func cast(forPackSlug slug: String) -> MeeSticker.Character? {
+        switch BuiltinStickerPack(slug: slug) {
+        case .mee: .mee
+        case .meo: .meo
+        case .meeEtMeo: .duo
+        case nil: nil
+        }
+    }
+
     /// Le Mee qu'une entrée de favori ou de récent désigne — `nil` si elle
     /// n'en est pas un, ou s'il a quitté le catalogue (#9067).
     public static func sticker(for entry: StickerUsageEntry) -> MeeSticker? {

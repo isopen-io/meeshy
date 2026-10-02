@@ -41,16 +41,18 @@ extension StickerPickerView {
             //
             // Ce qui sépare deux sections est désormais l'ESPACE et la graisse
             // du titre — la même grammaire que la fiche de création audio.
-            LazyVStack(alignment: .leading, spacing: Self.rowSpacing(for: selectedTab)) {
-                switch selectedTab {
-                case .search:    searchTabContent
-                case .favorites: usageSections(usage.favorites, vide: .favorites)
-                case .recents:   usageSections(usage.recents, vide: .recents)
-                case .meeAndMeo: meeSections
-                case .custom:
+            LazyVStack(alignment: .leading, spacing: Self.rowSpacing(for: displayedPage)) {
+                switch displayedPage {
+                case .fixed(.search):    searchTabContent
+                case .fixed(.favorites): usageSections(usage.favorites, vide: .favorites)
+                case .fixed(.recents):   usageSections(usage.recents, vide: .recents)
+                case .fixed(.meeAndMeo): meeSections(cast: nil)
+                case .fixed(.custom):
                     paletteSections(for: .custom)
                     meeInstantSections
-                case .smileys:   smileySections
+                case .fixed(.smileys):   smileySections
+                case .pack(let slug):    packContent(slug: slug)
+                case .shop:              shopContent
                 }
             }
             .padding(.horizontal, MeeshySpacing.xl)
@@ -66,7 +68,7 @@ extension StickerPickerView {
         // `.id` sur l'onglet plutôt qu'un `ScrollViewReader` : la liste est
         // paresseuse, sa reconstruction ne coûte que les sections visibles, et
         // un lecteur aurait demandé une ancre par section pour un seul usage.
-        .id(selectedTab)
+        .id(displayedPage)
     }
 
     // MARK: - Recherche
@@ -134,6 +136,16 @@ extension StickerPickerView {
     /// titres reprennent l'aération d'une section par leur propre marge.
     static func rowSpacing(for onglet: StickerSheetTab) -> CGFloat {
         onglet == .meeAndMeo ? 8 : MeeshySpacing.xxl
+    }
+
+    /// Une page de pack intégré défile en RANGÉES, comme la planche Mee & Meo ;
+    /// un pack de tiers et la Boutique, en sections.
+    static func rowSpacing(for page: StickerSheetPage) -> CGFloat {
+        switch page {
+        case .fixed(let onglet): rowSpacing(for: onglet)
+        case .pack(let slug): MeeStickerCatalog.cast(forPackSlug: slug) == nil ? MeeshySpacing.xxl : 8
+        case .shop: MeeshySpacing.xxl
+        }
     }
 
     // MARK: - Favoris et récents

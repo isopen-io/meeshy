@@ -23,49 +23,85 @@ import MeeshySDK
 /// « Dynami… » n'apprend rien de plus qu'un pictogramme.
 public struct StickerSheetTabBar: View {
 
-    @Binding var selection: StickerSheetTab
+    /// Une entrée de la barre : la page, son mot et son glyphe. Un pack n'a ni
+    /// titre ni glyphe à la compilation — son nom vient du serveur.
+    public struct Entry: Identifiable {
+        public let page: StickerSheetPage
+        public let title: String
+        public let symbolName: String
+        public var id: String { page.id }
+
+        public init(page: StickerSheetPage, title: String, symbolName: String) {
+            self.page = page
+            self.title = title
+            self.symbolName = symbolName
+        }
+    }
+
+    @Binding var selection: StickerSheetPage
     @Environment(\.colorScheme) private var colorScheme
 
-    let tabs: [StickerSheetTab]
+    let entries: [Entry]
 
-    public init(selection: Binding<StickerSheetTab>,
-                tabs: [StickerSheetTab] = StickerSheetTab.offered(hasMee: false)) {
+    /// Au-delà de six positions, la capsule DÉFILE (#9190) : un onglet par pack
+    /// installé en ajoute autant qu'il y a de packs, et des libellés réduits à
+    /// l'illisible n'apprendraient plus rien.
+    static let fixedWidthLimit = 6
+    static let scrollingEntryWidth: CGFloat = 64
+
+    public init(selection: Binding<StickerSheetPage>, entries: [Entry]) {
         self._selection = selection
-        self.tabs = tabs
+        self.entries = entries
     }
 
     public var body: some View {
-        HStack(spacing: 4) {
-            ForEach(tabs) { onglet in
-                Button {
-                    // L'animation porte sur la SÉLECTION, donc sur la pastille
-                    // qui glisse — le contenu, lui, se remplace sans ressort :
-                    // animer une liste qu'on vient de changer entièrement fait
-                    // clignoter des sections que personne n'a demandées.
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
-                        selection = onglet
+        Group {
+            if entries.count > Self.fixedWidthLimit {
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 4) { buttons(width: Self.scrollingEntryWidth) }
+                            .padding(4)
                     }
-                    HapticFeedback.light()
-                } label: {
-                    entree(onglet)
+                    .onAppear { proxy.scrollTo(selection.id, anchor: .center) }
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(onglet.title)
-                .accessibilityAddTraits(onglet == selection ? [.isButton, .isSelected] : .isButton)
+            } else {
+                HStack(spacing: 4) { buttons(width: nil) }
+                    .padding(4)
             }
         }
-        .padding(4)
         .adaptiveGlass(in: Capsule())
         .padding(.horizontal, 16)
     }
 
     @ViewBuilder
-    private func entree(_ onglet: StickerSheetTab) -> some View {
-        let choisi = onglet == selection
+    private func buttons(width: CGFloat?) -> some View {
+        ForEach(entries) { entree in
+            Button {
+                // L'animation porte sur la SÉLECTION, donc sur la pastille
+                // qui glisse — le contenu, lui, se remplace sans ressort :
+                // animer une liste qu'on vient de changer entièrement fait
+                // clignoter des sections que personne n'a demandées.
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.86)) {
+                    selection = entree.page
+                }
+                HapticFeedback.light()
+            } label: {
+                label(entree, width: width)
+            }
+            .buttonStyle(.plain)
+            .id(entree.id)
+            .accessibilityLabel(entree.title)
+            .accessibilityAddTraits(entree.page == selection ? [.isButton, .isSelected] : .isButton)
+        }
+    }
+
+    @ViewBuilder
+    private func label(_ entree: Entry, width: CGFloat?) -> some View {
+        let choisi = entree.page == selection
         VStack(spacing: 3) {
-            Image(systemName: onglet.symbolName)
+            Image(systemName: entree.symbolName)
                 .font(.system(size: 13, weight: .semibold))
-            Text(onglet.title)
+            Text(entree.title)
                 .font(.system(size: 9, weight: choisi ? .bold : .medium, design: .rounded))
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
@@ -75,7 +111,8 @@ public struct StickerSheetTabBar: View {
         // une capsule de 44 pt, un anneau se confond avec le socle de verre.
         .foregroundStyle(choisi ? AnyShapeStyle(MeeshyColors.brandGradient)
                                 : AnyShapeStyle(Color.secondary))
-        .frame(maxWidth: .infinity)
+        .frame(width: width)
+        .frame(maxWidth: width == nil ? .infinity : nil)
         .frame(height: 40)
         .background {
             if choisi {

@@ -45,7 +45,9 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
     case favorites
     /// Ce qu'il a posé récemment.
     case recents
-    /// Mee, Meo et leurs duos, rangés par intention (#9053, #9058, #9068).
+    /// Mee, Meo et leurs duos (#9053, #9058, #9068). Plus jamais une page
+    /// depuis #9190 — chaque pack intégré a la sienne — : le titre de la
+    /// section Mee de Favoris et Récents.
     case meeAndMeo
     /// Ce que l'auteur fait sien (directive porteur 2026-09-25 : « une tab
     /// customisée plutôt que dynamique ») : ses propres stickers, puis les
@@ -128,12 +130,8 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// **Les onglets rendus, dans l'ordre** (loi 4). Mee & Meo n'existe que si
-    /// l'hôte sait ENVOYER leur sticker (`meeStickerPick`) — la scène d'une
-    /// story ne sait pas poser un film, et n'y montre donc pas l'onglet.
-    public static func offered(hasMee: Bool) -> [StickerSheetTab] {
-        allCases.filter { hasMee || $0 != .meeAndMeo }
-    }
+    // Les onglets RENDUS ne se lisent plus ici : `StickerSheetPage.offered`
+    // (#9190) range les onglets fixes autour d'un onglet par pack installé.
 
     /// **Toute famille servie appartient à AU MOINS un onglet.**
     ///

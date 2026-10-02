@@ -19,9 +19,18 @@ extension StickerPickerView {
     /// créait ses quarante cases d'un coup et faisait osciller la hauteur du
     /// contenu au bas de la planche — défilement figé, processeur à 100 %
     /// (retour porteur 2026-10-02).
+    ///
+    /// `cast` : la distribution d'un pack intégré (#9190) — `nil`, la planche
+    /// entière.
     @ViewBuilder
-    var meeSections: some View {
-        ForEach(MeeStickerCatalog.rows(columns: Self.meeColumns)) { row in
+    func meeSections(cast: MeeSticker.Character?) -> some View {
+        let rows = cast.map { MeeStickerCatalog.rows(columns: Self.meeColumns, cast: $0) }
+            ?? MeeStickerCatalog.rows(columns: Self.meeColumns)
+        let firstIntent = rows.first.flatMap { row -> MeeSticker.Intent? in
+            if case .title(let intent) = row { return intent }
+            return nil
+        }
+        ForEach(rows) { row in
             switch row {
             case .title(let intent):
                 sectionHeader(symbole: StickerSheetTab.meeAndMeo.symbolName, titre: intent.title) {
@@ -30,8 +39,8 @@ extension StickerPickerView {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.top, intent == MeeStickerCatalog.sections.first?.intent
-                         ? 0 : MeeshySpacing.xxl - Self.rowSpacing(for: .meeAndMeo))
+                .padding(.top, intent == firstIntent
+                         ? 0 : MeeshySpacing.xxl - Self.rowSpacing(for: StickerSheetTab.meeAndMeo))
             case .stickers(let stickers):
                 meeRow(stickers)
             }

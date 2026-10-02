@@ -139,14 +139,16 @@ final class MeeStickerCatalogTests: XCTestCase {
 
     // MARK: - Les onglets de la feuille
 
-    /// Loi 4 : un onglet n'existe que s'il a un effet. Sans hôte capable
-    /// d'ENVOYER un Mee (la scène d'une story ne sait pas le poser), l'onglet
-    /// n'est pas rendu — jamais grisé. Et il n'y en a plus qu'UN (#9068).
-    func test_sheetTabs_offerOneMeeAndMeoTab_onlyWhenAHostSendsThem() {
-        XCTAssertEqual(StickerSheetTab.offered(hasMee: false),
-                       [.search, .favorites, .recents, .custom, .smileys])
-        XCTAssertEqual(StickerSheetTab.offered(hasMee: true),
-                       [.search, .favorites, .recents, .meeAndMeo, .custom, .smileys])
+    /// Loi 4 : sans hôte capable d'envoyer ou de poser un Mee, aucun pack
+    /// intégré n'a d'onglet. Depuis #9190, un onglet par PACK installé
+    /// (`StickerSheetPage`) remplace l'onglet unique « Mee & Meo » (#9068).
+    func test_sheetPages_offerTheBuiltinPacks_onlyWhenAHostSendsThem() {
+        XCTAssertFalse(StickerSheetPage.offered(hasMee: false, installed: nil, hasPackPick: false, hasShop: false)
+                        .contains(where: \.isPack))
+        XCTAssertEqual(StickerSheetPage.offered(hasMee: true, installed: nil, hasPackPick: false, hasShop: false)
+                        .filter(\.isPack), [.pack("mee"), .pack("meo"), .pack("mee-et-meo")])
+        XCTAssertFalse(StickerSheetPage.offered(hasMee: true, installed: nil, hasPackPick: false, hasShop: false)
+                        .contains(.fixed(.meeAndMeo)))
     }
 
     /// Mee et Meo ne portent aucune famille de palette : leur contenu vient de
