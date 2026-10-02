@@ -51,10 +51,15 @@ final class StickerPlaceExactPositionTests: XCTestCase {
     }
 
     /// La feuille de stickers de la CONVERSATION n'injectait pas la carte :
-    /// la puce « Ma position… » n'y était jamais rendue.
+    /// la puce « Ma position… » n'y était jamais rendue. Depuis #9189, la
+    /// conversation monte la feuille UNIQUE, et c'est elle qui fournit la carte.
     func test_laFeuilleDeStickersDeLaConversation_ouvreLaCarte() throws {
-        let source = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
-        XCTAssertTrue(source.contains(".storyLocationPickerProvided(accentColor: accentColor)"),
+        let conversation = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
+        let feuille = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Components/MeeshyStickerSheet.swift"))
+        XCTAssertTrue(conversation.contains("MeeshyStickerSheet("),
+                      "la conversation monte la feuille de stickers unique (#9189)")
+        XCTAssertTrue(feuille.contains(".storyLocationPickerProvided(accentColor: accentColor)"),
                       "la feuille de stickers de la conversation doit fournir la carte (#7922)")
     }
 }
