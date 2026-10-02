@@ -11,6 +11,15 @@ nonisolated struct CallFaceDetection: Equatable, Sendable {
     let boundingBox: CGRect
     let leftEye: CGPoint?
     let rightEye: CGPoint?
+    /// #9196 — centre des lèvres, normalisé à la boîte.
+    let mouth: CGPoint?
+
+    init(boundingBox: CGRect, leftEye: CGPoint?, rightEye: CGPoint?, mouth: CGPoint? = nil) {
+        self.boundingBox = boundingBox
+        self.leftEye = leftEye
+        self.rightEye = rightEye
+        self.mouth = mouth
+    }
 }
 
 protocol CallFaceLandmarkDetecting: AnyObject {
@@ -27,7 +36,8 @@ nonisolated final class VisionFaceLandmarkDetector: CallFaceLandmarkDetecting, @
         return CallFaceDetection(
             boundingBox: observation.boundingBox,
             leftEye: Self.center(of: observation.landmarks?.leftEye),
-            rightEye: Self.center(of: observation.landmarks?.rightEye)
+            rightEye: Self.center(of: observation.landmarks?.rightEye),
+            mouth: Self.center(of: observation.landmarks?.outerLips)
         )
     }
 
@@ -102,6 +112,7 @@ nonisolated final class CallFaceTracker: @unchecked Sendable {
             boundingBox: detection.boundingBox,
             leftEye: detection.leftEye,
             rightEye: detection.rightEye,
+            mouth: detection.mouth,
             imageSize: CGSize(width: 1, height: 1)
         )
         unitFace = unitFace?.smoothed(toward: detected, factor: CallFaceEffectBudget.landmarkSmoothing) ?? detected
