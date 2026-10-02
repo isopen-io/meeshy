@@ -11,34 +11,41 @@ extension StickerPickerView {
     /// la météo garde la valeur de chaque sticker. Les vignettes montrent ce
     /// qui partira.
     ///
-    /// Des RANGÉES de hauteur fixe dans une pile paresseuse — jamais une grille
-    /// par famille, qui figeait le défilement de la planche Mee & Meo.
+    /// Chaque ligne est un enfant DIRECT de la pile paresseuse de la feuille —
+    /// une pile imbriquée ne créait pas ses rangées au-delà de la première
+    /// mesure (la section Météo restait vide, 2026-10-02). L'onglet espace ses
+    /// enfants comme des sections ; une rangée se rapproche de la précédente
+    /// par une marge haute négative, les titres gardent l'aération.
     @ViewBuilder
     var meeInstantSections: some View {
         if let meeInstantPick {
             let typed = meeInstantTypedSlots
-            LazyVStack(alignment: .leading, spacing: 8) {
-                sectionHeader(symbole: StickerSheetTab.meeAndMeo.symbolName,
-                              titre: String(localized: "sticker.sheet.instants.title",
-                                            defaultValue: "Instants", bundle: .module)) {
-                    Text(String(localized: "sticker.sheet.instants.hint",
-                                defaultValue: "Ce que vous écrivez s’affiche sur le sticker", bundle: .module))
-                        .font(.system(size: 12, design: .rounded))
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(MeeInstantCatalog.sections) { section in
-                    Text(Self.instantKindTitle(section.kind))
+            sectionHeader(symbole: StickerSheetTab.meeAndMeo.symbolName,
+                          titre: String(localized: "sticker.sheet.instants.title",
+                                        defaultValue: "Instants", bundle: .module)) {
+                Text(String(localized: "sticker.sheet.instants.hint",
+                            defaultValue: "Ce que vous écrivez s’affiche sur le sticker", bundle: .module))
+                    .font(.system(size: 12, design: .rounded))
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(MeeInstantCatalog.rows(columns: Self.meeColumns)) { row in
+                switch row {
+                case .title(let kind):
+                    Text(Self.instantKindTitle(kind))
                         .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .foregroundStyle(.secondary)
-                        .padding(.top, 6)
-                    ForEach(Array(stride(from: 0, to: section.instants.count, by: Self.meeColumns)), id: \.self) { debut in
-                        instantRow(Array(section.instants[debut..<min(debut + Self.meeColumns, section.instants.count)]),
-                                   typed: typed, pick: meeInstantPick)
-                    }
+                        .padding(.top, Self.instantTitlePull)
+                case .instants(let instants):
+                    instantRow(instants, typed: typed, pick: meeInstantPick)
+                        .padding(.top, Self.instantRowPull)
                 }
             }
         }
     }
+
+    /// Ramène l'espacement de section de l'onglet à celui d'une rangée.
+    private static var instantRowPull: CGFloat { 8 - Self.rowSpacing(for: .custom) }
+    private static var instantTitlePull: CGFloat { 16 - Self.rowSpacing(for: .custom) }
 
     /// Ce que l'onglet sait déjà, rangé par emplacement.
     var meeInstantTypedSlots: [MeeSlot: String] {

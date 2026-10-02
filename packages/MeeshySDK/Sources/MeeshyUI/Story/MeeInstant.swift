@@ -124,6 +124,29 @@ nonisolated public enum MeeInstantCatalog {
         return instants.isEmpty ? nil : Section(kind: kind, instants: instants)
     }
 
+    /// **Une ligne de la section Instants** : le titre d'une famille, ou une
+    /// rangée. Chaque ligne est un enfant DIRECT de la pile de la feuille —
+    /// une pile paresseuse imbriquée ne créait pas ses rangées (2026-10-02).
+    nonisolated public enum Row: Hashable, Identifiable, Sendable {
+        case title(MeeInstant.Kind)
+        case instants([MeeInstant])
+
+        public var id: String {
+            switch self {
+            case .title(let kind): "title.\(kind.rawValue)"
+            case .instants(let instants): "row.\(instants.first?.id ?? "")"
+            }
+        }
+    }
+
+    public static func rows(columns: Int) -> [Row] {
+        sections.flatMap { section in
+            [Row.title(section.kind)] + stride(from: 0, to: section.instants.count, by: columns).map {
+                Row.instants(Array(section.instants[$0..<min($0 + columns, section.instants.count)]))
+            }
+        }
+    }
+
     public static func instant(forTemplateID templateID: String?) -> MeeInstant? {
         guard let templateID, templateID.hasPrefix(MeeStickerCatalog.templatePrefix) else { return nil }
         return byID[String(templateID.dropFirst(MeeStickerCatalog.templatePrefix.count))]

@@ -35,6 +35,24 @@ final class MeeInstantCatalogTests: XCTestCase {
         XCTAssertEqual(sections.flatMap(\.instants).count, MeeInstantCatalog.all.count)
     }
 
+    /// **Des LIGNES, jamais une pile imbriquée** : dans « Personnalisés », une
+    /// pile paresseuse dans la pile de la feuille ne créait pas ses rangées
+    /// au-delà de la première mesure — la section Météo restait vide sous son
+    /// titre (simulateur, 2026-10-02). Chaque ligne est un titre de famille ou
+    /// une rangée d'au plus trois Instants, dans l'ordre des sections.
+    func test_rows_areAFamilyTitleThenRowsOfThree_inSectionOrder() {
+        let rows = MeeInstantCatalog.rows(columns: 3)
+        var attendu: [MeeInstantCatalog.Row] = []
+        for section in MeeInstantCatalog.sections {
+            attendu.append(.title(section.kind))
+            attendu += stride(from: 0, to: section.instants.count, by: 3).map {
+                .instants(Array(section.instants[$0..<min($0 + 3, section.instants.count)]))
+            }
+        }
+        XCTAssertEqual(rows, attendu)
+        XCTAssertEqual(Set(rows.map(\.id)).count, rows.count)
+    }
+
     /// Un Instant n'est pas un personnage, et réciproquement : chaque
     /// catalogue ne répond que de ses propres identifiants.
     func test_templateID_resolvesInItsOwnCatalogOnly() throws {
