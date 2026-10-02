@@ -324,6 +324,9 @@ extension ConversationView {
             .stickerNearbyPlacesProvided()
             // Mee et Meo (#9053) : seule la conversation sait envoyer un film ;
             // sans cet injecteur, la feuille ne montre pas leurs onglets.
+            // Les gabarits partent contournés de blanc, comme Mee (#9060) :
+            // la feuille les montre comme ils partiront.
+            .stickerSheetDieCut()
             .meeStickersProvided { mee in
                 composerState.showStickerPicker = false
                 sendMeeSticker(mee)

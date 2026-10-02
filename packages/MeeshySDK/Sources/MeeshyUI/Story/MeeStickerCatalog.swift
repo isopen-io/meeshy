@@ -19,28 +19,39 @@ import MeeshySDK
 /// sont pas dans l'index : un film ne peut pas porter un emplacement.
 nonisolated public struct MeeSticker: Hashable, Identifiable, Sendable {
 
+    /// L'onglet : Mee seule, Meo seul, ou Mee & Meo ensemble (#9058).
     nonisolated public enum Character: String, Sendable {
         case mee
         case meo
+        case duo
     }
 
-    nonisolated public enum Section: String, Sendable {
-        case solo
-        case duo
+    /// **Ce que le sticker permet de DIRE** (#9058) — la section de la
+    /// feuille. Les valeurs brutes sont celles du web (`MEE_INTENTS`).
+    nonisolated public enum Intent: String, Sendable {
+        case bonjour
+        case amour
+        case fete
+        case soutien
+        case rale
+        case coupDeMou = "coup-de-mou"
+        case surprise
+        case quotidien
+        case humourNoir = "humour-noir"
     }
 
     public let id: String
     public let tab: Character
-    public let section: Section
+    public let intent: Intent
     /// Le nom du sticker — celui que VoiceOver dit, comme le `aria-label` du web.
     public let title: String
     public let emoji: String
     public let animated: Bool
 
-    public init(id: String, tab: Character, section: Section, title: String, emoji: String, animated: Bool) {
+    public init(id: String, tab: Character, intent: Intent, title: String, emoji: String, animated: Bool) {
         self.id = id
         self.tab = tab
-        self.section = section
+        self.intent = intent
         self.title = title
         self.emoji = emoji
         self.animated = animated
@@ -62,9 +73,9 @@ nonisolated public enum MeeStickerCatalog {
     public static let templatePrefix = "mee."
 
     nonisolated public struct SectionGroup: Identifiable, Sendable {
-        public let section: MeeSticker.Section
+        public let intent: MeeSticker.Intent
         public let stickers: [MeeSticker]
-        public var id: MeeSticker.Section { section }
+        public var id: MeeSticker.Intent { intent }
     }
 
     private static let byID: [String: MeeSticker] =
@@ -74,12 +85,13 @@ nonisolated public enum MeeStickerCatalog {
         all.filter { $0.tab == character }
     }
 
-    /// Solo d'abord, puis « à deux » — l'ordre des onglets du web.
+    /// Une section par intention, dans l'ordre du web ; une intention sans
+    /// sticker dans cet onglet ne laisse aucune section vide.
     public static func sections(of character: MeeSticker.Character) -> [SectionGroup] {
         let ofCharacter = stickers(of: character)
-        return [MeeSticker.Section.solo, .duo].compactMap { section in
-            let stickers = ofCharacter.filter { $0.section == section }
-            return stickers.isEmpty ? nil : SectionGroup(section: section, stickers: stickers)
+        return intentOrder.compactMap { intent in
+            let stickers = ofCharacter.filter { $0.intent == intent }
+            return stickers.isEmpty ? nil : SectionGroup(intent: intent, stickers: stickers)
         }
     }
 
@@ -152,6 +164,43 @@ nonisolated public enum MeeStickerCatalog {
         let decoded: AnimatedImageDecoder.Decoded
         init(_ decoded: AnimatedImageDecoder.Decoded) { self.decoded = decoded }
         nonisolated deinit {}
+    }
+}
+
+// MARK: - Le titre et l'explication d'une intention
+
+extension MeeSticker.Intent {
+
+    /// Le titre de la section — les libellés du web, en sept langues.
+    @MainActor
+    public var title: String {
+        switch self {
+        case .bonjour: String(localized: "sticker.sheet.intent.bonjour.title", defaultValue: "Bonjour, merci", bundle: .module)
+        case .amour: String(localized: "sticker.sheet.intent.amour.title", defaultValue: "Dire je t’aime", bundle: .module)
+        case .fete: String(localized: "sticker.sheet.intent.fete.title", defaultValue: "Rire et fêter", bundle: .module)
+        case .soutien: String(localized: "sticker.sheet.intent.soutien.title", defaultValue: "Consoler et soutenir", bundle: .module)
+        case .rale: String(localized: "sticker.sheet.intent.rale.title", defaultValue: "Râler et bouder", bundle: .module)
+        case .coupDeMou: String(localized: "sticker.sheet.intent.coup-de-mou.title", defaultValue: "Coup de mou", bundle: .module)
+        case .surprise: String(localized: "sticker.sheet.intent.surprise.title", defaultValue: "Surprise et frisson", bundle: .module)
+        case .quotidien: String(localized: "sticker.sheet.intent.quotidien.title", defaultValue: "Le quotidien", bundle: .module)
+        case .humourNoir: String(localized: "sticker.sheet.intent.humour-noir.title", defaultValue: "Humour noir", bundle: .module)
+        }
+    }
+
+    /// **Quand l'employer** — la phrase sous le titre.
+    @MainActor
+    public var hint: String {
+        switch self {
+        case .bonjour: String(localized: "sticker.sheet.intent.bonjour.hint", defaultValue: "Pour saluer, remercier, dire oui, s’excuser ou souhaiter bonne nuit", bundle: .module)
+        case .amour: String(localized: "sticker.sheet.intent.amour.hint", defaultValue: "Pour un mot doux, un bisou, un câlin ou une déclaration", bundle: .module)
+        case .fete: String(localized: "sticker.sheet.intent.fete.hint", defaultValue: "Pour une bonne nouvelle, un succès, un anniversaire ou un fou rire", bundle: .module)
+        case .soutien: String(localized: "sticker.sheet.intent.soutien.hint", defaultValue: "Pour encourager, réconforter ou dire « je suis là »", bundle: .module)
+        case .rale: String(localized: "sticker.sheet.intent.rale.hint", defaultValue: "Pour dire son agacement, sa colère, sa jalousie ou prendre ses distances", bundle: .module)
+        case .coupDeMou: String(localized: "sticker.sheet.intent.coup-de-mou.hint", defaultValue: "Pour la tristesse, le chagrin, la fatigue ou l’envie de dormir", bundle: .module)
+        case .surprise: String(localized: "sticker.sheet.intent.surprise.hint", defaultValue: "Pour l’étonnement, la peur, la gêne ou un « oups »", bundle: .module)
+        case .quotidien: String(localized: "sticker.sheet.intent.quotidien.hint", defaultValue: "Pour dire ce qu’on fait : un café, un repas, le travail, la route, un retard", bundle: .module)
+        case .humourNoir: String(localized: "sticker.sheet.intent.humour-noir.hint", defaultValue: "Pour rire de tout, même du pire : mort de rire, fantômes et pierres tombales", bundle: .module)
+        }
     }
 }
 

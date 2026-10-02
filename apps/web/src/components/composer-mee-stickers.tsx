@@ -6,15 +6,18 @@ import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { meeSlotsFor, meeStickersOfTab, meeTemplateId } from '@/lib/mee/catalog';
+import { MEE_INTENT_KEYS } from '@/lib/mee/intents';
 import { meeStickerFile, rasterizeSvg } from '@/lib/mee/png';
 import type { RasterizeSvg } from '@/lib/mee/png';
 import { renderMeeSticker } from '@/lib/mee/render';
+import { MEE_INTENTS } from '@/lib/mee/types';
 import type { MeeSection, MeeSlot, MeeSlots, MeeSticker, MeeTab } from '@/lib/mee/types';
 
 /**
- * LES STICKERS DE MEE ET MEO (#9034) — trois onglets de la feuille de
- * stickers, après « Mes stickers ». Mee et Meo : les stickers seuls, puis
- * « à deux », où le personnage de l'onglet fait le geste. Instants : les
+ * LES STICKERS DE MEE ET MEO (#9034, #9058) — quatre onglets de la feuille de
+ * stickers, après « Mes stickers ». Mee, Meo, puis « Mee & Meo » (les duos),
+ * chacun rangé par INTENTION : un titre, la phrase qui dit quand l'employer,
+ * puis la grille — une intention vide ne s'affiche pas. Instants : les
  * stickers dynamiques, qui écrivent ce que l'utilisateur saisit au-dessus
  * (message, lieu, météo, heure — l'heure est celle de l'instant, modifiable).
  *
@@ -25,26 +28,23 @@ import type { MeeSection, MeeSlot, MeeSlots, MeeSticker, MeeTab } from '@/lib/me
 
 export type MeePicked = { readonly file: File; readonly sticker: MessageSticker };
 
-const SECTIONS: Readonly<Record<MeeTab, readonly MeeSection[]>> = {
-  mee: ['solo', 'duo'],
-  meo: ['solo', 'duo'],
-  instants: ['message', 'moment', 'lieu', 'meteo'],
+type Heading = { readonly title: InterfaceCatalogKey; readonly hint?: InterfaceCatalogKey };
+type Section = readonly [MeeSection, Heading];
+
+const INTENT_SECTIONS: readonly Section[] = MEE_INTENTS.map((intent) => [intent, MEE_INTENT_KEYS[intent]]);
+
+/** Les sections d'un onglet, dans leur ordre : les intentions pour les personnages, les familles pour les Instants. */
+const SECTIONS: Readonly<Record<MeeTab, readonly Section[]>> = {
+  mee: INTENT_SECTIONS,
+  meo: INTENT_SECTIONS,
+  duo: INTENT_SECTIONS,
+  instants: [
+    ['message', { title: 'composer.sticker.instants.message' }],
+    ['moment', { title: 'composer.sticker.instants.moment' }],
+    ['lieu', { title: 'composer.sticker.instants.lieu' }],
+    ['meteo', { title: 'composer.sticker.instants.meteo' }],
+  ],
 };
-
-const SECTION_KEYS = {
-  'mee.solo': 'composer.sticker.mee.solo',
-  'mee.duo': 'composer.sticker.mee.duo',
-  'meo.solo': 'composer.sticker.meo.solo',
-  'meo.duo': 'composer.sticker.meo.duo',
-  'instants.message': 'composer.sticker.instants.message',
-  'instants.moment': 'composer.sticker.instants.moment',
-  'instants.lieu': 'composer.sticker.instants.lieu',
-  'instants.meteo': 'composer.sticker.instants.meteo',
-} as const satisfies Readonly<Record<string, InterfaceCatalogKey>>;
-
-const sectionKey = (tab: MeeTab, section: MeeSection): InterfaceCatalogKey =>
-  SECTION_KEYS[`${tab}.${section}` as keyof typeof SECTION_KEYS] ?? 'composer.sticker.item';
-
 
 const FIELDS = [
   { slot: 'message', label: 'composer.sticker.instants.field.message' },
@@ -120,13 +120,20 @@ export function MeeStickerPanel({
         {failed ? translate(language, 'composer.sticker.unavailable') : tab === 'instants' ? translate(language, 'composer.sticker.instants.hint') : ''}
       </p>
 
-      {SECTIONS[tab].map((section) => {
+      {SECTIONS[tab].map(([section, heading]) => {
         const list = stickers.filter((sticker) => sticker.section === section);
         return list.length === 0 ? null : (
           <section key={section} data-mee-section={section} className="flex flex-col gap-2">
-            <h3 className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink-2)' }}>
-              {translate(language, sectionKey(tab, section))}
-            </h3>
+            <header className="flex flex-col gap-0.5">
+              <h3 className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+                {translate(language, heading.title)}
+              </h3>
+              {heading.hint !== undefined ? (
+                <p data-mee-hint className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+                  {translate(language, heading.hint)}
+                </p>
+              ) : null}
+            </header>
             <ul className="grid grid-cols-4 gap-2">
               {list.map((sticker) => (
                 <li key={sticker.id} style={{ contentVisibility: 'auto', containIntrinsicSize: '80px 80px' }}>

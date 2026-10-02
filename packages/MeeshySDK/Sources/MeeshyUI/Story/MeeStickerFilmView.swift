@@ -14,28 +14,44 @@ public struct MeeStickerFilmView: View {
     let sticker: MeeSticker
     let side: CGFloat
     let animates: Bool
+    let pixelCap: Int
 
     @Environment(\.displayScale) private var displayScale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var still: UIImage?
     @State private var film: AnimatedImageDecoder.Decoded?
 
-    public init(sticker: MeeSticker, side: CGFloat, animates: Bool = true) {
+    /// - Parameter pixelCap: la définition maximale du décodage. Jamais
+    ///   au-delà du film tourné (360 px) ; la feuille, qui anime une grille
+    ///   entière, la baisse (`gridPixelCap`) — la mémoire d'un film croît au
+    ///   carré de sa définition.
+    public init(sticker: MeeSticker, side: CGFloat, animates: Bool = true, pixelCap: Int = 360) {
         self.sticker = sticker
         self.side = side
         self.animates = animates
+        self.pixelCap = pixelCap
     }
 
-    /// Jamais au-delà du film tourné (360 px) : décoder plus grand ne
-    /// montrerait rien de plus et coûterait la mémoire au carré.
+    /// Une case de 96 pt décodée à 180 px : 48 images pèsent 6 Mo, quinze
+    /// cases visibles tiennent sous le plafond du cache (96 Mo).
+    public static let gridPixelCap = 180
+
+    public static func decodePixelSize(side: CGFloat, scale: CGFloat, cap: Int) -> Int {
+        min(cap, 360, Int((side * scale).rounded(.up)))
+    }
+
     private var maxPixelSize: Int {
-        min(360, Int((side * displayScale).rounded(.up)))
+        Self.decodePixelSize(side: side, scale: displayScale, cap: pixelCap)
     }
 
     public var body: some View {
         Group {
             if let film, animates, !reduceMotion {
+                // Transparente aux touchers : un Mee ne change pas la bulle qui
+                // le porte — appui long, double tap, glisser-répondre partent
+                // comme sur un gabarit (retour porteur 2026-10-01).
                 AnimatedImageView(decoded: film)
+                    .allowsHitTesting(false)
             } else if let still {
                 Image(uiImage: still).resizable().scaledToFit()
             } else {
@@ -43,6 +59,7 @@ public struct MeeStickerFilmView: View {
             }
         }
         .frame(width: side, height: side)
+        .contentShape(Rectangle())
         .task(id: "\(sticker.id)|\(animates && !reduceMotion)|\(maxPixelSize)") {
             if still == nil { still = MeeStickerCatalog.stillImage(sticker) }
             guard animates, !reduceMotion, sticker.animated,

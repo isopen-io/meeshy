@@ -114,6 +114,10 @@ struct MessageStickerArtwork: View {
                 // plutôt que laisser un trou, pour que la cellule ne saute pas.
                 let measured = StickerTemplateRenderer.measuredSize(
                     templateID: id, slots: sticker.slots, metrics: metrics)
+                    .map { taille -> CGSize in
+                        let marge = StickerDieCut.margin(for: taille)
+                        return CGSize(width: taille.width + 2 * marge, height: taille.height + 2 * marge)
+                    }
                     ?? CGSize(width: side, height: side)
                 let size = BubbleSticker.fittedSize(measured, within: templateBox)
                 Color.clear.frame(width: size.width, height: size.height)
@@ -156,7 +160,7 @@ struct MessageStickerArtwork: View {
             templateSize = .zero
             return
         }
-        guard let rendered = StickerTemplateRenderer.image(
+        guard let rendered = StickerTemplateRenderer.dieCutImage(
             templateID: id, slots: sticker.slots,
             metrics: metrics, screenScale: displayScale) else { return }
         templateImage = rendered.0

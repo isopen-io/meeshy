@@ -49,6 +49,8 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
     case mee
     /// Meo, son compagnon (#9053).
     case meo
+    /// Mee et Meo ensemble — les duos (#9058).
+    case meeAndMeo
     /// Ce que l'auteur fait sien (directive porteur 2026-09-25 : « une tab
     /// customisée plutôt que dynamique ») : ses propres stickers, puis les
     /// décorations qui se remplissent de SES données — ses mots, son lieu,
@@ -66,6 +68,7 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
         case .recents:   return "clock.arrow.circlepath"
         case .mee:       return "bird.fill"
         case .meo:       return "bird"
+        case .meeAndMeo: return "bird.circle.fill"
         case .custom:    return "paintbrush.pointed.fill"
         case .smileys:   return "face.smiling"
         }
@@ -83,6 +86,8 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
             return String(localized: "sticker.sheet.tab.mee", defaultValue: "Mee", bundle: .module)
         case .meo:
             return String(localized: "sticker.sheet.tab.meo", defaultValue: "Meo", bundle: .module)
+        case .meeAndMeo:
+            return String(localized: "sticker.sheet.tab.mee-and-meo", defaultValue: "Mee & Meo", bundle: .module)
         case .custom:
             return String(localized: "sticker.sheet.tab.custom", defaultValue: "Personnalisés", bundle: .module)
         case .smileys:
@@ -128,16 +133,16 @@ public enum StickerSheetTab: String, CaseIterable, Identifiable, Sendable {
             // qui n'appartiendrait à aucun onglet serait invisible, et rien ne
             // le dirait.
             return offered.filter { $0 != .emoji && $0 != .library && !dynamicTabs.contains($0) }
-        case .favorites, .recents, .mee, .meo:
+        case .favorites, .recents, .mee, .meo, .meeAndMeo:
             return []
         }
     }
 
-    /// **Les onglets rendus, dans l'ordre** (loi 4). Mee et Meo n'existent que
+    /// **Les onglets rendus, dans l'ordre** (loi 4). Mee, Meo et Mee & Meo n'existent que
     /// si l'hôte sait ENVOYER leur sticker (`meeStickerPick`) — la scène d'une
     /// story ne sait pas poser un film, et n'y montre donc pas les onglets.
     public static func offered(hasMee: Bool) -> [StickerSheetTab] {
-        allCases.filter { hasMee || ($0 != .mee && $0 != .meo) }
+        allCases.filter { hasMee || ![.mee, .meo, .meeAndMeo].contains($0) }
     }
 
     /// **Toute famille servie appartient à AU MOINS un onglet.**
