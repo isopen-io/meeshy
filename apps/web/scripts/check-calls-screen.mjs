@@ -155,22 +155,35 @@ try {
         const drag = async (distance) => {
           const x = Math.round(width / 2);
           const y = Math.round(height * 0.25);
+          const under = await page.evaluate(([px, py]) => {
+            const hit = document.elementFromPoint(px, py);
+            const name = (el) => (el === null ? null : `${el.tagName.toLowerCase()}${[...el.attributes].filter((a) => a.name !== 'class' && a.name !== 'style').map((a) => `[${a.name}=${a.value.slice(0, 24)}]`).join('')}`);
+            return { hit: name(hit), interactive: name(hit?.closest('button, a[href], [role], [tabindex]') ?? null) };
+          }, [x, y]);
           await page.mouse.move(x, y);
           await page.mouse.down();
           await page.mouse.move(x, y + distance / 2, { steps: 8 });
           await page.mouse.move(x, y + distance, { steps: 8 });
           await page.waitForTimeout(150);
+          const held = await page.evaluate(() => {
+            const screen = document.querySelector('[data-call-screen]');
+            return screen === null ? null : { swipe: screen.getAttribute('data-call-swipe-down'), transform: screen.style.transform, height: innerHeight };
+          });
           await page.mouse.up();
+          return { from: [x, y], distance, under, held };
         };
         await drag(30);
         await page.waitForTimeout(300);
         check((await page.$('[data-call-screen="connected"]')) !== null && (await page.$('[data-call-pill-bar]')) === null, `${label} : un toucher ou un petit glissé laisse l'écran d'appel en place`);
-        await drag(Math.min(280, height - Math.round(height * 0.25) - 20));
-        check(await appears(page, '[data-call-pill-bar]', 3000), `${label} : glissé aux trois quarts et relâché, l'appel se réduit`);
+        const swiped = await drag(Math.min(280, height - Math.round(height * 0.25) - 20));
+        const reduced = await appears(page, '[data-call-pill-bar]', 3000);
+        check(reduced, `${label} : glissé aux trois quarts et relâché, l'appel se réduit — ${JSON.stringify(swiped)}`);
         check((await page.$('[data-call-screen]')) === null, `${label} : réduit, l'écran d'appel a quitté le plein écran`);
         await capture(page, `glisse-reduit-${slug}`);
-        await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
-        check(await appears(page, '[data-call-screen="connected"]'), `${label} : la pastille rend l'écran d'appel`);
+        if (reduced) {
+          await page.click('[data-call-pill-bar] button[aria-label="Revenir à l’appel"]');
+          check(await appears(page, '[data-call-screen="connected"]'), `${label} : la pastille rend l'écran d'appel`);
+        }
 
         // ------------------------------------------------ 2. le bouton
         await openActions(page);
