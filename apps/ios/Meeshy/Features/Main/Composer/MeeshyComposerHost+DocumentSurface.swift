@@ -226,7 +226,8 @@ extension MeeshyComposerHost {
             loadedImages: viewModel.loadedImages,
             imagesVersion: viewModel.loadedImagesVersion,
             onSelect: { viewModel.selectSlide(at: $0) },
-            onDelete: { retractScene(at: $0) }))
+            // En retouche, une scène EST une pièce du message : elle ne se jette pas ici.
+            onDelete: returnsToConversation ? nil : { retractScene(at: $0) }))
     }
 
     var documentContentMedia: [ComposerContentMedia] {

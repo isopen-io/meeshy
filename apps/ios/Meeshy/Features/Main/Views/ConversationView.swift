@@ -103,11 +103,8 @@ struct ConversationScrollState {
     // Media editor queues
     var photosToEdit: [UIImage] = []
     var videosToPreview: [URL] = []
-    var editingPendingAttachmentId: String? = nil
-    /// La SOURCE de la retouche (#8524) : le fichier de la pièce jointe décodé
-    /// à 2 048 px hors du fil principal, jamais la vignette du plateau.
-    var editingPendingSource: UIImage? = nil
-    var videoToEdit: PendingVideoEdit? = nil
+    /// « Éditer » sur une pièce en attente : toutes les pièces en scènes (#9126).
+    var retouchSeries: ConversationRetouchSeries? = nil
     var audioToEdit: PendingAudioEdit? = nil
     // "Éditer" from the recent-media strip — edited BEFORE staging (the edited
     // output goes through the camera-capture pipeline, never the original).

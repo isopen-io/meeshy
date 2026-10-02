@@ -10,7 +10,7 @@ import MeeshyUI
 // « Terminé » qui rend le média à l'hôte, puis referme.
 extension MeeshyComposerHost {
 
-    var returnsToConversation: Bool { onReturnMedia != nil }
+    var returnsToConversation: Bool { onReturnMedia != nil || onReturnSeries != nil }
 
     /// **La caméra de la barre ouvre le viseur ARMÉ** (#9123) — la seule porte
     /// qui le fasse : l'auteur a touché « caméra ». La règle lit l'ORIGINE.
@@ -53,6 +53,7 @@ extension MeeshyComposerHost {
     /// **« Terminé » rend un MÉDIA** (#8416, #9123, #9124) — la loi
     /// (`ComposerReturnMedia.action`) dit lequel ; ce site l'exécute.
     func returnSceneMedia() {
+        if retouchSeries != nil { returnRetouchSeries(); return }
         guard let onReturnMedia else { return }
         HapticFeedback.light()
         if viewModel.timelineIsOpen { viewModel.closeTimelinePanel() }

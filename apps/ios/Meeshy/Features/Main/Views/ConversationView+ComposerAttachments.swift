@@ -170,68 +170,17 @@ extension ConversationView {
         composerState.preparingAttachments.removeAll { $0.id == prep.id }
     }
 
-    /// Ferme la retouche et oublie sa source décodée (#8524) — l'image à
-    /// 2 048 px ne survit pas à la couverture.
-    func closePendingImageRetouche() {
-        scrollState.editingPendingAttachmentId = nil
-        scrollState.editingPendingSource = nil
-    }
-
     // MARK: - Attachment Preview Tap Handler
     func handleAttachmentPreviewTap(_ attachment: MessageAttachment) {
         switch attachment.type {
-        case .image:
-            // Guard at the source: only open the editor when a thumbnail
-            // genuinely exists to show. The fullScreenCover below has its own
-            // defense-in-depth fallback for the (rarer) case where the
-            // thumbnail vanishes AFTER presentation starts, but there is no
-            // reason to open the cover at all for an id that has none now.
-            guard let vignette = composerState.pendingThumbnails[attachment.id],
-                  ConversationImageRetouche.offersRetouche(mimeType: attachment.mimeType) else { return }
-            let id = attachment.id
-            let fichier = composerState.pendingMediaFiles[id]
-            Task {
-                var source: UIImage?
-                if let fichier { source = await ConversationImageRetouche.loadSource(fileURL: fichier) }
-                scrollState.editingPendingSource = source ?? vignette
-                scrollState.editingPendingAttachmentId = id
-            }
-        case .video:
-            if let url = composerState.pendingMediaFiles[attachment.id] {
-                scrollState.videoToEdit = PendingVideoEdit(id: attachment.id, url: url)
-            }
+        case .image, .video:
+            openRetouchSeries(focusId: attachment.id)
         case .audio:
             if let url = composerState.pendingMediaFiles[attachment.id] {
                 scrollState.audioToEdit = PendingAudioEdit(id: attachment.id, url: url)
             }
         default:
             break
-        }
-    }
-
-    /// Dismissable full-screen fallback for the (rare) race where a pending
-    /// attachment's thumbnail is gone by the time its editor cover presents —
-    /// see the doc-comment on the "C. Tap pending image" fullScreenCover.
-    func attachmentPreviewUnavailableFallback(onDismiss: @escaping () -> Void) -> some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
-            VStack(spacing: MeeshySpacing.lg) {
-                Image(systemName: "photo.badge.exclamationmark")
-                    .font(.system(size: 40))
-                    .foregroundColor(.white.opacity(MeeshyOpacity.heavy))
-                Text(String(localized: "conversation.view.composer.attachmentUnavailable",
-                            defaultValue: "Pièce jointe indisponible", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                    .foregroundColor(.white)
-                Button(action: onDismiss) {
-                    Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, MeeshySpacing.xxl)
-                        .padding(.vertical, MeeshySpacing.smPlus)
-                        .background(Capsule().fill(.white.opacity(MeeshyOpacity.light)))
-                }
-            }
         }
     }
 

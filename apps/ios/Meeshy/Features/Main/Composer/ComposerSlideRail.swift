@@ -54,7 +54,7 @@ struct ComposerSlideRail: View {
     /// manque la poubelle pour supprimer les scènes »). L'ancienne rangée de
     /// médias portait cette croix ; ma rangée de scènes ne l'avait pas reprise
     /// — une capacité perdue au passage d'un lot.
-    let onDelete: (Int) -> Void
+    let onDelete: ((Int) -> Void)?
 
     private static let height: CGFloat = 44
 
@@ -83,7 +83,7 @@ struct ComposerSlideRail: View {
     /// cette vue la consulte, elle ne la refait pas.
     @ViewBuilder
     private func corbeille(_ index: Int) -> some View {
-        if ComposerHeaderTiles.showsDelete(sceneIndex: index,
+        if let onDelete, ComposerHeaderTiles.showsDelete(sceneIndex: index,
                                            currentIndex: currentIndex,
                                            sceneCount: slides.count) {
             Button { onDelete(index) } label: {

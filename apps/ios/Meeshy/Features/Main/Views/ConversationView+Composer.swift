@@ -339,50 +339,18 @@ extension ConversationView {
     /// le plus dense en types de closures distincts (un par éditeur média).
     private func composerEditingCovers(_ content: AnyView) -> AnyView {
         AnyView(content
-        // C. Tap pending image → MeeshyImageEditorView
-        //
-        // Bug fix (2026-07-09): `isPresented` used to be driven solely by
-        // `editingPendingAttachmentId != nil` while the content required a
-        // SEPARATE `pendingThumbnails[id]` lookup to succeed. Whenever that
-        // dictionary lookup missed — a since-removed attachment, a thumbnail
-        // that failed to generate, any race between the tap and the
-        // dictionaries settling — the cover still presented (isPresented was
-        // already true) but its content body evaluated to nothing, which
-        // reads to the user as the composer "crashing" on tap: a full-screen
-        // cover appears with no way to dismiss it from inside. The two must
-        // share one source of truth so the cover can never present empty.
-        .conversationCover(isPresented: Binding(
-            get: { scrollState.editingPendingAttachmentId != nil },
-            set: { if !$0 { closePendingImageRetouche() } }
-        )) {
-            if let id = scrollState.editingPendingAttachmentId,
-               let source = scrollState.editingPendingSource ?? composerState.pendingThumbnails[id] {
-                // **La même scène que toute composition** (#8416) : la retouche
-                // d'une image du brouillon ouvre le composer plein écran, et
-                // « Terminé » rend l'image composée ici, au message. Sa source
-                // est le fichier à 2 048 px (#8524), pas la vignette.
-                ConversationImageSceneEditor(image: source, staged: true, onDone: { media in
-                    replacePendingWithSceneMedia(id: id, media)
-                }, onCancel: { closePendingImageRetouche() })
-            } else {
-                // The thumbnail vanished out from under the presentation
-                // (attachment removed mid-race, or generation never
-                // succeeded) — never present a silently-empty cover; give the
-                // user a dismissable state instead.
-                attachmentPreviewUnavailableFallback { closePendingImageRetouche() }
-            }
-        }
-        // D. Tap pending video → la SCÈNE (#9124), plus `MeeshyVideoEditorView` :
-        // « Terminé » rend la vidéo bakée, qui remplace la pièce en place.
-        .conversationCover(isPresented: Binding(
-            get: { scrollState.videoToEdit != nil },
-            set: { if !$0 { scrollState.videoToEdit = nil } }
-        )) {
-            if let target = scrollState.videoToEdit {
-                ConversationVideoSceneEditor(url: target.url, staged: true, onDone: { media in
-                    replacePendingWithSceneMedia(id: target.id, media)
-                }, onCancel: { scrollState.videoToEdit = nil })
-            }
+        // C. « Éditer » sur une pièce en attente (image ou vidéo) → TOUTES les
+        // pièces du message en scènes, ouvertes sur la touchée (#9126) ;
+        // « Terminé » rend chaque scène retouchée à SA pièce, en place. La
+        // série est préparée AVANT la présentation : la couverture ne peut pas
+        // s'ouvrir vide.
+        .conversationCover(item: Binding(
+            get: { scrollState.retouchSeries },
+            set: { scrollState.retouchSeries = $0 }
+        )) { serie in
+            ConversationRetouchSeriesEditor(series: serie, onDone: { rendues in
+                replacePendingWithRetouchedPieces(rendues)
+            }, onCancel: { scrollState.retouchSeries = nil })
         }
         // D2. "Éditer" from the recent-media strip → the editor opens BEFORE
         // staging; the edited output goes through the same preparation pipeline

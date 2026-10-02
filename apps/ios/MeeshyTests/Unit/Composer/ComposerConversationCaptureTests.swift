@@ -133,8 +133,10 @@ final class ComposerConversationCaptureTests: XCTestCase {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
         XCTAssertFalse(code.contains("MeeshyVideoEditorView("),
                        "La vidéo en attente et la vidéo récente s'éditent dans la scène (#9124).")
-        XCTAssertEqual(code.components(separatedBy: "ConversationVideoSceneEditor(").count - 1, 2,
-                       "La vidéo EN ATTENTE et la vidéo RÉCENTE ouvrent toutes deux la scène.")
+        XCTAssertEqual(code.components(separatedBy: "ConversationVideoSceneEditor(").count - 1, 1,
+                       "La vidéo RÉCENTE ouvre la scène.")
+        XCTAssertTrue(code.contains("ConversationRetouchSeriesEditor("),
+                      "La vidéo EN ATTENTE ouvre toutes les pièces du message en scènes (#9126).")
     }
 }
 
