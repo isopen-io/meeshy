@@ -19,7 +19,7 @@ import MeeshySDK
 /// sont pas dans l'index : un film ne peut pas porter un emplacement.
 nonisolated public struct MeeSticker: Hashable, Identifiable, Sendable {
 
-    /// L'onglet : Mee seule, Meo seul, ou Mee & Meo ensemble (#9058).
+    /// La distribution : Mee seule, Meo seul, ou les deux ensemble (#9058).
     nonisolated public enum Character: String, Sendable {
         case mee
         case meo
@@ -85,14 +85,29 @@ nonisolated public enum MeeStickerCatalog {
         all.filter { $0.tab == character }
     }
 
-    /// Une section par intention, dans l'ordre du web ; une intention sans
-    /// sticker dans cet onglet ne laisse aucune section vide.
-    public static func sections(of character: MeeSticker.Character) -> [SectionGroup] {
-        let ofCharacter = stickers(of: character)
-        return intentOrder.compactMap { intent in
-            let stickers = ofCharacter.filter { $0.intent == intent }
-            return stickers.isEmpty ? nil : SectionGroup(intent: intent, stickers: stickers)
+    /// **L'onglet « Mee & Meo », une section par INTENTION** (#9068) : on y
+    /// cherche ce qu'on veut dire, pas qui le joue. Dans une section, Mee
+    /// d'abord, puis Meo, puis les duos ; une intention sans sticker ne laisse
+    /// aucune section vide.
+    public static let sections: [SectionGroup] = intentOrder.compactMap { intent in
+        let stickers = [MeeSticker.Character.mee, .meo, .duo].flatMap { character in
+            all.filter { $0.tab == character && $0.intent == intent }
         }
+        return stickers.isEmpty ? nil : SectionGroup(intent: intent, stickers: stickers)
+    }
+
+    /// Le Mee qu'une entrée de favori ou de récent désigne — `nil` si elle
+    /// n'en est pas un, ou s'il a quitté le catalogue (#9067).
+    public static func sticker(for entry: StickerUsageEntry) -> MeeSticker? {
+        guard entry.kind == .mee else { return nil }
+        return byID[entry.value]
+    }
+
+    /// **Les Mee d'une liste d'usage, dans son ordre** — aucun là où l'hôte ne
+    /// sait pas les envoyer (loi 4) : ils restent au magasin, invisibles.
+    public static func stickers(in entries: [StickerUsageEntry], hasMee: Bool) -> [MeeSticker] {
+        guard hasMee else { return [] }
+        return entries.compactMap(sticker(for:))
     }
 
     /// Le sticker qu'un `templateId` de message désigne — `nil` s'il ne vient
@@ -206,10 +221,10 @@ extension MeeSticker.Intent {
 
 // MARK: - L'hôte qui ENVOIE un Mee
 
-/// **Les onglets Mee et Meo n'existent que si un hôte sait envoyer le
-/// sticker** (loi 4). La conversation l'injecte ; la scène d'une story, qui ne
-/// sait pas poser un film, ne l'injecte pas — et la feuille n'y montre pas les
-/// onglets, au lieu de les montrer inertes.
+/// **L'onglet Mee & Meo n'existe que si un hôte sait envoyer le sticker**
+/// (loi 4). La conversation l'injecte ; la scène d'une story, qui ne sait pas
+/// poser un film, ne l'injecte pas — et la feuille n'y montre pas l'onglet,
+/// au lieu de le montrer inerte.
 public struct MeeStickerPickKey: EnvironmentKey {
     public static let defaultValue: ((MeeSticker) -> Void)? = nil
 }

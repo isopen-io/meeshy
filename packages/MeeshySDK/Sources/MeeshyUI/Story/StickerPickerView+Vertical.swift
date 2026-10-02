@@ -46,9 +46,7 @@ extension StickerPickerView {
                 case .search:    searchTabContent
                 case .favorites: usageSections(usage.favorites, vide: .favorites)
                 case .recents:   usageSections(usage.recents, vide: .recents)
-                case .mee:       meeSections(.mee)
-                case .meo:       meeSections(.meo)
-                case .meeAndMeo: meeSections(.meeAndMeo)
+                case .meeAndMeo: meeSections
                 case .custom:    paletteSections(for: .custom)
                 case .smileys:   smileySections
                 }
@@ -133,7 +131,7 @@ extension StickerPickerView {
 
     /// **Les décorations retenues, groupées par SECTION.**
     ///
-    /// Deux sections au plus : les GABARITS et les SMILEYS. C'est le seul
+    /// Les MEE (#9067), les images de l'auteur, les GABARITS et les SMILEYS. C'est le seul
     /// groupement qui ait un sens ici — regrouper par famille de catalogue
     /// rendrait des sections d'un élément, et l'onglet perdrait ce pour quoi
     /// il existe : voir d'un coup ce qu'on a sous la main.
@@ -144,6 +142,7 @@ extension StickerPickerView {
     @ViewBuilder
     private func usageSections(_ entrees: [StickerUsageEntry],
                                vide: StickerSheetTab) -> some View {
+        let entrees = meeStickerPick == nil ? entrees.filter { $0.kind != .mee } : entrees
         if entrees.isEmpty {
             emptyState(symbole: vide.symbolName, texte: Self.emptyLabel(for: vide))
         } else {
@@ -158,6 +157,15 @@ extension StickerPickerView {
             let miennes = entrees
                 .filter { $0.kind == .library }
                 .compactMap { entree in libraryItems.first { $0.id == entree.value } }
+            let mees = MeeStickerCatalog.stickers(in: entrees, hasMee: true)
+            if !mees.isEmpty {
+                Section {
+                    meeGrid(mees)
+                } header: {
+                    sectionHeader(symbole: StickerSheetTab.meeAndMeo.symbolName,
+                                  titre: StickerSheetTab.meeAndMeo.title)
+                }
+            }
             if !miennes.isEmpty {
                 Section {
                     usageLibraryGrid(miennes)
