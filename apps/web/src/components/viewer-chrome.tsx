@@ -353,6 +353,7 @@ export function ViewerBottomBar({
   reply,
   children,
   hidden = false,
+  held = false,
   placement = 'overlay',
   scrim = 'soft',
   probe,
@@ -369,10 +370,17 @@ export function ViewerBottomBar({
   /** Ce qui PARCOURT le média : barre de lecture, pellicule. */
   readonly children?: ReactNode;
   readonly hidden?: boolean;
+  /**
+   * Le média est TENU (appui long, #9072) : les CONTRÔLES cèdent, la légende
+   * reste lisible et redescend — la capsule quitte le flux, le rail garde sa
+   * largeur pour que le texte ne se recompose pas sous le doigt.
+   */
+  readonly held?: boolean;
   readonly placement?: Placement;
 }) {
   const chrome = useYield(hidden);
-  const onReply = reply?.onReply;
+  const controls = useYield(held);
+  const onReply = held ? undefined : reply?.onReply;
   const hasRow = caption !== undefined || rail !== undefined;
   if (!hasRow && onReply === undefined && children === undefined) return null;
   const overlay = placement === 'overlay';
@@ -390,7 +398,17 @@ export function ViewerBottomBar({
           <div data-viewer-caption="" className="viewer-ink-shadow flex min-w-0 flex-1 flex-col gap-1">
             {caption}
           </div>
-          {rail === undefined ? null : <div className="shrink-0">{rail}</div>}
+          {rail === undefined ? null : (
+            <div
+              data-viewer-rail-slot=""
+              data-chrome-yields={controls['data-chrome-yields']}
+              inert={controls.inert}
+              className="shrink-0"
+              style={controls.style}
+            >
+              {rail}
+            </div>
+          )}
         </div>
       ) : null}
       {onReply === undefined || reply === undefined ? null : (

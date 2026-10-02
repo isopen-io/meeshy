@@ -309,6 +309,23 @@ describe('la barre basse de la story : légende, rail, « Répondre… »', () =
     expect(el.querySelector('[data-story-media-caption] a')).not.toBeNull();
   });
 
+  test('#9072 — tenue par l’appui long : la légende RESTE lisible et la capsule quitte le flux, pour que le texte redescende', () => {
+    const el = mount(bottomBar({ held: true, onReply: () => undefined, rail: rail({ react: () => undefined }) }));
+    const bar = el.querySelector('[data-viewer-bottom-bar]');
+    expect(bar?.hasAttribute('inert')).toBe(false);
+    expect(bar?.getAttribute('data-chrome-yields')).toBe('shown');
+    expect(el.querySelector('[data-viewer-caption] p')?.textContent).toBe('Le lac, ce matin.');
+    expect(el.querySelector('[data-viewer-reply]')).toBeNull();
+  });
+
+  test('#9072 — tenue par l’appui long : le rail cède (inerte, invisible) sans changer la largeur de la légende', () => {
+    const el = mount(bottomBar({ held: true, rail: rail({ react: () => undefined }) }));
+    const railSlot = el.querySelector('[data-viewer-bottom-row] [data-viewer-rail-slot]');
+    expect(railSlot?.hasAttribute('inert')).toBe(true);
+    expect(railSlot?.getAttribute('data-chrome-yields')).toBe('hidden');
+    expect(railSlot?.querySelector('[data-story-action-rail]')).not.toBeNull();
+  });
+
   test('cédante avec la feuille : la barre devient inerte, rail compris', () => {
     const el = mount(bottomBar({ hidden: true, onReply: () => undefined }));
     expect(el.querySelector('[data-viewer-bottom-bar]')?.hasAttribute('inert')).toBe(true);
