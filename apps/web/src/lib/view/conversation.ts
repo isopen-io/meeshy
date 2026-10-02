@@ -166,6 +166,12 @@ export const initialsOf = (name: string): string => {
  * serveur ne sert ni `isOnline` ni `lastActiveAt`, et un client ne fabrique
  * jamais ce que le serveur retire.
  *
+ * LE COMPTE D'ABORD (#9065) : quand la passerelle sert la présence du compte
+ * (`participant.user.isOnline`), c'est elle qui fait foi — la ligne de
+ * participant porte un `lastActiveAt` figé à son entrée dans la conversation,
+ * qui faisait tomber un pair en ligne dans la décroissance anti-stale. Un
+ * invité sans compte garde la présence de sa ligne.
+ *
  * `now` est INJECTABLE (repli `Date.now()`) : la loi 1/3/5 de
  * `getUserPresenceStatus` prend son horloge en paramètre, jamais en lecture
  * interne — sans l'injection ici, aucun témoin ne peut fixer les fenêtres
@@ -174,16 +180,17 @@ export const initialsOf = (name: string): string => {
 export const presenceOf = (
   participant: Participant | undefined,
   now: number = Date.now(),
-): UserPresenceStatus =>
-  getUserPresenceStatus(
-    participant === undefined
-      ? null
-      : {
-          isOnline: participant.isOnline,
-          ...(participant.lastActiveAt === undefined ? {} : { lastActiveAt: participant.lastActiveAt }),
-        },
+): UserPresenceStatus => {
+  if (participant === undefined) return getUserPresenceStatus(null, now);
+  const source = participant.user?.isOnline === undefined ? participant : participant.user;
+  return getUserPresenceStatus(
+    {
+      isOnline: source.isOnline ?? false,
+      ...(source.lastActiveAt === undefined ? {} : { lastActiveAt: source.lastActiveAt }),
+    },
     now,
   );
+};
 
 /**
  * LA FORME DE L'APERÇU DE LISTE — miroir de `LastMessageSummaryKind.swift:6-37`

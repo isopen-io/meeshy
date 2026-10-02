@@ -7,6 +7,7 @@ import type { UserPresenceStatus } from '@/lib/api/types';
 import { initialsOf } from '@/lib/view/conversation';
 import type { ActiveMember } from '@/lib/view/top-active-members';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
+import { AuthorMoodsContext } from '@/lib/view/use-author-moods';
 import { ActivePeersContext, FocusedPeersContext, HerePeersContext } from '@/lib/view/use-conversation-viewing';
 
 import { Avatar } from './avatar';
@@ -47,6 +48,7 @@ export function ActiveMembersStack({
   const herePeers = useContext(HerePeersContext);
   const activePeers = useContext(ActivePeersContext);
   const focusedPeers = useContext(FocusedPeersContext);
+  const moodOf = useContext(AuthorMoodsContext);
   if (members.length === 0) return null;
   const label = translate(currentInterfaceLanguage(), 'thread.header.active_members');
 
@@ -54,6 +56,7 @@ export function ActiveMembersStack({
     <ul aria-label={label} className="flex shrink-0 items-center" data-active-members>
       {members.map((member, index) => {
         const ring = storyRingOf?.(member.id);
+        const mood = moodOf(member.id);
         const entries = avatarMenuEntries({ username: member.username, storyRing: ring, details: onOpenDetails !== undefined });
         return (
           <li
@@ -75,6 +78,7 @@ export function ActiveMembersStack({
                 {...(member.avatar === undefined ? {} : { src: member.avatar })}
                 {...(member.username === undefined ? {} : { profileUsername: member.username })}
                 {...(ring === undefined ? {} : { storyRing: ring })}
+                {...(mood === undefined ? {} : { mood })}
               />
             </AvatarMenuTrigger>
           </li>

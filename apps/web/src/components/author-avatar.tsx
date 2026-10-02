@@ -1,6 +1,7 @@
 import { useContext, type ComponentProps } from 'react';
 
 import { avatarMenuEntries } from '@/lib/view/avatar-menu';
+import { useAuthorMood } from '@/lib/view/use-author-moods';
 import { useAuthorActive, useAuthorFocused, useAuthorHere } from '@/lib/view/use-conversation-viewing';
 
 import { Avatar } from './avatar';
@@ -28,6 +29,7 @@ export function AuthorAvatar({
   const here = useAuthorHere(authorId);
   const active = useAuthorActive(authorId);
   const focused = useAuthorFocused(authorId);
+  const mood = useAuthorMood(authorId);
   const openDetails = useContext(ConversationDetailsContext);
   const entries = avatarMenuEntries({
     username: props.profileUsername,
@@ -46,6 +48,7 @@ export function AuthorAvatar({
       onOpenDetails={openDetails ?? undefined}
     >
       <Avatar
+        {...(mood === undefined ? {} : { mood })}
         {...props}
         here={here || props.here === true}
         hereActive={active || props.hereActive === true}

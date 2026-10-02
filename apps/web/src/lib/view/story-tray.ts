@@ -119,6 +119,23 @@ export function groupStoriesByAuthor(
 }
 
 /**
+ * **LE MOOD COURANT DE CHAQUE AUTEUR** (#5652, #9065) — le plus récent, le
+ * corpus étant trié `createdAt desc` ; une humeur vide ou nulle ne compte pas.
+ * Lu par le rail (`withMoods`) ET par les avatars de la liste et du fil
+ * (`use-author-moods.ts`), qui n'exigent pas que l'auteur ait une story.
+ */
+export function moodsByAuthor(moods: readonly StatusMoodPost[]): ReadonlyMap<string, string> {
+  const moodByAuthor = new Map<string, string>();
+  for (const post of moods) {
+    const authorId = post.author?.id ?? post.authorId;
+    if (authorId === undefined || moodByAuthor.has(authorId)) continue;
+    if (post.moodEmoji === null || post.moodEmoji === undefined || post.moodEmoji === '') continue;
+    moodByAuthor.set(authorId, post.moodEmoji);
+  }
+  return moodByAuthor;
+}
+
+/**
  * **FUSIONNE LE CORPUS DES HUMEURS DANS LES GROUPES DE STORIES** (#5652).
  *
  * Le rail « vivants » d'iOS peint UNE pastille par auteur, portant à la fois
@@ -137,13 +154,7 @@ export function withMoods(
   groups: readonly StoryTrayGroup[],
   moods: readonly StatusMoodPost[],
 ): readonly StoryTrayGroup[] {
-  const moodByAuthor = new Map<string, string>();
-  for (const post of moods) {
-    const authorId = post.author?.id ?? post.authorId;
-    if (authorId === undefined || moodByAuthor.has(authorId)) continue;
-    if (post.moodEmoji === null || post.moodEmoji === undefined || post.moodEmoji === '') continue;
-    moodByAuthor.set(authorId, post.moodEmoji);
-  }
+  const moodByAuthor = moodsByAuthor(moods);
   if (moodByAuthor.size === 0) return groups;
   return groups.map((g) => {
     const mood = moodByAuthor.get(g.authorId);

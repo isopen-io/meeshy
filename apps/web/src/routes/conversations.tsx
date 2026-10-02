@@ -19,7 +19,8 @@ import { refreshListAction, rowAction, useConversations } from '@/lib/api/query'
 import type { Conversation } from '@/lib/api/types';
 import { sessionStore } from '@/lib/api/session';
 import { useTypistNames } from '@/lib/api/use-typists';
-import { peerHereIn, useActiveHerePeers, useFocusedHerePeers, useHerePeers } from '@/lib/view/use-conversation-viewing';
+import { useAuthorMoods } from '@/lib/view/use-author-moods';
+import { peerHereIn, peerKeyIn, useActiveHerePeers, useFocusedHerePeers, useHerePeers } from '@/lib/view/use-conversation-viewing';
 import { effectiveEngagementOf } from '@/lib/api/conversation-engagement';
 import { useLiveEngagements } from '@/lib/view/use-conversation-engagement';
 import { resolveViewer } from '@/lib/api/viewer';
@@ -356,6 +357,8 @@ export default function ConversationsScreen() {
   const activePeers = useActiveHerePeers(viewer.id ?? '');
   /** … et ceux qui y regardent en plein écran (#9065). */
   const focusedPeers = useFocusedHerePeers(viewer.id ?? '');
+  /** … et le mood de chaque pair de direct, du corpus déjà chargé par le rail (#9065). */
+  const moodOf = useAuthorMoods(viewer);
   const liveEngagements = useLiveEngagements();
   /**
    * LE CORPUS DU RAIL — une seule prop, partagée par les DEUX géographies
@@ -609,6 +612,7 @@ export default function ConversationsScreen() {
                 peerHere={peerHereIn(herePeers, c, viewer.id ?? '')}
                 peerActive={peerHereIn(activePeers, c, viewer.id ?? '')}
                 peerFocused={peerHereIn(focusedPeers, c, viewer.id ?? '')}
+                peerMood={moodOf(peerKeyIn(c, viewer.id ?? ''))}
                 engagement={effectiveEngagementOf({ byConversation: liveEngagements }, c)}
                 status={{
                   /**

@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import type { TypingEntry } from '@/lib/api/typing-store';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { HerePeersContext, hereKeyOf, herePeersIn } from '@/lib/view/use-conversation-viewing';
+import { AuthorMoodsContext } from '@/lib/view/use-author-moods';
 import type { ActiveMember } from '@/lib/view/top-active-members';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -84,5 +85,28 @@ describe('qui est ici, et sous quelle clé', () => {
     const state = { byConversation: { 'c-1': ['u-1'] } };
     expect(herePeersIn(state, 'c-1')).toEqual(['u-1']);
     expect(herePeersIn(state, 'c-2')).toBe(herePeersIn({ byConversation: {} }, 'c-3'));
+  });
+});
+
+describe('le mood des auteurs dans le fil (#9065)', () => {
+  const MOODS: Readonly<Record<string, string>> = { 'u-nour': '😎' };
+  const withMoods = (node: ReactNode) =>
+    renderToStaticMarkup(
+      <AuthorMoodsContext.Provider value={(authorId) => (authorId === undefined ? undefined : MOODS[authorId])}>{node}</AuthorMoodsContext.Provider>,
+    );
+
+  test('l’auteur qui a un mood le porte sur son avatar', () => {
+    expect(withMoods(<AuthorAvatar initials="NH" color="#6366f1" size={32} authorId="u-nour" />)).toContain('data-mood="😎"');
+  });
+
+  test('l’auteur sans mood n’en porte pas', () => {
+    expect(withMoods(<AuthorAvatar initials="AB" color="#6366f1" size={32} authorId="u-ali" />)).not.toContain('data-mood');
+  });
+
+  test('la pile des actifs et la cellule de frappe le portent aussi', () => {
+    const members: readonly ActiveMember[] = [{ id: 'u-nour', name: 'Nour Haddad', username: 'nour', avatar: undefined, count: 5 }];
+    expect(withMoods(<ActiveMembersStack members={members} accent="#6366f1" />)).toContain('data-mood="😎"');
+    const entry: TypingEntry = { userId: 'u-nour', displayName: 'Nour Haddad', expiresAt: 0 };
+    expect(withMoods(<TypingRosterCell typists={[entry]} accent="#5B4CFF" flat />)).toContain('data-mood="😎"');
   });
 });
