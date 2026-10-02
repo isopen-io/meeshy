@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { heuristicFaceBox } from './face-effects';
-import { createFaceTracker, detectFace, faceDetectorOf, type FaceDetectorPort } from './face-tracker';
+import { heuristicFaceBox, smoothFaceBox } from './face-effects';
+import { browserResize, createFaceTracker, detectFace, faceDetectorOf, type FaceDetectorPort } from './face-tracker';
 
 /**
  * LE VISAGE, IMAGE APRÈS IMAGE (#8551, #8552) — le détecteur du navigateur
@@ -61,5 +61,67 @@ describe('avec détecteur', () => {
     expect(await detectFace(detectorAt(seen).port, source, frame)).toEqual(seen);
     expect(await detectFace({ detect: async () => [] }, source, frame)).toEqual(heuristicFaceBox(frame));
     expect(await detectFace(null, source, frame)).toEqual(heuristicFaceBox(frame));
+  });
+});
+
+describe('sur une image réduite (#9100)', () => {
+  test('le détecteur lit une image de 320 px de large, et la boîte revient à l’échelle de l’image', async () => {
+    const reduced = { tag: 'reduced' } as unknown as CanvasImageSource;
+    const widths: number[] = [];
+    let closed = 0;
+    const read: CanvasImageSource[] = [];
+    const tracker = createFaceTracker(
+      {
+        detect: async (image) => {
+          read.push(image);
+          return [{ boundingBox: { x: 100, y: 40, width: 50, height: 60 } }];
+        },
+      },
+      {
+        resize: async (_image, { to }) => {
+          widths.push(to);
+          return { image: reduced, width: to, close: () => void (closed += 1) };
+        },
+      },
+    );
+    tracker.next(source, frame, 0);
+    await flush();
+    await flush();
+    const box = tracker.next(source, frame, 1);
+    expect(widths).toEqual([320]);
+    expect(read).toEqual([reduced]);
+    expect(closed).toBe(1);
+    expect(box).toEqual(smoothFaceBox(heuristicFaceBox(frame), { x: 400, y: 160, width: 200, height: 240 }));
+  });
+
+  test('une image déjà petite part telle quelle', async () => {
+    const widths: number[] = [];
+    const tracker = createFaceTracker({ detect: async () => [] }, { resize: async (image, { from, to }) => (widths.push(to), { image, width: from, close: () => undefined }) });
+    tracker.next(source, { width: 320, height: 240 }, 0);
+    await flush();
+    expect(widths).toEqual([]);
+  });
+});
+
+describe('la réduction du navigateur (#9100)', () => {
+  test('sans createImageBitmap, l’image part telle quelle, à sa largeur', async () => {
+    const reduced = await browserResize({})(source, { from: 1280, to: 320 });
+    expect(reduced.image).toBe(source);
+    expect(reduced.width).toBe(1280);
+  });
+
+  test('avec createImageBitmap, une image de 320 px de large, rendue à la fermeture', async () => {
+    const asked: unknown[] = [];
+    let closed = false;
+    const reduced = await browserResize({
+      createImageBitmap: async (_image, options) => {
+        asked.push(options);
+        return { width: 320, height: 180, close: () => void (closed = true) } as unknown as ImageBitmap;
+      },
+    })(source, { from: 1280, to: 320 });
+    expect(asked).toEqual([{ resizeWidth: 320, resizeQuality: 'low' }]);
+    expect(reduced.width).toBe(320);
+    reduced.close();
+    expect(closed).toBe(true);
   });
 });
