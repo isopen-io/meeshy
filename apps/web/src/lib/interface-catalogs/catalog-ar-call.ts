@@ -48,6 +48,7 @@ const arCall = {
   'call.ended.permission': 'اسمح بالميكروفون لإجراء المكالمة',
   'call.retry': 'إعادة المحاولة',
   'call.close': 'إغلاق',
+  'call.openSettings': 'الإعدادات',
   'call.waiting.from': '{caller} يتصل بك',
   'call.waiting.answer': 'رد',
   'call.waiting.decline': 'رفض',

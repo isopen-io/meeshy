@@ -13,7 +13,7 @@ const deCallCaptions = {
   'callCaptions.mode.translated': 'In deine Sprache übersetzt',
   'callCaptions.mode.original': 'In der Originalsprache',
   'callCaptions.listening': 'Deine Stimme wird transkribiert',
-  'callCaptions.unsupported': 'Dieser Browser transkribiert deine Stimme nicht: Du liest die anderen',
+  'callCaptions.unsupported': 'Deine Stimme wird auf diesem Gerät nicht transkribiert: Du liest die anderen',
   'callCaptions.denied': 'Spracherkennung abgelehnt: Du liest die anderen',
   'callCaptions.journal.title': 'Anrufprotokoll',
   'callCaptions.participant': 'Teilnehmer',
