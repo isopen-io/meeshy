@@ -5,13 +5,17 @@ import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { MEE_CHARACTER_STICKERS, meeSlotsFor, meeStickersOfTab, meeTemplateId } from '@/lib/mee/catalog';
+import { MEE_CHARACTER_STICKERS, findMeeSticker, meeSlotsFor, meeStickersOfTab, meeTemplateId } from '@/lib/mee/catalog';
 import { MEE_INTENT_KEYS } from '@/lib/mee/intents';
 import { meeStickerFile, rasterizeSvg } from '@/lib/mee/png';
 import type { RasterizeSvg } from '@/lib/mee/png';
 import { renderMeeSticker } from '@/lib/mee/render';
 import { MEE_INTENTS } from '@/lib/mee/types';
 import type { MeeSection, MeeSlot, MeeSlots, MeeSticker } from '@/lib/mee/types';
+import { isFavorite } from '@/lib/stickers/favorites';
+import type { StickerFavorite } from '@/lib/stickers/favorites';
+
+import { FavoriteStar } from './sticker-favorite-star';
 
 /**
  * LES STICKERS DE MEE ET MEO (#9034, #9058, #9068, #9069) — deux usages dans
@@ -36,11 +40,13 @@ type Section = readonly [MeeSection, Heading];
 
 const INTENT_SECTIONS: readonly Section[] = MEE_INTENTS.map((intent) => [intent, MEE_INTENT_KEYS[intent]]);
 
-export type MeePanelMode = 'characters' | 'instants';
+/** `favorites` : les Mee épinglés, dans l'ordre où ils l'ont été (#9070). */
+export type MeePanelMode = 'characters' | 'instants' | 'favorites';
 
 /** Les sections d'un usage, dans leur ordre : les intentions pour les personnages, les familles pour les Instants. */
 const SECTIONS: Readonly<Record<MeePanelMode, readonly Section[]>> = {
   characters: INTENT_SECTIONS,
+  favorites: [['favorites' as MeeSection, { title: 'composer.sticker.tab.favorites' }]],
   instants: [
     ['message', { title: 'composer.sticker.instants.message' }],
     ['moment', { title: 'composer.sticker.instants.moment' }],
@@ -49,10 +55,17 @@ const SECTIONS: Readonly<Record<MeePanelMode, readonly Section[]>> = {
   ],
 };
 
-const STICKERS: Readonly<Record<MeePanelMode, readonly MeeSticker[]>> = {
+const STICKERS: Readonly<Record<Exclude<MeePanelMode, 'favorites'>, readonly MeeSticker[]>> = {
   characters: MEE_CHARACTER_STICKERS,
   instants: meeStickersOfTab('instants'),
 };
+
+/** Les Mee d'une liste de favoris, dans son ordre ; un identifiant sorti du catalogue est ignoré, jamais purgé. */
+const favoriteMees = (favorites: readonly StickerFavorite[]): readonly MeeSticker[] =>
+  favorites.flatMap((entry) => {
+    const found = entry.kind === 'mee' ? findMeeSticker(entry.value) : undefined;
+    return found === undefined ? [] : [found];
+  });
 
 const FIELDS = [
   { slot: 'message', label: 'composer.sticker.instants.field.message' },
@@ -70,8 +83,14 @@ export function MeeStickerPanel({
   onPick,
   rasterize = rasterizeSvg,
   now = () => new Date(),
+  favorites = [],
+  onToggleFavorite,
 }: {
   readonly mode: MeePanelMode;
+  /** Les favoris de la feuille : la case épinglée porte son étoile, et `favorites` les liste. */
+  readonly favorites?: readonly StickerFavorite[];
+  /** L'appui long (ou clic droit) épingle ou retire — absent pour les Instants, qui dépendent du texte saisi. */
+  readonly onToggleFavorite?: (entry: StickerFavorite) => void;
   readonly language: InterfaceLanguage;
   readonly onPick: (picked: MeePicked) => void;
   readonly rasterize?: RasterizeSvg;
@@ -80,7 +99,7 @@ export function MeeStickerPanel({
   const [values, setValues] = useState<MeeSlots>(() => ({ time: clockOf(language, now()) }));
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
-  const stickers = STICKERS[mode];
+  const stickers = mode === 'favorites' ? favoriteMees(favorites) : STICKERS[mode];
   const typed = mode === 'instants' ? values : {};
 
   const pick = async (sticker: MeeSticker) => {
@@ -129,10 +148,11 @@ export function MeeStickerPanel({
       </p>
 
       {SECTIONS[mode].map(([section, heading]) => {
-        const list = stickers.filter((sticker) => sticker.section === section);
+        const list = mode === 'favorites' ? stickers : stickers.filter((sticker) => sticker.section === section);
+        const pinnable = mode !== 'instants' && onToggleFavorite !== undefined;
         return list.length === 0 ? null : (
           <section key={section} data-mee-section={section} className="flex flex-col gap-2">
-            <header className="flex flex-col gap-0.5">
+            <header className="flex flex-col gap-0.5" hidden={mode === 'favorites'}>
               <h3 className="text-caption font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
                 {translate(language, heading.title)}
               </h3>
@@ -144,13 +164,22 @@ export function MeeStickerPanel({
             </header>
             <ul className="grid grid-cols-4 gap-2">
               {list.map((sticker) => (
-                <li key={sticker.id} style={{ contentVisibility: 'auto', containIntrinsicSize: '80px 80px' }}>
+                <li key={sticker.id} className="relative" style={{ contentVisibility: 'auto', containIntrinsicSize: '80px 80px' }}>
                   <button
                     type="button"
                     data-mee-sticker={sticker.id}
                     aria-label={sticker.title}
                     disabled={busy}
                     onClick={() => void pick(sticker)}
+                    data-favorite={pinnable && isFavorite(favorites, { kind: 'mee', value: sticker.id }) ? 'true' : undefined}
+                    onContextMenu={
+                      pinnable
+                        ? (event) => {
+                            event.preventDefault();
+                            onToggleFavorite?.({ kind: 'mee', value: sticker.id });
+                          }
+                        : undefined
+                    }
                     className="block aspect-square w-full rounded-xl p-0.5"
                     style={{ backgroundColor: 'var(--color-ios-card)' }}
                   >
@@ -160,6 +189,7 @@ export function MeeStickerPanel({
                       dangerouslySetInnerHTML={{ __html: renderMeeSticker(sticker, { uid: `pick-${sticker.id}`, slots: typed }) }}
                     />
                   </button>
+                  {pinnable && isFavorite(favorites, { kind: 'mee', value: sticker.id }) ? <FavoriteStar /> : null}
                 </li>
               ))}
             </ul>
@@ -169,3 +199,4 @@ export function MeeStickerPanel({
     </div>
   );
 }
+
