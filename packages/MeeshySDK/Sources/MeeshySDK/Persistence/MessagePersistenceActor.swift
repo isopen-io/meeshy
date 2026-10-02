@@ -1541,17 +1541,15 @@ public actor MessagePersistenceActor {
                 // colonnes dérivées, donc une position affichée en ligne mais
                 // jamais hissée ici disparaîtrait au prochain chargement du
                 // cache (relaunch, pull-to-refresh).
-                let locationJson: String? = api.location.flatMap { place in
-                    encoder.encodeOrLog(place, field: "locationJson", id: api.id)
-                        .flatMap { String(data: $0, encoding: .utf8) }
-                }
+                let locationJson = MessageRecord.encodeJSONText(api.location, field: "locationJson", id: api.id)
 
                 // Sticker (#4823) — même mécanique et même raison que
                 // `locationJson` juste au-dessus.
-                let stickerJson: String? = api.sticker.flatMap { sticker in
-                    encoder.encodeOrLog(sticker, field: "stickerJson", id: api.id)
-                        .flatMap { String(data: $0, encoding: .utf8) }
-                }
+                let stickerJson = MessageRecord.encodeJSONText(api.sticker, field: "stickerJson", id: api.id)
+
+                // Carte des liens suivis (#9104) — même mécanique, même coalescence.
+                let trackedLinksJson = MessageRecord.encodeJSONText(
+                    api.trackingLinks.flatMap { $0.isEmpty ? nil : $0 }, field: "trackedLinksJson", id: api.id)
 
                 var effectFlags: UInt32 = api.effectFlags ?? 0
                 if effectFlags == 0 {
@@ -1797,6 +1795,7 @@ public actor MessagePersistenceActor {
                     // Même coalescence : un écho partiel sans `sticker` ne doit
                     // pas effacer celui qu'un instantané plus riche a persisté.
                     existing.stickerJson = stickerJson ?? existing.stickerJson
+                    existing.trackedLinksJson = trackedLinksJson ?? existing.trackedLinksJson
                     existing.effectFlags = effectFlags
                     // #7508 — l'horloge d'un éphémère COALESCE. Ses deux
                     // porteurs arrivent par des chemins différents et jamais
@@ -1910,7 +1909,8 @@ public actor MessagePersistenceActor {
                         locationJson: locationJson,
                         stickerJson: stickerJson,
                         // #7508 — le seul porteur d'horloge du temps réel.
-                        ephemeralDuration: api.ephemeralDuration
+                        ephemeralDuration: api.ephemeralDuration,
+                        trackedLinksJson: trackedLinksJson
                     )
                     if api.consumedByMe == true {
                         record.sealAsOpenedViewOnce(at: Date())
