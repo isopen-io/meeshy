@@ -24,7 +24,8 @@ export const APPAREILS = {
       { ecran: 'fil', legende: 'L4', theme: 'dark' },
       { ecran: 'story', legende: 'L6', theme: 'dark' },
       { ecran: 'progression', legende: 'L7', theme: 'light' },
-      { ecran: 'invitation', legende: 'L10', theme: 'light' },
+      // 1.1.3 : en français, la vraie page d'invitation (lien.mov, « Aiko t'invite », /chat/lisboa-2026).
+      { ecran: 'invitation', legende: 'L10', theme: 'light', ecranReel: { fr: { video: 'Marketing/02-captures/iphone/fr/lien.mov', instant: 3.5 } } },
     ],
   },
   ipad: {

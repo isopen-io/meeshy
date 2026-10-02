@@ -18,6 +18,7 @@ import { pngInfo, stripAlpha } from '../../lib/png.mjs'
 import { LEGENDES } from '../../textes/legendes.mjs'
 import { APPAREILS, OUT_APPSTORE, POSTER, cheminFastlane, cheminPlanche, cheminPoster, graphemes } from './plan.mjs'
 import { pageCapture, pagePoster } from './composition.mjs'
+import { imageReelle } from './ecran-reel.mjs'
 
 const RAPPORT = resolve(OUT_APPSTORE, 'appstore-verification.json')
 
@@ -104,7 +105,8 @@ const produire = async ({ langs, appareils, rangs }) => {
         const numeros = rangs ?? a.captures.map((_, i) => i + 1)
         const corps = await corpsDeSerie(browser, { appareil, lang })
         for (const rang of numeros.filter((r) => r <= a.captures.length)) {
-          const { png, mesure } = await rendre(browser, { html: pageCapture({ appareil, lang, rang, corps }), ...a })
+          const ecranReel = imageReelle({ capture: a.captures[rang - 1], lang })
+          const { png, mesure } = await rendre(browser, { html: pageCapture({ appareil, lang, rang, corps, ecranReel }), ...a })
           const chemin = cheminFastlane({ appareil, lang, rang })
           ecrire(chemin, png)
           const legende = LEGENDES[a.captures[rang - 1].legende][lang]

@@ -3,6 +3,7 @@ import { KIT_LANGS } from '../../lib/locales.mjs'
 import { LEGENDES } from '../../textes/legendes.mjs'
 import { APPAREILS, POSTER, cheminFastlane, cheminPoster, graphemes } from './plan.mjs'
 import { pageCapture, pagePoster } from './composition.mjs'
+import { imageReelle } from './ecran-reel.mjs'
 
 const theme = (sequence) => sequence.map((c) => (c.theme === 'dark' ? 'S' : 'C')).join('-')
 
@@ -95,5 +96,46 @@ describe('légende des badges (hors vitrine depuis #8825)', () => {
   test('la légende dit « badges », comme l’écran (« Badge gagné »)', () => {
     expect(LEGENDES.L8.fr).toStartWith('Débloque des badges.')
     expect(LEGENDES.L8.en).toStartWith('Unlock badges.')
+  })
+})
+
+describe('écran réel de l’invitation (lien.mov, 1.1.3)', () => {
+  const invitation = APPAREILS.iphone.captures[9]
+  const PNG = Buffer.from('89504e470d0a1a0a', 'hex')
+
+  test('la capture 10 de l’iPhone prend en français l’image de lien.mov, une fois la page posée', () => {
+    expect(invitation.ecran).toBe('invitation')
+    expect(invitation.ecranReel).toEqual({ fr: { video: 'Marketing/02-captures/iphone/fr/lien.mov', instant: 3.5 } })
+  })
+
+  test('l’image se tire de la vidéo déclarée, à son instant ; une langue sans vidéo garde la maquette', () => {
+    const appels = []
+    const extraire = (video, instant) => (appels.push([video, instant]), PNG)
+    expect(imageReelle({ capture: invitation, lang: 'fr', extraire, existe: () => true })).toBe(PNG)
+    expect(appels).toHaveLength(1)
+    expect(appels[0][0]).toMatch(/\/Marketing\/02-captures\/iphone\/fr\/lien\.mov$/)
+    expect(appels[0][1]).toBe(3.5)
+    expect(imageReelle({ capture: invitation, lang: 'en', extraire, existe: () => true })).toBeNull()
+    expect(appels).toHaveLength(1)
+  })
+
+  test('une vidéo déclarée mais absente arrête le rendu au lieu de retomber sur la maquette', () => {
+    expect(() => imageReelle({ capture: invitation, lang: 'fr', extraire: () => PNG, existe: () => false })).toThrow(/lien\.mov/)
+  })
+
+  test('posée dans le cadre, l’image réelle remplace la maquette, sous la même légende', () => {
+    const html = pageCapture({ appareil: 'iphone', lang: 'fr', rang: 10, ecranReel: PNG })
+    expect(html).toMatch(/class="device-screen"[\s\S]*class="ecran-reel"/)
+    expect(html).not.toContain('class="inv-card"')
+    expect(html).toContain('class="as-caption')
+  })
+
+  test('la maquette de l’invitation montre un lien /chat/, et aucune capture un lien /l/', () => {
+    for (const appareil of Object.keys(APPAREILS)) {
+      for (const lang of KIT_LANGS) {
+        APPAREILS[appareil].captures.forEach((_, i) => expect(pageCapture({ appareil, lang, rang: i + 1 })).not.toMatch(/meeshy\.me\/l\//))
+      }
+    }
+    expect(pageCapture({ appareil: 'iphone', lang: 'en', rang: 10 })).toContain('meeshy.me/chat/')
   })
 })

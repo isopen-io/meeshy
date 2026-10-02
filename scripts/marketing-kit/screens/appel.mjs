@@ -47,7 +47,7 @@ export const ecranAppel = (ctx) => {
   </div>`
 }
 
-// Lien d'invitation (CommunityLinkDetailView) : on entre SANS compte par /l/<lien>.
+// Lien d'invitation (CommunityLinkDetailView) : on entre SANS compte par /chat/<lien>.
 export const invitationCorps = (ctx) => {
   const L = DEMO.lienInvitation
   const total = L.langues.reduce((n, [, v]) => n + v, 0)
