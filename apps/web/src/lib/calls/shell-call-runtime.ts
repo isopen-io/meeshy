@@ -29,6 +29,8 @@ export function startShellCall(coque: CoqueNative | undefined = coqueCourante())
     pictureInPicture: (active) => shellPipStore.setState({ active }),
     store: callStore,
     accept: () => void import('./call-actions').then(({ callActions }) => callActions.accept()),
+    toggleMic: () => void import('./call-actions').then(({ callActions }) => callActions.toggleMic()),
+    hangup: () => void import('./call-actions').then(({ callActions }) => callActions.hangup()),
     watchCredential: (write) =>
       watchDeliveryReceiptCredential({
         sessionStore,

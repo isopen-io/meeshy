@@ -20,7 +20,8 @@ import type { ActiveCall, CallPhase, CallStoreApi } from './call-store';
  * - un appel qui quitte la sonnerie dans l'app retire la notification native ;
  * - le credential que « Refuser » utilise app tuée suit la session ;
  * - l'activité qui flotte en image dans l'image (#8144) le dit à la page, qui
- *   réduit son rendu à l'image (`pictureInPicture`).
+ *   réduit son rendu à l'image (`pictureInPicture`) ; ses boutons micro et
+ *   raccrocher reviennent à la page (`pictureInPictureAction`).
  *
  * Tout est injecté ; `shell-call-runtime.ts` branche les réels.
  */
@@ -33,18 +34,20 @@ export type ShellCallSnapshot = {
   readonly active: boolean;
   readonly video: boolean;
   readonly phase: CallPhase['kind'] | null;
+  readonly micMuted: boolean;
 };
 
 export type ShellCallCommand =
   | { readonly method: 'startCallService'; readonly options: { readonly video: boolean } }
   | { readonly method: 'stopCallService'; readonly options: Record<string, never> }
-  | { readonly method: 'haptic'; readonly options: { readonly kind: 'connected' | 'reconnecting' | 'ended' } };
+  | { readonly method: 'haptic'; readonly options: { readonly kind: 'connected' | 'reconnecting' | 'ended' } }
+  | { readonly method: 'setPictureInPictureControls'; readonly options: { readonly micMuted: boolean } };
 
 const LIVE_PHASES: ReadonlySet<CallPhase['kind']> = new Set(['outgoing', 'connecting', 'connected', 'reconnecting']);
 
 export function shellCallSnapshot(call: ActiveCall | null): ShellCallSnapshot {
-  if (call === null) return { active: false, video: false, phase: null };
-  return { active: LIVE_PHASES.has(call.phase.kind), video: call.media === 'video', phase: call.phase.kind };
+  if (call === null) return { active: false, video: false, phase: null, micMuted: false };
+  return { active: LIVE_PHASES.has(call.phase.kind), video: call.media === 'video', phase: call.phase.kind, micMuted: call.micMuted };
 }
 
 const hapticFor = (previous: ShellCallSnapshot, next: ShellCallSnapshot): ShellCallCommand | null => {
@@ -63,9 +66,15 @@ const serviceFor = (previous: ShellCallSnapshot, next: ShellCallSnapshot): Shell
   return null;
 };
 
+/* La coque oublie le micro à la fin de l'appel : un appel neuf part « micro ouvert » de son côté. */
+const pipControlsFor = (previous: ShellCallSnapshot, next: ShellCallSnapshot): ShellCallCommand | null => {
+  const known = previous.active && previous.micMuted;
+  return next.active && next.micMuted !== known ? { method: 'setPictureInPictureControls', options: { micMuted: next.micMuted } } : null;
+};
+
 /** Les appels au plugin qu'impose un changement du magasin, dans l'ordre. */
 export function shellCallCommands(previous: ShellCallSnapshot, next: ShellCallSnapshot): readonly ShellCallCommand[] {
-  return [serviceFor(previous, next), hapticFor(previous, next)].filter(
+  return [serviceFor(previous, next), pipControlsFor(previous, next), hapticFor(previous, next)].filter(
     (command): command is ShellCallCommand => command !== null,
   );
 }
@@ -76,8 +85,10 @@ export function audioRouteLabelKey(route: ShellAudioRoute): `call.audioRoute.${S
 
 export type ShellCallEnvironment = {
   readonly native: (method: string, options: object) => Promise<unknown>;
-  readonly listen: (event: 'callAnswer' | 'pictureInPictureModeChanged', listener: (data: unknown) => void) => void;
+  readonly listen: (event: 'callAnswer' | 'pictureInPictureModeChanged' | 'pictureInPictureAction', listener: (data: unknown) => void) => void;
   readonly pictureInPicture: (active: boolean) => void;
+  readonly toggleMic: () => void;
+  readonly hangup: () => void;
   readonly store: Pick<CallStoreApi, 'getState' | 'subscribe'>;
   readonly accept: () => void;
   readonly watchCredential: (write: (value: DeliveryReceiptCredential) => void) => () => void;
@@ -132,6 +143,13 @@ export function bindShellCall(env: ShellCallEnvironment): () => void {
 
   env.listen('pictureInPictureModeChanged', (data) => {
     if (attached) env.pictureInPicture((data as { readonly active?: unknown } | null)?.active === true);
+  });
+
+  env.listen('pictureInPictureAction', (data) => {
+    if (!attached) return;
+    const action = (data as { readonly action?: unknown } | null)?.action;
+    if (action === 'mic') env.toggleMic();
+    if (action === 'hangup') env.hangup();
   });
 
   const stopCredential = env.watchCredential((value) => {

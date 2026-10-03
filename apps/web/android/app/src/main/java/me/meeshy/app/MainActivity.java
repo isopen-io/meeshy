@@ -1,7 +1,6 @@
 package me.meeshy.app;
 
 import android.annotation.SuppressLint;
-import android.app.PictureInPictureParams;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.os.Bundle;
@@ -87,7 +86,7 @@ public class MainActivity extends BridgeActivity {
         MeeshyCallPlugin call = callPlugin();
         if (call == null || !call.floatsInPictureInPicture()) return;
         try {
-            enterPictureInPictureMode(new PictureInPictureParams.Builder().build());
+            enterPictureInPictureMode(call.pictureInPictureParams());
         } catch (IllegalStateException refused) {
             // PiP coupee pour Meeshy dans les reglages : l'appel continue en arriere-plan.
         }

@@ -45,6 +45,18 @@ public final class CallShellRules {
         return sdk >= 26 && systemSupports && callActive && video;
     }
 
+    /** #8144 — les boutons de la fenetre flottante, dans l'ordre : le micro (dans son etat), puis raccrocher. */
+    public static String[] pictureInPictureActions(boolean micMuted) {
+        return new String[] {micMuted ? "unmute" : "mute", "hangup"};
+    }
+
+    /** Le geste de la page qu'un bouton de la fenetre declenche (`shell-call.ts`), ou null. */
+    public static String pictureInPictureGesture(String action) {
+        if ("mute".equals(action) || "unmute".equals(action)) return "mic";
+        if ("hangup".equals(action)) return "hangup";
+        return null;
+    }
+
     /** `DELETE /api/v1/calls/:callId?reason=rejected` — le refus AVANT d'avoir rejoint (`sw-push.js` § refuserAppel). */
     public static String declineUrl(String apiBase, String callId) {
         if (apiBase == null || callId == null || callId.trim().isEmpty()) return null;

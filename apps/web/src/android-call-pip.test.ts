@@ -65,7 +65,8 @@ describe("l'image dans l'image d'un appel dans la coque Android (#8144)", () => 
     const plugin = sansCommentaires(lire(...JAVA, 'MeeshyCallPlugin.java'));
     const params = corpsDe(plugin, 'PictureInPictureParams pictureInPictureParams(');
     expect(params).toContain('CallShellRules.pictureInPictureActions(');
-    expect(params).toContain('new RemoteAction(');
+    expect(params).toContain('remoteAction(');
+    expect(corpsDe(plugin, 'RemoteAction remoteAction(')).toContain('new RemoteAction(');
     expect(plugin).toContain('RECEIVER_NOT_EXPORTED');
     expect(plugin).toContain('notifyListeners("pictureInPictureAction"');
     for (const dossier of LANGUES) {
