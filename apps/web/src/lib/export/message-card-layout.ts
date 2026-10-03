@@ -1,7 +1,16 @@
 import { CARD_ASPECT_SIZE, CARD_TILT_RADIANS, DEFAULT_CARD_FRAME, metaLine, sideHeaderOps, type CardAspect, type CardFrame } from './message-card-frame';
-import { DEFAULT_AUDIO_STYLE, DEFAULT_MEDIA_STYLE, layoutCardMedia, type CardAudioStyle, type CardMedia, type CardMediaBlock, type CardMediaStyle } from './message-card-media';
+import {
+  DEFAULT_MEDIA_ARRANGEMENT,
+  DEFAULT_MEDIA_LAYOUT,
+  effectiveMediaLayout,
+  isBeside,
+  paintedVisualIndexes,
+  type CardMediaArrangement,
+  type CardMediaLayout,
+} from './message-card-arrangement';
+import { DEFAULT_AUDIO_STYLE, layoutCardMedia, type CardAudioStyle, type CardMedia, type CardMediaBlock } from './message-card-media';
 import type { CardOp } from './message-card-ops';
-import { GUILLEMET_FONT, canvasFont, templateOf, type CardLinkId, type MessageCardTemplateId } from './message-card-templates';
+import { GUILLEMET_FONT, canvasFont, templateOf, type CardLinkId, type CardPalette, type MessageCardTemplateId } from './message-card-templates';
 import { textDirection, truncateLines, wrapText, type Measure } from './message-card-text';
 
 export { textDirection, truncateLines, wrapText, type Measure } from './message-card-text';
@@ -19,7 +28,9 @@ export type { CardBarOp, CardDotOp, CardMediaOp, CardOp, CardPanelOp, CardPlayOp
  *  2. la LIAISON du template, qui mène la question à la réponse ;
  *  3. la RÉPONSE, en bas, dans la police du template et en grand — ses MÉDIAS
  *     (images, première image des vidéos, représentation de l'audio) au-dessus
- *     de son texte, comme dans la bulle (`message-card-media.ts`) ;
+ *     de son texte comme dans la bulle, au-dessous, dans une colonne à sa gauche
+ *     ou à sa droite (la réponse se resserre à côté), ou un visuel EN FOND sous
+ *     un voile de la palette (#9236, `message-card-arrangement.ts`) ;
  *  4. les SUITES, quand on image un commentaire « avec ses réponses » (#8734) :
  *     chacune en taille réduite, à la manière de la citation, trois lignes au
  *     plus — le commentaire imagé reste le sujet.
@@ -60,7 +71,12 @@ export type MessageCardInput = {
   readonly frame?: CardFrame;
   /** Les médias de la réponse, dans leur ordre — le peintre reçoit leurs pixels à part. */
   readonly media?: readonly CardMedia[];
-  readonly mediaStyle?: CardMediaStyle;
+  /** OÙ se posent les médias (#9236) — au-dessus de la réponse par défaut. */
+  readonly mediaLayout?: CardMediaLayout;
+  /** COMMENT plusieurs visuels s'agencent (#9236). */
+  readonly mediaArrangement?: CardMediaArrangement;
+  /** Le rang, dans `media`, du visuel que « une seule » et « en fond » montrent — absent : le premier. */
+  readonly featuredMedia?: number | null;
   readonly audioStyle?: CardAudioStyle;
   /** Les réponses peintes SOUS la réponse (#8734), dans leur ordre. */
   readonly followUps?: readonly MessageCardPart[];
@@ -95,7 +111,12 @@ export type CardLayout = {
   readonly truncated: boolean;
   /** La rotation du contenu autour du centre de la carte, en radians — le fond et le filigrane restent droits. */
   readonly tilt: number;
+  /** Le visuel peint EN FOND (#9236) — droit comme le fond, sous un voile de la palette ; `null` : aucun. */
+  readonly backdrop: CardBackdrop | null;
 };
+
+/** Le visuel de fond : son rang dans `MessageCardInput.media`, et le voile qui garde le texte lisible. */
+export type CardBackdrop = { readonly index: number; readonly video: boolean; readonly veil: string };
 
 export const CARD_WIDTH = 1080;
 export const CARD_MIN_HEIGHT = 1080;
@@ -128,6 +149,9 @@ const MEDIA_GAP = 28;
 const SIDE_REGION = 64;
 const FOLLOW_GAP = 40;
 const FOLLOW_MAX_LINES = 3;
+/** La part de la colonne de texte qu'une colonne de médias prend, et l'espace qui la sépare de la réponse. */
+const BESIDE_SHARE = 0.42;
+const BESIDE_GAP = 40;
 
 /**
  * La géométrie de chaque liaison : la hauteur du bloc qui sépare la citation
@@ -165,12 +189,24 @@ type Chrome = {
   readonly bubble: number;
   readonly link: number;
   readonly media: number;
+  /** La hauteur d'une colonne de médias à côté de la réponse — elle ne s'ADDITIONNE pas au texte. */
+  readonly beside: number;
 };
 
 function contentHeight(sized: Sized, hasQuote: boolean, chrome: Chrome): number {
   const quote = hasQuote ? chrome.quoteMeta + sized.quoteLines.length * quoteLineHeight(sized.quoteSize) + chrome.bubble + chrome.link : 0;
   const mediaGap = chrome.media > 0 && sized.replyLines.length > 0 ? MEDIA_GAP : 0;
-  return chrome.header + quote + chrome.replyMeta + chrome.media + mediaGap + sized.replyLines.length * replyLineHeight(sized.replySize) + chrome.bubble;
+  const text = chrome.replyMeta + sized.replyLines.length * replyLineHeight(sized.replySize);
+  const reply = chrome.beside > 0 ? Math.max(text, chrome.beside) : chrome.media + mediaGap + text;
+  return chrome.header + quote + reply + chrome.bubble;
+}
+
+/** Le voile d'un visuel de fond : la première teinte du fond, assez opaque pour que le texte se lise et que la carte garde sa couleur. */
+function veilOf(palette: CardPalette): string {
+  const base = /^#([0-9a-f]{6})$/i.exec(palette.background[0]?.[1] ?? '')?.[1] ?? '000000';
+  const channel = (at: number) => Number.parseInt(base.slice(at, at + 2), 16);
+  const alpha = palette.replyInk.toUpperCase() === '#FFFFFF' ? 0.6 : 0.72;
+  return `rgba(${channel(0)}, ${channel(2)}, ${channel(4)}, ${alpha})`;
 }
 
 const nonBlank = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim());
@@ -210,14 +246,28 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   const followUps = (input.followUps ?? []).filter((part) => part.text.trim() !== '');
   const followMetas = followUps.map(metaOf);
   const followInset = geometry.quoteBar ? QUOTE_INDENT : 0;
+  const media = input.media ?? [];
+  const arrangement = input.mediaArrangement ?? DEFAULT_MEDIA_ARRANGEMENT;
+  const painted = paintedVisualIndexes(media, { layout: input.mediaLayout ?? DEFAULT_MEDIA_LAYOUT, arrangement, featured: input.featuredMedia ?? null });
+  const placement = effectiveMediaLayout(input.mediaLayout ?? DEFAULT_MEDIA_LAYOUT, painted.length > 0);
+  const beside = isBeside(placement);
+  const besideWidth = beside ? Math.round(replyWidth * BESIDE_SHARE) : 0;
+  const replyTextWidth = beside ? replyWidth - besideWidth - BESIDE_GAP : replyWidth;
+  const backdropIndex = placement === 'backdrop' ? (painted[0] ?? null) : null;
+  const backdropMedia = backdropIndex === null ? undefined : media[backdropIndex];
+  const replyRtl = textDirection(input.reply.text) === 'rtl';
   const mediaBlock: CardMediaBlock = layoutCardMedia({
-    media: input.media ?? [],
-    style: input.mediaStyle ?? DEFAULT_MEDIA_STYLE,
+    media,
+    painted: placement === 'backdrop' ? [] : painted,
+    arrangement,
     audioStyle: input.audioStyle ?? DEFAULT_AUDIO_STYLE,
-    width: replyWidth,
-    maxHeight: Math.round(budget * (replyHasText || hasQuote ? 0.46 : 0.8)),
+    width: beside ? besideWidth : replyWidth,
+    maxHeight: Math.round(budget * (beside ? 0.62 : replyHasText || hasQuote ? 0.46 : 0.8)),
+    column: beside,
+    creditAt: placement === 'backdrop' ? null : frame.authors,
+    measure,
     palette,
-    rtl: textDirection(input.reply.text) === 'rtl',
+    rtl: replyRtl,
     font: (size, weight) => canvasFont({ family: null, weight, style: 'normal' }, size),
   });
   const metaHeight = (line: string | null) => (line === null ? 0 : AUTHOR_LINE + AUTHOR_GAP);
@@ -227,7 +277,8 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     replyMeta: metaHeight(replyMeta),
     bubble: geometry.bubbles ? 2 * BUBBLE_PAD_Y : 0,
     link: geometry.block,
-    media: mediaBlock.height,
+    media: beside ? 0 : mediaBlock.height,
+    beside: beside ? mediaBlock.height : 0,
   };
 
   const sizeAt = (step: number): Sized => {
@@ -240,7 +291,7 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
       quoteSize,
       replyFont,
       quoteFont,
-      replyLines: replyHasText ? wrapText(input.reply.text, replyWidth, replyFont, measure) : [],
+      replyLines: replyHasText ? wrapText(input.reply.text, replyTextWidth, replyFont, measure) : [],
       quoteLines: hasQuote ? wrapText(input.quoted?.text ?? '', quoteWidth, quoteFont, measure) : [],
       followLines: followUps.map((part) => truncateLines(wrapText(part.text, quoteWidth, quoteFont, measure), FOLLOW_MAX_LINES, quoteWidth, quoteFont, measure)),
     };
@@ -267,7 +318,9 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     truncated = true;
     const quoteLH = quoteLineHeight(sized.quoteSize);
     const replyLH = replyLineHeight(sized.replySize);
-    const fixed = total({ ...sized, quoteLines: [], replyLines: [] }) + (chrome.media > 0 && replyHasText ? MEDIA_GAP : 0);
+    /* Une colonne de médias se pose À CÔTÉ des lignes : elle ne leur prend pas de place en hauteur. */
+    const besideShare = beside ? Math.max(chrome.replyMeta, chrome.beside) - chrome.replyMeta : 0;
+    const fixed = total({ ...sized, quoteLines: [], replyLines: [] }) - besideShare + (chrome.media > 0 && replyHasText ? MEDIA_GAP : 0);
     const room = budget - fixed;
     /* La citation cède d'abord : au plus un tiers de la place, deux lignes au moins. */
     const quoteKeep = hasQuote ? Math.min(sized.quoteLines.length, Math.max(2, Math.floor((room * 0.3) / quoteLH))) : 0;
@@ -275,7 +328,7 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     sized = {
       ...sized,
       quoteLines: truncateLines(sized.quoteLines, quoteKeep, quoteWidth, sized.quoteFont, measure),
-      replyLines: replyHasText ? truncateLines(sized.replyLines, replyKeep, replyWidth, sized.replyFont, measure) : [],
+      replyLines: replyHasText ? truncateLines(sized.replyLines, replyKeep, replyTextWidth, sized.replyFont, measure) : [],
     };
   }
 
@@ -343,7 +396,8 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
       readonly ink: string;
       readonly inset: number;
       readonly meta: string | null;
-      readonly media: CardMediaBlock | null;
+      /** Les médias du bloc et leur place — au-dessus, au-dessous, ou en colonne à côté des lignes. */
+      readonly media: { readonly block: CardMediaBlock; readonly at: 'above' | 'below' | 'left' | 'right' } | null;
       readonly bubble: { readonly offset: number; readonly color: string } | null;
     },
   ) => {
@@ -353,24 +407,45 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     const panelIndex = ops.length;
     const inset = options.bubble === null ? options.inset : options.bubble.offset + BUBBLE_PAD_X;
     if (options.bubble !== null) y += BUBBLE_PAD_Y;
-    if (frame.authors === 'top') meta(options.meta, start(rtl, inset), rtl);
+    const media = options.media !== null && options.media.block.height > 0 ? options.media : null;
+    const boxLeft = rtl ? width - PAD_X - inset - replyWidth : PAD_X + inset;
+    const columnX = media?.at === 'left' ? boxLeft : boxLeft + replyWidth - besideWidth;
+    /* À côté d'une colonne, la réponse — son nom compris — se resserre dans ce qui reste de la largeur. */
+    const textStart = (() => {
+      if (media?.at === 'left') return rtl ? boxLeft + replyWidth : boxLeft + besideWidth + BESIDE_GAP;
+      if (media?.at === 'right') return rtl ? boxLeft + replyWidth - besideWidth - BESIDE_GAP : boxLeft;
+      return start(rtl, inset);
+    })();
+    const rowTop = y;
     let mediaTop: number | null = null;
-    if (options.media !== null && options.media.height > 0) {
+    if (media !== null && (media.at === 'left' || media.at === 'right')) {
+      mediaTop = rowTop;
+      ops.push(...media.block.place(columnX, rowTop));
+    }
+    if (frame.authors === 'top') meta(options.meta, textStart, rtl);
+    if (media?.at === 'above') {
       mediaTop = y;
-      ops.push(...options.media.place(rtl ? width - PAD_X - inset - replyWidth : PAD_X + inset, y));
-      y += options.media.height + (lines.length > 0 ? MEDIA_GAP : 0);
+      ops.push(...media.block.place(boxLeft, y));
+      y += media.block.height + (lines.length > 0 ? MEDIA_GAP : 0);
     }
     for (const line of lines) {
-      ops.push({ kind: 'text', text: line, x: start(rtl, inset), y: y + Math.round(options.size), font: options.font, color: options.ink, align: align(rtl), direction });
+      ops.push({ kind: 'text', text: line, x: textStart, y: y + Math.round(options.size), font: options.font, color: options.ink, align: align(rtl), direction });
       y += options.lineHeight;
     }
-    if (frame.authors === 'end') meta(options.meta, start(rtl, inset), rtl);
+    if (media?.at === 'below') {
+      y += lines.length > 0 ? MEDIA_GAP : 0;
+      mediaTop = y;
+      ops.push(...media.block.place(boxLeft, y));
+      y += media.block.height;
+    }
+    if (frame.authors === 'end') meta(options.meta, textStart, rtl);
+    if (mediaTop !== null && (media?.at === 'left' || media?.at === 'right')) y = Math.max(y, rowTop + media.block.height);
     if (options.bubble !== null) {
       y += BUBBLE_PAD_Y;
       const x = rtl ? width - PAD_X - options.bubble.offset - bubbleWidth : PAD_X + options.bubble.offset;
       ops.splice(panelIndex, 0, { kind: 'panel', x, y: top, width: bubbleWidth, height: y - top, radius: BUBBLE_RADIUS, color: options.bubble.color });
     }
-    return { top, rtl, mediaTop };
+    return { top, rtl, mediaTop, mediaX: media?.at === 'left' || media?.at === 'right' ? columnX : null };
   };
 
   if (hasQuote && input.quoted !== null) {
@@ -398,12 +473,13 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     ink: palette.replyInk,
     inset: 0,
     meta: replyMeta,
-    media: mediaBlock,
+    media: placement === 'backdrop' ? { block: mediaBlock, at: 'above' } : { block: mediaBlock, at: placement },
     bubble: geometry.bubbles ? { offset: BUBBLE_OFFSET, color: palette.replyPanel } : null,
   });
   region('reply', reply.top, y);
   /* Les médias vivent DANS la réponse : leur zone vient après pour se poser au-dessus d'elle. */
-  if (reply.mediaTop !== null) region('media', reply.mediaTop, reply.mediaTop + mediaBlock.height);
+  if (reply.mediaTop !== null && reply.mediaX !== null) regions.push({ part: 'media', x: reply.mediaX, y: reply.mediaTop, width: besideWidth, height: mediaBlock.height });
+  if (reply.mediaTop !== null && reply.mediaX === null) region('media', reply.mediaTop, reply.mediaTop + mediaBlock.height);
 
   const followTop = y + FOLLOW_GAP;
   followUps.forEach((part, index) => {
@@ -422,7 +498,9 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   });
   if (followUps.length > 0) region('replies', followTop, y);
 
-  return { width, height, ops, regions, watermark: watermarkOf(input.handle), truncated, tilt: CARD_TILT_RADIANS[frame.tilt] };
+  const backdrop: CardBackdrop | null =
+    backdropIndex === null || backdropMedia === undefined ? null : { index: backdropIndex, video: backdropMedia.kind === 'video', veil: veilOf(palette) };
+  return { width, height, ops, regions, watermark: watermarkOf(input.handle), truncated, tilt: CARD_TILT_RADIANS[frame.tilt], backdrop };
 }
 
 /** Ce que la liaison peint dans son bloc, entre le bas de la citation (`y`) et la réponse. */

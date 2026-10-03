@@ -1,7 +1,7 @@
 import type { Message } from '@/lib/api/types';
 import { protectionOf } from '@/lib/reading-mode/protection';
 
-import { cardAuthorOf, cardHandleOf, cardMediaOf, type MessageCardMediaItem, type MessageCardSubject, type MessageCardSubjectPart } from './message-card-subject';
+import { authoredBy, cardAuthorOf, cardHandleOf, cardMediaOf, mediaAuthorOf, type MessageCardMediaItem, type MessageCardSubject, type MessageCardSubjectPart } from './message-card-subject';
 
 /**
  * **« IMAGER LA DISCUSSION »** (#9039) — la carte d'Imager étendue aux
@@ -16,14 +16,18 @@ import { cardAuthorOf, cardHandleOf, cardMediaOf, type MessageCardMediaItem, typ
  * pièce masquée non plus (`cardMediaOf`). Les mots sont ceux que le lecteur
  * LIT (`servedOf`, le Prisme du fil).
  *
+ * CHAQUE MÉDIA EST ATTRIBUÉ À SON MESSAGE (#9236) : ceux du premier suivent
+ * l'anonymat de la réponse, ceux des suivants celui des « autres » — comme
+ * leurs noms (`messageCardInputOf`).
+ *
  * LA BORNE — huit messages, quatre médias :
  *  - la carte mesure au plus `CARD_MAX_HEIGHT` = 1920 px et ses suites ne
  *    cèdent jamais leurs trois lignes (`FOLLOW_MAX_LINES`) : à la taille
  *    plancher, une suite coûte ~200 px (méta, trois lignes, écart), si bien
  *    qu'au-delà de huit messages la carte ne ferait que TRONQUER ce qu'on lui
  *    a donné ;
- *  - la mise en page ne peint que quatre pièces visuelles (`MAX_VISUALS`,
- *    `message-card-media.ts`) : en remettre davantage à l'atelier ferait
+ *  - la mise en page ne peint que quatre pièces visuelles (`MOSAIC_MAX_VISIBLE`,
+ *    `message-card-arrangement.ts`) : en remettre davantage à l'atelier ferait
  *    télécharger et décoder des images que personne ne verra. La mémoire
  *    tenue par une carte reste donc celle de quatre images, quelle que soit la
  *    longueur du fil.
@@ -63,7 +67,7 @@ export function discussionCardSubjectOf(params: {
   if (first === undefined) return null;
 
   const media = kept
-    .flatMap((entry) => entry.media)
+    .flatMap((entry, index) => authoredBy(entry.media, mediaAuthorOf(entry.part, index > 0)))
     .filter((item, index, all) => all.findIndex((other) => other.id === item.id) === index)
     .slice(0, DISCUSSION_CARD_MAX_MEDIA);
   return {

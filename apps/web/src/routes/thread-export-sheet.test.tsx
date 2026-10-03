@@ -568,21 +568,130 @@ describe('« Imagine » — l’atelier d’« Imager » (#8693)', () => {
     expect(host.querySelector('[data-export-media-retry]')).not.toBeNull();
   });
 
-  test('Médias : disposition des images et représentation de l’audio', async () => {
-    const video = await mountSheet({ subject: withVideo });
-    await openTab(video.host, 'media');
-    expect(chip(video.host, 'media-style', 'bande')).not.toBeNull();
-    expect(video.host.querySelector('[data-export-audio-style]')).toBeNull();
-    await mounter.click(chip(video.host, 'media-style', 'bande'));
-    await mounter.settle();
-    expect(video.harness.painted[video.harness.painted.length - 1]?.mediaStyle).toBe('bande');
-
+  test('Médias : la représentation de l’audio', async () => {
     const voice = await mountSheet({ subject: withVoice });
     await openTab(voice.host, 'media');
+    expect(voice.host.querySelector('[data-export-media-layout]')).toBeNull();
     for (const style of ['onde', 'spectre', 'pastille', 'etiquette']) expect(chip(voice.host, 'audio-style', style)).not.toBeNull();
     await mounter.click(chip(voice.host, 'audio-style', 'pastille'));
     await mounter.settle();
     expect(voice.harness.painted[voice.harness.painted.length - 1]?.audioStyle).toBe('pastille');
+  });
+
+  const withThree: MessageCardSubject = {
+    ...subject,
+    media: (['p1', 'p2', 'p3'] as const).map((id, index) => ({
+      id,
+      card: { kind: 'image', width: 800, height: 800 },
+      url: `/${id}.jpg`,
+      mimeType: 'image/jpeg',
+      posterUrl: null,
+      author: index === 1 ? { name: 'Awa', handle: 'awa', quoted: true } : { name: 'Jacques', handle: 'jacques', quoted: false },
+    })),
+  };
+  const lastPainted = (harness: Harness) => harness.painted[harness.painted.length - 1];
+  const pick = async (host: HTMLElement, dimension: string, value: string) => {
+    await mounter.click(chip(host, dimension, value));
+    await mounter.settle();
+  };
+
+  test('Médias (#9236) : OÙ ils se posent et COMMENT ils s’agencent, deux choix séparés', async () => {
+    const { host, harness } = await mountSheet({ subject: withThree });
+    await openTab(host, 'media');
+    for (const at of ['above', 'below', 'left', 'right', 'backdrop']) expect(chip(host, 'media-layout', at)).not.toBeNull();
+    for (const arrangement of ['single', 'mosaic', 'wave', 'hero', 'sine']) expect(chip(host, 'media-arrangement', arrangement)).not.toBeNull();
+    expect(chip(host, 'media-layout', 'above')?.getAttribute('aria-checked')).toBe('true');
+    expect(chip(host, 'media-arrangement', 'mosaic')?.getAttribute('aria-checked')).toBe('true');
+    await pick(host, 'media-layout', 'left');
+    await pick(host, 'media-arrangement', 'hero');
+    expect([lastPainted(harness)?.mediaLayout, lastPainted(harness)?.mediaArrangement]).toEqual(['left', 'hero']);
+  });
+
+  test('« Une seule » : le média montré se choisit par vignettes, et ne s’enregistre pas avec le format', async () => {
+    const storage = memoryStorage();
+    const { host, harness } = await mountSheet({ subject: withThree, storage });
+    await openTab(host, 'media');
+    expect(host.querySelector('[data-export-featured]')).toBeNull();
+    await pick(host, 'media-arrangement', 'single');
+    const thumbs = [...host.querySelectorAll('[data-export-featured]')];
+    expect(thumbs.map((el) => el.getAttribute('data-export-featured'))).toEqual(['p1', 'p2', 'p3']);
+    expect(thumbs[0]?.getAttribute('aria-checked')).toBe('true');
+    await pick(host, 'featured', 'p2');
+    expect(lastPainted(harness)?.featuredMedia).toBe(1);
+    expect(chip(host, 'featured', 'p2')?.getAttribute('aria-checked')).toBe('true');
+    await mounter.click(host.querySelector('[data-export-default]'));
+    await mounter.settle();
+    expect(storage.entries.get(MESSAGE_CARD_FORMAT_KEY)).not.toContain('p2');
+  });
+
+  test('« En fond » : plus de disposition à choisir, le média montré oui, l’auteur jamais', async () => {
+    const { host, harness } = await mountSheet({ subject: withThree });
+    await openTab(host, 'media');
+    expect(host.querySelector('[data-export-option="showsMediaAuthor"]')).not.toBeNull();
+    await pick(host, 'media-layout', 'backdrop');
+    expect(host.querySelector('[data-export-media-arrangement]')).toBeNull();
+    expect(host.querySelectorAll('[data-export-featured]')).toHaveLength(3);
+    expect(host.querySelector('[data-export-option="showsMediaAuthor"]')).toBeNull();
+    expect(lastPainted(harness)?.mediaLayout).toBe('backdrop');
+  });
+
+  test('« Auteur du média » signe chaque visuel du nom de qui l’a posté, comme les autres noms', async () => {
+    const { host, harness } = await mountSheet({ subject: withThree });
+    await openTab(host, 'media');
+    expect(lastPainted(harness)?.media?.some((item) => item.kind !== 'audio' && item.credit != null)).toBe(false);
+    await mounter.click(host.querySelector('[data-export-option="showsMediaAuthor"]'));
+    await mounter.settle();
+    expect(lastPainted(harness)?.media?.map((item) => (item.kind === 'audio' ? null : item.credit))).toEqual(['Jacques', 'Awa', 'Jacques']);
+  });
+
+  test('un média sans auteur connu n’offre pas « Auteur du média », et un seul visuel n’offre ni disposition ni choix', async () => {
+    const { host } = await mountSheet({ subject: { ...withThree, media: withThree.media.slice(0, 1).map(({ author: _author, ...item }) => item) } });
+    await openTab(host, 'media');
+    expect(host.querySelector('[data-export-option="showsMediaAuthor"]')).toBeNull();
+    expect(host.querySelector('[data-export-media-arrangement]')).toBeNull();
+    expect(chip(host, 'media-layout', 'right')).not.toBeNull();
+  });
+
+  test('les sorties offertes suivent les médias PEINTS ; une sortie qui ne l’est plus retombe sur l’image', async () => {
+    const { host, harness } = await mountSheet({ subject: withVideo });
+    expect(outputsOf(host)).toEqual(['image', 'gif', 'video']);
+    await mounter.click(host.querySelector('[data-export-output="gif"]'));
+    await mounter.settle();
+    await openTab(host, 'media');
+    await pick(host, 'media-arrangement', 'single');
+    await pick(host, 'featured', 'i');
+    expect(outputsOf(host)).toEqual([]);
+    await mounter.click(host.querySelector('[data-export-save]'));
+    await mounter.settle();
+    expect(harness.delivered.every((name) => name.endsWith('.png'))).toBe(true);
+    expect(harness.delivered).toHaveLength(1);
+  });
+
+  test('l’export animé décode la vidéo MONTRÉE, pas la première du message', async () => {
+    const recorded: string[] = [];
+    const twoClips: MessageCardSubject = {
+      ...subject,
+      media: [
+        { id: 'v1', card: { kind: 'video', width: 1920, height: 1080 }, url: '/v1.mp4', mimeType: 'video/mp4', posterUrl: null },
+        { id: 'i', card: { kind: 'image', width: 800, height: 600 }, url: '/i.jpg', mimeType: 'image/jpeg', posterUrl: null },
+        { id: 'v2', card: { kind: 'video', width: 1920, height: 1080 }, url: '/v2.mp4', mimeType: 'video/mp4', posterUrl: null },
+      ],
+    };
+    const { host } = await mountSheet({
+      subject: twoClips,
+      recordMotion: async ({ item, index }) => {
+        recorded.push(`${item.id}@${index}`);
+        return new Blob(['v'], { type: 'video/mp4' });
+      },
+    });
+    await openTab(host, 'media');
+    await pick(host, 'media-layout', 'backdrop');
+    await pick(host, 'featured', 'v2');
+    await mounter.click(host.querySelector('[data-export-output="video"]'));
+    await mounter.settle();
+    await mounter.click(host.querySelector('[data-export-save]'));
+    await mounter.settle();
+    expect(recorded).toEqual(['v2@2']);
   });
 
   test('avant d’enregistrer : Image · GIF · Vidéo pour une vidéo, Image · Vidéo pour un audio, rien pour un texte', async () => {

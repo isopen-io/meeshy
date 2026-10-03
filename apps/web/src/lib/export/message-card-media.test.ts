@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 
 import { layoutMessageCard, type CardMediaOp, type CardOp, type Measure, type MessageCardInput } from './message-card-layout';
-import { CARD_AUDIO_STYLES, CARD_MEDIA_STYLES, formatDuration, normalizePeaks, shortName, type CardMedia } from './message-card-media';
+import { CARD_MEDIA_ARRANGEMENTS, CARD_MEDIA_LAYOUTS } from './message-card-arrangement';
+import { CARD_AUDIO_STYLES, formatDuration, normalizePeaks, shortName, type CardMedia } from './message-card-media';
 
 const measure: Measure = (text, font) => {
   const size = Number(/(\d+)px/.exec(font)?.[1] ?? '10');
@@ -43,29 +44,26 @@ describe('les médias d’une carte', () => {
   });
 
   test('la MOSAÏQUE range quatre images en deux colonnes ; la cinquième se dit « +1 »', () => {
-    const layout = layoutMessageCard(input([photo(), photo(), photo(), photo(), photo()], { mediaStyle: 'mosaique' }), measure);
+    const layout = layoutMessageCard(input([photo(), photo(), photo(), photo(), photo()], { mediaArrangement: 'mosaic' }), measure);
     const tiles = mediaOps(layout.ops);
     expect(tiles).toHaveLength(4);
     expect(new Set(tiles.map((tile) => tile.x)).size).toBe(2);
     expect(layout.ops.some((op) => op.kind === 'text' && op.text === '+1')).toBe(true);
   });
 
-  test('la BANDE aligne des vignettes carrées sur une ligne', () => {
-    const tiles = mediaOps(layoutMessageCard(input([photo(), photo(), photo()], { mediaStyle: 'bande' }), measure).ops);
-    expect(new Set(tiles.map((tile) => tile.y)).size).toBe(1);
-    expect(tiles.every((tile) => tile.width === tile.height)).toBe(true);
-  });
-
-  test('la PLEINE largeur ne montre que la première pièce', () => {
-    const tiles = mediaOps(layoutMessageCard(input([photo(), photo()], { mediaStyle: 'pleine' }), measure).ops);
+  test('UNE SEULE ne montre que la première pièce, en pleine largeur', () => {
+    const tiles = mediaOps(layoutMessageCard(input([photo(), photo()], { mediaArrangement: 'single' }), measure).ops);
     expect(tiles).toHaveLength(1);
     expect(tiles[0]?.width).toBe(1080 - 2 * 96);
   });
 
-  test('chaque disposition garde les médias dans la carte', () => {
-    for (const mediaStyle of CARD_MEDIA_STYLES) {
-      const layout = layoutMessageCard(input([photo(400, 4000), clip, photo()], { mediaStyle }), measure);
-      expect(mediaOps(layout.ops).every((tile) => tile.y + tile.height <= layout.height && tile.x + tile.width <= layout.width)).toBe(true);
+  test('chaque place et chaque disposition gardent les médias dans la carte', () => {
+    for (const mediaLayout of CARD_MEDIA_LAYOUTS) {
+      for (const mediaArrangement of CARD_MEDIA_ARRANGEMENTS) {
+        const layout = layoutMessageCard(input([photo(400, 4000), clip, photo()], { mediaLayout, mediaArrangement }), measure);
+        const inside = mediaOps(layout.ops).every((tile) => tile.x >= 0 && tile.y >= 0 && tile.y + tile.height <= layout.height && tile.x + tile.width <= layout.width);
+        expect({ mediaLayout, mediaArrangement, inside }).toEqual({ mediaLayout, mediaArrangement, inside: true });
+      }
     }
   });
 
@@ -84,8 +82,8 @@ describe('les médias d’une carte', () => {
     expect(layout.ops.some((op) => op.kind === 'text' && op.text === '')).toBe(false);
   });
 
-  test('en arabe, la bande part de la DROITE', () => {
-    const tiles = mediaOps(layoutMessageCard(input([photo(), photo()], { mediaStyle: 'bande', reply: { author: 'ج', text: 'انظر' } }), measure).ops);
+  test('en arabe, la vague part de la DROITE', () => {
+    const tiles = mediaOps(layoutMessageCard(input([photo(), photo()], { mediaArrangement: 'wave', reply: { author: 'ج', text: 'انظر' } }), measure).ops);
     expect((tiles[0]?.x ?? 0) > (tiles[1]?.x ?? 0)).toBe(true);
   });
 

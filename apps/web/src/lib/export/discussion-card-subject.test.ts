@@ -96,4 +96,12 @@ describe('discussionCardSubjectOf — la discussion jusqu’au message choisi', 
     );
     expect(subject?.media.map((item) => item.id)).toEqual(['p1', 'p2', 'p3', 'p4']);
   });
+
+  test('chaque média est attribué à SON message (#9236) — le premier suit l’anonymat de la réponse, les suites celui des autres', () => {
+    const subject = subjectOf([line('m1', 1, { attachments: [photo('p1')] }), line('m2', 2, { attachments: [photo('p2')] })], 'm2');
+    expect(subject?.media.map((item) => item.author)).toEqual([
+      { name: amina.displayName ?? '', handle: null, quoted: false },
+      { name: 'Jacques', handle: 'jacques', quoted: true },
+    ]);
+  });
 });

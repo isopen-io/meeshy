@@ -4,6 +4,7 @@ import { Glyph, GlyphSvg } from '@/components/glyph';
 import { EXPORT_CARD_GLYPHS } from '@/components/glyphs-export-card';
 import { Sheet } from '@/components/sheet';
 import type { MessageCardDelivery, MessageCardIntent } from '@/lib/export/deliver-message-card';
+import { paintedMediaIndexes, paintedVisualIndexes, type CardMediaDisposition } from '@/lib/export/message-card-arrangement';
 import {
   INITIAL_MESSAGE_CARD_FORMAT,
   readDefaultMessageCardFormat,
@@ -15,7 +16,8 @@ import {
 import type { CardPart, CardRegion, MessageCardInput, MessageCardPart } from '@/lib/export/message-card-layout';
 import { cardOutputsOf, extensionOfType, type CardOutput } from '@/lib/export/message-card-output';
 import type { CardSource } from '@/lib/export/message-card-paint';
-import { messageCardFileName, type MessageCardSubject, type MessageCardSubjectPart } from '@/lib/export/message-card-subject';
+import type { CardMedia } from '@/lib/export/message-card-media';
+import { messageCardFileName, type CardMediaAuthor, type MessageCardSubject, type MessageCardSubjectPart } from '@/lib/export/message-card-subject';
 import { randomTemplateId, templateIdOf, templateOf, type CardLinkId, type CardPaletteId, type CardTypefaceId, type MessageCardTemplateId } from '@/lib/export/message-card-templates';
 import { createThumbnailCache } from '@/lib/export/message-card-thumbnails';
 import { popularTemplates, readTemplateUsage, recordTemplateUse } from '@/lib/export/message-card-usage';
@@ -23,7 +25,7 @@ import { translateExportCard, type ExportCardCatalogKey } from '@/lib/i18n-expor
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { safeLocalStorage, type SafeStorage } from '@/lib/storage';
 
-import type { FrameChoice } from './thread-export-frame';
+import type { FrameChoice, VisualChoice } from './thread-export-frame';
 import { ExportGallery } from './thread-export-gallery';
 import { MediaFailure, OutputPicker, defaultMotionRecorder, defaultSourcesLoader, temporalItemOf, useCardSources, useMotionCache, type MotionRecorder, type SourcesLoader } from './thread-export-output';
 import type { ThumbSource } from './thread-export-thumb';
@@ -125,6 +127,11 @@ const defaultDeliver = async (blob: Blob, fileName: string, intent: MessageCardI
  * on l'a voulu, son PSEUDO (« @awa ») si on le préfère au nom affiché et qu'on
  * le connaît, sinon son nom. Le filigrane, lui, garde toujours le pseudo de qui
  * exporte.
+ *
+ * L'AUTEUR D'UN MÉDIA (#9236) se nomme de la même façon quand « Auteur du
+ * média » est demandé : anonyme avec son bloc (un média cité avec la citation,
+ * les autres avec la réponse), son pseudo au choix. Le média CHOISI voyage par
+ * son rang (`featured`, un état de la feuille, jamais du format).
  */
 export function messageCardInputOf(params: {
   readonly subject: MessageCardSubject;
@@ -135,8 +142,17 @@ export function messageCardInputOf(params: {
   readonly formatDate: (date: Date) => string;
   /** L'heure d'un message, rédigée — absente : aucune heure n'est peinte. */
   readonly formatTime?: (date: Date) => string;
+  /** L'identifiant du visuel que « une seule » et « en fond » montrent — absent : le premier. */
+  readonly featured?: string | null;
 }): MessageCardInput {
   const { subject, format } = params;
+  const creditOf = (author: CardMediaAuthor): string => {
+    if (author.quoted ? format.anonymizeQuoted : format.anonymizeReply) return params.anonymousLabel;
+    return format.usePseudonyms && author.handle !== null ? `@${author.handle}` : author.name;
+  };
+  const credited = (card: CardMedia, author: CardMediaAuthor | null | undefined): CardMedia =>
+    !format.showsMediaAuthor || card.kind === 'audio' || author === null || author === undefined ? card : { ...card, credit: creditOf(author) };
+  const featured = params.featured === undefined || params.featured === null ? -1 : subject.media.findIndex((item) => item.id === params.featured);
   const time = (date: Date | null) => (format.showTimes && date !== null && params.formatTime !== undefined ? params.formatTime(date) : null);
   const part = (source: MessageCardSubjectPart, anonymized: boolean, at: Date | null): MessageCardPart => ({
     author: anonymized ? params.anonymousLabel : format.usePseudonyms && source.handle !== null ? `@${source.handle}` : source.author,
@@ -153,8 +169,10 @@ export function messageCardInputOf(params: {
     showAuthors: format.showAuthors,
     aspect: format.aspect,
     frame: { header: format.header, authors: format.authorsAt, tilt: format.tilt },
-    media: subject.media.map((item) => item.card),
-    mediaStyle: format.mediaStyle,
+    media: subject.media.map((item) => credited(item.card, item.author)),
+    mediaLayout: format.mediaLayout,
+    mediaArrangement: format.mediaArrangement,
+    featuredMedia: featured === -1 ? null : featured,
     audioStyle: format.audioStyle,
     /* Les réponses jointes (#8734) sont des « autres » : l'anonymat de la citation les couvre. */
     ...(subject.followUps === undefined ? {} : { followUps: subject.followUps.map((follow) => part(follow, format.anonymizeQuoted, null)) }),
@@ -226,6 +244,7 @@ export function MessageExportSheet({
   const [focus, setFocus] = useState<CardPart | null>(null);
   const [touched, setTouched] = useState(false);
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [featured, setFeatured] = useState<string | null>(null);
   const subject = useMemo(
     () => (exportLanguage === null ? asRead : (exportLanguages.subjectIn(exportLanguage) ?? asRead)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -245,7 +264,13 @@ export function MessageExportSheet({
   }, []);
 
   const media = useCardSources(subject.media, loadSources);
-  const outputs = cardOutputsOf(subject.media.map((item) => item.card));
+  /* Ce que la carte PEINT (#9236) — les sorties offertes et le média qu'un export animé décode le suivent. */
+  const cards = subject.media.map((item) => item.card);
+  const featuredIndex = featured === null ? -1 : subject.media.findIndex((item) => item.id === featured);
+  const disposition: CardMediaDisposition = { layout: format.mediaLayout, arrangement: format.mediaArrangement, featured: featuredIndex === -1 ? null : featuredIndex };
+  const painted = paintedMediaIndexes(cards, disposition);
+  const shownId = subject.media[paintedVisualIndexes(cards, disposition)[0] ?? -1]?.id ?? null;
+  const outputs = cardOutputsOf(painted.flatMap((index) => cards[index] ?? []));
   const [chosenOutput, setOutput] = useState<CardOutput>('image');
   const output: CardOutput = outputs.includes(chosenOutput) ? chosenOutput : 'image';
   const [motionBusy, setMotionBusy] = useState<Exclude<CardOutput, 'image'> | null>(null);
@@ -260,9 +285,10 @@ export function MessageExportSheet({
       anonymousLabel: translateExportCard(language, 'export.card.anonymous'),
       formatDate: (date) => new Intl.DateTimeFormat(language, { dateStyle: 'long' }).format(date),
       formatTime: (date) => new Intl.DateTimeFormat(language, { timeStyle: 'short' }).format(date),
+      featured,
     });
 
-  const key = `${formatKey(format)}|${media.version}`;
+  const key = `${formatKey(format)}|${featured ?? ''}|${media.version}`;
 
   useEffect(() => {
     let live = true;
@@ -290,7 +316,7 @@ export function MessageExportSheet({
      tout ce qui change la carte SAUF le template, qu'elle nomme elle-même. */
   const [cache] = useState(() => createThumbnailCache({ createObjectURL, revokeObjectURL }));
   useEffect(() => () => cache.dispose(), [cache]);
-  const context = `${JSON.stringify({ ...format, template: null })}|${exportLanguage ?? ''}|${media.version}`;
+  const context = `${JSON.stringify({ ...format, template: null })}|${featured ?? ''}|${exportLanguage ?? ''}|${media.version}`;
   const thumbs = useMemo<ThumbSource>(
     () => ({ cache, keyOf: (id) => `${id}|${context}`, render: (id) => thumbnail(inputFor(id), THUMB_WIDTH, media.sources) }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -308,7 +334,7 @@ export function MessageExportSheet({
     const cacheKey = `${key}|${output}|${exportLanguage ?? ''}`;
     const cached = motionCache.get(cacheKey);
     if (cached !== undefined) return cached;
-    const temporal = temporalItemOf(subject.media);
+    const temporal = temporalItemOf(subject.media, painted);
     if (temporal === null) return null;
     setMotionBusy(output);
     announce(translateExportCard(language, output === 'gif' ? 'export.card.motion.gif' : 'export.card.motion.video'));
@@ -374,6 +400,8 @@ export function MessageExportSheet({
   const hasHeader = (format.showConversationTitle && title !== null) || format.showDate;
   const hasVisual = subject.media.some((item) => item.card.kind !== 'audio');
   const hasAudio = subject.media.some((item) => item.card.kind === 'audio');
+  const visuals: readonly VisualChoice[] = subject.media.flatMap((item, index) => (item.card.kind === 'audio' ? [] : [{ id: item.id, source: media.sources[index] ?? null }]));
+  const hasMediaAuthors = subject.media.some((item) => item.card.kind !== 'audio' && item.author !== null && item.author !== undefined);
 
   const headerButton = { width: 44, height: 44, color: 'var(--color-ios-ink)' } as const;
   const shown = rendered;
@@ -514,6 +542,10 @@ export function MessageExportSheet({
             hasHeader={hasHeader}
             hasVisual={hasVisual}
             hasAudio={hasAudio}
+            visuals={visuals}
+            featured={shownId}
+            onFeatured={setFeatured}
+            hasMediaAuthors={hasMediaAuthors}
             popular={popular.includes(format.template) ? popular : [format.template, ...popular]}
             thumbs={thumbs}
             onTemplate={pick}

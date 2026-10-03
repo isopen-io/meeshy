@@ -188,6 +188,15 @@ describe('le message CITÉ apporte son média (#8901)', () => {
     expect(subject?.media.map((item) => item.id)).toEqual(['q-open']);
   });
 
+  test('chaque média porte son AUTEUR (#9236) : la réponse les siens, la citation les siens — même sans texte cité', () => {
+    const own = piece({ id: 'r-1', messageId: 'm-reply' });
+    const subject = subjectOf(reply({ attachments: [own], replyTo: quoted({ content: '', translations: [], attachments: [piece({ id: 'q-1' })], sender: { ...amina, username: 'amina.d' } as NonNullable<Message['sender']> }) }));
+    expect(subject?.media.map((item) => item.author)).toEqual([
+      { name: 'Jacques', handle: 'jacques', quoted: false },
+      { name: amina.displayName ?? '', handle: 'amina.d', quoted: true },
+    ]);
+  });
+
   test('une citation ÉCHUE n’apporte plus son média', () => {
     const subject = subjectOf(reply({ replyTo: quoted({ attachments: [piece({})], expiresAt: new Date(NOW - 1000) }) }));
     expect(subject?.media).toEqual([]);

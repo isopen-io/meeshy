@@ -42,7 +42,7 @@ describe('chaque langue porte toutes les clés du français, et rien d’autre',
     const french = await loadExportCardCatalog('fr');
     for (const [language, catalog] of await loadAll()) {
       if (language === 'fr') continue;
-      for (const key of ['export.card.hint', 'export.card.gallery.empty', 'export.announce.gallery', 'export.card.option.pseudonyms', 'export.announce.motionUnavailable'] as const) {
+      for (const key of ['export.card.hint', 'export.card.gallery.empty', 'export.announce.gallery', 'export.card.option.pseudonyms', 'export.announce.motionUnavailable', 'export.card.media.author', 'export.card.media.layout.backdrop', 'export.card.media.featured'] as const) {
         expect({ language, key, copied: catalog[key] === french[key] }).toEqual({ language, key, copied: false });
       }
     }

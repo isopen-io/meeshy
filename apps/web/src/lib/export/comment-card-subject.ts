@@ -1,6 +1,6 @@
 import type { PostComment } from '@/lib/api/publication-comments';
 
-import { cardMediaOf, maskedByEffects, type MessageCardSubject, type MessageCardSubjectPart } from './message-card-subject';
+import { authoredBy, cardMediaOf, maskedByEffects, mediaAuthorOf, type MessageCardSubject, type MessageCardSubjectPart } from './message-card-subject';
 
 /**
  * **UN COMMENTAIRE S'IMAGE COMME UN MESSAGE** (#8693) — même carte, même
@@ -41,12 +41,13 @@ export function commentCardSubjectOf(params: {
   const media = cardMediaOf(comment.media);
   if (text === '' && media.length === 0) return null;
   const quotedText = parent === null || maskedByEffects(parent.comment.effectFlags) ? '' : parent.servedText.trim();
+  const reply = partOf(comment, text);
   return {
     quoted: parent === null || quotedText === '' ? null : partOf(parent.comment, quotedText),
-    reply: partOf(comment, text),
+    reply,
     sentAt: new Date(comment.createdAt),
     quotedAt: parent === null || quotedText === '' ? null : new Date(parent.comment.createdAt),
-    media,
+    media: authoredBy(media, mediaAuthorOf(reply, false)),
     followUps: (params.replies ?? []).filter(paintable).map((entry) => partOf(entry.comment, entry.servedText.trim())),
   };
 }

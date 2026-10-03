@@ -9,6 +9,8 @@ import {
   writeDefaultMessageCardFormat,
 } from './message-card-format';
 
+const legacyToggles = { template: 'manuscrit.plume.fil', showConversationTitle: false, showAuthors: true, showDate: false, anonymizeQuoted: false, anonymizeReply: false };
+
 describe('le format par défaut d’une carte d’export', () => {
   test('s’écrit puis se relit à l’identique', () => {
     const entries = new Map<string, string>();
@@ -25,7 +27,9 @@ describe('le format par défaut d’une carte d’export', () => {
       tilt: 'left',
       showTimes: true,
       usePseudonyms: true,
-      mediaStyle: 'bande',
+      mediaLayout: 'right',
+      mediaArrangement: 'hero',
+      showsMediaAuthor: true,
       audioStyle: 'spectre',
     } as const;
     writeDefaultMessageCardFormat(storage, format);
@@ -57,7 +61,32 @@ describe('le format par défaut d’une carte d’export', () => {
     expect(parsed?.showDate).toBe(true);
   });
 
+  test('une disposition d’avant #9236 se relit : la pleine largeur est « une seule », la bande « en vague », au-dessus de la réponse', () => {
+    const before = (mediaStyle: string) => parseMessageCardFormat(JSON.stringify({ ...legacyToggles, mediaStyle }));
+    expect([before('mosaique'), before('pleine'), before('bande')].map((format) => [format?.mediaLayout, format?.mediaArrangement])).toEqual([
+      ['above', 'mosaic'],
+      ['above', 'single'],
+      ['above', 'wave'],
+    ]);
+    expect(before('pleine')?.showsMediaAuthor).toBe(false);
+  });
+
+  test('les clés d’iOS se relisent — et l’ancienne POSITION « mosaic » d’iOS se relit au-dessus, en mosaïque', () => {
+    const ios = parseMessageCardFormat(JSON.stringify({ ...legacyToggles, mediaLayout: 'left', mediaArrangement: 'sine', showsMediaAuthor: true }));
+    expect([ios?.mediaLayout, ios?.mediaArrangement, ios?.showsMediaAuthor]).toEqual(['left', 'sine', true]);
+    const older = parseMessageCardFormat(JSON.stringify({ ...legacyToggles, mediaLayout: 'mosaic' }));
+    expect([older?.mediaLayout, older?.mediaArrangement]).toEqual(['above', 'mosaic']);
+  });
+
+  test('le visuel choisi n’est pas un réglage du format : il ne s’enregistre pas', () => {
+    expect(Object.keys(INITIAL_MESSAGE_CARD_FORMAT).some((key) => key.startsWith('featured'))).toBe(false);
+    expect(Object.keys(INITIAL_MESSAGE_CARD_FORMAT)).not.toContain('mediaStyle');
+  });
+
   test('deux formats égaux champ à champ sont le même format', () => {
+    expect(sameMessageCardFormat(INITIAL_MESSAGE_CARD_FORMAT, { ...INITIAL_MESSAGE_CARD_FORMAT, mediaLayout: 'backdrop' })).toBe(false);
+    expect(sameMessageCardFormat(INITIAL_MESSAGE_CARD_FORMAT, { ...INITIAL_MESSAGE_CARD_FORMAT, mediaArrangement: 'wave' })).toBe(false);
+    expect(sameMessageCardFormat(INITIAL_MESSAGE_CARD_FORMAT, { ...INITIAL_MESSAGE_CARD_FORMAT, showsMediaAuthor: true })).toBe(false);
     expect(sameMessageCardFormat(INITIAL_MESSAGE_CARD_FORMAT, { ...INITIAL_MESSAGE_CARD_FORMAT, aspect: 'story' })).toBe(false);
     expect(sameMessageCardFormat(INITIAL_MESSAGE_CARD_FORMAT, { ...INITIAL_MESSAGE_CARD_FORMAT, usePseudonyms: true })).toBe(false);
     expect(sameMessageCardFormat(INITIAL_MESSAGE_CARD_FORMAT, { ...INITIAL_MESSAGE_CARD_FORMAT })).toBe(true);

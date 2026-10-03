@@ -260,8 +260,23 @@ function paintOp(ctx: Paintable, op: CardOp, options: ResolvedOptions): void {
   }
 }
 
+/** Le visuel EN FOND (#9236) : toute la carte en « cover », sous le voile de la palette — droit, comme le fond. */
+function paintBackdrop(ctx: Paintable, layout: CardLayout, sources: readonly (CardSource | null)[]): void {
+  const { backdrop } = layout;
+  if (backdrop === null) return;
+  const source = sources[backdrop.index] ?? null;
+  const size = source === null ? null : sizeOf(source);
+  if (source !== null && size !== null && size.width > 0 && size.height > 0) {
+    const scale = Math.max(layout.width / size.width, layout.height / size.height);
+    ctx.drawImage(source, (layout.width - size.width * scale) / 2, (layout.height - size.height * scale) / 2, size.width * scale, size.height * scale);
+  }
+  ctx.fillStyle = backdrop.veil;
+  ctx.fillRect(0, 0, layout.width, layout.height);
+}
+
 export function paintMessageCard(ctx: Paintable, layout: CardLayout, template: MessageCardTemplate, options: PaintOptions = {}): void {
   paintBackground(ctx, layout, template.palette);
+  paintBackdrop(ctx, layout, options.sources ?? []);
   paintWatermark(ctx, layout, template.palette);
   const resolved: ResolvedOptions = { sources: options.sources ?? [], progress: options.progress ?? null, strokeFloor: options.strokeFloor ?? 0 };
   if (layout.tilt === 0) {
