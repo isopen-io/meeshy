@@ -98,7 +98,7 @@ struct MessageCardMediaArrangementTests {
     @Test func beside_withoutAVisual_theSoundStaysAboveTheReply() {
         let card = Self.layout(Self.input(media: [Self.voice], disposition: MessageCardDisposition(mediaLayout: .left)))
         #expect(card.regions.map(\.part) == [.media, .reply])
-        #expect(card.regions.first?.width == 1080 - 2 * 96)
+        #expect(card.regions.first?.width == Double(1080 - 2 * 96))
     }
 
     // MARK: - Comment
