@@ -37,7 +37,8 @@ final class ConversationViewModelAudioTests: XCTestCase {
     /// shared mutable state between tests (per apps/ios/CLAUDE.md TDD rules).
     private func makeSUT(
         conversationId: String? = nil,
-        userSystemLanguage: String? = nil
+        userSystemLanguage: String? = nil,
+        userRegionalLanguage: String? = nil
     ) -> (ConversationViewModel, MockAudioPlaybackEngine, ConversationAudioCoordinator) {
         let mockAuthManager = MockAuthManager()
         let mockMessageService = MockMessageService()
@@ -48,7 +49,8 @@ final class ConversationViewModelAudioTests: XCTestCase {
 
         let currentUser = MeeshyUser(
             id: testUserId, username: "bob",
-            displayName: "Bob", systemLanguage: userSystemLanguage
+            displayName: "Bob", systemLanguage: userSystemLanguage,
+            regionalLanguage: userRegionalLanguage
         )
         mockAuthManager.simulateLoggedIn(user: currentUser)
 
@@ -732,5 +734,55 @@ final class ConversationViewModelAudioTests: XCTestCase {
 
         XCTAssertEqual(coordinator.queueCount, queueCountBefore,
                        "Audio queue must not grow on a no-op message reassignment")
+    }
+
+    // MARK: - #9010 — l'aperçu d'appui long sert la piste que la lecture joue
+
+    /// Lecteur germanophone puis francophone (rang 2, leçon 261), vocal coréen,
+    /// piste TTS française : l'aperçu reçoit la piste FRANÇAISE — la même URL
+    /// que `playAudio` joue, sa durée, son texte.
+    func test_servedAudioTracks_readerSecondRankHasTrack_servesTheTrackPlaybackPlays() async {
+        let (vm, _, _) = makeSUT(userSystemLanguage: "de", userRegionalLanguage: "fr")
+        var m1 = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", durationMs: 33_000, fileUrl: "https://cdn/orig-ko.m4a")],
+            createdAt: date(1_000)
+        )
+        m1.originalLanguage = "ko"
+        vm.messages = [m1]
+        vm.messageTranslatedAudiosByAttachment["a1"] = [
+            makeTranslatedTrack(attachmentId: "a1", lang: "fr", url: "https://cdn/voix-fr.m4a")
+        ]
+        await Task.yield()
+
+        let served = vm.servedAudioTracks(of: m1)["a1"]
+
+        XCTAssertEqual(served?.language, "fr")
+        XCTAssertEqual(served?.url, "https://cdn/voix-fr.m4a")
+        XCTAssertEqual(served?.durationMs, 3_000)
+        XCTAssertEqual(served?.url, vm.effectiveAudioTrackUrl(for: m1.attachments[0], message: m1),
+                       "l'aperçu et la lecture descendent la MÊME loi — jamais une seconde descente")
+    }
+
+    func test_servedAudioTracks_flagToggledToOriginal_servesTheOriginal() async {
+        let (vm, _, _) = makeSUT(userSystemLanguage: "fr")
+        var m1 = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", fileUrl: "https://cdn/orig-ko.m4a")],
+            createdAt: date(1_000)
+        )
+        m1.originalLanguage = "ko"
+        vm.messages = [m1]
+        vm.messageTranslatedAudiosByAttachment["a1"] = [
+            makeTranslatedTrack(attachmentId: "a1", lang: "fr", url: "https://cdn/voix-fr.m4a")
+        ]
+        vm.setBubbleActiveDisplayLanguage("ko", for: "m1")
+        await Task.yield()
+
+        XCTAssertEqual(vm.servedAudioTracks(of: m1)["a1"]?.url, "https://cdn/orig-ko.m4a")
     }
 }

@@ -40,4 +40,28 @@ final class OverlayAudioPlayerDurationTests: XCTestCase {
 
         XCTAssertEqual(label, "\(LocalizedNumber.duration(seconds: 0)) / \(LocalizedNumber.duration(seconds: 0))")
     }
+
+    // MARK: - #9010 — l'aperçu joue la piste que la bulle sert
+
+    private func voice() -> MessageAttachment {
+        MessageAttachment(
+            id: "a1", fileName: "vocal-minjun.p-ko.m4a", originalName: "vocal-minjun.p-ko.m4a",
+            mimeType: "audio/mp4", fileUrl: "https://cdn/orig-ko.m4a", duration: 33_000
+        )
+    }
+
+    func test_previewAudioTrack_servedTranslation_playsTheTranslatedTrack() {
+        let french = ServedAudioTrack(language: "fr", url: "https://cdn/voix-fr.m4a", durationMs: 38_000, transcript: "Je pense à toi")
+
+        let track = MessageOverlayMenu.previewAudioTrack(for: voice(), served: ["a1": french])
+
+        XCTAssertEqual(track, french, "l'aperçu d'appui long joue la piste élue par le Prisme, pas attachment.fileUrl")
+    }
+
+    func test_previewAudioTrack_nothingServed_playsTheOriginal() {
+        let track = MessageOverlayMenu.previewAudioTrack(for: voice(), served: [:])
+
+        XCTAssertEqual(track, ServedAudioTrack(language: nil, url: "https://cdn/orig-ko.m4a", durationMs: 33_000, transcript: nil))
+    }
+
 }
