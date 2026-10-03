@@ -2,6 +2,7 @@ import { sessionStore } from '@/lib/api/session';
 import { appelNatif, appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native-shell';
 import { watchDeliveryReceiptCredential } from '@/lib/notifications/delivery-receipt-credential';
 
+import { shellPipStore } from './call-pip';
 import { callStore } from './call-store';
 import { bindShellCall, PONT_APPEL, type ShellAudioRoute } from './shell-call';
 
@@ -25,6 +26,7 @@ export function startShellCall(coque: CoqueNative | undefined = coqueCourante())
   bindShellCall({
     native,
     listen: (event, listener) => void coque?.addListener?.(PONT_APPEL, event, listener),
+    pictureInPicture: (active) => shellPipStore.setState({ active }),
     store: callStore,
     accept: () => void import('./call-actions').then(({ callActions }) => callActions.accept()),
     watchCredential: (write) =>

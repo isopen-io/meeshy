@@ -18,7 +18,9 @@ import type { ActiveCall, CallPhase, CallStoreApi } from './call-store';
  *   l'appel quand il sonne dans l'app — la MÊME loi que l'intention du service
  *   worker web (`call-answer-intent.ts`) ;
  * - un appel qui quitte la sonnerie dans l'app retire la notification native ;
- * - le credential que « Refuser » utilise app tuée suit la session.
+ * - le credential que « Refuser » utilise app tuée suit la session ;
+ * - l'activité qui flotte en image dans l'image (#8144) le dit à la page, qui
+ *   réduit son rendu à l'image (`pictureInPicture`).
  *
  * Tout est injecté ; `shell-call-runtime.ts` branche les réels.
  */
@@ -74,7 +76,8 @@ export function audioRouteLabelKey(route: ShellAudioRoute): `call.audioRoute.${S
 
 export type ShellCallEnvironment = {
   readonly native: (method: string, options: object) => Promise<unknown>;
-  readonly listen: (event: 'callAnswer', listener: (data: unknown) => void) => void;
+  readonly listen: (event: 'callAnswer' | 'pictureInPictureModeChanged', listener: (data: unknown) => void) => void;
+  readonly pictureInPicture: (active: boolean) => void;
   readonly store: Pick<CallStoreApi, 'getState' | 'subscribe'>;
   readonly accept: () => void;
   readonly watchCredential: (write: (value: DeliveryReceiptCredential) => void) => () => void;
@@ -127,6 +130,10 @@ export function bindShellCall(env: ShellCallEnvironment): () => void {
     now: env.now,
   });
 
+  env.listen('pictureInPictureModeChanged', (data) => {
+    if (attached) env.pictureInPicture((data as { readonly active?: unknown } | null)?.active === true);
+  });
+
   const stopCredential = env.watchCredential((value) => {
     const options = credentialOptions(value);
     if (options === null) send('clearCredential', {});
@@ -135,6 +142,7 @@ export function bindShellCall(env: ShellCallEnvironment): () => void {
 
   return () => {
     attached = false;
+    env.pictureInPicture(false);
     stopCommands();
     stopIntents();
     stopCredential();

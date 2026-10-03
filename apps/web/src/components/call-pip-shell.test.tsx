@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, test } from 'bun:test';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { shellPipStore } from '@/lib/calls/call-pip';
 import { callStore, type ActiveCall } from '@/lib/calls/call-store';
+import { createActMounter } from '@/test-support/act-mount';
+import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { CallPipLayer } from './call-pip-window';
 
@@ -46,30 +47,42 @@ const call = (overrides: Partial<ActiveCall> = {}): ActiveCall => ({
   ...overrides,
 });
 
-const layer = (active: ActiveCall, floating: boolean): string => {
-  callStore.setState({ call: active });
-  shellPipStore.setState({ active: floating });
-  return renderToStaticMarkup(<CallPipLayer />);
-};
-
+const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+beforeAll(() => {
+  ensureHappyDomRegistered();
+  globals.IS_REACT_ACT_ENVIRONMENT = true;
+});
+afterAll(async () => {
+  delete globals.IS_REACT_ACT_ENVIRONMENT;
+  await releaseHappyDomIfRegistered();
+});
+const mounter = createActMounter();
 afterEach(() => {
+  mounter.unmountAll();
   callStore.setState({ call: null });
   shellPipStore.setState({ active: false });
 });
 
+const layer = async (active: ActiveCall, floating: boolean): Promise<string> => {
+  callStore.setState({ call: active });
+  shellPipStore.setState({ active: floating });
+  const host = await mounter.mount(<CallPipLayer />);
+  return host.innerHTML;
+};
+
 describe('l’appel dans la fenêtre flottante de la coque (#8144)', () => {
-  test('la page se réduit à l’image et au nom, sans aucun bouton', () => {
-    const html = layer(call(), true);
+  test('la page se réduit à l’image et au nom, sans aucun bouton', async () => {
+    const html = await layer(call(), true);
     expect(html).toContain('data-call-pip-shell');
     expect(html).toContain('Amina Diallo');
     expect(html).not.toContain('<button');
   });
 
-  test('hors de l’image dans l’image, l’écran d’appel reste seul', () => {
-    expect(layer(call(), false)).not.toContain('data-call-pip-shell');
+  test('hors de l’image dans l’image, l’écran d’appel reste seul', async () => {
+    expect(await layer(call(), false)).not.toContain('data-call-pip-shell');
   });
 
-  test('un appel fini ne flotte plus', () => {
-    expect(layer(call({ phase: { kind: 'ended', reason: 'remote', detail: null } }), true)).not.toContain('data-call-pip-shell');
+  test('un appel fini ne flotte plus', async () => {
+    expect(await layer(call({ phase: { kind: 'ended', reason: 'remote', detail: null } }), true)).not.toContain('data-call-pip-shell');
   });
 });

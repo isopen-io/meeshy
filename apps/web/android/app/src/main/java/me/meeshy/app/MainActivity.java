@@ -1,5 +1,7 @@
 package me.meeshy.app;
 
+import android.annotation.SuppressLint;
+import android.app.PictureInPictureParams;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.os.Bundle;
@@ -16,6 +18,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebChromeClient;
+import com.getcapacitor.PluginHandle;
 import com.getcapacitor.WebViewListener;
 
 /**
@@ -69,6 +72,37 @@ public class MainActivity extends BridgeActivity {
     public void onPause() {
         inForeground = false;
         super.onPause();
+    }
+
+    /**
+     * #8144 — Accueil ou autre app pendant un appel video : l'activite flotte
+     * en image dans l'image, la ou le web ouvre Document PiP. Le service au
+     * premier plan gardait deja l'appel vivant ; l'image disparaissait. L'API
+     * 26 est verifiee par `CallShellRules.entersPictureInPicture`.
+     */
+    @Override
+    @SuppressLint("NewApi")
+    protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        MeeshyCallPlugin call = callPlugin();
+        if (call == null || !call.floatsInPictureInPicture()) return;
+        try {
+            enterPictureInPictureMode(new PictureInPictureParams.Builder().build());
+        } catch (IllegalStateException refused) {
+            // PiP coupee pour Meeshy dans les reglages : l'appel continue en arriere-plan.
+        }
+    }
+
+    @Override
+    public void onPictureInPictureModeChanged(boolean active, Configuration newConfig) {
+        super.onPictureInPictureModeChanged(active, newConfig);
+        MeeshyCallPlugin call = callPlugin();
+        if (call != null) call.pictureInPictureChanged(active);
+    }
+
+    private MeeshyCallPlugin callPlugin() {
+        PluginHandle handle = getBridge() == null ? null : getBridge().getPlugin("MeeshyCall");
+        return handle == null ? null : (MeeshyCallPlugin) handle.getInstance();
     }
 
     @Override

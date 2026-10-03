@@ -2,6 +2,7 @@ package me.meeshy.app;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.os.Build;
@@ -33,6 +34,9 @@ import java.util.List;
  * - `setCredential` / `clearCredential` : ce qu'il faut au refus sans socket
  *   ({@link CallShellStore}).
  *
+ * Evenement `pictureInPictureModeChanged { active }` (#8144) : l'appel flotte
+ * en image dans l'image, ou l'app revient au plein ecran.
+ *
  * Evenement `callAnswer { callId }` : « Repondre » touche sur la notification.
  * RETENU jusqu'a l'abonnement de la page (`retainUntilConsumed`), comme les
  * liens de `MeeshyLinksPlugin` : un lancement a froid ne le perd pas.
@@ -41,8 +45,8 @@ import java.util.List;
 public class MeeshyCallPlugin extends Plugin {
 
     private PowerManager.WakeLock proximity;
-    private boolean callActive;
-    private boolean video;
+    private volatile boolean callActive;
+    private volatile boolean video;
     private String route;
 
     @Override
@@ -136,6 +140,19 @@ public class MeeshyCallPlugin extends Plugin {
     public void clearCredential(PluginCall call) {
         CallShellStore.clearCredential(getContext());
         call.resolve();
+    }
+
+    /** #8144 — l'appel en cours flotte-t-il quand l'utilisateur quitte l'app ? Lu par `MainActivity`. */
+    boolean floatsInPictureInPicture() {
+        boolean supported = getContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
+        return CallShellRules.entersPictureInPicture(Build.VERSION.SDK_INT, callActive, video, supported);
+    }
+
+    /** #8144 — la page reduit son rendu a l'image et au nom pendant la PiP (`call-pip-window.tsx`). */
+    void pictureInPictureChanged(boolean active) {
+        JSObject event = new JSObject();
+        event.put("active", active);
+        notifyListeners("pictureInPictureModeChanged", event);
     }
 
     @Override
