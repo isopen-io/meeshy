@@ -301,6 +301,12 @@ export class CallService {
       this.broadcastCallEndedIfTerminal(await this.leaveCall({ callId, userId, participantId, endReasonHint: CallEndReason.completed }), lastLeaverUserId);
       this.finalizeCallSummary(callId);
     },
+    endAbandoned: async ({ callId, lastLeaverUserId }) => {
+      const ended = await this.forceEndOrphanedCallSession(callId, CallEndReason.completed);
+      if (ended === null) return;
+      this.broadcastCallEndedIfTerminal({ id: callId, ...ended, endedAt: new Date() }, lastLeaverUserId);
+      this.finalizeCallSummary(callId);
+    },
     onError: (callId, error) => logger.warn('lone-survivor end failed', { callId, error })
   });
 
