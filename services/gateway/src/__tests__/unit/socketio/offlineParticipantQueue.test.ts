@@ -136,6 +136,53 @@ describe('enqueueForOfflineParticipants — language-restricted fan-out', () => 
     expect(deps.enqueued.map((e) => e.key)).toEqual(['u-pt']);
   });
 
+  // #9247 — L'ÉCHEC OUVERT NE COUVRE PAS LA QUESTION MAL POSÉE.
+  //
+  // Le filtre ci-dessus ne met en file sans condition qu'un participant dont
+  // AUCUNE langue n'est résoluble (`readable.length === 0`). Un invité dont
+  // `Participant.language` est un code HORS CATALOGUE et TAGUÉ RÉGION a bien
+  // un prisme — mais sous une forme que personne d'autre ne produit : la cible
+  // arrive du pipeline déjà canonicalisée par `normalizeLanguageForDedup`
+  // (`'yue'`), et le repli rendait `'yue-hk'`. Non vide, donc pas d'échec
+  // ouvert ; différent, donc `continue`. Le lecteur n'était jamais servi, et
+  // un invité de lien partagé n'a aucun autre transport pour rattraper
+  // l'entrée perdue.
+  //
+  // Le témoin voisin ('PT-BR') ne pouvait pas le voir : au rang CATALOGUÉ,
+  // l'ancienne forme et la SSOT rendent le même verdict.
+  test('queues for an anonymous guest whose declared language is an UNCATALOGUED region-tagged code', async () => {
+    const deps = makeDeps({
+      participants: [
+        { id: 'p-anon-yue', userId: null, language: 'yue-HK', user: null },
+        { id: 'p-anon-es', userId: null, language: 'es', user: null },
+      ],
+    });
+
+    await enqueueForOfflineParticipants(
+      deps,
+      translationParams({ restrictToReadersOfLanguage: 'yue', dedupKey: 'msg-1:yue' })
+    );
+
+    expect(deps.enqueued.map((e) => e.key)).toEqual(['p-anon-yue']);
+  });
+
+  // La porte JUMELLE, dans la même fonction : la cible se normalisait elle
+  // aussi hors SSOT. Aucun appelant de production ne passe aujourd'hui une
+  // cible verbatim — c'était donc un piège armé, pas une panne — et le premier
+  // qui le ferait ne matcherait plus personne.
+  test('canonicalises a VERBATIM target language on the restriction side too', async () => {
+    const deps = makeDeps({
+      participants: [{ id: 'p-anon-yue', userId: null, language: 'yue', user: null }],
+    });
+
+    await enqueueForOfflineParticipants(
+      deps,
+      translationParams({ restrictToReadersOfLanguage: 'yue-HK', dedupKey: 'msg-1:yue' })
+    );
+
+    expect(deps.enqueued.map((e) => e.key)).toEqual(['p-anon-yue']);
+  });
+
   test('still excludes connected participants and the actor', async () => {
     const deps = makeDeps({
       participants: [
