@@ -18,6 +18,7 @@ const APP = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SOURCES = join(APP, 'android', 'app', 'src', 'main');
 const lire = (...chemin: string[]): string => readFileSync(join(SOURCES, ...chemin), 'utf8');
 const JAVA = ['java', 'me', 'meeshy', 'app'];
+const LANGUES = ['values', 'values-fr', 'values-es', 'values-pt', 'values-de', 'values-it', 'values-ar'];
 
 function sansCommentaires(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '').replace(/<!--[\s\S]*?-->/g, '');
@@ -56,5 +57,21 @@ describe("l'image dans l'image d'un appel dans la coque Android (#8144)", () => 
     const plugin = sansCommentaires(lire(...JAVA, 'MeeshyCallPlugin.java'));
     expect(corpsDe(plugin, 'void pictureInPictureChanged(')).toContain('notifyListeners("pictureInPictureModeChanged"');
     expect(corpsDe(plugin, 'boolean floatsInPictureInPicture(')).toContain('CallShellRules.entersPictureInPicture(');
+  });
+
+  test('la fenêtre porte micro et raccrocher, dans les sept langues', () => {
+    const code = sansCommentaires(lire(...JAVA, 'MainActivity.java'));
+    expect(corpsDe(code, 'void onUserLeaveHint(')).toContain('pictureInPictureParams()');
+    const plugin = sansCommentaires(lire(...JAVA, 'MeeshyCallPlugin.java'));
+    const params = corpsDe(plugin, 'PictureInPictureParams pictureInPictureParams(');
+    expect(params).toContain('CallShellRules.pictureInPictureActions(');
+    expect(params).toContain('new RemoteAction(');
+    expect(plugin).toContain('RECEIVER_NOT_EXPORTED');
+    expect(plugin).toContain('notifyListeners("pictureInPictureAction"');
+    for (const dossier of LANGUES) {
+      const chaines = lire('res', dossier, 'strings_call.xml');
+      for (const cle of ['call_pip_mute', 'call_pip_unmute', 'call_pip_hangup']) expect(chaines).toContain(`name="${cle}"`);
+    }
+    for (const icone of ['ic_pip_mic', 'ic_pip_mic_off', 'ic_pip_hangup']) expect(lire('res', 'drawable', `${icone}.xml`)).toContain('<vector');
   });
 });

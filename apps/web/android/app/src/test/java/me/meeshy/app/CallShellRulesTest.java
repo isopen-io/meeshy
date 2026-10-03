@@ -90,4 +90,19 @@ public class CallShellRulesTest {
         assertFalse(CallShellRules.entersPictureInPicture(25, true, true, true));
         assertFalse(CallShellRules.entersPictureInPicture(36, true, true, false));
     }
+
+    @Test
+    public void theFloatingWindowOffersTheMicrophoneThenHangUp() {
+        assertArrayEquals(new String[] {"mute", "hangup"}, CallShellRules.pictureInPictureActions(false));
+        assertArrayEquals(new String[] {"unmute", "hangup"}, CallShellRules.pictureInPictureActions(true));
+    }
+
+    @Test
+    public void aTappedWindowButtonBecomesThePageGesture() {
+        assertEquals("mic", CallShellRules.pictureInPictureGesture("mute"));
+        assertEquals("mic", CallShellRules.pictureInPictureGesture("unmute"));
+        assertEquals("hangup", CallShellRules.pictureInPictureGesture("hangup"));
+        assertNull(CallShellRules.pictureInPictureGesture("other"));
+        assertNull(CallShellRules.pictureInPictureGesture(null));
+    }
 }
