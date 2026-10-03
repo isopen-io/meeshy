@@ -164,7 +164,12 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // servie ; sa portée est connue (les conversations des étoiles de la page).
   'messaging/messageStars/StarredMessagesReader.ts': { kind: 'applies', reads: 1, applications: 1 },
 
-  'AttachmentReactionService.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // Deux lectures depuis #9240 : `resolveConversationId` (projette le scalaire
+  // `conversationId`) et la garde d'admission d'écriture de
+  // `addAttachmentReaction` (projette `conversation: { isActive, closedAt }`).
+  // Ni l'une ni l'autre ne demande la relation `sender` — un expéditeur disparu
+  // n'entre dans aucune de leurs branches.
+  'AttachmentReactionService.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'attachments/attachmentReadVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // Deux `create`/`update` (jamais `find*`) pour le message-résumé d'appel :
   // hors du périmètre `.message.find*` de ce garde, mais nommé ici pour la
