@@ -856,6 +856,14 @@ for (const scheme of ['light', 'dark']) {
    * Mesuré à 390 px et à 320 px — la largeur à laquelle l'ancienne forme
    * « cinq sur tout le côté droit » débordait (#7984).
    *
+   * LA BARRE TIENT DANS SA BOÎTE (#7992) — à 320 px, la pastille de langue
+   * allait de 252 à 324 px (`scrollWidth` 324 pour 320). Huit cibles de 44 px
+   * ne tiennent pas dans 296 px : comme `ComposerToolbarStrip` (iOS,
+   * `ViewThatFits`), seule la bande menante défile. On mesure donc la barre
+   * (jamais plus large que sa boîte), l'angle droit (entier dans la barre), et
+   * chaque outil de la bande menante une fois amené à l'écran : ENTIER dans la
+   * bande, et c'est lui qui reçoit le doigt en son centre.
+   *
    * Puis EN SÉRIE : deux taps sur le même emoji font DEUX bulles (plus de
    * dédoublonnage par contenu), et un double clic sur « Envoyer » n'en fait
    * qu'UNE (le brouillon est vidé à l'instant de l'envoi). Fixtures seules :
@@ -895,7 +903,33 @@ for (const scheme of ['light', 'dark']) {
           const r = b.getBoundingClientRect();
           return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top) };
         });
+        const leading = toolbar?.querySelector('[data-composer-toolbar-leading]') ?? null;
+        const controls = [...(toolbar?.querySelectorAll('button, label') ?? [])].filter((c) => c.getBoundingClientRect().width > 0);
+        const nameOf = (c) => c.getAttribute('aria-label') ?? c.querySelector('[aria-label]')?.getAttribute('aria-label') ?? c.tagName;
+        const barBox = toolbar?.getBoundingClientRect() ?? null;
+        const escaping = barBox === null ? [] : controls.filter((c) => {
+          const r = c.getBoundingClientRect();
+          if (leading !== null && leading.contains(c)) return false;
+          return r.left < barBox.left - 0.5 || r.right > barBox.right + 0.5;
+        }).map(nameOf);
+        const unreachable = leading === null ? [] : controls.filter((c) => leading.contains(c)).filter((c) => {
+          c.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+          const r = c.getBoundingClientRect();
+          const host = leading.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return r.left < host.left - 0.5 || r.right > host.right + 0.5 || !c.contains(hit);
+        }).map(nameOf);
+        if (leading !== null) leading.scrollLeft = 0;
+        const small = controls
+          .map((c) => ({ c, r: c.getBoundingClientRect() }))
+          .filter(({ r }) => r.width < 44 || r.height < 44)
+          .map(({ c, r }) => `${nameOf(c)} ${Math.round(r.width)}×${Math.round(r.height)}`);
         return {
+          barOverflow: toolbar === null ? null : `${toolbar.scrollWidth}/${toolbar.clientWidth}`,
+          barOverflows: toolbar !== null && toolbar.scrollWidth > toolbar.clientWidth,
+          escaping,
+          unreachable,
+          small,
           frame: box(frame),
           toolbar: box(toolbar),
           field: box(field),
@@ -923,6 +957,13 @@ for (const scheme of ['light', 'dark']) {
         );
       }
       expect(m.doors, `${tag} · la barre porte le sticker et la caméra (#9082)`);
+      expect(!m.barOverflows, `${tag} · la barre d'outils ne déborde pas de sa boîte (#7992 — scrollWidth/clientWidth ${m.barOverflow})`);
+      expect(m.escaping.length === 0, `${tag} · aucun contrôle de l'angle droit ne sort de la barre (${m.escaping.join(', ') || 'tous dedans'})`);
+      expect(
+        m.unreachable.length === 0,
+        `${tag} · chaque outil de la bande menante, amené à l'écran, y tient ENTIER et reçoit le doigt (${m.unreachable.join(', ') || 'tous'})`,
+      );
+      expect(m.small.length === 0, `${tag} · chaque contrôle de la barre tient la cible 44×44 (${m.small.join(', ') || 'tous'})`);
       expect(!m.pageScrolls, `${tag} · aucun défilement horizontal de la page`);
       const tiny = m.buttons.filter((b) => b.w < 24 || b.h < 24);
       expect(tiny.length === 0, `${tag} · chaque emoji tient au moins la cible AA de 24 px (${JSON.stringify(m.buttons)})`);
