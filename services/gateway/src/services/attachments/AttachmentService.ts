@@ -24,6 +24,7 @@ import {
 } from './UploadProcessor';
 import { attachmentServiceRowSelect } from './attachmentIncludes';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { carrierMessageStillServesWhere } from './carrierMessageLifecycle';
 
 const logger = enhancedLogger.child({ module: 'AttachmentService' });
 
@@ -416,6 +417,36 @@ export class AttachmentService {
    * même forme dérivent ; une seule ne peut pas. La méthode rend donc un
    * `Attachment`, comme ses deux sœurs.
    */
+  /**
+   * La galerie d'une conversation — et la seule surface de LISTE qui rende des
+   * pièces jointes à un lecteur ordinaire, y compris un participant anonyme.
+   *
+   * ## Pourquoi le cycle de vie du porteur se borne ICI (#9244)
+   *
+   * `carrierMessageStillServesBytes` répondait déjà pour le DÉTAIL
+   * (`GET /attachments/:id/metadata`, depuis #4923) ; cette liste, elle, ne
+   * bornait que `deletedAt`. Elle annonçait donc le nom d'origine, les
+   * dimensions, l'auteur et la date d'un média dont le porteur avait EXPIRÉ
+   * (`expiresAt`) ou BRÛLÉ (`viewOnceBurnAt`) — un média que l'émetteur avait
+   * voulu disparu, et que le détail refusait déjà. #4923 avait aligné le détail
+   * sur la liste et lui avait donné, du même geste, une borne de PLUS : la
+   * liste restait en retard sur ce qui s'était aligné sur elle.
+   *
+   * L'exclusion entre dans le `where`, jamais dans une boucle après coup —
+   * même forme que l'opt-out d'accusés de lecture (#3907), et pour la même
+   * raison : cette liste PAGINE (`take`/`skip`), et un filtrage post-requête
+   * ferait rétrécir la page sans corriger ce qui la borne.
+   *
+   * La forme de requête vient de la SSOT (`carrierMessageStillServesWhere`),
+   * pas d'une copie locale : deux écritures d'une seule loi dérivent au premier
+   * ajout de colonne, et c'est exactement ce défaut qui a laissé la liste
+   * derrière le détail.
+   *
+   * @param options.now L'instant qui tranche les échéances. Passé par
+   *   l'appelant comme la route du détail le fait à son site d'appel ; à défaut,
+   *   l'heure courante — une borne qui n'agirait que si on pense à l'activer
+   *   serait un demi-correctif.
+   */
   async getConversationAttachments(
     conversationId: string,
     options: {
@@ -423,13 +454,14 @@ export class AttachmentService {
       limit?: number;
       offset?: number;
       messageFilter?: Prisma.MessageWhereInput;
+      now?: Date;
     } = {}
   ): Promise<Attachment[]> {
     const where: Prisma.MessageAttachmentWhereInput = {
       message: {
         ...options.messageFilter,
         conversationId: conversationId,
-        deletedAt: null,
+        ...carrierMessageStillServesWhere(options.now ?? new Date()),
       },
     };
 

@@ -52,6 +52,16 @@
  * oublié.
  */
 
+/**
+ * Ce fichier porte DEUX formes d'une même loi, et seule la seconde connaît
+ * Prisma. Le prédicat en mémoire reste STRUCTURAL — il ne lit que ce que son
+ * interface déclare — parce qu'il sert des appelants qui ont déjà chargé leur
+ * message. La forme-requête, elle, produit un filtre Prisma : la dépendance
+ * n'est pas accidentelle, c'est son objet. La typer ici plutôt qu'au site
+ * d'appel évite un `as` chez chaque surface qui l'utilise.
+ */
+import type { Prisma } from '@meeshy/shared/prisma/client';
+
 /** Les deux seules colonnes qui décident si un message rend encore ses octets. */
 export interface CarrierMessageLifecycle {
   readonly deletedAt?: Date | string | null;
@@ -62,6 +72,23 @@ export interface CarrierMessageLifecycle {
   /** Échéance de purge d'une vue unique (#7578) — sa colonne à elle. */
   readonly viewOnceBurnAt?: Date | string | null;
 }
+
+/**
+ * Les colonnes d'ÉCHÉANCE de la loi, déclarées une fois.
+ *
+ * Elles nourrissent les DEUX formes du prédicat — celle qui répond sur un
+ * message déjà chargé ({@link carrierMessageStillServesBytes}) et celle qui
+ * exclut en base ({@link carrierMessageStillServesWhere}). Deux écritures d'une
+ * seule loi dérivent au premier ajout ; dérivées d'une liste, elles ne peuvent
+ * pas. `deletedAt` n'y figure pas : ce n'est pas une échéance mais un fait, et
+ * les deux formes le traitent à part.
+ *
+ * Le témoin `carrierMessageLifecycle.test.ts` relit l'interface dans la SOURCE
+ * et refuse qu'une échéance y soit déclarée sans entrer ici — aucune réflexion
+ * n'atteint un type TypeScript à l'exécution, et c'est pourquoi cette garde
+ * existe.
+ */
+export const CARRIER_DEADLINE_COLUMNS = ['expiresAt', 'viewOnceBurnAt'] as const;
 
 /**
  * Une échéance illisible ne doit PAS passer pour une échéance dépassée : un
@@ -88,4 +115,35 @@ export function carrierMessageStillServesBytes(
   if (message.deletedAt) return false;
 
   return !deadlinePassed(message.expiresAt, now) && !deadlinePassed(message.viewOnceBurnAt, now);
+}
+
+/**
+ * La MÊME loi, en forme de requête — ce qu'une surface qui LISTE doit poser
+ * dans son `where` (#9244).
+ *
+ * `carrierMessageStillServesBytes` répond sur un message déjà chargé : il sert
+ * les routes qui rendent UN média. Une surface qui en liste plusieurs ne peut
+ * pas s'en servir après coup, parce qu'elle PAGINE : exclure en JS ferait
+ * rétrécir la page sans corriger ce qui la borne, et le total dirait alors
+ * exactement ce que l'exclusion cache. Même raisonnement, et même forme, que
+ * l'opt-out d'accusés de lecture (#3907) : l'exclusion entre dans la requête.
+ *
+ * Le défaut qu'elle ferme : `GET /conversations/:id/attachments` ne bornait que
+ * `deletedAt`. La galerie listait donc le nom d'origine, les dimensions,
+ * l'auteur et la date d'un média dont le porteur avait expiré ou brûlé — que le
+ * DÉTAIL, lui, refusait depuis #4923. L'alignement de #4923 avait donné au
+ * détail les bornes de la liste, PLUS le cycle de vie ; la liste restait en
+ * retard d'une borne sur ce qui s'était aligné sur elle.
+ *
+ * `null` — l'échéance jamais écrite — passe, comme dans l'autre forme. Une
+ * échéance illisible n'est pas représentable ici : la base compare des dates,
+ * là où `deadlinePassed` doit se méfier d'une chaîne.
+ */
+export function carrierMessageStillServesWhere(now: Date): Prisma.MessageWhereInput {
+  return {
+    deletedAt: null,
+    AND: CARRIER_DEADLINE_COLUMNS.map((column) => ({
+      OR: [{ [column]: null }, { [column]: { gt: now } }],
+    })),
+  };
 }
