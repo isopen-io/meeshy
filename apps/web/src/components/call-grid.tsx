@@ -55,7 +55,15 @@ export function Portrait({ name, avatar, size, pulse }: { readonly name: string;
 export type CallGridProps = {
   readonly members: readonly CallMember[];
   readonly remoteStreams: Readonly<Record<string, MediaStream>>;
-  readonly self: { readonly stream: MediaStream | null; readonly cameraOn: boolean; readonly mirrored: boolean; readonly micMuted: boolean };
+  readonly self: {
+    readonly stream: MediaStream | null;
+    readonly cameraOn: boolean;
+    readonly mirrored: boolean;
+    readonly micMuted: boolean;
+    /** Mon nom et mon avatar : le portrait de ma tuile caméra coupée, comme iOS (le libellé reste « Vous »). */
+    readonly name?: string | null;
+    readonly avatar?: string | null;
+  };
   /** Les commandes de ma caméra, posées en haut au centre quand MA tuile est à la une. */
   readonly selfControls?: ReactNode;
   readonly choice: SpotlightChoice;
@@ -141,7 +149,7 @@ function SelfTile({ self, language, portrait, onPress }: { readonly self: CallGr
   const frame = { background: TILE, borderColor: SELF_SPEAKER_COLOR };
   const body = (
     <>
-      {self.cameraOn ? <StreamVideo stream={self.stream} mirrored={self.mirrored} className="absolute inset-0 size-full" label={you} self /> : <Portrait name={you} avatar={null} size={portrait} pulse={false} />}
+      {self.cameraOn ? <StreamVideo stream={self.stream} mirrored={self.mirrored} className="absolute inset-0 size-full" label={you} self /> : <Portrait name={self.name || you} avatar={self.avatar ?? null} size={portrait} pulse={false} />}
       <NameLabel name={you} muted={self.micMuted} suffix={null} />
     </>
   );
