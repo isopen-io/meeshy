@@ -28,7 +28,7 @@ extension CallView {
                     .equatable().padding(.top, 60).frame(maxHeight: .infinity, alignment: .top)
                     .callChromeVisibility(chromeVisibility.isVisible(.screenShareBanner))
 
-                if !isGroupStage && chromeVisibility.isVisible(.selfView) {
+                if !isGroupStage && chromeVisibility.isVisible(.selfView) && !isLiveFrameShown {
                     duoOverlays
                 }
 
@@ -98,6 +98,9 @@ extension CallView {
         .sheet(isPresented: panelSheet(.journal)) {
             captionsJournal
         }
+        .sheet(isPresented: $showLiveFramePicker) { liveFramePicker }
+        .task(id: liveFrameBindingKey) { await bindLiveFrame() }
+        .task(id: callManager.currentCallId) { await liveFrame.runClock() }
     }
 
     /// La disposition 1:1 : le flux primaire plein écran (vidéo) ou le duo
@@ -531,6 +534,9 @@ extension CallView {
             videoStream(local: effectiveSwapStreams, contentMode: primaryVideoContentMode)
                 .callCameraZoom(isEnabled: effectiveSwapStreams)
                 .ignoresSafeArea()
+            // #9214 — le cadre en direct du duo, composé ici, au-dessus de la vidéo.
+            liveFrameSurface
+                .ignoresSafeArea()
             // #8787 — le micro coupé du correspondant reste sur SON image,
             // sous la rangée d'en-tête, même quand le chrome s'efface.
             if showsPeerMutedBadge && !effectiveSwapStreams {
@@ -542,6 +548,7 @@ extension CallView {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: showsPeerMutedBadge)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isLiveFrameShown)
     }
 
     /// #8787 — en duo vidéo, le micro coupé du correspondant se voit sur son
