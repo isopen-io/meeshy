@@ -84,6 +84,8 @@ const deComposerAttach = {
   'composer.sticker.instants.field.time': 'Uhrzeit',
   'composer.quickEmoji.label': 'Direkt senden',
   'composer.quickEmoji.group': 'Schnell-Emojis',
+  'composer.quickEmoji.more': 'Anderes Emoji wählen',
+  'composer.quickEmoji.moreHint': 'Lange drücken oder Umschalt+F10: anderes Emoji wählen',
   'composer.effects.panel': 'Nachrichteneffekte',
   'composer.effects.entrance': 'Eingangsanimation',
   'composer.effects.permanent': 'Dauerhafter Effekt',

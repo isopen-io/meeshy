@@ -11,6 +11,8 @@ import { pinToBottom } from '@/lib/view/pin-to-bottom';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { MessageMenu, type MessageMenuTarget } from './message-menu';
+import { ReactionSheet } from './reaction-sheet';
+import { EMOJI_USAGE_KEY, readEmojiUsage } from '@/lib/emoji-usage';
 
 /**
  * TÉMOIN DE COMPOSANT (#5814, T8-T11) — patron `composer.test.tsx:60-110`
@@ -45,6 +47,7 @@ afterEach(() => {
     root.unmount();
   });
   container.remove();
+  localStorage.clear();
   /* La langue d'interface est un état GLOBAL du document : un témoin qui la
      déplace la rend, sinon le suivant mesure la langue du précédent. */
   document.documentElement.lang = 'fr';
@@ -868,5 +871,51 @@ describe('MessageMenu — le rail sans cadre, la liste dans sa carte, et l’ape
       list().querySelector<HTMLButtonElement>('[role="menuitem"]')!.focus();
     });
     expect(listTop()).toBeLessThan(top0);
+  });
+});
+
+/**
+ * LE RAIL SUIT L'USAGE (#7983) — la même table que le cadre des emojis rapides
+ * du composeur (`lib/emoji-usage.ts`, jumelle d'`EmojiUsageTracker`) : une
+ * réaction posée ici reclasse le composeur, et inversement.
+ */
+describe('MessageMenu — le rail suit l’usage des emojis', () => {
+  const railEmojis = () =>
+    [...document.querySelectorAll<HTMLButtonElement>('[data-message-menu-rail] [role="menuitem"]')]
+      .filter((tile) => !tile.hasAttribute('data-add-reaction'))
+      .map((tile) => tile.getAttribute('aria-label'));
+  const open = (el: HTMLDivElement) =>
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+
+  test('sans historique : les six réactions d’iOS, dans leur ordre', () => {
+    open(mount());
+    expect(railEmojis()).toEqual(['😂', '❤️', '👍', '😮', '😢', '🔥']);
+  });
+
+  test('les emojis que ce lecteur emploie passent en tête, les défauts complètent', () => {
+    localStorage.setItem(EMOJI_USAGE_KEY, JSON.stringify([['🔥', 3], ['🎉', 4]]));
+    open(mount());
+    expect(railEmojis()).toEqual(['🎉', '🔥', '😂', '❤️', '👍', '😮']);
+  });
+
+  test('réagir depuis le rail compte un emploi', () => {
+    open(mount());
+    act(() => document.querySelector<HTMLButtonElement>('[data-message-menu-rail] [aria-label="😮"]')!.click());
+    expect(readEmojiUsage().get('😮')).toBe(1);
+  });
+
+  test('réagir depuis « Ajouter une réaction » compte un emploi', () => {
+    const picked: string[] = [];
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<ReactionSheet onPick={(emoji) => picked.push(emoji)} onClose={() => {}} />);
+    });
+    act(() => container.querySelector<HTMLButtonElement>('button[aria-label="🎉"]')!.click());
+    expect(picked).toEqual(['🎉']);
+    expect(readEmojiUsage().get('🎉')).toBe(1);
   });
 });

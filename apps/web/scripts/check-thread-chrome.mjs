@@ -868,6 +868,10 @@ for (const scheme of ['light', 'dark']) {
    * dédoublonnage par contenu), et un double clic sur « Envoyer » n'en fait
    * qu'UNE (le brouillon est vidé à l'instant de l'envoi). Fixtures seules :
    * aucun envoi ne quitte le navigateur.
+   *
+   * Enfin (#7983) : l'appui long — et Maj+F10 — ouvre la palette sans envoyer
+   * l'emoji pressé, l'emoji choisi y part directement, et au rechargement le
+   * cadre est classé par l'usage de l'appareil.
    */
   for (const width of [390, 320]) {
     const context = await browser.newContext({
@@ -985,6 +989,34 @@ for (const scheme of ['light', 'dark']) {
       await page.waitForTimeout(600);
       const afterDouble = await bubbles();
       expect(afterDouble === afterSeries + 1, `${scheme} · double clic sur « Envoyer » ⇒ UNE bulle (${afterSeries} → ${afterDouble})`);
+
+      const picker = '[data-quick-emoji-picker] dialog[open]';
+      const pressed = page.locator('[data-composer-quick-emoji] button').nth(2);
+      await pressed.hover();
+      await page.mouse.down();
+      await page.waitForTimeout(650);
+      await page.mouse.up();
+      const pickerOpened = await page.waitForSelector(picker, { timeout: 3000 }).then(() => true, () => false);
+      expect(pickerOpened, `${scheme} · appui long sur un emoji rapide ⇒ la palette des emojis (#7983)`);
+      expect((await bubbles()) === afterDouble, `${scheme} · l’appui long n’envoie pas l’emoji pressé`);
+      if (pickerOpened) {
+        await page.locator(`${picker} button[aria-label="🎉"]`).click();
+        await page.waitForFunction((n) => document.querySelectorAll('[data-message]').length >= n + 1, afterDouble, { timeout: 3000 }).catch(() => {});
+        expect((await bubbles()) === afterDouble + 1, `${scheme} · l’emoji choisi dans la palette part directement`);
+        expect((await page.locator(picker).count()) === 0, `${scheme} · la palette se referme après le choix`);
+      }
+
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForSelector('[data-composer-quick-emoji]');
+      const ranked = await page.locator('[data-composer-quick-emoji] button').allTextContents();
+      expect(ranked[0] === '😂' && ranked[1] === '🎉', `${scheme} · au rechargement, le cadre est classé par l’usage de cet appareil (${ranked.join(' ')})`);
+
+      const keyboardTarget = page.locator('[data-composer-quick-emoji] button').first();
+      await keyboardTarget.focus();
+      await page.keyboard.press('Shift+F10');
+      const byKeyboard = await page.waitForSelector(picker, { timeout: 3000 }).then(() => true, () => false);
+      expect(byKeyboard, `${scheme} · Maj+F10 sur un emoji rapide ouvre la même palette`);
+      await page.keyboard.press('Escape');
     }
 
     await context.close();

@@ -1,4 +1,5 @@
 import { EmojiGrid } from './emoji-grid';
+import { recordEmojiUsage } from '@/lib/emoji-usage';
 import { Sheet } from './sheet';
 
 /**
@@ -15,7 +16,12 @@ import { Sheet } from './sheet';
 export function ReactionSheet({ onPick, onClose }: { readonly onPick: (emoji: string) => void; readonly onClose: () => void }) {
   return (
     <Sheet title="Ajouter une réaction" onClose={onClose}>
-      <EmojiGrid onPick={onPick} />
+      <EmojiGrid
+        onPick={(emoji) => {
+          recordEmojiUsage(emoji);
+          onPick(emoji);
+        }}
+      />
     </Sheet>
   );
 }

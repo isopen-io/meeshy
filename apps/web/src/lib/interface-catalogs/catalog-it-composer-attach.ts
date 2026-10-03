@@ -84,6 +84,8 @@ const itComposerAttach = {
   'composer.sticker.instants.field.time': 'Ora',
   'composer.quickEmoji.label': 'Invia direttamente',
   'composer.quickEmoji.group': 'Emoji rapide',
+  'composer.quickEmoji.more': 'Scegli un’altra emoji',
+  'composer.quickEmoji.moreHint': 'Pressione prolungata o Maiusc+F10: scegli un’altra emoji',
   'composer.effects.panel': 'Effetti del messaggio',
   'composer.effects.entrance': 'Animazione di ingresso',
   'composer.effects.permanent': 'Effetto permanente',
