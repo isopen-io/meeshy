@@ -752,12 +752,23 @@ describe('GET /conversations/:id/attachments — masquage personnel', () => {
 describe('GET /conversations/:id/attachments — contrat SERVI (harnais armé)', () => {
   beforeEach(() => { mockGetConversationAttachments.mockClear(); });
 
-  it('sert les treize clés de la liste, et retient toute colonne lourde', async () => {
+  it('retient toute colonne lourde, et ne sert aucune clé que le schéma ne déclare', async () => {
     // Le service ne charge plus `transcription` ni `translations` (#4887,
     // défaut 3) ; ce témoin garde l'autre moitié de la garantie — même si un
     // appelant futur en remettait dans la charge, le schéma de la LISTE ne les
     // déclare pas et le sérialiseur les retirerait. Le contrat servi ne dépend
     // pas de la discipline du producteur.
+    //
+    // CE QUE CE TÉMOIN N'ÉPINGLE PAS, et pourquoi son intitulé ne dit plus un
+    // nombre : la fixture ci-dessous ne porte PAS `isViewOnce` / `isBlurred`,
+    // et une clé déclarée qu'un objet ne porte pas n'est pas fabriquée. Le jeu
+    // de clés observé ici est donc celui de CETTE charge, pas celui du schéma —
+    // il est resté à treize quand le schéma est passé à quinze au #9249, et ce
+    // témoin n'a pas rougi. Le jeu EXHAUSTIF d'une ligne complète est épinglé
+    // une seule fois, chez son sujet
+    // (`unit/routes/attachments/conversation-attachments-served-keys.test.ts`) :
+    // deux pins du même jeu dériveraient, et c'est celui qui ne rougit pas qui
+    // survivrait.
     mockGetConversationAttachments.mockResolvedValue([{
       id: 'att-1',
       messageId: 'msg-1',
@@ -832,5 +843,79 @@ describe('GET /conversations/:id/attachments — service error', () => {
   it('returns 500 on service error', async () => {
     const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
     expect(res.statusCode).toBe(500);
+  });
+});
+
+// ─── #9249 — la galerie sert l'URL, elle doit servir aussi la protection ──────
+//
+// `conversationAttachmentListItemSchema` épand `messageAttachmentMinimalSchema`,
+// qui déclare `fileUrl` ET `thumbnailUrl`. L'URL d'un média à vue unique ou
+// flouté partait donc, et les deux drapeaux qui disent au client de poser un
+// voile ou de décompter une vue étaient SUPPRIMÉS par `fast-json-stringify` —
+// la projection les rend (`AttachmentService.toAttachment`), le schéma ne les
+// déclarait pas. La protection n'était pas contournée : elle était
+// INEXPRIMABLE.
+//
+// Le témoin traverse le VRAI sérialiseur (`app.inject` + les vrais schémas
+// partagés, ce harnais n'en double aucun) et assert sur la valeur SERVIE : un
+// témoin qui n'interrogerait que l'objet rendu par le service serait vert
+// avant comme après, puisque c'est le service qui porte déjà les drapeaux.
+
+describe('GET /conversations/:id/attachments — la protection de la pièce jointe est SERVIE (#9249)', () => {
+  let app: FastifyInstance;
+  beforeAll(async () => {
+    mockGetConversationAttachments.mockResolvedValue([
+      {
+        id: 'att-view-once',
+        messageId: 'msg-1',
+        fileName: 'a1b2c3d4-e5f6-4789-abcd-0123456789ab.jpg',
+        originalName: 'Reçu.jpg',
+        mimeType: 'image/jpeg',
+        fileSize: 51234,
+        fileUrl: '/api/v1/attachments/file/a1b2c3d4-e5f6-4789-abcd-0123456789ab.jpg',
+        thumbnailUrl: '/api/v1/attachments/file/a1b2c3d4-e5f6-4789-abcd-0123456789ab.thumb.jpg',
+        width: 1200,
+        height: 1600,
+        duration: undefined,
+        uploadedBy: 'u-1',
+        isAnonymous: false,
+        createdAt: '2026-09-20T08:00:00.000Z',
+        isForwarded: false,
+        capturedInApp: true,
+        isViewOnce: true,
+        viewOnceCount: 1,
+        isBlurred: true,
+        viewedCount: 0,
+        downloadedCount: 0,
+        consumedCount: 0,
+        isEncrypted: false,
+      },
+    ]);
+    app = await buildApp({
+      prismaOverrides: {
+        participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }) },
+      },
+    });
+  });
+  afterAll(async () => { await app.close(); });
+
+  it("sert les drapeaux de protection de la pièce jointe, pas seulement son URL", async () => {
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
+
+    expect(res.statusCode).toBe(200);
+    const [served] = res.json().data.attachments;
+    expect(served).toMatchObject({ isViewOnce: true, isBlurred: true });
+  });
+
+  it("sert l'URL et la vignette — ce que le schéma épand, donc ce que la protection doit accompagner", async () => {
+    // L'autre moitié de l'affirmation, écrite pour que le témoin dise POURQUOI
+    // les drapeaux sont dus : si un lot futur retirait `fileUrl` de cette
+    // porte, ce témoin tomberait et la question se reposerait au lieu de se
+    // perdre.
+    const res = await app.inject({ method: 'GET', url: `/conversations/${CONV_ID}/attachments` });
+
+    const [served] = res.json().data.attachments;
+    expect(typeof served.fileUrl).toBe('string');
+    expect(typeof served.thumbnailUrl).toBe('string');
   });
 });
