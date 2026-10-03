@@ -13,4 +13,7 @@
     <string name="call_ongoing_audio">Chamada de voz em andamento</string>
     <string name="call_ongoing_video">Chamada de vídeo em andamento</string>
     <string name="call_ongoing_return">Toque para voltar à chamada</string>
+    <string name="call_pip_mute">Desativar microfone</string>
+    <string name="call_pip_unmute">Ativar microfone</string>
+    <string name="call_pip_hangup">Desligar</string>
 </resources>
