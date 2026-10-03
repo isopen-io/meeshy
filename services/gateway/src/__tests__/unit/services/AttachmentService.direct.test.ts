@@ -84,7 +84,6 @@ jest.mock('../../../utils/logger-enhanced.js', () => ({
 }));
 
 import { AttachmentService } from '../../../services/attachments';
-import { carrierMessageStillServesWhere } from '../../../services/attachments/carrierMessageLifecycle';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -602,94 +601,9 @@ describe('AttachmentService — direct-access methods', () => {
       expect(result).toEqual([]);
     });
 
-    it('exclut POUR TOUS le message retiré ET celui dont l’échéance est passée, sans qu’on ait à le demander', async () => {
-      // La galerie sert les pièces jointes des messages ; elle doit s'arrêter
-      // à la même tombstone que `GET /conversations/:id/messages`. Sans ce
-      // `deletedAt: null`, un média restait listé — URL comprise — après la
-      // suppression du message qui le portait.
-      //
-      // #9244 a étendu cette borne aux ÉCHÉANCES. `deletedAt` seul laissait la
-      // liste annoncer le nom, les dimensions, l'auteur et la date d'un média
-      // dont le porteur avait expiré ou brûlé — que le DÉTAIL refusait depuis
-      // #4923. La forme vient de la SSOT, jamais d'une copie : c'est la dérive
-      // entre les deux écritures de cette loi qui avait laissé la liste
-      // derrière le détail.
-      const prisma = makePrisma();
-      (prisma.messageAttachment.findMany as jest.Mock<any>).mockResolvedValue([]);
-      const svc = new AttachmentService(prisma as PrismaClient);
-      const now = new Date('2026-10-03T12:00:00.000Z');
-
-      await svc.getConversationAttachments(CONV_ID, { now });
-
-      expect(prisma.messageAttachment.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            message: { conversationId: CONV_ID, ...carrierMessageStillServesWhere(now) },
-          }),
-        })
-      );
-    });
-
-    it('fusionne le `messageFilter` de l’appelant sous `message`', async () => {
-      const prisma = makePrisma();
-      (prisma.messageAttachment.findMany as jest.Mock<any>).mockResolvedValue([]);
-      const svc = new AttachmentService(prisma as PrismaClient);
-      const floor = new Date('2026-06-15T00:00:00Z');
-
-      const now = new Date('2026-10-03T12:00:00.000Z');
-
-      await svc.getConversationAttachments(CONV_ID, {
-        messageFilter: { createdAt: { gte: floor }, id: { notIn: ['m-1'] } },
-        now,
-      });
-
-      expect(prisma.messageAttachment.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            message: {
-              createdAt: { gte: floor },
-              id: { notIn: ['m-1'] },
-              conversationId: CONV_ID,
-              ...carrierMessageStillServesWhere(now),
-            },
-          }),
-        })
-      );
-    });
-
-    it('ne laisse PAS l’appelant desserrer les TROIS invariants du service', async () => {
-      // Le filtre ne peut qu'AJOUTER. Un appelant qui poserait
-      // `conversationId` ou `deletedAt` — par recopie d'une clause de message
-      // toute faite — sortirait sinon de la conversation demandée, ou
-      // ressusciterait les tombstones.
-      //
-      // Ils sont TROIS depuis #9244 : la conversation, la tombstone, et le
-      // cycle de vie du porteur. Le troisième se pose en dernier comme les deux
-      // autres, donc un appelant ne peut pas davantage le desserrer — la
-      // tentative ci-dessous essaie les trois à la fois.
-      const prisma = makePrisma();
-      (prisma.messageAttachment.findMany as jest.Mock<any>).mockResolvedValue([]);
-      const svc = new AttachmentService(prisma as PrismaClient);
-      const now = new Date('2026-10-03T12:00:00.000Z');
-
-      await svc.getConversationAttachments(CONV_ID, {
-        messageFilter: {
-          conversationId: 'autre-conversation',
-          deletedAt: { not: null },
-          AND: [],
-        } as any,
-        now,
-      });
-
-      expect(prisma.messageAttachment.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.objectContaining({
-            message: { conversationId: CONV_ID, ...carrierMessageStillServesWhere(now) },
-          }),
-        })
-      );
-    });
-
+    // Les trois témoins du `where` de la galerie (conversation, tombstone,
+    // cycle de vie du porteur #9244) vivent chez leur sujet :
+    // `unit/services/attachments/conversation-attachments-carrier-lifecycle.test.ts`.
     it('filters by mimeType when type option provided', async () => {
       const prisma = makePrisma();
       (prisma.messageAttachment.findMany as jest.Mock<any>).mockResolvedValue([]);

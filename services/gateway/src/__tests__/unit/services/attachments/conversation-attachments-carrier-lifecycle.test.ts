@@ -128,3 +128,90 @@ describe('AttachmentService.getConversationAttachments — le cycle de vie du po
     expect(message.AND as unknown[]).toHaveLength(CARRIER_DEADLINE_COLUMNS.length);
   });
 });
+
+/**
+ * ─── LES TROIS INVARIANTS DU `where`, RAPATRIÉS ICI (#9244) ─────────────────
+ *
+ * Ces trois témoins vivaient dans `unit/services/AttachmentService.direct.test.ts`,
+ * un fichier de **dette héritée** au sens du cliquet
+ * `gateway-test-file-size-budget.test.ts` : une suite déjà hors budget, à
+ * laquelle la règle 3 interdit de grossir. Les mettre à jour sur place aurait
+ * ajouté six lignes à une pile que le dépôt a gelée — et « regeler le nombre,
+ * c'est-à-dire ne plus lire le cliquet » est précisément ce que ce cliquet
+ * nomme comme la mauvaise réaction.
+ *
+ * Ils sont donc rapatriés chez leur SUJET, ce qui réduit la dette de 61 lignes
+ * au lieu de l'augmenter de six. Leur intention est inchangée ; le troisième
+ * change de nom, parce que le service a désormais TROIS invariants que
+ * l'appelant ne peut pas desserrer, non plus deux.
+ */
+describe('AttachmentService.getConversationAttachments — les invariants du `where`', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('exclut POUR TOUS le message retiré ET celui dont l’échéance est passée', async () => {
+    // La galerie sert les pièces jointes des messages ; elle doit s'arrêter à
+    // la même tombstone que `GET /conversations/:id/messages`. Sans
+    // `deletedAt: null`, un média restait listé — URL comprise — après la
+    // suppression du message porteur. #9244 a étendu la borne aux échéances.
+    const { service, findMany } = makeService();
+
+    await service.getConversationAttachments(CONVERSATION_ID, { now: NOW });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          message: { conversationId: CONVERSATION_ID, ...carrierMessageStillServesWhere(NOW) },
+        }),
+      })
+    );
+  });
+
+  it('fusionne le `messageFilter` de l’appelant sous `message`', async () => {
+    const { service, findMany } = makeService();
+    const floor = new Date('2026-06-15T00:00:00Z');
+
+    await service.getConversationAttachments(CONVERSATION_ID, {
+      messageFilter: { createdAt: { gte: floor }, id: { notIn: ['m-1'] } },
+      now: NOW,
+    });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          message: {
+            createdAt: { gte: floor },
+            id: { notIn: ['m-1'] },
+            conversationId: CONVERSATION_ID,
+            ...carrierMessageStillServesWhere(NOW),
+          },
+        }),
+      })
+    );
+  });
+
+  it('ne laisse PAS l’appelant desserrer les TROIS invariants du service', async () => {
+    // Le filtre ne peut qu'AJOUTER. Un appelant qui poserait `conversationId`,
+    // `deletedAt` ou les bornes d'échéance — par recopie d'une clause toute
+    // faite — sortirait sinon de la conversation demandée, ressusciterait les
+    // tombstones, ou rouvrirait la galerie aux médias brûlés. La tentative
+    // ci-dessous essaie les trois à la fois.
+    const { service, findMany } = makeService();
+
+    await service.getConversationAttachments(CONVERSATION_ID, {
+      messageFilter: {
+        conversationId: 'autre-conversation',
+        deletedAt: { not: null },
+        AND: [],
+      } as never,
+      now: NOW,
+    });
+
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          message: { conversationId: CONVERSATION_ID, ...carrierMessageStillServesWhere(NOW) },
+        }),
+      })
+    );
+  });
+});
