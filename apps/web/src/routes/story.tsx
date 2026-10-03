@@ -61,6 +61,7 @@ import {
   previousPosition,
   resolvePlayablePosition,
   resolvePosition,
+  scopeToLiveStories,
   scopeToSingleGroup,
   slideDurationForScene,
   slideDurationMs,
@@ -218,10 +219,10 @@ export default function StoryScreen() {
   /* `scopeToSingleGroup` NARROWS le tableau AVANT toute navigation : c'est ce
      qui fait fermer `nextPosition` en fin de mon groupe au lieu de passer à
      l'auteur suivant, sans ajouter de branche à cette loi pure. */
-  const scopedGroups = useMemo(
-    () => (singleGroupScope ? scopeToSingleGroup(groups, currentId) : groups),
-    [groups, singleGroupScope, currentId],
-  );
+  const scopedGroups = useMemo(() => {
+    const live = scopeToLiveStories(groups, { keeping: [post, currentId], now: Date.now() });
+    return singleGroupScope ? scopeToSingleGroup(live, currentId) : live;
+  }, [groups, singleGroupScope, post, currentId]);
 
   const rawPosition = useMemo(() => resolvePosition(scopedGroups, currentId), [scopedGroups, currentId]);
   const playablePosition = useMemo(
