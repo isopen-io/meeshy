@@ -869,6 +869,10 @@ for (const scheme of ['light', 'dark']) {
    * qu'UNE (le brouillon est vidé à l'instant de l'envoi). Fixtures seules :
    * aucun envoi ne quitte le navigateur.
    *
+   * LA LANGUE SE LIT SANS GESTE (#9251) — la pastille ferme la bande menante
+   * sans y défiler : entière dans la barre aux deux largeurs ; et une bande qui
+   * défile le dit par un fondu à son bord de fin.
+   *
    * Enfin (#7983) : l'appui long — et Maj+F10 — ouvre la palette sans envoyer
    * l'emoji pressé, l'emoji choisi y part directement, et au rechargement le
    * cadre est classé par l'usage de l'appareil.
@@ -908,6 +912,21 @@ for (const scheme of ['light', 'dark']) {
           return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top) };
         });
         const leading = toolbar?.querySelector('[data-composer-toolbar-leading]') ?? null;
+        const pill = toolbar?.querySelector('[data-composer-language]') ?? null;
+        const pillPainted = pill === null ? null : [pill, ...pill.querySelectorAll('*')].map((n) => n.getBoundingClientRect()).filter((r) => r.width > 0).reduce(
+          (u, r) => ({ left: Math.min(u.left, r.left), right: Math.max(u.right, r.right), top: Math.min(u.top, r.top), bottom: Math.max(u.bottom, r.bottom) }),
+          { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity },
+        );
+        const pillHit = pill === null ? null : (() => {
+          const r = pill.getBoundingClientRect();
+          return pill.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+        })();
+        const barRect = toolbar?.getBoundingClientRect() ?? null;
+        const pillWhole = pillPainted !== null && barRect !== null && pillHit === true &&
+          pillPainted.left >= Math.max(barRect.left, 0) - 0.5 && pillPainted.right <= Math.min(barRect.right, window.innerWidth) + 0.5;
+        const pillScrolls = pill !== null && leading !== null && leading.contains(pill);
+        const bandScrolls = leading !== null && leading.scrollWidth > leading.clientWidth + 1;
+        const bandSignals = leading !== null && leading.hasAttribute('data-scrolls-further') && getComputedStyle(leading).maskImage.includes('gradient');
         const controls = [...(toolbar?.querySelectorAll('button, label') ?? [])].filter((c) => c.getBoundingClientRect().width > 0);
         const nameOf = (c) => c.getAttribute('aria-label') ?? c.querySelector('[aria-label]')?.getAttribute('aria-label') ?? c.tagName;
         const barBox = toolbar?.getBoundingClientRect() ?? null;
@@ -941,6 +960,12 @@ for (const scheme of ['light', 'dark']) {
           toolbarScrolls: toolbar === null ? false : toolbar.scrollWidth > toolbar.clientWidth + 1,
           doors: toolbar?.querySelector('[data-composer-sticker]') !== null && toolbar?.querySelector('[data-composer-camera]') !== null,
           pageScrolls: document.documentElement.scrollWidth > window.innerWidth + 1,
+          pill: pillPainted === null ? null : `${Math.round(pillPainted.left)}→${Math.round(pillPainted.right)}`,
+          pillWhole,
+          pillScrolls,
+          bandScrolls,
+          bandSignals,
+          band: leading === null ? null : `${leading.scrollWidth}/${leading.clientWidth}`,
           buttons,
         };
       });
@@ -969,6 +994,14 @@ for (const scheme of ['light', 'dark']) {
       );
       expect(m.small.length === 0, `${tag} · chaque contrôle de la barre tient la cible 44×44 (${m.small.join(', ') || 'tous'})`);
       expect(!m.pageScrolls, `${tag} · aucun défilement horizontal de la page`);
+      expect(
+        m.pillWhole && !m.pillScrolls,
+        `${tag} · la pastille de langue se lit ENTIÈRE sans geste, hors de la bande qui défile (#9251 — capsule ${m.pill}, barre ${m.toolbar === null ? '?' : `${Math.round(m.toolbar.left)}→${Math.round(m.toolbar.right)}`})`,
+      );
+      expect(
+        !m.bandScrolls || m.bandSignals,
+        `${tag} · une bande menante qui défile le DIT par un fondu à son bord de fin (#9251 — ${m.band})`,
+      );
       const tiny = m.buttons.filter((b) => b.w < 24 || b.h < 24);
       expect(tiny.length === 0, `${tag} · chaque emoji tient au moins la cible AA de 24 px (${JSON.stringify(m.buttons)})`);
       await page.screenshot({ path: join(CAPTURES, `thread-composer-quick-emoji.${width}.${state}.${scheme}.png`) });

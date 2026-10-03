@@ -1,4 +1,4 @@
-import type { Ref } from 'react';
+import { useRef, type Ref } from 'react';
 
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 import { ComposerLanguagePill } from './composer-language-pill';
@@ -9,6 +9,7 @@ import { COMPOSER_GLYPHS } from './glyphs-composer';
 import type { ImposedLocks } from '@/lib/send/reply-contagion';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { useScrollsFurtherMark } from '@/lib/view/scrolls-further';
 
 /**
  * L'ÉTAT ARMÉ D'UNE BASCULE (revue-correction #6175, défaut majeur) — le
@@ -131,14 +132,17 @@ export function ComposerTopRow({
   const language = currentInterfaceLanguage();
   const armedEphemeral = ephemeralSeconds === undefined ? undefined : ephemeralDurationLabelOf(ephemeralSeconds);
   const ephemeralDuration = armedEphemeral === undefined ? '' : translate(language, armedEphemeral.displayKey);
+  const leadingRef = useRef<HTMLDivElement | null>(null);
+  useScrollsFurtherMark(leadingRef, 'data-scrolls-further');
 
   return (
     <div data-composer-toolbar className="flex items-center justify-start gap-1 px-3 pt-1.5">
       {/* LA BANDE MENANTE DÉFILE, L'ANGLE DROIT JAMAIS (#9082) — miroir
           `ComposerToolbarStrip` : à 320 px la rangée débordait et la caméra
           sortait de l'écran ; seuls les outils de tête glissent, le compteur
-          et la caméra restent à l'angle du verre. */}
-      <div data-composer-toolbar-leading className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+          et la caméra restent à l'angle du verre. La pastille de langue la
+          ferme SANS y défiler (#9251, D-164). */}
+      <div ref={leadingRef} data-composer-toolbar-leading className="flex min-w-0 items-center gap-1 overflow-x-auto">
         {/* CIBLES ≥ 44×44 (dimension 5, revue-correction #6175) — `min-w-11`
             AUTANT que `min-h-11`, motif `composer-language-pill.tsx:69`. La
             première forme ne posait que la HAUTEUR : mesurée 32×44 au
@@ -243,6 +247,9 @@ export function ComposerTopRow({
           </button>
         )}
 
+      </div>
+
+      <div className="me-auto flex shrink-0">
         <ComposerLanguagePill code={languageCode} onOpen={onOpenLanguage} {...(languagePillRef ? { buttonRef: languagePillRef } : {})} />
       </div>
 

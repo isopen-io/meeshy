@@ -577,6 +577,14 @@
   }
 }
 
+[data-composer-toolbar-leading][data-scrolls-further] {
+  mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent);
+}
+
+[data-composer-toolbar-leading][data-scrolls-further]:dir(rtl) {
+  mask-image: linear-gradient(to left, #000 calc(100% - 44px), transparent);
+}
+
 /* LA MONTEE D'UNE PLAQUE DU STUDIO (#8517) — l'edition d'un objet et le
    Cadre entrent comme le texte du post : un cadre de verre qui glisse de
    16 px vers le haut en s'eclairant. `prefers-reduced-motion` la coupe. */
