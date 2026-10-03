@@ -34,6 +34,7 @@ describe('commentCardSubjectOf — un commentaire s’image comme un message (#8
       parent: null,
     });
     expect(subject?.media.map((item) => item.card.kind)).toEqual(['image']);
+    expect(subject?.media[0]?.author).toEqual({ name: 'Awa', handle: 'awa', quoted: false });
   });
 
   test('« avec les réponses » (#8734) : elles suivent, dans le texte servi, sans les masquées, les vides ni celles en vol', () => {

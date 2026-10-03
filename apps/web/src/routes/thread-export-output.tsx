@@ -19,8 +19,9 @@ import { Pill } from './thread-export-controls';
  * arrivent — jamais une attente blanche. Celles qui n'arrivent pas sont
  * NOMMÉES, et `MediaFailure` le dit avec « Réessayer ».
  *
- * `OutputPicker` offre, avant d'enregistrer, ce que le contenu permet :
- * Image · GIF · Vidéo pour une vidéo, Image · Vidéo pour un audio.
+ * `OutputPicker` offre, avant d'enregistrer, ce que les médias PEINTS
+ * permettent (#9236) : Image · GIF · Vidéo pour une vidéo montrée, Image ·
+ * Vidéo pour un audio.
  * `recordMotion` fabrique le GIF ou la vidéo à la demande — son moteur
  * (`message-card-motion.ts`) n'est chargé qu'à ce moment.
  */
@@ -155,12 +156,17 @@ export const defaultMotionRecorder: MotionRecorder = async ({ input, sources, ou
   }
 };
 
-/** Le média temporel qui anime la carte : la première vidéo, sinon le premier audio. */
-export function temporalItemOf(items: readonly MessageCardMediaItem[]): { readonly item: MessageCardMediaItem; readonly index: number } | null {
-  const video = items.findIndex((item) => item.card.kind === 'video');
-  const index = video !== -1 ? video : items.findIndex((item) => item.card.kind === 'audio');
-  const item = items[index];
-  return item === undefined ? null : { item, index };
+/**
+ * Le média temporel qui anime la carte, PARMI CEUX QU'ELLE PEINT (#9236) : la
+ * première vidéo montrée, sinon le son — jamais une vidéo que la carte ne
+ * montre pas. `painted` : leurs rangs dans `items` (`paintedMediaIndexes`).
+ */
+export function temporalItemOf(items: readonly MessageCardMediaItem[], painted: readonly number[]): { readonly item: MessageCardMediaItem; readonly index: number } | null {
+  const shown = painted.flatMap((index) => {
+    const item = items[index];
+    return item === undefined ? [] : [{ item, index }];
+  });
+  return shown.find((entry) => entry.item.card.kind === 'video') ?? shown.find((entry) => entry.item.card.kind === 'audio') ?? null;
 }
 
 /** Un export animé déjà fabriqué se réutilise : un second geste (partage expiré) ne refilme rien. */

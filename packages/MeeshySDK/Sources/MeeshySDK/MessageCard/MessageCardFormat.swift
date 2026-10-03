@@ -110,6 +110,8 @@ public struct MessageCardFormat: Equatable, Sendable {
         let authorPlacement: String?
         let tilt: String?
         let mediaLayout: String?
+        let mediaArrangement: String?
+        let showsMediaAuthor: Bool?
         let audioStyle: String?
         let showsTranscript: Bool?
         let showsTimer: Bool?
@@ -123,6 +125,9 @@ public struct MessageCardFormat: Equatable, Sendable {
               let stored = try? JSONDecoder().decode(Stored.self, from: data),
               let template = MessageCardTemplateID(rawValue: stored.template) else { return nil }
         let standard = MessageCardDisposition.standard
+        // Avant #9235, la mosaïque était une POSITION : elle se relit au-dessus, en mosaïque.
+        let legacyMosaic = stored.mediaLayout == "mosaic"
+        let arrangement = stored.mediaArrangement.flatMap(MessageCardMediaArrangement.init(rawValue:))
         return MessageCardFormat(
             template: template,
             showConversationTitle: stored.showConversationTitle,
@@ -138,6 +143,8 @@ public struct MessageCardFormat: Equatable, Sendable {
                 authorPlacement: stored.authorPlacement.flatMap(MessageCardAuthorPlacement.init(rawValue:)) ?? standard.authorPlacement,
                 tilt: stored.tilt.flatMap(MessageCardTilt.init(rawValue:)) ?? standard.tilt,
                 mediaLayout: stored.mediaLayout.flatMap(MessageCardMediaLayout.init(rawValue:)) ?? standard.mediaLayout,
+                mediaArrangement: arrangement ?? (legacyMosaic ? .mosaic : standard.mediaArrangement),
+                showsMediaAuthor: stored.showsMediaAuthor ?? standard.showsMediaAuthor,
                 audioStyle: stored.audioStyle.flatMap(MessageCardAudioStyle.init(rawValue:)) ?? standard.audioStyle,
                 showsTranscript: stored.showsTranscript ?? standard.showsTranscript,
                 showsTimer: stored.showsTimer ?? standard.showsTimer,
@@ -163,6 +170,8 @@ public struct MessageCardFormat: Equatable, Sendable {
             authorPlacement: disposition.authorPlacement.rawValue,
             tilt: disposition.tilt.rawValue,
             mediaLayout: disposition.mediaLayout.rawValue,
+            mediaArrangement: disposition.mediaArrangement.rawValue,
+            showsMediaAuthor: disposition.showsMediaAuthor,
             audioStyle: disposition.audioStyle.rawValue,
             showsTranscript: disposition.showsTranscript,
             showsTimer: disposition.showsTimer,

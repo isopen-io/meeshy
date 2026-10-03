@@ -33,7 +33,9 @@ import type { CardMedia } from './message-card-media';
  * audios (leur représentation) ; un document n'a rien à montrer sur une carte.
  * Un message fait d'un seul média s'image, même sans texte. Une pièce CHIFFRÉE
  * ne se peint pas : son fichier n'est pas lisible hors de la bulle. Le message
- * CITÉ apporte aussi ses médias, après ceux de la réponse (#8901).
+ * CITÉ apporte aussi ses médias, après ceux de la réponse (#8901). Chaque
+ * média porte son AUTEUR (#9236) — le message d'où il vient — pour que la
+ * carte puisse signer les visuels comme elle signe les messages.
  */
 
 type AuthorFields = Pick<Message, 'senderId'> & {
@@ -61,7 +63,14 @@ export function cardHandleOf(message: AuthorFields, viewer: Viewer): string | nu
 
 export type MessageCardSubjectPart = MessageCardPart & { readonly handle: string | null };
 
-/** Un média de la carte : sa forme pour la mise en page, et de quoi aller chercher ses pixels. */
+/**
+ * L'AUTEUR D'UN MÉDIA (#9236) — son nom, son pseudo, et le bloc d'où vient la
+ * pièce : un média `quoted` suit l'anonymat de la citation (et des suites, les
+ * « autres »), les autres celui de la réponse. Il se peint comme les autres noms.
+ */
+export type CardMediaAuthor = { readonly name: string; readonly handle: string | null; readonly quoted: boolean };
+
+/** Un média de la carte : sa forme pour la mise en page, de quoi aller chercher ses pixels, et qui l'a posté. */
 export type MessageCardMediaItem = {
   readonly id: string;
   readonly card: CardMedia;
@@ -69,7 +78,15 @@ export type MessageCardMediaItem = {
   readonly mimeType: string;
   /** L'image d'attente d'une vidéo, servie par la passerelle — la première image quand elle existe. */
   readonly posterUrl: string | null;
+  /** Qui l'a posté — absent : inconnu, la carte ne le signe pas. */
+  readonly author?: CardMediaAuthor | null;
 };
+
+/** Les mêmes médias, attribués à `author`. */
+export const authoredBy = (items: readonly MessageCardMediaItem[], author: CardMediaAuthor): readonly MessageCardMediaItem[] => items.map((item) => ({ ...item, author }));
+
+/** L'auteur des médias d'un bloc de la carte — son nom et son pseudo tels que la carte les connaît. */
+export const mediaAuthorOf = (part: MessageCardSubjectPart, quoted: boolean): CardMediaAuthor => ({ name: part.author, handle: part.handle, quoted });
 
 export type MessageCardSubject = {
   readonly quoted: MessageCardSubjectPart | null;
@@ -145,6 +162,7 @@ export function messageCardSubjectOf(params: {
   if (text === '' && media.length === 0) return null;
 
   const replyTo = message.replyTo;
+  const replyPart: MessageCardSubjectPart = { author: cardAuthorOf(message, viewer), text, handle: cardHandleOf(message, viewer) };
   let quoted: MessageCardSubjectPart | null = null;
   let quotedAt: Date | null = null;
   let quotedMedia: readonly MessageCardMediaItem[] = [];
@@ -154,15 +172,16 @@ export function messageCardSubjectOf(params: {
       quoted = { author: cardAuthorOf(replyTo, viewer), text: preview.text, handle: cardHandleOf(replyTo, viewer) };
       quotedAt = replyTo.createdAt === undefined ? null : new Date(replyTo.createdAt);
     }
-    quotedMedia = quotedMediaOf(replyTo, preview.isProtected, params.now);
+    const quotedAuthor: CardMediaAuthor = { name: cardAuthorOf(replyTo, viewer), handle: cardHandleOf(replyTo, viewer), quoted: true };
+    quotedMedia = authoredBy(quotedMediaOf(replyTo, preview.isProtected, params.now), quotedAuthor);
   }
   const ownIds = new Set(media.map((item) => item.id));
   return {
     quoted,
-    reply: { author: cardAuthorOf(message, viewer), text, handle: cardHandleOf(message, viewer) },
+    reply: replyPart,
     sentAt: new Date(message.createdAt),
     quotedAt,
-    media: [...media, ...quotedMedia.filter((item) => !ownIds.has(item.id))],
+    media: [...authoredBy(media, mediaAuthorOf(replyPart, false)), ...quotedMedia.filter((item) => !ownIds.has(item.id))],
   };
 }
 

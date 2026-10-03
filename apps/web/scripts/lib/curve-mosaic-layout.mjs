@@ -26,7 +26,7 @@ export const MOSAIC_LAYOUT_COTES = 20;
 export function mosaicLayoutCurveFailures({ root, count }) {
   const failures = [];
   const canvasSwift = readFileSync(`${root}packages/MeeshySDK/Sources/MeeshySDK/Models/CanvasV3.swift`, 'utf8');
-  const layoutSwift = readFileSync(`${root}packages/MeeshySDK/Sources/MeeshyUI/Story/MosaicLayout.swift`, 'utf8');
+  const layoutSwift = readFileSync(`${root}packages/MeeshySDK/Sources/MeeshySDK/Story/MosaicLayout.swift`, 'utf8');
   const mosaicSwift = readFileSync(`${root}apps/ios/Meeshy/Features/Main/Views/PostSceneMosaic.swift`, 'utf8');
   const choiceSwift = readFileSync(`${root}apps/ios/Meeshy/Features/Main/Composer/ComposerMosaicChoice.swift`, 'utf8');
   const publicationLayout = readFileSync(`${root}apps/web/src/lib/stories/publication-layout.ts`, 'utf8');

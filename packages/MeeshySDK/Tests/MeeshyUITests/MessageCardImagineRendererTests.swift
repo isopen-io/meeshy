@@ -97,10 +97,12 @@ struct MessageCardImagineRendererTests {
 
     @Test func render_everyDispositionProducesAnImage() {
         let media = [MessageCardMedia(id: "p1", kind: .image), MessageCardMedia(id: "v1", kind: .video), MessageCardMedia(id: "a1", kind: .audio, duration: 5)]
+        let arrangements = MessageCardMediaArrangement.allCases
         for aspect in MessageCardAspect.allCases {
             for layout in MessageCardMediaLayout.allCases {
-                for header in MessageCardHeaderOrientation.allCases {
-                    let disposition = MessageCardDisposition(aspect: aspect, headerOrientation: header, authorPlacement: .after, tilt: .right, mediaLayout: layout)
+                for (index, header) in MessageCardHeaderOrientation.allCases.enumerated() {
+                    let disposition = MessageCardDisposition(aspect: aspect, headerOrientation: header, authorPlacement: .after, tilt: .right, mediaLayout: layout,
+                                                             mediaArrangement: arrangements[index % arrangements.count], showsMediaAuthor: true)
                     let input = MessageCardInput(
                         quoted: nil, reply: MessageCardPart(author: "J", text: "Réponse"), template: Self.orbite, handle: nil,
                         title: "Soirée", date: "28 sept.", media: media, disposition: disposition, replyTime: "14:32"

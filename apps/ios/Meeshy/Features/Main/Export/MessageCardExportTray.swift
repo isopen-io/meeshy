@@ -24,6 +24,10 @@ struct MessageCardExportTray: View {
     let hasHandles: Bool
     /// Les médias du contenu, tels qu'on les peint — « Médias » ne propose que ce qui a un effet.
     let media: [MessageCardMedia]
+    /// Le visuel que « une seule » et « en fond » montrent (#9235) — propre à ce contenu, jamais enregistré.
+    @Binding var featuredMedia: String?
+    /// Un visuel au moins dit qui l'a posté : « Auteur du média » s'offre (#9235).
+    let hasMediaAuthors: Bool
     /// Ce que « Sauvegarder » produira — la durée et le passage n'existent qu'en vidéo (#8979).
     let output: MessageCardOutput
     let plan: MessageCardMotionPlan?
@@ -239,7 +243,9 @@ struct MessageCardExportTray: View {
                     )
                 Text(label)
                     .font(.caption2.weight(selected ? .semibold : .regular))
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(width: 64)
             }
         }

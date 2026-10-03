@@ -1,6 +1,5 @@
 import CoreGraphics
 import Foundation
-import MeeshySDK
 
 /// **Comment les VISUELS d'une publication se posent les uns à côté des
 /// autres** (directive porteur 2026-09-06, #5322).
@@ -176,7 +175,7 @@ public nonisolated enum MosaicLayout {
         // scène (9:16), et c'est un REPLI — la vue paginée prend d'abord le
         // cadrage de ses scènes (`SceneFraming.cardAspect`), qui donne des
         // cartes courtes quand le contenu s'y prête.
-        case .carousel: return 1 / SceneFraming.sceneAspect
+        case .carousel: return 1 / SceneShape.aspect
         }
     }
 

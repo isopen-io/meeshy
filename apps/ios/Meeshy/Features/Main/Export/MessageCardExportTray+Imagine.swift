@@ -19,11 +19,26 @@ enum MessageCardTrayOffer {
         format.showAuthors || format.showTimes ? MessageCardAuthorPlacement.allCases : []
     }
 
-    /// Les dispositions des médias : aucune sans image, la mosaïque à partir de deux.
+    /// OÙ se posent les médias : au-dessus, en dessous, à gauche, à droite, en fond — rien sans image.
     static func mediaLayouts(_ kinds: [MessageCardMediaKind]) -> [MessageCardMediaLayout] {
-        let visuals = kinds.filter(\.isVisual).count
-        guard visuals > 0 else { return [] }
-        return MessageCardMediaLayout.allCases.filter { $0 != .mosaic || visuals > 1 }
+        kinds.contains(where: \.isVisual) ? MessageCardMediaLayout.allCases : []
+    }
+
+    /// COMMENT ils s'agencent : dès deux visuels, et jamais en fond — le fond n'en montre qu'un (#9235).
+    static func arrangements(_ format: MessageCardFormat, kinds: [MessageCardMediaKind]) -> [MessageCardMediaArrangement] {
+        kinds.filter(\.isVisual).count > 1 && format.disposition.mediaLayout != .backdrop ? MessageCardMediaArrangement.allCases : []
+    }
+
+    /// LEQUEL se montre : « une seule » et « en fond » choisissent parmi deux visuels au moins.
+    static func featuredChoices(_ format: MessageCardFormat, media: [MessageCardMedia]) -> [MessageCardMedia] {
+        let visuals = media.filter { $0.kind.isVisual }
+        let showsOne = format.disposition.mediaLayout == .backdrop || format.disposition.mediaArrangement == .single
+        return visuals.count > 1 && showsOne ? visuals : []
+    }
+
+    /// « Auteur du média » : hors fond, pour un visuel dont on sait qui l'a posté.
+    static func offersMediaAuthor(_ format: MessageCardFormat, hasMediaAuthors: Bool) -> Bool {
+        hasMediaAuthors && format.disposition.mediaLayout != .backdrop
     }
 
     /// Les représentations du son : seulement s'il y a un son.
@@ -138,11 +153,13 @@ extension MessageCardExportTray {
         }
     }
 
-    /// « Médias » — où se posent les images, comment se représente un son, sa
+    /// « Médias » — où se posent les images, comment elles s'agencent, laquelle
+    /// se montre et qui l'a postée (#9235) ; comment se représente un son, sa
     /// transcription, son minuteur, et — pour une vidéo — la durée et le passage (#8979).
     var mediaPanel: some View {
         let kinds = media.map(\.kind)
         let layouts = MessageCardTrayOffer.mediaLayouts(kinds)
+        let arrangements = MessageCardTrayOffer.arrangements(format, kinds: kinds)
         let styles = MessageCardTrayOffer.audioStyles(kinds)
         return VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             if !layouts.isEmpty {
@@ -153,6 +170,25 @@ extension MessageCardExportTray {
                         } content: {
                             Image(systemName: MessageCardExportSymbols.mediaLayout(layout)).font(.title3)
                         }
+                    }
+                }
+            }
+            if !arrangements.isEmpty {
+                row {
+                    ForEach(arrangements, id: \.self) { arrangement in
+                        tile(MessageCardExportText.arrangementLabel(arrangement), selected: arrangement == format.disposition.mediaArrangement) {
+                            format.disposition.mediaArrangement = arrangement
+                        } content: {
+                            Image(systemName: MessageCardExportSymbols.arrangement(arrangement)).font(.title3)
+                        }
+                    }
+                }
+            }
+            featuredOptions
+            if MessageCardTrayOffer.offersMediaAuthor(format, hasMediaAuthors: hasMediaAuthors) {
+                row {
+                    pill(MessageCardExportText.text("export.card.media.author", "Auteur du média"), selected: format.disposition.showsMediaAuthor) {
+                        format.disposition.showsMediaAuthor.toggle()
                     }
                 }
             }
@@ -169,6 +205,26 @@ extension MessageCardExportTray {
             }
             soundOptions
             clipOptions
+        }
+    }
+
+    /// Le visuel que « une seule » et « en fond » montrent — ses propres pixels, l'élu cerclé.
+    @ViewBuilder
+    private var featuredOptions: some View {
+        let choices = MessageCardTrayOffer.featuredChoices(format, media: media)
+        if let first = choices.first {
+            let current = choices.first { $0.id == featuredMedia }?.id ?? first.id
+            row {
+                ForEach(Array(choices.enumerated()), id: \.element.id) { index, item in
+                    chip(MessageCardExportText.featuredLabel(item.kind, position: index + 1, count: choices.count), selected: item.id == current) {
+                        featuredMedia = item.id
+                    } content: {
+                        MessageCardFeaturedThumb(picture: thumbs.pictures.images[item.id], kind: item.kind)
+                    }
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(MessageCardExportText.text("export.card.media.featured", "Le média montré"))
         }
     }
 
@@ -269,6 +325,34 @@ struct MessageCardAspectGlyph: View {
                     .frame(width: max(size.width, 30))
             }
         }
+        .accessibilityHidden(true)
+    }
+}
+
+/// La vignette d'un visuel parmi lesquels on choisit — ses pixels dès qu'ils
+/// sont chargés, son pictogramme en attendant.
+struct MessageCardFeaturedThumb: View {
+    let picture: CGImage?
+    let kind: MessageCardMediaKind
+
+    var body: some View {
+        ZStack {
+            if let picture {
+                Image(decorative: picture, scale: 1)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: kind == .video ? "video" : "photo").font(.title3)
+            }
+            if kind == .video {
+                Image(systemName: "play.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.white)
+                    .shadow(radius: 2)
+            }
+        }
+        .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous))
         .accessibilityHidden(true)
     }
 }

@@ -22,7 +22,7 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
 import { spokenLanguageName } from '@/lib/view/language-name';
 
 import { PRESSED, Pill, REST } from './thread-export-controls';
-import { AUDIO_STYLE_LABEL, FramePanel, MEDIA_STYLE_LABEL, MediaPanel, type FrameChoice } from './thread-export-frame';
+import { AUDIO_STYLE_LABEL, FramePanel, MEDIA_ARRANGEMENT_LABEL, MEDIA_LAYOUT_LABEL, MediaPanel, type FrameChoice, type VisualChoice } from './thread-export-frame';
 import { CardThumb, LinkGlyph, cssFontOf, paletteGradient, type ThumbSource } from './thread-export-thumb';
 
 /**
@@ -74,6 +74,7 @@ const OPTION_LABEL = {
   anonymizeQuoted: 'export.card.option.anonymizeQuoted',
   anonymizeReply: 'export.card.option.anonymizeReply',
   usePseudonyms: 'export.card.option.pseudonyms',
+  showsMediaAuthor: 'export.card.media.author',
 } as const satisfies Readonly<Record<MessageCardToggle, ExportCardCatalogKey>>;
 
 const TAB_LABEL = {
@@ -145,6 +146,11 @@ export type ExportTrayProps = {
   readonly hasHeader: boolean;
   readonly hasVisual: boolean;
   readonly hasAudio: boolean;
+  /** Les visuels de la carte, pour choisir celui qu'« une seule » et « en fond » montrent (#9236). */
+  readonly visuals: readonly VisualChoice[];
+  readonly featured: string | null;
+  readonly onFeatured: (id: string) => void;
+  readonly hasMediaAuthors: boolean;
   readonly popular: readonly MessageCardTemplateId[];
   readonly thumbs: ThumbSource;
   readonly onTemplate: (id: MessageCardTemplateId) => void;
@@ -175,7 +181,12 @@ export function ExportTray(props: ExportTrayProps) {
     ...(props.languages.length > 1 ? (['language'] as const) : []),
   ];
 
-  const mediaSubtitle = [props.hasVisual ? translateExportCard(language, MEDIA_STYLE_LABEL[format.mediaStyle]) : null, props.hasAudio ? translateExportCard(language, AUDIO_STYLE_LABEL[format.audioStyle]) : null]
+  const arranged = props.visuals.length > 1 && format.mediaLayout !== 'backdrop';
+  const mediaSubtitle = [
+    props.hasVisual ? translateExportCard(language, MEDIA_LAYOUT_LABEL[format.mediaLayout]) : null,
+    arranged ? translateExportCard(language, MEDIA_ARRANGEMENT_LABEL[format.mediaArrangement]) : null,
+    props.hasAudio ? translateExportCard(language, AUDIO_STYLE_LABEL[format.audioStyle]) : null,
+  ]
     .filter((part): part is string => part !== null)
     .join(' · ');
   const subtitle: Readonly<Record<ExportTab, string>> = {
@@ -230,7 +241,19 @@ export function ExportTray(props: ExportTrayProps) {
 
         {tab === 'frame' ? <FramePanel language={language} format={format} hasHeader={props.hasHeader} hasQuote={props.hasQuote} onChoice={props.onChoice} onToggle={props.onToggle} /> : null}
 
-        {tab === 'media' ? <MediaPanel language={language} format={format} hasVisual={props.hasVisual} hasAudio={props.hasAudio} onChoice={props.onChoice} /> : null}
+        {tab === 'media' ? (
+          <MediaPanel
+            language={language}
+            format={format}
+            visuals={props.visuals}
+            featured={props.featured}
+            hasAudio={props.hasAudio}
+            hasMediaAuthors={props.hasMediaAuthors}
+            onChoice={props.onChoice}
+            onToggle={props.onToggle}
+            onFeatured={props.onFeatured}
+          />
+        ) : null}
 
         {tab === 'palette'
           ? CARD_PALETTE_IDS.map((palette) => (

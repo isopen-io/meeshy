@@ -162,6 +162,17 @@ describe('la MINIATURE et l’IMAGE — un seul moteur (#8693)', () => {
     expect(w).toBeGreaterThanOrEqual(frame.width);
   });
 
+  test('un visuel EN FOND couvre toute la carte, droit et voilé, avant le filigrane et le texte (#9236)', () => {
+    const { ctx, calls, drawn, painted } = recordingContext();
+    const layout = layoutOf({ quoted: null, frame: { header: 'horizontal', authors: 'top', tilt: 'left' }, mediaLayout: 'backdrop', media: [{ kind: 'image', width: 2000, height: 1000 }] });
+    paintMessageCard(ctx, layout, templateOf(input.template), { sources: [{ width: 2000, height: 1000 } as unknown as CanvasImageSource] });
+    const [x = 0, y = 0, w = 0, h = 0] = drawn[0] ?? [];
+    expect(x <= 0 && y <= 0 && w >= layout.width && h >= layout.height).toBe(true);
+    expect(calls.indexOf('drawImage')).toBeLessThan(calls.indexOf(`rotate:${-Math.PI / 7}`));
+    expect(calls.indexOf(`rotate:${-Math.PI / 7}`)).toBeLessThan(calls.indexOf(`rotate:${-Math.PI / 60}`));
+    expect(painted.findIndex((entry) => entry.text === 'Chez Lina !')).toBeGreaterThan(painted.findIndex((entry) => entry.text === 'Meeshy @jacques'));
+  });
+
   test('un média encore absent laisse un cadre neutre, jamais un trou', () => {
     const { ctx, calls } = recordingContext();
     paintMessageCard(ctx, layoutOf({ quoted: null, media: [{ kind: 'video', width: 16, height: 9 }] }), templateOf(input.template));

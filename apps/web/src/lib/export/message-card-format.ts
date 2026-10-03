@@ -10,7 +10,16 @@ import {
   type CardHeaderOrientation,
   type CardTilt,
 } from './message-card-frame';
-import { CARD_AUDIO_STYLES, CARD_MEDIA_STYLES, DEFAULT_AUDIO_STYLE, DEFAULT_MEDIA_STYLE, type CardAudioStyle, type CardMediaStyle } from './message-card-media';
+import {
+  CARD_MEDIA_ARRANGEMENTS,
+  CARD_MEDIA_LAYOUTS,
+  DEFAULT_MEDIA_ARRANGEMENT,
+  DEFAULT_MEDIA_LAYOUT,
+  LEGACY_MEDIA_STYLES,
+  type CardMediaArrangement,
+  type CardMediaLayout,
+} from './message-card-arrangement';
+import { CARD_AUDIO_STYLES, DEFAULT_AUDIO_STYLE, type CardAudioStyle } from './message-card-media';
 import { DEFAULT_TEMPLATE_ID, parseTemplateId, type MessageCardTemplateId } from './message-card-templates';
 
 /**
@@ -32,6 +41,13 @@ import { DEFAULT_TEMPLATE_ID, parseTemplateId, type MessageCardTemplateId } from
  * contenu), relu et VALIDÉ à chaque lecture : une valeur abîmée retombe sur
  * « aucun défaut », jamais sur une exception ; un défaut enregistré avant
  * l'onglet Frame se relit, complété des réglages par défaut.
+ *
+ * LES MÉDIAS (#9236) : leur PLACE (`mediaLayout`), leur DISPOSITION
+ * (`mediaArrangement`) et le nom de qui les a postés (`showsMediaAuthor`) —
+ * les clés et les valeurs d'iOS (`MessageCardFormat.swift`). Une disposition
+ * d'avant (`mediaStyle`) se relit au-dessus de la réponse ; l'ancienne
+ * POSITION « mosaic » d'iOS aussi, en mosaïque. Le visuel CHOISI ne s'enregistre
+ * pas : il est propre à un contenu.
  */
 
 export type MessageCardFormat = {
@@ -47,15 +63,17 @@ export type MessageCardFormat = {
   readonly tilt: CardTilt;
   readonly showTimes: boolean;
   readonly usePseudonyms: boolean;
-  readonly mediaStyle: CardMediaStyle;
+  readonly mediaLayout: CardMediaLayout;
+  readonly mediaArrangement: CardMediaArrangement;
+  readonly showsMediaAuthor: boolean;
   readonly audioStyle: CardAudioStyle;
 };
 
-export type MessageCardToggle = 'showConversationTitle' | 'showAuthors' | 'showDate' | 'showTimes' | 'anonymizeQuoted' | 'anonymizeReply' | 'usePseudonyms';
+export type MessageCardToggle = 'showConversationTitle' | 'showAuthors' | 'showDate' | 'showTimes' | 'anonymizeQuoted' | 'anonymizeReply' | 'usePseudonyms' | 'showsMediaAuthor';
 
 /** Les cinq bascules d'origine : un défaut enregistré les porte toutes, sinon il est abîmé. */
 const LEGACY_TOGGLES = ['showConversationTitle', 'showAuthors', 'showDate', 'anonymizeQuoted', 'anonymizeReply'] as const;
-const TOGGLES: readonly MessageCardToggle[] = [...LEGACY_TOGGLES, 'showTimes', 'usePseudonyms'];
+const TOGGLES: readonly MessageCardToggle[] = [...LEGACY_TOGGLES, 'showTimes', 'usePseudonyms', 'showsMediaAuthor'];
 
 export const INITIAL_MESSAGE_CARD_FORMAT: MessageCardFormat = {
   template: DEFAULT_TEMPLATE_ID,
@@ -70,7 +88,9 @@ export const INITIAL_MESSAGE_CARD_FORMAT: MessageCardFormat = {
   tilt: 'none',
   showTimes: false,
   usePseudonyms: false,
-  mediaStyle: DEFAULT_MEDIA_STYLE,
+  mediaLayout: DEFAULT_MEDIA_LAYOUT,
+  mediaArrangement: DEFAULT_MEDIA_ARRANGEMENT,
+  showsMediaAuthor: false,
   audioStyle: DEFAULT_AUDIO_STYLE,
 };
 
@@ -88,6 +108,9 @@ export function parseMessageCardFormat(raw: string | null): MessageCardFormat | 
     if (template === null || !LEGACY_TOGGLES.every((toggle) => typeof record[toggle] === 'boolean')) return null;
     const flag = (toggle: MessageCardToggle) => record[toggle] === true;
     const initial = INITIAL_MESSAGE_CARD_FORMAT;
+    const legacyStyle = record['mediaStyle'];
+    const iosLegacyMosaic = record['mediaLayout'] === 'mosaic';
+    const legacyArrangement = typeof legacyStyle === 'string' ? LEGACY_MEDIA_STYLES[legacyStyle] : undefined;
     return {
       template,
       showConversationTitle: flag('showConversationTitle'),
@@ -97,11 +120,13 @@ export function parseMessageCardFormat(raw: string | null): MessageCardFormat | 
       anonymizeReply: flag('anonymizeReply'),
       showTimes: flag('showTimes'),
       usePseudonyms: flag('usePseudonyms'),
+      showsMediaAuthor: flag('showsMediaAuthor'),
       aspect: oneOf(CARD_ASPECTS, record['aspect'], initial.aspect),
       header: oneOf(CARD_HEADER_ORIENTATIONS, record['header'], initial.header),
       authorsAt: oneOf(CARD_AUTHOR_PLACEMENTS, record['authorsAt'], initial.authorsAt),
       tilt: oneOf(CARD_TILTS, record['tilt'], initial.tilt),
-      mediaStyle: oneOf(CARD_MEDIA_STYLES, record['mediaStyle'], initial.mediaStyle),
+      mediaLayout: oneOf(CARD_MEDIA_LAYOUTS, record['mediaLayout'], initial.mediaLayout),
+      mediaArrangement: oneOf(CARD_MEDIA_ARRANGEMENTS, record['mediaArrangement'], iosLegacyMosaic ? 'mosaic' : (legacyArrangement ?? initial.mediaArrangement)),
       audioStyle: oneOf(CARD_AUDIO_STYLES, record['audioStyle'], initial.audioStyle),
     };
   } catch {
@@ -117,7 +142,7 @@ export function writeDefaultMessageCardFormat(storage: Pick<SafeStorage, 'setIte
   storage.setItem(MESSAGE_CARD_FORMAT_KEY, JSON.stringify(format));
 }
 
-const CHOICES = ['aspect', 'header', 'authorsAt', 'tilt', 'mediaStyle', 'audioStyle'] as const;
+const CHOICES = ['aspect', 'header', 'authorsAt', 'tilt', 'mediaLayout', 'mediaArrangement', 'audioStyle'] as const;
 
 export const sameMessageCardFormat = (a: MessageCardFormat, b: MessageCardFormat | null): boolean =>
   b !== null && a.template === b.template && TOGGLES.every((toggle) => a[toggle] === b[toggle]) && CHOICES.every((choice) => a[choice] === b[choice]);

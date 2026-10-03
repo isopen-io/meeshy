@@ -73,6 +73,8 @@ struct MessageCardExportSheet: View {
     @State var clipStart: Double = 0
     /// Le pincement en cours sur une partie de l'aperçu (#8979).
     @State var pinch: MessageCardPinch?
+    /// Le visuel que « une seule » et « en fond » montrent (#9235) — propre à ce contenu.
+    @State var featuredMedia: String?
 
     struct Rendered {
         let key: String
@@ -101,9 +103,22 @@ struct MessageCardExportSheet: View {
         loadedMedia.media(of: subject.media)
     }
 
+    /// Le format tel que la carte le peint : avec le visuel choisi (#9235).
+    func painting(_ format: MessageCardFormat) -> MessageCardFormat {
+        var painted = format
+        painted.disposition.featuredMediaID = featuredMedia
+        return painted
+    }
+
+    /// Ce que la carte MONTRE — les sorties offertes, le plan animé et la vidéo
+    /// décodée suivent ces médias, jamais ceux que la disposition cache (#9235).
+    var paintedMedia: [MessageCardMedia] {
+        painting(format).disposition.paintedMedia(of: currentMedia)
+    }
+
     /// Le plan d'une carte animée : la durée choisie, à partir du passage choisi (#8979).
     var motionPlan: MessageCardMotionPlan? {
-        MessageCardMotionPlan.of(output, media: currentMedia, length: format.disposition.clipLength, start: clipStart)
+        MessageCardMotionPlan.of(output, media: paintedMedia, length: format.disposition.clipLength, start: clipStart)
     }
 
     /// L'extrait que l'aperçu montre — celui que la vidéo emportera.
@@ -121,7 +136,7 @@ struct MessageCardExportSheet: View {
         return trimmed
     }
 
-    var renderKey: String { "\(format.serialized)|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)" }
+    var renderKey: String { "\(format.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)" }
     var ready: Bool { rendered?.key == renderKey }
     private var isDefault: Bool { savedDefault == format }
 
@@ -152,6 +167,10 @@ struct MessageCardExportSheet: View {
         .tint(accent)
         .onAppear(perform: load)
         .onDisappear { motionTask?.cancel() }
+        // Une sortie que la carte n'offre plus (une seule photo choisie après « GIF ») retombe sur l'image (#9235).
+        .adaptiveOnChange(of: offeredOutputs) { _, offered in
+            if !offered.contains(output) { output = .image }
+        }
         .task(id: "\(loaded)|\(mediaAttempt)|\(soundsKey)") { await loadMedia() }
         .task(id: "\(loaded)|\(renderKey)") { await render() }
         .sheet(isPresented: $galleryOpen) {
@@ -293,6 +312,8 @@ struct MessageCardExportSheet: View {
             hasTitle: title != nil,
             hasHandles: subject.hasHandles,
             media: currentMedia,
+            featuredMedia: $featuredMedia,
+            hasMediaAuthors: subject.hasMediaAuthors,
             output: output,
             plan: motionPlan,
             languages: request.languages,
@@ -335,7 +356,7 @@ struct MessageCardExportSheet: View {
     var thumbSource: MessageCardThumbSource {
         var neutral = format
         neutral.template = MessageCardTemplates.defaultID
-        let state = "\(neutral.serialized)|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)"
+        let state = "\(neutral.serialized)|\(featuredMedia ?? "")|\(exportLanguage ?? "")|\(mediaVersion)|\(clipKey)"
         let format = format
         return MessageCardThumbSource(
             store: thumbnails,
@@ -353,7 +374,7 @@ struct MessageCardExportSheet: View {
     func input(for format: MessageCardFormat) -> MessageCardInput {
         MessageCardInput.of(
             subject: subject,
-            format: format,
+            format: painting(format),
             handle: request.handle,
             conversationTitle: title,
             anonymousLabel: MessageCardExportText.text("export.card.anonymous", "Anonyme"),
