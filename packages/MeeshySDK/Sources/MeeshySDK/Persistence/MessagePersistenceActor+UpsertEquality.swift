@@ -29,6 +29,9 @@ func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord) -> Bool {
     let encryptionAndDelivery = a.isEncrypted == b.isEncrypted && a.encryptionMode == b.encryptionMode
         && a.deliveredCount == b.deliveredCount && a.readCount == b.readCount
         && a.deliveredToAllAt == b.deliveredToAllAt && a.readByAllAt == b.readByAllAt
+        // #7433 — le dénominateur décide du palier d'un groupe : un REST qui
+        // ne changerait que lui doit être écrit.
+        && a.recipientCount == b.recipientCount
     let sender = a.senderId == b.senderId && a.senderName == b.senderName
         && a.senderUsername == b.senderUsername && a.senderAvatarURL == b.senderAvatarURL
     let replyAndForward = a.replyToId == b.replyToId && a.storyReplyToId == b.storyReplyToId

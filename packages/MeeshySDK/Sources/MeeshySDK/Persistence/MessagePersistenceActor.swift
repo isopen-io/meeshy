@@ -63,7 +63,9 @@ public actor MessagePersistenceActor {
         /// below drops every one of them (a media-only or encrypted message
         /// ingested that way renders as an empty bubble — Sprint 2 RC2.2).
         case upsertAPIMessages([APIMessage], preferredLanguages: [String])
-        case batchDeliveryUpdate(conversationId: String, event: MessageEvent)
+        /// #7433 — un `read-status:updated` posé sur la SEULE ligne qu'il
+        /// décrit (`MessagePersistenceActor+ReadStatusReceipt.swift`).
+        case readStatusSummary(conversationId: String, summary: ReadStatusSummary, currentUserId: String)
     }
 
     public init(dbWriter: any DatabaseWriter, currentUserId: String? = nil) {
@@ -198,13 +200,15 @@ public actor MessagePersistenceActor {
                     } catch {
                         Logger.messages.error("upsertFromAPIMessages dropped \(messages.count, privacy: .public) message(s): \(error.localizedDescription, privacy: .public)")
                     }
-                case .batchDeliveryUpdate(let convId, let event):
+                case .readStatusSummary(let convId, let summary, let currentUserId):
                     do {
-                        if try await self.batchDeliverySync(conversationId: convId, event: event) {
+                        if try await self.applyReadStatusSummarySync(
+                            conversationId: convId, summary: summary, currentUserId: currentUserId
+                        ) {
                             postMessageStoreRefresh(conversationIds: [convId])
                         }
                     } catch {
-                        Logger.messages.error("batchDeliverySync failed for conv=\(convId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                        Logger.messages.error("applyReadStatusSummarySync failed for conv=\(convId, privacy: .public): \(error.localizedDescription, privacy: .public)")
                     }
                 }
             }
@@ -489,10 +493,12 @@ public actor MessagePersistenceActor {
         writeContinuation.yield(.upsertAPIMessages(messages, preferredLanguages: preferredLanguages))
     }
 
-    public func bufferBatchDelivery(conversationId: String, event: MessageEvent) {
+    /// Ordonné avec les autres écritures du flux : un accusé qui suit de près
+    /// l'ack d'envoi trouve la ligne déjà réconciliée sous son id serveur.
+    public func bufferReadStatusSummary(conversationId: String, summary: ReadStatusSummary, currentUserId: String) {
         // Notification is posted by the worker AFTER the GRDB write completes
         // (see `start()`).
-        writeContinuation.yield(.batchDeliveryUpdate(conversationId: conversationId, event: event))
+        writeContinuation.yield(.readStatusSummary(conversationId: conversationId, summary: summary, currentUserId: currentUserId))
     }
 
     /// Message ids carrying a still-pending outbox mutation of `kind`.
@@ -611,88 +617,6 @@ public actor MessagePersistenceActor {
                 }
             }
             return changedConvIds
-        }
-    }
-
-    /// Returns whether any row actually transitioned, so the worker only
-    /// posts a refresh for real changes — delivery/read events routinely
-    /// target conversations whose rows are already past the transition.
-    private func batchDeliverySync(conversationId: String, event: MessageEvent) throws -> Bool {
-        // Read frontier carried by the event (the peer's read/deliver moment).
-        // A message created AFTER it cannot have been received/read yet, so it
-        // must be skipped — otherwise a message sent right after the peer read
-        // would falsely advance to delivered/read. Mirrors the frontier guard in
-        // ConversationSyncEngine.applyReadReceipt (the cache path).
-        let frontier: Date? = {
-            switch event {
-            case .delivered(_, let at): return at
-            case .readBy(_, let at): return at
-            default: return nil
-            }
-        }()
-        return try dbWriter.write { db -> Bool in
-            // I3 (#7349) — `.delivered` MUST stay in this list. `MessageStateMachine`
-            // supports `.delivered → .read` on `.readBy` (a message is routinely
-            // delivered-to-all before it is read-by-all), but a query that only
-            // looked at `.sending`/`.sent` could never SEE a row once the first
-            // (delivered) batch had already advanced it — the row fell out of
-            // every future call, and a second, later "everyone has read it" event
-            // had nothing left to act on. The bubble stayed on a single grey check
-            // forever, with no gesture able to unstick it. `.read` is excluded on
-            // purpose: it is terminal, and `MessageStateMachine.apply` has no
-            // transition out of it anyway.
-            let records = try MessageRecord
-                .filter(Column("conversationId") == conversationId)
-                .filter([MessageState.sending.rawValue, MessageState.sent.rawValue,
-                         MessageState.delivered.rawValue]
-                    .contains(Column("state")))
-                .fetchAll(db)
-
-            var didChange = false
-            for var record in records {
-                if let frontier, record.createdAt > frontier { continue }
-                // Les horodatages déjà gravés sont SEMÉS dans la machine, et
-                // réassignés en repli — exactement comme le chemin à un seul
-                // message (`applyEvent`, plus haut dans ce fichier). Tant que
-                // la requête s'arrêtait à `.sending`/`.sent`, aucune ligne
-                // portant déjà un `deliveredAt` ne lui parvenait et la
-                // divergence entre les deux jumeaux ne coûtait rien ; en
-                // ouvrant `.delivered`, le second événement (`.readBy`)
-                // rendait une machine dont `deliveredAt` est nil et EFFAÇAIT
-                // l'instant de distribution d'une ligne qui venait de
-                // l'obtenir. C'est ce qui part À CÔTÉ du palier qu'on corrige.
-                var machine = MessageStateMachine(
-                    state: record.state, retryCount: record.retryCount,
-                    serverId: record.serverId,
-                    lastError: record.lastError,
-                    deliveredAt: record.deliveredAt,
-                    readAt: record.readAt
-                )
-                if let _ = machine.apply(event) {
-                    record.state = machine.state
-                    record.deliveredAt = machine.deliveredAt ?? record.deliveredAt
-                    record.readAt = machine.readAt ?? record.readAt
-                    // The caller (ConversationSocketHandler) only feeds this batch
-                    // a delivered/read event once the WHOLE group has received /
-                    // read (all-or-nothing). This path advances `state` but does
-                    // NOT carry per-row counters, so stamp the unambiguous "all"
-                    // markers the display resolver trusts — otherwise a real-time
-                    // group delivery/read would transiently regress to a single
-                    // check until the sibling counters write lands.
-                    if machine.state == .read {
-                        let at = machine.readAt ?? Date()
-                        record.readByAllAt = at
-                        record.deliveredToAllAt = record.deliveredToAllAt ?? machine.deliveredAt ?? at
-                    } else if machine.state == .delivered {
-                        record.deliveredToAllAt = machine.deliveredAt ?? Date()
-                    }
-                    record.updatedAt = Date()
-                    record.changeVersion += 1
-                    try record.update(db)
-                    didChange = true
-                }
-            }
-            return didChange
         }
     }
 
@@ -1735,23 +1659,12 @@ public actor MessagePersistenceActor {
                         existing.isEncrypted = api.isEncrypted ?? existing.isEncrypted
                         existing.encryptionMode = api.encryptionMode ?? existing.encryptionMode
                     }
-                    existing.deliveredCount = deliveredCount
-                    existing.readCount = readCount
-                    // `deliveredToAllAt` / `readByAllAt` are the unambiguous
-                    // "every recipient has received / read" markers that the live
-                    // all-or-nothing path stamps locally (and that the delivery
-                    // resolver trusts). Coalesce rather than hard-assign so a REST
-                    // refresh — which currently returns null for these (the
-                    // gateway no longer computes them under the cursor model) —
-                    // never CLEARS a marker the live path already confirmed. A
-                    // genuine server value, if ever provided, still wins.
-                    existing.deliveredToAllAt = api.deliveredToAllAt ?? existing.deliveredToAllAt
-                    existing.readByAllAt = api.readByAllAt ?? existing.readByAllAt
-                    // Authoritative recipient denominator: adopt a positive server
-                    // value, but never let a refresh that omits it (socket-origin
-                    // row, older gateway) clear a count already learned.
-                    if let rc = api.recipientCount, rc > 0 { existing.recipientCount = rc }
-                    existing.state = max(existing.state, computedState)
+                    existing.adoptServedReceipts(
+                        deliveredCount: deliveredCount, readCount: readCount,
+                        recipientCount: api.recipientCount,
+                        deliveredToAllAt: api.deliveredToAllAt, readByAllAt: api.readByAllAt,
+                        computedState: computedState
+                    )
                     // Self-heal rows that were upserted before we resolved
                     // sender.userId — their `senderId` column held the
                     // gateway's participantId, breaking `isMe` checks. Each

@@ -21,9 +21,9 @@ export function ConversationStreakMark({
   const model = streakMarkModel(snapshot, localDayOf(now === undefined ? Date.now() : now()), currentInterfaceLanguage());
   if (model === null) return null;
   return (
-    <span data-streak-mark className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap font-bold tabular-nums text-time" style={{ color: 'var(--ios-error)' }}>
+    <span data-streak-mark className="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap font-bold tabular-nums text-time" style={{ color: 'var(--streak-ink)' }}>
       <span aria-hidden="true" className="inline-flex items-center gap-0.5">
-        <Glyph name="flame" size={11} />
+        <Glyph name="flameFill" size={12} />
         <span>{model.streakDays}</span>
         <span>·</span>
         <span>{model.totalText}</span>

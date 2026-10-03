@@ -210,10 +210,11 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
     expect(mark).not.toMatch(/background|box-shadow|border-radius/);
   });
 
-  test('le compteur est rouge, cerclé de 1 px blanc, quel que soit le thème (#9044)', () => {
+  test('le compteur est rouge, cerclé de 1 px blanc, quel que soit le thème (#9044) — à l’encre de série, en 12 px (#9221)', () => {
     const css = readFileSync(new URL('../styles/header-flame.css', import.meta.url), 'utf8');
     const digits = css.match(/\.header-flame-count-digits\s*\{([^}]*)\}/)?.[1] ?? '';
-    expect(digits).toContain('color: var(--ios-error)');
+    expect(digits).toContain('color: var(--streak-ink)');
+    expect(digits).toContain('font-size: var(--ios-text-time)');
     expect(digits).toContain('-webkit-text-stroke: 2px #fff');
     expect(digits).toContain('paint-order: stroke fill');
     expect(css).not.toMatch(/:root\.(dark|light)/);

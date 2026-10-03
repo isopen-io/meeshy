@@ -37,6 +37,7 @@ import { translateCallControls } from '@/lib/i18n-call-controls-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { cameraMirrored } from '@/lib/media/camera-mirror';
+import { sessionStore } from '@/lib/api/session';
 
 /**
  * **LA SCÈNE DE L'APPEL** (#6382, #8063, #8392) — ce que l'écran d'appel montre
@@ -311,12 +312,13 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
 }
 
 export function CallStage({ call, layout, language, choice, onChoose, immersive, onToggleImmersive, moderation, self }: StageProps) {
+  const me = useStore(sessionStore, (state) => (state.session.status === 'authenticated' ? state.session.user : null));
   if (layout === 'grid') {
     return (
       <CallGrid
         members={orderedMembers(call.members)}
         remoteStreams={call.remoteStreams}
-        self={{ stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call), micMuted: call.micMuted }}
+        self={{ stream: call.localStream, cameraOn: call.cameraOn, mirrored: selfPreviewMirrored(call), micMuted: call.micMuted, name: me?.displayName || me?.username || null, avatar: me?.avatar ?? null }}
         selfControls={self.controls ? self.row() : null}
         choice={choice}
         onChoose={onChoose}

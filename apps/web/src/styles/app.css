@@ -761,6 +761,22 @@
 }
 
 /*
+ * L'ENCRE DE LA SÉRIE 🔥 (#9221) — la flamme sous l'avatar de l'en-tête et la
+ * marque « 🔥4 · 120 » de la liste. Le rouge iOS (`--ios-error`, #f87171) se
+ * lit sur nuit, mais pas sur blanc (2,8:1, en 11–12 px) : sur téléphone, la
+ * série disparaissait. En clair, un rouge plus profond, mêlé des deux rouges
+ * du design system, mesuré à 5:1.
+ */
+:root,
+:root.dark {
+  --streak-ink: var(--ios-error);
+}
+
+:root.light {
+  --streak-ink: color-mix(in srgb, var(--ios-error-strong) 60%, var(--ios-error-dark));
+}
+
+/*
  * UNE INTERFACE ARABE, UN CONTENU LATIN (#8803). `<html dir="rtl">` retourne la
  * mise en page ; il retournerait aussi chaque phrase française ou anglaise d'un
  * message, d'un aperçu ou d'un nom — « .On se voit demain au bureau », le point

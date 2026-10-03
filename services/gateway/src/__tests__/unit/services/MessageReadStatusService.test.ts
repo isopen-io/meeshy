@@ -4672,6 +4672,25 @@ describe('MessageReadStatusService', () => {
       expect(result.readCount).toBe(0);
     });
 
+    // #7433 — le dernier message du fil n'est pas forcément celui de
+    // l'expéditeur qui reçoit l'événement : quand c'est celui du PAIR, les
+    // compteurs disent si l'expéditeur, lui, l'a lu. Sans le nom du message,
+    // iOS les appliquait à ses propres messages et peignait de faux « Lu ».
+    it('names the message it summarises, so a client never applies it to another one', async () => {
+      mockPrisma.message.findFirst.mockResolvedValue({
+        id: 'm-latest',
+        createdAt: new Date('2024-06-01T10:00:00Z'),
+        senderId: 'sender-id',
+      });
+      mockPrisma.participant.findMany.mockResolvedValue([{ id: 'p1' }]);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
+      mockPrisma.messageStatusEntry.findMany.mockResolvedValue([]);
+
+      const result = await service.getLatestMessageSummary(testConversationId);
+
+      expect(result.messageId).toBe('m-latest');
+    });
+
     it('counts a frozen read entry when the cursor row was cleaned up', async () => {
       const msgCreatedAt = new Date('2024-06-01T10:00:00Z');
       mockPrisma.message.findFirst.mockResolvedValue({

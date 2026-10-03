@@ -2322,7 +2322,7 @@ export class MessageReadStatusService {
 
   async getLatestMessageSummary(
     conversationId: string
-  ): Promise<{ totalMembers: number; deliveredCount: number; readCount: number }> {
+  ): Promise<{ totalMembers: number; deliveredCount: number; readCount: number; messageId?: string }> {
     try {
       const latestMessage = await this.prisma.message.findFirst({
         where: { conversationId, deletedAt: null },
@@ -2412,7 +2412,12 @@ export class MessageReadStatusService {
         if (readAt) readCount++;
       }
 
-      return { totalMembers, deliveredCount, readCount };
+      // #7433 — le résumé NOMME le message qu'il décrit. Le dernier message du
+      // fil n'est pas forcément celui de l'expéditeur qui reçoit l'événement :
+      // quand c'est celui du PAIR, ces compteurs disent si l'expéditeur, lui,
+      // l'a lu. Un client qui ne sait pas de quel message il s'agit les
+      // applique aux siens — de faux « Lu » sur des messages jamais ouverts.
+      return { totalMembers, deliveredCount, readCount, messageId: latestMessage.id };
     } catch (error) {
       logger.error('[MessageReadStatus] Error computing summary:', error);
       return { totalMembers: 0, deliveredCount: 0, readCount: 0 };

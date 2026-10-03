@@ -5,7 +5,7 @@ import { useStore } from 'zustand/react';
 import { ChromeActionDisc, CHROME_ACTION_HIT_CLASS } from './chrome-action';
 import { Glyph, GlyphSvg } from './glyph';
 import { CALLS_GLYPHS } from './glyphs-calls';
-import { conversationActiveCallQueryKey, loadConversationActiveCallId } from '@/lib/api/call-sessions';
+import { conversationActiveCallQueryKey, joinableCall, loadConversationActiveCall } from '@/lib/api/call-sessions';
 import { unwrap } from '@/lib/api/client';
 import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
@@ -62,7 +62,7 @@ export function ThreadCallButton({
   const served = useQuery(
     {
       queryKey: conversationActiveCallQueryKey(conversationId),
-      queryFn: async ({ signal }) => unwrap(await loadConversationActiveCallId(apiDeps, conversationId, signal)),
+      queryFn: async ({ signal }) => unwrap(await loadConversationActiveCall(apiDeps, conversationId, signal)),
       enabled: signedIn && !live,
       refetchInterval: THREAD_ACTIVE_CALL_POLL_MS,
       staleTime: THREAD_ACTIVE_CALL_POLL_MS,
@@ -70,8 +70,7 @@ export function ThreadCallButton({
     },
     appQueryClient,
   );
-  const joinableId = served.data !== undefined ? served.data : (liveCallHint?.id ?? null);
-  const joinMedia: CallMedia = liveCallHint?.kind === 'video' ? 'video' : 'audio';
+  const joinable = joinableCall(served.data, liveCallHint);
 
   useEffect(() => {
     rememberCallIdentity(conversationId, { title, avatar, isGroup: group });
@@ -99,14 +98,14 @@ export function ThreadCallButton({
   };
 
   if (!signedIn) return null;
-  if (!live && joinableId !== null) {
+  if (!live && joinable !== null) {
     return (
       <button
         type="button"
         className="grid min-h-11 shrink-0 place-items-center focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ outlineColor: 'var(--color-success)' }}
         aria-label={translate(language, 'callJoin.header')}
-        onClick={() => callActions.join({ conversationId, callId: joinableId, media: joinMedia, title, avatar, isGroup: group })}
+        onClick={() => callActions.join({ conversationId, callId: joinable.callId, media: joinable.media, title, avatar, isGroup: group })}
         data-thread-call="join"
       >
         <span

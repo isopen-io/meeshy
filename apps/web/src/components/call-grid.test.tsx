@@ -57,6 +57,19 @@ const grid = (overrides: Partial<CallGridProps> = {}) => renderToStaticMarkup(<C
 
 const sharing = { members: [member('u-a', 'Awa'), member('u-k', 'Kofi', { screenSharing: true })], remoteStreams: { 'u-k': liveVideo } };
 
+describe('CallGrid — ma tuile caméra coupée montre MON portrait, pas « Vous »', () => {
+  test('mes initiales et mon avatar, le libellé « Vous » gardé', () => {
+    const html = grid({ self: { stream: null, cameraOn: false, mirrored: true, micMuted: false, name: 'Kofi Mensah', avatar: null } });
+    expect(html).toContain('KM');
+    expect(html).not.toContain('>VO<');
+    expect(html).toContain('Vous');
+  });
+
+  test('sans identité connue, « Vous » sert encore de portrait', () => {
+    expect(grid()).toContain('Vous');
+  });
+});
+
 describe('CallGrid', () => {
   test('sans mise en avant : une tuile par participant, la sienne comprise, chacune se met en avant', () => {
     const html = grid();

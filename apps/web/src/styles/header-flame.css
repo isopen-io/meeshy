@@ -62,14 +62,15 @@
 .header-flame-tongue-1 { --tongue-x: 3px; --tongue-delay: 1.04s; }
 .header-flame-tongue-2 { --tongue-x: 0px; --tongue-delay: 1.18s; }
 
-/* Rouge (`--ios-error`, le `MeeshyColors.error` d'iOS, le même dans les deux
-   thèmes) cerclé de 1 px blanc, en clair comme en sombre (porteur
+/* Rouge (`--streak-ink`, `app.css` : le `MeeshyColors.error` d'iOS sur nuit,
+   un rouge plus profond sur blanc — #9221) cerclé de 1 px blanc, en clair comme en sombre (porteur
    2026-10-01). `paint-order` peint le trait SOUS le remplissage : 2 px de
    trait centré = 1 px visible autour du chiffre. */
 .header-flame-count-digits {
   display: inline-block;
+  font-size: var(--ios-text-time);
   font-weight: 800;
-  color: var(--ios-error);
+  color: var(--streak-ink);
   -webkit-text-stroke: 2px #fff;
   paint-order: stroke fill;
 }
