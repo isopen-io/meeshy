@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, test } from 'bun:test';
+import { readFileSync } from 'node:fs';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { ConversationEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
@@ -71,7 +72,8 @@ describe('la rangée de liste', () => {
     const html = row(false, snapshot());
     const mark = markOf(html);
     expect(mark).toBeDefined();
-    expect(mark).toContain('var(--ios-error)');
+    expect(mark).toContain('var(--streak-ink)');
+    expect(mark).toContain(`d="M173.79,51.48`);
     expect(mark).toMatch(/>4<[\s\S]*·[\s\S]*>120</);
     expect(mark).not.toContain('rounded-chip');
     expect(mark).not.toContain('background');
@@ -88,5 +90,38 @@ describe('la rangée de liste', () => {
     const html = row(true, snapshot());
     expect(html).not.toContain('data-streak-mark');
     expect(html).not.toContain('data-engagement-pill');
+  });
+});
+
+describe('l’encre de série se lit sur téléphone (#9221)', () => {
+  const appCss = readFileSync(new URL('../styles/app.css', import.meta.url), 'utf8');
+  const tokens = readFileSync(new URL('../../../../packages/design-tokens/ios.css', import.meta.url), 'utf8');
+  const hex = (name: string) => {
+    const value = tokens.match(new RegExp(`--${name}:\\s*(#[0-9a-fA-F]{6})`))?.[1];
+    if (value === undefined) throw new Error(`jeton --${name} introuvable`);
+    return [1, 3, 5].map((i) => Number.parseInt(value.slice(i, i + 2), 16));
+  };
+  const luminance = (rgb: readonly number[]) => {
+    const [r, g, b] = rgb.map((c) => {
+      const s = c / 255;
+      return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * (r ?? 0) + 0.7152 * (g ?? 0) + 0.0722 * (b ?? 0);
+  };
+  const block = (selector: string) =>
+    appCss.match(new RegExp(`${selector}\\s*\\{[^}]*--streak-ink:\\s*([^;]+);`))?.[1]?.trim();
+
+  test('en sombre, le rouge iOS ; en clair, un rouge profond à ≥ 4,5:1 sur blanc', () => {
+    expect(block(':root,\\s*:root\\.dark')).toBe('var(--ios-error)');
+    const light = block(':root\\.light');
+    const mix = light?.match(/color-mix\(in srgb, var\(--([\w-]+)\) (\d+)%, var\(--([\w-]+)\)\)/);
+    expect(mix).toBeTruthy();
+    const [, first, share, second] = mix ?? [];
+    const weight = Number(share) / 100;
+    const a = hex(first ?? '');
+    const b = hex(second ?? '');
+    const ink = a.map((c, i) => Math.round(c * weight + (b[i] ?? 0) * (1 - weight)));
+    expect(1.05 / (luminance(ink) + 0.05)).toBeGreaterThanOrEqual(4.5);
+    expect(1.05 / (luminance(hex('ios-error')) + 0.05)).toBeLessThan(4.5);
   });
 });
