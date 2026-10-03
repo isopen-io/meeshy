@@ -72,6 +72,7 @@ export * from './call-rules.js';
 export * from './call-recording.js';
 export * from './call-controls.js';
 export * from './call-preview.js';
+export * from './call-live-frame.js';
 
 // Export des types unifiés Phase 7 - Audio Effects Timeline
 export * from './audio-effects-timeline.js';

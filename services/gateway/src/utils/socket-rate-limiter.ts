@@ -129,6 +129,12 @@ export const SOCKET_RATE_LIMITS = {
     windowMs: 1000,
     keyPrefix: 'socket:call:reaction'
   },
+  /** #9214 — choisir le cadre en direct d'un appel à deux : dix choix par dix secondes et par personne. */
+  CALL_FRAME_SELECT: {
+    maxRequests: 10,
+    windowMs: 10000,
+    keyPrefix: 'socket:call:frame-select'
+  },
   /** #8480 — demander l'aperçu d'un appel qui sonne : une fois par sonnerie, plus les reprises de socket. */
   CALL_PREVIEW_REQUEST: {
     maxRequests: 10,

@@ -112,6 +112,7 @@ import type {
   CallReactionReceivedEvent,
 } from '../call-controls.js';
 import type { CallPreviewRequestEvent, CallPreviewRequestedEvent } from '../call-preview.js';
+import type { CallLiveFrameSelectEvent, CallLiveFrameSelectedEvent } from '../call-live-frame.js';
 
 import type { AgentAdminEventData } from './agent.js';
 import type { AttachmentStatusUpdatedEventData, AttachmentUpdatedEventData } from './attachment.js';
@@ -298,6 +299,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_INVITE_EXPIRED]: (data: CallInviteSettledEvent) => void;
   [SERVER_EVENTS.CALL_MUTED_BY_MODERATOR]: (data: CallMutedByModeratorEvent) => void;
   [SERVER_EVENTS.CALL_REACTION_RECEIVED]: (data: CallReactionReceivedEvent) => void;
+  [SERVER_EVENTS.CALL_FRAME_SELECTED]: (data: CallLiveFrameSelectedEvent) => void;
   [SERVER_EVENTS.CALL_PREVIEW_REQUESTED]: (data: CallPreviewRequestedEvent) => void;
   [SERVER_EVENTS.CALL_PREVIEW_SIGNAL]: (data: CallSignalEvent) => void;
   [SERVER_EVENTS.CONVERSATION_NEW]: (data: ConversationNewEventData) => void;
@@ -592,6 +594,7 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.CALL_INVITE_PARTICIPANT]: (data: CallInviteParticipantEvent, ack?: (response: CallControlAck) => void) => void;
   [CLIENT_EVENTS.CALL_MUTE_PARTICIPANT]: (data: CallMuteParticipantEvent, ack?: (response: CallControlAck) => void) => void;
   [CLIENT_EVENTS.CALL_REACTION]: (data: CallReactionEvent, ack?: (response: CallControlAck) => void) => void;
+  [CLIENT_EVENTS.CALL_FRAME_SELECT]: (data: CallLiveFrameSelectEvent, ack?: (response: CallControlAck) => void) => void;
   [CLIENT_EVENTS.CALL_PREVIEW_REQUEST]: (data: CallPreviewRequestEvent, ack?: (response: CallControlAck) => void) => void;
   [CLIENT_EVENTS.CALL_PREVIEW_SIGNAL]: (data: CallSignalEvent, ack?: (response: CallControlAck) => void) => void;
   [CLIENT_EVENTS.PRESENCE_APP_STATE]: (data: { foreground?: boolean }) => void;
