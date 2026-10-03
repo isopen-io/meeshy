@@ -99,7 +99,8 @@ extension CallView {
             isConnected: isConnected,
             mayRecord: callManager.mayRequestRecording || callManager.recording.phase.isActive,
             canPictureInPicture: callManager.canActivateSystemPiP || callManager.isSystemPiPActive,
-            showsVideo: callManager.isVideoUIActive
+            showsVideo: callManager.isVideoUIActive,
+            offersLiveFrame: offersLiveFrame
         )
     }
 
@@ -330,6 +331,8 @@ extension CallView {
             reactActionButton(captioned: captioned, diameter: diameter)
         case .capture:
             captureActionButton(captioned: captioned, diameter: diameter)
+        case .liveFrame:
+            liveFrameActionButton(captioned: captioned, diameter: diameter)
         case .journal:
             journalActionButton(captioned: captioned, diameter: diameter)
         }

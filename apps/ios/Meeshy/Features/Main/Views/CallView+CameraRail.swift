@@ -27,7 +27,7 @@ extension CallView {
     /// La vignette perso du duo porte-t-elle MON image ? Même garde que
     /// `duoOverlays`, qui la monte.
     private var showsMyImageTile: Bool {
-        !isGroupStage && callManager.isVideoEnabled && callManager.hasLocalVideoTrack
+        !isGroupStage && callManager.isVideoEnabled && callManager.hasLocalVideoTrack && !isLiveFrameShown
     }
 
     var cameraControlsPlacement: CallCameraControlsPlacement {
