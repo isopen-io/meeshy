@@ -116,6 +116,8 @@ function harness(options: { readonly failing?: boolean } = {}) {
   const events: Array<(data: unknown) => void> = [];
   const credentialWriters: Array<(value: DeliveryReceiptCredential) => void> = [];
   const accepted: number[] = [];
+  const floating: Array<(data: unknown) => void> = [];
+  const pictureInPicture: boolean[] = [];
   const env: ShellCallEnvironment = {
     native: (method, payload) => {
       sent.push({ method, options: payload });
@@ -123,7 +125,9 @@ function harness(options: { readonly failing?: boolean } = {}) {
     },
     listen: (event, listener) => {
       if (event === 'callAnswer') events.push(listener);
+      if (event === 'pictureInPictureModeChanged') floating.push(listener);
     },
+    pictureInPicture: (active) => void pictureInPicture.push(active),
     store,
     accept: () => void accepted.push(1),
     watchCredential: (write) => {
@@ -139,6 +143,8 @@ function harness(options: { readonly failing?: boolean } = {}) {
     accepted,
     stop,
     answer: (callId: unknown) => events.forEach((listener) => listener({ callId })),
+    float: (data: unknown) => floating.forEach((listener) => listener(data)),
+    pictureInPicture,
     writeCredential: (value: DeliveryReceiptCredential) => credentialWriters.forEach((write) => write(value)),
   };
 }
@@ -198,6 +204,27 @@ describe('bindShellCall — la page branchée au plugin natif', () => {
     await Promise.resolve();
     h.store.setState({ call: null });
     expect(h.sent.map((entry) => entry.method)).toEqual(['startCallService', 'stopCallService']);
+  });
+
+  test('l’image dans l’image de la coque (#8144) arrive à la page : entrée, puis retour dans l’app', () => {
+    const h = harness();
+    h.float({ active: true });
+    h.float({ active: false });
+    expect(h.pictureInPicture).toEqual([true, false]);
+  });
+
+  test('un état d’image dans l’image illisible ne réduit pas l’écran', () => {
+    const h = harness();
+    h.float(null);
+    h.float({ active: 'oui' });
+    expect(h.pictureInPicture).toEqual([false, false]);
+  });
+
+  test('détaché, l’écran ne se réduit plus', () => {
+    const h = harness();
+    h.stop();
+    h.float({ active: true });
+    expect(h.pictureInPicture).toEqual([false]);
   });
 
   test('détaché, plus rien ne part vers la coque', () => {
