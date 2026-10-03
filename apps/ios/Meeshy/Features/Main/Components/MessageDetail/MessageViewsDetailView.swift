@@ -27,12 +27,15 @@ struct MessageViewsDetailView: View {
 
     // Views sub-filter — `nil` tant que l'utilisateur n'a rien touché :
     // l'onglet d'ouverture est alors celui que `MessageViewsFilter.initial`
-    // juge pertinent (#7366), jamais « Envoyé » par défaut.
+    // juge pertinent (#7366), jamais « Envoyé » par défaut. Il se règle sur
+    // le décompte SERVEUR dès qu'il est chargé (#7433) : sur les compteurs
+    // locaux seuls, une bulle faussement « lue » ouvrait la fiche sur un
+    // onglet « Lu » que le serveur laissait vide.
     @State private var chosenViewsFilter: MessageViewsFilter? = nil
     private var viewsFilter: MessageViewsFilter {
         chosenViewsFilter ?? .initial(
-            readCount: message.readCount,
-            deliveredCount: message.deliveredCount,
+            readCount: readStatusData?.readCount ?? message.readCount,
+            deliveredCount: readStatusData?.receivedCount ?? message.deliveredCount,
             showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts
         )
     }

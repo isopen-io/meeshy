@@ -993,39 +993,21 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
-        // Read status updated (delivered / read) — persist delivery state;
-        // store observation surfaces the updated checkmarks in the view.
+        // Read status updated (delivered / read) — #7433 : le résumé décrit
+        // UN message (`summary.messageId`, sinon le dernier du fil) et ne
+        // touche que lui, s'il est le mien (`ReadStatusReceipt`). L'appliquer
+        // à tout message antérieur à `updatedAt` — l'instant d'ÉMISSION —
+        // peignait de faux « Lu » que la fiche « Vu par » démentait.
         socketManager.readStatusUpdated
             .filter { $0.conversationId == convId }
             .filter { ($0.userId ?? $0.participantId) != userId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let persistence = self.persistence else { return }
-                let summary = event.summary
-                // WhatsApp-style all-or-nothing: the sender's ✓✓ / read indicator
-                // must reflect EVERY recipient, never a single member of a group.
-                // `totalMembers` is the active recipient count (sender excluded);
-                // a partial summary advances NOTHING — the bubbles stay at their
-                // current (lower) state until the whole group catches up. The
-                // threshold is owned by DeliveryStatusResolver (single source of
-                // truth; a 0 denominator falls back to legacy "any > 0" for 1:1).
-                let deliveryEvent: MessageEvent?
-                switch DeliveryStatusResolver.fromCounts(
-                    deliveredCount: summary.deliveredCount,
-                    readCount: summary.readCount,
-                    recipientCount: summary.totalMembers
-                ) {
-                case .read:
-                    deliveryEvent = .readBy(userId: userId, at: event.updatedAt)
-                case .delivered:
-                    deliveryEvent = .delivered(count: summary.deliveredCount, at: event.updatedAt)
-                default:
-                    deliveryEvent = nil
-                }
-                // Batch-update delivery state; store observation will rebuild
-                // the message list with updated deliveryStatus for all rows.
-                if let deliveryEvent {
-                    Task { await persistence.bufferBatchDelivery(conversationId: convId, event: deliveryEvent) }
+                Task {
+                    await persistence.bufferReadStatusSummary(
+                        conversationId: convId, summary: event.summary, currentUserId: userId
+                    )
                 }
             }
             .store(in: &cancellables)

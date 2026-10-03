@@ -23,24 +23,16 @@ import Foundation
 /// lu CE message, `nil` tant qu'il en manque un. Même moteur que le REST
 /// (`MessageReadStatusService.getConversationReadStatuses`, gateway).
 ///
-/// Le CONSOMMATEUR iOS (`ConversationSocketHandler.swift`,
-/// `MessagePersistenceActor.batchDeliverySync`, `ConversationSyncEngine
-/// .applyReadReceipt(frontier:)`) n'est PAS réécrit par ce lot, et PRATIQUE
-/// un défaut APPARENTÉ, pas une immunité : son mécanisme de FRONTIÈRE
-/// applique `event.updatedAt` (et, avec G-5, le résumé du SEUL message
-/// nommé par `summary.messageId`) à TOUT message ENVOYÉ localement sous
-/// cette date — y compris des messages plus RÉCENTS que le pair n'a pas
-/// encore vus. Avant G-5, l'agrégat portait sur le dernier message et ce
-/// cas ne se produisait pas ; depuis G-5, un résumé par message rend la
-/// frontière iOS capable de peindre un faux ✓✓ « Lu » sur un message que
-/// le pair n'a pas lu. Le cibler PAR message (lire `summary.messageId`
-/// avant d'appliquer la frontière) serait une réécriture d'architecture
-/// distincte, hors des fichiers cadrés par ce lot (`ConversationSocketHandler.swift`
-/// et `MessagePersistenceActor.swift` sont eux-mêmes hors budget, 1393 et
-/// 2376 lignes, à extraire PAR RESPONSABILITÉ avant tout ajout) — dette
-/// CONSIGNÉE, pas soldée : les deux champs sont décodés et prêts, mais
-/// aucun consommateur iOS ne les lit encore. Suivi : voir l'issue iOS du
-/// même milestone que #7347.
+/// Les deux consommateurs iOS — la base GRDB que la bulle lit
+/// (`MessagePersistenceActor+ReadStatusReceipt.swift`) et le cache de
+/// `ConversationSyncEngine.applyReadReceipt` — lisent `messageId` depuis #7433
+/// : un résumé ne touche que le message qu'il décrit, et seulement si
+/// l'utilisateur courant en est l'auteur (`ReadStatusReceipt`). Ils l'appliquaient auparavant à
+/// TOUT message envoyé avant `updatedAt`, instant d'ÉMISSION de l'événement —
+/// de faux ✓✓ « Lu » que la fiche « Vu par » démentait. La passerelle nomme
+/// désormais aussi le message de son résumé agrégé
+/// (`getLatestMessageSummary`) ; le repli sur le dernier message du fil ne
+/// sert plus qu'à une passerelle plus ancienne.
 public struct ReadStatusSummary: Decodable, Sendable {
     public let totalMembers: Int
     public let deliveredCount: Int

@@ -987,178 +987,137 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
     // MARK: - readStatusUpdated
     //
-    // Post Phase 1.5: readStatusUpdated writes via `persistence.bufferBatchDelivery`,
-    // which transitions every matching row's MessageState through the state machine.
-    // delegate.messages is no longer mutated — assertions verify the DB row state.
+    // #7433 — `readStatusUpdated` pose le résumé sur la SEULE ligne qu'il décrit
+    // (`summary.messageId`, sinon le dernier message acquitté du fil), et
+    // seulement si elle est à l'utilisateur courant. Les assertions lisent la
+    // ligne GRDB, celle que la bulle rend.
 
-    func test_readStatusUpdated_updatesDeliveryStatusForOwnMessages() async throws {
-        let (db, actor) = try makeDB()
-        let (sut, delegate, socket) = makeSUT()
-        sut.persistence = actor
-        _ = delegate
-
-        // Seed two own-messages in `.sent` state — bufferBatchDelivery applies
-        // to rows in .sending/.sent/.delivered (I3, #7349: .delivered stayed
-        // in scope so a message can still advance to .read after a prior
-        // delivered batch — see MessagePersistenceActorDeliveryChainTests for
-        // the delivered-then-read regression this used to miss).
-        let msgDate = Date()
-        var record1 = makeSeedRecord(localId: "msg1", senderId: currentUserId, content: "First")
-        record1.state = .sent
-        record1.createdAt = msgDate
-        record1.updatedAt = msgDate
-        try await actor.insertOptimistic(record1)
-
-        var record2 = makeSeedRecord(localId: "msg2", senderId: currentUserId, content: "Second")
-        record2.state = .sent
-        record2.createdAt = msgDate.addingTimeInterval(1)
-        record2.updatedAt = msgDate.addingTimeInterval(1)
-        try await actor.insertOptimistic(record2)
-
-        // Boot the actor's write processor so buffered ops are processed.
-        await actor.start()
-
-        let event: ReadStatusUpdateEvent = JSONStub.decode("""
-        {
-            "conversationId":"\(conversationId)",
-            "participantId":"participant-other",
-            "userId":"\(otherUserId)",
-            "type":"read",
-            "updatedAt":"2099-12-31T23:59:59.000Z",
-            "summary":{"totalMembers":2,"deliveredCount":2,"readCount":2}
-        }
-        """)
-        socket.readStatusUpdated.send(event)
-
-        // bufferBatchDelivery is async (queued via AsyncStream); allow it to land.
-        try await Task.sleep(nanoseconds: 600_000_000)
-
-        let after1 = try await db.read { db in
-            try MessageRecord.fetchOne(db, key: "msg1")
-        }
-        let after2 = try await db.read { db in
-            try MessageRecord.fetchOne(db, key: "msg2")
-        }
-        // .read event (all recipients) transitions both rows; readAt + the
-        // unambiguous "read by all" marker the display resolver trusts are set.
-        XCTAssertNotNil(after1?.readAt, "msg1 must transition to read state via bufferBatchDelivery")
-        XCTAssertNotNil(after2?.readAt, "msg2 must transition to read state via bufferBatchDelivery")
-        XCTAssertNotNil(after1?.readByAllAt, "msg1 must be stamped read-by-all for the resolver")
-        XCTAssertNotNil(after2?.readByAllAt, "msg2 must be stamped read-by-all for the resolver")
+    private func seedOwnSent(
+        _ actor: MessagePersistenceActor, localId: String, serverId: String,
+        senderId: String? = nil, createdAt: Date
+    ) async throws {
+        var record = makeSeedRecord(localId: localId, senderId: senderId ?? currentUserId, content: localId)
+        record.serverId = serverId
+        record.state = .sent
+        record.createdAt = createdAt
+        record.updatedAt = createdAt
+        try await actor.insertOptimistic(record)
     }
 
-    func test_readStatusUpdated_deliveredStatus_updatesCorrectly() async throws {
-        let (db, actor) = try makeDB()
-        let (sut, delegate, socket) = makeSUT()
-        sut.persistence = actor
-        _ = delegate
-
-        var record = makeSeedRecord(localId: "msg1", senderId: currentUserId, content: "Hello")
-        record.state = .sent
-        try await actor.insertOptimistic(record)
-        await actor.start()
-
-        // ALL recipients received (2/2) → delivered-to-all fires.
-        let event: ReadStatusUpdateEvent = JSONStub.decode("""
+    private func readStatusEvent(type: String, summary: String) -> ReadStatusUpdateEvent {
+        JSONStub.decode("""
         {
             "conversationId":"\(conversationId)",
             "participantId":"participant-other",
             "userId":"\(otherUserId)",
-            "type":"received",
+            "type":"\(type)",
             "updatedAt":"2099-12-31T23:59:59.000Z",
-            "summary":{"totalMembers":2,"deliveredCount":2,"readCount":0}
+            "summary":\(summary)
         }
         """)
-        socket.readStatusUpdated.send(event)
-
-        try await Task.sleep(nanoseconds: 600_000_000)
-
-        let after = try await db.read { db in
-            try MessageRecord.fetchOne(db, key: "msg1")
-        }
-        // .delivered event (all recipients) transitions the row to .delivered
-        // state, sets deliveredAt + the "delivered to all" marker.
-        XCTAssertNotNil(after?.deliveredAt, "msg1 must transition to delivered via bufferBatchDelivery")
-        XCTAssertNotNil(after?.deliveredToAllAt, "msg1 must be stamped delivered-to-all for the resolver")
     }
 
-    /// WhatsApp-style all-or-nothing: a PARTIAL group delivery (1 of 2 members)
-    /// must NOT advance the sender's checkmark — showing ✓✓ "delivered" while
-    /// only one of several recipients has received would misrepresent reality.
-    func test_readStatusUpdated_partialGroupDelivery_doesNotTransition() async throws {
-        let (db, actor) = try makeDB()
-        let (sut, delegate, socket) = makeSUT()
-        sut.persistence = actor
-        _ = delegate
-
-        var record = makeSeedRecord(localId: "msg1", senderId: currentUserId, content: "Hello")
-        record.state = .sent
-        try await actor.insertOptimistic(record)
-        await actor.start()
-
-        // Only 1 of 2 recipients received → not delivered-to-all.
-        let event: ReadStatusUpdateEvent = JSONStub.decode("""
-        {
-            "conversationId":"\(conversationId)",
-            "participantId":"participant-other",
-            "userId":"\(otherUserId)",
-            "type":"received",
-            "updatedAt":"2099-12-31T23:59:59.000Z",
-            "summary":{"totalMembers":2,"deliveredCount":1,"readCount":0}
-        }
-        """)
-        socket.readStatusUpdated.send(event)
-
-        try await Task.sleep(nanoseconds: 600_000_000)
-
-        let after = try await db.read { db in
-            try MessageRecord.fetchOne(db, key: "msg1")
-        }
-        XCTAssertNil(after?.deliveredAt,
-            "a partial group delivery (1/2) must NOT mark the message delivered-to-all")
-        XCTAssertEqual(after?.state, .sent,
-            "the row must stay at .sent until EVERY recipient has received it")
+    private func bubbleStatus(_ record: MessageRecord?) -> MeeshyMessage.DeliveryStatus? {
+        guard let message = record?.toMessage(currentUserId: currentUserId) else { return nil }
+        return DeliveryStatusResolver.resolve(
+            status: message.deliveryStatus,
+            deliveredCount: message.deliveredCount,
+            readCount: message.readCount,
+            recipientCount: message.recipientCount,
+            deliveredToAllAt: message.deliveredToAllAt,
+            readByAllAt: message.readByAllAt
+        )
     }
 
-    /// Soundness (never over-claim): a message I sent AFTER the peer's read
-    /// moment must NOT be marked read by a batch read event, even when the
-    /// summary says read-by-all (that "all" refers to the older latest message).
-    /// Mirrors the cache-path frontier guard.
-    func test_readStatusUpdated_messageAfterFrontier_staysUnread() async throws {
+    /// Le pair lit `srv1` : seule cette bulle passe « Lu ». `srv2`, envoyé
+    /// AVANT l'instant d'émission de l'événement, n'a pas été lu — l'ancien
+    /// réducteur le passait violet quand même.
+    func test_readStatusUpdated_namedSummary_marksOnlyThatOwnMessageRead() async throws {
         let (db, actor) = try makeDB()
         let (sut, delegate, socket) = makeSUT()
         sut.persistence = actor
         _ = delegate
-
-        // Message created NOW (2026), well after the event's read frontier (2020).
-        var record = makeSeedRecord(localId: "msg1", senderId: currentUserId, content: "after")
-        record.state = .sent
-        record.createdAt = Date()
-        try await actor.insertOptimistic(record)
+        let base = Date().addingTimeInterval(-60)
+        try await seedOwnSent(actor, localId: "msg1", serverId: "srv1", createdAt: base)
+        try await seedOwnSent(actor, localId: "msg2", serverId: "srv2", createdAt: base.addingTimeInterval(1))
         await actor.start()
 
-        let event: ReadStatusUpdateEvent = JSONStub.decode("""
-        {
-            "conversationId":"\(conversationId)",
-            "participantId":"participant-other",
-            "userId":"\(otherUserId)",
-            "type":"read",
-            "updatedAt":"2020-01-01T00:00:00.000Z",
-            "summary":{"totalMembers":2,"deliveredCount":2,"readCount":2}
-        }
-        """)
-        socket.readStatusUpdated.send(event)
-
+        socket.readStatusUpdated.send(readStatusEvent(
+            type: "read",
+            summary: #"{"totalMembers":1,"deliveredCount":1,"readCount":1,"messageId":"srv1"}"#
+        ))
         try await Task.sleep(nanoseconds: 600_000_000)
 
-        let after = try await db.read { db in
-            try MessageRecord.fetchOne(db, key: "msg1")
-        }
-        XCTAssertNil(after?.readAt,
-            "a message sent AFTER the read frontier must NOT be marked read")
-        XCTAssertNil(after?.readByAllAt,
-            "and must NOT be stamped read-by-all")
-        XCTAssertEqual(after?.state, .sent)
+        let after1 = try await db.read { db in try MessageRecord.fetchOne(db, key: "msg1") }
+        let after2 = try await db.read { db in try MessageRecord.fetchOne(db, key: "msg2") }
+        XCTAssertEqual(bubbleStatus(after1), .read)
+        XCTAssertEqual(bubbleStatus(after2), .sent, "a message the summary does not name must keep its own check")
+        XCTAssertNil(after2?.readByAllAt)
+    }
+
+    func test_readStatusUpdated_deliveredToAll_showsDoubleCheck() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        _ = delegate
+        try await seedOwnSent(actor, localId: "msg1", serverId: "srv1", createdAt: Date())
+        await actor.start()
+
+        socket.readStatusUpdated.send(readStatusEvent(
+            type: "received",
+            summary: #"{"totalMembers":2,"deliveredCount":2,"readCount":0,"messageId":"srv1"}"#
+        ))
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        let after = try await db.read { db in try MessageRecord.fetchOne(db, key: "msg1") }
+        XCTAssertEqual(after?.recipientCount, 2)
+        XCTAssertEqual(bubbleStatus(after), .delivered)
+    }
+
+    /// Tout-ou-rien en groupe : un destinataire sur deux laisse la coche simple.
+    func test_readStatusUpdated_partialGroupDelivery_keepsSingleCheck() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        _ = delegate
+        try await seedOwnSent(actor, localId: "msg1", serverId: "srv1", createdAt: Date())
+        await actor.start()
+
+        socket.readStatusUpdated.send(readStatusEvent(
+            type: "received",
+            summary: #"{"totalMembers":2,"deliveredCount":1,"readCount":0,"messageId":"srv1"}"#
+        ))
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        let after = try await db.read { db in try MessageRecord.fetchOne(db, key: "msg1") }
+        XCTAssertEqual(bubbleStatus(after), .sent,
+            "the row must stay at a single check until EVERY recipient has received it")
+    }
+
+    /// Passerelle d'avant #7433 : le résumé décrit le DERNIER message du fil,
+    /// ici celui du pair — ses compteurs disent si MOI je l'ai lu, et ne
+    /// peignent aucun de mes messages.
+    func test_readStatusUpdated_unnamedSummaryOfPeersLatestMessage_leavesOwnMessagesUnread() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        _ = delegate
+        let base = Date().addingTimeInterval(-60)
+        try await seedOwnSent(actor, localId: "msg1", serverId: "srv1", createdAt: base)
+        try await seedOwnSent(actor, localId: "peer1", serverId: "srvPeer", senderId: otherUserId,
+                              createdAt: base.addingTimeInterval(10))
+        await actor.start()
+
+        socket.readStatusUpdated.send(readStatusEvent(
+            type: "read",
+            summary: #"{"totalMembers":1,"deliveredCount":1,"readCount":1}"#
+        ))
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        let after = try await db.read { db in try MessageRecord.fetchOne(db, key: "msg1") }
+        XCTAssertEqual(after?.readCount, 0)
+        XCTAssertNil(after?.readByAllAt)
+        XCTAssertEqual(bubbleStatus(after), .sent)
     }
 
     func test_readStatusUpdated_fromSelf_ignored() async throws {
