@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { pendingAttachmentOf, type PendingAttachment } from '@/lib/send/attachments';
 
+import { shellMicrophoneHold, type MicrophoneHold } from './shell-microphone';
+
 /**
  * LE MICRO, DERRIÈRE UNE INTERFACE BOUCHONNABLE (#5668) — miroir
  * `AudioRecorderManager.swift`. `idle → requesting → recording → idle`, ou
@@ -173,6 +175,9 @@ export function useRecorder(params?: {
    * fonction qui capture le callback et le rejoue manuellement, plutôt que
    * d'attendre un délai réel (déterministe, aucun `sleep`). */
   readonly interval?: (callback: () => void, ms: number) => () => void;
+  /** La coque tient le micro tant qu'on capte (#9238) — injectable, le
+   * défaut ne fait rien hors de la coque Android. */
+  readonly microphone?: MicrophoneHold;
 }): {
   readonly state: RecorderState;
   readonly start: () => void;
@@ -213,6 +218,15 @@ export function useRecorder(params?: {
       });
   }
   const scheduleInterval = intervalRef.current;
+  const microphoneRef = useRef<MicrophoneHold | null>(null);
+  if (microphoneRef.current === null) microphoneRef.current = params?.microphone ?? shellMicrophoneHold();
+  const microphone = microphoneRef.current;
+  const heldRef = useRef(false);
+  const releaseMicrophone = useCallback(() => {
+    if (!heldRef.current) return;
+    heldRef.current = false;
+    microphone.release();
+  }, [microphone]);
 
   const [state, setState] = useState<RecorderState>(RECORDER_IDLE_STATE);
   const streamRef = useRef<MediaStream | null>(null);
@@ -241,6 +255,7 @@ export function useRecorder(params?: {
     return () => {
       stopMetering();
       if (streamRef.current !== null) engine.release(streamRef.current);
+      releaseMicrophone();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- nettoyage de démontage seul, volontairement sans dépendance.
   }, []);
@@ -262,6 +277,8 @@ export function useRecorder(params?: {
       streamRef.current = result.stream;
       startedAtRef.current = now();
       setState({ status: 'recording', durationMs: 0, levels: [] });
+      heldRef.current = true;
+      microphone.hold();
       engine.start(result.stream, (level) => {
         setState((current) =>
           current.status === 'recording' ? { ...current, levels: [...current.levels, level].slice(-MAX_LEVELS) } : current,
@@ -282,8 +299,9 @@ export function useRecorder(params?: {
       engine.release(streamRef.current);
       streamRef.current = null;
     }
+    releaseMicrophone();
     activeRef.current = false;
-  }, [engine, stopMetering]);
+  }, [engine, stopMetering, releaseMicrophone]);
 
   const cancel = useCallback(() => {
     // Défaut 6 : `teardown()` couvre aussi `requesting` — un double tap qui

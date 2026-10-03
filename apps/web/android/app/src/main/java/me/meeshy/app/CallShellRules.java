@@ -57,6 +57,18 @@ public final class CallShellRules {
         return null;
     }
 
+    /**
+     * #8144 — le format de la fenetre flottante, celui de la video qui y
+     * flotte. Android refuse un format plus allonge que 2,39:1 (dans un sens
+     * ou dans l'autre) : il est ramene a cette borne. null = format systeme.
+     */
+    public static int[] pictureInPictureAspect(int width, int height) {
+        if (width <= 0 || height <= 0) return null;
+        if (width * 100L > height * 239L) return new int[] {239, 100};
+        if (height * 100L > width * 239L) return new int[] {100, 239};
+        return new int[] {width, height};
+    }
+
     /** `DELETE /api/v1/calls/:callId?reason=rejected` — le refus AVANT d'avoir rejoint (`sw-push.js` § refuserAppel). */
     public static String declineUrl(String apiBase, String callId) {
         if (apiBase == null || callId == null || callId.trim().isEmpty()) return null;

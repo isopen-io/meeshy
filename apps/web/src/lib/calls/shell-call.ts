@@ -2,6 +2,7 @@ import type { DeliveryReceiptCredential } from '@/lib/notifications/delivery-rec
 import { NOTIFICATION_CLICKED_MESSAGE } from '@/lib/notifications/tap-navigation';
 
 import { listenCallAnswerIntents } from './call-answer-intent';
+import { pipAspect, pipSource, type PipAspect } from './call-pip';
 import type { ActiveCall, CallPhase, CallStoreApi } from './call-store';
 
 /**
@@ -35,19 +36,30 @@ export type ShellCallSnapshot = {
   readonly video: boolean;
   readonly phase: CallPhase['kind'] | null;
   readonly micMuted: boolean;
+  readonly aspect: PipAspect | null;
 };
 
 export type ShellCallCommand =
   | { readonly method: 'startCallService'; readonly options: { readonly video: boolean } }
   | { readonly method: 'stopCallService'; readonly options: Record<string, never> }
   | { readonly method: 'haptic'; readonly options: { readonly kind: 'connected' | 'reconnecting' | 'ended' } }
-  | { readonly method: 'setPictureInPictureControls'; readonly options: { readonly micMuted: boolean } };
+  | {
+      readonly method: 'setPictureInPictureControls';
+      readonly options: { readonly micMuted: boolean; readonly aspectWidth?: number; readonly aspectHeight?: number };
+    };
 
 const LIVE_PHASES: ReadonlySet<CallPhase['kind']> = new Set(['outgoing', 'connecting', 'connected', 'reconnecting']);
 
 export function shellCallSnapshot(call: ActiveCall | null): ShellCallSnapshot {
-  if (call === null) return { active: false, video: false, phase: null, micMuted: false };
-  return { active: LIVE_PHASES.has(call.phase.kind), video: call.media === 'video', phase: call.phase.kind, micMuted: call.micMuted };
+  if (call === null) return { active: false, video: false, phase: null, micMuted: false, aspect: null };
+  const active = LIVE_PHASES.has(call.phase.kind);
+  return {
+    active,
+    video: call.media === 'video',
+    phase: call.phase.kind,
+    micMuted: call.micMuted,
+    aspect: active && call.media === 'video' ? pipAspect(pipSource(call)) : null,
+  };
 }
 
 const hapticFor = (previous: ShellCallSnapshot, next: ShellCallSnapshot): ShellCallCommand | null => {
@@ -66,10 +78,16 @@ const serviceFor = (previous: ShellCallSnapshot, next: ShellCallSnapshot): Shell
   return null;
 };
 
-/* La coque oublie le micro à la fin de l'appel : un appel neuf part « micro ouvert » de son côté. */
+const sameAspect = (a: PipAspect | null, b: PipAspect | null): boolean => a?.width === b?.width && a?.height === b?.height;
+
+/* La coque oublie le micro et le format à la fin de l'appel : un appel neuf part « micro ouvert, format système » de son côté. */
 const pipControlsFor = (previous: ShellCallSnapshot, next: ShellCallSnapshot): ShellCallCommand | null => {
-  const known = previous.active && previous.micMuted;
-  return next.active && next.micMuted !== known ? { method: 'setPictureInPictureControls', options: { micMuted: next.micMuted } } : null;
+  if (!next.active) return null;
+  const knownMuted = previous.active && previous.micMuted;
+  const knownAspect = previous.active ? previous.aspect : null;
+  if (next.micMuted === knownMuted && sameAspect(next.aspect, knownAspect)) return null;
+  const aspect = next.aspect === null ? {} : { aspectWidth: next.aspect.width, aspectHeight: next.aspect.height };
+  return { method: 'setPictureInPictureControls', options: { micMuted: next.micMuted, ...aspect } };
 };
 
 /** Les appels au plugin qu'impose un changement du magasin, dans l'ordre. */

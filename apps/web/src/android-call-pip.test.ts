@@ -75,4 +75,14 @@ describe("l'image dans l'image d'un appel dans la coque Android (#8144)", () => 
     }
     for (const icone of ['ic_pip_mic', 'ic_pip_mic_off', 'ic_pip_hangup']) expect(lire('res', 'drawable', `${icone}.xml`)).toContain('<vector');
   });
+
+  test('la fenêtre prend le format que la page lui donne (#8144)', () => {
+    const plugin = sansCommentaires(lire(...JAVA, 'MeeshyCallPlugin.java'));
+    const params = corpsDe(plugin, 'PictureInPictureParams pictureInPictureParams(');
+    expect(params).toContain('CallShellRules.pictureInPictureAspect(');
+    expect(params).toContain('setAspectRatio(new Rational(');
+    const reglage = corpsDe(plugin, 'void setPictureInPictureControls(');
+    expect(reglage).toContain('"aspectWidth"');
+    expect(reglage).toContain('"aspectHeight"');
+  });
 });
