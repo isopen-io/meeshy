@@ -105,4 +105,22 @@ public class CallShellRulesTest {
         assertNull(CallShellRules.pictureInPictureGesture("other"));
         assertNull(CallShellRules.pictureInPictureGesture(null));
     }
+
+    @Test
+    public void theFloatingWindowTakesTheShapeOfTheVideo() {
+        assertArrayEquals(new int[] {720, 1280}, CallShellRules.pictureInPictureAspect(720, 1280));
+        assertArrayEquals(new int[] {1280, 720}, CallShellRules.pictureInPictureAspect(1280, 720));
+    }
+
+    @Test
+    public void aShapeAndroidRefusesIsBroughtToItsLimit() {
+        assertArrayEquals(new int[] {239, 100}, CallShellRules.pictureInPictureAspect(3000, 500));
+        assertArrayEquals(new int[] {100, 239}, CallShellRules.pictureInPictureAspect(300, 1600));
+    }
+
+    @Test
+    public void anUnknownShapeLeavesTheSystemDefault() {
+        assertNull(CallShellRules.pictureInPictureAspect(0, 720));
+        assertNull(CallShellRules.pictureInPictureAspect(720, -1));
+    }
 }

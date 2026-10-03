@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { armAutoPip, pipSource, pipSupport, registerPipOpener, requestCallPip, shouldOfferPip } from './call-pip';
+import { armAutoPip, pipAspect, pipSource, pipSupport, registerPipOpener, requestCallPip, shouldOfferPip } from './call-pip';
 import type { ActiveCall, CallMember } from './call-store';
 
 /**
@@ -98,3 +98,21 @@ describe('armAutoPip', () => {
     expect(() => armAutoPip(undefined, () => undefined)()).not.toThrow();
   });
 });
+
+const sized = (width?: number, height?: number, readyState = 'live') =>
+  ({ getVideoTracks: () => [{ readyState, getSettings: () => ({ width, height }) }] }) as unknown as MediaStream;
+
+describe('pipAspect — le format de la fenêtre flottante de la coque (#8144)', () => {
+  test('le format de l’image qui flotte, tel que la piste le déclare', () => {
+    expect(pipAspect({ stream: sized(720, 1280), mirrored: false, fit: 'cover' })).toEqual({ width: 720, height: 1280 });
+    expect(pipAspect({ stream: sized(1920, 1080), mirrored: false, fit: 'contain' })).toEqual({ width: 1920, height: 1080 });
+  });
+
+  test('rien ne flotte, ou la piste ne connaît pas encore sa taille : aucun format imposé', () => {
+    expect(pipAspect(null)).toBeNull();
+    expect(pipAspect({ stream: sized(), mirrored: false, fit: 'cover' })).toBeNull();
+    expect(pipAspect({ stream: sized(0, 720), mirrored: false, fit: 'cover' })).toBeNull();
+    expect(pipAspect({ stream: sized(720, 1280, 'ended'), mirrored: false, fit: 'cover' })).toBeNull();
+  });
+});
+
