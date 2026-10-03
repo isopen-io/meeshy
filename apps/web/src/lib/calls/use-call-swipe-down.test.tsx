@@ -123,6 +123,31 @@ describe('useCallSwipeDown', () => {
     view.done();
   });
 
+  /* Chromium : un glissé à la souris qui passe sur le portrait lance un
+     glisser-déposer natif, qui annule le pointeur (pointercancel) — l'appel ne
+     se réduisait plus en 320 × 568, où le doigt part du portrait. */
+  test('un glissé à la souris ne devient pas un glisser-déposer du navigateur', () => {
+    const view = mount();
+    const stage = view.at('[data-stage]');
+    view.pointer('pointerdown', stage, 100);
+    const native = new Event('dragstart', { bubbles: true, cancelable: true });
+    act(() => void stage.dispatchEvent(native));
+    expect(native.defaultPrevented).toBe(true);
+    view.pointer('pointermove', stage, 250);
+    view.pointer('pointermove', stage, 400);
+    view.pointer('pointerup', stage, 400);
+    expect(view.outcomes).toEqual(['pill']);
+    view.done();
+  });
+
+  test('hors d’un glissé, le glisser-déposer du navigateur reste libre', () => {
+    const view = mount({ allowed: false });
+    const native = new Event('dragstart', { bubbles: true, cancelable: true });
+    act(() => void view.at('[data-stage]').dispatchEvent(native));
+    expect(native.defaultPrevented).toBe(false);
+    view.done();
+  });
+
   test('là où le geste n’existe pas (groupe, menu ouvert), rien ne bouge', () => {
     const view = mount({ allowed: false });
     view.drag('[data-stage]', 300);

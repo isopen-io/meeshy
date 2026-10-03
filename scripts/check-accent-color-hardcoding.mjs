@@ -215,8 +215,14 @@
 // généré, pour que le bandeau et le texte redessinés en natif soient
 // identiques au web (une seule source de dessin). Les rapporter à
 // `accentColor` changerait le sticker selon la conversation.
+//
+// 2026-10-03 (#9171) — variables inconnues 442 → 443 : le fond d'attente de
+// `VisitorContentView` (`Color(hex: media.thumbnailColor)`). C'est la couleur
+// DOMINANTE du média, servie avec lui — le même fond que la bulle, la galerie
+// et l'aperçu peignent déjà sous chaque média qui charge. La rapporter à
+// `accentColor` peindrait la vignette d'un autre média que le sien.
 const REFERENCE_LITERAL_COLOR_COUNT = 65;
-const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 442;
+const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 443;
 
 import { readFileSync, readdirSync, statSync, realpathSync } from 'node:fs';
 import { join, dirname } from 'node:path';

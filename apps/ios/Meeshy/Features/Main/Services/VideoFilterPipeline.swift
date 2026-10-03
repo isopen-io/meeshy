@@ -182,6 +182,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
     private let faceEffects: any CallFaceEffectsRendererProviding
     private let backgroundBlur: CallBackgroundBlur
     private let clock: @Sendable () -> CFTimeInterval
+    private let stopwatch: @Sendable () -> CFTimeInterval
     private let isPowerConstrained: @Sendable () -> Bool
 
     // PERF-014: dedicated CVPixelBufferPool for filter output. Rendering back
@@ -193,6 +194,9 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
     private var outputPoolHeight: Int = 0
     private var outputPoolPixelFormat: OSType = 0
 
+    /// - Parameter stopwatch: mesure le temps de traitement d'une image, qui
+    ///   règle l'échelle de dégradation — injecté pour qu'un témoin ne juge pas
+    ///   la vitesse de la machine qui le fait tourner.
     /// - Parameter isPowerConstrained: économie d'énergie OU état thermique
     ///   `.serious`/`.critical` — le flou plafonne alors au palier 10 i/s et
     ///   l'éclaircissement automatique s'abstient.
@@ -201,10 +205,12 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         segmenter: any CallPersonSegmentationProviding = VisionPersonSegmenter(),
         segmentationExecutor: any CallVisionExecuting = CallVisionQueueExecutor(label: "me.meeshy.call.segmentation"),
         clock: @escaping @Sendable () -> CFTimeInterval = { CACurrentMediaTime() },
+        stopwatch: @escaping @Sendable () -> CFTimeInterval = { CACurrentMediaTime() },
         isPowerConstrained: @escaping @Sendable () -> Bool = { CallVideoDegradation.isDeviceConstrained() }
     ) {
         self.faceEffects = faceEffects
         self.clock = clock
+        self.stopwatch = stopwatch
         self.isPowerConstrained = isPowerConstrained
         let context = Self.makeContext()
         self.context = context
@@ -267,7 +273,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         let signposter = CallVideoSignposts.signposter
         let signpost = signposter.beginInterval("process", id: signposter.makeSignpostID())
         defer { signposter.endInterval("process", signpost) }
-        let start = CACurrentMediaTime()
+        let start = stopwatch()
 
         var image = CIImage(cvPixelBuffer: pixelBuffer)
 
@@ -333,7 +339,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
             output = pixelBuffer
         }
 
-        let elapsed = CACurrentMediaTime() - start
+        let elapsed = stopwatch() - start
         lastFrameProcessingTime = elapsed
         recordFrame(elapsedMs: elapsed * 1000, blurActive: cfg.backgroundBlurEnabled)
 
