@@ -216,12 +216,11 @@
 // identiques au web (une seule source de dessin). Les rapporter à
 // `accentColor` changerait le sticker selon la conversation.
 //
-// 2026-10-02 (#9171) — variables inconnues 442 → 443 : le
-// `Color(hex: media.thumbnailColor)` du contenu public ouvert sans session
-// (`VisitorContentView`). C'est la teinte d'attente du MÉDIA lui-même, la même
-// que celle des huit cartes de fil, de réel et de post qui la posent déjà
-// (`FeedPostCard+Media`, `PostDetailView+Media`…) : un visiteur n'est dans
-// aucune conversation, `accentColor` n'y désignerait rien.
+// 2026-10-03 (#9171) — variables inconnues 442 → 443 : le fond d'attente de
+// `VisitorContentView` (`Color(hex: media.thumbnailColor)`). C'est la couleur
+// DOMINANTE du média, servie avec lui — le même fond que la bulle, la galerie
+// et l'aperçu peignent déjà sous chaque média qui charge. La rapporter à
+// `accentColor` peindrait la vignette d'un autre média que le sien.
 const REFERENCE_LITERAL_COLOR_COUNT = 65;
 const REFERENCE_UNKNOWN_VARIABLE_COLOR_COUNT = 443;
 

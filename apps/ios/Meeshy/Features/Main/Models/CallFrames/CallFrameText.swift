@@ -63,6 +63,7 @@ nonisolated enum CallFrameText {
     }
 
     /// Le texte d'un titre ou d'un sous-titre. `group` hors groupe (ou sans nom de groupe) ⇒ les noms. La marque ne passe jamais en capitales.
+    /// L'heure, le lieu, le monument et l'émotion (#9197) n'écrivent rien tant que leur moteur n'est pas là (doc 06, étape 3.3).
     static func titleText(_ source: CallFrameTitleSource, people: [CallFramePerson], texts: CallFrameTexts, letterCase: CallFrameLetterCase? = nil) -> String {
         let raw: String
         switch source {
@@ -76,6 +77,7 @@ nonisolated enum CallFrameText {
         case .brand: raw = brandWord
         case .date: raw = trimmed(texts.date)
         case .none: raw = ""
+        case .time, .datetime, .place, .landmark, .emotion: raw = ""
         }
         return letterCase == .upper && source != .brand ? raw.uppercased(with: .current) : raw
     }

@@ -315,7 +315,7 @@ const progression = {
 const lienInvitation = {
   groupe: 'Nova Club 🌍',
   identifiant: 'nova-club',
-  url: 'meeshy.me/l/nova-club',
+  url: 'meeshy.me/chat/nova-club',
   clics: 1284,
   arrivees: 412,
   sansCompte: 157,

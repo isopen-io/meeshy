@@ -1,3 +1,5 @@
+import { createStore } from 'zustand/vanilla';
+
 import { cameraMirrored } from '@/lib/media/camera-mirror';
 
 import { hasVideo } from './call-view';
@@ -14,7 +16,8 @@ import type { ActiveCall } from './call-store';
  *   où la première manque (Safari, Firefox).
  *
  * La coque Android (WebView) n'offre ni l'un ni l'autre : le bouton n'y est
- * pas dessiné. La bascule AUTOMATIQUE quand l'onglet se masque passe par
+ * pas dessiné. C'est l'ACTIVITÉ qui y flotte quand on quitte l'app (#8144) ;
+ * `shellPipStore` dit à la page qu'elle est devenue la fenêtre flottante. La bascule AUTOMATIQUE quand l'onglet se masque passe par
  * l'action Media Session `enterpictureinpicture` : un navigateur refuse toute
  * image dans l'image sans geste, sauf par ce chemin.
  */
@@ -34,6 +37,9 @@ export function browserPipSupport(): PipSupport {
   const env = window as unknown as { readonly documentPictureInPicture?: unknown };
   return pipSupport({ documentPictureInPicture: env.documentPictureInPicture, pictureInPictureEnabled: (document as { readonly pictureInPictureEnabled?: boolean }).pictureInPictureEnabled });
 }
+
+/** Écrit par `shell-call.ts` depuis l'événement de la coque, lu par `call-pip-window.tsx`. */
+export const shellPipStore = createStore<{ readonly active: boolean }>(() => ({ active: false }));
 
 let opener: (() => Promise<boolean>) | null = null;
 

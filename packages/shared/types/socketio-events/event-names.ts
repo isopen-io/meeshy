@@ -257,6 +257,8 @@ export const SERVER_EVENTS = {
   CALL_MUTED_BY_MODERATOR: 'call:muted-by-moderator',
   /** #8439 — une réaction d'un participant, relayée aux autres participants connectés. */
   CALL_REACTION_RECEIVED: 'call:reaction-received',
+  /** #9214 — le cadre en direct d'un appel à deux, relayé à l'AUTRE participant seulement. */
+  CALL_FRAME_SELECTED: 'call:frame-selected',
   /** #8480 — à l'initiateur d'un appel qui sonne : l'appelé demande l'aperçu avant de décrocher. */
   CALL_PREVIEW_REQUESTED: 'call:preview-requested',
   /** #8480 — signal WebRTC de l'aperçu, relayé entre l'initiateur et l'appelé ; ne décroche rien. */
@@ -706,6 +708,8 @@ export const CLIENT_EVENTS = {
   CALL_MUTE_PARTICIPANT: 'call:mute-participant',
   /** #8439 — réagir pendant l'appel, emoji de la liste blanche `CALL_REACTION_EMOJIS`. */
   CALL_REACTION: 'call:reaction',
+  /** #9214 — poser ou retirer le cadre en direct d'un appel à deux (accusé `CallControlAck`). */
+  CALL_FRAME_SELECT: 'call:frame-select',
   /** #8480 — l'appelé demande à voir l'appelant pendant la sonnerie (accusé `CallControlAck`). */
   CALL_PREVIEW_REQUEST: 'call:preview-request',
   /** #8480 — signal WebRTC de l'aperçu (forme de `CallSignalEvent`, accusé `CallControlAck`). */

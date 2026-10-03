@@ -198,7 +198,8 @@ check(
 /* « T+ » pose le texte ET ouvre sa saisie : on tape au CLAVIER, jamais par
    `page.fill`, qui écrivait sous le calque des gestes (#8515). */
 /* L'invite du texte AJOUTÉ s'écrit à SA place — l'ancre du texte neuf, sur
-   85 % de la scène — jamais dans la boîte du texte déjà écrit (#8681). */
+   88 % de la scène (la coupe d'iOS, SCENE_TEXT_WRAP_FRACTION, #9140) — jamais
+   dans la boîte du texte déjà écrit (#8681). */
 await page.click('[data-story-option="add-text"]');
 await page.waitForFunction(() => document.activeElement?.id === 'story-studio-text', null, { timeout: 4000 });
 await twoFrames();
@@ -211,8 +212,8 @@ const invite = await page.evaluate(() => {
 });
 check(invite?.target === 'text-2', `l’invite n’écrit pas le texte ajouté — ${JSON.stringify(invite)}`);
 check(
-  invite !== null && Math.abs(invite.width - 0.85) < 0.01 && Math.abs(invite.cx - 0.5) < 0.01 && Math.abs(invite.cy - 0.5) < 0.01,
-  `l’invite du texte ajouté ne s’écrit pas à son ancre, sur 85 % de la scène — ${JSON.stringify(invite)}`,
+  invite !== null && Math.abs(invite.width - 0.88) < 0.01 && Math.abs(invite.cx - 0.5) < 0.01 && Math.abs(invite.cy - 0.5) < 0.01,
+  `l’invite du texte ajouté ne s’écrit pas à son ancre, sur 88 % de la scène — ${JSON.stringify(invite)}`,
 );
 const tPlus = await writeOnStage(page, 'Hello', { finish: false });
 if (tPlus !== null) console.error(`  « T+ » puis le clavier : ${tPlus}`);

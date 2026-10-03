@@ -70,6 +70,9 @@ nonisolated enum CallFrameSlotShape: String, CaseIterable, Equatable, Sendable {
     case ticket
     case stamp
     case blob
+    case torn
+    case polaroid
+    case frameOval = "frame-oval"
 }
 
 nonisolated enum CallFrameTone: String, CaseIterable, Equatable, Sendable {
@@ -224,6 +227,11 @@ nonisolated enum CallFrameTitleSource: String, CaseIterable, Equatable, Sendable
     case brand
     case date
     case none
+    case time
+    case datetime
+    case place
+    case landmark
+    case emotion
 }
 
 nonisolated enum CallFrameTitlePlace: String, CaseIterable, Equatable, Sendable {
@@ -278,6 +286,25 @@ nonisolated struct CallFrameSlotStyle: Equatable, Sendable {
     let tilt: CallFrameTilt
     let tone: CallFrameTone
     let duotone: CallFrameDuotone?
+    /// Les looks de la bibliothèque Meeshy (#9197) — reçus, pas encore dessinés (doc 06, étape 3.5).
+    let look: [CallFrameSlotLook]
+
+    init(
+        shape: CallFrameSlotShape, radius: Double?, stroke: CallFrameStroke?, double: Bool, glow: String?, shadow: Bool,
+        card: CallFrameCard?, tilt: CallFrameTilt, tone: CallFrameTone, duotone: CallFrameDuotone?, look: [CallFrameSlotLook] = []
+    ) {
+        self.shape = shape
+        self.radius = radius
+        self.stroke = stroke
+        self.double = double
+        self.glow = glow
+        self.shadow = shadow
+        self.card = card
+        self.tilt = tilt
+        self.tone = tone
+        self.duotone = duotone
+        self.look = look
+    }
 }
 
 nonisolated enum CallFrameBackground: Equatable, Sendable {
@@ -305,6 +332,16 @@ nonisolated struct CallFrameOrnament: Equatable, Sendable {
     let color: String
     let density: CallFrameDensity
     let layer: CallFrameLayer
+    /// `still` par défaut ; `loop` et `onAppear` ne s'animent qu'en direct (doc 06, étape 3.2).
+    let motion: CallFrameOrnamentMotion
+
+    init(kind: CallFrameOrnamentKind, color: String, density: CallFrameDensity, layer: CallFrameLayer, motion: CallFrameOrnamentMotion = .still) {
+        self.kind = kind
+        self.color = color
+        self.density = density
+        self.layer = layer
+        self.motion = motion
+    }
 }
 
 nonisolated struct CallFrameBrand: Equatable, Sendable {
@@ -313,6 +350,17 @@ nonisolated struct CallFrameBrand: Equatable, Sendable {
     let color: String
     let size: CallFrameTextSize
     let font: StoryTextStyle?
+    /// Le filigrane orientable des Imager (#9197) — reçu ; le rendu garde la diagonale actuelle jusqu'à l'étape 3.4.
+    let watermark: CallFrameWatermark?
+
+    init(mark: CallFrameBrandMark, place: CallFrameBrandPlace, color: String, size: CallFrameTextSize, font: StoryTextStyle?, watermark: CallFrameWatermark? = nil) {
+        self.mark = mark
+        self.place = place
+        self.color = color
+        self.size = size
+        self.font = font
+        self.watermark = watermark
+    }
 }
 
 nonisolated struct CallFrameNames: Equatable, Sendable {
@@ -331,11 +379,28 @@ nonisolated struct CallFrameTitle: Equatable, Sendable {
     let size: CallFrameTextSize
     let effect: CallFrameTextEffect?
     let letterCase: CallFrameLetterCase?
+    /// La forme de la source (spec 01 § 2) — `nil` : la forme par défaut de la source.
+    let form: CallFrameTextForm?
+
+    init(
+        source: CallFrameTitleSource, font: StoryTextStyle, color: String, place: CallFrameTitlePlace, size: CallFrameTextSize,
+        effect: CallFrameTextEffect?, letterCase: CallFrameLetterCase?, form: CallFrameTextForm? = nil
+    ) {
+        self.source = source
+        self.font = font
+        self.color = color
+        self.place = place
+        self.size = size
+        self.effect = effect
+        self.letterCase = letterCase
+        self.form = form
+    }
 
     var servedEffect: CallFrameTextEffect { effect ?? CallFrameTextEffect.none }
 }
 
 /// L'apparence complète d'un cadre — ce qu'une variante surcharge, clé par clé.
+/// `brand` est FACULTATIF depuis #9197 : un cadre sans signature se peint sans marque.
 nonisolated struct CallFrameLook: Equatable, Sendable {
     let layout: CallFrameLayout
     let slot: CallFrameSlotStyle
@@ -343,10 +408,36 @@ nonisolated struct CallFrameLook: Equatable, Sendable {
     let pattern: CallFramePattern?
     let border: CallFrameBorder?
     let ornaments: [CallFrameOrnament]
-    let brand: CallFrameBrand
+    let brand: CallFrameBrand?
     let names: CallFrameNames
     let title: CallFrameTitle
     let subtitle: CallFrameTitle?
+    let elements: [CallFrameElement]
+    let scene: [CallFrameSceneLayer]
+    let behaviors: [CallFrameBehavior]
+    let fallbacks: CallFrameFallbacks?
+
+    init(
+        layout: CallFrameLayout, slot: CallFrameSlotStyle, background: CallFrameBackground, pattern: CallFramePattern?,
+        border: CallFrameBorder?, ornaments: [CallFrameOrnament], brand: CallFrameBrand? = nil, names: CallFrameNames,
+        title: CallFrameTitle, subtitle: CallFrameTitle?, elements: [CallFrameElement] = [], scene: [CallFrameSceneLayer] = [],
+        behaviors: [CallFrameBehavior] = [], fallbacks: CallFrameFallbacks? = nil
+    ) {
+        self.layout = layout
+        self.slot = slot
+        self.background = background
+        self.pattern = pattern
+        self.border = border
+        self.ornaments = ornaments
+        self.brand = brand
+        self.names = names
+        self.title = title
+        self.subtitle = subtitle
+        self.elements = elements
+        self.scene = scene
+        self.behaviors = behaviors
+        self.fallbacks = fallbacks
+    }
 }
 
 /// Un cadre : un motif servi à une tranche. `id` = `<ambiance>.<motif>.<tranche>`, stable.
@@ -358,8 +449,16 @@ nonisolated struct CallFrameDesign: Equatable, Sendable, Identifiable {
     let bucket: CallFrameBucket
     let people: ClosedRange<Int>
     let look: CallFrameLook
+    /// Qui a fait le cadre et quand — le panneau du tap (doc 06, étape 3.4).
+    let credits: CallFrameCredits?
+    /// Où le cadre se propose : la capture seule, sauf s'il déclare aussi le direct.
+    let surfaces: [CallFrameSurface]
+    let cost: CallFrameCost?
 
-    init(id: String, motif: String, mood: CallFrameMood, name: String, bucket: CallFrameBucket, look: CallFrameLook) {
+    init(
+        id: String, motif: String, mood: CallFrameMood, name: String, bucket: CallFrameBucket, look: CallFrameLook,
+        credits: CallFrameCredits? = nil, surfaces: [CallFrameSurface] = [.capture], cost: CallFrameCost? = nil
+    ) {
         self.id = id
         self.motif = motif
         self.mood = mood
@@ -367,7 +466,12 @@ nonisolated struct CallFrameDesign: Equatable, Sendable, Identifiable {
         self.bucket = bucket
         self.people = bucket.people
         self.look = look
+        self.credits = credits
+        self.surfaces = surfaces
+        self.cost = cost
     }
+
+    func isOffered(on surface: CallFrameSurface) -> Bool { surfaces.contains(surface) }
 
     func serves(people count: Int) -> Bool { people.contains(count) }
 }

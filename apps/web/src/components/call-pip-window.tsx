@@ -9,7 +9,7 @@ import { StreamVideo } from '@/components/call-media-elements';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_SCREEN_GLYPHS } from '@/components/glyphs-call-screen';
 import { callActions } from '@/lib/calls/call-actions';
-import { armAutoPip, browserPipSupport, pipSource, registerPipOpener, shouldOfferPip, type AutoPipSession } from '@/lib/calls/call-pip';
+import { armAutoPip, browserPipSupport, pipSource, registerPipOpener, shellPipStore, shouldOfferPip, type AutoPipSession } from '@/lib/calls/call-pip';
 import { callStore, elapsedSeconds, formatCallClock, type ActiveCall } from '@/lib/calls/call-store';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -23,6 +23,10 @@ import { initialsOf } from '@/lib/view/conversation';
  * d'une vidéo lit une `<video>` cachée, montée tant qu'une vidéo peut
  * flotter, pour que le geste n'attende aucun chargement (un navigateur refuse
  * la PiP qui n'est pas demandée DANS le geste).
+ *
+ * Dans la coque Android, c'est l'activité entière qui flotte (#8144) : la
+ * page couvre alors l'écran d'appel de l'image et du nom, sans boutons — une
+ * fenêtre PiP d'Android ne transmet aucun toucher à la page.
  */
 
 type DocumentPip = { readonly requestWindow: (options: { readonly width: number; readonly height: number }) => Promise<Window>; readonly window: Window | null };
@@ -89,26 +93,33 @@ function PipClock({ call }: { readonly call: ActiveCall }) {
   return <span className="text-mini tabular-nums">{formatCallClock(elapsedSeconds(call, now))}</span>;
 }
 
+/** L'image et le nom — ce que montrent la fenêtre PiP du navigateur et l'activité qui flotte dans la coque. */
+function PipStage({ call }: { readonly call: ActiveCall }) {
+  const source = pipSource(call);
+  return (
+    <div className="relative grid min-h-0 flex-1 place-items-center">
+      {source === null ? (
+        <Avatar initials={initialsOf(call.title)} color={colorForName(call.title)} size={72} {...(call.avatar === null ? {} : { src: call.avatar })} />
+      ) : (
+        <StreamVideo stream={source.stream} mirrored={source.mirrored} fit={source.fit} className="absolute inset-0 size-full" label={call.title} />
+      )}
+      <span className="absolute left-2 top-2 flex items-center gap-2 rounded-full px-2 py-0.5 text-mini" style={{ background: 'var(--color-scrim)' }}>
+        <span className="max-w-[10rem] truncate font-semibold">{call.title}</span>
+        <PipClock call={call} />
+      </span>
+    </div>
+  );
+}
+
 function CallPipView({ call }: { readonly call: ActiveCall }) {
   const language = currentInterfaceLanguage();
-  const source = pipSource(call);
   const back = () => {
     window.focus();
     callActions.expand();
   };
   return (
     <div className="relative flex h-screen flex-col" style={{ background: 'var(--color-media-backdrop)', color: 'var(--color-on-media)' }} data-call-pip-window="">
-      <div className="relative grid min-h-0 flex-1 place-items-center">
-        {source === null ? (
-          <Avatar initials={initialsOf(call.title)} color={colorForName(call.title)} size={72} {...(call.avatar === null ? {} : { src: call.avatar })} />
-        ) : (
-          <StreamVideo stream={source.stream} mirrored={source.mirrored} fit={source.fit} className="absolute inset-0 size-full" label={call.title} />
-        )}
-        <span className="absolute left-2 top-2 flex items-center gap-2 rounded-full px-2 py-0.5 text-mini" style={{ background: 'var(--color-scrim)' }}>
-          <span className="max-w-[10rem] truncate font-semibold">{call.title}</span>
-          <PipClock call={call} />
-        </span>
-      </div>
+      <PipStage call={call} />
       <div className="flex items-center justify-center gap-3 py-1" style={{ background: 'color-mix(in srgb, var(--color-media-backdrop) 92%, transparent)' }}>
         <button type="button" onClick={callActions.toggleMic} aria-pressed={call.micMuted} aria-label={translate(language, call.micMuted ? 'call.mic.unmute' : 'call.mic.mute')} className="grid size-11 place-items-center rounded-full">
           {call.micMuted ? <GlyphSvg glyph={CALL_SCREEN_GLYPHS.microphoneSlash} size={20} /> : <Glyph name="microphone" size={20} />}
@@ -131,6 +142,7 @@ function CallPipView({ call }: { readonly call: ActiveCall }) {
  */
 function CallPip({ call }: { readonly call: ActiveCall }) {
   const pipWindow = useStore(pipWindowStore, (state) => state.window);
+  const shellFloating = useStore(shellPipStore, (state) => state.active);
   const support = browserPipSupport();
   const offered = shouldOfferPip(call, support);
   const live = call.phase.kind !== 'ended';
@@ -165,6 +177,11 @@ function CallPip({ call }: { readonly call: ActiveCall }) {
         <video ref={hidden} muted playsInline autoPlay aria-hidden {...{ [PIP_VIDEO]: '' }} style={{ position: 'fixed', width: 1, height: 1, opacity: 0, pointerEvents: 'none', left: 0, top: 0 }} />
       ) : null}
       {pipWindow === null || !live ? null : createPortal(<CallPipView call={call} />, pipWindow.document.body)}
+      {shellFloating && live ? (
+        <div className="fixed inset-0 z-[220] flex flex-col" style={{ background: 'var(--color-media-backdrop)', color: 'var(--color-on-media)' }} data-call-pip-shell="">
+          <PipStage call={call} />
+        </div>
+      ) : null}
     </>
   );
 }

@@ -13,4 +13,7 @@
     <string name="call_ongoing_audio">Sprachanruf läuft</string>
     <string name="call_ongoing_video">Videoanruf läuft</string>
     <string name="call_ongoing_return">Tippen, um zum Anruf zurückzukehren</string>
+    <string name="call_pip_mute">Mikrofon stummschalten</string>
+    <string name="call_pip_unmute">Mikrofon einschalten</string>
+    <string name="call_pip_hangup">Auflegen</string>
 </resources>

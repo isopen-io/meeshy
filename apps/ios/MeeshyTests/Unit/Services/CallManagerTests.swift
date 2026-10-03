@@ -2786,13 +2786,18 @@ final class LocalMediaStartHelperTests: XCTestCase {
         guard let body = functionBody(of: "func performLocalMediaStart", in: source) else {
             XCTFail("performLocalMediaStart not found"); return
         }
+        // #8788 — les replis vers l'audio passent par UN site :
+        // `CallVideoFallback.classify` puis `continueAudioOnly`.
+        guard let fallback = functionBody(of: "func continueAudioOnly", in: source) else {
+            XCTFail("continueAudioOnly not found"); return
+        }
         XCTAssertTrue(
-            body.contains("simulatorVideoUnsupported"),
+            body.contains("CallVideoFallback.classify(error)") && source.contains("case WebRTCError.simulatorVideoUnsupported: return .simulator"),
             "performLocalMediaStart must handle simulatorVideoUnsupported and fall back to audio-only"
         )
         XCTAssertTrue(
-            body.contains("isVideoEnabled = false"),
-            "performLocalMediaStart must set isVideoEnabled = false on video degradation"
+            fallback.contains("isVideoEnabled = false"),
+            "the audio fallback must set isVideoEnabled = false on video degradation"
         )
     }
 

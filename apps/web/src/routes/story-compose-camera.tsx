@@ -111,6 +111,7 @@ export function StudioCamera({
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [facing, setFacing] = useState<CameraFacing>('environment');
   const [status, setStatus] = useState<'opening' | 'live' | 'unavailable'>('opening');
+  const [attempt, setAttempt] = useState(0);
   const openAppSettings = appSettingsOpener();
   const [torch, setTorch] = useState(false);
   const [recording, setRecording] = useState<Recording>(null);
@@ -174,7 +175,19 @@ export function StudioCamera({
       releaseStream();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facing, engine]);
+  }, [facing, engine, attempt]);
+
+  /* AU RETOUR DES RÉGLAGES, LA CAMÉRA SE RALLUME (#9193) — « Réglages » sort
+     de l'app (#9032) ; la permission accordée là-bas n'est relue qu'au
+     retour au premier plan, comme celle des notifications (`use-device-push.ts`). */
+  useEffect(() => {
+    if (status !== 'unavailable') return;
+    const retry = () => {
+      if (document.visibilityState === 'visible') setAttempt((n) => n + 1);
+    };
+    document.addEventListener('visibilitychange', retry);
+    return () => document.removeEventListener('visibilitychange', retry);
+  }, [status]);
 
   const plan = () => cameraFlashPlan({ flash, facing, torch });
 

@@ -4,12 +4,13 @@ import { BRAND_FONT, frameCanvasFont } from './frame-fonts';
 import type { FrameAreas, FrameSlotBox } from './frame-layout';
 import { enterSlot, footprint, intersects, luminance, mix, photoRect, roundedRectPath, tint, type Surface2D } from './frame-paint-kit';
 import { shapeInnerRect, slotPath } from './frame-paint-shapes';
-import type { FrameFont, FrameLook, FrameNames, FrameTitle } from './frame-spec';
+import type { FrameBrand, FrameFont, FrameLook, FrameNames, FrameTitle } from './frame-spec';
 import { BRAND_WORD, fitText, listEntry, personLines, titleText, type FittedText, type FramePerson, type FrameTexts, type MeasureText } from './frame-text';
 
 /**
  * **LES TEXTES D'UN CADRE** (#8743, spec § 4.5, § 5.2) — la signature
- * Meeshy (toujours), les noms, le titre et le sous-titre. Un texte ne couvre
+ * Meeshy (quand le cadre la déclare : facultative depuis #9197), les noms,
+ * le titre et le sous-titre. Un texte ne couvre
  * jamais un visage : il vit dans les réserves `top`/`bottom`, sous la case,
  * ou — pour `plate`, `badge` et `bubble` seulement — DANS la case, sur son
  * propre fond.
@@ -55,7 +56,7 @@ export function canvasMeasure(context: Surface2D, font: FrameFont): MeasureText 
 type BrandBox = { readonly width: number; readonly height: number; readonly px: number; readonly logoHeight: number };
 
 /** L'encombrement de la signature : le mot à `px`, le logo à la hauteur de ses traits, les deux côte à côte. */
-function brandBox(brand: FrameLook['brand'], unit: number, measure: MeasureText): BrandBox {
+function brandBox(brand: FrameBrand, unit: number, measure: MeasureText): BrandBox {
   const px = unit * BRAND_SHARE[brand.size];
   const logoHeight = brand.mark === 'logo' ? px * 0.95 : px * 0.62;
   const logoWidth = logoHeight * GLYPH_ASPECT;
@@ -87,18 +88,19 @@ const titleShown = (title: FrameTitle | undefined): title is FrameTitle => title
  */
 export function planText(look: FrameTextLook, people: number, areas: FrameAreas, measure: MeasureText): TextPlan {
   const unit = areas.unit;
-  const box = brandBox(look.brand, unit, measure);
+  const box = look.brand === undefined ? null : brandBox(look.brand, unit, measure);
+  const brandRows = (at: 'top' | 'bottom'): readonly Row[] => (box !== null && look.brand?.place === at ? [{ key: 'brand', height: box.height * 1.25 }] : []);
   const titleHeight = (title: FrameTitle) => unit * TITLE_SHARE[title.size] * LINE;
   const listLines = look.names.show === 'both' || people >= 5 ? 2 : 1;
   const listed = look.names.style === 'list' && look.names.show !== 'none';
   const place = (at: 'top' | 'bottom') => {
     const rows: readonly Row[] = [
-      ...(at === 'top' && look.brand.place === 'top' ? [{ key: 'brand', height: box.height * 1.25 } as const] : []),
+      ...(at === 'top' ? brandRows('top') : []),
       ...(at === 'bottom' && titleShown(look.title) && look.title.place === 'bottom' ? [{ key: 'title', height: titleHeight(look.title) } as const] : []),
       ...(at === 'top' && titleShown(look.title) && look.title.place === 'top' ? [{ key: 'title', height: titleHeight(look.title) } as const] : []),
       ...(titleShown(look.subtitle) && look.subtitle.place === at ? [{ key: 'subtitle', height: titleHeight(look.subtitle) } as const] : []),
       ...(at === 'bottom' && listed ? [{ key: 'list', height: unit * LIST_SHARE * 1.45 * listLines } as const] : []),
-      ...(at === 'bottom' && look.brand.place === 'bottom' ? [{ key: 'brand', height: box.height * 1.25 } as const] : []),
+      ...(at === 'bottom' ? brandRows('bottom') : []),
     ];
     const reserve = at === 'top' ? areas.top : areas.bottom;
     const room = reserve.height * 0.94;
@@ -118,7 +120,7 @@ export function planText(look: FrameTextLook, people: number, areas: FrameAreas,
   const top = place('top');
   const bottom = place('bottom');
   const find = (key: Row['key']): Rect | null => [...top.rects, ...bottom.rects].find((row) => row.key === key)?.rect ?? null;
-  const brandScale = look.brand.place === 'top' ? top.brandScale : look.brand.place === 'bottom' ? bottom.brandScale : 1;
+  const brandScale = look.brand?.place === 'top' ? top.brandScale : look.brand?.place === 'bottom' ? bottom.brandScale : 1;
   return { brand: find('brand'), brandScale, title: find('title'), subtitle: find('subtitle'), list: find('list'), textScale: { top: top.scale, bottom: bottom.scale } };
 }
 
@@ -182,7 +184,7 @@ export function paintLogo(context: Surface2D, x: number, y: number, height: numb
 }
 
 /** La signature — le logo, le mot, ou les deux — centrée sur (`cx`, `cy`). */
-function paintBrandAt(context: Surface2D, brand: FrameLook['brand'], box: BrandBox, cx: number, cy: number, scale: number, alpha = 1): void {
+function paintBrandAt(context: Surface2D, brand: FrameBrand, box: BrandBox, cx: number, cy: number, scale: number, alpha = 1): void {
   const px = box.px * scale;
   const logoHeight = box.logoHeight * scale;
   const width = box.width * scale;
@@ -199,7 +201,7 @@ function paintBrandAt(context: Surface2D, brand: FrameLook['brand'], box: BrandB
 export const WATERMARK_ALPHA = 0.12;
 
 /** Le filigrane : la signature répétée en diagonale, très discrète, par-dessus l'ensemble. */
-function paintWatermark(context: Surface2D, brand: FrameLook['brand'], box: BrandBox, size: Size): void {
+function paintWatermark(context: Surface2D, brand: FrameBrand, box: BrandBox, size: Size): void {
   const reach = Math.hypot(size.width, size.height);
   const stepX = box.width * 2.2;
   const stepY = box.height * 3.2;
@@ -217,6 +219,7 @@ function paintWatermark(context: Surface2D, brand: FrameLook['brand'], box: Bran
 
 export function paintBrand(context: Surface2D, scene: TextScene, plan: TextPlan): void {
   const { brand } = scene.look;
+  if (brand === undefined) return;
   const unit = scene.areas.unit;
   const box = brandBox(brand, unit, canvasMeasure(context, brand.font ?? BRAND_FONT));
   if (brand.place === 'watermark') {
@@ -234,8 +237,8 @@ export function paintBrand(context: Surface2D, scene: TextScene, plan: TextPlan)
 
 /** Le rectangle d'une signature posée dans un coin de l'intérieur — `null` hors des quatre coins. */
 function cornerBrandRect(scene: TextScene, box: BrandBox): Rect | null {
-  const { place } = scene.look.brand;
-  if (place === 'top' || place === 'bottom' || place === 'watermark') return null;
+  const place = scene.look.brand?.place;
+  if (place === undefined || place === 'top' || place === 'bottom' || place === 'watermark') return null;
   const pad = scene.areas.unit * 0.035;
   const inner = scene.areas.inner;
   const x = place.endsWith('left') ? inner.x + pad : inner.x + inner.width - pad - box.width;
@@ -253,9 +256,11 @@ const overlapsRow = (row: Rect, top: number, bottom: number): boolean => top < r
 
 /** Ce qu'une signature posée dans un coin prend à une rangée de texte qu'elle croise : sa largeur et son côté. */
 function brandAllowance(scene: TextScene, row: Rect, measure: MeasureText): { readonly width: number; readonly side: 'left' | 'right' } | null {
-  const corner = cornerBrandRect(scene, brandBox(scene.look.brand, scene.areas.unit, measure));
+  const { brand } = scene.look;
+  if (brand === undefined) return null;
+  const corner = cornerBrandRect(scene, brandBox(brand, scene.areas.unit, measure));
   if (corner === null || !overlapsRow(row, corner.y, corner.y + corner.height)) return null;
-  return { width: corner.width + scene.areas.unit * 0.06, side: scene.look.brand.place.endsWith('left') ? 'left' : 'right' };
+  return { width: corner.width + scene.areas.unit * 0.06, side: brand.place.endsWith('left') ? 'left' : 'right' };
 }
 
 /** La largeur que prennent les ornements de coin (lune, REC) à une rangée qu'ils croisent — ils CÈDENT au titre quand il ne tiendrait plus qu'en se tronquant. */
@@ -290,7 +295,7 @@ function fittedTitles(context: Surface2D, scene: TextScene, plan: TextPlan): rea
     const scale = title.place === 'top' ? plan.textScale.top : plan.textScale.bottom;
     const px = unit * TITLE_SHARE[title.size] * scale;
     const measure = canvasMeasure(context, title.font);
-    const brand = brandAllowance(scene, row, canvasMeasure(context, scene.look.brand.font ?? BRAND_FONT));
+    const brand = brandAllowance(scene, row, canvasMeasure(context, scene.look.brand?.font ?? BRAND_FONT));
     const brandWidth = brand?.width ?? 0;
     const ornaments = title.place === 'top' ? ornamentAllowance(scene, row) : 0;
     const whole = (fitted: FittedText): boolean => fitted.text === text && fitted.px >= px * 0.75;
@@ -310,15 +315,15 @@ function fittedTitles(context: Surface2D, scene: TextScene, plan: TextPlan): rea
 export type TextLayout = { readonly plan: TextPlan; readonly boxes: readonly Rect[]; readonly headline: Rect | null };
 
 export function textLayout(context: Surface2D, scene: TextScene): TextLayout {
-  const brandMeasure = canvasMeasure(context, scene.look.brand.font ?? BRAND_FONT);
+  const brandMeasure = canvasMeasure(context, scene.look.brand?.font ?? BRAND_FONT);
   const plan = planText(scene.look, scene.people.length, scene.areas, brandMeasure);
   const titles = fittedTitles(context, scene, plan).map((fitted) => {
     const width = canvasMeasure(context, fitted.title.font)(fitted.text, fitted.px) + fitted.px * 0.8;
     return { x: fitted.cx - width / 2, y: fitted.row.y, width, height: fitted.row.height };
   });
-  const box = brandBox(scene.look.brand, scene.areas.unit, brandMeasure);
-  const corner = cornerBrandRect(scene, box);
-  const brand = plan.brand !== null ? [{ x: plan.brand.x + (plan.brand.width - box.width) / 2 - box.px * 0.3, y: plan.brand.y, width: box.width + box.px * 0.6, height: plan.brand.height }] : corner === null ? [] : [corner];
+  const box = scene.look.brand === undefined ? null : brandBox(scene.look.brand, scene.areas.unit, brandMeasure);
+  const corner = box === null ? null : cornerBrandRect(scene, box);
+  const brand = box === null ? [] : plan.brand !== null ? [{ x: plan.brand.x + (plan.brand.width - box.width) / 2 - box.px * 0.3, y: plan.brand.y, width: box.width + box.px * 0.6, height: plan.brand.height }] : corner === null ? [] : [corner];
   const list = plan.list === null ? [] : [plan.list];
   return { plan, boxes: [...titles, ...brand, ...list], headline: titles[0] ?? null };
 }
