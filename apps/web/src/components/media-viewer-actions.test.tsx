@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { EMOJI_USAGE_KEY, readEmojiUsage } from '@/lib/emoji-usage';
 import type { Attachment } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { closeSendSheet, sendSheetStore, type SendSheetRequest } from '@/lib/send/send-sheet-store';
@@ -57,6 +58,7 @@ afterEach(() => {
     root.unmount();
   });
   container.remove();
+  localStorage.clear();
 });
 
 type Props = Parameters<typeof MediaViewer>[0];
@@ -300,5 +302,42 @@ describe('MediaViewer — « Partager » ouvre la feuille d’envoi commune (#88
     });
     expect(document.getElementById('root')?.hasAttribute('inert')).toBe(false);
     root = createRoot(container);
+  });
+});
+
+describe('MediaViewer — la traînée de réactions suit l’usage des emojis (#9252)', () => {
+  const trayEmojis = (): readonly (string | null)[] =>
+    [...dialog().querySelectorAll<HTMLButtonElement>('[data-viewer-reactions] button')].map((button) => button.getAttribute('data-viewer-reaction'));
+  const openTray = async (): Promise<void> => {
+    const items = photos(['a']);
+    mount({ items, startIndex: 0, actionsAt: () => pageOf(items[0]!, { ...NO_MEDIA_OFFERS, react: true }) });
+    await settle();
+    act(() => {
+      dialog().querySelector<HTMLButtonElement>('[data-viewer-action="react"]')!.click();
+    });
+  };
+
+  test('sans historique : les six réactions rapides, dans leur ordre', async () => {
+    await openTray();
+    expect(trayEmojis()).toEqual(['😂', '❤️', '👍', '😮', '😢', '🔥']);
+  });
+
+  test('les emojis que ce lecteur emploie passent en tête, les défauts complètent', async () => {
+    localStorage.setItem(EMOJI_USAGE_KEY, JSON.stringify([['🔥', 3], ['🎉', 4]]));
+    await openTray();
+    expect(trayEmojis()).toEqual(['🎉', '🔥', '😂', '❤️', '👍', '😮']);
+  });
+
+  test('réagir depuis la traînée compte un emploi, et la traînée rouverte le classe', async () => {
+    await openTray();
+    await act(async () => {
+      dialog().querySelector<HTMLButtonElement>('[data-viewer-reaction="😮"]')!.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(readEmojiUsage().get('😮')).toBe(1);
+    act(() => {
+      dialog().querySelector<HTMLButtonElement>('[data-viewer-action="react"]')!.click();
+    });
+    expect(trayEmojis()).toEqual(['😮', '😂', '❤️', '👍', '😢', '🔥']);
   });
 });
