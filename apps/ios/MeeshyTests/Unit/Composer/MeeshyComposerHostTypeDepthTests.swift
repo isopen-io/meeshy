@@ -94,7 +94,7 @@ final class MeeshyComposerHostTypeDepthTests: XCTestCase {
 
     /// Le TYPE `StoryComposerView`, pas un préfixe : `StoryComposerViewModel`
     /// peut paraître dans un paramètre générique sans rien déplier.
-    private static func mentionsAtelier(_ typeName: String) -> Bool {
+    nonisolated private static func mentionsAtelier(_ typeName: String) -> Bool {
         typeName.range(of: "StoryComposerView(?![A-Za-z])", options: .regularExpression) != nil
     }
 
@@ -143,7 +143,7 @@ final class MeeshyComposerHostTypeDepthTests: XCTestCase {
 
     /// Les chevrons ET les parenthèses : un tuple ou un type de fonction porte
     /// sa propre imbrication, que le démangleur parcourt aussi.
-    private static func depth(of typeName: String) -> Int {
+    nonisolated private static func depth(of typeName: String) -> Int {
         typeName.reduce(into: (depth: 0, max: 0)) { acc, character in
             switch character {
             case "<", "(":

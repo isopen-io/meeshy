@@ -875,7 +875,7 @@ struct MeeshyComposerHost: View {
 
     /// **Trois couches NOMINALES, jamais une seule expression** (#8387). Le
     /// `body` empilait la scène, ce qui la recouvre et le cycle de vie en un
-    /// type d'une soixantaine de niveaux, matérialisé dans un cadre de ~100 Ko :
+    /// type d'une cinquantaine de niveaux, matérialisé dans un cadre de ~100 Ko :
     /// « Créer une story » débordait la pile. Chaque couche est évaluée dans
     /// son propre cadre — `MeeshyComposerHost+Layers`, gardé par
     /// `MeeshyComposerHostTypeDepthTests`. L'ORDRE des modificateurs est celui

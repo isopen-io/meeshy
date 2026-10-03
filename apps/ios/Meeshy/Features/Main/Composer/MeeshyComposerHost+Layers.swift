@@ -11,8 +11,8 @@ import MeeshyUI
 // La cause est la forme du type, pas un geste : le `body` empilait en UNE
 // expression la racine, l'autosave, le viseur, le menu du fond, la pile du
 // socle, les portails d'ingestion et l'aiguillage des quatre surfaces. Son type
-// concret imbriquait tout cela en un seul `ModifiedContent<…>` d'une
-// soixantaine de niveaux, matérialisé — et copié, une fois par fermeture qui
+// concret imbriquait tout cela en un seul `ModifiedContent<…>` — une
+// cinquantaine de niveaux comptés sur la source —, matérialisé — et copié, une fois par fermeture qui
 // capture le meuble — dans le cadre du même `body`.
 //
 // Une vue `struct` NOMINALE, ou un `ViewModifier` nommé, crée un nœud
