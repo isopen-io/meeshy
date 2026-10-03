@@ -18,17 +18,35 @@ function overlay(base: FrameLook, variant: Variant): FrameLook {
   const pattern = variant.pattern ?? base.pattern;
   const border = variant.border ?? base.border;
   const subtitle = variant.subtitle ?? base.subtitle;
+  const brand = variant.brand ?? base.brand;
+  const elements = variant.elements ?? base.elements;
+  const scene = variant.scene ?? base.scene;
+  const behaviors = variant.behaviors ?? base.behaviors;
+  const fallbacks = variant.fallbacks ?? base.fallbacks;
   return {
     layout: variant.layout ?? base.layout,
     slot: variant.slot ?? base.slot,
     background: variant.background ?? base.background,
     ornaments: variant.ornaments ?? base.ornaments,
-    brand: variant.brand ?? base.brand,
     names: variant.names ?? base.names,
     title: variant.title ?? base.title,
     ...(pattern === undefined ? {} : { pattern }),
     ...(border === undefined ? {} : { border }),
+    ...(brand === undefined ? {} : { brand }),
     ...(subtitle === undefined ? {} : { subtitle }),
+    ...(elements === undefined ? {} : { elements }),
+    ...(scene === undefined ? {} : { scene }),
+    ...(behaviors === undefined ? {} : { behaviors }),
+    ...(fallbacks === undefined ? {} : { fallbacks }),
+  };
+}
+
+/** Ce que le motif déclare pour TOUTES ses tranches (doc 06 § 3) : qui l'a fait, où il se propose, ce qu'il coûte. */
+function motifKeys(motif: FrameMotif): Pick<CaptureFrame, 'credits' | 'surfaces' | 'cost'> {
+  return {
+    ...(motif.credits === undefined ? {} : { credits: motif.credits }),
+    ...(motif.surfaces === undefined ? {} : { surfaces: motif.surfaces }),
+    ...(motif.cost === undefined ? {} : { cost: motif.cost }),
   };
 }
 
@@ -37,7 +55,7 @@ export function expandMotif(motif: FrameMotif): readonly CaptureFrame[] {
   return FRAME_BUCKETS.flatMap((bucket) => {
     const variant = motif.variants[bucket];
     if (variant === undefined) return [];
-    return [{ ...overlay(motif.base, variant), id: `${motif.id}.${bucket}`, motif: motif.id, mood: motif.mood, name: motif.name, bucket, people: BUCKET_PEOPLE[bucket] }];
+    return [{ ...overlay(motif.base, variant), ...motifKeys(motif), id: `${motif.id}.${bucket}`, motif: motif.id, mood: motif.mood, name: motif.name, bucket, people: BUCKET_PEOPLE[bucket] }];
   });
 }
 

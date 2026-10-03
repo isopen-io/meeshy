@@ -56,7 +56,9 @@ final class CallFrameCatalogueTests: XCTestCase {
     }
 
     func test_everyFrame_isSignedAndUsesEveryMark() {
-        let marks = Set(CallFrameCatalogue.all.map(\.look.brand.mark.rawValue))
+        let brands = CallFrameCatalogue.all.compactMap(\.look.brand)
+        XCTAssertEqual(brands.count, CallFrameCatalogue.all.count)
+        let marks = Set(brands.map(\.mark.rawValue))
         XCTAssertEqual(marks.sorted(), ["both", "logo", "wordmark"])
         let handles = CallFrameCatalogue.all.filter { $0.look.names.show == .handle || $0.look.names.show == .both }
         XCTAssertGreaterThanOrEqual(handles.count, 15)
@@ -129,7 +131,7 @@ final class CallFrameCatalogueTests: XCTestCase {
         }
         let slot = [look.slot.stroke?.color, look.slot.glow, look.slot.card?.color, look.slot.duotone?.shadow, look.slot.duotone?.light].compactMap { $0 }
         let decor = [look.pattern?.color, look.border?.color].compactMap { $0 } + look.ornaments.map(\.color)
-        let texts = [look.brand.color, look.names.color, look.names.fill, look.title.color, look.subtitle?.color].compactMap { $0 }
+        let texts = [look.brand?.color, look.names.color, look.names.fill, look.title.color, look.subtitle?.color].compactMap { $0 }
         return background + slot + decor + texts
     }
 

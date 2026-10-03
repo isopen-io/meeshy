@@ -45,7 +45,7 @@ export function framesFonts(frames: readonly Pick<FrameLook, 'names' | 'title' |
     ...(frame.names.show === 'none' ? [] : [frame.names.font]),
     ...(frame.title.source === 'none' ? [] : [frame.title.font]),
     ...(frame.subtitle === undefined || frame.subtitle.source === 'none' ? [] : [frame.subtitle.font]),
-    ...(frame.brand.mark === 'logo' ? [] : [frame.brand.font ?? BRAND_FONT]),
+    ...(frame.brand === undefined || frame.brand.mark === 'logo' ? [] : [frame.brand.font ?? BRAND_FONT]),
   ]);
   return [...new Set(used)];
 }

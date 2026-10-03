@@ -104,7 +104,7 @@ final class CallFrameRendererTests: XCTestCase {
 
     private func withBrand(_ frame: CallFrameDesign, color: String) -> CallFrameDesign {
         let look = frame.look
-        let brand = CallFrameBrand(mark: look.brand.mark, place: look.brand.place, color: color, size: look.brand.size, font: look.brand.font)
+        let brand = look.brand.map { CallFrameBrand(mark: $0.mark, place: $0.place, color: color, size: $0.size, font: $0.font, watermark: $0.watermark) }
         return CallFrameDesign(
             id: frame.id + ".probe",
             motif: frame.motif,
@@ -154,7 +154,7 @@ final class CallFrameRendererTests: XCTestCase {
     func test_brand_isPaintedInItsFrame_forSeveralFrames() throws {
         let size = CGSize(width: 540, height: 960)
         let probes = ["signature", "elegant", "corporate", "futuriste"].compactMap { mood in
-            CallFrameCatalogue.all.first { $0.mood.rawValue == mood && $0.bucket == .duo && $0.look.brand.place != .watermark }
+            CallFrameCatalogue.all.first { $0.mood.rawValue == mood && $0.bucket == .duo && ($0.look.brand?.place ?? .watermark) != .watermark }
         }
         XCTAssertGreaterThanOrEqual(probes.count, 2)
         for frame in probes {

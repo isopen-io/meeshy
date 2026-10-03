@@ -42,7 +42,8 @@ describe('le catalogue réel se rend', () => {
           const group = recorder();
           paintFrame(group.context, frame, people(count), faces(count), texts(count > 2), size);
           const groupText = written(group.log);
-          const signed = frame.brand.mark === 'logo' ? drewBrandDashes(group.log) : groupText.includes('meeshy') && (frame.brand.mark === 'wordmark' || drewBrandDashes(group.log));
+          const mark = frame.brand?.mark;
+          const signed = mark === 'logo' ? drewBrandDashes(group.log) : mark !== undefined && groupText.includes('meeshy') && (mark === 'wordmark' || drewBrandDashes(group.log));
           if (!signed) problems.push(`${count}@${size.width}: signature absente`);
           if (count > 2 && usesGroupTitle(frame) && !groupText.some((text) => text.toLocaleUpperCase().startsWith('LES CO'))) problems.push(`${count}@${size.width}: nom du groupe absent`);
           const alone = recorder();

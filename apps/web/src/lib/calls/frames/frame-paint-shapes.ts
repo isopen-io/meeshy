@@ -4,11 +4,12 @@ import type { SlotShape } from './frame-spec';
 import { centerOf, rand, roundedRectPath, TAU, type Surface2D } from './frame-paint-kit';
 
 /**
- * **LES DOUZE FORMES DE CASE** (#8741, spec § 4.2) — chaque forme se trace
- * DANS son rectangle, centrée, sans le déborder : `circle`, `hex`, `star` et
- * `heart` gardent leurs proportions et prennent la plus grande taille qui
- * tient. `blob` est organique mais déterministe (graine = index de la case).
- * Chaque tracé ouvre son propre chemin (`beginPath`).
+ * **LES QUINZE FORMES DE CASE** (#8741, spec § 4.2 ; #9197 pour `torn`,
+ * `polaroid`, `frame-oval`) — chaque forme se trace DANS son rectangle,
+ * centrée, sans le déborder : `circle`, `hex`, `star`, `heart`, `polaroid` et
+ * `frame-oval` gardent leurs proportions et prennent la plus grande taille qui
+ * tient. `blob` et `torn` sont irréguliers mais déterministes (graine = index
+ * de la case). Chaque tracé ouvre son propre chemin (`beginPath`).
  */
 
 export type ShapeOptions = { readonly radius?: number | undefined; readonly seed?: number | undefined };
@@ -127,6 +128,50 @@ function blob(context: Surface2D, rect: Rect, seed: number): void {
   context.closePath();
 }
 
+type Point = readonly [number, number];
+
+/**
+ * Un bord déchiré : les quatre côtés du rectangle rongés vers l'intérieur par
+ * des dents irrégulières (au plus 2,5 % du petit côté), les coins intacts.
+ */
+export function tornPoints(rect: Rect, seed: number): readonly Point[] {
+  const side = Math.min(rect.width, rect.height);
+  const depth = side * 0.025;
+  const step = side * 0.045;
+  const { x, y, width: w, height: h } = rect;
+  const edge = (from: Point, to: Point, inward: Point, salt: number): readonly Point[] => {
+    const count = Math.max(4, Math.round(Math.hypot(to[0] - from[0], to[1] - from[1]) / step));
+    return Array.from({ length: count }, (_, index) => {
+      const share = index / count;
+      const bite = index === 0 ? 0 : rand(seed + 23, salt * 1000 + index) * depth;
+      return [from[0] + (to[0] - from[0]) * share + inward[0] * bite, from[1] + (to[1] - from[1]) * share + inward[1] * bite] as const;
+    });
+  };
+  return [
+    ...edge([x, y], [x + w, y], [0, 1], 0),
+    ...edge([x + w, y], [x + w, y + h], [-1, 0], 1),
+    ...edge([x + w, y + h], [x, y + h], [0, -1], 2),
+    ...edge([x, y + h], [x, y], [1, 0], 3),
+  ];
+}
+
+/** La photo d'un polaroid : carrée, marges fines en haut et sur les côtés, la marge du bas épaisse (20 % de la case au moins). */
+export function polaroidWindow(rect: Rect): Rect {
+  const pad = Math.min(rect.width, rect.height) * 0.06;
+  const side = Math.max(0, Math.min(rect.width - pad * 2, rect.height - pad - rect.height * 0.2));
+  return { x: rect.x + (rect.width - side) / 2, y: rect.y + pad, width: side, height: side };
+}
+
+const MEDALLION_RATIO = 0.75;
+
+/** Le rectangle d'un médaillon : un ovale vertical de proportion 3:4, le plus grand qui tient, centré. */
+export function medallionRect(rect: Rect): Rect {
+  const width = Math.min(rect.width, rect.height * MEDALLION_RATIO);
+  const height = width / MEDALLION_RATIO;
+  const { x: cx, y: cy } = centerOf(rect);
+  return { x: cx - width / 2, y: cy - height / 2, width, height };
+}
+
 /** Le tracé de la forme `shape` dans `rect` — le chemin est ouvert ici, à remplir, à tracer ou à découper. */
 export function slotPath(context: Surface2D, shape: SlotShape, rect: Rect, options: ShapeOptions = {}): void {
   const side = Math.min(rect.width, rect.height);
@@ -187,6 +232,21 @@ export function slotPath(context: Surface2D, shape: SlotShape, rect: Rect, optio
     case 'blob':
       blob(context, rect, options.seed ?? 0);
       return;
+    case 'torn':
+      polygon(context, tornPoints(rect, options.seed ?? 0));
+      return;
+    case 'polaroid': {
+      const photo = polaroidWindow(rect);
+      context.rect(photo.x, photo.y, photo.width, photo.height);
+      return;
+    }
+    case 'frame-oval': {
+      const medallion = medallionRect(rect);
+      context.moveTo(cx + medallion.width / 2, cy);
+      context.ellipse(cx, cy, medallion.width / 2, medallion.height / 2, 0, 0, TAU);
+      context.closePath();
+      return;
+    }
   }
 }
 
@@ -219,6 +279,14 @@ export function shapeInnerRect(shape: SlotShape, rect: Rect): Rect {
       return { x: rect.x + side * 0.06, y: rect.y + side * 0.06, width: rect.width - side * 0.12, height: rect.height - side * 0.12 };
     case 'blob':
       return around(rect.width * 0.8, rect.height * 0.8);
+    case 'torn':
+      return { x: rect.x + side * 0.04, y: rect.y + side * 0.04, width: rect.width - side * 0.08, height: rect.height - side * 0.08 };
+    case 'polaroid':
+      return polaroidWindow(rect);
+    case 'frame-oval': {
+      const medallion = medallionRect(rect);
+      return around(medallion.width * 0.82, medallion.height * 0.82);
+    }
     case 'rect':
     case 'round':
       return rect;
