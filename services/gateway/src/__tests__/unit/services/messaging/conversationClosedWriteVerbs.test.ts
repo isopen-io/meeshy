@@ -7,12 +7,20 @@
  * Trois autres verbes écrivent dans le même conteneur terminal, et aucun ne
  * posait la question :
  *
- * | verbe            | unité de convergence            | transports couverts |
- * |------------------|----------------------------------|---------------------|
- * | envoyer          | `admitConversationWrite`         | 3 (déjà gardé)      |
- * | **réagir**       | `ReactionService.addReaction`    | 3                   |
- * | **éditer**       | `admitMessageEdit`               | 4                   |
- * | retirer / effacer| — *délibérément NON gardé, § 3*  | —                   |
+ * | verbe                      | unité de convergence                            | transports couverts |
+ * |----------------------------|--------------------------------------------------|---------------------|
+ * | envoyer                    | `admitConversationWrite`                        | 3 (déjà gardé)      |
+ * | **réagir**                 | `ReactionService.addReaction`                   | 3                   |
+ * | **réagir (pièce jointe)**  | `AttachmentReactionService.addAttachmentReaction`| 1 — ne converge PAS |
+ * | **éditer**                 | `admitMessageEdit`                              | 4                   |
+ * | retirer / effacer          | — *délibérément NON gardé, § 3*                 | —                   |
+ *
+ * La ligne « pièce jointe » a été ajoutée après coup (#9240), et c'est la leçon
+ * de ce fichier : le périmètre d'un témoin est l'ensemble des portes dont
+ * quelqu'un s'est souvenu. La réaction par pièce jointe est le seul transport de
+ * réaction qui ne converge pas vers `ReactionService.addReaction` ; elle avait
+ * donc son propre point d'écriture, non gardé, et ce témoin ne pouvait pas le
+ * dire puisqu'il ne la connaissait pas.
  *
  * Ce fichier énonce l'invariant UNE fois pour la famille entière : un conteneur
  * mort n'accepte aucun CONTENU NEUF, et continue d'accepter le RETRAIT de ce
@@ -25,6 +33,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 import { admitMessageEdit, MESSAGE_EDIT_WINDOW_MS } from '../../../../services/messaging/messageEditAdmission';
 import { ReactionService } from '../../../../services/ReactionService';
+import { AttachmentReactionService } from '../../../../services/AttachmentReactionService';
 
 const AUTHOR = 'user-author';
 const MODERATOR = 'user-moderator';
@@ -230,6 +239,152 @@ describe('réagir — un fil terminé n\'accepte plus de contenu neuf', () => {
     ).rejects.toThrow();
 
     expect(prisma.message.findUnique).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ───────────── RÉAGIR SUR UNE PIÈCE JOINTE (la cinquième porte) ─────────────
+
+const ATTACHMENT_ID = '507f1f77bcf86cd799439033';
+
+/**
+ * Le double pour `AttachmentReactionService`. Il n'a PAS d'`include` qui
+ * ramènerait la conversation : contrairement à la jumelle message-level, le
+ * service devra lire l'état terminal lui-même — c'est le prix mesuré de cette
+ * porte, et `coûte une lecture, et une seule` le gèle plus bas.
+ */
+function buildAttachmentReactionPrisma(conversationRow: {
+  isActive?: boolean;
+  closedAt?: Date | null;
+}) {
+  return {
+    message: {
+      findUnique: jest.fn<any>(async () => ({
+        conversation: { ...conversationRow },
+      })),
+    },
+    attachmentReaction: {
+      findUnique: jest.fn<any>(async () => null),
+      count: jest.fn<any>(async () => 0),
+      upsert: jest.fn<any>(async () => ({})),
+      deleteMany: jest.fn<any>(async () => ({ count: 1 })),
+    },
+  };
+}
+
+describe('réagir sur une pièce jointe — la cinquième porte, celle que le témoin ignorait', () => {
+  it.each(CLOSED_SHAPES)('refuse la pose d\'une réaction ($label)', async ({ row }) => {
+    const prisma = buildAttachmentReactionPrisma(row);
+    const service = new AttachmentReactionService(prisma as never);
+
+    await expect(
+      service.addAttachmentReaction({
+        attachmentId: ATTACHMENT_ID,
+        messageId: MESSAGE_ID,
+        participantId: PARTICIPANT_ID,
+        emoji: '👍',
+      })
+    ).rejects.toThrow(/closed conversation/i);
+
+    expect(prisma.attachmentReaction.upsert).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Le refus porte le MÊME message que la jumelle. Deux formulations pour une
+   * seule règle donneraient deux cas à reconnaître aux clients, et la première
+   * reformulation d'un littéral recopié ferait diverger la paire — c'est pour
+   * cela que `CLOSED_CONVERSATION_REACTION_ERROR` est une constante partagée.
+   */
+  it('refuse avec le message de la jumelle, pas un littéral parallèle', async () => {
+    const closedPrisma = buildAttachmentReactionPrisma(CLOSED_SHAPES[0].row);
+    const twinPrisma = buildReactionPrisma(CLOSED_SHAPES[0].row);
+
+    const attachmentError = await new AttachmentReactionService(closedPrisma as never)
+      .addAttachmentReaction({
+        attachmentId: ATTACHMENT_ID,
+        messageId: MESSAGE_ID,
+        participantId: PARTICIPANT_ID,
+        emoji: '👍',
+      })
+      .catch((e: unknown) => (e as Error).message);
+
+    const twinError = await new ReactionService(twinPrisma as never)
+      .addReaction({ messageId: MESSAGE_ID, participantId: PARTICIPANT_ID, emoji: '👍' })
+      .catch((e: unknown) => (e as Error).message);
+
+    expect(attachmentError).toBe(twinError);
+  });
+
+  it('laisse passer un fil VIVANT — la garde borne, elle ne bloque pas', async () => {
+    const prisma = buildAttachmentReactionPrisma(ALIVE);
+    const service = new AttachmentReactionService(prisma as never);
+
+    await expect(
+      service.addAttachmentReaction({
+        attachmentId: ATTACHMENT_ID,
+        messageId: MESSAGE_ID,
+        participantId: PARTICIPANT_ID,
+        emoji: '👍',
+      })
+    ).resolves.toEqual({ changed: true });
+
+    expect(prisma.attachmentReaction.upsert).toHaveBeenCalled();
+  });
+
+  /**
+   * Un message absent ne ferme rien — parité avec `isConversationClosed`, dont
+   * le contrat est « `null` n'est pas clos », et avec la ligne « admet quand la
+   * conversation est absente » du verbe ÉDITER plus haut.
+   */
+  it('admet quand le message (donc la conversation) est introuvable', async () => {
+    const prisma = buildAttachmentReactionPrisma(ALIVE);
+    prisma.message.findUnique = jest.fn<any>(async () => null);
+    const service = new AttachmentReactionService(prisma as never);
+
+    await expect(
+      service.addAttachmentReaction({
+        attachmentId: ATTACHMENT_ID,
+        messageId: MESSAGE_ID,
+        participantId: PARTICIPANT_ID,
+        emoji: '👍',
+      })
+    ).resolves.toEqual({ changed: true });
+  });
+
+  /**
+   * Coûte une lecture, et une seule. Le service n'avait aucun `include` à
+   * recycler : la garde paie un `message.findUnique`. Ce témoin gèle ce prix —
+   * s'il rougit, c'est qu'on relit la conversation plusieurs fois par pose.
+   */
+  it('coûte une lecture, et une seule', async () => {
+    const prisma = buildAttachmentReactionPrisma(ALIVE);
+    const service = new AttachmentReactionService(prisma as never);
+
+    await service.addAttachmentReaction({
+      attachmentId: ATTACHMENT_ID,
+      messageId: MESSAGE_ID,
+      participantId: PARTICIPANT_ID,
+      emoji: '👍',
+    });
+
+    expect(prisma.message.findUnique).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * § 3 appliqué à cette porte : la rétraction survit à la clôture ICI AUSSI.
+   * Si ce test rougit un jour, c'est qu'une garde a été étendue au retrait —
+   * arbitrage produit, pas patch.
+   */
+  it.each(CLOSED_SHAPES)('laisse retirer une réaction de pièce jointe d\'un fil clos ($label)', async ({ row }) => {
+    const prisma = buildAttachmentReactionPrisma(row);
+    const service = new AttachmentReactionService(prisma as never);
+
+    await expect(
+      service.removeAttachmentReaction({
+        attachmentId: ATTACHMENT_ID,
+        participantId: PARTICIPANT_ID,
+        emoji: '👍',
+      })
+    ).resolves.toBe(true);
   });
 });
 
