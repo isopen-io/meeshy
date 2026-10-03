@@ -43,14 +43,16 @@ export function threadMediaEntriesOf(params: {
   readonly openedVisual: readonly Attachment[];
   /** Les messages de l'index, dans l'ordre SERVI (le plus récent d'abord). */
   readonly indexMessages: readonly Message[];
+  /** La pellicule des VOCAUX (#8333) — même loi, l'index `audio` au lieu du `visual`. */
+  readonly kind?: 'visual' | 'audio';
 }): readonly ThreadMediaEntry[] {
-  const { opened, openedVisual, indexMessages } = params;
+  const { opened, openedVisual, indexMessages, kind = 'visual' } = params;
   const indexed: readonly Group[] = [...indexMessages]
     .reverse()
     .filter((message) => message.id !== opened.id)
     .map((message) => ({
       message,
-      pieces: (itemsOfKind([message], 'visual') as readonly MediaHubAttachmentItem[]).map((item) => item.attachment),
+      pieces: (itemsOfKind([message], kind) as readonly MediaHubAttachmentItem[]).map((item) => item.attachment),
     }))
     .filter((group) => group.pieces.length > 0);
   const openedGroup: Group = { message: opened, pieces: openedVisual };

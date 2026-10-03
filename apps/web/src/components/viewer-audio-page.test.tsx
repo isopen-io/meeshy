@@ -194,6 +194,27 @@ describe('La bulle d’un vocal ouvre le lecteur plein écran (#8333)', () => {
 
     expect(page()).not.toBeNull();
   });
+
+  test('la lecture en cours passe au plein écran à la même seconde, et la bulle se tait', async () => {
+    mount(<Attachments attachments={[voice()]} languages={['fr']} fallbackLanguage="en" mediaFrame="box" />);
+    const bubbleAudio = container.querySelector<HTMLAudioElement>('audio');
+    let bubblePaused = 0;
+    if (bubbleAudio !== null) {
+      bubbleAudio.pause = () => {
+        bubblePaused += 1;
+      };
+      bubbleAudio.currentTime = 5;
+    }
+    act(() => {
+      bubbleAudio?.dispatchEvent(new Event('play'));
+    });
+
+    act(() => container.querySelector<HTMLButtonElement>('[data-voice-expand]')?.click());
+    await until(() => page() !== null);
+
+    expect(bubblePaused).toBeGreaterThan(0);
+    expect(page()?.querySelector<HTMLAudioElement>('audio')?.currentTime).toBe(5);
+  });
 });
 
 const CONVERSATION = 'c1';

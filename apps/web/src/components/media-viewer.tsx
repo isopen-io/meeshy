@@ -70,6 +70,9 @@ const MediaTransport = lazy(() => import('./media-transport').then((module) => (
  */
 const ViewerMediaActions = lazy(() => import('./viewer-media-actions'));
 
+/** LA PAGE AUDIO (#8333) — chunk à la demande : une visionneuse de photos ne la télécharge jamais (`budgets.json › viewer_audio_page`). */
+const ViewerAudioPage = lazy(() => import('./viewer-audio-page'));
+
 /**
  * `MediaViewer` (#6221, § 5 étape 5) — LA VISIONNEUSE PLEIN ÉCRAN, chunk À LA
  * DEMANDE (`lazy(() => import('./media-viewer'))`, `attachment-blocks.tsx`) :
@@ -149,6 +152,8 @@ export type MediaViewerProps = {
    * identité, voir `pinned`).
    */
   readonly onNearStart?: () => void;
+  /** LA LANGUE DE CHAQUE PAGE QUAND SA PIÈCE N'A PAS DE TRANSCRIPTION (#8333) — une pellicule de vocaux feuillette des messages d'auteurs différents ; prime sur `fallbackLanguage`. */
+  readonly fallbackLanguageAt?: (index: number) => string | undefined;
   /**
    * CE QUE LA PAGE OFFRE (#6303) — `null` ⇒ aucune action. L'hôte décide page
    * par page (`mediaPageOffers`, sur la pièce ORIGINALE) ; la visionneuse ne
@@ -230,7 +235,7 @@ function carrierFooter(params: {
     <div data-viewer-meta className="flex flex-col gap-1">
       {sceneEntry === undefined ? (
         <div className="viewer-ink-muted flex items-center gap-1.5 text-mini">
-          <Glyph name={kind === 'video' ? 'fillPlay' : 'image'} size={GLYPH_SIZE.xs} />
+          <Glyph name={kind === 'video' ? 'fillPlay' : kind === 'audio' ? 'microphone' : 'image'} size={GLYPH_SIZE.xs} />
           {sizeLabel !== undefined ? <span>{sizeLabel}</span> : null}
           <span>·</span>
           <span>{weightLabel}</span>
@@ -574,6 +579,7 @@ export default function MediaViewer({
   onNearEnd,
   isMineAt,
   onNearStart,
+  fallbackLanguageAt,
   actionsAt,
   shareMedia,
   container,
@@ -726,8 +732,11 @@ export default function MediaViewer({
     }
   };
 
+  const audioPage = current !== undefined && kindOf(current) === 'audio';
   const longPress = useLongPress({
-    onOpen: () => setPresentation(() => stageAfter(CARDED_STAGE, 'longPress')),
+    onOpen: () => {
+      if (!audioPage) setPresentation(() => stageAfter(CARDED_STAGE, 'longPress'));
+    },
   });
 
   /* LE GESTE COMMUN DES PLEIN ÉCRANS (#8879, `viewer-chrome-gestures.ts`) :
@@ -751,7 +760,7 @@ export default function MediaViewer({
   // eux-mêmes leurs événements (`viewer-chrome.tsx`) : le tap sur une action
   // réelle ne bascule rien. Un toucher qui a glissé n'est pas un tap.
   const onStageClick = (): void => {
-    if (swipe.wasDrag()) return;
+    if (swipe.wasDrag() || audioPage) return;
     setPresentation((p) => stageAfter(p, 'tap'));
   };
 
@@ -892,6 +901,23 @@ export default function MediaViewer({
                 />
               ) : isMasked ? (
                 <ViewerMaskedPage attachment={attachment} />
+              ) : kindOf(attachment) === 'audio' ? (
+                <Suspense fallback={<ViewerBackdropPage attachment={attachment} />}>
+                  <ViewerAudioPage
+                    attachment={attachment}
+                    isActive={i === index}
+                    languages={languages}
+                    fallbackLanguage={fallbackLanguageAt?.(i) ?? fallbackLanguage}
+                    language={language}
+                    pageIndex={i}
+                    pageCount={items.length}
+                    onToggleRef={(fn) => {
+                      if (i === index) activePlayToggleRef.current = fn;
+                    }}
+                    {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+                    {...(deps !== undefined ? { deps } : {})}
+                  />
+                </Suspense>
               ) : kindOf(attachment) === 'video' ? (
                 <ViewerVideoPage
                   attachment={attachment}
@@ -907,7 +933,7 @@ export default function MediaViewer({
                 <ViewerImagePage
                   attachment={attachment}
                   languages={languages}
-                  fallbackLanguage={fallbackLanguage}
+                  fallbackLanguage={fallbackLanguageAt?.(i) ?? fallbackLanguage}
                   isActive={i === index}
                   isMine={isMineAt?.(i) ?? isMine}
                   language={language}
@@ -946,7 +972,7 @@ export default function MediaViewer({
       >
         <div ref={setTransportSlot} data-viewer-transport-slot />
 
-        {items.length > 1 ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} language={language} /> : null}
+        {items.length > 1 && !audioPage ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} language={language} /> : null}
       </ViewerBottomBar>
     </div>,
     container ?? document.body,

@@ -18,6 +18,11 @@ const frMediaViewer = {
   'media.viewer.compose_failed': 'Impossible d’ouvrir ce média dans le studio',
   'media.viewer.open_fullscreen': 'Ouvrir en plein écran',
   'media.audio.play': 'Lire l’audio',
+  'media.audio.pause': 'Mettre en pause',
+  'media.audio.skip_back': 'Reculer de 10 secondes',
+  'media.audio.skip_forward': 'Avancer de 10 secondes',
+  'media.audio.transcript_empty': 'Aucune transcription',
+  'media.audio.languages': 'Écouter dans une autre langue',
 } as const;
 
 export default frMediaViewer;

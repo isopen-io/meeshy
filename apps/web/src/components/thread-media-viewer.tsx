@@ -45,7 +45,10 @@ export default function ThreadMediaViewer({
   deps,
   onClose,
   onReplyToMedia,
+  kind = 'visual',
 }: {
+  /** Les vocaux de la conversation (#8333) plutôt que ses images et vidéos — même plateau, page audio. */
+  readonly kind?: 'visual' | 'audio';
   readonly opened: Message;
   readonly openedVisual: readonly Attachment[];
   /**
@@ -64,11 +67,11 @@ export default function ThreadMediaViewer({
   readonly onClose: () => void;
   readonly onReplyToMedia: (messageId: string, attachmentId: string) => void;
 }) {
-  const index = useMediaHubIndex({ deps: deps ?? apiDeps, conversationId: opened.conversationId, kind: 'visual', term: null });
+  const index = useMediaHubIndex({ deps: deps ?? apiDeps, conversationId: opened.conversationId, kind, term: null });
   const indexMessages = index.query.data;
   const entries = useMemo(
-    () => threadMediaEntriesOf({ opened, openedVisual, indexMessages: indexMessages ?? [] }),
-    [opened, openedVisual, indexMessages],
+    () => threadMediaEntriesOf({ opened, openedVisual, indexMessages: indexMessages ?? [], kind }),
+    [opened, openedVisual, indexMessages, kind],
   );
   const openedId = openedVisual[startIndex]?.id;
   const start = Math.max(0, entries.findIndex((entry) => entry.attachment.id === openedId));
@@ -96,6 +99,7 @@ export default function ThreadMediaViewer({
       languages={languages}
       fallbackLanguage={fallbackLanguage}
       {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+      fallbackLanguageAt={(at) => entries[at]?.message.originalLanguage}
       carrierAt={(at) => {
         const message = entries[at]?.message;
         if (message === undefined) return undefined;

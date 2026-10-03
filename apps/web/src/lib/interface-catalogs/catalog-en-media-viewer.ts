@@ -18,6 +18,11 @@ const enMediaViewer = {
   'media.viewer.compose_failed': 'Couldn’t open this media in the studio',
   'media.viewer.open_fullscreen': 'Open full screen',
   'media.audio.play': 'Play audio',
+  'media.audio.pause': 'Pause',
+  'media.audio.skip_back': 'Back 10 seconds',
+  'media.audio.skip_forward': 'Forward 10 seconds',
+  'media.audio.transcript_empty': 'No transcription',
+  'media.audio.languages': 'Listen in another language',
 };
 
 export default enMediaViewer;

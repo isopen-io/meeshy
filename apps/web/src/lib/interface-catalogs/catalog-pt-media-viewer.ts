@@ -18,6 +18,11 @@ const ptMediaViewer = {
   'media.viewer.compose_failed': 'Não foi possível abrir esta mídia no estúdio',
   'media.viewer.open_fullscreen': 'Abrir em tela cheia',
   'media.audio.play': 'Reproduzir áudio',
+  'media.audio.pause': 'Pausar',
+  'media.audio.skip_back': 'Voltar 10 segundos',
+  'media.audio.skip_forward': 'Avançar 10 segundos',
+  'media.audio.transcript_empty': 'Sem transcrição',
+  'media.audio.languages': 'Ouvir em outro idioma',
 };
 
 export default ptMediaViewer;

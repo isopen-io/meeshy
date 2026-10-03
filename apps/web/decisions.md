@@ -4650,3 +4650,17 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - **Aucune cible ne rétrécit** : les bascules gardent leurs 44 × 44, la pastille ses 44 de haut.
 
 **Conséquences.** Gate `check-thread-chrome.mjs` § 8, deux schémas, 390 et 320 px : la capsule PEINTE de la pastille tient dans la barre et dans l'écran, reçoit le doigt en son centre, n'est pas dans la bande qui défile ; une bande qui déborde porte l'attribut ET un `mask-image` calculé. Si iOS change d'ordre ou de compacité, cette entrée se relit contre lui : la règle est de garder la langue lisible, pas d'éloigner l'ordre du web de celui d'iOS.
+
+## D-165 — Un vocal s'ouvre en plein écran par la visionneuse, sur une page audio à lui ; la citation d'un vocal se joue toujours sur place (2026-10-04, #8333)
+
+**Contexte.** iOS ouvre tout vocal du fil dans `AudioFullscreenView` (PR #8240) : onde, −10 s · lecture · +10 s, position, durée, vitesse, transcription servie au Prisme, rangée des langues, balayage entre les vocaux. Le web n'avait aucun plein écran audio, et la visionneuse (`media-viewer.tsx`) aurait rendu une pièce audio sur `ViewerImagePage`. L'issue demandait aussi d'ouvrir ce lecteur depuis l'aperçu d'un vocal CITÉ ; or #8320 (directive porteur du 2026-09-27, livrée sur les deux plateformes) a supplanté sur iOS le plein écran audio de #8230 pour la citation : la zone lecture d'une citation joue sur place et n'ouvre rien (`MessageListViewController+QuotedMedia.swift`, `openQuotedMedia`).
+
+**Décision.**
+- **La visionneuse a une page audio, chunk à la demande** (`viewer-audio-page.tsx`, budget `viewer_audio_page`) : une pièce `audio` y monte cette page au lieu de la page image ; une pièce protégée garde `ViewerMaskedPage` (ni piste, ni transcription). Dialogue, focus piégé, Échap, retour matériel, glissement vers le bas qui ferme et balayage horizontal sont ceux de la visionneuse — un seul plateau plein écran, pas une jumelle. Sur une page audio, le toucher et l'appui long ne basculent pas le plateau en plein cadre (le chrome reste, comme sur iOS), et la pellicule cède la place au compteur « n / N » de la page.
+- **Une descente** : `electAudio` rend le texte et la piste ; la langue choisie dans la rangée des langues entre au rang 0 du prisme (`displayLanguage`) et la piste suit la langue du texte servi. La lecture passe par le coordinateur partagé, la consommation remonte comme depuis la bulle (`listened`, langue de la piste).
+- **L'agrandissement vit sur la bulle** (`data-voice-expand`, même glyphe que la tuile vidéo), à la place de la pastille de pourcentage d'iOS. La lecture en cours y reprend à la même seconde (`handOffVideoPosition`) et la bulle se tait. Dans le fil, la liste est l'index `audio` de la conversation (`ThreadMediaViewer kind="audio"`, `threadMediaEntriesOf`), ouverte sur le vocal touché ; hors du fil, les vocaux du message.
+- **La citation d'un vocal ne change pas** : elle se joue sur place (#8320). Ouvrir le plein écran depuis elle contredirait la directive la plus récente et iOS.
+
+**Écarts restants avec iOS** : ni transcription à la demande (« Transcrire »), ni demande de traduction depuis le lecteur, ni AirPlay ; fermer le lecteur arrête la lecture (iOS la poursuit dans le mini-lecteur).
+
+**Conséquences.** Témoins `viewer-audio-page.test.tsx` ; gate `check-thread-states.mjs` § 8quater (`lib/check-audio-fullscreen.mjs`) sur les pistes WAV de `c-medias`.

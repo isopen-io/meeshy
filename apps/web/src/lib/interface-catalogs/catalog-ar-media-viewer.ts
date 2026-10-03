@@ -18,6 +18,11 @@ const arMediaViewer = {
   'media.viewer.compose_failed': 'تعذّر فتح هذه الوسائط في الاستوديو',
   'media.viewer.open_fullscreen': 'فتح بملء الشاشة',
   'media.audio.play': 'تشغيل الصوت',
+  'media.audio.pause': 'إيقاف مؤقت',
+  'media.audio.skip_back': 'الرجوع 10 ثوانٍ',
+  'media.audio.skip_forward': 'التقدم 10 ثوانٍ',
+  'media.audio.transcript_empty': 'لا يوجد نص مكتوب',
+  'media.audio.languages': 'الاستماع بلغة أخرى',
 };
 
 export default arMediaViewer;

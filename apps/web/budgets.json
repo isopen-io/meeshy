@@ -625,6 +625,15 @@
         "source": "Mesure de measure-weight.mjs le 2026-09-13 (`bun run build` puis `node scripts/measure-weight.mjs`) : 2,82 Ko gzip -9 sur DEUX fichiers -- `assets/media-transport-*.js` (2,09 : `components/media-transport.tsx`, la loi pure `lib/view/media-transport.ts` et le jeu de glyphes `glyphs-media-transport.ts`) et `assets/media-transport-*.css` (0,73 : `styles/media-transport.css`, importee par le composant donc decoupee avec lui). Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge, meme discipline que les chunks voisins. Charge UNIQUEMENT par `components/media-viewer.tsx` (`lazy(() => import('./media-transport'))`), monte seulement quand la page ACTIVE de la visionneuse est une video : une visionneuse ouverte sur des photos ne le telecharge jamais. `dynamic_only` garde cette voie d'acces unique. La mecanique (`lib/view/use-media-playback.ts`) n'est pas comptee ici : elle vit dans le chunk du fil, avec les tuiles video et les vocaux qui l'emploient deja."
       }
     },
+    "viewer_audio_page": {
+      "pattern": "^assets/viewer-audio-page-",
+      "dynamic_only": true,
+      "kb": {
+        "value": 4,
+        "status": "CIBLE -- MESUREE PAR #8333, NON ARBITREE",
+        "source": "Mesure de measure-weight.mjs le 2026-10-04 (`bun run build` puis `node scripts/measure-weight.mjs`) : 2,79 Ko gzip -9 pour `assets/viewer-audio-page-*.js` (`components/viewer-audio-page.tsx`, la page audio de la visionneuse : onde, commandes, position, vitesse, transcription au Prisme, rangee des langues). Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge, meme discipline que `media_transport`. Charge UNIQUEMENT par `components/media-viewer.tsx` (`lazy(() => import('./viewer-audio-page'))`), monte seulement quand une page de la visionneuse est un vocal : une visionneuse de photos ne le telecharge jamais. `dynamic_only` garde cette voie d'acces unique."
+      }
+    },
     "communities": {
       "pattern": "^assets/communities-(parts-)?[A-Za-z0-9_-]{8}\\.js$",
       "kb": {

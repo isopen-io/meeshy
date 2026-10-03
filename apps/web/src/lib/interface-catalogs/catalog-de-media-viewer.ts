@@ -18,6 +18,11 @@ const deMediaViewer = {
   'media.viewer.compose_failed': 'Dieses Medium konnte nicht im Studio geöffnet werden',
   'media.viewer.open_fullscreen': 'Im Vollbild öffnen',
   'media.audio.play': 'Audio abspielen',
+  'media.audio.pause': 'Pausieren',
+  'media.audio.skip_back': '10 Sekunden zurück',
+  'media.audio.skip_forward': '10 Sekunden vor',
+  'media.audio.transcript_empty': 'Keine Transkription',
+  'media.audio.languages': 'In einer anderen Sprache anhören',
 };
 
 export default deMediaViewer;

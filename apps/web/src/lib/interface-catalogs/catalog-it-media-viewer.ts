@@ -18,6 +18,11 @@ const itMediaViewer = {
   'media.viewer.compose_failed': 'Impossibile aprire questo contenuto nello studio',
   'media.viewer.open_fullscreen': 'Apri a schermo intero',
   'media.audio.play': 'Riproduci audio',
+  'media.audio.pause': 'Metti in pausa',
+  'media.audio.skip_back': 'Indietro di 10 secondi',
+  'media.audio.skip_forward': 'Avanti di 10 secondi',
+  'media.audio.transcript_empty': 'Nessuna trascrizione',
+  'media.audio.languages': 'Ascolta in un’altra lingua',
 };
 
 export default itMediaViewer;

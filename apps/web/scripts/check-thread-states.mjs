@@ -21,6 +21,7 @@ import { checkThreadMedia, waitForRowSettled } from './lib/check-media.mjs';
 import { waitForValueSettled } from './lib/settle-value.mjs';
 import { checkThreadMediaGrid } from './lib/check-media-grid.mjs';
 import { checkViewerVideoTransport } from './lib/check-media-transport.mjs';
+import { checkAudioFullscreen } from './lib/check-audio-fullscreen.mjs';
 import { checkMessageStates } from './lib/check-message-states.mjs';
 import { checkMoreSheet } from './lib/check-more-sheet.mjs';
 import { checkRealtimeEvents } from './lib/check-realtime-events.mjs';
@@ -866,6 +867,13 @@ await checkThreadMediaGrid({ browser, BASE, expect, setScheme, skin: 'bulles', s
  * jamais la visionneuse. Un seul schéma : la barre n'a pas de variante claire.
  */
 await checkViewerVideoTransport({ browser, BASE, expect, setScheme, scheme: 'dark' });
+
+/**
+ * 8quater — LE LECTEUR AUDIO PLEIN ÉCRAN (#8333) — `lib/check-audio-fullscreen.mjs` :
+ * la bulle d'un vocal ouvre la page audio, servie au Prisme du lecteur ; lecture,
+ * pause, vocal suivant et Échap, sur les vraies pistes décodées par Chromium.
+ */
+await checkAudioFullscreen({ browser, BASE, expect, setScheme, scheme: 'dark' });
 
 /**
  * 9 — LES ÉTATS DU MESSAGE (#5936) — `lib/check-message-states.mjs`, QUATRE
