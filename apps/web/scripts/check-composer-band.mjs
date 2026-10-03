@@ -144,16 +144,22 @@ const openThread = async (scheme) => {
  * mesures du virtualiseur convergent, et on rend l'écart restant au bas.
  */
 const poserAuBas = async (page) => {
-  for (let i = 0; i < 12; i += 1) {
-    const reste = await page.evaluate(() => {
-      const el = document.querySelector('main');
-      el.scrollTop = el.scrollHeight;
-      return el.scrollHeight - el.clientHeight - el.scrollTop;
-    });
-    await page.waitForTimeout(150);
-    if (reste <= 1 && i > 2) break;
-  }
-  await page.waitForTimeout(900);
+  await page.waitForFunction(
+    () =>
+      new Promise((resolve) => {
+        const el = document.querySelector('main');
+        el.scrollTop = el.scrollHeight;
+        const hauteur = el.scrollHeight;
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            el.scrollTop = el.scrollHeight;
+            resolve(el.scrollHeight === hauteur && el.scrollHeight - el.clientHeight - el.scrollTop <= 1);
+          }),
+        );
+      }),
+    null,
+    { timeout: 15_000, polling: 150 },
+  );
   return page.evaluate(() => {
     const el = document.querySelector('main');
     const bande = document.querySelector('.thread-composer-chrome')?.getBoundingClientRect();
