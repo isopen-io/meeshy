@@ -154,6 +154,23 @@ const sharpness = (page) =>
     return sum / ((w - 2) * (h - 2));
   });
 
+/**
+ * LA NETTETÉ D'UNE IMAGE QUI EXISTE (#9237). Une lecture unique, deux images
+ * après que l'aperçu a annoncé sa taille, tombait parfois sur une vidéo que le
+ * changement de filtre venait de remonter (`videoWidth` à 0) et rendait `null`
+ * — un rouge sans défaut, le même commit passant au tour suivant. On relit
+ * donc jusqu'à une mesure, borné : une vidéo qui ne peint JAMAIS rend toujours
+ * `null` et l'invariant rougit pour la bonne raison.
+ */
+const settledSharpness = async (page, timeoutMs = 5000) => {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    await nextFrame(page);
+    const value = await sharpness(page);
+    if ((value !== null && value > 0) || Date.now() >= deadline) return value;
+  }
+};
+
 /** Glisse le carrousel du mode à la molette, dans un sens puis dans l'autre ; rend la fenêtre du glissé (horloge de la page). */
 const glide = async (page, direction) => {
   const row = await page.$eval('[data-call-mode-carousel] [data-call-row-scroll]', (element) => {
@@ -256,9 +273,7 @@ try {
   await page.click('[data-call-effects-category="color"]');
   await page.click('[data-carousel-item="natural"]');
   await until(page, () => (document.querySelector('[data-call-mode-preview] video')?.videoWidth ?? 0) > 0);
-  await nextFrame(page);
-  await nextFrame(page);
-  const sharp = await sharpness(page);
+  const sharp = await settledSharpness(page);
   check(sharp !== null && sharp > 0, `la netteté de l’image envoyée se mesure sans flou (${sharp})`);
   await capture(page, 'perf-sans-flou');
   await page.click('[data-call-effects-settings-toggle]');
