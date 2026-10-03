@@ -49,8 +49,56 @@ nonisolated extension CallFrameRenderer {
             return stampPath(rect)
         case .blob:
             return blobPath(rect, seed: seed)
+        case .torn:
+            return polygon(tornPoints(rect, seed: seed))
+        case .polaroid:
+            path.addRect(polaroidWindow(rect))
+        case .frameOval:
+            path.addEllipse(in: medallionRect(rect))
         }
         return path
+    }
+
+    /// Un bord déchiré (`tornPoints` du web) : les quatre côtés rongés vers l'intérieur par des dents
+    /// irrégulières (au plus 2,5 % du petit côté), les coins intacts — déterministe pour une même case.
+    static func tornPoints(_ rect: CGRect, seed: Int) -> [CGPoint] {
+        let side = min(rect.width, rect.height)
+        let depth = side * 0.025
+        let step = side * 0.045
+        guard step > 0 else { return [rect.origin] }
+        func edge(_ from: CGPoint, _ to: CGPoint, inward: CGVector, salt: Int) -> [CGPoint] {
+            let count = max(4, Int((hypot(to.x - from.x, to.y - from.y) / step).rounded()))
+            return (0 ..< count).map { index in
+                let share = CGFloat(index) / CGFloat(count)
+                let bite = index == 0 ? 0 : rand(Double(seed + 23), Double(salt * 1000 + index)) * depth
+                return CGPoint(x: from.x + (to.x - from.x) * share + inward.dx * bite, y: from.y + (to.y - from.y) * share + inward.dy * bite)
+            }
+        }
+        let topLeft = CGPoint(x: rect.minX, y: rect.minY)
+        let topRight = CGPoint(x: rect.maxX, y: rect.minY)
+        let bottomRight = CGPoint(x: rect.maxX, y: rect.maxY)
+        let bottomLeft = CGPoint(x: rect.minX, y: rect.maxY)
+        return edge(topLeft, topRight, inward: CGVector(dx: 0, dy: 1), salt: 0)
+            + edge(topRight, bottomRight, inward: CGVector(dx: -1, dy: 0), salt: 1)
+            + edge(bottomRight, bottomLeft, inward: CGVector(dx: 0, dy: -1), salt: 2)
+            + edge(bottomLeft, topLeft, inward: CGVector(dx: 1, dy: 0), salt: 3)
+    }
+
+    /// La photo d'un polaroid (`polaroidWindow` du web) : carrée, marges fines en haut et sur les côtés,
+    /// la marge du bas épaisse (20 % de la case au moins).
+    static func polaroidWindow(_ rect: CGRect) -> CGRect {
+        let pad = min(rect.width, rect.height) * 0.06
+        let side = max(0, min(rect.width - pad * 2, rect.height - pad - rect.height * 0.2))
+        return CGRect(x: rect.minX + (rect.width - side) / 2, y: rect.minY + pad, width: side, height: side)
+    }
+
+    static let medallionRatio: CGFloat = 0.75
+
+    /// Le rectangle d'un médaillon (`medallionRect` du web) : un ovale vertical 3:4, le plus grand qui tient, centré.
+    static func medallionRect(_ rect: CGRect) -> CGRect {
+        let width = min(rect.width, rect.height * medallionRatio)
+        let height = width / medallionRatio
+        return CGRect(x: rect.midX - width / 2, y: rect.midY - height / 2, width: width, height: height)
     }
 
     static func slotPath(for box: CallFrameSlotBox, in rect: CGRect, slot: CallFrameSlotStyle) -> CGPath {
@@ -211,6 +259,13 @@ nonisolated extension CallFrameRenderer {
             return CGRect(x: rect.minX + side * 0.06, y: rect.minY + side * 0.06, width: rect.width - side * 0.12, height: rect.height - side * 0.12)
         case .blob:
             return around(rect.width * 0.8, rect.height * 0.8)
+        case .torn:
+            return rect.insetBy(dx: side * 0.04, dy: side * 0.04)
+        case .polaroid:
+            return polaroidWindow(rect)
+        case .frameOval:
+            let medallion = medallionRect(rect)
+            return around(medallion.width * 0.82, medallion.height * 0.82)
         case .rect, .round:
             return rect
         }

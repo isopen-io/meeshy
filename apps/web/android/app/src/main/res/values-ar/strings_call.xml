@@ -13,4 +13,7 @@
     <string name="call_ongoing_audio">مكالمة صوتية جارية</string>
     <string name="call_ongoing_video">مكالمة فيديو جارية</string>
     <string name="call_ongoing_return">اضغط للعودة إلى المكالمة</string>
+    <string name="call_pip_mute">كتم الميكروفون</string>
+    <string name="call_pip_unmute">تشغيل الميكروفون</string>
+    <string name="call_pip_hangup">إنهاء المكالمة</string>
 </resources>

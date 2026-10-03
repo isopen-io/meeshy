@@ -105,6 +105,23 @@ describe('shellCallCommands — ce que la coque fait à chaque changement du mag
     ]);
   });
 
+  test('couper le micro pendant l’appel le dit à la fenêtre flottante de la coque (#8144)', () => {
+    const live = snap({ kind: 'connected' }, 'video');
+    const muted = shellCallSnapshot({ ...call({ kind: 'connected' }, 'video'), micMuted: true });
+    expect(shellCallCommands(live, muted)).toEqual([{ method: 'setPictureInPictureControls', options: { micMuted: true } }]);
+    expect(shellCallCommands(muted, live)).toEqual([{ method: 'setPictureInPictureControls', options: { micMuted: false } }]);
+  });
+
+  test('un appel qui démarre micro coupé le dit dès le service', () => {
+    const muted = shellCallSnapshot({ ...call({ kind: 'outgoing' }, 'video'), micMuted: true });
+    expect(methods(shellCallCommands(snap(null), muted))).toEqual(['startCallService', 'setPictureInPictureControls']);
+  });
+
+  test('un micro coupé pendant la sonnerie n’envoie rien : aucune fenêtre ne flotte', () => {
+    const ringing = shellCallSnapshot({ ...call({ kind: 'incoming' }), micMuted: true });
+    expect(shellCallCommands(snap({ kind: 'incoming' }), ringing)).toEqual([]);
+  });
+
   test('aucun changement → aucune commande', () => {
     expect(shellCallCommands(snap({ kind: 'connected' }), snap({ kind: 'connected' }))).toEqual([]);
   });
@@ -116,6 +133,10 @@ function harness(options: { readonly failing?: boolean } = {}) {
   const events: Array<(data: unknown) => void> = [];
   const credentialWriters: Array<(value: DeliveryReceiptCredential) => void> = [];
   const accepted: number[] = [];
+  const floating: Array<(data: unknown) => void> = [];
+  const pictureInPicture: boolean[] = [];
+  const windowButtons: Array<(data: unknown) => void> = [];
+  const gestures: string[] = [];
   const env: ShellCallEnvironment = {
     native: (method, payload) => {
       sent.push({ method, options: payload });
@@ -123,7 +144,12 @@ function harness(options: { readonly failing?: boolean } = {}) {
     },
     listen: (event, listener) => {
       if (event === 'callAnswer') events.push(listener);
+      if (event === 'pictureInPictureModeChanged') floating.push(listener);
+      if (event === 'pictureInPictureAction') windowButtons.push(listener);
     },
+    toggleMic: () => void gestures.push('mic'),
+    hangup: () => void gestures.push('hangup'),
+    pictureInPicture: (active) => void pictureInPicture.push(active),
     store,
     accept: () => void accepted.push(1),
     watchCredential: (write) => {
@@ -139,6 +165,10 @@ function harness(options: { readonly failing?: boolean } = {}) {
     accepted,
     stop,
     answer: (callId: unknown) => events.forEach((listener) => listener({ callId })),
+    float: (data: unknown) => floating.forEach((listener) => listener(data)),
+    press: (data: unknown) => windowButtons.forEach((listener) => listener(data)),
+    gestures,
+    pictureInPicture,
     writeCredential: (value: DeliveryReceiptCredential) => credentialWriters.forEach((write) => write(value)),
   };
 }
@@ -198,6 +228,43 @@ describe('bindShellCall — la page branchée au plugin natif', () => {
     await Promise.resolve();
     h.store.setState({ call: null });
     expect(h.sent.map((entry) => entry.method)).toEqual(['startCallService', 'stopCallService']);
+  });
+
+  test('l’image dans l’image de la coque (#8144) arrive à la page : entrée, puis retour dans l’app', () => {
+    const h = harness();
+    h.float({ active: true });
+    h.float({ active: false });
+    expect(h.pictureInPicture).toEqual([true, false]);
+  });
+
+  test('un état d’image dans l’image illisible ne réduit pas l’écran', () => {
+    const h = harness();
+    h.float(null);
+    h.float({ active: 'oui' });
+    expect(h.pictureInPicture).toEqual([false, false]);
+  });
+
+  test('les boutons de la fenêtre flottante coupent le micro et raccrochent (#8144)', () => {
+    const h = harness();
+    h.press({ action: 'mic' });
+    h.press({ action: 'hangup' });
+    expect(h.gestures).toEqual(['mic', 'hangup']);
+  });
+
+  test('un bouton inconnu, ou reçu après le détachement, ne fait rien', () => {
+    const h = harness();
+    h.press({ action: 'record' });
+    h.press(null);
+    h.stop();
+    h.press({ action: 'hangup' });
+    expect(h.gestures).toEqual([]);
+  });
+
+  test('détaché, l’écran ne se réduit plus', () => {
+    const h = harness();
+    h.stop();
+    h.float({ active: true });
+    expect(h.pictureInPicture).toEqual([false]);
   });
 
   test('détaché, plus rien ne part vers la coque', () => {

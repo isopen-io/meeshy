@@ -1,20 +1,31 @@
 package me.meeshy.app;
 
+import android.app.Activity;
+import android.app.PendingIntent;
+import android.app.PictureInPictureParams;
+import android.app.RemoteAction;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
+import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.PowerManager;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.view.WindowManager;
+import androidx.annotation.RequiresApi;
+import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -33,6 +44,11 @@ import java.util.List;
  * - `setCredential` / `clearCredential` : ce qu'il faut au refus sans socket
  *   ({@link CallShellStore}).
  *
+ * Evenement `pictureInPictureModeChanged { active }` (#8144) : l'appel flotte
+ * en image dans l'image, ou l'app revient au plein ecran. La fenetre porte
+ * micro et raccrocher : `pictureInPictureAction { action: mic | hangup }`,
+ * l'etat du micro venant de `setPictureInPictureControls({ micMuted })`.
+ *
  * Evenement `callAnswer { callId }` : « Repondre » touche sur la notification.
  * RETENU jusqu'a l'abonnement de la page (`retainUntilConsumed`), comme les
  * liens de `MeeshyLinksPlugin` : un lancement a froid ne le perd pas.
@@ -41,9 +57,30 @@ import java.util.List;
 public class MeeshyCallPlugin extends Plugin {
 
     private PowerManager.WakeLock proximity;
-    private boolean callActive;
-    private boolean video;
+    private volatile boolean callActive;
+    private volatile boolean video;
     private String route;
+    private volatile boolean micMuted;
+    private BroadcastReceiver pipButtons;
+
+    static final String ACTION_PIP = "me.meeshy.app.CALL_PIP_ACTION";
+    static final String EXTRA_PIP_ACTION = "action";
+
+    @Override
+    public void load() {
+        super.load();
+        pipButtons = new BroadcastReceiver() {
+            @Override
+            public void onReceive(Context context, Intent intent) {
+                String gesture = CallShellRules.pictureInPictureGesture(intent.getStringExtra(EXTRA_PIP_ACTION));
+                if (gesture == null) return;
+                JSObject event = new JSObject();
+                event.put("action", gesture);
+                notifyListeners("pictureInPictureAction", event);
+            }
+        };
+        ContextCompat.registerReceiver(getContext(), pipButtons, new IntentFilter(ACTION_PIP), ContextCompat.RECEIVER_NOT_EXPORTED);
+    }
 
     @Override
     protected void handleOnNewIntent(Intent intent) {
@@ -138,15 +175,82 @@ public class MeeshyCallPlugin extends Plugin {
         call.resolve();
     }
 
+    /** #8144 — l'appel en cours flotte-t-il quand l'utilisateur quitte l'app ? Lu par `MainActivity`. */
+    boolean floatsInPictureInPicture() {
+        boolean supported = getContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
+        return CallShellRules.entersPictureInPicture(Build.VERSION.SDK_INT, callActive, video, supported);
+    }
+
+    @PluginMethod
+    public void setPictureInPictureControls(PluginCall call) {
+        micMuted = Boolean.TRUE.equals(call.getBoolean("micMuted", false));
+        refreshPictureInPicture();
+        call.resolve();
+    }
+
+    private void refreshPictureInPicture() {
+        Activity activity = getActivity();
+        if (activity == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        activity.runOnUiThread(() -> {
+            if (activity.isInPictureInPictureMode()) activity.setPictureInPictureParams(pictureInPictureParams());
+        });
+    }
+
+    /** #8144 — la fenetre flottante et ses boutons : le micro dans son etat, puis raccrocher. */
+    @RequiresApi(Build.VERSION_CODES.O)
+    PictureInPictureParams pictureInPictureParams() {
+        ArrayList<RemoteAction> actions = new ArrayList<>();
+        for (String action : CallShellRules.pictureInPictureActions(micMuted)) actions.add(remoteAction(action));
+        return new PictureInPictureParams.Builder().setActions(actions).build();
+    }
+
+    @RequiresApi(Build.VERSION_CODES.O)
+    private RemoteAction remoteAction(String action) {
+        Context context = getContext();
+        Intent intent = new Intent(ACTION_PIP).setPackage(context.getPackageName()).putExtra(EXTRA_PIP_ACTION, action);
+        PendingIntent pending = PendingIntent.getBroadcast(
+            context,
+            ("pip:" + action).hashCode(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        String label = context.getString(labelFor(action));
+        return new RemoteAction(Icon.createWithResource(context, iconFor(action)), label, label, pending);
+    }
+
+    private static int labelFor(String action) {
+        if ("unmute".equals(action)) return R.string.call_pip_unmute;
+        if ("mute".equals(action)) return R.string.call_pip_mute;
+        return R.string.call_pip_hangup;
+    }
+
+    private static int iconFor(String action) {
+        if ("unmute".equals(action)) return R.drawable.ic_pip_mic_off;
+        if ("mute".equals(action)) return R.drawable.ic_pip_mic;
+        return R.drawable.ic_pip_hangup;
+    }
+
+    /** #8144 — la page reduit son rendu a l'image et au nom pendant la PiP (`call-pip-window.tsx`). */
+    void pictureInPictureChanged(boolean active) {
+        JSObject event = new JSObject();
+        event.put("active", active);
+        notifyListeners("pictureInPictureModeChanged", event);
+    }
+
     @Override
     protected void handleOnDestroy() {
         release();
+        if (pipButtons != null) {
+            getContext().unregisterReceiver(pipButtons);
+            pipButtons = null;
+        }
         super.handleOnDestroy();
     }
 
     private void release() {
         boolean wasActive = callActive;
         callActive = false;
+        micMuted = false;
         CallForegroundService.stop(getContext());
         keepScreenOn(false);
         showOverLockScreen(false);

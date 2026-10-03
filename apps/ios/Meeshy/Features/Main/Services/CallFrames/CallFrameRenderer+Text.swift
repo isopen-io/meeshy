@@ -246,9 +246,10 @@ nonisolated extension CallFrameRenderer {
         context.restoreGState()
     }
 
-    /// Le cadre où la signature se peint — `nil` pour le filigrane, qui couvre toute la toile.
+    /// Le cadre où la signature se peint — `nil` pour le filigrane, qui couvre toute la toile, et pour un
+    /// cadre qui ne déclare pas de signature (facultative depuis #9197).
     static func brandFrame(_ stage: CallFrameStage, plan: CallFrameTextPlan, box: CallFrameBrandBox) -> CGRect? {
-        let brand = stage.look.brand
+        guard let brand = stage.look.brand else { return nil }
         let areas = stage.areas
         switch brand.place {
         case .watermark:
@@ -267,8 +268,8 @@ nonisolated extension CallFrameRenderer {
 
     /// Le rectangle d'une signature posée dans un coin de l'intérieur — `nil` hors des quatre coins.
     static func cornerBrandRect(_ stage: CallFrameStage, box: CallFrameBrandBox) -> CGRect? {
-        let place = stage.look.brand.place
-        guard place == .topLeft || place == .topRight || place == .bottomLeft || place == .bottomRight else { return nil }
+        guard let place = stage.look.brand?.place,
+              place == .topLeft || place == .topRight || place == .bottomLeft || place == .bottomRight else { return nil }
         let pad = stage.unit * 0.035
         let inner = stage.areas.inner
         let x = place == .topLeft || place == .bottomLeft ? inner.minX + pad : inner.maxX - pad - box.width
@@ -280,12 +281,13 @@ nonisolated extension CallFrameRenderer {
     static func brandFrame(frame: CallFrameDesign, people: [CallFramePerson], texts: CallFrameTexts, size: CGSize) -> CGRect? {
         let stage = CallFrameStage(frame: frame, people: people, texts: texts, size: size)
         let fonts = CallFrameFontBook()
+        guard let brand = stage.look.brand else { return nil }
         let plan = planText(stage, fonts: fonts)
-        return brandFrame(stage, plan: plan, box: brandBox(stage.look.brand, unit: stage.unit, fonts: fonts))
+        return brandFrame(stage, plan: plan, box: brandBox(brand, unit: stage.unit, fonts: fonts))
     }
 
     static func paintBrand(_ context: CGContext, stage: CallFrameStage, plan: CallFrameTextPlan, fonts: CallFrameFontBook) {
-        let brand = stage.look.brand
+        guard let brand = stage.look.brand else { return }
         let box = brandBox(brand, unit: stage.unit, fonts: fonts)
         guard let frame = brandFrame(stage, plan: plan, box: box) else {
             paintWatermark(context, brand: brand, box: box, size: stage.size, fonts: fonts)
@@ -334,18 +336,19 @@ nonisolated extension CallFrameRenderer {
     static func planText(_ stage: CallFrameStage, fonts: CallFrameFontBook) -> CallFrameTextPlan {
         let look = stage.look
         let unit = stage.unit
-        let box = brandBox(look.brand, unit: unit, fonts: fonts)
+        let box = look.brand.map { brandBox($0, unit: unit, fonts: fonts) }
+        let brandPlace = look.brand?.place
         func titleHeight(_ title: CallFrameTitle) -> CGFloat { unit * titleShare(title.size) * lineFactor }
         let listLines: CGFloat = look.names.show == .both || stage.people.count >= 5 ? 2 : 1
         let listed = look.names.style == .list && look.names.show != .none
         func place(_ top: Bool) -> (rects: [(RowKey, CGRect)], scale: CGFloat, brandScale: CGFloat) {
             var rows: [(key: RowKey, height: CGFloat)] = []
-            if top, look.brand.place == .top { rows.append((key: .brand, height: box.height * 1.25)) }
+            if top, brandPlace == .top, let box { rows.append((key: .brand, height: box.height * 1.25)) }
             if !top, titleShown(look.title), look.title.place == .bottom { rows.append((key: .title, height: titleHeight(look.title))) }
             if top, titleShown(look.title), look.title.place == .top { rows.append((key: .title, height: titleHeight(look.title))) }
             if let subtitle = look.subtitle, titleShown(subtitle), subtitle.place == (top ? CallFrameTitlePlace.top : CallFrameTitlePlace.bottom) { rows.append((key: .subtitle, height: titleHeight(subtitle))) }
             if !top, listed { rows.append((key: .list, height: unit * listShare * 1.45 * listLines)) }
-            if !top, look.brand.place == .bottom { rows.append((key: .brand, height: box.height * 1.25)) }
+            if !top, brandPlace == .bottom, let box { rows.append((key: .brand, height: box.height * 1.25)) }
             let reserve = top ? stage.areas.top : stage.areas.bottom
             let room = reserve.height * 0.94
             let brandRow = rows.first { $0.key == .brand }
@@ -368,15 +371,16 @@ nonisolated extension CallFrameRenderer {
         let top = place(true)
         let bottom = place(false)
         func find(_ key: RowKey) -> CGRect? { (top.rects + bottom.rects).first { $0.0 == key }?.1 }
-        let brandScale: CGFloat = look.brand.place == .top ? top.brandScale : look.brand.place == .bottom ? bottom.brandScale : 1
+        let brandScale: CGFloat = brandPlace == .top ? top.brandScale : brandPlace == .bottom ? bottom.brandScale : 1
         return CallFrameTextPlan(brand: find(.brand), brandScale: brandScale, title: find(.title), subtitle: find(.subtitle), list: find(.list), topScale: top.scale, bottomScale: bottom.scale)
     }
 
     /// La largeur que la signature, posée dans un coin de la réserve, prend aux textes centrés de cette réserve.
     static func brandAllowance(_ stage: CallFrameStage, top: Bool, fonts: CallFrameFontBook) -> CGFloat {
-        let place = stage.look.brand.place
+        guard let brand = stage.look.brand else { return 0 }
+        let place = brand.place
         let corner = top ? (place == .topLeft || place == .topRight) : (place == .bottomLeft || place == .bottomRight)
-        return corner ? brandBox(stage.look.brand, unit: stage.unit, fonts: fonts).width + stage.unit * 0.06 : 0
+        return corner ? brandBox(brand, unit: stage.unit, fonts: fonts).width + stage.unit * 0.06 : 0
     }
 
     /// La largeur que prennent les ornements de coin (lune, REC) — ils CÈDENT au titre quand il ne tiendrait
@@ -424,12 +428,14 @@ nonisolated extension CallFrameRenderer {
             let width = fonts.width(fitted.text, fitted.title.font, fitted.size) + fitted.size * 0.8
             return CGRect(x: fitted.row.minX + (fitted.row.width - width) / 2, y: fitted.row.minY, width: width, height: fitted.row.height)
         }
-        let box = brandBox(stage.look.brand, unit: stage.unit, fonts: fonts)
+        let box = stage.look.brand.map { brandBox($0, unit: stage.unit, fonts: fonts) }
         let brand: [CGRect]
-        if let row = plan.brand {
+        if let box, let row = plan.brand {
             brand = [CGRect(x: row.minX + (row.width - box.width) / 2 - box.px * 0.3, y: row.minY, width: box.width + box.px * 0.6, height: row.height)]
-        } else {
+        } else if let box {
             brand = cornerBrandRect(stage, box: box).map { [$0] } ?? []
+        } else {
+            brand = []
         }
         let list = plan.list.map { [$0] } ?? []
         return CallFrameTextLayout(plan: plan, boxes: titles + brand + list, headline: titles.first)

@@ -4,16 +4,17 @@ import type { CallService } from '../services/CallService';
 import type { PushNotificationService } from '../services/PushNotificationService';
 import type { SocketRateLimiter } from '../utils/socket-rate-limiter';
 import { recordCallReaction } from '../services/calls/callReactions';
-import { resolveActiveCallParticipant } from './call-participants';
+import { resolveActiveCallParticipant, resolveActiveCallParticipantDetailed } from './call-participants';
 import { callInviteDependencies, registerCallInviteEvents } from './call-invite-events';
 import type { CallInvitationLifecycle } from './call-invite-lifecycle';
 import { registerCallModerationEvents } from './call-moderation-events';
 import { registerCallReactionEvents } from './call-reaction-events';
+import { registerCallLiveFrameEvents } from './call-live-frame-events';
 import { callPreviewDependencies, registerCallPreviewEvents } from './call-preview-events';
 
 /**
  * Les contrôles d'un appel EN COURS — inviter (#8433), couper un micro
- * (#8438), réagir (#8439) — et l'aperçu d'un appel qui SONNE (#8480), branchés d'un seul appel depuis
+ * (#8438), réagir (#8439), choisir le cadre en direct d'un duo (#9214) — et l'aperçu d'un appel qui SONNE (#8480), branchés d'un seul appel depuis
  * `CallEventsHandler`, qui est hors budget de taille et ne reçoit plus de
  * verbe neuf.
  */
@@ -39,6 +40,18 @@ export function registerCallControlEvents(
       rateLimiter,
       resolveActiveCallParticipant: (userId, callId) => resolveActiveCallParticipant({ prisma, callService }, userId, callId),
       recordReaction: (callId, emoji) => recordCallReaction(prisma, callId, emoji),
+    },
+    socket,
+    getUserId
+  );
+  registerCallLiveFrameEvents(
+    {
+      rateLimiter,
+      resolveSender: async (userId, callId) => {
+        const sender = await resolveActiveCallParticipantDetailed({ prisma, callService }, userId, callId);
+        if (!sender) return null;
+        return { userId: sender.userId, activeParticipants: sender.session.participants.filter((p) => !p.leftAt).length };
+      },
     },
     socket,
     getUserId

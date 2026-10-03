@@ -63,10 +63,29 @@ export function loneSurvivorOf(call: LoneSurvivorCall): LoneSurvivor | null {
   return { callId: call.id, userId: userOf(survivor), participantId: survivor.participantId, lastLeaverUserId: userOf(lastLeaver) };
 }
 
+export type AbandonedCall = {
+  readonly callId: string;
+  readonly lastLeaverUserId: string;
+};
+
+/**
+ * Un appel décroché, encore ouvert, que PLUS PERSONNE n'occupe — ou `null`.
+ * Deux départs simultanés comptent chacun l'autre encore actif dans leur
+ * transaction : aucun ne se croit dernier, et l'appel resterait « en cours »
+ * sans personne dedans. L'échéance de la grâce le termine, sauf retour.
+ */
+export function abandonedCallOf(call: LoneSurvivorCall): AbandonedCall | null {
+  if (!call.answeredAt || call.endedAt || !ANSWERED_LIVE_STATUSES.includes(call.status)) return null;
+  if (call.participants.length === 0 || call.participants.some((row) => !row.leftAt)) return null;
+  const lastLeaver = [...call.participants].sort((a, b) => (b.leftAt?.getTime() ?? 0) - (a.leftAt?.getTime() ?? 0))[0];
+  return { callId: call.id, lastLeaverUserId: userOf(lastLeaver) };
+}
+
 export type LoneSurvivorGraceDeps = {
   readonly graceMs: number;
   readonly readCall: (callId: string) => Promise<LoneSurvivorCall | null>;
   readonly endFor: (survivor: LoneSurvivor) => Promise<void>;
+  readonly endAbandoned: (abandoned: AbandonedCall) => Promise<void>;
   readonly onError: (callId: string, error: unknown) => void;
 };
 
@@ -100,7 +119,10 @@ export class LoneSurvivorGrace {
 
   private async expire(callId: string): Promise<void> {
     const call = await this.deps.readCall(callId);
-    const survivor = call === null ? null : loneSurvivorOf(call);
-    if (survivor !== null) await this.deps.endFor(survivor);
+    if (call === null) return;
+    const survivor = loneSurvivorOf(call);
+    if (survivor !== null) return this.deps.endFor(survivor);
+    const abandoned = abandonedCallOf(call);
+    if (abandoned !== null) await this.deps.endAbandoned(abandoned);
   }
 }

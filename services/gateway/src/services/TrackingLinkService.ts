@@ -69,6 +69,37 @@ export function generateShortToken(length = 6): string {
  * redirection intelligente (web) et le DeepLinkRouter (iOS). `kind` distingue
  * un lien de tracking (partage de post/reel/story) d'une invitation conversation.
  */
+/**
+ * À qui un lien déjà minté peut être RENDU au lieu d'en créer un (#9184).
+ *
+ * - `owner` : les seuls liens de l'appelant. C'est la portée de tout ce qui
+ *   rend le lien entier à quelqu'un (`POST /tracking-links` sert `createdBy`,
+ *   la conversation, le message et les compteurs de clics).
+ * - `conversation` : le lien d'une URL est PARTAGÉ par tous les messages d'une
+ *   conversation, quel qu'en soit l'auteur — c'est ce que la réécriture d'un
+ *   message suppose (`messageRemovalEffects` désactive un lien que plus aucun
+ *   message vivant ne porte), et seul le jeton voyage dans le contenu.
+ */
+export type TrackingLinkReuseScope =
+  | { readonly kind: 'owner'; readonly createdBy: string; readonly conversationId?: string }
+  | { readonly kind: 'conversation'; readonly conversationId: string };
+
+const reuseScopeWhere = (scope: TrackingLinkReuseScope) =>
+  scope.kind === 'conversation'
+    ? { conversationId: scope.conversationId }
+    : { createdBy: scope.createdBy, ...(scope.conversationId ? { conversationId: scope.conversationId } : {}) };
+
+/**
+ * La portée d'un contenu (message, post, story, commentaire) : la conversation
+ * quand il y vit, sinon son auteur — et sans l'un ni l'autre, aucune : on mint,
+ * on ne réutilise le lien de personne.
+ */
+const contentReuseScope = (params: { conversationId?: string; createdBy?: string }): TrackingLinkReuseScope | null => {
+  if (params.conversationId) return { kind: 'conversation', conversationId: params.conversationId };
+  if (params.createdBy) return { kind: 'owner', createdBy: params.createdBy };
+  return null;
+};
+
 export type ResolvedLinkTarget = {
   kind: 'tracking' | 'conversation';
   targetType: string;
@@ -281,20 +312,13 @@ export class TrackingLinkService {
   }
 
   /**
-   * Vérifie si un lien de tracking existe pour une URL donnée
+   * Le lien actif déjà minté pour cette URL, DANS la portée donnée (#9184).
+   * Sans portée, la recherche rendait le lien de N'IMPORTE QUI — son auteur,
+   * sa conversation et ses compteurs de clics.
    */
-  async findExistingTrackingLink(originalUrl: string, conversationId?: string): Promise<TrackingLink | null> {
-    const where: any = {
-      originalUrl,
-      isActive: true
-    };
-
-    if (conversationId) {
-      where.conversationId = conversationId;
-    }
-
+  async findExistingTrackingLink(originalUrl: string, scope: TrackingLinkReuseScope): Promise<TrackingLink | null> {
     const trackingLink = await this.prisma.trackingLink.findFirst({
-      where
+      where: { originalUrl, isActive: true, ...reuseScopeWhere(scope) }
     });
 
     return trackingLink as TrackingLink | null;
@@ -728,7 +752,7 @@ export class TrackingLinkService {
           logger.debug('Reusing token for duplicate URL', { token, url });
         } else {
           // Find or create tracking link
-          let trackingLink = await this.findExistingTrackingLink(url, conversationId);
+          let trackingLink = await this.findExistingTrackingLink(url, { kind: 'conversation', conversationId });
 
           if (!trackingLink) {
             trackingLink = await this.createTrackingLink({
@@ -798,11 +822,15 @@ export class TrackingLinkService {
     const trackingLinks: TrackingLink[] = [];
     const rawTokens = new Map<string, string>();
 
+    const reuseScope = contentReuseScope({ conversationId, createdBy });
+    const linkByUrl = new Map<string, TrackingLink>();
     for (const { url, raw } of occurrences) {
       try {
         const trackingLink =
-          (await this.findExistingTrackingLink(url, conversationId)) ??
+          linkByUrl.get(url) ??
+          (reuseScope ? await this.findExistingTrackingLink(url, reuseScope) : null) ??
           (await this.createTrackingLink({ originalUrl: url, conversationId, messageId, createdBy }));
+        linkByUrl.set(url, trackingLink);
         trackingLinks.push(trackingLink);
         if (raw) rawTokens.set(url, trackingLink.token);
       } catch (error) {

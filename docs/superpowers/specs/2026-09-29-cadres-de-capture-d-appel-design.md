@@ -91,11 +91,20 @@ en fractions de la HAUTEUR, réservées au titre (haut) et à la signature / lis
 | `cascade` | cartes égales (60 % de la zone) en escalier du coin haut-gauche au coin bas-droit, chacune par-dessus la précédente |
 
 ### 4.2 `slot` — chaque case
-`{ shape, radius?, stroke?, double?, glow?, shadow?, card?, tilt, tone, duotone? }`
+`{ shape, radius?, stroke?, double?, glow?, shadow?, card?, tilt, tone, duotone?, look? }`
 
 - `shape` : `rect`, `round` (coins `radius`, fraction du petit côté), `circle`, `oval`, `arch` (haut en
   plein cintre), `hex`, `diamond`, `heart`, `star` (5 branches, rayon intérieur 0,5), `ticket` (coins
-  encochés), `stamp` (bord perforé), `blob` (organique, déterministe).
+  encochés), `stamp` (bord perforé), `blob` (organique, déterministe) ; depuis #9197 : `torn` (bords
+  rongés vers l'intérieur, dents ≤ 2,5 % du petit côté, déterministe), `polaroid` (photo CARRÉE, marges
+  fines en haut et sur les côtés — 6 % du petit côté —, marge du bas ≥ 20 % de la hauteur ; le papier
+  lui-même reste l'affaire de `card`), `frame-oval` (médaillon : ovale vertical 3:4, le plus grand qui
+  tient).
+- `look` (facultatif, #9197) : 2 looks au plus de la bibliothèque Meeshy, `{ id, amount?, size? }`,
+  `id` ∈ `instant-film`, `film-grain`, `oil-paint`, `scratch-film`, `halftone`, `vignette`, `bloom` ;
+  `amount` = intensité, `size` = taille du grain, de la touche ou de la trame (fractions). Appliqué
+  APRÈS le lissage de peau ; `tone` reste pour la compatibilité. Reçu par les deux moteurs, dessiné à
+  l'étape 3.5.
 - `stroke` `{ color, width }` ; `double: true` ajoute un second trait intérieur à 40 % de l'épaisseur.
 - `glow` : halo coloré (flou = 12 % du petit côté) ; `shadow: true` : ombre portée douce.
 - `card` `{ color, pad, foot }` : la case est posée sur une carte (polaroid, vignette de timbre) ; `pad`
@@ -117,9 +126,11 @@ en fractions de la HAUTEUR, réservées au titre (haut) et à la signature / lis
   noire), `vines`, `bulbs` (ampoules de loge), `polaroid` (marge blanche épaisse en bas).
 
 ### 4.4 `ornaments`
-Liste de `{ kind, color, density, layer }` — `density` ∈ `low`/`mid`/`high`, `layer` ∈ `back` (sous les
+Liste de `{ kind, color, density, layer, motion? }` — `density` ∈ `low`/`mid`/`high`, `layer` ∈ `back` (sous les
 cases) / `front` (dessus, jamais sur un visage : les ornements `front` se posent dans les marges et les
-réserves `top`/`bottom`). Placement DÉTERMINISTE (graine fixe) : l'aperçu ne scintille pas.
+réserves `top`/`bottom`). Placement DÉTERMINISTE (graine fixe) : l'aperçu ne scintille pas. `motion`
+(#9197) ∈ `still` (défaut), `loop`, `onAppear` : animé SEULEMENT en direct (étape 3.2) ; en capture,
+l'ornement se peint immobile.
 
 `sparkles`, `bokeh`, `confetti`, `balloons`, `stars`, `hearts`, `fireflies`, `petals`, `leaves`,
 `bubbles`, `snow`, `rays`, `glitch`, `scanlines`, `grain`, `vignette`, `lightleak`, `crown`, `ribbon`,
@@ -127,11 +138,20 @@ réserves `top`/`bottom`). Placement DÉTERMINISTE (graine fixe) : l'aperçu ne 
 `moon`, `clouds`, `bats`, `skulls`, `roses`.
 
 ### 4.5 Textes : `brand`, `names`, `title`, `subtitle`
-- **`brand` — OBLIGATOIRE** `{ mark, place, color, size, font? }` : `mark` ∈ `logo` (les trois traits
+- **`brand` — FACULTATIF depuis #9197** (décision de Jacques, 2026-10-02 ; il était obligatoire)
+  `{ mark, place, color, size, font?, watermark? }` : `mark` ∈ `logo` (les trois traits
   Meeshy, géométrie de `BrandMark`/`AnimatedLogoView`), `wordmark` (le mot « meeshy », en minuscules —
   l'UNIQUE graphie des cadres), `both` ; `place` ∈ `top`, `bottom`, `top-left`, `top-right`,
   `bottom-left`, `bottom-right`, `watermark` (mot répété en diagonale, très discret, par-dessus
-  l'ensemble) ; `size` ∈ `s`/`m`/`l`. Police par défaut : arrondie (SF Rounded / Fredoka).
+  l'ensemble) ; `size` ∈ `s`/`m`/`l`. Police par défaut : arrondie (SF Rounded / Fredoka). Un cadre
+  sans `brand` se peint sans marque et ne réserve aucune rangée pour elle ; le catalogue Meeshy, lui,
+  reste signé partout (témoin du § 6).
+  `watermark` (facultatif, réservé à `place: 'watermark'`) `{ content, orientation, opacity }` — le
+  filigrane des Imager (« Meeshy @pseudo » en quinconce) : `content` ∈ `brand`, `brand-handle` ;
+  `orientation` ∈ `diagonal-up` (−π/7, celle d'aujourd'hui), `diagonal-down` (+π/7), `horizontal`,
+  `vertical`, `cross` (les deux diagonales) ; `opacity` ≤ 0,08 (il passe sur la vidéo). Reçu par les
+  deux moteurs ; tant que l'étape 3.4 n'est pas livrée, le filigrane se peint comme aujourd'hui
+  (diagonale −π/7, 12 %).
 - **`names`** `{ show, style, font, color, fill? }` : `show` ∈ `none`, `name` (nom affiché), `handle`
   (@pseudo), `both` ; `style` ∈ `caption` (sous la case), `plate` (bandeau dans le bas de la case),
   `ribbon` (banderole à bouts pliés), `badge` (pastille), `bubble` (bulle de BD), `tag` (étiquette
@@ -139,13 +159,55 @@ réserves `top`/`bottom`). Placement DÉTERMINISTE (graine fixe) : l'aperçu ne 
 - **`title`** `{ source, font, color, place, size, effect?, case? }` et **`subtitle`** (même forme,
   sous le titre) : `source` ∈ `group` (nom du groupe ; hors groupe ⇒ `names`), `names` (« Awa & Karim »
   ; au-delà de trois : « Awa, Karim, Lina + 2 »), `brand` (« meeshy »), `date` (date du jour, format
-  court de la langue), `none`. `effect` ∈ `none`, `shadow`, `glow`, `outline` ; `case` ∈ `upper`,
-  `as-is`.
+  court de la langue), `none` ; depuis #9197 : `time`, `datetime`, `place`, `landmark`, `emotion` (qui
+  n'écrivent RIEN tant que l'étape 3.3 n'est pas livrée — un texte vide se tait). `effect` ∈ `none`,
+  `shadow`, `glow`, `outline` ; `case` ∈ `upper`, `as-is`. `form` (facultatif, #9197) : la forme de la
+  spec 01 § 2, réservée à SA source — `time` : `digital`, `digital-seconds`, `analog`, `words`,
+  `moment` ; `date` : `short`, `long`, `day-month`, `calendar-tile`, `roman` ; `datetime` : `inline`,
+  `stacked`, `stamp` ; `place` : `city`, `city-country`, `neighborhood`, `street`, `address`,
+  `country-flag`, `coordinates`, `pin`, `map-silhouette` (jamais plus précis que le réglage de
+  l'utilisateur : le cadre ne peut qu'en afficher moins) ; `landmark` : `name`, `line-art`, `badge`,
+  `skyline` ; `emotion` : `emoji`, `word`, `color-aura`, `particles`, `sticker`.
+- **`elements`** (facultatif, #9197) : 6 textes ou pictogrammes au plus, posés librement — même forme
+  que `title`, avec `place` ∈ `top`, `bottom`, `top-left`, `top-right`, `bottom-left`, `bottom-right`,
+  `center-left`, `center-right` (le pourtour de la zone des visages, jamais son centre). Dessinés à
+  l'étape 3.3.
 - **Polices** : les dix-huit `StoryTextStyle` (`bold`, `neon`, `typewriter`, `handwriting`, `classic`,
   `calligraphy`, `cartoon`, `futuristic`, `fantasy`, `curve`, `tag`, `italic`, `retro`, `elegant`,
   `poster`, `bubble`, `note`, `brush`) — celles des images de message et de commentaire (Imager). iOS
   résout par `StoryTextStyle.fontName`, le web par `STORY_FONT_FAMILIES` / pile native, chargées AVANT
   le premier rendu (`document.fonts.load`).
+
+### 4.6 Frames en direct et packs (#9197, doc 06 § 3 — étape 3.1)
+Le format des cadres de capture est ÉTENDU, pas doublé : toutes les clés ci-dessous sont FACULTATIVES,
+les douze fichiers d'ambiance se lisent sans changement, et un cadre qui ne les porte pas se rend
+comme avant (les fichiers Swift générés du catalogue actuel sont inchangés octet pour octet). Les
+moteurs REÇOIVENT ces clés et ignorent ce qu'ils ne dessinent pas encore.
+
+- Au niveau du **motif** (valent pour toutes ses tranches, aucune variante ne les surcharge) :
+  - `credits` `{ author, createdAt, updatedAt? }` — dates `AAAA-MM-JJ`, auteur ≤ 80 caractères ;
+    affiché au tap sur la signature, ou à l'appui long sur le cadre (étape 3.4) ;
+  - `surfaces` — sous-ensemble NON VIDE et sans doublon de `capture`, `live` ; absent ⇒ `['capture']`.
+    Un cadre n'est proposé en direct que s'il déclare `live` et que son coût le permet ;
+  - `cost` ∈ `light`, `standard`, `rich` — mesuré à la validation (spec 02 § 3.1).
+- Dans l'**apparence** (une variante peut les surcharger, clé par clé) :
+  - `scene` — 12 couches au plus `{ id, kind, depth, src?, preset?, color?, amount?, max? }` : `kind`
+    ∈ `image`, `lottie`, `sprite`, `video-loop`, `particles`, `light` ; `depth` ∈ `back`, `front`,
+    `effects`. Les couches à fichier (`image`, `lottie`, `sprite`, `video-loop`) exigent `src`, un
+    chemin DU pack sous `assets/` (aucun schéma d'URL, aucune remontée `..`) ; `particles` exige
+    `preset` (une sorte d'ornement) et `max` ≤ 150 ; `light` exige `color`. Plafonds de la scène : 2
+    `video-loop`, 2 `light`, 150 particules au total, identifiants uniques (spec 02 § 3.3) ;
+  - `behaviors` — `{ trigger, when?, target?, action, duration?, color? }` : `trigger` ∈ `onTap`,
+    `onShake`, `onTilt`, `onSmile`, `onEmotion`, `onTime`, `onSpeaking`, `onCallEvent` ; `action` ∈
+    `burst`, `calm`, `tint`, `play`, `stop`, `show`, `hide`, `shake` ; `when` précise le déclencheur
+    et lui est RÉSERVÉ — une émotion pour `onEmotion` (`joy`, `love`, `pride`, `calm`, `surprise`,
+    `nostalgia`, `party`, `gratitude`), un moment pour `onTime` (`morning`, `day`, `evening`,
+    `night`), un événement pour `onCallEvent` (`start`, `end`) ; `target` = l'`id` d'une couche ;
+    `duration` ≤ 10 s ;
+  - `fallbacks` `{ reduced?, minimal? }`, chaque palier `{ hide?, still? }` — les couches qu'il masque,
+    et celles qu'il remplace par un fichier fixe du pack (`{ layer, src }`). Le reste des paliers
+    (particules divisées, looks en demi-résolution, `off` en fondu) est la règle du MOTEUR (spec 02
+    § 3.2), pas une déclaration du cadre.
 
 ## 5. Règles de rendu communes
 
@@ -168,4 +230,10 @@ réserves `top`/`bottom`). Placement DÉTERMINISTE (graine fixe) : l'aperçu ne 
 - Disposition, pour chaque cadre et chaque `n` de sa tranche : une case par personne, toutes dans la
   toile, déterministe.
 - Rendu : la signature est tracée pour chaque cadre ; le titre de groupe n'apparaît qu'en groupe.
-- Parité : le fichier Swift généré est à jour du JSON.
+- Parité : le fichier Swift généré est à jour du JSON ; chaque vocabulaire du générateur est celui de
+  `frame-spec.ts`, et chaque énumération Swift (`CallFrameSpec.swift`, `CallFrameFormatExtension.swift`)
+  en porte les valeurs brutes.
+- Extension (#9197) : l'exemple du doc 06 se lit au schéma ; chaque clé ajoutée refuse ce qui sort de
+  son vocabulaire (forme hors de sa source, filigrane > 8 %, fichier hors `assets/`, plafonds de scène,
+  `when` hors de son déclencheur) ; un cadre sans signature se peint sans marque ; les trois nouvelles
+  formes se tracent dans leur case (`frame-spec-extension.test.ts`, `CallFrameFormatExtensionTests`).

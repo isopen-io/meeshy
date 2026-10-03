@@ -63,7 +63,8 @@ describe('le catalogue des cadres de capture', () => {
     const frames = captureFrames();
     const withHandles = frames.filter((frame) => frame.names.show === 'handle' || frame.names.show === 'both');
     expect(withHandles.length).toBeGreaterThanOrEqual(15);
-    const marks = new Set(frames.map((frame) => frame.brand.mark));
+    expect(frames.filter((frame) => frame.brand === undefined).map((frame) => frame.id)).toEqual([]);
+    const marks = new Set(frames.map((frame) => frame.brand?.mark));
     expect([...marks].sort()).toEqual(['both', 'logo', 'wordmark']);
   });
 });

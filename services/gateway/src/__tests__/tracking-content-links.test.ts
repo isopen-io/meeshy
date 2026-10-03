@@ -22,6 +22,7 @@ type Link = {
   shortUrl: string;
   isActive: boolean;
   conversationId?: string | null;
+  createdBy?: string | null;
 };
 
 /**
@@ -34,10 +35,11 @@ const buildPrisma = () => {
   let seq = 0;
 
   const trackingLink = {
-    // findExistingTrackingLink(originalUrl, conversationId?)
+    // findExistingTrackingLink(originalUrl, scope) — chaque clé du `where` compte
     findFirst: jest.fn(async (arg: any): Promise<Link | null> => {
-      const url = arg?.where?.originalUrl;
-      return store.find((l) => l.originalUrl === url && l.isActive) ?? null;
+      const where: Record<string, unknown> = arg?.where ?? {};
+      return store.find((l) =>
+        Object.entries(where).every(([key, value]) => (l as Record<string, unknown>)[key] === value)) ?? null;
     }),
     // tokenExists(token) — always unique in this mock (no collisions)
     findUnique: jest.fn(async (arg: any): Promise<Link | null> => {
@@ -53,13 +55,14 @@ const buildPrisma = () => {
         shortUrl: arg?.data?.shortUrl ?? `/l/tok${seq}`,
         isActive: true,
         conversationId: arg?.data?.conversationId ?? null,
+        createdBy: arg?.data?.createdBy ?? null,
       };
       store.push(link);
       return link;
     }),
   };
 
-  const prisma: unknown = { trackingLink };
+  const prisma: unknown = { trackingLink, __store: store };
   return prisma as ConstructorParameters<typeof TrackingLinkService>[0] & {
     trackingLink: typeof trackingLink;
     __store: Link[];
@@ -123,6 +126,38 @@ describe('TrackingLinkService.collectContentTrackingLinks', () => {
     });
     // processMessageLinks swallows per-URL errors → empty mapping, no throw.
     expect(links).toEqual([]);
+  });
+
+  it('never hands a post author the link another author minted for the same URL (#9184)', async () => {
+    const alice = await service.collectContentTrackingLinks({ content: 'Va voir https://meeshy.me', createdBy: 'alice' });
+    const lea = await service.collectContentTrackingLinks({ content: 'Moi aussi https://meeshy.me', createdBy: 'lea' });
+
+    expect(lea[0].token).not.toBe(alice[0].token);
+    expect(prisma.__store.map((link) => link.createdBy)).toEqual(['alice', 'lea']);
+  });
+
+  it('reuses an author\'s own link outside a conversation', async () => {
+    const first = await service.collectContentTrackingLinks({ content: 'https://meeshy.me', createdBy: 'lea' });
+    const again = await service.collectContentTrackingLinks({ content: 'encore https://meeshy.me', createdBy: 'lea' });
+
+    expect(again).toEqual(first);
+    expect(prisma.trackingLink.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('mints a fresh link, reusing nobody\'s, when content has neither author nor conversation', async () => {
+    const owned = await service.collectContentTrackingLinks({ content: 'https://meeshy.me', createdBy: 'alice' });
+    const orphan = await service.collectContentTrackingLinks({ content: 'https://meeshy.me' });
+
+    expect(orphan[0].token).not.toBe(owned[0].token);
+    expect(prisma.trackingLink.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps sharing one link per URL inside a conversation, whoever cites it', async () => {
+    const first = await service.collectContentTrackingLinks({ content: 'https://meeshy.me', conversationId: 'c1', createdBy: 'alice' });
+    const reply = await service.collectContentTrackingLinks({ content: 'https://meeshy.me', conversationId: 'c1', createdBy: 'lea' });
+
+    expect(reply).toEqual(first);
+    expect(prisma.trackingLink.create).toHaveBeenCalledTimes(1);
   });
 
   it('maps multiple distinct URLs to distinct tokens', async () => {

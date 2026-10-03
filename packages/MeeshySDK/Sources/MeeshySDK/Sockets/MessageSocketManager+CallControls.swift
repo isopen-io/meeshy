@@ -156,6 +156,7 @@ extension MessageSocketManager: CallControlsSocketProviding {
                 CallControlSocketChannel.events.send(.reactionReceived(event))
             }
         }
+        registerCallLiveFrameHandlers(on: socket)
     }
 
     public func inviteCallParticipant(callId: String, userId: String) async throws {

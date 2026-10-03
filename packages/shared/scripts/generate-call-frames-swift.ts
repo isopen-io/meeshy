@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 export const FRAME_MOODS = ['signature', 'distingue', 'elegant', 'jovial', 'deconnecte', 'corporate', 'fantastique', 'futuriste', 'glauque', 'hors-norme', 'morbide', 'feerique'] as const;
 export const FRAME_BUCKETS = ['duo', 'comite', 'groupe', 'tablee'] as const;
 export const FRAME_ARRANGEMENTS = ['split', 'diagonal', 'hero', 'grid', 'row', 'column', 'arch', 'orbit', 'scatter', 'tiers', 'mosaic', 'honeycomb', 'cascade'] as const;
-export const SLOT_SHAPES = ['rect', 'round', 'circle', 'oval', 'arch', 'hex', 'diamond', 'heart', 'star', 'ticket', 'stamp', 'blob'] as const;
+export const SLOT_SHAPES = ['rect', 'round', 'circle', 'oval', 'arch', 'hex', 'diamond', 'heart', 'star', 'ticket', 'stamp', 'blob', 'torn', 'polaroid', 'frame-oval'] as const;
 export const SLOT_TONES = ['color', 'mono', 'sepia', 'noir', 'warm', 'cool', 'faded', 'duotone'] as const;
 export const SLOT_TILTS = ['none', 'gentle', 'wild'] as const;
 export const FRAME_PATTERNS = ['dots', 'stripes', 'grid', 'checker', 'halftone', 'scanlines', 'grain', 'stars', 'confetti', 'sunburst', 'waves', 'circuit', 'damask', 'hearts'] as const;
@@ -39,8 +39,39 @@ export const BRAND_PLACES = ['top', 'bottom', 'top-left', 'top-right', 'bottom-l
 export const TEXT_SIZES = ['s', 'm', 'l'] as const;
 export const NAME_SHOWS = ['none', 'name', 'handle', 'both'] as const;
 export const NAME_STYLES = ['caption', 'plate', 'ribbon', 'badge', 'bubble', 'tag', 'list'] as const;
-export const TITLE_SOURCES = ['group', 'names', 'brand', 'date', 'none'] as const;
+export const TITLE_SOURCES = ['group', 'names', 'brand', 'date', 'none', 'time', 'datetime', 'place', 'landmark', 'emotion'] as const;
 export const TEXT_EFFECTS = ['none', 'shadow', 'glow', 'outline'] as const;
+/* L'extension du format (#9197, doc 06 § 3) — les mêmes listes que `frame-spec.ts`, dans le même ordre. */
+export const SLOT_LOOKS = ['instant-film', 'film-grain', 'oil-paint', 'scratch-film', 'halftone', 'vignette', 'bloom'] as const;
+export const ORNAMENT_MOTIONS = ['still', 'loop', 'onAppear'] as const;
+export const TEXT_FORMS = [
+  'digital', 'digital-seconds', 'analog', 'words', 'moment',
+  'short', 'long', 'day-month', 'calendar-tile', 'roman',
+  'inline', 'stacked', 'stamp',
+  'city', 'city-country', 'neighborhood', 'street', 'address', 'country-flag', 'coordinates', 'pin', 'map-silhouette',
+  'name', 'line-art', 'badge', 'skyline',
+  'emoji', 'word', 'color-aura', 'particles', 'sticker',
+] as const;
+export const ELEMENT_PLACES = ['top', 'bottom', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'center-left', 'center-right'] as const;
+export const WATERMARK_CONTENTS = ['brand', 'brand-handle'] as const;
+export const WATERMARK_ORIENTATIONS = ['diagonal-up', 'diagonal-down', 'horizontal', 'vertical', 'cross'] as const;
+export const FRAME_SURFACES = ['capture', 'live'] as const;
+export const FRAME_COSTS = ['light', 'standard', 'rich'] as const;
+export const SCENE_LAYER_KINDS = ['image', 'lottie', 'sprite', 'video-loop', 'particles', 'light'] as const;
+export const SCENE_DEPTHS = ['back', 'front', 'effects'] as const;
+export const BEHAVIOR_TRIGGERS = ['onTap', 'onShake', 'onTilt', 'onSmile', 'onEmotion', 'onTime', 'onSpeaking', 'onCallEvent'] as const;
+export const BEHAVIOR_ACTIONS = ['burst', 'calm', 'tint', 'play', 'stop', 'show', 'hide', 'shake'] as const;
+export const BEHAVIOR_CONDITIONS = ['joy', 'love', 'pride', 'calm', 'surprise', 'nostalgia', 'party', 'gratitude', 'morning', 'day', 'evening', 'night', 'start', 'end'] as const;
+
+/** Les formes admises par source (spec 01 § 2) : une forme hors de SA source fait échouer la génération, comme le schéma zod. */
+const FORMS_BY_SOURCE: Readonly<Record<string, readonly string[]>> = {
+  date: ['short', 'long', 'day-month', 'calendar-tile', 'roman'],
+  time: ['digital', 'digital-seconds', 'analog', 'words', 'moment'],
+  datetime: ['inline', 'stacked', 'stamp'],
+  place: ['city', 'city-country', 'neighborhood', 'street', 'address', 'country-flag', 'coordinates', 'pin', 'map-silhouette'],
+  landmark: ['name', 'line-art', 'badge', 'skyline'],
+  emotion: ['emoji', 'word', 'color-aura', 'particles', 'sticker'],
+};
 const DENSITIES = ['low', 'mid', 'high'] as const;
 const LAYERS = ['back', 'front'] as const;
 const TITLE_PLACES = ['top', 'bottom'] as const;
@@ -91,6 +122,128 @@ const bool = (value: unknown, path: string): string => {
 
 const optional = (value: unknown, render: (present: unknown) => string): string => (value === undefined ? 'nil' : render(value));
 
+/*
+ * L'extension du format (#9197) : une clé ajoutée ne s'écrit QUE si le cadre la déclare, en fin
+ * d'initialiseur (les initialiseurs Swift lui donnent une valeur par défaut). Un cadre qui ne la
+ * porte pas produit donc exactement le littéral d'avant — c'est ce qui garde le catalogue actuel
+ * octet pour octet.
+ */
+
+/** `[]` si la clé est absente, sinon le champ rendu — à répandre dans une liste de champs. */
+const present = (value: unknown, render: (value: unknown) => string): readonly string[] => (value === undefined ? [] : [render(value)]);
+
+const items = (value: unknown, path: string, max = Number.POSITIVE_INFINITY): readonly unknown[] => {
+  if (!Array.isArray(value)) return fail(path, 'liste attendue');
+  return value.length <= max ? value : fail(path, `${max} au plus`);
+};
+
+const listLiteral = (value: unknown, path: string, render: (item: unknown, path: string) => string, max?: number): string =>
+  `[${items(value, path, max).map((item, index) => render(item, `${path}[${index}]`)).join(', ')}]`;
+
+const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const ASSET_PATH = /^assets\/(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.[A-Za-z0-9]+$/;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+const matching = (pattern: RegExp, what: string) => (value: unknown, path: string): string =>
+  typeof value === 'string' && pattern.test(value) ? quote(value) : fail(path, `${what} attendu ${JSON.stringify(value)}`);
+
+const slug = matching(SLUG, 'identifiant');
+const assetPath = matching(ASSET_PATH, 'fichier du pack (assets/…)');
+const isoDate = matching(ISO_DATE, 'date AAAA-MM-JJ');
+
+const slotLooks = (value: unknown, path: string): string =>
+  listLiteral(value, path, (item, at) => {
+    const it = record(item, at);
+    return `CallFrameSlotLook(id: ${member(it.id, SLOT_LOOKS, `${at}.id`)}, amount: ${optional(it.amount, (amount) => fraction(amount, `${at}.amount`))}, size: ${optional(it.size, (size) => fraction(size, `${at}.size`))})`;
+  }, 2);
+
+const watermark = (value: unknown, path: string): string => {
+  const it = record(value, path);
+  const opacity = typeof it.opacity === 'number' && it.opacity >= 0 && it.opacity <= 0.08 ? numberLiteral(it.opacity, `${path}.opacity`) : fail(`${path}.opacity`, 'opacité de 0 à 0,08 attendue');
+  return `CallFrameWatermark(content: ${member(it.content, WATERMARK_CONTENTS, `${path}.content`)}, orientation: ${member(it.orientation, WATERMARK_ORIENTATIONS, `${path}.orientation`)}, opacity: ${opacity})`;
+};
+
+/** La forme d'un texte, réservée à SA source. */
+const textForm = (form: unknown, source: unknown, path: string): string => {
+  const allowed = typeof source === 'string' ? (FORMS_BY_SOURCE[source] ?? []) : [];
+  return allowed.includes(String(form)) ? qualified(form, TEXT_FORMS, 'CallFrameTextForm', path) : fail(path, `forme ${JSON.stringify(form)} hors de la source ${JSON.stringify(source)}`);
+};
+
+const element = (value: unknown, path: string): string => {
+  const it = record(value, path);
+  const fields = [
+    `source: ${member(it.source, TITLE_SOURCES, `${path}.source`)}`,
+    `form: ${optional(it.form, (form) => textForm(form, it.source, `${path}.form`))}`,
+    `place: ${member(it.place, ELEMENT_PLACES, `${path}.place`)}`,
+    `font: ${member(it.font, FRAME_FONTS, `${path}.font`)}`,
+    `color: ${hex(it.color, `${path}.color`)}`,
+    `size: ${member(it.size, TEXT_SIZES, `${path}.size`)}`,
+    `effect: ${optional(it.effect, (effect) => qualified(effect, TEXT_EFFECTS, 'CallFrameTextEffect', `${path}.effect`))}`,
+    `letterCase: ${optional(it.case, (letterCase) => qualified(letterCase, LETTER_CASES, 'CallFrameLetterCase', `${path}.case`))}`,
+  ];
+  return `CallFrameElement(${fields.join(', ')})`;
+};
+
+const particleCount = (value: unknown, path: string): string =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 150 ? String(value) : fail(path, 'entier de 1 à 150 attendu');
+
+const sceneLayer = (value: unknown, path: string): string => {
+  const it = record(value, path);
+  const fields = [
+    `id: ${slug(it.id, `${path}.id`)}`,
+    `kind: ${member(it.kind, SCENE_LAYER_KINDS, `${path}.kind`)}`,
+    `depth: ${member(it.depth, SCENE_DEPTHS, `${path}.depth`)}`,
+    `src: ${optional(it.src, (src) => assetPath(src, `${path}.src`))}`,
+    `preset: ${optional(it.preset, (preset) => qualified(preset, FRAME_ORNAMENTS, 'CallFrameOrnamentKind', `${path}.preset`))}`,
+    `color: ${optional(it.color, (color) => hex(color, `${path}.color`))}`,
+    `amount: ${optional(it.amount, (amount) => fraction(amount, `${path}.amount`))}`,
+    `maxParticles: ${optional(it.max, (max) => particleCount(max, `${path}.max`))}`,
+  ];
+  return `CallFrameSceneLayer(${fields.join(', ')})`;
+};
+
+const seconds = (value: unknown, path: string): string =>
+  typeof value === 'number' && value > 0 && value <= 10 ? numberLiteral(value, path) : fail(path, 'durée de 0 à 10 s attendue');
+
+const behavior = (value: unknown, path: string): string => {
+  const it = record(value, path);
+  const fields = [
+    `trigger: ${member(it.trigger, BEHAVIOR_TRIGGERS, `${path}.trigger`)}`,
+    `when: ${optional(it.when, (when) => qualified(when, BEHAVIOR_CONDITIONS, 'CallFrameBehaviorCondition', `${path}.when`))}`,
+    `target: ${optional(it.target, (target) => slug(target, `${path}.target`))}`,
+    `action: ${member(it.action, BEHAVIOR_ACTIONS, `${path}.action`)}`,
+    `duration: ${optional(it.duration, (duration) => seconds(duration, `${path}.duration`))}`,
+    `color: ${optional(it.color, (color) => hex(color, `${path}.color`))}`,
+  ];
+  return `CallFrameBehavior(${fields.join(', ')})`;
+};
+
+const fallbackTier = (value: unknown, path: string): string => {
+  const it = record(value, path);
+  const still = (item: unknown, at: string): string => {
+    const entry = record(item, at);
+    return `CallFrameFallbackStill(layer: ${slug(entry.layer, `${at}.layer`)}, src: ${assetPath(entry.src, `${at}.src`)})`;
+  };
+  return `CallFrameFallbackTier(hide: ${it.hide === undefined ? '[]' : listLiteral(it.hide, `${path}.hide`, slug)}, still: ${it.still === undefined ? '[]' : listLiteral(it.still, `${path}.still`, still)})`;
+};
+
+const fallbacks = (value: unknown, path: string): string => {
+  const it = record(value, path);
+  return `CallFrameFallbacks(reduced: ${optional(it.reduced, (tier) => fallbackTier(tier, `${path}.reduced`))}, minimal: ${optional(it.minimal, (tier) => fallbackTier(tier, `${path}.minimal`))})`;
+};
+
+const credits = (value: unknown, path: string): string => {
+  const it = record(value, path);
+  const author = typeof it.author === 'string' && it.author.length > 0 && it.author.length <= 80 ? quote(it.author) : fail(`${path}.author`, 'auteur attendu');
+  return `CallFrameCredits(author: ${author}, createdAt: ${isoDate(it.createdAt, `${path}.createdAt`)}, updatedAt: ${optional(it.updatedAt, (date) => isoDate(date, `${path}.updatedAt`))})`;
+};
+
+const surfaces = (value: unknown, path: string): string => {
+  const list = items(value, path);
+  if (list.length === 0 || new Set(list).size !== list.length) return fail(path, 'surfaces distinctes, une au moins');
+  return `[${list.map((surface, index) => member(surface, FRAME_SURFACES, `${path}[${index}]`)).join(', ')}]`;
+};
+
 const layout = (value: unknown, path: string): string => {
   const it = record(value, path);
   return `CallFrameLayout(arrangement: ${member(it.arrangement, FRAME_ARRANGEMENTS, `${path}.arrangement`)}, margin: ${fraction(it.margin, `${path}.margin`)}, gap: ${fraction(it.gap, `${path}.gap`)}, top: ${fraction(it.top, `${path}.top`)}, bottom: ${fraction(it.bottom, `${path}.bottom`)})`;
@@ -124,6 +277,7 @@ const slot = (value: unknown, path: string): string => {
     `tilt: ${member(it.tilt, SLOT_TILTS, `${path}.tilt`)}`,
     `tone: ${member(it.tone, SLOT_TONES, `${path}.tone`)}`,
     `duotone: ${optional(it.duotone, (present) => duotone(present, `${path}.duotone`))}`,
+    ...present(it.look, (looks) => `look: ${slotLooks(looks, `${path}.look`)}`),
   ];
   return `CallFrameSlotStyle(${fields.join(', ')})`;
 };
@@ -161,7 +315,14 @@ const border = (value: unknown, path: string): string => {
 
 const ornament = (value: unknown, path: string): string => {
   const it = record(value, path);
-  return `CallFrameOrnament(kind: ${member(it.kind, FRAME_ORNAMENTS, `${path}.kind`)}, color: ${hex(it.color, `${path}.color`)}, density: ${member(it.density, DENSITIES, `${path}.density`)}, layer: ${member(it.layer, LAYERS, `${path}.layer`)})`;
+  const fields = [
+    `kind: ${member(it.kind, FRAME_ORNAMENTS, `${path}.kind`)}`,
+    `color: ${hex(it.color, `${path}.color`)}`,
+    `density: ${member(it.density, DENSITIES, `${path}.density`)}`,
+    `layer: ${member(it.layer, LAYERS, `${path}.layer`)}`,
+    ...present(it.motion, (motion) => `motion: ${member(motion, ORNAMENT_MOTIONS, `${path}.motion`)}`),
+  ];
+  return `CallFrameOrnament(${fields.join(', ')})`;
 };
 
 const ornaments = (value: unknown, path: string): string => {
@@ -171,7 +332,16 @@ const ornaments = (value: unknown, path: string): string => {
 
 const brand = (value: unknown, path: string): string => {
   const it = record(value, path);
-  return `CallFrameBrand(mark: ${member(it.mark, BRAND_MARKS, `${path}.mark`)}, place: ${member(it.place, BRAND_PLACES, `${path}.place`)}, color: ${hex(it.color, `${path}.color`)}, size: ${member(it.size, TEXT_SIZES, `${path}.size`)}, font: ${optional(it.font, (font) => qualified(font, FRAME_FONTS, 'StoryTextStyle', `${path}.font`))})`;
+  if (it.watermark !== undefined && it.place !== 'watermark') return fail(`${path}.watermark`, 'réservé au placement « watermark »');
+  const fields = [
+    `mark: ${member(it.mark, BRAND_MARKS, `${path}.mark`)}`,
+    `place: ${member(it.place, BRAND_PLACES, `${path}.place`)}`,
+    `color: ${hex(it.color, `${path}.color`)}`,
+    `size: ${member(it.size, TEXT_SIZES, `${path}.size`)}`,
+    `font: ${optional(it.font, (font) => qualified(font, FRAME_FONTS, 'StoryTextStyle', `${path}.font`))}`,
+    ...present(it.watermark, (value) => `watermark: ${watermark(value, `${path}.watermark`)}`),
+  ];
+  return `CallFrameBrand(${fields.join(', ')})`;
 };
 
 const names = (value: unknown, path: string): string => {
@@ -189,14 +359,18 @@ const title = (value: unknown, path: string): string => {
     `size: ${member(it.size, TEXT_SIZES, `${path}.size`)}`,
     `effect: ${optional(it.effect, (effect) => qualified(effect, TEXT_EFFECTS, 'CallFrameTextEffect', `${path}.effect`))}`,
     `letterCase: ${optional(it.case, (letterCase) => qualified(letterCase, LETTER_CASES, 'CallFrameLetterCase', `${path}.case`))}`,
+    ...present(it.form, (form) => `form: ${textForm(form, it.source, `${path}.form`)}`),
   ];
   return `CallFrameTitle(${fields.join(', ')})`;
 };
 
-const LOOK_KEYS = ['layout', 'slot', 'background', 'pattern', 'border', 'ornaments', 'brand', 'names', 'title', 'subtitle'] as const;
+const LOOK_KEYS = ['layout', 'slot', 'background', 'pattern', 'border', 'ornaments', 'brand', 'names', 'title', 'subtitle', 'elements', 'scene', 'behaviors', 'fallbacks'] as const;
+
+/** Les clés du MOTIF (doc 06 § 3) : elles valent pour toutes ses tranches, aucune variante ne les surcharge. */
+const MOTIF_KEYS = ['credits', 'surfaces', 'cost'] as const;
 
 const look = (value: Json, path: string): string => {
-  const required = ['layout', 'slot', 'background', 'ornaments', 'brand', 'names', 'title'];
+  const required = ['layout', 'slot', 'background', 'ornaments', 'names', 'title'];
   required.filter((key) => value[key] === undefined).forEach((key) => fail(path, `clé manquante « ${key} »`));
   const lines = [
     `layout: ${layout(value.layout, `${path}.layout`)}`,
@@ -205,10 +379,14 @@ const look = (value: Json, path: string): string => {
     `pattern: ${optional(value.pattern, (present) => pattern(present, `${path}.pattern`))}`,
     `border: ${optional(value.border, (present) => border(present, `${path}.border`))}`,
     `ornaments: ${ornaments(value.ornaments, `${path}.ornaments`)}`,
-    `brand: ${brand(value.brand, `${path}.brand`)}`,
+    ...present(value.brand, (declared) => `brand: ${brand(declared, `${path}.brand`)}`),
     `names: ${names(value.names, `${path}.names`)}`,
     `title: ${title(value.title, `${path}.title`)}`,
-    `subtitle: ${optional(value.subtitle, (present) => title(present, `${path}.subtitle`))}`,
+    `subtitle: ${optional(value.subtitle, (declared) => title(declared, `${path}.subtitle`))}`,
+    ...present(value.elements, (declared) => `elements: ${listLiteral(declared, `${path}.elements`, element, 6)}`),
+    ...present(value.scene, (declared) => `scene: ${listLiteral(declared, `${path}.scene`, sceneLayer, 12)}`),
+    ...present(value.behaviors, (declared) => `behaviors: ${listLiteral(declared, `${path}.behaviors`, behavior)}`),
+    ...present(value.fallbacks, (declared) => `fallbacks: ${fallbacks(declared, `${path}.fallbacks`)}`),
   ];
   return `CallFrameLook(\n${lines.map((line) => `                ${line}`).join(',\n')}\n            )`;
 };
@@ -221,6 +399,8 @@ export type ExpandedFrame = {
   readonly name: string;
   readonly bucket: string;
   readonly look: Json;
+  /** `credits`, `surfaces`, `cost` — seulement ceux que le motif déclare. */
+  readonly motifKeys: Json;
 };
 
 const MOTIF_ID = /^[a-z-]+\.[a-z0-9-]+$/;
@@ -232,6 +412,7 @@ export function expandMotif(motif: Json, path: string): readonly ExpandedFrame[]
   const mood = typeof motif.mood === 'string' ? motif.mood : fail(path, 'ambiance absente');
   const base = record(motif.base, `${path}.base`);
   const variants = record(motif.variants, `${path}.variants`);
+  const motifKeys: Json = Object.fromEntries(MOTIF_KEYS.filter((key) => motif[key] !== undefined).map((key) => [key, motif[key]]));
   Object.keys(variants)
     .filter((key) => !(FRAME_BUCKETS as readonly string[]).includes(key))
     .forEach((key) => fail(`${path}.variants`, `tranche inconnue « ${key} »`));
@@ -242,7 +423,7 @@ export function expandMotif(motif: Json, path: string): readonly ExpandedFrame[]
     Object.keys(merged)
       .filter((key) => !(LOOK_KEYS as readonly string[]).includes(key))
       .forEach((key) => fail(`${path}.${bucket}`, `clé inconnue « ${key} »`));
-    return [{ id: `${id}.${bucket}`, motif: id, mood, name, bucket, look: merged }];
+    return [{ id: `${id}.${bucket}`, motif: id, mood, name, bucket, look: merged, motifKeys }];
   });
 }
 
@@ -262,17 +443,20 @@ export function expandFiles(files: readonly unknown[]): readonly ExpandedFrame[]
   return [...frames].sort((a, b) => rank(a.mood) - rank(b.mood));
 }
 
-const frameLiteral = (frame: ExpandedFrame): string =>
-  [
-    '        CallFrameDesign(',
-    `            id: ${quote(frame.id)},`,
-    `            motif: ${quote(frame.motif)},`,
-    `            mood: ${member(frame.mood, FRAME_MOODS, frame.id)},`,
-    `            name: ${quote(frame.name)},`,
-    `            bucket: ${member(frame.bucket, FRAME_BUCKETS, frame.id)},`,
-    `            look: ${look(frame.look, frame.id)}`,
-    '        )',
-  ].join('\n');
+const frameLiteral = (frame: ExpandedFrame): string => {
+  const fields = [
+    `id: ${quote(frame.id)}`,
+    `motif: ${quote(frame.motif)}`,
+    `mood: ${member(frame.mood, FRAME_MOODS, frame.id)}`,
+    `name: ${quote(frame.name)}`,
+    `bucket: ${member(frame.bucket, FRAME_BUCKETS, frame.id)}`,
+    `look: ${look(frame.look, frame.id)}`,
+    ...present(frame.motifKeys.credits, (declared) => `credits: ${credits(declared, `${frame.id}.credits`)}`),
+    ...present(frame.motifKeys.surfaces, (declared) => `surfaces: ${surfaces(declared, `${frame.id}.surfaces`)}`),
+    ...present(frame.motifKeys.cost, (declared) => `cost: ${qualified(declared, FRAME_COSTS, 'CallFrameCost', `${frame.id}.cost`)}`),
+  ];
+  return ['        CallFrameDesign(', fields.map((field) => `            ${field}`).join(',\n'), '        )'].join('\n');
+};
 
 const HEADER = [
   '// GÉNÉRÉ — ne pas éditer; source: packages/shared/design/call-capture-frames',

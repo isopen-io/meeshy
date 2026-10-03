@@ -13,4 +13,7 @@
     <string name="call_ongoing_audio">Voice call in progress</string>
     <string name="call_ongoing_video">Video call in progress</string>
     <string name="call_ongoing_return">Tap to return to the call</string>
+    <string name="call_pip_mute">Mute microphone</string>
+    <string name="call_pip_unmute">Unmute microphone</string>
+    <string name="call_pip_hangup">Hang up</string>
 </resources>
