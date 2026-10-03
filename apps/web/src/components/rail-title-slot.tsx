@@ -59,11 +59,22 @@ export function RailTitleSlot({
   }, [pinned]);
 
   return (
-    <div data-title-slot className="relative flex min-w-0 flex-1 items-center" style={{ minHeight: RAIL_TITLE_SLOT }}>
+    <div
+      data-title-slot
+      className="relative flex min-w-0 flex-1 items-center"
+      style={{ minHeight: RAIL_TITLE_SLOT, containerType: 'inline-size', ['--title-chars' as string]: title.length }}
+    >
       <h1
         aria-hidden={pinned ? 'true' : undefined}
-        className="min-w-0 flex-1 truncate text-large-title font-bold transition-opacity motion-reduce:transition-none"
+        className="min-w-0 flex-1 truncate font-bold transition-opacity motion-reduce:transition-none"
         style={{
+          /* RÉTRÉCIR PLUTÔT QUE COUPER (#9221) — le `minimumScaleFactor(0.55)`
+             d'iOS : à 360 px, trois actions de 44 px laissaient 160 px au titre,
+             qui se lisait « Meeshy C… ». La taille suit la place du créneau
+             (`cqi`) et la longueur du titre (0,56 em par caractère, la chasse du
+             gras), sans dépasser le grand titre ni descendre sous 55 % ; la
+             troncature ne reste qu'en dernier recours. */
+          fontSize: 'clamp(calc(var(--ios-text-large-title) * 0.55), calc(100cqi / (var(--title-chars) * 0.56)), var(--ios-text-large-title))',
           opacity: pinned ? 0 : 1,
           transitionDuration: `${HIDDEN_CHROME_EASE_OUT_MS}ms`,
           background: 'linear-gradient(90deg, var(--color-ios-brand), var(--color-ios-brand-deep))',
