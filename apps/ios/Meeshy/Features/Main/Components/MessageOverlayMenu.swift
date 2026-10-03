@@ -29,6 +29,8 @@ struct MessageOverlayMenu: View {
     var textTranslations: [MessageTranslation] = []
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
+    /// La piste que la bulle sert, par pièce (`ConversationViewModel.servedAudioTracks`) — #9010.
+    var servedAudioTracks: [String: ServedAudioTrack] = [:]
     var onReact: ((String) -> Void)?
     /// Composant unifié « Enregistrer » : déclenché par l'action `.saveMedia`
     /// (message à exactement un attachment enregistrable).
@@ -754,7 +756,7 @@ struct MessageOverlayMenu: View {
 
             if !audios.isEmpty {
                 ForEach(audios) { audio in
-                    PreviewAudioPlayer(attachment: audio, contactColor: contactColor)
+                    PreviewAudioPlayer(track: Self.previewAudioTrack(for: audio, served: servedAudioTracks), contactColor: contactColor)
                 }
             }
 
@@ -920,8 +922,16 @@ struct MessageOverlayMenu: View {
 
 // MARK: - Preview Audio Player (interactive)
 
+extension MessageOverlayMenu {
+    /// #9010 — l'aperçu joue la piste que la bulle sert ; l'original seulement
+    /// quand l'hôte n'en a élu aucune.
+    static func previewAudioTrack(for attachment: MessageAttachment, served: [String: ServedAudioTrack]) -> ServedAudioTrack {
+        served[attachment.id] ?? .original(of: attachment)
+    }
+}
+
 private struct PreviewAudioPlayer: View {
-    let attachment: MessageAttachment
+    let track: ServedAudioTrack
     let contactColor: String
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -934,7 +944,7 @@ private struct PreviewAudioPlayer: View {
     var body: some View {
         VStack(spacing: MeeshySpacing.sm) {
             HStack(spacing: MeeshySpacing.smPlus) {
-                Button { player.toggle(url: attachment.fileUrl) } label: {
+                Button { player.toggle(url: track.url) } label: {
                     ZStack {
                         Circle()
                             .fill(accent.opacity(0.2))
@@ -956,15 +966,16 @@ private struct PreviewAudioPlayer: View {
                 .accessibilityLabel(player.isPlaying
                     ? String(localized: "media.pauseAudio", defaultValue: "Mettre en pause", bundle: .main)
                     : String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main))
-                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.spokenTotalDuration(attachmentDurationMs: attachment.duration)))
+                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.spokenTotalDuration(attachmentDurationMs: track.durationMs)))
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
+                    // Comme la bulle : aucun nom de fichier, qui trahirait l'original (#9010).
+                    Text(String(localized: "attachment.voice", defaultValue: "Message vocal", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
-                    Text(player.timeLabel(attachmentDurationMs: attachment.duration))
+                    Text(player.timeLabel(attachmentDurationMs: track.durationMs))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .monospacedDigit()
@@ -993,6 +1004,14 @@ private struct PreviewAudioPlayer: View {
                         .padding(.vertical, MeeshySpacing.xs)
                         .background(Capsule().fill(accent.opacity(0.12)))
                 }
+            }
+
+            if let transcript = track.transcript, !transcript.isEmpty {
+                Text(transcript)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             HStack(spacing: MeeshySpacing.sm) {

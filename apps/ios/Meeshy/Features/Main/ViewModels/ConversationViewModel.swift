@@ -897,14 +897,27 @@ class ConversationViewModel: ObservableObject {
     /// puis Prisme). C'est CETTE url que le coordinateur doit jouer pour que
     /// l'audio entendu corresponde au texte et aux segments affichés.
     func effectiveAudioTrackUrl(for attachment: MessageAttachment, message: Message) -> String {
-        let tracks = translatedAudioTracks(for: attachment, messageId: message.id)
-        let lang = AudioTrackLanguageResolver.resolve(
+        servedAudioTrack(for: attachment, message: message).url
+    }
+
+    /// La piste SERVIE entière (URL, durée, texte) — la descente de
+    /// `effectiveAudioTrackUrl`, que l'aperçu d'appui long reçoit (#9010).
+    func servedAudioTrack(for attachment: MessageAttachment, message: Message) -> ServedAudioTrack {
+        let transcript = messageTranscriptionsByAttachment[attachment.id]
+            ?? messageTranscriptions[message.id].flatMap { $0.attachmentId == attachment.id ? $0 : nil }
+        return AudioTrackLanguageResolver.servedTrack(
+            of: attachment,
             manualOverride: bubbleLanguageSelections[message.id]?.activeDisplayLangCode,
             originalLanguage: message.originalLanguage,
             preferredLanguages: ConversationLanguagePreferences(user: authManager.currentUser).resolved,
-            translatedAudios: tracks
+            translatedAudios: translatedAudioTracks(for: attachment, messageId: message.id),
+            originalTranscript: transcript?.text ?? attachment.transcription?.text
         )
-        return AudioTrackLanguageResolver.url(for: lang, translatedAudios: tracks, originalUrl: attachment.fileUrl)
+    }
+
+    func servedAudioTracks(of message: Message) -> [String: ServedAudioTrack] {
+        Dictionary(message.attachments.filter { $0.type == .audio }.map { ($0.id, servedAudioTrack(for: $0, message: message)) },
+                   uniquingKeysWith: { first, _ in first })
     }
 
     /// Subscribes to `$messages` and forwards any newly-inserted audio messages

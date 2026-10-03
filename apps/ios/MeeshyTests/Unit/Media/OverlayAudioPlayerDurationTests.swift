@@ -1,5 +1,6 @@
 import XCTest
 @testable import Meeshy
+import MeeshySDK
 
 /// L'aperçu d'appui long d'un vocal annonce la durée de la pièce jointe tant que sa piste n'est
 /// pas chargée (#9008). `MessageAttachment.duration` est en MILLISECONDES : un vocal de 33 955 ms

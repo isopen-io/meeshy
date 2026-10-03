@@ -2476,9 +2476,8 @@ struct ConversationView: View {
                 canDelete: msg.isMe || isCurrentUserAdminOrMod,
                 canEdit: msg.isMe || isCurrentUserAdminOrMod,
                 onCopy: {
-                    // Prisme: copy what's actually DISPLAYED (the preferred
-                    // translation when one is showing), never blindly the
-                    // original — matches the quick-reaction bar's Copier.
+                    // Prisme: copy what's DISPLAYED (the preferred translation when
+                    // one is showing), never the original — like the quick bar's Copier.
                     UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
                     HapticFeedback.success()
                 },
@@ -2487,6 +2486,7 @@ struct ConversationView: View {
                 textTranslations: viewModel.messageTranslations[msg.id] ?? [],
                 transcription: viewModel.messageTranscriptions[msg.id],
                 translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
+                servedAudioTracks: viewModel.servedAudioTracks(of: msg),
                 onReact: { emoji in
                     viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
                 },
