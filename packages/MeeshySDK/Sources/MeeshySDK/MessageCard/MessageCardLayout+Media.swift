@@ -7,6 +7,21 @@ struct MessageCardMediaSlot {
     let y: Double
     let width: Double
     let height: Double
+    /// Les visuels non montrés, comptés sur la DERNIÈRE tuile — « +n » (#9235).
+    var overflow: Int = 0
+
+    func shifted(by dy: Double) -> MessageCardMediaSlot {
+        MessageCardMediaSlot(media: media, x: x, y: y + dy, width: width, height: height, overflow: overflow)
+    }
+}
+
+/// La ligne qui nomme qui a posté les visuels (#9235) — au-dessus d'eux ou en
+/// signature dessous, comme le nom d'un message.
+struct MessageCardMediaCredit {
+    let text: String
+    /// Le haut de la ligne, relatif au bloc.
+    let top: Double
+    let placement: MessageCardAuthorPlacement
 }
 
 /// Un bloc de médias : les images (ou premières images) en haut, le son
@@ -20,6 +35,7 @@ struct MessageCardMediaBlock {
     /// sa place minimale au texte (revue #8979).
     let scale: Double
     let slots: [MessageCardMediaSlot]
+    let credit: MessageCardMediaCredit?
     let audio: MessageCardMedia?
     let audioStyle: MessageCardAudioStyle
     let audioTop: Double
@@ -32,21 +48,38 @@ struct MessageCardMediaBlock {
     var mediaHeight: Double { transcript == nil ? height : audioTop + audioHeight }
 }
 
-/// **OÙ VONT LES MÉDIAS** (#8692) — au-dessus ou au-dessous de la réponse, en
-/// mosaïque, ou la première image en fond. À l'échelle 1, un visuel ne dépasse
-/// pas `visualShare` du budget ; agrandi au pincement, le bloc ne prend JAMAIS
-/// la place minimale du texte — le moteur borne son échelle (`mediaScaleLimit`,
-/// revue #8979) : le texte garde toujours de quoi se lire.
+/// **OÙ VONT LES MÉDIAS** (#8692, #9235) — au-dessus ou au-dessous de la
+/// réponse, dans une colonne à sa gauche ou à sa droite, ou un visuel en fond ;
+/// et, à leur place, un seul, la grille ou une disposition de post. À l'échelle
+/// 1, un visuel ne dépasse pas `visualShare` du budget ; agrandi au pincement,
+/// le bloc ne prend JAMAIS la place minimale du texte — le moteur borne son
+/// échelle (`mediaScaleLimit`, revue #8979) : le texte garde toujours de quoi se lire.
 struct MessageCardMediaPlan {
     let above: MessageCardMediaBlock?
     let below: MessageCardMediaBlock?
+    /// La colonne posée à côté de la réponse (#9235).
+    let beside: MessageCardMediaBlock?
+    let besideIsLeft: Bool
     let backdrop: MessageCardMedia?
 
     static let visualShare: Double = 0.42
+    /// À côté de la réponse, la colonne ne s'ADDITIONNE pas au texte : elle peut monter plus haut.
+    static let besideVisualShare: Double = 0.62
     static let gap: Double = 16
-    static let mosaicLimit = 4
     /// Ce qu'un bloc agrandi laisse au bord de la carte.
     static let bleed: Double = 24
+    /// L'espace entre la colonne de médias et la réponse.
+    static let besideGap: Double = 40
+    /// La part de la colonne de texte qu'une colonne de médias prend à l'échelle 1 — et ses bornes.
+    static let besideShare: Double = 0.42
+    static let besideShares: ClosedRange<Double> = 0.25...0.6
+    /// Le rapport hauteur / largeur minimal d'une disposition de post dans une colonne.
+    static let columnPostRatio: Double = 1.4
+
+    /// La largeur d'une colonne de médias : sa part de la colonne de texte, que le pincement élargit.
+    static func besideWidth(textWidth: Double, scale: Double) -> Double {
+        (textWidth * min(besideShares.upperBound, max(besideShares.lowerBound, besideShare * scale))).rounded()
+    }
 
     /// La hauteur de la REPRÉSENTATION d'un son, minuteur compris, à l'échelle 1.
     static func audioHeight(_ style: MessageCardAudioStyle, timer: Bool = true) -> Double {
@@ -60,6 +93,24 @@ struct MessageCardMediaPlan {
 
     fileprivate static func single(_ media: MessageCardMedia, width: Double, cap: Double) -> MessageCardMediaSlot {
         MessageCardMediaSlot(media: media, x: 0, y: 0, width: width, height: min(cap, (width / media.aspect).rounded()))
+    }
+
+    /// Les visuels PEINTS, agencés dans `width` : un seul, la grille, ou une
+    /// disposition de post — `total` compte tous les visuels, pour le « +n ».
+    /// - Parameter column: le bloc est une COLONNE à côté de la réponse — une
+    ///   disposition de post y prend une boîte en portrait, sinon ses tuiles s'écrasent.
+    static func arranged(_ visuals: [MessageCardMedia], total: Int, arrangement: MessageCardMediaArrangement,
+                         width: Double, cap: Double, column: Bool = false) -> [MessageCardMediaSlot] {
+        guard visuals.count > 1 else { return visuals.first.map { [single($0, width: width, cap: cap)] } ?? [] }
+        if let mode = arrangement.postLayout { return post(visuals, total: total, mode: mode, width: width, cap: cap, column: column) }
+        guard arrangement == .mosaic else { return [single(visuals[0], width: width, cap: cap)] }
+        let slots = mosaic(visuals, width: width, cap: cap)
+        let rest = max(0, total - visuals.count)
+        return slots.enumerated().map { index, slot in
+            var last = slot
+            if index == slots.count - 1 { last.overflow = rest }
+            return last
+        }
     }
 
     /// Une, deux, trois ou quatre images : une pleine largeur, deux côte à
@@ -81,6 +132,26 @@ struct MessageCardMediaPlan {
             )
         }
     }
+
+    /// **Les dispositions des POSTS** — vague, hero, sinusoïde : les cadres de
+    /// `MosaicLayout`, la loi du fil, posés dans une boîte de `width` au rapport
+    /// du mode (bornée par `cap`). Une seule géométrie pour le fil et la carte.
+    static func post(_ visuals: [MessageCardMedia], total: Int, mode: MosaicLayoutMode, width: Double, cap: Double,
+                     column: Bool = false) -> [MessageCardMediaSlot] {
+        let ratio = Double(MosaicLayout.aspectRatio(mode: mode))
+        let height = min(cap, (width * (column ? max(ratio, columnPostRatio) : ratio)).rounded())
+        return MosaicLayout.tiles(sceneCount: max(total, visuals.count), mode: mode).compactMap { tile in
+            guard tile.sceneIndex < visuals.count else { return nil }
+            return MessageCardMediaSlot(
+                media: visuals[tile.sceneIndex],
+                x: (Double(tile.x) * width).rounded(),
+                y: (Double(tile.y) * height).rounded(),
+                width: (Double(tile.width) * width).rounded(),
+                height: (Double(tile.height) * height).rounded(),
+                overflow: tile.overflow
+            )
+        }
+    }
 }
 
 extension MessageCardLayoutEngine {
@@ -90,41 +161,60 @@ extension MessageCardLayoutEngine {
     /// règle les deux pour que la carte tienne (revue #8979).
     func mediaPlan(columnWidth width: Double, canvasWidth: Double, budget: Double, scale: Double, transcriptLines: Int) -> MessageCardMediaPlan {
         let disposition = input.disposition
-        let blockWidth = min(canvasWidth - 2 * MessageCardMediaPlan.bleed, (width * scale).rounded())
-        let offset = ((width - blockWidth) / 2).rounded()
-        let visuals = input.media.filter { $0.kind.isVisual }
+        let painted = disposition.paintedVisuals(of: input.media)
+        let total = input.media.filter { $0.kind.isVisual }.count
         let audio = input.media.first { $0.kind == .audio }
         let cap = max(160, budget * MessageCardMediaPlan.visualShare) * scale
+        let placement = disposition.effectiveMediaLayout(hasVisuals: !painted.isEmpty)
+        if placement.isBeside {
+            let cap = max(160, budget * MessageCardMediaPlan.besideVisualShare) * scale
+            let side = MessageCardMediaPlan.besideWidth(textWidth: width, scale: scale)
+            let slots = MessageCardMediaPlan.arranged(painted, total: total, arrangement: disposition.mediaArrangement, width: side, cap: cap, column: true)
+            let block = mediaBlock(slots: slots, audio: audio, x: 0, width: side, columnWidth: side, scale: scale, transcriptLines: transcriptLines)
+            return MessageCardMediaPlan(above: nil, below: nil, beside: block, besideIsLeft: placement == .left, backdrop: nil)
+        }
+        let blockWidth = min(canvasWidth - 2 * MessageCardMediaPlan.bleed, (width * scale).rounded())
+        let offset = ((width - blockWidth) / 2).rounded()
         let block: ([MessageCardMediaSlot]) -> MessageCardMediaBlock? = { slots in
             mediaBlock(slots: slots, audio: audio, x: offset, width: blockWidth, columnWidth: width, scale: scale, transcriptLines: transcriptLines)
         }
-        switch disposition.mediaLayout {
-        case .backdrop:
-            return MessageCardMediaPlan(above: block([]), below: nil, backdrop: visuals.first)
-        case .mosaic:
-            let slots = MessageCardMediaPlan.mosaic(Array(visuals.prefix(MessageCardMediaPlan.mosaicLimit)), width: blockWidth, cap: cap)
-            return MessageCardMediaPlan(above: block(slots), below: nil, backdrop: nil)
-        case .above, .below:
-            let placed = block(visuals.first.map { [MessageCardMediaPlan.single($0, width: blockWidth, cap: cap)] } ?? [])
-            return MessageCardMediaPlan(
-                above: disposition.mediaLayout == .above ? placed : nil,
-                below: disposition.mediaLayout == .below ? placed : nil,
-                backdrop: nil
-            )
+        if placement == .backdrop {
+            return MessageCardMediaPlan(above: block([]), below: nil, beside: nil, besideIsLeft: false, backdrop: painted.first)
         }
+        let placed = block(MessageCardMediaPlan.arranged(painted, total: total, arrangement: disposition.mediaArrangement, width: blockWidth, cap: cap))
+        return MessageCardMediaPlan(
+            above: placement == .above ? placed : nil,
+            below: placement == .below ? placed : nil,
+            beside: nil, besideIsLeft: false, backdrop: nil
+        )
+    }
+
+    /// Les noms de qui a posté les visuels peints, dans leur ordre, sans redite.
+    private func creditText(of slots: [MessageCardMediaSlot]) -> String? {
+        guard input.disposition.showsMediaAuthor else { return nil }
+        var seen = Set<String>()
+        let names = slots.compactMap(\.media.credit).filter { seen.insert($0).inserted }
+        return names.isEmpty ? nil : names.joined(separator: " · ")
     }
 
     private func mediaBlock(slots: [MessageCardMediaSlot], audio: MessageCardMedia?, x: Double, width: Double, columnWidth: Double,
                             scale: Double, transcriptLines: Int) -> MessageCardMediaBlock? {
         guard !slots.isEmpty || audio != nil else { return nil }
         let style = input.disposition.audioStyle
-        let visualHeight = slots.map { $0.y + $0.height }.max() ?? 0
+        let placement = input.disposition.authorPlacement
+        let creditLine = ((MessageCardMetrics.authorLine + MessageCardMetrics.authorGap) * scale).rounded()
+        let creditName = creditText(of: slots)
+        let lead = creditName != nil && placement == .above ? creditLine : 0
+        let placed = slots.map { $0.shifted(by: lead) }
+        let pictures = placed.map { $0.y + $0.height }.max() ?? 0
+        let credit = creditName.map { MessageCardMediaCredit(text: $0, top: placement == .above ? 0 : pictures + MessageCardMediaPlan.gap, placement: placement) }
+        let visualHeight = credit.map { $0.placement == .above ? pictures : $0.top + creditLine } ?? pictures
         let audioTop = visualHeight > 0 && audio != nil ? visualHeight + MessageCardMediaPlan.gap * 1.5 : visualHeight
         let audioHeight = audio == nil ? 0 : (MessageCardMediaPlan.audioHeight(style, timer: input.disposition.showsTimer) * scale).rounded()
         let transcript = transcriptLines > 0 ? audio.flatMap { transcriptBlock(for: $0, width: columnWidth, lines: transcriptLines) } : nil
         let transcriptTop = audioTop + audioHeight + (transcript == nil ? 0 : MessageCardAudioMetrics.transcriptGap)
         return MessageCardMediaBlock(
-            x: x, width: width, scale: scale, slots: slots, audio: audio, audioStyle: style,
+            x: x, width: width, scale: scale, slots: placed, credit: credit, audio: audio, audioStyle: style,
             audioTop: audioTop, audioHeight: audioHeight,
             transcript: transcript, transcriptTop: transcriptTop,
             height: transcript.map { transcriptTop + $0.height } ?? audioTop + audioHeight
@@ -155,13 +245,28 @@ extension MessageCardLayoutEngine {
                 radius: MessageCardMetrics.mediaRadius, placeholder: palette.quotePanel
             ))]
             // Une vidéo FIXE dit qu'elle est une vidéo ; animée, elle se lit d'elle-même.
-            if slot.media.kind == .video && input.time == nil {
+            if slot.media.kind == .video && input.time == nil && slot.overflow == 0 {
                 let radius = min(64, min(slot.width, slot.height) * 0.14)
                 let center = (x: frame.x + slot.width / 2, y: frame.y + slot.height / 2)
                 painted.append(.dot(MessageCardDotOp(x: center.x, y: center.y, radius: radius, color: Self.shade)))
                 painted.append(.glyph(MessageCardGlyphOp(glyph: .play, x: center.x, y: center.y, size: radius * 0.9, color: Self.white)))
             }
+            // Ce qui reste à voir, jamais le total — la loi des posts (#9235).
+            if slot.overflow > 0 {
+                let size = min(96, min(slot.width, slot.height) * 0.32)
+                painted.append(.panel(MessageCardRectOp(
+                    x: frame.x, y: frame.y, width: slot.width, height: slot.height,
+                    radius: MessageCardMetrics.mediaRadius, color: Self.shade
+                )))
+                painted.append(.text(MessageCardTextOp(
+                    text: "+\(slot.overflow)", x: frame.x + slot.width / 2, y: frame.y + slot.height / 2 + size * 0.36,
+                    font: MessageCardFont(face: .system(700), size: size), color: Self.white, align: .center, direction: .ltr
+                )))
+            }
             return painted
+        }
+        if let credit = block.credit {
+            ops.append(creditOp(credit, left: left, width: block.width, y: y, scale: block.scale))
         }
         if let audio = block.audio {
             ops.append(contentsOf: audioOps(audio, style: block.audioStyle, x: left, y: y + block.audioTop, width: block.width, height: block.audioHeight, scale: block.scale))
@@ -172,7 +277,22 @@ extension MessageCardLayoutEngine {
         return ops
     }
 
-    /// La première image EN FOND, sous un voile de la couleur de la palette :
+    /// Le nom de qui a posté les visuels, mis en forme comme celui d'un message :
+    /// au début de la ligne au-dessus d'eux, ou « — Nom » au bout, dessous.
+    private func creditOp(_ credit: MessageCardMediaCredit, left: Double, width: Double, y: Double, scale: Double) -> MessageCardOp {
+        let font = MessageCardFont(face: .system(600), size: MessageCardMetrics.authorSize * scale)
+        let whole = credit.placement == .above ? credit.text : "— \(credit.text)"
+        let text = MessageCardText.truncate(MessageCardText.wrap(whole, maxWidth: width, font: font, measure: measure), count: 1,
+                                            maxWidth: width, font: font, measure: measure).first ?? whole
+        let direction = MessageCardText.direction(of: text)
+        let atStart = (credit.placement == .above) == (direction == .ltr)
+        return .text(MessageCardTextOp(
+            text: text, x: atStart ? left : left + width, y: y + credit.top + font.size, font: font,
+            color: palette.authorInk, align: atStart ? .left : .right, direction: direction
+        ))
+    }
+
+    /// Le visuel peint EN FOND, sous un voile de la couleur de la palette :
     /// le texte reste lisible, et la carte garde sa teinte.
     func backdropOps(_ media: MessageCardMedia, width: Double, height: Double) -> [MessageCardOp] {
         let base = palette.background.first?.color ?? MessageCardColor.hex("#000000")

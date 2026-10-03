@@ -30,9 +30,12 @@ public struct MessageCardMedia: Equatable, Sendable {
     public let samples: [Double]
     /// Ce que dit un son : la transcription de la piste SERVIE (#8979) — `nil` sans transcription.
     public let transcript: MessageCardTranscript?
+    /// Le nom de qui l'a posté, tel qu'il se peint — déjà anonymisé ou mis en
+    /// @pseudo par l'appelant (#9235) ; `nil` : la carte ne le dit pas.
+    public let credit: String?
 
     public init(id: String, kind: MessageCardMediaKind, aspect: Double = 1, duration: Double? = nil, name: String? = nil,
-                samples: [Double] = [], transcript: MessageCardTranscript? = nil) {
+                samples: [Double] = [], transcript: MessageCardTranscript? = nil, credit: String? = nil) {
         self.id = id
         self.kind = kind
         self.aspect = aspect.isFinite && aspect > 0.2 && aspect < 5 ? aspect : 1
@@ -40,15 +43,21 @@ public struct MessageCardMedia: Equatable, Sendable {
         self.name = MessageCardText.nonBlank(name)
         self.samples = samples.map { $0.isFinite ? min(1, max(0, $0)) : 0 }
         self.transcript = kind == .audio ? transcript : nil
+        self.credit = MessageCardText.nonBlank(credit)
     }
 
     public func with(samples: [Double]) -> MessageCardMedia {
-        MessageCardMedia(id: id, kind: kind, aspect: aspect, duration: duration, name: name, samples: samples, transcript: transcript)
+        MessageCardMedia(id: id, kind: kind, aspect: aspect, duration: duration, name: name, samples: samples, transcript: transcript, credit: credit)
     }
 
     /// Le même média, sa durée lue dans le fichier quand le message ne la disait pas.
     public func with(duration: Double?) -> MessageCardMedia {
-        MessageCardMedia(id: id, kind: kind, aspect: aspect, duration: duration ?? self.duration, name: name, samples: samples, transcript: transcript)
+        MessageCardMedia(id: id, kind: kind, aspect: aspect, duration: duration ?? self.duration, name: name, samples: samples, transcript: transcript, credit: credit)
+    }
+
+    /// Le même média, signé du nom de qui l'a posté — `nil` : sans signature.
+    public func with(credit: String?) -> MessageCardMedia {
+        MessageCardMedia(id: id, kind: kind, aspect: aspect, duration: duration, name: name, samples: samples, transcript: transcript, credit: credit)
     }
 
     /// Les amplitudes de l'extrait `clip` — toutes, sans extrait ou sans durée connue.

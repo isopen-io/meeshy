@@ -108,6 +108,8 @@ private struct Chrome {
     let link: Double
     let mediaAbove: Double
     let mediaBelow: Double
+    /// La colonne de médias à côté de la réponse — la rangée prend la plus haute des deux (#9235).
+    let mediaBeside: Double
 }
 
 /// JS `Math.round` — la moitié monte, comme sur le web.
@@ -127,8 +129,8 @@ struct MessageCardLayoutEngine {
         let quote = hasQuote
             ? chrome.quoteAuthor + Double(sized.quoteLines.count) * quoteLineHeight(sized.quoteSize) + chrome.quoteBubble + chrome.link
             : 0
-        return chrome.header + quote + chrome.mediaAbove + chrome.replyAuthor
-            + Double(sized.replyLines.count) * replyLineHeight(sized.replySize) + chrome.replyBubble + chrome.mediaBelow
+        let reply = chrome.replyAuthor + Double(sized.replyLines.count) * replyLineHeight(sized.replySize) + chrome.replyBubble
+        return chrome.header + quote + chrome.mediaAbove + max(reply, chrome.mediaBeside) + chrome.mediaBelow
     }
 
     func layout() -> MessageCardLayout {
@@ -143,7 +145,16 @@ struct MessageCardLayoutEngine {
         let textWidth = canvas.textWidth
         let bubbleWidth = textWidth - MessageCardMetrics.bubbleOffset
         let quoteWidth = geometry.bubbles ? bubbleWidth - 2 * MessageCardMetrics.bubblePadX : textWidth - MessageCardMetrics.quoteIndent
-        let replyWidth = geometry.bubbles ? bubbleWidth - 2 * MessageCardMetrics.bubblePadX : textWidth
+        // À côté d'une colonne de médias, la réponse se resserre (#9235) — la
+        // citation, au-dessus, garde toute la largeur.
+        let beside = disposition.effectiveMediaLayout(hasVisuals: !disposition.paintedVisuals(of: input.media).isEmpty).isBeside
+        let replyColumn: (Double) -> Double = { scale in
+            beside ? textWidth - MessageCardMediaPlan.besideWidth(textWidth: textWidth, scale: scale) - MessageCardMediaPlan.besideGap : textWidth
+        }
+        let fullReplyWidth = geometry.bubbles ? bubbleWidth - 2 * MessageCardMetrics.bubblePadX : textWidth
+        let replyWidthAt: (Double) -> Double = { scale in
+            geometry.bubbles ? replyColumn(scale) - MessageCardMetrics.bubbleOffset - 2 * MessageCardMetrics.bubblePadX : replyColumn(scale)
+        }
         let quoted = input.quoted.flatMap { MessageCardText.nonBlank($0.text) == nil ? nil : $0 }
         let hasQuote = quoted != nil
         let budget = canvas.budget
@@ -151,7 +162,7 @@ struct MessageCardLayoutEngine {
         let authorLine = MessageCardMetrics.authorLine + MessageCardMetrics.authorGap
         let hasReplyText = MessageCardText.nonBlank(input.reply.text) != nil
         let headerScale = scales[.header]
-        let mediaGap = hasReplyText ? MessageCardMetrics.mediaGap : 0
+        let mediaGap = hasReplyText && !beside ? MessageCardMetrics.mediaGap : 0
         let chromeOf: (MessageCardMediaPlan?) -> Chrome = { media in
             Chrome(
                 header: verticalHeader || (title == nil && date == nil)
@@ -163,7 +174,8 @@ struct MessageCardLayoutEngine {
                 replyBubble: geometry.bubbles && hasReplyText ? 2 * MessageCardMetrics.bubblePadY : 0,
                 link: geometry.block,
                 mediaAbove: media?.above.map { $0.height + mediaGap } ?? 0,
-                mediaBelow: media?.below.map { $0.height + mediaGap } ?? 0
+                mediaBelow: media?.below.map { $0.height + mediaGap } ?? 0,
+                mediaBeside: media?.beside?.height ?? 0
             )
         }
 
@@ -171,7 +183,7 @@ struct MessageCardLayoutEngine {
         // agrandie reste plus grande que sa voisine jusqu'au plancher (#8979).
         let replyScale = typeface.replyScale * scales[.reply]
         let quoteScale = scales[.quote]
-        let sizeAt: (Int) -> Sized = { step in
+        let sizeAt: (Int, Double) -> Sized = { step, replyWidth in
             let factor = pow(MessageCardMetrics.shrink, Double(step))
             let replySize = max(MessageCardMetrics.replyFloor * replyScale, MessageCardMetrics.replyStart * replyScale * factor)
             let quoteSize = max(MessageCardMetrics.quoteFloor * quoteScale, MessageCardMetrics.quoteStart * quoteScale * factor)
@@ -194,20 +206,22 @@ struct MessageCardLayoutEngine {
         // LA PLACE MINIMALE DU TEXTE, à son plancher : les médias, même pincés,
         // ne la prennent jamais — leur échelle s'arrête avant (revue #8979).
         let textOnly = chromeOf(nil)
-        let floorSized = sizeAt(MessageCardMetrics.floorStep)
+        let requestedWidth = replyWidthAt(scales[.media])
+        let floorSized = sizeAt(MessageCardMetrics.floorStep, requestedWidth)
         var minimal = floorSized
         minimal.quoteLines = Array(minimal.quoteLines.prefix(MessageCardMetrics.minimumQuoteLines))
         minimal.replyLines = Array(minimal.replyLines.prefix(MessageCardMetrics.minimumReplyLines))
         let mediaRoom = budget - contentHeight(minimal, hasQuote: hasQuote, chrome: textOnly) - mediaGap
         let mediaLimit = mediaScaleLimit(room: mediaRoom, columnWidth: textWidth, canvasWidth: width, budget: budget)
         let mediaScale = min(scales[.media], mediaLimit)
+        let replyWidth = replyWidthAt(mediaScale)
 
         // LA TRANSCRIPTION CÈDE D'ABORD — 3 → 2 → 1 → masquée — avant que le
         // texte ne rapetisse (revue #8979).
         var transcriptLines = MessageCardAudioMetrics.transcriptLines
         var media = mediaPlan(columnWidth: textWidth, canvasWidth: width, budget: budget, scale: mediaScale, transcriptLines: transcriptLines)
         var chrome = chromeOf(media)
-        let natural = sizeAt(0)
+        let natural = sizeAt(0, replyWidth)
         while transcriptLines > 0 && contentHeight(natural, hasQuote: hasQuote, chrome: chrome) > budget {
             transcriptLines -= 1
             media = mediaPlan(columnWidth: textWidth, canvasWidth: width, budget: budget, scale: mediaScale, transcriptLines: transcriptLines)
@@ -215,10 +229,10 @@ struct MessageCardLayoutEngine {
         }
 
         var step = 0
-        var sized = sizeAt(step)
+        var sized = sizeAt(step, replyWidth)
         while contentHeight(sized, hasQuote: hasQuote, chrome: chrome) > budget && !atFloor(sized) {
             step += 1
-            sized = sizeAt(step)
+            sized = sizeAt(step, replyWidth)
         }
 
         var truncated = false
@@ -238,7 +252,8 @@ struct MessageCardLayoutEngine {
         }
 
         // La VRAIE cause d'une coupe : le texte seul, au plancher, tiendrait-il ?
-        let crowdedByMedia = truncated && contentHeight(floorSized, hasQuote: hasQuote, chrome: textOnly) <= budget
+        let crowdedByMedia = truncated && contentHeight(beside ? sizeAt(MessageCardMetrics.floorStep, fullReplyWidth) : floorSized,
+                                                        hasQuote: hasQuote, chrome: textOnly) <= budget
         let content = contentHeight(sized, hasQuote: hasQuote, chrome: chrome)
         let height: Double
         if let fixed = canvas.fixedHeight {
@@ -334,16 +349,35 @@ struct MessageCardLayoutEngine {
             painter.y += chrome.mediaAbove
         }
 
-        if hasReplyText || chrome.replyAuthor > 0 {
-            let reply = painter.block(input.reply, lines: sized.replyLines, time: input.replyTime, style: MessageCardBlockStyle(
-                size: sized.replySize,
-                lineHeight: replyLineHeight(sized.replySize),
-                font: sized.replyFont,
-                ink: palette.replyInk,
-                inset: 0,
-                bubble: geometry.bubbles && hasReplyText ? MessageCardBubbleStyle(offset: MessageCardMetrics.bubbleOffset, color: palette.replyPanel) : nil,
-                nameScale: scales[.reply]
-            ))
+        let replyStyle = MessageCardBlockStyle(
+            size: sized.replySize,
+            lineHeight: replyLineHeight(sized.replySize),
+            font: sized.replyFont,
+            ink: palette.replyInk,
+            inset: 0,
+            bubble: geometry.bubbles && hasReplyText ? MessageCardBubbleStyle(offset: MessageCardMetrics.bubbleOffset, color: palette.replyPanel) : nil,
+            nameScale: scales[.reply]
+        )
+        if let side = media.beside {
+            // La rangée : la colonne de médias d'un côté, la réponse resserrée de l'autre.
+            let rowTop = painter.y
+            let column = replyColumn(mediaScale)
+            let mediaX = media.besideIsLeft ? canvas.left : canvas.right - side.width
+            let textLeft = media.besideIsLeft ? canvas.right - column : canvas.left
+            var replyPainter = painter.column(left: textLeft, right: textLeft + column, bubbleWidth: column - MessageCardMetrics.bubbleOffset)
+            if hasReplyText || chrome.replyAuthor > 0 {
+                let reply = replyPainter.block(input.reply, lines: sized.replyLines, time: input.replyTime, style: replyStyle)
+                regions.append(MessageCardRegion(part: .reply, x: textLeft, y: reply.top, width: column, height: replyPainter.y - reply.top))
+            }
+            painter.ops.append(contentsOf: replyPainter.ops)
+            painter.ops.append(contentsOf: mediaOps(side, x: mediaX, y: rowTop, width: side.width))
+            regions.append(MessageCardRegion(part: .media, x: mediaX, y: rowTop, width: side.width, height: side.mediaHeight))
+            if let transcript = side.transcript {
+                regions.append(MessageCardRegion(part: .transcript, x: mediaX, y: rowTop + side.transcriptTop, width: side.width, height: transcript.height))
+            }
+            painter.y = max(replyPainter.y, rowTop + side.height)
+        } else if hasReplyText || chrome.replyAuthor > 0 {
+            let reply = painter.block(input.reply, lines: sized.replyLines, time: input.replyTime, style: replyStyle)
             region(.reply, reply.top, painter.y)
         }
 
@@ -380,7 +414,7 @@ struct MessageCardLayoutEngine {
         let range = MessageCardScales.range
         let height: (Double) -> Double = { scale in
             let plan = mediaPlan(columnWidth: columnWidth, canvasWidth: canvasWidth, budget: budget, scale: scale, transcriptLines: 0)
-            return (plan.above?.height ?? 0) + (plan.below?.height ?? 0)
+            return (plan.above?.height ?? 0) + (plan.below?.height ?? 0) + (plan.beside?.height ?? 0)
         }
         let largest = height(range.upperBound)
         guard largest > 0, largest > room else { return range.upperBound }
@@ -458,6 +492,12 @@ struct MessageCardPainter {
     let measure: MessageCardMeasure
     var ops: [MessageCardOp] = []
 
+
+    /// Le même pinceau, sur une colonne plus étroite — la réponse à côté d'une colonne de médias (#9235).
+    func column(left: Double, right: Double, bubbleWidth: Double) -> MessageCardPainter {
+        MessageCardPainter(left: left, right: right, y: y, showAuthors: showAuthors, placement: placement,
+                           authorInk: authorInk, timeInk: timeInk, bubbleWidth: bubbleWidth, measure: measure)
+    }
 
     func start(rtl: Bool, inset: Double) -> Double {
         rtl ? right - inset : left + inset

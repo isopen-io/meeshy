@@ -67,16 +67,38 @@ public enum MessageCardTilt: String, CaseIterable, Sendable {
     public var radians: Double { degrees * .pi / 180 }
 }
 
-/// Comment les médias d'un message se posent sur la carte.
+/// OÙ les médias d'un message se posent sur la carte — au-dessus ou au-dessous
+/// de la réponse, à sa gauche ou à sa droite, ou en fond (#9235). COMMENT ils
+/// s'y agencent est une autre question : `MessageCardMediaArrangement`.
 public enum MessageCardMediaLayout: String, CaseIterable, Sendable {
-    /// Le premier média, en grand, au-dessus du texte.
     case above
-    /// Le premier média, en grand, sous le texte.
     case below
-    /// Jusqu'à quatre médias en mosaïque, au-dessus du texte.
-    case mosaic
-    /// La première image (ou la première image de la vidéo) EN FOND, sous un voile.
+    /// Une colonne de médias à gauche de la réponse, qui se resserre à côté.
+    case left
+    /// Une colonne de médias à droite de la réponse.
+    case right
+    /// Un visuel — le premier, ou celui qu'on choisit — EN FOND, sous un voile.
     case backdrop
+
+    /// Les médias partagent la largeur avec la réponse.
+    public var isBeside: Bool { self == .left || self == .right }
+}
+
+/// COMMENT plusieurs visuels s'agencent à leur place (#9235) : un seul — celui
+/// qu'on choisit —, la grille de deux par deux, ou les dispositions des posts
+/// (vague, hero, sinusoïde), dessinées par la MÊME loi que le fil (`MosaicLayout`).
+public enum MessageCardMediaArrangement: String, CaseIterable, Sendable {
+    case single, mosaic, wave, hero, sine
+
+    /// La disposition de post qu'il emprunte — `nil` pour l'image seule et la grille.
+    public var postLayout: MosaicLayoutMode? {
+        switch self {
+        case .single, .mosaic: return nil
+        case .wave: return .wave
+        case .hero: return .hero
+        case .sine: return .sine
+        }
+    }
 }
 
 /// Comment un son se représente sur une image — au même titre que les liaisons.
@@ -194,6 +216,13 @@ public struct MessageCardDisposition: Equatable, Sendable {
     public var authorPlacement: MessageCardAuthorPlacement
     public var tilt: MessageCardTilt
     public var mediaLayout: MessageCardMediaLayout
+    /// Comment plusieurs visuels s'agencent à leur place (#9235).
+    public var mediaArrangement: MessageCardMediaArrangement
+    /// Le visuel que « une seule » et « en fond » montrent — `nil` : le premier.
+    /// Propre à un contenu : il ne s'enregistre pas avec le format (#9235).
+    public var featuredMediaID: String?
+    /// Le nom de qui a posté chaque visuel, hors fond — mis en forme comme les autres noms (#9235).
+    public var showsMediaAuthor: Bool
     public var audioStyle: MessageCardAudioStyle
     /// La transcription d'un vocal, sous sa représentation (#8979) — montrée par défaut.
     public var showsTranscript: Bool
@@ -212,6 +241,9 @@ public struct MessageCardDisposition: Equatable, Sendable {
         authorPlacement: MessageCardAuthorPlacement = .above,
         tilt: MessageCardTilt = .none,
         mediaLayout: MessageCardMediaLayout = .above,
+        mediaArrangement: MessageCardMediaArrangement = .single,
+        featuredMediaID: String? = nil,
+        showsMediaAuthor: Bool = false,
         audioStyle: MessageCardAudioStyle = .wave,
         showsTranscript: Bool = true,
         showsTimer: Bool = true,
@@ -224,6 +256,9 @@ public struct MessageCardDisposition: Equatable, Sendable {
         self.authorPlacement = authorPlacement
         self.tilt = tilt
         self.mediaLayout = mediaLayout
+        self.mediaArrangement = mediaArrangement
+        self.featuredMediaID = featuredMediaID
+        self.showsMediaAuthor = showsMediaAuthor
         self.audioStyle = audioStyle
         self.showsTranscript = showsTranscript
         self.showsTimer = showsTimer
@@ -234,4 +269,34 @@ public struct MessageCardDisposition: Equatable, Sendable {
 
     /// La carte d'avant #8692 : adaptative, en-tête en ligne, noms au-dessus, droite.
     public static let standard = MessageCardDisposition()
+}
+
+public extension MessageCardDisposition {
+
+    /// **LES VISUELS QUE LA CARTE PEINT**, dans l'ordre où elle les pose (#9235) —
+    /// la seule réponse à « que montre-t-elle ? » : la mise en page, les sorties
+    /// offertes et la vidéo qu'une carte animée décode la lisent toutes ici.
+    /// Une seule image et le fond montrent le visuel CHOISI (le premier à
+    /// défaut) ; la grille et les dispositions de post, les quatre premiers.
+    func paintedVisuals(of media: [MessageCardMedia]) -> [MessageCardMedia] {
+        let visuals = media.filter { $0.kind.isVisual }
+        guard visuals.count > 1 else { return visuals }
+        if mediaLayout == .backdrop || mediaArrangement == .single {
+            let featured = featuredMediaID.flatMap { id in visuals.first { $0.id == id } } ?? visuals[0]
+            return [featured]
+        }
+        return Array(visuals.prefix(MosaicLayout.maxVisible))
+    }
+
+    /// Ce que la carte montre ET fait entendre : ses visuels peints, puis son son.
+    func paintedMedia(of media: [MessageCardMedia]) -> [MessageCardMedia] {
+        paintedVisuals(of: media) + (media.first { $0.kind == .audio }.map { [$0] } ?? [])
+    }
+
+    /// La position qui s'applique vraiment : sans visuel, ni fond ni colonne —
+    /// le son se pose au-dessus de la réponse, comme avant #9235.
+    func effectiveMediaLayout(hasVisuals: Bool) -> MessageCardMediaLayout {
+        guard !hasVisuals else { return mediaLayout }
+        return mediaLayout == .below ? .below : .above
+    }
 }

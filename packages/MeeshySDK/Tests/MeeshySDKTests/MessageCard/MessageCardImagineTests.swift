@@ -90,11 +90,11 @@ struct MessageCardImagineTests {
 
     @Test func media_mosaicLaysOutUpToFour_theOddOneFullWidth() {
         let four = (1...5).map { MessageCardMedia(id: "p\($0)", kind: .image) }
-        let three = Self.media(Self.layout(Self.input(media: Array(four.prefix(3)), disposition: MessageCardDisposition(mediaLayout: .mosaic))).ops)
+        let three = Self.media(Self.layout(Self.input(media: Array(four.prefix(3)), disposition: MessageCardDisposition(mediaArrangement: .mosaic))).ops)
         #expect(three.count == 3)
         #expect(three[0].width == three[1].width && three[2].width > three[0].width)
         #expect(three[0].y == three[1].y && three[2].y > three[0].y)
-        let capped = Self.media(Self.layout(Self.input(media: four, disposition: MessageCardDisposition(mediaLayout: .mosaic))).ops)
+        let capped = Self.media(Self.layout(Self.input(media: four, disposition: MessageCardDisposition(mediaArrangement: .mosaic))).ops)
         #expect(capped.map(\.mediaID) == ["p1", "p2", "p3", "p4"])
     }
 
@@ -258,7 +258,7 @@ struct MessageCardImagineTests {
         var format = MessageCardFormat.initial
         format.showTimes = true
         format.useHandles = true
-        format.disposition = MessageCardDisposition(aspect: .portrait, headerOrientation: .rotatedUp, authorPlacement: .after, tilt: .right, mediaLayout: .mosaic, audioStyle: .spectrum)
+        format.disposition = MessageCardDisposition(aspect: .portrait, headerOrientation: .rotatedUp, authorPlacement: .after, tilt: .right, mediaLayout: .left, mediaArrangement: .wave, showsMediaAuthor: true, audioStyle: .spectrum)
         #expect(MessageCardFormat.parse(format.serialized) == format)
         let older = #"{"template":"neige.systeme.bulles","showConversationTitle":false,"showAuthors":true,"showDate":false,"anonymizeQuoted":false,"anonymizeReply":true}"#
         #expect(MessageCardFormat.parse(older)?.disposition == .standard)

@@ -38,7 +38,10 @@ enum MessageCardDiscussion {
         let lines = messages.map { message in
             "\(author(of: message, viewer: viewer)) : \(said(by: message, servedText: servedText(message)))"
         }
-        let media = messages.flatMap { MessageCardSubject.paintableMedia(of: $0) }.suffix(maxMedia)
+        // Chaque média garde l'auteur de SON message — la discussion en mêle plusieurs (#9235).
+        let media = messages.flatMap { message in
+            MessageCardSubject.paintableMedia(of: message).map { $0.by(mediaAuthor(of: message, viewer: viewer)) }
+        }.suffix(maxMedia)
         return MessageCardSubject(
             quoted: nil,
             reply: MessageCardPart(author: nonBlank(title) ?? defaultTitle, text: lines.joined(separator: "\n")),
@@ -68,6 +71,12 @@ enum MessageCardDiscussion {
         let isViewer = message.isMe || (!viewer.id.isEmpty && message.senderId == viewer.id)
         let names = isViewer ? [viewer.displayName, message.senderName, message.senderUsername] : [message.senderName, message.senderUsername]
         return names.lazy.compactMap { nonBlank($0) }.first ?? "Meeshy"
+    }
+
+    private static func mediaAuthor(of message: Message, viewer: MessageCardSubject.Viewer) -> MessageCardMediaAuthor {
+        let isViewer = message.isMe || (!viewer.id.isEmpty && message.senderId == viewer.id)
+        return MessageCardMediaAuthor(name: author(of: message, viewer: viewer),
+                                      handle: isViewer ? (viewer.username ?? message.senderUsername) : message.senderUsername)
     }
 
     /// Le texte servi, ou — pour un message sans mots — ce que ses médias sont.

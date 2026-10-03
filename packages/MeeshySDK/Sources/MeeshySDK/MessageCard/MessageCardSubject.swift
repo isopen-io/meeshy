@@ -6,11 +6,38 @@ public struct MessageCardSubjectMedia: Equatable, Sendable {
     public let media: MessageCardMedia
     public let fileURL: String
     public let posterURL: String?
+    /// Qui l'a posté (#9235) — `nil` : inconnu, la carte ne le signe pas.
+    public let author: MessageCardMediaAuthor?
 
-    public init(media: MessageCardMedia, fileURL: String, posterURL: String? = nil) {
+    public init(media: MessageCardMedia, fileURL: String, posterURL: String? = nil, author: MessageCardMediaAuthor? = nil) {
         self.media = media
         self.fileURL = fileURL
         self.posterURL = MessageCardText.nonBlank(posterURL)
+        self.author = author
+    }
+
+    /// La même pièce, attribuée à `author`.
+    public func by(_ author: MessageCardMediaAuthor?) -> MessageCardSubjectMedia {
+        MessageCardSubjectMedia(media: media, fileURL: fileURL, posterURL: posterURL, author: author)
+    }
+}
+
+/// **L'AUTEUR D'UN MÉDIA** (#9235) — son nom, son pseudo, et le bloc d'où vient
+/// la pièce : un média CITÉ suit l'anonymat de la citation, les autres celui
+/// de la réponse. Il se peint comme les autres noms de la carte.
+public struct MessageCardMediaAuthor: Equatable, Sendable {
+    public let name: String
+    public let handle: String?
+    public let isQuoted: Bool
+
+    public init(name: String, handle: String? = nil, isQuoted: Bool = false) {
+        self.name = name
+        self.handle = MessageCardText.nonBlank(handle.map { String($0.drop(while: { $0 == "@" })) })
+        self.isQuoted = isQuoted
+    }
+
+    init(_ part: MessageCardPart, isQuoted: Bool) {
+        self.init(name: part.author, handle: part.handle, isQuoted: isQuoted)
     }
 }
 
@@ -164,14 +191,16 @@ public struct MessageCardSubject: Equatable, Sendable {
             text: text ?? "",
             handle: isViewer ? (viewer.username ?? message.senderUsername) : message.senderUsername
         )
+        let replyAuthor = MessageCardMediaAuthor(reply, isQuoted: false)
+        let quotedAuthor = quotedMediaAuthor(message.replyTo, quotedMessage: quotedMessage, viewer: viewer)
         return MessageCardSubject(
             quoted: quote(message.replyTo, viewer: viewer, now: now),
             reply: reply,
             sentAt: message.createdAt,
             quotedAt: message.replyTo == nil ? nil : quotedAt,
-            media: media + quotedMedia(message.replyTo, quotedMessage: quotedMessage, audioLanguages: audioLanguages, now: now).filter { quoted in
+            media: media.map { $0.by(replyAuthor) } + quotedMedia(message.replyTo, quotedMessage: quotedMessage, audioLanguages: audioLanguages, now: now).filter { quoted in
                 !media.contains { $0.media.id == quoted.media.id }
-            }
+            }.map { $0.by(quotedAuthor) }
         )
     }
 
@@ -200,6 +229,20 @@ public struct MessageCardSubject: Equatable, Sendable {
         return paintableMedia(of: [attachment], audioLanguages: audioLanguages)
     }
 
+    /// Qui a posté les pièces du message cité — le message réel quand il est
+    /// en mémoire, sinon le nom que la citation porte.
+    private static func quotedMediaAuthor(_ reference: ReplyReference?, quotedMessage: MeeshyMessage?, viewer: Viewer) -> MessageCardMediaAuthor? {
+        guard let reference else { return nil }
+        let real = quotedMessage?.id == reference.messageId ? quotedMessage : nil
+        let isViewer = reference.isMe || (real.map { $0.isMe || (!viewer.id.isEmpty && $0.senderId == viewer.id) } ?? false)
+        let names: [String?] = [reference.authorName] + (real.map { [$0.senderName, $0.senderUsername] } ?? [])
+        return MessageCardMediaAuthor(
+            name: author(isViewer: isViewer, names: names, viewer: viewer),
+            handle: isViewer ? (viewer.username ?? real?.senderUsername) : real?.senderUsername,
+            isQuoted: true
+        )
+    }
+
     /// **Un COMMENTAIRE devient une carte** (#8692) — le texte servi par le
     /// Prisme (`displayContent`), son auteur et ses médias. Un commentaire
     /// éphémère, flouté ou à vue unique ne part jamais en image.
@@ -214,12 +257,14 @@ public struct MessageCardSubject: Equatable, Sendable {
         let text = MessageCardText.nonBlank(showOriginal ? comment.content : comment.displayContent)
         guard text != nil || !media.isEmpty else { return nil }
         let quoted = root.flatMap { quote(comment: $0, viewer: viewer) }
+        let reply = part(of: comment, text: text ?? "", viewer: viewer)
+        let author = MessageCardMediaAuthor(reply, isQuoted: false)
         return MessageCardSubject(
             quoted: quoted,
-            reply: part(of: comment, text: text ?? "", viewer: viewer),
+            reply: reply,
             sentAt: comment.timestamp,
             quotedAt: quoted == nil ? nil : root?.timestamp,
-            media: media
+            media: media.map { $0.by(author) }
         )
     }
 
@@ -322,6 +367,15 @@ public extension MessageCardInput {
         }
         let quoted = subject.quoted.map { format.anonymizeQuoted ? MessageCardPart(author: anonymousLabel, text: $0.text) : named($0) }
         let reply = format.anonymizeReply ? MessageCardPart(author: anonymousLabel, text: subject.reply.text) : named(subject.reply)
+        // L'auteur d'un média se nomme comme les autres : anonyme avec son bloc, @pseudo au choix (#9235).
+        let credit: (MessageCardMediaAuthor) -> String = { author in
+            if author.isQuoted ? format.anonymizeQuoted : format.anonymizeReply { return anonymousLabel }
+            guard format.useHandles, let handle = author.handle else { return author.name }
+            return "@\(handle)"
+        }
+        let credits: [String: String] = format.disposition.showsMediaAuthor
+            ? Dictionary(subject.media.compactMap { item in item.author.map { (item.media.id, credit($0)) } }, uniquingKeysWith: { first, _ in first })
+            : [:]
         return MessageCardInput(
             quoted: quoted,
             reply: reply,
@@ -330,7 +384,7 @@ public extension MessageCardInput {
             title: format.showConversationTitle ? conversationTitle : nil,
             date: format.showDate ? formatDate(subject.sentAt) : nil,
             showAuthors: format.showAuthors,
-            media: media ?? subject.media.map(\.media),
+            media: (media ?? subject.media.map(\.media)).map { $0.with(credit: credits[$0.id]) },
             disposition: format.disposition,
             quotedTime: format.showTimes ? subject.quotedAt.map(formatTime) : nil,
             replyTime: format.showTimes ? formatTime(subject.sentAt) : nil
@@ -340,5 +394,8 @@ public extension MessageCardInput {
 
 public extension MessageCardSubject {
     /// Les pseudos sont-ils connus ? L'option « pseudo au lieu du nom affiché » n'existe qu'alors.
-    var hasHandles: Bool { reply.handle != nil || quoted?.handle != nil }
+    var hasHandles: Bool { reply.handle != nil || quoted?.handle != nil || media.contains { $0.author?.handle != nil } }
+
+    /// Un visuel au moins dit qui l'a posté — l'option « Auteur du média » n'existe qu'alors (#9235).
+    var hasMediaAuthors: Bool { media.contains { $0.media.kind.isVisual && $0.author != nil } }
 }

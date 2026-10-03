@@ -10,7 +10,7 @@ extension MessageCardExportSheet {
     /// Les sorties que le contenu OFFRE : une vidéo s'anime en GIF comme en
     /// vidéo, un son en vidéo seulement, le reste en image fixe.
     var offeredOutputs: [MessageCardOutput] {
-        MessageCardOutput.offered(for: currentMedia.map(\.kind))
+        MessageCardOutput.offered(for: paintedMedia.map(\.kind))
     }
 
     /// Le choix se fait AVANT d'enregistrer ou de partager — il n'existe que
@@ -124,7 +124,8 @@ extension MessageCardExportSheet {
         let input = input(for: format)
         let pictures = loadedMedia.pictures
         let audioFile = loadedMedia.soundFile(of: subject.media)
-        let video = subject.media.first { $0.media.kind == .video }
+        let shownVideo = paintedMedia.first { $0.kind == .video }?.id
+        let video = subject.media.first { $0.media.id == shownVideo }
         let box = motion
         let progress: @Sendable (Double) -> Void = { value in
             Task { @MainActor in box.value = value }

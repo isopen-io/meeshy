@@ -56,10 +56,46 @@ final class ImagineWorkshopTests: XCTestCase {
 
     func test_media_layoutsFollowThePictures_stylesFollowTheSound() {
         XCTAssertTrue(MessageCardTrayOffer.mediaLayouts([.audio]).isEmpty)
-        XCTAssertEqual(MessageCardTrayOffer.mediaLayouts([.image]), [.above, .below, .backdrop])
-        XCTAssertEqual(MessageCardTrayOffer.mediaLayouts([.image, .video]), [.above, .below, .mosaic, .backdrop])
+        XCTAssertEqual(MessageCardTrayOffer.mediaLayouts([.image]), [.above, .below, .left, .right, .backdrop])
         XCTAssertEqual(MessageCardTrayOffer.audioStyles([.audio]), MessageCardAudioStyle.allCases)
         XCTAssertTrue(MessageCardTrayOffer.audioStyles([.image]).isEmpty)
+    }
+
+    // MARK: - Plusieurs visuels (#9235)
+
+    private static let photos = [
+        MessageCardMedia(id: "p1", kind: .image), MessageCardMedia(id: "v1", kind: .video), MessageCardMedia(id: "p2", kind: .image),
+    ]
+
+    func test_media_arrangementsExistFromTwoVisuals_andNeverOnABackdrop() {
+        XCTAssertTrue(MessageCardTrayOffer.arrangements(.initial, kinds: [.image, .audio]).isEmpty, "une seule image n'a rien à agencer")
+        XCTAssertEqual(MessageCardTrayOffer.arrangements(.initial, kinds: [.image, .video]), [.single, .mosaic, .wave, .hero, .sine])
+        var backdrop = MessageCardFormat.initial
+        backdrop.disposition.mediaLayout = .backdrop
+        XCTAssertTrue(MessageCardTrayOffer.arrangements(backdrop, kinds: [.image, .video]).isEmpty)
+    }
+
+    func test_media_theShownVisualIsChosenForOneOrABackdrop_notForAGrid() {
+        XCTAssertEqual(MessageCardTrayOffer.featuredChoices(.initial, media: Self.photos).map(\.id), ["p1", "v1", "p2"])
+        var wave = MessageCardFormat.initial
+        wave.disposition.mediaArrangement = .wave
+        XCTAssertTrue(MessageCardTrayOffer.featuredChoices(wave, media: Self.photos).isEmpty)
+        wave.disposition.mediaLayout = .backdrop
+        XCTAssertEqual(MessageCardTrayOffer.featuredChoices(wave, media: Self.photos).count, 3, "le fond n'en montre qu'un : on le choisit")
+        XCTAssertTrue(MessageCardTrayOffer.featuredChoices(.initial, media: [Self.photos[0]]).isEmpty)
+    }
+
+    func test_media_theMediaAuthorIsOfferedOffTheBackdrop_whenSomeoneIsKnown() {
+        XCTAssertTrue(MessageCardTrayOffer.offersMediaAuthor(.initial, hasMediaAuthors: true))
+        XCTAssertFalse(MessageCardTrayOffer.offersMediaAuthor(.initial, hasMediaAuthors: false))
+        var backdrop = MessageCardFormat.initial
+        backdrop.disposition.mediaLayout = .backdrop
+        XCTAssertFalse(MessageCardTrayOffer.offersMediaAuthor(backdrop, hasMediaAuthors: true))
+    }
+
+    func test_media_postArrangementsSpeakTheComposersWords() {
+        XCTAssertEqual(MessageCardExportText.arrangementLabel(.wave), ComposerMosaicChoice.label(.wave))
+        XCTAssertEqual(MessageCardExportSymbols.arrangement(.hero), ComposerMosaicChoice.symbol(.hero))
     }
 
     // MARK: - Un vocal (#8979)
@@ -240,6 +276,8 @@ final class ImagineWorkshopTests: XCTestCase {
         keys += MessageCardHeaderOrientation.allCases.map { "export.card.header.\($0.rawValue)" }
         keys += MessageCardTilt.allCases.map { "export.card.tilt.\($0.rawValue)" }
         keys += MessageCardMediaLayout.allCases.map { "export.card.media.\($0.rawValue)" }
+        keys += ["export.card.media.mosaic", "export.card.media.single", "export.card.media.featured", "export.card.media.author"]
+        keys += ["composer.mosaic.wave", "composer.mosaic.hero", "composer.mosaic.sine"]
         keys += MessageCardAudioStyle.allCases.map { "export.card.audio.\($0.rawValue)" }
         keys += MessageCardOutput.allCases.map { "export.card.output.\($0.rawValue)" }
         for key in keys {

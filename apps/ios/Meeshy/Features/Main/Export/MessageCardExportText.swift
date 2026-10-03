@@ -177,9 +177,24 @@ enum MessageCardExportText {
         switch layout {
         case .above: return text("export.card.media.above", "Au-dessus")
         case .below: return text("export.card.media.below", "Au-dessous")
-        case .mosaic: return text("export.card.media.mosaic", "Mosaïque")
+        case .left: return text("export.card.media.left", "À gauche")
+        case .right: return text("export.card.media.right", "À droite")
         case .backdrop: return text("export.card.media.backdrop", "En fond")
         }
+    }
+
+    /// Les dispositions de post gardent les mots du composer — même choix, même nom (#9235).
+    static func arrangementLabel(_ arrangement: MessageCardMediaArrangement) -> String {
+        if let mode = arrangement.postLayout { return ComposerMosaicChoice.label(mode) }
+        return arrangement == .mosaic
+            ? text("export.card.media.mosaic", "Mosaïque")
+            : text("export.card.media.single", "Une seule")
+    }
+
+    /// « Photo 2 sur 3 », « Vidéo 1 sur 2 » — ce que VoiceOver dit d'une vignette au choix.
+    static func featuredLabel(_ kind: MessageCardMediaKind, position: Int, count: Int) -> String {
+        let name = kind == .video ? text("export.card.output.video", "Vidéo") : text("export.card.output.image", "Image")
+        return "\(name) \(position)/\(count)"
     }
 
     static func audioStyleLabel(_ style: MessageCardAudioStyle) -> String {
@@ -242,9 +257,15 @@ enum MessageCardExportSymbols {
         switch layout {
         case .above: return "rectangle.tophalf.inset.filled"
         case .below: return "rectangle.bottomhalf.inset.filled"
-        case .mosaic: return "square.grid.2x2"
+        case .left: return "rectangle.leadinghalf.inset.filled"
+        case .right: return "rectangle.trailinghalf.inset.filled"
         case .backdrop: return "photo.fill"
         }
+    }
+
+    static func arrangement(_ arrangement: MessageCardMediaArrangement) -> String {
+        if let mode = arrangement.postLayout { return ComposerMosaicChoice.symbol(mode) }
+        return arrangement == .mosaic ? "square.grid.2x2" : "photo"
     }
 
     static func audioStyle(_ style: MessageCardAudioStyle) -> String {
