@@ -64,7 +64,9 @@ extension MeeshyComposerHost {
     /// Le contrôle de découvrabilité y est aussi, et pour la même raison : un
     /// lieu posé depuis la scène doit pouvoir se retirer.
     var surfaceWithIntakePortals: some View {
-        surface
+        // L'aiguillage est un NŒUD (#8387) : l'atelier et ses gestes sortent du
+        // type de la pile, évalués dans leur propre cadre.
+        surfaceNode
         // document : c'est l'ÉVENTAIL (le plateau, en tête), seul sélecteur de
         // mode. Le média qui qualifie fait respirer son offre (`reelGate` lit
         // `documentComposesReel`), et choisir RÉEL/STORY route vers la scène.
