@@ -47,11 +47,17 @@ const specs = [
   { collection: 'Message', name: 'Message_storyReplyToId_idx', key: { storyReplyToId: 1 } },
   { collection: 'Participant', name: 'Participant_shareLinkId_joinedAt_idx', key: { shareLinkId: 1, joinedAt: 1 } },
   { collection: 'Participant', name: 'unique_conversation_identity', key: { conversationId: 1, userId: 1, sessionTokenHash: 1 }, unique: true },
+  { collection: 'StickerPack', name: 'StickerPack_slug_key', key: { slug: 1 }, unique: true },
+  { collection: 'StickerPack', name: 'StickerPack_status_createdAt_idx', key: { status: 1, createdAt: 1 } },
+  { collection: 'StickerPack', name: 'StickerPack_submitterId_idx', key: { submitterId: 1 } },
+  { collection: 'StickerPackItem', name: 'StickerPackItem_packId_key_key', key: { packId: 1, key: 1 }, unique: true },
   { collection: 'StoryBackgroundAudio', name: 'Sound_uploaderId_contentHash_key', key: { uploaderId: 1, contentHash: 1 }, unique: true },
   { collection: 'User', name: 'User_referralCode_key', key: { referralCode: 1 }, unique: true, partialFilterExpression: { referralCode: { $type: 'string' } } },
   { collection: 'UserConversationPreferences', name: 'UserConversationPreferences_userId_conversationId_key', key: { userId: 1, conversationId: 1 }, unique: true },
   { collection: 'UserSticker', name: 'UserSticker_userId_contentHash_key', key: { userId: 1, contentHash: 1 }, unique: true },
   { collection: 'UserSticker', name: 'UserSticker_userId_lastUsedAt_idx', key: { userId: 1, lastUsedAt: 1 } },
+  { collection: 'UserStickerPack', name: 'UserStickerPack_userId_packSlug_key', key: { userId: 1, packSlug: 1 }, unique: true },
+  { collection: 'UserStickerPack', name: 'UserStickerPack_userId_installedAt_idx', key: { userId: 1, installedAt: 1 } },
   { collection: 'UserVoiceModel', name: 'UserVoiceModel_profileId_key', key: { profileId: 1 }, unique: true },
 ];
 
