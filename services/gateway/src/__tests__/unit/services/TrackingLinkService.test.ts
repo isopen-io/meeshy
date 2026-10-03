@@ -348,30 +348,37 @@ describe('TrackingLinkService.resolveTarget', () => {
 // ─── findExistingTrackingLink ─────────────────────────────────────────────────
 
 describe('TrackingLinkService.findExistingTrackingLink', () => {
-  it('queries with originalUrl and isActive:true', async () => {
+  it('scopes an owner lookup to the caller\'s own active links (#9184)', async () => {
     const prisma = makePrisma();
     const sut = new TrackingLinkService(prisma as any);
 
-    await sut.findExistingTrackingLink('https://example.com');
+    await sut.findExistingTrackingLink('https://example.com', { kind: 'owner', createdBy: 'user-1' });
 
-    expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ originalUrl: 'https://example.com', isActive: true }),
-      })
-    );
+    expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith({
+      where: { originalUrl: 'https://example.com', isActive: true, createdBy: 'user-1' },
+    });
   });
 
-  it('includes conversationId filter when provided', async () => {
+  it('narrows an owner lookup to a conversation when one is given', async () => {
     const prisma = makePrisma();
     const sut = new TrackingLinkService(prisma as any);
 
-    await sut.findExistingTrackingLink('https://example.com', 'conv-42');
+    await sut.findExistingTrackingLink('https://example.com', { kind: 'owner', createdBy: 'user-1', conversationId: 'conv-42' });
 
-    expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ conversationId: 'conv-42' }),
-      })
-    );
+    expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith({
+      where: { originalUrl: 'https://example.com', isActive: true, createdBy: 'user-1', conversationId: 'conv-42' },
+    });
+  });
+
+  it('shares a conversation\'s link for the same URL regardless of who minted it', async () => {
+    const prisma = makePrisma();
+    const sut = new TrackingLinkService(prisma as any);
+
+    await sut.findExistingTrackingLink('https://example.com', { kind: 'conversation', conversationId: 'conv-42' });
+
+    expect(prisma.trackingLink.findFirst).toHaveBeenCalledWith({
+      where: { originalUrl: 'https://example.com', isActive: true, conversationId: 'conv-42' },
+    });
   });
 });
 
@@ -699,6 +706,7 @@ describe('TrackingLinkService.collectContentTrackingLinks', () => {
 
     const result = await sut.collectContentTrackingLinks({
       content: 'https://example.com and again https://example.com',
+      createdBy: 'user-1',
     });
 
     expect(result).toHaveLength(1);
