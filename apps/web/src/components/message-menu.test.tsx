@@ -918,4 +918,18 @@ describe('MessageMenu — le rail suit l’usage des emojis', () => {
     expect(picked).toEqual(['🎉']);
     expect(readEmojiUsage().get('🎉')).toBe(1);
   });
+
+  test('« Ajouter une réaction » se titre dans la langue d’interface (#9253)', () => {
+    document.documentElement.lang = 'en';
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<ReactionSheet onPick={() => {}} onClose={() => {}} />);
+    });
+    const dialog = document.querySelector<HTMLElement>('dialog');
+    const title = document.getElementById(dialog?.getAttribute('aria-labelledby') ?? '');
+    expect(title?.textContent).toBe('Add a reaction');
+    expect(document.body.textContent).not.toContain('Ajouter une réaction');
+  });
 });

@@ -1,5 +1,7 @@
 import { EmojiGrid } from './emoji-grid';
 import { recordEmojiUsage } from '@/lib/emoji-usage';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { Sheet } from './sheet';
 
 /**
@@ -15,7 +17,7 @@ import { Sheet } from './sheet';
  */
 export function ReactionSheet({ onPick, onClose }: { readonly onPick: (emoji: string) => void; readonly onClose: () => void }) {
   return (
-    <Sheet title="Ajouter une réaction" onClose={onClose}>
+    <Sheet title={translate(currentInterfaceLanguage(), 'message.menu.addReaction')} onClose={onClose}>
       <EmojiGrid
         onPick={(emoji) => {
           recordEmojiUsage(emoji);
