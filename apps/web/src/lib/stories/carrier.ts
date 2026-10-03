@@ -2,7 +2,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { objectMediaIdentity, type SceneCarrier, type SceneCarrierMedia } from '@/lib/canvas/carrier';
 import type { CanvasScene } from '@/lib/canvas/document';
 import { backgroundMedia } from '@/lib/feed/scene-framing';
-import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
+import { thumbHashImage } from '@/lib/media/thumbhash-image';
 
 import { storyMediaUrl, type StoryPlaybackStory } from './playback';
 
@@ -29,7 +29,7 @@ export function storyCarrier(story: Pick<StoryPlaybackStory, 'id' | 'media'>): S
     const poster =
       typeof m.thumbnailUrl === 'string' && m.thumbnailUrl !== ''
         ? attachmentSrc(m.thumbnailUrl)
-        : thumbHashPlaceholder(typeof m.thumbHash === 'string' ? m.thumbHash : undefined);
+        : thumbHashImage(typeof m.thumbHash === 'string' ? m.thumbHash : undefined);
     return [
       {
         id: m.id,
