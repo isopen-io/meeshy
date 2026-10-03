@@ -134,6 +134,38 @@ const openThread = async (scheme) => {
   return page;
 };
 
+/**
+ * **LE REPOS EST LE BAS DU FIL, PAS L'OUVERTURE** (#7993). `c-rattrapage` porte
+ * 26 non-lus : depuis D-105 (#7202) le fil s'ouvre SUR le séparateur de
+ * non-lus, et la suite du fil remplit l'écran jusque sous la bande — c'est le
+ * défileur qui passe sous un chrome flottant, pas une réserve fausse. La
+ * contre-épreuve vise la position où la réserve basse GOUVERNE : le fil posé
+ * en bas, comme pour un fil sans non-lus. On y descend, on attend que les
+ * mesures du virtualiseur convergent, et on rend l'écart restant au bas.
+ */
+const poserAuBas = async (page) => {
+  for (let i = 0; i < 12; i += 1) {
+    const reste = await page.evaluate(() => {
+      const el = document.querySelector('main');
+      el.scrollTop = el.scrollHeight;
+      return el.scrollHeight - el.clientHeight - el.scrollTop;
+    });
+    await page.waitForTimeout(150);
+    if (reste <= 1 && i > 2) break;
+  }
+  await page.waitForTimeout(900);
+  return page.evaluate(() => {
+    const el = document.querySelector('main');
+    const bande = document.querySelector('.thread-composer-chrome')?.getBoundingClientRect();
+    const derniere = [...el.querySelectorAll('li')].at(-1)?.getBoundingClientRect();
+    return {
+      reste: Math.round(el.scrollHeight - el.clientHeight - el.scrollTop),
+      derniereRangee: derniere === undefined ? null : Math.round(derniere.bottom),
+      bande: bande === undefined ? null : Math.round(bande.top),
+    };
+  });
+};
+
 const close = async (page) => {
   await page.close();
   await page.__context.close();
@@ -214,19 +246,42 @@ const texteSousLaBande = (page) =>
     }).length;
   });
 
+/**
+ * LE GESTE S'ARRÊTE SUR DU TEXTE, PAS SUR UNE DISTANCE (#7993). Six pas de
+ * 90 px depuis le bas peuvent poser sous la bande une rangée MÉDIA (la
+ * maquette de `c-rattrapage`), et le virtualiseur re-mesure les rangées qu'il
+ * vient de monter après le `touchend` : la prise remontée ne contiendrait
+ * alors aucun texte et le gate ne mesurerait rien. On remonte de six pas, on
+ * laisse le chrome se poser, et l'on reprend d'un pas tant qu'aucun paragraphe
+ * ne croise la bande AU REPOS — la seule position que la capture lit.
+ */
+const remonterJusquAuTexte = async (page) => {
+  for (let essai = 0; essai < 6; essai += 1) {
+    await touch(page, 'start');
+    for (let i = 0; i < (essai === 0 ? 6 : 1); i += 1) await touch(page, 'move', 90);
+    await touch(page, 'end');
+    await page.waitForTimeout(2500);
+    if ((await texteSousLaBande(page)) > 0) return;
+  }
+};
+
 for (const scheme of ['light', 'dark']) {
   /* ---------------------------------------------- 1. le GESTE remonte le fil */
   const page = await openThread(scheme);
+
+  const bas = await poserAuBas(page);
+  expect(bas.reste <= 1, `${scheme} · le fil est posé au BAS avant la prise de repos (reste ${bas.reste} px)`);
+  expect(
+    bas.derniereRangee !== null && bas.bande !== null && bas.derniereRangee <= bas.bande,
+    `${scheme} · au bas, la dernière rangée s'arrête AU-DESSUS de la bande (rangée ↓${bas.derniereRangee}, bande ↑${bas.bande})`,
+  );
 
   const auRepos = await bande(page, `composeur-repos-${scheme}`);
   expect(auRepos !== null, `${scheme} · la bande du composeur est mesurable au repos`);
   expect((await texteSousLaBande(page)) === 0, `${scheme} · au repos, la réserve basse laisse la bande vide (contre-épreuve)`);
 
-  await touch(page, 'start');
-  for (let i = 0; i < 6; i += 1) await touch(page, 'move', 90);
-  await touch(page, 'end');
   /* LE REPOS, pas l'escamotage : on lit la bande telle qu'elle se pose. */
-  await page.waitForTimeout(2500);
+  await remonterJusquAuTexte(page);
 
   const sousLaBande = await texteSousLaBande(page);
   expect(sousLaBande > 0, `${scheme} · fil remonté : ${sousLaBande} rangée(s) de texte passent sous la bande — sans quoi ce gate ne mesure RIEN`);
