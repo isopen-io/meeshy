@@ -75,7 +75,7 @@ final class CallLiveFrameRuleTests: XCTestCase {
     }
 
     func test_isEligible_groupFrame_isNotOffered() {
-        XCTAssertFalse(CallLiveFrameRule.isEligible(makeDesign(bucket: .trio)))
+        XCTAssertFalse(CallLiveFrameRule.isEligible(makeDesign(bucket: .comite)))
     }
 
     func test_frames_catalogue_offersAtLeastOneDuoFrame() {
