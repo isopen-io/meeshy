@@ -62,27 +62,23 @@ extension MessageListViewController {
     /// document y offre téléchargement/partage).
     func openQuotedMedia(_ reference: ReplyReference) {
         let localId = resolveLocalId(reference.messageId)
-        if reference.quotedMediaKind == .audio {
+        let quoted = store.domainMessage(for: localId, currentUserId: currentUserId)
+        // Le geste, l'élection et le verrou vivent dans `QuotedMediaOpening`,
+        // partagé avec la Rivière (#8283). Miroir de `BubbleGridCell.handleTap`,
+        // qui refuse d'ouvrir un attachement protégé tant qu'il n'a pas été
+        // révélé : élargir une porte sans son verrou serait une régression
+        // d'exposition. Le repli est le saut à l'original, où le média garde son
+        // propre geste de révélation et où la carte document offre
+        // téléchargement/partage.
+        switch QuotedMediaOpening.gesture(for: reference, quoted: quoted) {
+        case .playInPlace:
             if conversationViewModel?.toggleQuotedAudio(reference) != true {
                 scrollToMessage(localId: localId)
             }
-            return
-        }
-        let quoted = store.domainMessage(for: localId, currentUserId: currentUserId)
-        // L'élection et le verrou vivent dans `QuotedMediaOpening`, partagé avec
-        // la Rivière (#8283). Miroir de `BubbleGridCell.handleTap`, qui refuse
-        // d'ouvrir un attachement protégé tant qu'il n'a pas été révélé :
-        // élargir une porte sans son verrou serait une régression d'exposition.
-        // Le repli est le saut à l'original, où le média garde son propre geste
-        // de révélation et où la carte document offre téléchargement/partage.
-        guard let attachment = QuotedMediaOpening.attachment(for: reference, quoted: quoted) else {
+        case .open(let attachment):
+            onMediaTap?(attachment)
+        case .followQuote:
             scrollToMessage(localId: localId)
-            return
         }
-        guard attachment.type != .audio else {
-            scrollToMessage(localId: localId)
-            return
-        }
-        onMediaTap?(attachment)
     }
 }

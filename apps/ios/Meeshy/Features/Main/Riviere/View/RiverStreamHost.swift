@@ -96,8 +96,9 @@ struct RiverStreamHost: View {
     var onReply: ((String) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, reçue de `ConversationView`.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
-    /// #8283 — ouvre en plein écran le média d'une citation ; rend `false`
-    /// quand il n'y a rien d'honnête à ouvrir (média protégé, document, pièce
+    /// #8283 — la zone média d'une citation : joue un vocal sur place (#8320)
+    /// ou ouvre une image ou une vidéo en plein écran ; rend `false` quand il
+    /// n'y a rien d'honnête à jouer ni à ouvrir (média protégé, document, pièce
     /// introuvable), et la citation retombe alors sur son saut (`openReply`).
     var onOpenQuotedMedia: ((ReplyReference) -> Bool)? = nil
     /// #8310 — le plein écran d'un média flouté, ouvert par `ConversationView`.

@@ -1718,9 +1718,8 @@ struct ConversationView: View {
                         overlayState.storyViewerStartAtFirstUnviewed = true
                         overlayState.showStoryViewer = true
                     },
-                    // Lot 3 : mêmes retours au Fil que le Résumé — Script,
-                    // puis atterrissage sur le message (et le composeur en
-                    // mode réponse pour « Répondre »).
+                    // Lot 3 : mêmes retours au Fil que le Résumé — Script, puis atterrissage
+                    // sur le message (et le composeur en mode réponse pour « Répondre »).
                     onOpenInThread: { messageId in
                         readingModeController.select(.script)
                         scrollState.scrollToMessageId = messageId
@@ -1739,6 +1738,7 @@ struct ConversationView: View {
                         completion(openViewOnce(messageId: messageId))
                     },
                     onMediaTap: openMediaFullscreen,
+                    onPlayQuotedAudio: { viewModel.toggleQuotedAudio($0) },
                     // #3901 — la Rivière ne rend jamais bulle par bulle
                     // (`MessageListViewController.rendersThread`), donc ne
                     // peut jamais faire avancer le curseur de lecture par le
