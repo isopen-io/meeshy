@@ -10,6 +10,7 @@ import { usePublicationParticipation } from '@/lib/view/publication-participatio
 
 import { VIEWER_GLASS, ViewerActionRail, ViewerBottomBar, ViewerIdentity, type ViewerAction } from './viewer-chrome';
 import { carrierMediaIdentity } from '@/lib/canvas/carrier';
+import { sceneWaitingImage } from '@/lib/canvas/scene-placeholder';
 import { sceneHasAudibleBackgroundVideo, sceneHasControllableSound } from '@/lib/canvas/background-sound';
 import type { ProtectedMediaDeps, ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import type { FeedCardMedia, FeedCardModel, FeedCardScene } from '@/lib/feed/card-model';
@@ -177,7 +178,8 @@ function scenePosterOf(scene: FeedCardScene): string | undefined {
   const first = scene.document.scenes[0];
   if (first === undefined) return undefined;
   const identity = carrierMediaIdentity(first);
-  return identity === null ? undefined : scene.carrier.media.find((m) => m.id === identity)?.poster;
+  const poster = identity === null ? undefined : scene.carrier.media.find((m) => m.id === identity)?.poster;
+  return poster ?? sceneWaitingImage(first);
 }
 
 function ReelStage({

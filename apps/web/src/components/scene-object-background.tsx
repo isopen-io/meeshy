@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { effectiveMediaRatio, mediaCropStyle, readMediaCrop, type MediaCropRect } from '@meeshy/shared/utils/media-crop';
 
@@ -7,6 +7,8 @@ import { mediaFilterCss } from '@/lib/canvas/media-filter';
 import { backgroundMediaTimeline } from '@/lib/canvas/media-seek';
 import { objectMediaIdentity, objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import type { CanvasObject } from '@/lib/canvas/document';
+import { mediaHasArrived, noteMediaArrived } from '@/lib/canvas/scene-placeholder';
+import { thumbHashImage } from '@/lib/media/thumbhash-image';
 import { LETTERBOX_FILL_OPACITY, type LetterboxFill } from '@/lib/stories/letterbox';
 
 import type { SceneClockHandle } from './scene-clock';
@@ -31,6 +33,8 @@ function posterSrcOf(object: CanvasObject, carrier: SceneCarrier): string | unde
   return carrierEntryOf(object, carrier)?.poster;
 }
 
+const ARRIVAL_FADE_MS = 180;
+
 /** `NotAllowedError` — le seul refus de `play()` qui dise « la politique de
  * lecture automatique refuse le SON » ; un `AbortError` (une source remplacée
  * pendant le chargement) n'est pas un refus. */
@@ -45,6 +49,7 @@ export function BackgroundLayer({
   muted,
   framing,
   letterbox,
+  placeholderHash,
   callbacks,
   seekClock,
 }: {
@@ -60,6 +65,9 @@ export function BackgroundLayer({
    * `object-contain` y laisserait ses propres bandes (un letterbox dans un
    * letterbox — miroir `StoryBackgroundLayer+LetterboxFill.swift:54-56`). */
   readonly letterbox: LetterboxFill | undefined;
+  /** L'empreinte peinte SOUS le média tant que ses pixels n'ont pas paru
+   * (#5047, `backgroundPlaceholderHash`). */
+  readonly placeholderHash: string | undefined;
   readonly callbacks: { readonly current: SceneCallbacks };
   /** L'horloge du parcours au doigt (#7879) — la vidéo de fond (qui boucle)
    * s'y recale à chaque `seek`. */
@@ -107,6 +115,39 @@ export function BackgroundLayer({
 
   const ready = () => callbacks.current.onContentReady?.();
 
+  const placeholderSrc = useMemo(() => thumbHashImage(placeholderHash), [placeholderHash]);
+  const [arrivedAtMount] = useState(() => src !== undefined && mediaHasArrived(src));
+  const [arrivedSrc, setArrivedSrc] = useState<string | undefined>(arrivedAtMount ? src : undefined);
+  const arrived = src !== undefined && arrivedSrc === src;
+  const waits = placeholderSrc !== undefined && !arrivedAtMount;
+  const arrive = () => {
+    if (src !== undefined) {
+      noteMediaArrived(src);
+      setArrivedSrc(src);
+    }
+    ready();
+  };
+  // Un média déjà décodé (cache HTTP) se constate AVANT la première peinture :
+  // ni voile ni fondu ne s'y voient.
+  useLayoutEffect(() => {
+    const image = imageRef.current;
+    if (src === undefined || image === null || !image.complete || image.naturalWidth === 0) return;
+    noteMediaArrived(src);
+    setArrivedSrc(src);
+  }, [src]);
+  const fadeIn = waits ? { opacity: arrived ? 1 : 0, transition: `opacity ${ARRIVAL_FADE_MS}ms ease` } : undefined;
+  const placeholder = waits ? (
+    // eslint-disable-next-line jsx-a11y/alt-text
+    <img
+      data-scene-placeholder
+      src={placeholderSrc}
+      alt=""
+      aria-hidden="true"
+      className={`absolute inset-0 size-full ${fit}`}
+      style={{ opacity: arrived ? 0 : 1, transition: `opacity ${ARRIVAL_FADE_MS}ms ease ${ARRIVAL_FADE_MS}ms` }}
+    />
+  ) : null;
+
   // Un média déjà décodé AVANT que l'écouteur n'existe (cache, réhydratation)
   // n'émettrait plus son événement : on le constate au montage. Un fond de
   // couleur n'a rien à attendre.
@@ -118,11 +159,11 @@ export function BackgroundLayer({
     const video = videoRef.current;
     if (video !== null) {
       if (video.readyState >= 1 && Number.isFinite(video.duration)) callbacks.current.onDurationKnown?.(video.duration * 1000);
-      if (video.readyState >= 2) ready();
+      if (video.readyState >= 2) arrive();
       return;
     }
     const image = imageRef.current;
-    if (image !== null && image.complete && image.naturalWidth > 0) ready();
+    if (image !== null && image.complete && image.naturalWidth > 0) arrive();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src]);
 
@@ -177,6 +218,7 @@ export function BackgroundLayer({
     return (
       <>
         {letterboxFill}
+        {placeholder}
         {cropped((cropStyle, className) => (
           <video
             ref={videoRef}
@@ -188,7 +230,7 @@ export function BackgroundLayer({
             preload={awaitsContent ? 'auto' : 'none'}
             {...(poster !== undefined ? { poster } : {})}
             onLoadedMetadata={(event) => callbacks.current.onDurationKnown?.(event.currentTarget.duration * 1000)}
-            onLoadedData={ready}
+            onLoadedData={arrive}
             onError={ready}
             className={className}
             style={{ ...mediaStyle, ...cropStyle }}
@@ -201,6 +243,7 @@ export function BackgroundLayer({
     return (
       <>
         {letterboxFill}
+        {placeholder}
         {cropped((cropStyle, className) => (
           // eslint-disable-next-line jsx-a11y/alt-text
           <img
@@ -209,10 +252,10 @@ export function BackgroundLayer({
             alt=""
             aria-hidden="true"
             loading={awaitsContent ? 'eager' : 'lazy'}
-            onLoad={ready}
+            onLoad={arrive}
             onError={ready}
             className={className}
-            style={{ ...mediaStyle, ...cropStyle }}
+            style={{ ...mediaStyle, ...cropStyle, ...fadeIn }}
           />
         ))}
       </>

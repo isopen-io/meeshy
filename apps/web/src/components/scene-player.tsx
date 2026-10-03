@@ -5,6 +5,7 @@ import type { CanvasDocument, CanvasScene } from '@/lib/canvas/document';
 import { objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import { backgroundBackdrop, backgroundFraming } from '@/lib/canvas/background';
 import { sceneRatio } from '@/lib/canvas/fit';
+import { backgroundPlaceholderHash } from '@/lib/canvas/scene-placeholder';
 import { hasTimedObjects, sceneDurationSeconds } from '@/lib/canvas/timeline';
 import { backgroundMedia } from '@/lib/feed/scene-framing';
 import { isDocumentAudible } from '@/lib/feed/scene-motion';
@@ -178,6 +179,7 @@ function SceneCanvas({
           muted={muted}
           framing={framing}
           letterbox={letterbox}
+          placeholderHash={backgroundPlaceholderHash(background, scene)}
           callbacks={callbacks}
           seekClock={seekClock}
         />

@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { CanvasObject, CanvasScene } from './document';
-import { backgroundPlaceholderHash, mediaHasArrived, noteMediaArrived, scenePlaceholderHash } from './scene-placeholder';
+import { backgroundPlaceholderHash, mediaHasArrived, noteMediaArrived, scenePlaceholderHash, sceneWaitingImage } from './scene-placeholder';
 
 const fond = (payload: Record<string, unknown>): CanvasObject => ({
   id: 'bg',
@@ -52,6 +52,17 @@ describe('scenePlaceholderHash — la scène ENTIÈRE avant que le moteur ne soi
 
   test('ni l’un ni l’autre ⇒ `undefined`', () => {
     expect(scenePlaceholderHash(sceneOf([fond({ background: '4338CA' })]))).toBeUndefined();
+  });
+});
+
+describe('sceneWaitingImage — l’image de l’attente, prête pour un `src`', () => {
+  test('une empreinte lisible ⇒ son image COMPLÈTE, jamais un aplat', () => {
+    expect(sceneWaitingImage(sceneOf([], '3nQFFAT4WIiod4WYZ6joeo+u9w=='))).toMatch(/^data:image\/bmp;base64,/);
+  });
+
+  test('aucune empreinte, ou une empreinte illisible ⇒ `undefined`', () => {
+    expect(sceneWaitingImage(sceneOf([]))).toBeUndefined();
+    expect(sceneWaitingImage(sceneOf([], 'AA'))).toBeUndefined();
   });
 });
 
