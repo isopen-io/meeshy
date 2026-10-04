@@ -255,7 +255,10 @@ export function ReportGestures({
             body={t('admin.moderation.confirm.reopen.body')}
             confirmLabel={t('admin.moderation.gesture.reopen')}
             tone="primary"
-            onConfirm={() => void decide({ kind: 'reopen' }, 'admin.moderation.done.reopened', { status: 'pending' })}
+            onConfirm={() =>
+              /* La passerelle efface la résolution, l'action et le modérateur (07847730d6) : la fiche le montre aussitôt, puis se relit. */
+              void decide({ kind: 'reopen' }, 'admin.moderation.done.reopened', { status: 'pending', resolvedAt: null, actionTaken: null, moderatorId: null, moderator: null })
+            }
           />
         );
       case 'delete':

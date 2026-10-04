@@ -130,7 +130,7 @@ const f = {
   'admin.moderation.confirm.dismiss.title': 'Classer ce signalement sans suite',
   'admin.moderation.confirm.dismiss.body': 'Le signalement sera clôturé sans action. Il n’entrera pas dans le délai moyen de résolution.',
   'admin.moderation.confirm.reopen.title': 'Rouvrir ce signalement',
-  'admin.moderation.confirm.reopen.body': 'Le signalement repasse « En attente » et vous en devenez le modérateur.',
+  'admin.moderation.confirm.reopen.body': 'Le signalement repasse « En attente » : sa résolution, l’action consignée et son modérateur sont effacés, et il retourne dans la file.',
   'admin.moderation.confirm.delete.title': 'Supprimer ce signalement',
   'admin.moderation.confirm.delete.body':
     'Le signalement est supprimé définitivement : seule la trace de sa suppression reste dans le journal d’audit. Cette action est irréversible.',
@@ -151,6 +151,10 @@ const f = {
   'admin.moderation.meta.resolved': 'Résolu le',
   'admin.moderation.meta.resolvedDismissed': 'Les dossiers classés sans suite n’ont pas de date de résolution.',
   'admin.moderation.meta.resolvedOpen': 'Le dossier est ouvert : il n’a pas encore de date de résolution.',
+  /* ─── Signalement : fiche en cartes (lot Modération, croissance, plateforme, 2026-10-05) ─── */
+  'admin.moderation.cards.title': 'Le dossier, par section',
+  'admin.moderation.card.steps': 'Étapes',
+  'admin.moderation.card.links': 'Fiches où agir',
 } as const;
 
 export default f;

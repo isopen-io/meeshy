@@ -52,12 +52,13 @@ function Screen({ deps }: { readonly deps: AdminDeps }) {
   );
 }
 
-async function open(deps: AdminDeps, identity = BIGBOSS) {
+/** `section` : la fiche s'ouvre par un lien `?open=<section>` — le bloc monte dans sa modale (spec 2026-10-04 § 3). */
+async function open(deps: AdminDeps, identity = BIGBOSS, section?: string) {
   const { Router } = createRouter(
     { adminReport: { pattern: '/admin/reports/$report', screen: async () => ({ default: () => <Screen deps={deps} /> }) } },
     () => <p>absent</p>,
   );
-  navigate(`/admin/reports/${REPORT_ID}`, true);
+  navigate(`/admin/reports/${REPORT_ID}${section === undefined ? '' : `?open=${section}`}`, true);
   const host = await mount(<Router wrap={(children) => children} skeleton={null} />, identity);
   for (let attempt = 0; attempt < 30 && host.querySelector('[data-admin-report-fiche], [data-admin-report-loading], [data-admin-error], [data-admin-empty]') === null; attempt += 1) {
     await mounter.settle();
@@ -66,7 +67,12 @@ async function open(deps: AdminDeps, identity = BIGBOSS) {
   return host;
 }
 
-const meta = (host: ParentNode, anchor: string) => host.querySelector(`[data-admin-meta="${anchor}"]`)?.textContent ?? '';
+const meta = (scope: ParentNode, anchor: string) => scope.querySelector(`[data-admin-meta="${anchor}"]`)?.textContent ?? '';
+const block = (id: string) => document.querySelector(`[data-admin-fiche-section="${id}"]`);
+const card = (host: ParentNode, id: string) => host.querySelector(`[data-admin-summary="${id}"]`)?.textContent ?? '';
+const openCard = async (host: ParentNode, id: string) => {
+  await mounter.click(host.querySelector<HTMLElement>(`[data-admin-summary="${id}"] [data-admin-summary-open]`));
+};
 
 describe('la fiche — qui, quoi, pourquoi, où en est le dossier', () => {
   test('le titre dit le motif ; l’identité nomme l’élément signalé et le signalant', async () => {
@@ -93,9 +99,9 @@ describe('la fiche — qui, quoi, pourquoi, où en est le dossier', () => {
 
   test('le contenu signalé : l’extrait, l’auteur, la conversation — nommés', async () => {
     const { deps } = scripted(served());
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'reported');
 
-    const reported = host.querySelector('[data-admin-fiche-section="reported"]');
+    const reported = document.querySelector('[data-admin-fiche-section="reported"]');
     expect(reported?.querySelector('[data-admin-excerpt]')?.textContent).toBe('Tu vas voir');
     expect(reported?.textContent).toContain('Message');
     expect(meta(reported ?? host, 'reportedOwner')).toContain('Membre 4');
@@ -106,9 +112,9 @@ describe('la fiche — qui, quoi, pourquoi, où en est le dossier', () => {
 
   test('un contenu PROTÉGÉ se dit protégé — jamais un vide, jamais un extrait', async () => {
     const { deps } = scripted(served({ reportedEntity: servedMessageEntity({ excerpt: null, isProtected: true }) }));
-    const host = await open(deps);
+    await open(deps, BIGBOSS, 'reported');
 
-    const reported = host.querySelector('[data-admin-fiche-section="reported"]');
+    const reported = document.querySelector('[data-admin-fiche-section="reported"]');
     expect(reported?.querySelector('[data-admin-protected]')?.textContent).toContain('Contenu protégé');
     expect(reported?.textContent).toContain('L’auteur l’a rendu privé ou éphémère');
     expect(reported?.querySelector('[data-admin-excerpt]')).toBeNull();
@@ -117,18 +123,18 @@ describe('la fiche — qui, quoi, pourquoi, où en est le dossier', () => {
 
   test('un contenu supprimé dit qu’il n’y a plus rien à lire, et sa puce est barrée', async () => {
     const { deps } = scripted(served({ reportedEntity: servedMessageEntity({ excerpt: null, deleted: true }) }));
-    const host = await open(deps);
+    await open(deps, BIGBOSS, 'reported');
 
-    const reported = host.querySelector('[data-admin-fiche-section="reported"]');
+    const reported = document.querySelector('[data-admin-fiche-section="reported"]');
     expect(reported?.textContent).toContain('Ce contenu a été supprimé');
     expect(reported?.textContent).toContain('supprimé');
   });
 
   test('un message sans texte (un média) le dit, sans prétendre qu’il est protégé', async () => {
     const { deps } = scripted(served({ reportedEntity: servedMessageEntity({ excerpt: null }) }));
-    const host = await open(deps);
+    await open(deps, BIGBOSS, 'reported');
 
-    expect(host.querySelector('[data-admin-fiche-section="reported"]')?.textContent).toContain('Ce contenu ne porte pas de texte');
+    expect(document.querySelector('[data-admin-fiche-section="reported"]')?.textContent).toContain('Ce contenu ne porte pas de texte');
   });
 
   test('un membre signalé : son nom, pas de bloc d’extrait', async () => {
@@ -139,36 +145,36 @@ describe('la fiche — qui, quoi, pourquoi, où en est le dossier', () => {
         reportedEntity: { type: 'user', id: OBJECT_ID(20), label: 'Awa Diop', owner: null, excerpt: null, isProtected: false, deleted: false, conversation: null },
       }),
     );
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'reported');
 
     expect(host.querySelector('[data-admin-identity]')?.textContent).toContain('Awa Diop');
-    expect(host.querySelector('[data-admin-fiche-section="reported"] a')?.getAttribute('href')).toBe(`/admin/users/${OBJECT_ID(20)}`);
+    expect(document.querySelector('[data-admin-fiche-section="reported"] a')?.getAttribute('href')).toBe(`/admin/users/${OBJECT_ID(20)}`);
     expect(host.querySelector('[data-admin-excerpt]')).toBeNull();
   });
 
   test('le motif : le mot, le signalant, la raison libre', async () => {
-    const host = await open(scripted(served()).deps);
+    const host = await open(scripted(served()).deps, BIGBOSS, 'reason');
 
-    const reason = host.querySelector('[data-admin-fiche-section="reason"]') ?? host;
+    const reason = document.querySelector('[data-admin-fiche-section="reason"]') ?? host;
     expect(meta(reason, 'reason')).toContain('Harcèlement');
     expect(meta(reason, 'reporter')).toContain('Membre 3');
     expect(meta(reason, 'freeReason')).toContain('Il me menace depuis hier');
   });
 
   test('sans raison libre : « Aucune précision »', async () => {
-    const host = await open(scripted(served({ reason: null })).deps);
+    const host = await open(scripted(served({ reason: null })).deps, BIGBOSS, 'reason');
 
     expect(meta(host, 'freeReason')).toContain('Aucune précision');
   });
 
   test('un signalant anonyme est désigné par le nom qu’il a donné', async () => {
-    const host = await open(scripted(served({ reporterId: null, reporter: null, reporterName: 'Visiteur' })).deps);
+    const host = await open(scripted(served({ reporterId: null, reporter: null, reporterName: 'Visiteur' })).deps, BIGBOSS, 'reason');
 
     expect(meta(host, 'reporter')).toContain('Visiteur');
   });
 
   test('un signalant dont le compte a disparu se dit « Compte supprimé », pas « Anonyme »', async () => {
-    const host = await open(scripted(served({ reporter: null })).deps);
+    const host = await open(scripted(served({ reporter: null })).deps, BIGBOSS, 'reason');
 
     expect(meta(host, 'reporter')).toContain('Compte supprimé');
     expect(meta(host, 'reporter')).not.toContain('Anonyme');
@@ -186,9 +192,9 @@ describe('la fiche — qui, quoi, pourquoi, où en est le dossier', () => {
         updatedAt: '2026-09-30T08:00:00.000Z',
       }),
     );
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'handling');
 
-    const handling = host.querySelector('[data-admin-fiche-section="handling"]');
+    const handling = document.querySelector('[data-admin-fiche-section="handling"]');
     expect(meta(handling ?? host, 'status')).toContain('Résolu');
     expect(meta(handling ?? host, 'moderator')).toContain('Léa Moreau');
     expect(meta(handling ?? host, 'notes')).toContain('Message retiré, membre averti');
@@ -237,21 +243,78 @@ describe('la fiche — qui, quoi, pourquoi, où en est le dossier', () => {
   });
 });
 
+describe('la fiche en cartes — chaque bloc se résume, et s’ouvre en modale', () => {
+  test('six cartes déjà chiffrées ; aucune modale au repos ; « Ouvrir » écrit ?open= et monte le bloc', async () => {
+    const { deps } = scripted(served(), () => siblingPage([servedReport(), servedReport({ id: OBJECT_ID(8) })], 2));
+    const host = await open(deps);
+
+    const cards = [...host.querySelectorAll('[data-admin-report-cards] [data-admin-summary]')].map((item) => item.getAttribute('data-admin-summary'));
+    expect(cards).toEqual(['reported', 'reason', 'handling', 'timeline', 'siblings', 'actions']);
+    expect(document.querySelector('[data-admin-report-panel]')).toBeNull();
+    expect(card(host, 'reported')).toContain('Tu vas voir');
+    expect(card(host, 'reported')).toContain('Membre 4');
+    expect(card(host, 'reason')).toContain('Harcèlement');
+    expect(card(host, 'reason')).toContain('Il me menace depuis hier');
+    expect(card(host, 'handling')).toContain('En attente');
+    expect(card(host, 'timeline')).toContain('Reçu');
+    expect(card(host, 'siblings')).toContain('2');
+
+    await openCard(host, 'reason');
+    expect(window.location.search).toBe('?open=reason');
+    expect(document.querySelector('[data-admin-report-panel="reason"] [data-admin-fiche-section="reason"]')).not.toBeNull();
+    expectNoRawIdentifiers(host);
+  });
+
+  test('l’action à consigner se choisit SUR la carte « Traitement » tant que le dossier est ouvert', async () => {
+    const host = await open(scripted(served()).deps);
+
+    expect(host.querySelector('[data-admin-summary="handling"] [data-admin-action-choice]')).not.toBeNull();
+  });
+
+  test('un dossier résolu : la carte dit le modérateur, l’action et l’étape de clôture', async () => {
+    const { deps } = scripted(
+      served({
+        status: 'resolved',
+        moderatorId: OBJECT_ID(9),
+        moderator: servedPerson(9, { displayName: 'Léa Moreau' }),
+        actionTaken: 'content_removed',
+        resolvedAt: '2026-09-30T08:00:00.000Z',
+      }),
+    );
+    const host = await open(deps);
+
+    expect(card(host, 'handling')).toContain('Léa Moreau');
+    expect(card(host, 'handling')).toContain('Contenu retiré');
+    expect(card(host, 'timeline')).toContain('Clôturé : Résolu');
+  });
+
+  test('les voisins en échec : la carte le dit et « Réessayer » relit, la fiche reste', async () => {
+    const answers: readonly ApiResult<unknown>[] = [{ ok: false, status: 500, error: 'boom' }, siblingPage([servedReport()])];
+    const counter = { calls: 0 };
+    const { deps } = scripted(served(), () => answers[Math.min(counter.calls++, answers.length - 1)] ?? siblingPage([]));
+    const host = await open(deps);
+
+    expect(host.querySelector('[data-admin-summary="siblings"]')?.getAttribute('data-admin-summary-state')).toBe('error');
+    await mounter.click(host.querySelector<HTMLElement>('[data-admin-summary="siblings"] [data-admin-retry]'));
+    expect(card(host, 'siblings')).toContain('Aucun autre signalement');
+  });
+});
+
 describe('la chronologie n’invente aucune date', () => {
   test('en attente : seulement « Reçu »', async () => {
     const { deps } = scripted(served());
-    const host = await open(deps);
+    await open(deps, BIGBOSS, 'timeline');
 
-    expect([...host.querySelectorAll('[data-admin-timeline-step]')].map((step) => step.getAttribute('data-admin-timeline-step'))).toEqual(['received']);
+    expect([...document.querySelectorAll('[data-admin-timeline-step]')].map((step) => step.getAttribute('data-admin-timeline-step'))).toEqual(['received']);
   });
 
   test('en cours d’examen : la prise en charge porte le nom du modérateur et sa date', async () => {
     const { deps } = scripted(
       served({ status: 'under_review', moderatorId: OBJECT_ID(9), moderator: servedPerson(9, { displayName: 'Léa Moreau' }), updatedAt: '2026-09-29T15:00:00.000Z' }),
     );
-    const host = await open(deps);
+    await open(deps, BIGBOSS, 'timeline');
 
-    const taken = host.querySelector('[data-admin-timeline-step="taken"]')?.textContent ?? '';
+    const taken = document.querySelector('[data-admin-timeline-step="taken"]')?.textContent ?? '';
     expect(taken).toContain('Pris en charge par Léa Moreau');
     expect(taken).not.toContain('Date non conservée');
   });
@@ -260,10 +323,10 @@ describe('la chronologie n’invente aucune date', () => {
     const { deps } = scripted(
       served({ status: 'resolved', moderatorId: OBJECT_ID(9), moderator: servedPerson(9, { displayName: 'Léa Moreau' }), resolvedAt: '2026-09-30T08:00:00.000Z', updatedAt: '2026-09-30T08:00:00.000Z' }),
     );
-    const host = await open(deps);
+    await open(deps, BIGBOSS, 'timeline');
 
-    expect(host.querySelector('[data-admin-timeline-step="taken"]')?.textContent).toContain('Date non conservée');
-    const closed = host.querySelector('[data-admin-timeline-step="closed"]')?.textContent ?? '';
+    expect(document.querySelector('[data-admin-timeline-step="taken"]')?.textContent).toContain('Date non conservée');
+    const closed = document.querySelector('[data-admin-timeline-step="closed"]')?.textContent ?? '';
     expect(closed).toContain('Clôturé : Résolu');
     expect(closed).toMatch(/30 sept\.? 2026/);
   });
@@ -273,9 +336,9 @@ describe('les autres signalements de l’élément', () => {
   test('nommés, sans le signalement ouvert, chacun ouvre sa fiche ; « voir tous » ouvre la liste filtrée', async () => {
     const other = servedReport({ id: OBJECT_ID(8), reportType: 'spam', status: 'resolved', reporter: servedPerson(6), createdAt: '2026-09-20T10:00:00.000Z' });
     const { deps } = scripted(served(), () => siblingPage([servedReport(), other], 3));
-    const host = await open(deps);
+    await open(deps, BIGBOSS, 'siblings');
 
-    const section = host.querySelector('[data-admin-fiche-section="siblings"]');
+    const section = document.querySelector('[data-admin-fiche-section="siblings"]');
     expect(section?.querySelectorAll('[data-admin-sibling]')).toHaveLength(1);
     const row = section?.querySelector(`[data-admin-sibling="${OBJECT_ID(8)}"]`);
     expect(row?.textContent).toContain('Indésirable');
@@ -288,9 +351,9 @@ describe('les autres signalements de l’élément', () => {
 
   test('le signalement ouvert est le seul : « Aucun autre signalement »', async () => {
     const { deps } = scripted(served(), () => siblingPage([servedReport()]));
-    const host = await open(deps);
+    await open(deps, BIGBOSS, 'siblings');
 
-    const section = host.querySelector('[data-admin-fiche-section="siblings"]');
+    const section = document.querySelector('[data-admin-fiche-section="siblings"]');
     expect(section?.textContent).toContain('Aucun autre signalement ne vise cet élément.');
     expect(section?.querySelector('[data-admin-link="see-all"]')).toBeNull();
   });
@@ -299,9 +362,9 @@ describe('les autres signalements de l’élément', () => {
     const answers: readonly ApiResult<unknown>[] = [{ ok: false, status: 500, error: 'boom' }, siblingPage([servedReport()])];
     const counter = { calls: 0 };
     const { deps } = scripted(served(), () => answers[Math.min(counter.calls++, answers.length - 1)] ?? siblingPage([]));
-    const host = await open(deps);
+    const host = await open(deps, BIGBOSS, 'siblings');
 
-    const section = host.querySelector('[data-admin-fiche-section="siblings"]');
+    const section = document.querySelector('[data-admin-fiche-section="siblings"]');
     expect(host.querySelector('[data-admin-report-fiche]')).not.toBeNull();
     expect(section?.querySelector('[data-admin-notice="warning"]')?.textContent).toContain('n’ont pas pu être chargés');
 
@@ -314,9 +377,9 @@ describe('les autres signalements de l’élément', () => {
 describe('agir : des liens vers la bonne fiche, jamais un geste dupliqué', () => {
   test('un message : l’auteur (onglet Sécurité) et la conversation (lecture souveraine)', async () => {
     const { deps } = scripted(served());
-    const host = await open(deps);
+    await open(deps, BIGBOSS, 'actions');
 
-    const actions = host.querySelector('[data-admin-fiche-section="actions"]');
+    const actions = document.querySelector('[data-admin-fiche-section="actions"]');
     expect(actions?.querySelector('[data-admin-link="authorSecurity"]')?.getAttribute('href')).toBe(`/admin/users/${OBJECT_ID(4)}?tab=security`);
     expect(actions?.querySelector('[data-admin-link="authorSecurity"]')?.textContent).toContain('Examiner l’auteur : Membre 4');
     expect(actions?.querySelector('[data-admin-link="conversationReading"]')?.getAttribute('href')).toBe(`/admin/conversations/${OBJECT_ID(5)}`);
@@ -331,20 +394,24 @@ describe('agir : des liens vers la bonne fiche, jamais un geste dupliqué', () =
         reportedEntity: { type: 'user', id: OBJECT_ID(20), label: 'Awa Diop', owner: null, excerpt: null, isProtected: false, deleted: false, conversation: null },
       }),
     );
-    const host = await open(deps);
+    await open(deps, BIGBOSS, 'actions');
 
-    expect(host.querySelector('[data-admin-link="memberSecurity"]')?.getAttribute('href')).toBe(`/admin/users/${OBJECT_ID(20)}?tab=security`);
+    expect(document.querySelector('[data-admin-link="memberSecurity"]')?.getAttribute('href')).toBe(`/admin/users/${OBJECT_ID(20)}?tab=security`);
   });
 
   test('un lecteur qui ne peut pas ouvrir la section visée n’a pas le lien : aucun lien mort', async () => {
     const moderator = adminIdentityFixture({ role: 'MODERATOR' });
     const { deps } = scripted(served());
-    const host = await open(deps, moderator);
+    const host = await open(deps, moderator, 'actions');
 
-    const actions = host.querySelector('[data-admin-fiche-section="actions"]');
+    const actions = document.querySelector('[data-admin-fiche-section="actions"]');
     expect(actions?.querySelector('a')).toBeNull();
     expect(actions?.textContent).toContain('Aucune fiche liée à ouvrir');
-    expect(host.querySelector('[data-admin-fiche-section="reported"] a')).toBeNull();
+    expect(card(host, 'actions')).toContain('Aucune fiche liée à ouvrir');
+
+    await openCard(host, 'reported');
+    expect(block('reported')).not.toBeNull();
+    expect(block('reported')?.querySelector('a')).toBeNull();
   });
 });
 
