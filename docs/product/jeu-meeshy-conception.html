@@ -1,0 +1,797 @@
+<title>Le Jeu Meeshy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout : document long en onze parties, sommaire collant à gauche ; chaque élément du jeu = sa règle, ses chiffres, son dessin, son animation. */
+:root{
+  --bg:#f6f6fb; --surface:#ffffff; --ink:#17152b; --muted:#5d5a78; --line:#e2e1ee;
+  --indigo:#4f46e5; --violet:#8b5cf6;
+  --gold:#e2a72e; --flame:#f97316; --ok:#10b981; --warn:#d97706; --bad:#ef4444; --mee:#0f9488;
+  --tint:#eef0ff;
+  --f-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body:"Instrument Sans", "Helvetica Neue", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#100f1c; --surface:#1a1930; --ink:#ecebf7; --muted:#a3a1bf; --line:#2c2a48;
+  --indigo:#818cf8; --violet:#a78bfa;
+  --gold:#f2bf55; --flame:#fb923c; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; --mee:#2dd4bf; --tint:#22204a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#100f1c; --surface:#1a1930; --ink:#ecebf7; --muted:#a3a1bf; --line:#2c2a48;
+  --indigo:#818cf8; --violet:#a78bfa;
+  --gold:#f2bf55; --flame:#fb923c; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; --mee:#2dd4bf; --tint:#22204a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 var(--f-body);padding-inline:16px}
+.wrap{max-width:1200px;margin:0 auto;display:grid;grid-template-columns:230px minmax(0,1fr);gap:48px;padding-block:40px 80px}
+nav.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 24px);align-self:start;font-size:13.5px;max-height:calc(100vh - 48px);overflow:auto}
+nav.toc a{display:block;color:var(--muted);text-decoration:none;padding:3px 0}
+nav.toc a.part{color:var(--ink);font-weight:600;margin-top:10px}
+nav.toc a.sub{padding-left:12px}
+nav.toc a:hover,nav.toc a:focus-visible{color:var(--indigo)}
+nav.toc b{display:block;font-family:var(--f-display);font-size:16px;color:var(--ink);margin-bottom:4px}
+main{min-width:0}
+h1,h2,h3{font-family:var(--f-display);text-wrap:balance;line-height:1.1;margin:0}
+h1{font-size:clamp(40px,6vw,68px);font-weight:800;letter-spacing:-.02em}
+h2{font-size:clamp(24px,3.2vw,32px);font-weight:700;margin-bottom:14px}
+h3{font-size:19px;font-weight:700;margin:24px 0 8px}
+p{max-width:68ch;margin:0 0 12px}
+.part-head{margin-top:72px;padding:22px 0 6px;border-top:3px solid var(--ink)}
+.part-head .n{font:500 12px var(--f-mono);letter-spacing:.14em;color:var(--indigo);text-transform:uppercase}
+.part-head h2{font-size:clamp(30px,4vw,42px);margin:4px 0 6px}
+section{padding-top:36px;border-top:1px solid var(--line);margin-top:36px}
+.part-head + section{border-top:0;margin-top:8px;padding-top:16px}
+.eyebrow{font:500 12px var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--indigo);margin-bottom:10px}
+.lede{font-size:19px;color:var(--muted);max-width:62ch;margin-top:16px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(270px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;min-width:0}
+.card h3{margin-top:4px}
+.card p,.card li{font-size:14.5px}
+.tag{display:inline-block;font:500 11px var(--f-mono);letter-spacing:.06em;padding:3px 8px;border-radius:99px;background:var(--tint);color:var(--indigo);margin-right:6px;white-space:nowrap}
+.tag.down{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.tag.up{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.tag.new{background:color-mix(in srgb,var(--violet) 16%,transparent);color:var(--violet)}
+.tag.mee{background:color-mix(in srgb,var(--mee) 16%,transparent);color:var(--mee)}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);margin:12px 0}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 11.5px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+tr:last-child td{border-bottom:0}
+td.r,th.r{text-align:right}
+code{font:13px var(--f-mono);background:var(--tint);padding:1px 5px;border-radius:5px}
+.formula{font:15px var(--f-mono);background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:12px 14px;margin:10px 0;overflow-x:auto}
+.icon-row{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end;margin:14px 0}
+.icon-cell{display:flex;flex-direction:column;align-items:center;gap:6px;width:104px;text-align:center;font-size:12.5px}
+.icon-cell.wide{width:170px}
+.icon-cell b{font-family:var(--f-display);font-size:14px}
+.icon-cell span{color:var(--muted);font-family:var(--f-mono);font-size:11px}
+svg{display:block;max-width:100%;height:auto}
+.callout{border-left:3px solid var(--violet);padding:10px 14px;background:var(--surface);border-radius:0 10px 10px 0;margin:14px 0;font-size:15px;max-width:74ch}
+.callout.warn{border-left-color:var(--warn)}
+ul.tight,ol.tight{margin:6px 0 12px;padding-left:20px;max-width:72ch}
+ul.tight li,ol.tight li{margin:3px 0}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.rule{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;grid-template-columns:34px 1fr;gap:12px;align-items:start}
+.rule .k{font:800 26px var(--f-display);color:var(--indigo);line-height:1}
+.rule b{display:block;font-family:var(--f-display);font-size:16px;margin-bottom:2px}
+.rule p{font-size:14px;margin:0;color:var(--muted)}
+.gauges{display:grid;gap:12px}
+.gauge{display:grid;grid-template-columns:64px 1fr auto;gap:14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 16px}
+.gauge strong{font-family:var(--f-display);font-size:17px;display:block}
+.gauge small{color:var(--muted);font-size:13px}
+.hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:32px;align-items:center}
+.coach{display:grid;grid-template-columns:76px minmax(0,1fr);gap:12px;align-items:end;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px}
+.coach .who{font:600 11px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mee)}
+.coach .say{font-family:var(--f-display);font-size:16px;font-weight:700;line-height:1.25;margin:2px 0 8px}
+.coach dl{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;font-size:13px;margin:0}
+.coach dt{color:var(--muted)}
+.coach dd{margin:0}
+.coach .cta{display:inline-block;margin-top:10px;font-weight:600;font-size:13px;padding:7px 12px;border-radius:10px;background:var(--indigo);color:#fff}
+.steps{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.stepn{font:500 11px var(--f-mono);color:var(--muted);margin-bottom:4px}
+.sim{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
+.sim label{display:block;font-size:13px;color:var(--muted);margin:10px 0 4px}
+.sim input[type=range]{width:100%;accent-color:var(--indigo)}
+.sim output{font:600 15px var(--f-mono)}
+.sim .res{display:grid;grid-template-columns:1fr auto;gap:6px 14px;font-size:14.5px}
+.sim .res .v{font-family:var(--f-mono);text-align:right}
+.bar{height:10px;background:var(--line);border-radius:99px;position:relative;margin:6px 0 2px}
+.bar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--indigo),var(--violet));border-radius:99px}
+.bar u{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink);opacity:.5}
+.phones{display:flex;flex-wrap:wrap;gap:24px}
+.phone{width:292px;max-width:100%;border-radius:36px;border:8px solid #1d1b30;background:var(--bg);padding:18px 14px;box-shadow:0 20px 40px -24px rgba(30,27,75,.5);overflow:hidden}
+.phone.cam{background:#2a2540;padding:0}
+.phone .ttl{font-family:var(--f-display);font-weight:700;font-size:20px;margin:6px 4px 12px}
+.pc{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:10px}
+.pc .row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:13px}
+.pc .k{font-family:var(--f-display);font-weight:700;font-size:15px}
+.chal{display:grid;grid-template-columns:38px 1fr auto;gap:10px;align-items:center;font-size:12.5px;padding:8px 0;border-top:1px solid var(--line)}
+.chal:first-of-type{border-top:0}
+.chal .mini{height:5px;background:var(--line);border-radius:9px;margin-top:4px;overflow:hidden}
+.chal .mini i{display:block;height:100%;background:var(--indigo)}
+.pill{font:600 11px var(--f-mono);padding:3px 7px;border-radius:99px;background:var(--tint);color:var(--indigo);white-space:nowrap;text-align:center}
+.btn{display:block;text-align:center;font-weight:600;font-size:14px;padding:11px;border-radius:12px;background:var(--indigo);color:#fff;margin-top:8px}
+.btn.ghost{background:transparent;color:var(--indigo);border:1px solid var(--indigo)}
+@media (max-width:900px){.wrap{grid-template-columns:minmax(0,1fr)}nav.toc{display:none}.hero,.sim{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:no-preference){
+  .flicker{animation:fl 1.6s ease-in-out infinite alternate;transform-origin:50% 90%}@keyframes fl{to{transform:scale(1.04,1.08)}}
+  .sheen{animation:sh 3.6s ease-in-out 3}@keyframes sh{0%,55%{transform:translateX(-90px)}100%{transform:translateX(130px)}}
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="gSilver" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3f5f9"/><stop offset=".45" stop-color="#a8b1bf"/><stop offset="1" stop-color="#5f6a7d"/></linearGradient>
+    <linearGradient id="gSilverIn" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e3e7ee"/><stop offset="1" stop-color="#8f99aa"/></linearGradient>
+    <linearGradient id="gGoldCoin" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff1b8"/><stop offset=".5" stop-color="#e2a72e"/><stop offset="1" stop-color="#8a5a10"/></linearGradient>
+    <linearGradient id="gPrism" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f87171"/><stop offset=".25" stop-color="#fbbf24"/><stop offset=".5" stop-color="#34d399"/><stop offset=".75" stop-color="#60a5fa"/><stop offset="1" stop-color="#a855f7"/></linearGradient>
+    <linearGradient id="gCopper" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3b48a"/><stop offset="1" stop-color="#a5552b"/></linearGradient>
+    <linearGradient id="gBronze" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e7c08d"/><stop offset="1" stop-color="#8a5a24"/></linearGradient>
+    <linearGradient id="gArgent" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4f6fa"/><stop offset="1" stop-color="#8e98a8"/></linearGradient>
+    <linearGradient id="gOr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fde68a"/><stop offset="1" stop-color="#b7791f"/></linearGradient>
+    <linearGradient id="gPlatine" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e0f2fe"/><stop offset="1" stop-color="#5b7c99"/></linearGradient>
+    <linearGradient id="gObs" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#55527a"/><stop offset="1" stop-color="#0e0d1a"/></linearGradient>
+    <linearGradient id="gIndigo" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366f1"/><stop offset="1" stop-color="#312e81"/></linearGradient>
+    <linearGradient id="gFlame" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ef4444"/><stop offset=".55" stop-color="#f97316"/><stop offset="1" stop-color="#fde047"/></linearGradient>
+    <linearGradient id="gSheen" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".8"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <filter id="cut" filterUnits="userSpaceOnUse" x="-12" y="-12" width="170" height="170" color-interpolation-filters="sRGB"><feMorphology in="SourceAlpha" operator="dilate" radius="3.2" result="grown"/><feGaussianBlur in="grown" stdDeviation="1.6" result="soft"/><feComponentTransfer in="soft" result="c"><feFuncA type="linear" slope="5" intercept="-0.9"/></feComponentTransfer><feFlood flood-color="#ffffff"/><feComposite in2="c" operator="in" result="paper"/><feGaussianBlur in="c" stdDeviation="2.4" result="haze"/><feOffset in="haze" dy="2.2" result="drop"/><feFlood flood-color="#1c1941" flood-opacity=".26"/><feComposite in2="drop" operator="in" result="shadow"/><feMerge><feMergeNode in="shadow"/><feMergeNode in="paper"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+</svg>
+
+<div class="wrap">
+<nav class="toc" aria-label="Sommaire">
+  <b>Le Jeu Meeshy</b>
+  <span class="muted" style="font-size:12px">brouillon v2 · 5 oct. 2026</span>
+  <a class="part" href="#regles">I. Les règles en une page</a>
+  <a class="part" href="#elements">II. Les éléments du jeu</a>
+  <a class="sub" href="#points">Points</a>
+  <a class="sub" href="#niveaux">Niveaux</a>
+  <a class="sub" href="#meeshes">Meeshes</a>
+  <a class="sub" href="#rang">Gloire et rang</a>
+  <a class="sub" href="#missions">Missions du jour</a>
+  <a class="sub" href="#flamme">Flamme</a>
+  <a class="sub" href="#ligues">Ligues et saisons</a>
+  <a class="sub" href="#badges">Badges et collections</a>
+  <a class="sub" href="#trophees">Trophées et succès</a>
+  <a class="part" href="#guides">III. Mee et Meo, les guides</a>
+  <a class="sub" href="#integration">L'intégration en 7 étapes</a>
+  <a class="sub" href="#explications">À chaque étape</a>
+  <a class="part" href="#decoration">IV. La décoration Meeshy</a>
+  <a class="part" href="#animations">V. Animations</a>
+  <a class="part" href="#photos">VI. Moments photo</a>
+  <a class="part" href="#ecrans">VII. Écrans</a>
+  <a class="part" href="#simulateur">VIII. Simulateur</a>
+  <a class="part" href="#garde-fous">IX. Garde-fous</a>
+  <a class="part" href="#livraison">X. Livraison</a>
+  <a class="part" href="#decisions">XI. Décisions</a>
+</nav>
+
+<main>
+<header>
+  <div class="hero">
+    <div>
+      <div class="eyebrow">Brouillon de conception · version 2 · 5 octobre 2026</div>
+      <h1>Le Jeu Meeshy</h1>
+      <p class="lede">On gagne des points en utilisant Meeshy. Les points font monter le niveau. Avec Mee et Meo, on les frappe en Meeshes : le niveau redescend, le rang monte pour toujours. À chaque étape, les deux colibris expliquent ce qui vient de se passer et ce qui vient ensuite.</p>
+    </div>
+    <div id="heroArt" aria-hidden="true"></div>
+  </div>
+</header>
+
+<div class="part-head" id="regles"><div class="n">Partie I</div><h2>Les règles en une page</h2><p class="muted">Ce texte, dit par Mee et Meo, est celui que le joueur découvre à l'intégration et retrouve dans le carnet des règles.</p></div>
+<section>
+  <div class="rules">
+    <div class="rule"><span class="k">1</span><div><b>Chaque geste rapporte</b><p>Écrire, parler, publier, réagir, inviter : chaque action utile donne des points.</p></div></div>
+    <div class="rule"><span class="k">2</span><div><b>Les points font le niveau</b><p>100 niveaux en 10 paliers. Chaque niveau demande un peu plus que le précédent.</p></div></div>
+    <div class="rule"><span class="k">3</span><div><b>On frappe des Meeshes</b><p>À partir de 1 221 points, on frappe une Meesh à la main. Le prix monte avec le nombre de Meeshes déjà frappées.</p></div></div>
+    <div class="rule"><span class="k">4</span><div><b>Frapper fait redescendre</b><p>Les points dépensés quittent le niveau. Les badges qu'ils tenaient peuvent s'éteindre.</p></div></div>
+    <div class="rule"><span class="k">5</span><div><b>Le rang ne baisse jamais</b><p>Chaque frappe, chaque record, chaque succès ajoute de la Gloire. La Gloire donne le rang.</p></div></div>
+    <div class="rule"><span class="k">6</span><div><b>Le trésor se garde ou se dépense</b><p>Garder ses Meeshes fait monter le trésor. Les dépenser protège la Flamme ou offre des cosmétiques.</p></div></div>
+    <div class="rule"><span class="k">7</span><div><b>Chaque jour compte</b><p>Trois missions, un coffre, une Flamme qui grandit tant qu'on revient.</p></div></div>
+    <div class="rule"><span class="k">8</span><div><b>On garde une trace</b><p>Chaque grand moment se photographie avec Mee et Meo dans le carnet de progression.</p></div></div>
+  </div>
+  <h3>Les trois jauges</h3>
+  <div class="gauges" id="gauges"></div>
+  <div class="callout">Le but : <b>un haut niveau, un haut rang et un gros trésor en même temps</b>. Aucune action ne fait monter les trois. Frapper fait monter le trésor et le rang mais coûte des niveaux. Garder ses points fait grimper le niveau sans remplir le trésor. Dépenser des Meeshes donne des avantages mais vide le trésor.</div>
+</section>
+
+<div class="part-head" id="elements"><div class="n">Partie II</div><h2>Les éléments du jeu</h2><p class="muted">Chaque élément part de ce qui existe dans le code (axes pondérés, badges, série, niveau, frappe, registre des Meeshes, succès, Élan) et l'étend sans rien retirer.</p></div>
+
+<section id="points">
+  <div class="eyebrow">II.1</div>
+  <h2>Les points</h2>
+  <p>Les poids existants restent : contenu ×9, lien social ×7, conversation ×5, commentaire ×3, outil ×1, avec les plafonds quotidiens déjà en place.</p>
+  <div class="grid g3">
+    <div class="card"><span class="tag">existant</span><h3>Élan</h3><p>Multiplicateur ×1 à ×5 selon le nombre de familles d'actions tenues en même temps. Inchangé.</p></div>
+    <div class="card"><span class="tag new">nouveau</span><h3>Vent arrière</h3><p>Après une frappe, +25 % sur les points jusqu'à revenir au niveau record.</p></div>
+    <div class="card"><span class="tag new">nouveau</span><h3>Réponse reçue</h3><p>+3 points à l'auteur quand une autre personne lui répond dans l'heure.</p></div>
+    <div class="card"><span class="tag new">nouveau</span><h3>Bonus de Flamme</h3><p>+2 % sur les récompenses de mission par jour de série, jusqu'à +50 % à 25 jours.</p></div>
+    <div class="card"><span class="tag new">nouveau</span><h3>Heure du Prisme</h3><p>Une heure par jour, tirée entre 9 h et 21 h : les missions comptent double. Une notification au plus, désactivable.</p></div>
+    <div class="card"><span class="tag">rythme</span><h3>Ordre de grandeur</h3><p>Un usage actif rapporte 400 à 600 points par jour, missions comprises. Une Meesh demande 2 à 3 jours.</p></div>
+  </div>
+</section>
+
+<section id="niveaux">
+  <div class="eyebrow">II.2 · peut redescendre</div>
+  <h2>Les niveaux</h2>
+  <p>Le niveau se lit sur le score <b>en poche</b>, celui que la frappe débite.</p>
+  <div class="formula">seuil(N) = 10 × N²     ·     niveau = ⌊ √(score ÷ 10) ⌋     ·     écart(N) = 10 × (2N − 1)</div>
+  <p>Une frappe de 1 221 points coûte 5 niveaux au niveau 15, 3 au niveau 30, un seul au niveau 100. La décision centrale : grimper avant de frapper.</p>
+  <h3>Les 10 paliers</h3>
+  <div class="icon-row" id="paliers" aria-label="Les dix paliers de niveau"></div>
+  <div class="tablebox"><table>
+    <thead><tr><th>Niveau</th><th class="r">Score requis</th><th class="r">Écart</th><th class="r">Jours actifs*</th><th>Débloque</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td class="r num">10</td><td class="r num">10</td><td class="r num">&lt; 1</td><td>Progression, premier conseil de Mee</td></tr>
+      <tr><td>5</td><td class="r num">250</td><td class="r num">90</td><td class="r num">&lt; 1</td><td>Missions du jour</td></tr>
+      <tr><td>10</td><td class="r num">1 000</td><td class="r num">190</td><td class="r num">2</td><td>Palier Lueur, ligues</td></tr>
+      <tr><td>20</td><td class="r num">4 000</td><td class="r num">390</td><td class="r num">8</td><td>Mission en duo</td></tr>
+      <tr><td>30</td><td class="r num">9 000</td><td class="r num">590</td><td class="r num">18</td><td>Cadre d'avatar animé</td></tr>
+      <tr><td>50</td><td class="r num">25 000</td><td class="r num">990</td><td class="r num">50</td><td>Missions d'Or</td></tr>
+      <tr><td>75</td><td class="r num">56 250</td><td class="r num">1 490</td><td class="r num">113</td><td>Thème de bulles Comète</td></tr>
+      <tr><td>100</td><td class="r num">100 000</td><td class="r num">1 990</td><td class="r num">200</td><td>Prestige</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted" style="font-size:13.5px">* à 500 points par jour, sans frappe.</p>
+  <h3>Niveau record et Prestige</h3>
+  <p>Le niveau le plus haut atteint reste marqué sur la barre : il règle le Vent arrière et donne de la Gloire la première fois qu'on atteint chaque niveau. Au niveau 100, on peut passer en Prestige : niveau à 1, une étoile sur l'anneau (5 au plus), +1 000 de Gloire, un Trophée de Prestige.</p>
+</section>
+
+<section id="meeshes">
+  <div class="eyebrow">II.3 · la pièce rare</div>
+  <h2>Les Meeshes</h2>
+  <p>Toujours frappée à la main, avec l'aperçu du prix avant de confirmer et une ligne au registre. Le prix monte avec le nombre de Meeshes déjà frappées.</p>
+  <div class="formula">prix(n) = 1 221 × 1,06<sup>⌊(n − 1) ÷ 10⌋</sup>, plafonné à 4 884</div>
+  <p class="muted">Les 10 premières coûtent 1 221 points. La 50e en coûte 1 541, la 100e 2 063, la 250e atteint le plafond.</p>
+  <h3>Chaque Meesh est numérotée</h3>
+  <p>Le revers porte son numéro et l'année : « N° 13 · 2026 ». Chaque centième est frappée en or, chaque millième en prisme. Ces éditions ne valent rien de plus en jeu ; elles se collectionnent.</p>
+  <h3>Les paliers du trésor</h3>
+  <div class="icon-row" id="tresor" aria-label="Paliers du trésor"></div>
+  <h3>À quoi servent les Meeshes</h3>
+  <div class="tablebox"><table>
+    <thead><tr><th>Dépense</th><th class="r">Prix</th><th>Règle</th></tr></thead>
+    <tbody>
+      <tr><td>Gel de Flamme</td><td class="r num">1</td><td>Protège un jour manqué. 2 en réserve au plus.</td></tr>
+      <tr><td>Rallumer une Flamme éteinte</td><td class="r num">3</td><td>Dans les 48 h. Une fois par mois.</td></tr>
+      <tr><td>Changer une mission du jour</td><td class="r num">1</td><td>Une fois par jour, même difficulté.</td></tr>
+      <tr><td>Offrir une Meesh</td><td class="r num">1</td><td>Déjà spécifié (#5750) : un succès, jamais des points.</td></tr>
+      <tr><td>Cadre d'avatar, thème de bulles, aura du nom</td><td class="r num">5 à 50</td><td>Cosmétique, aucun avantage de jeu.</td></tr>
+      <tr><td>Sceau de saison</td><td class="r num">10</td><td>Rangée cosmétique du parcours de saison.</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout warn">Les Meeshes ne s'achètent pas avec de l'argent et ne se convertissent pas en argent : Meeshy reste gratuit (#9227) et le jeu reste hors des règles des jeux d'argent.</div>
+</section>
+
+<section id="rang">
+  <div class="eyebrow">II.4 · ne baisse jamais</div>
+  <h2>Gloire et rang</h2>
+  <p>La Gloire s'accumule dans un registre en ajout seul, comme les Meeshes. Le rang se lit sur la Gloire. Une frappe en rapporte : frapper fait toujours monter le rang.</p>
+  <div class="tablebox"><table>
+    <thead><tr><th>Source</th><th class="r">Gloire</th></tr></thead>
+    <tbody>
+      <tr><td>Frapper une Meesh</td><td class="r num">+100</td></tr>
+      <tr><td>Atteindre un niveau pour la première fois</td><td class="r num">+20</td></tr>
+      <tr><td>Succès commun · rare · épique · légendaire · mythique</td><td class="r num">+10 · 25 · 60 · 150 · 400</td></tr>
+      <tr><td>Record de Flamme 7 · 30 · 100 · 365 jours</td><td class="r num">+50 · 150 · 500 · 2 000</td></tr>
+      <tr><td>Mission d'Or</td><td class="r num">+40</td></tr>
+      <tr><td>Montée de ligue · coupe de ligue</td><td class="r num">+30 · +100</td></tr>
+      <tr><td>Saison terminée · Prestige</td><td class="r num">+500 · +1 000</td></tr>
+    </tbody>
+  </table></div>
+  <p>Dix rangs en trois divisions (III, II, I), puis Mythe pour les 100 Légendes les plus glorieuses. Les blasons sont dessinés en partie IV.</p>
+  <div class="tablebox"><table>
+    <thead><tr><th>Rang</th><th class="r">Gloire</th><th>Ce qu'il raconte</th></tr></thead>
+    <tbody id="rangTable"></tbody>
+  </table></div>
+</section>
+
+<section id="missions">
+  <div class="eyebrow">II.5 · chaque jour</div>
+  <h2>Missions du jour</h2>
+  <p>Trois missions par jour : facile, moyenne, difficile. Les trois faites ouvrent le Coffre du jour. Le mot « Défis » nomme déjà la page des paliers de la grammaire des succès (#5843) : on parle donc de missions.</p>
+  <div class="formula">bande = ⌊ niveau ÷ 10 ⌋  ·  objectif = ⌈ base × (1 + 0,3 × bande) ⌉  ·  récompense = points de base × (1 + 0,15 × bande) × bonus de Flamme</div>
+  <div class="tablebox"><table>
+    <thead><tr><th>Difficulté</th><th>Exemple</th><th class="r">Niv. 5</th><th class="r">Niv. 50</th><th class="r">Base</th></tr></thead>
+    <tbody>
+      <tr><td><span class="tag up">facile</span></td><td>Réagir à N messages</td><td class="r num">5</td><td class="r num">13</td><td class="r num">30</td></tr>
+      <tr><td><span class="tag up">facile</span></td><td>Envoyer un vocal</td><td class="r num">1</td><td class="r num">3</td><td class="r num">30</td></tr>
+      <tr><td><span class="tag">moyenne</span></td><td>Répondre dans N conversations différentes</td><td class="r num">3</td><td class="r num">8</td><td class="r num">60</td></tr>
+      <tr><td><span class="tag">moyenne</span></td><td>Lire N messages traduits automatiquement</td><td class="r num">10</td><td class="r num">25</td><td class="r num">60</td></tr>
+      <tr><td><span class="tag down">difficile</span></td><td>Échanger avec quelqu'un qui écrit dans une autre langue</td><td class="r num">1</td><td class="r num">3</td><td class="r num">120</td></tr>
+      <tr><td><span class="tag down">difficile</span></td><td>Publier une story qui reçoit N réactions</td><td class="r num">3</td><td class="r num">8</td><td class="r num">120</td></tr>
+      <tr><td><span class="tag new">or</span></td><td>Mission d'Or (niveau 50+ ou trésor ≥ 50) : N personnes répondent dans une conversation que vous animez</td><td class="r num">—</td><td class="r num">10</td><td class="r num">250 + 40 Gloire</td></tr>
+    </tbody>
+  </table></div>
+  <ul class="tight">
+    <li>Jamais deux missions du même axe le même jour, jamais une mission impossible pour le compte.</li>
+    <li>Une mission Prisme (langues, traduction) au moins un jour sur trois.</li>
+    <li>Tirage au premier lancement du jour, dans le fuseau de l'utilisateur. Validation au geste, case cochée sans écran intermédiaire.</li>
+    <li>Coffre du jour : 60 à 200 points, un fragment de cosmétique (1 chance sur 6), un gel de Flamme (1 sur 20). Contenu et probabilités affichés avant l'ouverture. Jamais de Meesh.</li>
+  </ul>
+</section>
+
+<section id="flamme">
+  <div class="eyebrow">II.6 · la série</div>
+  <h2>La Flamme</h2>
+  <p>La série de jours existante prend cinq formes ; son cœur porte la Signature Meeshy. Le gel la protège, le rallumage la rattrape dans les 48 h.</p>
+  <div class="icon-row" id="flammes" aria-label="Formes de la flamme"></div>
+</section>
+
+<section id="ligues">
+  <div class="eyebrow">II.7 · chaque semaine, chaque saison</div>
+  <h2>Ligues et saisons</h2>
+  <p>Les ligues comptent les points <b>gagnés dans la semaine</b>, jamais le score en poche : frapper ne fait pas perdre de place. Fermeture le dimanche à 20 h, heure locale. Groupes de 30 d'activité comparable ; les 7 premiers montent, les 5 derniers descendent ; les 3 premiers reçoivent une coupe.</p>
+  <div class="icon-row" id="ligues-row" aria-label="Les huit ligues"></div>
+  <ul class="tight">
+    <li>Ligue publique sur consentement, sous pseudonyme par défaut, total hebdomadaire seul : aucune heure d'activité n'en ressort.</li>
+    <li>Ligue Amis toujours disponible, limitée aux amis acceptés.</li>
+    <li>Mission en duo hebdomadaire avec un ami : objectif commun, récompense double si les deux finissent leur part.</li>
+    <li>Saison de 8 semaines, un thème (une langue, une région), 40 étapes gratuites, un badge daté et une coupe de saison. La rangée Sceau (10 Meeshes) est cosmétique.</li>
+  </ul>
+</section>
+
+<section id="badges">
+  <div class="eyebrow">II.8 · ce que l'on montre</div>
+  <h2>Badges et collections</h2>
+  <p>Trois formes (#5751), chacune avec sa silhouette, toutes avec la Signature Meeshy au centre. Les badges d'accumulation passent de 5 à 7 paliers (ajout de 1 000 et 5 000). Un badge éteint par une frappe devient une <b>empreinte</b> qui dit ce qu'il manque pour le rallumer.</p>
+  <div class="icon-row" id="formes" aria-label="Formes de badge"></div>
+  <div class="icon-row" id="matieres" aria-label="Matières des paliers"></div>
+  <h3>L'Atlas des langues</h3>
+  <p>Chaque langue avec laquelle on a vraiment échangé (un message envoyé et un reçu avec quelqu'un qui l'écrit) pose un tampon dans le passeport. Le modèle de traduction couvre 200 langues.</p>
+  <div class="icon-row" id="atlas" aria-label="Tampons de l'Atlas"></div>
+</section>
+
+<section id="trophees">
+  <div class="eyebrow">II.9 · ce qui ne s'éteint pas</div>
+  <h2>Trophées et succès</h2>
+  <p>Un <b>trophée</b> est un objet reçu à un moment précis ; il va dans la vitrine du profil. Les <b>succès</b> gardent leur grammaire ; leur rareté est mesurée chaque nuit et figée à l'obtention. Ni l'un ni l'autre ne rapporte de points.</p>
+  <div class="tablebox"><table>
+    <thead><tr><th>Trophée</th><th>Quand</th></tr></thead>
+    <tbody>
+      <tr><td>Coupe de ligue (or, argent, bronze)</td><td>Top 3 d'une ligue en fin de semaine</td></tr>
+      <tr><td>Coupe de saison</td><td>Parcours de saison terminé</td></tr>
+      <tr><td>Trophée de Prestige</td><td>Passage en Prestige, numéroté de 1 à 5</td></tr>
+      <tr><td>Trophée de Flamme</td><td>100 puis 365 jours de série</td></tr>
+    </tbody>
+  </table></div>
+  <div class="tablebox"><table>
+    <thead><tr><th>Rareté d'un succès</th><th>Part des comptes</th><th>Liseré</th><th class="r">Gloire</th></tr></thead>
+    <tbody>
+      <tr><td>Commun</td><td>plus de 40 %</td><td>ardoise</td><td class="r num">10</td></tr>
+      <tr><td>Rare</td><td>10 à 40 %</td><td>bleu</td><td class="r num">25</td></tr>
+      <tr><td>Épique</td><td>2 à 10 %</td><td>violet</td><td class="r num">60</td></tr>
+      <tr><td>Légendaire</td><td>0,2 à 2 %</td><td>or</td><td class="r num">150</td></tr>
+      <tr><td>Mythique</td><td>moins de 0,2 %</td><td>prisme</td><td class="r num">400</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<div class="part-head" id="guides"><div class="n">Partie III</div><h2>Mee et Meo, les guides</h2><p class="muted">Les deux colibris du pack de stickers intégré deviennent les guides du jeu. Leur dessin vient du moteur existant (<code>apps/web/src/lib/mee/art.ts</code>, miroir iOS <code>MeeStickerCatalog</code>).</p></div>
+<section>
+  <div class="grid g2">
+    <div class="card" style="display:grid;grid-template-columns:100px 1fr;gap:14px;align-items:center"><div data-bird="meeGuide" data-size="100"></div><div><span class="tag mee">Mee</span><h3>Montre le geste</h3><p>Dit quoi faire maintenant, compte les points, célèbre. Ton enthousiaste et bref.</p></div></div>
+    <div class="card" style="display:grid;grid-template-columns:100px 1fr;gap:14px;align-items:center"><div data-bird="meoGuide" data-size="100" data-flip="1"></div><div><span class="tag mee">Meo</span><h3>Explique la règle</h3><p>Dit ce que ça veut dire et ce qui vient ensuite, surtout quand quelque chose baisse. Ton calme et clair.</p></div></div>
+  </div>
+  <p style="margin-top:14px">Pour les grands moments (frappe, nouveau rang, trophée), ils apparaissent ensemble. Chaque intervention suit la même structure :</p>
+  <div class="formula">Ce qui vient d'arriver  →  Ce que ça veut dire  →  L'étape d'après  →  Un bouton qui y mène</div>
+  <ul class="tight">
+    <li>Explication complète la première fois, une ligne courte les fois suivantes. Le bouton « ? » rouvre toujours la version complète.</li>
+    <li>Une seule carte par ouverture d'écran. Jamais dans une conversation : seulement sur Progression, après une célébration et pendant l'intégration.</li>
+    <li>La loi qui choisit la phrase est partagée (<code>packages/shared/utils/mascot.ts</code>, étendue) : web et iOS disent la même chose au même moment, dans les 7 langues.</li>
+    <li>Lecteur d'écran : la carte est lue en entier, le dessin est décoratif. Animations réduites à un fondu si l'utilisateur limite les animations.</li>
+  </ul>
+</section>
+
+<section id="integration">
+  <div class="eyebrow">III.1</div>
+  <h2>L'intégration en 7 étapes</h2>
+  <p>Branchée sur l'intégration interactive existante (#7729) : le joueur fait vraiment chaque geste, rien n'est simulé. Chaque carte peut se passer ; le carnet des règles les garde toutes.</p>
+  <div class="steps" id="onboarding"></div>
+</section>
+
+<section id="explications">
+  <div class="eyebrow">III.2</div>
+  <h2>À chaque étape, ce que ça veut dire et la suite</h2>
+  <div class="tablebox"><table>
+    <thead><tr><th>Moment</th><th>Qui</th><th>Ce que ça veut dire</th><th>L'étape d'après</th></tr></thead>
+    <tbody>
+      <tr><td>Premier niveau gagné</td><td>Mee</td><td>Tes points remplissent l'anneau.</td><td>« Encore 50 points pour le niveau 3. »</td></tr>
+      <tr><td>Nouveau palier (10, 20…)</td><td>Mee et Meo</td><td>Tu entres dans Lueur, Lumière…</td><td>Ce que débloque le palier suivant.</td></tr>
+      <tr><td>Missions débloquées (niveau 5)</td><td>Mee</td><td>Trois missions par jour, un coffre.</td><td>Ouvre ta première mission.</td></tr>
+      <tr><td>Première frappe possible</td><td>Meo</td><td>Frapper coûte X niveaux et rapporte +100 de Gloire.</td><td>Frapper maintenant, ou grimper d'abord.</td></tr>
+      <tr><td>Première frappe</td><td>Mee et Meo</td><td>Ton niveau est passé de 14 à 9, c'est la règle. Le Vent arrière est actif.</td><td>Reprendre tes niveaux plus vite.</td></tr>
+      <tr><td>Un badge s'éteint</td><td>Meo</td><td>Il est devenu une empreinte ; rien n'est perdu pour toujours.</td><td>« 37 messages pour le rallumer. »</td></tr>
+      <tr><td>11e Meesh : le prix monte</td><td>Meo</td><td>Les Meeshes deviennent plus rares.</td><td>« La prochaine coûte 1 294 points. »</td></tr>
+      <tr><td>Nouvelle division, nouveau rang</td><td>Mee et Meo</td><td>Ta Gloire a passé un seuil, et elle ne redescend pas.</td><td>Gloire manquante pour la division suivante, puis photo.</td></tr>
+      <tr><td>Nouveau palier du trésor</td><td>Mee</td><td>Ton trésor est visible sur ton profil.</td><td>Garder pour le palier suivant, ou dépenser.</td></tr>
+      <tr><td>Flamme en danger (20 h, rien fait)</td><td>Meo</td><td>Ta Flamme s'éteint à minuit.</td><td>Une mission facile, ou un gel.</td></tr>
+      <tr><td>Flamme éteinte</td><td>Meo (triste)</td><td>Le Bonus de Flamme repart à zéro.</td><td>La rallumer sous 48 h pour 3 Meeshes.</td></tr>
+      <tr><td>Première ligue, montée, descente</td><td>Mee / Meo</td><td>Comment se comptent les points de la semaine.</td><td>Points manquants pour la zone de montée.</td></tr>
+      <tr><td>Début et fin de saison</td><td>Mee et Meo</td><td>Le thème, les étapes, ce qui a été gagné.</td><td>La première étape de la saison.</td></tr>
+      <tr><td>Niveau 100</td><td>Mee et Meo</td><td>Le Prestige : niveau à 1, étoile, trophée.</td><td>Passer en Prestige, ou rester au sommet.</td></tr>
+      <tr><td>Retour après 7 jours d'absence</td><td>Mee</td><td>Ce qui a changé pendant ton absence.</td><td>La mission la plus facile du jour.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<div class="part-head" id="decoration"><div class="n">Partie IV</div><h2>La décoration Meeshy</h2><p class="muted">Plus aucune bulle de conversation. Tout objet du jeu porte la <b>Signature</b> : les trois traits de la marque (<code>MeeshyDashesShape</code>, <code>BRAND_DASHES</code>), opacités 0,7 · 1 · 0,75. Mee et Meo deviennent les tenants des blasons et les figures du revers des Meeshes.</p></div>
+<section>
+  <div class="eyebrow">IV.1 · la Signature</div>
+  <h2>La règle de décoration</h2>
+  <div class="icon-row" id="signatures"></div>
+  <ul class="tight">
+    <li><b>Frappée</b> sur le métal (pièces, coupes) : relief, ombre en bas à droite, éclat en haut à gauche.</li>
+    <li><b>Gravée</b> sur les blasons, badges et gemmes : creux, teinte plus sombre que la matière.</li>
+    <li><b>En aplat</b> sur les fonds de couleur (anneaux, cœur de la Flamme, tampons).</li>
+    <li>Proportions fixes : longueurs 500 · 400 · 300 dans un carré de 1 024, jamais déformées.</li>
+  </ul>
+</section>
+<section>
+  <div class="eyebrow">IV.2</div>
+  <h2>La Meesh, avers et revers</h2>
+  <div class="icon-row" id="pieces"></div>
+  <p>Avers : la Signature frappée, « MEESHY · UNE MEESH » en couronne, tranche cannelée. Revers : Mee et Meo face à face, le numéro de frappe et l'année.</p>
+</section>
+<section>
+  <div class="eyebrow">IV.3</div>
+  <h2>Les blasons des rangs</h2>
+  <p>Un écu par rang ; la matière et les pièces héraldiques montent avec lui. À partir d'Ambassadeur, Mee et Meo tiennent l'écu ; à Légende ils sont couronnés ; à Mythe, auréolés. La division s'affiche en chevrons sous l'écu (ici la division III).</p>
+  <div class="icon-row" id="blasons" aria-label="Blasons des onze rangs"></div>
+</section>
+<section>
+  <div class="eyebrow">IV.4</div>
+  <h2>Trophées et coffre</h2>
+  <div class="icon-row" id="coupes" aria-label="Trophées"></div>
+  <div class="icon-row" id="coffres" aria-label="Coffre du jour"></div>
+  <p class="muted">Badges, gemmes de ligue, anneaux de niveau, Flamme et tampons de l'Atlas sont dessinés avec leur élément, en partie II.</p>
+</section>
+
+<div class="part-head" id="animations"><div class="n">Partie V</div><h2>Animations</h2><p class="muted">Une animation explique ce qui arrive. Elle tient 120 images par seconde sur iPhone ProMotion et 60 ailleurs, ne bloque jamais un geste et se réduit à un fondu quand l'utilisateur limite les animations.</p></div>
+<section>
+  <div class="grid g3">
+    <div class="card"><span class="tag">iOS 17 à 26</span><h3>Metal dans SwiftUI</h3><p>Shaders Metal appliqués par <code>.layerEffect</code>, <code>.colorEffect</code> et <code>.distortionEffect</code> : reflet spéculaire, onde de frappe, irisation du prisme selon l'inclinaison du téléphone (CoreMotion). Les shaders vivent dans <code>MeeshyUI</code> comme briques ; l'orchestration reste dans l'app. Un shader Metal existe déjà (<code>CallSkinRetouch.metal</code>).</p></div>
+    <div class="card"><span class="tag">iOS 16</span><h3>Repli Core Animation</h3><p><code>CAGradientLayer</code> animé pour le reflet, <code>CAEmitterLayer</code> pour les particules, ressorts SwiftUI. Même chorégraphie, sans shader.</p></div>
+    <div class="card"><span class="tag">Web et Android</span><h3>WebGL2 et compositeur</h3><p>Un petit moteur WebGL2 maison, sans dépendance, rejoue les mêmes shaders dans un <code>&lt;canvas&gt;</code>. Le reste n'anime que <code>transform</code> et <code>opacity</code> (Web Animations). Android passe par la coque Capacitor d'<code>apps/web</code> : le Kotlin natif est gelé. Vibration par <code>navigator.vibrate</code>, irisation par <code>DeviceOrientation</code>.</p></div>
+  </div>
+  <div class="tablebox"><table>
+    <thead><tr><th>Moment</th><th>Chorégraphie</th><th class="r">Durée</th><th>Effet Metal / WebGL</th><th>Haptique</th></tr></thead>
+    <tbody>
+      <tr><td>Frappe d'une Meesh</td><td>Mee pose le flan, Meo frappe, « tchak », la pièce se retourne et montre son numéro</td><td class="r num">1,2 s</td><td>onde radiale, reflet sur la face</td><td>choc net, léger rebond</td></tr>
+      <tr><td>Nouveau rang ou division</td><td>l'écu monte, la Signature se grave trait par trait, les tenants se posent</td><td class="r num">1,6 s</td><td>reflet sur la matière, irisation pour Mythe</td><td>trois tapes, une par trait</td></tr>
+      <tr><td>Niveau gagné</td><td>l'anneau se remplit, le chiffre roule</td><td class="r num">0,6 s</td><td>—</td><td>tape légère</td></tr>
+      <tr><td>Niveau perdu à la frappe</td><td>l'anneau se vide calmement, le repère du record reste</td><td class="r num">0,8 s</td><td>—</td><td>aucune</td></tr>
+      <tr><td>Badge rallumé ou éteint</td><td>la matière remonte du bas, ou se retire en pointillé</td><td class="r num">0,7 s</td><td>reflet à l'allumage</td><td>tape légère à l'allumage</td></tr>
+      <tr><td>Coffre du jour</td><td>le couvercle s'ouvre, les récompenses montent une à une</td><td class="r num">1,4 s</td><td>particules (hors fil principal sur le web)</td><td>une tape par récompense</td></tr>
+      <tr><td>Flamme</td><td>vacillement tant qu'elle est visible</td><td class="r num">boucle</td><td>bruit procédural dans la flamme</td><td>—</td></tr>
+      <tr><td>Mee et Meo</td><td>vol stationnaire, clignement, gestes de <code>motion.ts</code></td><td class="r num">boucle</td><td>—</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+  <ul class="tight">
+    <li>Shaders compilés au démarrage, jamais au moment de la célébration.</li>
+    <li>Aucune animation continue hors écran ni en mode économie d'énergie ; le reflet s'arrête après 3 passages.</li>
+    <li>Web : aucune propriété de mise en page animée, <code>will-change</code> pendant l'animation seulement, <code>OffscreenCanvas</code> dans un worker pour les particules quand il existe.</li>
+    <li>Mesure : moins de 8 ms par image sur iPhone 12 et sur un Android d'entrée de gamme, vérifié en recette.</li>
+  </ul>
+</section>
+
+<div class="part-head" id="photos"><div class="n">Partie VI</div><h2>Moments photo</h2><p class="muted">Les grands moments se photographient. Au déclenchement, Mee et Meo « frappent en place » l'emblème du moment dans la photo, comme on frappe une Meesh. Le carnet de progression garde ces photos et montre le chemin parcouru.</p></div>
+<section>
+  <div class="grid g2">
+    <div>
+      <h3 style="margin-top:0">Quand la proposition apparaît</h3>
+      <ul class="tight">
+        <li>Photo de départ, à la fin de l'intégration.</li>
+        <li>Nouveau rang ou nouvelle division.</li>
+        <li>Nouveau palier de niveau (10, 20…) et Prestige.</li>
+        <li>Première Meesh, chaque 10e, et chaque édition or ou prisme.</li>
+        <li>Trophée, montée de ligue, nouveau palier du trésor.</li>
+        <li>Flamme à 7, 30, 100 et 365 jours.</li>
+      </ul>
+      <h3>Le déroulé</h3>
+      <ol class="tight">
+        <li>Après la célébration, Mee propose : « On immortalise ? » — Selfie avec nous, Carte seule, Plus tard.</li>
+        <li>Selfie : caméra avant, cadre du moment en surimpression (emblème en haut, titre et date, Mee et Meo en bas).</li>
+        <li>Au déclenchement, Mee et Meo frappent l'emblème : « tchak », éclat, la photo se fige.</li>
+        <li>Image 9:16 pour la story et 1:1 pour le profil. Enregistrer dans Photos, partager en story (avec le lien de parrainage, #7742) ou garder au carnet.</li>
+        <li>« Plus tard » laisse le moment en attente 7 jours dans le carnet.</li>
+      </ol>
+    </div>
+    <div>
+      <h3 style="margin-top:0">Vie privée</h3>
+      <ul class="tight">
+        <li>La photo reste sur l'appareil tant qu'on ne la partage pas. Aucune analyse du visage.</li>
+        <li>Le carnet se synchronise avec le compte seulement si on l'active, en privé.</li>
+        <li>Sans caméra, on choisit une photo de la galerie ou on garde la carte seule.</li>
+      </ul>
+      <h3>Technique</h3>
+      <ul class="tight">
+        <li>iOS : <code>AVCaptureSession</code> et <code>AVCapturePhotoOutput</code>, cadre composé en Metal pendant l'aperçu, image finale par <code>ImageRenderer</code> (iOS 16+).</li>
+        <li>Web et coque Android : <code>getUserMedia</code>, composition sur <code>canvas</code>, enregistrement par le partage natif de la coque ou par téléchargement dans le navigateur.</li>
+        <li>Le cadre est le même dessin partout : emblème, Signature, Mee et Meo du moteur de stickers.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<div class="part-head" id="ecrans"><div class="n">Partie VII</div><h2>Écrans</h2><p class="muted">Même disposition sur iOS et sur <code>apps/web</code> (web et coque Android). L'écran Progression existant s'enrichit en haut ; la frappe garde son aperçu.</p></div>
+<section>
+  <div class="phones" id="phones"></div>
+</section>
+
+<div class="part-head" id="simulateur"><div class="n">Partie VIII</div><h2>Simulateur de frappe</h2><p class="muted">Pour régler les chiffres avant de les figer.</p></div>
+<section>
+  <div class="sim card">
+    <div>
+      <label for="simScore">Score en poche : <output id="oScore" class="num"></output> points</label>
+      <input id="simScore" type="range" min="1300" max="100000" step="100" value="11600">
+      <label for="simMinted">Meeshes déjà frappées : <output id="oMinted" class="num"></output></label>
+      <input id="simMinted" type="range" min="0" max="300" step="1" value="12">
+      <label for="simHeld">Meeshes gardées : <output id="oHeld" class="num"></output></label>
+      <input id="simHeld" type="range" min="0" max="1000" step="1" value="9">
+    </div>
+    <div>
+      <div class="res" aria-live="polite">
+        <span>Prix de la prochaine Meesh</span><span class="v" id="rCost"></span>
+        <span>Numéro et édition</span><span class="v" id="rEdition"></span>
+        <span>Niveau avant → après</span><span class="v" id="rLevel"></span>
+        <span>Niveaux perdus</span><span class="v" id="rLost"></span>
+        <span>Gloire gagnée</span><span class="v">+100</span>
+        <span>Palier du trésor après</span><span class="v" id="rTreasury"></span>
+        <span>Jours pour reprendre le niveau*</span><span class="v" id="rDays"></span>
+      </div>
+      <div class="bar" aria-hidden="true"><i id="rBar"></i><u id="rGhost"></u></div>
+      <p class="muted" style="font-size:12.5px;margin-top:6px">* à 500 points par jour avec le Vent arrière (+25 %).</p>
+    </div>
+  </div>
+</section>
+
+<div class="part-head" id="garde-fous"><div class="n">Partie IX</div><h2>Garde-fous</h2></div>
+<section>
+  <div class="grid g2">
+    <div class="card"><h3>Contre la triche</h3><ul class="tight">
+      <li>Plafonds quotidiens par axe et par conversation, étendus aux missions.</li>
+      <li>Rien pour un message à soi-même, à un compte de moins de 24 h ou bloqué.</li>
+      <li>Deux comptes qui ne parlent qu'entre eux : points divisés par 4 au-delà de 50 messages par jour.</li>
+      <li>Registres Meesh et Gloire en ajout seul : toute correction est une ligne inverse.</li>
+    </ul></div>
+    <div class="card"><h3>Contre l'excès</h3><ul class="tight">
+      <li>Une notification de jeu par jour au plus, interrupteur « Jeu » dans les réglages.</li>
+      <li>Ni compte à rebours rouge ni « tu vas tout perdre ». Meo le dit calmement, et le gel existe.</li>
+      <li>Pas d'Heure du Prisme après 21 h.</li>
+      <li>Mode « Jeu masqué » : tout est compté, rien n'est montré.</li>
+    </ul></div>
+    <div class="card"><h3>Vie privée</h3><ul class="tight">
+      <li>Ligues sur consentement, pseudonyme, total hebdomadaire seul, conformes à la règle de visibilité de la présence.</li>
+      <li>Rang, trésor et vitrine visibles par : tout le monde, amis (défaut), moi seul (#5738).</li>
+      <li>Conversations chiffrées : seuls comptent les gestes que le serveur voit déjà, jamais le texte.</li>
+      <li>Photos sur l'appareil par défaut.</li>
+    </ul></div>
+    <div class="card"><h3>Rétrocompatibilité</h3><ul class="tight">
+      <li><code>GET /me/engagement</code> garde ses champs ; niveau étendu, rang, trésor et missions s'ajoutent à côté.</li>
+      <li>Les 6 anciens seuils restent servis aux anciens clients jusqu'à zéro usage mesuré.</li>
+      <li>Un ancien client qui croit au prix de 1 221 : le serveur recalcule le prix et refuse sans débiter si les points manquent.</li>
+    </ul></div>
+  </div>
+  <div class="callout warn">Avant ouverture : l'agent <b>conformite-juridique</b> relit ligues (données personnelles, mineurs), coffres aléatoires, caméra et règles des stores ; l'agent <b>auditeur-adversarial</b> relit les registres et la frappe. Ce ne sont ni un avis juridique signé ni un audit tiers.</div>
+</section>
+
+<div class="part-head" id="livraison"><div class="n">Partie X</div><h2>Livraison</h2><p class="muted">Deux vagues. Chaque milestone a ses issues dans « Meeshy — pilotage » ; l'issue fait foi sur l'état.</p></div>
+<section>
+  <div class="tablebox"><table>
+    <thead><tr><th>Vague</th><th>Milestone</th><th>Contenu</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Le jeu se comprend et se joue chaque jour</td><td>Loi partagée (niveaux 100, prix de rareté, Gloire, rangs, trésor, missions, Flamme, guide) ; passerelle (registre de Gloire, missions, coffre, dépenses, charge étendue) ; web et iOS (Progression, frappe, Mee et Meo, décoration Meeshy, animations Metal et WebGL, moments photo, carnet)</td></tr>
+      <tr><td>2</td><td>On se mesure aux autres sans exposer sa présence</td><td>Ligues, ligue Amis, mission en duo, saisons, trophées et vitrine, Atlas des langues, Prestige, rareté des succès, badges 1 000 et 5 000</td></tr>
+    </tbody>
+  </table></div>
+  <p class="muted">Données nouvelles : <code>GloryLedger</code> (ajout seul), <code>DailyMission</code>, plus tard <code>LeagueWeek</code>, <code>LeagueMembership</code>, <code>SeasonProgress</code>, <code>Trophy</code>, <code>CosmeticOwnership</code> ; sur <code>User</code> : <code>levelRecord</code>, <code>prestige</code>, <code>flameFreezes</code>. Le carnet photo reste sur l'appareil.</p>
+</section>
+
+<div class="part-head" id="decisions"><div class="n">Partie XI</div><h2>Décisions</h2><p class="muted">Adoptées par défaut le 5 octobre 2026 pour lancer la vague 1 ; chacune reste réversible par une issue <code>décision-produit</code>.</p></div>
+<section>
+  <div class="tablebox"><table>
+    <thead><tr><th>Question</th><th>Choix adopté</th></tr></thead>
+    <tbody>
+      <tr><td>Le prix d'une Meesh dépasse-t-il 1 221 ?</td><td>Oui après la 10e (+6 % toutes les 10, plafond ×4) : la difficulté monte avec les pièces, comme demandé le 5 octobre.</td></tr>
+      <tr><td>La courbe de 100 niveaux remplace-t-elle les 6 seuils ?</td><td>Oui, anciens seuils servis aux anciens clients.</td></tr>
+      <tr><td>Le Vent arrière accélère-t-il trop la frappe suivante ?</td><td>Non, la rareté croissante compense.</td></tr>
+      <tr><td>Ligues entre inconnus ?</td><td>Sur consentement, en vague 2, après revue de conformité.</td></tr>
+      <tr><td>Hasard dans le coffre ?</td><td>Oui, probabilités affichées, aucune valeur monétaire.</td></tr>
+      <tr><td>Visibilité du rang et du trésor ?</td><td>Amis par défaut.</td></tr>
+      <tr><td>Photos synchronisées ?</td><td>Non par défaut ; activable, privé.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+</main>
+</div>
+
+<script>
+const MEE={"meeGuide":"<defs><radialGradient id=\"a1mee1b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#7ff0c8\"/><stop offset=\"1\" stop-color=\"#14b8a6\"/></radialGradient><linearGradient id=\"a1mee1w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e6fff7\"/><stop offset=\"1\" stop-color=\"#7de8d2\"/></linearGradient><linearGradient id=\"a1mee1h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fb7185\"/><stop offset=\"1\" stop-color=\"#e11d48\"/></linearGradient><linearGradient id=\"a1mee1k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl1\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#a1mee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#0f766e\" stroke=\"#0f766e\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#0f766e\" stroke-width=\"9.5\" stroke-linecap=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#f43f5e\" stroke-width=\"6\" stroke-linecap=\"round\"/><circle cx=\"72\" cy=\"24\" r=\"1.6\" fill=\"#fff\" opacity=\".75\"/><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#a1mee1b)\" stroke=\"#0f766e\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#f0fdfa\" opacity=\".96\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#a1mee1h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff7a9a\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff7a9a\" opacity=\".85\"/><g class=\"e1\"><ellipse cx=\"57\" cy=\"74\" rx=\"9\" ry=\"10.5\" fill=\"#1c1941\"/><ellipse cx=\"57\" cy=\"79\" rx=\"6\" ry=\"4\" fill=\"#4c4a8a\" opacity=\".55\"/><circle cx=\"60\" cy=\"70\" r=\"3.8\" fill=\"#fff\"/><circle cx=\"54\" cy=\"77.8\" r=\"1.7\" fill=\"#fff\"/><ellipse cx=\"83\" cy=\"74\" rx=\"9\" ry=\"10.5\" fill=\"#1c1941\"/><ellipse cx=\"83\" cy=\"79\" rx=\"6\" ry=\"4\" fill=\"#4c4a8a\" opacity=\".55\"/><circle cx=\"86\" cy=\"70\" r=\"3.8\" fill=\"#fff\"/><circle cx=\"80\" cy=\"77.8\" r=\"1.7\" fill=\"#fff\"/><path d=\"M50.5 67 l-4.5 -3.5 M48.5 71 l-5 -1.2 M89.5 67 l4.5 -3.5 M91.5 71 l5 -1.2\" stroke=\"#1c1941\" stroke-width=\"2.2\" stroke-linecap=\"round\"/></g><path d=\"M65.5 85 Q60.5 91 65.5 97.5 L86.5 93 Q90.5 91.3 86.5 89.6 Z\" fill=\"url(#a1mee1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M63.8 90.6 Q75 94 87 90.9\" fill=\"none\" stroke=\"#b45309\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><g class=\"wr1\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#a1mee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g>","meoGuide":"<defs><radialGradient id=\"a2meo1b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#5ee6a8\"/><stop offset=\"1\" stop-color=\"#0d9b6c\"/></radialGradient><linearGradient id=\"a2meo1w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e3fcef\"/><stop offset=\"1\" stop-color=\"#86efac\"/></linearGradient><linearGradient id=\"a2meo1h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#a78bfa\"/><stop offset=\"1\" stop-color=\"#6d28d9\"/></linearGradient><linearGradient id=\"a2meo1k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl1\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#a2meo1w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#d97706\" stroke=\"#065f46\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><g fill=\"#7c3aed\" stroke=\"#6d28d9\" stroke-width=\"2\" stroke-linejoin=\"round\"><path d=\"M62 45 C58 35 48 31 38 34 C46 37 51 41 53 48 Z\"/><path d=\"M69 43 C68 29 58 20 45 21 C55 27 59 34 60 45 Z\"/><path d=\"M76 43 C77 30 70 18 60 14 C66 23 68 32 67 44 Z\"/></g><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#a2meo1b)\" stroke=\"#065f46\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#ecfdf5\" opacity=\".96\"/><path d=\"M61 107 Q50 110 42 117 Q53 115 62 112 Z\" fill=\"#6d28d9\"/><path d=\"M79 107 Q90 110 98 117 Q87 115 78 112 Z\" fill=\"#6d28d9\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#a2meo1h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff8fa8\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff8fa8\" opacity=\".85\"/><g class=\"e1\"><ellipse cx=\"57\" cy=\"74\" rx=\"9\" ry=\"10.5\" fill=\"#1c1941\"/><ellipse cx=\"57\" cy=\"79\" rx=\"6\" ry=\"4\" fill=\"#4c4a8a\" opacity=\".55\"/><circle cx=\"60\" cy=\"70\" r=\"3.8\" fill=\"#fff\"/><circle cx=\"54\" cy=\"77.8\" r=\"1.7\" fill=\"#fff\"/><path d=\"M75 76 q8 -11 16 0\" fill=\"none\" stroke=\"#1c1941\" stroke-width=\"4.5\" stroke-linecap=\"round\"/></g><path d=\"M64.5 91 L87 90.2 Q85 97 81.5 97.5 L66.5 100.5 Q63 96 64.5 91 Z\" fill=\"#9f1239\"/><ellipse cx=\"74\" cy=\"97.5\" rx=\"6\" ry=\"2.6\" fill=\"#fb7185\"/><path d=\"M65.5 84.5 Q61 88.5 65 92 L87.5 90.6 Q90.5 89 86.5 88 Z\" fill=\"url(#a2meo1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M66 96.5 Q63.5 99.5 67 101.5 L82.5 98 Q85 96.5 81.5 96 Z\" fill=\"url(#a2meo1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><path d=\"M30 36 L70 22 L110 36 L70 50 Z\" fill=\"#1c1941\"/><rect x=\"54\" y=\"40\" width=\"32\" height=\"10\" fill=\"#1c1941\"/><path d=\"M106 37 v18\" stroke=\"#fbbf24\" stroke-width=\"3\"/><g class=\"wr1\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#a2meo1w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g>","meeCoin":"<defs><radialGradient id=\"a3mee1b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#7ff0c8\"/><stop offset=\"1\" stop-color=\"#14b8a6\"/></radialGradient><linearGradient id=\"a3mee1w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e6fff7\"/><stop offset=\"1\" stop-color=\"#7de8d2\"/></linearGradient><linearGradient id=\"a3mee1h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fb7185\"/><stop offset=\"1\" stop-color=\"#e11d48\"/></linearGradient><linearGradient id=\"a3mee1k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl1\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#a3mee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#0f766e\" stroke=\"#0f766e\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#0f766e\" stroke-width=\"9.5\" stroke-linecap=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#f43f5e\" stroke-width=\"6\" stroke-linecap=\"round\"/><circle cx=\"72\" cy=\"24\" r=\"1.6\" fill=\"#fff\" opacity=\".75\"/><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#a3mee1b)\" stroke=\"#0f766e\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#f0fdfa\" opacity=\".96\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#a3mee1h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff7a9a\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff7a9a\" opacity=\".85\"/><g class=\"e1\"><circle cx=\"57\" cy=\"74\" r=\"9.5\" fill=\"#fcd34d\" stroke=\"#b45309\" stroke-width=\"1.6\"/><text x=\"57\" y=\"78\" text-anchor=\"middle\" font-size=\"11\" font-weight=\"800\" fill=\"#7c2d12\" font-family=\"system-ui,sans-serif\">M</text><circle cx=\"83\" cy=\"74\" r=\"9.5\" fill=\"#fcd34d\" stroke=\"#b45309\" stroke-width=\"1.6\"/><text x=\"83\" y=\"78\" text-anchor=\"middle\" font-size=\"11\" font-weight=\"800\" fill=\"#7c2d12\" font-family=\"system-ui,sans-serif\">M</text></g><path d=\"M64.5 91 L87 90.2 Q85 97 81.5 97.5 L66.5 100.5 Q63 96 64.5 91 Z\" fill=\"#9f1239\"/><ellipse cx=\"74\" cy=\"97.5\" rx=\"6\" ry=\"2.6\" fill=\"#fb7185\"/><path d=\"M65.5 84.5 Q61 88.5 65 92 L87.5 90.6 Q90.5 89 86.5 88 Z\" fill=\"url(#a3mee1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M66 96.5 Q63.5 99.5 67 101.5 L82.5 98 Q85 96.5 81.5 96 Z\" fill=\"url(#a3mee1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><path d=\"M58 44 L74 8 L90 44 Z\" fill=\"#f472b6\"/><path d=\"M63 34 h22 M67 24 h14\" stroke=\"#fde047\" stroke-width=\"4\"/><circle cx=\"74\" cy=\"8\" r=\"5\" fill=\"#fde047\"/><g class=\"wr1\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#a3mee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g>","meoStar":"<defs><radialGradient id=\"a4meo2b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#5ee6a8\"/><stop offset=\"1\" stop-color=\"#0d9b6c\"/></radialGradient><linearGradient id=\"a4meo2w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e3fcef\"/><stop offset=\"1\" stop-color=\"#86efac\"/></linearGradient><linearGradient id=\"a4meo2h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#a78bfa\"/><stop offset=\"1\" stop-color=\"#6d28d9\"/></linearGradient><linearGradient id=\"a4meo2k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl2\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#a4meo2w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#d97706\" stroke=\"#065f46\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><g fill=\"#7c3aed\" stroke=\"#6d28d9\" stroke-width=\"2\" stroke-linejoin=\"round\"><path d=\"M62 45 C58 35 48 31 38 34 C46 37 51 41 53 48 Z\"/><path d=\"M69 43 C68 29 58 20 45 21 C55 27 59 34 60 45 Z\"/><path d=\"M76 43 C77 30 70 18 60 14 C66 23 68 32 67 44 Z\"/></g><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#a4meo2b)\" stroke=\"#065f46\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#ecfdf5\" opacity=\".96\"/><path d=\"M61 107 Q50 110 42 117 Q53 115 62 112 Z\" fill=\"#6d28d9\"/><path d=\"M79 107 Q90 110 98 117 Q87 115 78 112 Z\" fill=\"#6d28d9\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#a4meo2h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff8fa8\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff8fa8\" opacity=\".85\"/><g class=\"e2\"><path d=\"M57.0 64.5 L59.5 70.5 L66.0 71.1 L61.1 75.3 L62.6 81.7 L57.0 78.3 L51.4 81.7 L52.9 75.3 L48.0 71.1 L54.5 70.5 Z\" fill=\"#fbbf24\" stroke=\"#f59e0b\" stroke-width=\"1\"/><path d=\"M83.0 64.5 L85.5 70.5 L92.0 71.1 L87.1 75.3 L88.6 81.7 L83.0 78.3 L77.4 81.7 L78.9 75.3 L74.0 71.1 L80.5 70.5 Z\" fill=\"#fbbf24\" stroke=\"#f59e0b\" stroke-width=\"1\"/></g><path d=\"M65.5 85 Q60.5 91 65.5 97.5 L86.5 93 Q90.5 91.3 86.5 89.6 Z\" fill=\"url(#a4meo2k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M63.8 90.6 Q75 94 87 90.9\" fill=\"none\" stroke=\"#b45309\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><g class=\"wr2\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#a4meo2w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g>","meeJoy":"<defs><radialGradient id=\"a5mee1b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#7ff0c8\"/><stop offset=\"1\" stop-color=\"#14b8a6\"/></radialGradient><linearGradient id=\"a5mee1w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e6fff7\"/><stop offset=\"1\" stop-color=\"#7de8d2\"/></linearGradient><linearGradient id=\"a5mee1h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fb7185\"/><stop offset=\"1\" stop-color=\"#e11d48\"/></linearGradient><linearGradient id=\"a5mee1k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl1\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#a5mee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#0f766e\" stroke=\"#0f766e\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#0f766e\" stroke-width=\"9.5\" stroke-linecap=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#f43f5e\" stroke-width=\"6\" stroke-linecap=\"round\"/><circle cx=\"72\" cy=\"24\" r=\"1.6\" fill=\"#fff\" opacity=\".75\"/><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#a5mee1b)\" stroke=\"#0f766e\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#f0fdfa\" opacity=\".96\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#a5mee1h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff7a9a\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff7a9a\" opacity=\".85\"/><g class=\"e1\"><path d=\"M49 76 q8 -11 16 0\" fill=\"none\" stroke=\"#1c1941\" stroke-width=\"4.5\" stroke-linecap=\"round\"/><path d=\"M75 76 q8 -11 16 0\" fill=\"none\" stroke=\"#1c1941\" stroke-width=\"4.5\" stroke-linecap=\"round\"/></g><path d=\"M65.5 85 Q60.5 91 65.5 97.5 L86.5 93 Q90.5 91.3 86.5 89.6 Z\" fill=\"url(#a5mee1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M63.8 90.6 Q75 94 87 90.9\" fill=\"none\" stroke=\"#b45309\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><g class=\"wr1\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#a5mee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g>","meoOpen":"<defs><radialGradient id=\"a6meo2b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#5ee6a8\"/><stop offset=\"1\" stop-color=\"#0d9b6c\"/></radialGradient><linearGradient id=\"a6meo2w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e3fcef\"/><stop offset=\"1\" stop-color=\"#86efac\"/></linearGradient><linearGradient id=\"a6meo2h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#a78bfa\"/><stop offset=\"1\" stop-color=\"#6d28d9\"/></linearGradient><linearGradient id=\"a6meo2k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl2\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#a6meo2w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#d97706\" stroke=\"#065f46\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><g fill=\"#7c3aed\" stroke=\"#6d28d9\" stroke-width=\"2\" stroke-linejoin=\"round\"><path d=\"M62 45 C58 35 48 31 38 34 C46 37 51 41 53 48 Z\"/><path d=\"M69 43 C68 29 58 20 45 21 C55 27 59 34 60 45 Z\"/><path d=\"M76 43 C77 30 70 18 60 14 C66 23 68 32 67 44 Z\"/></g><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#a6meo2b)\" stroke=\"#065f46\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#ecfdf5\" opacity=\".96\"/><path d=\"M61 107 Q50 110 42 117 Q53 115 62 112 Z\" fill=\"#6d28d9\"/><path d=\"M79 107 Q90 110 98 117 Q87 115 78 112 Z\" fill=\"#6d28d9\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#a6meo2h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff8fa8\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff8fa8\" opacity=\".85\"/><g class=\"e2\"><ellipse cx=\"57\" cy=\"74\" rx=\"9\" ry=\"10.5\" fill=\"#1c1941\"/><ellipse cx=\"57\" cy=\"79\" rx=\"6\" ry=\"4\" fill=\"#4c4a8a\" opacity=\".55\"/><circle cx=\"60\" cy=\"70\" r=\"3.8\" fill=\"#fff\"/><circle cx=\"54\" cy=\"77.8\" r=\"1.7\" fill=\"#fff\"/><ellipse cx=\"83\" cy=\"74\" rx=\"9\" ry=\"10.5\" fill=\"#1c1941\"/><ellipse cx=\"83\" cy=\"79\" rx=\"6\" ry=\"4\" fill=\"#4c4a8a\" opacity=\".55\"/><circle cx=\"86\" cy=\"70\" r=\"3.8\" fill=\"#fff\"/><circle cx=\"80\" cy=\"77.8\" r=\"1.7\" fill=\"#fff\"/></g><path d=\"M65.5 85 Q60.5 91 65.5 97.5 L86.5 93 Q90.5 91.3 86.5 89.6 Z\" fill=\"url(#a6meo2k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M63.8 90.6 Q75 94 87 90.9\" fill=\"none\" stroke=\"#b45309\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><g class=\"wr2\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#a6meo2w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g>","meeCrown":"<defs><radialGradient id=\"a7mee1b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#7ff0c8\"/><stop offset=\"1\" stop-color=\"#14b8a6\"/></radialGradient><linearGradient id=\"a7mee1w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e6fff7\"/><stop offset=\"1\" stop-color=\"#7de8d2\"/></linearGradient><linearGradient id=\"a7mee1h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fb7185\"/><stop offset=\"1\" stop-color=\"#e11d48\"/></linearGradient><linearGradient id=\"a7mee1k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl1\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#a7mee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#0f766e\" stroke=\"#0f766e\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#0f766e\" stroke-width=\"9.5\" stroke-linecap=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#f43f5e\" stroke-width=\"6\" stroke-linecap=\"round\"/><circle cx=\"72\" cy=\"24\" r=\"1.6\" fill=\"#fff\" opacity=\".75\"/><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#a7mee1b)\" stroke=\"#0f766e\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#f0fdfa\" opacity=\".96\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#a7mee1h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff7a9a\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff7a9a\" opacity=\".85\"/><g class=\"e1\"><path d=\"M57.0 64.5 L59.5 70.5 L66.0 71.1 L61.1 75.3 L62.6 81.7 L57.0 78.3 L51.4 81.7 L52.9 75.3 L48.0 71.1 L54.5 70.5 Z\" fill=\"#fbbf24\" stroke=\"#f59e0b\" stroke-width=\"1\"/><path d=\"M83.0 64.5 L85.5 70.5 L92.0 71.1 L87.1 75.3 L88.6 81.7 L83.0 78.3 L77.4 81.7 L78.9 75.3 L74.0 71.1 L80.5 70.5 Z\" fill=\"#fbbf24\" stroke=\"#f59e0b\" stroke-width=\"1\"/></g><path d=\"M64.5 91 L87 90.2 Q85 97 81.5 97.5 L66.5 100.5 Q63 96 64.5 91 Z\" fill=\"#9f1239\"/><ellipse cx=\"74\" cy=\"97.5\" rx=\"6\" ry=\"2.6\" fill=\"#fb7185\"/><path d=\"M65.5 84.5 Q61 88.5 65 92 L87.5 90.6 Q90.5 89 86.5 88 Z\" fill=\"url(#a7mee1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M66 96.5 Q63.5 99.5 67 101.5 L82.5 98 Q85 96.5 81.5 96 Z\" fill=\"url(#a7mee1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><path d=\"M50 46 L54 22 L64 36 L74 16 L84 36 L94 22 L98 46 Z\" fill=\"#fcd34d\" stroke=\"#b45309\" stroke-width=\"2\" stroke-linejoin=\"round\"/><circle cx=\"74\" cy=\"34\" r=\"3\" fill=\"#e11d48\"/><g class=\"wr1\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#a7mee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g>","meoCrown":"<defs><radialGradient id=\"a8meo2b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#5ee6a8\"/><stop offset=\"1\" stop-color=\"#0d9b6c\"/></radialGradient><linearGradient id=\"a8meo2w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e3fcef\"/><stop offset=\"1\" stop-color=\"#86efac\"/></linearGradient><linearGradient id=\"a8meo2h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#a78bfa\"/><stop offset=\"1\" stop-color=\"#6d28d9\"/></linearGradient><linearGradient id=\"a8meo2k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl2\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#a8meo2w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#d97706\" stroke=\"#065f46\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><g fill=\"#7c3aed\" stroke=\"#6d28d9\" stroke-width=\"2\" stroke-linejoin=\"round\"><path d=\"M62 45 C58 35 48 31 38 34 C46 37 51 41 53 48 Z\"/><path d=\"M69 43 C68 29 58 20 45 21 C55 27 59 34 60 45 Z\"/><path d=\"M76 43 C77 30 70 18 60 14 C66 23 68 32 67 44 Z\"/></g><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#a8meo2b)\" stroke=\"#065f46\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#ecfdf5\" opacity=\".96\"/><path d=\"M61 107 Q50 110 42 117 Q53 115 62 112 Z\" fill=\"#6d28d9\"/><path d=\"M79 107 Q90 110 98 117 Q87 115 78 112 Z\" fill=\"#6d28d9\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#a8meo2h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff8fa8\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff8fa8\" opacity=\".85\"/><g class=\"e2\"><path d=\"M57.0 64.5 L59.5 70.5 L66.0 71.1 L61.1 75.3 L62.6 81.7 L57.0 78.3 L51.4 81.7 L52.9 75.3 L48.0 71.1 L54.5 70.5 Z\" fill=\"#fbbf24\" stroke=\"#f59e0b\" stroke-width=\"1\"/><path d=\"M83.0 64.5 L85.5 70.5 L92.0 71.1 L87.1 75.3 L88.6 81.7 L83.0 78.3 L77.4 81.7 L78.9 75.3 L74.0 71.1 L80.5 70.5 Z\" fill=\"#fbbf24\" stroke=\"#f59e0b\" stroke-width=\"1\"/></g><path d=\"M64.5 91 L87 90.2 Q85 97 81.5 97.5 L66.5 100.5 Q63 96 64.5 91 Z\" fill=\"#9f1239\"/><ellipse cx=\"74\" cy=\"97.5\" rx=\"6\" ry=\"2.6\" fill=\"#fb7185\"/><path d=\"M65.5 84.5 Q61 88.5 65 92 L87.5 90.6 Q90.5 89 86.5 88 Z\" fill=\"url(#a8meo2k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M66 96.5 Q63.5 99.5 67 101.5 L82.5 98 Q85 96.5 81.5 96 Z\" fill=\"url(#a8meo2k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><path d=\"M50 46 L54 22 L64 36 L74 16 L84 36 L94 22 L98 46 Z\" fill=\"#fcd34d\" stroke=\"#b45309\" stroke-width=\"2\" stroke-linejoin=\"round\"/><circle cx=\"74\" cy=\"34\" r=\"3\" fill=\"#e11d48\"/><g class=\"wr2\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#a8meo2w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g>","meoTeary":"<defs><radialGradient id=\"a9meo1b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#5ee6a8\"/><stop offset=\"1\" stop-color=\"#0d9b6c\"/></radialGradient><linearGradient id=\"a9meo1w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e3fcef\"/><stop offset=\"1\" stop-color=\"#86efac\"/></linearGradient><linearGradient id=\"a9meo1h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#a78bfa\"/><stop offset=\"1\" stop-color=\"#6d28d9\"/></linearGradient><linearGradient id=\"a9meo1k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl1\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#a9meo1w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#d97706\" stroke=\"#065f46\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><g fill=\"#7c3aed\" stroke=\"#6d28d9\" stroke-width=\"2\" stroke-linejoin=\"round\"><path d=\"M62 45 C58 35 48 31 38 34 C46 37 51 41 53 48 Z\"/><path d=\"M69 43 C68 29 58 20 45 21 C55 27 59 34 60 45 Z\"/><path d=\"M76 43 C77 30 70 18 60 14 C66 23 68 32 67 44 Z\"/></g><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#a9meo1b)\" stroke=\"#065f46\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#ecfdf5\" opacity=\".96\"/><path d=\"M61 107 Q50 110 42 117 Q53 115 62 112 Z\" fill=\"#6d28d9\"/><path d=\"M79 107 Q90 110 98 117 Q87 115 78 112 Z\" fill=\"#6d28d9\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#a9meo1h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><path d=\"M36 100 q34 16 68 0 l2 10 q-36 18 -72 0 z\" fill=\"#ef4444\"/><path d=\"M88 108 l10 22 l8 -4 l-8 -20 z\" fill=\"#dc2626\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff8fa8\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff8fa8\" opacity=\".85\"/><g class=\"e1\"><ellipse cx=\"57\" cy=\"74\" rx=\"9.5\" ry=\"11\" fill=\"#1c1941\"/><circle cx=\"60\" cy=\"70\" r=\"4.2\" fill=\"#fff\"/><circle cx=\"54\" cy=\"77\" r=\"2.2\" fill=\"#fff\"/><path d=\"M49 80 q8 6 16 0\" fill=\"none\" stroke=\"#7dd3fc\" stroke-width=\"2.4\"/><ellipse cx=\"83\" cy=\"74\" rx=\"9.5\" ry=\"11\" fill=\"#1c1941\"/><circle cx=\"86\" cy=\"70\" r=\"4.2\" fill=\"#fff\"/><circle cx=\"80\" cy=\"77\" r=\"2.2\" fill=\"#fff\"/><path d=\"M75 80 q8 6 16 0\" fill=\"none\" stroke=\"#7dd3fc\" stroke-width=\"2.4\"/></g><path d=\"M65.5 85 Q60.5 91 65.5 97.5 L86.5 93 Q90.5 91.3 86.5 89.6 Z\" fill=\"url(#a9meo1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M64 91.5 L87.5 91.3\" fill=\"none\" stroke=\"#b45309\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><g class=\"wr1\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#a9meo1w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g>","meeWink":"<defs><radialGradient id=\"b1mee1b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#7ff0c8\"/><stop offset=\"1\" stop-color=\"#14b8a6\"/></radialGradient><linearGradient id=\"b1mee1w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e6fff7\"/><stop offset=\"1\" stop-color=\"#7de8d2\"/></linearGradient><linearGradient id=\"b1mee1h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fb7185\"/><stop offset=\"1\" stop-color=\"#e11d48\"/></linearGradient><linearGradient id=\"b1mee1k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl1\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#b1mee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#0f766e\" stroke=\"#0f766e\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#0f766e\" stroke-width=\"9.5\" stroke-linecap=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#f43f5e\" stroke-width=\"6\" stroke-linecap=\"round\"/><circle cx=\"72\" cy=\"24\" r=\"1.6\" fill=\"#fff\" opacity=\".75\"/><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#b1mee1b)\" stroke=\"#0f766e\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#f0fdfa\" opacity=\".96\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#b1mee1h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff7a9a\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff7a9a\" opacity=\".85\"/><g class=\"e1\"><ellipse cx=\"57\" cy=\"74\" rx=\"9\" ry=\"10.5\" fill=\"#1c1941\"/><ellipse cx=\"57\" cy=\"79\" rx=\"6\" ry=\"4\" fill=\"#4c4a8a\" opacity=\".55\"/><circle cx=\"60\" cy=\"70\" r=\"3.8\" fill=\"#fff\"/><circle cx=\"54\" cy=\"77.8\" r=\"1.7\" fill=\"#fff\"/><path d=\"M75 76 q8 -11 16 0\" fill=\"none\" stroke=\"#1c1941\" stroke-width=\"4.5\" stroke-linecap=\"round\"/></g><path d=\"M64.5 91 L87 90.2 Q85 97 81.5 97.5 L66.5 100.5 Q63 96 64.5 91 Z\" fill=\"#9f1239\"/><path d=\"M70 96 Q71 107 77 106 Q82 105 80 95.5 Z\" fill=\"#fb7185\" stroke=\"#e11d48\" stroke-width=\"1.2\"/><path d=\"M75 97.5 v5\" stroke=\"#e11d48\" stroke-width=\"1\" stroke-linecap=\"round\"/><path d=\"M65.5 84.5 Q61 88.5 65 92 L87.5 90.6 Q90.5 89 86.5 88 Z\" fill=\"url(#b1mee1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M66 96.5 Q63.5 99.5 67 101.5 L82.5 98 Q85 96.5 81.5 96 Z\" fill=\"url(#b1mee1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><rect x=\"50\" y=\"10\" width=\"40\" height=\"34\" rx=\"3\" fill=\"#1c1941\"/><rect x=\"40\" y=\"40\" width=\"60\" height=\"8\" rx=\"4\" fill=\"#1c1941\"/><rect x=\"50\" y=\"34\" width=\"40\" height=\"5\" fill=\"#e11d48\"/><g class=\"wr1\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#b1mee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g>","meoHeart":"<defs><radialGradient id=\"b2meo2b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#5ee6a8\"/><stop offset=\"1\" stop-color=\"#0d9b6c\"/></radialGradient><linearGradient id=\"b2meo2w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e3fcef\"/><stop offset=\"1\" stop-color=\"#86efac\"/></linearGradient><linearGradient id=\"b2meo2h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#a78bfa\"/><stop offset=\"1\" stop-color=\"#6d28d9\"/></linearGradient><linearGradient id=\"b2meo2k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl2\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#b2meo2w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#d97706\" stroke=\"#065f46\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><g fill=\"#7c3aed\" stroke=\"#6d28d9\" stroke-width=\"2\" stroke-linejoin=\"round\"><path d=\"M62 45 C58 35 48 31 38 34 C46 37 51 41 53 48 Z\"/><path d=\"M69 43 C68 29 58 20 45 21 C55 27 59 34 60 45 Z\"/><path d=\"M76 43 C77 30 70 18 60 14 C66 23 68 32 67 44 Z\"/></g><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#b2meo2b)\" stroke=\"#065f46\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#ecfdf5\" opacity=\".96\"/><path d=\"M61 107 Q50 110 42 117 Q53 115 62 112 Z\" fill=\"#6d28d9\"/><path d=\"M79 107 Q90 110 98 117 Q87 115 78 112 Z\" fill=\"#6d28d9\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#b2meo2h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff8fa8\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff8fa8\" opacity=\".85\"/><g class=\"e2\"><path d=\"M57 80.75 C44.25 73.25 50.25 65 57 71.375 C63.75 65 69.75 73.25 57 80.75 Z\" fill=\"#e11d48\"/><circle cx=\"54\" cy=\"71\" r=\"1.6\" fill=\"#fff\" opacity=\".8\"/><path d=\"M83 80.75 C70.25 73.25 76.25 65 83 71.375 C89.75 65 95.75 73.25 83 80.75 Z\" fill=\"#e11d48\"/><circle cx=\"80\" cy=\"71\" r=\"1.6\" fill=\"#fff\" opacity=\".8\"/></g><path d=\"M64.5 91 L87 90.2 Q85 97 81.5 97.5 L66.5 100.5 Q63 96 64.5 91 Z\" fill=\"#9f1239\"/><ellipse cx=\"74\" cy=\"97.5\" rx=\"6\" ry=\"2.6\" fill=\"#fb7185\"/><path d=\"M65.5 84.5 Q61 88.5 65 92 L87.5 90.6 Q90.5 89 86.5 88 Z\" fill=\"url(#b2meo2k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M66 96.5 Q63.5 99.5 67 101.5 L82.5 98 Q85 96.5 81.5 96 Z\" fill=\"url(#b2meo2k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><g transform=\"translate(98 44)\"><circle r=\"5\" cx=\"0\" cy=\"-7\" fill=\"#f9a8d4\"/><circle r=\"5\" cx=\"7\" cy=\"0\" fill=\"#f9a8d4\"/><circle r=\"5\" cx=\"0\" cy=\"7\" fill=\"#f9a8d4\"/><circle r=\"5\" cx=\"-7\" cy=\"0\" fill=\"#f9a8d4\"/><circle r=\"4\" fill=\"#fde047\"/></g><g class=\"wr2\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#b2meo2w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g>","meoCool":"<defs><radialGradient id=\"b3meo1b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#5ee6a8\"/><stop offset=\"1\" stop-color=\"#0d9b6c\"/></radialGradient><linearGradient id=\"b3meo1w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e3fcef\"/><stop offset=\"1\" stop-color=\"#86efac\"/></linearGradient><linearGradient id=\"b3meo1h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#a78bfa\"/><stop offset=\"1\" stop-color=\"#6d28d9\"/></linearGradient><linearGradient id=\"b3meo1k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl1\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#b3meo1w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#d97706\" stroke=\"#065f46\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><g fill=\"#7c3aed\" stroke=\"#6d28d9\" stroke-width=\"2\" stroke-linejoin=\"round\"><path d=\"M62 45 C58 35 48 31 38 34 C46 37 51 41 53 48 Z\"/><path d=\"M69 43 C68 29 58 20 45 21 C55 27 59 34 60 45 Z\"/><path d=\"M76 43 C77 30 70 18 60 14 C66 23 68 32 67 44 Z\"/></g><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#b3meo1b)\" stroke=\"#065f46\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#ecfdf5\" opacity=\".96\"/><path d=\"M61 107 Q50 110 42 117 Q53 115 62 112 Z\" fill=\"#6d28d9\"/><path d=\"M79 107 Q90 110 98 117 Q87 115 78 112 Z\" fill=\"#6d28d9\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#b3meo1h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff8fa8\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff8fa8\" opacity=\".85\"/><g class=\"e1\"><path d=\"M44 66 h52 v6 q-2 12 -12 12 h-4 q-9 0 -10 -10 q-1 10 -10 10 h-4 q-10 0 -12 -12 z\" fill=\"#1c1941\"/><path d=\"M50 69 l6 0 -8 8 z\" fill=\"#fff\" opacity=\".5\"/></g><path d=\"M65.5 85 Q60.5 91 65.5 97.5 L86.5 93 Q90.5 91.3 86.5 89.6 Z\" fill=\"url(#b3meo1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M63.8 90.6 Q75 94 87 90.9\" fill=\"none\" stroke=\"#b45309\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><path d=\"M30 82 q0 -58 40 -58 q40 0 40 58\" fill=\"none\" stroke=\"#1f2937\" stroke-width=\"6\"/><rect x=\"22\" y=\"72\" width=\"14\" height=\"22\" rx=\"6\" fill=\"#ef4444\"/><rect x=\"104\" y=\"72\" width=\"14\" height=\"22\" rx=\"6\" fill=\"#ef4444\"/><g class=\"wr1\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#b3meo1w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g>","meeHalo":"<defs><radialGradient id=\"b4mee1b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#7ff0c8\"/><stop offset=\"1\" stop-color=\"#14b8a6\"/></radialGradient><linearGradient id=\"b4mee1w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e6fff7\"/><stop offset=\"1\" stop-color=\"#7de8d2\"/></linearGradient><linearGradient id=\"b4mee1h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fb7185\"/><stop offset=\"1\" stop-color=\"#e11d48\"/></linearGradient><linearGradient id=\"b4mee1k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl1\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#b4mee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#0f766e\" stroke=\"#0f766e\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#0f766e\" stroke-width=\"9.5\" stroke-linecap=\"round\"/><path d=\"M66 44 C58 28 74 16 84 24 C91 30 84 40 77 35\" fill=\"none\" stroke=\"#f43f5e\" stroke-width=\"6\" stroke-linecap=\"round\"/><circle cx=\"72\" cy=\"24\" r=\"1.6\" fill=\"#fff\" opacity=\".75\"/><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#b4mee1b)\" stroke=\"#0f766e\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#f0fdfa\" opacity=\".96\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#b4mee1h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff7a9a\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff7a9a\" opacity=\".85\"/><g class=\"e1\"><path d=\"M49 73 q8 8 16 0\" fill=\"none\" stroke=\"#1c1941\" stroke-width=\"4\" stroke-linecap=\"round\"/><path d=\"M75 73 q8 8 16 0\" fill=\"none\" stroke=\"#1c1941\" stroke-width=\"4\" stroke-linecap=\"round\"/></g><path d=\"M65.5 85 Q60.5 91 65.5 97.5 L86.5 93 Q90.5 91.3 86.5 89.6 Z\" fill=\"url(#b4mee1k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M63.8 90.6 Q75 94 87 90.9\" fill=\"none\" stroke=\"#b45309\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><ellipse cx=\"70\" cy=\"28\" rx=\"24\" ry=\"6\" fill=\"none\" stroke=\"#fde047\" stroke-width=\"5\"/><g class=\"wr1\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#b4mee1w)\" stroke=\"#0f766e\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#7de8d2\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g>","meoHalo":"<defs><radialGradient id=\"b5meo2b\" cx=\".38\" cy=\".3\" r=\".8\"><stop offset=\"0\" stop-color=\"#5ee6a8\"/><stop offset=\"1\" stop-color=\"#0d9b6c\"/></radialGradient><linearGradient id=\"b5meo2w\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#e3fcef\"/><stop offset=\"1\" stop-color=\"#86efac\"/></linearGradient><linearGradient id=\"b5meo2h\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#a78bfa\"/><stop offset=\"1\" stop-color=\"#6d28d9\"/></linearGradient><linearGradient id=\"b5meo2k\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\"><stop offset=\"0\" stop-color=\"#fde68a\"/><stop offset=\"1\" stop-color=\"#f59e0b\"/></linearGradient></defs><g class=\"wl2\"><ellipse cx=\"26\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(-34 26 70)\" fill=\"url(#b5meo2w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M21 60 q2 12 7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g><path d=\"M61 112 C50 116 45 124 47 131 C53 130 57 126 60 122 C62 128 66 132 72 133 C74 125 70 117 66 112 Z\" fill=\"#d97706\" stroke=\"#065f46\" stroke-width=\"1.8\" stroke-linejoin=\"round\"/><g fill=\"#7c3aed\" stroke=\"#6d28d9\" stroke-width=\"2\" stroke-linejoin=\"round\"><path d=\"M62 45 C58 35 48 31 38 34 C46 37 51 41 53 48 Z\"/><path d=\"M69 43 C68 29 58 20 45 21 C55 27 59 34 60 45 Z\"/><path d=\"M76 43 C77 30 70 18 60 14 C66 23 68 32 67 44 Z\"/></g><circle cx=\"70\" cy=\"80\" r=\"40\" fill=\"url(#b5meo2b)\" stroke=\"#065f46\" stroke-width=\"2.4\"/><ellipse cx=\"55\" cy=\"55\" rx=\"13\" ry=\"7.5\" transform=\"rotate(-28 55 55)\" fill=\"#fff\" opacity=\".38\"/><circle cx=\"76\" cy=\"47.5\" r=\"2.6\" fill=\"#fff\" opacity=\".55\"/><ellipse cx=\"70\" cy=\"103\" rx=\"26\" ry=\"16\" fill=\"#ecfdf5\" opacity=\".96\"/><path d=\"M61 107 Q50 110 42 117 Q53 115 62 112 Z\" fill=\"#6d28d9\"/><path d=\"M79 107 Q90 110 98 117 Q87 115 78 112 Z\" fill=\"#6d28d9\"/><path d=\"M70 117.2 C56.4 109.2 62.8 100.4 70 107.2 C77.2 100.4 83.6 109.2 70 117.2 Z\" fill=\"url(#b5meo2h)\"/><circle cx=\"66\" cy=\"107\" r=\"1.5\" fill=\"#fff\" opacity=\".9\"/><ellipse cx=\"45\" cy=\"88\" rx=\"7.5\" ry=\"4.8\" fill=\"#ff8fa8\" opacity=\".85\"/><ellipse cx=\"98\" cy=\"86\" rx=\"7\" ry=\"4.6\" fill=\"#ff8fa8\" opacity=\".85\"/><g class=\"e2\"><path d=\"M49 73 q8 8 16 0\" fill=\"none\" stroke=\"#1c1941\" stroke-width=\"4\" stroke-linecap=\"round\"/><path d=\"M75 73 q8 8 16 0\" fill=\"none\" stroke=\"#1c1941\" stroke-width=\"4\" stroke-linecap=\"round\"/></g><path d=\"M65.5 85 Q60.5 91 65.5 97.5 L86.5 93 Q90.5 91.3 86.5 89.6 Z\" fill=\"url(#b5meo2k)\" stroke=\"#b45309\" stroke-width=\"1.6\" stroke-linejoin=\"round\"/><path d=\"M63.8 90.6 Q75 94 87 90.9\" fill=\"none\" stroke=\"#b45309\" stroke-width=\"1.5\" stroke-linecap=\"round\"/><path d=\"M68 86.8 Q75 86 81 88\" fill=\"none\" stroke=\"#fff\" stroke-width=\"1.8\" stroke-linecap=\"round\" opacity=\".7\"/><ellipse cx=\"70\" cy=\"28\" rx=\"24\" ry=\"6\" fill=\"none\" stroke=\"#fde047\" stroke-width=\"5\"/><g class=\"wr2\"><ellipse cx=\"114\" cy=\"70\" rx=\"13\" ry=\"24\" transform=\"rotate(34 114 70)\" fill=\"url(#b5meo2w)\" stroke=\"#065f46\" stroke-width=\"2.2\" stroke-opacity=\".55\"/><path d=\"M119 60 q-2 12 -7 22\" stroke=\"#86efac\" stroke-width=\"2\" stroke-linecap=\"round\" fill=\"none\"/></g>"};
+(function(){
+  const $=id=>document.getElementById(id);
+  const fr=n=>n.toLocaleString('fr-FR');
+  const strip=s=>s.replace(/<svg[^>]*>/,'').replace(/<\/svg>\s*$/,'');
+  const cell=(svg,name,sub,wide)=>`<div class="icon-cell${wide?' wide':''}">${svg}<b>${name}</b><span>${sub}</span></div>`;
+  const DASH=[[262,762,384,.7],[262,662,512,1],[262,562,640,.75]];
+  const sig=(cx,cy,size,color,sw=92,mode='flat')=>{
+    const s=size/1024,g=(c,dx,dy,o)=>`<g transform="translate(${cx-size/2+dx} ${cy-size/2+dy}) scale(${s})">${DASH.map(d=>`<line x1="${d[0]}" y1="${d[2]}" x2="${d[1]}" y2="${d[2]}" stroke="${c}" stroke-opacity="${o??d[3]}" stroke-width="${sw}" stroke-linecap="round"/>`).join('')}</g>`;
+    if(mode==='struck')return g('#2b3342',size*.018,size*.022,.5)+g('#ffffff',-size*.012,-size*.014,.85)+g(color,0,0);
+    if(mode==='engraved')return g('#ffffff',size*.012,size*.016,.35)+g(color,0,0,.85);
+    return g(color,0,0);
+  };
+  const bird=(k,x,y,s,flip)=>`<g transform="translate(${x} ${y}) scale(${flip?-s:s} ${s})"><g filter="url(#cut)">${MEE[k]}</g></g>`;
+  document.querySelectorAll('[data-bird]').forEach(el=>{const s=+el.dataset.size,f=el.dataset.flip;el.innerHTML=`<svg viewBox="0 0 150 150" width="${s}" height="${s}" aria-hidden="true">${bird(el.dataset.bird,f?145:5,5,1,f)}</svg>`});
+
+  let uid=0;
+  const coinAvers=(size,metal='gSilver')=>{const id='ring'+(uid++);return `<svg viewBox="0 0 120 120" width="${size}" height="${size}" aria-hidden="true"><defs><path id="${id}" d="M60 60 m-43 0 a43 43 0 1 1 86 0 a43 43 0 1 1 -86 0"/><clipPath id="c${id}"><circle cx="60" cy="60" r="56"/></clipPath></defs><circle cx="60" cy="60" r="57" fill="url(#${metal})"/><circle cx="60" cy="60" r="53" fill="none" stroke="#5f6a7d" stroke-width="1.4" stroke-dasharray="1.4 2"/><circle cx="60" cy="60" r="35" fill="url(#gSilverIn)" stroke="#f3f5f9" stroke-width="1.6"/><text font-family="JetBrains Mono,monospace" font-size="8.4" letter-spacing="2" fill="#3f4858"><textPath href="#${id}">MEESHY · UNE MEESH · MEESHY · UNE MEESH ·</textPath></text>${sig(60,60,66,'#3f4858',100,'struck')}<g clip-path="url(#c${id})"><rect class="sheen" x="20" y="-10" width="24" height="140" fill="url(#gSheen)" transform="rotate(20 60 60)" opacity=".7"/></g></svg>`};
+  const coinRevers=(size,n,metal='gSilver')=>`<svg viewBox="0 0 120 120" width="${size}" height="${size}" aria-hidden="true"><circle cx="60" cy="60" r="57" fill="url(#${metal})"/><circle cx="60" cy="60" r="53" fill="none" stroke="#5f6a7d" stroke-width="1.4" stroke-dasharray="1.4 2"/><circle cx="60" cy="60" r="45" fill="url(#gSilverIn)" stroke="#f3f5f9" stroke-width="1.4"/>${bird('meeJoy',13,30,.34)}${bird('meoOpen',107,30,.34,1)}<text x="60" y="96" text-anchor="middle" font-family="Bricolage Grotesque,system-ui" font-weight="800" font-size="13" fill="#3f4858">N° ${n}</text><text x="60" y="27" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8" letter-spacing="2" fill="#3f4858">2026</text></svg>`;
+  const ring=(lvl,pct,color='var(--indigo)',size=56)=>`<svg viewBox="0 0 56 56" width="${size}" height="${size}" aria-hidden="true"><circle cx="28" cy="28" r="24" fill="none" stroke="var(--line)" stroke-width="5"/><circle cx="28" cy="28" r="24" fill="none" stroke="${color}" stroke-width="5" stroke-linecap="round" stroke-dasharray="${(151*pct).toFixed(1)} 151" transform="rotate(-90 28 28)"/>${sig(28,17,13,'var(--muted)',120)}<text x="28" y="36" text-anchor="middle" font-family="Bricolage Grotesque,system-ui" font-weight="800" font-size="14" fill="var(--ink)">${lvl}</text></svg>`;
+
+  const RANGS=[
+    {n:'Murmure',g:0,m:'gCopper',ink:'#5a2a12',t:'on commence à se faire entendre'},
+    {n:'Écho',g:500,m:'gCopper',ink:'#5a2a12',t:'on vous répond'},
+    {n:'Voix',g:1500,m:'gBronze',ink:'#4a3010',t:'on vous reconnaît'},
+    {n:'Conteur',g:3500,m:'gBronze',ink:'#4a3010',t:'on vous écoute'},
+    {n:'Passeur',g:7000,m:'gArgent',ink:'#3f4858',t:'vous reliez des gens'},
+    {n:'Polyglotte',g:12000,m:'gArgent',ink:'#3f4858',t:'vous reliez des langues'},
+    {n:'Ambassadeur',g:20000,m:'gOr',ink:'#6b4610',t:'Mee et Meo tiennent votre écu'},
+    {n:'Orateur',g:32000,m:'gOr',ink:'#6b4610',t:'les lauriers'},
+    {n:'Oracle',g:50000,m:'gPlatine',ink:'#2c4459',t:'l’étoile au cimier'},
+    {n:'Légende',g:80000,m:'gObs',ink:'#d7d4f2',t:'la couronne'},
+    {n:'Mythe',g:'top 100',m:'gPrism',ink:'#1c1941',t:'les 100 premières Légendes'}];
+  const ECU='M14 10 h72 v38 c0 24 -16 37 -36 45 c-20 -8 -36 -21 -36 -45 z';
+  const STAR=(x,y,r)=>{let p='';for(let k=0;k<10;k++){const a=k*Math.PI/5-Math.PI/2,rr=k%2?r*.45:r;p+=(k?'L':'M')+(x+rr*Math.cos(a)).toFixed(1)+' '+(y+rr*Math.sin(a)).toFixed(1)}return p+'Z'};
+  const blason=(i,size,div=3)=>{
+    const R=RANGS[i];
+    const ecu=`<g transform="translate(50 26)"><path d="${ECU}" fill="url(#${R.m})" stroke="#1c1941" stroke-opacity=".35" stroke-width="2"/>${i>=1?`<path d="M21 16 h58 v32 c0 19 -12 30 -29 37 c-17 -7 -29 -18 -29 -37 z" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="2"/>`:''}${i>=3?`<path d="M14 10 h72 v15 h-72z" fill="#1c1941" fill-opacity=".16"/>`:''}${i===4?`<path d="${STAR(32,18,5)} ${STAR(68,18,5)}" fill="#fff"/>`:''}${i===5?[38,50,62].map(x=>`<circle cx="${x}" cy="18" r="3" fill="#fff"/>`).join(''):''}${sig(50,55,60,R.ink,96,'engraved')}</g>`;
+    const tenants=i>=6?bird(i>=10?'meeHalo':i>=9?'meeCrown':'meeJoy',0,62,.42)+bird(i>=10?'meoHalo':i>=9?'meoCrown':'meoOpen',200,62,.42,1):'';
+    const cimier=i===8?`<path d="${STAR(100,13,11)}" fill="url(#gPlatine)" stroke="#1c1941" stroke-opacity=".35"/>`:i>=9?`<path d="M78 26 l6 -16 8 10 8 -14 8 14 8 -10 6 16 z" fill="${i===10?'url(#gPrism)':'url(#gOr)'}" stroke="#1c1941" stroke-opacity=".35"/>`:'';
+    const laurel=i>=7?`<path d="M60 132 q-18 -12 -14 -40 M140 132 q18 -12 14 -40" fill="none" stroke="#10b981" stroke-width="3.5" stroke-linecap="round"/>${[0,1,2].map(k=>`<ellipse cx="${50-k*1}" cy="${120-k*12}" rx="5" ry="2.6" fill="#10b981" transform="rotate(-50 ${50-k} ${120-k*12})"/><ellipse cx="${150+k}" cy="${120-k*12}" rx="5" ry="2.6" fill="#10b981" transform="rotate(50 ${150+k} ${120-k*12})"/>`).join('')}`:'';
+    const ribbon=i>=6?`<path d="M52 140 h96 l-7 8 7 8 h-96 l7 -8z" fill="#4f46e5"/><text x="100" y="151.5" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8.5" letter-spacing="1.4" fill="#fff">${R.n.toUpperCase()}</text>`:'';
+    const chev=i<10?Array.from({length:div},(_,k)=>`<path d="M90 ${162+k*6} l10 5 10 -5" fill="none" stroke="#4f46e5" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>`).join(''):'';
+    return `<svg viewBox="0 0 200 184" width="${size}" height="${Math.round(size*184/200)}" aria-hidden="true">${laurel}${tenants}${cimier}${ecu}${ribbon}${chev}</svg>`;
+  };
+  $('rangTable').innerHTML=RANGS.map(r=>`<tr><td>${r.n}</td><td class="r num">${typeof r.g==='number'?fr(r.g):r.g}</td><td>${r.t}</td></tr>`).join('');
+
+  $('heroArt').innerHTML=`<svg viewBox="0 0 300 190" width="440" aria-hidden="true">${bird('meeCoin',0,36,.92)}${bird('meoStar',300,36,.92,1)}<g transform="translate(92 34) scale(.97)">${strip(coinAvers(120))}</g></svg>`;
+
+  $('gauges').innerHTML=[
+    [ring(34,.7),'Niveau','Suit les points en poche. Redescend à chaque frappe.','<span class="tag down">peut baisser</span>'],
+    [coinAvers(56),'Trésor','Les Meeshes gardées. Baisse quand on dépense.','<span class="tag">à arbitrer</span>'],
+    [blason(2,64,2),'Rang','Lu sur la Gloire. Ne baisse jamais.','<span class="tag up">permanent</span>']
+  ].map(g=>`<div class="gauge">${g[0]}<div><strong>${g[1]}</strong><small>${g[2]}</small></div>${g[3]}</div>`).join('');
+
+  const paliers=[['Étincelle','1–9','#f87171'],['Lueur','10–19','#fb923c'],['Lumière','20–29','#fbbf24'],['Éclat','30–39','#a3e635'],['Rayon','40–49','#34d399'],['Aurore','50–59','#22d3ee'],['Comète','60–69','#60a5fa'],['Étoile','70–79','#818cf8'],['Constellation','80–89','#a855f7'],['Galaxie','90–100','url(#gPrism)']];
+  $('paliers').innerHTML=paliers.map((p,i)=>{
+    const rays=Array.from({length:i+1},(_,k)=>{const a=(k/(i+1))*Math.PI*2-Math.PI/2;return `<circle cx="${(36+31*Math.cos(a)).toFixed(1)}" cy="${(36+31*Math.sin(a)).toFixed(1)}" r="2.6" fill="${p[2]}"/>`}).join('');
+    return cell(`<svg viewBox="0 0 72 72" width="64" height="64" aria-hidden="true"><circle cx="36" cy="36" r="24" fill="none" stroke="${p[2]}" stroke-width="${3+i*.5}"/>${rays}<circle cx="36" cy="36" r="16" fill="var(--surface)" stroke="var(--line)"/>${sig(36,28,11,'var(--muted)',120)}<text x="36" y="44" text-anchor="middle" font-family="Bricolage Grotesque,system-ui" font-weight="800" font-size="12" fill="var(--ink)">${i===0?1:i*10}</text></svg>`,p[0],p[1]);
+  }).join('');
+
+  const tres=[['Bourse','1+',1],['Escarcelle','10+',2],['Coffret','50+',3],['Coffre','100+',4],['Trésor','500+',5],['Réserve royale','1 000+',6]];
+  $('tresor').innerHTML=tres.map(t=>{let coins='';for(let k=0;k<t[2];k++){coins+=`<g transform="translate(${4+(k%3)*17} ${42-Math.floor(k/3)*18-(k%3)*4}) scale(.27)">${strip(coinAvers(120))}</g>`}return cell(`<svg viewBox="0 0 76 76" width="66" height="66" aria-hidden="true">${coins}</svg>`,t[0],t[1]+' gardées')}).join('');
+
+  const fl=[['Braise','1–6 j',.45,0],['Flamme','7–29 j',.7,0],['Brasier','30–99 j',.95,1],['Astre','100–364 j',1,2],['Soleil','365 j+',1,3]];
+  $('flammes').innerHTML=fl.map(f=>{const s=f[2];const extra=f[3]>=2?`<circle cx="36" cy="40" r="${f[3]===3?31:25}" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-dasharray="3 4"/>`:'';
+    return cell(`<svg viewBox="0 0 72 72" width="64" height="64" aria-hidden="true">${extra}<g class="flicker"><path d="M36 ${66-56*s} c 12 16 22 26 18 42 a18 18 0 0 1 -36 0 c -2 -12 8 -18 10 -28 c 4 6 6 10 8 12 c 2 -8 2 -16 0 -26z" fill="url(#gFlame)"/>${s>=.7?sig(36,54,18,'#fff',120):''}</g></svg>`,f[0],f[1]);}).join('');
+
+  const ligues=[['Quartz','#e5e7eb'],['Ambre','#f59e0b'],['Jade','#10b981'],['Saphir','#3b82f6'],['Rubis','#e11d48'],['Améthyste','#8b5cf6'],['Diamant','#bae6fd'],['Prisme','url(#gPrism)']];
+  $('ligues-row').innerHTML=ligues.map((l,i)=>cell(`<svg viewBox="0 0 72 72" width="58" height="58" aria-hidden="true"><path d="M36 6l26 20-26 42-26-42z" fill="${l[1]}" stroke="#1c1941" stroke-opacity=".3"/><path d="M10 26h52" stroke="#fff" stroke-opacity=".6" stroke-width="1.4"/>${sig(36,38,26,'#1c1941',110,'engraved')}</svg>`,l[0],'ligue '+(i+1))).join('');
+
+  const hex=(fill,lab,ink='#1c1941')=>`<svg viewBox="0 0 72 72" width="64" height="64" aria-hidden="true"><polygon points="36,4 64,20 64,52 36,68 8,52 8,20" fill="${fill}" stroke="#1c1941" stroke-opacity=".25"/>${sig(36,32,34,ink,100,'engraved')}${lab?`<text x="36" y="58" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="8" fill="${ink}">${lab}</text>`:''}</svg>`;
+  $('formes').innerHTML=cell(hex('url(#gOr)','100','#6b4610'),'Accumulation','hexagone · combien de fois')
+   +cell(`<svg viewBox="0 0 72 72" width="64" height="64" aria-hidden="true"><path d="M36 3 L66 36 L36 69 L6 36 Z" fill="url(#gPlatine)" stroke="#1c1941" stroke-opacity=".25"/>${sig(36,36,34,'#2c4459',100,'engraved')}</svg>`,'Record','losange · le meilleur')
+   +cell(`<svg viewBox="0 0 72 72" width="64" height="64" aria-hidden="true"><circle cx="36" cy="36" r="31" fill="url(#gPrism)"/><circle cx="36" cy="36" r="24" fill="var(--surface)"/>${[0,1,2,3,4,5].map(k=>{const a=k/6*Math.PI*2-Math.PI/2;return `<circle cx="${(36+18*Math.cos(a)).toFixed(1)}" cy="${(36+18*Math.sin(a)).toFixed(1)}" r="3.6" fill="${k<4?'var(--indigo)':'none'}" stroke="var(--indigo)" stroke-width="1.4"/>`}).join('')}${sig(36,36,22,'var(--ink)',110)}</svg>`,'Collection','médaillon · à réunir');
+  const mats=[['Cuivre','1','gCopper','#5a2a12'],['Bronze','10','gBronze','#4a3010'],['Argent','50','gArgent','#3f4858'],['Or','100','gOr','#6b4610'],['Platine','500','gPlatine','#2c4459'],['Obsidienne','1 000','gObs','#d7d4f2'],['Prisme','5 000','gPrism','#1c1941']];
+  $('matieres').innerHTML=mats.map(m=>cell(hex(`url(#${m[2]})`,m[1],m[3]),m[0],m[1]+' actions')).join('')
+   +cell(`<svg viewBox="0 0 72 72" width="64" height="64" aria-hidden="true"><polygon points="36,4 64,20 64,52 36,68 8,52 8,20" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="4 4"/>${sig(36,32,34,'var(--muted)',90)}<text x="36" y="58" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="var(--muted)">−37</text></svg>`,'Empreinte','badge éteint');
+
+  const langs=[['FR','Français','#4f46e5'],['ES','Español','#e11d48'],['AR','العربية','#10b981'],['SW','Kiswahili','#d97706'],['JA','日本語','#8b5cf6'],['··','à découvrir','none']];
+  $('atlas').innerHTML=langs.map((l,i)=>{const empty=l[2]==='none';const col=empty?'var(--muted)':l[2];return cell(`<svg viewBox="0 0 72 72" width="64" height="64" aria-hidden="true"><g transform="rotate(${(i%2?8:-6)} 36 36)"><circle cx="36" cy="36" r="29" fill="none" stroke="${col}" stroke-width="2.5" ${empty?'stroke-dasharray="4 4"':''}/><circle cx="36" cy="36" r="23" fill="none" stroke="${col}" stroke-width="1"/><text x="36" y="38" text-anchor="middle" font-family="Bricolage Grotesque,system-ui" font-weight="800" font-size="15" fill="${col}">${l[0]}</text>${sig(36,48,14,col,120)}</g></svg>`,l[1],empty?'194 restantes':'tampon')}).join('');
+
+  $('signatures').innerHTML=cell(`<svg viewBox="0 0 90 90" width="80" height="80" aria-hidden="true"><rect x="5" y="5" width="80" height="80" rx="18" fill="url(#gIndigo)"/>${sig(45,45,70,'#fff',96)}</svg>`,'Marque','icône de l’app')
+   +cell(`<svg viewBox="0 0 90 90" width="80" height="80" aria-hidden="true"><circle cx="45" cy="45" r="40" fill="url(#gSilverIn)"/>${sig(45,45,72,'#3f4858',96,'struck')}</svg>`,'Frappée','pièces, coupes')
+   +cell(`<svg viewBox="0 0 90 90" width="80" height="80" aria-hidden="true"><path d="M10 8 h70 v36 c0 24 -15 36 -35 44 c-20 -8 -35 -20 -35 -44 z" fill="url(#gOr)"/>${sig(45,42,66,'#6b4610',96,'engraved')}</svg>`,'Gravée','blasons, badges')
+   +cell(`<svg viewBox="0 0 90 90" width="80" height="80" aria-hidden="true"><circle cx="45" cy="45" r="38" fill="none" stroke="var(--indigo)" stroke-width="7"/>${sig(45,45,52,'var(--indigo)',110)}</svg>`,'En aplat','anneaux, Flamme');
+
+  $('pieces').innerHTML=cell(coinAvers(130),'Avers','Signature frappée',1)+cell(coinRevers(130,13),'Revers','N° 13 · argent',1)+cell(coinRevers(130,100,'gGoldCoin'),'Édition or','chaque centième',1)+cell(coinRevers(130,1000,'gPrism'),'Édition prisme','chaque millième',1);
+
+  $('blasons').innerHTML=RANGS.map((r,i)=>cell(blason(i,150),r.n,typeof r.g==='number'?fr(r.g)+' Gloire':r.g,1)).join('');
+
+  const cup=(metal,ink,label)=>`<svg viewBox="0 0 120 124" width="110" height="114" aria-hidden="true"><path d="M30 22 c-17 0 -19 24 3 28 M90 22 c17 0 19 24 -3 28" fill="none" stroke="url(#${metal})" stroke-width="5"/><path d="M30 12 h60 v22 c0 22 -14 36 -30 38 c-16 -2 -30 -16 -30 -38 z" fill="url(#${metal})" stroke="#1c1941" stroke-opacity=".3"/><rect x="54" y="72" width="12" height="16" fill="url(#${metal})"/><rect x="36" y="88" width="48" height="9" rx="2" fill="url(#${metal})"/><rect x="30" y="97" width="60" height="17" rx="3" fill="#1c1941" fill-opacity=".88"/>${sig(60,38,42,ink,100,'struck')}<text x="60" y="109" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="7.5" letter-spacing="1" fill="#fff">${label}</text></svg>`;
+  $('coupes').innerHTML=cell(cup('gOr','#6b4610','JADE · S41'),'Coupe de ligue','or, argent, bronze',1)
+   +cell(cup('gPlatine','#2c4459','SAISON 1'),'Coupe de saison','parcours terminé',1)
+   +cell(`<svg viewBox="0 0 170 124" width="160" height="117" aria-hidden="true">${bird('meeCrown',0,58,.4)}${bird('meoCrown',170,58,.4,1)}<g transform="translate(25 0)">${strip(cup('gPrism','#1c1941','PRESTIGE I'))}</g></svg>`,'Trophée de Prestige','Mee et Meo à la base',1)
+   +cell(cup('gFlame','#7c2d12','365 JOURS'),'Trophée de Flamme','100 et 365 jours',1);
+
+  const lock=`<rect x="35" y="36" width="20" height="16" rx="3" fill="url(#gOr)"/>${sig(45,44,15,'#6b4610',120,'engraved')}`;
+  $('coffres').innerHTML=cell(`<svg viewBox="0 0 90 72" width="90" height="72" aria-hidden="true"><rect x="10" y="30" width="70" height="36" rx="6" fill="url(#gIndigo)"/><path d="M10 34a35 22 0 0 1 70 0z" fill="#8b5cf6"/><rect x="10" y="30" width="70" height="6" fill="url(#gOr)"/>${lock}</svg>`,'Coffre fermé','serrure Signature')
+   +cell(`<svg viewBox="0 0 90 72" width="90" height="72" aria-hidden="true"><path d="M20 30l-6-20 62 0-6 20" fill="#8b5cf6" opacity=".85"/><path d="M30 18l-4-8M45 14V4M60 18l4-8" stroke="var(--gold)" stroke-width="2" stroke-linecap="round"/><rect x="10" y="30" width="70" height="36" rx="6" fill="url(#gIndigo)"/><rect x="10" y="30" width="70" height="6" fill="url(#gOr)"/>${lock}</svg>`,'Coffre ouvert','contenu annoncé');
+
+  const ob=[
+    ['meeGuide','Mee','Salut, moi c’est Mee, et voici Meo. On t’apprend le jeu en jouant.','Chaque geste dans Meeshy te rapporte des points.','Gagner tes premiers points','On y va'],
+    ['meeJoy','Mee','Envoie un message à un ami : +9 points.','Messages, vocaux et stories rapportent le plus.','Voir ton niveau','J’envoie'],
+    ['meoGuide','Meo','Tes points remplissent ton niveau. Il y en a 100, chacun demande un peu plus.','Ton niveau suit les points que tu as en poche.','Tes missions du jour','Compris'],
+    ['meeCoin','Mee','Trois missions par jour. Fais-les et le coffre s’ouvre.','La première est déjà là : réagis à un message.','Ta Flamme','Je la fais'],
+    ['meoCool','Meo','Reviens demain : ta Flamme s’allume. Plus elle dure, plus les missions rapportent.','La série nourrit ton Bonus de Flamme.','Les Meeshes','D’accord'],
+    ['duo','Mee et Meo','À 1 221 points, on frappe une Meesh ensemble. Ton niveau redescend un peu, ton rang monte pour toujours.','Frapper, c’est échanger du niveau contre du rang et du trésor.','Ton rang','Montre-moi'],
+    ['meoGuide','Meo','Ton rang, c’est ta Gloire. Elle ne baisse jamais. Tu commences Murmure.','Chaque frappe et chaque record te font grimper.','Ta photo de départ, puis ta première mission','Prendre la photo']
+  ];
+  $('onboarding').innerHTML=ob.map((o,i)=>{const meo=o[1]==='Meo';const art=o[0]==='duo'?`<svg viewBox="0 0 150 90" width="76" height="46" aria-hidden="true">${bird('meeCoin',0,8,.55)}${bird('meoStar',150,8,.55,1)}</svg>`:`<svg viewBox="0 0 150 150" width="76" height="76" aria-hidden="true">${bird(o[0],meo?145:5,5,1,meo)}</svg>`;
+    return `<div><div class="stepn">Étape ${i+1} sur 7</div><div class="coach">${art}<div><div class="who">${o[1]}</div><div class="say">${o[2]}</div><dl><dt>Ça veut dire</dt><dd>${o[3]}</dd><dt>Ensuite</dt><dd>${o[4]}</dd></dl><span class="cta">${o[5]}</span></div></div></div>`}).join('');
+
+  $('phones').innerHTML=`
+  <div class="phone" aria-label="Maquette Progression">
+    <div class="ttl">Progression</div>
+    <div class="pc">
+      <div class="row"><span style="display:flex;gap:10px;align-items:center">${ring(34,.9,'#a3e635',52)}<span><span class="k">Niveau 34</span><br><span class="muted" style="font-size:11.5px">Éclat · record 36</span></span></span>${blason(2,70,2)}</div>
+      <div class="bar" style="margin-top:10px"><i style="width:90%"></i><u style="left:99%"></u></div>
+      <div class="row muted" style="font-size:11.5px"><span class="num">12 180 / 12 250</span><span>Voix II · 1 730 Gloire</span></div>
+      <div class="row" style="margin-top:10px"><span style="display:flex;gap:8px;align-items:center">${coinAvers(28)}<b class="num">9</b> Meeshes · Bourse</span><span style="display:flex;align-items:center;gap:4px;color:var(--flame);font-weight:600"><svg viewBox="0 0 72 72" width="18" height="18" aria-hidden="true"><path d="M36 14 c 12 16 22 26 18 42 a18 18 0 0 1 -36 0 c -2 -12 8 -18 10 -28 c 4 6 6 10 8 12 c 2 -8 2 -16 0 -26z" fill="url(#gFlame)"/></svg>23 j</span></div>
+    </div>
+    <div class="coach" style="grid-template-columns:52px 1fr;padding:10px;margin-bottom:10px"><svg viewBox="0 0 150 150" width="52" height="52" aria-hidden="true">${bird('meoGuide',145,5,1,1)}</svg><div><div class="who">Meo</div><div style="font-size:12.5px;line-height:1.35">Tu peux frapper. Ça te coûte 2 niveaux et te donne +100 de Gloire : tu passes Voix I.</div></div></div>
+    <div class="pc">
+      <div class="row"><span class="k">Missions du jour</span><span class="muted" style="font-size:11.5px">reste 7 h</span></div>
+      <div class="chal"><span class="pill">✓</span><div>Réagir à 10 messages<div class="mini"><i style="width:100%"></i></div></div><span class="num">64</span></div>
+      <div class="chal"><span class="pill">2/6</span><div>Répondre dans 6 conversations<div class="mini"><i style="width:33%"></i></div></div><span class="num">127</span></div>
+      <div class="chal"><span class="pill">0/2</span><div>Échanger dans une autre langue<div class="mini"><i style="width:0"></i></div></div><span class="num">254</span></div>
+    </div>
+    <span class="btn">Frapper une Meesh · 1 294 points</span>
+  </div>
+  <div class="phone" aria-label="Maquette de la frappe">
+    <div class="ttl">Frapper une Meesh</div>
+    <svg viewBox="0 0 300 150" width="262" aria-hidden="true">${bird('meeCoin',0,26,.74)}${bird('meoStar',300,26,.74,1)}<g transform="translate(100 25) scale(.83)">${strip(coinAvers(120))}</g></svg>
+    <div class="pc">
+      <div class="row"><span>Prix</span><b class="num">1 294 points</b></div>
+      <div class="row"><span>Niveau</span><b class="num">34 → 32</b></div>
+      <div class="row"><span>Trésor</span><b class="num">9 → 10 · Escarcelle</b></div>
+      <div class="row"><span>Gloire</span><b class="num" style="color:var(--ok)">+100</b></div>
+      <div class="row"><span>Rang</span><b>Voix II → Voix I</b></div>
+      <div class="row"><span>Pièce</span><b class="num">N° 13 · argent</b></div>
+    </div>
+    <div class="pc" style="font-size:12.5px"><b>Badges qui redescendent</b><div class="muted">Messages texte : Or → Argent (37 de plus pour le rallumer)</div><div style="margin-top:6px"><b>Ensuite</b> · Vent arrière +25 % jusqu’au niveau 36</div></div>
+    <span class="btn">Frapper avec Mee et Meo</span>
+    <span class="btn ghost">Garder mes points</span>
+  </div>
+  <div class="phone cam" aria-label="Maquette du moment photo">
+    <svg viewBox="0 0 276 560" width="276" height="560" aria-hidden="true">
+      <defs><radialGradient id="face" cx=".5" cy=".45" r=".6"><stop offset="0" stop-color="#6b5f8f"/><stop offset="1" stop-color="#2a2540"/></radialGradient></defs>
+      <rect width="276" height="560" fill="url(#face)"/>
+      <ellipse cx="138" cy="300" rx="70" ry="88" fill="#3d3560" opacity=".75"/>
+      <ellipse cx="138" cy="480" rx="120" ry="70" fill="#3d3560" opacity=".75"/>
+      <rect x="10" y="10" width="256" height="540" rx="22" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="2" stroke-dasharray="2 6"/>
+      <g transform="translate(63 18) scale(.75)">${strip(blason(3,200,3))}</g>
+      <text x="138" y="172" text-anchor="middle" font-family="Bricolage Grotesque,system-ui" font-weight="800" font-size="20" fill="#fff">Conteur III</text>
+      <text x="138" y="190" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="10" fill="#fff" opacity=".85">5 OCT. 2026 · 3 500 GLOIRE</text>
+      ${bird('meeWink',-2,402,.62)}${bird('meoHeart',278,402,.62,1)}
+      <text x="138" y="452" text-anchor="middle" font-family="Bricolage Grotesque,system-ui" font-weight="800" font-size="22" fill="#fde047">Tchak !</text>
+      <circle cx="138" cy="506" r="28" fill="#fff"/><circle cx="138" cy="506" r="22" fill="none" stroke="#1c1941" stroke-width="2"/>
+      ${sig(138,506,30,'#1c1941',110)}
+    </svg>
+  </div>`;
+
+  const lvl=s=>Math.min(100,Math.floor(Math.sqrt(s/10)));
+  const cost=n=>Math.min(Math.round(1221*Math.pow(1.06,Math.floor((n-1)/10))),4884);
+  const tiers=[[0,'Aucun'],[1,'Bourse'],[10,'Escarcelle'],[50,'Coffret'],[100,'Coffre'],[500,'Trésor'],[1000,'Réserve royale']];
+  const tier=h=>tiers.filter(t=>h>=t[0]).pop()[1];
+  const edition=n=>n%1000===0?'prisme':n%100===0?'or':'argent';
+  function upd(){
+    const s=+$('simScore').value,m=+$('simMinted').value,h=+$('simHeld').value;
+    $('oScore').value=fr(s);$('oMinted').value=m;$('oHeld').value=h;
+    const n=m+1,c=cost(n),before=lvl(s),afterS=Math.max(0,s-c),after=lvl(afterS),ok=s>=c;
+    $('rCost').textContent=fr(c)+' pts';
+    $('rEdition').textContent='N° '+n+' · '+edition(n);
+    $('rLevel').textContent=ok?before+' → '+after:'points insuffisants';
+    $('rLost').textContent=ok?before-after:'—';
+    $('rTreasury').textContent=tier(h+1);
+    $('rDays').textContent=(c/(500*1.25)).toFixed(1)+' j';
+    const lo=10*after*after,hi=10*(after+1)*(after+1);
+    const pct=after>=100?100:Math.max(0,Math.min(100,(afterS-lo)/(hi-lo)*100));
+    $('rBar').style.width=pct+'%';
+    $('rGhost').style.left=(before>after?100:Math.max(0,Math.min(100,((s-lo)/(hi-lo))*100)))+'%';
+  }
+  ['simScore','simMinted','simHeld'].forEach(id=>$(id).addEventListener('input',upd));upd();
+})();
+</script>
