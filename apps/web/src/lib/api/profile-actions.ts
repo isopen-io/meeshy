@@ -4,7 +4,7 @@ import { uploadProfileImage } from '@/lib/profile/image-upload';
 
 import type { AccountVault } from './accounts';
 import { CONVERSATIONS_QUERY_KEY } from './conversations';
-import { repaintMyPortrait } from './my-portrait';
+import { repaintMyPortrait, repaintProfile } from './my-portrait';
 import {
   LANGUAGE_PATCH_KEYS,
   MY_PROFILE_QUERY_KEY,
@@ -154,6 +154,15 @@ const heldUser = (session: SessionStoreApi): SessionUser | undefined => {
 
 const touchesPrism = (patch: ProfilePatch): boolean => LANGUAGE_PATCH_KEYS.some((key) => patch[key] !== undefined);
 
+const NAME_PATCH_KEYS = ['displayName', 'firstName', 'lastName'] as const;
+
+/** #8890 — mon nom, recopié dans chaque charge qui me montre, suit la valeur SERVIE (même loi que la photo, `my-portrait.ts`). */
+function repaintMyName(queryClient: QueryClient, patch: ProfilePatch, profile: MyProfile): void {
+  if (!NAME_PATCH_KEYS.some((key) => patch[key] !== undefined)) return;
+  const { displayName, firstName, lastName, username } = profile;
+  repaintProfile(queryClient, { userId: profile.id, name: { displayName, firstName, lastName, username } });
+}
+
 export async function performProfileEdit(params: {
   readonly patch: ProfilePatch;
   readonly deps: ProfileActionDeps;
@@ -182,6 +191,7 @@ export async function performProfileEdit(params: {
   }
 
   confirm(deps, result.data);
+  repaintMyName(deps.queryClient, patch, result.data);
   if (touchesPrism(patch)) void deps.queryClient.invalidateQueries({ queryKey: CONVERSATIONS_QUERY_KEY });
   return { status: 'saved' };
 }
