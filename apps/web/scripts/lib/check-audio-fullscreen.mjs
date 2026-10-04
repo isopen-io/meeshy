@@ -18,9 +18,14 @@
  * SOUS « Reprendre l'appel », et son toucher ouvre la conversation du vocal,
  * comme iOS.
  *
+ * #9294 — ce toucher ouvre la conversation SUR la bulle du vocal (`?message=`,
+ * mise en évidence du saut), les étapes tournent dans les deux schémas, et le
+ * vocal dure trente secondes : aucune ne court plus contre la fin du son.
+ *
  * `expect` et `setScheme` sont REMIS par l'hôte, jamais redéfinis.
  */
 import { waitForRowSettled } from './check-media.mjs';
+import { contrastOf } from './contrast.mjs';
 
 const VOICE_EN_MESSAGE_ID = 'media-2';
 const VOICE_EN_ATTACHMENT_ID = 'media-2-a1';
@@ -229,13 +234,37 @@ const audioTimeAt = (page, selector) =>
   }, selector);
 
 /**
+ * LA MISE EN ÉVIDENCE DU VOCAL, ENREGISTRÉE (#9294) — elle s'efface à 1600 ms
+ * (`HIGHLIGHT_MS`) : on l'ARME avant le toucher et on attend le FAIT noté,
+ * jamais une lecture après un délai (même loi que `check-summary.mjs`).
+ */
+const armRowHighlight = (page, messageId) =>
+  page.evaluate((mid) => {
+    const lit = () => {
+      const row = document.querySelector(`main li [data-message="${mid}"]`);
+      if (row === null) return false;
+      const bg = getComputedStyle(row).backgroundColor;
+      return bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent';
+    };
+    const state = { seen: false };
+    window.__vocalHighlight = state;
+    const observer = new MutationObserver(() => {
+      if (!lit()) return;
+      state.seen = true;
+      observer.disconnect();
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['style', 'class'], childList: true, subtree: true });
+  }, messageId);
+
+/**
  * #9279 — LE MINI-LECTEUR REJOINT iOS (`MiniAudioPlayerBar`), sous un appel
  * vivant côté serveur pour que « Reprendre l'appel » soit à l'écran :
  *  B1 fermer le plein écran dans le fil du vocal : il s'efface, la bulle dit
  *     « Mettre en pause » ;
  *  B2 ailleurs il reparaît, SOUS le bandeau d'appel, sans le chevaucher ;
- *  B3 son toucher ouvre la conversation du vocal, comme iOS : la lecture
- *     continue, il s'y efface et la bulle montre la lecture à la même seconde ;
+ *  B3 son toucher ouvre la conversation du vocal SUR sa bulle (#9294), mise
+ *     en évidence et à l'écran sans défilement : la lecture continue, il s'y
+ *     efface et la bulle montre la lecture à la même seconde ;
  *  B4 la bulle commande LE son ; B5 hors du fil, « Fermer » le retire.
  */
 export async function checkMiniPlayerParity({ browser, BASE, expect, setScheme, scheme }) {
@@ -300,12 +329,23 @@ export async function checkMiniPlayerParity({ browser, BASE, expect, setScheme, 
     banner !== null && bar !== null && banner.y + banner.height <= bar.y,
     `${label} hors de la conversation, le mini-lecteur reparaît SOUS le bandeau d'appel, sans chevauchement (bandeau ${JSON.stringify(banner)}, lecteur ${JSON.stringify(bar)})`,
   );
+  const titleContrast = await contrastOf(page, `[data-mini-audio-player="${aid}"] [data-mini-audio-title]`);
+  expect(titleContrast !== null && titleContrast >= 4.5, `${label} l'auteur du vocal se lit sur l'aplat du mini-lecteur (contraste ${titleContrast?.toFixed(2)} ≥ 4.5)`);
 
   // ===== B3 — le toucher ouvre la conversation du vocal (iOS : onMiniPlayerTap) ; la lecture continue, la bulle la montre =====
   const before = await audioTimeAt(page, miniAudio);
+  await armRowHighlight(page, UNTRANSCRIBED_MESSAGE_ID);
   await mini.locator('[data-mini-audio-open]').click();
-  await page.waitForURL('**/c/c-medias', { timeout: 8000 });
-  await scrollUntilMounted(page, UNTRANSCRIBED_MESSAGE_ID);
+  await page.waitForURL(`**/c/c-medias?message=${UNTRANSCRIBED_MESSAGE_ID}`, { timeout: 8000 });
+  await page.waitForFunction(() => window.__vocalHighlight?.seen === true, null, { timeout: 8000 });
+  expect(true, `${label} le toucher ouvre la conversation SUR le vocal : sa rangée est mise en évidence, sans défilement à la main`);
+  await waitForRowSettled(page, UNTRANSCRIBED_MESSAGE_ID);
+  const onScreen = await page.evaluate((mid) => {
+    const row = document.querySelector(`main li [data-message="${mid}"]`)?.getBoundingClientRect();
+    const main = document.querySelector('main#contenu')?.getBoundingClientRect();
+    return row !== undefined && main !== undefined && row.bottom > main.top && row.top < main.bottom;
+  }, UNTRANSCRIBED_MESSAGE_ID);
+  expect(onScreen, `${label} la bulle du vocal est à l'écran à l'ouverture`);
   await page.waitForFunction(
     ({ query, id, from }) => {
       const audio = document.querySelector(query);

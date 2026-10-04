@@ -31,6 +31,8 @@ export type CarriedAudio = {
   readonly title: string | null;
   /** La conversation du vocal (#9279) — le toucher l'ouvre, le mini-lecteur s'y efface et la bulle y reprend la main. `null` : hors conversation. */
   readonly conversationId?: string | null;
+  /** Le message du vocal (#9294) — le toucher ouvre la conversation SUR lui (`?message=`). `null` : à sa position normale. */
+  readonly messageId?: string | null;
 };
 
 export type CarriedPlaybackStatus = 'idle' | 'playing' | 'paused' | 'error';
@@ -78,6 +80,22 @@ export function withdrawCarriedPlayback(toggle: CarriedPlayback['toggle']): void
 /** La lecture du mini-lecteur QUAND il joue CE vocal — `null` sinon : la bulle garde la sienne. */
 export function useCarriedPlayback(attachmentId: string): CarriedPlayback | null {
   return useStore(audioCarryStore, (state) => (state.live?.attachmentId === attachmentId ? state.live : null));
+}
+
+/**
+ * LA CONVERSATION AU PREMIER PLAN (#9294) — l'aperçu tiré de la bannière
+ * recouvre le fil : c'est sa bulle qui est sous les yeux. iOS lit
+ * `router.currentConversationId ?? notificationPreviewConversation?.id` ; le
+ * web lit d'abord ce qui est À L'ÉCRAN, l'aperçu posé par-dessus un fil.
+ */
+export function frontConversationId({
+  previewConversationId,
+  routeConversationId,
+}: {
+  readonly previewConversationId: string | null;
+  readonly routeConversationId: string | null;
+}): string | null {
+  return previewConversationId ?? routeConversationId;
 }
 
 /**

@@ -380,9 +380,10 @@ export const callersIn = (contents, nsNames) => {
 // Boutique et la proposition de pack côté web (leurs cinq voisines ont leur
 // appelant dans `lib/api/sticker-packs.ts`) ; l'écran de modération web qui
 // lira ces deux-là est un suivi à part. Valeur MESURÉE le 2026-10-02.
-// 287 → 285 (2026-10-04) : deux entrées ont trouvé leur appelant hors test
-// sur `dev` ; le cliquet rougissait toute PR ouverte contre `dev`
-// (relevé sur #9293). Valeur MESURÉE le 2026-10-04.
+// 287 → 285 (#9256, 2026-10-04) : `attachments.byAttachmentIdTranscribe` et
+// `attachments.byAttachmentIdTranslate` regagnent leur appelant — le lecteur
+// audio plein écran web transcrit et traduit à la demande
+// (`lib/api/attachment-processing.ts`). Valeur MESURÉE le 2026-10-04.
 const BASELINE_DEAD_ENTRIES = 285;
 
 export const readWorld = (root) => {

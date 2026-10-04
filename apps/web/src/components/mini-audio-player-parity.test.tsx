@@ -5,7 +5,16 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Attachment } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
-import { audioCarryStore, carryAudio, concealsMiniPlayer, dropCarriedAudio, publishCarriedPlayback, type CarriedAudio } from '@/lib/view/audio-carry';
+import { closeConversationPreview, openConversationPreview } from '@/lib/notifications/conversation-preview';
+import {
+  audioCarryStore,
+  carryAudio,
+  concealsMiniPlayer,
+  dropCarriedAudio,
+  frontConversationId,
+  publishCarriedPlayback,
+  type CarriedAudio,
+} from '@/lib/view/audio-carry';
 import type { MediaCarrier } from '@/lib/view/media';
 import { createMediaCoordinator } from '@/lib/view/media-coordinator';
 import { NO_MEDIA_OFFERS } from '@/lib/view/viewer-page-offers';
@@ -43,6 +52,7 @@ afterEach(() => {
   container.remove();
   restore();
   dropCarriedAudio();
+  closeConversationPreview();
 });
 
 function stubMediaPrototype(): void {
@@ -87,6 +97,7 @@ const carried = (partial: Partial<CarriedAudio> = {}): CarriedAudio => ({
   rate: 1,
   title: 'Kwame Mensah',
   conversationId: 'c-medias',
+  messageId: 'm-voice',
   ...partial,
 });
 
@@ -119,16 +130,23 @@ describe('Le toucher ouvre la conversation du vocal, comme iOS (#9279)', () => {
 
     const open = container.querySelector<HTMLButtonElement>('[data-mini-audio-open]');
     expect(open?.getAttribute('aria-label')).toBe('Kwame Mensah — Ouvrir la conversation');
-    /* Le toucher ne met rien en pause — compté AUTOUR du geste : le
-       coordinateur partagé peut, au montage, mettre en pause un média qu'un
-       autre fichier de témoins a laissé derrière lui (suite complète). */
-    const pausesBefore = calls.pause;
     act(() => open?.click());
 
-    expect(window.location.pathname).toBe('/c/c-medias');
-    expect(calls.pause).toBe(pausesBefore);
+    expect(`${window.location.pathname}${window.location.search}`).toBe('/c/c-medias?message=m-voice');
+    expect(calls.pause).toBe(0);
     expect(audioCarryStore.getState().carried?.attachment.id).toBe('a-voice');
     expect(bar()?.getAttribute('data-mini-audio-status')).toBe('playing');
+  });
+
+  test('sans message connu, la conversation s’ouvre à sa position normale (#9294)', async () => {
+    window.history.replaceState(null, '', '/');
+    mount(<MiniAudioPlayerHost />);
+    act(() => carryAudio(carried({ messageId: null })));
+    await act(async () => {});
+
+    act(() => container.querySelector<HTMLButtonElement>('[data-mini-audio-open]')?.click());
+
+    expect(`${window.location.pathname}${window.location.search}`).toBe('/c/c-medias');
   });
 
   test('hors conversation, le corps n’est pas un bouton : rien à ouvrir', async () => {
@@ -168,12 +186,46 @@ describe('Le toucher ouvre la conversation du vocal, comme iOS (#9279)', () => {
   });
 });
 
+describe('L’aplat indigo porte l’encre blanche d’iOS dans les deux schémas (#9294)', () => {
+  test('texte et progression en `--ios-on-brand`, constant — jamais l’encre « sur marque » que le sombre assombrit', async () => {
+    mount(<MiniAudioPlayer carried={carried()} onClose={() => {}} coordinator={createMediaCoordinator()} />);
+    await act(async () => {});
+
+    expect(bar()?.style.color).toBe('var(--ios-on-brand)');
+    expect(bar()?.querySelector<HTMLElement>('span[aria-hidden]')?.style.backgroundColor).toBe('var(--ios-on-brand)');
+  });
+});
+
 describe('Dans la conversation du vocal, le mini-lecteur s’efface (#9279)', () => {
   test('la loi : effacé dans SA conversation, visible ailleurs et hors conversation', () => {
     expect(concealsMiniPlayer({ carried: carried(), openConversationId: 'c-medias' })).toBe(true);
     expect(concealsMiniPlayer({ carried: carried(), openConversationId: 'c-kwame' })).toBe(false);
     expect(concealsMiniPlayer({ carried: carried(), openConversationId: null })).toBe(false);
     expect(concealsMiniPlayer({ carried: carried({ conversationId: null }), openConversationId: 'c-medias' })).toBe(false);
+  });
+
+  test('dans l’aperçu tiré de la bannière, la conversation du vocal l’efface aussi (#9294)', async () => {
+    window.history.replaceState(null, '', '/');
+    mount(<MiniAudioPlayerHost />);
+    act(() => carryAudio(carried()));
+    await act(async () => {});
+    expect(container.querySelector('[data-mini-audio-concealed]')).toBeNull();
+
+    act(() => openConversationPreview('c-medias'));
+    expect(container.querySelector<HTMLElement>('[data-mini-audio-concealed]')?.hidden).toBe(true);
+    expect(bar()?.getAttribute('data-mini-audio-status')).toBe('playing');
+
+    act(() => openConversationPreview('c-kwame'));
+    expect(container.querySelector('[data-mini-audio-concealed]')).toBeNull();
+
+    act(() => closeConversationPreview());
+    expect(container.querySelector('[data-mini-audio-concealed]')).toBeNull();
+  });
+
+  test('la conversation au premier plan est l’aperçu quand il est ouvert, le fil sinon (#9294)', () => {
+    expect(frontConversationId({ previewConversationId: 'c-medias', routeConversationId: 'c-kwame' })).toBe('c-medias');
+    expect(frontConversationId({ previewConversationId: null, routeConversationId: 'c-kwame' })).toBe('c-kwame');
+    expect(frontConversationId({ previewConversationId: null, routeConversationId: null })).toBeNull();
   });
 
   test('effacé, il ne montre rien mais la lecture continue', async () => {
@@ -281,6 +333,7 @@ describe('La reprise emporte sa conversation (#9279)', () => {
     await until(() => audioCarryStore.getState().carried !== null);
 
     expect(audioCarryStore.getState().carried?.conversationId).toBe('c-medias');
+    expect(audioCarryStore.getState().carried?.messageId).toBe('m-voice');
     expect(audioCarryStore.getState().carried?.title).toBe('Kwame Mensah');
   });
 });
