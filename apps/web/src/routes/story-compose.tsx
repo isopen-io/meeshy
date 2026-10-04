@@ -64,7 +64,8 @@ import { publishStudioPlan } from '@/lib/stories/studio-publish-flow';
 import { useStudioReelOffer } from '@/routes/story-compose-reel-offer';
 import type { StudioCompositeDeps } from '@/lib/stories/studio-composite-plan';
 import { studioFloor } from '@/lib/stories/studio-floor';
-import { emptyStudioHistory, rebaseStudioLive, recordStudioStep, redoStudioStep, undoStudioStep } from '@/lib/stories/studio-history';
+import { emptyStudioHistory, rebaseStudioLive, recordStudioStep, redoStudioStep, undoStudioStep, withoutBirthStep } from '@/lib/stories/studio-history';
+import { STUDIO_INLINE_SECTION_KEYS } from '@/lib/stories/studio-inline-edit';
 import { clampPose, type StudioPose } from '@/lib/stories/studio-pose';
 import { pageIsAnimated, studioPageDuration, studioTracks, timingEnteringAt, timingExitingAt, type StudioTrack } from '@/lib/stories/studio-timeline';
 import type { StudioTiming } from '@/lib/stories/studio-text';
@@ -98,7 +99,7 @@ import { useStudioTimeline } from '@/routes/use-studio-timeline';
 import { useStudioQuickCapture } from '@/routes/use-studio-quick-capture';
 import { studioChrome, studioOpenTool } from '@/lib/stories/studio-focus';
 import type { StudioBackgroundEdit } from '@/lib/stories/studio-background-tools';
-import { useStudioBackgroundTools } from '@/routes/use-studio-background-tools';
+import { StudioBackLayer, useStudioBackgroundTools } from '@/routes/use-studio-background-tools';
 import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
 
 /**
@@ -137,9 +138,9 @@ import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
 /** LA FEUILLE D'AUDIENCE, CHARGÉE À LA DEMANDE (#7683) — même discipline que
  * `LanguageSheet`/`EffectsSheet` du composeur du fil : elle ne pèse sur le
  * chunk du studio que si l'auteur touche la pastille. */
-const StudioObjectEditor = lazy(() => import('@/routes/story-compose-editor').then((m) => ({ default: m.StudioObjectEditor })));
-const StudioEditPlaque = lazy(() => import('@/routes/story-compose-editor').then((m) => ({ default: m.StudioEditPlaque })));
-const StudioOverlayEditor = lazy(() => import('@/routes/story-compose-editor').then((m) => ({ default: m.StudioOverlayEditor })));
+const StudioTextSectionControls = lazy(() => import('@/routes/story-compose-editor').then((m) => ({ default: m.StudioTextSectionControls })));
+const StudioInlinePanel = lazy(() => import('@/routes/story-compose-editor').then((m) => ({ default: m.StudioInlinePanel })));
+const StudioOverlaySectionControls = lazy(() => import('@/routes/story-compose-editor').then((m) => ({ default: m.StudioOverlaySectionControls })));
 /** Le menu d'un objet (appui long, clic droit), à la demande. */
 const StudioObjectMenu = lazy(() => import('@/routes/story-compose-object-menu').then((m) => ({ default: m.StudioObjectMenu })));
 
@@ -638,7 +639,7 @@ function StoryStudio({
       ? translate(lang, 'story.studio.object.overlay')
       : translate(lang, 'story.studio.object.text', { index: String(page.texts.findIndex((layer) => layer.id === id) + 1) });
 
-  const { stageObjects, editing, setEditingId, objectMenu, setObjectMenu, startEditing, commitPoseOf, objectActions } = useStudioObjects({
+  const { stageObjects, editing, sections, openSection, tapSection, closeSection, setEditingId, objectMenu, setObjectMenu, startEditing, commitPoseOf, objectActions } = useStudioObjects({
     page,
     lang,
     edit,
@@ -649,6 +650,10 @@ function StoryStudio({
       edit(withOverlayAsBackground);
     },
     closeFrame: () => setBackgroundEdit(null),
+    onLeaveEmptyText: (id) => {
+      historyRef.current = withoutBirthStep(historyRef.current, id);
+      setDraft((current) => withoutText(current, id));
+    },
   });
 
   /** LE SOL (#8413) — le hash du COMPOSITE (#8425), sinon celui du fond ;
@@ -678,7 +683,7 @@ function StoryStudio({
       const added = withAddedText(current, language);
       const placed = currentStudioPage(added).selected;
       return placed === null ? added : withPlacedWhileAnimated(added, placed, clock?.now() ?? 0);
-    });
+    }, id === null ? null : `text:${id}`);
     if (id !== null) startEditing(id);
   };
   /** La carte du socle — hors retouche, un média en montée ou en échec, le
@@ -753,6 +758,11 @@ function StoryStudio({
       onRemove: () => remove('visual'),
     },
     backgroundTools: { column: backgroundTools.column, onSection: backgroundTools.onSection, onExit: backgroundTools.leave },
+    editing: {
+      column: editing === null ? null : { id: editing, sections, open: openSection, actions: objectActions(editing).map((action) => action.id) },
+      onSection: tapSection,
+      onExit: () => setEditingId(null),
+    },
     hidden: !chrome.trailingRail,
   });
   /** « Entre ici » / « Sort ici » — la fenêtre de l'objet SÉLECTIONNÉ, à la tête. */
@@ -885,6 +895,39 @@ function StoryStudio({
         {/* LA COLONNE DROITE (#8713, #8714) — options du moment en haut,
             l'historique toujours en bas. */}
         {columns.trailing}
+
+        {/* LES OPTIONS DU SOUS-OUTIL OUVERT, À DROITE DEPUIS LE HAUT (#9140,
+            jumelle de #9138) — celles d'un objet en édition, ou du fond. */}
+        {editing !== null ? <StudioBackLayer onBack={() => setEditingId(null)} /> : null}
+        {editing !== null && openSection !== null ? (
+          <Suspense fallback={null}>
+            <StudioInlinePanel lang={lang} section={openSection} title={translate(lang, STUDIO_INLINE_SECTION_KEYS[openSection])} probe="section" onClose={closeSection}>
+              {/* Les contrôles ont LEUR attente : suspendus sous le panneau, ils le
+                  démonteraient, et sa couche rendrait son entrée d'historique —
+                  dont le retour refermerait aussitôt le panneau remonté. */}
+              <div inert={publishing}>
+                <Suspense fallback={null}>
+                  {editing === 'overlay' && page.overlay !== null ? (
+                    <StudioOverlaySectionControls
+                      lang={lang}
+                      section={openSection === 'describe' || openSection === 'filter' ? openSection : 'pose'}
+                      pose={page.overlay.pose}
+                      caption={page.overlay.caption}
+                      {...(retouching ? {} : { alt: { value: page.overlay.alt ?? '', onPage: editPage } })}
+                      filter={page.overlay.filter ?? null}
+                      onFilter={(filter) => edit((current) => withVisualFilter(current, 'overlay', filter))}
+                      onPose={(pose) => commitPoseOf('overlay', pose)}
+                      onCaption={(value) => edit((current) => withVisualCaption(current, 'overlay', value), 'caption:overlay')}
+                    />
+                  ) : openSection !== 'describe' && openSection !== 'filter' ? (
+                    <StudioTextSectionControls lang={lang} section={openSection} layer={selectedLayer} onChange={changeLayer} onPose={commitPose} />
+                  ) : null}
+                </Suspense>
+              </div>
+            </StudioInlinePanel>
+          </Suspense>
+        ) : null}
+        {backgroundTools.panel}
       </div>
 
       {/* LE SOCLE — sous la scène, jamais sur elle. Les contrôleurs de l'outil
@@ -912,43 +955,6 @@ function StoryStudio({
             />
           </Suspense>
         ) : null}
-        {editing !== null ? (
-          <Suspense fallback={null}>
-            <StudioEditPlaque lang={lang} title={objectName(editing)} onDone={() => setEditingId(null)}>
-              <div inert={publishing}>
-                <Suspense fallback={null}>
-                  {editing === 'overlay' && page.overlay !== null ? (
-                    <StudioOverlayEditor
-                      lang={lang}
-                      pose={page.overlay.pose}
-                      caption={page.overlay.caption}
-                      {...(retouching ? {} : { alt: { value: page.overlay.alt ?? '', onPage: editPage } })}
-                      filter={page.overlay.filter ?? null}
-                      onFilter={(filter) => edit((current) => withVisualFilter(current, 'overlay', filter))}
-                      onPose={(pose) => commitPoseOf('overlay', pose)}
-                      onCaption={(value) => edit((current) => withVisualCaption(current, 'overlay', value), 'caption:overlay')}
-                    />
-                  ) : (
-                    <StudioObjectEditor
-                      lang={lang}
-                      layer={selectedLayer}
-                      onChange={changeLayer}
-                      onPose={commitPose}
-                      onRemove={() => {
-                        setEditingId(null);
-                        edit((current) => {
-                          const selected = currentStudioPage(current).selected;
-                          return selected === null ? current : withoutText(current, selected);
-                        });
-                      }}
-                    />
-                  )}
-                </Suspense>
-              </div>
-            </StudioEditPlaque>
-          </Suspense>
-        ) : null}
-        {backgroundTools.panel}
         {/* La carte se MONTRE quand elle a une ligne visible ; sinon elle reste
             pour le lecteur d'écran et le clavier (l'état « Prêt », « Retirer »). */}
         {!retouching ? (

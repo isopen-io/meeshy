@@ -97,6 +97,20 @@ function CallStage({ children }: { readonly children: ReactNode }) {
   return typeof document === 'undefined' ? stage : createPortal(stage, document.body);
 }
 
+/**
+ * « REPRENDRE L'APPEL » DANS LA PILE DU HAUT (#9279) — la coquille l'empile
+ * AU-DESSUS du mini-lecteur, comme `FloatingCallPillView` puis
+ * `MiniAudioPlayerBar` dans le `VStack` de `CallPresentationLayer` iOS : posés
+ * chacun en `fixed` au même sommet, ils se chevauchaient.
+ */
+export function CallResumeSlot() {
+  return (
+    <Suspense fallback={null}>
+      <CallResumeBanner />
+    </Suspense>
+  );
+}
+
 export function CallLayer() {
   const active = useStore(callStore, (state) => state.call !== null || state.waiting !== null || state.notice !== null);
   const hasCall = useStore(callStore, (state) => state.call !== null);
@@ -112,9 +126,6 @@ export function CallLayer() {
           <CallBackPromptLayer />
         </Suspense>
       ) : null}
-      <Suspense fallback={null}>
-        <CallResumeBanner />
-      </Suspense>
       {staged ? (
         <CallStage>
           <StagedLayers active={active} recording={recording} rating={rating} hasCall={hasCall} bubble={bubble} />

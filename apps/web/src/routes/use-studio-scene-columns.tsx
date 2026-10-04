@@ -7,6 +7,7 @@ import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { withVisualFilter, type StudioDraft } from '@/lib/stories/studio';
 import type { StudioBackgroundSection } from '@/lib/stories/studio-background-tools';
 import type { StudioOpenTool } from '@/lib/stories/studio-focus';
+import { STUDIO_INLINE_SECTION_KEYS, type StudioInlineSection } from '@/lib/stories/studio-inline-edit';
 import type { StudioPage } from '@/lib/stories/studio-page';
 import {
   STUDIO_EFFECT_LABEL_KEYS,
@@ -20,6 +21,7 @@ import {
   studioTransitionsAfter,
   type StudioBackgroundColumn,
   type StudioEffectChoice,
+  type StudioObjectColumn,
   type StudioSceneEffect,
   type StudioTrailingFoot,
 } from '@/lib/stories/studio-scene-columns';
@@ -29,7 +31,7 @@ import { FrameMark, RedoMark, UndoMark } from '@/routes/story-compose-chrome';
 import type { StudioObjectAction } from '@/routes/story-compose-object-menu';
 import { TimeMark } from '@/routes/story-compose-parts';
 import { StudioTrailingColumn, type StudioColumnTile } from '@/routes/story-compose-scene-rails';
-import { CropMark, DescribeMark, EffectMark, ObjectActionMark, SoundMark, TrimMark, VisualEffectMark } from '@/routes/story-compose-scene-marks';
+import { CropMark, DescribeMark, EffectMark, InlineSectionMark, ObjectActionMark, SoundMark, TrimMark, VisualEffectMark } from '@/routes/story-compose-scene-marks';
 import type { StudioSceneObjectAction } from '@/routes/use-studio-objects';
 import { useStudioRehearsal } from '@/routes/use-studio-rehearsal';
 
@@ -90,6 +92,7 @@ export function useStudioSceneColumns({
   stageRef,
   background,
   backgroundTools,
+  editing,
   hidden,
 }: {
   readonly lang: InterfaceLanguage;
@@ -117,6 +120,13 @@ export function useStudioSceneColumns({
     readonly onSection: (section: StudioBackgroundSection) => void;
     readonly onExit: () => void;
   };
+  /** L'OBJET EN ÉDITION (#9140, jumelle de #9138) — ses sous-outils au rail,
+   * `null` hors édition. */
+  readonly editing: {
+    readonly column: StudioObjectColumn | null;
+    readonly onSection: (section: StudioInlineSection) => void;
+    readonly onExit: () => void;
+  };
   readonly hidden: boolean;
 }): {
   readonly trailing: ReactNode;
@@ -130,18 +140,21 @@ export function useStudioSceneColumns({
   const [menuAt, setMenuAt] = useState<Point | null>(null);
   const rehearse = useStudioRehearsal(stageRef);
 
-  const toolOpen = tool === 'object' || timeline.open;
+  const toolOpen = timeline.open;
+  const editsObject = tool === 'object' && editing.column !== null;
   const editsBackground = tool === 'background' && backgroundTools.column !== null;
-  const focusedId = touched !== null && objects.ids.includes(touched) && !toolOpen && !editsBackground ? touched : null;
+  const focusedId = touched !== null && objects.ids.includes(touched) && !toolOpen && !editsBackground && !editsObject ? touched : null;
   const served = studioSceneEffectsServed(retouching ? null : (page.background?.mediaType ?? null));
-  const carouselEffect = studioEffectCarousel({ open: openEffect, served, objectSelected: focusedId !== null, toolOpen: toolOpen || editsBackground });
-  const actions = focusedId === null ? [] : objects.actionsOf(focusedId);
+  const carouselEffect = studioEffectCarousel({ open: openEffect, served, objectSelected: focusedId !== null, toolOpen: toolOpen || editsBackground || editsObject });
+  const actionsId = editsObject ? (editing.column?.id ?? null) : focusedId;
+  const actions = actionsId === null ? [] : objects.actionsOf(actionsId);
   const focus = studioTrailingFocus({
     toolOpen,
     object: focusedId === null ? null : { id: focusedId, actions: actions.map((action) => action.id) },
     effects: served,
     openEffect: carouselEffect,
     background: editsBackground ? backgroundTools.column : null,
+    editing: editsObject ? editing.column : null,
   });
 
   const choose = (choice: StudioEffectChoice) => {
@@ -197,7 +210,19 @@ export function useStudioSceneColumns({
         },
       ];
     }
-    if (entry.kind === 'exit-object' || entry.kind === 'exit-tool') return [];
+    if (entry.kind === 'object-section') {
+      return [
+        {
+          key: `section.${entry.section}`,
+          label: translate(lang, STUDIO_INLINE_SECTION_KEYS[entry.section]),
+          probe: `section:${entry.section}`,
+          glyph: <InlineSectionMark section={entry.section} />,
+          pressed: entry.open,
+          onPress: () => editing.onSection(entry.section),
+        },
+      ];
+    }
+    if (entry.kind === 'exit-object' || entry.kind === 'exit-tool' || entry.kind === 'exit-edit') return [];
     const action = actions.find((candidate) => candidate.id === entry.action);
     return action === undefined
       ? []
@@ -212,7 +237,17 @@ export function useStudioSceneColumns({
           },
         ];
   });
-  const exits: Record<'exit-tool' | 'exit-object', StudioColumnTile> = {
+  const exits: Record<'exit-tool' | 'exit-object' | 'exit-edit', StudioColumnTile> = {
+    'exit-edit': {
+      key: 'exit.edit',
+      label: translate(lang, 'story.studio.background.tools.leave'),
+      probe: 'edit:exit',
+      glyph: <Glyph name="x" size={18} />,
+      onPress: () => {
+        setTouched(null);
+        editing.onExit();
+      },
+    },
     'exit-tool': {
       key: 'exit.background',
       label: translate(lang, 'story.studio.background.tools.leave'),
@@ -231,7 +266,9 @@ export function useStudioSceneColumns({
       },
     },
   };
-  const exitEntry = entries.find((entry): entry is Extract<typeof entry, { kind: 'exit-tool' | 'exit-object' }> => entry.kind === 'exit-tool' || entry.kind === 'exit-object');
+  const exitEntry = entries.find(
+    (entry): entry is Extract<typeof entry, { kind: 'exit-tool' | 'exit-object' | 'exit-edit' }> => entry.kind === 'exit-tool' || entry.kind === 'exit-object' || entry.kind === 'exit-edit',
+  );
   const exit: StudioColumnTile | null = exitEntry === undefined ? null : exits[exitEntry.kind];
 
   const footHandlers: Record<StudioTrailingFoot, (() => void) | null> = { time: timeline.onToggle, undo: history.onUndo, redo: history.onRedo };
@@ -251,8 +288,8 @@ export function useStudioSceneColumns({
       label={
         focus.kind === 'background'
           ? translate(lang, 'story.studio.background.tools')
-          : focusedId !== null
-            ? translate(lang, 'story.studio.object.options', { name: objects.nameOf(focusedId) })
+          : actionsId !== null
+            ? translate(lang, 'story.studio.object.options', { name: objects.nameOf(actionsId) })
             : translate(lang, 'story.studio.effect.column')
       }
       options={options}

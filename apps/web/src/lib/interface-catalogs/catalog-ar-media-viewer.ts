@@ -23,6 +23,16 @@ const arMediaViewer = {
   'media.audio.skip_forward': 'التقدم 10 ثوانٍ',
   'media.audio.transcript_empty': 'لا يوجد نص مكتوب',
   'media.audio.languages': 'الاستماع بلغة أخرى',
+  'media.audio.transcribe': 'تفريغ نصي',
+  'media.audio.transcribing': 'جارٍ التفريغ النصي…',
+  'media.audio.transcribe_failed': 'تعذّر التفريغ النصي',
+  'media.audio.translate': 'ترجمة',
+  'media.audio.translate_to': 'الترجمة إلى {language}',
+  'media.audio.translating': 'جارٍ الترجمة…',
+  'media.audio.translate_failed': 'تعذّرت الترجمة',
+  'media.audio.mini.label': 'مشغّل الصوت',
+  'media.audio.mini.title': 'رسالة صوتية',
+  'media.audio.mini.close': 'إغلاق المشغّل',
 };
 
 export default arMediaViewer;

@@ -194,8 +194,10 @@ final class ComposerSceneBandTests: XCTestCase {
     /// > ce dépôt (budget de 1200 lignes), et le nom change à chaque fois.
     func test_leSocle_neCedeJamaisAUneBande() throws {
         let code = try source("MeeshyComposerHost.swift")
-        guard let corps = declarationBody(startingAt: "var composerStack: some View", in: code) else {
-            return XCTFail("`composerStack` est introuvable — la garde doit être re-pointée, "
+        // **`socleSlot`** depuis #8387 : l'encart du bas est un nœud nominal,
+        // et sa condition a quitté `composerStack` avec lui.
+        guard let corps = declarationBody(startingAt: "var socleSlot: some View", in: code) else {
+            return XCTFail("`socleSlot` est introuvable — la garde doit être re-pointée, "
                              + "comme elle l'a été le 2026-09-05 quand la pile a quitté le `body`")
         }
         let compacte = compact(corps)

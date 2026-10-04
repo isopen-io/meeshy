@@ -16,6 +16,7 @@ import { partitionAttachments, type MediaGridFrame } from '@/lib/view/media-grid
 import { waveformOf } from '@/lib/view/message';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 import { handOffVideoPosition } from '@/lib/view/video-handoff';
+import { useCarriedPlayback } from '@/lib/view/audio-carry';
 import { PLAYBACK_SPEEDS, seekFraction, speedLabel } from '@/lib/view/media-transport';
 import {
   karaokeSegments,
@@ -128,8 +129,7 @@ function VoiceAttachment({
   // la fin et au démontage — le hook porte la reprise, le throttle 5 s et le
   // tracker de segments, ce widget ne fait que lui donner ce qu'il connaît.
   const consumption = attachment.currentUserConsumption;
-  const { status, progress, toggle, bind, position, duration, seek, rate, setRate, reportedFraction } =
-    useMediaPlayback({
+  const own = useMediaPlayback({
       attachmentId: attachment.id,
       tracksTime: true,
       report: {
@@ -146,6 +146,12 @@ function VoiceAttachment({
           : {}),
       },
     });
+  /* LA BULLE REPREND LA MAIN (#9279) — quand le mini-lecteur joue CE vocal, il
+     en est le seul moteur : la bulle reflète sa lecture et la commande, comme
+     la bulle iOS reflète `ConversationAudioCoordinator`. Jamais un second son. */
+  const carried = useCarriedPlayback(attachment.id);
+  const { bind, reportedFraction } = own;
+  const { status, progress, toggle, position, duration, seek, rate, setRate } = carried ?? own;
   const uiLanguage = currentInterfaceLanguage();
 
   /*
@@ -188,7 +194,8 @@ function VoiceAttachment({
     },
     [bind],
   );
-  const activeSegment = useKaraokeIndex(audioElement, segments, status === 'playing');
+  const playingElement = carried?.element ?? audioElement;
+  const activeSegment = useKaraokeIndex(playingElement, segments, status === 'playing');
 
   const waves = waveformOf(attachment);
   // `duration` voyage en MILLISECONDES sur la charge du dépôt.
@@ -353,8 +360,8 @@ function VoiceAttachment({
           type="button"
           data-voice-expand
           onClick={() => {
-            if (audioElement !== null && (status === 'playing' || status === 'paused') && audioElement.currentTime > 0) {
-              handOffVideoPosition({ attachmentId: attachment.id, positionMs: Math.round(audioElement.currentTime * 1000) });
+            if (playingElement !== null && (status === 'playing' || status === 'paused') && playingElement.currentTime > 0) {
+              handOffVideoPosition({ attachmentId: attachment.id, positionMs: Math.round(playingElement.currentTime * 1000) });
             }
             if (isPlaying) toggle();
             onExpand();

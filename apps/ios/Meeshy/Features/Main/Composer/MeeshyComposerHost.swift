@@ -873,7 +873,21 @@ struct MeeshyComposerHost: View {
         openSceneEffect = nil
     }
 
+    /// **Trois couches NOMINALES, jamais une seule expression** (#8387). Le
+    /// `body` empilait la scène, ce qui la recouvre et le cycle de vie en un
+    /// type d'une cinquantaine de niveaux, matérialisé dans un cadre de ~100 Ko :
+    /// « Créer une story » débordait la pile. Chaque couche est évaluée dans
+    /// son propre cadre — `MeeshyComposerHost+Layers`, gardé par
+    /// `MeeshyComposerHostTypeDepthTests`. L'ORDRE des modificateurs est celui
+    /// du `body` d'avant : la scène, puis ce qui la recouvre, puis le cycle de
+    /// vie.
     var body: some View {
+        ComposerHostStage(host: self, observation: observation)
+            .modifier(ComposerHostChromeLayer(host: self, observation: observation))
+            .modifier(ComposerHostLifecycleLayer(host: self, observation: observation))
+    }
+
+    var composerStage: some View {
         // **Le viseur ENVELOPPE le meuble entier, socle compris** (directive
         // porteur 2026-09-04). Une enveloppe, et non un `.overlay` posé plus
         // bas : le socle — audience · aperçu · publier — est le FRÈRE de la
@@ -885,9 +899,12 @@ struct MeeshyComposerHost: View {
         // SwiftUI n'honore qu'UNE présentation par vue, et la racine porte déjà
         // la feuille de partage (#4996). Une seconde y serait silencieusement
         // avalée — le mode de panne qui ne rougit nulle part.
-        withComposerAutosave(withSceneCameraViewfinder(backgroundMenuPresented(composerStack)))
+        withComposerAutosave(withSceneCameraViewfinder(backgroundMenuPresented(composerStackNode)))
         .background(tint.color.ignoresSafeArea())
+    }
 
+    func composerChrome<Contenu: View>(_ contenu: Contenu) -> some View {
+        contenu
         // **La couche d'écriture, AU-DESSUS de tout** (#4124). En overlay du
         // meuble et non en `.sheet` : une feuille système laisse voir la scène
         // NETTE derrière son bord arrondi et impose sa propre poignée, alors que
@@ -918,6 +935,10 @@ struct MeeshyComposerHost: View {
         // à la fois) — donc sans ce voile, le geste serait sans effet ET sans
         // explication.
         .overlay { composerExportProgress }
+    }
+
+    func composerLifecycle<Contenu: View>(_ contenu: Contenu) -> some View {
+        contenu
         // Le meuble se ferme pendant un bake : le RÉSULTAT tardif est jeté et
         // son fichier temporaire avec. `AVAssetWriter` n'observe pas
         // l'annulation, c'est tout ce qu'on peut faire — et c'est assez pour

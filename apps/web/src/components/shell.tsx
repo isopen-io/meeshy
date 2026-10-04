@@ -9,11 +9,12 @@ import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog'
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { conversationPreviewStore } from '@/lib/notifications/conversation-preview';
 import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
+import { audioCarryStore } from '@/lib/view/audio-carry';
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 import { useRoute } from '@/lib/router';
 
-import { CallLayer } from './call-layer';
+import { CallLayer, CallResumeSlot } from './call-layer';
 import { loadConversationPreviewHost } from './conversation-preview-chunks';
 import { ProfilePeekHost } from './profile-peek-host';
 import { SendSheetHost } from './send-sheet-host';
@@ -176,7 +177,18 @@ const ConversationPreviewHost = lazy(() =>
   })),
 );
 
+/**
+ * ...ET LE MINI-LECTEUR (#9256) : le vocal que le lecteur plein écran jouait
+ * quand on l'a fermé continue ici, sur toutes les routes, comme
+ * `MiniAudioPlayerBar` au-dessus de la racine iOS. Rien n'est chargé tant
+ * qu'aucune lecture n'a été confiée.
+ */
+const MiniAudioPlayerHost = lazy(() =>
+  Promise.all([import('./mini-audio-player'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => m),
+);
+
 export default function Shell({ children }: { children: ReactNode }) {
+  const lectureConfiee = useStore(audioCarryStore, (state) => state.carried !== null);
   const banniereNotification = useStore(inAppBannerStore, (state) => state.current !== null);
   const apercuOuvert = useStore(conversationPreviewStore, (state) => state.conversationId !== null);
   const pastilleArmee = useSyncPillArmed();
@@ -236,6 +248,18 @@ export default function Shell({ children }: { children: ReactNode }) {
         </Suspense>
       ) : null}
       <CallLayer />
+      {/* LA PILE DU HAUT (#9279) — « Reprendre l'appel » puis le mini-lecteur,
+          dans UNE colonne fixe : l'appel prime et le vocal se range dessous,
+          comme le `VStack` de `CallPresentationLayer` iOS. Chacun posé en
+          `fixed` au même sommet, ils se chevauchaient. */}
+      <div data-top-bars className="pointer-events-none fixed inset-x-0 z-40 flex flex-col gap-2 px-4" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>
+        <CallResumeSlot />
+        {lectureConfiee ? (
+          <Suspense fallback={null}>
+            <MiniAudioPlayerHost />
+          </Suspense>
+        ) : null}
+      </div>
       {invitationArmee ? (
         <Suspense fallback={null}>
           <ActivationInviteHost />

@@ -834,7 +834,6 @@ const es = {
   'story.studio.failure.refused': 'Publicación rechazada.',
   'story.studio.failure.unavailable': 'El servidor no está disponible.',
   'story.studio.text.add': 'Añadir texto',
-  'story.studio.text.remove': 'Quitar este texto',
   'story.studio.object.text': 'Texto {index}',
   'story.studio.object.overlay': 'Capa',
   'story.studio.object.select': 'Seleccionar {name}',

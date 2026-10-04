@@ -991,44 +991,50 @@ extension MeeshyComposerHost {
     /// (#8370). `composerFloatingSocle` le pose en surimpression au bas de la
     /// scène et réserve sa hauteur, pour que la rangée d'outils du bas reste
     /// entière au-dessus du verre.
-    @ViewBuilder
+    ///
+    /// **Le contenu de l'encart est un NŒUD** (#8387) : ce qui occupe le bas
+    /// (`socleSlot`) est évalué dans son propre cadre, hors du type de la pile.
     var composerStack: some View {
-        surfaceWithIntakePortals.composerFloatingSocle {
-            // **La description a quitté le bas au #4124.** Elle y vivait en
-            // permanence — d'abord une barre à chevron, puis le calque de
-            // lecture — et prenait la place que la scène CENTRÉE réclame, pour
-            // un texte que l'auteur ne regarde pas la plupart du temps. Elle
-            // s'ouvre désormais par l'icône de la rangée haute, par-dessus tout
-            // (`sceneDescriptionLayer`), et n'occupe l'écran que quand on
-            // l'écrit.
-            // `assembles(.publish)` dit que l'ATELIER peint la flèche. Le socle
-            // peint donc les MÊMES trois zones seulement quand l'atelier les a
-            // cédées : deux barres de publication, dont une inerte, seraient
-            // une régression sèche sur la surface de création la plus utilisée.
-            //
-            // `!paintedSocleZones.isEmpty` s'y ajoute depuis le 2026-08-28 : le
-            // mood a cédé sa SEULE zone (`.publish`) à son propre en-tête
-            // (`ComposerMoodSurface.header`), et sans cette garde le socle se
-            // peindrait quand même — une `HStack` vide, juste un `Spacer` sous
-            // un padding, l'espace exact que la consolidation vise à rendre.
-            // **Un outil ouvert efface le socle** (#8652) : audience et
-            // publication n'ont rien à faire pendant qu'on dessine ou qu'on
-            // écrit, et publier en plein tracé n'est pas un geste à offrir.
-            // Par l'OPACITÉ : l'encart garde sa hauteur, donc la scène ne
-            // grandit pas sous le doigt au moment où l'outil s'ouvre.
-            // **Le carrousel d'effets PREND la place du socle** (#8712) : la
-            // scène se recadre au-dessus de lui par la zone sûre du bas.
-            if let effet = activeSceneEffect {
-                sceneEffectCarousel(effet)
-            } else if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty {
-                let servi = ComposerToolFocus.isShown(.socle, toolIsOpen: sceneToolOwnsScreen)
-                socle
-                    .opacity(servi ? 1 : 0)
-                    .allowsHitTesting(servi)
-                    .accessibilityHidden(!servi)
-                    .animation(ComposerToolFocus.transition(reduceMotion: UIAccessibility.isReduceMotionEnabled),
-                               value: servi)
-            }
+        surfaceWithIntakePortals.composerFloatingSocle { socleSlotNode }
+    }
+
+    /// Ce qui occupe l'encart du bas : le carrousel d'effets, ou le socle.
+    @ViewBuilder
+    var socleSlot: some View {
+        // **La description a quitté le bas au #4124.** Elle y vivait en
+        // permanence — d'abord une barre à chevron, puis le calque de
+        // lecture — et prenait la place que la scène CENTRÉE réclame, pour
+        // un texte que l'auteur ne regarde pas la plupart du temps. Elle
+        // s'ouvre désormais par l'icône de la rangée haute, par-dessus tout
+        // (`sceneDescriptionLayer`), et n'occupe l'écran que quand on
+        // l'écrit.
+        // `assembles(.publish)` dit que l'ATELIER peint la flèche. Le socle
+        // peint donc les MÊMES trois zones seulement quand l'atelier les a
+        // cédées : deux barres de publication, dont une inerte, seraient
+        // une régression sèche sur la surface de création la plus utilisée.
+        //
+        // `!paintedSocleZones.isEmpty` s'y ajoute depuis le 2026-08-28 : le
+        // mood a cédé sa SEULE zone (`.publish`) à son propre en-tête
+        // (`ComposerMoodSurface.header`), et sans cette garde le socle se
+        // peindrait quand même — une `HStack` vide, juste un `Spacer` sous
+        // un padding, l'espace exact que la consolidation vise à rendre.
+        // **Un outil ouvert efface le socle** (#8652) : audience et
+        // publication n'ont rien à faire pendant qu'on dessine ou qu'on
+        // écrit, et publier en plein tracé n'est pas un geste à offrir.
+        // Par l'OPACITÉ : l'encart garde sa hauteur, donc la scène ne
+        // grandit pas sous le doigt au moment où l'outil s'ouvre.
+        // **Le carrousel d'effets PREND la place du socle** (#8712) : la
+        // scène se recadre au-dessus de lui par la zone sûre du bas.
+        if let effet = activeSceneEffect {
+            sceneEffectCarousel(effet)
+        } else if !chromeOwner.assembles(.publish) && !paintedSocleZones.isEmpty {
+            let servi = ComposerToolFocus.isShown(.socle, toolIsOpen: sceneToolOwnsScreen)
+            socleNode
+                .opacity(servi ? 1 : 0)
+                .allowsHitTesting(servi)
+                .accessibilityHidden(!servi)
+                .animation(ComposerToolFocus.transition(reduceMotion: UIAccessibility.isReduceMotionEnabled),
+                           value: servi)
         }
     }
 
