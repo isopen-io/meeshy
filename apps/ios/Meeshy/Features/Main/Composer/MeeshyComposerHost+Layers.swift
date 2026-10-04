@@ -74,6 +74,33 @@ struct ComposerHostSurface: View {
     var body: some View { host.surface }
 }
 
+/// Ce qui occupe l'encart flottant du bas — carrousel d'effets ou socle
+/// (`socleSlot`). Nominal, il sort ce contenu du type de la pile.
+struct ComposerHostSocleSlot: View {
+    let host: MeeshyComposerHost
+    var observation: ComposerHostObservation
+
+    var body: some View { host.socleSlot }
+}
+
+/// La rangée du socle — audience · texte du post · publier (`socle`).
+struct ComposerHostSocleRow: View {
+    let host: MeeshyComposerHost
+    var observation: ComposerHostObservation
+
+    var body: some View { host.socle }
+}
+
+/// Le contenu d'UN portail présenté par la feuille ou le plein écran du meuble
+/// (`portalContent`). Nominal, il sort les dix feuilles du type de la pile.
+struct ComposerHostPortal: View {
+    let host: MeeshyComposerHost
+    var observation: ComposerHostObservation
+    let portal: ComposerPortal
+
+    var body: some View { host.portalContent(portal) }
+}
+
 /// Ce que la racine pose PAR-DESSUS la scène : la zone d'écriture, la feuille
 /// de partage, le voile du bake (`composerChrome`).
 struct ComposerHostChromeLayer: ViewModifier {
@@ -116,5 +143,15 @@ extension MeeshyComposerHost {
     /// L'aiguillage, monté comme un NŒUD sous les portails.
     var surfaceNode: some View {
         ComposerHostSurface(host: self, observation: observation)
+    }
+
+    /// L'encart du bas, monté comme un NŒUD dans `composerStack`.
+    var socleSlotNode: some View {
+        ComposerHostSocleSlot(host: self, observation: observation)
+    }
+
+    /// La rangée du socle, montée comme un NŒUD dans `socleSlot`.
+    var socleNode: some View {
+        ComposerHostSocleRow(host: self, observation: observation)
     }
 }

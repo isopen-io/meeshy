@@ -45,6 +45,9 @@ final class MeeshyComposerHostTypeDepthTests: XCTestCase {
             ("ComposerHostStage.Body", ComposerHostStage.Body.self),
             ("ComposerHostStack.Body", ComposerHostStack.Body.self),
             ("ComposerHostSurface.Body", ComposerHostSurface.Body.self),
+            ("ComposerHostSocleSlot.Body", ComposerHostSocleSlot.Body.self),
+            ("ComposerHostSocleRow.Body", ComposerHostSocleRow.Body.self),
+            ("ComposerHostPortal.Body", ComposerHostPortal.Body.self),
             ("ComposerHostChromeLayer.Body", ComposerHostChromeLayer.Body.self),
             ("ComposerHostLifecycleLayer.Body", ComposerHostLifecycleLayer.Body.self),
         ]
@@ -86,8 +89,15 @@ final class MeeshyComposerHostTypeDepthTests: XCTestCase {
         }
         XCTAssertTrue(try Self.measure(ComposerHostStage.Body.self).name.contains("ComposerHostStack"),
                       "La scène doit monter la pile comme un NŒUD.")
-        XCTAssertTrue(try Self.measure(ComposerHostStack.Body.self).name.contains("ComposerHostSurface"),
+        let pile = try Self.measure(ComposerHostStack.Body.self).name
+        XCTAssertTrue(pile.contains("ComposerHostSurface"),
                       "La pile doit monter l'aiguillage comme un NŒUD.")
+        XCTAssertTrue(pile.contains("ComposerHostSocleSlot"),
+                      "La pile doit monter l'encart du bas comme un NŒUD (la pile mesurait 42 niveaux avant).")
+        XCTAssertTrue(pile.contains("ComposerHostPortal"),
+                      "Les feuilles des portails doivent rester un NŒUD sous la pile.")
+        XCTAssertTrue(try Self.measure(ComposerHostSocleSlot.Body.self).name.contains("ComposerHostSocleRow"),
+                      "L'encart doit monter la rangée du socle comme un NŒUD.")
         XCTAssertTrue(Self.mentionsAtelier(try Self.measure(ComposerHostSurface.Body.self).name),
                       "Le fusible : l'aiguillage lu est bien celui qui monte l'atelier.")
     }
@@ -99,15 +109,20 @@ final class MeeshyComposerHostTypeDepthTests: XCTestCase {
     }
 
     func test_chaqueCouche_tientDansLeBudgetDePile() throws {
-        for (nom, type) in Self.layers {
-            let mesure = try Self.measure(type)
-            print("[profondeur #8387] \(nom) = \(mesure.depth) niveaux (\(mesure.name.count) caractères)")
+        let mesures = try Self.layers.map { nom, type in (nom, try Self.measure(type)) }
+        // Le RELEVÉ entier accompagne chaque échec : la sortie standard d'un
+        // run CI ne remonte pas, le message d'assertion, si — et c'est lui qui
+        // dit quelle couche approche le plafond avant qu'elle ne le franchisse.
+        let releve = mesures.map { "\($0.0) = \($0.1.depth)" }.joined(separator: " · ")
+        print("[profondeur #8387] \(releve)")
+        for (nom, mesure) in mesures {
             XCTAssertLessThanOrEqual(
                 mesure.depth, Self.layerBudget,
                 """
                 `\(nom)` imbrique \(mesure.depth) niveaux (budget \(Self.layerBudget)). Découper la \
                 couche en vues `struct` nominales ou en `ViewModifier` nommés — un `AnyView` ne \
                 ferait que déplacer le débordement (#8387).
+                Relevé : \(releve)
                 \(mesure.excerpt)
                 """
             )

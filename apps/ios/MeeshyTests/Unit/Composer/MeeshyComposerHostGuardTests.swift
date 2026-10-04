@@ -439,8 +439,10 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
         // n'interdit pas. Une garde négative doit être bornée à l'endroit où sa
         // règle s'applique.
         let code = try hostCode()
-        guard let bodyBlock = declarationBody(startingAt: "var composerStack: some View", in: code) else {
-            return XCTFail("`composerStack` est introuvable — le meuble a changé de forme, la garde doit être re-pointée")
+        // **`socleSlot`** depuis #8387 : l'encart du bas est un nœud nominal
+        // monté par `composerStack`, et la condition du socle vit en lui.
+        guard let bodyBlock = declarationBody(startingAt: "var socleSlot: some View", in: code) else {
+            return XCTFail("`socleSlot` est introuvable — le meuble a changé de forme, la garde doit être re-pointée")
         }
         let compacte = compact(bodyBlock)
 

@@ -24,8 +24,14 @@ extension MeeshyComposerHost {
             })
     }
 
-    @ViewBuilder
+    /// Le contenu d'un portail, monté comme un NŒUD (#8387) : les dix
+    /// feuilles sortent du type de la pile et s'évaluent dans leur cadre.
     func portalView(_ portail: ComposerPortal) -> some View {
+        ComposerHostPortal(host: self, observation: observation, portal: portail)
+    }
+
+    @ViewBuilder
+    func portalContent(_ portail: ComposerPortal) -> some View {
         switch portail {
         case .location:     documentLocationPickerSheet
         case .emoji:        emojiPickerSheet
