@@ -484,3 +484,65 @@ private struct ComposerQuotedFlow: View {
         .lineLimit(QuotedReplyPresentation.previewLineLimit(for: .composer))
     }
 }
+
+// MARK: - Zones qui REMPLACENT le composer (sorties de ConversationView.swift, #9359)
+//
+// Conversation fermée, direct bloqué : le composer cède la place à une zone
+// statique qui dit pourquoi on ne peut pas écrire.
+extension ConversationView {
+
+    // MARK: - Closed Conversation Banner
+
+    var closedConversationBanner: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            Image(systemName: "lock.fill")
+                .foregroundColor(.secondary)
+            Text(String(localized: "conversation.view.closed", bundle: .main))
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, MeeshySpacing.md + 2)
+        .background(.ultraThinMaterial)
+    }
+
+    // MARK: - Blocked Conversation Composer Zone
+
+    /// Replaces the composer for a DM the user has blocked: explains they must
+    /// unblock to write to and receive messages from the user, with a one-tap
+    /// unblock CTA. Mirrors `closedConversationBanner`'s static-zone pattern.
+    func blockedComposerZone(userId: String) -> some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            HStack(spacing: MeeshySpacing.sm) {
+                Image(systemName: "hand.raised.fill")
+                    .foregroundColor(.secondary)
+                Text(String(localized: "conversation.composer.blocked.title", bundle: .main))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.secondary)
+            }
+            Text(String(localized: "conversation.composer.blocked.subtitle", bundle: .main))
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+            Button {
+                HapticFeedback.medium()
+                Task {
+                    await BlockActionCoordinator.shared.unblock(userId: userId)
+                    await MainActor.run { HapticFeedback.success() }
+                }
+            } label: {
+                Text(String(localized: "conversation.composer.blocked.unblock", bundle: .main))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, MeeshySpacing.xxl)
+                    .padding(.vertical, MeeshySpacing.sm + 2)
+                    .background(Capsule().fill(Color(hex: accentColor)))
+            }
+            .accessibilityLabel(String(localized: "conversation.composer.blocked.unblock", bundle: .main))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, MeeshySpacing.lg)
+        .padding(.horizontal, MeeshySpacing.xxl)
+        .background(.ultraThinMaterial)
+    }
+}
