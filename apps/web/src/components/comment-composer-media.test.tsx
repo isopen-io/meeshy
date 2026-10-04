@@ -84,13 +84,13 @@ function hote(sent: Envoi[], result: CommentComposerResult = { ok: true }) {
 }
 
 describe('CommentComposer — photo et vidéo jointes (#9167)', () => {
-  test('le trombone ouvre la photothèque, photos et vidéos seulement', async () => {
+  test('le trombone ouvre la photothèque : photos, vidéos et sons (#9318)', async () => {
     const host = await monter(hote([]));
     const attach = host.querySelector<HTMLButtonElement>('[data-comment-attach]');
-    expect(attach?.getAttribute('aria-label')).toBe('Joindre une photo ou une vidéo');
+    expect(attach?.getAttribute('aria-label')).toBe('Joindre une photo, une vidéo ou un son');
     const input = host.querySelector<HTMLInputElement>('[data-comment-attach-input]');
     expect(input?.type).toBe('file');
-    expect(input?.accept).toBe('image/*,video/*');
+    expect(input?.accept).toBe('image/*,video/*,audio/*');
     expect(input?.multiple).toBe(true);
   });
 

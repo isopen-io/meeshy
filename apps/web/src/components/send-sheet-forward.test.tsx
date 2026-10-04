@@ -159,10 +159,10 @@ describe('Transfert du fil — la feuille d’envoi, cache-first', () => {
 });
 
 describe('Transfert du fil — un seul message portant un seul média', () => {
-  test('une photo ouverte offre Ma story / Post / Réel', async () => {
+  test('une photo ouverte offre Ma story / Post — une image seule n’est pas un réel (#9286)', async () => {
     seedCache();
     const host = await mount(forwardOf({ attachments: [photo()] }));
-    expect([...host.querySelectorAll('[data-send-publish]')].map((chip) => chip.textContent)).toEqual(['Ma story', 'Post', 'Réel']);
+    expect([...host.querySelectorAll('[data-send-publish]')].map((chip) => chip.textContent)).toEqual(['Ma story', 'Post']);
   });
 
   test('une photo à VUE UNIQUE n’offre rien et le dit', async () => {

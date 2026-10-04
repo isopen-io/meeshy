@@ -8,7 +8,9 @@ import type { CommentGestureHandlers } from '@/components/comment-row';
 import { findCardPost } from '@/lib/api/card-caches';
 import type { CommentGestureFailure, CommentGestureRequest } from '@/lib/api/comment-gestures';
 import { commentAction, commentGestureAction, loadCommentRepliesAction, reportCommentAction, useComments } from '@/lib/api/query';
-import { flattenCommentPages, type CommentInfiniteData, type PostComment } from '@/lib/api/publication-comments';
+import type { PickedSticker } from '@/components/composer-sticker-sheet';
+import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
+import { flattenCommentPages, type CommentInfiniteData, type CommentStickerSend, type PostComment } from '@/lib/api/publication-comments';
 import { appQueryClient } from '@/lib/api/query-client';
 import { browserCommentUpload, uploadCommentMedia, type CommentMediaUpload } from '@/lib/comments/comment-media';
 import { resolveFeedText } from '@/lib/feed/text';
@@ -147,18 +149,19 @@ export function CommentThread({
     );
   }, []);
 
-  const onSend = useCallback(
-    async (content: string, pending: readonly PendingAttachment[]): Promise<CommentComposerResult> => {
+  /**
+   * LE DÉPART D'UN COMMENTAIRE — texte, médias déjà téléversés, sticker
+   * (#9167, #9318) : la MÊME porte pour le composeur et pour la feuille de
+   * stickers, donc la même cible de réponse et le même dépliage.
+   */
+  const deliver = useCallback(
+    async (outgoing: { readonly content: string; readonly media: readonly PostMediaUploadResult[]; readonly sticker?: CommentStickerSend }): Promise<CommentComposerResult> => {
       const target = replyTarget;
-      /* LES PIÈCES MONTENT D'ABORD (#9167, miroir `CommentMediaUploader`) :
-         `attachmentIds` ne porte que des `PostMedia` déjà téléversés. Une
-         seule refusée et rien ne part — le composeur rend texte et pièces. */
-      const uploaded = pending.length === 0 ? { ok: true as const, media: [] } : await uploadCommentMedia(pending, uploadMedia);
-      if (!uploaded.ok) return { ok: false, message: 'comments.media.upload_failed' };
       const sending = commentAction({
         postId,
-        content,
-        media: uploaded.media,
+        content: outgoing.content,
+        media: outgoing.media,
+        ...(outgoing.sticker === undefined ? {} : { sticker: outgoing.sticker }),
         ...(target === null ? {} : { parentId: target.rootId }),
         author: {
           id: viewer.id ?? '',
@@ -182,7 +185,33 @@ export function CommentThread({
         ? { ok: true, ...(result.notice === undefined ? {} : { message: result.notice }) }
         : { ok: false, message: result.message };
     },
-    [postId, viewer.id, viewer.displayName, viewer.handle, viewer.avatar, language, replyTarget, uploadMedia],
+    [postId, viewer.id, viewer.displayName, viewer.handle, viewer.avatar, language, replyTarget],
+  );
+
+  const onSend = useCallback(
+    async (content: string, pending: readonly PendingAttachment[]): Promise<CommentComposerResult> => {
+      /* LES PIÈCES MONTENT D'ABORD (#9167, miroir `CommentMediaUploader`) :
+         `attachmentIds` ne porte que des `PostMedia` déjà téléversés. Une
+         seule refusée et rien ne part — le composeur rend texte et pièces. */
+      const uploaded = pending.length === 0 ? { ok: true as const, media: [] } : await uploadCommentMedia(pending, uploadMedia);
+      if (!uploaded.ok) return { ok: false, message: 'comments.media.upload_failed' };
+      return deliver({ content, media: uploaded.media });
+    },
+    [uploadMedia, deliver],
+  );
+
+  /**
+   * LE STICKER, UN COMMENTAIRE À LUI SEUL (#9318, la forme de #9080) — son
+   * image monte en `PostMedia` (contexte `comment`), puis le descripteur et
+   * l'image partent ensemble ; `commentStickerOf` relira l'image au premier rang.
+   */
+  const onSendSticker = useCallback(
+    async ({ file, sticker }: PickedSticker): Promise<CommentComposerResult> => {
+      const picture = await uploadMedia(file);
+      if (!picture.ok) return { ok: false, message: 'comments.media.upload_failed' };
+      return deliver({ content: '', media: [], sticker: { sticker, picture: picture.data } });
+    },
+    [uploadMedia, deliver],
   );
 
   /**
@@ -336,6 +365,7 @@ export function CommentThread({
       <CommentComposer
         language={language}
         onSend={onSend}
+        onSendSticker={onSendSticker}
         canWrite={canWrite}
         mentionSource={mentionSource}
         replyTo={replyTarget}

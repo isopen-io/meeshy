@@ -92,6 +92,7 @@ import { useStudioBackgroundSound } from '@/routes/use-studio-background-sound';
 import { useStudioCompositeHash } from '@/routes/use-studio-composite-hash';
 import { useStudioTextBox } from '@/routes/use-studio-text-box';
 import { RETOUCH_DRAFTS, useStudioRetouchFinish, type StudioRetouch } from '@/routes/use-studio-retouch';
+import { EDIT_DRAFTS, studioEditSaver, type StudioEdit } from '@/routes/use-studio-edit';
 import type { StudioSeededPiece } from '@/lib/stories/studio-retouch-finish';
 import { useStudioObjects } from '@/routes/use-studio-objects';
 import { ALL_DOORS, uploadKey, useStudioUploads } from '@/routes/use-studio-uploads';
@@ -207,6 +208,7 @@ export default function StoryComposeScreen({
   requestedAudience = null,
   origin = null,
   retouch,
+  edit,
 }: {
   readonly deps?: StoryStudioDeps;
   readonly initialKind?: PublicationKind;
@@ -214,6 +216,8 @@ export default function StoryComposeScreen({
   readonly origin?: StudioOrigin | null;
   /** LA RETOUCHE d'une image du fil (#8416) — voir `StudioRetouch`. */
   readonly retouch?: StudioRetouch;
+  /** MODIFIER UNE PUBLICATION (#9317) — voir `StudioEdit`. */
+  readonly edit?: StudioEdit;
 } = {}) {
   const session = useStore(sessionStore, (s) => s.session);
   // Une retouche ne publie rien et ne touche AUCUN brouillon de story : ni
@@ -223,6 +227,10 @@ export default function StoryComposeScreen({
   }
   if (session.status === 'guest') {
     return <StudioShell kind={initialKind} origin={origin}>{<StudioRefusal lang={currentInterfaceLanguage()} />}</StudioShell>;
+  }
+  // Une modification n'écrit dans aucun brouillon de création : sans lecteur.
+  if (edit !== undefined) {
+    return <StoryStudio deps={{ ...deps, drafts: EDIT_DRAFTS }} viewerId={null} initialKind={edit.origin.kind} requestedAudience={null} origin={null} edit={edit} />;
   }
   const viewerId = session.status === 'authenticated' ? session.user.id : null;
   return (
@@ -244,6 +252,7 @@ function StoryStudio({
   requestedAudience,
   origin,
   retouch,
+  edit: reopened,
 }: {
   readonly deps: StoryStudioDeps;
   readonly viewerId: string | null;
@@ -251,6 +260,7 @@ function StoryStudio({
   readonly requestedAudience: ChoosableAudience | null;
   readonly origin: StudioOrigin | null;
   readonly retouch?: StudioRetouch;
+  readonly edit?: StudioEdit;
 }) {
   const retouching = retouch !== undefined;
   const lang = currentInterfaceLanguage();
@@ -258,6 +268,7 @@ function StoryStudio({
   const online = useOnline();
 
   const [draft, setDraft] = useState<StudioDraft>(() => {
+    if (reopened !== undefined) return reopened.draft;
     const snapshot = viewerId === null ? null : deps.drafts.get(viewerId);
     const seeded = studioDraftFromSnapshot(snapshot, attachmentSrc, reader.languages[0] ?? 'fr');
     // **RANG 1 le brouillon, RANG 2 la mémoire du dernier choix** (#7683,
@@ -283,7 +294,7 @@ function StoryStudio({
   // La création ROUVERTE reprend son format (#8849) — l'entrée ne décide que
   // d'une création neuve.
   const [entryKind] = useState<PublicationKind>(() => (viewerId === null ? null : deps.drafts.get(viewerId)?.kind) ?? initialKind);
-  const [choice, setChoice] = useState<PublishChoice>({ kind: entryKind, layout: null });
+  const [choice, setChoice] = useState<PublishChoice>({ kind: entryKind, layout: reopened?.origin.layout ?? null });
   const kind = choice.kind;
   const [publishing, setPublishing] = useState(false);
   const [awaitingNetwork, setAwaitingNetwork] = useState(false);
@@ -385,8 +396,16 @@ function StoryStudio({
       if (focus !== undefined) setDraft((current) => withCurrentPage(current, focus.pageId));
       return;
     }
-    const seed = retouch !== undefined ? retouch.file : takeStudioSeed();
-    if (seed !== null) place('visual', seed);
+    if (retouch !== undefined) {
+      if (retouch.file !== null) place('visual', retouch.file);
+      return;
+    }
+    // Une modification (#9317) ne consomme pas la pièce déposée pour une création.
+    if (reopened !== undefined) return;
+    const seed = takeStudioSeed();
+    if (seed === null) return;
+    importMedia(seed.files);
+    if (seed.text !== '') setDraft((current) => withPostText(current, seed.text));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -519,6 +538,10 @@ function StoryStudio({
     setPublishFailure(null);
 
     const settledByPage = await settlePages(draft.pages, (pageId, door) => pendingRef.current[uploadKey(pageId, door)] ?? null);
+    if (reopened !== undefined) {
+      const save = studioEditSaver({ edit: reopened, api: deps.api, language, latest: latestDraft, sendRef, setPublishing, setPublishFailure, setPublishProgress, dropPublished: (ids) => dropPublishedPages(ids, reopened.origin.kind) });
+      return save(settledByPage);
+    }
     const current = latestDraft.current;
     const plan = studioPublishPlan({ pages: current.pages, settled: settledByPage, choice: chosen });
     if (plan.kind !== 'ready') {
@@ -582,7 +605,9 @@ function StoryStudio({
 
   const reelOffer = useStudioReelOffer({ lang, draft, choice, setChoice, publish: (chosen, promoted) => void publish(chosen, promoted) });
   /** LA BASCULE POST → RÉEL (#8794) — le chevron la verrouille (`authorChose`). */
-  const reelAuto = useStudioReelAutoSwitch({ lang, draft, entryKind, enabled: !retouching, setChoice });
+  const reelAuto = useStudioReelAutoSwitch({ lang, draft, entryKind, enabled: !retouching && reopened === undefined, setChoice });
+  /** Enregistrer une modification ne demande jamais « en réel ? » (#9317). */
+  const requestPublish = reopened !== undefined ? () => void publish() : reelOffer.requestPublish;
   const publishRef = useRef(publish);
   publishRef.current = publish;
   useEffect(() => {
@@ -629,10 +654,10 @@ function StoryStudio({
           current: String(Math.min(publishProgress.published + 1, publishProgress.total)),
           total: String(publishProgress.total),
         })
-      : translate(lang, 'story.studio.publishing')
+      : translate(lang, reopened !== undefined ? 'story.studio.edit.saving' : 'story.studio.publishing')
     : awaitingNetwork
       ? translate(lang, 'story.studio.publish.waiting')
-      : translate(lang, publishTitleKey(kind));
+      : translate(lang, reopened !== undefined ? 'story.studio.edit.save' : publishTitleKey(kind));
 
   const objectName = (id: string): string =>
     id === 'overlay'
@@ -791,7 +816,7 @@ function StoryStudio({
           </Suspense>
         )
       }
-      {...(retouch !== undefined ? { onCancel: retouch.onCancel } : {})}
+      {...(retouch !== undefined ? { onCancel: retouch.onCancel } : reopened !== undefined ? { onCancel: reopened.onCancel, cancelLabel: translate(lang, 'story.studio.edit.cancel') } : {})}
       menu={
         retouching ? undefined : (
           <>
@@ -868,7 +893,7 @@ function StoryStudio({
                       ? studioWritingStyle({ layer: inviteLayer, widthFraction: textAppearance.widthFraction, box: textBox })
                       : null,
                   onText: onTextChange,
-                  onPublish: reelOffer.requestPublish,
+                  onPublish: requestPublish,
                   locked: publishing,
                   editing: editing !== null && editing === inviteLayer?.id,
                 }
@@ -1014,7 +1039,7 @@ function StoryStudio({
               kind={kind}
               label={publishLabel}
               disabled={!canPublish || publishing || kindRefusal !== null}
-              menuDisabled={!canPublish || publishing}
+              menuDisabled={!canPublish || publishing || reopened !== undefined}
               busy={publishing || awaitingNetwork}
               refusalOf={(candidate) => {
                 const refusal = studioPublishRefusal(draft, candidate);
@@ -1022,7 +1047,7 @@ function StoryStudio({
               }}
               audienceLabelOf={(candidate) => translate(lang, audienceLabelKey(audienceOf(candidate)))}
               layoutsServedFor={(candidate) => layoutIsServed({ publishablePageCount, kind: candidate })}
-              onPrimary={reelOffer.requestPublish}
+              onPrimary={requestPublish}
               onChoose={(chosen) => {
                 reelAuto.authorChose();
                 reelOffer.choose(chosen);

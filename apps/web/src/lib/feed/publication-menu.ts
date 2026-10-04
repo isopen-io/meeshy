@@ -16,12 +16,14 @@
  *   porte un ; le navigateur n'a pas de photothèque, le signet est le geste
  *   qui existe. Il bascule avec l'état servi (« Retirer des enregistrements »).
  *
- * ## « MODIFIER » (#7534) — LE TEXTE SEULEMENT
+ * ## « MODIFIER » (#7534, #9317) — LE STUDIO, OU LA FEUILLE DE TEXTE
  *
  * `FeedPostCard+Header.swift:208-215` la pose ENTRE Épingler et Supprimer,
  * sans séparateur avant elle, hors du bloc destructif — miroir exact ici.
- * L'éditeur web (`publication-edit-sheet.tsx`) ne porte que le texte ; médias,
- * langue, type et audience restent hors tranche (issue compagnon).
+ * Une publication qui porte une scène ou un média se modifie dans le STUDIO
+ * (`/posts/:id/edit`, `routes/publication-edit.tsx`) : scènes modifiées,
+ * ajoutées, supprimées. Un post de texte seul, ou une republication, garde la
+ * feuille de texte (`publication-edit-sheet.tsx`).
  *
  * ## « À MOI » SE DÉCIDE PAR L'IDENTITÉ DE SESSION
  *

@@ -27,6 +27,7 @@ export function StudioShell({
   menu,
   floor,
   onCancel,
+  cancelLabel,
   chromeHidden = false,
   children,
 }: {
@@ -39,6 +40,9 @@ export function StudioShell({
   readonly floor?: ReactNode;
   /** ✕ d'une RETOUCHE (#8416) — l'hôte referme la couche, aucune navigation. */
   readonly onCancel?: () => void;
+  /** Ce que dit ce ✕ — « Abandonner la retouche » par défaut ; une
+   * modification de publication (#9317) dit la sienne. */
+  readonly cancelLabel?: string;
   /** UN OUTIL OUVERT (#8654) — la barre haute cède en fondu (`studioChrome`). */
   readonly chromeHidden?: boolean;
   readonly children: ReactNode;
@@ -61,7 +65,7 @@ export function StudioShell({
             type="button"
             data-story-retouch-cancel
             onClick={onCancel}
-            aria-label={translate(lang, 'story.studio.retouch.cancel')}
+            aria-label={cancelLabel ?? translate(lang, 'story.studio.retouch.cancel')}
             className={ROUND_GLASS}
             style={{ outlineColor: 'var(--color-ios-brand)', color: 'var(--color-ios-ink)' }}
           >

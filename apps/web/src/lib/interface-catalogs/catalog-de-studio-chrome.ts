@@ -131,6 +131,9 @@ const deStudioChrome = {
   'story.studio.audioTrim.title': 'Audio kürzen',
   'story.studio.background.tools.leave': 'Zurück zur Szene',
   'story.studio.reelSwitch.announcement': 'Zu einem Reel gewechselt',
+  'story.studio.edit.save': 'Speichern',
+  'story.studio.edit.saving': 'Wird gespeichert…',
+  'story.studio.edit.cancel': 'Änderungen verwerfen',
 } satisfies StudioChromeCatalogSlice;
 
 export default deStudioChrome;

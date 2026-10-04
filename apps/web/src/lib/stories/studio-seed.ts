@@ -9,14 +9,29 @@
  * téléversé (`uploadPostMedia`), et une adresse de pièce jointe n'est pas un
  * média de publication. La graine se prend UNE fois : un retour arrière vers
  * le studio ne la repose pas.
+ *
+ * **« MODIFIER AVANT DE PUBLIER »** (#9286) — un partage entrant (autre
+ * application → Meeshy) sème PLUSIEURS fichiers (une scène chacun, la porte
+ * multiple du fond) et le TEXTE qui les accompagnait, qui devient le corps
+ * de la publication — miroir de l'extension de partage iOS, qui ouvre le
+ * composer pré-rempli au lieu de publier à l'aveugle.
  */
-let pending: File | null = null;
+export type StudioSeed = {
+  readonly files: readonly File[];
+  readonly text: string;
+};
 
-export function offerStudioSeed(file: File): void {
-  pending = file;
+let pending: StudioSeed | null = null;
+
+export function offerStudioSeedOf(seed: StudioSeed): void {
+  pending = seed;
 }
 
-export function takeStudioSeed(): File | null {
+export function offerStudioSeed(file: File): void {
+  offerStudioSeedOf({ files: [file], text: '' });
+}
+
+export function takeStudioSeed(): StudioSeed | null {
   const seed = pending;
   pending = null;
   return seed;

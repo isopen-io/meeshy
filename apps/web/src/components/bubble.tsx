@@ -12,7 +12,7 @@ import type { PlacedMessage } from '@/lib/grouping';
 import { time } from '@/lib/grouping';
 import { languageBand, mountsBottomLine } from '@/lib/reading-mode/meta';
 import { protectionOf } from '@/lib/reading-mode/protection';
-import { BUBBLE_STICKER_SIDE } from '@/lib/reading-mode/metrics';
+import { BUBBLE_STICKER_SIDE, STICKER_RENDER_SCALE } from '@/lib/reading-mode/metrics';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { hereKeyOf } from '@/lib/view/use-conversation-viewing';
@@ -353,7 +353,7 @@ export function Bubble({
       {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" language={currentInterfaceLanguage()} /> : null}
 
       {body.kind === 'sticker' ? (
-        <StickerArtwork sticker={body.sticker} picture={body.picture} side={BUBBLE_STICKER_SIDE} />
+        <StickerArtwork sticker={body.sticker} picture={body.picture} side={BUBBLE_STICKER_SIDE * STICKER_RENDER_SCALE} />
       ) : body.kind === 'emoji-only' ? (
         <EmojiOnly text={body.text} fontSize={body.fontSize} />
       ) : rendered.text ? (

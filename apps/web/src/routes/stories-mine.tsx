@@ -171,6 +171,17 @@ export function MyStoryCard({
           {viewCount > 0 ? <span className="text-check">{viewCount}</span> : null}
         </button>
 
+        <Link
+          to="postEdit"
+          params={{ post: story.id }}
+          aria-label={translate(language, 'storiesMine.action.edit')}
+          data-my-story-edit
+          className="grid place-items-center rounded-chip focus-visible:outline-2"
+          style={{ minWidth: 44, minHeight: 44, color: 'var(--color-ios-ink-2)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          <GlyphSvg glyph={STORIES_MINE_GLYPHS.pencilSimple} size={GLYPH_SIZE.lg} />
+        </Link>
+
         <button
           type="button"
           onClick={() => onRequestDelete(story.id)}

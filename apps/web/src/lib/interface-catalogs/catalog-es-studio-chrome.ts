@@ -131,6 +131,9 @@ const esStudioChrome = {
   'story.studio.audioTrim.title': 'Acortar el audio',
   'story.studio.background.tools.leave': 'Volver a la escena',
   'story.studio.reelSwitch.announcement': 'Cambiado a reel',
+  'story.studio.edit.save': 'Guardar',
+  'story.studio.edit.saving': 'Guardando…',
+  'story.studio.edit.cancel': 'Descartar los cambios',
 } satisfies StudioChromeCatalogSlice;
 
 export default esStudioChrome;

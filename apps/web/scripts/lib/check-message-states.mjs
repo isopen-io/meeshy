@@ -313,7 +313,8 @@ export async function checkMessageStates({ browser, BASE, expect, setScheme, AA_
     (await rowOf('st-sticker').locator('img[alt^="Sticker"]').count()) === 0,
     `${label} st-sticker : AUCUNE <img> — le PNG n'est que le repli des clients qui ne dessinent pas`,
   );
-  /* LA POLICE (90, `BubbleSticker.emojiGlyphSize` — un sticker garde sa taille, #9054) — et AUCUN débord
+  /* LA POLICE (180 : le 90 de `BubbleSticker.emojiGlyphSize` × `STICKER_RENDER_SCALE`, rendu ×2 du web, #9319 ;
+     un sticker garde sa taille, #9054) — et AUCUN débord
      (#7881). La boîte 60×60 (`BubbleSticker.emojiBox`) servie en CSS laissait
      un glyphe de ~100 px déborder de sa rangée sur le nom, l'heure et le
      sticker voisins ; le témoin précédent exigeait EXACTEMENT ce 60 et
@@ -328,8 +329,8 @@ export async function checkMessageStates({ browser, BASE, expect, setScheme, AA_
       contained: row !== undefined && box.top >= row.top - 0.5 && box.bottom <= row.bottom + 0.5,
     };
   });
-  expect(stickerGlyphBox.fontSize === '90px', `${label} st-sticker : police du glyphe 90px (obtenu ${stickerGlyphBox.fontSize})`);
-  expect(stickerGlyphBox.height >= 90, `${label} st-sticker : la boîte du glyphe réserve sa hauteur peinte (obtenu ${stickerGlyphBox.height})`);
+  expect(stickerGlyphBox.fontSize === '180px', `${label} st-sticker : police du glyphe 180px (obtenu ${stickerGlyphBox.fontSize})`);
+  expect(stickerGlyphBox.height >= 180, `${label} st-sticker : la boîte du glyphe réserve sa hauteur peinte (obtenu ${stickerGlyphBox.height})`);
   expect(stickerGlyphBox.contained, `${label} st-sticker : le glyphe tient DANS sa rangée — aucun débord sur les voisins`);
 
   // st-sticker-bare — aucun gabarit, aucune pièce jointe : repli emoji (glyphe).

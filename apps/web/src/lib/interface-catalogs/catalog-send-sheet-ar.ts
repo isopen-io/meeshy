@@ -32,6 +32,7 @@ const ar = {
   'sendSheet.error.captionTooLong': 'هذه الرسالة أطول من أن تُنشر (بحد أقصى {count} حرفًا)',
   'sendSheet.error.tooManyFiles': 'بحد أقصى {count} ملفات لكل منشور',
   'sendSheet.moreOptions': 'المزيد من الخيارات…',
+  'sendSheet.compose': 'تعديل قبل النشر',
   'sendSheet.copyLink': 'نسخ الرابط',
   'sendSheet.linkCopied': 'تم نسخ الرابط',
   'sendSheet.announce.sent': 'تم الإرسال إلى {count}',

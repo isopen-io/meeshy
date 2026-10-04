@@ -81,4 +81,17 @@ describe('CommentRow — les médias joints (#9167)', () => {
     const el = await mount(comment({ content: '', sticker: { emoji: '🔥' }, media: [{ id: 'pm-sticker', mimeType: 'image/png', fileUrl: 'https://cdn.meeshy.me/s/x.png' }] }));
     expect(el.querySelector('[data-comment-media]')).toBeNull();
   });
+
+  test('un son se lit sur place, et son lecteur se nomme (#9318)', async () => {
+    const el = await mount(comment({ content: '', media: [{ id: 'pm-son', mimeType: 'audio/webm', fileUrl: 'https://cdn.meeshy.me/c/voix.webm' }] }));
+    const audio = el.querySelector('[data-comment-media] audio');
+    expect(audio?.getAttribute('src')).toBe('https://cdn.meeshy.me/c/voix.webm');
+    expect(audio?.hasAttribute('controls')).toBe(true);
+    expect(audio?.getAttribute('aria-label')).toBe('Audio');
+  });
+
+  test('un GIF reste une image : il s’anime tel quel (#9318)', async () => {
+    const el = await mount(comment({ media: [{ id: 'pm-gif', mimeType: 'image/gif', fileUrl: 'https://cdn.meeshy.me/c/chat.gif' }] }));
+    expect(el.querySelector('[data-comment-media] img')?.getAttribute('src')).toBe('https://cdn.meeshy.me/c/chat.gif');
+  });
 });

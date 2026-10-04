@@ -93,7 +93,7 @@ function StickerPicture({
         alt={alt}
         width={side}
         height={side}
-        style={{ objectFit: 'contain' }}
+        style={{ objectFit: 'contain', maxWidth: '100%', height: 'auto' }}
         src={attachmentSrc(picture.fileUrl)}
       />
     );
@@ -109,9 +109,9 @@ function StickerPicture({
 const EMOJI_GLYPH_LINE_HEIGHT = 1.1;
 
 /**
- * LE GLYPHE — la POLICE est `STICKER_EMOJI_GLYPH_SIZE` (90,
- * `BubbleSticker.emojiGlyphSize`), CONSTANTE quel que soit `side` (112 en
- * rangée plate, 160 en bulle — la cote du cas PNG, pas de celui-ci ;
+ * LE GLYPHE — la POLICE est `STICKER_EMOJI_GLYPH_SIZE` (180, le 90 de
+ * `BubbleSticker.emojiGlyphSize` doublé par #9319), CONSTANTE quel que soit
+ * `side` (224 en rangée plate, 320 en bulle — la cote du cas PNG, pas de celui-ci ;
  * revue-correction #5936, défaut majeur 6b).
  *
  * AUCUNE BOÎTE FIXE (#7881). `STICKER_EMOJI_BOX` (60, `BubbleSticker.

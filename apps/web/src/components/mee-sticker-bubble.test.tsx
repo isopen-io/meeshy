@@ -18,6 +18,13 @@ describe('MeeBubbleSticker', () => {
     expect(html).not.toContain('<img');
   });
 
+  test('un carré de `side`, borné à la largeur de sa colonne (#9319)', () => {
+    const html = renderToStaticMarkup(<MeeBubbleSticker sticker={{ templateId: 'mee.instant-plage' }} side={320} fallback={null} />);
+    expect(html).toContain('width:320px');
+    expect(html).toContain('max-width:100%');
+    expect(html).toContain('aspect-ratio:1');
+  });
+
   test('un gabarit inconnu de ce binaire rend l’image jointe', () => {
     const html = renderToStaticMarkup(<MeeBubbleSticker sticker={{ templateId: 'mee.demain' }} side={160} fallback={<img alt="repli" />} />);
     expect(html).toContain('alt="repli"');

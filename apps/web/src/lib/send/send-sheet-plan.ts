@@ -131,15 +131,22 @@ const isVisualMime = (mime: string): boolean => mime.startsWith('image/') || mim
 
 const ALL_FORMATS: readonly PublishFormat[] = ['POST', 'STORY', 'REEL'];
 
+/**
+ * LE RÉEL SE REFUSE, IL NE SE DÉGRADE PAS (#9286) — la règle serveur
+ * (`qualifiesAsReel`) lue sur ce qui se sait AVANT téléchargement : une
+ * vidéo, ou au moins deux images. Une image seule rétrograderait en post
+ * sans un mot ; la pastille n'est donc pas offerte.
+ */
+const formatsForMimes = (mimes: readonly string[]): readonly PublishFormat[] => {
+  if (mimes.length === 0 || !mimes.every(isVisualMime)) return [];
+  const reel = mimes.some((mime) => mime.startsWith('video/')) || mimes.filter((mime) => mime.startsWith('image/')).length >= 2;
+  return reel ? ALL_FORMATS : ['POST', 'STORY'];
+};
+
 /** Les fichiers qu'un payload met en jeu, comptés — `media` pèse UN fichier. */
 const fileCountOf = (payload: SendPayload): number => {
   if (payload.kind === 'files') return payload.files.length;
   return payload.kind === 'media' ? 1 : 0;
-};
-
-const visualFilesOf = (payload: SendPayload): boolean => {
-  if (payload.kind === 'files') return payload.files.length > 0 && payload.files.every((f) => isVisualMime(f.type));
-  return payload.kind === 'media' && isVisualMime(payload.mime);
 };
 
 /**
@@ -150,20 +157,18 @@ const visualFilesOf = (payload: SendPayload): boolean => {
 export function publishOffered(payload: SendPayload): readonly PublishFormat[] {
   switch (payload.kind) {
     case 'attachment':
-      return !payload.protected && isVisualMime(payload.mime) ? ALL_FORMATS : [];
+      return payload.protected ? [] : formatsForMimes([payload.mime]);
     case 'media':
+      return formatsForMimes([payload.mime]);
     case 'files':
-      return visualFilesOf(payload) ? ALL_FORMATS : [];
+      return formatsForMimes(payload.files.map((f) => f.type));
     case 'publication':
       return ['STORY', 'REEL', 'POST'];
     case 'text':
       return ['POST'];
     case 'messages':
-      return payload.messages.length === 1 &&
-        payload.soleMedia !== undefined &&
-        !payload.soleMedia.protected &&
-        isVisualMime(payload.soleMedia.mime)
-        ? ALL_FORMATS
+      return payload.messages.length === 1 && payload.soleMedia !== undefined && !payload.soleMedia.protected
+        ? formatsForMimes([payload.soleMedia.mime])
         : [];
   }
 }

@@ -9,7 +9,7 @@ import type { ApiResult } from '@/lib/api/http';
 import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
 import { pendingAttachmentOf } from '@/lib/send/attachments';
 
-import { COMMENT_MEDIA_ACCEPT, acceptCommentFiles, uploadCommentMedia } from './comment-media';
+import { COMMENT_MEDIA_ACCEPT, acceptCommentFiles, uploadCommentMedia, withCommentPiece } from './comment-media';
 
 /**
  * #9167 — UN COMMENTAIRE WEB JOINT UNE PHOTO OU UNE VIDÉO, par le MÊME contrat
@@ -20,15 +20,21 @@ import { COMMENT_MEDIA_ACCEPT, acceptCommentFiles, uploadCommentMedia } from './
 
 const file = (name: string, type: string) => new File([new Uint8Array([1, 2, 3])], name, { type });
 
-describe('acceptCommentFiles — la photothèque', () => {
-  test('n’ouvre que les photos et les vidéos', () => {
-    expect(COMMENT_MEDIA_ACCEPT).toBe('image/*,video/*');
+describe('acceptCommentFiles — photos, vidéos et sons (#9167, #9318)', () => {
+  test('ouvre les photos, les vidéos et les sons', () => {
+    expect(COMMENT_MEDIA_ACCEPT).toBe('image/*,video/*,audio/*');
   });
 
-  test('garde images et vidéos, écarte le reste', () => {
-    const accepted = acceptCommentFiles([], [file('a.jpg', 'image/jpeg'), file('b.pdf', 'application/pdf'), file('c.mp4', 'video/mp4'), file('d.mp3', 'audio/mpeg')]);
-    expect(accepted.map((piece) => piece.name)).toEqual(['a.jpg', 'c.mp4']);
-    expect(accepted.map((piece) => piece.kind)).toEqual(['image', 'video']);
+  test('garde images, GIF, vidéos et sons, écarte le reste', () => {
+    const accepted = acceptCommentFiles([], [
+      file('a.jpg', 'image/jpeg'),
+      file('b.pdf', 'application/pdf'),
+      file('c.mp4', 'video/mp4'),
+      file('d.mp3', 'audio/mpeg'),
+      file('e.gif', 'image/gif'),
+    ]);
+    expect(accepted.map((piece) => piece.name)).toEqual(['a.jpg', 'c.mp4', 'd.mp3', 'e.gif']);
+    expect(accepted.map((piece) => piece.kind)).toEqual(['image', 'video', 'audio', 'image']);
   });
 
   test('s’ajoute à la sélection, jamais au-delà de MAX_POST_MEDIA', () => {
@@ -37,6 +43,22 @@ describe('acceptCommentFiles — la photothèque', () => {
     const accepted = acceptCommentFiles(déjà, many);
     expect(accepted).toHaveLength(MAX_POST_MEDIA);
     expect(accepted[0]).toBe(déjà[0]);
+  });
+});
+
+describe('withCommentPiece — le vocal enregistré rejoint la sélection (#9318)', () => {
+  test('s’ajoute à la fin, en gardant sa durée', () => {
+    const déjà = [pendingAttachmentOf(file('x.jpg', 'image/jpeg'))];
+    const vocal = pendingAttachmentOf(file('Message vocal.webm', 'audio/webm'), { durationMs: 2_000 });
+    const after = withCommentPiece(déjà, vocal);
+    expect(after).toEqual([déjà[0], vocal]);
+    expect(déjà).toHaveLength(1);
+  });
+
+  test('jamais au-delà de MAX_POST_MEDIA', () => {
+    const pleine = Array.from({ length: MAX_POST_MEDIA }, (_, i) => pendingAttachmentOf(file(`p${i}.jpg`, 'image/jpeg')));
+    const vocal = pendingAttachmentOf(file('Message vocal.webm', 'audio/webm'));
+    expect(withCommentPiece(pleine, vocal)).toBe(pleine);
   });
 });
 

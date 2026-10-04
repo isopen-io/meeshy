@@ -85,11 +85,12 @@ describe('MessageSwipe — le glissé d’iOS sous le doigt (#7559)', () => {
     expect(journal).toEqual(['reply', 'forward']);
   });
 
-  test('bulle envoyée : la réponse part vers la GAUCHE ; rangée plate : toujours vers la droite', async () => {
+  test('bulle envoyée comme rangée plate : vers la droite RÉPOND, vers la gauche TRANSFÈRE (porteur 2026-10-04)', async () => {
     const mine: Journal = [];
     const bubble = await monte({ actions: actionsOf(mine), isMine: true });
+    await glisser(texte(bubble), [[100, 100], [140, 100], [180, 100]]);
     await glisser(texte(bubble), [[200, 100], [160, 100], [120, 100]]);
-    expect(mine).toEqual(['reply']);
+    expect(mine).toEqual(['reply', 'forward']);
     mounter.unmountAll();
     const flat: Journal = [];
     const row = await monte({ actions: actionsOf(flat), isMine: true, flat: true });

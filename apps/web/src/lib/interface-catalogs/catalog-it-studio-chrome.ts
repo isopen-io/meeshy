@@ -131,6 +131,9 @@ const itStudioChrome = {
   'story.studio.audioTrim.title': 'Accorcia l’audio',
   'story.studio.background.tools.leave': 'Torna alla scena',
   'story.studio.reelSwitch.announcement': 'Passato a reel',
+  'story.studio.edit.save': 'Salva',
+  'story.studio.edit.saving': 'Salvataggio…',
+  'story.studio.edit.cancel': 'Annulla le modifiche',
 } satisfies StudioChromeCatalogSlice;
 
 export default itStudioChrome;
