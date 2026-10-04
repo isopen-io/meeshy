@@ -3,21 +3,21 @@ import MeeshySDK
 import XCTest
 @testable import Meeshy
 
-/// LE CHOIX DU CADRE EN DIRECT (#9214) — optimiste chez moi, envoyé avec le prénom que je
-/// partage, retiré si la passerelle refuse ; le choix de l'autre remplace le mien ; un autre
-/// appel repart sans cadre.
+/// LE CADRE EN DIRECT (#9214, #9287) — appliqué chez moi tout de suite et PROPOSÉ à l'autre
+/// avec le prénom que je partage ; une proposition reçue ne remplace jamais mon cadre : je
+/// l'applique ou je la refuse, et l'autre l'apprend ; un autre appel repart sans cadre.
 @MainActor
 final class CallLiveFrameSessionTests: XCTestCase {
 
     private final class MockSocket: CallLiveFrameSocketProviding, @unchecked Sendable {
         var selectError: Error?
-        var selections: [(callId: String, frameId: String?, texts: CallLiveFrameTexts?)] = []
+        var selections: [(callId: String, frameId: String?, texts: CallLiveFrameTexts?, reply: CallLiveFrameReply?)] = []
         var onSelect: (@MainActor () -> Void)?
 
         var callLiveFrameEvents: AnyPublisher<CallLiveFrameSelectedEvent, Never> { Empty().eraseToAnyPublisher() }
 
-        func selectCallLiveFrame(callId: String, frameId: String?, texts: CallLiveFrameTexts?) async throws {
-            selections.append((callId, frameId, texts))
+        func selectCallLiveFrame(callId: String, frameId: String?, texts: CallLiveFrameTexts?, reply: CallLiveFrameReply?) async throws {
+            selections.append((callId, frameId, texts, reply))
             if let onSelect { await onSelect() }
             if let selectError { throw selectError }
         }
@@ -70,99 +70,182 @@ final class CallLiveFrameSessionTests: XCTestCase {
         return env
     }
 
-    private func event(callId: String = "call-1", frameId: String?, name: String? = nil) -> CallLiveFrameSelectedEvent {
-        CallLiveFrameSelectedEvent(callId: callId, userId: "u-peer", frameId: frameId, texts: name.map { CallLiveFrameTexts(name: $0) })
+    private func event(callId: String = "call-1", frameId: String?, name: String? = nil, reply: CallLiveFrameReply? = nil) -> CallLiveFrameSelectedEvent {
+        CallLiveFrameSelectedEvent(callId: callId, userId: "u-peer", frameId: frameId, texts: name.map { CallLiveFrameTexts(name: $0) }, reply: reply)
     }
 
-    // MARK: - Choisir
+    // MARK: - Appliquer chez moi, proposer à l'autre (#9287)
 
-    func test_select_bound_appliesAtOnceAndSendsTheSharedName() async {
+    func test_apply_bound_showsAtOnceAndProposesWithTheSharedName() async {
         let env = await makeBoundEnv()
         var seenBeforeAck: String?
         env.socket.onSelect = { [weak sut = env.sut] in seenBeforeAck = sut?.frameId }
 
-        await env.sut.select("corporate.conseil.duo")
+        await env.sut.apply("corporate.conseil.duo")
 
         XCTAssertEqual(seenBeforeAck, "corporate.conseil.duo")
         XCTAssertEqual(env.sut.frameId, "corporate.conseil.duo")
         XCTAssertEqual(env.socket.selections.count, 1)
         XCTAssertEqual(env.socket.selections.first?.callId, "call-1")
+        XCTAssertEqual(env.socket.selections.first?.frameId, "corporate.conseil.duo")
+        XCTAssertNil(env.socket.selections.first?.reply)
         XCTAssertEqual(env.socket.selections.first?.texts?.name, "Awa")
+        XCTAssertEqual(env.sut.sentProposal, "corporate.conseil.duo")
         XCTAssertTrue(env.notices.messages.isEmpty)
     }
 
-    func test_select_nil_clearsTheFrameAndSendsTheClear() async {
+    func test_apply_nil_removesMineAndWithdrawsTheProposal() async {
         let env = await makeBoundEnv()
-        await env.sut.select("corporate.conseil.duo")
+        await env.sut.apply("corporate.conseil.duo")
 
-        await env.sut.select(nil)
+        await env.sut.apply(nil)
 
         XCTAssertNil(env.sut.frameId)
+        XCTAssertNil(env.sut.sentProposal)
         XCTAssertEqual(env.socket.selections.count, 2)
         XCTAssertEqual(env.socket.selections.last.map { $0.frameId == nil }, true)
     }
 
-    func test_select_refused_rollsBackAndTellsTheUser() async {
+    func test_apply_nil_afterTheProposalWasAnswered_sendsNothing() async {
         let env = await makeBoundEnv()
-        await env.sut.select("corporate.conseil.duo")
-        env.socket.selectError = CallControlRefusal(code: "PERMISSION_DENIED")
+        await env.sut.apply("corporate.conseil.duo")
+        env.sut.receive(event(frameId: "corporate.conseil.duo", reply: .accepted))
 
-        await env.sut.select("hors-norme.pop-art")
+        await env.sut.apply(nil)
 
-        XCTAssertEqual(env.sut.frameId, "corporate.conseil.duo")
-        XCTAssertEqual(env.notices.messages, [CallLiveFrameCopy.refused])
+        XCTAssertNil(env.sut.frameId)
+        XCTAssertEqual(env.socket.selections.count, 1)
     }
 
-    func test_select_refusedAfterThePeerChose_keepsThePeerChoice() async {
+    func test_apply_proposalRefusedByTheGateway_keepsMyFrameAndSaysSo() async {
         let env = await makeBoundEnv()
         env.socket.selectError = CallControlRefusal(code: "RATE_LIMITED")
-        env.socket.onSelect = { [weak sut = env.sut] in
-            sut?.receive(CallLiveFrameSelectedEvent(callId: "call-1", userId: "u-peer", frameId: "hors-norme.pop-art"))
-        }
 
-        await env.sut.select("corporate.conseil.duo")
+        await env.sut.apply("hors-norme.pop-art")
 
         XCTAssertEqual(env.sut.frameId, "hors-norme.pop-art")
-        XCTAssertTrue(env.notices.messages.isEmpty)
+        XCTAssertNil(env.sut.sentProposal)
+        XCTAssertEqual(env.notices.messages, [CallLiveFrameCopy.notProposed])
     }
 
-    func test_select_withoutCall_sendsNothing() async {
+    func test_apply_theFrameThePeerAlreadyShows_proposesNothing() async {
+        let env = await makeBoundEnv()
+        env.sut.receive(event(frameId: "hors-norme.pop-art"))
+        await env.sut.accept()
+
+        await env.sut.apply("hors-norme.pop-art")
+
+        XCTAssertEqual(env.socket.selections.map(\.reply), [.accepted])
+    }
+
+    func test_apply_withoutCall_sendsNothing() async {
         let env = makeEnv()
 
-        await env.sut.select("corporate.conseil.duo")
+        await env.sut.apply("corporate.conseil.duo")
 
         XCTAssertNil(env.sut.frameId)
         XCTAssertTrue(env.socket.selections.isEmpty)
     }
 
-    func test_select_foreignId_sendsNothing() async {
+    func test_apply_foreignId_sendsNothing() async {
         let env = await makeBoundEnv()
 
-        await env.sut.select("../etc/passwd")
+        await env.sut.apply("../etc/passwd")
 
         XCTAssertNil(env.sut.frameId)
         XCTAssertTrue(env.socket.selections.isEmpty)
     }
 
-    // MARK: - Recevoir
+    // MARK: - Recevoir une proposition : jamais imposée
 
-    func test_receive_peerChoice_replacesMineAndNamesThePeer() async {
+    func test_receive_proposal_neverReplacesMine_andWaitsForMyAnswer() async {
         let env = await makeBoundEnv()
-        await env.sut.select("corporate.conseil.duo")
+        await env.sut.apply("corporate.conseil.duo")
 
         env.sut.receive(event(frameId: "hors-norme.pop-art", name: "  Karim "))
 
-        XCTAssertEqual(env.sut.frameId, "hors-norme.pop-art")
+        XCTAssertEqual(env.sut.frameId, "corporate.conseil.duo")
+        XCTAssertEqual(env.sut.proposal, CallLiveFrameProposal(frameId: "hors-norme.pop-art", from: "Karim"))
         XCTAssertEqual(env.sut.remoteSharedName, "Karim")
     }
 
-    func test_receive_peerClear_removesTheFrame() async {
+    func test_accept_appliesTheProposalAndTellsThePeer() async {
         let env = await makeBoundEnv()
+        env.sut.receive(event(frameId: "hors-norme.pop-art"))
+
+        await env.sut.accept()
+
+        XCTAssertEqual(env.sut.frameId, "hors-norme.pop-art")
+        XCTAssertNil(env.sut.proposal)
+        XCTAssertEqual(env.socket.selections.last?.frameId, "hors-norme.pop-art")
+        XCTAssertEqual(env.socket.selections.last?.reply, .accepted)
+    }
+
+    func test_decline_keepsMineAndTellsThePeer() async {
+        let env = await makeBoundEnv()
+        await env.sut.apply("corporate.conseil.duo")
+        env.sut.receive(event(frameId: "hors-norme.pop-art"))
+
+        await env.sut.decline()
+
+        XCTAssertEqual(env.sut.frameId, "corporate.conseil.duo")
+        XCTAssertNil(env.sut.proposal)
+        XCTAssertEqual(env.socket.selections.last?.frameId, "hors-norme.pop-art")
+        XCTAssertEqual(env.socket.selections.last?.reply, .declined)
+    }
+
+    func test_receive_proposalOfTheFrameIAlreadyShow_acceptsSilently() async {
+        let env = await makeBoundEnv()
+        await env.sut.apply("hors-norme.pop-art")
+
+        env.sut.receive(event(frameId: "hors-norme.pop-art"))
+        await env.sut.settle()
+
+        XCTAssertNil(env.sut.proposal)
+        XCTAssertEqual(env.socket.selections.last?.reply, .accepted)
+    }
+
+    func test_receive_withdrawal_dismissesTheProposalAndKeepsMine() async {
+        let env = await makeBoundEnv()
+        await env.sut.apply("corporate.conseil.duo")
         env.sut.receive(event(frameId: "hors-norme.pop-art"))
 
         env.sut.receive(event(frameId: nil))
 
-        XCTAssertNil(env.sut.frameId)
+        XCTAssertNil(env.sut.proposal)
+        XCTAssertEqual(env.sut.frameId, "corporate.conseil.duo")
+    }
+
+    func test_receive_reply_toMyProposal_tellsMeAndClosesIt() async {
+        let env = await makeBoundEnv()
+        await env.sut.apply("corporate.conseil.duo")
+
+        env.sut.receive(event(frameId: "corporate.conseil.duo", name: "Karim", reply: .declined))
+
+        XCTAssertNil(env.sut.sentProposal)
+        XCTAssertEqual(env.sut.frameId, "corporate.conseil.duo")
+        XCTAssertEqual(env.sut.answer, CallLiveFrameAnswer(frameId: "corporate.conseil.duo", reply: .declined, from: "Karim"))
+        XCTAssertTrue(env.notices.messages.isEmpty)
+    }
+
+    func test_receive_reply_toAnOlderProposal_isIgnored() async {
+        let env = await makeBoundEnv()
+        await env.sut.apply("corporate.conseil.duo")
+
+        env.sut.receive(event(frameId: "hors-norme.pop-art", reply: .accepted))
+
+        XCTAssertEqual(env.sut.sentProposal, "corporate.conseil.duo")
+        XCTAssertNil(env.sut.answer)
+    }
+
+    func test_dismissAnswer_clearsIt() async {
+        let env = await makeBoundEnv()
+        await env.sut.apply("corporate.conseil.duo")
+        env.sut.receive(event(frameId: "corporate.conseil.duo", reply: .accepted))
+
+        env.sut.dismissAnswer()
+
+        XCTAssertNil(env.sut.answer)
     }
 
     func test_receive_otherCall_isIgnored() async {
@@ -170,7 +253,7 @@ final class CallLiveFrameSessionTests: XCTestCase {
 
         env.sut.receive(event(callId: "call-2", frameId: "hors-norme.pop-art", name: "Karim"))
 
-        XCTAssertNil(env.sut.frameId)
+        XCTAssertNil(env.sut.proposal)
         XCTAssertNil(env.sut.remoteSharedName)
     }
 
@@ -179,7 +262,7 @@ final class CallLiveFrameSessionTests: XCTestCase {
 
         env.sut.receive(event(frameId: "Not A Frame"))
 
-        XCTAssertNil(env.sut.frameId)
+        XCTAssertNil(env.sut.proposal)
     }
 
     func test_receive_longSharedName_isCapped() async {
@@ -192,20 +275,23 @@ final class CallLiveFrameSessionTests: XCTestCase {
 
     // MARK: - L'appel
 
-    func test_bind_otherCall_forgetsTheFrameAndTheSharedName() async {
+    func test_bind_otherCall_forgetsTheFrameTheProposalAndTheSharedName() async {
         let env = await makeBoundEnv()
+        await env.sut.apply("corporate.conseil.duo")
         env.sut.receive(event(frameId: "hors-norme.pop-art", name: "Karim"))
 
         await env.sut.bind(callId: "call-2", context: context)
 
         XCTAssertNil(env.sut.frameId)
+        XCTAssertNil(env.sut.proposal)
+        XCTAssertNil(env.sut.sentProposal)
         XCTAssertNil(env.sut.remoteSharedName)
         XCTAssertEqual(env.sut.callId, "call-2")
     }
 
     func test_bind_sameCall_keepsTheFrame() async {
         let env = await makeBoundEnv()
-        env.sut.receive(event(frameId: "hors-norme.pop-art"))
+        await env.sut.apply("hors-norme.pop-art")
 
         await env.sut.bind(callId: "call-1", context: context)
 
@@ -224,13 +310,15 @@ final class CallLiveFrameSessionTests: XCTestCase {
 
     func test_leaveDuo_clearsLocallyWithoutSending() async {
         let env = await makeBoundEnv()
+        await env.sut.apply("corporate.conseil.duo")
         env.sut.receive(event(frameId: "hors-norme.pop-art", name: "Karim"))
 
         env.sut.leaveDuo()
 
         XCTAssertNil(env.sut.frameId)
+        XCTAssertNil(env.sut.proposal)
         XCTAssertNil(env.sut.remoteSharedName)
-        XCTAssertTrue(env.socket.selections.isEmpty)
+        XCTAssertEqual(env.socket.selections.count, 1)
     }
 
     func test_refreshTexts_sameTexts_publishesNothing() async {

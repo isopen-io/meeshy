@@ -40,7 +40,14 @@ extension CallView {
                 .ignoresSafeArea()
                 .accessibilityHidden(true)
         case .montage:
-            CallMontageLiveStage(capture: capture)
+            CallMontageFrameStage(
+                capture: capture,
+                isLiveOffered: offersLiveFrame,
+                reduceMotion: reduceMotion,
+                people: liveFramePeople,
+                texts: liveFrameTexts,
+                sources: liveFrameSources
+            )
         }
     }
 
@@ -61,7 +68,7 @@ extension CallView {
         case .effects:
             CallEffectsModeControls(callManager: callManager, capture: capture, subjects: myImageCaptureSubjects, tracks: myImageCaptureTracks, onExit: exitMode)
         case .montage:
-            CallMontageModeControls(capture: capture, subjects: captureSubjects, tracks: captureTracks, call: montageCallContext, onExit: exitMode)
+            CallMontageModeControls(capture: capture, subjects: captureSubjects, tracks: captureTracks, call: montageCallContext, hold: liveFrameHold, onExit: exitMode)
         }
     }
 

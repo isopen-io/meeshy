@@ -13,19 +13,40 @@ enum CallLiveFrameCopy {
     }
 
     static var hint: String {
-        String(localized: "call.liveFrame.hint", defaultValue: "Entoure les deux vidéos d'un même cadre, chez vous et chez votre correspondant", bundle: .main)
+        String(localized: "call.liveFrame.hold.hint", defaultValue: "Garde ce cadre autour des deux vidéos pendant tout l'appel, et le propose à votre correspondant", bundle: .main)
     }
 
-    static var none: String {
-        String(localized: "call.liveFrame.none", defaultValue: "Aucun cadre", bundle: .main)
+    static var notProposed: String {
+        String(localized: "call.liveFrame.notProposed", defaultValue: "Le cadre est appliqué chez vous, mais n'a pas pu être proposé", bundle: .main)
     }
 
-    static var close: String {
-        String(localized: "call.liveFrame.close", defaultValue: "Fermer", bundle: .main)
+    static func proposal(from name: String?, frame: String) -> String {
+        guard let name, !name.isEmpty else {
+            return String(format: String(localized: "call.liveFrame.proposal.anonymous", defaultValue: "Votre correspondant vous propose le cadre « %@ »", bundle: .main), frame)
+        }
+        return String(format: String(localized: "call.liveFrame.proposal", defaultValue: "%1$@ vous propose le cadre « %2$@ »", bundle: .main), name, frame)
     }
 
-    static var refused: String {
-        String(localized: "call.liveFrame.refused", defaultValue: "Le cadre n'a pas pu être partagé", bundle: .main)
+    static var accept: String {
+        String(localized: "call.liveFrame.accept", defaultValue: "Appliquer", bundle: .main)
+    }
+
+    static var decline: String {
+        String(localized: "call.liveFrame.decline", defaultValue: "Non merci", bundle: .main)
+    }
+
+    static func answered(_ reply: CallLiveFrameReply, by name: String?) -> String {
+        let who = name.flatMap { $0.isEmpty ? nil : $0 }
+        switch (reply, who) {
+        case (.accepted, let who?):
+            return String(format: String(localized: "call.liveFrame.answer.accepted", defaultValue: "%@ a appliqué votre cadre", bundle: .main), who)
+        case (.accepted, nil):
+            return String(localized: "call.liveFrame.answer.accepted.anonymous", defaultValue: "Votre correspondant a appliqué votre cadre", bundle: .main)
+        case (.declined, let who?):
+            return String(format: String(localized: "call.liveFrame.answer.declined", defaultValue: "%@ garde son affichage", bundle: .main), who)
+        case (.declined, nil):
+            return String(localized: "call.liveFrame.answer.declined.anonymous", defaultValue: "Votre correspondant garde son affichage", bundle: .main)
+        }
     }
 
     static func surface(_ name: String) -> String {
@@ -42,155 +63,67 @@ enum CallLiveFrameCopy {
     }
 }
 
-/// **LE CHOIX DU CADRE EN DIRECT** (#9214) — une feuille basse : les ambiances (les puces du
-/// Montage, `CallFrameMoodChips`), puis « Aucun cadre » et les cadres du duo en vignettes.
-/// Toucher une vignette pose le cadre chez les deux, tout de suite ; la feuille reste ouverte
-/// pour comparer.
-struct CallLiveFramePicker: View {
-    let selectedId: String?
-    let suspension: CallLiveFrameSuspension?
-    let people: [CallFramePerson]
-    let texts: CallFrameTexts
-    let onSelect: (String?) -> Void
-
-    @State private var mood: CallFrameMood?
-    @Environment(\.dismiss) private var dismiss
-
-    static let thumbnailSize = CGSize(width: 90, height: 160)
-
-    private var moods: [CallFrameMood] { CallLiveFrameRule.moods() }
-
-    private var currentMood: CallFrameMood? {
-        mood ?? selectedId.flatMap { CallFrameCatalogue.frame(id: $0)?.mood } ?? moods.first
-    }
+/// **LA PROPOSITION D'UN CADRE** (#9287) — l'autre m'invite à appliquer son cadre ; rien ne
+/// change chez moi tant que je n'ai pas touché « Appliquer ». Posée en haut de l'écran
+/// d'appel, sous l'en-tête, elle laisse la vidéo et les commandes à leur place.
+struct CallLiveFrameProposalCard: View {
+    let text: String
+    let onAccept: () -> Void
+    let onDecline: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.md) {
-            header
-            if let suspension {
-                Text(CallLiveFrameCopy.suspended(suspension))
-                    .font(.footnote)
-                    .foregroundColor(MeeshyColors.warning)
-                    .padding(.horizontal, MeeshySpacing.lg)
+        VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+            HStack(alignment: .top, spacing: MeeshySpacing.sm) {
+                Image(systemName: "photo.artframe")
+                    .font(.body.weight(.semibold))
+                    .foregroundColor(.white)
+                    .accessibilityHidden(true)
+                Text(text)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.white)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            if let currentMood {
-                CallFrameMoodChips(chips: moods.map { .mood($0) }, selected: .mood(currentMood)) { chip in
-                    guard case .mood(let picked) = chip else { return }
-                    mood = picked
+            HStack(spacing: MeeshySpacing.sm) {
+                Button(action: onDecline) {
+                    Text(CallLiveFrameCopy.decline)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(Capsule().fill(Color.white.opacity(0.16)))
                 }
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: MeeshySpacing.smPlus) {
-                    noneCard
-                    ForEach(CallLiveFrameRule.frames(mood: currentMood)) { design in
-                        frameCard(design)
-                    }
+                .buttonStyle(.plain)
+                Button(action: onAccept) {
+                    Text(CallLiveFrameCopy.accept)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(Capsule().fill(MeeshyColors.brandGradient))
                 }
-                .padding(.horizontal, MeeshySpacing.lg)
+                .buttonStyle(.plain)
             }
         }
-        .padding(.vertical, MeeshySpacing.md)
-        .presentationDetents([.height(340)])
-        .presentationDragIndicator(.visible)
-    }
-
-    private var header: some View {
-        HStack {
-            Text(CallLiveFrameCopy.label)
-                .font(.headline)
-                .accessibilityAddTraits(.isHeader)
-            Spacer()
-            Button(CallLiveFrameCopy.close) { dismiss() }
-                .frame(minWidth: 44, minHeight: 44)
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-    }
-
-    private var noneCard: some View {
-        card(isSelected: selectedId == nil, title: CallLiveFrameCopy.none) {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.primary.opacity(0.06))
-                .overlay(Image(systemName: "square.dashed").font(.title2).foregroundColor(.secondary))
-        } action: {
-            onSelect(nil)
-        }
-    }
-
-    private func frameCard(_ design: CallFrameDesign) -> some View {
-        card(isSelected: selectedId == design.id, title: design.name) {
-            CallLiveFrameThumbnail(design: design, people: people, texts: texts, size: Self.thumbnailSize)
-        } action: {
-            onSelect(design.id)
-        }
-    }
-
-    private func card<Thumb: View>(isSelected: Bool, title: String, @ViewBuilder thumbnail: () -> Thumb, action: @escaping () -> Void) -> some View {
-        Button {
-            guard !isSelected else { return }
-            HapticFeedback.light()
-            action()
-        } label: {
-            VStack(spacing: MeeshySpacing.xs) {
-                thumbnail()
-                    .frame(width: Self.thumbnailSize.width, height: Self.thumbnailSize.height)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(isSelected ? MeeshyColors.indigo500 : Color.clear, lineWidth: 3)
-                    )
-                Text(title)
-                    .font(.caption)
-                    .lineLimit(1)
-                    .frame(width: Self.thumbnailSize.width)
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(title)
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .padding(MeeshySpacing.md)
+        .background(RoundedRectangle(cornerRadius: 22, style: .continuous).fill(.ultraThinMaterial).environment(\.colorScheme, .dark))
+        .accessibilityElement(children: .contain)
     }
 }
 
-/// La vignette d'un cadre pour le duo, peinte HORS du fil principal avec les initiales
-/// (jamais les visages), gardée dans un cache borné ; en attendant, le glyphe de l'ambiance.
-struct CallLiveFrameThumbnail: View {
-    let design: CallFrameDesign
-    let people: [CallFramePerson]
-    let texts: CallFrameTexts
-    let size: CGSize
-
-    @State private var image: CGImage?
-    @Environment(\.displayScale) private var displayScale
-
-    nonisolated static let cache = CallFrameThumbnailCache()
+/// Une ligne d'état du cadre : la réponse de l'autre, ou la raison d'une pause.
+struct CallLiveFrameNotice: View {
+    let text: String
 
     var body: some View {
-        ZStack {
-            if let image {
-                Image(decorative: image, scale: displayScale)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Color.primary.opacity(0.06)
-                Image(systemName: CallFrameCopy.moodSymbol(design.mood))
-                    .foregroundColor(.secondary)
-            }
+        HStack(spacing: MeeshySpacing.sm) {
+            Image(systemName: "photo.artframe")
+                .accessibilityHidden(true)
+            Text(text)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .accessibilityHidden(true)
-        .task(id: design.id) {
-            let canvas = CGSize(width: size.width * displayScale, height: size.height * displayScale)
-            image = await Self.render(design: design, people: people, texts: texts, canvas: canvas)
-        }
-    }
-
-    @concurrent
-    nonisolated static func render(design: CallFrameDesign, people: [CallFramePerson], texts: CallFrameTexts, canvas: CGSize) async -> CGImage? {
-        let key = ([design.id] + people.map(\.name)).joined(separator: "\u{1F}")
-        if let hit = cache.image(frameId: key, people: people.count, size: canvas) { return hit }
-        let portraits = people.map { CallFramePortrait(id: $0.id, name: $0.name, handle: $0.handle, isSelf: $0.isSelf, image: nil) }
-        guard let painted = CallFrameRenderer.render(frame: design, portraits: portraits, texts: texts, size: canvas) else { return nil }
-        cache.store(painted, frameId: key, people: people.count, size: canvas)
-        return painted
+        .font(.footnote.weight(.semibold))
+        .foregroundColor(.white)
+        .padding(.horizontal, MeeshySpacing.md)
+        .padding(.vertical, MeeshySpacing.sm)
+        .background(Capsule().fill(.ultraThinMaterial).environment(\.colorScheme, .dark))
+        .accessibilityElement(children: .combine)
     }
 }

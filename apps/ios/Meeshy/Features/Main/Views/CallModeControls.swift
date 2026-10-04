@@ -213,6 +213,8 @@ struct CallMontageModeControls: View {
     /// #8743 — la conversation de l'appel, pour le nom du groupe et l'accent d'un cadre.
     let call: CallFrameCallContext
     var textsProvider: any CallFrameTextsProviding = CallFrameTextsResolver.shared
+    /// #9287 — l'interrupteur qui garde le cadre choisi pendant tout l'appel.
+    var hold: CallLiveFrameHold = .unavailable
     let onExit: () -> Void
 
     @AppStorage(CallModeCopy.gestureHintSeenKey) private var hasSeenGestureHint = false
@@ -249,7 +251,7 @@ struct CallMontageModeControls: View {
             CallModeActionBar(
                 exitHint: CallModeCopy.quitMontageHint,
                 onExit: onExit,
-                options: [
+                options: holdOptions(for: selection) + [
                     CallModeOption(
                         id: "faces",
                         symbol: "person.crop.square",
@@ -266,6 +268,10 @@ struct CallMontageModeControls: View {
         .task(id: CallCaptureSourceKey(subjects: subjects, tracks: tracks)) {
             capture.start(subjects: subjects, tracks: tracks)
         }
+        .onAppear {
+            guard let held = hold.heldFrameId else { return }
+            capture.select(choice: .frame(held))
+        }
         .task(id: call) {
             capture.setFrameTexts(textsProvider.immediateTexts(for: call))
             let resolved = await textsProvider.texts(for: call)
@@ -276,6 +282,26 @@ struct CallMontageModeControls: View {
             hasSeenGestureHint = true
             capture.stop()
         }
+    }
+
+    /// Le cadre affiché se garde pendant l'appel d'un toucher sur l'icône « Cadre » ; rien ne
+    /// s'offre sur un montage classique ni hors d'un duo vidéo.
+    private func holdOptions(for selection: CallMontageChoice) -> [CallModeOption] {
+        guard case .frame(let id) = selection, CallLiveFrameRule.mayHold(frameId: id, isOffered: hold.isOffered) else { return [] }
+        let isHeld = hold.heldFrameId == id
+        return [
+            CallModeOption(
+                id: "hold-frame",
+                symbol: "photo.artframe",
+                label: CallLiveFrameCopy.label,
+                caption: CallLiveFrameCopy.caption,
+                hint: CallLiveFrameCopy.hint,
+                isOn: isHeld,
+                isEnabled: !capture.isRecording
+            ) {
+                hold.toggle(id)
+            }
+        ]
     }
 
     private func thumbnail(_ item: CallMontageChoice) -> CGImage? {
@@ -303,6 +329,16 @@ struct CallMontageModeControls: View {
     }
 }
 
+/// #9287 — ce que la capture sait du cadre en direct : le cadre gardé, si l'appel en sert un,
+/// et le geste qui le garde ou le retire.
+struct CallLiveFrameHold {
+    let heldFrameId: String?
+    let isOffered: Bool
+    let toggle: (String) -> Void
+
+    static let unavailable = CallLiveFrameHold(heldFrameId: nil, isOffered: false, toggle: { _ in })
+}
+
 /// L'identité du carrousel : une autre ambiance ou un autre nombre, c'est une autre piste,
 /// qui se pose d'emblée sur son choix.
 private struct CallMontageCarouselKey: Hashable {
@@ -321,6 +357,43 @@ struct CallMontageLiveStage: View {
             styleName: CallFrameCopy.choiceName(capture.choice),
             isWorking: capture.status == .working
         )
+    }
+}
+
+/// #9287 — la scène de la capture : un cadre servi en direct se montre sur le FLUX VIDÉO, à
+/// pleine cadence (`CallLiveFrameSurface`) ; un classique, ou un cadre trop riche pour le
+/// direct, garde l'aperçu peint quelques fois par seconde. La scène observe le choix seule.
+struct CallMontageFrameStage: View {
+    @ObservedObject var capture: CallCaptureController
+    let isLiveOffered: Bool
+    let reduceMotion: Bool
+    let people: [CallFramePerson]
+    let texts: CallFrameTexts
+    let sources: [String: CallLiveFrameVideoSource]
+
+    private var liveDesign: CallFrameDesign? {
+        guard isLiveOffered, case .frame(let id) = capture.choice else { return nil }
+        return CallLiveFrameRule.display(
+            frameId: id,
+            participants: people.count,
+            isDeviceConstrained: CallVideoDegradation.isDeviceConstrained(),
+            reduceMotion: reduceMotion
+        ).design
+    }
+
+    var body: some View {
+        if let design = liveDesign {
+            ZStack {
+                Color.black
+                CallLiveFrameSurface(design: design, people: people, texts: texts, sources: sources)
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .accessibilityElement()
+            .accessibilityLabel(CallLiveFrameCopy.surface(design.name))
+        } else {
+            CallMontageLiveStage(capture: capture)
+        }
     }
 }
 

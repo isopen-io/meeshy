@@ -2276,7 +2276,7 @@
 		D600F039E11232EC63631ADF /* CallView+Pill.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D0211DCFFB7D9CA779F13F5 /* CallView+Pill.swift */; };
 		48A3E6995D86787A0FBC22A4 /* CallView+LiveFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D5AAAE752BDE5071BBAA3D8 /* CallView+LiveFrame.swift */; };
 		51AE8C307A042AC023A58C3C /* CallLiveFrameSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8EC836DD6D50E59772F0457 /* CallLiveFrameSurface.swift */; };
-		200567584AFBBB274CD7F118 /* CallLiveFramePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2595AE7FCF702F155CBBB51F /* CallLiveFramePicker.swift */; };
+		200567584AFBBB274CD7F118 /* CallLiveFrameProposal.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2595AE7FCF702F155CBBB51F /* CallLiveFrameProposal.swift */; };
 		D60B94E2AA18D466DDEEDE4B /* BubbleBodyFooterLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E9D4473D82CA54CE1162F17 /* BubbleBodyFooterLayout.swift */; };
 		D61C6DC6B4F9F787ECB9C6E5 /* ComposerSlideRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DB5D2BBE5F8DA07FFC89F46 /* ComposerSlideRail.swift */; };
 		D6323136B435E1F470B4F1CD /* QueueHandlerWiringParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36EFB2940015DDD1325FB72F /* QueueHandlerWiringParityTests.swift */; };
@@ -3836,7 +3836,7 @@
 		5D0211DCFFB7D9CA779F13F5 /* CallView+Pill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallView+Pill.swift"; sourceTree = "<group>"; };
 		7D5AAAE752BDE5071BBAA3D8 /* CallView+LiveFrame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CallView+LiveFrame.swift"; sourceTree = "<group>"; };
 		A8EC836DD6D50E59772F0457 /* CallLiveFrameSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallLiveFrameSurface.swift; sourceTree = "<group>"; };
-		2595AE7FCF702F155CBBB51F /* CallLiveFramePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallLiveFramePicker.swift; sourceTree = "<group>"; };
+		2595AE7FCF702F155CBBB51F /* CallLiveFrameProposal.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallLiveFrameProposal.swift; sourceTree = "<group>"; };
 		5D2DAA42C53B06A427C23771 /* StoryActiveBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryActiveBridge.swift; sourceTree = "<group>"; };
 		5D59F10B34260BA4B7F24C86 /* StoryCoverURLMemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryCoverURLMemo.swift; sourceTree = "<group>"; };
 		5D8D6629A58C18E32000E58D /* SharePickerViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePickerViewModel.swift; sourceTree = "<group>"; };
@@ -7741,7 +7741,7 @@
 				5D0211DCFFB7D9CA779F13F5 /* CallView+Pill.swift */,
 				7D5AAAE752BDE5071BBAA3D8 /* CallView+LiveFrame.swift */,
 				A8EC836DD6D50E59772F0457 /* CallLiveFrameSurface.swift */,
-				2595AE7FCF702F155CBBB51F /* CallLiveFramePicker.swift */,
+				2595AE7FCF702F155CBBB51F /* CallLiveFrameProposal.swift */,
 				8C6558FF6A97BF771556EE80 /* CallView+Recording.swift */,
 				2DDE71A5582D628B9127262A /* CallView+SelfView.swift */,
 				15C7DC8EEF133498D41DEB40 /* CallView+States.swift */,
@@ -9827,7 +9827,7 @@
 				D600F039E11232EC63631ADF /* CallView+Pill.swift in Sources */,
 				48A3E6995D86787A0FBC22A4 /* CallView+LiveFrame.swift in Sources */,
 				51AE8C307A042AC023A58C3C /* CallLiveFrameSurface.swift in Sources */,
-				200567584AFBBB274CD7F118 /* CallLiveFramePicker.swift in Sources */,
+				200567584AFBBB274CD7F118 /* CallLiveFrameProposal.swift in Sources */,
 				D8944A79B5B141813119F4FB /* CallView+Recording.swift in Sources */,
 				73BC96721DEAFAD24026DA8A /* CallView+SelfView.swift in Sources */,
 				A71A4496F1EC85EB3AAFB17F /* CallView+States.swift in Sources */,

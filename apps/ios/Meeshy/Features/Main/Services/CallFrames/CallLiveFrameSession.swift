@@ -3,18 +3,34 @@ import Foundation
 import MeeshySDK
 import os
 
-/// **LE CHOIX DU CADRE EN DIRECT D'UN APPEL À DEUX** (#9214, doc frames 06 § 4.4).
+/// Une proposition reçue : le cadre que l'autre m'invite à appliquer, et le prénom qu'il partage.
+nonisolated struct CallLiveFrameProposal: Equatable, Sendable {
+    let frameId: String
+    let from: String?
+}
+
+/// Ce que l'autre a répondu à MA proposition — montré par l'écran d'appel, pas par un toast :
+/// la réponse arrive du réseau, et elle appartient à l'appel.
+nonisolated struct CallLiveFrameAnswer: Equatable, Sendable {
+    let frameId: String
+    let reply: CallLiveFrameReply
+    let from: String?
+}
+
+/// **LE CADRE EN DIRECT D'UN APPEL À DEUX** (#9214, #9287, doc frames 06 § 4.4).
 ///
-/// Le même cadre des deux côtés : mon choix s'applique tout de suite chez moi (optimiste),
-/// part par la signalisation de l'appel avec le prénom que je partage, et revient en arrière
-/// si la passerelle refuse. Le choix de l'autre arrive par `call:frame-selected` et remplace
-/// le mien — le dernier qui choisit gagne, chez les deux. Rien n'est persisté : un nouvel
-/// appel repart sans cadre.
+/// Chacun reste libre de son cadre : le mien s'applique tout de suite CHEZ MOI et part à
+/// l'autre comme une PROPOSITION, avec le prénom que je partage. Une proposition reçue ne
+/// touche jamais à mon cadre — je l'applique ou je la refuse, et l'autre l'apprend. Rien
+/// n'est persisté : un nouvel appel repart sans cadre.
 @MainActor
 final class CallLiveFrameSession: ObservableObject {
     static let clockPeriodNs: UInt64 = 60_000_000_000
 
     @Published private(set) var frameId: String?
+    @Published private(set) var proposal: CallLiveFrameProposal?
+    @Published private(set) var sentProposal: String?
+    @Published private(set) var answer: CallLiveFrameAnswer?
     @Published private(set) var remoteSharedName: String?
     @Published private(set) var texts: CallFrameTexts?
 
@@ -27,6 +43,9 @@ final class CallLiveFrameSession: ObservableObject {
     private let notify: (String) -> Void
     private let wait: @MainActor (UInt64) async -> Void
     private var subscription: AnyCancellable?
+    private var pendingReply: Task<Void, Never>?
+    /// Le cadre que l'autre montre de son côté, quand il me l'a dit (proposé, ou accepté le mien).
+    private var peerFrameId: String?
     private let logger = Logger(subsystem: "me.meeshy.app", category: "call-live-frame")
 
     nonisolated deinit {}
@@ -60,8 +79,7 @@ final class CallLiveFrameSession: ObservableObject {
     func bind(callId: String?, context: CallFrameCallContext) async {
         if callId != self.callId {
             self.callId = callId
-            frameId = nil
-            remoteSharedName = nil
+            forget()
             texts = nil
         }
         self.context = context
@@ -72,8 +90,16 @@ final class CallLiveFrameSession: ObservableObject {
 
     /// Le duo n'en est plus un : le cadre s'efface localement, sans rien envoyer.
     func leaveDuo() {
+        forget()
+    }
+
+    private func forget() {
         frameId = nil
+        proposal = nil
+        sentProposal = nil
+        answer = nil
         remoteSharedName = nil
+        peerFrameId = nil
     }
 
     /// Les textes du cadre (la date) se relisent une fois par minute ; un texte identique
@@ -93,23 +119,58 @@ final class CallLiveFrameSession: ObservableObject {
         texts = fresh
     }
 
-    // MARK: - Choisir
+    // MARK: - Mon cadre
 
-    /// Optimiste : le cadre change tout de suite ; un refus le remet comme avant, sauf si
-    /// l'autre a choisi entre-temps (son choix est plus récent que le mien).
-    func select(_ id: String?) async {
+    /// Mon cadre s'applique tout de suite chez moi, puis se PROPOSE à l'autre — sauf s'il le
+    /// montre déjà. Retirer mon cadre retire ma proposition tant qu'elle attend sa réponse.
+    /// Un refus de la passerelle ne m'enlève pas mon cadre : il n'est simplement pas proposé.
+    func apply(_ id: String?) async {
         guard let callId else { return }
         guard id.map(CallLiveFrameRule.isFrameId) ?? true else { return }
-        let previous = frameId
         frameId = id
-        do {
-            try await socket.selectCallLiveFrame(callId: callId, frameId: id, texts: CallLiveFrameTexts(name: myName()))
-        } catch {
-            logger.warning("call-live-frame: choix refusé \((error as? CallControlRefusal)?.code ?? "?", privacy: .public)")
-            guard self.callId == callId, frameId == id else { return }
-            frameId = previous
-            notify(CallLiveFrameCopy.refused)
+        answer = nil
+        guard let id else {
+            guard sentProposal != nil else { return }
+            sentProposal = nil
+            try? await socket.selectCallLiveFrame(callId: callId, frameId: nil, texts: nil, reply: nil)
+            return
         }
+        guard id != peerFrameId else { return }
+        sentProposal = id
+        do {
+            try await socket.selectCallLiveFrame(callId: callId, frameId: id, texts: CallLiveFrameTexts(name: myName()), reply: nil)
+        } catch {
+            logger.warning("call-live-frame: proposition refusée \((error as? CallControlRefusal)?.code ?? "?", privacy: .public)")
+            guard self.callId == callId, sentProposal == id else { return }
+            sentProposal = nil
+            notify(CallLiveFrameCopy.notProposed)
+        }
+    }
+
+    // MARK: - La proposition de l'autre
+
+    func accept() async {
+        guard let proposal else { return }
+        self.proposal = nil
+        frameId = proposal.frameId
+        peerFrameId = proposal.frameId
+        await sendReply(proposal.frameId, .accepted)
+    }
+
+    func decline() async {
+        guard let proposal else { return }
+        self.proposal = nil
+        await sendReply(proposal.frameId, .declined)
+    }
+
+    /// Attend la réponse que la session envoie d'elle-même (une proposition du cadre que je montre déjà).
+    func settle() async {
+        await pendingReply?.value
+    }
+
+    private func sendReply(_ frameId: String, _ reply: CallLiveFrameReply) async {
+        guard let callId else { return }
+        try? await socket.selectCallLiveFrame(callId: callId, frameId: frameId, texts: CallLiveFrameTexts(name: myName()), reply: reply)
     }
 
     // MARK: - Recevoir
@@ -117,8 +178,34 @@ final class CallLiveFrameSession: ObservableObject {
     func receive(_ event: CallLiveFrameSelectedEvent) {
         guard let callId, event.callId == callId else { return }
         if let id = event.frameId, !CallLiveFrameRule.isFrameId(id) { return }
-        frameId = event.frameId
         let shared = event.texts?.name?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let shared, !shared.isEmpty { remoteSharedName = String(shared.prefix(CallLiveFrameTexts.maxLength)) }
+        if let reply = event.reply {
+            receiveReply(reply, frameId: event.frameId)
+            return
+        }
+        peerFrameId = event.frameId
+        guard let id = event.frameId else {
+            proposal = nil
+            return
+        }
+        guard id != frameId else {
+            proposal = nil
+            pendingReply = Task { [weak self] in await self?.sendReply(id, .accepted) }
+            return
+        }
+        proposal = CallLiveFrameProposal(frameId: id, from: remoteSharedName)
+    }
+
+    private func receiveReply(_ reply: CallLiveFrameReply, frameId answered: String?) {
+        guard let answered, answered == sentProposal else { return }
+        sentProposal = nil
+        if reply == .accepted { peerFrameId = answered }
+        answer = CallLiveFrameAnswer(frameId: answered, reply: reply, from: remoteSharedName)
+    }
+
+    /// L'écran a montré la réponse : elle s'efface.
+    func dismissAnswer() {
+        answer = nil
     }
 }

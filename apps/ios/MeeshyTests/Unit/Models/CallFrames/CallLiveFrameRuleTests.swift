@@ -90,6 +90,36 @@ final class CallLiveFrameRuleTests: XCTestCase {
         XCTAssertFalse(CallLiveFrameRule.mayOffer(participants: 3, showsVideo: true))
     }
 
+    // MARK: - L'interrupteur de la capture (#9287)
+
+    func test_toggledHold_tappingTheHeldFrame_releasesIt() {
+        XCTAssertNil(CallLiveFrameRule.toggledHold(current: "a.b", tapped: "a.b"))
+    }
+
+    func test_toggledHold_tappingAnotherFrame_holdsItInstead() {
+        XCTAssertEqual(CallLiveFrameRule.toggledHold(current: "a.b", tapped: "c.d"), "c.d")
+        XCTAssertEqual(CallLiveFrameRule.toggledHold(current: nil, tapped: "c.d"), "c.d")
+    }
+
+    func test_mayHold_aLiveDuoFrameInAVideoDuo() {
+        let design = makeDesign()
+        XCTAssertTrue(CallLiveFrameRule.mayHold(frameId: design.id, isOffered: true, in: [design]))
+    }
+
+    func test_mayHold_notOutsideAVideoDuo() {
+        let design = makeDesign()
+        XCTAssertFalse(CallLiveFrameRule.mayHold(frameId: design.id, isOffered: false, in: [design]))
+    }
+
+    func test_mayHold_notAFrameTooHeavyForLive() {
+        let design = makeDesign(cost: .rich)
+        XCTAssertFalse(CallLiveFrameRule.mayHold(frameId: design.id, isOffered: true, in: [design]))
+    }
+
+    func test_mayHold_notAnUnknownFrame() {
+        XCTAssertFalse(CallLiveFrameRule.mayHold(frameId: "inconnu.cadre", isOffered: true, in: [makeDesign()]))
+    }
+
     // MARK: - Ce qui se montre
 
     func test_display_duo_showsTheFrame() {
