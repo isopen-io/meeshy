@@ -31,6 +31,19 @@ nonisolated enum CallLiveFrameGeometry {
         return fill.concatenating(turn)
     }
 
+    /// La vidéo remplie dans `photo` (repère de la case, y vers le bas), puis
+    /// portée dans la toile Core Image par la transformation relevée — rotation
+    /// autour de n'importe quel centre comprise.
+    static func placed(source: CGRect, photo: CGRect, toCanvas: CGAffineTransform) -> CGAffineTransform {
+        guard source.width > 0, source.height > 0, photo.width > 0, photo.height > 0 else { return .identity }
+        let scale = max(photo.width / source.width, photo.height / source.height)
+        let fill = CGAffineTransform(translationX: -source.midX, y: -source.midY)
+            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+            .concatenating(CGAffineTransform(translationX: photo.midX, y: photo.midY))
+        let retourne = CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: photo.minY + photo.maxY)
+        return fill.concatenating(retourne).concatenating(toCanvas)
+    }
+
     /// La scène peinte à `scene` remplit l'écran à `drawable` (même proportion à l'arrondi près).
     static func fit(scene: CGSize, into drawable: CGSize) -> CGAffineTransform {
         guard scene.width > 0, scene.height > 0 else { return .identity }
@@ -51,6 +64,9 @@ nonisolated struct CallLiveFrameSlot: @unchecked Sendable {
     let placeholder: CIImage
     let tone: CallFrameTone
     let duotone: CallFrameDuotone?
+    /// Repère de la case → repère de la toile, relevé à la peinture d'un
+    /// classique (#9348). `nil` ⇒ la case se pose par `photo` + `rotation`.
+    var placement: CGAffineTransform? = nil
 }
 
 /// Les couches CUITES d'un cadre (doc frames 02 § 3.3) : peintes une fois par le processeur,
@@ -188,7 +204,10 @@ nonisolated final class CallLiveFrameCompositor: CallLiveFrameCompositing, @unch
     }
 
     func place(_ video: CIImage, in slot: CallLiveFrameSlot, canvasHeight: CGFloat) -> CIImage {
-        let transform = CallLiveFrameGeometry.videoTransform(source: video.extent, photo: slot.photo, degrees: slot.rotation, canvasHeight: canvasHeight)
+        let transform = slot.placement.map {
+            CallLiveFrameGeometry.placed(source: video.extent, photo: slot.photo, toCanvas: $0)
+        } ?? CallLiveFrameGeometry.videoTransform(source: video.extent, photo: slot.photo, degrees: slot.rotation,
+                                                  canvasHeight: canvasHeight)
         return Self.toned(video.transformed(by: transform), slot: slot).cropped(to: slot.mask.extent)
     }
 
