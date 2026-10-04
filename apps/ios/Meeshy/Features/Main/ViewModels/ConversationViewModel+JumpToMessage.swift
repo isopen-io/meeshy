@@ -99,8 +99,10 @@ extension ConversationViewModel {
             return
         }
         guard newerPagesChain == nil, isInJumpedState, hasNewerMessages else { return }
+        // `self` n'est retenu que le temps d'UNE page : la conversation
+        // quittée libère le modèle, dont le `deinit` annule la chaîne.
         newerPagesChain = Task { [weak self] in
-            await self?.chainNewerPages()
+            while await self?.loadNextNewerPageIfStillAtBottom() == true {}
             guard !Task.isCancelled else { return }
             self?.newerPagesChain = nil
         }
@@ -112,15 +114,14 @@ extension ConversationViewModel {
     }
 
     /// Une page à la fois, tant que le bas reste visible et que le serveur
-    /// annonce du plus récent. Une page qui ne recule pas le bord de la
-    /// fenêtre (filigrane stagnant, échec réseau) arrête la chaîne : elle ne
-    /// redemande jamais la même page.
-    private func chainNewerPages() async {
-        while !Task.isCancelled, isCurrentlyNearBottom, isInJumpedState, hasNewerMessages {
-            let edgeBefore = messageStore.jumpedNewerEdge
-            await loadNewerMessages()
-            guard messageStore.jumpedNewerEdge != edgeBefore else { return }
-        }
+    /// annonce du plus récent. Rend `false` — la chaîne s'arrête — quand il
+    /// n'y a rien à demander ou qu'une page n'a pas reculé le bord de la
+    /// fenêtre (filigrane stagnant, échec réseau) : jamais la même page deux fois.
+    private func loadNextNewerPageIfStillAtBottom() async -> Bool {
+        guard !Task.isCancelled, isCurrentlyNearBottom, isInJumpedState, hasNewerMessages else { return false }
+        let edgeBefore = messageStore.jumpedNewerEdge
+        await loadNewerMessages()
+        return messageStore.jumpedNewerEdge != edgeBefore
     }
 
     /// Outcome of `jumpToQuotedMessage`.
