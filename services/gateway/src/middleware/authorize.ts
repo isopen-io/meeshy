@@ -116,6 +116,15 @@ export function requireHierarchy(options: { param?: string } = {}) {
 }
 
 /**
+ * L'acteur porte-t-il le rang SOUVERAIN (BIGBOSS) ? La SEULE source de cette
+ * question : `requireSovereign` la pose pour refuser, la règle du motif
+ * (`sovereign-reason.ts`) la pose pour dispenser.
+ */
+export function isSovereign(request: FastifyRequest): boolean {
+  return acteur(request)?.role === UserRoleEnum.BIGBOSS;
+}
+
+/**
  * Exige le rang SOUVERAIN — BIGBOSS, et lui seul.
  *
  * Réservé à ce qu'aucune permission ne doit pouvoir déléguer : la
@@ -127,7 +136,7 @@ export function requireSovereign() {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const moi = acteur(request);
     if (!moi) return refuser(reply, 401, 'Authentification requise');
-    if (moi.role !== UserRoleEnum.BIGBOSS) {
+    if (!isSovereign(request)) {
       return refuser(reply, 403, 'Rang souverain requis');
     }
   };

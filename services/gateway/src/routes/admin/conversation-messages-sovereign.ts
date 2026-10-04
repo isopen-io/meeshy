@@ -46,6 +46,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { requireAdminRank, requirePermission, withAudit } from '../../middleware/authorize';
+import { requireReasonUnlessSovereign } from '../../middleware/sovereign-reason';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { sendPaginatedSuccess, sendNotFound, sendInternalError } from '../../utils/response';
@@ -75,7 +76,7 @@ const REASON_MIN_LENGTH = 10;
 export function registerConversationMessagesSovereignRoute(fastify: FastifyInstance): void {
   fastify.get<{
     Params: { conversationId: string };
-    Querystring: { offset?: string; limit?: string; reason: string };
+    Querystring: { offset?: string; limit?: string; reason?: string };
   }>('/admin/conversations/:conversationId/messages', {
     /**
      * **LE RANG A BAISSÉ, LA TRACE N'A PAS BOUGÉ** — directive porteur du
@@ -100,6 +101,9 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
      * #4157 fermait. La garde de rang dit « aussi les ADMIN », et rien de plus.
      */
     onRequest: [fastify.authenticate, requirePermission('canManageConversations'), requireAdminRank()],
+    // Le motif est obligatoire SAUF pour le rang souverain (spec 2026-10-04
+    // § 4) : le schéma ne connaît pas l'acteur, la règle vit donc ici.
+    preHandler: [requireReasonUnlessSovereign({ source: 'querystring', min: REASON_MIN_LENGTH })],
     schema: {
       description:
         'Lit le contenu intégral des messages d\'une conversation privée. Rang souverain (BIGBOSS), motif écrit ' +
@@ -109,14 +113,12 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
       security: [{ bearerAuth: [] }],
       querystring: {
         type: 'object',
-        required: ['reason'],
         properties: {
           offset: { type: 'string', description: 'Pagination offset' },
           limit: { type: 'string', description: 'Pagination limit (max 100)' },
           reason: {
             type: 'string',
-            minLength: REASON_MIN_LENGTH,
-            description: 'Motif écrit de la lecture (10 caractères minimum), consigné dans AdminAuditLog'
+            description: 'Motif écrit de la lecture (10 caractères minimum s\'il est fourni ; facultatif pour le rang souverain), consigné dans AdminAuditLog'
           }
         }
       },
@@ -151,7 +153,7 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { conversationId } = request.params as { conversationId: string };
-      const { offset = '0', limit, reason } = request.query as { offset?: string; limit?: string; reason: string };
+      const { offset = '0', limit, reason } = request.query as { offset?: string; limit?: string; reason?: string };
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 30, maxLimit: 100 });
 
       const conversation = await fastify.prisma.conversation.findUnique({
