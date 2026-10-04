@@ -248,8 +248,16 @@ export function useMediaPlayback(params: {
    */
   readonly tracksTime?: boolean;
   readonly report?: MediaPlaybackReport;
+  /**
+   * LA CLÉ D'EXCLUSIVITÉ auprès du coordinateur (#9256) — l'id de la pièce par
+   * défaut. Le mini-lecteur qui reprend un vocal au sortir du plein écran
+   * joue la MÊME pièce que sa bulle : sous la même clé, toucher la bulle
+   * serait un `claim` redondant (idempotent) et les deux joueraient ensemble.
+   */
+  readonly claimKey?: string;
 }): MediaPlayback {
   const { attachmentId, tracksTime = false } = params;
+  const claimId = params.claimKey ?? attachmentId;
   const coordinator = params.coordinator ?? mediaCoordinator;
 
   const [status, setStatus] = useState<MediaPlaybackStatus>('idle');
@@ -364,7 +372,7 @@ export function useMediaPlayback(params: {
         // bon, et `toggle()` appelait `pause()` sur un élément DÉJÀ en
         // pause — sans effet, sans événement : un contrôle INERTE jusqu'au
         // prochain démontage de la rangée (mesuré au navigateur).
-        coordinator.release(attachmentId);
+        coordinator.release(claimId);
         if (previous !== null) previous.pause();
         // LE DÉMONTAGE EST UN SIGNAL TERMINAL (#7225) — au même titre que
         // `ended` : l'écran quitté ne rejouera plus cet élément, donc
@@ -417,14 +425,14 @@ export function useMediaPlayback(params: {
        * dans cette fermeture.
        */
       const onPause = (): void => {
-        coordinator.release(attachmentId);
+        coordinator.release(claimId);
         setStatus((current) => (current === 'error' ? current : 'paused'));
         const positionMs = Math.round(element.currentTime * 1000);
         trackerRef.current?.pause(positionMs);
         attemptReport({ element, positionMs, complete: false, force: false });
       };
       const onEnded = (): void => {
-        coordinator.release(attachmentId);
+        coordinator.release(claimId);
         lastEmittedProgressRef.current = 1;
         setProgress(1);
         setStatus('idle');
@@ -436,7 +444,7 @@ export function useMediaPlayback(params: {
         attemptReport({ element, positionMs, complete: true, force: true });
       };
       const onError = (): void => {
-        coordinator.release(attachmentId);
+        coordinator.release(claimId);
         setStatus('error');
       };
       const onTimeUpdate = (): void => {
@@ -477,7 +485,7 @@ export function useMediaPlayback(params: {
       setMutedState(element.muted);
       setPictureInPicture(pictureInPictureSupport(element));
     },
-    [attachmentId, attemptReport, coordinator, detach, emitPosition, tracksTime],
+    [attemptReport, claimId, coordinator, detach, emitPosition, tracksTime],
   );
 
   const toggle = useCallback((): void => {
@@ -494,12 +502,12 @@ export function useMediaPlayback(params: {
     // « Réessayer » des autres surfaces du fil.
     if (status === 'error') element.load();
 
-    coordinator.claim(attachmentId, () => element.pause());
+    coordinator.claim(claimId, () => element.pause());
     void element.play().catch(() => {
-      coordinator.release(attachmentId);
+      coordinator.release(claimId);
       setStatus('error');
     });
-  }, [attachmentId, coordinator, status]);
+  }, [claimId, coordinator, status]);
 
   const seek = useCallback(
     (seconds: number): void => {
