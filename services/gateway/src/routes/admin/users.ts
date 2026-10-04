@@ -1,5 +1,5 @@
 import { countUserActivity } from './user-activity-totals';
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   UserRoleEnum,
@@ -18,6 +18,7 @@ import { UserAuditService } from '../../services/admin/user-audit.service';
 import { sanitizationService } from '../../services/admin/user-sanitization.service';
 import { permissionsService } from '../../services/admin/permissions.service';
 import { UnifiedAuthContext, UnifiedAuthRequest } from '../../middleware/auth';
+import { judgeReason, sendReasonRefusal } from '../../middleware/sovereign-reason';
 import {
   requireUserViewAccess,
   requireUserDeleteAccess
@@ -82,6 +83,37 @@ export {
 // Même chemin que `routes/auth/revoke-all-sessions.ts` : le manager est lu à
 // chaque appel, pas capturé ici — il n'existe pas encore quand les routes
 // s'enregistrent.
+/**
+ * Le motif facultatif `{ reason }` d'une suppression ou d'une restauration de
+ * compte : obligatoire (3 caractères) sauf pour le rang souverain, validé s'il
+ * est écrit (`judgeReason`, comme le retrait de publication), borné à 500. Le
+ * corps peut manquer : le web n'en envoie aucun sans motif. Refuse en
+ * répondant ; l'appelant s'arrête sur `ok: false`.
+ */
+const MOTIF_DE_GESTE_MINIMAL = 3;
+const MOTIF_DE_GESTE_MAXIMAL = 500;
+
+function motifDuGeste(
+  request: FastifyRequest<{ Body: { reason?: string } | undefined }>,
+  reply: FastifyReply
+): { ok: boolean; value?: string } {
+  const raw = request.body && typeof request.body === 'object' ? request.body.reason : undefined;
+  if (raw !== undefined && typeof raw !== 'string') {
+    sendBadRequest(reply, 'reason must be a string');
+    return { ok: false };
+  }
+  if (typeof raw === 'string' && raw.length > MOTIF_DE_GESTE_MAXIMAL) {
+    sendBadRequest(reply, `reason must NOT have more than ${MOTIF_DE_GESTE_MAXIMAL} characters`);
+    return { ok: false };
+  }
+  const verdict = judgeReason(request, raw, MOTIF_DE_GESTE_MINIMAL);
+  if (verdict.problem) {
+    sendReasonRefusal(reply, verdict.problem, { source: 'body', min: MOTIF_DE_GESTE_MINIMAL });
+    return { ok: false };
+  }
+  return { ok: true, value: verdict.reason };
+}
+
 function deactivatedUserSessionRevoker(fastify: FastifyInstance): SessionRevoker {
   return (userId) => disconnectRevokedSessions({
     io: fastify.socketIOHandler?.getManager?.()?.getIO(),
@@ -436,6 +468,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
    */
   fastify.delete<{
     Params: { userId: string };
+    Body: { reason?: string } | undefined;
   }>('/admin/users/:userId', {
     preHandler: [fastify.authenticate, requireUserDeleteAccess, requireHierarchy({ param: 'userId' })]
   }, async (request, reply) => {
@@ -457,6 +490,9 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
 
+      const reason = motifDuGeste(request, reply);
+      if (!reason.ok) return;
+
       // Supprimer l'utilisateur (soft delete)
       await userManagementService.deleteUser(request.params.userId, authContext.registeredUser!.id);
 
@@ -464,7 +500,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       await userAuditService.logDeleteUser(
         authContext.registeredUser!.id,
         request.params.userId,
-        undefined,
+        reason.value,
         request.ip,
         request.headers['user-agent']
       );
@@ -483,6 +519,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
    */
   fastify.post<{
     Params: { userId: string };
+    Body: { reason?: string } | undefined;
   }>('/admin/users/:userId/restore', {
     preHandler: [fastify.authenticate, requireUserDeleteAccess, requireHierarchy({ param: 'userId' })]
   }, async (request, reply) => {
@@ -502,12 +539,15 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         return;
       }
 
+      const reason = motifDuGeste(request, reply);
+      if (!reason.ok) return;
+
       const restored = await userManagementService.restoreUser(request.params.userId);
 
       await userAuditService.logRestoreUser(
         authContext.registeredUser!.id,
         request.params.userId,
-        undefined,
+        reason.value,
         request.ip,
         request.headers['user-agent']
       );

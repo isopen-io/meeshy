@@ -648,37 +648,37 @@ describe('DELETE /admin/users/:userId', () => {
   it('returns 401 when no authContext', async () => {
     const noAuth = buildNoAuthApp();
     await noAuth.ready();
-    const res = await noAuth.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await noAuth.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     await noAuth.close();
     expect(res.statusCode).toBe(401);
   });
 
   it('returns 403 when hasPermission (delete) is false', async () => {
     (permissionsService.hasPermission as jest.Mock).mockReturnValueOnce(false);
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(403);
   });
 
   it('returns 200 on happy path', async () => {
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(200);
   });
 
   it('returns 404 when user not found', async () => {
     mockUMS.getUserById.mockResolvedValue(null);
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(404);
   });
 
   it('returns 403 when canModifyUser is false', async () => {
     (permissionsService.canModifyUser as jest.Mock).mockReturnValueOnce(false);
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(403);
   });
 
   it('returns 500 when deleteUser throws', async () => {
     mockUMS.deleteUser.mockRejectedValue(new Error('DB error'));
-    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123' });
+    const res = await app.inject({ method: 'DELETE', url: '/admin/users/user123', payload: { reason: 'Motif de test' } });
     expect(res.statusCode).toBe(500);
   });
 });
