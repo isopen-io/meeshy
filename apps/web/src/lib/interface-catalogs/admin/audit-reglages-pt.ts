@@ -58,6 +58,7 @@ const f = {
   'admin.audit.target.FriendRequest': 'Pedido de contato',
   'admin.audit.target.AgentLlmConfig': 'Modelo do agente',
   'admin.audit.target.Agent': 'Agente',
+  'admin.audit.target.EngagementScaleConfig': 'Tabela de pontos',
   'admin.audit.target.unknown': 'Elemento',
 
   // ── Audit log: action vocabulary ───────────────────────────────────────────
@@ -289,6 +290,39 @@ const f = {
   'admin.audit.action.AGENT_CONVERSATION_RESET.explain': 'A configuração, os papéis e os resumos do agente nesta conversa foram apagados.',
   'admin.audit.action.AGENT_USER_RESET': 'Agente redefinido para um membro',
   'admin.audit.action.AGENT_USER_RESET.explain': 'Os papéis que o agente mantinha para este membro foram apagados.',
+  /* ─── Journal : gestes servis depuis l’audit 2026-10-04 (lot Modération, croissance, plateforme) ─── */
+  'admin.audit.action.UPDATE_BROADCAST': 'Difusão modificada',
+  'admin.audit.action.UPDATE_BROADCAST.explain': 'O nome, o texto ou o público de uma difusão em rascunho mudaram.',
+  'admin.audit.action.PREVIEW_BROADCAST': 'Difusão preparada',
+  'admin.audit.action.PREVIEW_BROADCAST.explain': 'O público de uma difusão foi contado e suas traduções preparadas antes do envio.',
+  'admin.audit.action.AGENT_CONFIG_UPDATED': 'Agente configurado para uma conversa',
+  'admin.audit.action.AGENT_CONFIG_UPDATED.explain': 'A configuração do agente nesta conversa foi criada ou alterada.',
+  'admin.audit.action.AGENT_CONFIG_DELETED': 'Configuração do agente excluída',
+  'admin.audit.action.AGENT_CONFIG_DELETED.explain': 'O agente não acompanha mais esta conversa: sua configuração foi apagada.',
+  'admin.audit.action.AGENT_SCAN_STOPPED': 'Análise do agente interrompida',
+  'admin.audit.action.AGENT_SCAN_STOPPED.explain': 'A análise em andamento do agente nesta conversa foi interrompida.',
+  'admin.audit.action.AGENT_SCAN_TRIGGERED': 'Agente reativado',
+  'admin.audit.action.AGENT_SCAN_TRIGGERED.explain': 'Uma análise imediata do agente foi solicitada nesta conversa.',
+  'admin.audit.action.AGENT_QUEUE_ITEM_DELETED': 'Mensagem do agente retirada da fila',
+  'admin.audit.action.AGENT_QUEUE_ITEM_DELETED.explain': 'Uma mensagem que o agente ia enviar foi excluída antes do envio.',
+  'admin.audit.action.AGENT_QUEUE_ITEM_EDITED': 'Mensagem do agente corrigida',
+  'admin.audit.action.AGENT_QUEUE_ITEM_EDITED.explain': 'O texto de uma mensagem aguardando envio pelo agente foi reescrito.',
+  'admin.audit.action.AGENT_ROLE_ASSIGNED': 'Papel do agente atribuído a um membro',
+  'admin.audit.action.AGENT_ROLE_ASSIGNED.explain': 'O agente passará a manter um papel escolhido para este membro em uma conversa.',
+  'admin.audit.action.AGENT_ROLE_UNLOCKED': 'Papel do agente desbloqueado',
+  'admin.audit.action.AGENT_ROLE_UNLOCKED.explain': 'O papel que o agente mantinha para este membro não está mais fixo: o agente poderá reavaliá-lo.',
+  'admin.audit.action.AGENT_TOPIC_CREATED': 'Tema do agente criado',
+  'admin.audit.action.AGENT_TOPIC_CREATED.explain': 'Um novo tema de conversa foi proposto ao agente.',
+  'admin.audit.action.AGENT_TOPIC_UPDATED': 'Tema do agente modificado',
+  'admin.audit.action.AGENT_TOPIC_UPDATED.explain': 'Um tema de conversa do agente foi reescrito.',
+  'admin.audit.action.AGENT_TOPIC_DELETED': 'Tema do agente excluído',
+  'admin.audit.action.AGENT_TOPIC_DELETED.explain': 'Um tema de conversa foi retirado do agente.',
+  /* ─── Journal : décisions de signalement interprétées (audit 2026-10-04) ─── */
+  'admin.audit.field.actionTaken': 'Ação adotada',
+  'admin.audit.field.moderatorNotes': 'Notas do moderador',
+  'admin.audit.field.moderatorId': 'Moderador',
+  'admin.audit.value.moderator': 'Moderador',
+  'admin.audit.col.subject': 'Membro envolvido',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

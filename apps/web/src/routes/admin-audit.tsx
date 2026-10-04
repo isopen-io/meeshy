@@ -105,6 +105,15 @@ export function AdminAuditPanel({ language, deps = apiDeps, now = defaultNow }: 
     },
     { id: 'target', header: translateAdmin(language, 'admin.audit.col.target'), cell: (row) => <AuditTarget language={language} target={row.target} /> },
     {
+      id: 'subject',
+      header: translateAdmin(language, 'admin.audit.col.subject'),
+      priority: 2,
+      /* Le membre que le geste concerne, quand la passerelle le sert (d987e0d684) ; tu, un tiret — pas « Système ». */
+      cell: (row) => (
+        <span data-admin-audit-subject>{row.subject === null ? '—' : <AuditPerson language={language} person={row.subject} />}</span>
+      ),
+    },
+    {
       id: 'reason',
       header: translateAdmin(language, 'admin.audit.col.reason'),
       priority: 3,

@@ -3,9 +3,11 @@ import { fileURLToPath } from 'node:url';
 
 import { beforeAll, describe, expect, test } from 'bun:test';
 
-import { ADMIN_LANGUAGES, loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
+import { ADMIN_LANGUAGES, loadAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
 
 import { KNOWN_AUDIT_FIELDS, auditFieldLabel, auditValue, summarizeUserAgent } from './audit-fields';
+import { OBJECT_ID, servedAuditPerson } from './audit-fixtures';
+import { interpretReportAction } from './interpret/enums';
 
 /**
  * **LES CHAMPS MODIFIÉS, DITS EN MOTS** (#8876, #6727) — le libellé du champ (traduit
@@ -47,6 +49,27 @@ describe('auditFieldLabel — le champ en mots', () => {
 
   test('un champ imbriqué garde son chemin, segment par segment', () => {
     expect(auditFieldLabel('settings.notificationLevel', 'fr')).toBe('Settings › notification level');
+  });
+
+  test('une décision de signalement se lit : action retenue, notes, modérateur (audit 2026-10-04)', () => {
+    expect(auditFieldLabel('actionTaken', 'fr')).toBe('Action retenue');
+    expect(auditFieldLabel('moderatorNotes', 'fr')).toBe('Notes du modérateur');
+    expect(auditFieldLabel('moderatorId', 'fr')).toBe('Modérateur');
+  });
+
+  test('le diff à plat du barème se lit par opération et par réglage, jamais par chemin brut', () => {
+    expect(auditFieldLabel('operations.content.text_message.points', 'fr', 'EngagementScaleConfig')).toBe('Points — Envoyer un message texte');
+    expect(auditFieldLabel('operations.content.text_message.multiplied', 'fr', 'EngagementScaleConfig')).toBe('Multiplié par l’élan — Envoyer un message texte');
+    expect(auditFieldLabel('operations.content.text_message.cap', 'fr', 'EngagementScaleConfig')).toBe('Plafond — Envoyer un message texte');
+    expect(auditFieldLabel('multiplier.windowDays', 'fr', 'EngagementScaleConfig')).toBe('Multiplicateur › Fenêtre glissante (jours)');
+    expect(auditFieldLabel('multiplier.levelCaps', 'fr', 'EngagementScaleConfig')).toBe('Plafond par niveau');
+    expect(auditFieldLabel('streakBonuses', 'fr', 'EngagementScaleConfig')).toBe(translateAdmin('fr', 'admin.scale.streak.title'));
+    expect(auditFieldLabel('abuse.heavyPoints', 'fr', 'EngagementScaleConfig')).toContain(translateAdmin('fr', 'admin.scale.abuse.heavyPoints'));
+    expect(auditFieldLabel('linkVisits.basePoints', 'fr', 'EngagementScaleConfig')).toContain(translateAdmin('fr', 'admin.scale.links.basePoints'));
+  });
+
+  test('un chemin du barème inconnu reste humanisé', () => {
+    expect(auditFieldLabel('operations.unknown_op.points', 'fr', 'EngagementScaleConfig')).toBe('Operations › unknown op › points');
   });
 
   test('un champ vide ne plante pas', () => {
@@ -111,6 +134,21 @@ describe('auditValue — la valeur en mots', () => {
 
   test('un texte libre est laissé tel quel', () => {
     expect(value('bio', 'Développeuse à Dakar')).toEqual({ kind: 'text', text: 'Développeuse à Dakar' });
+  });
+
+  test('l’action retenue d’une décision se dit par son nom', () => {
+    expect(value('actionTaken', 'warning_sent', 'Report').text).toBe(interpretReportAction('warning_sent', 'fr').label);
+    expect(value('actionTaken', 'warning_sent', 'Report').text).not.toContain('warning_sent');
+  });
+
+  test('le modérateur se nomme par la personne servie, sinon « Modérateur » — jamais un identifiant', () => {
+    const admin = servedAuditPerson(7, { displayName: 'Awa Diop' });
+    const named = auditValue({ field: 'moderatorId', value: OBJECT_ID(7), entity: 'Report', people: [admin] }, 'fr', NOW);
+    const unknown = auditValue({ field: 'moderatorId', value: OBJECT_ID(9), entity: 'Report', people: [admin] }, 'fr', NOW);
+
+    expect(named).toEqual({ kind: 'text', text: 'Awa Diop' });
+    expect(unknown).toEqual({ kind: 'text', text: 'Modérateur' });
+    expect(value('moderatorId', OBJECT_ID(9), 'Report').text).toBe('Modérateur');
   });
 
   test('une énumération inconnue se dit « Non reconnu », jamais son code brut', () => {

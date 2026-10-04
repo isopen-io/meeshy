@@ -84,7 +84,7 @@ function ChangesTable({ language, entry, now }: { readonly language: AdminLangua
   }
 
   const cell = (field: string, served: string | null) => {
-    const value = auditValue({ field, value: served, entity: entry.target.type }, language, now);
+    const value = auditValue({ field, value: served, entity: entry.target.type, people: [entry.admin, entry.subject] }, language, now);
     return (
       <span
         data-admin-audit-value={value.kind}
@@ -113,7 +113,7 @@ function ChangesTable({ language, entry, now }: { readonly language: AdminLangua
           {changes.map((change, index) => (
             <tr key={`${index}-${change.field}`} data-admin-audit-change={change.field}>
               <th scope="row" className="min-w-0 break-words px-3 py-2 text-start font-medium" style={{ color: INK, borderBottom: `1px solid ${EDGE}` }}>
-                {auditFieldLabel(change.field, language)}
+                {auditFieldLabel(change.field, language, entry.target.type)}
               </th>
               <td className="min-w-0 break-words px-3 py-2" style={{ borderBottom: `1px solid ${EDGE}` }}>
                 {cell(change.field, change.before)}

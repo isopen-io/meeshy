@@ -56,6 +56,7 @@ const f = {
   'admin.audit.target.FriendRequest': 'Contact request',
   'admin.audit.target.AgentLlmConfig': 'Agent model',
   'admin.audit.target.Agent': 'Agent',
+  'admin.audit.target.EngagementScaleConfig': 'Points scale',
   'admin.audit.target.unknown': 'Item',
 
   // ── Audit log: action vocabulary ───────────────────────────────────────────
@@ -287,6 +288,39 @@ const f = {
   'admin.audit.action.AGENT_CONVERSATION_RESET.explain': 'The agent’s configuration, roles and summaries in this conversation were erased.',
   'admin.audit.action.AGENT_USER_RESET': 'Agent reset for a member',
   'admin.audit.action.AGENT_USER_RESET.explain': 'The roles the agent held for this member were erased.',
+  /* ─── Journal : gestes servis depuis l’audit 2026-10-04 (lot Modération, croissance, plateforme) ─── */
+  'admin.audit.action.UPDATE_BROADCAST': 'Broadcast edited',
+  'admin.audit.action.UPDATE_BROADCAST.explain': 'The name, text or audience of a draft broadcast changed.',
+  'admin.audit.action.PREVIEW_BROADCAST': 'Broadcast prepared',
+  'admin.audit.action.PREVIEW_BROADCAST.explain': 'A broadcast’s audience was counted and its translations prepared before sending.',
+  'admin.audit.action.AGENT_CONFIG_UPDATED': 'Agent configured for a conversation',
+  'admin.audit.action.AGENT_CONFIG_UPDATED.explain': 'The agent’s configuration in this conversation was created or changed.',
+  'admin.audit.action.AGENT_CONFIG_DELETED': 'Agent configuration deleted',
+  'admin.audit.action.AGENT_CONFIG_DELETED.explain': 'The agent no longer follows this conversation: its configuration was erased.',
+  'admin.audit.action.AGENT_SCAN_STOPPED': 'Agent scan stopped',
+  'admin.audit.action.AGENT_SCAN_STOPPED.explain': 'The agent’s running scan in this conversation was interrupted.',
+  'admin.audit.action.AGENT_SCAN_TRIGGERED': 'Agent triggered',
+  'admin.audit.action.AGENT_SCAN_TRIGGERED.explain': 'An immediate agent scan was requested in this conversation.',
+  'admin.audit.action.AGENT_QUEUE_ITEM_DELETED': 'Agent message removed from the queue',
+  'admin.audit.action.AGENT_QUEUE_ITEM_DELETED.explain': 'A message the agent was about to send was deleted before sending.',
+  'admin.audit.action.AGENT_QUEUE_ITEM_EDITED': 'Agent message edited',
+  'admin.audit.action.AGENT_QUEUE_ITEM_EDITED.explain': 'The text of a message waiting to be sent by the agent was rewritten.',
+  'admin.audit.action.AGENT_ROLE_ASSIGNED': 'Agent role assigned to a member',
+  'admin.audit.action.AGENT_ROLE_ASSIGNED.explain': 'The agent will now hold a chosen role for this member in a conversation.',
+  'admin.audit.action.AGENT_ROLE_UNLOCKED': 'Agent role unlocked',
+  'admin.audit.action.AGENT_ROLE_UNLOCKED.explain': 'The role the agent held for this member is no longer fixed: the agent may reassess it.',
+  'admin.audit.action.AGENT_TOPIC_CREATED': 'Agent topic created',
+  'admin.audit.action.AGENT_TOPIC_CREATED.explain': 'A new conversation topic was offered to the agent.',
+  'admin.audit.action.AGENT_TOPIC_UPDATED': 'Agent topic edited',
+  'admin.audit.action.AGENT_TOPIC_UPDATED.explain': 'One of the agent’s conversation topics was rewritten.',
+  'admin.audit.action.AGENT_TOPIC_DELETED': 'Agent topic deleted',
+  'admin.audit.action.AGENT_TOPIC_DELETED.explain': 'A conversation topic was taken away from the agent.',
+  /* ─── Journal : décisions de signalement interprétées (audit 2026-10-04) ─── */
+  'admin.audit.field.actionTaken': 'Action taken',
+  'admin.audit.field.moderatorNotes': 'Moderator notes',
+  'admin.audit.field.moderatorId': 'Moderator',
+  'admin.audit.value.moderator': 'Moderator',
+  'admin.audit.col.subject': 'Member concerned',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;
