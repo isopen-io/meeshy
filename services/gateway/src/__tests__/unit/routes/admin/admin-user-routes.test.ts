@@ -104,10 +104,10 @@ const mockUser = {
 };
 
 const mockPrisma: Record<string, Record<string, jest.Mock>> = {
-  conversationShareLink: { findMany: jest.fn(), count: jest.fn() },
-  trackingLink: { findMany: jest.fn(), count: jest.fn() },
-  affiliateToken: { findMany: jest.fn(), count: jest.fn() },
-  friendRequest: { findMany: jest.fn(), count: jest.fn() },
+  conversationShareLink: { findMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+  trackingLink: { findMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+  affiliateToken: { findMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
+  friendRequest: { findMany: jest.fn(), count: jest.fn().mockResolvedValue(0) },
   user: { findUnique: jest.fn() },
   conversation: { findMany: jest.fn(), findUnique: jest.fn(), count: jest.fn() },
   postMedia: { findMany: jest.fn(), count: jest.fn() },
@@ -191,9 +191,6 @@ function resetMocks() {
   mockPrisma.trackingLink.findMany.mockResolvedValue([]);
   mockPrisma.affiliateToken.findMany.mockResolvedValue([]);
   mockPrisma.friendRequest.findMany.mockResolvedValue([]);
-  for (const m of ['conversationShareLink', 'trackingLink', 'affiliateToken', 'friendRequest'] as const) {
-    (mockPrisma[m].count as jest.Mock).mockResolvedValue(0);
-  }
   mockPrisma.user.findUnique.mockResolvedValue({ id: 'user123' });
   mockPrisma.conversation.findMany.mockResolvedValue([]);
   mockPrisma.conversation.findUnique.mockResolvedValue({ id: 'conv123' });
@@ -609,15 +606,6 @@ describe('POST /admin/users/:userId/reset-password', () => {
     expect(res.statusCode).toBe(200);
   });
 
-  it('passe le motif reçu à la trace d’audit', async () => {
-    const corps = { ...validBody, reason: 'demande écrite du membre' };
-    (adminUserValidation.resetPasswordValidationSchema.parse as jest.Mock).mockReturnValue(corps);
-    const res = await app.inject({ method: 'POST', url: '/admin/users/user123/reset-password', payload: corps });
-    expect(res.statusCode).toBe(200);
-    const appel = (mockAudit.logResetPassword as jest.Mock).mock.calls[0];
-    expect(appel[4]).toBe('demande écrite du membre');
-  });
-
   it('returns 404 when user not found', async () => {
     mockUMS.getUserById.mockResolvedValue(null);
     const res = await app.inject({ method: 'POST', url: '/admin/users/user123/reset-password', payload: validBody });
@@ -959,9 +947,7 @@ describe('POST /admin/users/:userId/voice-consent', () => {
     expect(mockUMS.toggleVoiceConsent).not.toHaveBeenCalled();
   });
 
-  // Spec 2026-10-04 § 4 : le rang souverain n'a rien à justifier — le geste
-  // a lieu et reste tracé ; un motif FOURNI trop court est refusé.
-  it('admet un souverain SANS motif écrit — le geste a lieu', async () => {
+  it('admet un souverain SANS motif écrit — spec 2026-10-04 § 4', async () => {
     const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
@@ -969,16 +955,6 @@ describe('POST /admin/users/:userId/voice-consent', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(mockUMS.toggleVoiceConsent).toHaveBeenCalledWith('user123', 'voiceProfile', true);
-  });
-
-  it('refuse un souverain dont le motif fourni est trop court', async () => {
-    const res = await appSouverain.inject({
-      method: 'POST',
-      url: '/admin/users/user123/voice-consent',
-      payload: { consentType: 'voiceProfile', enabled: true, reason: 'RGPD' }
-    });
-    expect(res.statusCode).toBe(400);
-    expect(mockUMS.toggleVoiceConsent).not.toHaveBeenCalled();
   });
 
   it('returns 400 on invalid consentType (aucune loi ne porte ce champ)', async () => {

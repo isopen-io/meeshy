@@ -40,7 +40,7 @@ jest.mock('../../../../services/admin/user-management.service', () => ({
 }));
 
 jest.mock('../../../../services/admin/user-audit.service', () => ({
-  UserAuditService: jest.fn().mockImplementation(() => ({ createAuditLog, logCreateUser: createAuditLog, logRestoreUser: createAuditLog })),
+  UserAuditService: jest.fn().mockImplementation(() => ({ createAuditLog, logCreateUser: createAuditLog, logRestoreUser: createAuditLog, logResetPassword: createAuditLog })),
 }));
 
 // `permissionsService` n'est PAS doublé : c'est la loi que ces témoins
@@ -149,6 +149,24 @@ describe('une écriture sert la fiche relue (avec _count et adminMetadata)', () 
     expect(res.statusCode).toBe(200);
     expect(res.json().data._count).toEqual(COMPTES);
     expect(res.json().data.adminMetadata).toBeDefined();
+    await app.close();
+  });
+});
+
+describe('POST /admin/users/:id/reset-password — le motif reçu est consigné', () => {
+  it('passe le motif à la trace (il était reçu, puis perdu)', async () => {
+    jest.clearAllMocks();
+    service.getUserById.mockResolvedValue(CIBLE);
+    service.resetPassword.mockResolvedValue(CIBLE);
+    const app = await buildApp('BIGBOSS');
+    const res = await app.inject({
+      method: 'POST',
+      url: `/admin/users/${CIBLE_ID}/reset-password`,
+      payload: { newPassword: 'Xk9$mQ2vLp8#nR4wZ', reason: 'demande écrite du membre' },
+    });
+    expect(res.statusCode).toBe(200);
+    const appel = createAuditLog.mock.calls[0] as unknown[];
+    expect(appel[4]).toBe('demande écrite du membre');
     await app.close();
   });
 });
