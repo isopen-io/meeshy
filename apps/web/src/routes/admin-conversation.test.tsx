@@ -24,6 +24,8 @@ import { AdminConversationPanel } from './admin-conversation';
  */
 const { mount, mounter } = setupAdminKitTests();
 const BIGBOSS = adminIdentityFixture({ role: 'BIGBOSS' });
+/* Le motif écrit se mesure sur un ADMIN : le rang souverain n'en écrit pas (spec 2026-10-04 § 4). */
+const ADMIN = adminIdentityFixture({ role: 'ADMIN' });
 const NOW = new Date('2026-09-30T12:00:00.000Z');
 const CONVERSATION = OBJECT_ID(1);
 const MOTIVE = 'Signalement #9142 — mise en conformité';
@@ -298,7 +300,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
       members(MEMBERS),
       (req) => (req.method === 'PATCH' ? { ok: true, data: { conversationId: CONVERSATION, userId: OBJECT_ID(3), participantId: OBJECT_ID(103), role: 'admin' } } : undefined),
     );
-    const host = await open(deps);
+    const host = await open(deps, ADMIN);
     typeInto(gesture(host, 'member-role', '3') as HTMLSelectElement, 'admin');
     await mounter.settle();
 
@@ -323,7 +325,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
       served = MEMBERS.map((member) => (member.id === OBJECT_ID(103) ? { ...member, role: 'admin' } : member));
       return { ok: true, data: { conversationId: CONVERSATION, userId: OBJECT_ID(3), participantId: OBJECT_ID(103), role: 'admin' } };
     });
-    const host = await open(deps);
+    const host = await open(deps, ADMIN);
     typeInto(gesture(host, 'member-role', '3') as HTMLSelectElement, 'admin');
     await mounter.settle();
     mounter.type(document.body, '[data-admin-motive]', MOTIVE);
@@ -335,7 +337,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
 
   test('un refus DÉFAIT l’effet optimiste et le dit dans la confirmation, qui reste ouverte', async () => {
     const { deps } = setup(fiche(), members(MEMBERS), (req) => (req.method === 'PATCH' ? { ok: false, status: 500, error: 'boom' } : undefined));
-    const host = await open(deps);
+    const host = await open(deps, ADMIN);
     typeInto(gesture(host, 'member-role', '3') as HTMLSelectElement, 'admin');
     await mounter.settle();
     mounter.type(document.body, '[data-admin-motive]', MOTIVE);
@@ -361,7 +363,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
 
   test('un 403 « créateur protégé » se dit par sa phrase, pas par « permission refusée »', async () => {
     const { deps } = setup(fiche(), members(MEMBERS), (req) => (req.method === 'PATCH' ? { ok: false, status: 403, error: 'refusé', code: 'CREATOR_PROTECTED' } : undefined));
-    const host = await open(deps);
+    const host = await open(deps, ADMIN);
     typeInto(gesture(host, 'member-role', '3') as HTMLSelectElement, 'moderator');
     await mounter.settle();
     mounter.type(document.body, '[data-admin-motive]', MOTIVE);
@@ -376,7 +378,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
       members(MEMBERS),
       (req) => (req.method === 'POST' ? { ok: true, data: { conversationId: CONVERSATION, userId: OBJECT_ID(3), participantId: OBJECT_ID(103), removed: true } } : undefined),
     );
-    const host = await open(deps);
+    const host = await open(deps, ADMIN);
 
     await mounter.click(gesture(host, 'member-remove', '3'));
     expect(document.querySelector('[data-admin-confirm]')?.textContent).toContain('Léa Moreau sera retiré de la conversation');
@@ -421,7 +423,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
 describe('la lecture souveraine — le contrat reste', () => {
   test('le portillon est là dès l’ouverture, AVANT toute requête de messages', async () => {
     const { deps, calls } = setup(fiche(), members(MEMBERS));
-    const host = await open(deps);
+    const host = await open(deps, ADMIN);
 
     expect(host.querySelector('[data-admin-reading-gate]')).not.toBeNull();
     expect(host.querySelector('[data-admin-reason]')).not.toBeNull();
@@ -434,7 +436,7 @@ describe('la lecture souveraine — le contrat reste', () => {
       members(MEMBERS),
       (req) => (pathOf(req) === `${CONVERSATION_PATH}/messages` ? resultatServi({ data: [], pagination: { total: 0, offset: 0, limit: 30, hasMore: false } }) : undefined),
     );
-    const host = await open(deps);
+    const host = await open(deps, ADMIN);
 
     mounter.type(host, '[data-admin-reason]', 'Neuf care');
     expect(host.querySelector<HTMLButtonElement>('[data-admin-reason-submit]')?.disabled).toBe(true);
@@ -445,6 +447,35 @@ describe('la lecture souveraine — le contrat reste', () => {
     const read = calls().find((call) => pathOf(call).endsWith('/messages'));
     expect(new URL(read?.path ?? '', 'https://x.test').searchParams.get('reason')).toBe(MOTIVE);
     expect(host.querySelector('[data-admin-reading-empty]')).not.toBeNull();
+  });
+
+  test('le rang souverain lit SANS motif : aucun portillon, GET …/messages sans `reason`', async () => {
+    const { deps, calls } = setup(
+      fiche(),
+      members(MEMBERS),
+      (req) => (pathOf(req) === `${CONVERSATION_PATH}/messages` ? resultatServi({ data: [], pagination: { total: 0, offset: 0, limit: 30, hasMore: false } }) : undefined),
+    );
+    const host = await open(deps);
+    await mounter.settle();
+
+    expect(host.querySelector('[data-admin-reason]')).toBeNull();
+    const read = calls().find((call) => pathOf(call).endsWith('/messages'));
+    expect(read).toBeDefined();
+    expect(new URL(read?.path ?? '', 'https://x.test').searchParams.has('reason')).toBe(false);
+  });
+
+  test('le rang souverain change un rôle SANS motif : PATCH sans `reason`', async () => {
+    const { deps, calls } = setup(
+      fiche(),
+      members(MEMBERS),
+      (req) => (req.method === 'PATCH' ? { ok: true, data: { conversationId: CONVERSATION, userId: OBJECT_ID(3), participantId: OBJECT_ID(103), role: 'admin' } } : undefined),
+    );
+    const host = await open(deps);
+    typeInto(gesture(host, 'member-role', '3') as HTMLSelectElement, 'admin');
+    await mounter.settle();
+    expect(document.querySelector('[data-admin-motive]')).toBeNull();
+    await mounter.click(document.querySelector<HTMLElement>('[data-admin-action="confirm"]'));
+    expect(writes(calls)[0]?.body).toEqual({ role: 'admin' });
   });
 
   test('aucune trace du motif ni du fil dans le cache persistable : les clés sont souveraines', async () => {
@@ -459,7 +490,7 @@ describe('la lecture souveraine — le contrat reste', () => {
 
   test('si la fiche échoue, la lecture reste offerte sous l’avis d’erreur', async () => {
     const { deps } = setup((req) => (req.method === 'GET' && pathOf(req) === CONVERSATION_PATH ? { ok: false, status: 500, error: 'boom' } : undefined), members(MEMBERS));
-    const host = await open(deps);
+    const host = await open(deps, ADMIN);
 
     expect(host.querySelector('[data-admin-conversation-fiche-error] [data-admin-error]')).not.toBeNull();
     expect(host.querySelector('[data-admin-reading-gate]')).not.toBeNull();

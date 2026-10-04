@@ -151,7 +151,7 @@ export function AdminMemberSecuritySection({
     tone: granted ? 'primary' : 'danger',
     motive: { label: t('admin.people.motive.required'), minLength: MOTIVE_MIN_SOVEREIGN, required: true },
     success: 'admin.people.consent.done',
-    call: (reason) => setAdminUserConsent({ ...deps, userId: membre.id, consent, granted, reason: reason ?? '' }),
+    call: (reason) => setAdminUserConsent({ ...deps, userId: membre.id, consent, granted, reason }),
   });
 
   const proofRows: readonly { readonly channel: AdminProofChannel; readonly at: string | null }[] = [

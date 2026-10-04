@@ -218,7 +218,7 @@ export function AdminPostRemoval({
   const remove = async (motive: string | null) => {
     const done = await action.run({
       call: async (): Promise<ApiResult<RemovalResult>> => {
-        const result = await removeAdminPost({ ...deps, postId: fiche.id, reason: motive ?? '' });
+        const result = await removeAdminPost({ ...deps, postId: fiche.id, reason: motive });
         return !result.ok && result.status === 400 ? translatedRefusal(translateAdmin(language, 'admin.posts.remove.already')) : result;
       },
       success: 'admin.posts.remove.done',

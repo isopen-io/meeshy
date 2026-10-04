@@ -136,13 +136,14 @@ const MOTIF_MINIMAL = 3;
 export async function banAdminUser(
   params: AdminDeps & {
     readonly userId: string;
-    readonly reason: string;
+    /** Absent (`null`) : sans motif — la passerelle ne l'admet que du rang souverain (spec 2026-10-04 § 4). */
+    readonly reason: string | null;
     readonly expiresAt?: string;
     readonly signal?: AbortSignal;
   },
 ): Promise<ApiResult<readonly AdminBan[]>> {
-  const motif = params.reason.trim();
-  if (motif.length < MOTIF_MINIMAL) {
+  const motif = params.reason === null ? null : params.reason.trim();
+  if (motif !== null && motif.length < MOTIF_MINIMAL) {
     return { ok: false, status: 0, error: `Le motif doit compter au moins ${MOTIF_MINIMAL} caractères` };
   }
 
@@ -156,7 +157,7 @@ export async function banAdminUser(
     return { ok: false, status: 0, error: "L'échéance doit être dans le futur" };
   }
 
-  const corps: Record<string, unknown> = { reason: motif };
+  const corps: Record<string, unknown> = motif === null ? {} : { reason: motif };
   // Absent = PERMANENT. On n'envoie pas `null` explicite : la passerelle traite
   // les deux pareil, et omettre dit mieux « pas d'échéance » que poser un vide.
   if (params.expiresAt !== undefined) corps.expiresAt = params.expiresAt;

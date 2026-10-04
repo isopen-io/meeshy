@@ -3,7 +3,7 @@ import { act } from 'react';
 
 import type { AdminDeps } from '@/lib/api/admin';
 import type { HttpRequest } from '@/lib/api/http';
-import { expectNoRawIdentifiers } from '@/test-support/admin-assertions';
+import { adminIdentityFixture, expectNoRawIdentifiers } from '@/test-support/admin-assertions';
 import { setupAdminKitTests } from '@/test-support/admin-harness';
 import { typeInto } from '@/test-support/act-mount';
 import { pathOf, routedTransport, type RoutedReply } from '@/test-support/routed-transport';
@@ -211,5 +211,38 @@ describe('bannir — l’échéance se lit en heure locale et la saisie survit �
 
     const [call] = posted(gateway.calls);
     expect(call?.body).toEqual({ reason: 'Fraude avérée' });
+  });
+});
+
+describe('le motif du bannissement, selon le rang (spec 2026-10-04 § 4)', () => {
+  async function openAs(role: string) {
+    const gateway = routedTransport((request: HttpRequest) => (request.method === 'POST' ? { ok: true, data: [] } : undefined), bans);
+    const deps: AdminDeps = { source: 'gateway', transport: gateway.transport };
+    await mount(
+      <AdminUserBanSheet userId={USER} language="fr" onClose={() => undefined} onAnnounce={() => undefined} deps={deps} />,
+      adminIdentityFixture({ role }),
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    await mounter.settle();
+    const apply = [...document.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Bannir');
+    return { apply, calls: gateway.calls };
+  }
+
+  test('souverain : le motif est facultatif, le bannissement part sans `reason`', async () => {
+    const { apply, calls } = await openAs('BIGBOSS');
+    expect(document.querySelector('label[for="admin-ban-reason"], [data-admin-ban-reason]')).not.toBeNull();
+    expect(textOf(document.body)).toContain('Motif (facultatif)');
+    expect(apply?.disabled).toBe(false);
+    await mounter.click(apply ?? null);
+    const post = calls().find((call) => call.method === 'POST');
+    expect(post?.body).toEqual({});
+  });
+
+  test('ADMIN : le motif reste obligatoire', async () => {
+    const { apply } = await openAs('ADMIN');
+    expect(textOf(document.body)).toContain('Motif (obligatoire)');
+    expect(apply?.disabled).toBe(true);
   });
 });

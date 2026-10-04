@@ -22,6 +22,8 @@ import AdminPostScreen, { AdminPostPanel } from './admin-post';
  */
 const { mount, mounter } = setupAdminKitTests({ languages: ['fr', 'en'] });
 const BIGBOSS = adminIdentityFixture({ role: 'BIGBOSS' });
+/* Le motif écrit se mesure sur un ADMIN : le rang souverain n'en écrit pas (spec 2026-10-04 § 4). */
+const ADMIN = adminIdentityFixture({ role: 'ADMIN' });
 const ID = (n: number) => `64f1c2a9e8b7d6c5b4a3928${n}`;
 const NOW = new Date('2026-09-30T12:00:00.000Z');
 const person = (n: number, name: string, username = name.split(' ')[0]?.toLowerCase() ?? 'x') => ({ id: ID(n), username, displayName: name, avatar: null });
@@ -333,7 +335,7 @@ describe('AdminPostPanel — « Retirer la publication »', () => {
   });
 
   test('la feuille DIT l’effet (et qu’aucune restauration n’est offerte), demande un motif de 3 caractères, rien ne part avant', async () => {
-    const { host, gateway } = await ouvrir();
+    const { host, gateway } = await ouvrir([], `/admin/posts/${ID(9)}`, ADMIN);
     await click(host.querySelector('[data-admin-action="remove"]'));
     expect(host.querySelector('dialog h2')?.textContent).toBe('Retirer cette publication ?');
     expect(text(host, '[data-admin-confirm]')).toContain('ne permet pas de la rétablir');
@@ -346,7 +348,7 @@ describe('AdminPostPanel — « Retirer la publication »', () => {
   });
 
   test('confirmer envoie DELETE {reason}, annonce le succès, ferme la feuille, relit la fiche — qui passe à « Retirée »', async () => {
-    const { host, gateway } = await ouvrir();
+    const { host, gateway } = await ouvrir([], `/admin/posts/${ID(9)}`, ADMIN);
     await click(host.querySelector('[data-admin-action="remove"]'));
     mounter.type(host, '[data-admin-motive]', 'Propos haineux signalés');
     expect(confirmer(host)?.textContent).toBe('Retirer la publication');
@@ -363,7 +365,7 @@ describe('AdminPostPanel — « Retirer la publication »', () => {
 
   test('l’effet est IMMÉDIAT : « Retirée » avant la réponse de la passerelle', async () => {
     let release: () => void = () => undefined;
-    const { host } = await ouvrir([served(), { remove: () => new Promise((resolve) => { release = () => resolve(resultatServi({ success: true, message: 'ok' })); }) }]);
+    const { host } = await ouvrir([served(), { remove: () => new Promise((resolve) => { release = () => resolve(resultatServi({ success: true, message: 'ok' })); }) }], `/admin/posts/${ID(9)}`, ADMIN);
     await click(host.querySelector('[data-admin-action="remove"]'));
     mounter.type(host, '[data-admin-motive]', 'Propos haineux signalés');
     await click(confirmer(host));
@@ -374,7 +376,7 @@ describe('AdminPostPanel — « Retirer la publication »', () => {
   });
 
   test('un refus DÉFAIT l’effet immédiat, garde la feuille ouverte et le dit en mots', async () => {
-    const { host } = await ouvrir([served(), { remove: () => ({ ok: false, status: 403, error: 'Permission insuffisante' }) }]);
+    const { host } = await ouvrir([served(), { remove: () => ({ ok: false, status: 403, error: 'Permission insuffisante' }) }], `/admin/posts/${ID(9)}`, ADMIN);
     await click(host.querySelector('[data-admin-action="remove"]'));
     mounter.type(host, '[data-admin-motive]', 'Propos haineux signalés');
     await click(confirmer(host));
@@ -385,12 +387,21 @@ describe('AdminPostPanel — « Retirer la publication »', () => {
   });
 
   test('« déjà retirée » (400) se dit en mots, et l’état n’est pas faussé', async () => {
-    const { host } = await ouvrir([served(), { remove: () => ({ ok: false, status: 400, error: 'Le post est deja supprime' }) }]);
+    const { host } = await ouvrir([served(), { remove: () => ({ ok: false, status: 400, error: 'Le post est deja supprime' }) }], `/admin/posts/${ID(9)}`, ADMIN);
     await click(host.querySelector('[data-admin-action="remove"]'));
     mounter.type(host, '[data-admin-motive]', 'Doublon de signalement');
     await click(confirmer(host));
     await mounter.settle();
     expect(text(host, '[data-admin-confirm-error]')).toBe('Cette publication était déjà retirée.');
+  });
+
+  test('le rang souverain retire SANS motif : aucun champ, DELETE sans `reason`', async () => {
+    const { host, gateway } = await ouvrir();
+    await click(host.querySelector('[data-admin-action="remove"]'));
+    expect(host.querySelector('[data-admin-motive]')).toBeNull();
+    await click(confirmer(host));
+    await mounter.settle();
+    expect(removals(gateway)[0]?.body).toEqual({});
   });
 
   test('annuler ferme la feuille sans rien envoyer', async () => {

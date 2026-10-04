@@ -29,7 +29,6 @@ const ADMIN = adminIdentityFixture({ role: 'ADMIN' });
 const NOW = new Date('2026-09-30T12:00:00.000Z');
 const LINK_ID = OBJECT_ID(1);
 const SECRET = { linkId: 'mshy_AbCd1234', identifier: 'mshy_voisins-7k2' };
-const REASON = 'Support : le propriétaire a perdu son lien';
 
 type Call = { readonly method: string; readonly path: string; readonly body?: unknown };
 
@@ -387,39 +386,33 @@ describe('rouvrir le lien', () => {
   });
 });
 
-describe('révéler le secret — rang souverain, motif écrit, affiché UNE fois, jamais en cache', () => {
-  const reveal = async (host: HTMLDivElement, reason = REASON) => {
+/* Le geste est SOUVERAIN : le rang souverain n'écrit pas de motif (spec 2026-10-04 § 4) — la
+   confirmation n'a plus de champ, et la révélation part sans `reason` (toujours consignée). */
+describe('révéler le secret — rang souverain, sans motif, affiché UNE fois, jamais en cache', () => {
+  const reveal = async (host: HTMLDivElement) => {
     await mounter.click(action(host, 'reveal-secret'));
-    mounter.type(host, '[data-admin-motive]', reason);
     await mounter.settle();
     await mounter.click(confirm(host));
   };
 
-  test('la confirmation demande un motif d’au moins 10 caractères : en dessous, rien ne part', async () => {
+  test('la confirmation DIT le geste et n’a pas de champ de motif ; rien ne part avant de confirmer', async () => {
     const fake = fakeServer();
     const host = await open(fake);
     await mounter.click(action(host, 'reveal-secret'));
 
     expect(host.querySelector('[data-admin-confirm]')?.textContent).toContain('Ce geste est réservé au créateur de la plateforme');
-    expect(confirm(host)?.disabled).toBe(true);
-
-    mounter.type(host, '[data-admin-motive]', 'trop bref');
-    await mounter.settle();
-    expect(confirm(host)?.disabled).toBe(true);
-
-    mounter.type(host, '[data-admin-motive]', REASON);
-    await mounter.settle();
+    expect(host.querySelector('[data-admin-motive]')).toBeNull();
     expect(confirm(host)?.disabled).toBe(false);
     expect(writes(fake)).toEqual([]);
   });
 
-  test('POST avec le motif ; les deux clés s’affichent dans une feuille, avec copie', async () => {
+  test('POST sans motif ; les deux clés s’affichent dans une feuille, avec copie', async () => {
     const fake = fakeServer();
     const host = await open(fake);
 
     await reveal(host);
 
-    expect(writes(fake)).toEqual([{ method: 'POST', path: adminEndpoints.shareLinksByIdReveal(LINK_ID), body: { reason: REASON } }]);
+    expect(writes(fake)).toEqual([{ method: 'POST', path: adminEndpoints.shareLinksByIdReveal(LINK_ID), body: {} }]);
     const sheet = host.querySelector('[data-admin-secret]');
     expect(sheet).not.toBeNull();
     expect(sheet?.textContent).toContain(SECRET.linkId);

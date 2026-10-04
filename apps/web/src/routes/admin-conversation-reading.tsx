@@ -9,6 +9,7 @@ import {
   loadAdminSovereignThread,
   MOTIF_LONGUEUR_MINIMALE,
 } from '@/lib/api/admin-conversations';
+import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import { apiDeps } from '@/lib/api/deps';
 import type { Viewer } from '@/lib/api/viewer';
@@ -59,6 +60,13 @@ import { ThreadModes } from '@/routes/thread-modes';
  * La requête n'est donc PAS armée tant que le motif n'est pas validé
  * (`enabled`), et le motif validé est FIGÉ : le rendre modifiable relancerait
  * une lecture sous un autre motif que celui déjà consigné.
+ *
+ * **LE RANG SOUVERAIN LIT SANS MOTIF** (spec 2026-10-04 § 4, « BIGBOSS n'a
+ * besoin de rien justifier ») : pour lui, aucun formulaire — la lecture est
+ * armée d'emblée et part SANS `reason`, ce que la passerelle n'admet que de ce
+ * rang ; la lecture reste consignée au journal. Le rang se lit sur la matrice
+ * SERVIE (`useAdminReach().isSovereign`) ; tant qu'elle n'est pas lue, le
+ * lecteur n'est pas souverain (fermé par défaut).
  *
  * ## RIEN DE CE QUI EST LU ICI NE TOUCHE LE DISQUE
  *
@@ -171,6 +179,9 @@ export function AdminConversationReading({
   const [saisie, setSaisie] = useState('');
   /** Le motif VALIDÉ — figé une fois la lecture demandée. */
   const [motif, setMotif] = useState<string | null>(null);
+  const souverain = useAdminReach().isSovereign;
+  /** La lecture est armée : un motif validé, ou le rang souverain qui n'en écrit pas. */
+  const armee = motif !== null || souverain;
   const [offset, setOffset] = useState(0);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [expiredIds, setExpiredIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -182,13 +193,13 @@ export function AdminConversationReading({
         ...deps,
         conversationId,
         offset,
-        reason: motif ?? '',
+        reason: motif,
         signal,
       });
       if (!resultat.ok) throw new Error(resultat.error);
       return resultat.data;
     },
-    enabled: motif !== null,
+    enabled: armee,
     retry: false,
     gcTime: 0,
   });
@@ -265,7 +276,7 @@ export function AdminConversationReading({
 
   const motifSuffisant = saisie.trim().length >= MOTIF_LONGUEUR_MINIMALE;
 
-  if (motif === null) {
+  if (!armee) {
     return (
       <div className="grid gap-3" data-admin-reading-gate>
         <label className="grid gap-1">

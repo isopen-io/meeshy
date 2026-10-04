@@ -190,7 +190,8 @@ export function ReportGestures({
   };
 
   const informs = report.reporterId === null ? '' : ` ${t('admin.moderation.confirm.informs')}`;
-  const notesField = { label: t('admin.moderation.confirm.notes'), minLength: 3, required: false } as const;
+  /* Une NOTE du dossier, pas un motif : elle reste offerte au rang souverain (`kind: 'note'`). */
+  const notesField = { label: t('admin.moderation.confirm.notes'), minLength: 3, required: false, kind: 'note' } as const;
   const noteOf = (motive: string | null): string | null => (motive === null || motive === '' ? null : motive);
   const error = action.state.phase === 'error' ? action.state.message : null;
 

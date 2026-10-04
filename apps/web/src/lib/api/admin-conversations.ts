@@ -334,15 +334,19 @@ export async function loadAdminSovereignThread(
   params: AdminDeps & {
     readonly conversationId: string;
     readonly offset: number;
-    /** Dix caractères au moins — la route refuse au SCHÉMA, avant son handler. */
-    readonly reason: string;
+    /**
+     * Dix caractères au moins — la route refuse au SCHÉMA, avant son handler.
+     * Absent (`null`) : la lecture part sans `reason`, ce que la passerelle
+     * n'admet que du rang souverain (spec 2026-10-04 § 4).
+     */
+    readonly reason: string | null;
     readonly signal?: AbortSignal;
   },
 ): Promise<ApiResult<AdminSovereignThreadPage>> {
   const query = new URLSearchParams({
     offset: String(params.offset),
     limit: String(ADMIN_MESSAGES_PAGE_SIZE),
-    reason: params.reason,
+    ...(params.reason === null ? {} : { reason: params.reason }),
   });
 
   const result = await params.transport.request<unknown>({

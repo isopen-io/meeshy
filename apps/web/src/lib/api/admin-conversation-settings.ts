@@ -76,9 +76,15 @@ export type AdminMemberRemoval = {
   readonly removed: boolean;
 };
 
-type MotifVerifie = { readonly ok: true; readonly motif: string } | { readonly ok: false; readonly status: 0; readonly error: string };
+type MotifVerifie = { readonly ok: true; readonly motif: string | null } | { readonly ok: false; readonly status: 0; readonly error: string };
 
-function verifierMotif(reason: string): MotifVerifie {
+/**
+ * Un motif FOURNI se vérifie avant le réseau ; un motif ABSENT (`null`/`undefined`)
+ * passe — le geste part sans `reason`, ce que la passerelle n'admet que du rang
+ * souverain (spec 2026-10-04 § 4).
+ */
+function verifierMotif(reason: string | null | undefined): MotifVerifie {
+  if (reason === null || reason === undefined) return { ok: true, motif: null };
   const motif = reason.trim();
   if (motif.length < MOTIF_LONGUEUR_MINIMALE) {
     return { ok: false, status: 0, error: `Le motif doit compter au moins ${MOTIF_LONGUEUR_MINIMALE} caractères` };
@@ -88,6 +94,8 @@ function verifierMotif(reason: string): MotifVerifie {
   }
   return { ok: true, motif };
 }
+
+const avecMotif = (motif: string | null): { readonly reason?: string } => (motif === null ? {} : { reason: motif });
 
 const cheminConversation = (conversationId: string) => adminEndpoints.conversationsByConversationId(conversationId);
 
@@ -104,7 +112,8 @@ export async function updateAdminConversation(
   params: AdminDeps & {
     readonly conversationId: string;
     readonly edit: AdminConversationEdit;
-    readonly reason: string;
+    /** Absent : sans motif (rang souverain seulement, la passerelle tranche). */
+    readonly reason?: string | null;
     readonly signal?: AbortSignal;
   },
 ): Promise<ApiResult<AdminConversation>> {
@@ -117,7 +126,7 @@ export async function updateAdminConversation(
   const result = await params.transport.request<unknown>({
     method: 'PATCH',
     path: cheminConversation(params.conversationId),
-    body: { ...Object.fromEntries(champs.map((champ) => [champ, params.edit[champ]])), reason: motif.motif },
+    body: { ...Object.fromEntries(champs.map((champ) => [champ, params.edit[champ]])), ...avecMotif(motif.motif) },
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
@@ -134,7 +143,8 @@ export async function setAdminConversationMemberRole(
     readonly conversationId: string;
     readonly userId: string;
     readonly role: AdminParticipantRole;
-    readonly reason: string;
+    /** Absent : sans motif (rang souverain seulement, la passerelle tranche). */
+    readonly reason?: string | null;
     readonly signal?: AbortSignal;
   },
 ): Promise<ApiResult<AdminMemberRoleChange>> {
@@ -144,7 +154,7 @@ export async function setAdminConversationMemberRole(
   const result = await params.transport.request<unknown>({
     method: 'PATCH',
     path: adminEndpoints.conversationsByConversationIdParticipantsByUserId(params.conversationId, params.userId),
-    body: { role: params.role, reason: motif.motif },
+    body: { role: params.role, ...avecMotif(motif.motif) },
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;
@@ -166,7 +176,8 @@ export async function removeAdminConversationMember(
   params: AdminDeps & {
     readonly conversationId: string;
     readonly userId: string;
-    readonly reason: string;
+    /** Absent : sans motif (rang souverain seulement, la passerelle tranche). */
+    readonly reason?: string | null;
     readonly signal?: AbortSignal;
   },
 ): Promise<ApiResult<AdminMemberRemoval>> {
@@ -176,7 +187,7 @@ export async function removeAdminConversationMember(
   const result = await params.transport.request<unknown>({
     method: 'POST',
     path: adminEndpoints.conversationsByConversationIdParticipantsByUserIdRemove(params.conversationId, params.userId),
-    body: { reason: motif.motif },
+    body: { ...avecMotif(motif.motif) },
     ...(params.signal === undefined ? {} : { signal: params.signal }),
   });
   if (!result.ok) return result;

@@ -437,7 +437,7 @@ describe('désactiver, puis réactiver', () => {
 
   test('avec un motif : il part dans le corps ; un motif de 1 ou 2 caractères bloque la confirmation (la route exige 3 au moins)', async () => {
     const fake = fakeServer();
-    const host = await open(fake);
+    const host = await open(fake, ADMIN);
     await mounter.click(action(host, 'deactivate-tracking'));
 
     mounter.type(host, '[data-admin-motive]', 'ab');

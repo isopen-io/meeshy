@@ -21,6 +21,8 @@ import AdminCommunityScreen, { AdminCommunityPanel } from './admin-community';
  */
 const { mount, mounter } = setupAdminKitTests({ languages: ['fr', 'en'] });
 const BIGBOSS = adminIdentityFixture({ role: 'BIGBOSS' });
+/* Le motif écrit se mesure sur un ADMIN : le rang souverain n'en écrit pas (spec 2026-10-04 § 4). */
+const ADMIN = adminIdentityFixture({ role: 'ADMIN' });
 const ID = (n: number) => `64f1c2a9e8b7d6c5b4a3928${n}`;
 const NOW = new Date('2026-09-30T12:00:00.000Z');
 const person = (n: number, name: string) => ({ id: ID(n), username: name.toLowerCase(), displayName: name, avatar: null });
@@ -343,7 +345,7 @@ describe('AdminCommunityPanel — les gestes', () => {
   });
 
   test('désactiver ouvre une feuille qui DIT l’effet, demande un motif de 10 caractères, et rien ne part avant', async () => {
-    const { host, gateway } = await ouvrir();
+    const { host, gateway } = await ouvrir([], `/admin/communities/${ID(3)}`, ADMIN);
     await click(gesture(host, 'deactivate'));
     const sheet = host.querySelector('[data-admin-confirm]');
     expect(host.querySelector('dialog h2')?.textContent).toBe('Désactiver cette communauté ?');
@@ -356,7 +358,7 @@ describe('AdminCommunityPanel — les gestes', () => {
   });
 
   test('confirmer envoie PATCH {isActive:false, reason}, annonce le succès, ferme la feuille et relit la fiche', async () => {
-    const { host, gateway } = await ouvrir();
+    const { host, gateway } = await ouvrir([], `/admin/communities/${ID(3)}`, ADMIN);
     await click(gesture(host, 'deactivate'));
     mounter.type(host, '[data-admin-motive]', 'Contenus contraires aux règles');
     expect(confirmer(host)?.textContent).toBe('Désactiver la communauté');
@@ -375,7 +377,7 @@ describe('AdminCommunityPanel — les gestes', () => {
 
   test('l’effet est IMMÉDIAT : la fiche passe à « Désactivée » avant la réponse de la passerelle', async () => {
     let release: () => void = () => undefined;
-    const { host, gateway } = await ouvrir([fiche(), { patch: () => new Promise((resolve) => { release = () => resolve(resultatServi({ success: true, data: fiche({ isActive: false }) })); }) }]);
+    const { host, gateway } = await ouvrir([fiche(), { patch: () => new Promise((resolve) => { release = () => resolve(resultatServi({ success: true, data: fiche({ isActive: false }) })); }) }], `/admin/communities/${ID(3)}`, ADMIN);
     await click(gesture(host, 'deactivate'));
     mounter.type(host, '[data-admin-motive]', 'Contenus contraires aux règles');
     await click(confirmer(host));
@@ -387,7 +389,7 @@ describe('AdminCommunityPanel — les gestes', () => {
   });
 
   test('un refus DÉFAIT l’effet immédiat, garde la feuille ouverte et le dit en mots', async () => {
-    const { host } = await ouvrir([fiche(), { patch: () => ({ ok: false, status: 403, error: 'Permission insuffisante' }) }]);
+    const { host } = await ouvrir([fiche(), { patch: () => ({ ok: false, status: 403, error: 'Permission insuffisante' }) }], `/admin/communities/${ID(3)}`, ADMIN);
     await click(gesture(host, 'deactivate'));
     mounter.type(host, '[data-admin-motive]', 'Contenus contraires aux règles');
     await click(confirmer(host));
@@ -399,7 +401,7 @@ describe('AdminCommunityPanel — les gestes', () => {
   });
 
   test('annuler ferme la feuille sans rien envoyer', async () => {
-    const { host, gateway } = await ouvrir();
+    const { host, gateway } = await ouvrir([], `/admin/communities/${ID(3)}`, ADMIN);
     await click(gesture(host, 'makePublic'));
     expect(host.querySelector('dialog h2')?.textContent).toBe('Rendre cette communauté publique ?');
     await click(host.querySelector('[data-admin-action="cancel"]'));
@@ -408,7 +410,7 @@ describe('AdminCommunityPanel — les gestes', () => {
   });
 
   test('rendre publique envoie {isPrivate:false, reason} et l’annonce', async () => {
-    const { host, gateway } = await ouvrir();
+    const { host, gateway } = await ouvrir([], `/admin/communities/${ID(3)}`, ADMIN);
     await click(gesture(host, 'makePublic'));
     mounter.type(host, '[data-admin-motive]', 'Demande du créateur de la communauté');
     await click(confirmer(host));
@@ -418,7 +420,7 @@ describe('AdminCommunityPanel — les gestes', () => {
   });
 
   test('réactiver envoie {isActive:true, reason} et l’annonce', async () => {
-    const { host, gateway } = await ouvrir([fiche({ isActive: false, deletedAt: '2026-09-20T08:00:00.000Z' })]);
+    const { host, gateway } = await ouvrir([fiche({ isActive: false, deletedAt: '2026-09-20T08:00:00.000Z' })], `/admin/communities/${ID(3)}`, ADMIN);
     await click(gesture(host, 'reactivate'));
     expect(host.querySelector('dialog h2')?.textContent).toBe('Réactiver cette communauté ?');
     mounter.type(host, '[data-admin-motive]', 'Erreur de modération corrigée');
@@ -426,6 +428,16 @@ describe('AdminCommunityPanel — les gestes', () => {
     expect(gestures(gateway)[0]?.body).toEqual({ isActive: true, reason: 'Erreur de modération corrigée' });
     expect(text(host, '[data-admin-announcement]')).toBe('Communauté réactivée');
     expect(text(host, '[data-admin-identity]')).toContain('Active');
+  });
+
+  test('le rang souverain désactive SANS motif : aucun champ, PATCH {isActive:false} sans `reason`', async () => {
+    const { host, gateway } = await ouvrir();
+    await click(gesture(host, 'deactivate'));
+    expect(host.querySelector('[data-admin-motive]')).toBeNull();
+    expect(confirmer(host)?.disabled).toBe(false);
+    await click(confirmer(host));
+    await mounter.settle();
+    expect(gestures(gateway)[0]?.body).toEqual({ isActive: false });
   });
 
   test('hors ligne : les gestes sont éteints et l’écran le dit', async () => {

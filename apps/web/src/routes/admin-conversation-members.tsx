@@ -207,7 +207,8 @@ export function ConversationMembers({
   };
 
   const confirm = async (motive: string | null) => {
-    if (pending === null || motive === null) return;
+    /* `motive` vaut `null` pour le rang souverain : la feuille n'a pas demandé de motif, le geste part sans `reason`. */
+    if (pending === null) return;
     const { member } = pending;
     const userId = member.userId;
     if (userId === null) return;

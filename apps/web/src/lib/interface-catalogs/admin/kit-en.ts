@@ -24,6 +24,7 @@ const f = {
   'admin.kit.cancel': 'Cancel',
   'admin.kit.confirm.motiveCount': '{count} of {min} characters minimum',
   'admin.kit.confirm.busy': 'In progress…',
+  'admin.kit.motiveOptional': 'Reason (optional)',
   'admin.kit.chart.showTable': 'View the data',
   'admin.kit.chart.hideTable': 'Hide the data',
   'admin.kit.chart.empty': 'No data for this period',

@@ -214,14 +214,15 @@ export type AdminPostRemoval = { readonly removed: true };
  * **RETIRER UNE PUBLICATION** — `DELETE admin.postsByPostId`, un retrait DOUX
  * (`deletedAt`), sans restauration servie. Le motif part dans `reason` — le nom
  * du fil, que la passerelle consigne dans le journal d'audit.
+ * Un motif ABSENT (`null`/`undefined`) part sans `reason` : la passerelle l'admet du seul rang souverain (spec 2026-10-04 § 4) et refuse les autres.
  */
 export async function removeAdminPost(
-  params: AdminDeps & { readonly postId: string; readonly reason: string },
+  params: AdminDeps & { readonly postId: string; readonly reason?: string | null },
 ): Promise<ApiResult<AdminPostRemoval>> {
   const result = await params.transport.request<unknown>({
     method: 'DELETE',
     path: adminEndpoints.postsByPostId(params.postId),
-    body: { reason: params.reason },
+    body: params.reason === null || params.reason === undefined ? {} : { reason: params.reason },
   });
   if (!result.ok) return result;
   return { ok: true, data: { removed: true } };
