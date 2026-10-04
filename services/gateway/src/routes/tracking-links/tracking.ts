@@ -142,7 +142,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         browser,
         os,
         device,
-        ...(await clickGeo(request, ipAddress)),
+        ...clickGeo(request),
         language,
         referrer,
         visitor: linkVisitorFromRequest(request)
