@@ -113,11 +113,7 @@ export async function loadMessagesWindow(
   if (__FIXTURES__ && params.source === 'fixtures') {
     return { ok: true, data: windowPageOf(messagesOf(params.conversationId), params.param, WINDOW_LIMIT) };
   }
-  const served = await requestMessageRows({
-    ...params,
-    query: queryOf(params.param),
-    ...(params.signal !== undefined ? { signal: params.signal } : {}),
-  });
+  const served = await requestMessageRows({ ...params, query: queryOf(params.param) });
   if (!served.ok) return served;
   const { rows, hasMore, nextCursor, hasNewer } = served.data;
   if ('after' in params.param) return { ok: true, data: pageOf(rows, { hasOlder: true, hasNewer: hasMore }) };
