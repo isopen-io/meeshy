@@ -7,6 +7,7 @@ import type { PublicContactAccount } from '@meeshy/shared/types/contact-card';
 import type { FriendActionOutcome } from '@/lib/api/friend-actions';
 import type { Attachment } from '@/lib/api/types';
 import { contactResolveQueryKey } from '@/lib/contact-card/resolve';
+import type { ContactFileOutcome } from '@/lib/contact-card/save-contact-file';
 import type { ContactActionPorts } from '@/lib/contact-card/use-contact-actions';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { createActMounter } from '@/test-support/act-mount';
@@ -78,6 +79,7 @@ type Harness = {
   readonly accounts?: readonly PublicContactAccount[] | 'network';
   readonly vcard?: string | Error;
   readonly sendRequest?: () => Promise<FriendActionOutcome>;
+  readonly saveFile?: (attachment: Attachment) => Promise<ContactFileOutcome>;
 };
 
 async function mountCard(harness: Harness = {}) {
@@ -112,6 +114,7 @@ async function mountCard(harness: Harness = {}) {
       clipboard={async (text) => {
         copied.push(text);
       }}
+      {...(harness.saveFile !== undefined ? { saveFile: harness.saveFile } : {})}
     />,
   );
   await mounter.settle();
@@ -145,7 +148,34 @@ describe('la bulle — le carnet de l’auteur d’abord', () => {
     const { host } = await mountCard({ vcard: 'pas une vcard' });
     expect(host.querySelector('[data-contact-card="unreadable"]')).not.toBeNull();
     expect(text(host)).toContain('Unreadable contact card');
-    expect(host.querySelector('a[download]')).not.toBeNull();
+    expect(host.querySelector('[data-contact-download]')).not.toBeNull();
+  });
+
+  test('« Télécharger la carte » passe par la porte de fichiers partagée, jamais par un lien qui ferait quitter la coque (#9263)', async () => {
+    const saved: string[] = [];
+    const { host } = await mountCard({
+      vcard: 'pas une vcard',
+      saveFile: async (attachment) => {
+        saved.push(attachment.id);
+        return 'saved';
+      },
+    });
+    expect(host.querySelector('a[download]')).toBeNull();
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[data-contact-download]')?.click();
+    });
+    await mounter.settle();
+    expect(saved).toEqual(['att-vcf-1']);
+    expect(host.querySelector('[data-contact-download-failed]')).toBeNull();
+  });
+
+  test('un téléchargement de la carte qui échoue le dit dans la bulle (#9263)', async () => {
+    const { host } = await mountCard({ vcard: 'pas une vcard', saveFile: async () => 'failed' });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('button[data-contact-download]')?.click();
+    });
+    await mounter.settle();
+    expect(text(host.querySelector('[data-contact-download-failed]'))).toBe('The contact card could not be downloaded');
   });
 
   test('panne de lecture : offre de réessayer', async () => {
