@@ -2,6 +2,20 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+/// **Ce que l'hôte pose DERRIÈRE la bande** (#4122). La bande n'a pas de fond
+/// à elle (directive porteur 2026-09-05) : son encre et ses capsules dépendent
+/// donc entièrement de ce qu'il y a dessous, et seul l'hôte le sait.
+///
+/// - `plateau` — le champ du document, l'éditeur d'objet : les trois teintes
+///   de `PlateauTint` sont sombres par doctrine ;
+/// - `scene` — le calque de description, posé sur la carte (#6126) ou
+///   flottant sur elle : une couleur que l'AUTEUR choisit, avec le schéma que
+///   l'hôte épingle pour elle (`CanvasChromeScheme`).
+nonisolated enum ComposerMentionStripBackdrop: Equatable, Sendable {
+    case plateau
+    case scene(ColorScheme)
+}
+
 /// **La bande de mentions du composer (#3904)** — une variante horizontale,
 /// pleine largeur, ancrée en bas de l'écran de publication.
 ///
@@ -16,7 +30,50 @@ struct ComposerMentionStrip: View {
     @ObservedObject var controller: MentionComposerController
     var accentColor: String = MeeshyColors.brandPrimaryHex
     let currentText: String
+    /// Sans valeur par défaut : un hôte qui ne le déclare pas ne compile pas.
+    let backdrop: ComposerMentionStripBackdrop
     let onSelect: (String) -> Void
+
+    /// Le plateau est sombre par construction ; sur la scène, l'encre suit le
+    /// schéma que l'hôte épingle. Suivre le thème de l'APP peindrait du texte
+    /// sombre sur un plateau sombre en thème clair.
+    nonisolated static func inkIsDark(on backdrop: ComposerMentionStripBackdrop) -> Bool {
+        switch backdrop {
+        case .plateau: return true
+        case .scene(let schema): return schema == .dark
+        }
+    }
+
+    /// **La capsule d'une entrée — le fond RÉEL sous le pseudo.**
+    ///
+    /// Sur le plateau, un voile : le fond est connu et sombre, le pseudo y
+    /// tient 6,31:1 au pire cas (violet profond). Sur la scène, le fond est
+    /// INCONNU — une scène blanche, une photo aux zones claires — et ce même
+    /// voile y rendait 1,98:1 : le défaut de l'issue, revenu sur l'hôte qu'elle
+    /// ne mesurait pas. La capsule y devient le fond PRIMAIRE du schéma,
+    /// opaque : la seule base qui tient sur une couleur qu'on ne connaît pas.
+    /// Verrouillé par `ComposerMentionStripContrastTests`.
+    nonisolated static func capsuleFill(on backdrop: ComposerMentionStripBackdrop) -> Color {
+        let isDark = inkIsDark(on: backdrop)
+        switch backdrop {
+        case .plateau:
+            return MeeshyColors.textPrimary(isDark: isDark).opacity(MeeshyOpacity.subtle)
+        case .scene:
+            return MeeshyColors.backgroundPrimary(isDark: isDark)
+        }
+    }
+
+    nonisolated static func nameColor(on backdrop: ComposerMentionStripBackdrop) -> Color {
+        MeeshyColors.textPrimary(isDark: inkIsDark(on: backdrop))
+    }
+
+    nonisolated static func pseudoColor(on backdrop: ComposerMentionStripBackdrop) -> Color {
+        MeeshyColors.textSecondary(isDark: inkIsDark(on: backdrop))
+    }
+
+    private var capsule: some View {
+        Capsule().fill(Self.capsuleFill(on: backdrop))
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -38,10 +95,15 @@ struct ComposerMentionStrip: View {
                 // `MentionSuggestionList` (SDK) le faisait déjà pour la
                 // surface mood du même composer.
                 if controller.suggestions.isEmpty {
+                    //
+                    // Sur sa capsule, comme une entrée : posé nu sur une scène
+                    // claire, « personne » disparaîtrait comme le pseudo.
                     Text(ComposerDocumentCopy.mentionEmpty)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                        .foregroundColor(Self.pseudoColor(on: backdrop))
+                        .padding(.horizontal, MeeshySpacing.smPlus)
                         .frame(minHeight: MeeshyControlSize.tapTarget, alignment: .leading)
+                        .background(capsule)
                 }
                 ForEach(controller.suggestions) { candidate in
                     Button {
@@ -57,40 +119,26 @@ struct ComposerMentionStrip: View {
                                 accentColor: accentColor,
                                 avatarURL: candidate.avatarURL
                             )
-                            // **`isDark: true` n'est pas un oubli, c'est une
-                            // CONSÉQUENCE** (#4122). La bande n'apparaît que
-                            // sur le plateau du composer, dont les trois
-                            // teintes sont sombres par doctrine
-                            // (`PlateauTint` : « un fond sombre laisse la scène
-                            // être la seule source de lumière »). Le suivre
-                            // avec le `colorScheme` peindrait du texte sombre
-                            // sur un fond sombre en thème clair — l'inverse
-                            // exact du défaut qu'on croirait corriger.
-                            //
-                            // Mesuré sur les trois teintes (capsule à 6 % de
-                            // `textPrimary` par-dessus) : le pseudo tient
-                            // **6,62:1** au pire cas — au-dessus d'AA. Un token
-                            // plus discret (`textMuted`) y tomberait à
-                            // **4,01:1**, donc SOUS le seuil : le correctif
-                            // intuitif dégraderait ce qu'il prétend réparer.
-                            // Verrouillé par `ComposerMentionStripContrastTests`.
+                            // L'encre et la capsule viennent du FOND que l'hôte
+                            // déclare (#4122) — voir `capsuleFill(on:)`. Un
+                            // token plus discret (`textMuted`) tomberait SOUS
+                            // AA sur le plateau (3,88:1) : le pseudo garde
+                            // `textSecondary`.
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(candidate.displayName)
                                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                                    .foregroundColor(Self.nameColor(on: backdrop))
                                     .lineLimit(1)
                                 Text("@\(candidate.username)")
                                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                                    .foregroundColor(MeeshyColors.textSecondary(isDark: true))
+                                    .foregroundColor(Self.pseudoColor(on: backdrop))
                                     .lineLimit(1)
                             }
                             .frame(maxWidth: 140, alignment: .leading)
                         }
                         .padding(.vertical, MeeshySpacing.xsPlus)
                         .padding(.horizontal, MeeshySpacing.smPlus)
-                        .background(
-                            Capsule().fill(MeeshyColors.textPrimary(isDark: true).opacity(MeeshyOpacity.subtle))
-                        )
+                        .background(capsule)
                     }
                     .accessibilityLabel(
                         "\(String(localized: "composer.mention.label", defaultValue: "Mention", bundle: .main)) \(candidate.displayName)"
@@ -110,11 +158,10 @@ struct ComposerMentionStrip: View {
         // travers de la scène au moment précis où l'auteur regarde ce qu'il
         // écrit.
         //
-        // Les capsules des entrées portent déjà leur propre fond (6 % de
-        // `textPrimary`) : c'est LUI que `ComposerMentionStripContrastTests`
-        // mesure, et il mesurait déjà sur la teinte du plateau — jamais sur le
-        // verre. Le retirer ne change donc aucun ratio ; il rend vraie la base
-        // que le témoin énonçait déjà.
+        // Les capsules des entrées portent leur propre fond
+        // (`capsuleFill(on:)`) : c'est LUI que
+        // `ComposerMentionStripContrastTests` mesure, sur le fond que l'hôte
+        // déclare — jamais sur un verre de bande.
         //
         // > Un chrome hérité d'un écran voisin arrive avec les hypothèses de
         // > CET écran-là. « Même chrome que X » n'est une raison que si X a le

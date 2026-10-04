@@ -59,17 +59,26 @@ final class ComposerMentionStripContrastTests: XCTestCase {
     /// mesurer une couleur translucide sans la composer sur son fond rend un
     /// ratio qui n'existe nulle part à l'écran.
     private static func compose(_ dessus: Color, sur dessous: Color, alpha: Double) -> Color {
-        let a = UIColor(dessus).cgColor.components ?? [0, 0, 0, 1]
-        let b = UIColor(dessous).cgColor.components ?? [0, 0, 0, 1]
-        return Color(red: Double(a[0]) * alpha + Double(b[0]) * (1 - alpha),
-                     green: Double(a[1]) * alpha + Double(b[1]) * (1 - alpha),
-                     blue: Double(a[2]) * alpha + Double(b[2]) * (1 - alpha))
+        let a = rvba(dessus)
+        let b = rvba(dessous)
+        return Color(red: a.r * alpha + b.r * (1 - alpha),
+                     green: a.g * alpha + b.g * (1 - alpha),
+                     blue: a.b * alpha + b.b * (1 - alpha))
+    }
+
+    /// Les composantes en RVB, quel que soit l'espace de la couleur — un gris
+    /// (`Color(white:)`) n'en porte que deux, et les indexer en direct lirait
+    /// hors du tableau.
+    private static func rvba(_ couleur: Color) -> (r: Double, g: Double, b: Double, a: Double) {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(couleur).getRed(&r, green: &g, blue: &b, alpha: &a)
+        return (Double(r), Double(g), Double(b), Double(a))
     }
 
     /// Une couleur APLATIE sur son fond avec son propre alpha. Pour une couleur
     /// opaque, elle-même.
     private static func aplatir(_ couleur: Color, sur fond: Color) -> Color {
-        let alpha = Double(UIColor(couleur).cgColor.alpha)
+        let alpha = rvba(couleur).a
         return alpha >= 1 ? couleur : compose(couleur, sur: fond, alpha: alpha)
     }
 
