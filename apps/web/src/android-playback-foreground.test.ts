@@ -82,4 +82,16 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
     expect(main.slice(garde, debut)).not.toMatch(/\n}\n/);
     expect(main.slice(debut, debut + 300)).toContain('holdWhileAudioPlays');
   });
+
+  test('sa notification porte une « Pause » qui parvient à la page, en sept langues (#9301)', () => {
+    const service = sansCommentaires(lire(...JAVA, 'PlaybackForegroundService.java'));
+    const notification = corpsDe(service, 'Notification notification(');
+    expect(notification).toContain('ACTION_PAUSE');
+    expect(notification).toContain('PendingIntent.getService(');
+    expect(notification).toContain('R.string.playback_pause');
+    expect(corpsDe(service, 'int onStartCommand(')).toContain('MeeshyPlaybackPlugin.pauseRequested(');
+    const plugin = sansCommentaires(lire(...JAVA, 'MeeshyPlaybackPlugin.java'));
+    expect(corpsDe(plugin, 'static boolean pauseRequested(')).toContain('notifyListeners("pauseRequested"');
+    for (const dossier of LANGUES) expect(lire('res', dossier, 'strings_playback.xml')).toContain('name="playback_pause"');
+  });
 });

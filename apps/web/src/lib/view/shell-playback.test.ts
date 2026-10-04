@@ -15,19 +15,38 @@ import { holdWhileAudioPlays, shellPlaybackHold, type PlaybackHold } from './she
  */
 
 type Appel = { readonly plugin: string; readonly methode: string };
+type Ecoute = { readonly plugin: string; readonly evenement: string; readonly rappel: (donnees: unknown) => void; retiree: boolean };
 
-function coque(methodes: readonly string[], issue: 'resout' | 'rejette' = 'resout'): CoqueNative & { readonly appels: Appel[] } {
+function coque(
+  methodes: readonly string[],
+  issue: 'resout' | 'rejette' = 'resout',
+): CoqueNative & { readonly appels: Appel[]; readonly ecoutes: Ecoute[] } {
   const appels: Appel[] = [];
+  const ecoutes: Ecoute[] = [];
   return {
     appels,
+    ecoutes,
     getPlatform: () => 'android',
     PluginHeaders: [{ name: 'MeeshyPlayback', methods: methodes.map((name) => ({ name })) }],
     nativePromise: (plugin, methode) => {
       appels.push({ plugin, methode });
       return issue === 'resout' ? Promise.resolve({}) : Promise.reject(new Error('coque'));
     },
+    addListener: (plugin, evenement, rappel) => {
+      const ecoute: Ecoute = { plugin, evenement, rappel, retiree: false };
+      ecoutes.push(ecoute);
+      return {
+        remove: async () => {
+          ecoute.retiree = true;
+        },
+      };
+    },
   };
 }
+
+const emettre = (hote: { readonly ecoutes: Ecoute[] }, evenement: string): void => {
+  for (const ecoute of hote.ecoutes) if (ecoute.evenement === evenement && !ecoute.retiree) ecoute.rappel({});
+};
 
 describe('la prise de la lecture par la coque (#9257)', () => {
   test('dans la coque, tenir puis rendre appellent le plugin de lecture', () => {
@@ -59,6 +78,24 @@ describe('la prise de la lecture par la coque (#9257)', () => {
     await Promise.resolve();
     await Promise.resolve();
   });
+
+  test('la « Pause » de la notification de la coque parvient à la page, jusqu’à ce qu’elle cesse d’écouter (#9301)', () => {
+    const hote = coque(['holdPlayback', 'releasePlayback']);
+    const journal: string[] = [];
+    const cesser = shellPlaybackHold(hote).onPauseRequested(() => journal.push('pause'));
+    emettre(hote, 'pauseRequested');
+    expect(journal).toEqual(['pause']);
+    expect(hote.ecoutes.map(({ plugin, evenement }) => ({ plugin, evenement }))).toEqual([
+      { plugin: 'MeeshyPlayback', evenement: 'pauseRequested' },
+    ]);
+    cesser();
+    emettre(hote, 'pauseRequested');
+    expect(journal).toEqual(['pause']);
+  });
+
+  test('un navigateur n’écoute aucune notification (#9301)', () => {
+    expect(() => shellPlaybackHold(undefined).onPauseRequested(() => undefined)()).not.toThrow();
+  });
 });
 
 beforeAll(() => {
@@ -68,9 +105,31 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 
-function priseComptee(): PlaybackHold & { readonly journal: string[] } {
+function priseComptee(): PlaybackHold & { readonly journal: string[]; readonly demanderPause: () => void } {
   const journal: string[] = [];
-  return { journal, hold: () => journal.push('hold'), release: () => journal.push('release') };
+  const ecouteurs = new Set<() => void>();
+  return {
+    journal,
+    hold: () => journal.push('hold'),
+    release: () => journal.push('release'),
+    onPauseRequested: (ecouteur) => {
+      ecouteurs.add(ecouteur);
+      return () => ecouteurs.delete(ecouteur);
+    },
+    demanderPause: () => {
+      for (const ecouteur of ecouteurs) ecouteur();
+    },
+  };
+}
+
+function vocalQuiSePause(): HTMLMediaElement & { readonly pauses: () => number } {
+  const vocal = media('audio');
+  let pauses = 0;
+  vocal.pause = () => {
+    pauses += 1;
+    vocal.dispatchEvent(new Event('pause'));
+  };
+  return Object.assign(vocal, { pauses: () => pauses });
 }
 
 function media(tag: 'audio' | 'video'): HTMLMediaElement {
@@ -131,6 +190,34 @@ describe('la page tient la lecture tant qu’un audio joue (#9257)', () => {
     arreter();
     signal(vocal, 'pause');
     expect(prise.journal).toEqual(['hold', 'release']);
+    vocal.remove();
+  });
+});
+
+describe('la « Pause » de la notification de la coque met les vocaux en pause (#9301)', () => {
+  test('chaque audio qui joue se met en pause, et la lecture est rendue', () => {
+    const prise = priseComptee();
+    const arreter = holdWhileAudioPlays(document, prise);
+    const premier = vocalQuiSePause();
+    const second = vocalQuiSePause();
+    const muet = vocalQuiSePause();
+    signal(premier, 'playing');
+    signal(second, 'playing');
+    prise.demanderPause();
+    expect([premier.pauses(), second.pauses(), muet.pauses()]).toEqual([1, 1, 0]);
+    expect(prise.journal).toEqual(['hold', 'release']);
+    arreter();
+    for (const vocal of [premier, second, muet]) vocal.remove();
+  });
+
+  test('la page qui a cessé d’écouter ne répond plus à la notification', () => {
+    const prise = priseComptee();
+    const arreter = holdWhileAudioPlays(document, prise);
+    const vocal = vocalQuiSePause();
+    signal(vocal, 'playing');
+    arreter();
+    prise.demanderPause();
+    expect(vocal.pauses()).toBe(0);
     vocal.remove();
   });
 });
