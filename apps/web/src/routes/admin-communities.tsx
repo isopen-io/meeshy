@@ -8,6 +8,7 @@ import { AdminListToolbar } from '@/components/admin/list-toolbar';
 import { adminGroupOf } from '@/lib/admin/admin-routes';
 import { COMMUNITY_LIST_SPEC } from '@/lib/admin/community-list';
 import { communityStateOf, communityVisibilityOf } from '@/lib/admin/community-state';
+import { excerptOf } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { communityRef, personRef } from '@/lib/admin/post-entities';
@@ -17,6 +18,9 @@ import type { AdminDeps } from '@/lib/api/admin';
 import { adminCommunitiesQueryKey, loadAdminCommunities, type AdminCommunityRow } from '@/lib/api/admin-communities';
 import { apiDeps } from '@/lib/api/deps';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+
+/** L'extrait de description sous le nom d'une communauté : de quoi la reconnaître, pas la lire. */
+const DESCRIPTION_EXCERPT = 100;
 
 /**
  * **LES COMMUNAUTÉS** (#8876) — `/admin/communities` · `/adm/communities`.
@@ -60,7 +64,19 @@ export function AdminCommunitiesPanel({
       header: translateAdmin(language, 'admin.community.col.community'),
       primary: true,
       sortKey: 'name',
-      cell: (row) => <AdminEntityIdentity language={language} entity={communityRef(row, language)} />,
+      cell: (row) => {
+        const description = excerptOf(row.description, DESCRIPTION_EXCERPT);
+        return (
+          <span className="grid gap-1">
+            <AdminEntityIdentity language={language} entity={communityRef(row, language)} />
+            {description === null ? null : (
+              <span data-admin-community-description className="max-w-md break-words text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+                {description}
+              </span>
+            )}
+          </span>
+        );
+      },
     },
     {
       id: 'visibility',

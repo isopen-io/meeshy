@@ -172,8 +172,6 @@ const f = {
   'admin.community.stat.left': 'Saídas',
   'admin.community.stat.conversations': 'Conversas',
   'admin.community.stat.posts': 'Publicações',
-  'admin.community.tabs.label': 'Seções da comunidade',
-  'admin.community.tab.overview': 'Resumo',
   'admin.community.tab.members': 'Membros',
   'admin.community.section.description': 'Descrição',
   'admin.community.description.empty': 'Esta comunidade não tem descrição.',
@@ -231,6 +229,12 @@ const f = {
   'admin.community.done.reactivated': 'Comunidade reativada',
   'admin.community.done.private': 'Comunidade tornada privada',
   'admin.community.done.public': 'Comunidade tornada pública',
+  /* ─── Communauté : fiche en cartes (lot Échanges et contenus, 2026-10-05) ─── */
+  'admin.community.cards.title': 'O detalhe, por seção',
+  'admin.community.card.staffCount': 'Membros da equipe',
+  'admin.community.card.conversationsRestricted': 'A lista é reservada ao nível de administração.',
+  'admin.community.conversations.lastMessage': 'Última mensagem {when}',
+  'admin.community.conversations.noMessage': 'Nenhuma mensagem por enquanto',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

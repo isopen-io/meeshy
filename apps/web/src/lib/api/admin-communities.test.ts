@@ -40,6 +40,7 @@ describe('decodeAdminCommunityRow — champ par champ', () => {
       id: ID(3),
       identifier: 'mshy_club-jazz',
       name: 'Club de jazz',
+      description: 'Les amateurs de jazz de Douala',
       avatar: 'https://cdn.meeshy.me/c/jazz.jpg',
       isPrivate: true,
       isActive: true,
@@ -71,6 +72,11 @@ describe('decodeAdminCommunityRow — champ par champ', () => {
 
   test('un créateur ou une photo absents se disent null', () => {
     expect(decodeAdminCommunityRow(row({ creator: null, avatar: '' }))).toMatchObject({ creator: null, avatar: null });
+  });
+
+  test('la description est gardée pour l’extrait de la liste ; vide ou absente, elle se dit null', () => {
+    expect(decodeAdminCommunityRow(row({ description: '   ' }))?.description).toBeNull();
+    expect(decodeAdminCommunityRow(row({ description: undefined }))?.description).toBeNull();
   });
 
   test('une ligne sans identifiant est écartée', () => {

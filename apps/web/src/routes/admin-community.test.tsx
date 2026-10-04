@@ -154,51 +154,55 @@ describe('AdminCommunityPanel — identité, chiffres, description', () => {
     expect(text(host, '[data-admin-stat="posts"]')).toContain('15');
   });
 
-  test('les membres actifs ouvrent l’onglet des membres, les départs le filtrent sur « Partis »', async () => {
+  test('les membres actifs ouvrent la modale des membres, les départs la filtrent sur « Partis »', async () => {
     const { host } = await ouvrir();
-    expect(host.querySelector('[data-admin-stat="members"] a')?.getAttribute('href')).toBe(`/admin/communities/${ID(3)}?tab=members`);
-    expect(host.querySelector('[data-admin-stat="left"] a')?.getAttribute('href')).toBe(`/admin/communities/${ID(3)}?tab=members&isActive=false`);
+    expect(host.querySelector('[data-admin-stat="members"] a')?.getAttribute('href')).toBe(`/admin/communities/${ID(3)}?open=members`);
+    expect(host.querySelector('[data-admin-stat="left"] a')?.getAttribute('href')).toBe(`/admin/communities/${ID(3)}?open=members&isActive=false`);
   });
 
   test('la description est lue ; sans description, l’écran le dit', async () => {
-    const { host } = await ouvrir();
-    expect(text(host, '[data-admin-fiche-section="description"]')).toContain('Les amateurs de jazz de Douala');
+    /* La carte en dit l'extrait ; la modale, le texte entier. */
+    const { host } = await ouvrir([], `/admin/communities/${ID(3)}?open=description`);
+    expect(text(host, '[data-admin-summary="description"]')).toContain('Les amateurs de jazz de Douala');
+    expect(text(document, '[data-admin-fiche-section="description"]')).toContain('Les amateurs de jazz de Douala');
   });
 
   test('sans description, l’écran le dit', async () => {
-    const { host } = await ouvrir([fiche({ description: null })]);
-    expect(text(host, '[data-admin-fiche-section="description"]')).toContain('n’a pas de description');
+    await ouvrir([fiche({ description: null })], `/admin/communities/${ID(3)}?open=description`);
+    expect(text(document, '[data-admin-fiche-section="description"]')).toContain('n’a pas de description');
   });
 });
 
 describe('AdminCommunityPanel — équipe, conversations, métadonnées', () => {
   test('l’équipe est nommée, avec le rôle en mot et un lien vers chaque fiche membre', async () => {
-    const { host } = await ouvrir();
-    const jean = host.querySelector(`[data-admin-staff="${ID(2)}"]`);
+    const { host } = await ouvrir([], `/admin/communities/${ID(3)}?open=staff`);
+    expect(text(host, '[data-admin-summary="staff"]')).toContain('2');
+    const jean = document.querySelector(`[data-admin-staff="${ID(2)}"]`);
     expect(jean?.textContent).toContain('Jean Mbarga');
     expect(jean?.textContent).toContain('Modérateur');
     expect(jean?.querySelector('a')?.getAttribute('href')).toBe(`/admin/users/${ID(2)}`);
-    expect(text(host, `[data-admin-staff="${ID(1)}"]`)).toContain('Administrateur');
+    expect(text(document, `[data-admin-staff="${ID(1)}"]`)).toContain('Administrateur');
   });
 
   test('les conversations sont nommées, typées, comptées — et ouvrent leur fiche (rang admin)', async () => {
-    const { host } = await ouvrir();
-    const repetitions = host.querySelector(`[data-admin-conversation="${ID(5)}"]`);
+    await ouvrir([], `/admin/communities/${ID(3)}?open=conversations`);
+    const repetitions = document.querySelector(`[data-admin-conversation="${ID(5)}"]`);
     expect(repetitions?.textContent).toContain('Répétitions');
     expect(repetitions?.textContent).toContain('Groupe · Membres : 12');
     expect(repetitions?.querySelector('a')?.getAttribute('href')).toBe(`/admin/conversations/${ID(5)}`);
-    const sansTitre = host.querySelector(`[data-admin-conversation="${ID(6)}"]`);
+    const sansTitre = document.querySelector(`[data-admin-conversation="${ID(6)}"]`);
     expect(sansTitre?.textContent).toContain('Conversation sans titre');
     expect(sansTitre?.textContent).toContain('Publique · Membres : 3 · Inactive');
   });
 
   test('sans le rang d’administration, l’inventaire des conversations n’est PAS dessiné — le chiffre seul, et il le dit', async () => {
-    const { host } = await ouvrir([], `/admin/communities/${ID(3)}`, adminIdentityFixture({ role: 'MODERATOR' }));
+    const { host } = await ouvrir([], `/admin/communities/${ID(3)}?open=conversations`, adminIdentityFixture({ role: 'MODERATOR' }));
 
-    expect(host.querySelector('[data-admin-conversation]')).toBeNull();
-    expect(host.textContent).not.toContain('Répétitions');
-    expect(text(host, '[data-admin-conversations-restricted]')).toContain('2 conversation(s)');
-    expect(text(host, '[data-admin-conversations-restricted]')).toContain('réservée au rang d’administration');
+    expect(text(host, '[data-admin-summary="conversations"]')).toContain('réservée au rang d’administration');
+    expect(document.querySelector('[data-admin-conversation]')).toBeNull();
+    expect(document.body.textContent).not.toContain('Répétitions');
+    expect(text(document, '[data-admin-conversations-restricted]')).toContain('2 conversation(s)');
+    expect(text(document, '[data-admin-conversations-restricted]')).toContain('réservée au rang d’administration');
   });
 
   test('« Conversations » du bandeau mène à CELLES de la communauté (communityId) — et reste du texte sans la section', async () => {
@@ -216,8 +220,8 @@ describe('AdminCommunityPanel — équipe, conversations, métadonnées', () => 
   });
 
   test('la phrase « … sur N » est elle aussi un lien vers la liste filtrée quand il y a plus que ce qui est montré', async () => {
-    const { host } = await ouvrir([fiche({ conversationCount: 31 })]);
-    const more = host.querySelector('[data-admin-link="all-conversations"]');
+    await ouvrir([fiche({ conversationCount: 31 })], `/admin/communities/${ID(3)}?open=conversations`);
+    const more = document.querySelector('[data-admin-link="all-conversations"]');
 
     expect(more?.getAttribute('href')).toBe(`/admin/conversations?communityId=${ID(3)}`);
     expect(more?.textContent).toContain('sur 31');
@@ -249,36 +253,46 @@ describe('AdminCommunityPanel — équipe, conversations, métadonnées', () => 
   });
 
   test('plus de 20 conversations : l’écran dit qu’il n’en montre que les plus récentes', async () => {
-    const { host } = await ouvrir([fiche({ conversationCount: 31 })]);
-    expect(text(host, '[data-admin-fiche-section="conversations"]')).toContain('Les 20 conversations les plus récemment actives, sur 31.');
+    await ouvrir([fiche({ conversationCount: 31 })], `/admin/communities/${ID(3)}?open=conversations`);
+    expect(text(document, '[data-admin-fiche-section="conversations"]')).toContain('Les 20 conversations les plus récemment actives, sur 31.');
+  });
+
+  test('chaque conversation dit son dernier message — une conversation muette le dit aussi (audit 2026-10-04)', async () => {
+    await ouvrir([], `/admin/communities/${ID(3)}?open=conversations`);
+    expect(text(document, `[data-admin-conversation="${ID(5)}"] [data-admin-conversation-last]`)).toContain('Dernier message');
+    expect(text(document, `[data-admin-conversation="${ID(6)}"] [data-admin-conversation-last]`)).toContain('Aucun message pour le moment');
   });
 });
 
-describe('AdminCommunityPanel — l’onglet des membres', () => {
-  test('« Aperçu » par défaut ; « Membres » porte le nombre de membres actifs', async () => {
-    const { host } = await ouvrir();
-    expect(host.querySelector('[data-admin-tab="overview"]')?.getAttribute('aria-selected')).toBe('true');
-    expect(text(host, '[data-admin-tab="members"]')).toContain('42');
-    expect(host.querySelector('[data-admin-list]')).toBeNull();
+describe('AdminCommunityPanel — les cartes et la modale des membres', () => {
+  test('quatre cartes : description, équipe, conversations, membres (qui porte ses 42 actifs) ; aucune modale au repos, aucun membre lu', async () => {
+    const { host, gateway } = await ouvrir();
+    const cards = [...host.querySelectorAll('[data-admin-community-cards] [data-admin-summary]')].map((card) => card.getAttribute('data-admin-summary'));
+    expect(cards).toEqual(['description', 'staff', 'conversations', 'members']);
+    expect(text(host, '[data-admin-summary="members"]')).toContain('42');
+    expect(document.querySelector('[data-admin-community-panel]')).toBeNull();
+    expect(document.querySelector('[data-admin-list]')).toBeNull();
+    expect(gateway.calls.some((call) => call.path.startsWith(`/api/v1/admin/communities/${ID(3)}/members`))).toBe(false);
   });
 
-  test('ouvrir l’onglet écrit `?tab=members` et charge les membres de CETTE communauté', async () => {
+  test('« Ouvrir » les membres écrit `?open=members` et charge les membres de CETTE communauté', async () => {
     const { host, gateway } = await ouvrir();
-    await click(host.querySelector('[data-admin-tab="members"]'));
-    expect(window.location.search).toBe('?tab=members');
+    await click(host.querySelector('[data-admin-summary="members"] [data-admin-summary-open]'));
+    await mounter.settle();
+    expect(window.location.search).toBe('?open=members');
     expect(gateway.calls.some((call) => call.path.startsWith(`/api/v1/admin/communities/${ID(3)}/members`))).toBe(true);
-    expect(host.querySelector('[data-admin-list="communities"]')).not.toBeNull();
+    expect(document.querySelector('[data-admin-community-panel="members"] [data-admin-list="communities"]')).not.toBeNull();
   });
 
   test('chaque membre est nommé, avec son rôle, son état, son arrivée — et ouvre sa fiche', async () => {
     const { host } = await ouvrir([], `/admin/communities/${ID(3)}?tab=members`);
-    const nadia = host.querySelector(`[data-admin-row="${ID(8)}"]`);
+    const nadia = document.querySelector(`[data-admin-row="${ID(8)}"]`);
     expect(nadia?.textContent).toContain('Nadia Fotso');
     expect(nadia?.textContent).toContain('@nadia fotso');
     expect(nadia?.textContent).toContain('Membre');
     expect(nadia?.textContent).toContain('Présent');
     expect(nadia?.querySelector('a')?.getAttribute('href')).toBe(`/admin/users/${ID(9)}`);
-    const paul = host.querySelector(`[data-admin-row="${ID(10)}"]`);
+    const paul = document.querySelector(`[data-admin-row="${ID(10)}"]`);
     expect(paul?.textContent).toContain('Modérateur');
     expect(paul?.textContent).toContain('Parti');
     expect(paul?.textContent).toContain('il y a 2 semaines');
@@ -286,8 +300,8 @@ describe('AdminCommunityPanel — l’onglet des membres', () => {
   });
 
   test('les filtres de rôle et de présence réécrivent l’adresse en gardant l’onglet', async () => {
-    const { host, gateway } = await ouvrir([], `/admin/communities/${ID(3)}?tab=members`);
-    const role = host.querySelector('[data-admin-filter="role"]') as HTMLSelectElement;
+    const { gateway } = await ouvrir([], `/admin/communities/${ID(3)}?tab=members`);
+    const role = document.querySelector('[data-admin-filter="role"]') as HTMLSelectElement;
     expect([...role.options].map((option) => option.textContent)).toEqual(['Tous', 'Administrateur', 'Modérateur', 'Membre']);
     act(() => {
       role.value = 'moderator';
@@ -300,16 +314,17 @@ describe('AdminCommunityPanel — l’onglet des membres', () => {
   });
 
   test('le filtre de présence se nomme « Présents / Partis »', async () => {
-    const { host } = await ouvrir([], `/admin/communities/${ID(3)}?tab=members`);
-    const presence = host.querySelector('[data-admin-filter="isActive"]') as HTMLSelectElement;
+    await ouvrir([], `/admin/communities/${ID(3)}?tab=members`);
+    const presence = document.querySelector('[data-admin-filter="isActive"]') as HTMLSelectElement;
     expect([...presence.options].map((option) => option.textContent)).toEqual(['Tous', 'Présents', 'Partis']);
   });
 
-  test('revenir à « Aperçu » retire `tab` ET les réglages de la liste des membres de l’adresse', async () => {
-    const { host } = await ouvrir([], `/admin/communities/${ID(3)}?tab=members&role=admin&q=jean`);
-    await click(host.querySelector('[data-admin-tab="overview"]'));
+  test('fermer la modale retire `tab` ET les réglages de la liste des membres de l’adresse', async () => {
+    await ouvrir([], `/admin/communities/${ID(3)}?tab=members&role=admin&q=jean`);
+    expect(document.querySelector('[data-admin-community-panel="members"]')).not.toBeNull();
+    await click(document.querySelector('[data-sheet-presentation] button[aria-label="Fermer"]'));
     expect(window.location.search).toBe('');
-    expect(host.querySelector('[data-admin-tab="overview"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(document.querySelector('[data-admin-community-panel="members"]')).toBeNull();
   });
 });
 
@@ -503,8 +518,9 @@ describe('AdminCommunityScreen — servi par la table des routes, dans les deux 
 
   test('/adm/communities/$community : la même fiche, le retour et les liens restent dans /adm', async () => {
     seed();
-    const host = await mountAdminAt(mounter, `/adm/communities/${ID(3)}`, BIGBOSS, '[data-admin-screen="community"]');
+    const host = await mountAdminAt(mounter, `/adm/communities/${ID(3)}?open=conversations`, BIGBOSS, '[data-admin-screen="community"]');
     expect(host.querySelector('[data-admin-back]')?.getAttribute('href')).toBe('/adm/communities');
-    expect(host.querySelector(`[data-admin-conversation="${ID(5)}"] a`)?.getAttribute('href')).toBe(`/adm/conversations/${ID(5)}`);
+    expect(host.querySelector('[data-admin-stat="members"] a')?.getAttribute('href')).toBe(`/adm/communities/${ID(3)}?open=members`);
+    expect(document.querySelector(`[data-admin-conversation="${ID(5)}"] a`)?.getAttribute('href')).toBe(`/adm/conversations/${ID(5)}`);
   });
 });

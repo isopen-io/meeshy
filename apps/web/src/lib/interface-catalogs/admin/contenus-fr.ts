@@ -177,8 +177,6 @@ const f = {
   'admin.community.stat.left': 'Départs',
   'admin.community.stat.conversations': 'Conversations',
   'admin.community.stat.posts': 'Publications',
-  'admin.community.tabs.label': 'Sections de la communauté',
-  'admin.community.tab.overview': 'Aperçu',
   'admin.community.tab.members': 'Membres',
   'admin.community.section.description': 'Description',
   'admin.community.description.empty': 'Cette communauté n’a pas de description.',
@@ -236,6 +234,12 @@ const f = {
   'admin.community.done.reactivated': 'Communauté réactivée',
   'admin.community.done.private': 'Communauté rendue privée',
   'admin.community.done.public': 'Communauté rendue publique',
+  /* ─── Communauté : fiche en cartes (lot Échanges et contenus, 2026-10-05) ─── */
+  'admin.community.cards.title': 'Le détail, par section',
+  'admin.community.card.staffCount': 'Membres de l’équipe',
+  'admin.community.card.conversationsRestricted': 'Leur liste est réservée au rang d’administration.',
+  'admin.community.conversations.lastMessage': 'Dernier message {when}',
+  'admin.community.conversations.noMessage': 'Aucun message pour le moment',
 } as const;
 
 export default f;
