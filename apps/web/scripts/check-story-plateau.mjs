@@ -617,7 +617,7 @@ console.log(
   `check-story-plateau : vert — ${invariants} invariants : deux objets texte posés, celui-ci déplacé au POINTEUR puis tourné et ` +
     'agrandi au CLAVIER, sa langue et son style choisis ET PEINTS, les TREIZE familles à police embarquée peintes par leur ' +
     'propre fichier avec la pile native derrière elles (#6951), la première porte ouvrant la photothèque sans intermédiaire, le ' +
-    'double-toucher rouvrant l’édition de l’ajout avec une saisie à la pose et à l’échelle de la scène réduite (#8681), un son ' +
+    'double-toucher rouvrant l’édition de l’ajout avec une saisie à la pose et à l’échelle de la scène (#8681), ses options ouvertes à droite depuis le haut (#9140), un son ' +
     'placé sur la scène, une légende écrite — et CHACUNE de ces ' +
     'valeurs relue dans le corps de POST /api/v1/posts, un objet non sélectionné restant intact.',
 );

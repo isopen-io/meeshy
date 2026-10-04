@@ -761,10 +761,7 @@ function StoryStudio({
     editing: {
       column: editing === null ? null : { id: editing, sections, open: openSection, actions: objectActions(editing).map((action) => action.id) },
       onSection: tapSection,
-      onExit: () => {
-        setEditingId(null);
-        setDraft((current) => withSelected(current, null));
-      },
+      onExit: () => setEditingId(null),
     },
     hidden: !chrome.trailingRail,
   });
@@ -905,22 +902,27 @@ function StoryStudio({
         {editing !== null && openSection !== null ? (
           <Suspense fallback={null}>
             <StudioInlinePanel lang={lang} section={openSection} title={translate(lang, STUDIO_INLINE_SECTION_KEYS[openSection])} probe="section" onClose={closeSection}>
+              {/* Les contrôles ont LEUR attente : suspendus sous le panneau, ils le
+                  démonteraient, et sa couche rendrait son entrée d'historique —
+                  dont le retour refermerait aussitôt le panneau remonté. */}
               <div inert={publishing}>
-                {editing === 'overlay' && page.overlay !== null ? (
-                  <StudioOverlaySectionControls
-                    lang={lang}
-                    section={openSection === 'describe' || openSection === 'filter' ? openSection : 'pose'}
-                    pose={page.overlay.pose}
-                    caption={page.overlay.caption}
-                    {...(retouching ? {} : { alt: { value: page.overlay.alt ?? '', onPage: editPage } })}
-                    filter={page.overlay.filter ?? null}
-                    onFilter={(filter) => edit((current) => withVisualFilter(current, 'overlay', filter))}
-                    onPose={(pose) => commitPoseOf('overlay', pose)}
-                    onCaption={(value) => edit((current) => withVisualCaption(current, 'overlay', value), 'caption:overlay')}
-                  />
-                ) : openSection !== 'describe' && openSection !== 'filter' ? (
-                  <StudioTextSectionControls lang={lang} section={openSection} layer={selectedLayer} onChange={changeLayer} onPose={commitPose} />
-                ) : null}
+                <Suspense fallback={null}>
+                  {editing === 'overlay' && page.overlay !== null ? (
+                    <StudioOverlaySectionControls
+                      lang={lang}
+                      section={openSection === 'describe' || openSection === 'filter' ? openSection : 'pose'}
+                      pose={page.overlay.pose}
+                      caption={page.overlay.caption}
+                      {...(retouching ? {} : { alt: { value: page.overlay.alt ?? '', onPage: editPage } })}
+                      filter={page.overlay.filter ?? null}
+                      onFilter={(filter) => edit((current) => withVisualFilter(current, 'overlay', filter))}
+                      onPose={(pose) => commitPoseOf('overlay', pose)}
+                      onCaption={(value) => edit((current) => withVisualCaption(current, 'overlay', value), 'caption:overlay')}
+                    />
+                  ) : openSection !== 'describe' && openSection !== 'filter' ? (
+                    <StudioTextSectionControls lang={lang} section={openSection} layer={selectedLayer} onChange={changeLayer} onPose={commitPose} />
+                  ) : null}
+                </Suspense>
               </div>
             </StudioInlinePanel>
           </Suspense>
