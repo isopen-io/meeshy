@@ -132,3 +132,36 @@ describe('studioTrailingFocus — l’édition du fond', () => {
     expect(studioTrailingFoot(focus, true)).toEqual(['undo', 'redo']);
   });
 });
+
+/** UN OBJET EN ÉDITION AU RAIL DROIT (#9140, jumelle de `ComposerInlineEditing`
+ * iOS, #9138) — ses sous-outils (l'ouvert marqué), ses gestes sans
+ * « Modifier » (on y est déjà), puis le (x) ; l'historique reste au pied. */
+describe('studioTrailingFocus — un objet en édition', () => {
+  const editing = { id: 't1', sections: ['style', 'color'] as const, open: 'color' as const, actions: ['raise', 'edit', 'duplicate', 'remove'] as const };
+
+  test('ses sous-outils, ses gestes hors « Modifier », puis le (x) en dernier', () => {
+    const focus = studioTrailingFocus({ toolOpen: false, object: { id: 't1', actions: ['edit'] }, effects: ['opening'], openEffect: null, editing });
+    expect(studioTrailingOptions(focus)).toEqual([
+      { kind: 'object-section', section: 'style', open: false },
+      { kind: 'object-section', section: 'color', open: true },
+      { kind: 'object-action', action: 'raise' },
+      { kind: 'object-action', action: 'duplicate' },
+      { kind: 'object-action', action: 'remove' },
+      { kind: 'exit-edit' },
+    ]);
+  });
+
+  test('elle l’emporte sur l’édition du fond et sur un objet touché', () => {
+    const background = { sections: ['frame'] as const, open: null, actions: [] as const };
+    expect(studioTrailingFocus({ toolOpen: false, object: { id: 't1', actions: ['edit'] }, effects: [], openEffect: null, editing, background }).kind).toBe('edit');
+  });
+
+  test('la frise ouverte l’emporte sur elle', () => {
+    expect(studioTrailingFocus({ toolOpen: true, object: null, effects: [], openEffect: null, editing }).kind).toBe('tool');
+  });
+
+  test('annuler et rétablir restent pendant l’édition, jamais « Temps »', () => {
+    const focus = studioTrailingFocus({ toolOpen: false, object: null, effects: [], openEffect: null, editing });
+    expect(studioTrailingFoot(focus, true)).toEqual(['undo', 'redo']);
+  });
+});

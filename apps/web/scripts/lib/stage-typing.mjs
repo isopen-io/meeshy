@@ -13,8 +13,8 @@
  * donné le focus à la saisie, rien n'est tapé : la phrase rendue nomme le
  * défaut au lieu de le contourner.
  *
- * `finish` (vrai par défaut) referme ensuite l'édition par « Terminé », comme
- * l'auteur avant de publier : sur mobile, la plaque d'édition retire le socle.
+ * `finish` (vrai par défaut) referme ensuite l'édition par le `(x)` du rail
+ * droit, comme l'auteur avant de publier : l'édition retire le socle (#9140).
  *
  * Rend `null` quand le texte est arrivé, sinon la raison de l'échec.
  */
@@ -43,7 +43,7 @@ export async function writeOnStage(page, text, { finish = true } = {}) {
   else await page.keyboard.type(text);
   const value = await page.evaluate((selector) => document.querySelector(selector)?.value ?? null, FIELD);
   if (value !== text) return `le texte tapé au clavier n’est pas arrivé dans la saisie : « ${value} »`;
-  if (finish && (await page.locator('[data-story-edit-done]').count()) > 0) await page.click('[data-story-edit-done]');
+  if (finish && (await page.locator('[data-story-option="edit:exit"]').count()) > 0) await page.click('[data-story-option="edit:exit"]');
   return null;
 }
 
