@@ -9,6 +9,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.graphics.drawable.Icon;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
 import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
@@ -26,6 +28,10 @@ import android.util.Log;
  * joue ; sa notification discrete rouvre l'application, et sa « Pause »
  * (#9301) — celle de la notification media de Chrome Android — est remise a
  * la page, qui met ses `<audio>` en pause et rend ainsi la lecture.
+ *
+ * Le bouton d'un casque ou d'ecouteurs Bluetooth suit la meme voie (#9344) :
+ * le service porte une `MediaSession` active, en lecture, qui n'accepte que
+ * la pause — celle que Chrome Android ouvre pour un `<audio>` qui joue.
  */
 public class PlaybackForegroundService extends Service {
 
@@ -50,6 +56,32 @@ public class PlaybackForegroundService extends Service {
 
     static void stop(Context context) {
         context.stopService(new Intent(context, PlaybackForegroundService.class));
+    }
+
+    private MediaSession session;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        session = new MediaSession(this, TAG);
+        session.setCallback(new MediaSession.Callback() {
+            @Override
+            public void onPause() {
+                if (!MeeshyPlaybackPlugin.pauseRequested()) stopSelf();
+            }
+        });
+        session.setPlaybackState(new PlaybackState.Builder()
+            .setActions(PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE)
+            .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1f)
+            .build());
+        session.setActive(true);
+    }
+
+    @Override
+    public void onDestroy() {
+        if (session != null) session.release();
+        session = null;
+        super.onDestroy();
     }
 
     @Override
