@@ -5,6 +5,19 @@ import os
 import MeeshySDK
 import MeeshyUI
 
+/// **Quand le micro entre dans la session** (#9328).
+///
+/// Ajouter une entrée à une session DÉJÀ lancée la reconfigure : l'aperçu gèle
+/// puis noircit le temps qu'elle se refasse — à l'instant précis où l'auteur
+/// commence à filmer. Un micro déjà autorisé entre donc dans la configuration
+/// initiale ; un micro jamais demandé attend que le son serve (aucun prompt à
+/// l'ouverture d'un viseur photo), et un refus n'empêche pas de filmer muet.
+nonisolated enum CameraAudioArming {
+    static func armsAtSetup(microphone: AVAuthorizationStatus) -> Bool {
+        microphone == .authorized
+    }
+}
+
 @MainActor
 final class CameraModel: NSObject, ObservableObject {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
@@ -96,6 +109,9 @@ final class CameraModel: NSObject, ObservableObject {
 
         if session.canAddOutput(photoOutput) { session.addOutput(photoOutput) }
         if session.canAddOutput(videoOutput) { session.addOutput(videoOutput) }
+        if CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio)) {
+            addAudioInput()
+        }
 
         session.commitConfiguration()
 
@@ -127,7 +143,14 @@ final class CameraModel: NSObject, ObservableObject {
             return
         }
 
-        guard let audioDevice = AVCaptureDevice.default(for: .audio) else { return }
+        session.beginConfiguration()
+        addAudioInput()
+        session.commitConfiguration()
+    }
+
+    /// Branche le micro DANS une configuration ouverte par l'appelant.
+    private func addAudioInput() {
+        guard !hasAudioInput, let audioDevice = AVCaptureDevice.default(for: .audio) else { return }
         let audioInput: AVCaptureDeviceInput
         do {
             audioInput = try AVCaptureDeviceInput(device: audioDevice)
@@ -135,12 +158,9 @@ final class CameraModel: NSObject, ObservableObject {
             Logger.media.error("Failed to create audio capture input: \(error.localizedDescription, privacy: .public)")
             return
         }
-        session.beginConfiguration()
-        if session.canAddInput(audioInput) {
-            session.addInput(audioInput)
-            hasAudioInput = true
-        }
-        session.commitConfiguration()
+        guard session.canAddInput(audioInput) else { return }
+        session.addInput(audioInput)
+        hasAudioInput = true
     }
 
     private func addVideoInput(position: AVCaptureDevice.Position) {
