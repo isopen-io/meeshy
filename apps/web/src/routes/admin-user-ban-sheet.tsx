@@ -16,6 +16,7 @@ import {
   type AdminBanActor,
 } from '@/lib/api/admin-user-bans';
 import type { AdminDeps } from '@/lib/api/admin';
+import { adminUserDetailQueryKey } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -131,7 +132,14 @@ export function AdminUserBanSheet({
     setEnvoi(false);
 
     onAnnounce(translateAdmin(language, resultat.ok ? 'admin.ban.done' : 'admin.ban.failed'));
-    if (resultat.ok) void client.invalidateQueries({ queryKey: adminUserBansQueryKey(userId) });
+    /* Un ban change l'ÉTAT du compte : l'historique, la fiche (son badge « Banni ») et la
+       liste des comptes se relisent — n'invalider que l'historique laissait les deux autres
+       dire l'état d'avant (audit 2026-10-04). */
+    if (resultat.ok) {
+      void client.invalidateQueries({ queryKey: adminUserBansQueryKey(userId) });
+      void client.invalidateQueries({ queryKey: adminUserDetailQueryKey(userId), exact: true });
+      void client.invalidateQueries({ queryKey: ['admin', 'users'] });
+    }
     return resultat;
   }
 
