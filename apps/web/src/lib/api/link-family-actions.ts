@@ -164,7 +164,10 @@ export async function performDeleteAffiliateToken({ token, deps }: { readonly to
   const snapshot = deps.queryClient.getQueryData<AffiliateTokensData>(AFFILIATE_TOKENS_QUERY_KEY);
   deps.queryClient.setQueryData<AffiliateTokensData>(AFFILIATE_TOKENS_QUERY_KEY, (data) => withAffiliateRemoved(data, token.id));
   const result = await deleteAffiliateToken(deps, token.id);
-  if (result.ok) return 'done';
+  if (result.ok) {
+    void deps.queryClient.invalidateQueries({ queryKey: AFFILIATE_STATS_QUERY_KEY });
+    return 'done';
+  }
   deps.queryClient.setQueryData<AffiliateTokensData>(AFFILIATE_TOKENS_QUERY_KEY, snapshot);
   void deps.queryClient.invalidateQueries({ queryKey: AFFILIATE_QUERY_PREFIX });
   return 'failed';

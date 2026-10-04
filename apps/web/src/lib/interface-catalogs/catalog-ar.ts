@@ -660,7 +660,7 @@ const ar = {
   'a11y.floating.rung.discover.requests.other': 'اكتشاف، {count} طلبات واردة',
 
   'links.hub.banner.title': 'إدارة روابطك',
-  'links.hub.banner.subtitle': 'ادعُ من تشاء إلى محادثاتك',
+  'links.hub.banner.subtitle': 'شارك وتابع ووسّع جمهورك',
   'links.hub.share.title': 'روابط المشاركة',
   'links.hub.share.description': 'ادعُ جهات اتصالك للانضمام إلى محادثاتك',
   'links.hub.share.create': 'إنشاء رابط مشاركة',

@@ -117,6 +117,7 @@ const AFFILIATE_TOKENS: readonly AffiliateToken[] = [
 export const fixtureAffiliateTokensPage = (offset: number): AffiliateTokensPage => ({ tokens: offset === 0 ? AFFILIATE_TOKENS : [], nextOffset: null });
 
 export const fixtureAffiliateStats = (): AffiliateStats => ({
+  totalTokens: AFFILIATE_TOKENS.length,
   totalReferrals: 64,
   completedReferrals: 58,
   pendingReferrals: 6,

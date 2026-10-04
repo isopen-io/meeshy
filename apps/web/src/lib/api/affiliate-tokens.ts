@@ -14,8 +14,9 @@ import type { ApiResult, HttpTransport } from './http';
  * - `GET affiliate.tokens?offset=&limit=` — les jetons CRÉÉS PAR le lecteur
  *   (`routes/affiliate.ts` : `where: { createdBy: userId }`), avec le nombre
  *   d'inscrits de chacun (`_count.affiliations`).
- * - `GET affiliate.stats` — les inscrits, terminés et en attente, et la liste
- *   des filleuls (nom et pseudo seulement : ce qui se peint).
+ * - `GET affiliate.stats` — les inscrits, terminés et en attente, le nombre de
+ *   ses jetons (tous, pas une page), et la liste des filleuls (nom et pseudo
+ *   seulement : ce qui se peint).
  * - `POST affiliate.tokens` (`{ name, maxUses? }`), `DELETE affiliate.tokensById`.
  *
  * **L'adresse se compose ici**, sur l'origine publique du site : la passerelle
@@ -60,6 +61,7 @@ export type Referral = {
 };
 
 export type AffiliateStats = {
+  readonly totalTokens: number;
   readonly totalReferrals: number;
   readonly completedReferrals: number;
   readonly pendingReferrals: number;
@@ -106,6 +108,7 @@ const WireStats = z.object({
   completedReferrals: optionalNumber,
   pendingReferrals: optionalNumber,
   referrals: z.optional(z.nullable(z.array(z.unknown()))),
+  tokens: z.optional(z.nullable(z.array(z.unknown()))),
 });
 
 const textOrNull = (value: string | null | undefined): string | null =>
@@ -172,6 +175,7 @@ export function decodeAffiliateStats(raw: unknown): AffiliateStats | null {
   if (!parsed.success) return null;
   const wire = parsed.data;
   return {
+    totalTokens: wire.tokens?.length ?? 0,
     totalReferrals: countOf(wire.totalReferrals),
     completedReferrals: countOf(wire.completedReferrals),
     pendingReferrals: countOf(wire.pendingReferrals),

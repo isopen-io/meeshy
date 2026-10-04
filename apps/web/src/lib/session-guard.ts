@@ -103,6 +103,21 @@ export type RouteKey =
   | 'shareLinkNew'
   | 'communityNew'
   /**
+   * LES TROIS AUTRES FAMILLES DE « MES LIENS » (#6408, #6409, #6410) —
+   * PRIVÉES : chacune ne lit que des ports authentifiés
+   * (`GET /tracking-links/user/me`, `GET /affiliate/tokens`,
+   * `GET /communities/mine`) et n'a rien à montrer à un visiteur sans compte.
+   * Non déclarées, elles seraient PUBLIQUES par défaut : l'écran se peindrait
+   * en squelette sans fin, ou une création se remplirait avant le refus.
+   */
+  | 'myTrackingLinks'
+  | 'myTrackingLinkNew'
+  | 'myTrackingLink'
+  | 'affiliateLinks'
+  | 'affiliateLinkNew'
+  | 'communityLinks'
+  | 'communityLink'
+  /**
    * LE PROFIL PUBLIC ET LE MOT-CLÉ (#7032) — PRIVÉES, comme `feed`. Les deux
    * ports qu'elles lisent exigent une session : `GET /directory/people/:handle`
    * porte `fastify.authenticate` (`routes/directory/people.ts`), et
@@ -302,6 +317,15 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
      écrite sur `RouteKey` plus haut. */
   'shareLinkNew',
   'communityNew',
+  /* LES TROIS AUTRES FAMILLES DE « MES LIENS » (#6408, #6409, #6410) — voir la
+     raison écrite sur `RouteKey` plus haut. */
+  'myTrackingLinks',
+  'myTrackingLinkNew',
+  'myTrackingLink',
+  'affiliateLinks',
+  'affiliateLinkNew',
+  'communityLinks',
+  'communityLink',
   /* LES DEUX ADRESSES DU TEXTE ENRICHI (#7032) — privées, leurs ports étant
      authentifiés ; voir la raison écrite sur `RouteKey` plus haut. */
   'userProfile',

@@ -879,6 +879,15 @@
         "status": "CIBLE -- MESUREE PAR #8103, NON ARBITREE",
         "source": "Mesure de measure-weight.mjs le 2026-09-26 (`bun run build` puis `node scripts/measure-weight.mjs`) : 2,04 Ko gzip -9 -- l'ecran « Medias, liens et documents » d'une conversation (`components/conversation-media-hub.tsx` : sept segments, recherche posee, etats dessines, sentinelle de defilement). CHARGE A LA DEMANDE (`lazy()`, `conversation-media-section.tsx`) au tap sur « Tout voir » de la feuille de details ; ses rangees et sa grille (`conversation-media-hub-items.tsx`) sont partagees avec l'apercu de la feuille. Arrondi au Ko SUPERIEUR (3) + 1 Ko de marge, meme discipline que les chunks voisins."
       }
+    },
+    "interface_catalogs_link_families": {
+      "pattern": "^assets/catalog-link-families-(fr|en|es|pt|de|it|ar)-[A-Za-z0-9_-]+\\.js$",
+      "dynamic_only": true,
+      "kb": {
+        "value": 15,
+        "status": "CIBLE -- MESUREE PAR #6408, #6409, #6410, NON ARBITREE",
+        "source": "Mesure du 2026-10-04 (`bun run build` puis gzip -9) : 13,64 Ko pour les SEPT catalogues des trois autres familles de « Mes liens » (cles `linkFamilies.*` et `links.hub.{tracking,community,affiliate}.*`, 118 cles : listes, details et creations des liens de suivi, de parrainage et de communaute). Sortis du catalogue principal parce qu'ils le portaient au-dela de son plafond (190,17 Ko > 180) : une FAMILLE entiere, le seuil de rentabilite que l'entree `interface_catalogs` ecrit elle-meme. Charges avec le hub et ces ecrans seulement (`i18n-link-families-catalog`, `route-table.tsx`), jamais avec la premiere peinture ; un lecteur n'en telecharge qu'UN. Arrondi au Ko SUPERIEUR (14) + 1 Ko de marge."
+      }
     }
   },
   "network_note": "Le profil est REPRIS TEL QUEL de apps/web/budgets.json — deux chiffres mesures sur deux profils differents ne se comparent pas, et la comparaison v3 / v4 est precisement ce que ce POC doit rendre.",

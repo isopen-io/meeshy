@@ -666,7 +666,7 @@ const pt = {
   'a11y.floating.rung.discover.requests.other': 'Descobrir, {count} pedidos recebidos',
 
   'links.hub.banner.title': 'Gerencie seus links',
-  'links.hub.banner.subtitle': 'Convide quem quiser para suas conversas',
+  'links.hub.banner.subtitle': 'Compartilhe, acompanhe e aumente seu público',
   'links.hub.share.title': 'Links de compartilhamento',
   'links.hub.share.description': 'Convide contatos para entrar nas suas conversas',
   'links.hub.share.create': 'Criar um link de compartilhamento',
