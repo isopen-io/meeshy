@@ -406,6 +406,93 @@ final class JumpedWindowNewerPageTests: XCTestCase {
         XCTAssertEqual(service.listAfterCallCount, 1, "Une page qui n'avance pas arrête la chaîne")
     }
 
+    // MARK: - Un nouveau saut et la chaîne du précédent (#9364)
+
+    /// Second saut, plus loin dans le fil : `m-10`…`m-12`, le plus récent
+    /// servi étant `m-12` (11:02).
+    private func jumpAgain(_ sut: ConversationViewModel, _ service: MockMessageService, atBottom: Bool) async {
+        sut.noteNearBottom(atBottom)
+        service.listAroundResult = .success(response([
+            ("m-10", "2026-03-01T11:00:00.000Z"),
+            ("m-11", "2026-03-01T11:01:00.000Z"),
+            ("m-12", "2026-03-01T11:02:00.000Z"),
+        ], hasMore: true, hasNewer: true))
+        await sut.loadMessagesAround(messageId: "m-11")
+    }
+
+    func test_secondJump_whileFirstChainInFlight_cancelsItAndStartsItsOwn() async {
+        let (sut, service) = makeSUT()
+        let gate = PageGate()
+        service.holdListAfter = { await gate.hold() }
+        service.listAfterResults = [
+            response([("m-4", "2026-03-01T10:03:00.000Z")], hasMore: true, hasNewer: nil),
+            response([("m-13", "2026-03-01T11:03:00.000Z")], hasMore: false, hasNewer: nil),
+        ]
+        await jump(sut, service, hasNewer: true, atBottom: true)
+        let firstChain = sut.newerPagesChain
+        await gate.untilHolding()
+
+        await jumpAgain(sut, service, atBottom: true)
+        let secondChain = sut.newerPagesChain
+
+        XCTAssertNotNil(firstChain)
+        XCTAssertEqual(firstChain?.isCancelled, true, "Le nouveau saut arrête la chaîne de l'ancienne fenêtre")
+        XCTAssertNotNil(secondChain, "La nouvelle fenêtre au bas lance sa propre chaîne")
+        XCTAssertFalse(secondChain == firstChain, "Une seule chaîne vivante : celle de la fenêtre courante")
+        if secondChain != firstChain { await secondChain?.value }
+        gate.release()
+        await firstChain?.value
+
+        XCTAssertEqual(service.listAfterCallCount, 2, "La page en vol de l'ancienne chaîne n'en appelle pas d'autre")
+        let after = service.lastListAfterAfter.map { $0.timeIntervalSince(isoDate("2026-03-01T11:02:00.000Z")) }
+        XCTAssertEqual(after ?? -1, 0, accuracy: 0.01, "La nouvelle chaîne part du bord de la NOUVELLE fenêtre")
+        XCTAssertEqual(sut.messageStore.jumpedNewerEdge, .present)
+        XCTAssertFalse(sut.hasNewerMessages)
+        XCTAssertFalse(sut.isLoadingNewer)
+    }
+
+    func test_pageOfPreviousWindow_landingAfterSecondJump_doesNotExtendTheNewWindow() async {
+        let (sut, service) = makeSUT()
+        let gate = PageGate()
+        service.holdListAfter = { await gate.hold() }
+        service.listAfterResult = .success(response([("m-4", "2026-03-01T10:03:00.000Z")], hasMore: false, hasNewer: nil))
+        await jump(sut, service, hasNewer: true)
+        let firstPage = Task { await sut.loadNewerMessages() }
+        await gate.untilHolding()
+
+        await jumpAgain(sut, service, atBottom: false)
+        gate.release()
+        await firstPage.value
+
+        XCTAssertEqual(sut.messageStore.jumpedNewerEdge, .through(isoDate("2026-03-01T11:02:00.000Z")),
+                       "Une page partie pour l'ancienne fenêtre n'en recule pas le bord")
+        XCTAssertTrue(sut.hasNewerMessages, "Le présent annoncé par l'ancienne page ne vaut pas pour la nouvelle fenêtre")
+        XCTAssertFalse(sut.isLoadingNewer)
+    }
+
+    func test_newWindow_pageInFlightForPreviousWindow_doesNotBlockItsOwnPage() async {
+        let (sut, service) = makeSUT()
+        let gate = PageGate()
+        service.holdListAfter = { await gate.hold() }
+        service.listAfterResults = [
+            response([("m-4", "2026-03-01T10:03:00.000Z")], hasMore: true, hasNewer: nil),
+            response([("m-13", "2026-03-01T11:03:00.000Z")], hasMore: true, hasNewer: nil),
+        ]
+        await jump(sut, service, hasNewer: true)
+        let firstPage = Task { await sut.loadNewerMessages() }
+        await gate.untilHolding()
+        await jumpAgain(sut, service, atBottom: false)
+
+        await sut.loadNewerMessages()
+
+        XCTAssertEqual(service.listAfterCallCount, 2, "La page de la nouvelle fenêtre part sans attendre celle de l'ancienne")
+        XCTAssertEqual(sut.messageStore.jumpedNewerEdge, .through(isoDate("2026-03-01T11:03:00.000Z")))
+        gate.release()
+        await firstPage.value
+        XCTAssertEqual(sut.messageStore.jumpedNewerEdge, .through(isoDate("2026-03-01T11:03:00.000Z")))
+        XCTAssertFalse(sut.isLoadingNewer)
+    }
+
     // MARK: - La fenêtre du store
 
     private func seededStore() async throws -> (store: MessageStore, center: Date) {
@@ -472,5 +559,35 @@ final class JumpedWindowNewerPageTests: XCTestCase {
     func test_scrollToBottomButton_receivesNewerPageLoading() throws {
         XCTAssertTrue(try viewSource("ConversationView+ScrollIndicators.swift").contains("isLoadingNewer: viewModel.isLoadingNewer"),
                       "Le bouton « revenir en bas » dit la page plus récente en vol")
+    }
+}
+
+/// Retient UNE page `listAfter` en vol jusqu'à `release()` : le témoin rejoue
+/// un saut pendant qu'elle est partie (#9364).
+@MainActor
+private final class PageGate {
+    private var held: CheckedContinuation<Void, Never>?
+    private var arrival: CheckedContinuation<Void, Never>?
+    private var used = false
+    private var isHolding = false
+
+    func hold() async {
+        guard !used else { return }
+        used = true
+        isHolding = true
+        arrival?.resume()
+        arrival = nil
+        await withCheckedContinuation { held = $0 }
+    }
+
+    func untilHolding() async {
+        guard !isHolding else { return }
+        await withCheckedContinuation { arrival = $0 }
+    }
+
+    func release() {
+        isHolding = false
+        held?.resume()
+        held = nil
     }
 }
