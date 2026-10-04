@@ -23,6 +23,16 @@ const deMediaViewer = {
   'media.audio.skip_forward': '10 Sekunden vor',
   'media.audio.transcript_empty': 'Keine Transkription',
   'media.audio.languages': 'In einer anderen Sprache anhören',
+  'media.audio.transcribe': 'Transkribieren',
+  'media.audio.transcribing': 'Wird transkribiert …',
+  'media.audio.transcribe_failed': 'Transkription nicht möglich',
+  'media.audio.translate': 'Übersetzen',
+  'media.audio.translate_to': 'Auf {language} übersetzen',
+  'media.audio.translating': 'Wird übersetzt …',
+  'media.audio.translate_failed': 'Übersetzung nicht möglich',
+  'media.audio.mini.label': 'Audioplayer',
+  'media.audio.mini.title': 'Sprachnachricht',
+  'media.audio.mini.close': 'Player schließen',
 };
 
 export default deMediaViewer;

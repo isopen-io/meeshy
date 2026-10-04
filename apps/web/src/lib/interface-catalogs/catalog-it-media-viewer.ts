@@ -23,6 +23,16 @@ const itMediaViewer = {
   'media.audio.skip_forward': 'Avanti di 10 secondi',
   'media.audio.transcript_empty': 'Nessuna trascrizione',
   'media.audio.languages': 'Ascolta in un’altra lingua',
+  'media.audio.transcribe': 'Trascrivi',
+  'media.audio.transcribing': 'Trascrizione in corso…',
+  'media.audio.transcribe_failed': 'Impossibile trascrivere',
+  'media.audio.translate': 'Traduci',
+  'media.audio.translate_to': 'Traduci in {language}',
+  'media.audio.translating': 'Traduzione in corso…',
+  'media.audio.translate_failed': 'Impossibile tradurre',
+  'media.audio.mini.label': 'Lettore audio',
+  'media.audio.mini.title': 'Messaggio vocale',
+  'media.audio.mini.close': 'Chiudi il lettore',
 };
 
 export default itMediaViewer;
