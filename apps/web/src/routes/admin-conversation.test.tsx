@@ -284,7 +284,7 @@ describe('les métadonnées, interprétées', () => {
 
   test('l’identifiant technique vit seul dans sa ligne copiable', async () => {
     const { deps } = setup(fiche(), members(MEMBERS));
-    const host = await open(deps, BIGBOSS, 'settings');
+    await open(deps, BIGBOSS, 'settings');
 
     expect(document.querySelector('[data-admin-technical-id]')?.textContent).toBe(CONVERSATION);
     expect(document.querySelector('[data-admin-action="copy-technical-id"]')).not.toBeNull();
@@ -327,7 +327,7 @@ describe('les membres — nommés, avec leurs gestes', () => {
 
   test('chaque membre ouvre sa fiche, dans l’espace courant ; un invité, sa fiche d’anonyme par sa ligne de participation', async () => {
     const { deps } = setup(fiche(), members(MEMBERS));
-    const host = await open(deps, BIGBOSS, 'members');
+    await open(deps, BIGBOSS, 'members');
 
     const hrefOf = (row: number) => document.querySelector(`[data-admin-row="${OBJECT_ID(100 + row)}"] td a`)?.getAttribute('href');
     expect(hrefOf(2)).toBe(`/admin/users/${OBJECT_ID(2)}`);
@@ -505,7 +505,7 @@ describe('la lecture souveraine — le contrat reste', () => {
 
   test('le portillon est là dès l’ouverture, AVANT toute requête de messages', async () => {
     const { deps, calls } = setup(fiche(), members(MEMBERS));
-    const host = await open(deps, ADMIN, 'reading');
+    await open(deps, ADMIN, 'reading');
 
     expect(document.querySelector('[data-admin-reading-gate]')).not.toBeNull();
     expect(document.querySelector('[data-admin-reason]')).not.toBeNull();
@@ -518,7 +518,7 @@ describe('la lecture souveraine — le contrat reste', () => {
       members(MEMBERS),
       (req) => (pathOf(req) === `${CONVERSATION_PATH}/messages` ? resultatServi({ data: [], pagination: { total: 0, offset: 0, limit: 30, hasMore: false } }) : undefined),
     );
-    const host = await open(deps, ADMIN, 'reading');
+    await open(deps, ADMIN, 'reading');
 
     mounter.type(document.body, '[data-admin-reason]', 'Neuf care');
     expect(document.querySelector<HTMLButtonElement>('[data-admin-reason-submit]')?.disabled).toBe(true);
