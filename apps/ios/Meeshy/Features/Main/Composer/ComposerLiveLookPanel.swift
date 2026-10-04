@@ -7,6 +7,10 @@ enum ComposerLiveLookCopy {
     static var toggle: String {
         String(localized: "composer.capture.looks", defaultValue: "Filtres et cadres", bundle: .main)
     }
+
+    static var rendering: String {
+        String(localized: "composer.capture.looks.rendering", defaultValue: "Application du filtre…", bundle: .main)
+    }
 }
 
 /// **Le sélecteur d'effets du viseur** (#9329) : les teintes de l'appel et ses

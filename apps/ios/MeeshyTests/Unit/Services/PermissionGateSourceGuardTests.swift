@@ -210,7 +210,7 @@ final class PermissionGateSourceGuardTests: XCTestCase {
             "enableAudioCaptureIfNeeded(), au mode Vidéo."
         )
         XCTAssertTrue(
-            setup.contains("CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio))"),
+            setup.contains("CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio),"),
             "Seul un micro déjà autorisé entre à l'ouverture (#9328)."
         )
 

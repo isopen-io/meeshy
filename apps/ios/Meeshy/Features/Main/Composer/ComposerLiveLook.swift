@@ -33,14 +33,24 @@ nonisolated enum ComposerLiveLookRule {
     /// compose en direct (`CallLiveFrameSurface`). Un classique du Montage est
     /// le peintre d'une image FIGÉE : il reste offert à la prise d'une photo
     /// (`ComposerPhotoLookReview`), pas au flux.
+    ///
+    /// Seuls ceux que l'appel compose en direct s'offrent
+    /// (`CallLiveFrameRule.isEligible`) : un cadre lourd tiendrait l'aperçu
+    /// sous ses 30 images par seconde.
     static func chips() -> [CallMontageMoodChip] {
-        ComposerPhotoLookRule.chips().filter { $0 != .classics }
+        ComposerPhotoLookRule.chips().filter { puce in
+            puce != .classics && frames(for: puce).contains { $0 != ComposerPhotoFrame.none }
+        }
     }
 
     /// « Aucun cadre » en tête, puis les cadres de l'ambiance qui se composent
     /// en direct.
     static func frames(for chip: CallMontageMoodChip) -> [ComposerPhotoFrame] {
-        ComposerPhotoLookRule.frames(for: chip).filter(isLive)
+        ComposerPhotoLookRule.frames(for: chip).filter { cadre in
+            guard isLive(cadre) else { return false }
+            guard let dessin = design(for: cadre) else { return cadre == ComposerPhotoFrame.none }
+            return CallLiveFrameRule.isEligible(dessin)
+        }
     }
 
     static func isLive(_ frame: ComposerPhotoFrame) -> Bool {
@@ -87,17 +97,24 @@ nonisolated enum ComposerLiveLookRule {
         position == .front ? .leftMirrored : .right
     }
 
-    /// L'espace des trames et du rendu : celui de la prise (#9327).
+    /// L'espace du drawable de l'aperçu : Display P3, qui contient tout ce que
+    /// le capteur sert — chaque trame y est convertie, jamais écrêtée.
     static var colorSpace: CGColorSpace {
         CGColorSpace(name: CGColorSpace.displayP3) ?? CGColorSpaceCreateDeviceRGB()
     }
 
     /// Une trame filtrée, ramenée à l'origine. `.natural` la rend telle quelle.
-    static func graded(_ image: CIImage, filter: VideoFilterPreset) -> CIImage {
+    ///
+    /// Le cube lit la trame dans l'espace qu'ELLE déclare — la loi même de la
+    /// photo (`ComposerPhotoLookRule.colorSpace(declared:)`) : une caméra qui
+    /// sert du sRGB et une qui sert du P3 donnent, à l'aperçu, à la vidéo et à
+    /// la photo, la même teinte.
+    static func graded(_ image: CIImage, filter: VideoFilterPreset, declared: CGColorSpace? = nil) -> CIImage {
         let posee = image.transformed(by: CGAffineTransform(translationX: -image.extent.minX,
                                                             y: -image.extent.minY))
         guard ComposerPhotoLookRule.grades(filter) else { return posee }
-        return VideoFilterColorimetry.graded(posee, config: filter.config, colorSpace: colorSpace)
+        let espace = ComposerPhotoLookRule.colorSpace(declared: declared ?? image.colorSpace)
+        return VideoFilterColorimetry.graded(posee, config: filter.config, colorSpace: espace)
     }
 
     /// **Un cadre se montre ENTIER** : la photo et la vidéo le rendent à la

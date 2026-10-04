@@ -18,7 +18,8 @@ final class ComposerLiveLookTests: XCTestCase {
         XCTAssertFalse(puces.isEmpty, "le viseur offre au moins une ambiance de cadres")
         XCTAssertFalse(puces.contains(.classics),
                        "un classique du Montage peint une image figée : il reste à la prise d'une photo")
-        XCTAssertEqual(puces, ComposerPhotoLookRule.chips().filter { $0 != .classics })
+        XCTAssertTrue(Set(puces).isSubset(of: Set(ComposerPhotoLookRule.chips())),
+                      "les ambiances du viseur sont celles du Montage, rien de plus")
     }
 
     func test_carrousel_aucunCadreEnTete_puisDesCadresQuiSeComposentEnDirect() throws {
@@ -165,6 +166,56 @@ final class ComposerLiveLookTests: XCTestCase {
             url, look: ComposerPhotoLook(), person: CallFramePerson(id: "u1", name: "Jean", handle: nil, isSelf: true),
             texts: ComposerPhotoLookSource.texts(at: Date()))
         XCTAssertEqual(rendue, url)
+    }
+
+    // MARK: - Ce que la relecture a resserré
+
+    func test_seulsLesCadresQueLAppelComposeEnDirect_sOffrent() {
+        for puce in ComposerLiveLookRule.chips() {
+            for cadre in ComposerLiveLookRule.frames(for: puce).dropFirst() {
+                let dessin = ComposerLiveLookRule.design(for: cadre)
+                XCTAssertTrue(dessin.map(CallLiveFrameRule.isEligible) ?? false,
+                              "un cadre lourd tiendrait l'aperçu sous ses 30 images par seconde")
+            }
+            XCTAssertTrue(ComposerLiveLookRule.frames(for: puce).contains { $0 != ComposerPhotoFrame.none },
+                          "une ambiance sans cadre en direct ne s'offre pas")
+        }
+    }
+
+    func test_leCube_litLaTrameDansLEspaceQuElleDeclare() {
+        XCTAssertEqual(ComposerPhotoLookRule.colorSpace(declared: CGColorSpace(name: CGColorSpace.displayP3)).name,
+                       CGColorSpace.displayP3)
+        XCTAssertEqual(ComposerPhotoLookRule.colorSpace(declared: CGColorSpace(name: CGColorSpace.sRGB)).name,
+                       CGColorSpace.sRGB, "une caméra qui sert du sRGB n'est pas lue comme du P3")
+        XCTAssertEqual(ComposerPhotoLookRule.colorSpace(declared: nil).name, CGColorSpace.sRGB)
+        XCTAssertEqual(ComposerPhotoLookRule.colorSpace(declared: CGColorSpace(name: CGColorSpace.extendedSRGB)).name,
+                       CGColorSpace.displayP3, "un espace étendu ne tient pas dans 8 bits")
+    }
+
+    func test_laSessionArretee_neGardeNiTrameNiEspace() {
+        let flux = ComposerCameraFeed()
+        flux.isActive = true
+        flux.flush()
+        XCTAssertNil(flux.latestImage(), "la dernière trame ne se montre pas figée au prochain armement")
+        XCTAssertNil(flux.declaredSpace)
+    }
+
+    func test_fermerLeViseur_arreteLAttenteDuRendu() {
+        let session = ComposerCaptureSession()
+        XCTAssertFalse(session.isRenderingLook)
+        session.disarm()
+        XCTAssertFalse(session.isRenderingLook, "un viseur fermé n'attend plus aucun rendu")
+    }
+
+    func test_leRendu_seDit_etSAnnuleALaFermeture() throws {
+        let session = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
+        XCTAssertTrue(session.contains("guard generation == renderGeneration else"),
+                      "un rendu lancé avant la fermeture ne remet rien à un viseur fermé")
+        XCTAssertTrue(session.contains("declaredSpaceName: espace"), "la vidéo se lit dans l'espace de l'aperçu")
+        let vues = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(vues.contains("if session.isRenderingLook"), "le ✓ attend, et le dit")
+        let export = try Self.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
+        XCTAssertTrue(export.contains("@concurrent"), "l'export ne se monte jamais sur le fil principal")
     }
 
     // MARK: - Le câblage : les pièces de l'appel, un seul viseur

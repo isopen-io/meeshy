@@ -99,8 +99,15 @@ nonisolated enum ComposerPhotoLookRule {
     /// ne tient pas dans une toile 8 bits : il retombe sur Display P3, qui
     /// couvre ce que le capteur sert ; une image sans espace RVB, sur sRGB.
     static func colorSpace(of photo: CGImage) -> CGColorSpace {
+        colorSpace(declared: photo.colorSpace)
+    }
+
+    /// La même loi pour un espace DÉCLARÉ — celui d'une trame de l'objectif
+    /// (#9329), qui suit l'espace actif de la caméra : P3 ou sRGB selon le
+    /// format que la session a élu.
+    static func colorSpace(declared: CGColorSpace?) -> CGColorSpace {
         let srgb = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-        guard let space = photo.colorSpace, space.model == .rgb else { return srgb }
+        guard let space = declared, space.model == .rgb else { return srgb }
         guard CGColorSpaceUsesExtendedRange(space) || CGColorSpaceUsesITUR_2100TF(space) else { return space }
         return CGColorSpace(name: CGColorSpace.displayP3) ?? srgb
     }

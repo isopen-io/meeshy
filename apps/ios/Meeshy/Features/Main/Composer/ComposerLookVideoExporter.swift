@@ -18,8 +18,14 @@ nonisolated enum ComposerLookVideoExporter {
 
     /// - Returns: la vidéo regardée, `url` telle quelle sans look, `nil` si le
     ///   rendu a échoué (l'appelant garde alors la prise brute).
+    ///
+    /// `@concurrent` : peindre les couches du cadre et monter l'export ne se
+    /// fait jamais sur le fil principal, d'où le `✓` l'appelle.
+    /// `declaredSpaceName` : l'espace que déclaraient les trames du viseur — le
+    /// cube y lit la vidéo comme il y lisait l'aperçu.
+    @concurrent
     static func export(_ url: URL, look: ComposerPhotoLook, person: CallFramePerson,
-                       texts: CallFrameTexts) async -> URL? {
+                       texts: CallFrameTexts, declaredSpaceName: String? = nil) async -> URL? {
         guard ComposerLiveLookRule.rendersLive(look) else { return url }
         let asset = AVURLAsset(url: url)
         do {
@@ -33,7 +39,8 @@ nonisolated enum ComposerLookVideoExporter {
             let filter = look.filter
             let personId = person.id
             let composition = AVMutableVideoComposition(asset: asset) { @Sendable request in
-                let graded = ComposerLiveLookRule.graded(request.sourceImage, filter: filter)
+                let declare = declaredSpaceName.flatMap { CGColorSpace(name: $0 as CFString) }
+                let graded = ComposerLiveLookRule.graded(request.sourceImage, filter: filter, declared: declare)
                 let image = scene.map { compositor.compose($0, videos: [personId: graded]) } ?? graded
                 request.finish(with: image.cropped(to: CGRect(origin: .zero, size: toile)), context: nil)
             }

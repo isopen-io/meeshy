@@ -53,8 +53,15 @@ final class ComposerCaptureSession: ObservableObject {
     }
     /// Le sélecteur d'effets est déplié.
     @Published var looksOpen = false
-    /// Les textes que les cadres écrivent — la date de la séance de prise.
-    let lookTexts = ComposerPhotoLookSource.texts(at: Date())
+    /// La vidéo se rend avec son look : le `✓` attend, et le dit.
+    @Published private(set) var isRenderingLook = false
+    /// La date de la séance de prise : l'aperçu, la photo et la vidéo écrivent
+    /// la MÊME dans leur cadre.
+    let lookDate = Date()
+    var lookTexts: CallFrameTexts { ComposerPhotoLookSource.texts(at: lookDate) }
+    /// Chaque désarmement ouvre une nouvelle génération : un rendu lancé avant
+    /// ne remet plus rien à un viseur que l'auteur a fermé.
+    private var renderGeneration = 0
 
     /// La durée du segment en cours, saisie À LA CLÔTURE : l'horloge du modèle
     /// repart à zéro au démarrage suivant, et le fichier n'arrive qu'après.
@@ -136,6 +143,8 @@ final class ComposerCaptureSession: ObservableObject {
     /// leurs fichiers : la prise suivante ne repart jamais avec des segments
     /// que l'auteur croyait jetés.
     func disarm() {
+        renderGeneration += 1
+        isRenderingLook = false
         stage = .off
         mode = nil
         discardSegments()
@@ -241,14 +250,29 @@ final class ComposerCaptureSession: ObservableObject {
         let regard = look
         let auteur = lookPerson
         let textes = lookTexts
+        let espace = camera.liveFeed.declaredSpace?.name as String?
+        let generation = renderGeneration
+        isRenderingLook = ComposerLiveLookRule.rendersLive(regard)
         Task { @MainActor in
             let finale = ComposerCaptureSegments.needsMerge(pris)
                 ? await CameraModel.mergeSegments(pris.map(\.url))
                 : pris.first?.url
-            guard let url = finale ?? pris.last?.url else { return }
+            guard let url = finale ?? pris.last?.url else {
+                isRenderingLook = false
+                return
+            }
             // La vidéo part avec le look qu'on voyait (#9329) ; un rendu qui
             // échoue rend la prise brute plutôt que de la perdre.
-            let regardee = await ComposerLookVideoExporter.export(url, look: regard, person: auteur, texts: textes)
+            let regardee = await ComposerLookVideoExporter.export(url, look: regard, person: auteur, texts: textes,
+                                                                   declaredSpaceName: espace)
+            guard generation == renderGeneration else {
+                if let regardee, regardee != url {
+                    FileManager.default.removeItemLogging(at: regardee, context: "rendu d'un viseur fermé",
+                                                          logger: .media)
+                }
+                return
+            }
+            isRenderingLook = false
             if let regardee, regardee != url {
                 FileManager.default.removeItemLogging(at: url, context: "prise brute remplacée par son look",
                                                       logger: .media)
@@ -493,7 +517,7 @@ extension ComposerCaptureSession {
             deliver(.photo(image, data: data))
             return
         }
-        let source = ComposerPhotoLookSource.taken(debout, by: lookPerson, at: Date())
+        let source = ComposerPhotoLookSource.taken(debout, by: lookPerson, at: lookDate)
         Task { @MainActor in
             guard let rendu = await ComposerPhotoLookReview.paintFinal(regard, source: source) else {
                 deliver(.photo(image, data: data))

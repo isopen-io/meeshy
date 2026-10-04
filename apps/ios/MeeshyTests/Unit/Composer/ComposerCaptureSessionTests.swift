@@ -154,15 +154,20 @@ final class ComposerCaptureSessionTests: XCTestCase {
     // MARK: - L'image reste à l'écran au déclenchement (#9328)
 
     func test_micro_dejaAutorise_entreDansLaSessionALOuverture() {
-        XCTAssertTrue(CameraAudioArming.armsAtSetup(microphone: .authorized),
+        XCTAssertTrue(CameraAudioArming.armsAtSetup(microphone: .authorized, otherAudioPlaying: false),
                       "brancher le micro sur la session lancée la reconfigure et noircit l'aperçu au déclenchement")
     }
 
     func test_micro_jamaisDemande_attendQueLeSonServe() {
-        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .notDetermined),
+        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .notDetermined, otherAudioPlaying: false),
                        "aucun prompt micro à l'ouverture d'un viseur photo")
-        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .denied))
-        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .restricted))
+        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .denied, otherAudioPlaying: false))
+        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .restricted, otherAudioPlaying: false))
+    }
+
+    func test_micro_uneMusiqueJoue_ouvrirLeViseurNeLaCoupePas() {
+        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .authorized, otherAudioPlaying: true),
+                       "le micro bascule la session audio : il attend la prise, comme l'appareil photo")
     }
 
     func test_laConfigurationInitiale_brancheLeMicroAvantDeLancerLaSession() throws {

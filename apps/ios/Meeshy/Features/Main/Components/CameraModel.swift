@@ -12,9 +12,14 @@ import MeeshyUI
 /// commence à filmer. Un micro déjà autorisé entre donc dans la configuration
 /// initiale ; un micro jamais demandé attend que le son serve (aucun prompt à
 /// l'ouverture d'un viseur photo), et un refus n'empêche pas de filmer muet.
+///
+/// **Ouvrir le viseur ne coupe pas la musique.** Brancher le micro bascule la
+/// session audio de l'app en enregistrement, ce qui interrompt une autre app
+/// qui joue : quand une musique tourne, le micro attend donc la prise — comme
+/// l'appareil photo, qui ne la coupe qu'en filmant.
 nonisolated enum CameraAudioArming {
-    static func armsAtSetup(microphone: AVAuthorizationStatus) -> Bool {
-        microphone == .authorized
+    static func armsAtSetup(microphone: AVAuthorizationStatus, otherAudioPlaying: Bool) -> Bool {
+        microphone == .authorized && !otherAudioPlaying
     }
 }
 
@@ -116,7 +121,8 @@ final class CameraModel: NSObject, ObservableObject {
         frameOutput.alwaysDiscardsLateVideoFrames = true
         frameOutput.setSampleBufferDelegate(liveFeed, queue: liveFeed.queue)
         if session.canAddOutput(frameOutput) { session.addOutput(frameOutput) }
-        if CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio)) {
+        if CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio),
+                                         otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying) {
             addAudioInput()
         }
 
@@ -477,6 +483,7 @@ final class CameraModel: NSObject, ObservableObject {
 
     func stop() {
         if isRecordingVideo { stopRecording() }
+        liveFeed.flush()
         stopWatchingSubjectArea()
         Task.detached { [weak self] in
             self?.session.stopRunning()

@@ -162,15 +162,14 @@ final class ComposerLiveLookRenderer: NSObject, MTKViewDelegate {
         buffer.commit()
     }
 
-    /// La trame filtrée, posée dans son cadre s'il y en a un. Un cadre dont les
-    /// couches ne sont pas encore peintes ne montre RIEN plutôt qu'une image
-    /// sans cadre : l'aperçu système reste visible dessous une image de plus.
+    /// La trame filtrée, posée dans son cadre s'il y en a un.
     private func composed(_ frame: CIImage, drawableSize: CGSize) -> CIImage? {
-        let graded = ComposerLiveLookRule.graded(frame, filter: look.filter)
-        guard design != nil else {
+        let graded = ComposerLiveLookRule.graded(frame, filter: look.filter, declared: feed.declaredSpace)
+        // Le cadre se peint hors du fil principal : en attendant ses couches,
+        // la trame filtrée se montre plutôt qu'une image figée.
+        guard design != nil, let scene, let person else {
             return graded.transformed(by: CallLiveFrameGeometry.fit(scene: graded.extent.size, into: drawableSize))
         }
-        guard let scene, let person else { return nil }
         return compositor.compose(scene, videos: [person.id: graded])
             .transformed(by: ComposerLiveLookRule.fit(scene: scene.size, into: drawableSize))
     }

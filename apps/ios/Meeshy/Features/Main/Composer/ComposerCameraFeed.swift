@@ -13,6 +13,10 @@ nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSa
 
     private let lock = NSLock()
     private var latest: CVPixelBuffer?
+    /// L'espace que les trames DÉCLARENT (attachements du tampon), lu une fois
+    /// par objectif : le cube les lit dans cet espace, à l'aperçu comme à
+    /// l'export.
+    private var space: CGColorSpace?
     private var position: AVCaptureDevice.Position = .back
     private var active = false
 
@@ -41,6 +45,22 @@ nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSa
         defer { lock.unlock() }
         position = newPosition
         latest = nil
+        space = nil
+    }
+
+    /// La session s'arrête : sa dernière trame ne se montre pas figée au
+    /// prochain armement, et retourne au pool.
+    func flush() {
+        lock.lock()
+        defer { lock.unlock() }
+        latest = nil
+        space = nil
+    }
+
+    var declaredSpace: CGColorSpace? {
+        lock.lock()
+        defer { lock.unlock() }
+        return space
     }
 
     /// La trame la plus récente, redressée comme l'aperçu système.
@@ -59,5 +79,9 @@ nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSa
         defer { lock.unlock() }
         guard active else { return }
         latest = buffer
+        if space == nil {
+            space = CVBufferCopyAttachments(buffer, .shouldPropagate)
+                .flatMap { CVImageBufferCreateColorSpaceFromAttachments($0)?.takeRetainedValue() }
+        }
     }
 }

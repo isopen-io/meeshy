@@ -123,6 +123,15 @@ struct ComposerCaptureChrome: View {
                 onShutterTouched: { session.releaseStaleHold() },
                 onToggleLooks: session.lookIsLocked ? nil : { toggleLooks() },
                 lookActive: !session.look.isUntouched)
+            if session.isRenderingLook {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .tint(.white)
+                    .controlSize(.large)
+                    .padding(MeeshySpacing.lg)
+                    .adaptiveLiquidGlass(in: Circle())
+                    .accessibilityLabel(ComposerLiveLookCopy.rendering)
+            }
             if session.looksOpen, !session.lookIsLocked {
                 VStack {
                     Spacer(minLength: 0)
