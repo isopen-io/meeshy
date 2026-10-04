@@ -244,6 +244,12 @@ public final class MessageStore: ObservableObject {
     /// Bord récent de la fenêtre `.around` (#9304) — sans effet hors d'elle.
     private(set) var jumpedNewerEdge: JumpedWindowNewerEdge = .halfWindow
 
+    /// Jeton de la fenêtre affichée (#9364) : avance à chaque fenêtre
+    /// REMPLACÉE (saut, retour au présent, recherche), jamais quand une page
+    /// plus récente l'ÉTEND. Une page partie pour une génération précédente
+    /// ne touche plus à la fenêtre courante.
+    private(set) var windowGeneration: UInt64 = 0
+
     // MARK: - Internal
 
     let conversationId: String
@@ -791,6 +797,7 @@ public final class MessageStore: ObservableObject {
     /// Switches the window to be centered around `date`, then refreshes from DB.
     /// Used by jump-to-message UX. Returns when the new window has been loaded.
     func loadWindow(around date: Date, newerEdge: JumpedWindowNewerEdge = .halfWindow) async {
+        windowGeneration &+= 1
         windowMode = .around(date: date)
         windowAnchor = nil
         jumpedNewerEdge = newerEdge
@@ -807,6 +814,7 @@ public final class MessageStore: ObservableObject {
 
     /// Restores the latest window. Used when returning from a jumped state.
     public func restoreLatestWindow() async {
+        windowGeneration &+= 1
         windowMode = .latest
         windowAnchor = nil
         jumpedNewerEdge = .halfWindow
@@ -819,6 +827,7 @@ public final class MessageStore: ObservableObject {
     /// `upsertFromAPIMessages`) so they are fetchable. Exit via
     /// `restoreLatestWindow()`.
     public func enterSearchMode(ids: [String]) async {
+        windowGeneration &+= 1
         windowMode = .search(ids: ids)
         windowAnchor = nil
         jumpedNewerEdge = .halfWindow

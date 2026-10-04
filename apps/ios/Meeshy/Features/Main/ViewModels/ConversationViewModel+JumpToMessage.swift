@@ -37,6 +37,8 @@ extension ConversationViewModel {
     /// Fenêtre centrée sur `messageId` + état de pagination — le corps commun
     /// de `loadMessagesAround` et `jumpToQuotedMessage`, à l'identique.
     private func applyJumpedWindow(_ response: MessagesAPIResponse, around messageId: String) async {
+        // La chaîne et la page en vol appartiennent à la fenêtre qu'on quitte (#9364).
+        abandonNewerPages()
         let targetDate = response.data.first(where: { $0.id == messageId })?.createdAt
             ?? response.data.last?.createdAt
             ?? Date()
@@ -66,11 +68,16 @@ extension ConversationViewModel {
     /// l'appel réseau : c'est lui que le bouton « revenir en bas » annonce.
     /// Une page qui n'avance pas le filigrane clôt la marche — la même
     /// demande ne repart jamais deux fois (miroir de `newerWindowParam` web).
+    ///
+    /// La page porte la génération de la fenêtre qui l'a demandée (#9364) :
+    /// arrivée après un nouveau saut, elle est écrite dans GRDB mais n'étend
+    /// pas la nouvelle fenêtre avec l'ancien repère.
     func loadNewerMessages() async {
         guard isInJumpedState, hasNewerMessages, !isLoadingNewer,
               case .through(let watermark) = messageStore.jumpedNewerEdge else { return }
+        let generation = messageStore.windowGeneration
         isLoadingNewer = true
-        defer { isLoadingNewer = false }
+        defer { releaseNewerPageLoading(of: generation) }
         do {
             let response = try await messageService.listAfter(
                 conversationId: conversationId, after: watermark.addingTimeInterval(-0.001), limit: limit,
@@ -78,6 +85,7 @@ extension ConversationViewModel {
             )
             guard isInJumpedState else { return }
             try? await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages)
+            guard isInJumpedState, messageStore.windowGeneration == generation else { return }
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
             let newest = response.data.compactMap(\.createdAt).max().map { max($0, watermark) } ?? watermark
@@ -122,6 +130,21 @@ extension ConversationViewModel {
     func cancelNewerPagesChain() {
         newerPagesChain?.cancel()
         newerPagesChain = nil
+    }
+
+    /// La fenêtre change : sa chaîne s'arrête, et la page qu'elle avait en
+    /// vol ne retient plus celle de la fenêtre suivante (#9364).
+    private func abandonNewerPages() {
+        cancelNewerPagesChain()
+        isLoadingNewer = false
+    }
+
+    /// Une page d'une fenêtre PRÉCÉDENTE n'éteint le chargement que si la
+    /// fenêtre courante ne peut pas avoir la sienne en vol — sinon elle
+    /// éteindrait l'annonce d'une page qui n'est pas la sienne.
+    private func releaseNewerPageLoading(of generation: UInt64) {
+        if messageStore.windowGeneration != generation, case .through = messageStore.jumpedNewerEdge { return }
+        isLoadingNewer = false
     }
 
     /// Une page à la fois, tant que le bas reste visible et que le serveur
@@ -197,7 +220,7 @@ extension ConversationViewModel {
     func returnToLatest() async {
         guard isInJumpedState else { return }
 
-        cancelNewerPagesChain()
+        abandonNewerPages()
         isInJumpedState = false
         hasNewerMessages = false
         // Also clear any active in-conversation search state so the results
