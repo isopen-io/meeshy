@@ -275,6 +275,15 @@ export function useMediaPlayback(params: {
   if (trackerRef.current === null) trackerRef.current = new PlaybackStretchTracker();
   const lastReportAtRef = useRef(0);
   const appliedResumeRef = useRef(false);
+  // LE CLAMP DE FIN (#9265) — la reprise ci-dessous est posée AVANT que la
+  // durée réelle soit connue ; si cette durée s'avère plus COURTE que la
+  // position de reprise (traduction jouée différente de celle qui a produit
+  // la position enregistrée), le navigateur clampe le seek en attente à la
+  // fin exacte. Un `play()` sur un élément déjà en butée déclenche `ended`
+  // quasi instantanément — on s'en souvient jusqu'à `loadedmetadata` pour
+  // repartir de zéro plutôt que de laisser l'utilisateur rejouer une fin
+  // déjà atteinte.
+  const pendingResumeSecondsRef = useRef<number | null>(null);
 
   const recordConsumption = useCallback((fraction: number, complete: boolean): void => {
     const clamped = complete ? 1 : Math.max(0, Math.min(1, fraction));
@@ -396,6 +405,7 @@ export function useMediaPlayback(params: {
       const resumeAt = resumeSeconds(reportRef.current?.resume);
       if (!appliedResumeRef.current && resumeAt !== null) {
         appliedResumeRef.current = true;
+        pendingResumeSecondsRef.current = resumeAt;
         try {
           element.currentTime = resumeAt;
         } catch {
@@ -451,6 +461,22 @@ export function useMediaPlayback(params: {
         setProgress(raw);
       };
       const onMetadata = (): void => {
+        const pendingResumeSeconds = pendingResumeSecondsRef.current;
+        if (pendingResumeSeconds !== null) {
+          pendingResumeSecondsRef.current = null;
+          const total = knownDuration(element);
+          // La reprise visait une position que la durée RÉELLE, connue
+          // seulement maintenant, ne couvre pas : le navigateur l'a clampée
+          // à la fin exacte. Repartir de zéro plutôt que de laisser
+          // l'élément en butée.
+          if (total > 0 && pendingResumeSeconds >= total) {
+            try {
+              element.currentTime = 0;
+            } catch {
+              // best effort, même raison que ci-dessus.
+            }
+          }
+        }
         if (tracksTime) setDuration(knownDuration(element));
         setPictureInPicture(pictureInPictureSupport(element));
       };

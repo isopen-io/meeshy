@@ -9,24 +9,40 @@
  *
  * `expect` et `setScheme` sont REMIS par l'hôte, jamais redéfinis.
  */
-import { awaitCondition } from './await-fact.mjs';
 import { waitForRowSettled } from './check-media.mjs';
 
 const VOICE_EN_MESSAGE_ID = 'media-2';
 const VOICE_EN_ATTACHMENT_ID = 'media-2-a1';
 const VOICE_DE_ATTACHMENT_ID = 'media-3-a1';
 
-const scrollUntilMounted = (page, id) =>
-  awaitCondition(
-    page,
-    (mid) => {
-      if (document.querySelector(`[data-message="${mid}"]`) !== null) return true;
-      const scroller = document.querySelector('main#contenu');
-      if (scroller !== null) scroller.scrollTop = 0;
-      return false;
-    },
-    id,
-  );
+const rowMounted = (page, id) => page.evaluate((mid) => document.querySelector(`[data-message="${mid}"]`) !== null, id);
+
+/**
+ * #9265 (suivi) — `awaitCondition` s'ARRÊTE dès le premier montage observé,
+ * sans continuer à corriger `scrollTop` ensuite : le virtualiseur mesure
+ * encore les rangées voisines à cet instant (même course que #6221,
+ * doc-comment de `check-media.mjs:waitForRowSettled`) et peut démonter la
+ * rangée une seconde fois avant que `waitForRowSettled` ne la mesure — qui ne
+ * lève jamais sur une rangée absente, elle rend simplement la main après son
+ * propre budget. Le `row.evaluate(...)` de l'appelant attendait alors une
+ * rangée qui ne remonterait plus, jusqu'à son propre timeout (30 s). On
+ * reboucle donc mount PUIS settle PUIS re-vérifie la présence, en reprenant
+ * la remontée si la rangée a disparu entre les deux.
+ */
+const scrollUntilMounted = async (page, id) => {
+  const scroller = page.locator('main#contenu');
+  for (let attempt = 1; attempt <= 40; attempt += 1) {
+    if (await rowMounted(page, id)) {
+      await waitForRowSettled(page, id);
+      if (await rowMounted(page, id)) return true;
+    }
+    await scroller.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    await page.waitForTimeout(100);
+  }
+  return false;
+};
 
 const pageAudio = (page, id) =>
   page.evaluate((aid) => {
@@ -42,8 +58,8 @@ export async function checkAudioFullscreen({ browser, BASE, expect, setScheme, s
   await page.goto(`${BASE}/c/c-medias`, { waitUntil: 'load' });
   await page.waitForSelector('[data-message]');
 
-  await scrollUntilMounted(page, VOICE_EN_MESSAGE_ID);
-  await waitForRowSettled(page, VOICE_EN_MESSAGE_ID);
+  const mounted = await scrollUntilMounted(page, VOICE_EN_MESSAGE_ID);
+  expect(mounted, `${label} le vocal media-2 est atteint et stable avant l'appui`);
   const row = page.locator(`[data-message="${VOICE_EN_MESSAGE_ID}"]`);
   await row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await waitForRowSettled(page, VOICE_EN_MESSAGE_ID);

@@ -550,6 +550,57 @@ describe('useMediaPlayback — reprise au montage (#7225)', () => {
     });
     expect(mediaOf(el).currentTime).toBe(0);
   });
+
+  /**
+   * #9265 — une position de reprise connue AVANT les métadonnées (4 s) peut
+   * dépasser la durée RÉELLE de la piste effectivement chargée (2 s, cas
+   * nominal dès que la traduction jouée diffère de celle qui a produit la
+   * position enregistrée). Le navigateur CLAMPE alors le seek en attente à
+   * la fin exacte une fois `duration` connue — simulé ici en posant
+   * `currentTime` à la durée, comme le ferait le moteur média réel, avant de
+   * déclencher `loadedmetadata`. Sans correctif, l'élément reste bloqué en
+   * butée de fin : un `play()` y déclenche `ended` quasi instantanément.
+   */
+  test('reprise au-delà de la durée réelle : la fin clampée repart de zéro', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps } = fakeReportDeps();
+    const el = mount({
+      onReady: () => {},
+      attachmentId: 'a',
+      coordinator,
+      report: { kind: 'listened', resume: { positionMs: 4_000, complete: false }, deps },
+    });
+    const media = mediaOf(el);
+    expect(media.currentTime).toBe(4);
+
+    await act(async () => {
+      // Le moteur média clampe le seek en attente à la durée réelle, plus
+      // courte que la position de reprise, une fois les métadonnées connues.
+      setMediaTime(media, { duration: 2, currentTime: 2 });
+      media.dispatchEvent(new Event('loadedmetadata'));
+    });
+
+    expect(media.currentTime).toBe(0);
+  });
+
+  test('reprise EN DEÇÀ de la durée réelle : le clamp est laissé intact', async () => {
+    const coordinator = createMediaCoordinator();
+    const { deps } = fakeReportDeps();
+    const el = mount({
+      onReady: () => {},
+      attachmentId: 'a',
+      coordinator,
+      report: { kind: 'listened', resume: { positionMs: 4_000, complete: false }, deps },
+    });
+    const media = mediaOf(el);
+
+    await act(async () => {
+      setMediaTime(media, { duration: 65, currentTime: 4 });
+      media.dispatchEvent(new Event('loadedmetadata'));
+    });
+
+    expect(media.currentTime).toBe(4);
+  });
 });
 
 describe('useMediaPlayback — rapport au serveur, throttlé (#7225)', () => {
