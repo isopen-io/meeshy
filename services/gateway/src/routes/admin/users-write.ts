@@ -229,6 +229,15 @@ function rendreErreur(
 export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): void {
   const { userManagementService, userAuditService } = deps;
 
+  /**
+   * La fiche RELUE après le geste : `prisma.user.update` rend la ligne nue,
+   * sans `_count` — que la fiche du web lit dans la réponse de chaque geste.
+   * Relire par `getUserById` sert la même forme que `GET /admin/users/:id`.
+   */
+  async function relire(userId: string, ecrit: unknown): Promise<unknown> {
+    return (await userManagementService.getUserById(userId)) ?? ecrit;
+  }
+
   /** La garde commune : la porte, puis le RANG. La loi du champ suit, en corps. */
   const gardes = [fastify.authenticate, requireUserModifyAccess, requireHierarchy({ param: 'userId' })];
 
@@ -367,7 +376,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
         });
       }
 
-      servir(reply, moi.role, servi, corps, rendu, 'User updated successfully');
+      servir(reply, moi.role, await relire(userId, servi), corps, rendu, 'User updated successfully');
     } catch (error) {
       rendreErreur(fastify, reply, error, 'Failed to update user');
     }
@@ -424,7 +433,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
         });
       }
 
-      servir(reply, moi.role, servi, corps, rendu, 'Security settings updated');
+      servir(reply, moi.role, await relire(userId, servi), corps, rendu, 'Security settings updated');
     } catch (error) {
       rendreErreur(fastify, reply, error, 'Failed to update security settings');
     }
@@ -471,7 +480,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
         });
       }
 
-      servir(reply, moi.role, servi, corps, rendu, 'Verifications updated');
+      servir(reply, moi.role, await relire(userId, servi), corps, rendu, 'Verifications updated');
     } catch (error) {
       rendreErreur(fastify, reply, error, 'Failed to update verifications');
     }
@@ -515,7 +524,7 @@ export function registerUserWriteRoutes(fastify: FastifyInstance, deps: Deps): v
         motif,
       });
 
-      servir(reply, moi.role, servi, corps, rendu, 'Consents updated');
+      servir(reply, moi.role, await relire(userId, servi), corps, rendu, 'Consents updated');
     } catch (error) {
       rendreErreur(fastify, reply, error, 'Failed to update consents');
     }

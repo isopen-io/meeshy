@@ -606,6 +606,15 @@ describe('POST /admin/users/:userId/reset-password', () => {
     expect(res.statusCode).toBe(200);
   });
 
+  it('passe le motif reçu à la trace d’audit', async () => {
+    const corps = { ...validBody, reason: 'demande écrite du membre' };
+    (adminUserValidation.resetPasswordValidationSchema.parse as jest.Mock).mockReturnValue(corps);
+    const res = await app.inject({ method: 'POST', url: '/admin/users/user123/reset-password', payload: corps });
+    expect(res.statusCode).toBe(200);
+    const appel = (mockAudit.logResetPassword as jest.Mock).mock.calls[0];
+    expect(appel[4]).toBe('demande écrite du membre');
+  });
+
   it('returns 404 when user not found', async () => {
     mockUMS.getUserById.mockResolvedValue(null);
     const res = await app.inject({ method: 'POST', url: '/admin/users/user123/reset-password', payload: validBody });

@@ -327,8 +327,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         request.headers['user-agent']
       );
 
-      // Sanitize la reponse
-      const sanitizedUser = sanitizationService.sanitizeUser(newUser, adminRole);
+      // La fiche relue (avec `_count`), comme toute écriture sur un membre.
+      const sanitizedUser = sanitizationService.sanitizeUser((await userManagementService.getUserById(newUser.id)) ?? newUser, adminRole, { withAdminMetadata: true });
 
       sendSuccess(reply, sanitizedUser, { statusCode: 201, message: 'User created successfully' });
     } catch (error) {
@@ -414,7 +414,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         authContext.registeredUser!.id,
         request.params.userId,
         request.ip,
-        request.headers['user-agent']
+        request.headers['user-agent'], validatedData.reason
       );
 
       sendSuccess(reply, { message: 'Password reset successfully' });
@@ -511,7 +511,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         request.headers['user-agent']
       );
 
-      sendSuccess(reply, sanitizationService.sanitizeUser(restored, adminRole), { message: 'User restored successfully' });
+      const relu = (await userManagementService.getUserById(request.params.userId)) ?? restored;
+      sendSuccess(reply, sanitizationService.sanitizeUser(relu, adminRole, { withAdminMetadata: true }), { message: 'User restored successfully' });
     } catch (error) {
       logError(fastify.log, 'Error restoring user', error);
       sendInternalError(reply, 'Internal server error', { message: 'Failed to restore user' });

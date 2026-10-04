@@ -55,15 +55,21 @@ const cibleRow = (overrides: Row = {}): Row => ({
 
 function fakePrisma(options: { cible?: Row | null; media?: Row | null; upload?: Row | null; candidates?: Row[] } = {}) {
   const cible = options.cible === undefined ? cibleRow() : options.cible;
+  let ecrit: Row = {};
   return {
     user: {
       findUnique: jest.fn(async (args: Row) => {
         const select = (args.select ?? {}) as Row;
         if (cible === null) return null;
         if (Object.keys(select).length === 1 && select.role === true) return { role: cible.role };
+        // La relecture de la fiche (`include: { _count }`) — ce que sert la réponse.
+        if (args.include) return { ...cible, ...ecrit, _count: { participations: 4 } };
         return cible;
       }) as AsyncMock,
-      update: jest.fn(async (args: Row) => ({ ...cible, ...(args.data as Row) })) as AsyncMock,
+      update: jest.fn(async (args: Row) => {
+        ecrit = args.data as Row;
+        return { ...cible, ...ecrit };
+      }) as AsyncMock,
     },
     postMedia: {
       findFirst: jest.fn(async () => (options.media === undefined ? { fileUrl: '/api/v1/attachments/file/post/p.jpg' } : options.media)) as AsyncMock,
@@ -106,6 +112,20 @@ const put = (app: FastifyInstance, kind: string, payload: Row) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+});
+
+describe('PUT /admin/users/:userId/profile-images/:kind — la réponse est la fiche relue', () => {
+  it('sert _count et adminMetadata, comme GET /admin/users/:id', async () => {
+    const prisma = fakePrisma();
+    const app = await buildApp(prisma);
+    const res = await put(app, 'avatar', { source: 'media', mediaId: MEDIA_ID });
+    expect(res.statusCode).toBe(200);
+    const data = res.json().data;
+    expect(data._count).toEqual({ participations: 4 });
+    expect(data.adminMetadata).toBeDefined();
+    expect(data.avatar).toBe('/api/v1/attachments/file/post/p.jpg');
+    await app.close();
+  });
 });
 
 describe('PUT /admin/users/:userId/profile-images/:kind — choisir parmi les médias du membre', () => {
