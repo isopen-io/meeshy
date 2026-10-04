@@ -1373,16 +1373,13 @@ struct ConversationView: View {
                     await viewModel.loadOlderMessages()
                 },
                 onNearBottomChanged: { nearBottom in
-                    let wasNearBottom = scrollState.isNearBottom
                     if scrollState.isNearBottom != nearBottom {
                         scrollState.isNearBottom = nearBottom
                     }
                     viewModel.isCurrentlyNearBottom = nearBottom
-                    // Revenir au bas ne marque plus rien : la position de la
-                    // barre ne dit pas ce qui a été vu. Les bulles qui
-                    // réapparaissent sont signalées par `onMessagesSeen` une
-                    // fois le seuil de présence franchi.
-                    _ = wasNearBottom
+                    // Revenir au bas ne marque rien (`onMessagesSeen` le fait) ;
+                    // au bas d'une fenêtre sautée, la page plus récente (#9304).
+                    if nearBottom { Task { await viewModel.loadNewerMessages() } }
                 },
                 onScrollingActiveChanged: { isActive in
                     withAnimation(.easeInOut(duration: 0.22)) {
