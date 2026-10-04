@@ -25,6 +25,7 @@ import {
 import { attachmentServiceRowSelect } from './attachmentIncludes';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { carrierMessageStillServesWhere } from './carrierMessageLifecycle';
+import { derivedFileCandidates, resolveInsideUploadRoot } from './derivedAttachmentFiles';
 
 const logger = enhancedLogger.child({ module: 'AttachmentService' });
 
@@ -365,6 +366,62 @@ export class AttachmentService {
     if (attachment.thumbnailPath) {
       await this.unlinkIfUnreferenced('thumbnailPath', attachment.thumbnailPath);
     }
+
+    await this.unlinkDerivedFiles(attachment);
+  }
+
+  /**
+   * Les pistes TTS et les variantes WebP de la ligne supprimée (#9315), MOINS
+   * ce que citent encore les lignes qui partagent ses octets : une copie
+   * transférée reprend le `filePath` et la carte de traductions de l'original,
+   * mais peut porter des pistes à elle (`<idCopie>_<langue>`). Sans ce ménage,
+   * elles restaient servies par la route de fichiers, à une adresse dérivée de
+   * l'ObjectId, après le départ de la ligne. Une lecture qui échoue garde tout.
+   */
+  private async unlinkDerivedFiles(attachment: {
+    filePath: string;
+    thumbnailPath: string | null;
+    translations?: unknown;
+    imageVariants?: unknown;
+  }): Promise<void> {
+    const candidates = derivedFileCandidates(attachment);
+    if (candidates.length === 0) {
+      return;
+    }
+
+    let survivors: Array<{
+      filePath: string;
+      thumbnailPath: string | null;
+      translations: unknown;
+      imageVariants: unknown;
+    }>;
+    try {
+      survivors = await this.prisma.messageAttachment.findMany({
+        where: { filePath: attachment.filePath },
+        select: { filePath: true, thumbnailPath: true, translations: true, imageVariants: true },
+      });
+    } catch (error) {
+      logger.error('Erreur suppression fichiers', error as Error);
+      return;
+    }
+
+    const kept = new Set(
+      [attachment, ...survivors]
+        .flatMap((row) => [
+          row.filePath,
+          row.thumbnailPath,
+          ...(row === attachment ? [] : derivedFileCandidates(row)),
+        ])
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => resolveInsideUploadRoot(this.uploadBasePath, value))
+    );
+    const derived = new Set(
+      candidates
+        .map((candidate) => resolveInsideUploadRoot(this.uploadBasePath, candidate))
+        .filter((fullPath): fullPath is string => fullPath !== null && !kept.has(fullPath))
+    );
+
+    await Promise.all([...derived].map((fullPath) => this.unlinkQuietly(fullPath)));
   }
 
   /**
@@ -384,8 +441,17 @@ export class AttachmentService {
       if (stillReferenced > 0) {
         return;
       }
+    } catch (error) {
+      logger.error('Erreur suppression fichiers', error as Error);
+      return;
+    }
 
-      await fs.unlink(path.join(this.uploadBasePath, relativePath));
+    await this.unlinkQuietly(path.join(this.uploadBasePath, relativePath));
+  }
+
+  private async unlinkQuietly(fullPath: string): Promise<void> {
+    try {
+      await fs.unlink(fullPath);
     } catch (error) {
       logger.error('Erreur suppression fichiers', error as Error);
     }
