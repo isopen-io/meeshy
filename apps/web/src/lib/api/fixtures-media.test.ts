@@ -14,6 +14,8 @@ import {
   MEDIA_IMAGE_WITNESS_ID,
   MEDIA_MASKED_PIECE_WITNESS_ID,
   MEDIA_NULL_METADATA_WITNESS_ID,
+  MEDIA_ON_DEMAND,
+  MEDIA_UNTRANSCRIBED_VOICE_WITNESS_ID,
   MEDIA_VIEW_ONCE_WITNESS_ID,
   MEDIA_VOICE_DE_WITNESS_ID,
   MEDIA_VOICE_EN_WITNESS_ID,
@@ -122,6 +124,31 @@ test('wavDataUri : un en-tête RIFF/WAVE valide, dont les tailles déclarées co
   const dataSize = bytes.readUInt32LE(40);
   expect(riffSize).toBe(bytes.length - 8);
   expect(dataSize).toBe(bytes.length - 44);
+});
+
+const wavSeconds = (uri: string): number => {
+  const bytes = Buffer.from(uri.slice('data:audio/wav;base64,'.length), 'base64');
+  return bytes.readUInt32LE(40) / bytes.readUInt32LE(28);
+};
+
+/**
+ * #9294 — LE VOCAL DU MINI-LECTEUR NE COURT PAS CONTRE SA FIN : les étapes
+ * navigateur du mini-lecteur (`check-audio-fullscreen.mjs`) ferment le plein
+ * écran, changent deux fois de route et touchent la bulle pendant qu'il joue.
+ * Huit secondes ne laissaient que ~3 s de marge ; arrivé au bout, le
+ * mini-lecteur se retire et l'étape rougit pour un son trop court.
+ */
+test('media-17 : chaque piste dure au moins 30 s, et le fichier dit la durée déclarée', () => {
+  const attachment = attachmentOf(MEDIA_UNTRANSCRIBED_VOICE_WITNESS_ID);
+  const tracks = Object.values(MEDIA_ON_DEMAND[attachment.id]?.translations ?? {});
+  expect(tracks.length).toBeGreaterThan(0);
+  expect(wavSeconds(attachment.fileUrl)).toBeGreaterThanOrEqual(30);
+  expect(wavSeconds(attachment.fileUrl) * 1000).toBe(attachment.duration ?? 0);
+  expect(Buffer.from(attachment.fileUrl.slice('data:audio/wav;base64,'.length), 'base64').length).toBe(attachment.fileSize);
+  for (const track of tracks) {
+    expect(wavSeconds(track.url ?? '') * 1000).toBe(track.durationMs ?? 0);
+    expect(track.durationMs).toBe(attachment.duration);
+  }
 });
 
 test('wavDataUri : deux tons différents rendent deux URIs différentes', () => {
