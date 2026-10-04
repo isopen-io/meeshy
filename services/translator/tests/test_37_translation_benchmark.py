@@ -57,6 +57,20 @@ class FakeTranslator:
         return self.answers.get(text, text)
 
 
+class SlowFirstCallTranslator(FakeTranslator):
+    def __init__(self, clock, load_seconds):
+        super().__init__()
+        self.clock = clock
+        self.load_seconds = load_seconds
+        self.loaded = False
+
+    def translate(self, text, source_lang, target_lang):
+        if not self.loaded:
+            self.clock.now += self.load_seconds
+            self.loaded = True
+        return super().translate(text, source_lang, target_lang)
+
+
 class TickingClock:
     def __init__(self, step_seconds):
         self.step = step_seconds
@@ -365,6 +379,23 @@ class TestRunner:
         assert direction.segments == 3
         assert (direction.short.count, direction.short.p50_ms) == (1, 500.0)
         assert (direction.long.count, direction.long.p50_ms) == (1, 500.0)
+
+    def test_the_engine_loads_before_the_clock_starts(self):
+        clock = TickingClock(0.5)
+        translator = SlowFirstCallTranslator(clock, load_seconds=30.0)
+        pairs = (make_pair(id="1", source="Salut"), make_pair(id="2", source="Merci"))
+
+        report = run_benchmark(translator, pairs, clock=clock)
+        direction = report.directions[0]
+
+        assert (direction.short.count, direction.short.p95_ms) == (2, 500.0)
+
+    def test_a_failing_warm_up_does_not_stop_the_run(self):
+        pairs = (make_pair(id="1", source="Merci"), make_pair(id="2", source="Salut"))
+
+        report = run_benchmark(FakeTranslator(failing={"Merci"}), pairs)
+
+        assert report.directions[0].failures == 1
 
     def test_an_engine_failure_counts_and_scores_as_an_empty_translation(self):
         pairs = (

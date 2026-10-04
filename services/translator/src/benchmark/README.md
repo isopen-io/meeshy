@@ -41,3 +41,12 @@ un modèle, qu'il suit le format recommandé par sa carte.
 
 `baselines/` reçoit le rapport JSON d'une nuit jugée saine. Sans référence, la porte
 s'annonce non appliquée et passe.
+
+Le job imprime ce rapport dans son journal, dans le bloc replié
+« report.json » de l'étape « Mesurer » : c'est de là qu'on le recopie. La qualité est
+déterministe (décodage glouton), donc une référence ne bouge que si le modèle, le jeu
+ou le code changent. La latence varie d'une machine partagée à l'autre et la porte ne
+la garde pas par défaut.
+
+`nllb-200-distilled-600M.json` vient du passage 37194080600 (2026-10-04, runner CPU à
+4 vCPU).

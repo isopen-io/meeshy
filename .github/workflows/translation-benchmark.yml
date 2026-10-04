@@ -84,6 +84,9 @@ jobs:
             --out "$RUNNER_TEMP/bench/report.json" \
             --markdown "$RUNNER_TEMP/bench/report.md"
           cat "$RUNNER_TEMP/bench/report.md" >> "$GITHUB_STEP_SUMMARY"
+          echo "::group::report.json (la référence se committe depuis ce bloc)"
+          cat "$RUNNER_TEMP/bench/report.json"
+          echo "::endgroup::"
 
       - name: Publier le rapport
         if: always()
