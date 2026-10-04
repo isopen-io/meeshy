@@ -246,6 +246,12 @@ const f = {
   'admin.tracking.confirm.motive': 'Motivo (opcional, registrado no registro de auditoria)',
   'admin.tracking.done.deactivated': 'Link de rastreamento desativado',
   'admin.tracking.done.reactivated': 'Link de rastreamento reativado',
+  /* ─── Lien de partage : fiche en cartes (lot Échanges et contenus, 2026-10-05) ─── */
+  'admin.shareLink.cards.title': 'O detalhe, por seção',
+  'admin.shareLink.card.outOf': '{count} de {total}',
+  'admin.shareLink.card.allowed': 'Permitidos',
+  'admin.shareLink.card.required': 'Exigidos',
+  'admin.shareLink.card.present': 'Presentes entre os recentes',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

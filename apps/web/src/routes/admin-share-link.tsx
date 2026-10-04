@@ -1,14 +1,25 @@
 import { useQuery } from '@tanstack/react-query';
+import { useId, type ReactNode } from 'react';
 
+import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminLink } from '@/components/admin/entity-chip';
 import { AdminFiche, AdminIdentityHeader, AdminStatStrip } from '@/components/admin/fiche';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { excerptOf, personLabel, shareLinkLabel } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { shareLinkUsage } from '@/lib/admin/share-link-model';
+import {
+  ADMIN_SHARE_LINK_SECTION_GLYPHS,
+  ADMIN_SHARE_LINK_SECTION_TITLES,
+  ADMIN_SHARE_LINK_SECTIONS,
+  shareLinkSummaryOf,
+  type AdminShareLinkSection,
+} from '@/lib/admin/share-link-summaries';
+import { useAdminOpen } from '@/lib/admin/use-admin-open';
 import type { AdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminShareLinkKey, loadAdminShareLink } from '@/lib/api/admin-share-links';
@@ -40,6 +51,10 @@ import {
  * (pays et langues nommés), qui est arrivé par lui. Puis les gestes : fermer,
  * rouvrir, et — au seul rang souverain — révéler le secret.
  *
+ * **Lue par sections** (spec 2026-10-04 § 3) : l'en-tête, les gestes, le bandeau
+ * d'usage et les métadonnées restent visibles ; les cinq blocs sont des cartes
+ * résumées qui ouvrent chacun sa modale (`?open=<id>`).
+ *
  * Fail-closed comme la liste (`canManageConversations`) ; un 403 malgré tout se rend
  * comme un refus, un 404 comme « ce lien n'existe plus » — jamais comme une panne.
  */
@@ -56,6 +71,8 @@ type ShareLinkPanelProps = {
 export function AdminShareLinkPanel({ language, shareLinkId, reach, deps = apiDeps, now = defaultNow }: ShareLinkPanelProps) {
   const online = useOnline();
   const announcer = useLiveAnnouncer();
+  const sections = useAdminOpen(ADMIN_SHARE_LINK_SECTIONS);
+  const cardsTitle = useId();
 
   const query = useQuery({
     queryKey: adminShareLinkKey(shareLinkId),
@@ -101,6 +118,22 @@ export function AdminShareLinkPanel({ language, shareLinkId, reach, deps = apiDe
   const title = shareLinkLabel(link, language);
   const created = adminMomentOf(link.createdAt, clock, language);
   const uses = shareLinkUsage(link.currentUses, link.maxUses, language);
+
+  /** Le contenu de chaque modale : le bloc d'hier, tel quel — monté seulement à l'ouverture. */
+  const detail = (section: AdminShareLinkSection): ReactNode => {
+    switch (section) {
+      case 'conversation':
+        return <ConversationSection language={language} link={link} />;
+      case 'permissions':
+        return <PermissionsSection language={language} link={link} />;
+      case 'requirements':
+        return <RequirementsSection language={language} link={link} />;
+      case 'restrictions':
+        return <RestrictionsSection language={language} link={link} />;
+      case 'guests':
+        return <GuestsSection language={language} link={link} now={clock} />;
+    }
+  };
 
   return (
     <div className="grid gap-6" data-admin-share-link-fiche>
@@ -150,12 +183,44 @@ export function AdminShareLinkPanel({ language, shareLinkId, reach, deps = apiDe
         }
         aside={<ShareLinkMeta language={language} link={link} now={clock} onAnnounce={announcer.announce} />}
       >
-        <ConversationSection language={language} link={link} />
-        <PermissionsSection language={language} link={link} />
-        <RequirementsSection language={language} link={link} />
-        <RestrictionsSection language={language} link={link} />
-        <GuestsSection language={language} link={link} now={clock} />
+        <section aria-labelledby={cardsTitle} className="@container grid gap-3" data-admin-share-link-cards>
+          <h2 id={cardsTitle} className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+            {translateAdmin(language, 'admin.shareLink.cards.title')}
+          </h2>
+          <AdminSummaryGrid>
+            {ADMIN_SHARE_LINK_SECTIONS.map((section) => {
+              const summary = shareLinkSummaryOf(section, link, language);
+              return (
+                <AdminSummaryCard
+                  key={section}
+                  language={language}
+                  id={section}
+                  title={translateAdmin(language, ADMIN_SHARE_LINK_SECTION_TITLES[section])}
+                  glyph={ADMIN_SHARE_LINK_SECTION_GLYPHS[section]}
+                  values={summary.values}
+                  sentence={summary.sentence}
+                  onOpen={() => sections.open(section)}
+                />
+              );
+            })}
+          </AdminSummaryGrid>
+        </section>
       </AdminFiche>
+      {ADMIN_SHARE_LINK_SECTIONS.map((section) => (
+        <AdminDetailSheet
+          key={section}
+          language={language}
+          id={`share-link-${section}`}
+          title={translateAdmin(language, ADMIN_SHARE_LINK_SECTION_TITLES[section])}
+          open={sections.active === section}
+          onClose={sections.close}
+          inAddress={sections.inAddress}
+        >
+          <div className="grid gap-6" data-admin-share-link-panel={section}>
+            {detail(section)}
+          </div>
+        </AdminDetailSheet>
+      ))}
       <AdminAnnouncement text={announcer.text} />
     </div>
   );

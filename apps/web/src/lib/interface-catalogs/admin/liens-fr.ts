@@ -253,6 +253,12 @@ const f = {
   'admin.tracking.confirm.motive': 'Motif (facultatif, consigné au journal d’audit)',
   'admin.tracking.done.deactivated': 'Lien de suivi désactivé',
   'admin.tracking.done.reactivated': 'Lien de suivi réactivé',
+  /* ─── Lien de partage : fiche en cartes (lot Échanges et contenus, 2026-10-05) ─── */
+  'admin.shareLink.cards.title': 'Le détail, par section',
+  'admin.shareLink.card.outOf': '{count} sur {total}',
+  'admin.shareLink.card.allowed': 'Permis',
+  'admin.shareLink.card.required': 'Exigés',
+  'admin.shareLink.card.present': 'Présents parmi les récents',
 } as const;
 
 export default f;

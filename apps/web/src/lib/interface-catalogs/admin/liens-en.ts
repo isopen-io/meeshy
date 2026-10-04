@@ -250,6 +250,12 @@ const f = {
   'admin.tracking.confirm.motive': 'Reason (optional, recorded in the audit log)',
   'admin.tracking.done.deactivated': 'Tracking link deactivated',
   'admin.tracking.done.reactivated': 'Tracking link reactivated',
+  /* ─── Lien de partage : fiche en cartes (lot Échanges et contenus, 2026-10-05) ─── */
+  'admin.shareLink.cards.title': 'Details, by section',
+  'admin.shareLink.card.outOf': '{count} of {total}',
+  'admin.shareLink.card.allowed': 'Allowed',
+  'admin.shareLink.card.required': 'Required',
+  'admin.shareLink.card.present': 'Present among recent ones',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;
