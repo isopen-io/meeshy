@@ -119,10 +119,14 @@ describe('Le toucher ouvre la conversation du vocal, comme iOS (#9279)', () => {
 
     const open = container.querySelector<HTMLButtonElement>('[data-mini-audio-open]');
     expect(open?.getAttribute('aria-label')).toBe('Kwame Mensah — Ouvrir la conversation');
+    /* Le toucher ne met rien en pause — compté AUTOUR du geste : le
+       coordinateur partagé peut, au montage, mettre en pause un média qu'un
+       autre fichier de témoins a laissé derrière lui (suite complète). */
+    const pausesBefore = calls.pause;
     act(() => open?.click());
 
     expect(window.location.pathname).toBe('/c/c-medias');
-    expect(calls.pause).toBe(0);
+    expect(calls.pause).toBe(pausesBefore);
     expect(audioCarryStore.getState().carried?.attachment.id).toBe('a-voice');
     expect(bar()?.getAttribute('data-mini-audio-status')).toBe('playing');
   });
