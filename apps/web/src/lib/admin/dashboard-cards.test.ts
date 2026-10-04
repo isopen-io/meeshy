@@ -41,10 +41,10 @@ const DASHBOARD: AdminDashboard = {
 
 const byAnchor = <T extends { readonly anchor: string }>(items: readonly T[], anchor: string): T | undefined => items.find((item) => item.anchor === anchor);
 
-describe('platformStats — huit cartes, chacune vers sa liste filtrée', () => {
+describe('platformStats — dix cartes, chacune vers sa liste filtrée', () => {
   const cardsOf = () => platformStats(DASHBOARD, 'fr');
 
-  test('les huit cartes, dans l’ordre de la spécification', () => {
+  test('les dix cartes : les huit de la spécification, puis les traductions et les signalements (décodés, jamais affichés avant le 2026-10-04)', () => {
     expect(cardsOf().map((card) => card.anchor)).toEqual([
       'platform-users',
       'platform-active-users',
@@ -53,6 +53,8 @@ describe('platformStats — huit cartes, chacune vers sa liste filtrée', () => 
       'platform-conversations',
       'platform-communities',
       'platform-share-links',
+      'platform-translations',
+      'platform-reports',
       'platform-admins',
     ]);
   });
@@ -66,6 +68,8 @@ describe('platformStats — huit cartes, chacune vers sa liste filtrée', () => 
       ['Nouvelles conversations', '4', 'Créées ces 24 dernières heures'],
       ['Communautés', '5', ''],
       ['Liens de partage actifs', '31', 'sur 40'],
+      ['Traductions', '21 000', ''],
+      ['Signalements', '9', ''],
       ['Administrateurs', '2', 'Administrateurs et créateur'],
     ]);
   });
@@ -79,6 +83,8 @@ describe('platformStats — huit cartes, chacune vers sa liste filtrée', () => 
       { kind: 'section', section: 'conversations', search: { period: '24h', sort: 'createdAt' } },
       { kind: 'section', section: 'communities' },
       { kind: 'section', section: 'shareLinks', search: { isActive: 'true' } },
+      { kind: 'section', section: 'languages' },
+      { kind: 'section', section: 'reports' },
       { kind: 'section', section: 'users', search: { role: 'ADMINISTRATION' } },
     ]);
   });
@@ -116,7 +122,7 @@ describe('platformStats — huit cartes, chacune vers sa liste filtrée', () => 
 
   test('sans charge (chargement), les cartes gardent libellé et cible', () => {
     const loading = platformStats(null, 'fr');
-    expect(loading).toHaveLength(8);
+    expect(loading).toHaveLength(10);
     expect(loading.every((card) => card.value === '—' && card.label !== '')).toBe(true);
   });
 

@@ -4,7 +4,8 @@ import { INK2, TONE_COLOR } from '@/components/admin/tone';
 import { useDashBlock } from '@/lib/admin/dashboard-block';
 import { broadcastRows, recentReportRows } from '@/lib/admin/dashboard-rows';
 import { formatPercent } from '@/lib/admin/interpret/numbers';
-import { loadAdminRecentReports, loadAdminSendingBroadcasts } from '@/lib/api/admin-overview-queue';
+import { sendingBroadcastsRead } from '@/lib/admin/dashboard-reads';
+import { loadAdminRecentReports } from '@/lib/api/admin-overview-queue';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
 
 import { ModerationStatsBlock } from './admin-dashboard-numbers';
@@ -83,12 +84,7 @@ function ProgressBar({ percent, label }: { readonly percent: number; readonly la
 }
 
 export function BroadcastsBlock({ language, deps }: DashContext) {
-  const block = useDashBlock({
-    key: ['broadcasts-sending'],
-    load: (signal) => loadAdminSendingBroadcasts({ ...deps, signal }),
-    staleTime: 30_000,
-    refetchEvery: (data) => (data !== undefined && data.rows.length > 0 ? 15_000 : false),
-  });
+  const block = useDashBlock(sendingBroadcastsRead(deps));
   const title = translateAdmin(language, 'admin.dash.broadcasts.title');
 
   return (

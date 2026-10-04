@@ -141,6 +141,18 @@ export function platformStats(data: AdminDashboard | null, language: AdminLangua
       target: section('shareLinks', { isActive: 'true' }),
     },
     {
+      anchor: 'platform-translations',
+      label: translateAdmin(language, 'admin.dash.platform.translations'),
+      value: count(data?.totalTranslations),
+      target: section('languages'),
+    },
+    {
+      anchor: 'platform-reports',
+      label: translateAdmin(language, 'admin.dash.platform.reports'),
+      value: count(data?.totalReports),
+      target: section('reports'),
+    },
+    {
       anchor: 'platform-admins',
       label: translateAdmin(language, 'admin.dash.platform.admins'),
       value: count(data?.adminUsers),

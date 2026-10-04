@@ -23,9 +23,10 @@ import { AdminDashboardPanel } from '@/routes/admin-dashboard';
  * ## Ce que le hub montre
  *
  * L'en-tête (le rôle SERVI, dit en mots — plus « Votre rôle : BIGBOSS »), le
- * panneau du tableau de bord (`admin-dashboard.tsx`, que son lot remplace), puis
- * le répertoire des sections rangées par groupe. Une section pas encore prête
- * n'a pas de tuile (loi 4).
+ * panneau du tableau de bord (`admin-dashboard.tsx` : la bande « À traiter » et
+ * une carte résumée par zone, dont « Ouvrir » montre le détail en modale —
+ * `?open=<zone>`, spec 2026-10-04 § 2), puis le répertoire des sections rangées
+ * par groupe, en bas. Une section pas encore prête n'a pas de tuile (loi 4).
  */
 export default function AdminScreen() {
   const language = currentAdminLanguage();

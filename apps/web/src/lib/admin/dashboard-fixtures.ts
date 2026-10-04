@@ -21,6 +21,7 @@ export const IDS = {
   reportUser: '64f1c2a9e8b7d6c5b4a30006',
   broadcast: '64f1c2a9e8b7d6c5b4a30007',
   message: '64f1c2a9e8b7d6c5b4a30008',
+  guest: '64f1c2a9e8b7d6c5b4a30009',
 } as const;
 
 const person = (id: string, username: string, displayName: string | null) => ({ id, username, displayName, avatar: null });
@@ -51,7 +52,8 @@ export const SERVED = {
     timestamp: '2026-09-30T11:59:00.000Z',
   },
   realtime: { onlineUsers: 12, messagesLastHour: 340, activeConversations: 27, timestamp: '2026-09-30T11:59:30.000Z' },
-  kpis: { engagementRate: 42, avgSessionTime: '2h 45m', peakHours: '18h-21h', growthRate: 7, messagesPerUser: 31, activeUserRate: 42 },
+  /* Deux taux DISTINCTS depuis le 2026-10-04 : l'engagement (comptes ayant écrit / comptes actifs) et la part des comptes actifs. */
+  kpis: { engagementRate: 35, avgSessionTime: '2h 45m', peakHours: '18h-21h', growthRate: 7, messagesPerUser: 31, activeUserRate: 42 },
   volume: [
     { date: 'mer. 24/09', messages: 10 },
     { date: 'jeu. 25/09', messages: 20 },
@@ -223,11 +225,13 @@ export const SERVED = {
     rankings: [
       { id: IDS.awa, username: 'awa', displayName: 'Awa Diop', avatar: null, count: 88, lastActivity: '2026-09-30T11:00:00.000Z' },
       { id: IDS.jean, username: 'jean', displayName: null, avatar: null, count: 50 },
+      /* Un participant ANONYME classé parmi les membres : sans compte, la passerelle le marque `guest` et pose le bouche-trou `Unknown`. */
+      { id: IDS.guest, username: 'Unknown', displayName: 'Invitée Mariam', avatar: null, guest: true, count: 12 },
     ],
     entityType: 'users',
     criterion: 'messages_sent',
     period: '7d',
-    total: 2,
+    total: 3,
   },
   monitoring: {
     generatedAt: '2026-09-30T12:00:00.000Z',

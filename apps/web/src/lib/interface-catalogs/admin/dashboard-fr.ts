@@ -16,7 +16,7 @@ const f = {
   'admin.dash.zone.usage': 'Santé de l’usage',
   'admin.dash.zone.usage.hint': 'Mesurée sur les 30 derniers jours.',
   'admin.dash.zone.trends': 'Tendances',
-  'admin.dash.zone.trends.hint': 'Les jours et les tranches horaires sont ceux du serveur.',
+  'admin.dash.zone.trends.hint': 'Les jours sont ceux du serveur ; les tranches horaires se lisent dans votre fuseau quand le serveur le permet.',
   'admin.dash.zone.todo': 'À traiter',
   'admin.dash.zone.people': 'Personnes et échanges',
   'admin.dash.zone.system': 'Système',
@@ -46,7 +46,7 @@ const f = {
   'admin.dash.platform.admins.caption': 'Administrateurs et créateur',
 
   'admin.dash.usage.engagement': 'Taux d’engagement',
-  'admin.dash.usage.engagement.caption': 'Comptes vus sur la période, rapportés à tous les comptes',
+  'admin.dash.usage.engagement.caption': 'Comptes ayant écrit sur la période, rapportés aux comptes actifs',
   'admin.dash.usage.growth': 'Croissance',
   'admin.dash.usage.growth.caption': 'Nouveaux comptes sur la période, rapportés à tous les comptes',
   'admin.dash.usage.perUser': 'Messages par compte',
@@ -115,6 +115,14 @@ const f = {
   'admin.dash.agent.messages.caption': 'Par l’agent, depuis le début',
   'admin.dash.agent.last': 'Dernière activité',
   'admin.dash.agent.last.none': 'Aucune activité',
+
+  'admin.dash.hourly.titleUtc': 'Activité par tranche de 3 heures (24 dernières heures, heures UTC)',
+  'admin.dash.todo.reports': 'Signalements en attente : {count}',
+  'admin.dash.todo.broadcasts': 'Diffusions en cours : {count}',
+  'admin.dash.todo.nothing': 'Rien à traiter',
+  'admin.dash.platform.translations': 'Traductions',
+  'admin.dash.platform.reports': 'Signalements',
+  'admin.dash.system.ok': 'Tous les services répondent.',
 } as const;
 
 export default f;
