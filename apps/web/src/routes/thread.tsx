@@ -22,7 +22,8 @@ import { ConversationDetailsContext } from '@/components/avatar-menu';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
 import { apiConfig } from '@/lib/api/config';
 import { webOriginOf } from '@/lib/links/web-origin';
-import { DayPill, NoticePill, OlderLoadIndicator, ScrollToBottomButton } from '@/components/thread-chrome';
+import { DayPill, NoticePill, OlderLoadIndicator } from '@/components/thread-chrome';
+import { ThreadReturnToBottom } from '@/components/thread-return-to-bottom';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiDeps } from '@/lib/api/deps';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
@@ -862,13 +863,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
       </main>
       <OlderLoadIndicator state={older.state} onRetry={older.retry} />
 
-      <ScrollToBottomButton
-        visible={chrome.scrollButtonVisible}
-        unreadCount={chrome.scrollButtonUnreadCount}
-        senderName={chrome.scrollButtonSenderName}
-        previewText={chrome.scrollButtonPreviewText}
-        onClick={chrome.onScrollToBottom}
-      />
+      <ThreadReturnToBottom chrome={chrome} windowLoading={threadData.windowLoading} newerState={threadData.newerState} />
 
       <NoticePill text={announcer.text} />
 
