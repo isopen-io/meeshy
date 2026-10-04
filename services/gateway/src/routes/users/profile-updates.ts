@@ -35,6 +35,7 @@ import {
 import { applyCategoryWriteEffects } from '../me/preferences/preference-registry';
 import { calculateProfileCompletionRate } from '../../utils/profile-completion';
 import { releaseParticipantAvatarSnapshots } from '../../services/participantAvatarSnapshots';
+import { refreshParticipantNameSnapshots } from '../../services/participantNameSnapshots';
 import { EngagementService } from '../../services/engagement/EngagementService';
 import type { EngagementOperationKey } from '@meeshy/shared/types/engagement-operations';
 
@@ -292,6 +293,8 @@ export async function updateUserProfile(fastify: FastifyInstance) {
           lastName: updatedUser.lastName,
           username: updatedUser.username,
         };
+        await refreshParticipantNameSnapshots(fastify.prisma, userId!, publicChanges)
+          .catch((err: unknown) => logError(fastify.log, '[PROFILE_UPDATE] participant name refresh failed', err));
         fastify.notificationService?.emitUserUpdated({ userId: userId!, changes: publicChanges })
           .catch((err: unknown) => logError(fastify.log, '[PROFILE_UPDATE] emitUserUpdated failed', err));
 
