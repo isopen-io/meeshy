@@ -634,6 +634,7 @@ export default function MediaViewer({
     currentId: current?.id,
     title: currentCarrier?.sender?.displayName ?? null,
     conversationId: page?.conversationId ?? null,
+    messageId: page?.messageId ?? null,
   });
   const currentSceneEntry = current === undefined ? undefined : scenes?.get(current.id);
   const insets = safeAreaInsets();
