@@ -2,13 +2,19 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** remplacer, dans l'app iOS, le viseur + la revue `ComposerPhotoLookReview` par UN objet `ComposerCaptureStage` (viser, filmer, retoucher), peint par UN peintre Core Image/Metal, sur un canevas 9:16 1080×1920 daté de la session — monté à l'identique par la barre de conversation (`ComposerViewfinder`) et par le composer story / post / réel (`MeeshyComposerHost+Viewfinder`).
+**Goal:** remplacer, dans l'app iOS, le viseur + la revue `ComposerPhotoLookReview` par UN objet `ComposerCaptureStage` (viser, filmer, retoucher), peint par UN peintre Core Image/Metal, sur un canevas 9:16 à la résolution NATIVE de la source (le plus grand recadrage 9:16, jamais réduit), daté de la session, l'EXIF de la prise conservé — monté à l'identique par la barre de conversation (`ComposerViewfinder`) et par le composer story / post / réel (`MeeshyComposerHost+Viewfinder`).
 
 **Architecture:** un peintre pur (`ComposerLookPainter`) sert l'aperçu, la photo, l'export vidéo, la boucle d'édition et les miniatures ; les couches statiques d'un look (cadre du catalogue OU classique du Montage, désormais découpé en couches) se cuisent une fois hors du fil principal dans un cache borné. La machine `ComposerCaptureSession` gagne une phase (capture / édition), des intentions de prise (scène → édition, miniature choisie → galerie), un budget thermique injecté et un zoom en facteur affiché (×0,5 sur caméra virtuelle). La vue `ComposerCaptureStage` assemble aperçu (couche système OU vue Metal, jamais les deux), nappe de gestes (table de décision pure), rail Filtres/Cadres, bande de miniatures vivantes (un atlas Metal), cadenas, piste de découpe et ✓ Terminé.
 
 **Tech Stack:** Swift 6.2 (SDK iOS 26, cible de déploiement iOS 16.0), SwiftUI, AVFoundation (`AVCaptureDevice.DiscoverySession`, `AVQueuePlayer`, `AVPlayerLooper`, `AVPlayerItemVideoOutput`, `AVAssetExportSession`, `AVAssetImageGenerator`), Core Image sur Metal (`CIContext(mtlDevice:)`, `MTKView`), CoreGraphics (peintre du Montage), XCTest, XcodeGen, GitHub Actions (`iOS` workflow), `gh`.
 
 **Spec:** `docs/superpowers/specs/2026-10-04-capture-unifiee-design.md` (validée par le porteur le 2026-10-04). Issues : parent #9346 ; lots #9347 → #9354 ; jumelle web #9355 (HORS de ce plan — elle se pilote par sa propre issue).
+
+### Décisions du porteur (2026-10-04, après revue du plan) — elles priment sur toute ligne contraire
+
+- **(a) Canevas à la résolution NATIVE de la source.** Le canevas qui PART (photo, vidéo, rendu galerie, « Terminé ») est le plus grand recadrage 9:16 de la source (`ComposerLookPainter.canvas(for:)` : 3024×4032 ⇒ 2268×4032 ; 1080×1920 ⇒ 1080×1920) — jamais réduit à 1080×1920. `1080×1920` (`ComposerLookPainter.designCanvas`) n'est plus que le REPÈRE DE DESSIN : les deux peintres de cadres mesurent tout en unités proportionnelles (`CallFrameLayoutGeometry.unit = min(w, h)`, `CallMontageRenderer` : `unit = canvas.width / 1080`), donc une scène cuite à la taille native montre le même dessin, à l'échelle. La photo rendue garde les métadonnées de la prise (EXIF, GPS, date de prise) : elle s'encode par `CGImageDestination` avec les propriétés d'origine, orientation remise à 1 et dimensions mises à jour (Tâche 3b) ; la vidéo rendue garde les métadonnées de l'asset (`AVAssetExportSession.metadata`). Le BRUT part en galerie à la prise, octets d'origine compris (Tâche 3b corrige `saveImage(_ data:)`, qui repassait par `UIImage` et perdait l'EXIF).
+- **(b) L'inversion des gestes est ASSUMÉE** face à #8711 (un toucher photographiait) et #9295 (la photo passait par une revue) : désormais un toucher vise, deux touchers photographient, la revue disparaît. Les témoins de #8711 / #9295 sont MIS À JOUR (Tâche 15, étape 3i — liste exhaustive), jamais supprimés sans remplaçant.
+- **(c) Palier thermique critique** : l'aperçu retombe sur la couche système et l'écran le DIT par une mention visible (« Aperçu simplifié : l'appareil chauffe. La prise garde tout l'effet. ») ; la photo et l'export reçoivent toujours le look complet (Tâche 7).
 
 ---
 
@@ -27,7 +33,7 @@
 - **Commentaires** : le style du dépôt — doc-comments `///` en français, en tête de type et de membre public de la loi ; aucun commentaire de paraphrase dans les corps.
 - **Localisation** : `String(localized: "clé", defaultValue: "texte fr", bundle: .main)` ; toute clé neuve entre au catalogue `apps/ios/Meeshy/Localizable.xcstrings` dans les **sept** langues (`fr`, `en`, `es`, `de`, `it`, `pt-BR`, `ar`), `fr` = `defaultValue` mot pour mot ; toute clé dont le dernier usage disparaît SORT du catalogue (sinon `test_everyAppCatalogIdentifierKeyIsReferencedInCode` rougit). Outil : `apps/ios/scripts/catalog_keys.py` (créé en Tâche 3). Check local : `python3 apps/ios/scripts/check_localization.py` → `Localization consistency check passed.`
 - **Accessibilité** : chaque contrôle a un `accessibilityLabel`, une cible ≥ 44 pt (`MeeshyControlSize.tapTarget`), et tout geste (double toucher, appui long, glissé) a son équivalent `accessibilityAction(named:)` ; Reduce Motion coupe les battements, jamais l'information.
-- **Canevas canonique** : 9:16, **1080×1920**, rempli, avec ou sans cadre (`ComposerLookPainter.canvas`). Miniatures : **162×288**. Date gravée : TOUJOURS `ComposerCaptureSession.lookDate`, jamais `Date()` sur un chemin de rendu.
+- **Canevas canonique** : 9:16, rempli, avec ou sans cadre, **à la résolution native de la source** (`ComposerLookPainter.canvas(for: source.extent.size)`, décision (a)) ; `ComposerLookPainter.designCanvas` (1080×1920) ne sert qu'aux PROPORTIONS (ajustement à l'écran) et de repère de dessin. Miniatures : **162×288** (`thumbnailCanvas`). Date gravée : TOUJOURS `ComposerCaptureSession.lookDate`, jamais `Date()` sur un chemin de rendu. Mémoire : le cache de scènes est borné en OCTETS (`totalCostLimit`), et une scène à la résolution d'une photo n'y entre jamais (cuite, peinte, relâchée).
 - **Simulateurs** : un seul démarré, `Meeshy-iOS26` (sur staging). JAMAIS « Meeshy Vitrine iPhone ».
 - **Hors périmètre** : le web (#9355), Android Kotlin (gelé), le chemin CPU des APPELS (`CallFrameRenderer.render`, `CallCaptureController+Frames`) qui reste tel quel.
 
@@ -75,7 +81,8 @@ git pull --rebase --autostash origin dev && git push origin HEAD:dev
 2. **Une prise qui arrive après la fermeture ou pendant une interruption** (appel entrant, app en arrière-plan) alors qu'une prise « vers la galerie » était en cours : elle ne doit ni devenir un segment fantôme ni être perdue (le BRUT est déjà en galerie). Témoin : Tâche 14, `test_videoArrived_afterDisarm_discardsFileAndKeepsNoSegment`.
 3. **Photos refusées** (`PHAuthorization` `.denied`) au moment d'enregistrer un RENDU : la capture continue, rien ne reste « en rendu », un toast explique. Témoin : Tâche 14, `test_saveRenderedPhoto_galleryRefuses_staysCapturingAndClearsRendering`.
 4. **iPhone sans ultra grand-angle, caméra avant, simulateur** : la pastille ×0,5 n'apparaît pas, le zoom ne descend jamais sous 1, le pincement ne fait rien sans objectif. Témoin : Tâche 8, `test_presets_singleLensOrFrontCamera_excludesHalf`.
-5. **Vidéo très courte** (segment de 0,3 s, ou plus court que la durée minimale de découpe) : la piste reste utilisable, la plage = le clip entier, l'export ne plante pas. Témoin : Tâche 19, `test_initialRange_clipShorterThanMinimum_isWholeClip`.
+5. **Métadonnées de ce qui part** (décision (a)) : la photo rendue (conversation, galerie, « Terminé ») garde date et lieu de PRISE, orientation 1, dimensions natives ; le brut en galerie garde ses octets. Témoins : Tâche 3b `test_encoded_keepsTheTakeMetadata_uprightAndAtTheRenderedSize`, Tâche 18 `test_finishEditingPhoto_deliversTheNativeCanvas_withTheTakeExif_andSavesIt`.
+6. **Vidéo très courte** (segment de 0,3 s, ou plus court que la durée minimale de découpe) : la piste reste utilisable, la plage = le clip entier, l'export ne plante pas. Témoin : Tâche 19, `test_initialRange_clipShorterThanMinimum_isWholeClip`.
 
 ---
 
@@ -87,7 +94,8 @@ git pull --rebase --autostash origin dev && git push origin HEAD:dev
 | `…/Composer/ComposerLookPainter.swift` (neuf) | le peintre unique, la clé de scène, le GPU partagé | 2, 5 |
 | `…/Composer/ComposerLookSceneCache.swift` (neuf) | cuisson hors fil principal, `NSCache` borné | 2 |
 | `…/Composer/ComposerLiveLookSurface.swift` | la vue Metal : peint par le peintre, au rythme des trames | 3, 7, 18 |
-| `…/Composer/ComposerLookVideoExporter.swift` | l'export par le peintre (+ cadrage, + découpe) | 3, 18, 20 |
+| `…/Composer/ComposerLookVideoExporter.swift` | l'export par le peintre (+ cadrage, + découpe, + métadonnées) | 3, 3b, 18, 20 |
+| `…/Composer/ComposerPhotoEncoding.swift` (neuf) | l'encodeur unique : la photo rendue garde l'EXIF de la prise | 3b |
 | `…/Composer/ComposerCaptureViews.swift` | aperçu 9:16 (couche système OU Metal) | 3, 7 |
 | `…/Services/CallMontageRenderer+Layers.swift` (neuf) | un classique découpé en couches GPU | 4 |
 | `…/Services/CallMontageRenderer.swift`, `…+Glamour.swift` | trou relevé à la peinture du portrait | 4 |
@@ -98,7 +106,7 @@ git pull --rebase --autostash origin dev && git push origin HEAD:dev
 | `…/Composer/ComposerFramePacing.swift` (neuf) | source de trames + cadence | 7 |
 | `…/Composer/ComposerCameraFeed.swift` | prévient à chaque trame | 7 |
 | `…/Composer/ComposerCaptureHold.swift` | zoom en facteur affiché | 8 |
-| `…/Components/CameraModel.swift` | caméra virtuelle, zoom affiché, crochets de recette | 9, 10 |
+| `…/Components/CameraModel.swift` | brut en galerie octets tels quels, caméra virtuelle, zoom affiché, crochets de recette | 3b, 9, 10, 14, 16 |
 | `…/Components/CameraModel+Fixture.swift` (neuf, DEBUG) | caméra de recette au simulateur | 10 |
 | `…/Composer/ComposerCaptureGesture.swift` (neuf) | table zone × geste × phase × verrou | 11 |
 | `…/Composer/ComposerLookStripRule.swift` (neuf) | familles, combinaison, fenêtre peinte | 12 |
@@ -313,7 +321,7 @@ Puis P1 (`LOT=9347`). Expected: PASS (`exit=0`), `ComposerFramingTests` 7/7.
 - Produces:
   - `nonisolated struct ComposerLookSceneKey: Equatable, Sendable { let look: ComposerPhotoLook; let canvas: CGSize; let date: Date; let person: CallFramePerson; var cacheKey: NSString; static func token(_ frame: ComposerPhotoFrame) -> String }`
   - `nonisolated enum ComposerLookGPU { static let device: MTLDevice?; static let commandQueue: MTLCommandQueue?; static let context: CIContext }`
-  - `nonisolated enum ComposerLookPainter { static let canvas: CGSize; static let thumbnailCanvas: CGSize; static func scene(for look: ComposerPhotoLook, canvas: CGSize, date: Date, person: CallFramePerson) -> CallLiveFrameScene?; static func scene(for key: ComposerLookSceneKey) -> CallLiveFrameScene?; static func paint(_ source: CIImage, look: ComposerPhotoLook, framing: ComposerFraming, scene: CallLiveFrameScene?, canvas: CGSize, declared: CGColorSpace?) -> CIImage; static func filled(_ image: CIImage, framing: ComposerFraming, into target: CGRect) -> CIImage; static func photo(_ image: CGImage, look: ComposerPhotoLook, framing: ComposerFraming, scene: CallLiveFrameScene?, canvas: CGSize) -> CGImage?; static func onScreen(_ painted: CIImage, canvas: CGSize, drawable: CGSize) -> CIImage; @concurrent static func renderPhoto(_ image: CGImage, look: ComposerPhotoLook, framing: ComposerFraming, person: CallFramePerson, date: Date, scenes: any ComposerLookSceneProviding) async -> CGImage? }`
+  - `nonisolated enum ComposerLookPainter { static let designCanvas: CGSize; static let thumbnailCanvas: CGSize; static func canvas(for source: CGSize) -> CGSize; static func scene(for look: ComposerPhotoLook, canvas: CGSize, date: Date, person: CallFramePerson) -> CallLiveFrameScene?; static func scene(for key: ComposerLookSceneKey) -> CallLiveFrameScene?; static func paint(_ source: CIImage, look: ComposerPhotoLook, framing: ComposerFraming, scene: CallLiveFrameScene?, canvas: CGSize, declared: CGColorSpace?) -> CIImage; static func filled(_ image: CIImage, framing: ComposerFraming, into target: CGRect) -> CIImage; static func photo(_ image: CGImage, look: ComposerPhotoLook, framing: ComposerFraming, scene: CallLiveFrameScene?, canvas: CGSize?) -> CGImage?; static func onScreen(_ painted: CIImage, canvas: CGSize, drawable: CGSize) -> CIImage; @concurrent static func renderPhoto(_ image: CGImage, look: ComposerPhotoLook, framing: ComposerFraming, person: CallFramePerson, date: Date, scenes: any ComposerLookSceneProviding) async -> CGImage? }`
   - `protocol ComposerLookSceneProviding: AnyObject, Sendable { func cached(_ key: ComposerLookSceneKey) -> CallLiveFrameScene?; func prepare(_ key: ComposerLookSceneKey, ready: @escaping @MainActor @Sendable () -> Void); func purge() }` et `nonisolated final class ComposerLookSceneCache: ComposerLookSceneProviding` (`static let shared`).
 
 - [ ] **Step 1: Write the failing test**
@@ -331,9 +339,28 @@ final class ComposerLookPainterTests: XCTestCase {
     private let auteur = CallFramePerson(id: "moi", name: "Ada", handle: "ada", isSelf: true)
     private let date = Date(timeIntervalSince1970: 1_790_000_000)
 
-    func test_canvas_isCanonicalNineSixteen() {
-        XCTAssertEqual(ComposerLookPainter.canvas, CGSize(width: 1080, height: 1920))
+    func test_designCanvas_isTheNineSixteenReference() {
+        XCTAssertEqual(ComposerLookPainter.designCanvas, CGSize(width: 1080, height: 1920))
         XCTAssertEqual(ComposerLookPainter.thumbnailCanvas, CGSize(width: 162, height: 288))
+    }
+
+    func test_canvas_isTheLargestNineSixteenCropOfTheSource_neverDownscaled() {
+        XCTAssertEqual(ComposerLookPainter.canvas(for: CGSize(width: 3024, height: 4032)), CGSize(width: 2268, height: 4032),
+                       "une photo 12 Mpx garde sa définition : 2268×4032, pas 1080×1920")
+        XCTAssertEqual(ComposerLookPainter.canvas(for: CGSize(width: 1080, height: 1920)), CGSize(width: 1080, height: 1920))
+        XCTAssertEqual(ComposerLookPainter.canvas(for: CGSize(width: 2160, height: 3840)), CGSize(width: 2160, height: 3840))
+        let paysage = ComposerLookPainter.canvas(for: CGSize(width: 4032, height: 3024))
+        XCTAssertEqual(paysage.width / paysage.height, 9.0 / 16.0, accuracy: 0.0001)
+        XCTAssertLessThanOrEqual(paysage.height, 3024)
+        XCTAssertEqual(Int(paysage.width) % 2, 0, "dimensions paires : l'encodeur vidéo les exige")
+    }
+
+    func test_photo_isRenderedAtTheSourceResolution() throws {
+        let photo = try XCTUnwrap(ComposerLookPainter.photo(Self.cgSource(), look: ComposerPhotoLook(filter: .warm),
+                                                            framing: .identity, scene: nil, canvas: nil))
+        let attendu = ComposerLookPainter.canvas(for: CGSize(width: 300, height: 400))
+        XCTAssertEqual(CGSize(width: photo.width, height: photo.height), attendu)
+        XCTAssertEqual(attendu, CGSize(width: 216, height: 384))
     }
 
     func test_paint_withoutLook_isTheSourceFilledIntoTheCanvas() throws {
@@ -355,11 +382,14 @@ final class ComposerLookPainterTests: XCTestCase {
                                                             scene: scene, canvas: toile))
         XCTAssertEqual(photo.width, 108)
         XCTAssertEqual(photo.height, 192)
+        let espace = ComposerPhotoLookRule.colorSpace(of: Self.cgSource())
         let apercu = ComposerLookPainter.paint(CIImage(cgImage: Self.cgSource()), look: look, framing: .identity,
-                                               scene: scene, canvas: toile,
-                                               declared: ComposerPhotoLookRule.colorSpace(of: Self.cgSource()))
+                                               scene: scene, canvas: toile, declared: espace)
+        let apercuRendu = try XCTUnwrap(ComposerLookGPU.context.createCGImage(
+            apercu, from: CGRect(origin: .zero, size: toile), format: .RGBA8, colorSpace: espace),
+            "le même contexte que la photo : on compare le GRAPHE, pas deux moteurs de rendu")
         let a = try Self.rgba(CIImage(cgImage: photo), size: toile)
-        let b = try Self.rgba(apercu, size: toile)
+        let b = try Self.rgba(CIImage(cgImage: apercuRendu), size: toile)
         for (x, y) in [(10, 10), (54, 96), (100, 180), (54, 20)] {
             let pa = Self.pixel(a, x: x, y: y, width: 108), pb = Self.pixel(b, x: x, y: y, width: 108)
             XCTAssertEqual(Int(pa.red), Int(pb.red), accuracy: 2, "(\(x),\(y))")
@@ -369,16 +399,16 @@ final class ComposerLookPainterTests: XCTestCase {
     }
 
     func test_sceneKey_carriesTheSessionDateText_neverToday() {
-        let cle = ComposerLookSceneKey(look: ComposerPhotoLook(), canvas: ComposerLookPainter.canvas,
+        let cle = ComposerLookSceneKey(look: ComposerPhotoLook(), canvas: ComposerLookPainter.designCanvas,
                                        date: date, person: auteur)
         XCTAssertTrue((cle.cacheKey as String).contains(CallFrameTextsRule.dateText(date)))
-        let autre = ComposerLookSceneKey(look: ComposerPhotoLook(), canvas: ComposerLookPainter.canvas,
+        let autre = ComposerLookSceneKey(look: ComposerPhotoLook(), canvas: ComposerLookPainter.designCanvas,
                                          date: date.addingTimeInterval(86_400 * 3), person: auteur)
         XCTAssertNotEqual(cle.cacheKey, autre.cacheKey, "une autre date est une autre scène")
     }
 
     func test_scene_withoutFrame_isNil() {
-        XCTAssertNil(ComposerLookPainter.scene(for: ComposerPhotoLook(filter: .vivid), canvas: ComposerLookPainter.canvas,
+        XCTAssertNil(ComposerLookPainter.scene(for: ComposerPhotoLook(filter: .vivid), canvas: ComposerLookPainter.designCanvas,
                                                date: date, person: auteur))
     }
 
@@ -428,10 +458,12 @@ final class ComposerLookPainterTests: XCTestCase {
         var valeur: Int { verrou.lock(); defer { verrou.unlock() }; return n }
     }
 
+    /// Un cadre du catalogue À MARGE : ses coins sont du décor, jamais la vidéo —
+    /// un cadre à fond perdu rendrait le témoin du miroir vide de sens.
     static func premierCadreDuCatalogue() -> ComposerPhotoFrame? {
         ComposerLiveLookRule.chips().lazy
             .flatMap { ComposerLiveLookRule.frames(for: $0) }
-            .first { ComposerLiveLookRule.design(for: $0) != nil }
+            .first { ComposerLiveLookRule.design(for: $0).map { $0.look.layout.margin > 0 } ?? false }
     }
 
     static func cgSource() -> CGImage {
@@ -543,10 +575,20 @@ nonisolated enum ComposerLookGPU {
 /// Ce qu'on voit est donc ce qui part, par construction.
 nonisolated enum ComposerLookPainter {
 
-    /// Le canevas canonique : 9:16, rempli, avec ou sans cadre.
-    static let canvas = CGSize(width: 1080, height: 1920)
+    /// Le REPÈRE de dessin : 9:16, 1080×1920. Il dit les proportions (ajustement à
+    /// l'écran) et la toile de l'aperçu ; ce qui PART se peint à `canvas(for:)`.
+    static let designCanvas = CGSize(width: 1080, height: 1920)
     /// La toile d'une miniature de la bande.
     static let thumbnailCanvas = CGSize(width: 162, height: 288)
+
+    /// **Le canevas qui part : le plus grand recadrage 9:16 de la source**, à sa
+    /// résolution native, jamais réduit (décision porteur 2026-10-04). Des
+    /// multiples PAIRS de 9 × 16 : proportion exacte, dimensions paires (encodeurs).
+    static func canvas(for source: CGSize) -> CGSize {
+        let pas = Int(min(source.width / 9, source.height / 16).rounded(.down))
+        let pair = max(2, pas - pas % 2)
+        return CGSize(width: 9 * pair, height: 16 * pair)
+    }
 
     private static let compositor = CallLiveFrameCompositor()
 
@@ -595,13 +637,15 @@ nonisolated enum ComposerLookPainter {
         return image.cropped(to: fenetre).transformed(by: pose).cropped(to: target)
     }
 
-    /// **La photo qui part** : le même graphe, rendu dans l'espace de la photo (#9327).
+    /// **La photo qui part** : le même graphe, rendu dans l'espace de la photo (#9327),
+    /// à la résolution native de la source quand `canvas` est `nil`.
     static func photo(_ image: CGImage, look: ComposerPhotoLook, framing: ComposerFraming,
-                      scene: CallLiveFrameScene?, canvas: CGSize = canvas) -> CGImage? {
+                      scene: CallLiveFrameScene?, canvas: CGSize? = nil) -> CGImage? {
+        let toile = canvas ?? Self.canvas(for: CGSize(width: image.width, height: image.height))
         let espace = ComposerPhotoLookRule.colorSpace(of: image)
         let peinte = paint(CIImage(cgImage: image), look: look, framing: framing, scene: scene,
-                           canvas: canvas, declared: espace)
-        return ComposerLookGPU.context.createCGImage(peinte, from: CGRect(origin: .zero, size: canvas),
+                           canvas: toile, declared: espace)
+        return ComposerLookGPU.context.createCGImage(peinte, from: CGRect(origin: .zero, size: toile),
                                                      format: .RGBA8, colorSpace: espace)
     }
 
@@ -610,17 +654,19 @@ nonisolated enum ComposerLookPainter {
         painted.transformed(by: ComposerLiveLookRule.fit(scene: canvas, into: drawable))
     }
 
-    /// La photo en pleine toile, hors du fil principal. La scène vient du cache
-    /// quand l'aperçu l'a déjà cuite ; un cadre qui ne se peint pas rend `nil`
-    /// plutôt qu'une photo sans le cadre que l'auteur voyait.
+    /// La photo à sa résolution native, hors du fil principal. Sa scène est cuite à
+    /// cette taille et relâchée aussitôt — jamais retenue par le cache, borné pour
+    /// l'aperçu. Un cadre qui ne se peint pas rend `nil` plutôt qu'une photo sans le
+    /// cadre que l'auteur voyait.
     @concurrent
     static func renderPhoto(_ image: CGImage, look: ComposerPhotoLook, framing: ComposerFraming,
                             person: CallFramePerson, date: Date,
                             scenes: any ComposerLookSceneProviding) async -> CGImage? {
-        let cle = ComposerLookSceneKey(look: look, canvas: canvas, date: date, person: person)
-        let scene = scenes.cached(cle) ?? scene(for: cle)
+        let toile = canvas(for: CGSize(width: image.width, height: image.height))
+        let cle = ComposerLookSceneKey(look: look, canvas: toile, date: date, person: person)
+        let scene = scenes.cached(cle) ?? Self.scene(for: cle)
         if look.frame != .none, scene == nil { return nil }
-        return photo(image, look: look, framing: framing, scene: scene)
+        return photo(image, look: look, framing: framing, scene: scene, canvas: toile)
     }
 }
 ```
@@ -654,10 +700,18 @@ nonisolated final class ComposerLookSceneCache: ComposerLookSceneProviding, @unc
 
     nonisolated deinit {}
 
-    init(countLimit: Int = 48,
+    /// Borné en NOMBRE et en OCTETS : une scène de l'aperçu (1080×1920, trois
+    /// couches BGRA) pèse ~25 Mo ; 64 Mo en gardent deux, et toute la bande (162×288).
+    init(countLimit: Int = 48, totalCostLimit: Int = 64 * 1_024 * 1_024,
          painter: @escaping @Sendable (ComposerLookSceneKey) -> CallLiveFrameScene? = { ComposerLookPainter.scene(for: $0) }) {
         scenes.countLimit = countLimit
+        scenes.totalCostLimit = totalCostLimit
         self.painter = painter
+    }
+
+    /// Le poids d'une scène : fond, calque et masques, 4 octets par pixel.
+    static func cost(of key: ComposerLookSceneKey) -> Int {
+        Int(key.canvas.width * key.canvas.height) * 4 * 3
     }
 
     func cached(_ key: ComposerLookSceneKey) -> CallLiveFrameScene? {
@@ -673,7 +727,7 @@ nonisolated final class ComposerLookSceneCache: ComposerLookSceneProviding, @unc
         lock.unlock()
         guard !dejaEnCours else { return }
         queue.async {
-            if let scene = self.painter(key) { self.scenes.setObject(scene, forKey: cle) }
+            if let scene = self.painter(key) { self.scenes.setObject(scene, forKey: cle, cost: Self.cost(of: key)) }
             self.lock.lock()
             self.pending.remove(cle)
             self.lock.unlock()
@@ -700,7 +754,7 @@ git add $P/ComposerLookPainter.swift $P/ComposerLookSceneCache.swift apps/ios/Me
 git commit -m "feat(ios): un seul peintre Core Image, une scène cuite une fois hors du fil principal (#9347)" -- $P/ComposerLookPainter.swift $P/ComposerLookSceneCache.swift apps/ios/Meeshy.xcodeproj/project.pbxproj
 ```
 
-P1 (`LOT=9347`). Expected: PASS, `ComposerLookPainterTests` 7/7. Si `test_photo_andPreview_paintTheSamePixels` diffère de plus de 2 niveaux, c'est que `photo` et `paint` ne lisent pas la source dans le même espace : passer `declared` identique des deux côtés (c'est le contrat), ne pas élargir la tolérance.
+P1 (`LOT=9347`). Expected: PASS, `ComposerLookPainterTests` 9/9. (Sur un exécuteur de CI sans GPU, `MTLCreateSystemDefaultDevice()` rend `nil` et `ComposerLookGPU.context` retombe sur le moteur logiciel : les témoins restent valides, ils comparent un graphe à lui-même ; seule la vue Metal est inerte sans appareil — elle n'est jamais exercée par un test.) Si `test_photo_andPreview_paintTheSamePixels` diffère de plus de 2 niveaux, c'est que `photo` et `paint` ne lisent pas la source dans le même espace : passer `declared` identique des deux côtés (c'est le contrat), ne pas élargir la tolérance.
 
 - [ ] **Step 5: Commit** — fait ; P3.
 
@@ -712,7 +766,7 @@ P1 (`LOT=9347`). Expected: PASS, `ComposerLookPainterTests` 7/7. Si `test_photo_
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerLiveLookSurface.swift` (tout le moteur)
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureViews.swift:9-39` (`ComposerCapturePreview`)
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift:28-72`
-- Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession.swift:288-332` (`validateSegments`) et `:510-528` (`lookedPhoto`)
+- Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession.swift:246-285` (`validateSegments`) et `:510-528` (`lookedPhoto`)
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerPhotoLookReview.swift:117-120` (date), `:287-297` (peintre), `:319-328` (`upright` déplacé)
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerPhotoLook.swift` (reçoit `upright` et `caption(at:)`)
 - Create: `apps/ios/scripts/catalog_keys.py`
@@ -871,7 +925,7 @@ et leurs deux appels : `await Self.paintPreview(look, source: source, date: date
 /// ce qui part.
 nonisolated enum ComposerCaptureCanvas {
     static func fitted(in bounds: CGRect) -> CGRect {
-        let toile = ComposerLookPainter.canvas
+        let toile = ComposerLookPainter.designCanvas
         guard bounds.width > 0, bounds.height > 0 else { return bounds }
         let echelle = min(bounds.width / toile.width, bounds.height / toile.height)
         let taille = CGSize(width: toile.width * echelle, height: toile.height * echelle)
@@ -885,12 +939,12 @@ et, dans `ComposerCapturePreview.body`, remplacer le `case .viewfinder:` par :
 
 ```swift
             case .viewfinder:
-                GeometryReader { proxy in
-                    let toile = ComposerCaptureCanvas.fitted(in: CGRect(origin: .zero, size: proxy.size))
+                GeometryReader { exterieur in
+                    let toile = ComposerCaptureCanvas.fitted(in: CGRect(origin: .zero, size: exterieur.size))
                     ZStack {
                         CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints)
-                            .background(GeometryReader { mesure in
-                                Color.clear.adaptiveOnChange(of: mesure.frame(in: .global), initial: true) { _, cadre in
+                            .background(GeometryReader { proxy in
+                                Color.clear.adaptiveOnChange(of: proxy.frame(in: .global), initial: true) { _, cadre in
                                     session.focusPoints.previewFrame = cadre
                                 }
                             })
@@ -905,7 +959,15 @@ et, dans `ComposerCapturePreview.body`, remplacer le `case .viewfinder:` par :
                 }
 ```
 
-(Garder `adaptiveOnChange(of: proxy.frame(in: .global), initial: true)` mot pour mot : la garde `test_leChromePartage_porteLeDoubleToucherEtLePincement` le lit — renommer `mesure` en `proxy` en renommant le `GeometryReader` extérieur `exterieur`.)
+(`adaptiveOnChange(of: proxy.frame(in: .global), initial: true)` est écrit mot pour mot : la garde `ComposerCaptureLockZoomFlashTests.swift:466` le lit.)
+
+Mettre à jour aussi `test_sansLook_laVideoPartTelleQuelle_sansRendu` (`ComposerLiveLookTests.swift` ~:163), dont l'appel ne compile plus :
+
+```swift
+        let rendue = await ComposerLookVideoExporter.export(
+            url, look: ComposerPhotoLook(), person: CallFramePerson(id: "u1", name: "Jean", handle: nil, isSelf: true),
+            date: Date(timeIntervalSince1970: 1_790_000_000))
+```
 
 3d. `ComposerLiveLookSurface.swift` — le moteur peint par le peintre, au canevas canonique :
 
@@ -951,6 +1013,9 @@ final class ComposerLiveLookRenderer: NSObject, MTKViewDelegate {
     private var look = ComposerPhotoLook()
     private var framing = ComposerFraming.identity
     private var key: ComposerLookSceneKey?
+    /// La scène du look courant, posée au changement de look ou à la fin de sa
+    /// cuisson — jamais relue dans le cache à chaque image.
+    private var scene: CallLiveFrameScene?
 
     nonisolated deinit {}
 
@@ -979,16 +1044,22 @@ final class ComposerLiveLookRenderer: NSObject, MTKViewDelegate {
     func update(look: ComposerPhotoLook, person: CallFramePerson, date: Date, framing: ComposerFraming) {
         self.look = look
         self.framing = framing
-        let cle = ComposerLookSceneKey(look: look, canvas: ComposerLookPainter.canvas, date: date, person: person)
+        let cle = ComposerLookSceneKey(look: look, canvas: ComposerLookPainter.designCanvas, date: date, person: person)
+        guard cle != key else { return }
         key = cle
-        guard look.frame != .none else { return }
-        scenes.prepare(cle) {}
+        scene = scenes.cached(cle)
+        guard look.frame != .none, scene == nil else { return }
+        scenes.prepare(cle) { [weak self] in
+            guard let self, self.key == cle else { return }
+            self.scene = self.scenes.cached(cle)
+        }
     }
 
     func stop(_ view: MTKView) {
         view.isPaused = true
         view.delegate = nil
         key = nil
+        scene = nil
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
@@ -998,12 +1069,11 @@ final class ComposerLiveLookRenderer: NSObject, MTKViewDelegate {
               let frame = source.latestImage(),
               let drawable = view.currentDrawable,
               let buffer = commandQueue.makeCommandBuffer() else { return }
-        let scene = key.flatMap { scenes.cached($0) }
         let lookPeint = look.frame != .none && scene == nil ? ComposerPhotoLook(filter: look.filter) : look
         let peinte = ComposerLookPainter.paint(frame, look: lookPeint, framing: framing, scene: scene,
-                                               canvas: ComposerLookPainter.canvas, declared: source.declaredSpace)
+                                               canvas: ComposerLookPainter.designCanvas, declared: source.declaredSpace)
         let bounds = CGRect(origin: .zero, size: view.drawableSize)
-        let ecran = ComposerLookPainter.onScreen(peinte, canvas: ComposerLookPainter.canvas, drawable: view.drawableSize)
+        let ecran = ComposerLookPainter.onScreen(peinte, canvas: ComposerLookPainter.designCanvas, drawable: view.drawableSize)
         let opaque = ecran.composited(over: CIImage(color: .black).cropped(to: bounds))
         ComposerLookGPU.context.render(opaque, to: drawable.texture, commandBuffer: buffer, bounds: bounds,
                                        colorSpace: ComposerLiveLookRule.colorSpace)
@@ -1028,7 +1098,7 @@ final class ComposerLiveLookRenderer: NSObject, MTKViewDelegate {
             let natural = try await track.load(.naturalSize)
             let transform = try await track.load(.preferredTransform)
             let upright = MeeshyVideoWatermarkBaker.orientedSize(natural: natural, transform: transform)
-            let toile = ComposerLookPainter.canvas
+            let toile = ComposerLookPainter.canvas(for: upright)
             let scene = ComposerLookPainter.scene(for: look, canvas: toile, date: date, person: person)
             if look.frame != .none, scene == nil { throw UnpaintedFrame() }
             let composition = AVMutableVideoComposition(asset: asset) { @Sendable request in
@@ -1050,7 +1120,7 @@ final class ComposerLiveLookRenderer: NSObject, MTKViewDelegate {
     }
 ```
 
-Supprimer `paintedScene(for:person:texts:size:)` (remplacée par le peintre).
+Supprimer `paintedScene(for:person:texts:size:)` (remplacée par le peintre). `ComposerLiveLookRule.sceneSize(in:)` et `exportSize(for:upright:)` (`ComposerLiveLook.swift:133-145`) n'ont plus d'appelant : les supprimer, avec leurs témoins `test_laScene_aLesProportionsDeLaToileDuMontage` et `test_laVideoExportee_aLaToileDuMontageSousUnCadre_saTailleSinon` (`ComposerLiveLookTests.swift:86-99`) — `test_canvas_isTheLargestNineSixteenCropOfTheSource_neverDownscaled` (Tâche 2) dit désormais la toile de ce qui part, cadre ou pas (une vidéo paysage filtrée part donc en 9:16, comme la spec § 4.1 le veut).
 
 3f. `ComposerCaptureSession.swift` — `validateSegments` : remplacer `let textes = lookTexts` par rien, et l'appel par
 
@@ -1154,10 +1224,224 @@ cd /Users/smpceo/Documents/v2_meeshy
 P=apps/ios/Meeshy/Features/Main/Composer
 F="$P/ComposerLiveLookSurface.swift $P/ComposerCaptureViews.swift $P/ComposerLookVideoExporter.swift $P/ComposerCaptureSession.swift $P/ComposerPhotoLookReview.swift $P/ComposerPhotoLook.swift $P/ComposerViewfinder.swift apps/ios/MeeshyTests/Unit/Composer/ComposerLiveLookTests.swift apps/ios/scripts/catalog_keys.py"
 git add $F
-git commit -m "fix(ios): l'aperçu, la photo et la vidéo sortent du même peintre, sur le canevas 9:16 et à la date de la session — run test (Closes #9347)" -- $F
+git commit -m "fix(ios): l'aperçu, la photo et la vidéo sortent du même peintre, sur le canevas 9:16 et à la date de la session — run test (#9347)" -- $F
 ```
 
 P1. Expected: PASS — `ComposerLookPainterWiringTests` 3/3, `ComposerLiveLookTests` vert, `ComposerSingleViewfinderTests` vert (ses tests de `ComposerPhotoLookRenderer` restent valides : la classe vit jusqu'en Tâche 15).
+
+- [ ] **Step 5: Livrer** — P3. Le lot #9347 se clôt à la Tâche 3b (la photo qui part garde l'EXIF de la prise).
+
+---
+
+### Task 3b: La photo rendue garde l'EXIF de la prise ; le brut part en galerie avec ses octets d'origine
+
+Décision porteur (a). Aujourd'hui la photo regardée part `data: nil` (le témoin `test_avecUnFiltre_…` l'exige : « un EXIF qui décrirait une autre image mentirait ») et le brut passe par `PhotoLibraryManager.saveImage(_ data:)`, qui DÉCODE en `UIImage` puis enregistre l'image (`PhotoLibraryManager.swift:19-42`) — l'EXIF que le commentaire de `CameraModel.swift:678-683` croit garder est perdu. Le correctif : un encodeur unique qui recopie les propriétés de la prise en les rendant VRAIES pour l'image rendue (orientation 1, dimensions du rendu), et l'enregistrement en galerie par `saveImageFile(_:fileName:)` (`PHAssetCreationRequest.addResource`, octets tels quels).
+
+**Files:**
+- Create: `apps/ios/Meeshy/Features/Main/Composer/ComposerPhotoEncoding.swift`
+- Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession.swift` (`lookedPhoto` livre les octets encodés)
+- Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift` (`write` recopie `asset.metadata`)
+- Modify: `apps/ios/Meeshy/Features/Main/Components/CameraModel.swift:683` (le brut part par `saveImageFile`)
+- Test: `apps/ios/MeeshyTests/Unit/Composer/ComposerPhotoEncodingTests.swift`
+- Test (mise à jour) : `apps/ios/MeeshyTests/Unit/Composer/ComposerLiveLookTests.swift` (`test_avecUnFiltre_laPhotoPartPeinte_sansOctetsDOrigine` et la mise à jour 3g de la Tâche 3), `apps/ios/MeeshyTests/Unit/Components/CameraModelPhotoLibrarySaveTests.swift:50`
+
+**Interfaces:**
+- Produces: `nonisolated enum ComposerPhotoEncoding { static func encoded(_ image: CGImage, like original: Data?, quality: CGFloat = 0.92) -> Data?; static func metadata(_ original: [CFString: Any], for image: CGImage, quality: CGFloat) -> [CFString: Any]; static func fileName(for data: Data, id: String) -> String; @concurrent static func encode(_ image: CGImage, like original: Data?) async -> Data? }`
+
+- [ ] **Step 1: Write the failing test**
+
+```swift
+import XCTest
+import ImageIO
+import UniformTypeIdentifiers
+@testable import Meeshy
+
+/// **La photo qui part garde l'EXIF de la prise** (décision porteur 2026-10-04, #9347).
+@MainActor
+final class ComposerPhotoEncodingTests: XCTestCase {
+
+    func test_encoded_keepsTheTakeMetadata_uprightAndAtTheRenderedSize() throws {
+        let prise = try XCTUnwrap(Self.takeWithExif())
+        let rendu = ComposerLookPainterTests.cgSource()
+        let octets = try XCTUnwrap(ComposerPhotoEncoding.encoded(rendu, like: prise))
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(octets as CFData, nil))
+        let lu = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        let exif = try XCTUnwrap(lu[kCGImagePropertyExifDictionary] as? [CFString: Any])
+        XCTAssertEqual(exif[kCGImagePropertyExifDateTimeOriginal] as? String, "2026:10:04 09:30:00", "la date de PRISE reste")
+        XCTAssertNotNil(lu[kCGImagePropertyGPSDictionary], "le lieu de prise reste")
+        XCTAssertEqual(lu[kCGImagePropertyOrientation] as? Int, 1, "les pixels sont debout : l'orientation d'origine mentirait")
+        XCTAssertEqual(lu[kCGImagePropertyPixelWidth] as? Int, 300)
+        XCTAssertEqual(lu[kCGImagePropertyPixelHeight] as? Int, 400)
+        XCTAssertEqual(CGImageSourceGetType(source) as String?, UTType.jpeg.identifier, "le type de la prise")
+    }
+
+    func test_encoded_withoutTake_isAPlainJpeg() throws {
+        let octets = try XCTUnwrap(ComposerPhotoEncoding.encoded(ComposerLookPainterTests.cgSource(), like: nil))
+        let source = try XCTUnwrap(CGImageSourceCreateWithData(octets as CFData, nil))
+        XCTAssertEqual(CGImageSourceGetType(source) as String?, UTType.jpeg.identifier)
+    }
+
+    func test_fileName_followsTheEncodedType() throws {
+        let jpeg = try XCTUnwrap(ComposerPhotoEncoding.encoded(ComposerLookPainterTests.cgSource(), like: nil))
+        XCTAssertEqual(ComposerPhotoEncoding.fileName(for: jpeg, id: "abc"), "Meeshy_abc.jpg")
+    }
+
+    func test_rawTake_isSavedAsItsOriginalBytes() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let camera = AppSourceGuard.stripComments(try String(contentsOf: racine.appendingPathComponent(
+            "Meeshy/Features/Main/Components/CameraModel.swift"), encoding: .utf8))
+        XCTAssertTrue(camera.contains("PhotoLibraryManager.shared.saveImageFile(data"),
+                      "le brut part octets tels quels : saveImage(_ data:) repasse par UIImage et perd l'EXIF")
+    }
+
+    /// Une prise JPEG 40×30 couchée (orientation 6), datée, géolocalisée.
+    static func takeWithExif() -> Data? {
+        let contexte = CGContext(data: nil, width: 40, height: 30, bitsPerComponent: 8, bytesPerRow: 0,
+                                 space: CGColorSpaceCreateDeviceRGB(),
+                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        guard let image = contexte?.makeImage() else { return nil }
+        let sortie = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(sortie, UTType.jpeg.identifier as CFString, 1, nil)
+        else { return nil }
+        let proprietes: [CFString: Any] = [
+            kCGImagePropertyOrientation: 6,
+            kCGImagePropertyExifDictionary: [kCGImagePropertyExifDateTimeOriginal: "2026:10:04 09:30:00"],
+            kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 48.85, kCGImagePropertyGPSLatitudeRef: "N"],
+        ]
+        CGImageDestinationAddImage(destination, image, proprietes as CFDictionary)
+        return CGImageDestinationFinalize(destination) ? sortie as Data : nil
+    }
+}
+```
+
+Dans `ComposerLiveLookTests`, `test_avecUnFiltre_laPhotoPartPeinte_sansOctetsDOrigine` devient `test_avecUnFiltre_laPhotoPartPeinte_avecLEXIFDeLaPrise` : la prise passée est `ComposerPhotoEncodingTests.takeWithExif()`, et l'assertion finale devient
+
+```swift
+        let octets = try XCTUnwrap(data, "la photo qui part porte les métadonnées de la prise")
+        let lu = CGImageSourceCreateWithData(octets as CFData, nil)
+            .flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) as? [CFString: Any] }
+        XCTAssertEqual(lu?[kCGImagePropertyOrientation] as? Int, 1)
+        XCTAssertNotNil(lu?[kCGImagePropertyExifDictionary])
+```
+
+(la fonction devient `throws`, `import ImageIO` en tête) ; la mise à jour 3g de la Tâche 3 (`XCTAssertNil(octets, …)`) devient `XCTAssertNotNil(octets, "la photo qui part porte ses propres métadonnées")`. Dans `CameraModelPhotoLibrarySaveTests.swift:50`, `"PhotoLibraryManager.shared.saveImage(data)"` devient `"PhotoLibraryManager.shared.saveImageFile(data"`.
+
+- [ ] **Step 2: Run test to verify it fails**
+
+```bash
+cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate --quiet && ./scripts/check_test_registration.sh
+cd /Users/smpceo/Documents/v2_meeshy
+T=apps/ios/MeeshyTests/Unit
+F="$T/Composer/ComposerPhotoEncodingTests.swift $T/Composer/ComposerLiveLookTests.swift $T/Components/CameraModelPhotoLibrarySaveTests.swift apps/ios/Meeshy.xcodeproj/project.pbxproj"
+git add $F
+git commit -m "test(ios): témoin rouge — la photo qui part garde l'EXIF de la prise (#9347)" -- $F
+```
+
+P1 (`LOT=9347`). Expected: FAIL — `cannot find 'ComposerPhotoEncoding' in scope`.
+
+- [ ] **Step 3: Write minimal implementation**
+
+`ComposerPhotoEncoding.swift` :
+
+```swift
+import CoreGraphics
+import Foundation
+import ImageIO
+import UniformTypeIdentifiers
+
+/// **La photo rendue garde les métadonnées de la prise** (décision porteur
+/// 2026-10-04, #9347) : date et lieu de prise, appareil, objectif — rendus VRAIS
+/// pour l'image qui part (orientation 1 : les pixels sont debout ; dimensions du
+/// rendu). Un seul encodeur pour la conversation, la galerie et « Terminé ».
+nonisolated enum ComposerPhotoEncoding {
+
+    /// Encodée au type de la prise (HEIC, JPEG) ; sans prise lisible — ou si
+    /// l'encodeur de ce type manque (simulateur sans HEVC) — en JPEG.
+    static func encoded(_ image: CGImage, like original: Data?, quality: CGFloat = 0.92) -> Data? {
+        let prise = original.flatMap { CGImageSourceCreateWithData($0 as CFData, nil) }
+        let proprietes = prise.flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) as? [CFString: Any] } ?? [:]
+        let jpeg = UTType.jpeg.identifier as CFString
+        let types = [prise.flatMap { CGImageSourceGetType($0) }, jpeg].compactMap { $0 }
+        return types.lazy.compactMap { type in
+            write(image, type: type, properties: metadata(proprietes, for: image, quality: quality))
+        }.first
+    }
+
+    static func metadata(_ original: [CFString: Any], for image: CGImage, quality: CGFloat) -> [CFString: Any] {
+        let tiff = (original[kCGImagePropertyTIFFDictionary] as? [CFString: Any] ?? [:])
+            .merging([kCGImagePropertyTIFFOrientation: 1]) { _, rendu in rendu }
+        let exif = (original[kCGImagePropertyExifDictionary] as? [CFString: Any] ?? [:])
+            .merging([kCGImagePropertyExifPixelXDimension: image.width,
+                      kCGImagePropertyExifPixelYDimension: image.height]) { _, rendu in rendu }
+        return original
+            .filter { $0.key != kCGImagePropertyPixelWidth && $0.key != kCGImagePropertyPixelHeight }
+            .merging([kCGImagePropertyOrientation: 1,
+                      kCGImagePropertyTIFFDictionary: tiff,
+                      kCGImagePropertyExifDictionary: exif,
+                      kCGImageDestinationLossyCompressionQuality: quality]) { _, rendu in rendu }
+    }
+
+    /// Le nom du fichier en galerie, à l'extension du type encodé.
+    static func fileName(for data: Data, id: String) -> String {
+        let type = CGImageSourceCreateWithData(data as CFData, nil)
+            .flatMap { CGImageSourceGetType($0) }
+            .flatMap { UTType($0 as String) }
+        return "Meeshy_\(id).\(type?.preferredFilenameExtension ?? "jpg")"
+    }
+
+    /// Hors du fil principal : encoder 12 Mpx en HEIC coûte des centaines de ms.
+    @concurrent
+    static func encode(_ image: CGImage, like original: Data?) async -> Data? {
+        encoded(image, like: original)
+    }
+
+    private static func write(_ image: CGImage, type: CFString, properties: [CFString: Any]) -> Data? {
+        let sortie = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(sortie, type, 1, nil) else { return nil }
+        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        return CGImageDestinationFinalize(destination) ? sortie as Data : nil
+    }
+}
+```
+
+`ComposerCaptureSession.lookedPhoto` (Tâche 3) — la livraison porte les octets encodés :
+
+```swift
+        Task { @MainActor in
+            guard let rendu = await ComposerLookPainter.renderPhoto(debout, look: regard, framing: .identity,
+                                                                    person: auteur, date: date,
+                                                                    scenes: ComposerLookSceneCache.shared) else {
+                deliver(.photo(image, data: data))
+                return
+            }
+            let octets = await ComposerPhotoEncoding.encode(rendu, like: data)
+            deliver(.photo(UIImage(cgImage: rendu), data: octets))
+        }
+```
+
+`ComposerLookVideoExporter.write` — avant l'export : `session.metadata = (try? await asset.load(.metadata)) ?? []` (date de création, lieu : la vidéo rendue les garde aussi). `CameraModel.swift:683` :
+
+```swift
+        let nom = ComposerPhotoEncoding.fileName(for: data, id: UUID().uuidString)
+        Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImageFile(data, fileName: nom) } }
+```
+
+et le commentaire au-dessus dit désormais pourquoi : `saveImage(_ data:)` repasse par `UIImage`, `saveImageFile` garde les octets.
+
+- [ ] **Step 4: Run test to verify it passes**
+
+```bash
+cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate --quiet && ./scripts/check_test_registration.sh
+cd /Users/smpceo/Documents/v2_meeshy
+P=apps/ios/Meeshy/Features/Main
+F="$P/Composer/ComposerPhotoEncoding.swift $P/Composer/ComposerCaptureSession.swift $P/Composer/ComposerLookVideoExporter.swift $P/Components/CameraModel.swift apps/ios/Meeshy.xcodeproj/project.pbxproj"
+git add $F
+git commit -m "fix(ios): la photo qui part garde l'EXIF de la prise, et le brut part en galerie avec ses octets d'origine — run test (Closes #9347)" -- $F
+```
+
+P1. Expected: PASS — `ComposerPhotoEncodingTests` 4/4, `ComposerLiveLookTests`, `CameraModelPhotoLibrarySaveTests` verts.
 
 - [ ] **Step 5: Livrer et clore le lot** — P3, puis `status 9347 Done` et commentaire de clôture (modèle en Tâche 22, étape 4).
 
@@ -1501,7 +1785,11 @@ Dans `ComposerLookPainterTests` :
     }
 ```
 
-Dans `ComposerLiveLookTests`, remplacer `test_puces_sontLesAmbiancesDuCatalogue_sansLesClassiques`, `test_unClassique_neSeComposePasEnDirect` et la ligne `XCTAssertTrue(cadres.allSatisfy(ComposerLiveLookRule.isLive))` de `test_carrousel_…` par :
+Dans `ComposerLiveLookTests`, supprimer `test_puces_sontLesAmbiancesDuCatalogue_sansLesClassiques` et `test_unClassique_neSeComposePasEnDirect`. Deux témoins existants lisaient « première puce = une ambiance du catalogue » et rougiraient dès que les classiques passent en tête :
+- `test_carrousel_aucunCadreEnTete_puisDesCadresQuiSeComposentEnDirect` : lire `chips().last` (une ambiance du catalogue) au lieu de `chips().first`, et retirer sa ligne `XCTAssertTrue(cadres.allSatisfy(ComposerLiveLookRule.isLive))` ;
+- `test_seulsLesCadresQueLAppelComposeEnDirect_sOffrent` (~:172) : la boucle intérieure ne juge que les cadres du catalogue (un classique n'a pas de `design`, il se peint en couches) : sa première ligne devient `guard case .montage(.frame) = cadre else { continue }`.
+
+Puis ajouter :
 
 ```swift
     func test_chips_includeTheClassics_firstThenTheCatalogMoods() {
@@ -1651,6 +1939,9 @@ final class ComposerThermalBudgetTests: XCTestCase {
     }
 }
 
+/// La cible de tests compile en isolation `nonisolated` par défaut (`project.yml`) :
+/// le double d'un protocole de l'app (isolé MainActor) se déclare `@MainActor`.
+@MainActor
 final class MockThermalStateMonitor: ThermalStateMonitorProviding {
     var currentState: ProcessInfo.ThermalState
     var onStateChange: ((ProcessInfo.ThermalState) -> Void)?
@@ -1748,7 +2039,7 @@ protocol ThermalStateMonitorProviding: AnyObject {
 }
 ```
 
-puis `final class ThermalStateMonitor: ThermalStateMonitorProviding {`, la propriété `var onStateChange: ((ProcessInfo.ThermalState) -> Void)?` sous `weak var delegate`, et dans `thermalStateChanged()` après `delegate?.thermalStateDidChange(to: newState)` : `onStateChange?(newState)`.
+puis `final class ThermalStateMonitor: ThermalStateMonitorProviding {`, la propriété `var onStateChange: ((ProcessInfo.ThermalState) -> Void)?` sous `weak var delegate`, et dans `thermalStateChanged()` après `delegate?.thermalStateDidChange(to: newState)` : `onStateChange?(newState)`. Dans `startMonitoring()`, juste après `currentState = ProcessInfo.processInfo.thermalState` : `guard thermalObserver == nil else { return }` — un viseur ré-armé sans fermeture n'empile pas un second observateur (l'appel est sinon idempotent pour l'appel vidéo, qui ne le rappelle jamais).
 
 `ComposerCaptureSession.swift` — propriétés stockées (sous `lookDate`) :
 
@@ -1821,7 +2112,7 @@ P1. Expected: PASS — `ComposerThermalBudgetTests` 3/3, `ThermalStateMonitorTes
 **Interfaces:**
 - Consumes: `ComposerThermalBudget` (Tâche 6), peintre (Tâche 2).
 - Produces:
-  - `protocol ComposerFrameSourcing: AnyObject, Sendable { nonisolated func latestImage() -> CIImage?; nonisolated var declaredSpace: CGColorSpace? { get }; nonisolated func setFrameHandler(_ handler: (@Sendable () -> Void)?) }` ; `ComposerCameraFeed: ComposerFrameSourcing`.
+  - `protocol ComposerFrameSourcing: AnyObject, Sendable { nonisolated func latestImage() -> CIImage?; nonisolated var declaredSpace: CGColorSpace? { get }; nonisolated func setFrameHandler(_ handler: (@Sendable () -> Void)?, for owner: ObjectIdentifier) }` (une source sert PLUSIEURS peintres — l'aperçu et la bande — chacun sous son identifiant : poser ou retirer le sien ne touche jamais celui de l'autre) ; `ComposerCameraFeed: ComposerFrameSourcing`.
   - `nonisolated struct ComposerFramePacer: Equatable, Sendable { let fps: Int; func shouldDraw(now: TimeInterval, last: TimeInterval?) -> Bool }`
   - `nonisolated enum ComposerCaptureSurfaceRule { static func paintsWithMetal(look: ComposerPhotoLook, budget: ComposerThermalBudget, fixture: Bool) -> Bool; static func showsThermalNotice(look: ComposerPhotoLook, budget: ComposerThermalBudget) -> Bool }`
   - `ComposerLiveLookSurface(look:person:date:framing:source: any ComposerFrameSourcing, fps: Int, surfaceScale: CGFloat, scenes:)`
@@ -1868,10 +2159,25 @@ final class ComposerFramePacingTests: XCTestCase {
     func test_feed_announcesEachFrameToItsHandler() {
         let flux = ComposerCameraFeed()
         let annonce = expectation(description: "trame annoncée")
-        flux.setFrameHandler { annonce.fulfill() }
+        flux.setFrameHandler({ annonce.fulfill() }, for: ObjectIdentifier(self))
         flux.isActive = true
         flux.announceForTesting()
         wait(for: [annonce], timeout: 1)
+    }
+
+    func test_feed_servesThePreviewAndTheStrip_removingOneKeepsTheOther() {
+        let flux = ComposerCameraFeed()
+        let apercu = NSObject(), bande = NSObject()
+        let pourLApercu = expectation(description: "l'aperçu est prévenu")
+        let pourLaBande = expectation(description: "la bande est prévenue")
+        pourLaBande.expectedFulfillmentCount = 2
+        flux.setFrameHandler({ pourLApercu.fulfill() }, for: ObjectIdentifier(apercu))
+        flux.setFrameHandler({ pourLaBande.fulfill() }, for: ObjectIdentifier(bande))
+        flux.isActive = true
+        flux.announceForTesting()
+        flux.setFrameHandler(nil, for: ObjectIdentifier(apercu))
+        flux.announceForTesting()
+        wait(for: [pourLApercu, pourLaBande], timeout: 1)
     }
 
     func test_preview_neverStacksTheSystemLayerUnderMetal() throws {
@@ -1921,7 +2227,7 @@ import Foundation
 protocol ComposerFrameSourcing: AnyObject, Sendable {
     nonisolated func latestImage() -> CIImage?
     nonisolated var declaredSpace: CGColorSpace? { get }
-    nonisolated func setFrameHandler(_ handler: (@Sendable () -> Void)?)
+    nonisolated func setFrameHandler(_ handler: (@Sendable () -> Void)?, for owner: ObjectIdentifier)
 }
 
 /// La cadence permise : une trame qui arrive plus vite que le budget attend la suivante.
@@ -1953,25 +2259,25 @@ nonisolated enum ComposerCaptureSurfaceRule {
 enum ComposerCaptureCopy {
     static var thermalNotice: String {
         String(localized: "composer.capture.thermal.notice",
-               defaultValue: "L'appareil chauffe : aperçu sans effet, la prise garde l'effet", bundle: .main)
+               defaultValue: "Aperçu simplifié : l'appareil chauffe. La prise garde tout l'effet.", bundle: .main)
     }
 }
 ```
 
-`ComposerCameraFeed.swift` — conformité (`final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, ComposerFrameSourcing, @unchecked Sendable`), propriété `private var frameHandler: (@Sendable () -> Void)?`, puis :
+`ComposerCameraFeed.swift` — conformité (`final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, ComposerFrameSourcing, @unchecked Sendable`), propriété `private var frameHandlers: [ObjectIdentifier: @Sendable () -> Void] = [:]`, puis :
 
 ```swift
-    func setFrameHandler(_ handler: (@Sendable () -> Void)?) {
+    func setFrameHandler(_ handler: (@Sendable () -> Void)?, for owner: ObjectIdentifier) {
         lock.lock()
-        frameHandler = handler
+        frameHandlers[owner] = handler
         lock.unlock()
     }
 
     private func announce() {
         lock.lock()
-        let prevenir = active ? frameHandler : nil
+        let prevenir = active ? Array(frameHandlers.values) : []
         lock.unlock()
-        prevenir?()
+        prevenir.forEach { $0() }
     }
 
     #if DEBUG
@@ -2044,9 +2350,9 @@ struct ComposerLiveLookSurface: UIViewRepresentable {
 et dans `ComposerLiveLookRenderer` : `source: any ComposerFrameSourcing` ; propriétés `private var pacer = ComposerFramePacer(fps: 30)`, `private var lastDraw: TimeInterval?`, `private weak var view: MTKView?` ; `makeView()` pose `view.enableSetNeedsDisplay = true`, `view.isPaused = true`, retient `self.view = view`, et branche la source :
 
 ```swift
-        source.setFrameHandler { [weak self] in
+        source.setFrameHandler({ [weak self] in
             Task { @MainActor [weak self] in self?.frameArrived() }
-        }
+        }, for: ObjectIdentifier(self))
 ```
 
 puis :
@@ -2059,10 +2365,17 @@ puis :
         self.framing = framing
         self.pacer = pacer
         view.contentScaleFactor = max(1, view.traitCollection.displayScale * surfaceScale)
-        let cle = ComposerLookSceneKey(look: look, canvas: ComposerLookPainter.canvas, date: date, person: person)
-        key = cle
-        if look.frame != .none {
-            scenes.prepare(cle) { [weak self] in self?.view?.setNeedsDisplay() }
+        let cle = ComposerLookSceneKey(look: look, canvas: ComposerLookPainter.designCanvas, date: date, person: person)
+        if cle != key {
+            key = cle
+            scene = scenes.cached(cle)
+            if look.frame != .none, scene == nil {
+                scenes.prepare(cle) { [weak self] in
+                    guard let self, self.key == cle else { return }
+                    self.scene = self.scenes.cached(cle)
+                    self.view?.setNeedsDisplay()
+                }
+            }
         }
         if changed { view.setNeedsDisplay() }
     }
@@ -2075,10 +2388,11 @@ puis :
     }
 
     func stop(_ view: MTKView) {
-        source.setFrameHandler(nil)
+        source.setFrameHandler(nil, for: ObjectIdentifier(self))
         view.isPaused = true
         view.delegate = nil
         key = nil
+        scene = nil
     }
 ```
 
@@ -2106,7 +2420,11 @@ puis :
 ```swift
                         CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints,
                                            mirrorsFrames: !session.paintsWithMetal)
-                            .background(…inchangé…)
+                            .background(GeometryReader { proxy in
+                                Color.clear.adaptiveOnChange(of: proxy.frame(in: .global), initial: true) { _, cadre in
+                                    session.focusPoints.previewFrame = cadre
+                                }
+                            })
                         if session.paintsWithMetal {
                             ComposerLiveLookSurface(look: session.look, person: session.lookPerson,
                                                     date: session.lookDate, framing: .identity,
@@ -2133,13 +2451,13 @@ Catalogue (clé neuve, sept langues) :
 ```bash
 cat > /tmp/cap-9349.json <<'JSON'
 {"set": {"composer.capture.thermal.notice": {
-  "fr": "L'appareil chauffe : aperçu sans effet, la prise garde l'effet",
-  "en": "Your device is warm: preview without effect, the capture keeps it",
-  "es": "El dispositivo se calienta: vista previa sin efecto, la captura lo conserva",
-  "de": "Das Gerät wird warm: Vorschau ohne Effekt, die Aufnahme behält ihn",
-  "it": "Il dispositivo si scalda: anteprima senza effetto, lo scatto lo conserva",
-  "pt-BR": "O aparelho está quente: prévia sem efeito, a captura o mantém",
-  "ar": "الجهاز ساخن: معاينة بلا تأثير، واللقطة تحتفظ به"}}}
+  "fr": "Aperçu simplifié : l'appareil chauffe. La prise garde tout l'effet.",
+  "en": "Simplified preview: your device is warm. The capture keeps the full effect.",
+  "es": "Vista previa simplificada: el dispositivo se calienta. La captura conserva todo el efecto.",
+  "de": "Vereinfachte Vorschau: Das Gerät wird warm. Die Aufnahme behält den vollen Effekt.",
+  "it": "Anteprima semplificata: il dispositivo si scalda. Lo scatto conserva tutto l'effetto.",
+  "pt-BR": "Prévia simplificada: o aparelho está quente. A captura mantém todo o efeito.",
+  "ar": "معاينة مبسّطة: الجهاز ساخن. تحتفظ اللقطة بالتأثير كاملًا."}}}
 JSON
 python3 apps/ios/scripts/catalog_keys.py apply /tmp/cap-9349.json && python3 apps/ios/scripts/check_localization.py | tail -1
 ```
@@ -2157,7 +2475,7 @@ git add $F
 git commit -m "perf(ios): la capture peint un passage par image, à l'arrivée des trames et au rythme du palier thermique — run test (Closes #9349)" -- $F
 ```
 
-P1. Expected: PASS — `ComposerFramePacingTests` 6/6, `ComposerLiveLookTests` et `ComposerCaptureLockZoomFlashTests` verts.
+P1. Expected: PASS — `ComposerFramePacingTests` 7/7, `ComposerLiveLookTests` et `ComposerCaptureLockZoomFlashTests` verts.
 
 - [ ] **Step 5: Livrer** — P3 ; `status 9349 Done`. Commentaire de clôture : la mesure Instruments (Metal System Trace, Energy Log 5 min, Time Profiler, Allocations) reste à faire sur appareil réel — ouvrir l'issue de suivi « La capture unifiée est mesurée sur iPhone 12 : passages par image, ms GPU, palier après 5 min » (dimension 2 / 3 / 4) dans le même milestone si elle n'est pas faite au moment de la clôture.
 
@@ -3277,7 +3595,8 @@ P1. Expected: PASS — 7/7. P3.
 - Produces:
   - `nonisolated struct ComposerLookStripTile: Equatable, Sendable { let index: Int; let look: ComposerPhotoLook; let rect: CGRect }` (rect en points, repère du contenu, y vers le bas)
   - `struct ComposerLookStripSurface: UIViewRepresentable` (`tiles`, `source`, `person`, `date`, `framing`, `fps`, `frozen`, `scenes`) et `final class ComposerLookStripRenderer: NSObject, MTKViewDelegate`
-  - `nonisolated enum ComposerLookStripGeometry { static func pixelRect(_ tile: CGRect, contentHeight: CGFloat, scale: CGFloat) -> CGRect }`
+  - `nonisolated enum ComposerLookStripGeometry { static let maxTexturePixels: CGFloat; static func pixelRect(_ tile: CGRect, contentHeight: CGFloat, scale: CGFloat) -> CGRect; static func paintedWindow(_ indices: [Int]) -> ClosedRange<Int>? }` — la vue Metal ne couvre que la FENÊTRE des cases peintes (au plus `cells` + 2 cases), jamais tout le contenu : 170 cases × 64 pt × 3 ≈ 32 600 px dépasseraient la plus grande texture Metal (16 384 px).
+  - `ComposerCaptureSession.lockPendingTake()` — VoiceOver ne TIENT pas un doigt : la prise demandée part verrouillée, et la tenue se relâche aussitôt.
   - `struct ComposerLookRail: View` (`open: ComposerLookFamily?`, `onSelect: (ComposerLookFamily) -> Void`)
   - `struct ComposerLookStrip: View` (`session: ComposerCaptureSession`, `source: any ComposerFrameSourcing`, `context: ComposerCaptureGestureContext`)
   - `ComposerCaptureSession.openFamily: ComposerLookFamily?` (`@Published`) ; `func toggleFamily(_:)` ; `stripNeedsFeed` vrai dès que le viseur est armé et que le budget garde au moins une case.
@@ -3297,6 +3616,24 @@ final class ComposerLookStripTests: XCTestCase {
         let rect = ComposerLookStripGeometry.pixelRect(CGRect(x: 64, y: 0, width: 56, height: 100),
                                                        contentHeight: 100, scale: 3)
         XCTAssertEqual(rect, CGRect(x: 192, y: 0, width: 168, height: 300))
+    }
+
+    func test_paintedWindow_spansOnlyThePaintedCells_andFitsAMetalTexture() throws {
+        XCTAssertEqual(ComposerLookStripGeometry.paintedWindow([4, 2, 7]), 2...7)
+        XCTAssertNil(ComposerLookStripGeometry.paintedWindow([]))
+        let cases = ComposerLookStripRule.paintedIndices(visible: 60...66, count: 170, cells: 8, chosen: 3, recording: false)
+        let fenetre = try XCTUnwrap(ComposerLookStripGeometry.paintedWindow(cases))
+        XCTAssertLessThanOrEqual(CGFloat(fenetre.count) * ComposerLookStripRule.pitch * 3,
+                                 ComposerLookStripGeometry.maxTexturePixels,
+                                 "la vue Metal de la bande tient dans une texture, quelle que soit la longueur du catalogue")
+    }
+
+    func test_lockPendingTake_filmsLocked_andFreesTheHold() {
+        let session = ComposerCaptureSession(stage: .armed)
+        session.beginHold()
+        session.lockPendingTake()
+        XCTAssertEqual(session.holdPhase, .locked, "la prise part verrouillée : rien ne la retient au doigt")
+        XCTAssertNil(session.holdStartedAt, "une seconde demande VoiceOver n'est pas bloquée par une tenue fantôme")
     }
 
     func test_toggleFamily_opensThenCloses_andSwitches() {
@@ -3396,17 +3733,27 @@ nonisolated struct ComposerLookStripTile: Equatable, Sendable {
 }
 
 nonisolated enum ComposerLookStripGeometry {
+    /// La plus grande texture 2D garantie sur les puces d'iOS 16 (A11 et suivantes).
+    static let maxTexturePixels: CGFloat = 16_384
+
     /// Le rectangle d'une case (points, y vers le bas) en pixels Core Image (y vers le haut).
     static func pixelRect(_ tile: CGRect, contentHeight: CGFloat, scale: CGFloat) -> CGRect {
         CGRect(x: tile.minX * scale, y: (contentHeight - tile.maxY) * scale,
                width: tile.width * scale, height: tile.height * scale)
     }
+
+    /// La fenêtre des cases peintes : la vue Metal ne couvre qu'elle.
+    static func paintedWindow(_ indices: [Int]) -> ClosedRange<Int>? {
+        guard let premiere = indices.min(), let derniere = indices.max() else { return nil }
+        return premiere...derniere
+    }
 }
 
-/// **La bande, peinte dans UN atlas Metal** (#9351, spec § 5) : la vue est aussi
-/// large que le contenu et défile avec lui (aucun redessin pendant le défilement) ;
-/// seules les cases visibles ±1 se repeignent, chacune dans sa région d'un atlas
-/// persistant, copié dans le drawable en un seul passage.
+/// **La bande, peinte dans UN atlas Metal** (#9351, spec § 5) : la vue couvre la
+/// seule FENÊTRE des cases peintes (visibles ±1, au plus le budget thermique) et
+/// défile avec le contenu — aucun redessin pendant le défilement, sauf quand la
+/// fenêtre glisse d'une case. Chaque case se peint dans sa région d'un atlas,
+/// copié dans le drawable en un seul passage.
 struct ComposerLookStripSurface: UIViewRepresentable {
     let tiles: [ComposerLookStripTile]
     let source: any ComposerFrameSourcing
@@ -3475,11 +3822,11 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
     func update(tiles: [ComposerLookStripTile], source: any ComposerFrameSourcing, person: CallFramePerson,
                 date: Date, framing: ComposerFraming, pacer: ComposerFramePacer, view: MTKView) {
         if self.source !== source {
-            self.source?.setFrameHandler(nil)
+            self.source?.setFrameHandler(nil, for: ObjectIdentifier(self))
             self.source = source
-            source.setFrameHandler { [weak self] in
+            source.setFrameHandler({ [weak self] in
                 Task { @MainActor [weak self] in self?.frameArrived() }
-            }
+            }, for: ObjectIdentifier(self))
         }
         let changed = tiles != self.tiles || framing != self.framing
         self.tiles = tiles
@@ -3491,7 +3838,7 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
     }
 
     func stop(_ view: MTKView) {
-        source?.setFrameHandler(nil)
+        source?.setFrameHandler(nil, for: ObjectIdentifier(self))
         source = nil
         view.delegate = nil
         atlas = nil
@@ -3687,10 +4034,16 @@ struct ComposerLookStrip: View {
     @State private var scrollSettle: Task<Void, Never>?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// La famille ouverte GARDE ses cases pendant l'enregistrement : basculer de la
+    /// bande à la miniature seule annulerait l'appui long qui vient de lancer la
+    /// prise (sa levée ne parviendrait plus à `endHold`). Les autres cases
+    /// s'effacent (`cell`) ; seule la choisie reste visible et vivante.
     private var items: [ComposerLookStripItem] {
-        guard context.stage != .recording, let famille = session.openFamily else { return [] }
+        guard let famille = session.openFamily else { return [] }
         return ComposerLookStripRule.items(famille)
     }
+
+    private var recording: Bool { context.stage == .recording }
 
     var body: some View {
         Group {
@@ -3733,7 +4086,8 @@ struct ComposerLookStrip: View {
         .accessibilityAction(named: Text(ComposerCaptureCopy.filmToPhotos)) { voiceOverFilm() }
     }
 
-    /// Le point rouge clignotant et le chronomètre, DÈS le premier segment.
+    /// Le point rouge clignotant et le chronomètre, DÈS le premier segment —
+    /// posés sur la miniature choisie, seule ou dans la bande ouverte.
     @ViewBuilder
     private var chosenOverlay: some View {
         if context.stage == .recording || !session.segments.isEmpty {
@@ -3753,6 +4107,11 @@ struct ComposerLookStrip: View {
                 Spacer()
             }
             .accessibilityHidden(true)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 0.6).repeatForever(autoreverses: true)) { blink = 0.25 }
+            }
+            .onDisappear { blink = 1 }
         }
     }
 
@@ -3765,32 +4124,40 @@ struct ComposerLookStrip: View {
         let pas = ComposerLookStripRule.pitch
         let choisie = ComposerLookStripRule.chosenIndex(in: items, look: session.look)
         let visibles = ComposerLookStripRule.visibleRange(offset: offset, width: width, count: items.count)
+        let budget = recording ? session.thermalBudget.whileRecording() : session.thermalBudget
         let peintes = ComposerLookStripRule.paintedIndices(visible: visibles, count: items.count,
-                                                           cells: session.thermalBudget.thumbnailCells,
-                                                           chosen: choisie, recording: false)
+                                                           cells: budget.thumbnailCells,
+                                                           chosen: choisie, recording: recording)
+        let fenetre = ComposerLookStripGeometry.paintedWindow(peintes) ?? 0...0
         let tuiles = peintes.map { index in
             ComposerLookStripTile(index: index,
                                   look: ComposerLookStripRule.look(of: items[index], combinedWith: session.look),
-                                  rect: CGRect(x: CGFloat(index) * pas, y: 0, width: cellule.width, height: cellule.height))
+                                  rect: CGRect(x: CGFloat(index - fenetre.lowerBound) * pas, y: 0,
+                                               width: cellule.width, height: cellule.height))
         }
-        let largeur = CGFloat(items.count) * pas - ComposerLookStripRule.spacing
+        let largeurFenetre = CGFloat(fenetre.count) * pas - ComposerLookStripRule.spacing
         return GeometryReader { conteneur in
             ScrollViewReader { lecteur in
                 ScrollView(.horizontal, showsIndicators: false) {
                     ZStack(alignment: .topLeading) {
                         HStack(spacing: ComposerLookStripRule.spacing) {
-                            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                            ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                                 glyph(symbol: ComposerCaptureCopy.itemSymbol(item))
                                     .frame(width: cellule.width, height: cellule.height)
+                                    .opacity(recording && index != choisie ? 0 : 1)
                             }
                         }
                         ComposerLookStripSurface(tiles: tuiles, source: source, person: session.lookPerson,
                                                  date: session.lookDate, framing: session.framing,
-                                                 fps: session.thermalBudget.thumbnailFPS, frozen: scrolling)
-                            .frame(width: largeur, height: cellule.height)
+                                                 fps: budget.thumbnailFPS, frozen: scrolling)
+                            .frame(width: largeurFenetre, height: cellule.height)
+                            .offset(x: CGFloat(fenetre.lowerBound) * pas)
                         HStack(spacing: ComposerLookStripRule.spacing) {
                             ForEach(Array(items.enumerated()), id: \.offset) { index, item in
                                 cell(item: item, chosen: index == choisie)
+                                    .opacity(recording && index != choisie ? 0 : 1)
+                                    .allowsHitTesting(!recording || index == choisie)
+                                    .accessibilityHidden(recording && index != choisie)
                                     .id(index)
                             }
                         }
@@ -3821,6 +4188,7 @@ struct ComposerLookStrip: View {
                 .gesture(chosen ? AnyGesture(chosenGestures.map { _ in () }) : AnyGesture(TapGesture().onEnded {
                     perform(.otherThumbnail, .tap, item: item)
                 }))
+                .overlay { if chosen { chosenOverlay } }
             Text(ComposerCaptureCopy.itemName(item))
                 .font(MeeshyFont.relative(10, weight: chosen ? .bold : .medium))
                 .foregroundStyle(.white)
@@ -3874,7 +4242,7 @@ struct ComposerLookStrip: View {
         }
         session.perform(ComposerCaptureGesture.action(zone: .chosenThumbnail, gesture: .longPress, context: context),
                         item: nil)
-        session.lockTake()
+        session.lockPendingTake()
     }
 
     private func followScroll(x: CGFloat, inset: CGFloat) {
@@ -3890,7 +4258,21 @@ struct ComposerLookStrip: View {
 }
 ```
 
-(`session.perform(_:item:)`, `session.framing` et `ComposerCaptureSegments.elapsed(segments:live:)` : `perform` arrive en Tâche 14, `framing` en Tâche 16 — pour que CE commit compile, ajouter dès maintenant à `ComposerCaptureSession.swift` la stockée `@Published var framing = ComposerFraming.identity` et, dans `ComposerCaptureSession+Thermal.swift`, un `perform` minimal qui ne connaît que `.select` : `func perform(_ action: ComposerCaptureAction, item: ComposerLookStripItem?) { guard action == .select, let item else { return }; look = ComposerLookStripRule.look(of: item, combinedWith: look) }` — la Tâche 14 le remplace par le dispatcher complet. `ComposerCaptureSegments.elapsed(segments:live:recording:)` est la loi existante du chrono : elle n'ajoute l'horloge vivante qu'en enregistrement. Le battement de `blink` s'anime dans `.onAppear` de `chosenOverlay` par `withAnimation(.easeInOut(duration: 0.6).repeatForever()) { blink = 0.25 }`, coupé sous Reduce Motion.)
+(`session.perform(_:item:)`, `session.framing` et `ComposerCaptureSegments.elapsed(segments:live:recording:)` : `perform` arrive en Tâche 14, `framing` en Tâche 16 — pour que CE commit compile, ajouter dès maintenant à `ComposerCaptureSession.swift` la stockée `@Published var framing = ComposerFraming.identity` et, dans `ComposerCaptureSession+Thermal.swift`, deux membres que la Tâche 14 DÉPLACE dans `ComposerCaptureSession+Takes.swift` : un `perform` minimal qui ne connaît que `.select` — `func perform(_ action: ComposerCaptureAction, item: ComposerLookStripItem?) { guard action == .select, let item else { return }; look = ComposerLookStripRule.look(of: item, combinedWith: look) }` — et la prise verrouillée de VoiceOver :
+
+```swift
+    /// VoiceOver ne TIENT pas un doigt : la prise demandée part verrouillée
+    /// (`ComposerCaptureHold.release` garde une prise verrouillée), puis la tenue
+    /// se relâche — sans quoi `holdStartedAt` bloquerait toute demande suivante.
+    func lockPendingTake() {
+        guard holdStartedAt != nil else { return }
+        holdPhase = .locked
+        lockProgress = 1
+        endHold()
+    }
+```
+
+`ComposerCaptureSegments.elapsed(segments:live:recording:)` (`ComposerCaptureSegments.swift:58`) est la loi existante du chrono : elle n'ajoute l'horloge vivante qu'en enregistrement.)
 
 3d. Catalogue :
 
@@ -3919,7 +4301,7 @@ git add $F
 git commit -m "feat(ios): la bande peint ses miniatures vivantes dans un atlas Metal, le rail l'ouvre (#9351)" -- $F
 ```
 
-P1. Expected: PASS — `ComposerLookStripTests` 4/4.
+P1. Expected: PASS — `ComposerLookStripTests` 6/6.
 
 - [ ] **Step 5: Commit** — fait ; P3.
 
@@ -3930,24 +4312,24 @@ P1. Expected: PASS — `ComposerLookStripTests` 4/4.
 **Files:**
 - Create: `apps/ios/Meeshy/Features/Main/Composer/ComposerGallery.swift`
 - Create: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession.swift` (stockées : `photoIntent`, `filmIntent`, `onDeliver`, `gallery`, `scenes`, `takeSubscriptions`, `pendingGallerySaves` ; `init` ; `beginGallerySave`/`endGallerySave`)
-- Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Thermal.swift` (retirer le `perform` provisoire)
+- Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession.swift` (stockées : `photoIntent`, `filmIntent`, `filmIntents`, `onDeliver`, `gallery`, `scenes`, `takeSubscriptions`, `pendingGallerySaves` ; `init` ; `beginGallerySave`/`endGallerySave` ; `startFilming` appelle `noteRecordingStarted()` ; `looksOpen` reste jusqu'à la Tâche 15)
+- Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Thermal.swift` (le `perform` provisoire et `lockPendingTake` partent vers `+Takes`)
 - Modify: `apps/ios/Meeshy/Features/Main/Components/CameraModel.swift:555-571` (`saveToPhotoLibrary` → `reportPhotoLibraryRefusal`)
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerViewfinder.swift:138-152` (retrait des deux `onReceive`, `capture.onDeliver`)
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Surfaces.swift:642-656` (retrait des deux `onReceive` — lignes en MOINS seulement)
-- Modify: `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift` (`sceneCapture.onDeliver` posé dans `sceneCameraChrome`)
+- Modify: `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift` (`sceneCapture.onDeliver` posé dans `sceneCameraChrome` ; `collectSceneSegment` (:125) n'a plus d'appelant : supprimé)
 - Modify: `apps/ios/Meeshy/Localizable.xcstrings` (1 clé)
 - Test: `apps/ios/MeeshyTests/Unit/Composer/ComposerCaptureTakesTests.swift`
-- Test (mise à jour) : `apps/ios/MeeshyTests/Unit/Composer/ComposerSceneCameraMountingTests.swift:238,275`
+- Test (mise à jour) : `apps/ios/MeeshyTests/Unit/Composer/ComposerSceneCameraMountingTests.swift` (`test_lesObservateurs_écoutentLesIdentifiants_pasLesValeurs` :231, `test_uneVidéoSAccumule_quandUnePhotoSePose` :266)
 
 **Interfaces:**
 - Consumes: Tâches 2, 3, 11, 12.
 - Produces:
-  - `protocol ComposerGalleryProviding: AnyObject, Sendable { func saveImage(_ image: UIImage) async -> Bool; func saveVideo(at url: URL) async -> Bool }` ; `nonisolated final class ComposerGallery: ComposerGalleryProviding` (`static let shared`).
-  - `nonisolated enum ComposerTakeIntent: Equatable, Sendable { case edit, gallery }`
+  - `nonisolated protocol ComposerGalleryProviding: AnyObject, Sendable { func saveImage(_ data: Data) async -> Bool; func saveVideo(at url: URL) async -> Bool }` — des OCTETS encodés (`ComposerPhotoEncoding`, Tâche 3b), jamais une `UIImage` : l'EXIF part avec ; `nonisolated final class ComposerGallery: ComposerGalleryProviding` (`static let shared`, méthodes `@concurrent`).
+  - `nonisolated enum ComposerTakeIntent: Equatable, Sendable { case edit, gallery }` ; `var filmIntents: [ComposerTakeIntent]` (FIFO : une intention par enregistrement PARTI, dépilée à l'arrivée de SON fichier) ; `func noteRecordingStarted()`
   - `ComposerCaptureSession.init(stage:mode:camera:defaults:thermal:gallery: any ComposerGalleryProviding = ComposerGallery.shared, scenes: any ComposerLookSceneProviding = ComposerLookSceneCache.shared)`
   - `var onDeliver: (@MainActor (CameraResult) -> Void)?` ; `@Published private(set) var pendingGallerySaves: Int`
-  - `func perform(_ action: ComposerCaptureAction, item: ComposerLookStripItem?)` ; `func shootPhoto(intent:)` ; `func photoArrived()` ; `func videoArrived()` ; `func saveRenderedPhoto(_:)` ; `func saveRenderedVideo(_:)`
+  - `func perform(_ action: ComposerCaptureAction, item: ComposerLookStripItem?)` ; `func lockPendingTake()` (déplacée) ; `func shootPhoto(intent:)` ; `func photoArrived()` ; `func videoArrived()` ; `func saveRenderedPhoto(_:data:)` ; `func saveRenderedVideo(_:)`
   - `CameraModel.reportPhotoLibraryRefusal() async` (nonisolated static)
   - `ComposerCaptureCopy.savedToPhotos`
 
@@ -3966,6 +4348,7 @@ final class ComposerCaptureTakesTests: XCTestCase {
     func test_photoArrived_galleryIntent_savesTheRendered_andDeliversNothing() async {
         let galerie = MockComposerGallery()
         let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
+        session.look = ComposerPhotoLook(filter: .warm)
         var remis = 0
         session.onDeliver = { _ in remis += 1 }
         session.photoIntent = .gallery
@@ -3977,9 +4360,20 @@ final class ComposerCaptureTakesTests: XCTestCase {
         XCTAssertEqual(session.photoIntent, .edit, "l'intention ne vaut que pour UNE prise")
     }
 
+    func test_photoArrived_galleryIntent_untouchedLook_savesNoSecondCopy() async {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
+        session.photoIntent = .gallery
+        Self.publishPhoto(on: session)
+        await Self.waitUntil(timeout: 1) { session.pendingGallerySaves == 0 }
+        XCTAssertEqual(galerie.saveImageCount, 0, "sans effet, le rendu EST le brut, déjà enregistré par CameraModel")
+        XCTAssertEqual(session.photoIntent, .edit)
+    }
+
     func test_saveRenderedPhoto_galleryRefuses_staysCapturingAndClearsRendering() async {
         let galerie = MockComposerGallery(imageResult: false)
         let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
+        session.look = ComposerPhotoLook(filter: .warm)
         session.photoIntent = .gallery
         Self.publishPhoto(on: session)
         await Self.waitUntil { galerie.saveImageCount == 1 && session.pendingGallerySaves == 0 }
@@ -3993,12 +4387,29 @@ final class ComposerCaptureTakesTests: XCTestCase {
         let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
         session.look = ComposerPhotoLook(filter: .warm)
         session.filmIntent = .gallery
+        session.noteRecordingStarted()
         let url = try Self.tempFile()
         session.camera.capturedVideoURL = url
         session.camera.capturedVideoId = UUID().uuidString
         await Self.waitUntil { session.pendingGallerySaves == 0 }
         XCTAssertTrue(session.segments.isEmpty, "une vidéo vers la galerie n'est jamais un segment")
         XCTAssertEqual(session.filmIntent, .edit)
+        XCTAssertTrue(session.filmIntents.isEmpty)
+    }
+
+    func test_videoArrived_intentsAreMatchedInRecordingOrder() throws {
+        let session = ComposerCaptureSession(stage: .armed, gallery: MockComposerGallery())
+        session.filmIntent = .gallery
+        session.noteRecordingStarted()
+        session.filmIntent = .edit
+        session.noteRecordingStarted()
+        let versGalerie = try Self.tempFile(), segment = try Self.tempFile()
+        session.camera.capturedVideoURL = versGalerie
+        session.camera.capturedVideoId = UUID().uuidString
+        session.camera.capturedVideoURL = segment
+        session.camera.capturedVideoId = UUID().uuidString
+        XCTAssertEqual(session.segments.map(\.url), [segment],
+                       "un segment lancé avant l'arrivée du fichier galerie ne lui vole pas son intention")
     }
 
     func test_videoArrived_editIntent_isASegment() throws {
@@ -4013,6 +4424,7 @@ final class ComposerCaptureTakesTests: XCTestCase {
         let galerie = MockComposerGallery()
         let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
         session.filmIntent = .gallery
+        session.noteRecordingStarted()
         session.disarm()
         let url = try Self.tempFile()
         session.camera.capturedVideoURL = url
@@ -4038,6 +4450,8 @@ final class ComposerCaptureTakesTests: XCTestCase {
         let prises = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift")
         XCTAssertTrue(prises.contains("camera.$capturedPhotoId"))
         XCTAssertTrue(prises.contains("camera.$capturedVideoId"))
+        let machine = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureSession.swift")
+        XCTAssertTrue(machine.contains("noteRecordingStarted()"), "chaque enregistrement PARTI pose son intention")
     }
 
     // MARK: - Outils
@@ -4087,7 +4501,7 @@ final class MockComposerGallery: ComposerGalleryProviding, @unchecked Sendable {
         self.videoResult = videoResult
     }
 
-    func saveImage(_ image: UIImage) async -> Bool {
+    func saveImage(_ data: Data) async -> Bool {
         saveImageCount += 1
         return imageResult
     }
@@ -4099,7 +4513,9 @@ final class MockComposerGallery: ComposerGalleryProviding, @unchecked Sendable {
 }
 ```
 
-Dans `ComposerSceneCameraMountingTests`, supprimer les deux assertions sur `onReceive(sceneCamera.$capturedPhotoId)` et `sceneCapture.lookedPhoto(…)` (lignes ~238 et ~275) : la garde `test_hostsNoLongerObserveTheCamera_theSessionDoes` les remplace.
+Dans `ComposerSceneCameraMountingTests`, deux témoins lisaient les observateurs de l'hôte ; ils lisent désormais la session, et gardent leur raison d'être :
+- `test_lesObservateurs_écoutentLesIdentifiants_pasLesValeurs` (:231) lit `ComposerCaptureSession+Takes.swift` : `camera.$capturedPhotoId` et `camera.$capturedVideoId` présents, `camera.$capturedPhoto.` absent (écouter la VALEUR raterait deux prises identiques d'affilée) ;
+- `test_uneVidéoSAccumule_quandUnePhotoSePose` (:266) lit `ComposerCaptureSession+Takes.swift` : `collectSegment(url)` (une vidéo de la scène rejoint les segments) et `lookedPhoto(image,data:camera.capturedPhotoData)` (la photo part avec ses octets, donc son EXIF) — la Tâche 16 remplace ce second motif par `beginEditing(photo:image,data:camera.capturedPhotoData)`.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -4148,25 +4564,28 @@ import MeeshySDK
 import UIKit
 
 /// Ce que la capture enregistre en galerie : le RENDU (le brut y part déjà,
-/// à la prise, par `CameraModel`).
-protocol ComposerGalleryProviding: AnyObject, Sendable {
-    func saveImage(_ image: UIImage) async -> Bool
+/// à la prise, par `CameraModel`), en OCTETS encodés qui portent l'EXIF de la prise.
+nonisolated protocol ComposerGalleryProviding: AnyObject, Sendable {
+    func saveImage(_ data: Data) async -> Bool
     func saveVideo(at url: URL) async -> Bool
 }
 
-/// **La galerie de la capture** (#9351, spec § 3.4) — l'album Meeshy, et un refus
-/// qui se dit.
+/// **La galerie de la capture** (#9351, spec § 3.4) — l'album Meeshy, octets tels
+/// quels (`saveImageFile` : aucun aller-retour par `UIImage`), et un refus qui se dit.
 nonisolated final class ComposerGallery: ComposerGalleryProviding, @unchecked Sendable {
     static let shared = ComposerGallery()
 
     nonisolated deinit {}
 
-    func saveImage(_ image: UIImage) async -> Bool {
-        let enregistre = await PhotoLibraryManager.shared.saveImage(image)
+    @concurrent
+    func saveImage(_ data: Data) async -> Bool {
+        let nom = ComposerPhotoEncoding.fileName(for: data, id: UUID().uuidString)
+        let enregistre = await PhotoLibraryManager.shared.saveImageFile(data, fileName: nom)
         if !enregistre { await CameraModel.reportPhotoLibraryRefusal() }
         return enregistre
     }
 
+    @concurrent
     func saveVideo(at url: URL) async -> Bool {
         let enregistre = await PhotoLibraryManager.shared.saveVideo(at: url)
         if !enregistre { await CameraModel.reportPhotoLibraryRefusal() }
@@ -4181,6 +4600,10 @@ nonisolated final class ComposerGallery: ComposerGalleryProviding, @unchecked Se
     /// Où part la prochaine photo, la prochaine vidéo (#9351).
     var photoIntent = ComposerTakeIntent.edit
     var filmIntent = ComposerTakeIntent.edit
+    /// Une intention par enregistrement PARTI, dans l'ordre : le fichier qui
+    /// arrive dépile la sienne (un segment relancé avant l'arrivée d'une vidéo
+    /// « galerie » ne lui vole pas son intention).
+    var filmIntents: [ComposerTakeIntent] = []
     /// Qui reçoit la prise finie — posé par l'hôte qui monte la capture.
     var onDeliver: (@MainActor (CameraResult) -> Void)?
     let gallery: any ComposerGalleryProviding
@@ -4193,7 +4616,7 @@ nonisolated final class ComposerGallery: ComposerGalleryProviding, @unchecked Se
     func endGallerySave() { pendingGallerySaves = max(0, pendingGallerySaves - 1) }
 ```
 
-`init` : paramètres `gallery: any ComposerGalleryProviding = ComposerGallery.shared, scenes: any ComposerLookSceneProviding = ComposerLookSceneCache.shared` ; affectations ; puis, après `relais = …`, `subscribeToTakes()`. Dans `disarm()`, ajouter `photoIntent = .edit` (l'intention vidéo reste : une vidéo vers la galerie déjà partie se jette, voir `videoArrived`).
+`init` : paramètres `gallery: any ComposerGalleryProviding = ComposerGallery.shared, scenes: any ComposerLookSceneProviding = ComposerLookSceneCache.shared` ; affectations ; puis, après `relais = …`, `subscribeToTakes()`. Dans `disarm()`, ajouter `photoIntent = .edit` et `filmIntent = .edit` (la FILE `filmIntents` reste : une vidéo déjà partie dépile la sienne à son arrivée, puis se jette, voir `videoArrived`). Dans `startFilming()`, juste avant `stage = .recording` : `noteRecordingStarted()`.
 
 3d. `ComposerCaptureSession+Takes.swift` :
 
@@ -4258,13 +4681,19 @@ extension ComposerCaptureSession {
         photographWhenReady()
     }
 
+    /// L'enregistrement part : son intention entre dans la file.
+    func noteRecordingStarted() {
+        filmIntents.append(filmIntent)
+        filmIntent = .edit
+    }
+
     func photoArrived() {
         guard stage != .off, let image = camera.capturedPhoto else { return }
         let intent = photoIntent
         photoIntent = .edit
         switch intent {
         case .gallery:
-            saveRenderedPhoto(image)
+            saveRenderedPhoto(image, data: camera.capturedPhotoData)
         case .edit:
             lookedPhoto(image, data: camera.capturedPhotoData) { [weak self] resultat in
                 self?.onDeliver?(resultat)
@@ -4276,8 +4705,8 @@ extension ComposerCaptureSession {
     /// galerie, son fichier temporaire part.
     func videoArrived() {
         guard let url = camera.capturedVideoURL else { return }
-        let intent = filmIntent
-        filmIntent = .edit
+        let intent = filmIntents.first ?? .edit
+        filmIntents = Array(filmIntents.dropFirst())
         guard stage != .off else {
             FileManager.default.removeItemLogging(at: url, context: "prise arrivée après la fermeture du viseur",
                                                   logger: .media)
@@ -4289,9 +4718,15 @@ extension ComposerCaptureSession {
         }
     }
 
-    func saveRenderedPhoto(_ image: UIImage) {
-        guard let debout = ComposerPhotoLookSource.upright(image) else { return }
+    /// Le RENDU part en galerie, encodé avec l'EXIF de la prise. Sans effet, le
+    /// rendu serait le brut que `CameraModel` vient d'enregistrer : rien de plus ne part.
+    func saveRenderedPhoto(_ image: UIImage, data: Data?) {
         let regard = look
+        guard ComposerLiveLookRule.rendersLive(regard) else {
+            FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
+            return
+        }
+        guard let debout = ComposerPhotoLookSource.upright(image) else { return }
         let auteur = lookPerson
         let date = lookDate
         let cache = scenes
@@ -4300,8 +4735,9 @@ extension ComposerCaptureSession {
         Task { @MainActor in
             defer { endGallerySave() }
             guard let rendu = await ComposerLookPainter.renderPhoto(debout, look: regard, framing: .identity,
-                                                                    person: auteur, date: date, scenes: cache) else { return }
-            guard await galerie.saveImage(UIImage(cgImage: rendu)) else { return }
+                                                                    person: auteur, date: date, scenes: cache),
+                  let octets = await ComposerPhotoEncoding.encode(rendu, like: data) else { return }
+            guard await galerie.saveImage(octets) else { return }
             FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
         }
     }
@@ -4318,8 +4754,11 @@ extension ComposerCaptureSession {
         Task { @MainActor in
             defer { endGallerySave() }
             guard let rendue = await ComposerLookVideoExporter.export(url, look: regard, person: auteur, date: date,
-                                                                      declaredSpaceName: espace),
-                  rendue != url else { return }
+                                                                      declaredSpaceName: espace) else { return }
+            guard rendue != url else {
+                FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
+                return
+            }
             if await galerie.saveVideo(at: rendue) {
                 FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
             }
@@ -4330,7 +4769,7 @@ extension ComposerCaptureSession {
 }
 ```
 
-Retirer le `perform` provisoire de `ComposerCaptureSession+Thermal.swift`.
+Retirer de `ComposerCaptureSession+Thermal.swift` le `perform` provisoire et `lockPendingTake` (Tâche 13) : `lockPendingTake` vient ici, mot pour mot, sous `perform`.
 
 3e. Hôtes : dans `ComposerViewfinder.swift`, supprimer les deux `.onReceive(camera.$capturedPhotoId)` / `.onReceive(camera.$capturedVideoId)` et ajouter dans `.onAppear` : `capture.onDeliver = { deliver($0) }` (la revue reste branchée jusqu'à la Tâche 15 : pour que la photo d'une porte qui revoyait passe encore par la revue, `onDeliver` pose `pendingPhoto` quand `reviewsPhoto` est vrai :
 
@@ -4341,7 +4780,7 @@ Retirer le `perform` provisoire de `ComposerCaptureSession+Thermal.swift`.
             }
 ```
 
-). Dans `MeeshyComposerHost+Surfaces.swift`, supprimer les deux `.onReceive(sceneCamera.$capturedPhotoId)` / `.onReceive(sceneCamera.$capturedVideoId)` et leurs commentaires (lignes en moins). Dans `MeeshyComposerHost+Viewfinder.swift`, `sceneCameraChrome(rect:)` pose `.onAppear { sceneCapture.onDeliver = { poseSceneCapture($0) } }` sur le `ComposerCaptureChrome`.
+). Dans `MeeshyComposerHost+Surfaces.swift`, supprimer les deux `.onReceive(sceneCamera.$capturedPhotoId)` / `.onReceive(sceneCamera.$capturedVideoId)` et leurs commentaires (lignes en moins). Dans `MeeshyComposerHost+Viewfinder.swift`, `sceneCameraChrome(rect:)` pose `.onAppear { sceneCapture.onDeliver = { poseSceneCapture($0) } }` sur le `ComposerCaptureChrome`, et `collectSceneSegment(_:)` (:125), dont le seul appelant était l'`onReceive` retiré, est supprimée avec son doc-comment.
 
 3f. Catalogue :
 
@@ -4364,7 +4803,7 @@ git add $F
 git commit -m "feat(ios): la session reçoit les prises — la scène mène à l'édition, la miniature choisie enregistre le rendu en galerie (#9351)" -- $F
 ```
 
-Expected `wc -l` : < 1 111 (le fichier ne fait que rétrécir). P1. Expected: PASS — `ComposerCaptureTakesTests` 7/7, `ComposerSceneCameraMountingTests` vert.
+Expected `wc -l` : < 1 111 (le fichier ne fait que rétrécir). P1. Expected: PASS — `ComposerCaptureTakesTests` 9/9, `ComposerSceneCameraMountingTests` vert.
 
 - [ ] **Step 5: Commit** — fait ; P3.
 
@@ -4596,7 +5035,9 @@ struct ComposerCaptureChrome: View {
                         scene(.doubleTap)
                     }
                     .accessibilityAction(named: Text(ComposerSceneCameraCopy.filmActionLabel)) {
-                        session.stage == .recording ? session.closeTake() : scene(.longPress)
+                        guard session.stage != .recording else { return session.closeTake() }
+                        scene(.longPress)
+                        session.lockPendingTake()
                     }
             }
             VStack(spacing: 0) {
@@ -4871,6 +5312,7 @@ et, dans `preview`, `ComposerCapturePreview(session: capture, size: .fullScreen)
 - `ComposerLiveLookPanel.swift` : déplacer `rendering` dans `ComposerCaptureCopy` (fichier `ComposerFramePacing.swift`, même clé `composer.capture.looks.rendering`) ; `git rm apps/ios/Meeshy/Features/Main/Composer/ComposerLiveLookPanel.swift`.
 - `ComposerPhotoLook.swift` : supprimer `ComposerPhotoLookRenderer`, `ComposerPhotoLookThumbnails`, et de `ComposerPhotoLookRule` les membres qui n'ont plus d'appelant après ces retraits (`grep -rn "previewMaxPixel\|thumbnailMaxPixel\|previewFrameCanvas\|thumbnailFrameCanvas\|downscale(\|captureLook(" apps/ios/Meeshy --include='*.swift'` ; garder `frameCanvas`, `colorSpace`, `filters`, `chips`, `frames`, `entering`, `chip(of:)`, `grades` s'ils sont lus). Si `ComposerPhotoLookSource.taken(_:by:at:)` et ses propriétés stockées n'ont plus d'appelant, faire de `ComposerPhotoLookSource` un `nonisolated enum` qui ne garde que `texts(at:)`, `caption(at:)`, `upright(_:)`.
 - `ComposerLiveLook.swift` : supprimer `ComposerLiveLookPanelLayout`.
+- `ComposerCaptureSession.swift` : supprimer `@Published var looksOpen` (:55) — son seul lecteur était le panneau à onglets de `ComposerCaptureViews.swift:135-152`, réécrit en 3b ; le rail lit `openFamily`.
 
 3h. Catalogue — le bouton « Filtres et cadres » part, la photo se prend à deux touchers :
 
@@ -4892,6 +5334,18 @@ et mettre les `defaultValue:` des deux appels (`ComposerSceneCameraCopy.hint` ca
 - `ComposerLiveLookTests` : `test_lAperçuPartage_poseLeLookEnDirect` vérifie désormais `vues.contains("ComposerLiveLookSurface(")` et `bas.contains("ComposerLookRail(")` (fichier `ComposerCaptureBottomRow.swift`) ; dans `test_laPrise_partAvecLeLook_…`, remplacer les trois assertions sur `initialLook:`, `capture.lookedPhoto(` et `sceneCapture.lookedPhoto(` par `XCTAssertTrue(prises.contains("lookedPhoto(image"), "toute photo de la scène part regardée")` lu dans `ComposerCaptureSession+Takes.swift`.
 - `ComposerCaptureLockZoomFlashTests` : `test_leChromePartage_…` lit `"SpatialTapGesture(count: 1, coordinateSpace: .global)"` et `"TapGesture(count: 2)"` ; `test_laBarreMontreLeCadenasLeZoomEtLeCurseur` lit le cadenas et le zoom dans `ComposerCaptureBottomRow.swift`, le curseur dans la barre ; `test_lesDeuxMontages_profitentDesGestesSansLesRecabler` accepte `ComposerCaptureStage(` OU `ComposerCaptureChrome(` (le composer passe à la scène en Tâche 21) ; `test_focusesOnDoubleTap_…` devient `test_focusesOnTap_…`.
 
+**Les témoins de #8711 (un toucher photographiait) et de #9295 (la revue) — inversion ASSUMÉE par le porteur (décision (b)).** Chacun est réécrit pour dire la règle nouvelle, jamais supprimé sans remplaçant :
+- `ComposerSceneShutterWiringTests.swift` :
+  - `test_lePremierToucher_armeSansPhotographier_parLaLoi` (:89) — inchangé dans ce qu'il affirme (le premier toucher d'une scène vide ARME le viseur, #8711 tient) ; sa borne de fin `funchandleArmedSceneTap()` disparaît : la remplacer par la fonction suivante, `code.range(of: "func", range: début.upperBound..<code.endIndex)` (ou `code.endIndex` s'il n'y en a plus).
+  - `test_leSecondToucher_prendLaPhoto_parLaLoi` (:105) devient `test_viseurArme_unToucherVise_deuxTouchersPhotographient` : `XCTAssertEqual(ComposerCaptureGesture.action(zone: .scene, gesture: .tap, context: ComposerCaptureGestureContext()), .focus)` ; idem `.doubleTap` ⇒ `.photoToEdit` ; puis, câblage, `ComposerCaptureViews.swift` contient `TapGesture(count:2).onEnded{scene(.doubleTap)}` et `holdGesture.exclusively(before:` ; et `photographWhenReady` contient toujours `takePhoto()` (bloc conservé tel quel).
+- `ComposerSceneQuickCaptureTests.swift` (:72-118) : `armedTap` / `armedHold` et leurs types `ArmedTap` / `ArmedHold` quittent `ComposerSceneQuickCapture` (plus d'appelant). Leurs témoins deviennent des témoins de la TABLE, sur les mêmes cas :
+  - `test_armedTap_viseurArmeDansUnFormatPhoto_prendLaPhoto` → `test_table_viseurArme_doubleToucherPhotographie` (`.scene` / `.doubleTap` ⇒ `.photoToEdit`) ;
+  - `test_armedTap_refuseHorsDuViseurArme` → `test_table_doubleToucher_refuseHorsDuViseurArme` : `stage: .off` ⇒ `.none`, `stage: .recording` ⇒ `.none`, `allowsPhoto: false` (réel) ⇒ `.none`, `pendingSegments: 2` ⇒ `.none` — les quatre raisons d'origine, dites par la table ;
+  - `test_armedHold_…` (deux) → `test_table_appuiLong_filmeUnSegment` (`.armed` ⇒ `.filmSegment` ; `.recording` ⇒ `.none` ; `allowsVideo: false` ⇒ `.none`) ;
+  - `test_viseurArme_toucherEtAppuiLong_nePortentPasLaMemeIntention` : `.tap` ⇒ `.focus`, `.doubleTap` ⇒ `.photoToEdit`, `.longPress` ⇒ `.filmSegment` — trois gestes, trois intentions ;
+  - `test_nappeDuViseurArme_cableLAppuiLongVersLaVideo` lit `ComposerCaptureViews.swift` : `holdGesture` contient `scene(.longPress)` (et plus `onHold: { handleArmedSceneHold() }`).
+- Balayage final, qui doit rendre VIDE : `grep -rn "armedTap\|armedHold\|ArmedTap\|ArmedHold\|handleArmedScene\|takesPhotoOnTap\|filmsOnHold\|reviewsPhoto\|ComposerPhotoLookReview\|looksOpen" apps/ios/Meeshy apps/ios/MeeshyTests --include='*.swift'`.
+
 - [ ] **Step 4: Run test to verify it passes**
 
 ```bash
@@ -4901,7 +5355,7 @@ git rm -q $P/ComposerPhotoLookReview.swift $P/ComposerLiveLookPanel.swift
 cd apps/ios && xcodegen generate --quiet && ./scripts/check_test_registration.sh && cd ../..
 python3 apps/ios/scripts/check_localization.py | tail -1
 T=apps/ios/MeeshyTests/Unit/Composer
-F="$P/ComposerCaptureStage.swift $P/ComposerCaptureBottomRow.swift $P/ComposerCaptureViews.swift $P/ComposerSceneCameraBar.swift $P/ComposerViewfinder.swift $P/ComposerViewfinder+Provider.swift $P/MeeshyComposerHost+Viewfinder.swift $P/ComposerPhotoLook.swift $P/ComposerLiveLook.swift $P/ComposerFramePacing.swift $P/ComposerCaptureFocus.swift $P/ComposerCaptureSession.swift $P/ComposerSceneCameraCopy.swift $P/ComposerSceneCaptureGesture.swift $P/ComposerPhotoLookReview.swift $P/ComposerLiveLookPanel.swift $T/ComposerSingleViewfinderTests.swift $T/ComposerLiveLookTests.swift $T/ComposerCaptureLockZoomFlashTests.swift apps/ios/Meeshy/Localizable.xcstrings apps/ios/Meeshy.xcodeproj/project.pbxproj"
+F="$P/ComposerCaptureStage.swift $P/ComposerCaptureBottomRow.swift $P/ComposerCaptureViews.swift $P/ComposerSceneCameraBar.swift $P/ComposerViewfinder.swift $P/ComposerViewfinder+Provider.swift $P/MeeshyComposerHost+Viewfinder.swift $P/ComposerPhotoLook.swift $P/ComposerLiveLook.swift $P/ComposerFramePacing.swift $P/ComposerCaptureFocus.swift $P/ComposerCaptureSession.swift $P/ComposerSceneCameraCopy.swift $P/ComposerSceneCaptureGesture.swift $P/ComposerPhotoLookReview.swift $P/ComposerLiveLookPanel.swift $T/ComposerSingleViewfinderTests.swift $T/ComposerLiveLookTests.swift $T/ComposerCaptureLockZoomFlashTests.swift $T/ComposerSceneShutterWiringTests.swift $T/ComposerSceneQuickCaptureTests.swift apps/ios/Meeshy/Localizable.xcstrings apps/ios/Meeshy.xcodeproj/project.pbxproj"
 git add $F
 git commit -m "feat(ios): le viseur se pilote par un rail, une bande de miniatures vivantes et la miniature choisie — sans revue ni déclencheur ( o ) — run test (#9351)" -- $F
 ```
@@ -4920,7 +5374,7 @@ P1. Expected: PASS — toute la suite verte (`ComposerCaptureStageWiringTests` 5
 - Create: `apps/ios/Meeshy/Features/Main/Composer/ComposerCapturePhase.swift`
 - Create: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift`
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession.swift` (stockées `phase`, `editPhoto`, `editSource` ; `isRenderingLook` en écriture interne ; `renderGeneration` en `private(set)` ; `disarm` remet la phase)
-- Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift` (`photoArrived` `.edit` → `beginEditing(photo:)`)
+- Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Takes.swift` (`photoArrived` `.edit` → `beginEditing(photo:data:)`)
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureStage.swift` (`gestureContext.editing`)
 - Modify: `apps/ios/Meeshy/Features/Main/Components/CameraModel.swift` (`pauseRunning`, `resumeRunning`)
 - Test: `apps/ios/MeeshyTests/Unit/Composer/ComposerCapturePhaseTests.swift`
@@ -4931,7 +5385,7 @@ P1. Expected: PASS — toute la suite verte (`ComposerCaptureStageWiringTests` 5
   - `nonisolated enum ComposerEditMedia: Hashable, Sendable { case photo; case video(URL) }`
   - `nonisolated enum ComposerCapturePhase: Hashable, Sendable { case capturing; case editing(ComposerEditMedia); var isEditing: Bool }`
   - `nonisolated final class ComposerStillSource: ComposerFrameSourcing` (`init(_ image: CGImage)`)
-  - `ComposerCaptureSession.phase` (`@Published`), `editPhoto: CGImage?`, `editSource: (any ComposerFrameSourcing)?`, `func beginEditing(photo: UIImage)`, `func cancelEditing()`, `var editExtent: CGRect?`, `var framingAspect: CGFloat`, `func reframe(from:translation:viewSize:)`, `func rezoom(from:scale:)`
+  - `ComposerCaptureSession.phase` (`@Published`), `editPhoto: CGImage?`, `editPhotoData: Data?` (les octets de la prise : leur EXIF suit le rendu final), `editSource: (any ComposerFrameSourcing)?`, `func beginEditing(photo: UIImage, data: Data? = nil)`, `func cancelEditing()`, `var editExtent: CGRect?`, `var framingAspect: CGFloat`, `func reframe(from:translation:viewSize:)`, `func rezoom(from:scale:)`
   - `CameraModel.pauseRunning()`, `CameraModel.resumeRunning()`
 
 - [ ] **Step 0: Ouvrir le lot** — `status 9352 "In Progress"` ; `git pull --rebase --autostash origin dev`.
@@ -4955,7 +5409,7 @@ final class ComposerCapturePhaseTests: XCTestCase {
         let source = ComposerStillSource(Self.photo(width: 300, height: 400))
         XCTAssertEqual(source.latestImage()?.extent, CGRect(x: 0, y: 0, width: 300, height: 400))
         let dessin = expectation(description: "une image, une fois")
-        source.setFrameHandler { dessin.fulfill() }
+        source.setFrameHandler({ dessin.fulfill() }, for: ObjectIdentifier(self))
         wait(for: [dessin], timeout: 1)
     }
 
@@ -4975,6 +5429,23 @@ final class ComposerCapturePhaseTests: XCTestCase {
         XCTAssertLessThan(session.framing.center.x, 0.5, "le média suit le doigt vers la droite")
         session.rezoom(from: session.framing, scale: 2)
         XCTAssertEqual(session.framing.scale, 2, accuracy: 0.001)
+    }
+
+    func test_beginEditingPhoto_keepsTheTakeBytes_forTheirMetadata() {
+        let session = ComposerCaptureSession(stage: .armed)
+        let octets = Data([0xFF, 0xD8, 0xFF])
+        session.beginEditing(photo: UIImage(cgImage: Self.photo(width: 30, height: 40)), data: octets)
+        XCTAssertEqual(session.editPhotoData, octets)
+        session.cancelEditing()
+        XCTAssertNil(session.editPhotoData)
+    }
+
+    func test_framingAspect_followsTheFrameSlot_evenBeforeThePreviewCookedIt() {
+        let session = ComposerCaptureSession(stage: .armed, scenes: ComposerLookSceneCache(countLimit: 1))
+        XCTAssertEqual(session.framingAspect, 9.0 / 16.0, accuracy: 0.001, "sans cadre : le canevas 9:16")
+        session.look = ComposerPhotoLook(frame: .montage(.classic(.polaroid)))
+        XCTAssertGreaterThan(abs(session.framingAspect - 9.0 / 16.0), 0.01,
+                             "la case d'un polaroïd n'est pas 9:16 : un cache froid ne doit pas fausser le cadrage")
     }
 
     func test_cancelEditing_returnsToCapture() {
@@ -5070,7 +5541,10 @@ nonisolated final class ComposerStillSource: ComposerFrameSourcing, @unchecked S
 
     func latestImage() -> CIImage? { image }
 
-    func setFrameHandler(_ handler: (@Sendable () -> Void)?) {
+    /// Une image figée n'a qu'une trame : le peintre qui s'abonne est prévenu
+    /// aussitôt, une fois ; le reste du temps, seul un changement de look ou de
+    /// cadrage redessine.
+    func setFrameHandler(_ handler: (@Sendable () -> Void)?, for owner: ObjectIdentifier) {
         handler?()
     }
 }
@@ -5083,6 +5557,8 @@ nonisolated final class ComposerStillSource: ComposerFrameSourcing, @unchecked S
     @Published var phase = ComposerCapturePhase.capturing
     /// La photo figée de l'édition, debout.
     var editPhoto: CGImage?
+    /// Les octets de la prise : leur EXIF suit le rendu final (décision porteur (a)).
+    var editPhotoData: Data?
     /// Ce que le peintre lit en édition : la photo figée, ou la vidéo en boucle.
     var editSource: (any ComposerFrameSourcing)?
 ```
@@ -5098,9 +5574,10 @@ import UIKit
 /// **Le mode édition** (#9352, spec § 3.3) : même interface, la source change.
 extension ComposerCaptureSession {
 
-    func beginEditing(photo image: UIImage) {
+    func beginEditing(photo image: UIImage, data: Data? = nil) {
         guard let debout = ComposerPhotoLookSource.upright(image) else { return }
         editPhoto = debout
+        editPhotoData = data
         editSource = ComposerStillSource(debout)
         framing = .identity
         openFamily = nil
@@ -5117,6 +5594,7 @@ extension ComposerCaptureSession {
     func leaveEditing() {
         phase = .capturing
         editPhoto = nil
+        editPhotoData = nil
         editSource = nil
         framing = .identity
     }
@@ -5127,12 +5605,17 @@ extension ComposerCaptureSession {
     }
 
     /// Les proportions de la case où le média se pose : la découpe du cadre, le
-    /// canevas 9:16 sinon.
+    /// canevas 9:16 sinon. La scène de l'aperçu ou de la miniature sert si elle est
+    /// cuite ; sinon la miniature (162×288, une milliseconde) se cuit ici — un cache
+    /// froid ne doit jamais faire cadrer en 9:16 un média qui part dans une case 4:5.
     var framingAspect: CGFloat {
-        let cle = ComposerLookSceneKey(look: look, canvas: ComposerLookPainter.canvas, date: lookDate, person: lookPerson)
-        guard let photo = scenes.cached(cle)?.slots.first?.photo, photo.height > 0 else {
-            return ComposerLookPainter.canvas.width / ComposerLookPainter.canvas.height
+        let neutre = ComposerLookPainter.designCanvas.width / ComposerLookPainter.designCanvas.height
+        guard look.frame != .none else { return neutre }
+        let cles = [ComposerLookPainter.designCanvas, ComposerLookPainter.thumbnailCanvas].map {
+            ComposerLookSceneKey(look: look, canvas: $0, date: lookDate, person: lookPerson)
         }
+        let scene = cles.lazy.compactMap { self.scenes.cached($0) }.first ?? ComposerLookPainter.scene(for: cles[1])
+        guard let photo = scene?.slots.first?.photo, photo.height > 0 else { return neutre }
         return photo.width / photo.height
     }
 
@@ -5148,7 +5631,9 @@ extension ComposerCaptureSession {
 }
 ```
 
-`ComposerCaptureSession+Takes.swift`, `photoArrived` — le cas `.edit` devient `beginEditing(photo: image)`. `ComposerCaptureStage.swift`, `gestureContext` : `editing: phase.isEditing`.
+`ComposerCaptureSession+Takes.swift`, `photoArrived` — le cas `.edit` devient `beginEditing(photo: image, data: camera.capturedPhotoData)`. `lookedPhoto` (Tâches 3 / 3b) n'a alors plus d'appelant : la SUPPRIMER de `ComposerCaptureSession.swift`, avec ses deux témoins de `ComposerLiveLookTests` (`test_sansLook_laPhotoPartTelleQuelle_avecSesOctets`, `test_avecUnFiltre_laPhotoPartPeinte_avecLEXIFDeLaPrise`) — la Tâche 18 les remplace par `test_finishEditingPhoto_…`, qui garde la même promesse (peinte, à la date de la session, avec l'EXIF de la prise). Mettre à jour le motif de `test_uneVidéoSAccumule_quandUnePhotoSePose` (`beginEditing(photo:image,data:camera.capturedPhotoData)`) et, dans `ComposerLiveLookTests.test_laPrise_partAvecLeLook_…`, `prises.contains("lookedPhoto(image")` devient `prises.contains("beginEditing(photo: image, data: camera.capturedPhotoData)")`.
+
+**Fenêtre de staging à surveiller** : entre cette tâche et la Tâche 18, une photo prise par la scène s'ouvre en édition mais ✓ Terminé n'existe pas encore — `dev` est utilisable, pas promouvable. Ne pas fusionner `dev` → `main` (build TestFlight) avant la fin de la Tâche 18. `ComposerCaptureStage.swift`, `gestureContext` : `editing: phase.isEditing`.
 
 `CameraModel.swift`, sous `stop()` :
 
@@ -5174,11 +5659,12 @@ extension ComposerCaptureSession {
 cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate --quiet && ./scripts/check_test_registration.sh
 cd /Users/smpceo/Documents/v2_meeshy
 P=apps/ios/Meeshy/Features/Main
-F="$P/Composer/ComposerCapturePhase.swift $P/Composer/ComposerCaptureSession+Edit.swift $P/Composer/ComposerCaptureSession.swift $P/Composer/ComposerCaptureSession+Takes.swift $P/Composer/ComposerCaptureStage.swift $P/Components/CameraModel.swift apps/ios/Meeshy.xcodeproj/project.pbxproj"
+T=apps/ios/MeeshyTests/Unit/Composer
+F="$P/Composer/ComposerCapturePhase.swift $P/Composer/ComposerCaptureSession+Edit.swift $P/Composer/ComposerCaptureSession.swift $P/Composer/ComposerCaptureSession+Takes.swift $P/Composer/ComposerCaptureStage.swift $P/Components/CameraModel.swift $T/ComposerLiveLookTests.swift $T/ComposerSceneCameraMountingTests.swift apps/ios/Meeshy.xcodeproj/project.pbxproj"
 git add $F && git commit -m "feat(ios): la photo prise par la scène se fige en édition, cadrable au doigt (#9352)" -- $F
 ```
 
-P1. Expected: PASS — `ComposerCapturePhaseTests` 6/6, `ComposerCaptureTakesTests` 8/8. P3.
+P1. Expected: PASS — `ComposerCapturePhaseTests` 8/8, `ComposerCaptureTakesTests` 10/10. P3.
 
 - [ ] **Step 5: Commit** — fait.
 
@@ -5192,12 +5678,14 @@ P1. Expected: PASS — `ComposerCapturePhaseTests` 6/6, `ComposerCaptureTakesTes
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift` (`validateSegments()`, `beginEditing(video:)`, `leaveEditing` arrête la boucle)
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureStage.swift` (`onValidateSegments: { session.validateSegments() }`)
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift` (`validateSceneSegments` → `sceneCapture.validateSegments()`)
+- Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerFramePacing.swift` (`ComposerCaptureSurfaceRule.editFPS`)
 - Test: `apps/ios/MeeshyTests/Unit/Composer/ComposerLoopPlayerTests.swift`
 
 **Interfaces:**
 - Produces:
-  - `nonisolated enum ComposerVideoOrientation { static func orientation(of: CGAffineTransform) -> CGImagePropertyOrientation }`
-  - `protocol ComposerLoopPlayerProviding: ComposerFrameSourcing { nonisolated var duration: TimeInterval { get }; nonisolated var uprightSize: CGSize { get }; @MainActor func play(); @MainActor func stop(); @MainActor func setRange(_: ClosedRange<TimeInterval>); @MainActor func seek(to: TimeInterval); @MainActor var currentTime: TimeInterval { get } }`
+  - `nonisolated enum ComposerVideoOrientation { static func orientation(of: CGAffineTransform) -> CGImagePropertyOrientation }` (les quatre rotations ET leurs quatre miroirs — un clip de la caméra avant)
+  - `ComposerCaptureSurfaceRule.editFPS(_ budget: ComposerThermalBudget) -> Int` (en édition, la cadence suit le palier, jamais 0)
+  - `protocol ComposerLoopPlayerProviding: ComposerFrameSourcing { nonisolated var duration: TimeInterval { get }; nonisolated var uprightSize: CGSize { get }; @MainActor func configure(fps: Int, declaredSpace: CGColorSpace?); @MainActor func play(); @MainActor func stop(); @MainActor func setRange(_: ClosedRange<TimeInterval>); @MainActor func seek(to: TimeInterval); @MainActor var currentTime: TimeInterval { get } }` — `configure` reçoit la cadence du palier et l'espace colorimétrique de la CAMÉRA : la boucle d'édition et l'export lisent la source dans le même espace (sinon l'aperçu d'édition et la vidéo qui part divergent)
   - `nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProviding` ; `@MainActor static func load(url: URL) async -> ComposerLoopPlayer?`
   - `ComposerCaptureSession.loopPlayer: (any ComposerLoopPlayerProviding)?` ; `@Published var trim: ClosedRange<TimeInterval>?` ; `init(…, loopPlayerFactory: @escaping @MainActor (URL) async -> (any ComposerLoopPlayerProviding)? = { await ComposerLoopPlayer.load(url: $0) })` ; `func validateSegments()` (sans argument) ; `func beginEditing(video: URL) async`
 
@@ -5216,6 +5704,21 @@ final class ComposerLoopPlayerTests: XCTestCase {
         XCTAssertEqual(ComposerVideoOrientation.orientation(of: CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 1080, ty: 0)), .right)
         XCTAssertEqual(ComposerVideoOrientation.orientation(of: .identity), .up)
         XCTAssertEqual(ComposerVideoOrientation.orientation(of: CGAffineTransform(a: -1, b: 0, c: 0, d: -1, tx: 0, ty: 0)), .down)
+        XCTAssertEqual(ComposerVideoOrientation.orientation(of: CGAffineTransform(a: 0, b: -1, c: 1, d: 0, tx: 0, ty: 1920)), .left)
+    }
+
+    func test_orientation_frontCameraMirroredTransforms_keepTheirMirror() {
+        XCTAssertEqual(ComposerVideoOrientation.orientation(of: CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: 1920, ty: 0)), .upMirrored)
+        XCTAssertEqual(ComposerVideoOrientation.orientation(of: CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: 1080)), .downMirrored)
+        XCTAssertEqual(ComposerVideoOrientation.orientation(of: CGAffineTransform(a: 0, b: 1, c: 1, d: 0, tx: 0, ty: 0)), .leftMirrored)
+        XCTAssertEqual(ComposerVideoOrientation.orientation(of: CGAffineTransform(a: 0, b: -1, c: -1, d: 0, tx: 1080, ty: 1920)), .rightMirrored)
+    }
+
+    func test_editFPS_followsTheTier_neverZero() {
+        XCTAssertEqual(ComposerCaptureSurfaceRule.editFPS(ComposerThermalBudget.budget(for: .nominal)), 30)
+        XCTAssertEqual(ComposerCaptureSurfaceRule.editFPS(ComposerThermalBudget.budget(for: .serious)), 15)
+        XCTAssertGreaterThan(ComposerCaptureSurfaceRule.editFPS(ComposerThermalBudget.budget(for: .critical)), 0,
+                             "la photo figée et la boucle se dessinent encore au palier critique, lentement")
     }
 
     func test_validateSegments_entersVideoEditing_withTheWholeClipAsRange() async throws {
@@ -5229,6 +5732,7 @@ final class ComposerLoopPlayerTests: XCTestCase {
         XCTAssertEqual(session.phase, .editing(.video(url)))
         XCTAssertEqual(session.trim, 0...4)
         XCTAssertEqual(lecteur.playCount, 1)
+        XCTAssertEqual(lecteur.configuredFPS, 30, "la boucle suit le palier thermique, pas une horloge fixe")
         XCTAssertTrue(session.segments.isEmpty)
     }
 
@@ -5256,10 +5760,14 @@ final class ComposerLoopPlayerTests: XCTestCase {
     #endif
 }
 
+/// Isolé MainActor comme les membres `@MainActor` du protocole qu'il double (la
+/// cible de tests est `nonisolated` par défaut).
+@MainActor
 final class MockComposerLoopPlayer: ComposerLoopPlayerProviding, @unchecked Sendable {
     let duration: TimeInterval
     let uprightSize = CGSize(width: 1080, height: 1920)
     let declaredSpace: CGColorSpace? = nil
+    private(set) var configuredFPS: Int?
     private(set) var playCount = 0
     private(set) var stopCount = 0
     private(set) var ranges: [ClosedRange<TimeInterval>] = []
@@ -5271,7 +5779,8 @@ final class MockComposerLoopPlayer: ComposerLoopPlayerProviding, @unchecked Send
     init(duration: TimeInterval) { self.duration = duration }
 
     func latestImage() -> CIImage? { CIImage(color: .gray).cropped(to: CGRect(origin: .zero, size: uprightSize)) }
-    func setFrameHandler(_ handler: (@Sendable () -> Void)?) {}
+    func setFrameHandler(_ handler: (@Sendable () -> Void)?, for owner: ObjectIdentifier) {}
+    func configure(fps: Int, declaredSpace: CGColorSpace?) { configuredFPS = fps }
     func play() { playCount += 1 }
     func stop() { stopCount += 1 }
     func setRange(_ range: ClosedRange<TimeInterval>) { ranges.append(range) }
@@ -5309,6 +5818,10 @@ nonisolated enum ComposerVideoOrientation {
         case (0, 1, -1, 0): return .right
         case (0, -1, 1, 0): return .left
         case (-1, 0, 0, -1): return .down
+        case (-1, 0, 0, 1): return .upMirrored
+        case (1, 0, 0, -1): return .downMirrored
+        case (0, 1, 1, 0): return .leftMirrored
+        case (0, -1, -1, 0): return .rightMirrored
         default: return .up
         }
     }
@@ -5318,6 +5831,7 @@ nonisolated enum ComposerVideoOrientation {
 protocol ComposerLoopPlayerProviding: ComposerFrameSourcing {
     nonisolated var duration: TimeInterval { get }
     nonisolated var uprightSize: CGSize { get }
+    @MainActor func configure(fps: Int, declaredSpace: CGColorSpace?)
     @MainActor func play()
     @MainActor func stop()
     @MainActor func setRange(_ range: ClosedRange<TimeInterval>)
@@ -5332,7 +5846,11 @@ protocol ComposerLoopPlayerProviding: ComposerFrameSourcing {
 nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProviding, @unchecked Sendable {
     let duration: TimeInterval
     let uprightSize: CGSize
-    var declaredSpace: CGColorSpace? { nil }
+    var declaredSpace: CGColorSpace? {
+        lock.lock()
+        defer { lock.unlock() }
+        return space
+    }
 
     private let asset: AVURLAsset
     private let orientation: CGImagePropertyOrientation
@@ -5340,9 +5858,11 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
     private var looper: AVPlayerLooper?
     private var outputs: [ObjectIdentifier: AVPlayerItemVideoOutput] = [:]
     private var link: CADisplayLink?
+    private var fps = 30
     private let lock = NSLock()
     private var latest: CVPixelBuffer?
-    private var handler: (@Sendable () -> Void)?
+    private var space: CGColorSpace?
+    private var handlers: [ObjectIdentifier: @Sendable () -> Void] = [:]
 
     nonisolated(unsafe) private static let attributes: [String: Any] = [
         kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
@@ -5380,9 +5900,20 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
         return tampon.map { CIImage(cvPixelBuffer: $0).oriented(orientation) }
     }
 
-    func setFrameHandler(_ handler: (@Sendable () -> Void)?) {
+    func setFrameHandler(_ handler: (@Sendable () -> Void)?, for owner: ObjectIdentifier) {
         lock.lock()
-        self.handler = handler
+        handlers[owner] = handler
+        lock.unlock()
+    }
+
+    /// La cadence du palier thermique, et l'espace colorimétrique de la caméra
+    /// qui a filmé — celui que l'export déclare aussi.
+    @MainActor
+    func configure(fps: Int, declaredSpace: CGColorSpace?) {
+        self.fps = max(1, fps)
+        link?.preferredFramesPerSecond = self.fps
+        lock.lock()
+        space = declaredSpace
         lock.unlock()
     }
 
@@ -5391,8 +5922,8 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
         if looper == nil { setRange(0...duration) }
         player.play()
         guard link == nil else { return }
-        let lien = CADisplayLink(target: ComposerLoopPlayerTick(owner: self), selector: #selector(ComposerLoopPlayerTick.tick))
-        lien.preferredFramesPerSecond = 30
+        let lien = CADisplayLink(target: ComposerLoopPlayerTick(owner: self), selector: #selector(ComposerLoopPlayerTick.tick(_:)))
+        lien.preferredFramesPerSecond = fps
         lien.add(to: .main, forMode: .common)
         link = lien
     }
@@ -5434,19 +5965,31 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
 
     @MainActor
     fileprivate func tick() {
-        guard let element = player.currentItem, let sortie = outputs[ObjectIdentifier(element)] else { return }
+        guard let element = player.currentItem else { return }
+        let sortie = outputs[ObjectIdentifier(element)] ?? attachOutput(to: element)
         let temps = sortie.itemTime(forHostTime: CACurrentMediaTime())
         guard sortie.hasNewPixelBuffer(forItemTime: temps),
               let tampon = sortie.copyPixelBuffer(forItemTime: temps, itemTimeForDisplay: nil) else { return }
         lock.lock()
         latest = tampon
-        let prevenir = handler
+        let prevenir = Array(handlers.values)
         lock.unlock()
-        prevenir?()
+        prevenir.forEach { $0() }
+    }
+
+    /// Filet : un élément de la boucle sans sortie (recréé par le looper) en reçoit une.
+    @MainActor
+    private func attachOutput(to element: AVPlayerItem) -> AVPlayerItemVideoOutput {
+        let sortie = AVPlayerItemVideoOutput(pixelBufferAttributes: Self.attributes)
+        element.add(sortie)
+        outputs[ObjectIdentifier(element)] = sortie
+        return sortie
     }
 }
 
-/// La cible du `CADisplayLink` — elle ne retient pas le lecteur.
+/// La cible du `CADisplayLink` — elle ne retient pas le lecteur, et coupe le lien
+/// si le lecteur est parti sans `stop()` (un lien vivant tiendrait 30 réveils par
+/// seconde pour rien).
 private final class ComposerLoopPlayerTick: NSObject {
     weak var owner: ComposerLoopPlayer?
 
@@ -5457,11 +6000,27 @@ private final class ComposerLoopPlayerTick: NSObject {
         super.init()
     }
 
-    @objc func tick() {
-        owner?.tick()
+    @objc func tick(_ lien: CADisplayLink) {
+        guard let owner else {
+            lien.invalidate()
+            return
+        }
+        owner.tick()
     }
 }
 ```
+
+`ComposerFramePacing.swift`, dans `ComposerCaptureSurfaceRule` :
+
+```swift
+    /// En édition, rien ne vient de l'objectif : la photo figée et la boucle se
+    /// dessinent au rythme du palier, et encore au palier critique (10 i/s).
+    static func editFPS(_ budget: ComposerThermalBudget) -> Int {
+        max(10, budget.previewFPS)
+    }
+```
+
+`ComposerCaptureSession.swift`, `applyThermal` (son écrivain unique, Tâche 6) — après `refreshFeed()` : `loopPlayer?.configure(fps: ComposerCaptureSurfaceRule.editFPS(thermalBudget), declaredSpace: camera.liveFeed.declaredSpace)` (une boucle qui joue suit le palier).
 
 `ComposerCaptureSession.swift` — stockées (sous `editSource`) :
 
@@ -5509,6 +6068,8 @@ private final class ComposerLoopPlayerTick: NSObject {
         openFamily = nil
         phase = .editing(.video(url))
         camera.pauseRunning()
+        lecteur.configure(fps: ComposerCaptureSurfaceRule.editFPS(thermalBudget),
+                          declaredSpace: camera.liveFeed.declaredSpace)
         lecteur.play()
     }
 ```
@@ -5530,11 +6091,11 @@ et `leaveEditing()` commence par `loopPlayer?.stop()`, puis `loopPlayer = nil`, 
 cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate --quiet && ./scripts/check_test_registration.sh
 cd /Users/smpceo/Documents/v2_meeshy
 P=apps/ios/Meeshy/Features/Main/Composer
-F="$P/ComposerEditSources.swift $P/ComposerCaptureSession.swift $P/ComposerCaptureSession+Edit.swift $P/ComposerCaptureStage.swift $P/MeeshyComposerHost+Viewfinder.swift apps/ios/Meeshy.xcodeproj/project.pbxproj"
+F="$P/ComposerEditSources.swift $P/ComposerFramePacing.swift $P/ComposerCaptureSession.swift $P/ComposerCaptureSession+Edit.swift $P/ComposerCaptureStage.swift $P/MeeshyComposerHost+Viewfinder.swift apps/ios/Meeshy.xcodeproj/project.pbxproj"
 git add $F && git commit -m "feat(ios): ✓ assemble les segments et la vidéo se retouche en boucle (#9352)" -- $F
 ```
 
-P1. Expected: PASS — `ComposerLoopPlayerTests` 4/4 (le test sur le film de recette tourne au simulateur de la CI). P3.
+P1. Expected: PASS — `ComposerLoopPlayerTests` 6/6 (le test sur le film de recette tourne au simulateur de la CI). P3.
 
 - [ ] **Step 5: Commit** — fait.
 
@@ -5547,40 +6108,61 @@ P1. Expected: PASS — `ComposerLoopPlayerTests` 4/4 (le test sur le film de rec
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift` (édition : pas de zoom ni de cadenas ; ✓ Terminé ; bande sur la source éditée)
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift` (`editing` cache flash et retournement)
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift` (`finishEditing`)
-- Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerFramePacing.swift` (`editFPS`)
+- Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerFramePacing.swift` (`ComposerCaptureCopy.done`)
 - Test: `apps/ios/MeeshyTests/Unit/Composer/ComposerCaptureEditTests.swift`
 
 **Interfaces:**
 - Consumes: Tâches 2, 3, 14, 16, 17.
-- Produces: `ComposerCaptureSession.finishEditing()` ; `ComposerCaptureSurfaceRule.editFPS(_ budget: ComposerThermalBudget) -> Int` ; `ComposerSceneCameraBar.editing: Bool` ; `ComposerCaptureCopy.done`.
+- Produces: `ComposerCaptureSession.finishEditing()` ; `ComposerSceneCameraBar.editing: Bool` ; `ComposerCaptureCopy.done`. (`editFPS` vient de la Tâche 17.)
 
 - [ ] **Step 1: Write the failing test**
 
 ```swift
 import XCTest
+import ImageIO
 @testable import Meeshy
 
 /// **✓ Terminé livre le rendu final et l'enregistre en galerie** (#9352, spec § 3.3 / § 3.4).
 @MainActor
 final class ComposerCaptureEditTests: XCTestCase {
 
-    func test_finishEditingPhoto_deliversTheCanvas_savesTheRendered_andLeavesEditing() async {
+    func test_finishEditingPhoto_deliversTheNativeCanvas_withTheTakeExif_andSavesIt() async throws {
         let galerie = MockComposerGallery()
         let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
         var remis: CameraResult?
         session.onDeliver = { remis = $0 }
-        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)),
+                             data: ComposerPhotoEncodingTests.takeWithExif())
         session.look = ComposerPhotoLook(filter: .cool)
         session.rezoom(from: .identity, scale: 1.5)
         session.finishEditing()
         await ComposerCaptureTakesTests.waitUntil { remis != nil }
         guard case .photo(let image, let octets) = remis else { return XCTFail("une photo") }
-        XCTAssertEqual(image.size.width * image.scale, 1080)
-        XCTAssertEqual(image.size.height * image.scale, 1920)
-        XCTAssertNil(octets)
+        let natif = ComposerLookPainter.canvas(for: CGSize(width: 300, height: 400))
+        XCTAssertEqual(image.size.width * image.scale, natif.width, "la définition de la source, jamais réduite")
+        XCTAssertEqual(image.size.height * image.scale, natif.height)
+        let lu = try XCTUnwrap(octets.flatMap { CGImageSourceCreateWithData($0 as CFData, nil) }
+            .flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) as? [CFString: Any] })
+        let exif = try XCTUnwrap(lu[kCGImagePropertyExifDictionary] as? [CFString: Any])
+        XCTAssertEqual(exif[kCGImagePropertyExifDateTimeOriginal] as? String, "2026:10:04 09:30:00",
+                       "le rendu final garde la date de PRISE")
+        XCTAssertEqual(lu[kCGImagePropertyOrientation] as? Int, 1)
         XCTAssertEqual(galerie.saveImageCount, 1, "« Terminé » enregistre le RENDU final en galerie")
         XCTAssertEqual(session.phase, .capturing)
         XCTAssertFalse(session.isRenderingLook)
+    }
+
+    func test_finishEditingPhoto_afterDisarm_deliversNothing() async {
+        let galerie = MockComposerGallery()
+        let session = ComposerCaptureSession(stage: .armed, gallery: galerie)
+        var remis = 0
+        session.onDeliver = { _ in remis += 1 }
+        session.beginEditing(photo: UIImage(cgImage: ComposerCapturePhaseTests.photo(width: 300, height: 400)))
+        session.finishEditing()
+        session.disarm()
+        try? await Task.sleep(nanoseconds: 500_000_000)
+        XCTAssertEqual(remis, 0, "un viseur fermé ne reçoit pas de prise en retard")
+        XCTAssertEqual(galerie.saveImageCount, 0)
     }
 
     func test_finishEditingVideo_untouched_deliversTheClip_andSavesNothingMore() async {
@@ -5611,11 +6193,6 @@ final class ComposerCaptureEditTests: XCTestCase {
         XCTAssertEqual(compte, 1)
     }
 
-    func test_editFPS_neverZero_soAFrozenPhotoStillDraws() {
-        XCTAssertGreaterThan(ComposerCaptureSurfaceRule.editFPS(ComposerThermalBudget.budget(for: .critical)), 0)
-        XCTAssertEqual(ComposerCaptureSurfaceRule.editFPS(ComposerThermalBudget.budget(for: .nominal)), 30)
-    }
-
     func test_editScreen_paintsTheEditedSource_andOffersDone() throws {
         let apercu = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
         XCTAssertTrue(apercu.contains("session.editSource"), "en édition, le peintre lit la photo figée ou la boucle")
@@ -5640,15 +6217,7 @@ P1. Expected: FAIL — `value of type 'ComposerCaptureSession' has no member 'fi
 
 - [ ] **Step 3: Write minimal implementation**
 
-3a. `ComposerFramePacing.swift`, dans `ComposerCaptureSurfaceRule` et `ComposerCaptureCopy` :
-
-```swift
-    /// En édition, rien ne vient de l'objectif : la photo figée se dessine même au
-    /// palier critique (à son rythme minimal), la boucle au rythme du palier.
-    static func editFPS(_ budget: ComposerThermalBudget) -> Int {
-        max(10, budget.previewFPS)
-    }
-```
+3a. `ComposerFramePacing.swift`, dans `ComposerCaptureCopy` :
 
 ```swift
     static var done: String {
@@ -5670,6 +6239,8 @@ P1. Expected: FAIL — `value of type 'ComposerCaptureSession' has no member 'fi
         }
     }
 
+    /// La photo à sa définition native, encodée avec l'EXIF de la prise, part en
+    /// galerie ET vers l'hôte. Un viseur fermé pendant le rendu ne reçoit rien.
     private func finishPhoto() {
         guard let photo = editPhoto else { return }
         let regard = look
@@ -5678,6 +6249,8 @@ P1. Expected: FAIL — `value of type 'ComposerCaptureSession' has no member 'fi
         let date = lookDate
         let cache = scenes
         let galerie = gallery
+        let prise = editPhotoData
+        let generation = renderGeneration
         isRenderingLook = true
         Task { @MainActor in
             guard let rendu = await ComposerLookPainter.renderPhoto(photo, look: regard, framing: cadrage,
@@ -5686,11 +6259,12 @@ P1. Expected: FAIL — `value of type 'ComposerCaptureSession' has no member 'fi
                 HapticFeedback.error()
                 return
             }
-            let image = UIImage(cgImage: rendu)
-            _ = await galerie.saveImage(image)
+            let octets = await ComposerPhotoEncoding.encode(rendu, like: prise)
+            guard generation == renderGeneration else { return }
+            if let octets { _ = await galerie.saveImage(octets) }
             isRenderingLook = false
             leaveEditing()
-            onDeliver?(.photo(image, data: nil))
+            onDeliver?(.photo(UIImage(cgImage: rendu), data: octets))
         }
     }
 
@@ -5766,6 +6340,18 @@ La boucle continue de jouer pendant le rendu ; `leaveEditing` l'arrête UNE fois
                                                         surfaceScale: session.thermalBudget.surfaceScale)
                                     .id(session.phase)
                             }
+                            if ComposerCaptureSurfaceRule.showsThermalNotice(look: session.look, budget: session.thermalBudget) {
+                                VStack {
+                                    Text(ComposerCaptureCopy.thermalNotice)
+                                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, MeeshySpacing.md)
+                                        .padding(.vertical, MeeshySpacing.sm)
+                                        .adaptiveLiquidGlass(in: Capsule())
+                                        .padding(.top, MeeshySpacing.xl * 2)
+                                    Spacer()
+                                }
+                            }
                         }
                     }
                     .frame(width: toile.width, height: toile.height)
@@ -5773,7 +6359,7 @@ La boucle continue de jouer pendant le rendu ; `leaveEditing` l'arrête UNE fois
                 }
 ```
 
-(conserver le bloc de la mention thermique de la Tâche 7 dans la branche « capture »). Dans `ComposerCaptureChrome` : états `@State private var reframeAnchor: ComposerFraming?` et `@State private var rezoomAnchor: ComposerFraming?` ; `dragGesture.onChanged` gagne le cas :
+(La mention thermique de la Tâche 7 reste dans la branche « capture » : en édition, la source est figée ou en boucle, et `editFPS` ne coupe jamais l'effet.) Dans `ComposerCaptureChrome` : états `@State private var reframeAnchor: ComposerFraming?` et `@State private var rezoomAnchor: ComposerFraming?` ; `dragGesture.onChanged` gagne le cas :
 
 ```swift
                 case .reframe:
@@ -5807,7 +6393,7 @@ où `canvasSize` est mesuré une fois par le `GeometryReader` de la nappe : `@St
 
 3d. `ComposerSceneCameraBar.swift` — `var editing = false` ; dans `topControls`, `flashCluster` et le bouton de retournement ne s'affichent que si `!editing` ; la bande des segments aussi.
 
-3e. `ComposerCaptureBottomRow.swift` — en édition : pas de zoom, pas de cadenas ; la bande lit la source éditée ; ✓ Terminé à droite :
+3e. `ComposerCaptureBottomRow.swift` — en édition : pas de zoom, pas de cadenas ; la bande lit la source éditée ; ✓ Terminé à droite. Propriété :
 
 ```swift
     private var source: any ComposerFrameSourcing {
@@ -5815,7 +6401,16 @@ où `canvasSize` est mesuré une fois par le `GeometryReader` de la nappe : `@St
     }
 ```
 
-(`ComposerLookStrip(session:source: source, …)`), `zoom` n'est rendu que si `!session.phase.isEditing`, et le `HStack` du cadenas devient :
+et, dans `body`, le début du `VStack` devient :
+
+```swift
+            if !session.phase.isEditing { zoom }
+            ZStack {
+                ComposerLookStrip(session: session, source: source, context: context,
+                                  recordingTime: session.camera.recordingDuration)
+```
+
+puis le `HStack` du cadenas devient :
 
 ```swift
                 HStack {
@@ -5840,7 +6435,21 @@ où `canvasSize` est mesuré une fois par le `GeometryReader` de la nappe : `@St
                 }
 ```
 
-et la phrase du geste se tait en édition (`if !session.phase.isEditing { Text(…) }`).
+et la phrase du geste se tait en édition :
+
+```swift
+            if !session.phase.isEditing {
+                Text(showsLock ? ComposerSceneCameraCopy.lockHint
+                               : ComposerSceneCameraCopy.hint(mode: session.mode ?? .photo, stage: session.stage))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .shadow(color: .black.opacity(0.6), radius: 3, y: 1)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                    .accessibilityHidden(true)
+            }
+```
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -6037,6 +6646,7 @@ P1. Expected: PASS — 9/9. P3.
 
 **Files:**
 - Create: `apps/ios/Meeshy/Features/Main/Composer/ComposerTrimTrack.swift`
+- Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerTrimRule.swift` (`precisionWindow`)
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureSession+Edit.swift` (`setTrim`, `seekPlayhead`, `finishVideo` passe la plage)
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift` (`timeRange:`)
 - Modify: `apps/ios/Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift` (piste AU-DESSUS du rail et de la bande, en édition vidéo)
@@ -6045,17 +6655,26 @@ P1. Expected: PASS — 9/9. P3.
 
 **Interfaces:**
 - Consumes: Tâches 17, 19.
-- Produces: `struct ComposerTrimTrack: View { @ObservedObject var session; let url: URL; let duration: TimeInterval }` ; `ComposerCaptureSession.setTrim(_:committed:)`, `seekPlayhead(to:)` ; `ComposerLookVideoExporter.export(_:look:framing:timeRange:person:date:declaredSpaceName:)` ; `ComposerCaptureCopy.trimPrecisionHint`, `ComposerCaptureCopy.playhead`.
+- Produces: `ComposerTrimRule.precisionWindow(anchor:width:pointsPerSecond:) -> ClosedRange<TimeInterval>` (la seule plage que la loupe dessine) ; `struct ComposerTrimTrack: View { @ObservedObject var session; let url: URL; let duration: TimeInterval }` ; `ComposerCaptureSession.setTrim(_:committed:)`, `seekPlayhead(to:)` ; `ComposerLookVideoExporter.export(_:look:framing:timeRange:person:date:declaredSpaceName:)` ; `ComposerCaptureCopy.trimPrecisionHint`, `ComposerCaptureCopy.playhead`.
 
 - [ ] **Step 1: Write the failing test**
 
 ```swift
 import XCTest
+import AVFoundation
 @testable import Meeshy
 
 /// **La piste de découpe** (#9353, spec § 3.3).
 @MainActor
 final class ComposerTrimTrackTests: XCTestCase {
+
+    func test_precisionWindow_drawsOnlyWhatTheTrackShows() {
+        let fenetre = ComposerTrimRule.precisionWindow(anchor: 3, width: 300, pointsPerSecond: 37.5 * ComposerTrimRule.preciseZoom)
+        XCTAssertEqual(fenetre.lowerBound, 3 - 150 / (37.5 * ComposerTrimRule.preciseZoom), accuracy: 0.0001)
+        XCTAssertEqual(fenetre.upperBound, 3 + 150 / (37.5 * ComposerTrimRule.preciseZoom), accuracy: 0.0001)
+        XCTAssertLessThan(fenetre.upperBound - fenetre.lowerBound, 0.25,
+                          "la loupe ne couvre qu'une fraction de seconde : rien n'est peint 40 fois plus large")
+    }
 
     func test_setTrim_whileDragging_movesTheRange_onlyTheEndRebuildsTheLoop() async {
         let lecteur = MockComposerLoopPlayer(duration: 6)
@@ -6088,7 +6707,22 @@ final class ComposerTrimTrackTests: XCTestCase {
         XCTAssertTrue(vue.contains("WaveformCache.shared.samples("), "forme d'onde en filigrane")
         let export = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
         XCTAssertTrue(export.contains("session.timeRange"), "la découpe part dans le rendu")
+        XCTAssertTrue(export.contains("session.metadata"), "la vidéo rendue garde les métadonnées de la prise")
     }
+
+    #if DEBUG
+    func test_export_withATrim_keepsOnlyTheRange() async throws {
+        let film = try XCTUnwrap(await ComposerCaptureFixture.movie())
+        let plage = try XCTUnwrap(ComposerTrimRule.timeRange(0.5...1.5, duration: 3))
+        let rendue = try XCTUnwrap(await ComposerLookVideoExporter.export(
+            film, look: ComposerPhotoLook(filter: .warm), timeRange: plage,
+            person: CallFramePerson(id: "u1", name: "Ada", handle: nil, isSelf: true),
+            date: Date(timeIntervalSince1970: 1_790_000_000)))
+        defer { try? FileManager.default.removeItem(at: rendue) }
+        let duree = try await AVURLAsset(url: rendue).load(.duration).seconds
+        XCTAssertEqual(duree, 1, accuracy: 0.1, "seule la plage gardée part")
+    }
+    #endif
 }
 ```
 
@@ -6118,6 +6752,7 @@ P1. Expected: FAIL — `value of type 'ComposerCaptureSession' has no member 'se
         session.outputURL = sortie
         session.outputFileType = .mov
         session.videoComposition = composition
+        session.metadata = (try? await asset.load(.metadata)) ?? []
         if let timeRange { session.timeRange = timeRange }
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             session.exportAsynchronously { continuation.resume() }
@@ -6148,6 +6783,19 @@ P1. Expected: FAIL — `value of type 'ComposerCaptureSession' has no member 'se
 ```
 
 et, dans `finishVideo`, l'appel à l'export passe `timeRange: ComposerTrimRule.timeRange(trim, duration: loopPlayer?.duration ?? 0)` (lire `trim` et la durée dans des constantes AVANT la `Task`).
+
+`ComposerTrimRule.swift` — la loupe :
+
+```swift
+    /// **Ce que la loupe montre** : la fenêtre de temps qui tient dans la piste
+    /// autour du trait fixe — seule elle se dessine, jamais la piste dilatée entière.
+    static func precisionWindow(anchor: TimeInterval, width: CGFloat,
+                                pointsPerSecond: CGFloat) -> ClosedRange<TimeInterval> {
+        guard pointsPerSecond > 0, width > 0 else { return anchor...anchor }
+        let demi = TimeInterval(width / 2 / pointsPerSecond)
+        return (anchor - demi)...(anchor + demi)
+    }
+```
 
 3c. `ComposerTrimTrack.swift` :
 
@@ -6226,7 +6874,7 @@ struct ComposerTrimTrack: View {
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .disabled(!ComposerTrimRule.canTrim(duration: duration))
-        .task(id: url) {
+        .task(id: url) { @MainActor in
             frames = await Self.thumbnails(url: url, count: 12)
             samples = (try? await WaveformCache.shared.samples(from: url, count: 256)) ?? []
         }
@@ -6234,27 +6882,52 @@ struct ComposerTrimTrack: View {
 
     // MARK: - La bande
 
+    /// La piste à l'échelle 1 ; en précision, une LOUPE par-dessus — jamais la
+    /// piste dilatée 40 fois (≈ 14 000 pt, au-delà d'une texture).
     private func strip(width: CGFloat) -> some View {
-        let zoom = precise == nil ? 1 : ComposerTrimRule.preciseZoom
-        let decalage = precise == nil ? 0 : CGFloat(anchor) * pointsPerSecond * zoom - x(for: anchor)
-        return ZStack(alignment: .leading) {
+        ZStack(alignment: .leading) {
             HStack(spacing: 0) {
                 ForEach(Array(frames.enumerated()), id: \.offset) { _, image in
                     Image(decorative: image, scale: 1).resizable().aspectRatio(contentMode: .fill)
-                        .frame(width: width * zoom / CGFloat(max(1, frames.count)), height: Self.height)
+                        .frame(width: width / CGFloat(max(1, frames.count)), height: Self.height)
                         .clipped()
                 }
             }
-            waveform(width: width * zoom).opacity(0.25)
+            waveform(width: width).opacity(0.25)
             Color.black.opacity(0.55)
-                .frame(width: max(0, x(for: range.lowerBound) * zoom), height: Self.height)
+                .frame(width: max(0, x(for: range.lowerBound)), height: Self.height)
             Color.black.opacity(0.55)
-                .frame(width: max(0, (width - x(for: range.upperBound)) * zoom), height: Self.height)
-                .offset(x: x(for: range.upperBound) * zoom)
+                .frame(width: max(0, width - x(for: range.upperBound)), height: Self.height)
+                .offset(x: x(for: range.upperBound))
+            if precise != nil { loupe(width: width) }
         }
-        .offset(x: -decalage)
         .frame(width: width, alignment: .leading)
         .accessibilityHidden(true)
+    }
+
+    /// **La loupe de précision** : une règle de la SEULE fenêtre visible (un trait
+    /// toutes les 10 ms, un grand toutes les 100 ms), qui défile sous un trait fixe
+    /// au centre ; le temps exact se lit au-dessus, à la milliseconde.
+    private func loupe(width: CGFloat) -> some View {
+        let echelle = pointsPerSecond * ComposerTrimRule.preciseZoom
+        let instant = precise == .start ? range.lowerBound : range.upperBound
+        let fenetre = ComposerTrimRule.precisionWindow(anchor: instant, width: width, pointsPerSecond: echelle)
+        return Canvas { contexte, taille in
+            contexte.fill(Path(CGRect(origin: .zero, size: taille)), with: .color(.black.opacity(0.75)))
+            let premier = Int((fenetre.lowerBound * 100).rounded(.up))
+            let dernier = Int((fenetre.upperBound * 100).rounded(.down))
+            for centieme in premier...max(premier, dernier) {
+                let posX = taille.width / 2 + CGFloat(TimeInterval(centieme) / 100 - instant) * echelle
+                let grand = centieme % 10 == 0
+                let hauteur = grand ? taille.height * 0.6 : taille.height * 0.3
+                contexte.fill(Path(CGRect(x: posX, y: taille.height - hauteur, width: 1, height: hauteur)),
+                              with: .color(.white.opacity(grand ? 0.9 : 0.5)))
+            }
+            contexte.fill(Path(CGRect(x: taille.width / 2 - 1, y: 0, width: 2, height: taille.height)),
+                          with: .color(.yellow))
+        }
+        .frame(width: width, height: Self.height)
+        .allowsHitTesting(false)
     }
 
     private func waveform(width: CGFloat) -> some View {
@@ -6270,8 +6943,11 @@ struct ComposerTrimTrack: View {
         .fill(Color.white)
     }
 
+    /// La tête suit la boucle au rythme du palier thermique, et s'arrête pendant
+    /// un réglage de précision (la loupe la remplace).
     private var playheadLine: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30)) { _ in
+        TimelineView(.animation(minimumInterval: 1.0 / Double(ComposerCaptureSurfaceRule.editFPS(session.thermalBudget)),
+                                paused: precise != nil)) { _ in
             let temps = ComposerTrimRule.playhead(session.loopPlayer?.currentTime ?? range.lowerBound, in: range)
             Rectangle().fill(Color.white).frame(width: 2, height: Self.height)
                 .offset(x: x(for: temps) - 1)
@@ -6284,7 +6960,7 @@ struct ComposerTrimTrack: View {
 
     private func handle(_ poignee: Handle) -> some View {
         let temps = poignee == .start ? range.lowerBound : range.upperBound
-        let posX = precise == poignee ? x(for: anchor) : x(for: temps)
+        let posX = precise == poignee ? width / 2 : x(for: temps)
         return RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous)
             .fill(Color.yellow)
             .overlay(Image(systemName: poignee == .start ? "chevron.compact.left" : "chevron.compact.right")
@@ -6338,7 +7014,6 @@ struct ComposerTrimTrack: View {
             .onEnded { _ in
                 precise = nil
                 session.setTrim(range, committed: true)
-                Task { @MainActor in frames = await Self.thumbnails(url: url, count: 12) }
             }
     }
 
@@ -6353,7 +7028,8 @@ struct ComposerTrimTrack: View {
         CGFloat(time) * pointsPerSecond
     }
 
-    /// Les vignettes de la plage, UNE fois (et à la fin d'un geste de précision).
+    /// Les vignettes du clip entier, UNE fois : la plage est une fenêtre posée
+    /// dessus, la régler ne les change pas (spec § 3.3 : jamais pendant un geste).
     @concurrent
     nonisolated static func thumbnails(url: URL, count: Int) async -> [CGImage] {
         let asset = AVURLAsset(url: url)
@@ -6371,7 +7047,7 @@ struct ComposerTrimTrack: View {
 }
 ```
 
-(La forme `for await … { append }` est la seule mutation locale tolérée : une séquence asynchrone ne se `map` pas.)
+(La forme `for await … { append }` est la seule mutation locale tolérée : une séquence asynchrone ne se `map` pas. `Canvas` et `TimelineView(.animation(minimumInterval:paused:))` sont d'iOS 15.)
 
 3d. `ComposerCaptureBottomRow.swift` — en tête du `VStack`, AVANT le zoom :
 
@@ -6401,12 +7077,12 @@ python3 apps/ios/scripts/catalog_keys.py apply /tmp/cap-9353.json && python3 app
 cd /Users/smpceo/Documents/v2_meeshy/apps/ios && xcodegen generate --quiet && ./scripts/check_test_registration.sh
 cd /Users/smpceo/Documents/v2_meeshy
 P=apps/ios/Meeshy/Features/Main/Composer
-F="$P/ComposerTrimTrack.swift $P/ComposerCaptureSession+Edit.swift $P/ComposerLookVideoExporter.swift $P/ComposerCaptureBottomRow.swift apps/ios/Meeshy/Localizable.xcstrings apps/ios/Meeshy.xcodeproj/project.pbxproj"
+F="$P/ComposerTrimTrack.swift $P/ComposerTrimRule.swift $P/ComposerCaptureSession+Edit.swift $P/ComposerLookVideoExporter.swift $P/ComposerCaptureBottomRow.swift apps/ios/Meeshy/Localizable.xcstrings apps/ios/Meeshy.xcodeproj/project.pbxproj"
 git add $F
 git commit -m "feat(ios): la vidéo capturée se découpe entre deux poignées, à la milliseconde sur appui long, sous une tête en boucle — run test (#9353)" -- $F
 ```
 
-P1. Expected: PASS — `ComposerTrimTrackTests` 3/3 et toute la suite.
+P1. Expected: PASS — `ComposerTrimTrackTests` 5/5 (dont l'export réel du film de recette, découpé à 1 s) et toute la suite.
 
 - [ ] **Step 5: Livrer** — P3. #9353 reste `In Progress` jusqu'à la recette de la Tâche 22.
 
@@ -6576,6 +7252,8 @@ xcrun simctl privacy "$UDID" grant photos-add me.meeshy.app
 xcrun simctl launch "$UDID" me.meeshy.app -MeeshyCaptureFixture
 SHOTS=/private/tmp/claude-504/-Users-smpceo-Documents-v2-meeshy/recette-capture && mkdir -p "$SHOTS"
 ```
+
+Précondition : le simulateur doit être connecté à STAGING. Si l'écran de connexion paraît, se connecter avec le compte de démonstration (`DEMO_USER` / `DEMO_PASSWORD` lus dans `apps/ios/fastlane/.env`, jamais affichés ni recopiés), puis vérifier dans Réglages que l'environnement est bien `staging.meeshy.me`. La capture 6 repose sur la caméra de recette (Tâche 10) : chaque « segment » y est une copie du film de 3 s ; deux segments ⇒ ✓ ⇒ un clip assemblé de 6 s, sur lequel la piste paraît.
 
 Piloter l'app par le skill `ios-simulator` (navigation sémantique) ou `idb` ; chaque capture : `xcrun simctl io "$UDID" screenshot "$SHOTS/<nom>.png"`. Les huit captures, dans cet ordre :
 1. `1-capture-armee.png` — une conversation, bouton caméra : le viseur plein écran (canevas 9:16), rail Filtres/Cadres en bas à gauche, miniature choisie au centre, pastille ×1.

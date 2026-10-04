@@ -48,6 +48,8 @@ S'y ajoutent : les cadres « classiques » (`CallMontageChoice.classic`) existen
 
 Le déclencheur ( o ) est RETIRÉ (changement assumé par le porteur).
 
+**L'inversion des gestes est assumée (décision porteur 2026-10-04).** #8711 faisait photographier au toucher, #9295 faisait passer la photo par une revue ; désormais un toucher vise, deux touchers photographient, et la revue disparaît. Les témoins de #8711 et #9295 sont réécrits pour dire la règle nouvelle, jamais supprimés sans remplaçant.
+
 **Filtre et cadre se COMBINENT.** Le look est toujours la paire `(filtre, cadre)` (`ComposerPhotoLook`) : choisir un filtre garde le cadre, choisir un cadre garde le filtre. Chaque miniature montre la combinaison qu'elle produirait — la bande Filtres peint chaque filtre AVEC le cadre en cours, la bande Cadres chaque cadre AVEC le filtre en cours — et la miniature choisie montre la paire exacte. Toute prise (galerie directe, édition, envoi) porte cette paire complète.
 
 ### 3.2 Capture, enregistrement en cours
@@ -74,10 +76,12 @@ Le déclencheur ( o ) est RETIRÉ (changement assumé par le porteur).
 
 | moment | ce qui part |
 |---|---|
-| à la prise (photo ou segment) | le BRUT, comme aujourd'hui (`CameraModel`) |
+| à la prise (photo ou segment) | le BRUT, octets d'origine et métadonnées compris (`CameraModel`, par `saveImageFile` : aucun aller-retour par `UIImage`) |
 | double toucher sur la miniature choisie | + le RENDU de la photo (filtre ET cadre choisis), immédiatement |
 | appui long sur la miniature choisie, à l'arrêt | + le RENDU de la vidéo (filtre ET cadre choisis), immédiatement |
 | « Terminé » | + le RENDU final (effet, cadrage, découpe) |
+
+Tout RENDU photo garde les métadonnées de la prise (date et lieu de prise, appareil) : il s'encode par `CGImageDestination` avec les propriétés d'origine, orientation remise à 1 et dimensions du rendu. Tout rendu vidéo garde les métadonnées de l'asset. Sans filtre ni cadre, le « rendu » d'une prise galerie serait le brut : rien de plus ne part.
 
 ## 4. Architecture
 
@@ -91,9 +95,9 @@ nonisolated enum ComposerLookPainter {
 }
 ```
 
-- `scene` prépare, HORS du fil principal et UNE fois par (look, taille, date), les couches statiques : fond, masque de la découpe, calque (texte, trait, grain, vignette). Cache borné (`NSCache`), vidé à la fermeture.
+- `scene` prépare, HORS du fil principal et UNE fois par (look, taille, date), les couches statiques : fond, masque de la découpe, calque (texte, trait, grain, vignette). Cache borné en nombre ET en octets (`NSCache.totalCostLimit`), vidé à la fermeture ; une scène à la taille native d'une photo n'y entre pas (cuite, peinte, relâchée).
 - `paint` est un graphe Core Image pur, en UN passage : colorimétrie (`VideoFilterColorimetry`) → cadrage (`ComposerFraming` : décalage + échelle, remplissage du canevas) → ton de la découpe → composition fond / découpe / calque.
-- Canevas canonique : **9:16, 1080×1920, rempli**, avec ou sans cadre. L'écran montre ce canevas par une seule transformation d'ajustement.
+- Canevas canonique : **9:16, rempli, avec ou sans cadre, à la résolution NATIVE de la source** — le plus grand recadrage 9:16 de la prise (3024×4032 ⇒ 2268×4032), jamais réduit (décision porteur 2026-10-04). **1080×1920 n'est que le repère de dessin** : les peintres de cadres mesurent tout en unités proportionnelles, une scène cuite à la taille native montre le même dessin à l'échelle. L'aperçu, la bande et la boucle peignent au repère (ou plus petit) ; ce qui PART peint à la taille native. L'écran montre le canevas par une seule transformation d'ajustement.
 - La date gravée est toujours `lookDate` de la session.
 - Consommateurs : aperçu direct (vue Metal), photo (`createCGImage` dans l'espace couleur de la photo, #9327), export vidéo (`ComposerLookVideoExporter`, gestionnaire `AVVideoComposition`), lecture en boucle, miniatures.
 
@@ -135,7 +139,7 @@ Retraits : `ComposerPhotoLookReview`, le paramètre `reviewsPhoto`, le déclench
 | nominal | 30 i/s | 12 i/s, 8 cases |
 | fair | 24 i/s | 6 i/s, 5 cases |
 | serious | 15 i/s, surface ×0,75 | figées |
-| critical | couche système seule, mention visible | coupées |
+| critical | couche système seule, mention visible : « Aperçu simplifié : l'appareil chauffe. La prise garde tout l'effet. » | coupées |
 
   Pendant l'enregistrement, seule la miniature choisie vit (au rythme du palier). Dans tous les états, photo et export reçoivent l'effet complet.
 - Mesure (Instruments, iPhone 12 ou plus ancien disponible) : Metal System Trace (ms GPU par image, passages par image), Energy Log + état thermique (5 min de viseur avec effet et bande ouverte ⇒ rester `nominal`/`fair`), Time Profiler (pics de cuisson), Allocations (cache de scènes).
