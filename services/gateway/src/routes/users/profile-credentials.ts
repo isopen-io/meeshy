@@ -28,6 +28,7 @@ import { disconnectSession } from '../../socketio/disconnectSession';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { sendSuccess, sendError, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest } from '../../utils/response';
 import { searchTokensFor } from '../../utils/search-tokens';
+import { refreshParticipantNameSnapshots } from '../../services/participantNameSnapshots';
 
 const logger = enhancedLogger.child({ module: 'UserProfileRoutes' });
 
@@ -371,6 +372,9 @@ export async function updateUsername(fastify: FastifyInstance) {
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
+
+      await refreshParticipantNameSnapshots(fastify.prisma, userId!, updatedUser)
+        .catch((err: unknown) => logError(fastify.log, '[USERNAME_CHANGE] participant name refresh failed', err));
 
       fastify.notificationService?.emitUserUpdated({
         userId: userId!,

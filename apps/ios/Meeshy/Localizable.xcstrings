@@ -213746,6 +213746,53 @@
         }
       }
     },
+    "call.effects.smoothingStrength": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قوة التنعيم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stärke der Glättung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smoothing strength"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensidad del suavizado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Force du lissage"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensità della levigatura"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensidade da suavização"
+          }
+        }
+      }
+    },
     "call.effects.face.none": {
       "extractionState": "manual",
       "localizations": {
@@ -224133,190 +224180,472 @@
         }
       }
     },
-    "call.liveFrame.hint": {
+    "call.liveFrame.hold.hint": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يحيط الفيديوهين بالإطار نفسه، لديك ولدى الطرف الآخر"
+            "value": "يُبقي هذا الإطار حول الفيديوهين طوال المكالمة ويقترحه على الطرف الآخر"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Umgibt beide Videos mit demselben Rahmen, bei dir und bei deinem Gegenüber"
+            "value": "Behält diesen Rahmen während des ganzen Anrufs um beide Videos und schlägt ihn deinem Gegenüber vor"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Surrounds both videos with the same frame, for you and the other person"
+            "value": "Keeps this frame around both videos for the whole call, and offers it to the other person"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rodea los dos vídeos con el mismo marco, para ti y para la otra persona"
+            "value": "Mantiene este marco alrededor de los dos vídeos durante toda la llamada y se lo propone a la otra persona"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Entoure les deux vidéos d'un même cadre, chez vous et chez votre correspondant"
+            "value": "Garde ce cadre autour des deux vidéos pendant tout l'appel, et le propose à votre correspondant"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Circonda i due video con la stessa cornice, per te e per l'altra persona"
+            "value": "Mantiene questa cornice attorno ai due video per tutta la chiamata e la propone all'altra persona"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Envolve os dois vídeos com a mesma moldura, para você e para a outra pessoa"
+            "value": "Mantém esta moldura em volta dos dois vídeos durante toda a chamada e a propõe à outra pessoa"
           }
         }
       }
     },
-    "call.liveFrame.none": {
+    "call.liveFrame.notProposed": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "بلا إطار"
+            "value": "تم تطبيق الإطار لديك، لكن تعذّر اقتراحه"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kein Rahmen"
+            "value": "Der Rahmen ist bei dir aktiv, konnte aber nicht vorgeschlagen werden"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No frame"
+            "value": "The frame is applied on your side but couldn't be offered"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sin marco"
+            "value": "El marco se aplica en tu pantalla, pero no se pudo proponer"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aucun cadre"
+            "value": "Le cadre est appliqué chez vous, mais n'a pas pu être proposé"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nessuna cornice"
+            "value": "La cornice è applicata da te, ma non è stato possibile proporla"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sem moldura"
+            "value": "A moldura está aplicada para você, mas não pôde ser proposta"
           }
         }
       }
     },
-    "call.liveFrame.close": {
+    "call.liveFrame.proposal": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إغلاق"
+            "value": "يقترح %1$@ الإطار «%2$@»"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Schließen"
+            "value": "%1$@ schlägt dir den Rahmen „%2$@“ vor"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Close"
+            "value": "%1$@ suggests the “%2$@” frame"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cerrar"
+            "value": "%1$@ te propone el marco «%2$@»"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fermer"
+            "value": "%1$@ vous propose le cadre « %2$@ »"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiudi"
+            "value": "%1$@ ti propone la cornice «%2$@»"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fechar"
+            "value": "%1$@ sugere a moldura “%2$@”"
           }
         }
       }
     },
-    "call.liveFrame.refused": {
+    "call.liveFrame.proposal.anonymous": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعذّرت مشاركة الإطار"
+            "value": "يقترح الطرف الآخر الإطار «%@»"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Rahmen konnte nicht geteilt werden"
+            "value": "Dein Gegenüber schlägt dir den Rahmen „%@“ vor"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The frame couldn't be shared"
+            "value": "The other person suggests the “%@” frame"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No se pudo compartir el marco"
+            "value": "La otra persona te propone el marco «%@»"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le cadre n'a pas pu être partagé"
+            "value": "Votre correspondant vous propose le cadre « %@ »"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossibile condividere la cornice"
+            "value": "L'altra persona ti propone la cornice «%@»"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não foi possível compartilhar a moldura"
+            "value": "A outra pessoa sugere a moldura “%@”"
+          }
+        }
+      }
+    },
+    "call.liveFrame.accept": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تطبيق"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übernehmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplicar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appliquer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applica"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplicar"
+          }
+        }
+      }
+    },
+    "call.liveFrame.decline": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا، شكرًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nein, danke"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No thanks"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No, gracias"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non merci"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No, grazie"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não, obrigado"
+          }
+        }
+      }
+    },
+    "call.liveFrame.answer.accepted": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "طبّق %@ إطارك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat deinen Rahmen übernommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ applied your frame"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ aplicó tu marco"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ a appliqué votre cadre"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ha applicato la tua cornice"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ aplicou sua moldura"
+          }
+        }
+      }
+    },
+    "call.liveFrame.answer.accepted.anonymous": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "طبّق الطرف الآخر إطارك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Gegenüber hat deinen Rahmen übernommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The other person applied your frame"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La otra persona aplicó tu marco"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre correspondant a appliqué votre cadre"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'altra persona ha applicato la tua cornice"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A outra pessoa aplicou sua moldura"
+          }
+        }
+      }
+    },
+    "call.liveFrame.answer.declined": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحتفظ %@ بعرضه"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ behält die eigene Ansicht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ keeps their own view"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ mantiene su vista"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ garde son affichage"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ mantiene la propria vista"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ mantém a própria visualização"
+          }
+        }
+      }
+    },
+    "call.liveFrame.answer.declined.anonymous": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحتفظ الطرف الآخر بعرضه"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Gegenüber behält die eigene Ansicht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The other person keeps their own view"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La otra persona mantiene su vista"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre correspondant garde son affichage"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'altra persona mantiene la propria vista"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A outra pessoa mantém a própria visualização"
           }
         }
       }

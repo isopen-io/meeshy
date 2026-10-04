@@ -40,6 +40,7 @@ import {
   applyServedRepost,
 } from './feed-realtime';
 import { FRIENDS_QUERY_PREFIX } from './friends-keys';
+import { profileRepaintOfUserUpdated, repaintProfile } from './my-portrait';
 import { PUBLIC_PROFILE_QUERY_PREFIX } from './public-profile';
 import { NOTIFICATION_COUNTS_QUERY_KEY, NOTIFICATION_LISTS_KEY } from './notifications';
 import { bindPublicationRoomTransport } from './publication-rooms';
@@ -798,6 +799,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     void deps.queryClient.invalidateQueries({ queryKey: PUBLIC_PROFILE_QUERY_PREFIX });
   };
 
+  /** `user:updated` (#8889, #8890) — la photo et le nom d'un pair repeints dans chaque copie du cache ; la loi vit dans `my-portrait.ts`. */
+  const onUserUpdated = (payload: unknown): void => {
+    const update = profileRepaintOfUserUpdated(payload);
+    if (update !== null) repaintProfile(deps.queryClient, update);
+  };
+
   /**
    * `conversation:new` (#6799) — UNE CONVERSATION QUI N'EST PAS ENCORE DANS LE
    * CACHE. `patchConversation` ne touche qu'une page qui porte DÉJÀ la ligne
@@ -950,6 +957,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, onFriendshipChanged);
+  socket.on<unknown>(SERVER_EVENTS.USER_UPDATED, onUserUpdated);
   socket.on<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
   socket.on<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
 
@@ -1032,6 +1040,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, onFriendshipChanged);
+      socket.off<unknown>(SERVER_EVENTS.USER_UPDATED, onUserUpdated);
       socket.off<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
       socket.off<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
       socket.disconnect();

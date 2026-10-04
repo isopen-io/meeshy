@@ -181,6 +181,18 @@ if (__SHELL__) {
 }
 
 /**
+ * UN VOCAL CONTINUE DE JOUER QUAND ON QUITTE L'APP (#9257) — la coque Android
+ * tient un service au premier plan tant qu'un `<audio>` de la page joue ;
+ * sans lui, Android gèle le processus mis en cache au milieu du vocal. Un
+ * navigateur tient lui-même la lecture : hors coque, rien ne se charge.
+ */
+if (__SHELL__) {
+  void import('@/lib/view/shell-playback').then(({ holdWhileAudioPlays, shellPlaybackHold }) =>
+    holdWhileAudioPlays(document, shellPlaybackHold()),
+  );
+}
+
+/**
  * LA COQUE ANDROID REÇOIT SES PUSHS PAR FCM NATIF (#7307). La WebView n'a ni
  * Push API ni service worker : le jeton vient de `@capacitor/push-notifications`
  * et s'enregistre par le même port qu'iOS. Derrière `__SHELL__`, ce module et

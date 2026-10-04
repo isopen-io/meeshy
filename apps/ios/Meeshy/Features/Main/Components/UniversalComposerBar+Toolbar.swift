@@ -62,7 +62,10 @@ extension UniversalComposerBar {
                     action: openStickers)
             }
 
-            // Language selector
+        } pinned: {
+            // **La langue d'écriture ferme la bande sans y défiler** (#9254,
+            // jumelle web D-164) : dernière de la bande défilante, elle passait
+            // sous les portes de droite dès que la rangée débordait.
             languageSelectorPill
         } trailing: {
             // Character counter
@@ -252,22 +255,104 @@ struct ComposerFoldControl {
     let action: () -> Void
 }
 
-struct ComposerToolbarStrip<Leading: View, Trailing: View>: View {
+/// **Ce que la bande d'outils dit de son débordement** (#9254, jumelle web
+/// D-164 `useScrollsFurtherMark`) : tant qu'un outil reste au-delà du bord de
+/// fin, les 44 derniers points s'estompent — une CIBLE, si bien que le fondu
+/// recouvre toujours une partie d'un glyphe et dit qu'il y a plus loin.
+/// Défilée jusqu'au bout, la bande s'éclaire.
+nonisolated enum ComposerToolbarOverflow {
+    static let fadeWidth: CGFloat = 44
+
+    static func scrollsFurther(offset: CGFloat, contentWidth: CGFloat, viewportWidth: CGFloat) -> Bool {
+        viewportWidth > 0 && contentWidth - viewportWidth - abs(offset) > 0.5
+    }
+}
+
+/// La rangée d'outils du composeur : les outils (`leading`), la pastille qui
+/// les ferme (`pinned`) et l'angle droit du verre (`trailing`).
+///
+/// Quand tout tient, la rangée se lit d'un bloc, pastille accolée aux outils.
+/// Sinon, SEULS les outils défilent : la pastille et l'angle droit gardent
+/// leur place et leur largeur (#9254), et la bande signale qu'elle défile
+/// (`ComposerToolbarOverflow`). Sa largeur ne dépasse jamais celle proposée
+/// (#7997).
+struct ComposerToolbarStrip<Leading: View, Pinned: View, Trailing: View>: View {
     @ViewBuilder let leading: Leading
+    @ViewBuilder let pinned: Pinned
     @ViewBuilder let trailing: Trailing
+
+    @State private var contentWidth: CGFloat = 0
+    @State private var viewportWidth: CGFloat = 0
+    @State private var scrollsFurther = false
+    @State private var lastOffset = ComposerToolbarOffsetBox()
+
+    private static var scrollSpace: String { "composer.toolbar.strip" }
 
     var body: some View {
         HStack(spacing: 6) {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 6) {
                     leading
+                    pinned
                     Spacer(minLength: 0)
                 }
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) { leading }
+                HStack(spacing: 6) {
+                    scrollingTools
+                    pinned
                 }
             }
             trailing
         }
     }
+
+    /// Le décalage se lit par le patron de `ScrollOffsetTracking` : sentinelle
+    /// de préférence jusqu'à iOS 17, `onScrollGeometryChange` à partir d'iOS 18.
+    /// Il est gardé hors du rendu (`ComposerToolbarOffsetBox`) : la bande ne se
+    /// réévalue qu'au moment où le fondu s'allume ou s'éteint, jamais à chaque
+    /// image du défilement.
+    private var scrollingTools: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) { leading }
+                .background(GeometryReader { content in
+                    Color.clear
+                        .preference(key: HorizontalScrollOffsetKey.self,
+                                    value: -content.frame(in: .named(Self.scrollSpace)).minX)
+                        .onAppear { contentWidth = content.size.width; refreshFade() }
+                        .onChange(of: content.size.width) { contentWidth = $0; refreshFade() }
+                })
+        }
+        .coordinateSpace(name: Self.scrollSpace)
+        .background(GeometryReader { viewport in
+            Color.clear
+                .onAppear { viewportWidth = viewport.size.width; refreshFade() }
+                .onChange(of: viewport.size.width) { viewportWidth = $0; refreshFade() }
+        })
+        .onPreferenceChange(HorizontalScrollOffsetKey.self) { record(offset: $0) }
+        .trackScrollContentOffsetX { record(offset: $0) }
+        .mask {
+            HStack(spacing: 0) {
+                Rectangle()
+                LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .leading, endPoint: .trailing)
+                    .flipsForRightToLeftLayoutDirection(true)
+                    .frame(width: scrollsFurther ? ComposerToolbarOverflow.fadeWidth : 0)
+            }
+        }
+    }
+
+    private func record(offset: CGFloat) {
+        lastOffset.value = offset
+        refreshFade()
+    }
+
+    private func refreshFade() {
+        let next = ComposerToolbarOverflow.scrollsFurther(
+            offset: lastOffset.value, contentWidth: contentWidth, viewportWidth: viewportWidth)
+        if next != scrollsFurther { scrollsFurther = next }
+    }
+}
+
+/// Le dernier décalage lu, tenu HORS du graphe de rendu : le muter ne
+/// réévalue rien.
+nonisolated final class ComposerToolbarOffsetBox {
+    var value: CGFloat = 0
 }

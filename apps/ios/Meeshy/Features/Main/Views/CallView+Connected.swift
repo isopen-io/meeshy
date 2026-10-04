@@ -41,6 +41,11 @@ extension CallView {
                 CallRecordingOverlay(phase: callManager.recording.phase, notice: callManager.recording.notice, kind: callManager.recording.kind, requesterName: callManager.remoteUsername ?? "", onAnswer: { _ = callManager.recording.answer(accepted: $0) }, onStop: { _ = callManager.recording.stop() }, onDismiss: callManager.recording.dismissNotice, showsStatus: chromeVisibility.isVisible(.recordingStatus))
                     .equatable().padding(.top, 110).frame(maxHeight: .infinity, alignment: .top)
 
+                liveFrameStatus
+                    .padding(.top, 160)
+                    .padding(.horizontal, MeeshySpacing.lg)
+                    .frame(maxHeight: .infinity, alignment: .top)
+
                 CallCaptureFlash(capture: capture, reduceMotion: reduceMotion)
                 CallCaptureOutcomeAnnouncer(capture: capture)
             }
@@ -98,7 +103,6 @@ extension CallView {
         .sheet(isPresented: panelSheet(.journal)) {
             captionsJournal
         }
-        .sheet(isPresented: $showLiveFramePicker) { liveFramePicker }
         .task(id: liveFrameBindingKey) { await bindLiveFrame() }
         .task(id: callManager.currentCallId) { await liveFrame.runClock() }
     }

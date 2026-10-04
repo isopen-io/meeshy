@@ -4,12 +4,12 @@ import { useQuery, type QueryClient } from '@tanstack/react-query';
 import type { ResolveContactsRequest } from '@meeshy/shared/types/contact-card';
 import { buildResolveContactsRequest } from '@meeshy/shared/utils/vcard';
 
-import { attachmentSrc } from '@/lib/api/media-url';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import type { Attachment } from '@/lib/api/types';
 import { contactActionPorts } from '@/lib/contact-card/contact-ports';
 import { contactResolveQueryOptions, type ContactResolveDeps } from '@/lib/contact-card/resolve';
+import { saveContactFile, type ContactFileOutcome } from '@/lib/contact-card/save-contact-file';
 import { useContactActions, type ContactActionPorts } from '@/lib/contact-card/use-contact-actions';
 import { vcardQueryOptions, type FetchText } from '@/lib/contact-card/vcard-file';
 import { contactInitials } from '@/lib/contact-card/view';
@@ -46,6 +46,7 @@ export default function ContactCard({
   ports = contactActionPorts,
   fetchText,
   clipboard,
+  saveFile = (piece) => saveContactFile({ attachment: piece }),
   language = currentInterfaceLanguage(),
 }: {
   readonly attachment: Attachment;
@@ -54,9 +55,12 @@ export default function ContactCard({
   readonly ports?: ContactActionPorts;
   readonly fetchText?: FetchText;
   readonly clipboard?: ClipboardWriter;
+  /** Injectable pour les témoins ; la porte de fichiers partagée par défaut (#9263). */
+  readonly saveFile?: (attachment: Attachment) => Promise<ContactFileOutcome>;
   readonly language?: InterfaceLanguage;
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [download, setDownload] = useState<'idle' | 'busy' | 'failed'>('idle');
   const vcard = useQuery(
     vcardQueryOptions({ attachmentId: attachment.id, fileUrl: attachment.fileUrl, ...(fetchText !== undefined ? { fetchText } : {}) }),
     queryClient,
@@ -95,16 +99,26 @@ export default function ContactCard({
               {translate(language, 'contactCard.retry')}
             </button>
           ) : null}
-          <a
-            href={attachmentSrc(attachment.fileUrl)}
-            download={attachment.originalName}
+          <button
+            type="button"
+            disabled={download === 'busy'}
+            onClick={() => {
+              setDownload('busy');
+              void saveFile(attachment).then((outcome) => setDownload(outcome === 'failed' ? 'failed' : 'idle'));
+            }}
             className="flex items-center gap-2 rounded-chip px-4 text-body"
             style={{ minHeight: 44, color: 'inherit', textDecoration: 'underline' }}
+            data-contact-download=""
           >
             <Glyph name="downloadSimple" size={18} />
             {translate(language, 'contactCard.download')}
-          </a>
+          </button>
         </div>
+        {download === 'failed' ? (
+          <p className="text-caption" role="status" data-contact-download-failed="">
+            {translate(language, 'contactCard.downloadFailed')}
+          </p>
+        ) : null}
       </div>
     );
   }

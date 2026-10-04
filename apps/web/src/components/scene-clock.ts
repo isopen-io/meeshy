@@ -32,6 +32,10 @@ export type SceneClockParams = {
    * sur ce signal), sans jamais remonter le PLAYER (Zero Unnecessary
    * Re-render). Jamais émis pour une scène qui NE boucle pas. */
   readonly onLoop: (() => void) | undefined;
+  /** LE GEL EN PHASE (#9277, miroir `onPlaybackProgressing` d'iOS) — `false`
+   * quand un média de la scène entre en buffer, `true` quand plus aucun
+   * n'attend. Émis au CHANGEMENT seulement. */
+  readonly onStall?: ((stalled: boolean) => void) | undefined;
 };
 
 export type SceneClockHandle = {
@@ -46,6 +50,15 @@ export type SceneClockHandle = {
    * `<audio>` de la scène, qui courent sur leur propre horloge, s'y recalent
    * (`useMediaSeek`, `scene-media-seek.ts`). */
   readonly subscribeSeek: (listener: (t: number) => void) => () => void;
+  /** UN MÉDIA DE LA SCÈNE ATTEND SES OCTETS (#9277) — tant qu'un seul
+   * attend (`key` : l'identité du média), l'horloge NE COMPTE PAS : la scène
+   * ne court plus devant une vidéo figée, donc ne la recale plus à coups de
+   * `currentTime` (chaque recalage relançait le buffer, sur un réseau lent).
+   * Elle repart de là où elle s'était arrêtée, sans saut. */
+  readonly setStalled: (key: object, stalled: boolean) => void;
+  /** Entendu à chaque entrée/sortie de gel : les médias qui, eux, ont leurs
+   * octets s'y mettent en pause, puis repartent en phase. */
+  readonly subscribeStall: (listener: (stalled: boolean) => void) => () => void;
   /** Le temps courant, en secondes — le point de départ d'un pas clavier. */
   readonly now: () => number;
   /** L'horloge MÈNE-t-elle la scène (`enabled`) ? Les `<video>`/`<audio>`
@@ -78,7 +91,9 @@ export function useSceneClock(params: SceneClockParams): SceneClockHandle {
   duration.current = durationSeconds;
   const driving = useRef(enabled);
   driving.current = enabled;
-  const callbacks = useLatestCallback({ onTime: params.onTime, onEnded: params.onEnded, onLoop: params.onLoop });
+  const callbacks = useLatestCallback({ onTime: params.onTime, onEnded: params.onEnded, onLoop: params.onLoop, onStall: params.onStall });
+  const stalled = useRef<Set<object>>(new Set());
+  const stallListeners = useRef<Set<(stalled: boolean) => void>>(new Set());
 
   useEffect(() => {
     if (!enabled || !playing) {
@@ -88,6 +103,11 @@ export function useSceneClock(params: SceneClockParams): SceneClockHandle {
     ended.current = false;
     const tick = (now: number) => {
       rafId.current = null;
+      // Gelée par un buffer : la boucle s'arrête, `setStalled` la relance.
+      if (stalled.current.size > 0) {
+        lastFrame.current = null;
+        return;
+      }
       if (lastFrame.current === null) lastFrame.current = now;
       const deltaSeconds = (now - lastFrame.current) / 1000;
       lastFrame.current = now;
@@ -162,6 +182,25 @@ export function useSceneClock(params: SceneClockParams): SceneClockHandle {
         callbacks.current.onTime?.(t);
         const tick = loop.current;
         if (tick !== null && rafId.current === null && !ended.current) rafId.current = requestAnimationFrame(tick);
+      },
+      setStalled(key: object, isStalled: boolean) {
+        const set = stalled.current;
+        const was = set.size > 0;
+        if (isStalled) set.add(key);
+        else set.delete(key);
+        const is = set.size > 0;
+        if (was === is) return;
+        lastFrame.current = null;
+        for (const listener of stallListeners.current) listener(is);
+        callbacks.current.onStall?.(is);
+        const tick = loop.current;
+        if (!is && tick !== null && rafId.current === null && !ended.current) rafId.current = requestAnimationFrame(tick);
+      },
+      subscribeStall(listener: (isStalled: boolean) => void) {
+        stallListeners.current.add(listener);
+        return () => {
+          stallListeners.current.delete(listener);
+        };
       },
       now: () => elapsed.current,
       isDriving: () => driving.current,

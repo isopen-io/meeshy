@@ -512,6 +512,7 @@ const es = {
   'media.audio.position': 'Posición de reproducción',
   'media.audio.speed': 'Velocidad de reproducción',
   'media.video.position.value': '{elapsed} de {total}',
+  'media.buffering': 'Cargando…',
   'media.video.mute': 'Silenciar',
   'media.video.unmute': 'Activar sonido',
   'media.video.more_options': 'Más opciones',

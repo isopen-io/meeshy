@@ -46,6 +46,8 @@ function fakeClock(): { readonly clock: SceneClockHandle; readonly seeks: number
     seek: (t) => seeks.push(t),
     now: () => 0,
     isDriving: () => false,
+    setStalled: () => undefined,
+    subscribeStall: () => () => undefined,
   };
   return { clock, seeks };
 }

@@ -42,14 +42,27 @@ export type CallLiveFrameTexts = {
   readonly city?: string;
 };
 
-/** Client → serveur : poser (ou retirer, `frameId: null`) le cadre en direct de l'appel. */
+/**
+ * La réponse à une proposition (#9287) : le cadre ne s'impose jamais à l'autre. Sans
+ * `reply`, l'événement PROPOSE un cadre (ou retire la proposition, `frameId: null`) ;
+ * avec `reply`, il dit à l'émetteur si son cadre a été appliqué ou refusé.
+ */
+export const CALL_LIVE_FRAME_REPLIES = ['accepted', 'declined'] as const;
+export type CallLiveFrameReply = (typeof CALL_LIVE_FRAME_REPLIES)[number];
+
+/** Client → serveur : proposer (ou retirer, `frameId: null`) un cadre en direct, ou répondre à une proposition. */
 export const callLiveFrameSelectSchema = z
   .object({
     callId: objectId,
     frameId: frameId.nullable(),
     texts: sharedTexts.optional(),
+    reply: z.enum(CALL_LIVE_FRAME_REPLIES).optional(),
   })
-  .strict();
+  .strict()
+  .refine((event) => event.reply === undefined || event.frameId !== null, {
+    message: 'a reply names the frame it answers',
+    path: ['frameId'],
+  });
 
 export type CallLiveFrameSelectEvent = z.input<typeof callLiveFrameSelectSchema>;
 
@@ -59,5 +72,6 @@ export type CallLiveFrameSelectedEvent = {
   readonly userId: string;
   readonly frameId: string | null;
   readonly texts?: CallLiveFrameTexts;
+  readonly reply?: CallLiveFrameReply;
   readonly at: string;
 };

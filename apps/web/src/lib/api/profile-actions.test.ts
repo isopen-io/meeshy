@@ -228,6 +228,45 @@ describe('modifier son nom — optimiste, puis confirmé ou défait', () => {
     expect(cached?.avatar).toBe('2026/08/u-ada/ancien.webp');
   });
 
+  /**
+   * #8890 — AILLEURS QUE SUR LE PROFIL, comme la photo (#8886). Mon nom est
+   * recopié dans chaque conversation (la copie du participant, que la
+   * passerelle réécrit, ET mon compte lié) ; la confirmation les fait suivre.
+   */
+  test('confirmé, mon nouveau nom me nomme aussi dans mes conversations en cache — sans nom d’affichage, « Prénom Nom »', async () => {
+    const gateway = heldGateway();
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(MY_PROFILE_QUERY_KEY, profileOf());
+    const me = { id: 'p-ada', userId: 'u-ada', displayName: 'Ada L.', user: { id: 'u-ada', username: 'ada', displayName: 'Ada L.' } };
+    queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, { pages: [{ conversations: [{ id: 'c-1', participants: [me] }] }], pageParams: [null] });
+
+    const outcome = performProfileEdit({
+      patch: { lastName: 'King' },
+      deps: depsOf({ transport: gateway.transport, session: signedIn(), queryClient }),
+    });
+    await gateway.arrival();
+    gateway.release({ status: 200, body: { success: true, data: { user: wireUser({ displayName: null, lastName: 'King' }) } } });
+    expect(await outcome).toEqual({ status: 'saved' });
+
+    const cached = queryClient.getQueryData<{ pages: { conversations: { participants: (typeof me)[] }[] }[] }>(CONVERSATIONS_QUERY_KEY);
+    const row = cached?.pages[0]?.conversations[0]?.participants[0];
+    expect(row?.displayName).toBe('Ada King');
+    expect(row?.user.displayName).toBeNull();
+    expect(queryClient.getQueryData<MyProfile>(MY_PROFILE_QUERY_KEY)?.displayName).toBeNull();
+  });
+
+  test('une bio seule ne réécrit aucune conversation en cache', async () => {
+    const gateway = heldGateway();
+    const queryClient = new QueryClient();
+    const conversations = { pages: [{ conversations: [{ id: 'c-1', participants: [{ id: 'p-ada', userId: 'u-ada', displayName: 'Vieux nom' }] }] }] };
+    queryClient.setQueryData(CONVERSATIONS_QUERY_KEY, conversations);
+    const outcome = performProfileEdit({ patch: { bio: 'Pionnière' }, deps: depsOf({ transport: gateway.transport, session: signedIn(), queryClient }) });
+    await gateway.arrival();
+    gateway.release({ status: 200, body: { success: true, data: { user: wireUser({ bio: 'Pionnière' }) } } });
+    expect(await outcome).toEqual({ status: 'saved' });
+    expect(queryClient.getQueryData(CONVERSATIONS_QUERY_KEY)).toBe(conversations);
+  });
+
   test('HORS LIGNE, l’édition est refusée sans toucher à rien ni appeler personne', async () => {
     const gateway = heldGateway();
     const session = signedIn();
