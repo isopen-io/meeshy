@@ -33,7 +33,7 @@ final class CallMontageLayersTests: XCTestCase {
             let gpu = CallLiveFrameCompositor().compose(scene, videos: [personne.id: CIImage(cgImage: photo)])
             let a = Self.rgba(CIImage(cgImage: cpu), size: toile, context: contexte)
             let b = Self.rgba(gpu, size: toile, context: contexte)
-            let ecart = zip(a, b).reduce(0.0) { $0 + abs(Double($1.0) - Double($1.1)) } / Double(a.count) / 255
+            let ecart = Self.meanGap(a, b)
             let tolerance = style == .noir ? 0.10 : 0.035
             print("CallMontageLayers écart \(style.rawValue) = \(ecart)")
             XCTAssertLessThan(ecart, tolerance, "\(style) : écart moyen \(ecart) entre les couches et le rendu CPU")
@@ -66,6 +66,13 @@ final class CallMontageLayersTests: XCTestCase {
         contexte.setFillColor(CGColor(red: 0.2, green: 0.8, blue: 0.3, alpha: 1))
         contexte.fill(CGRect(x: 150, y: 200, width: 150, height: 200))
         return contexte.makeImage()!
+    }
+
+    static func meanGap(_ a: [UInt8], _ b: [UInt8]) -> Double {
+        let somme: Double = zip(a, b).reduce(0.0) { (total: Double, paire: (UInt8, UInt8)) -> Double in
+            total + abs(Double(paire.0) - Double(paire.1))
+        }
+        return somme / Double(max(a.count, 1)) / 255
     }
 
     static func rgba(_ image: CIImage, size: CGSize, context: CIContext) -> [UInt8] {
