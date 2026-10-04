@@ -136,7 +136,10 @@ export function requireSovereign() {
   return async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
     const moi = acteur(request);
     if (!moi) return refuser(reply, 401, 'Authentification requise');
-    if (!isSovereign(request)) {
+    // La comparaison reste ÉCRITE ici, et non déléguée à `isSovereign` : le
+    // manifeste des routes (`route-manifest/collect.ts`) classe une garde S6
+    // en lisant `UserRoleEnum.BIGBOSS` dans le TEXTE de la fonction montée.
+    if (moi.role !== UserRoleEnum.BIGBOSS) {
       return refuser(reply, 403, 'Rang souverain requis');
     }
   };
