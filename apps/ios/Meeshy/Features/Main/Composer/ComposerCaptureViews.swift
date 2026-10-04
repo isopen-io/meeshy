@@ -58,6 +58,9 @@ struct ComposerCaptureChrome: View {
 
     /// L'anneau de la dernière mise au point — un état de VUE, pas de la machine.
     @State private var focusMark: ComposerCaptureFocusMark?
+    /// Retombe tout seul quand le pincement finit — y compris annulé par le
+    /// système, qui n'appelle pas `onEnded`.
+    @GestureState private var pinchActive = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -67,9 +70,16 @@ struct ComposerCaptureChrome: View {
                     .contentShape(Rectangle())
                     .gesture(holdGesture.exclusively(before:
                         focusGesture(origin: proxy.frame(in: .global).origin)
-                            .exclusively(before: TapGesture().onEnded { onTap() })))
+                            .exclusively(before: TapGesture().onEnded {
+                                guard !session.pinchSpoilsGestures else { return }
+                                onTap()
+                            })))
                     .simultaneousGesture(dragGesture)
                     .simultaneousGesture(pinchGesture)
+                    .adaptiveOnChange(of: pinchActive) { _, actif in
+                        guard !actif else { return }
+                        session.endPinchZoom()
+                    }
                     .overlay(alignment: .topLeading) {
                         if let focusMark {
                             ComposerCaptureFocusRing(reduceMotion: reduceMotion)
@@ -131,17 +141,13 @@ struct ComposerCaptureChrome: View {
                 }
                 switch ComposerCaptureHold.verticalDrag(stage: session.stage) {
                 case .zoom: session.dragZoom(translationY: valeur.translation.height)
-                case .dismiss: session.dismissDrag = session.pinchSpoilsDismiss ? 0 : valeur.translation.height
+                case .dismiss: session.followDismissDrag(translationY: valeur.translation.height)
                 }
             }
             .onEnded { valeur in
                 session.endZoomDrag()
                 guard session.holdStartedAt == nil else { return }
-                let course = valeur.translation.height
-                session.dismissDrag = 0
-                guard ComposerCaptureHold.verticalDrag(stage: session.stage) == .dismiss,
-                      !session.pinchSpoilsDismiss,
-                      ComposerSceneCameraFrame.dismisses(translationY: course) else { return }
+                guard session.releaseDismissDrag(translationY: valeur.translation.height) else { return }
                 HapticFeedback.light()
                 onDisarm()
             }
@@ -150,6 +156,7 @@ struct ComposerCaptureChrome: View {
     /// **Pincer zoome l'objectif** (#9295), dans les deux montages.
     private var pinchGesture: some Gesture {
         MagnificationGesture()
+            .updating($pinchActive) { _, actif, _ in actif = true }
             .onChanged { echelle in session.pinchZoom(scale: echelle) }
             .onEnded { _ in session.endPinchZoom() }
     }
@@ -160,7 +167,7 @@ struct ComposerCaptureChrome: View {
     /// d'un même vide qui photographie et qui vise.
     private func focusGesture(origin: CGPoint) -> some Gesture {
         SpatialTapGesture(count: 2, coordinateSpace: .global).onEnded { toucher in
-            guard session.focus(atGlobalPoint: toucher.location) else { return }
+            guard !session.pinchSpoilsGestures, session.focus(atGlobalPoint: toucher.location) else { return }
             let marque = ComposerCaptureFocusMark(
                 id: UUID(), location: CGPoint(x: toucher.location.x - origin.x, y: toucher.location.y - origin.y))
             focusMark = marque

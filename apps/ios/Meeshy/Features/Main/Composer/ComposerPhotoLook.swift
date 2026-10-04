@@ -168,22 +168,31 @@ nonisolated struct ComposerPhotoLookThumbnails: @unchecked Sendable {
 
     static let empty = ComposerPhotoLookThumbnails(filters: [:], frames: [:])
 
-    /// Les vignettes des filtres sur la photo réduite, et celles des cadres
-    /// d'une puce sur la photo déjà filtrée — ce que l'auteur obtiendra.
-    static func paint(source: ComposerPhotoLookSource, filter: VideoFilterPreset,
-                      frames: [ComposerPhotoFrame]) -> ComposerPhotoLookThumbnails {
-        let maxPixel = ComposerPhotoLookRule.thumbnailMaxPixel
-        let small = ComposerPhotoLookRenderer.graded(source.photo, filter: .natural, maxPixel: maxPixel) ?? source.photo
-        let reduite = ComposerPhotoLookSource(photo: small, person: source.person,
-                                              texts: source.texts, caption: source.caption)
+    /// Les vignettes des filtres, sur la photo réduite — elles ne dépendent que
+    /// de la photo.
+    static func paintingFilters(source: ComposerPhotoLookSource) -> ComposerPhotoLookThumbnails {
+        let small = reduced(source.photo)
         let filtres = ComposerPhotoLookRule.filters.reduce(into: [VideoFilterPreset: CGImage]()) { result, preset in
             result[preset] = ComposerPhotoLookRenderer.graded(small, filter: preset, maxPixel: nil)
         }
+        return ComposerPhotoLookThumbnails(filters: filtres, frames: [:])
+    }
+
+    /// Les vignettes des cadres d'une puce, sur la photo déjà filtrée — ce que
+    /// l'auteur obtiendra.
+    static func paintingFrames(source: ComposerPhotoLookSource, filter: VideoFilterPreset,
+                               frames: [ComposerPhotoFrame]) -> ComposerPhotoLookThumbnails {
+        let reduite = ComposerPhotoLookSource(photo: reduced(source.photo), person: source.person,
+                                              texts: source.texts, caption: source.caption)
         let cadres = frames.reduce(into: [ComposerPhotoFrame: CGImage]()) { result, frame in
             result[frame] = ComposerPhotoLookRenderer.render(
                 ComposerPhotoLook(filter: filter, frame: frame), source: reduite,
                 maxPixel: nil, frameCanvas: ComposerPhotoLookRule.thumbnailFrameCanvas)
         }
-        return ComposerPhotoLookThumbnails(filters: filtres, frames: cadres)
+        return ComposerPhotoLookThumbnails(filters: [:], frames: cadres)
+    }
+
+    private static func reduced(_ photo: CGImage) -> CGImage {
+        ComposerPhotoLookRenderer.graded(photo, filter: .natural, maxPixel: ComposerPhotoLookRule.thumbnailMaxPixel) ?? photo
     }
 }

@@ -88,20 +88,25 @@ struct ComposerViewfinder: View {
 
     var body: some View {
         ZStack {
-            preview
-                .ignoresSafeArea()
-            if refused {
-                refusedChrome
-            } else {
-                ComposerCaptureChrome(
-                    session: capture,
-                    size: .fullScreen,
-                    offersSizeToggle: false,
-                    onTap: { tapAnywhere() },
-                    onHold: { holdAnywhere() },
-                    onDisarm: { close() },
-                    onValidateSegments: { capture.validateSegments { deliver(.video($0)) } })
+            Group {
+                preview
+                    .ignoresSafeArea()
+                if refused {
+                    refusedChrome
+                } else {
+                    ComposerCaptureChrome(
+                        session: capture,
+                        size: .fullScreen,
+                        offersSizeToggle: false,
+                        onTap: { tapAnywhere() },
+                        onHold: { holdAnywhere() },
+                        onDisarm: { close() },
+                        onValidateSegments: { capture.validateSegments { deliver(.video($0)) } })
+                }
             }
+            // Sous la prise, VoiceOver n'atteint ni l'obturateur ni la croix :
+            // une prise faite là serait perdue, une fermeture jetterait la photo.
+            .accessibilityHidden(pendingPhoto != nil)
             if let pendingPhoto {
                 ComposerPhotoLookReview(
                     photo: pendingPhoto.image,
@@ -115,6 +120,7 @@ struct ComposerViewfinder: View {
                             pendingPhoto.data, look: look)))
                     })
                 .id(pendingPhoto.id)
+                .accessibilityAddTraits(.isModal)
                 .transition(.opacity)
             }
         }
@@ -203,7 +209,10 @@ struct ComposerViewfinder: View {
 
     // MARK: - La sortie
 
+    /// **Une prise ne part qu'une fois** : deux touchers rapprochés sur
+    /// « Valider » pendant que le viseur se retire poseraient deux pièces.
     private func deliver(_ result: CameraResult) {
+        guard !delivered else { return }
         delivered = true
         capture.finishCapture()
         HapticFeedback.success()

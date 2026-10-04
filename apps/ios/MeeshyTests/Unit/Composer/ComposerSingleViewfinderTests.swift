@@ -231,10 +231,19 @@ final class ComposerPhotoLookTests: XCTestCase {
     }
 
     func test_vignettes_unePourChaqueFiltreEtChaqueCadre() {
+        let filtres = ComposerPhotoLookThumbnails.paintingFilters(source: Self.source())
+        XCTAssertEqual(Set(filtres.filters.keys), Set(VideoFilterPreset.allCases))
         let cadres = Array(ComposerPhotoLookRule.frames(for: .classics).prefix(3))
-        let vignettes = ComposerPhotoLookThumbnails.paint(source: Self.source(), filter: .natural, frames: cadres)
-        XCTAssertEqual(Set(vignettes.filters.keys), Set(VideoFilterPreset.allCases))
+        let vignettes = ComposerPhotoLookThumbnails.paintingFrames(source: Self.source(), filter: .natural, frames: cadres)
         XCTAssertEqual(Set(vignettes.frames.keys), Set(cadres))
+    }
+
+    func test_leViseur_neRemetQuUneFois_etMasqueSaCameraSousLaPrise() throws {
+        let viseur = try Self.code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
+        XCTAssertTrue(viseur.contains("guard !delivered else { return }"), "deux touchers sur « Valider » posaient deux pièces")
+        XCTAssertTrue(viseur.contains(".accessibilityHidden(pendingPhoto != nil)"),
+                      "VoiceOver n'atteint pas l'obturateur caché sous la prise")
+        XCTAssertTrue(viseur.contains(".accessibilityAddTraits(.isModal)"))
     }
 
     // MARK: - Le câblage : les pièces de l'appel, aucune jumelle

@@ -134,6 +134,7 @@ final class ComposerConversationCaptureTests: XCTestCase {
                       "La prise rejoint le message par le chemin de pose d'une scène terminée.")
     }
 
+    @MainActor
     func test_returnedMedia_fromAPhotoCapture_isTheImage() {
         let image = UIImage()
         guard case .image(let rendue) = ComposerReturnedMedia(capture: .photo(image, data: Data([0xFF]))) else {
@@ -142,6 +143,7 @@ final class ComposerConversationCaptureTests: XCTestCase {
         XCTAssertTrue(rendue === image)
     }
 
+    @MainActor
     func test_returnedMedia_fromAVideoCapture_isTheSameFile() {
         let url = URL(fileURLWithPath: "/tmp/prise.mov")
         guard case .video(let rendu) = ComposerReturnedMedia(capture: .video(url)) else {

@@ -11,7 +11,11 @@ final class CameraModel: NSObject, ObservableObject {
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
+    nonisolated deinit {
+        // Un modèle libéré sans `stop()` ne laisse pas son guet de la scène
+        // inscrit au centre de notifications (#9295).
+        if let subjectAreaObserver { NotificationCenter.default.removeObserver(subjectAreaObserver) }
+    }
     nonisolated(unsafe) let session = AVCaptureSession()
     var capturedPhoto: UIImage?
     /// Les octets tels que l'appareil les a produits — EXIF compris. `nil`
@@ -47,7 +51,9 @@ final class CameraModel: NSObject, ObservableObject {
     @Published private(set) var currentPosition: AVCaptureDevice.Position = .back
     private var recordingTimer: Timer?
     /// Le guet de la scène après un double toucher (#9295) — `nil` hors session.
-    private var subjectAreaObserver: NSObjectProtocol?
+    /// `nonisolated(unsafe)` : la deinit, non isolée, le retire ; il n'est
+    /// écrit que sur le fil principal.
+    nonisolated(unsafe) private var subjectAreaObserver: NSObjectProtocol?
 
     // Camera-switch-mid-recording (bug fix 2026-07-09): `AVCaptureMovieFileOutput`'s
     // active recording connection breaks when its video input is removed, even

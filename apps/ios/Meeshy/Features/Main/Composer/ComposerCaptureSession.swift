@@ -53,9 +53,16 @@ final class ComposerCaptureSession: ObservableObject {
     private var zoomAnchor: ComposerCaptureZoomAnchor?
     /// Le facteur au premier écart des doigts, `nil` hors pincement (#9295).
     private var pinchAnchor: CGFloat?
-    /// Deux doigts sont posés : ni le rangement ni l'appui long ne partent.
+    /// Deux doigts sont posés : ni le rangement, ni l'appui long, ni un
+    /// toucher ne partent.
     private(set) var isPinching = false
     private var pinchEndedAt: Date?
+    /// Un appui long qu'un pincement a annulé ne repart pas quand un doigt se
+    /// lève : seule la levée de CE geste (`endHold`) le libère.
+    private var holdSpoiledByPinch = false
+    /// Le glissé de rangement en cours, et s'il a croisé un pincement.
+    private var dismissDragActive = false
+    private var dismissDragSpoiled = false
     private var holdTask: Task<Void, Never>?
     private let defaults: UserDefaults
     private var relais: AnyCancellable?
@@ -126,6 +133,7 @@ final class ComposerCaptureSession: ObservableObject {
         resetHold()
         holdStartedAt = nil
         zoomAnchor = nil
+        resetPinch()
         dismissDrag = 0
         extinguishFlash()
         camera.stop()
@@ -246,7 +254,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// **L'appui long FILME** dès que la session peut écrire, et dure tant que
     /// le doigt reste — ou au-delà, verrouillé.
     func beginHold() {
-        guard holdStartedAt == nil, !isPinching else { return }
+        guard holdStartedAt == nil, !isPinching, !holdSpoiledByPinch else { return }
         HapticFeedback.medium()
         holdStartedAt = Date()
         holdPhase = .holding
@@ -265,7 +273,9 @@ final class ComposerCaptureSession: ObservableObject {
     func holdChanged(_ translation: CGPoint) {
         guard holdStartedAt != nil else { return }
         if stage == .recording { dragZoom(translationY: translation.y) }
-        guard holdPhase != .locked else { return }
+        // Deux doigts qui s'écartent à l'horizontale zooment ; ils ne
+        // verrouillent pas la prise.
+        guard holdPhase != .locked, !isPinching else { return }
         lockProgress = ComposerShutterGesture.lockProgress(translationX: translation.x)
         guard ComposerCaptureHold.phase(translation: translation, wasLocked: false) == .locked else { return }
         holdPhase = .locked
@@ -281,6 +291,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// a refusé l'armement.
     func endHold() {
         zoomAnchor = nil
+        holdSpoiledByPinch = false
         guard holdStartedAt != nil else {
             holdTask?.cancel()
             holdTask = nil
@@ -337,8 +348,10 @@ final class ComposerCaptureSession: ObservableObject {
         if !isPinching {
             isPinching = true
             dismissDrag = 0
+            dismissDragSpoiled = true
             if holdStartedAt != nil, stage != .recording {
                 holdStartedAt = nil
+                holdSpoiledByPinch = true
                 resetHold()
             }
         }
@@ -347,15 +360,54 @@ final class ComposerCaptureSession: ObservableObject {
         camera.setZoom(ComposerCaptureZoom.pinched(from: ancre, scale: scale, range: camera.zoomRange))
     }
 
+    /// Idempotente : la fin d'un pincement arrive par `onEnded` ET par l'état
+    /// du geste qui retombe — y compris quand le système l'annule sans fin.
     func endPinchZoom() {
+        guard isPinching else { return }
         pinchAnchor = nil
         isPinching = false
         pinchEndedAt = Date()
     }
 
-    /// Le glissé qui accompagne un pincement ne range pas le viseur.
-    var pinchSpoilsDismiss: Bool {
-        ComposerCaptureZoom.pinchSpoilsDismiss(isPinching: isPinching, pinchEndedAt: pinchEndedAt, now: Date())
+    private func resetPinch() {
+        pinchAnchor = nil
+        isPinching = false
+        pinchEndedAt = nil
+        holdSpoiledByPinch = false
+        dismissDragActive = false
+        dismissDragSpoiled = false
+    }
+
+    /// Un pincement en cours, ou qui vient de finir : ses doigts ne prennent
+    /// ni photo, ni mise au point, ni rangement.
+    var pinchSpoilsGestures: Bool {
+        ComposerCaptureZoom.pinchSpoilsGestures(isPinching: isPinching, pinchEndedAt: pinchEndedAt, now: Date())
+    }
+
+    // MARK: - Le rangement au glissé
+
+    /// **Le glissé vers le bas range le viseur, PROGRESSIF et ANNULABLE**
+    /// (directive 2026-08-30) — sauf un glissé qui a croisé un pincement :
+    /// celui-là reste gâté jusqu'à sa levée, il ne saute pas à sa course
+    /// entière une fois le délai passé.
+    func followDismissDrag(translationY: CGFloat) {
+        if !dismissDragActive {
+            dismissDragActive = true
+            dismissDragSpoiled = pinchSpoilsGestures
+        }
+        if isPinching { dismissDragSpoiled = true }
+        dismissDrag = dismissDragSpoiled ? 0 : translationY
+    }
+
+    /// La levée du glissé : `true` ⇒ le viseur se range.
+    func releaseDismissDrag(translationY: CGFloat) -> Bool {
+        let gate = dismissDragSpoiled || isPinching
+        dismissDragActive = false
+        dismissDragSpoiled = false
+        dismissDrag = 0
+        return !gate
+            && ComposerCaptureHold.verticalDrag(stage: stage) == .dismiss
+            && ComposerSceneCameraFrame.dismisses(translationY: translationY)
     }
 
     // MARK: - La mise au point (#9295)

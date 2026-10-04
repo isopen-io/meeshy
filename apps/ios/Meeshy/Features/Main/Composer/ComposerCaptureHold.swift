@@ -117,15 +117,16 @@ nonisolated enum ComposerCaptureZoom {
     }
 
     /// Le dernier doigt d'un pincement se lève rarement en même temps que le
-    /// premier : pendant ce délai, son glissé n'est pas un rangement.
-    static let pinchDismissGrace: TimeInterval = 0.4
+    /// premier : pendant ce délai, sa levée n'est ni un toucher ni un rangement.
+    static let pinchGrace: TimeInterval = 0.4
 
-    /// **Un pincement ne range jamais le viseur** : deux doigts qui descendent
-    /// ensemble pour dézoomer font aussi un glissé vertical.
-    static func pinchSpoilsDismiss(isPinching: Bool, pinchEndedAt: Date?, now: Date) -> Bool {
+    /// **Un pincement ne range jamais le viseur, ne photographie pas et ne
+    /// vise pas** : deux doigts qui descendent ensemble pour dézoomer font
+    /// aussi un glissé vertical, et leurs levées ressemblent à des touchers.
+    static func pinchSpoilsGestures(isPinching: Bool, pinchEndedAt: Date?, now: Date) -> Bool {
         if isPinching { return true }
         guard let pinchEndedAt else { return false }
-        return now.timeIntervalSince(pinchEndedAt) < pinchDismissGrace
+        return now.timeIntervalSince(pinchEndedAt) < pinchGrace
     }
 }
 

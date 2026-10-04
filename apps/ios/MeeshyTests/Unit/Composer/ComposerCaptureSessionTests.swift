@@ -50,7 +50,7 @@ final class ComposerCaptureSessionTests: XCTestCase {
             "ComposerCaptureZoom.factor(",
             "ComposerCaptureZoom.stepped(",
             "ComposerCaptureZoom.pinched(",
-            "ComposerCaptureZoom.pinchSpoilsDismiss(",
+            "ComposerCaptureZoom.pinchSpoilsGestures(",
             "ComposerScreenFlash.shared.light(",
         ]
         let montages = ["MeeshyComposerHost+Viewfinder.swift", "ComposerViewfinder.swift"]

@@ -351,15 +351,15 @@ final class ComposerCaptureFocusAndPinchTests: XCTestCase {
                        "un objectif fixe ne zoome pas")
     }
 
-    func test_pinchSpoilsDismiss_pendantEtJusteApresLePincement() {
+    func test_pinchSpoilsGestures_pendantEtJusteApresLePincement() {
         let maintenant = Date()
-        XCTAssertTrue(ComposerCaptureZoom.pinchSpoilsDismiss(isPinching: true, pinchEndedAt: nil, now: maintenant))
-        XCTAssertTrue(ComposerCaptureZoom.pinchSpoilsDismiss(
+        XCTAssertTrue(ComposerCaptureZoom.pinchSpoilsGestures(isPinching: true, pinchEndedAt: nil, now: maintenant))
+        XCTAssertTrue(ComposerCaptureZoom.pinchSpoilsGestures(
             isPinching: false, pinchEndedAt: maintenant.addingTimeInterval(-0.1), now: maintenant),
                       "le dernier doigt se lève après le premier")
-        XCTAssertFalse(ComposerCaptureZoom.pinchSpoilsDismiss(
+        XCTAssertFalse(ComposerCaptureZoom.pinchSpoilsGestures(
             isPinching: false, pinchEndedAt: maintenant.addingTimeInterval(-1), now: maintenant))
-        XCTAssertFalse(ComposerCaptureZoom.pinchSpoilsDismiss(isPinching: false, pinchEndedAt: nil, now: maintenant),
+        XCTAssertFalse(ComposerCaptureZoom.pinchSpoilsGestures(isPinching: false, pinchEndedAt: nil, now: maintenant),
                        "sans pincement, le glissé vers le bas range le viseur")
     }
 
@@ -370,24 +370,47 @@ final class ComposerCaptureFocusAndPinchTests: XCTestCase {
         let session = ComposerCaptureSession()
         session.pinchZoom(scale: 2)
         XCTAssertFalse(session.isPinching)
-        XCTAssertFalse(session.pinchSpoilsDismiss)
+        XCTAssertFalse(session.pinchSpoilsGestures)
     }
 
     @MainActor
-    func test_pinchZoom_annuleLeRangementEnCours_puisLeRendApresLeDelai() {
+    func test_rangement_sansPincement_suitLeDoigtPuisRange() {
         let session = ComposerCaptureSession(stage: .armed, mode: .photo)
-        session.dismissDrag = 80
+        session.followDismissDrag(translationY: 80)
+        XCTAssertEqual(session.dismissDrag, 80, "le viseur suit le doigt")
+        XCTAssertTrue(session.releaseDismissDrag(translationY: 400))
+        XCTAssertEqual(session.dismissDrag, 0)
+    }
+
+    @MainActor
+    func test_rangement_unGlisseQuiCroiseUnPincement_resteGateJusquALaLevee() {
+        let session = ComposerCaptureSession(stage: .armed, mode: .photo)
+        session.followDismissDrag(translationY: 80)
         session.pinchZoom(scale: 1.5)
         XCTAssertTrue(session.isPinching)
         XCTAssertEqual(session.dismissDrag, 0, "deux doigts qui descendent dézooment, ils ne rangent pas")
-        XCTAssertTrue(session.pinchSpoilsDismiss)
         session.endPinchZoom()
-        XCTAssertFalse(session.isPinching)
-        XCTAssertTrue(session.pinchSpoilsDismiss, "le délai du dernier doigt")
+        session.followDismissDrag(translationY: 500)
+        XCTAssertEqual(session.dismissDrag, 0, "après le délai, le glissé ne saute pas à sa course entière")
+        XCTAssertFalse(session.releaseDismissDrag(translationY: 500))
+        session.followDismissDrag(translationY: 60)
+        XCTAssertEqual(session.dismissDrag, 0, "le glissé suivant tombe encore dans le délai du dernier doigt")
+        XCTAssertFalse(session.releaseDismissDrag(translationY: 60))
     }
 
     @MainActor
-    func test_pinchZoom_annuleLAppuiLongQuiAttendaitLaCamera() {
+    func test_endPinchZoom_estIdempotente_etDesarmerOublieLePincement() {
+        let session = ComposerCaptureSession(stage: .armed, mode: .photo)
+        session.endPinchZoom()
+        XCTAssertFalse(session.pinchSpoilsGestures, "une fin sans pincement ne gâte rien")
+        session.pinchZoom(scale: 1.4)
+        session.disarm()
+        XCTAssertFalse(session.isPinching, "un pincement annulé par le système ne survit pas au rangement")
+        XCTAssertFalse(session.pinchSpoilsGestures)
+    }
+
+    @MainActor
+    func test_pinchZoom_annuleLAppuiLongQuiAttendaitLaCamera_jusquALaLeveeDuGeste() {
         let session = ComposerCaptureSession(stage: .armed, mode: .photo)
         session.beginHold()
         XCTAssertNotNil(session.holdStartedAt)
@@ -397,6 +420,12 @@ final class ComposerCaptureFocusAndPinchTests: XCTestCase {
         session.beginHold()
         XCTAssertNil(session.holdStartedAt, "pas d'appui long pendant un pincement")
         session.endPinchZoom()
+        session.beginHold()
+        XCTAssertNil(session.holdStartedAt, "le doigt resté posé ne relance pas la vidéo annulée")
+        session.endHold()
+        session.beginHold()
+        XCTAssertNotNil(session.holdStartedAt, "la levée du geste libère l'appui long suivant")
+        session.endHold()
     }
 
     @MainActor
@@ -426,7 +455,12 @@ final class ComposerCaptureFocusAndPinchTests: XCTestCase {
         XCTAssertTrue(chrome.contains("session.focus(atGlobalPoint:"))
         XCTAssertTrue(chrome.contains("MagnificationGesture()"), "pincer zoome")
         XCTAssertTrue(chrome.contains("session.pinchZoom(scale:"))
-        XCTAssertTrue(chrome.contains("session.pinchSpoilsDismiss"), "un pincement ne range jamais le viseur")
+        XCTAssertTrue(chrome.contains("session.followDismissDrag(") && chrome.contains("session.releaseDismissDrag("),
+                      "un pincement ne range jamais le viseur")
+        XCTAssertTrue(chrome.contains("guard !session.pinchSpoilsGestures"),
+                      "la levée d'un pincement ne photographie pas et ne vise pas")
+        XCTAssertTrue(chrome.contains(".updating($pinchActive)"),
+                      "un pincement annulé par le système finit quand même")
         XCTAssertTrue(chrome.contains("focusPoints: session.focusPoints"),
                       "l'aperçu partagé s'accroche au pont toucher → capteur")
         XCTAssertTrue(chrome.contains("adaptiveOnChange(of: proxy.frame(in: .global), initial: true)"),

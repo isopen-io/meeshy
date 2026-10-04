@@ -136,15 +136,14 @@ nonisolated enum VideoFilterColorimetry {
         exposed(colorControlled(temperatureTinted(image, config: config), config: config), config: config)
     }
 
+    /// La neutralité se compare sur les VALEURS du réglage, jamais sur deux
+    /// `CIVector` — un objet, dont l'égalité n'est pas celle qu'on lit.
     private static func temperatureTinted(_ image: CIImage, config: VideoFilterConfig) -> CIImage {
-        let neutral = CIVector(x: CGFloat(config.temperature), y: CGFloat(config.tint))
-        let target = CIVector(x: 6500, y: 0)
-
-        guard neutral != target else { return image }
+        guard config.temperature != 6500 || config.tint != 0 else { return image }
 
         return image.applyingFilter("CITemperatureAndTint", parameters: [
-            "inputNeutral": neutral,
-            "inputTargetNeutral": target
+            "inputNeutral": CIVector(x: CGFloat(config.temperature), y: CGFloat(config.tint)),
+            "inputTargetNeutral": CIVector(x: 6500, y: 0)
         ])
     }
 

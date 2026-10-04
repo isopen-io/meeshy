@@ -112,12 +112,20 @@ struct ComposerPhotoLookReview: View {
             guard !Task.isCancelled else { return }
             preview = rendu
         }
+        // Les vignettes des filtres ne dépendent que de la photo : peintes une fois.
+        .task(id: source != nil) {
+            guard let source else { return }
+            let filtres = await Self.paintFilterThumbnails(source: source)
+            guard !Task.isCancelled else { return }
+            thumbnails = ComposerPhotoLookThumbnails(filters: filtres.filters, frames: thumbnails.frames)
+        }
+        // Celles des cadres suivent l'ambiance ouverte et le filtre choisi.
         .task(id: ThumbnailsKey(chip: chip, filter: look.filter, ready: source != nil)) {
             guard let source else { return }
-            let peintes = await Self.paintThumbnails(source: source, filter: look.filter,
-                                                     frames: ComposerPhotoLookRule.frames(for: chip))
+            let cadres = await Self.paintFrameThumbnails(source: source, filter: look.filter,
+                                                         frames: ComposerPhotoLookRule.frames(for: chip))
             guard !Task.isCancelled else { return }
-            thumbnails = peintes
+            thumbnails = ComposerPhotoLookThumbnails(filters: thumbnails.filters, frames: cadres.frames)
         }
     }
 
@@ -227,7 +235,7 @@ struct ComposerPhotoLookReview: View {
                     .background(Capsule().fill(MeeshyColors.indigo500))
             }
             .buttonStyle(.plain)
-            .disabled(isFinishing || source == nil)
+            .disabled(isFinishing || (source == nil && !look.isUntouched))
             .opacity(isFinishing ? 0.6 : 1)
             .accessibilityLabel(ComposerPhotoLookCopy.use)
         }
@@ -238,19 +246,21 @@ struct ComposerPhotoLookReview: View {
 
     /// Le rendu final se peint en pleine définition, hors du fil principal ; un
     /// rendu qui échoue garde l'auteur sur la prise plutôt que d'envoyer autre
-    /// chose que ce qu'il a choisi.
+    /// chose que ce qu'il a choisi. « Valider » reste éteint jusqu'au retrait
+    /// du viseur : un second toucher ne remet rien.
     private func use() {
-        guard !isFinishing, let source else { return }
+        guard !isFinishing else { return }
         guard !look.isUntouched else {
+            isFinishing = true
             onUse(photo, look)
             return
         }
+        guard let source else { return }
         isFinishing = true
         let choisi = look
         Task {
-            let rendu = await Self.paintFinal(choisi, source: source)
-            isFinishing = false
-            guard let rendu else {
+            guard let rendu = await Self.paintFinal(choisi, source: source) else {
+                isFinishing = false
                 HapticFeedback.error()
                 return
             }
@@ -274,9 +284,14 @@ struct ComposerPhotoLookReview: View {
     }
 
     @concurrent
-    nonisolated static func paintThumbnails(source: ComposerPhotoLookSource, filter: VideoFilterPreset,
-                                            frames: [ComposerPhotoFrame]) async -> ComposerPhotoLookThumbnails {
-        ComposerPhotoLookThumbnails.paint(source: source, filter: filter, frames: frames)
+    nonisolated static func paintFilterThumbnails(source: ComposerPhotoLookSource) async -> ComposerPhotoLookThumbnails {
+        ComposerPhotoLookThumbnails.paintingFilters(source: source)
+    }
+
+    @concurrent
+    nonisolated static func paintFrameThumbnails(source: ComposerPhotoLookSource, filter: VideoFilterPreset,
+                                                 frames: [ComposerPhotoFrame]) async -> ComposerPhotoLookThumbnails {
+        ComposerPhotoLookThumbnails.paintingFrames(source: source, filter: filter, frames: frames)
     }
 
     /// Les pixels debout : le traitement de la prise (#8695) les rend déjà
