@@ -182,11 +182,21 @@ struct ConversationView: View {
     /// ses champs internes changent. L'override est la seule source vivante.
     @State private var conversationOverride: Conversation?
 
-    /// La conversation à AFFICHER : l'override serveur s'il existe, sinon la
-    /// valeur figée — le pair d'un direct repeint par-dessus (#9359). Interne :
-    /// lue par l'extension `ConversationView+Header`, qui vit dans un autre
-    /// fichier — `private` est à portée de fichier.
-    var liveConversation: Conversation? { headerState.peerRepaints.applied(to: conversationOverride ?? conversation) }
+    /// La conversation à AFFICHER : l'override s'il existe, sinon la valeur
+    /// figée. `internal` (pas `private`) : lue par l'extension
+    /// `ConversationView+Header`, qui vit dans un autre fichier — `private` est
+    /// à portée de fichier.
+    var liveConversation: Conversation? { conversationOverride ?? conversation }
+
+    /// Le pair d'un direct OUVERT renommé ou repeint à `user:updated` (#9359) :
+    /// l'annonce s'applique à la conversation AFFICHÉE et le résultat devient
+    /// l'override — l'override garde la priorité, la valeur figée reste le
+    /// repli, et un enregistrement des réglages repart du pair repeint. Une
+    /// annonce qui ne change rien n'écrit rien : l'écran ne se redessine pas.
+    func admitPeerUpdate(_ event: UserUpdatedEvent) {
+        guard let repainted = DirectPeerRepaint.repainted(liveConversation, by: event) else { return }
+        conversationOverride = repainted
+    }
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.

@@ -25,8 +25,7 @@ extension ConversationView {
         // d'un direct (#9359). Seule une annonce qui CHANGE le pair affiché
         // écrit l'état — les autres ne redessinent rien.
         .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
-            guard let next = headerState.peerRepaints.admitting(event, over: liveConversation) else { return }
-            headerState.peerRepaints = next
+            admitPeerUpdate(event)
         }
     }
 

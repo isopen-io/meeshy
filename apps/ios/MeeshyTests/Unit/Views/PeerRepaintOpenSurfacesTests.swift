@@ -33,40 +33,33 @@ final class PeerRepaintOpenSurfacesTests: XCTestCase {
 
     // MARK: - En-tête d'un direct ouvert
 
-    func test_admitting_peerRename_repaintsTitleHandleAndKeepsThePhoto() throws {
-        let repaints = try XCTUnwrap(DirectPeerRepaints().admitting(try renamedBob(), over: direct()))
-        let live = try XCTUnwrap(repaints.applied(to: direct()))
+    func test_repainted_peerRename_repaintsTitleHandleAndKeepsThePhoto() throws {
+        let live = try XCTUnwrap(DirectPeerRepaint.repainted(direct(), by: try renamedBob()))
         XCTAssertEqual(live.title, "Bobby")
         XCTAssertEqual(live.displayName, "Bobby", "le titre de l'en-tête lit ce nom")
         XCTAssertEqual(live.participantUsername, "bobby")
         XCTAssertEqual(live.participantAvatarURL, "https://cdn/old.png")
     }
 
-    func test_admitting_successiveAnnouncements_foldInOrder() throws {
-        let renamed = try XCTUnwrap(DirectPeerRepaints().admitting(try renamedBob(), over: direct()))
+    func test_repainted_successiveAnnouncements_foldInOrder() throws {
+        let renamed = try XCTUnwrap(DirectPeerRepaint.repainted(direct(), by: try renamedBob()))
         let photo = try event(#"{"avatar":"https://cdn/new.png"}"#)
-        let both = try XCTUnwrap(renamed.admitting(photo, over: renamed.applied(to: direct())))
-        let live = try XCTUnwrap(both.applied(to: direct()))
+        let live = try XCTUnwrap(DirectPeerRepaint.repainted(renamed, by: photo))
         XCTAssertEqual(live.title, "Bobby", "la photo n'efface pas le nom reçu avant elle")
         XCTAssertEqual(live.participantAvatarURL, "https://cdn/new.png")
     }
 
-    func test_admitting_photoRemoved_removesIt() throws {
-        let repaints = try XCTUnwrap(DirectPeerRepaints().admitting(try event(#"{"avatar":null}"#), over: direct()))
-        XCTAssertNil(repaints.applied(to: direct())?.participantAvatarURL)
+    func test_repainted_photoRemoved_removesIt() throws {
+        let live = try XCTUnwrap(DirectPeerRepaint.repainted(direct(), by: try event(#"{"avatar":null}"#)))
+        XCTAssertNil(live.participantAvatarURL)
     }
 
-    func test_admitting_anotherUserGroupOrNoChange_writesNothing() throws {
-        XCTAssertNil(DirectPeerRepaints().admitting(try renamedBob(userId: "u-alice"), over: direct()))
-        XCTAssertNil(DirectPeerRepaints().admitting(try renamedBob(), over: direct(type: .group)))
-        XCTAssertNil(DirectPeerRepaints().admitting(try event(#"{"avatar":"https://cdn/old.png"}"#), over: direct()),
+    func test_repainted_anotherUserGroupOrNoChange_writesNothing() throws {
+        XCTAssertNil(DirectPeerRepaint.repainted(direct(), by: try renamedBob(userId: "u-alice")))
+        XCTAssertNil(DirectPeerRepaint.repainted(direct(type: .group), by: try renamedBob()))
+        XCTAssertNil(DirectPeerRepaint.repainted(direct(), by: try event(#"{"avatar":"https://cdn/old.png"}"#)),
                      "une annonce qui ne change rien ne redessine pas l'écran")
-        XCTAssertNil(DirectPeerRepaints().admitting(try renamedBob(), over: nil))
-    }
-
-    func test_applied_withoutAnnouncement_isTheSameValue() {
-        XCTAssertEqual(DirectPeerRepaints().applied(to: direct())?.title, "Bob")
-        XCTAssertNil(DirectPeerRepaints().applied(to: nil))
+        XCTAssertNil(DirectPeerRepaint.repainted(nil, by: try renamedBob()))
     }
 
     // MARK: - Fiche d'un participant
