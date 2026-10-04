@@ -13,6 +13,11 @@
  * pendant la lecture confie le vocal au mini-lecteur, qui reprend à la même
  * seconde.
  *
+ * #9279 — `checkMiniPlayerParity` : le mini-lecteur s'efface dans la
+ * conversation du vocal (la bulle en devient la télécommande), reparaît ailleurs
+ * SOUS « Reprendre l'appel », et son toucher rouvre la page audio à la même
+ * seconde.
+ *
  * `expect` et `setScheme` sont REMIS par l'hôte, jamais redéfinis.
  */
 import { waitForRowSettled } from './check-media.mjs';
@@ -23,6 +28,9 @@ const VOICE_DE_ATTACHMENT_ID = 'media-3-a1';
 const UNTRANSCRIBED_MESSAGE_ID = 'media-17';
 const UNTRANSCRIBED_ATTACHMENT_ID = 'media-17-a1';
 const RESUME_FROM_SECONDS = 1.2;
+/* Un appel vivant côté serveur, comme `check-calls-join.mjs` § 7 : « Reprendre l'appel » paraît hors du fil de Kwame. */
+const ACTIVE_CALL_KEY = 'meeshy.fixtures.active-call';
+const LIVE_CALL = 'call-kwame-live';
 
 const rowMounted = (page, id) => page.evaluate((mid) => document.querySelector(`[data-message="${mid}"]`) !== null, id);
 
@@ -130,7 +138,8 @@ export async function checkAudioFullscreen({ browser, BASE, expect, setScheme, s
   /* Le vocal allemand a pu finir avant Échap, ou partir au mini-lecteur : on
      repart d'un écran sans lecture confiée, quel que soit le cas. */
   const leftover = page.locator('[data-mini-audio-player] [data-mini-audio-close]');
-  if ((await leftover.count()) > 0) await leftover.click();
+  /* Effacé dans la conversation du vocal (#9279), on le ferme par son bouton sans le voir. */
+  if ((await leftover.count()) > 0) await leftover.evaluate((button) => button.click());
   await page.waitForFunction(() => document.querySelector('[data-mini-audio-player]') === null, null, { timeout: 5000 });
 
   await checkOnDemandAndCarry({ page, label, expect });
@@ -205,7 +214,138 @@ async function checkOnDemandAndCarry({ page, label, expect }) {
     (await mini.locator('audio').getAttribute('data-mini-audio-track')) === 'en' && (await mini.getAttribute('data-mini-audio-status')) === 'playing',
     `${label} fermer pendant la lecture confie le vocal au mini-lecteur : même piste (en), lecture continue depuis ${closedAt.toFixed(2)} s`,
   );
+  /* #9279 — dans la conversation du vocal, le mini-lecteur s'efface et la
+     bulle en devient la télécommande : la mettre en pause arrête LE son. */
+  expect(!(await mini.isVisible()), `${label} dans la conversation du vocal, le mini-lecteur s'efface`);
+  await page.locator(`[data-attachment="${UNTRANSCRIBED_ATTACHMENT_ID}"] button`).first().click();
+  await page.waitForFunction((aid) => document.querySelector(`[data-mini-audio-player="${aid}"] audio`)?.paused === true, UNTRANSCRIBED_ATTACHMENT_ID, { timeout: 5000 });
+  expect(true, `${label} la pause de la bulle arrête la lecture confiée`);
+}
+
+const audioTimeAt = (page, selector) =>
+  page.evaluate((query) => {
+    const audio = document.querySelector(query);
+    return audio === null ? null : { paused: audio.paused, time: audio.currentTime };
+  }, selector);
+
+/**
+ * #9279 — LE MINI-LECTEUR REJOINT iOS (`MiniAudioPlayerBar`), sous un appel
+ * vivant côté serveur pour que « Reprendre l'appel » soit à l'écran :
+ *  B1 dans la conversation du vocal il s'efface, la bulle dit « Mettre en
+ *     pause » et commande LE son ;
+ *  B2 ailleurs il reparaît, SOUS le bandeau d'appel, sans le chevaucher ;
+ *  B3 le toucher rouvre la page audio du même vocal, à la même seconde, et la
+ *     lecture continue ;
+ *  B4 refermer pendant la lecture le rend.
+ */
+export async function checkMiniPlayerParity({ browser, BASE, expect, setScheme, scheme }) {
+  const label = `[mini-lecteur/${scheme}]`;
+  const aid = UNTRANSCRIBED_ATTACHMENT_ID;
+  const miniAudio = `[data-mini-audio-player="${aid}"] audio`;
+  const pageAudioSelector = `[data-media-viewer] [data-viewer-audio="${aid}"] audio`;
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR' });
+  await setScheme(context, scheme);
+  await context.addInitScript(
+    ([key, id]) => {
+      try {
+        localStorage.setItem(key, id);
+      } catch {}
+    },
+    [ACTIVE_CALL_KEY, LIVE_CALL],
+  );
+  const page = await context.newPage();
+  await page.goto(`${BASE}/c/c-medias`, { waitUntil: 'load' });
+  await page.waitForSelector('[data-message]');
+  await page.waitForSelector(`[data-call-resume="${LIVE_CALL}"]`, { timeout: 8000 });
+
+  await scrollUntilMounted(page, UNTRANSCRIBED_MESSAGE_ID);
+  await waitForRowSettled(page, UNTRANSCRIBED_MESSAGE_ID);
+  await page.locator(`[data-message="${UNTRANSCRIBED_MESSAGE_ID}"]`).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await waitForRowSettled(page, UNTRANSCRIBED_MESSAGE_ID);
+  await page.locator(`[data-attachment="${aid}"] [data-voice-expand]`).click();
+  await page.locator(`[data-media-viewer] [data-viewer-audio="${aid}"]`).waitFor({ state: 'visible', timeout: 8000 });
+  await page.waitForFunction(
+    (query) => {
+      const audio = document.querySelector(query);
+      return audio !== null && audio.paused === false && audio.currentTime >= 1.2;
+    },
+    pageAudioSelector,
+    { timeout: 8000 },
+  );
+  await page.keyboard.press('Escape');
+
+  // ===== B1 — dans la conversation du vocal : le mini-lecteur s'efface, la bulle reprend la main =====
+  await page.waitForFunction(
+    ({ query, id }) =>
+      document.querySelector('[data-media-viewer]') === null &&
+      document.querySelector('[data-mini-audio-concealed]') !== null &&
+      document.querySelector(query)?.paused === false &&
+      document.querySelector(`[data-attachment="${id}"] button`)?.getAttribute('aria-label') === 'Mettre en pause',
+    { query: miniAudio, id: aid },
+    { timeout: 8000 },
+  );
+  const mini = page.locator(`[data-mini-audio-player="${aid}"]`);
+  const bubble = page.locator(`[data-attachment="${aid}"] button`).first();
+  expect(
+    !(await mini.isVisible()) && (await bubble.getAttribute('aria-label')) === 'Mettre en pause',
+    `${label} dans la conversation du vocal, le mini-lecteur s'efface et la bulle dit « Mettre en pause »`,
+  );
+  await bubble.click();
+  await page.waitForFunction(
+    ({ query, id }) =>
+      document.querySelector(query)?.paused === true && document.querySelector(`[data-attachment="${id}"] button`)?.getAttribute('aria-label') === "Lire l'audio",
+    { query: miniAudio, id: aid },
+    { timeout: 5000 },
+  );
+  expect(true, `${label} la pause de la bulle arrête LE son, et la bulle le dit (« Lire l'audio »)`);
+  await bubble.click();
+  await page.waitForFunction((query) => document.querySelector(query)?.paused === false, miniAudio, { timeout: 5000 });
+  expect(
+    (await page.locator('[data-attachment] audio').evaluateAll((all) => all.filter((audio) => !audio.paused).length)) === 0,
+    `${label} la bulle relance la lecture confiée, sans ouvrir un second son`,
+  );
+
+  // ===== B2 — ailleurs, il reparaît sous « Reprendre l'appel », sans le chevaucher =====
+  await page.evaluate(() => {
+    history.pushState({}, '', '/');
+    dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await mini.waitFor({ state: 'visible', timeout: 8000 });
+  const banner = await page.locator(`[data-call-resume="${LIVE_CALL}"]`).boundingBox();
+  const bar = await mini.boundingBox();
+  expect(
+    banner !== null && bar !== null && banner.y + banner.height <= bar.y,
+    `${label} hors de la conversation, le mini-lecteur reparaît SOUS le bandeau d'appel, sans chevauchement (bandeau ${JSON.stringify(banner)}, lecteur ${JSON.stringify(bar)})`,
+  );
+
+  // ===== B3 — le toucher rouvre la page audio du même vocal, à la même seconde, sans coupure =====
+  const before = await audioTimeAt(page, miniAudio);
+  await mini.locator('[data-mini-audio-open]').click();
+  await page.waitForFunction(
+    ({ query, from }) => {
+      const audio = document.querySelector(query);
+      return document.querySelector('[data-mini-audio-player]') === null && audio !== null && audio.paused === false && audio.currentTime >= from;
+    },
+    { query: pageAudioSelector, from: (before?.time ?? 0) - 0.05 },
+    { timeout: 8000 },
+  );
+  const reopened = await audioTimeAt(page, pageAudioSelector);
+  expect(
+    before !== null && before.paused === false && reopened !== null && reopened.time >= before.time - 0.05,
+    `${label} toucher le mini-lecteur rouvre la page audio du même vocal, qui reprend à ${reopened?.time.toFixed(2)} s (touché à ${before?.time.toFixed(2)} s) et joue`,
+  );
+
+  // ===== B4 — refermer pendant la lecture rend le mini-lecteur =====
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(
+    (query) => document.querySelector('[data-media-viewer]') === null && document.querySelector(query)?.paused === false,
+    miniAudio,
+    { timeout: 8000 },
+  );
+  expect(await mini.isVisible(), `${label} refermer pendant la lecture rend le mini-lecteur, qui joue`);
   await mini.locator('[data-mini-audio-close]').click();
   await page.waitForFunction(() => document.querySelector('[data-mini-audio-player]') === null, null, { timeout: 5000 });
-  expect(true, `${label} « Fermer le lecteur » arrête la lecture et retire le mini-lecteur`);
+  expect(true, `${label} « Fermer le lecteur » le retire`);
+
+  await context.close();
 }
