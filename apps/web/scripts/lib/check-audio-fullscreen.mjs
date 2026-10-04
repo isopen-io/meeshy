@@ -15,8 +15,8 @@
  *
  * #9279 — `checkMiniPlayerParity` : le mini-lecteur s'efface dans la
  * conversation du vocal (la bulle en devient la télécommande), reparaît ailleurs
- * SOUS « Reprendre l'appel », et son toucher rouvre la page audio à la même
- * seconde.
+ * SOUS « Reprendre l'appel », et son toucher ouvre la conversation du vocal,
+ * comme iOS.
  *
  * `expect` et `setScheme` sont REMIS par l'hôte, jamais redéfinis.
  */
@@ -231,12 +231,12 @@ const audioTimeAt = (page, selector) =>
 /**
  * #9279 — LE MINI-LECTEUR REJOINT iOS (`MiniAudioPlayerBar`), sous un appel
  * vivant côté serveur pour que « Reprendre l'appel » soit à l'écran :
- *  B1 dans la conversation du vocal il s'efface, la bulle dit « Mettre en
- *     pause » et commande LE son ;
+ *  B1 fermer le plein écran dans le fil du vocal : il s'efface, la bulle dit
+ *     « Mettre en pause » ;
  *  B2 ailleurs il reparaît, SOUS le bandeau d'appel, sans le chevaucher ;
- *  B3 le toucher rouvre la page audio du même vocal, à la même seconde, et la
- *     lecture continue ;
- *  B4 refermer pendant la lecture le rend.
+ *  B3 son toucher ouvre la conversation du vocal, comme iOS : la lecture
+ *     continue, il s'y efface et la bulle montre la lecture à la même seconde ;
+ *  B4 la bulle commande LE son ; B5 hors du fil, « Fermer » le retire.
  */
 export async function checkMiniPlayerParity({ browser, BASE, expect, setScheme, scheme }) {
   const label = `[mini-lecteur/${scheme}]`;
@@ -267,14 +267,14 @@ export async function checkMiniPlayerParity({ browser, BASE, expect, setScheme, 
   await page.waitForFunction(
     (query) => {
       const audio = document.querySelector(query);
-      return audio !== null && audio.paused === false && audio.currentTime >= 1.2;
+      return audio !== null && audio.paused === false && audio.currentTime >= 0.4;
     },
     pageAudioSelector,
     { timeout: 8000 },
   );
   await page.keyboard.press('Escape');
 
-  // ===== B1 — dans la conversation du vocal : le mini-lecteur s'efface, la bulle reprend la main =====
+  // ===== B1 — fermer dans le fil du vocal : le mini-lecteur s'efface, la bulle dit la lecture =====
   await page.waitForFunction(
     ({ query, id }) =>
       document.querySelector('[data-media-viewer]') === null &&
@@ -286,10 +286,51 @@ export async function checkMiniPlayerParity({ browser, BASE, expect, setScheme, 
   );
   const mini = page.locator(`[data-mini-audio-player="${aid}"]`);
   const bubble = page.locator(`[data-attachment="${aid}"] button`).first();
+  expect(!(await mini.isVisible()), `${label} dans la conversation du vocal, le mini-lecteur s'efface et la bulle dit « Mettre en pause »`);
+
+  // ===== B2 — ailleurs, il reparaît sous « Reprendre l'appel », sans le chevaucher =====
+  await page.evaluate(() => {
+    history.pushState({}, '', '/');
+    dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await mini.waitFor({ state: 'visible', timeout: 8000 });
+  const banner = await page.locator(`[data-call-resume="${LIVE_CALL}"]`).boundingBox();
+  const bar = await mini.boundingBox();
   expect(
-    !(await mini.isVisible()) && (await bubble.getAttribute('aria-label')) === 'Mettre en pause',
-    `${label} dans la conversation du vocal, le mini-lecteur s'efface et la bulle dit « Mettre en pause »`,
+    banner !== null && bar !== null && banner.y + banner.height <= bar.y,
+    `${label} hors de la conversation, le mini-lecteur reparaît SOUS le bandeau d'appel, sans chevauchement (bandeau ${JSON.stringify(banner)}, lecteur ${JSON.stringify(bar)})`,
   );
+
+  // ===== B3 — le toucher ouvre la conversation du vocal (iOS : onMiniPlayerTap) ; la lecture continue, la bulle la montre =====
+  const before = await audioTimeAt(page, miniAudio);
+  await mini.locator('[data-mini-audio-open]').click();
+  await page.waitForURL('**/c/c-medias', { timeout: 8000 });
+  await scrollUntilMounted(page, UNTRANSCRIBED_MESSAGE_ID);
+  await page.waitForFunction(
+    ({ query, id, from }) => {
+      const audio = document.querySelector(query);
+      const slider = document.querySelector(`[data-attachment="${id}"] [role="slider"]`);
+      return (
+        document.querySelector('[data-mini-audio-concealed]') !== null &&
+        audio !== null &&
+        audio.paused === false &&
+        audio.currentTime >= from &&
+        document.querySelector(`[data-attachment="${id}"] button`)?.getAttribute('aria-label') === 'Mettre en pause' &&
+        slider !== null &&
+        Math.abs(Number(slider.getAttribute('aria-valuenow')) - audio.currentTime) <= 1
+      );
+    },
+    { query: miniAudio, id: aid, from: before?.time ?? 0 },
+    { timeout: 8000 },
+  );
+  const after = await audioTimeAt(page, miniAudio);
+  const shown = await page.locator(`[data-attachment="${aid}"] [role="slider"]`).getAttribute('aria-valuenow');
+  expect(
+    before !== null && before.paused === false && after !== null && after.paused === false && after.time >= before.time && !(await mini.isVisible()),
+    `${label} toucher le mini-lecteur ouvre la conversation du vocal (${new URL(page.url()).pathname}) : la lecture continue sans coupure (${before?.time.toFixed(2)} → ${after?.time.toFixed(2)} s), le mini-lecteur s'y efface, et la bulle dit « Mettre en pause » à la même seconde (${shown} s)`,
+  );
+
+  // ===== B4 — la bulle commande LE son, sans en ouvrir un second =====
   await bubble.click();
   await page.waitForFunction(
     ({ query, id }) =>
@@ -305,44 +346,12 @@ export async function checkMiniPlayerParity({ browser, BASE, expect, setScheme, 
     `${label} la bulle relance la lecture confiée, sans ouvrir un second son`,
   );
 
-  // ===== B2 — ailleurs, il reparaît sous « Reprendre l'appel », sans le chevaucher =====
+  // ===== B5 — hors du fil, « Fermer le lecteur » le retire =====
   await page.evaluate(() => {
     history.pushState({}, '', '/');
     dispatchEvent(new PopStateEvent('popstate'));
   });
   await mini.waitFor({ state: 'visible', timeout: 8000 });
-  const banner = await page.locator(`[data-call-resume="${LIVE_CALL}"]`).boundingBox();
-  const bar = await mini.boundingBox();
-  expect(
-    banner !== null && bar !== null && banner.y + banner.height <= bar.y,
-    `${label} hors de la conversation, le mini-lecteur reparaît SOUS le bandeau d'appel, sans chevauchement (bandeau ${JSON.stringify(banner)}, lecteur ${JSON.stringify(bar)})`,
-  );
-
-  // ===== B3 — le toucher rouvre la page audio du même vocal, à la même seconde, sans coupure =====
-  const before = await audioTimeAt(page, miniAudio);
-  await mini.locator('[data-mini-audio-open]').click();
-  await page.waitForFunction(
-    ({ query, from }) => {
-      const audio = document.querySelector(query);
-      return document.querySelector('[data-mini-audio-player]') === null && audio !== null && audio.paused === false && audio.currentTime >= from;
-    },
-    { query: pageAudioSelector, from: (before?.time ?? 0) - 0.05 },
-    { timeout: 8000 },
-  );
-  const reopened = await audioTimeAt(page, pageAudioSelector);
-  expect(
-    before !== null && before.paused === false && reopened !== null && reopened.time >= before.time - 0.05,
-    `${label} toucher le mini-lecteur rouvre la page audio du même vocal, qui reprend à ${reopened?.time.toFixed(2)} s (touché à ${before?.time.toFixed(2)} s) et joue`,
-  );
-
-  // ===== B4 — refermer pendant la lecture rend le mini-lecteur =====
-  await page.keyboard.press('Escape');
-  await page.waitForFunction(
-    (query) => document.querySelector('[data-media-viewer]') === null && document.querySelector(query)?.paused === false,
-    miniAudio,
-    { timeout: 8000 },
-  );
-  expect(await mini.isVisible(), `${label} refermer pendant la lecture rend le mini-lecteur, qui joue`);
   await mini.locator('[data-mini-audio-close]').click();
   await page.waitForFunction(() => document.querySelector('[data-mini-audio-player]') === null, null, { timeout: 5000 });
   expect(true, `${label} « Fermer le lecteur » le retire`);
