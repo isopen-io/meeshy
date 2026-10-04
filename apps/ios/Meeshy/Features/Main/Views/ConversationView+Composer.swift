@@ -250,15 +250,16 @@ extension ConversationView {
         .fileImporter(isPresented: $composerState.showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
         }
-        // **La caméra de la barre ouvre le composer, viseur ARMÉ** (#9123) —
-        // plus l'ancienne `CameraView` : la prise s'édite dans la scène, et
-        // « Terminé » la verse au message en attente par les mêmes chemins que
-        // l'ancienne feuille.
+        // **La caméra de la barre prend EN PLEIN ÉCRAN, hors de toute scène**
+        // (directive porteur 2026-10-04) : le viseur du composeur servi seul,
+        // le même que le fil, le statut et la page blanche. La prise rejoint
+        // le message en attente ; la scène reste à un geste, par « Éditer » sur
+        // la pièce posée (#9126).
         .conversationCover(isPresented: $composerState.showCamera) {
-            ConversationCaptureSceneEditor(onDone: { media in
-                composerState.showCamera = false
-                stageSceneMedia(media)
-            }, onCancel: { composerState.showCamera = false })
+            ComposerViewfinder { result in
+                stageSceneMedia(ComposerReturnedMedia(capture: result))
+            }
+            .ignoresSafeArea()
         }
         .sheet(isPresented: $composerState.showLocationPicker) {
             LocationPickerView(accentColor: accentColor) { place in
