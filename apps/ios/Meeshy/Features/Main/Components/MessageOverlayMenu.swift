@@ -29,8 +29,9 @@ struct MessageOverlayMenu: View {
     var textTranslations: [MessageTranslation] = []
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
-    /// La piste que la bulle sert, par pièce (`ConversationViewModel.servedAudioTracks`) — #9010.
-    var servedAudioTracks: [String: ServedAudioTrack] = [:]
+    /// Ce que le fil sert pour CE message — drapeau et pistes (#9010, #9259).
+    var threadLanguage = ThreadLanguage()
+    private var servedAudioTracks: [String: ServedAudioTrack] { threadLanguage.servedAudioTracks }
     var onReact: ((String) -> Void)?
     /// Composant unifié « Enregistrer » : déclenché par l'action `.saveMedia`
     /// (message à exactement un attachment enregistrable).
@@ -431,26 +432,7 @@ struct MessageOverlayMenu: View {
                     // visible — la position du cluster (action bar / emoji
                     // bar) reste cohérente.
                     Group {
-                        ThemedMessageBubble(
-                            message: message,
-                            contactColor: contactColor,
-                            isDirect: isDirect,
-                            isDark: isDark,
-                            transcription: transcription,
-                            translatedAudios: translatedAudios,
-                            textTranslations: textTranslations,
-                            preferredTranslation: preferredTranslation,
-                            showAvatar: !isDirect,
-                            isLastInGroup: true,
-                            isLastReceivedMessage: true,
-                            isLastSentMessage: true,
-                            mentionDisplayNames: mentionDisplayNames,
-                            currentUserId: currentUserId,
-                            userLanguages: (
-                                regional: userRegionalLanguage,
-                                custom: userCustomDestinationLanguage
-                            )
-                        )
+                        previewBubble
                         // Gate Equatable (H3) : pendant le drag 60 fps
                         // (`clusterDragOffset`) le body du GeometryReader se
                         // ré-évalue ; sans ce gate, `ThemedMessageBubble` se
@@ -927,6 +909,48 @@ extension MessageOverlayMenu {
     /// quand l'hôte n'en a élu aucune.
     static func previewAudioTrack(for attachment: MessageAttachment, served: [String: ServedAudioTrack]) -> ServedAudioTrack {
         served[attachment.id] ?? .original(of: attachment)
+    }
+
+    /// **Ce que le fil sert pour CE message** (#9259) : la sélection du
+    /// drapeau (`ConversationViewModel.bubbleLanguageSelections`), ses
+    /// écrivains, et les pistes qu'elle élit — lus dans le VM par l'hôte,
+    /// jamais recopiés dans un état de l'overlay.
+    struct ThreadLanguage {
+        var selection: ConversationViewModel.BubbleLanguageSelection? = nil
+        var servedAudioTracks: [String: ServedAudioTrack] = [:]
+        var onSetActiveDisplayLanguage: ((String?) -> Void)? = nil
+        var onSetSecondaryLanguage: ((String?) -> Void)? = nil
+    }
+
+    /// La bulle de l'aperçu, branchée sur le drapeau du fil comme la cellule
+    /// (`MessageListViewController`) : la face affichée ET la piste jouée
+    /// suivent une bascule faite dans le fil, pas le seul Prisme (#9259).
+    var previewBubble: ThemedMessageBubble {
+        ThemedMessageBubble(
+            message: message,
+            contactColor: contactColor,
+            isDirect: isDirect,
+            isDark: isDark,
+            transcription: transcription,
+            translatedAudios: translatedAudios,
+            textTranslations: textTranslations,
+            preferredTranslation: preferredTranslation,
+            showAvatar: !isDirect,
+            activeAudioLanguage: threadLanguage.selection?.activeDisplayLangCode,
+            isLastInGroup: true,
+            isLastReceivedMessage: true,
+            isLastSentMessage: true,
+            mentionDisplayNames: mentionDisplayNames,
+            currentUserId: currentUserId,
+            userLanguages: (
+                regional: userRegionalLanguage,
+                custom: userCustomDestinationLanguage
+            ),
+            activeDisplayLangCode: threadLanguage.selection?.activeDisplayLangCode,
+            secondaryLangCode: threadLanguage.selection?.secondaryLangCode,
+            onSetActiveDisplayLanguage: threadLanguage.onSetActiveDisplayLanguage,
+            onSetSecondaryLanguage: threadLanguage.onSetSecondaryLanguage
+        )
     }
 }
 
