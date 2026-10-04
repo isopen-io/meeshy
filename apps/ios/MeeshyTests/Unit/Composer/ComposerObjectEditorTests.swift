@@ -444,16 +444,16 @@ final class ComposerObjectEditorTests: XCTestCase {
             "Meeshy/Features/Main/Composer/ComposerRailGlass.swift"))
             .replacingOccurrences(of: " ", with: "")
             .replacingOccurrences(of: "\n", with: "")
-        XCTAssertTrue(verre.contains(".adaptiveGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))"),
+        XCTAssertTrue(verre.contains(".adaptiveLiquidGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))"),
                       "La carte d'un rail en colonne est le verre teinté du plateau.")
-        XCTAssertTrue(verre.contains(".adaptiveGlass(in:Circle(),tint:tint??plateauTint.opacity(0.55))"),
+        XCTAssertTrue(verre.contains(".adaptiveLiquidGlass(in:Circle(),tint:tint??plateauTint.opacity(0.55),interactive:true)"),
                       "Un bouton séparé porte le MÊME verre teinté, en disque.")
         for (nom, source, attendu, air) in [
             ("le couloir d'OUTILS", editeur,
-             ".adaptiveGlass(in:Circle(),tint:ComposerObjectEditorRail.isSelected(entree,selected:selectedTool)?MeeshyColors.brandPrimary:plateauTint.opacity(0.55))",
+             ".adaptiveLiquidGlass(in:Circle(),tint:ComposerObjectEditorRail.isSelected(entree,selected:selectedTool)?MeeshyColors.brandPrimary:plateauTint.opacity(0.55),interactive:true)",
              ".padding(.vertical,8)"),
             ("le couloir d'HISTORIQUE", trailing,
-             ".adaptiveGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))",
+             ".adaptiveLiquidGlass(in:RoundedRectangle(cornerRadius:ComposerRailGeometry.railWidth/2,style:.continuous),tint:plateauTint.opacity(0.55))",
              ".padding(.vertical,8)"),
             ("le couloir des PORTES", leading,
              ".modifier(ComposerRailButtonGlass(active:separateButtons,plateauTint:plateauTint,tint:glassTint))",

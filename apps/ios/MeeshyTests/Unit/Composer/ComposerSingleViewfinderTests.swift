@@ -286,6 +286,24 @@ final class ComposerPhotoLookTests: XCTestCase {
                       "le flux d'appel (sRGB) garde son cube ; seule la photo passe son espace")
     }
 
+    // MARK: - Le relief Liquid Glass (#9330)
+
+    func test_lesBoutonsDuViseurEtDeLaPrise_ontLeReliefLiquidGlass() throws {
+        for fichier in ["ComposerSceneCameraBar.swift", "ComposerPhotoLookReview.swift", "ComposerViewfinder.swift"] {
+            let code = try Self.code("Meeshy/Features/Main/Composer/\(fichier)")
+            XCTAssertFalse(code.contains(".adaptiveGlass(in:"),
+                           "\(fichier) : un verre plat sous iOS 26 — le relief passe par adaptiveLiquidGlass")
+            XCTAssertTrue(code.contains("adaptiveLiquidGlass(in:"), fichier)
+        }
+        let barre = try Self.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        XCTAssertTrue(barre.contains(".adaptiveLiquidGlass(in: Circle(), interactive: true)"),
+                      "un bouton du viseur réagit au toucher")
+        let prise = try Self.code("Meeshy/Features/Main/Composer/ComposerPhotoLookReview.swift")
+        XCTAssertTrue(prise.contains(".adaptiveGlassProminent(in: Capsule()"),
+                      "« Valider » est l'action terminale, sur verre proéminent")
+        XCTAssertFalse(prise.contains("Capsule().fill(MeeshyColors.indigo500)"))
+    }
+
     // MARK: - Le câblage : les pièces de l'appel, aucune jumelle
 
     func test_leViseur_monteLaPrise_etLaScenePasse() throws {

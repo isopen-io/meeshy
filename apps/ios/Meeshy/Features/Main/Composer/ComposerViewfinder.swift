@@ -183,7 +183,7 @@ struct ComposerViewfinder: View {
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                         .foregroundStyle(.white)
                         .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
-                        .adaptiveGlass(in: Circle())
+                        .adaptiveLiquidGlass(in: Circle(), interactive: true)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(ComposerSceneCameraCopy.disarmLabel)

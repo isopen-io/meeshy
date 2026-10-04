@@ -522,9 +522,9 @@ struct ComposerObjectEditorView: View {
                             // bandeau de contrôleur à gauche ou à droite, juste
                             // des petits boutons »). L'outil ouvert passe à
                             // l'indigo.
-                            .adaptiveGlass(in: Circle(),
+                            .adaptiveLiquidGlass(in: Circle(),
                                            tint: ComposerObjectEditorRail.isSelected(entree, selected: selectedTool)
-                                               ? MeeshyColors.brandPrimary : plateauTint.opacity(0.55))
+                                               ? MeeshyColors.brandPrimary : plateauTint.opacity(0.55), interactive: true)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(ComposerObjectEditorCopy.entry(entree))

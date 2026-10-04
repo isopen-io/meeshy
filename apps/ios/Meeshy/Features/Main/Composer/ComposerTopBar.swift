@@ -85,7 +85,7 @@ struct ComposerTopBar: View {
                     .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                     .frame(width: ComposerControlMetrics.visualDiameter,
                            height: ComposerControlMetrics.visualDiameter)
-                    .adaptiveGlass(in: Circle(), tint: plateauTint.opacity(0.55))
+                    .adaptiveLiquidGlass(in: Circle(), tint: plateauTint.opacity(0.55), interactive: true)
             }
             .accessibilityLabel(Text(ComposerDocumentCopy.close))
             slideRail

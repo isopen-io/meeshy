@@ -155,7 +155,7 @@ struct ComposerPhotoLookReview: View {
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
-                    .adaptiveGlass(in: Circle())
+                    .adaptiveLiquidGlass(in: Circle(), interactive: true)
             }
             .buttonStyle(.plain)
             .disabled(isFinishing)
@@ -232,7 +232,7 @@ struct ComposerPhotoLookReview: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, MeeshySpacing.lg)
                     .frame(minHeight: MeeshyControlSize.tapTarget)
-                    .background(Capsule().fill(MeeshyColors.indigo500))
+                    .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.indigo500)
             }
             .buttonStyle(.plain)
             .disabled(isFinishing || (source == nil && !look.isUntouched))
