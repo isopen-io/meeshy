@@ -130,6 +130,7 @@ describe('Transcrire à la demande (#9256)', () => {
     mount({ items: [bare()], deps });
     await until(() => transcribeButton() !== null);
 
+    transcribeButton()?.focus();
     act(() => transcribeButton()?.click());
     await until(() => transcript() !== null);
 
@@ -137,6 +138,7 @@ describe('Transcrire à la demande (#9256)', () => {
     expect(transcript()?.textContent).toBe(transcription.transcribedText);
     expect(transcript()?.getAttribute('lang')).toBe('fr');
     expect(transcribeButton()).toBeNull();
+    expect(document.activeElement?.hasAttribute('data-viewer-audio-play')).toBe(true);
   });
 
   test('un travail mis en file dit qu’il est en cours, et le résultat du temps réel le remplace', async () => {
@@ -206,6 +208,33 @@ describe('Traduire depuis le lecteur (#9256)', () => {
     expect(transcript()?.getAttribute('lang')).toBe('en');
   });
 
+  test('changer de version PENDANT la lecture joue la nouvelle piste, jamais ne la met en pause', async () => {
+    const proto = HTMLMediaElement.prototype;
+    const original = { play: proto.play, pause: proto.pause };
+    const played: string[] = [];
+    proto.play = function play(this: HTMLMediaElement) {
+      played.push(this.getAttribute('data-viewer-audio-track') ?? '');
+      this.dispatchEvent(new Event('play'));
+      return Promise.resolve();
+    };
+    proto.pause = function pause(this: HTMLMediaElement) {
+      this.dispatchEvent(new Event('pause'));
+    };
+    try {
+      mount({ items: [bare({ transcription, translations: { en: english } })], languages: ['fr'] });
+      await until(() => page()?.getAttribute('data-viewer-audio-status') === 'playing');
+
+      act(() => page()?.querySelector<HTMLButtonElement>('[data-viewer-audio-language="en"]')?.click());
+      await until(() => played.includes('en'));
+
+      expect(played).toContain('en');
+      expect(page()?.getAttribute('data-viewer-audio-status')).toBe('playing');
+    } finally {
+      proto.play = original.play;
+      proto.pause = original.pause;
+    }
+  });
+
   test('un refus le dit, et la langue reste à demander', async () => {
     const { deps } = gateway(() => ({ ok: false, status: 403, error: 'AUDIO_TRANSLATION_NOT_ENABLED' }));
     mount({ items: [bare({ transcription })], deps });
@@ -231,10 +260,14 @@ describe('Traduire depuis le lecteur (#9256)', () => {
     expect(page(id)?.querySelector('[data-viewer-audio-transcript]')?.textContent).toBe(supplied?.type === 'audio' ? supplied.transcribedText : '');
 
     act(() => page(id)?.querySelector<HTMLButtonElement>('[data-viewer-audio-translate]')?.click());
+    page(id)?.querySelector<HTMLButtonElement>('[data-viewer-audio-translate-to="es"]')?.focus();
     act(() => page(id)?.querySelector<HTMLButtonElement>('[data-viewer-audio-translate-to="es"]')?.click());
     await until(() => track(id)?.getAttribute('data-viewer-audio-track') === 'es');
 
     expect(page(id)?.querySelector('[data-viewer-audio-transcript]')?.textContent).toBe(MEDIA_ON_DEMAND[id]?.translations.es?.transcription);
+    /* La langue touchée a disparu avec sa demande : le focus rejoint la version
+       arrivée, dans le dialogue — sans quoi Échap ne fermerait plus rien. */
+    expect(document.activeElement?.getAttribute('data-viewer-audio-language')).toBe('es');
   });
 });
 

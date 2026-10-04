@@ -146,11 +146,14 @@ export default function ViewerAudioPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive]);
 
+  /* Changer de piste remonte l'élément : l'état « playing » de l'ancienne
+     piste survit un rendu, et `toggle` y mettrait en PAUSE la nouvelle. On
+     attend que la lecture soit retombée pour relancer (#9256). */
   useEffect(() => {
-    if (!playOnSwitchRef.current || !isActive) return;
+    if (!playOnSwitchRef.current || !isActive || status === 'playing') return;
     playOnSwitchRef.current = false;
     toggleRef.current();
-  }, [track.url, isActive]);
+  }, [track.url, isActive, status]);
 
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
   const lastElementRef = useRef<HTMLAudioElement | null>(null);
@@ -210,14 +213,29 @@ export default function ViewerAudioPage({
 
   const listenInRef = useRef(listenIn);
   listenInRef.current = listenIn;
+  /* Le bouton touché disparaît avec la demande qu'il portait (« Transcrire »,
+     la langue demandée) : le focus tomberait sur le document, hors du
+     dialogue, et Échap ne fermerait plus rien. Il rejoint ce qui le remplace. */
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const regainFocus = (selector: string): void => {
+    if (document.activeElement !== null && document.activeElement !== document.body) return;
+    rootRef.current?.querySelector<HTMLElement>(selector)?.focus();
+  };
   useEffect(() => {
     if (onDemand.arrived === null) return;
     setOffering(false);
     listenInRef.current(onDemand.arrived);
+    regainFocus(`[data-viewer-audio-language="${onDemand.arrived}"]`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onDemand.arrived]);
+  useEffect(() => {
+    if (hasTranscript) regainFocus('[data-viewer-audio-play]');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasTranscript]);
 
   return (
     <div
+      ref={rootRef}
       data-viewer-audio={attachment.id}
       data-viewer-audio-status={status}
       className="flex size-full flex-col items-center overflow-y-auto bg-media-backdrop text-on-media"
