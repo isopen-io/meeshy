@@ -300,6 +300,7 @@ struct ComposerDocumentSurface: View {
                 ComposerMentionStrip(
                     controller: mentionBox.controller,
                     currentText: text,
+                    backdrop: .plateau,
                     onSelect: { updated in text = updated }
                 )
                 .transition(.move(edge: .top).combined(with: .opacity))
