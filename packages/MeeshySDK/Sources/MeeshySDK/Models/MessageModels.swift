@@ -964,7 +964,8 @@ extension APIMessage {
                 conversationName: forwardedFromConversation?.title ?? forwardedFromConversation?.identifier,
                 attachmentType: fwdKindRaw,
                 attachmentThumbnailUrl: firstAtt?.thumbnailUrl,
-                conversationType: forwardedFromConversation?.type
+                conversationType: forwardedFromConversation?.type,
+                senderUserId: fwd.sender?.resolvedUserId
             )
         }()
         let resolvedUsername = sender?.username ?? sender?.user?.username
