@@ -9,6 +9,7 @@ const arContactCard = {
   'contactCard.failed': 'تعذّرت قراءة بطاقة جهة الاتصال',
   'contactCard.retry': 'إعادة المحاولة',
   'contactCard.download': 'تنزيل البطاقة',
+  'contactCard.downloadFailed': 'تعذّر تنزيل البطاقة',
   'contactCard.onMeeshy': 'على Meeshy',
   'contactCard.connect': 'تواصل',
   'contactCard.write': 'راسِل',
