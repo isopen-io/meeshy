@@ -8,7 +8,8 @@ import { ACCEPTED, gatedCallControl, refused } from './call-control-gate';
  * `call:frame-select` (#9214) — le cadre en direct d'un appel à DEUX.
  *
  * Chaque participant compose sa vue chez lui ; seul le CHOIX voyage : l'identifiant
- * du cadre (ou `null` pour le retirer) et les textes que l'émetteur partage. Seul
+ * du cadre (ou `null` pour le retirer) et les textes que l'émetteur partage. Le cadre
+ * se PROPOSE à l'autre, qui l'applique ou le refuse (`reply`, #9287) — jamais imposé. Seul
  * un participant CONNECTÉ à cet appel choisit, et seulement tant que l'appel réunit
  * exactement deux personnes : à trois, le cadre en direct n'existe pas encore. Le
  * choix part aux autres sockets de la room de l'appel — l'autre participant —
@@ -43,7 +44,7 @@ export function registerCallLiveFrameEvents(
       limit: SOCKET_RATE_LIMITS.CALL_FRAME_SELECT,
       schema: callLiveFrameSelectSchema,
       label: 'call-frame-select',
-      run: async (userId, { callId, frameId, texts }) => {
+      run: async (userId, { callId, frameId, texts, reply }) => {
         const sender = await deps.resolveSender(userId, callId);
         if (!sender) return refused('NOT_A_PARTICIPANT');
         if (sender.activeParticipants < DUO) return refused('CALL_NOT_ACTIVE');
@@ -54,6 +55,7 @@ export function registerCallLiveFrameEvents(
           userId: sender.userId,
           frameId,
           ...sharedTexts,
+          ...(reply ? { reply } : {}),
           at: now().toISOString(),
         });
         return ACCEPTED;

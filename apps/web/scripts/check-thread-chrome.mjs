@@ -74,6 +74,7 @@ import { fileURLToPath } from 'node:url';
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { contrastOf } from './lib/contrast.mjs';
+import { awaitCondition } from './lib/await-fact.mjs';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
 const DIST = join(APP, 'dist');
@@ -671,12 +672,57 @@ for (const scheme of ['light', 'dark']) {
 
     await page.locator('[data-composer] textarea').fill('Do you confirm the mockup for tomorrow?');
     await page.keyboard.press('Enter');
-    await page.waitForTimeout(500);
-    const lastLang = await page.evaluate(() => {
+    /**
+     * ON ATTEND LE FAIT, JAMAIS UN DÉLAI — et par la SSOT du dépôt (#9260,
+     * qui appelle `awaitCondition` de #7054).
+     *
+     * Ce site lisait la langue servie derrière un `waitForTimeout(500)`. Le fil
+     * est VIRTUALISÉ — `check-thread-virtualization.mjs` le mesure, `MAX_CELLS
+     * = 60` sur un corpus de 500 messages — donc la rangée qu'on vient
+     * d'envoyer n'est PAS dans le document à l'instant de l'envoi : elle y
+     * entre quand la fenêtre se recalcule et que la liste se recolle au bas.
+     * Avant ce moment, `rows[rows.length - 1]` est une rangée de FIXTURE, et
+     * les fixtures de rattrapage sont toutes en français
+     * (`src/lib/api/fixtures-catchup.ts`, `originalLanguage: 'fr'`). Le pari
+     * rendait donc un ROUGE qui accusait le produit quand c'était le runner
+     * qui était lent — le sens qui coûte le plus, puisque personne ne peut le
+     * reproduire.
+     *
+     * POURQUOI `awaitCondition` ET PAS UN `waitForFunction` ÉCRIT ICI. La loi
+     * existe déjà, avec ses trois raisons mesurées : elle ne LÈVE jamais (un
+     * throw dans ce gate devient `uncaughtException` → `process.exit(1)` et
+     * jette les témoins déjà verts, cf. `lib/browser.mjs`), son plafond est
+     * une constante nommée proportionnée à la charge, et elle sonde par
+     * intervalle NUMÉRIQUE plutôt que par `requestAnimationFrame`. Le gate des
+     * ÉTATS du fil l'appelle depuis #7054 et un cliquet l'y tient
+     * (`lib/no-fixed-delays.test.ts`) ; le gate du CHROME est resté hors de ce
+     * périmètre, et c'est tout ce qui lui manquait.
+     *
+     * LA MESURE NE S'AFFAIBLIT PAS. `awaitCondition` rend un booléen : à
+     * l'expiration, on relit la langue RÉELLEMENT servie et on échoue AVEC
+     * elle dans le libellé — une vraie dérive du Prisme reste rouge, avec
+     * exactement le message d'avant. Attendre son fait n'est pas fermer les
+     * yeux ; c'est refuser de trancher avant que le fait ait eu lieu.
+     *
+     * CE SITE N'EST PAS LES VINGT-DEUX AUTRES `waitForTimeout` DE CE FICHIER,
+     * et il faut le dire parce que la plupart sont justes : attendre une
+     * TRANSITION (une opacité de chrome qui se stabilise après un geste) n'a
+     * AUCUN fait à sonder — le délai EST l'instrument. Attendre un FAIT (une
+     * rangée montée, une valeur servie) a une condition. Ne convertir que les
+     * seconds, et seulement après avoir mesuré lequel c'est.
+     */
+    const servedLastLang = () =>
+      page.evaluate(() => {
+        const rows = document.querySelectorAll('[data-message]');
+        const last = rows[rows.length - 1];
+        return last?.querySelector('[lang]')?.getAttribute('lang') ?? null;
+      });
+    const servedInEnglish = await awaitCondition(page, () => {
       const rows = document.querySelectorAll('[data-message]');
       const last = rows[rows.length - 1];
-      return last?.querySelector('[lang]')?.getAttribute('lang') ?? null;
+      return last?.querySelector('[lang]')?.getAttribute('lang') === 'en';
     });
+    const lastLang = servedInEnglish ? 'en' : await servedLastLang();
     expect(lastLang === 'en', `${scheme} · la DERNIÈRE bulle du fil porte lang="en" (« ${lastLang} »)`);
 
     await context.close();
@@ -856,10 +902,26 @@ for (const scheme of ['light', 'dark']) {
    * Mesuré à 390 px et à 320 px — la largeur à laquelle l'ancienne forme
    * « cinq sur tout le côté droit » débordait (#7984).
    *
+   * LA BARRE TIENT DANS SA BOÎTE (#7992) — à 320 px, la pastille de langue
+   * allait de 252 à 324 px (`scrollWidth` 324 pour 320). Huit cibles de 44 px
+   * ne tiennent pas dans 296 px : comme `ComposerToolbarStrip` (iOS,
+   * `ViewThatFits`), seule la bande menante défile. On mesure donc la barre
+   * (jamais plus large que sa boîte), l'angle droit (entier dans la barre), et
+   * chaque outil de la bande menante une fois amené à l'écran : ENTIER dans la
+   * bande, et c'est lui qui reçoit le doigt en son centre.
+   *
    * Puis EN SÉRIE : deux taps sur le même emoji font DEUX bulles (plus de
    * dédoublonnage par contenu), et un double clic sur « Envoyer » n'en fait
    * qu'UNE (le brouillon est vidé à l'instant de l'envoi). Fixtures seules :
    * aucun envoi ne quitte le navigateur.
+   *
+   * LA LANGUE SE LIT SANS GESTE (#9251) — la pastille ferme la bande menante
+   * sans y défiler : entière dans la barre aux deux largeurs ; et une bande qui
+   * défile le dit par un fondu à son bord de fin.
+   *
+   * Enfin (#7983) : l'appui long — et Maj+F10 — ouvre la palette sans envoyer
+   * l'emoji pressé, l'emoji choisi y part directement, et au rechargement le
+   * cadre est classé par l'usage de l'appareil.
    */
   for (const width of [390, 320]) {
     const context = await browser.newContext({
@@ -895,7 +957,48 @@ for (const scheme of ['light', 'dark']) {
           const r = b.getBoundingClientRect();
           return { w: Math.round(r.width), h: Math.round(r.height), top: Math.round(r.top) };
         });
+        const leading = toolbar?.querySelector('[data-composer-toolbar-leading]') ?? null;
+        const pill = toolbar?.querySelector('[data-composer-language]') ?? null;
+        const pillPainted = pill === null ? null : [pill, ...pill.querySelectorAll('*')].map((n) => n.getBoundingClientRect()).filter((r) => r.width > 0).reduce(
+          (u, r) => ({ left: Math.min(u.left, r.left), right: Math.max(u.right, r.right), top: Math.min(u.top, r.top), bottom: Math.max(u.bottom, r.bottom) }),
+          { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity },
+        );
+        const pillHit = pill === null ? null : (() => {
+          const r = pill.getBoundingClientRect();
+          return pill.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+        })();
+        const barRect = toolbar?.getBoundingClientRect() ?? null;
+        const pillWhole = pillPainted !== null && barRect !== null && pillHit === true &&
+          pillPainted.left >= Math.max(barRect.left, 0) - 0.5 && pillPainted.right <= Math.min(barRect.right, window.innerWidth) + 0.5;
+        const pillScrolls = pill !== null && leading !== null && leading.contains(pill);
+        const bandScrolls = leading !== null && leading.scrollWidth > leading.clientWidth + 1;
+        const bandSignals = leading !== null && leading.hasAttribute('data-scrolls-further') && getComputedStyle(leading).maskImage.includes('gradient');
+        const controls = [...(toolbar?.querySelectorAll('button, label') ?? [])].filter((c) => c.getBoundingClientRect().width > 0);
+        const nameOf = (c) => c.getAttribute('aria-label') ?? c.querySelector('[aria-label]')?.getAttribute('aria-label') ?? c.tagName;
+        const barBox = toolbar?.getBoundingClientRect() ?? null;
+        const escaping = barBox === null ? [] : controls.filter((c) => {
+          const r = c.getBoundingClientRect();
+          if (leading !== null && leading.contains(c)) return false;
+          return r.left < barBox.left - 0.5 || r.right > barBox.right + 0.5;
+        }).map(nameOf);
+        const unreachable = leading === null ? [] : controls.filter((c) => leading.contains(c)).filter((c) => {
+          c.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+          const r = c.getBoundingClientRect();
+          const host = leading.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return r.left < host.left - 0.5 || r.right > host.right + 0.5 || !c.contains(hit);
+        }).map(nameOf);
+        if (leading !== null) leading.scrollLeft = 0;
+        const small = controls
+          .map((c) => ({ c, r: c.getBoundingClientRect() }))
+          .filter(({ r }) => r.width < 44 || r.height < 44)
+          .map(({ c, r }) => `${nameOf(c)} ${Math.round(r.width)}×${Math.round(r.height)}`);
         return {
+          barOverflow: toolbar === null ? null : `${toolbar.scrollWidth}/${toolbar.clientWidth}`,
+          barOverflows: toolbar !== null && toolbar.scrollWidth > toolbar.clientWidth,
+          escaping,
+          unreachable,
+          small,
           frame: box(frame),
           toolbar: box(toolbar),
           field: box(field),
@@ -903,6 +1006,12 @@ for (const scheme of ['light', 'dark']) {
           toolbarScrolls: toolbar === null ? false : toolbar.scrollWidth > toolbar.clientWidth + 1,
           doors: toolbar?.querySelector('[data-composer-sticker]') !== null && toolbar?.querySelector('[data-composer-camera]') !== null,
           pageScrolls: document.documentElement.scrollWidth > window.innerWidth + 1,
+          pill: pillPainted === null ? null : `${Math.round(pillPainted.left)}→${Math.round(pillPainted.right)}`,
+          pillWhole,
+          pillScrolls,
+          bandScrolls,
+          bandSignals,
+          band: leading === null ? null : `${leading.scrollWidth}/${leading.clientWidth}`,
           buttons,
         };
       });
@@ -923,7 +1032,22 @@ for (const scheme of ['light', 'dark']) {
         );
       }
       expect(m.doors, `${tag} · la barre porte le sticker et la caméra (#9082)`);
+      expect(!m.barOverflows, `${tag} · la barre d'outils ne déborde pas de sa boîte (#7992 — scrollWidth/clientWidth ${m.barOverflow})`);
+      expect(m.escaping.length === 0, `${tag} · aucun contrôle de l'angle droit ne sort de la barre (${m.escaping.join(', ') || 'tous dedans'})`);
+      expect(
+        m.unreachable.length === 0,
+        `${tag} · chaque outil de la bande menante, amené à l'écran, y tient ENTIER et reçoit le doigt (${m.unreachable.join(', ') || 'tous'})`,
+      );
+      expect(m.small.length === 0, `${tag} · chaque contrôle de la barre tient la cible 44×44 (${m.small.join(', ') || 'tous'})`);
       expect(!m.pageScrolls, `${tag} · aucun défilement horizontal de la page`);
+      expect(
+        m.pillWhole && !m.pillScrolls,
+        `${tag} · la pastille de langue se lit ENTIÈRE sans geste, hors de la bande qui défile (#9251 — capsule ${m.pill}, barre ${m.toolbar === null ? '?' : `${Math.round(m.toolbar.left)}→${Math.round(m.toolbar.right)}`})`,
+      );
+      expect(
+        !m.bandScrolls || m.bandSignals,
+        `${tag} · une bande menante qui défile le DIT par un fondu à son bord de fin (#9251 — ${m.band})`,
+      );
       const tiny = m.buttons.filter((b) => b.w < 24 || b.h < 24);
       expect(tiny.length === 0, `${tag} · chaque emoji tient au moins la cible AA de 24 px (${JSON.stringify(m.buttons)})`);
       await page.screenshot({ path: join(CAPTURES, `thread-composer-quick-emoji.${width}.${state}.${scheme}.png`) });
@@ -944,6 +1068,34 @@ for (const scheme of ['light', 'dark']) {
       await page.waitForTimeout(600);
       const afterDouble = await bubbles();
       expect(afterDouble === afterSeries + 1, `${scheme} · double clic sur « Envoyer » ⇒ UNE bulle (${afterSeries} → ${afterDouble})`);
+
+      const picker = '[data-quick-emoji-picker] dialog[open]';
+      const pressed = page.locator('[data-composer-quick-emoji] button').nth(2);
+      await pressed.hover();
+      await page.mouse.down();
+      await page.waitForTimeout(650);
+      await page.mouse.up();
+      const pickerOpened = await page.waitForSelector(picker, { timeout: 3000 }).then(() => true, () => false);
+      expect(pickerOpened, `${scheme} · appui long sur un emoji rapide ⇒ la palette des emojis (#7983)`);
+      expect((await bubbles()) === afterDouble, `${scheme} · l’appui long n’envoie pas l’emoji pressé`);
+      if (pickerOpened) {
+        await page.locator(`${picker} button[aria-label="🎉"]`).click();
+        await page.waitForFunction((n) => document.querySelectorAll('[data-message]').length >= n + 1, afterDouble, { timeout: 3000 }).catch(() => {});
+        expect((await bubbles()) === afterDouble + 1, `${scheme} · l’emoji choisi dans la palette part directement`);
+        expect((await page.locator(picker).count()) === 0, `${scheme} · la palette se referme après le choix`);
+      }
+
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForSelector('[data-composer-quick-emoji]');
+      const ranked = await page.locator('[data-composer-quick-emoji] button').allTextContents();
+      expect(ranked[0] === '😂' && ranked[1] === '🎉', `${scheme} · au rechargement, le cadre est classé par l’usage de cet appareil (${ranked.join(' ')})`);
+
+      const keyboardTarget = page.locator('[data-composer-quick-emoji] button').first();
+      await keyboardTarget.focus();
+      await page.keyboard.press('Shift+F10');
+      const byKeyboard = await page.waitForSelector(picker, { timeout: 3000 }).then(() => true, () => false);
+      expect(byKeyboard, `${scheme} · Maj+F10 sur un emoji rapide ouvre la même palette`);
+      await page.keyboard.press('Escape');
     }
 
     await context.close();

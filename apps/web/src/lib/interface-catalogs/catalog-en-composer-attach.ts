@@ -84,6 +84,8 @@ const enComposerAttach = {
   'composer.sticker.instants.field.time': 'Time',
   'composer.quickEmoji.label': 'Send directly',
   'composer.quickEmoji.group': 'Quick emojis',
+  'composer.quickEmoji.more': 'Choose another emoji',
+  'composer.quickEmoji.moreHint': 'Long press or Shift+F10: choose another emoji',
   'composer.effects.panel': 'Message effects',
   'composer.effects.entrance': 'Entrance animation',
   'composer.effects.permanent': 'Permanent effect',

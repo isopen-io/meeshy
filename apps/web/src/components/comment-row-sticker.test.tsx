@@ -70,6 +70,7 @@ describe('le sticker d’un commentaire', () => {
     const art = host.querySelector('[data-comment-sticker] img');
     expect(art?.getAttribute('src')).toContain('abc.png');
     expect(art?.getAttribute('alt')).toBe('Sticker');
+    expect(art?.getAttribute('width')).toBe('224');
   });
 
   test('l’aperçu embarqué ne porte que metadata.sticker : il se peint quand même', async () => {

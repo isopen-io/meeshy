@@ -10,6 +10,7 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
 import { createStudioDraftStore, type StudioDraftSnapshot, type StudioPageSnapshot, type StudioDraftStore } from '@/lib/stories/studio-draft-store';
 import StoryComposeScreen, { type StoryStudioDeps } from '@/routes/story-compose';
+import type { StudioEdit } from '@/routes/use-studio-edit';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from './happy-dom-environment';
 
@@ -106,6 +107,19 @@ export function mount(deps: StoryStudioDeps, initialKind?: PublicationKind): HTM
   return container;
 }
 
+/** LE STUDIO ROUVERT SUR UNE PUBLICATION (#9317) — le même banc, monté en
+ * édition : la route (`publication-edit.tsx`) n'y ajoute que l'hydratation. */
+export function mountEdit(deps: StoryStudioDeps, edit: StudioEdit): HTMLDivElement {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  mounted.push({ root, container });
+  act(() => {
+    root.render(<StoryComposeScreen deps={deps} initialKind={edit.origin.kind} edit={edit} />);
+  });
+  return container;
+}
+
 export function unmountAll(): void {
   act(() => {
     mounted.splice(0).forEach(({ root, container }) => {
@@ -192,6 +206,8 @@ export const removeButton = (host: ParentNode, label: string) => host.querySelec
 export type Harness = {
   readonly deps: StoryStudioDeps;
   readonly posts: Array<Record<string, unknown>>;
+  /** Les `PUT /posts/:id` d'un enregistrement (#9317) — le chemin et le corps. */
+  readonly puts: Array<{ readonly path: string; readonly body: Record<string, unknown> }>;
   readonly uploadCreations: () => number;
   /** Les montées ABANDONNÉES en vol — le signal de l'appelant a coupé le
    * transport (`uploadsHold`). */
@@ -212,13 +228,24 @@ export function harness(options: {
    * — la requête est ENREGISTRÉE (`posts`) dès son émission. */
   readonly postsHold?: () => boolean;
   readonly drafts?: StudioDraftStore;
+  /** Le statut des `PUT /posts/:id` (#9317) — 200 par défaut. */
+  readonly putsStatus?: () => number;
 }): Harness {
   const posts: Array<Record<string, unknown>> = [];
+  const puts: Array<{ readonly path: string; readonly body: Record<string, unknown> }> = [];
   const heldPosts: Array<() => void> = [];
   let creations = 0;
   let aborts = 0;
   const postsFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (init?.method === 'PUT' && url.includes(`${postsEndpoints.root}/`)) {
+      const path = url.slice(url.indexOf(postsEndpoints.root));
+      puts.push({ path, body: JSON.parse(String(init.body)) as Record<string, unknown> });
+      const status = options.putsStatus?.() ?? 200;
+      const id = decodeURIComponent(path.slice(postsEndpoints.root.length + 1));
+      const body = status === 200 ? { success: true, data: { id, type: 'POST', createdAt: '2026-10-01T10:00:00.000Z' } } : { success: false, error: 'refus', code: 'INVALID_POST_UPDATE' };
+      return new Response(JSON.stringify(body), { status });
+    }
     if (!url.endsWith(postsEndpoints.root) || init?.method !== 'POST') throw new Error(`appel inattendu : ${init?.method} ${url}`);
     posts.push(JSON.parse(String(init.body)) as Record<string, unknown>);
     if (options.postsHold?.() === true) await new Promise<void>((resolve) => heldPosts.push(resolve));
@@ -247,6 +274,7 @@ export function harness(options: {
   }) as typeof fetch;
   return {
     posts,
+    puts,
     uploadCreations: () => creations,
     uploadAborts: () => aborts,
     releasePost: () => heldPosts.shift()?.(),

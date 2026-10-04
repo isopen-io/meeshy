@@ -86,6 +86,10 @@ struct ComposerSceneCameraBar: View {
     var onZoomStep: (Bool) -> Void = { _ in }
     var onFlashIntensity: (Double) -> Void = { _ in }
     var onShutterTouched: () -> Void = {}
+    /// Le sélecteur de filtres et de cadres en direct (#9329) ; `nil` ⇒ pas de
+    /// bouton. Le glyphe passe au jaune quand un look est choisi, comme le flash.
+    var onToggleLooks: (() -> Void)?
+    var lookActive = false
 
     /// L'instant du poser de doigt. `nil` ⇒ aucun doigt. C'est lui qui fait la
     /// différence entre une photo et une prise, et il ne peut pas vivre
@@ -143,6 +147,12 @@ struct ComposerSceneCameraBar: View {
                              tint: .white,
                              action: onToggleSize)
             }
+            if let onToggleLooks {
+                glassControl(symbol: "camera.filters",
+                             label: ComposerLiveLookCopy.toggle,
+                             tint: lookActive ? .yellow : .white,
+                             action: onToggleLooks)
+            }
             glassControl(symbol: "arrow.triangle.2.circlepath.camera",
                          label: ComposerSceneCameraCopy.flipLabel,
                          tint: .white,
@@ -173,8 +183,8 @@ struct ComposerSceneCameraBar: View {
                     .transition(.move(edge: .leading).combined(with: .opacity))
             }
         }
-        .adaptiveGlass(in: Capsule())
         .clipShape(Capsule())
+        .adaptiveLiquidGlass(in: Capsule(), interactive: true)
         .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.82),
                    value: ComposerFlashIntensity.showsSlider(flash: flashMode))
     }
@@ -199,7 +209,7 @@ struct ComposerSceneCameraBar: View {
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                 .foregroundStyle(tint)
                 .frame(width: 40, height: 40)
-                .adaptiveGlass(in: Circle())
+                .adaptiveLiquidGlass(in: Circle(), interactive: true)
                 .contentShape(Circle().inset(by: -2))
         }
         .buttonStyle(.plain)
@@ -248,7 +258,7 @@ struct ComposerSceneCameraBar: View {
                 }
                 .padding(.horizontal, MeeshySpacing.sm)
                 .frame(height: 24)
-                .adaptiveGlass(in: Capsule())
+                .adaptiveLiquidGlass(in: Capsule())
                 // VoiceOver lit « 0:12 » comme une heure : la minuterie se DIT
                 // en mots (#9125 — elle remplace celle de l'ancienne vue).
                 .accessibilityElement(children: .ignore)
@@ -340,7 +350,7 @@ struct ComposerSceneCameraBar: View {
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .frame(height: 44)
-        .adaptiveGlass(in: Capsule())
+        .adaptiveLiquidGlass(in: Capsule())
         .overlay(
             Capsule().strokeBorder(.white.opacity(0.3 + 0.5 * progres), lineWidth: MeeshyBorder.strong)
         )
@@ -538,7 +548,7 @@ struct ComposerCaptureZoomChip: View {
         .foregroundStyle(ComposerCaptureZoom.showsBadge(factor) ? Color.yellow : .white)
         .padding(.horizontal, MeeshySpacing.smPlus)
         .frame(height: 32)
-        .adaptiveGlass(in: Capsule())
+        .adaptiveLiquidGlass(in: Capsule())
         .accessibilityElement()
         .accessibilityLabel(ComposerSceneCameraCopy.zoomLabel)
         .accessibilityValue(ComposerSceneCameraCopy.zoomValue(factor))

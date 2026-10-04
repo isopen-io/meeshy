@@ -413,6 +413,8 @@ function seekOnlyClock(): { readonly clock: SceneClockHandle; readonly seek: (t:
     seek,
     now: () => 0,
     isDriving: () => false,
+    setStalled: () => undefined,
+    subscribeStall: () => () => undefined,
   };
   return { clock, seek };
 }

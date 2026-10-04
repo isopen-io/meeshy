@@ -2,6 +2,7 @@ import { currentAdminLanguage, loadAdminInterfaceCatalog } from '@/lib/i18n-admi
 import { loadInterfaceCatalog, suspendForInterfaceCatalog, translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { loadInviteCatalog } from '@/lib/i18n-invite-catalog';
+import { loadLinkFamiliesCatalog } from '@/lib/i18n-link-families-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
 import { loadOnboardingCatalog } from '@/lib/i18n-onboarding-catalog';
 import { createRouter } from '@/lib/router';
@@ -77,6 +78,8 @@ const adminCommunitiesScreen = () =>
   Promise.all([import('@/routes/admin-communities'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminCommunityScreen = () =>
   Promise.all([import('@/routes/admin-community'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
+const withLinkFamiliesCatalog = <Screen,>(screen: Promise<Screen>) =>
+  Promise.all([screen, loadLinkFamiliesCatalog(currentInterfaceLanguage())]).then(([loaded]) => loaded);
 const adminShareLinksScreen = () =>
   Promise.all([import('@/routes/admin-share-links'), loadAdminInterfaceCatalog(currentAdminLanguage())]).then(([screen]) => screen);
 const adminShareLinkScreen = () =>
@@ -126,6 +129,8 @@ const chatJoinScreen = () =>
   Promise.all([import('@/routes/chat-join'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const shareLinkScreen = () =>
   Promise.all([import('@/routes/share-link'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const shareLinkArrivalsScreen = () =>
+  Promise.all([import('@/routes/share-link-arrivals'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
 /* LA CLOCHE (#8727) — son chunk ET le catalogue de ce qu'une notification dit
    (pied de contexte, palier nommé, gestes), en parallèle : la bannière in-app
@@ -219,6 +224,9 @@ export const ROUTES = {
      `/conversations/new`, et SANS collision avec le détail, qui est au
      SINGULIER (`/post/$post`). */
   postCompose: { pattern: '/posts/new', screen: () => import('@/routes/publication-compose').then((m) => ({ default: m.PostComposeRoute })) },
+  /* MODIFIER UNE PUBLICATION (#9317) — le studio rouvert sur un post, un réel
+     ou une story de l'auteur : on y modifie, ajoute et supprime des scènes. */
+  postEdit: { pattern: '/posts/$post/edit', screen: () => import('@/routes/publication-edit') },
   /* LE LECTEUR PLEIN ÉCRAN (#5817) — nomenclature legacy `/story/:postId`
      (D-5, `parity.md:310`). Une story NOMMÉE ouvre directement CETTE
      adresse (intention `targetingStory`, `StoryViewerRequestOrigin.swift`) ;
@@ -359,7 +367,7 @@ export const ROUTES = {
      (`servirProfilPublic`, insensible à la casse sur le pseudo). */
   userProfile: { pattern: '/u/$username', screen: () => import('@/routes/user-profile') },
   hashtag: { pattern: '/hashtag/$tag', screen: () => import('@/routes/hashtag') },
-  links: { pattern: '/links', screen: () => import('@/routes/links') },
+  links: { pattern: '/links', screen: () => withLinkFamiliesCatalog(import('@/routes/links')) },
   /* LES LIENS DE PARTAGE (#6361, D-63) — miroir `Route.shareLinks`, puis
      `CreateShareLinkView` et `ShareLinkDetailView` (`Router.swift`,
      `ShareLinksView.swift`). Adresses NEUVES : le legacy sert `/links` d'un
@@ -367,7 +375,19 @@ export const ROUTES = {
      correspond, et `new` serait sinon lu comme le linkId d'un lien. */
   shareLinks: { pattern: '/links/share', screen: () => import('@/routes/share-links') },
   shareLinkNew: { pattern: '/links/share/new', screen: () => import('@/routes/share-link-new') },
+  shareLinkArrivals: { pattern: '/links/share/$link/arrivals', screen: shareLinkArrivalsScreen },
   shareLink: { pattern: '/links/share/$link', screen: shareLinkScreen },
+  /* LES TROIS AUTRES FAMILLES (#6408, #6409, #6410) — miroir `Route.trackingLinks`,
+     `Route.affiliate` et `Route.communityLinks` (`LinksHubView.swift`). Même
+     règle d'ordre : `new` avant le paramètre. Un lien de communauté s'ouvre
+     depuis SES communautés, jamais par une adresse qui en lirait une autre. */
+  myTrackingLinks: { pattern: '/links/tracking', screen: () => withLinkFamiliesCatalog(import('@/routes/my-tracking-links')) },
+  myTrackingLinkNew: { pattern: '/links/tracking/new', screen: () => withLinkFamiliesCatalog(import('@/routes/my-tracking-link-new')) },
+  myTrackingLink: { pattern: '/links/tracking/$token', screen: () => withLinkFamiliesCatalog(import('@/routes/my-tracking-link')) },
+  affiliateLinks: { pattern: '/links/affiliate', screen: () => withLinkFamiliesCatalog(import('@/routes/affiliate-links')) },
+  affiliateLinkNew: { pattern: '/links/affiliate/new', screen: () => withLinkFamiliesCatalog(import('@/routes/affiliate-link-new')) },
+  communityLinks: { pattern: '/links/communities', screen: () => withLinkFamiliesCatalog(import('@/routes/community-links')) },
+  communityLink: { pattern: '/links/communities/$community', screen: () => withLinkFamiliesCatalog(import('@/routes/community-link')) },
   notifications: { pattern: '/notifications', screen: notificationsScreen },
   calls: { pattern: '/calls', screen: () => import('@/routes/calls') },
   /* LE PAVÉ ET LA FICHE D'UN APPEL (lot 3 — #6454, #6383) — le pavé est

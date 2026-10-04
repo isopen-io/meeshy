@@ -300,9 +300,12 @@ struct ComposerDescriptionLayer: View {
             // confondait : « on cherche encore » (on ne peint rien) et
             // « personne ne correspond » (la bande le DIT).
             if mentionBox.controller.showsSuggestions {
+                // La SCÈNE est derrière, avec le schéma que l'hôte épingle :
+                // la bande en tire son encre et sa capsule (#4122).
                 ComposerMentionStrip(
                     controller: mentionBox.controller,
                     currentText: text,
+                    backdrop: .scene(colorScheme),
                     onSelect: { updated in text = updated }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))

@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { sessionStore } from '@/lib/api/session';
+import type { GallerySaveInput, GallerySaveOutcome, GallerySaver } from '@/lib/gallery/gallery-saver';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { FileDeliveryHost } from '@/lib/media/file-delivery-host';
 import type { StoryPlaybackStory } from '@/lib/stories/playback';
@@ -78,7 +79,7 @@ function anchorHost(delivered: string[]): FileDeliveryHost {
   };
 }
 
-function mountProbe(host?: FileDeliveryHost): Probe {
+function mountProbe(host?: FileDeliveryHost, gallerySaver: GallerySaver | null = null): Probe {
   const pauses: string[] = [];
   const resumes: string[] = [];
   const announced: string[] = [];
@@ -90,7 +91,7 @@ function mountProbe(host?: FileDeliveryHost): Probe {
   const announce = (message: string) => announced.push(message);
 
   function Harness({ story, online }: { readonly story: StoryPlaybackStory | undefined; readonly online: boolean }) {
-    seen.push(useStoryOwnerRail({ story, online, pause, resume, announce, language: 'fr', deliveryHost }));
+    seen.push(useStoryOwnerRail({ story, online, pause, resume, announce, language: 'fr', deliveryHost, gallerySaver }));
     return null;
   }
 
@@ -297,5 +298,55 @@ describe('useStoryOwnerRail — « Enregistrer » : un job, un anneau, une issue
        jet rendait « Enregistrer », un bouton que le store refusait. */
     probe.render(storyOf('st-a'));
     expect(probe.rail().saving).not.toBeNull();
+  });
+});
+
+/** La galerie de la coque Android (`@capacitor-community/media`), dont chaque écriture est COMPTÉE. */
+function galleryOf(outcome: GallerySaveOutcome): GallerySaver & { readonly saved: GallerySaveInput[] } {
+  const saved: GallerySaveInput[] = [];
+  return {
+    saved,
+    available: true,
+    save: async (input) => {
+      saved.push(input);
+      return outcome;
+    },
+  };
+}
+
+describe('useStoryOwnerRail — « Enregistrer » dans la coque Android range la story dans la GALERIE (#9246)', () => {
+  test('la story part dans l’album « Meeshy », sans feuille de partage, et l’issue est dite', async () => {
+    serveImage();
+    const gallery = galleryOf('saved');
+    probe = mountProbe(undefined, gallery);
+    probe.render(storyOf('st-a'));
+    act(() => probe?.rail().handlers.save?.());
+    await settle();
+    expect(gallery.saved.map(({ fileName, mimeType }) => ({ fileName, mimeType }))).toEqual([
+      { fileName: 'meeshy-m-st-a.jpg', mimeType: 'image/jpeg' },
+    ]);
+    expect(probe.delivered).toEqual([]);
+    expect(probe.announced).toEqual(['Story enregistrée']);
+    expect(probe.rail().saving).toBeNull();
+  });
+
+  test('une écriture refusée par la galerie annonce l’échec, sans rouvrir une feuille de partage', async () => {
+    serveImage();
+    probe = mountProbe(undefined, galleryOf('failed'));
+    probe.render(storyOf('st-a'));
+    act(() => probe?.rail().handlers.save?.());
+    await settle();
+    expect(probe.delivered).toEqual([]);
+    expect(probe.announced).toEqual(['Échec de l’enregistrement']);
+  });
+
+  test('une galerie qui ne sait pas écrire ce fichier rend la main à la livraison de fichier', async () => {
+    serveImage();
+    probe = mountProbe(undefined, galleryOf('unavailable'));
+    probe.render(storyOf('st-a'));
+    act(() => probe?.rail().handlers.save?.());
+    await settle();
+    expect(probe.delivered).toEqual(['meeshy-m-st-a.jpg']);
+    expect(probe.announced).toEqual(['Story enregistrée']);
   });
 });

@@ -9,6 +9,7 @@ const itContactCard = {
   'contactCard.failed': 'Impossibile leggere il biglietto da visita',
   'contactCard.retry': 'Riprova',
   'contactCard.download': 'Scarica il biglietto',
+  'contactCard.downloadFailed': 'Non è stato possibile scaricare il biglietto',
   'contactCard.onMeeshy': 'Su Meeshy',
   'contactCard.connect': 'Connettiti',
   'contactCard.write': 'Scrivi',

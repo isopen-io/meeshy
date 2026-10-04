@@ -117,9 +117,17 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
         // qui ne change rien à ce qu'elle protège.
         guard let enveloppe = code.range(of: "withSceneCameraViewfinder(")
         else { return XCTFail("l'enveloppe du viseur a changé de nom") }
-        XCTAssertTrue(code[enveloppe.upperBound...].hasPrefix("backgroundMenuPresented(composerStack)")
-                      || code[enveloppe.upperBound...].hasPrefix("composerStack)"),
+        // La pile est un NŒUD depuis #8387 (`composerStackNode` monte
+        // `ComposerHostStack`, dont le `body` est `composerStack`) : la
+        // découpe de type ne change rien à ce que le viseur enveloppe.
+        XCTAssertTrue(code[enveloppe.upperBound...].hasPrefix("backgroundMenuPresented(composerStackNode)")
+                      || code[enveloppe.upperBound...].hasPrefix("composerStackNode)"),
                       "posé APRÈS le socle, le viseur ne l'aurait jamais couvert")
+        let couches = compact(try source("MeeshyComposerHost+Layers.swift"))
+        XCTAssertTrue(couches.contains("varcomposerStackNode:someView{ComposerHostStack(host:self"),
+                      "le nœud de la pile doit monter `ComposerHostStack`")
+        XCTAssertTrue(couches.contains("varbody:someView{host.composerStack}"),
+                      "`ComposerHostStack` doit rendre la pile ENTIÈRE, socle compris")
         guard let début = surfaces.range(of: "varcomposerStack:someView{") else {
             return XCTFail("la pile a changé de nom ou de fichier")
         }
@@ -264,7 +272,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
             try String(contentsOf: url, encoding: .utf8)))
         XCTAssertTrue(code.contains("collectSceneSegment(url)"),
                       "une vidéo doit rejoindre les segments, pas la scène")
-        XCTAssertTrue(code.contains("poseSceneCapture(.photo(image,data:sceneCamera.capturedPhotoData))"),
+        XCTAssertTrue(code.contains("sceneCapture.lookedPhoto(image,data:sceneCamera.capturedPhotoData){poseSceneCapture($0)}"),
                       "une photo se pose tout de suite — AVEC ses octets d'origine, qui portent l'EXIF")
     }
 

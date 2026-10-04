@@ -64,7 +64,19 @@ nonisolated enum CallLiveFrameRule {
         design.look.ornaments.contains { $0.motion != .still } || !design.look.scene.isEmpty
     }
 
-    /// L'entrée « Cadre » n'existe qu'en vidéo, à deux.
+    /// #9287 — l'interrupteur « Cadre » de la capture : toucher le cadre déjà gardé le retire,
+    /// toucher un autre cadre le garde à sa place.
+    static func toggledHold(current: String?, tapped: String) -> String? {
+        current == tapped ? nil : tapped
+    }
+
+    /// L'interrupteur se montre sur un cadre du catalogue servi en direct, en duo vidéo.
+    static func mayHold(frameId: String, isOffered: Bool, in catalogue: [CallFrameDesign] = CallFrameCatalogue.all) -> Bool {
+        guard isOffered, let design = catalogue.first(where: { $0.id == frameId }) else { return false }
+        return isEligible(design)
+    }
+
+    /// Le cadre en direct n'existe qu'en vidéo, à deux.
     static func mayOffer(participants: Int, showsVideo: Bool) -> Bool {
         showsVideo && participants == people
     }

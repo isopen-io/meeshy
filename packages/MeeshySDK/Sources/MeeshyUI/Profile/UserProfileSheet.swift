@@ -159,7 +159,19 @@ public struct UserProfileSheet: View {
         .onReceive(FriendshipCache.shared.objectWillChange) { _ in
             resolveConnectionStatus()
         }
+        .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
+            guard let repainted = Self.repaintedProfile(internalFullUser, with: event) else { return }
+            internalFullUser = repainted
+        }
         .adaptiveWideSheet()
+    }
+
+    /// #9307 — la fiche OUVERTE d'un pair suit son renommage et sa nouvelle
+    /// photo sans relecture, par la loi du SDK ; `nil` tant que la fiche n'est
+    /// pas chargée ou que l'annonce vise quelqu'un d'autre. Le cache `profiles`
+    /// suit par `ConversationSyncEngine`.
+    static func repaintedProfile(_ loaded: MeeshyUser?, with event: UserUpdatedEvent) -> MeeshyUser? {
+        loaded.flatMap(event.repainted)
     }
 
     /// Layout shown when the current user blocked the target — no tabs, just

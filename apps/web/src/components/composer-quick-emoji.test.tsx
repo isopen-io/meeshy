@@ -41,6 +41,7 @@ describe('Composer — le cadre des emojis rapides', () => {
       root.unmount();
     });
     container.remove();
+    localStorage.clear();
   });
 
   const mount = (onSend: (payload: { text: string }) => void = () => {}) => {
@@ -211,6 +212,7 @@ describe('Composer — le retour après envoi', () => {
       dispose: () => {
         act(() => root.unmount());
         container.remove();
+        localStorage.clear();
       },
     };
   };

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 
 import { currentCredential } from '@/lib/api/client';
+import { recordEmojiUsage, topEmojis } from '@/lib/emoji-usage';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { appQueryClient } from '@/lib/api/query-client';
 import type { Attachment } from '@/lib/api/types';
@@ -113,6 +114,8 @@ function SaveMenu({ page, language, announce }: { readonly page: MediaViewerPage
   );
 }
 
+const rankedReactions = (): readonly string[] => topEmojis({ count: QUICK_REACTIONS.length, defaults: QUICK_REACTIONS });
+
 function ActionRail({
   page,
   language,
@@ -128,12 +131,14 @@ function ActionRail({
 }) {
   const [open, setOpen] = useState(false);
   const [mine, setMine] = useState<readonly string[]>(page.attachment.currentUserReactions ?? []);
+  const [reactions, setReactions] = useState(rankedReactions);
   const [composing, setComposing] = useState(false);
   const reactButton = useRef<HTMLButtonElement | null>(null);
   const { offers } = page;
 
   const react = (emoji: string): void => {
     setOpen(false);
+    recordEmojiUsage(emoji);
     /* Le choix retire la traînée — et le bouton choisi avec elle. Le focus
        revient à « Réagir », jamais au `<body>` : Échap fermerait sinon… rien. */
     reactButton.current?.focus();
@@ -151,6 +156,11 @@ function ActionRail({
       setMine(before);
       announce(outcome === 'offline' ? 'media.viewer.offline' : outcome === 'limit' ? 'media.viewer.react_limit' : 'media.viewer.react_failed');
     });
+  };
+
+  const toggleTray = (): void => {
+    if (!open) setReactions(rankedReactions());
+    setOpen(!open);
   };
 
   const compose = (): void => {
@@ -179,7 +189,7 @@ function ActionRail({
       label: translate(language, 'media.viewer.react'),
       glyph: <Glyph name="smiley" size={GLYPH_SIZE.lg} />,
       pressed: open,
-      onPress: offers.react ? () => setOpen((o) => !o) : undefined,
+      onPress: offers.react ? toggleTray : undefined,
       buttonRef: reactButton,
     },
     {
@@ -209,7 +219,7 @@ function ActionRail({
               node: (
                 <ViewerReactionTray
                   label={translate(language, 'media.viewer.react')}
-                  reactions={QUICK_REACTIONS}
+                  reactions={reactions}
                   mine={mine}
                   labelOf={(emoji) => translate(language, 'media.viewer.react_with', { emoji })}
                   onPick={react}

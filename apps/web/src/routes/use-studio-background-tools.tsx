@@ -22,9 +22,10 @@ import { useBackDismiss } from '@/lib/view/use-back-dismiss';
  * si l'auteur ouvre un outil. */
 const StudioBackgroundToolPanel = lazy(() => import('@/routes/story-compose-frame').then((m) => ({ default: m.StudioBackgroundToolPanel })));
 
-/** Le retour matériel et Échap, outils ouverts, rendent la gestion de la
- * scène — une plaque ouverte par-dessus se referme d'abord (#8517). */
-function BackgroundToolsDismiss({ onBack }: { readonly onBack: () => void }) {
+/** Le retour matériel et Échap, outils ouverts — ceux du fond comme ceux d'un
+ * objet en édition (#9140) —, rendent la gestion de la scène ; un panneau
+ * ouvert par-dessus se referme d'abord (#8517). */
+export function StudioBackLayer({ onBack }: { readonly onBack: () => void }) {
   useBackDismiss(onBack, { escape: true });
   return null;
 }
@@ -95,7 +96,7 @@ export function useStudioBackgroundTools({
   const panel =
     resolved === null || background === null ? null : (
       <>
-        <BackgroundToolsDismiss onBack={leave} />
+        <StudioBackLayer onBack={leave} />
         {resolved.open !== null ? (
           <div inert={locked}>
             <Suspense fallback={null}>

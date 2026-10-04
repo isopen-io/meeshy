@@ -85,7 +85,12 @@ export type MediaPlaybackReport = {
   readonly durationMs?: number;
   /** La consommation SERVIE — pour la reprise. Absent/`positionMs: null` :
    * rien à reprendre, `complete: true` : on repart de zéro (rien à rejouer). */
-  readonly resume?: { readonly positionMs: number | null; readonly complete: boolean };
+  readonly resume?: {
+    readonly positionMs: number | null;
+    readonly complete: boolean;
+    /** Une lecture VIVANTE passée d'un lecteur à l'autre (#9279 — plein écran ⇄ mini-lecteur) : reprise à la seconde près, même sous la première seconde. */
+    readonly handedOff?: boolean;
+  };
   /** La langue de la PISTE consommée — une piste traduite est une écoute
    * d'une AUTRE version du contenu, et le serveur la stocke comme telle
    * (`AttachmentStatusBodySchema.language`). Omise si vide : le wire exige
@@ -143,7 +148,8 @@ const MIN_RESUME_MS = 1_000;
 function resumeSeconds(resume: MediaPlaybackReport['resume']): number | null {
   if (resume === undefined || resume.complete) return null;
   const positionMs = resume.positionMs;
-  if (positionMs === null || !Number.isFinite(positionMs) || positionMs < MIN_RESUME_MS) return null;
+  if (positionMs === null || !Number.isFinite(positionMs) || positionMs <= 0) return null;
+  if (positionMs < MIN_RESUME_MS && resume.handedOff !== true) return null;
   return positionMs / 1000;
 }
 
@@ -248,8 +254,16 @@ export function useMediaPlayback(params: {
    */
   readonly tracksTime?: boolean;
   readonly report?: MediaPlaybackReport;
+  /**
+   * LA CLÉ D'EXCLUSIVITÉ auprès du coordinateur (#9256) — l'id de la pièce par
+   * défaut. Le mini-lecteur qui reprend un vocal au sortir du plein écran
+   * joue la MÊME pièce que sa bulle : sous la même clé, toucher la bulle
+   * serait un `claim` redondant (idempotent) et les deux joueraient ensemble.
+   */
+  readonly claimKey?: string;
 }): MediaPlayback {
   const { attachmentId, tracksTime = false } = params;
+  const claimId = params.claimKey ?? attachmentId;
   const coordinator = params.coordinator ?? mediaCoordinator;
 
   const [status, setStatus] = useState<MediaPlaybackStatus>('idle');
@@ -275,6 +289,15 @@ export function useMediaPlayback(params: {
   if (trackerRef.current === null) trackerRef.current = new PlaybackStretchTracker();
   const lastReportAtRef = useRef(0);
   const appliedResumeRef = useRef(false);
+  // LE CLAMP DE FIN (#9265) — la reprise ci-dessous est posée AVANT que la
+  // durée réelle soit connue ; si cette durée s'avère plus COURTE que la
+  // position de reprise (traduction jouée différente de celle qui a produit
+  // la position enregistrée), le navigateur clampe le seek en attente à la
+  // fin exacte. Un `play()` sur un élément déjà en butée déclenche `ended`
+  // quasi instantanément — on s'en souvient jusqu'à `loadedmetadata` pour
+  // repartir de zéro plutôt que de laisser l'utilisateur rejouer une fin
+  // déjà atteinte.
+  const pendingResumeSecondsRef = useRef<number | null>(null);
 
   const recordConsumption = useCallback((fraction: number, complete: boolean): void => {
     const clamped = complete ? 1 : Math.max(0, Math.min(1, fraction));
@@ -364,7 +387,7 @@ export function useMediaPlayback(params: {
         // bon, et `toggle()` appelait `pause()` sur un élément DÉJÀ en
         // pause — sans effet, sans événement : un contrôle INERTE jusqu'au
         // prochain démontage de la rangée (mesuré au navigateur).
-        coordinator.release(attachmentId);
+        coordinator.release(claimId);
         if (previous !== null) previous.pause();
         // LE DÉMONTAGE EST UN SIGNAL TERMINAL (#7225) — au même titre que
         // `ended` : l'écran quitté ne rejouera plus cet élément, donc
@@ -396,6 +419,7 @@ export function useMediaPlayback(params: {
       const resumeAt = resumeSeconds(reportRef.current?.resume);
       if (!appliedResumeRef.current && resumeAt !== null) {
         appliedResumeRef.current = true;
+        pendingResumeSecondsRef.current = resumeAt;
         try {
           element.currentTime = resumeAt;
         } catch {
@@ -417,14 +441,14 @@ export function useMediaPlayback(params: {
        * dans cette fermeture.
        */
       const onPause = (): void => {
-        coordinator.release(attachmentId);
+        coordinator.release(claimId);
         setStatus((current) => (current === 'error' ? current : 'paused'));
         const positionMs = Math.round(element.currentTime * 1000);
         trackerRef.current?.pause(positionMs);
         attemptReport({ element, positionMs, complete: false, force: false });
       };
       const onEnded = (): void => {
-        coordinator.release(attachmentId);
+        coordinator.release(claimId);
         lastEmittedProgressRef.current = 1;
         setProgress(1);
         setStatus('idle');
@@ -436,7 +460,7 @@ export function useMediaPlayback(params: {
         attemptReport({ element, positionMs, complete: true, force: true });
       };
       const onError = (): void => {
-        coordinator.release(attachmentId);
+        coordinator.release(claimId);
         setStatus('error');
       };
       const onTimeUpdate = (): void => {
@@ -451,6 +475,22 @@ export function useMediaPlayback(params: {
         setProgress(raw);
       };
       const onMetadata = (): void => {
+        const pendingResumeSeconds = pendingResumeSecondsRef.current;
+        if (pendingResumeSeconds !== null) {
+          pendingResumeSecondsRef.current = null;
+          const total = knownDuration(element);
+          // La reprise visait une position que la durée RÉELLE, connue
+          // seulement maintenant, ne couvre pas : le navigateur l'a clampée
+          // à la fin exacte. Repartir de zéro plutôt que de laisser
+          // l'élément en butée.
+          if (total > 0 && pendingResumeSeconds >= total) {
+            try {
+              element.currentTime = 0;
+            } catch {
+              // best effort, même raison que ci-dessus.
+            }
+          }
+        }
         if (tracksTime) setDuration(knownDuration(element));
         setPictureInPicture(pictureInPictureSupport(element));
       };
@@ -477,7 +517,7 @@ export function useMediaPlayback(params: {
       setMutedState(element.muted);
       setPictureInPicture(pictureInPictureSupport(element));
     },
-    [attachmentId, attemptReport, coordinator, detach, emitPosition, tracksTime],
+    [attemptReport, claimId, coordinator, detach, emitPosition, tracksTime],
   );
 
   const toggle = useCallback((): void => {
@@ -494,12 +534,12 @@ export function useMediaPlayback(params: {
     // « Réessayer » des autres surfaces du fil.
     if (status === 'error') element.load();
 
-    coordinator.claim(attachmentId, () => element.pause());
+    coordinator.claim(claimId, () => element.pause());
     void element.play().catch(() => {
-      coordinator.release(attachmentId);
+      coordinator.release(claimId);
       setStatus('error');
     });
-  }, [attachmentId, coordinator, status]);
+  }, [claimId, coordinator, status]);
 
   const seek = useCallback(
     (seconds: number): void => {

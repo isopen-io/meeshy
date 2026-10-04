@@ -429,7 +429,7 @@ describe('la lecture souveraine ne peint AUCUN contrôle sans effet', () => {
    * rougir ce témoin, et c'est voulu — il faudra alors dire lequel, et prouver
    * qu'il fait quelque chose.
    */
-  const GESTES_OFFERTS = ['Précédents', 'Suivants', 'Ouvrir plan.png', "Lire l'audio", 'Vitesse de lecture'];
+  const GESTES_OFFERTS = ['Précédents', 'Suivants', 'Ouvrir plan.png', "Lire l'audio", 'Vitesse de lecture', 'Ouvrir en plein écran'];
 
   test('la fenêtre n’offre QUE les gestes dont l’effet existe', async () => {
     const { host } = await lire(['de', 'es'], 'de');

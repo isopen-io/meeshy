@@ -131,6 +131,9 @@ const enStudioChrome = {
   'story.studio.audioTrim.title': 'Trim audio',
   'story.studio.background.tools.leave': 'Back to the scene',
   'story.studio.reelSwitch.announcement': 'Switched to a reel',
+  'story.studio.edit.save': 'Save',
+  'story.studio.edit.saving': 'Saving…',
+  'story.studio.edit.cancel': 'Discard changes',
 } satisfies StudioChromeCatalogSlice;
 
 export default enStudioChrome;

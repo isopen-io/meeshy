@@ -102,12 +102,13 @@ extension CallCaptureController {
 
     // MARK: - Peindre, hors du thread principal
 
-    nonisolated static func render(_ look: CallCaptureLook, faces: CallCaptureFaces, caption: CallMontageCaption, texts: CallFrameTexts, size: CGSize) -> CGImage? {
+    nonisolated static func render(_ look: CallCaptureLook, faces: CallCaptureFaces, caption: CallMontageCaption, texts: CallFrameTexts, size: CGSize,
+                                   colorSpace: CGColorSpace = CallMontageRenderer.deviceSpace) -> CGImage? {
         switch look {
         case .classic(let classic):
-            return CallMontageRenderer.render(style: classic, portraits: faces.montage, canvas: size, caption: caption)
+            return CallMontageRenderer.render(style: classic, portraits: faces.montage, canvas: size, caption: caption, colorSpace: colorSpace)
         case .frame(let design):
-            return CallFrameRenderer.render(frame: design, portraits: faces.frame, texts: texts, size: size)
+            return CallFrameRenderer.render(frame: design, portraits: faces.frame, texts: texts, size: size, colorSpace: colorSpace)
         }
     }
 

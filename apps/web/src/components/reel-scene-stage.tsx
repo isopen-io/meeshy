@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 
 import { BackgroundTrackAudio } from './background-track-audio';
 import { Glyph } from './glyph';
+import { PlaybackStallIndicator } from './playback-stall-indicator';
 import { ReelPoster } from './reel-poster';
 import type { SceneClockHandle } from './scene-clock';
 import { SceneScrubBar, type SceneScrubPainter } from './scene-scrub-bar';
@@ -109,6 +110,7 @@ export default function ReelSceneStage({
   const [knownMaxMs, setKnownMaxMs] = useState<number | null>(null);
   const [pass, setPass] = useState(0);
   const [scrubbing, setScrubbing] = useState(false);
+  const [stalled, setStalled] = useState(false);
   /** La poignée de l'horloge du moteur — reçue UNE fois (`onClock`), remise
    * aussi à la piste de fond pour qu'elle suive le temps pointé. */
   const [clock, setClock] = useState<SceneClockHandle | null>(null);
@@ -187,6 +189,7 @@ export default function ReelSceneStage({
             onTime={writeProgress}
             onLoop={() => setPass((p) => p + 1)}
             onClock={setClock}
+            onPlaybackProgressing={(progressing) => setStalled(!progressing)}
           />
         </Suspense>
         {mode === 'active' && track !== null ? (
@@ -239,6 +242,7 @@ export default function ReelSceneStage({
           même remède que `ReelPlayable`. Sa zone de frappe (44 px, #7879)
           reste SOUS l'identité et le rail, peints après elle : ils gardent
           leur geste. */}
+      <PlaybackStallIndicator stalled={stalled && playing} language={language} />
       {duration !== null ? (
         <SceneScrubBar
           durationSeconds={duration}

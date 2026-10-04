@@ -58,21 +58,30 @@ const tokens = (element: Element | null) => (element?.className ?? '').split(/\s
 /** La borne commune des plaques (`STUDIO_PLATE`) : 36 rem au plus, centrée. */
 const bounded = (element: Element | null) => ['max-w-xl', 'mx-auto', 'w-full'].filter((token) => !tokens(element).includes(token));
 
-describe('au bureau, les plaques restent BORNÉES et centrées', () => {
-  test('le Cadre, la plaque d’édition et la frise portent la même borne', async () => {
+/** Le panneau des options (#9140) : à droite, depuis le haut ; au bureau, une
+ * carte de 320 px à côté du rail (`STUDIO_INLINE_PANEL.roomyWidth`). */
+const panelPlace = (element: Element | null) => {
+  const panel = element?.closest<HTMLElement>('[data-story-inline-panel]') ?? null;
+  return panel === null ? null : { top: panel.style.top, roomy: ['md:max-w-80', 'md:ms-auto'].every((token) => tokens(panel).includes(token)) };
+};
+
+describe('au bureau, les plaques restent BORNÉES', () => {
+  test('le Cadre et les options d’un objet partagent le MÊME panneau à droite, depuis le haut ; la frise garde la borne des plaques du bas', async () => {
     const el = mount(harness({}).deps);
     selectFile(el, 'visual', image());
     click(el.querySelector('[data-story-option="frame"]'));
     await flush(() => el.querySelector('[data-story-frame-panel]') !== null);
-    expect(bounded(el.querySelector('[data-story-frame-panel]'))).toEqual([]);
+    expect(panelPlace(el.querySelector('[data-story-frame-panel]'))).toEqual({ top: '8px', roomy: true });
     click(el.querySelector('[data-story-frame-done]'));
     click(el.querySelector('[data-story-option="background:exit"]'));
 
     typeText(el, 'Bonjour');
     click(el.querySelector('[data-story-object-edit="text-1"]'));
-    await flush(() => el.querySelector('[data-story-edit-plaque]') !== null);
-    expect(bounded(el.querySelector('[data-story-edit-plaque]'))).toEqual([]);
-    click(el.querySelector('[data-story-edit-done]'));
+    await flush(() => el.querySelector('[data-story-option="section:color"]') !== null);
+    click(el.querySelector('[data-story-option="section:color"]'));
+    await flush(() => el.querySelector('[data-story-object-editor]') !== null);
+    expect(panelPlace(el.querySelector('[data-story-object-editor]'))).toEqual({ top: '8px', roomy: true });
+    click(el.querySelector('[data-story-option="edit:exit"]'));
 
     click(el.querySelector('[data-story-animated]'));
     await flush(() => el.querySelector('[data-story-timeline]') !== null);
@@ -100,14 +109,20 @@ describe('le retour matériel ferme la couche du DESSUS, jamais le studio', () =
     expect(el.querySelector('[data-story-studio]') !== null).toBe(true);
   });
 
-  test('plaque d’édition ouverte : le retour la ferme', async () => {
+  test('édition ouverte : le retour range d’abord les options, puis l’édition', async () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Bonjour');
     click(el.querySelector('[data-story-object-edit="text-1"]'));
-    await flush(() => el.querySelector('[data-story-edit-plaque]') !== null);
+    await flush(() => el.querySelector('[data-story-option="section:style"]') !== null);
+    click(el.querySelector('[data-story-option="section:style"]'));
+    await flush(() => el.querySelector('[data-story-inline-panel]') !== null);
     back();
-    await flush(() => el.querySelector('[data-story-edit-plaque]') === null);
-    expect(el.querySelector('[data-story-edit-plaque]') === null).toBe(true);
+    await flush(() => el.querySelector('[data-story-inline-panel]') === null);
+    expect(el.querySelector('[data-story-option="edit:exit"]') !== null).toBe(true);
+    back();
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') === null);
+    expect(el.querySelector('[data-story-option="edit:exit"]') === null).toBe(true);
+    expect(el.querySelector('[data-story-studio]') !== null).toBe(true);
   });
 
   test('frise ouverte : le retour la referme, la scène garde son texte', async () => {
@@ -175,11 +190,11 @@ describe('Échap ferme la couche du DESSUS seule', () => {
     expect(cancels).toEqual(['cancel']);
   });
 
-  test('menu d’un objet par-dessus la plaque d’édition : Échap ferme le menu, la plaque reste', async () => {
+  test('menu d’un objet par-dessus son édition : Échap ferme le menu, l’édition reste', async () => {
     const el = mount(seeded().deps, 'STORY');
     await flush(() => el.querySelector('[data-story-object-edit="overlay"]') !== null);
     click(el.querySelector('[data-story-object-edit="overlay"]'));
-    await flush(() => el.querySelector('[data-story-edit-plaque]') !== null);
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') !== null);
     const layer = el.querySelector<HTMLElement>('[data-story-stage-gestures]')!;
     const painted = el.querySelector<HTMLElement>('[data-scene-object-id="overlay"]')!;
     painted.getBoundingClientRect = () => ({ left: 10, top: 10, width: 100, height: 40, right: 110, bottom: 50, x: 10, y: 10, toJSON: () => ({}) }) as DOMRect;
@@ -188,7 +203,7 @@ describe('Échap ferme la couche du DESSUS seule', () => {
     escape();
     await flush(() => document.querySelector('[data-story-object-menu]') === null);
     expect(document.querySelector('[data-story-object-menu]') === null).toBe(true);
-    expect(el.querySelector('[data-story-edit-plaque]') !== null).toBe(true);
+    expect(el.querySelector('[data-story-option="edit:exit"]') !== null).toBe(true);
   });
 });
 
@@ -197,7 +212,7 @@ describe('l’invite « Ajouter du texte » ne se peint pas sous un calque', () 
     const el = mount(seeded().deps, 'STORY');
     await flush(() => el.querySelector('[data-story-object-edit="overlay"]') !== null);
     click(el.querySelector('[data-story-object-edit="overlay"]'));
-    await flush(() => el.querySelector('[data-story-overlay-editor]') !== null);
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') !== null);
     expect(el.querySelector('#story-studio-text')?.getAttribute('placeholder') ?? null).toBeNull();
   });
 });

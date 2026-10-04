@@ -1373,16 +1373,12 @@ struct ConversationView: View {
                     await viewModel.loadOlderMessages()
                 },
                 onNearBottomChanged: { nearBottom in
-                    let wasNearBottom = scrollState.isNearBottom
                     if scrollState.isNearBottom != nearBottom {
                         scrollState.isNearBottom = nearBottom
                     }
-                    viewModel.isCurrentlyNearBottom = nearBottom
-                    // Revenir au bas ne marque plus rien : la position de la
-                    // barre ne dit pas ce qui a été vu. Les bulles qui
-                    // réapparaissent sont signalées par `onMessagesSeen` une
-                    // fois le seuil de présence franchi.
-                    _ = wasNearBottom
+                    // Revenir au bas ne marque rien (`onMessagesSeen` le fait) ;
+                    // au bas d'une fenêtre sautée, les pages plus récentes (#9339).
+                    viewModel.noteNearBottom(nearBottom)
                 },
                 onScrollingActiveChanged: { isActive in
                     withAnimation(.easeInOut(duration: 0.22)) {
@@ -1718,9 +1714,8 @@ struct ConversationView: View {
                         overlayState.storyViewerStartAtFirstUnviewed = true
                         overlayState.showStoryViewer = true
                     },
-                    // Lot 3 : mêmes retours au Fil que le Résumé — Script,
-                    // puis atterrissage sur le message (et le composeur en
-                    // mode réponse pour « Répondre »).
+                    // Lot 3 : mêmes retours au Fil que le Résumé — Script, puis atterrissage
+                    // sur le message (et le composeur en mode réponse pour « Répondre »).
                     onOpenInThread: { messageId in
                         readingModeController.select(.script)
                         scrollState.scrollToMessageId = messageId
@@ -1739,6 +1734,7 @@ struct ConversationView: View {
                         completion(openViewOnce(messageId: messageId))
                     },
                     onMediaTap: openMediaFullscreen,
+                    onPlayQuotedAudio: { viewModel.toggleQuotedAudio($0) },
                     // #3901 — la Rivière ne rend jamais bulle par bulle
                     // (`MessageListViewController.rendersThread`), donc ne
                     // peut jamais faire avancer le curseur de lecture par le
@@ -2476,9 +2472,8 @@ struct ConversationView: View {
                 canDelete: msg.isMe || isCurrentUserAdminOrMod,
                 canEdit: msg.isMe || isCurrentUserAdminOrMod,
                 onCopy: {
-                    // Prisme: copy what's actually DISPLAYED (the preferred
-                    // translation when one is showing), never blindly the
-                    // original — matches the quick-reaction bar's Copier.
+                    // Prisme: copy what's DISPLAYED (the preferred translation when
+                    // one is showing), never the original — like the quick bar's Copier.
                     UIPasteboard.general.string = viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content
                     HapticFeedback.success()
                 },
@@ -2487,6 +2482,7 @@ struct ConversationView: View {
                 textTranslations: viewModel.messageTranslations[msg.id] ?? [],
                 transcription: viewModel.messageTranscriptions[msg.id],
                 translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
+                threadLanguage: overlayThreadLanguage(for: msg),
                 onReact: { emoji in
                     viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
                 },

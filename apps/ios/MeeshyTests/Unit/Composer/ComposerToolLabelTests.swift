@@ -81,7 +81,7 @@ final class ComposerToolLabelTests: XCTestCase {
             src.contains("Text(ComposerDocumentCopy.label(tool))"),
             "Une légende est revenue sous un outil du document (directive porteur 2026-09-27)."
         )
-        XCTAssertTrue(src.contains(".adaptiveGlass(in:Circle(),tint:plateauTint.opacity(0.55))"),
+        XCTAssertTrue(src.contains(".adaptiveLiquidGlass(in:Circle(),tint:plateauTint.opacity(0.55),interactive:true)"),
                       "L'outil porte le disque de verre teinté des rails.")
     }
 

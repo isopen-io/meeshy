@@ -133,7 +133,7 @@ final class ComposerBackgroundMenuTests: XCTestCase {
     /// de partage (#4996) : une seconde y serait silencieusement avalée.
     func test_leMenu_estMontéSurLaPile_pasSurLaRacine() throws {
         XCTAssertTrue(try source("MeeshyComposerHost.swift")
-            .contains("withSceneCameraViewfinder(backgroundMenuPresented(composerStack))"))
+            .contains("withSceneCameraViewfinder(backgroundMenuPresented(composerStackNode))"))
     }
 
     /// **Le fond ouvre son menu, pas le viseur.** C'est le câblage qui fait

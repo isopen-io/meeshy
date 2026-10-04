@@ -83,9 +83,29 @@ final class QuotedMediaFaceMountGuardTests: XCTestCase {
         ] {
             let code = AppSourceGuard.stripComments(
                 try String(contentsOf: appRoot.appendingPathComponent(path), encoding: .utf8))
-            XCTAssertTrue(code.contains("QuotedMediaOpening.attachment(for: reference"),
-                          "\(path) élit la pièce par la règle UNIQUE du Fil et de la Rivière")
+            XCTAssertTrue(code.contains("QuotedMediaOpening.gesture(for: reference"),
+                          "\(path) décide du geste par la règle UNIQUE du Fil et de la Rivière")
         }
+    }
+
+    /// #8283 après #8320 — en Rivière comme en Script, un vocal cité se JOUE
+    /// sur place par le lecteur PARTAGÉ et sa capsule montre la lecture ; il
+    /// n'ouvre plus le plein écran audio.
+    func test_laRiviere_joueUnVocalCiteSurPlace_parLeLecteurPartage() throws {
+        let host = try source("Meeshy/Features/Main/Riviere/View/RiverConversationHost.swift")
+        XCTAssertTrue(host.contains("case .playInPlace:"),
+                      "l'hôte de la Rivière route l'audio cité vers la lecture sur place")
+        XCTAssertTrue(host.contains("onPlayQuotedAudio?(reference)"),
+                      "la lecture est DITE par l'appelant, l'hôte ne connaît pas le VM")
+        let conversation = try source("Meeshy/Features/Main/Views/ConversationView.swift")
+        XCTAssertTrue(conversation.contains("onPlayQuotedAudio: { viewModel.toggleQuotedAudio($0) }"),
+                      "la Rivière joue par le MÊME `toggleQuotedAudio` que le Fil — aucun second lecteur")
+        let face = try source("Meeshy/Features/Main/Riviere/View/RiverQuotedMediaFace.swift")
+        XCTAssertTrue(face.contains("playbackMessageId: reference.messageId"),
+                      "la capsule suit la lecture de SON message, comme dans les autres modes")
+        let bubble = try source("Meeshy/Features/Main/Riviere/View/RiverBubbleView.swift")
+        XCTAssertTrue(bubble.contains("QuotedZoneAccessibility.mediaActionLabel(for: media.reference)"),
+                      "VoiceOver nomme la zone « Écouter le message cité » pour un vocal, comme dans les autres modes")
     }
 
     func test_laConversation_ouvreUnVocalCiteEnPleinEcranAudio_jamaisDansLaGalerie() throws {

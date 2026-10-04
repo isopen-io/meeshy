@@ -15,6 +15,8 @@ import { electAudio, type MediaCarrier } from '@/lib/view/media';
 import { partitionAttachments, type MediaGridFrame } from '@/lib/view/media-grid-layout';
 import { waveformOf } from '@/lib/view/message';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
+import { handOffVideoPosition } from '@/lib/view/video-handoff';
+import { useCarriedPlayback } from '@/lib/view/audio-carry';
 import { PLAYBACK_SPEEDS, seekFraction, speedLabel } from '@/lib/view/media-transport';
 import {
   karaokeSegments,
@@ -103,11 +105,14 @@ function VoiceAttachment({
   languages,
   displayLanguage,
   fallbackLanguage,
+  onExpand,
 }: {
   readonly attachment: Attachment;
   readonly languages: readonly string[];
   readonly displayLanguage?: string;
   readonly fallbackLanguage: string;
+  /** Le lecteur plein écran (#8333, miroir de la pastille de pourcentage iOS) — la lecture en cours y reprend à la même seconde. */
+  readonly onExpand: () => void;
 }) {
   const { described: transcript, track } = electAudio({
     attachment,
@@ -124,8 +129,7 @@ function VoiceAttachment({
   // la fin et au démontage — le hook porte la reprise, le throttle 5 s et le
   // tracker de segments, ce widget ne fait que lui donner ce qu'il connaît.
   const consumption = attachment.currentUserConsumption;
-  const { status, progress, toggle, bind, position, duration, seek, rate, setRate, reportedFraction } =
-    useMediaPlayback({
+  const own = useMediaPlayback({
       attachmentId: attachment.id,
       tracksTime: true,
       report: {
@@ -142,6 +146,12 @@ function VoiceAttachment({
           : {}),
       },
     });
+  /* LA BULLE REPREND LA MAIN (#9279) — quand le mini-lecteur joue CE vocal, il
+     en est le seul moteur : la bulle reflète sa lecture et la commande, comme
+     la bulle iOS reflète `ConversationAudioCoordinator`. Jamais un second son. */
+  const carried = useCarriedPlayback(attachment.id);
+  const { bind, reportedFraction } = own;
+  const { status, progress, toggle, position, duration, seek, rate, setRate } = carried ?? own;
   const uiLanguage = currentInterfaceLanguage();
 
   /*
@@ -184,7 +194,8 @@ function VoiceAttachment({
     },
     [bind],
   );
-  const activeSegment = useKaraokeIndex(audioElement, segments, status === 'playing');
+  const playingElement = carried?.element ?? audioElement;
+  const activeSegment = useKaraokeIndex(playingElement, segments, status === 'playing');
 
   const waves = waveformOf(attachment);
   // `duration` voyage en MILLISECONDES sur la charge du dépôt.
@@ -345,6 +356,21 @@ function VoiceAttachment({
         >
           {speedLabel(rate, uiLanguage)}
         </button>
+        <button
+          type="button"
+          data-voice-expand
+          onClick={() => {
+            if (playingElement !== null && (status === 'playing' || status === 'paused') && playingElement.currentTime > 0) {
+              handOffVideoPosition({ attachmentId: attachment.id, positionMs: Math.round(playingElement.currentTime * 1000) });
+            }
+            if (isPlaying) toggle();
+            onExpand();
+          }}
+          className="tap-target-22 grid shrink-0 place-items-center rounded-chip"
+          aria-label={translate(uiLanguage, 'media.viewer.open_fullscreen')}
+        >
+          <GlyphSvg glyph={MEDIA_GLYPHS.arrowsOutSimple} size={13} />
+        </button>
       </div>
 
       {transcript.text !== '' ? (
@@ -503,6 +529,7 @@ export function Attachments({
   const { visual, audio, nonMedia } = partitionAttachments(attachments);
   const thread = useContext(ThreadMediaContext);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+  const [openAudioIndex, setOpenAudioIndex] = useState<number | null>(null);
   const maskedAttachment = useAttachmentMasked();
   /* LA VISIONNEUSE MONTRE EN CLAIR CE QUE LA RANGÉE MONTRE EN CLAIR — la pièce
      qu'on vient de toucher (#8008) et celles qu'une révélation a levées
@@ -517,7 +544,7 @@ export function Attachments({
           servedMasked(attachment) && (index === openIndex || liftedIds.has(attachment.id)) ? revealedAttachment(attachment) : attachment,
         );
   const veil = useContext(VeilRevealContext);
-  const viewing = openIndex !== null;
+  const viewing = openIndex !== null || openAudioIndex !== null;
   useEffect(() => {
     if (veil === null || !viewing) return;
     veil.onViewer(true);
@@ -546,6 +573,7 @@ export function Attachments({
             attachment={attachment}
             languages={languages}
             fallbackLanguage={fallbackLanguage}
+            onExpand={() => setOpenAudioIndex(i)}
             {...(displayLanguage !== undefined ? { displayLanguage } : {})}
           />
         ),
@@ -565,6 +593,39 @@ export function Attachments({
           <FileAttachmentRow key={`file-${i}`} attachment={attachment} isMine={isMine} {...(deps !== undefined ? { deps } : {})} />
         ),
       )}
+
+      {openAudioIndex !== null && thread !== null && message !== undefined ? (
+        <Suspense fallback={null}>
+          <ThreadMediaViewer
+            kind="audio"
+            opened={message}
+            openedVisual={audio}
+            startIndex={openAudioIndex}
+            viewerId={thread.viewerId}
+            onReplyToMedia={thread.onReplyToMedia}
+            onClose={() => setOpenAudioIndex(null)}
+            languages={languages}
+            fallbackLanguage={fallbackLanguage}
+            {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+            {...(carrier !== undefined ? { carrier } : {})}
+            {...(deps !== undefined ? { deps } : {})}
+          />
+        </Suspense>
+      ) : openAudioIndex !== null ? (
+        <Suspense fallback={null}>
+          <MediaViewer
+            items={audio}
+            startIndex={openAudioIndex}
+            onClose={() => setOpenAudioIndex(null)}
+            languages={languages}
+            fallbackLanguage={fallbackLanguage}
+            isMine={isMine}
+            {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+            {...(carrier !== undefined ? { carrier } : {})}
+            {...(deps !== undefined ? { deps } : {})}
+          />
+        </Suspense>
+      ) : null}
 
       {openIndex !== null && thread !== null && message !== undefined ? (
         <Suspense fallback={null}>

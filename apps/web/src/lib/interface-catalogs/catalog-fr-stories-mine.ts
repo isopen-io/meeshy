@@ -12,6 +12,7 @@ const frStoriesMine = {
   'storiesMine.empty.title': 'Aucune story envoyée',
   'storiesMine.empty.subtitle': 'Vos stories publiées apparaîtront ici tant qu’elles sont actives.',
   'storiesMine.action.open': 'Ouvrir',
+  'storiesMine.action.edit': 'Modifier',
   'storiesMine.action.delete': 'Supprimer',
   'storiesMine.delete.title': 'Supprimer la story ?',
   'storiesMine.delete.body': 'Cette action est définitive. La story ne sera plus visible par personne.',

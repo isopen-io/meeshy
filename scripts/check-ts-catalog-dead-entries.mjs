@@ -380,7 +380,16 @@ export const callersIn = (contents, nsNames) => {
 // Boutique et la proposition de pack côté web (leurs cinq voisines ont leur
 // appelant dans `lib/api/sticker-packs.ts`) ; l'écran de modération web qui
 // lira ces deux-là est un suivi à part. Valeur MESURÉE le 2026-10-02.
-const BASELINE_DEAD_ENTRIES = 287;
+// 287 → 285 (#9256, 2026-10-04) : `attachments.byAttachmentIdTranscribe` et
+// `attachments.byAttachmentIdTranslate` regagnent leur appelant — le lecteur
+// audio plein écran web transcrit et traduit à la demande
+// (`lib/api/attachment-processing.ts`). Valeur MESURÉE le 2026-10-04.
+// 285 → 276 (#6408, #6409, #6410, 2026-10-04) : les routes des liens de
+// suivi, de parrainage et de « mes communautés » regagnent leur appelant —
+// la page « Mes liens » web gère les quatre familles d'iOS
+// (`lib/api/my-tracking-links.ts`, `affiliate-tokens.ts`,
+// `community-links.ts`). Valeur MESURÉE le 2026-10-04.
+const BASELINE_DEAD_ENTRIES = 276;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();

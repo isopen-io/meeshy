@@ -24,7 +24,7 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
   let root: Root;
 
   beforeAll(async () => {
-    ensureHappyDomRegistered();
+    ensureHappyDomRegistered({ url: 'http://localhost/' });
     globals.IS_REACT_ACT_ENVIRONMENT = true;
     await loadInterfaceCatalog('fr');
   });
@@ -176,6 +176,27 @@ describe('FeedPostCard — le menu « ⋯ »', () => {
       const modifier = entrees.find((e) => e.dataset.feedPostAction === 'edit')!;
       expect(modifier.textContent).toContain('Modifier');
       expect(modifier.style.borderTop).toBe('');
+    });
+
+    test('MA publication avec un MÉDIA : « Modifier » rouvre le STUDIO à `/posts/:id/edit` (#9317), aucune feuille de texte', async () => {
+      const { menu } = host('u-other');
+      monte(post({ media: [{ id: 'pm-1', fileUrl: '2026/10/u/pm-1.jpg', mimeType: 'image/jpeg' }] }), menu);
+      window.history.replaceState(null, '', '/feed');
+
+      const entrees = await ouvre();
+      act(() => entrees.find((e) => e.dataset.feedPostAction === 'edit')?.click());
+      expect(window.location.pathname).toBe('/posts/p1/edit');
+      expect(document.querySelector('[data-publication-edit-sheet]')).toBeNull();
+      window.history.replaceState(null, '', '/');
+    });
+
+    test('MA publication de TEXTE seul : « Modifier » garde la feuille de texte', async () => {
+      const { menu } = host('u-other');
+      monte(post(), menu);
+      window.history.replaceState(null, '', '/feed');
+      expect(await ouvreEdition()).not.toBeNull();
+      expect(window.location.pathname).toBe('/feed');
+      window.history.replaceState(null, '', '/');
     });
 
     test('la publication d’un AUTRE n’offre jamais « Modifier »', async () => {

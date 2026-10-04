@@ -883,9 +883,9 @@ describe('FocalRow — les états du message (#5936)', () => {
     /* La police (90) est CONSTANTE, indépendante de `side` (112 en rangée
        plate) — défaut majeur 6b ; et AUCUNE boîte fixe plus petite que le
        glyphe (#7881) : la rangée réserve ce qu'il peint. */
-    expect(withPicture).toContain('font-size:90px');
+    expect(withPicture).toContain('font-size:180px');
     expect(withPicture).not.toContain('width:60px');
-    expect(withPicture).not.toContain('width:112px');
+    expect(withPicture).not.toContain('width:224px');
 
     const bare = renderFull({ ...BASE_MESSAGE, content: '🔥', metadata: { sticker: { emoji: '🔥' } } });
     expect(bare).toContain('data-sticker-emoji');
@@ -920,7 +920,7 @@ describe('FocalRow — les états du message (#5936)', () => {
       ],
     });
     expect(pictureOnly).toContain('<img');
-    expect(pictureOnly).toContain('width="112"');
+    expect(pictureOnly).toContain('width="224"');
     expect(pictureOnly).not.toContain('data-sticker-emoji');
   });
 

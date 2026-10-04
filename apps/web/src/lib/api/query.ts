@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { conversationStore } from '@/lib/conversation-store';
@@ -18,7 +19,7 @@ import { forwardMessages, type ForwardResult, type ForwardSource } from './forwa
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
 import type { FeedAuthor } from './feed-pages';
 import { recordPostShare } from './feed-share';
-import { commentsInfiniteOptions, flattenCommentPages, performComment, type CommentInfiniteData, type CommentResult, type PostComment } from './publication-comments';
+import { commentsInfiniteOptions, flattenCommentPages, performComment, type CommentInfiniteData, type CommentResult, type CommentStickerSend, type PostComment } from './publication-comments';
 import type { PostMediaUploadResult } from './post-media-upload';
 import { postQueryOptions } from './publication-detail';
 import { performRepost, type RepostIntent, type RepostResult } from './publication-repost';
@@ -26,6 +27,8 @@ import type { PostToggleKind } from '@/lib/feed/interactions';
 import { paginationStateOf } from '@/lib/lens/pagination';
 import type { Conversation, Message, Participant } from './types';
 import { messagesQuery } from './messages';
+import { joinThreadWindows } from './messages-window';
+import { useAnchoredThread } from './use-anchored-thread';
 import { appQueryClient } from './query-client';
 import { performReaction, type PerformReactionResult } from './reactions';
 import { deletePost, editPost, pinPost, type EditPostOutcome, type PostActionOutcome } from './publication-actions';
@@ -327,6 +330,21 @@ export function useThreadData(id: string) {
   const conversation = useConversation(id);
   const conversationId = conversation.data?.id ?? id;
   const messages = useMessages(conversationId);
+  /**
+   * LA FENÊTRE ANCRÉE (#7420) — un message hors des pages chargées s'atteint
+   * par `?around=` (`useAnchoredThread`) ; `joinThreadWindows` dit ce que le
+   * fil MONTRE : la fenêtre seule tant qu'elle est DÉTACHÉE du présent, puis
+   * un fil continu dès qu'elle le rejoint. Tant qu'elle est engagée, la
+   * pagination des deux bords lui appartient.
+   */
+  const anchored = useAnchoredThread(conversationId);
+  const present = messages.data?.messages ?? NO_MESSAGES;
+  const shown = useMemo(() => joinThreadWindows(present, anchored.window), [present, anchored.window]);
+  const presentOlderState = paginationStateOf({
+    hasNextPage: messages.hasNextPage,
+    isFetchingNextPage: messages.isFetchingNextPage,
+    isFetchNextPageError: messages.isFetchNextPageError,
+  });
 
   const error = conversation.error ?? messages.error ?? null;
   const refused = isRefusal(conversation.error) || isRefusal(messages.error);
@@ -338,7 +356,7 @@ export function useThreadData(id: string) {
   return {
     conversationId,
     conversation: conversation.data,
-    messages: messages.data?.messages ?? NO_MESSAGES,
+    messages: shown.messages,
     /**
      * `hasOlder` — « le serveur DÉCLARE-T-IL du plus ancien ? », lu sur la
      * page qui borde la fenêtre (`threadWindowOf`, `messages-pages.ts`).
@@ -348,19 +366,25 @@ export function useThreadData(id: string) {
      * toujours. Son lecteur est `windowCoversUnread` (« Sur les N derniers
      * messages » du Résumé Vivant, `routes/thread.tsx`).
      */
-    hasOlder: messages.data?.hasOlder ?? false,
+    hasOlder: anchored.window?.hasOlder ?? messages.data?.hasOlder ?? false,
     /** L'état de pagination du HAUT du fil, quatre cas, la MÊME loi que la
      * Lentille (`paginationStateOf`, `lib/lens/pagination.ts`) — dérivé des
      * drapeaux de TanStack, jamais tenu à part. */
-    olderState: paginationStateOf({
-      hasNextPage: messages.hasNextPage,
-      isFetchingNextPage: messages.isFetchingNextPage,
-      isFetchNextPageError: messages.isFetchNextPageError,
-    }),
+    olderState: anchored.engaged ? anchored.olderState : presentOlderState,
     /** `fetchNextPage` de TanStack — référence STABLE entre deux rendus
      * (`useInfiniteQuery` la mémoïse), ce que l'ancrage de `routes/thread.tsx`
      * exige pour ne pas recréer sa sentinelle à chaque image. */
-    fetchOlder: messages.fetchNextPage,
+    fetchOlder: anchored.engaged ? anchored.fetchOlder : messages.fetchNextPage,
+    /** Le bas du fil, vers le PRÉSENT — seulement tant que la fenêtre ancrée en est DÉTACHÉE (#7420). */
+    newerState: shown.detached ? anchored.newerState : ('exhausted' as const),
+    fetchNewer: anchored.fetchNewer,
+    /** La fenêtre montrée ne touche pas le présent : ni accusé de lecture, ni ancrage en bas (#7420, `windowIsAtTip` iOS). */
+    detached: shown.detached,
+    /** `target` non nul : le fil est ancré autour d'un message, son bas n'est plus « le présent qui arrive ». */
+    around: { target: anchored.target, settled: anchored.settled, seek: anchored.seek },
+    /** La fenêtre `?around=` est en vol, rien n'en est encore servi (#9302) — jamais sur un cache. */
+    windowLoading: anchored.loading,
+    returnToPresent: anchored.clear,
     status,
     error,
     refetch: (): void => {
@@ -512,6 +536,8 @@ export function commentAction(params: {
   readonly parentId?: string | undefined;
   /** Les photos et vidéos déjà téléversées (#9167). */
   readonly media?: readonly PostMediaUploadResult[] | undefined;
+  /** Le sticker et son image déjà téléversée (#9080, #9318). */
+  readonly sticker?: CommentStickerSend | undefined;
 }): Promise<CommentResult> {
   return performComment({
     postId: params.postId,
@@ -520,6 +546,7 @@ export function commentAction(params: {
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
     ...(params.parentId === undefined ? {} : { parentId: params.parentId }),
     ...(params.media === undefined || params.media.length === 0 ? {} : { media: params.media }),
+    ...(params.sticker === undefined ? {} : { sticker: params.sticker }),
     deps: { ...apiDeps, queryClient: appQueryClient },
   }).then((result) => {
     /* Un commentaire RETENU (servi, ou gardé en attente) allume l'anneau de

@@ -46556,43 +46556,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذا الرقم مرتبط بحساب بالفعل. اتركه فارغًا للمتابعة."
+            "value": "هذا الرقم مرتبط بحساب بالفعل. أدخل رقمًا آخر أو سجّل الدخول."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Nummer ist bereits mit einem Konto verknüpft. Lass sie leer, um fortzufahren."
+            "value": "Diese Nummer ist bereits mit einem Konto verknüpft. Gib eine andere ein oder melde dich an."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This number is already linked to an account. Leave it empty to continue."
+            "value": "This number is already linked to an account. Enter another one, or sign in."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este número ya está vinculado a una cuenta. Déjalo vacío para continuar."
+            "value": "Este número ya está vinculado a una cuenta. Introduce otro o inicia sesión."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce numéro est déjà rattaché à un compte. Laissez-le vide pour continuer."
+            "value": "Ce numéro est déjà rattaché à un compte. Saisissez-en un autre, ou connectez-vous."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo numero è già collegato a un account. Lascialo vuoto per continuare."
+            "value": "Questo numero è già collegato a un account. Inseriscine un altro o accedi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este número já está vinculado a uma conta. Deixe-o vazio para continuar."
+            "value": "Este número já está vinculado a uma conta. Informe outro ou entre."
           }
         }
       }
@@ -47255,190 +47255,143 @@
         }
       }
     },
-    "auth.signup.phoneNudge.addPhone": {
+    "auth.signup.phone.required": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إضافة رقمي"
+            "value": "أدخل رقم هاتفك للمتابعة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meine Nummer hinzufügen"
+            "value": "Gib deine Telefonnummer ein, um fortzufahren."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add my number"
+            "value": "Enter your phone number to continue."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Añadir mi número"
+            "value": "Introduce tu número de teléfono para continuar."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajouter mon numéro"
+            "value": "Saisissez votre numéro de téléphone pour continuer."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aggiungi il mio numero"
+            "value": "Inserisci il tuo numero di telefono per continuare."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Adicionar meu número"
+            "value": "Informe seu número de telefone para continuar."
           }
         }
       }
     },
-    "auth.signup.phoneNudge.continue": {
+    "auth.signup.phone.tooShort": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المتابعة على أي حال"
+            "value": "هذا الرقم قصير جدًا: %lld أرقام على الأقل."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trotzdem fortfahren"
+            "value": "Diese Nummer ist zu kurz: mindestens %lld Ziffern."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continue anyway"
+            "value": "This number is too short: at least %lld digits."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continuar de todos modos"
+            "value": "Este número es demasiado corto: al menos %lld dígitos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continuer quand même"
+            "value": "Ce numéro est trop court : %lld chiffres au moins."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continua comunque"
+            "value": "Questo numero è troppo corto: almeno %lld cifre."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continuar mesmo assim"
+            "value": "Este número é curto demais: pelo menos %lld dígitos."
           }
         }
       }
     },
-    "auth.signup.phoneNudge.message": {
+    "auth.signup.phone.implausible": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يؤمّن رقم هاتفك حسابك ويتيح لك استعادته إذا فقدت الوصول إلى بريدك الإلكتروني."
+            "value": "لا يبدو هذا الرقم حقيقيًا، يُرجى التحقق منه."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Telefonnummer schützt dein Konto und ermöglicht dir, es wiederherzustellen, falls du den Zugriff auf deine E-Mail verlierst."
+            "value": "Diese Nummer scheint nicht echt zu sein – bitte prüfe sie."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your phone number secures your account and lets you recover it if you lose access to your email."
+            "value": "This number doesn’t look real — please check it."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu número protege tu cuenta y te permite recuperarla si pierdes el acceso a tu correo electrónico."
+            "value": "Este número no parece real: compruébalo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre numéro sécurise votre compte et permet de le récupérer si vous perdez l’accès à votre e-mail."
+            "value": "Ce numéro ne semble pas réel : vérifiez-le."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo numero protegge il tuo account e ti permette di recuperarlo se perdi l’accesso alla tua email."
+            "value": "Questo numero non sembra reale: controllalo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seu número protege sua conta e permite recuperá-la se você perder o acesso ao seu e-mail."
-          }
-        }
-      }
-    },
-    "auth.signup.phoneNudge.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هل تريد المتابعة بدون رقم هاتف؟"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ohne Telefonnummer fortfahren?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Continue without a phone number?"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Continuar sin número de teléfono?"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Continuer sans numéro ?"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Continuare senza numero di telefono?"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Continuar sem número de telefone?"
+            "value": "Este número não parece real: confira-o."
           }
         }
       }
@@ -47627,100 +47580,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Telefone"
-          }
-        }
-      }
-    },
-    "auth.signup.phone.later": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لاحقًا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Später"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Later"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Más tarde"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus tard"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Più tardi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mais tarde"
-          }
-        }
-      }
-    },
-    "auth.signup.phone.later.a11y": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لاحقًا، المتابعة بدون رقم"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Später, ohne Nummer fortfahren"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Later, continue without a number"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Más tarde, continuar sin número"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus tard, continuer sans numéro"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Più tardi, continua senza numero"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mais tarde, continuar sem número"
           }
         }
       }
@@ -201103,6 +200962,457 @@
         }
       }
     },
+    "shareLink.arrivals.seeAll": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "variations": {
+            "plural": {
+              "zero": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا توجد انضمامات"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "عرض انضمام واحد"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "عرض الانضمامين"
+                }
+              },
+              "few": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "عرض الانضمامات الـ%lld"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "عرض الانضمامات الـ%lld"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "عرض الانضمامات الـ%lld"
+                }
+              }
+            }
+          }
+        },
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Beitritt ansehen"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Alle %lld Beitritte ansehen"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "See %lld arrival"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "See all %lld arrivals"
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ver %lld llegada"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ver las %lld llegadas"
+                }
+              }
+            }
+          }
+        },
+        "fr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Voir %lld arrivée"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Voir les %lld arrivées"
+                }
+              }
+            }
+          }
+        },
+        "it": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Vedi %lld arrivo"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Vedi tutti i %lld arrivi"
+                }
+              }
+            }
+          }
+        },
+        "pt-BR": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ver %lld chegada"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Ver as %lld chegadas"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "shareLink.arrivals.total": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "variations": {
+            "plural": {
+              "zero": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "لا انضمامات"
+                }
+              },
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "انضمام واحد إجمالًا"
+                }
+              },
+              "two": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "انضمامان إجمالًا"
+                }
+              },
+              "few": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld انضمامات إجمالًا"
+                }
+              },
+              "many": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld انضمامًا إجمالًا"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld انضمام إجمالًا"
+                }
+              }
+            }
+          }
+        },
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Beitritt insgesamt"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Beitritte insgesamt"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld arrival in total"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld arrivals in total"
+                }
+              }
+            }
+          }
+        },
+        "es": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld llegada en total"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld llegadas en total"
+                }
+              }
+            }
+          }
+        },
+        "fr": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld arrivée au total"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld arrivées au total"
+                }
+              }
+            }
+          }
+        },
+        "it": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld arrivo in totale"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld arrivi in totale"
+                }
+              }
+            }
+          }
+        },
+        "pt-BR": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld chegada no total"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld chegadas no total"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "shareLink.arrivals.loading": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ تحميل الانضمامات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beitritte werden geladen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading arrivals"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cargando llegadas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chargement des arrivées"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Caricamento degli arrivi"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Carregando chegadas"
+          }
+        }
+      }
+    },
+    "shareLink.arrivals.loadFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تحميل الانضمامات."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Beitritte konnten nicht geladen werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrivals couldn't be loaded."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron cargar las llegadas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les arrivées n'ont pas pu être chargées."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile caricare gli arrivi."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível carregar as chegadas."
+          }
+        }
+      }
+    },
+    "shareLink.arrivals.moreFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تعذّر تحميل البقية."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Rest konnte nicht geladen werden."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The rest couldn't be loaded."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo cargar el resto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La suite n'a pas pu être chargée."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossibile caricare il resto."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não foi possível carregar o restante."
+          }
+        }
+      }
+    },
     "shareLink.detail.configuration": {
       "extractionState": "manual",
       "localizations": {
@@ -213746,6 +214056,53 @@
         }
       }
     },
+    "call.effects.smoothingStrength": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قوة التنعيم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stärke der Glättung"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smoothing strength"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensidad del suavizado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Force du lissage"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensità della levigatura"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intensidade da suavização"
+          }
+        }
+      }
+    },
     "call.effects.face.none": {
       "extractionState": "manual",
       "localizations": {
@@ -223569,6 +223926,100 @@
         }
       }
     },
+    "composer.capture.looks": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المرشّحات والإطارات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter und Rahmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filters and frames"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtros y marcos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtres et cadres"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtri e cornici"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtros e molduras"
+          }
+        }
+      }
+    },
+    "composer.capture.looks.rendering": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "جارٍ تطبيق المرشّح…"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter wird angewendet…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applying the filter…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplicando el filtro…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Application du filtre…"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applicazione del filtro…"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplicando o filtro…"
+          }
+        }
+      }
+    },
     "visitor.body": {
       "extractionState": "manual",
       "localizations": {
@@ -224086,100 +224537,6 @@
         }
       }
     },
-    "call.liveFrame.caption": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إطار"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rahmen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Frame"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Marco"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cadre"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cornice"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Moldura"
-          }
-        }
-      }
-    },
-    "call.liveFrame.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "يحيط الفيديوهين بالإطار نفسه، لديك ولدى الطرف الآخر"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Umgibt beide Videos mit demselben Rahmen, bei dir und bei deinem Gegenüber"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Surrounds both videos with the same frame, for you and the other person"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rodea los dos vídeos con el mismo marco, para ti y para la otra persona"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Entoure les deux vidéos d'un même cadre, chez vous et chez votre correspondant"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Circonda i due video con la stessa cornice, per te e per l'altra persona"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Envolve os dois vídeos com a mesma moldura, para você e para a outra pessoa"
-          }
-        }
-      }
-    },
     "call.liveFrame.none": {
       "extractionState": "manual",
       "localizations": {
@@ -224227,96 +224584,519 @@
         }
       }
     },
-    "call.liveFrame.close": {
+    "call.liveFrame.caption": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إغلاق"
+            "value": "إطار"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Schließen"
+            "value": "Rahmen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Close"
+            "value": "Frame"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cerrar"
+            "value": "Marco"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fermer"
+            "value": "Cadre"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chiudi"
+            "value": "Cornice"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fechar"
+            "value": "Moldura"
           }
         }
       }
     },
-    "call.liveFrame.refused": {
+    "call.liveFrame.hold.hint": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تعذّرت مشاركة الإطار"
+            "value": "يُبقي هذا الإطار حول الفيديوهين طوال المكالمة ويقترحه على الطرف الآخر"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Rahmen konnte nicht geteilt werden"
+            "value": "Behält diesen Rahmen während des ganzen Anrufs um beide Videos und schlägt ihn deinem Gegenüber vor"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The frame couldn't be shared"
+            "value": "Keeps this frame around both videos for the whole call, and offers it to the other person"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "No se pudo compartir el marco"
+            "value": "Mantiene este marco alrededor de los dos vídeos durante toda la llamada y se lo propone a la otra persona"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le cadre n'a pas pu être partagé"
+            "value": "Garde ce cadre autour des deux vidéos pendant tout l'appel, et le propose à votre correspondant"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Impossibile condividere la cornice"
+            "value": "Mantiene questa cornice attorno ai due video per tutta la chiamata e la propone all'altra persona"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Não foi possível compartilhar a moldura"
+            "value": "Mantém esta moldura em volta dos dois vídeos durante toda a chamada e a propõe à outra pessoa"
+          }
+        }
+      }
+    },
+    "call.liveFrame.notProposed": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تم تطبيق الإطار لديك، لكن تعذّر اقتراحه"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Rahmen ist bei dir aktiv, konnte aber nicht vorgeschlagen werden"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The frame is applied on your side but couldn't be offered"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El marco se aplica en tu pantalla, pero no se pudo proponer"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le cadre est appliqué chez vous, mais n'a pas pu être proposé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La cornice è applicata da te, ma non è stato possibile proporla"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A moldura está aplicada para você, mas não pôde ser proposta"
+          }
+        }
+      }
+    },
+    "call.liveFrame.proposal": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يقترح %1$@ الإطار «%2$@»"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ schlägt dir den Rahmen „%2$@“ vor"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ suggests the “%2$@” frame"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ te propone el marco «%2$@»"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ vous propose le cadre « %2$@ »"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ ti propone la cornice «%2$@»"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ sugere a moldura “%2$@”"
+          }
+        }
+      }
+    },
+    "call.liveFrame.proposal.anonymous": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يقترح الطرف الآخر الإطار «%@»"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Gegenüber schlägt dir den Rahmen „%@“ vor"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The other person suggests the “%@” frame"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La otra persona te propone el marco «%@»"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre correspondant vous propose le cadre « %@ »"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'altra persona ti propone la cornice «%@»"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A outra pessoa sugere a moldura “%@”"
+          }
+        }
+      }
+    },
+    "call.liveFrame.accept": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تطبيق"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übernehmen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplicar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appliquer"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applica"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplicar"
+          }
+        }
+      }
+    },
+    "call.liveFrame.decline": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "لا، شكرًا"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nein, danke"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No thanks"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No, gracias"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Non merci"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No, grazie"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Não, obrigado"
+          }
+        }
+      }
+    },
+    "call.liveFrame.answer.accepted": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "طبّق %@ إطارك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat deinen Rahmen übernommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ applied your frame"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ aplicó tu marco"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ a appliqué votre cadre"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ha applicato la tua cornice"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ aplicou sua moldura"
+          }
+        }
+      }
+    },
+    "call.liveFrame.answer.accepted.anonymous": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "طبّق الطرف الآخر إطارك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Gegenüber hat deinen Rahmen übernommen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The other person applied your frame"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La otra persona aplicó tu marco"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre correspondant a appliqué votre cadre"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'altra persona ha applicato la tua cornice"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A outra pessoa aplicou sua moldura"
+          }
+        }
+      }
+    },
+    "call.liveFrame.answer.declined": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحتفظ %@ بعرضه"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ behält die eigene Ansicht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ keeps their own view"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ mantiene su vista"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ garde son affichage"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ mantiene la propria vista"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ mantém a própria visualização"
+          }
+        }
+      }
+    },
+    "call.liveFrame.answer.declined.anonymous": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "يحتفظ الطرف الآخر بعرضه"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Gegenüber behält die eigene Ansicht"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The other person keeps their own view"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La otra persona mantiene su vista"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Votre correspondant garde son affichage"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'altra persona mantiene la propria vista"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A outra pessoa mantém a própria visualização"
           }
         }
       }

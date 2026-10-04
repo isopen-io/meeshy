@@ -4,6 +4,7 @@ import type { StoryActionRailHandlers } from '@/components/story-action-rail';
 import { currentCredential } from '@/lib/api/client';
 import { apiConfig } from '@/lib/api/config';
 import { apiDeps } from '@/lib/api/deps';
+import type { GallerySaver } from '@/lib/gallery/gallery-saver';
 import { storyDownloadableMedia, storyExportUrl } from '@/lib/api/story-export';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -82,12 +83,15 @@ async function runStoryExport(params: {
   readonly url: string;
   readonly mediaId: string;
   readonly host: FileDeliveryHost;
+  readonly gallerySaver: GallerySaver | null | undefined;
 }): Promise<StorySaveNoticeKey> {
   const { job } = params;
   try {
-    const [{ downloadFile }, { fileDeliveryPortal }] = await Promise.all([
+    const [{ downloadFile }, { fileDeliveryPortal }, { saveToGallery }, { currentGallerySaver }] = await Promise.all([
       import('@/lib/media/download-file'),
       import('@/lib/media/deliver-file'),
+      import('@/lib/gallery/save-to-gallery'),
+      import('@/lib/gallery/gallery-saver'),
     ]);
     const result = await downloadFile({
       url: params.url,
@@ -100,6 +104,12 @@ async function runStoryExport(params: {
     if (result.status === 'offline') return 'story.save.offline';
     if (result.status === 'unavailable') return result.reason === 'refused' ? 'story.save.refused' : 'story.save.missing';
     job.lockDelivery();
+    /* La coque Android range la story DROIT dans l'album « Meeshy » (#9246),
+       comme la visionneuse (#8308) et Photos sur iOS : ni feuille de partage,
+       ni activation de geste à tenir après un long téléchargement. */
+    const saver = params.gallerySaver === undefined ? currentGallerySaver() : params.gallerySaver;
+    const gallery = await saveToGallery({ saver, blob: result.blob, fileName: result.fileName, mimeType: result.blob.type });
+    if (gallery !== null) return gallery === 'media.viewer.saved' ? 'story.save.success' : 'story.save.failed';
     const portal = fileDeliveryPortal(params.host);
     const outcome = portal === null ? 'unavailable' : await portal.deliver(result.blob, result.fileName, result.blob.type);
     if (outcome === 'delivered') return 'story.save.success';
@@ -129,8 +139,10 @@ export function useStoryOwnerRail(params: {
   readonly language: InterfaceLanguage;
   /** Injectable pour les témoins ; le navigateur par défaut. */
   readonly deliveryHost?: FileDeliveryHost;
+  /** Injectable pour les témoins ; la galerie de la coque, chargée au premier « Enregistrer », par défaut. */
+  readonly gallerySaver?: GallerySaver | null;
 }): StoryOwnerRail {
-  const { story, online, pause, resume, announce, language } = params;
+  const { story, online, pause, resume, announce, language, gallerySaver } = params;
   const storyId = story?.id;
   const viewers = useCommentsSheetHost(storyId);
   const host = useMemo(() => params.deliveryHost ?? browserFileDeliveryHost(), [params.deliveryHost]);
@@ -199,10 +211,10 @@ export function useStoryOwnerRail(params: {
         const job = storySaveStore.start(storyId);
         if (job === null) return;
         const url = storyExportUrl({ source: apiDeps.source, base: apiConfig.base, postId: storyId, media: exportMedia });
-        void runStoryExport({ job, url, mediaId: exportMedia.id, host }).then((key) => announce(translate(language, key)));
+        void runStoryExport({ job, url, mediaId: exportMedia.id, host, gallerySaver }).then((key) => announce(translate(language, key)));
       },
     };
-  }, [story, exportMedia, host, online, language, announce, viewers.open]);
+  }, [story, exportMedia, host, gallerySaver, online, language, announce, viewers.open]);
 
   const cancelSave = useCallback(() => {
     if (storyId !== undefined) storySaveStore.cancel(storyId);

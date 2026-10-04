@@ -5,6 +5,7 @@ import type { CanvasDocument, CanvasScene } from '@/lib/canvas/document';
 import { objectMediaSrc, type SceneCarrier } from '@/lib/canvas/carrier';
 import { backgroundBackdrop, backgroundFraming } from '@/lib/canvas/background';
 import { sceneRatio } from '@/lib/canvas/fit';
+import { backgroundPlaceholderHash } from '@/lib/canvas/scene-placeholder';
 import { hasTimedObjects, sceneDurationSeconds } from '@/lib/canvas/timeline';
 import { backgroundMedia } from '@/lib/feed/scene-framing';
 import { isDocumentAudible } from '@/lib/feed/scene-motion';
@@ -103,6 +104,11 @@ export type ScenePlayerProps = {
    * redessine la scène au temps pointé et recale ses médias, sans rouvrir le
    * moteur. AJOUTÉ, jamais un renommage (D-11). */
   readonly onClock?: (clock: SceneClockHandle) => void;
+  /** LE GEL EN PHASE (#9277, miroir `onPlaybackProgressing` de
+   * `MeeshyScenePlayer`) — `false` quand un média de la scène bufferise (la
+   * scène l'attend), `true` quand la lecture reprend. L'hôte y gèle SA barre
+   * (le lecteur de story) et y montre l'attente. AJOUTÉ (D-11). */
+  readonly onPlaybackProgressing?: (progressing: boolean) => void;
 };
 
 /** Le rappel le plus RÉCENT d'un hôte, sans en faire une dépendance d'effet :
@@ -178,6 +184,7 @@ function SceneCanvas({
           muted={muted}
           framing={framing}
           letterbox={letterbox}
+          placeholderHash={backgroundPlaceholderHash(background, scene)}
           callbacks={callbacks}
           seekClock={seekClock}
         />
@@ -236,6 +243,7 @@ export default function ScenePlayer({
   onLoop,
   servesLetterboxFill = true,
   onClock,
+  onPlaybackProgressing,
   ghostOutsideWindow,
 }: ScenePlayerProps) {
   const scene = document.scenes[sceneIndex];
@@ -252,7 +260,17 @@ export default function ScenePlayer({
   const durationSeconds =
     declaredDurationSeconds ?? (config.showsChrome && fallbackDurationSeconds !== undefined ? fallbackDurationSeconds : null);
   const enabled = timed || (config.showsChrome && durationSeconds !== null);
-  const clock = useSceneClock({ enabled, playing, loops: config.loops, durationSeconds, onTime, onEnded, onLoop });
+  const progressing = useLatest(onPlaybackProgressing);
+  const clock = useSceneClock({
+    enabled,
+    playing,
+    loops: config.loops,
+    durationSeconds,
+    onTime,
+    onEnded,
+    onLoop,
+    onStall: (stalled) => progressing.current?.(!stalled),
+  });
   const clockReceiver = useLatest(onClock);
   useEffect(() => {
     clockReceiver.current?.(clock);

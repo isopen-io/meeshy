@@ -9,7 +9,6 @@ import {
   messageSwipeOffset,
   messageSwipeOutcome,
   readingDelta,
-  replyDirectionOf,
   swipeProgress,
   swipeResistanceOf,
   swipeYieldsTo,
@@ -20,6 +19,8 @@ import {
 /**
  * **GLISSER UN MESSAGE : → RÉPONDRE, ← TRANSFÉRER** (#7559) — miroir de
  * `BubbleSwipeContainer` (`MessageListView.swift`), posé par `ThreadModes`
+ * (vers la droite répond pour TOUT message, bulle envoyée comprise — porteur
+ * 2026-10-04)
  * sur le nœud qui enveloppe LES DEUX peaux (rangée plate et bulle) : un mode
  * ajouté demain glisse sans rien câbler.
  *
@@ -103,7 +104,7 @@ export function MessageSwipe({
       ? undefined
       : {
           resistance: swipeResistanceOf(attachments),
-          replyDirection: replyDirectionOf({ flat, isMine }),
+          replyDirection: 1,
           canReply: actions.canReply,
           canForward: actions.canForward,
         };

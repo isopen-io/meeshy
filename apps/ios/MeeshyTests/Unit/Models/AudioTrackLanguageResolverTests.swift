@@ -106,4 +106,67 @@ final class AudioTrackLanguageResolverTests: XCTestCase {
             for: "es", translatedAudios: [track("fr")], originalUrl: "https://cdn/orig.m4a"
         ), "https://cdn/orig.m4a")
     }
+
+    // MARK: - Piste servie (#9010 — l'aperçu d'appui long joue ce que la bulle joue)
+
+    private func koreanVoice() -> MessageAttachment {
+        MessageAttachment(
+            id: "a1", fileName: "vocal-minjun.p-ko.m4a", originalName: "vocal-minjun.p-ko.m4a",
+            mimeType: "audio/mp4", fileUrl: "https://cdn/orig-ko.m4a", duration: 33_000
+        )
+    }
+
+    private func frenchTrack() -> MessageTranslatedAudio {
+        MessageTranslatedAudio(
+            id: "t-fr", attachmentId: "a1", targetLanguage: "fr",
+            url: "https://cdn/voix-fr.m4a", transcription: "Je pense à toi",
+            durationMs: 38_000, format: "m4a", cloned: true, quality: 0.9, ttsModel: "tts"
+        )
+    }
+
+    /// Leçon 261 : le témoin de RANG vit sur un rang AUTRE que le premier — au
+    /// rang 1, le court-circuit interdit et la règle juste rendent le même verdict.
+    func test_servedTrack_readerSecondRankHasTrack_servesThatTrackUrlDurationAndTranscript() {
+        let served = AudioTrackLanguageResolver.servedTrack(
+            of: koreanVoice(),
+            manualOverride: nil,
+            originalLanguage: "ko",
+            preferredLanguages: ["de", "fr"],
+            translatedAudios: [frenchTrack()],
+            originalTranscript: "너를 생각해"
+        )
+
+        XCTAssertEqual(served, ServedAudioTrack(
+            language: "fr", url: "https://cdn/voix-fr.m4a", durationMs: 38_000, transcript: "Je pense à toi"
+        ), "la piste servie est la piste traduite ENTIÈRE — son URL, sa durée et son texte, jamais ceux de l'original")
+    }
+
+    func test_servedTrack_originalAtItsRank_servesOriginalUrlDurationAndTranscript() {
+        let served = AudioTrackLanguageResolver.servedTrack(
+            of: koreanVoice(),
+            manualOverride: nil,
+            originalLanguage: "ko",
+            preferredLanguages: ["de", "ko", "fr"],
+            translatedAudios: [frenchTrack()],
+            originalTranscript: "너를 생각해"
+        )
+
+        XCTAssertEqual(served, ServedAudioTrack(
+            language: nil, url: "https://cdn/orig-ko.m4a", durationMs: 33_000, transcript: "너를 생각해"
+        ))
+    }
+
+    func test_servedTrack_manualFlagOnOriginal_servesOriginalEvenWhenPrismPrefersTranslation() {
+        let served = AudioTrackLanguageResolver.servedTrack(
+            of: koreanVoice(),
+            manualOverride: "ko",
+            originalLanguage: "ko",
+            preferredLanguages: ["fr"],
+            translatedAudios: [frenchTrack()],
+            originalTranscript: nil
+        )
+
+        XCTAssertEqual(served.url, "https://cdn/orig-ko.m4a")
+        XCTAssertNil(served.language)
+    }
 }

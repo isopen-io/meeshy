@@ -40,6 +40,10 @@ struct RiverConversationHost: View {
     /// #7452 — la consommation d'une vue unique, relayée jusqu'à la bulle.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
+    /// #8283 après #8320 — la lecture SUR PLACE d'un vocal cité, DITE par
+    /// l'appelant (`ConversationViewModel.toggleQuotedAudio`, le lecteur
+    /// PARTAGÉ du Fil). `false` ⇒ rien à jouer, la citation retombe sur son saut.
+    var onPlayQuotedAudio: ((ReplyReference) -> Bool)? = nil
     /// #3901 — appelé quand le curseur ATTEINT le présent (rang de la bulle
     /// la plus récente, `RiverConversationMapping.isAtPresent`) : c'est ici,
     /// et seulement ici, que l'appelant sait qu'il peut faire avancer le
@@ -84,6 +88,7 @@ struct RiverConversationHost: View {
         onReply: ((String) -> Void)? = nil,
         onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil,
         onMediaTap: ((MessageAttachment) -> Void)? = nil,
+        onPlayQuotedAudio: ((ReplyReference) -> Bool)? = nil,
         onReachPresent: (() -> Void)? = nil,
         text: @escaping (MeeshyMessage) -> String
     ) {
@@ -100,6 +105,7 @@ struct RiverConversationHost: View {
         self.onReply = onReply
         self.onConsumeViewOnce = onConsumeViewOnce
         self.onMediaTap = onMediaTap
+        self.onPlayQuotedAudio = onPlayQuotedAudio
         self.onReachPresent = onReachPresent
         self.text = text
         let geometry = RiverConversationMapping.resolveGeometry(messages: messages, viewerId: viewerId)
@@ -129,19 +135,29 @@ struct RiverConversationHost: View {
 
     @State private var memo = ContentsMemo()
 
-    /// #8283 — la zone média d'une citation ouvre le MÊME plein écran que
-    /// depuis Script : la pièce et son verrou sont ceux du Fil
-    /// (`QuotedMediaOpening`), l'ouverture celle du toucher d'un média
-    /// (`onMediaTap`). `false` ⇒ rien d'honnête à ouvrir (média protégé,
-    /// document, pièce introuvable), et la citation retombe sur son saut.
+    /// #8283 — la zone média d'une citation fait ce qu'elle fait en Script :
+    /// le geste, la pièce et son verrou sont ceux du Fil
+    /// (`QuotedMediaOpening.gesture`). Un vocal se JOUE sur place (#8320), une
+    /// image ou une vidéo s'ouvre par le toucher d'un média (`onMediaTap`).
+    /// `false` ⇒ rien d'honnête à jouer ni à ouvrir (média protégé, document,
+    /// pièce introuvable), et la citation retombe sur son saut.
     private var openQuotedMedia: ((ReplyReference) -> Bool)? {
-        guard let onMediaTap else { return nil }
+        let onMediaTap = onMediaTap
+        let onPlayQuotedAudio = onPlayQuotedAudio
+        guard onMediaTap != nil || onPlayQuotedAudio != nil else { return nil }
         let messages = messages
         return { reference in
             let quoted = messages.first { $0.id == reference.messageId }
-            guard let attachment = QuotedMediaOpening.attachment(for: reference, quoted: quoted) else { return false }
-            onMediaTap(attachment)
-            return true
+            switch QuotedMediaOpening.gesture(for: reference, quoted: quoted) {
+            case .playInPlace:
+                return onPlayQuotedAudio?(reference) ?? false
+            case .open(let attachment):
+                guard let onMediaTap else { return false }
+                onMediaTap(attachment)
+                return true
+            case .followQuote:
+                return false
+            }
         }
     }
 

@@ -24,7 +24,7 @@
  * littéral erroné, est celui que cette phrase promet : un retour matériel
  * ULTÉRIEUR ne consomme plus qu'UNE seule couche (jamais deux, jamais zéro).
  */
-import { waitForRowSettled } from './check-media.mjs';
+import { requireRowSettled, waitForRowSettled } from './check-media.mjs';
 import { confinementDe } from './chrome-confinement.mjs';
 
 const QUAD_ID = 'media-13';
@@ -181,13 +181,13 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
 
   const scroller = page.locator('main#contenu');
   await scrollUntilMounted(page, scroller, QUAD_ID);
-  await waitForRowSettled(page, QUAD_ID);
+  await requireRowSettled(page, QUAD_ID, expect);
 
   if (skin === 'bulles') {
     await page.getByRole('button', { name: /Mode de lecture/ }).click();
     await page.getByRole('menuitemradio', { name: /Bulles/ }).click();
     await page.waitForTimeout(300);
-    await waitForRowSettled(page, QUAD_ID);
+    await requireRowSettled(page, QUAD_ID, expect);
   }
 
   const rowOf = (id) => page.locator(`[data-message="${id}"]`);
@@ -280,7 +280,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   await expectNoTileClipped(QUAD_ID);
 
   await scrollUntilMounted(page, scroller, OVERFLOW_ID);
-  await waitForRowSettled(page, OVERFLOW_ID);
+  await requireRowSettled(page, OVERFLOW_ID, expect);
   const overflowRow = rowOf(OVERFLOW_ID);
   const overflowBadge = overflowRow.locator('[data-overflow]');
   expect((await overflowBadge.count()) === 1, `[${skin}/${scheme}] media-14 (6 images) porte un badge [data-overflow]`);
@@ -316,7 +316,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   // « aucune image perdue » se lit au PIXEL peint, pas à une métrique que la
   // responsivité peut fausser sans qu'aucun octet ne soit perdu.
   await rowOf(QUAD_ID).evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  await waitForRowSettled(page, QUAD_ID);
+  await requireRowSettled(page, QUAD_ID, expect);
   const quadImages = rowOf(QUAD_ID).locator('img[data-attachment-image]');
   const quadImageCount = await quadImages.count();
   const paintedColours = [];
@@ -426,7 +426,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
 
   // ===== G4 — la vidéo en grille est un <video> avec poster =====
   await scrollUntilMounted(page, scroller, TRIPLE_VIDEO_ID);
-  await waitForRowSettled(page, TRIPLE_VIDEO_ID);
+  await requireRowSettled(page, TRIPLE_VIDEO_ID, expect);
   const tripleRow = rowOf(TRIPLE_VIDEO_ID);
   expect(
     (await tripleRow.locator('[data-media-tile]').count()) === 3,
@@ -442,7 +442,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
      troisième agencement, et le seul dont les deux cases se partagent la
      largeur à parts égales sous `flex-shrink`. */
   await scrollUntilMounted(page, scroller, PAIR_ID);
-  await waitForRowSettled(page, PAIR_ID);
+  await requireRowSettled(page, PAIR_ID, expect);
   expect(
     (await rowOf(PAIR_ID).locator('[data-media-tile]').count()) === 2,
     `[${skin}/${scheme}] media-11 (2 images) rend 2 [data-media-tile]`,
@@ -545,7 +545,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
      main tout de suite quand la rangée est déjà là). */
   const checkGridShape = async (id, minimum) => {
     await scrollUntilMounted(page, scroller, id);
-    await waitForRowSettled(page, id);
+    await requireRowSettled(page, id, expect);
     await checkBoxAspectRatio(id);
     await checkSlotRatios(id, minimum);
   };
@@ -579,7 +579,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
    * c'est la FORME que `soloVideoSlot` élit — et une hauteur non nulle.
    */
   await scrollUntilMounted(page, scroller, SOLO_VIDEO_ID);
-  await waitForRowSettled(page, SOLO_VIDEO_ID);
+  await requireRowSettled(page, SOLO_VIDEO_ID, expect);
   const soloRow = rowOf(SOLO_VIDEO_ID);
   const soloTileBox = await soloRow.locator('[data-media-tile]').first().boundingBox();
   const soloVideoBox = await soloRow.locator('video').first().boundingBox();
@@ -621,7 +621,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
    * était juste ; il lui manquait la donnée. `media-16` est cette donnée.
    */
   await scrollDownUntilMounted(page, scroller, MINE_GRID_ID);
-  await waitForRowSettled(page, MINE_GRID_ID);
+  await requireRowSettled(page, MINE_GRID_ID, expect);
   const mineRow = rowOf(MINE_GRID_ID);
   if (skin === 'bulles') {
     const mineJustify = await mineRow.evaluate((el) => getComputedStyle(el).justifyContent);
@@ -654,7 +654,7 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   // G7 a défilé VERS LE BAS : le virtualiseur a démonté `media-13`, il faut le remonter avant de le viser.
   await scrollUntilMounted(page, scroller, QUAD_ID);
   await rowOf(QUAD_ID).evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  await waitForRowSettled(page, QUAD_ID);
+  await requireRowSettled(page, QUAD_ID, expect);
   const historyLengthBefore = await page.evaluate(() => window.history.length);
   const secondTile = rowOf(QUAD_ID).locator('[data-media-tile]').nth(1);
   /* D-134 (#6303) — la pièce se nomme par son IDENTITÉ : depuis le fil, la
@@ -837,15 +837,15 @@ export async function checkThreadMediaGrid({ browser, BASE, expect, setScheme, s
   await backPage.waitForSelector('[data-message]');
   const backScroller = backPage.locator('main#contenu');
   await scrollUntilMounted(backPage, backScroller, QUAD_ID);
-  await waitForRowSettled(backPage, QUAD_ID);
+  await requireRowSettled(backPage, QUAD_ID, expect);
   if (skin === 'bulles') {
     await backPage.getByRole('button', { name: /Mode de lecture/ }).click();
     await backPage.getByRole('menuitemradio', { name: /Bulles/ }).click();
     await backPage.waitForFunction(() => typeof window.history.state?.backDismiss !== 'string');
-    await waitForRowSettled(backPage, QUAD_ID);
+    await requireRowSettled(backPage, QUAD_ID, expect);
   }
   await backPage.locator(`[data-message="${QUAD_ID}"]`).evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  await waitForRowSettled(backPage, QUAD_ID);
+  await requireRowSettled(backPage, QUAD_ID, expect);
   /**
    * #6319 — l'entrée que le retour consomme est relevée À L'INSERTION de la
    * visionneuse (l'observateur de mutations s'exécute juste après le commit),

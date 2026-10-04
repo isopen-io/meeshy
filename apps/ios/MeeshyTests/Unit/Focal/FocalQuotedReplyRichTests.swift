@@ -430,7 +430,7 @@ final class FocalQuotedReplyRichTests: XCTestCase {
         // avec la Rivière (`QuotedMediaOpening`) : l'hôte l'APPELLE, la règle
         // se lit chez elle et s'exécute dans `QuotedMediaOpeningTests`.
         XCTAssertTrue(
-            body.contains("QuotedMediaOpening.attachment(for: reference") && body.contains("onMediaTap?(attachment)"),
+            body.contains("QuotedMediaOpening.gesture(for: reference") && body.contains("onMediaTap?(attachment)"),
             "Image et vidéo citées → le plein écran de la conversation (onMediaTap), jamais une surface parallèle."
         )
         XCTAssertTrue(

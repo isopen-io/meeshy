@@ -4,7 +4,7 @@ import {
   resolveParticipantLanguage,
   resolveUserLanguagesOrdered,
 } from '@meeshy/shared/utils/conversation-helpers';
-import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
+import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import type { QueuedEventVariant } from './queuedEventContract';
 
@@ -179,13 +179,20 @@ export async function enqueueForOfflineParticipants(
   if (!deliveryQueue) return;
 
   const { conversationId, actorParticipantId, actorUserId, eventType, messageId, payload, dedupKey, resolvePayloadForReader } = params;
-  // Normalisée une fois, du MÊME côté que le prisme : `resolveUserLanguagesOrdered`
-  // et `resolveParticipantLanguage` rendent des codes réduits et minusculés
-  // ('PT-BR' → 'pt'). Comparer une langue cible brute à un prisme normalisé
-  // raterait le lecteur qu'on cherche précisément à servir.
+  // Normalisée une fois, du MÊME côté que le prisme, et par la MÊME SSOT :
+  // `resolveUserLanguagesOrdered` et `resolveParticipantLanguage` rendent des
+  // codes région-strippés et minusculés — pour TOUT code depuis #9247, pas
+  // seulement pour ceux que le catalogue sait réduire. Comparer une langue cible
+  // brute à un prisme normalisé raterait le lecteur qu'on cherche précisément à
+  // servir.
+  //
+  // Le repli écrit ici à la main (`normalizeLanguageCode ?? toLowerCase`) était la
+  // porte jumelle du même défaut : aucune panne, le seul appelant de production
+  // passant une cible que le pipeline a déjà canonicalisée — mais le premier à
+  // passer un code verbatim hors catalogue aurait comparé un 'yue-hk' qui ne
+  // matche plus personne.
   const restrictToLanguage = params.restrictToReadersOfLanguage
-    ? normalizeLanguageCode(params.restrictToReadersOfLanguage) ??
-      params.restrictToReadersOfLanguage.toLowerCase()
+    ? normalizeLanguageForDedup(params.restrictToReadersOfLanguage)
     : null;
   try {
     // La restriction par langue exige les préférences du lecteur, que la

@@ -17,10 +17,11 @@ import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { awaitCondition, awaitFact } from './lib/await-fact.mjs';
 import { checkOfflineStates } from './lib/check-offline-states.mjs';
-import { checkThreadMedia, waitForRowSettled } from './lib/check-media.mjs';
+import { checkThreadMedia, requireRowSettled } from './lib/check-media.mjs';
 import { waitForValueSettled } from './lib/settle-value.mjs';
 import { checkThreadMediaGrid } from './lib/check-media-grid.mjs';
 import { checkViewerVideoTransport } from './lib/check-media-transport.mjs';
+import { checkAudioFullscreen, checkMiniPlayerParity } from './lib/check-audio-fullscreen.mjs';
 import { checkMessageStates } from './lib/check-message-states.mjs';
 import { checkMoreSheet } from './lib/check-more-sheet.mjs';
 import { checkRealtimeEvents } from './lib/check-realtime-events.mjs';
@@ -149,7 +150,7 @@ await checkProtectionStates({ browser, BASE, expect });
    * aussitôt, sans rapport avec le clic. `waitForRowSettled`
    * (`lib/check-media.mjs`) attend le FAIT — réutilisé, jamais dupliqué.
    */
-  await waitForRowSettled(menuPage, await rows.nth(2).locator('[data-message]').getAttribute('data-message'));
+  await requireRowSettled(menuPage, await rows.nth(2).locator('[data-message]').getAttribute('data-message'), expect);
 
   /**
    * Le fil est ANCRÉ EN BAS et VIRTUALISÉ : une rangée peut être montée sans
@@ -610,7 +611,7 @@ await checkProtectionStates({ browser, BASE, expect });
     // L'ancrage d'ouverture peut encore être en vol (§ doc-comment du premier
     // `waitForRowSettled` de ce fichier) — le clic droit qui suit ouvrirait
     // un menu que le premier `scroll` de convergence referme aussitôt.
-    await waitForRowSettled(leakPage, BLURRED_WITNESS_ID);
+    await requireRowSettled(leakPage, BLURRED_WITNESS_ID, expect);
 
     // (a) le menu d'un message PROTÉGÉ n'offre pas « Copier ». Visé par
     // `data-action` et non par le libellé (#7141/#7555) : ce gate tourne en
@@ -714,7 +715,7 @@ await checkProtectionStates({ browser, BASE, expect });
    */
   // L'ancrage d'ouverture peut encore être en vol (§ doc-comment du premier
   // `waitForRowSettled` de ce fichier).
-  await waitForRowSettled(touchPage, await touchPage.locator('[data-row] [data-message]').first().getAttribute('data-message'));
+  await requireRowSettled(touchPage, await touchPage.locator('[data-row] [data-message]').first().getAttribute('data-message'), expect);
   await touchPage.dispatchEvent('[data-row]', 'contextmenu');
   await touchPage.waitForSelector('.message-menu-list');
   const clusterTouchGuard = await touchPage.evaluate(() => {
@@ -866,6 +867,16 @@ await checkThreadMediaGrid({ browser, BASE, expect, setScheme, skin: 'bulles', s
  * jamais la visionneuse. Un seul schéma : la barre n'a pas de variante claire.
  */
 await checkViewerVideoTransport({ browser, BASE, expect, setScheme, scheme: 'dark' });
+
+/**
+ * 8quater — LE LECTEUR AUDIO PLEIN ÉCRAN (#8333) — `lib/check-audio-fullscreen.mjs` :
+ * la bulle d'un vocal ouvre la page audio, servie au Prisme du lecteur ; lecture,
+ * pause, vocal suivant et Échap, sur les vraies pistes décodées par Chromium.
+ */
+await checkAudioFullscreen({ browser, BASE, expect, setScheme, scheme: 'dark' });
+/* #9294 — le mini-lecteur dans les DEUX schémas : son aplat et sa place se jugent sur chaque fond. */
+await checkMiniPlayerParity({ browser, BASE, expect, setScheme, scheme: 'light' });
+await checkMiniPlayerParity({ browser, BASE, expect, setScheme, scheme: 'dark' });
 
 /**
  * 9 — LES ÉTATS DU MESSAGE (#5936) — `lib/check-message-states.mjs`, QUATRE

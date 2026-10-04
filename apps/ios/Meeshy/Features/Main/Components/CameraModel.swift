@@ -5,13 +5,35 @@ import os
 import MeeshySDK
 import MeeshyUI
 
+/// **Quand le micro entre dans la session** (#9328).
+///
+/// Ajouter une entrée à une session DÉJÀ lancée la reconfigure : l'aperçu gèle
+/// puis noircit le temps qu'elle se refasse — à l'instant précis où l'auteur
+/// commence à filmer. Un micro déjà autorisé entre donc dans la configuration
+/// initiale ; un micro jamais demandé attend que le son serve (aucun prompt à
+/// l'ouverture d'un viseur photo), et un refus n'empêche pas de filmer muet.
+///
+/// **Ouvrir le viseur ne coupe pas la musique.** Brancher le micro bascule la
+/// session audio de l'app en enregistrement, ce qui interrompt une autre app
+/// qui joue : quand une musique tourne, le micro attend donc la prise — comme
+/// l'appareil photo, qui ne la coupe qu'en filmant.
+nonisolated enum CameraAudioArming {
+    static func armsAtSetup(microphone: AVAuthorizationStatus, otherAudioPlaying: Bool) -> Bool {
+        microphone == .authorized && !otherAudioPlaying
+    }
+}
+
 @MainActor
 final class CameraModel: NSObject, ObservableObject {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
+    nonisolated deinit {
+        // Un modèle libéré sans `stop()` ne laisse pas son guet de la scène
+        // inscrit au centre de notifications (#9295).
+        if let subjectAreaObserver { NotificationCenter.default.removeObserver(subjectAreaObserver) }
+    }
     nonisolated(unsafe) let session = AVCaptureSession()
     var capturedPhoto: UIImage?
     /// Les octets tels que l'appareil les a produits — EXIF compris. `nil`
@@ -34,6 +56,10 @@ final class CameraModel: NSObject, ObservableObject {
 
     private let photoOutput = AVCapturePhotoOutput()
     private let videoOutput = AVCaptureMovieFileOutput()
+    /// Les trames de l'objectif pour le look en direct (#9329) — guettées, mais
+    /// gardées seulement quand un look est choisi.
+    private let frameOutput = AVCaptureVideoDataOutput()
+    nonisolated let liveFeed = ComposerCameraFeed()
     /// #8695 — le traitement UNIQUE de toute prise photo de l'app : chaque
     /// consommateur (conversation, fil, composer, story) reçoit la photo déjà
     /// redressée, bornée et améliorée, EXIF compris.
@@ -46,6 +72,10 @@ final class CameraModel: NSObject, ObservableObject {
     /// Publiée : le sol blanc du flash avant (#8653) suit l'objectif actif.
     @Published private(set) var currentPosition: AVCaptureDevice.Position = .back
     private var recordingTimer: Timer?
+    /// Le guet de la scène après un double toucher (#9295) — `nil` hors session.
+    /// `nonisolated(unsafe)` : la deinit, non isolée, le retire ; il n'est
+    /// écrit que sur le fil principal.
+    nonisolated(unsafe) private var subjectAreaObserver: NSObjectProtocol?
 
     // Camera-switch-mid-recording (bug fix 2026-07-09): `AVCaptureMovieFileOutput`'s
     // active recording connection breaks when its video input is removed, even
@@ -88,6 +118,13 @@ final class CameraModel: NSObject, ObservableObject {
 
         if session.canAddOutput(photoOutput) { session.addOutput(photoOutput) }
         if session.canAddOutput(videoOutput) { session.addOutput(videoOutput) }
+        frameOutput.alwaysDiscardsLateVideoFrames = true
+        frameOutput.setSampleBufferDelegate(liveFeed, queue: liveFeed.queue)
+        if session.canAddOutput(frameOutput) { session.addOutput(frameOutput) }
+        if CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio),
+                                         otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying) {
+            addAudioInput()
+        }
 
         session.commitConfiguration()
 
@@ -119,7 +156,14 @@ final class CameraModel: NSObject, ObservableObject {
             return
         }
 
-        guard let audioDevice = AVCaptureDevice.default(for: .audio) else { return }
+        session.beginConfiguration()
+        addAudioInput()
+        session.commitConfiguration()
+    }
+
+    /// Branche le micro DANS une configuration ouverte par l'appelant.
+    private func addAudioInput() {
+        guard !hasAudioInput, let audioDevice = AVCaptureDevice.default(for: .audio) else { return }
         let audioInput: AVCaptureDeviceInput
         do {
             audioInput = try AVCaptureDeviceInput(device: audioDevice)
@@ -127,12 +171,9 @@ final class CameraModel: NSObject, ObservableObject {
             Logger.media.error("Failed to create audio capture input: \(error.localizedDescription, privacy: .public)")
             return
         }
-        session.beginConfiguration()
-        if session.canAddInput(audioInput) {
-            session.addInput(audioInput)
-            hasAudioInput = true
-        }
-        session.commitConfiguration()
+        guard session.canAddInput(audioInput) else { return }
+        session.addInput(audioInput)
+        hasAudioInput = true
     }
 
     private func addVideoInput(position: AVCaptureDevice.Position) {
@@ -151,7 +192,10 @@ final class CameraModel: NSObject, ObservableObject {
 
         session.addInput(input)
         currentPosition = position
+        liveFeed.setPosition(position)
         zoomFactor = device.videoZoomFactor
+        apply(ComposerCaptureFocus.continuous(focusCapabilities(of: device)), to: device)
+        watchSubjectArea(of: device)
     }
 
     /// Switches the active camera. While recording, this cannot reconfigure the
@@ -277,6 +321,82 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - La mise au point (#9295)
+
+    /// **Le double toucher vise ce point du capteur** — mise au point et
+    /// exposition, une fois ; la scène qui change rend l'objectif au continu.
+    /// `devicePoint` est en coordonnées capteur (`0...1`), converties par la
+    /// couche d'aperçu (`CameraPreviewFocusPoints`).
+    func focus(at devicePoint: CGPoint) {
+        guard let device = activeVideoDevice else { return }
+        apply(ComposerCaptureFocus.focusing(at: devicePoint, focusCapabilities(of: device)), to: device)
+    }
+
+    private func resumeContinuousFocus() {
+        guard let device = activeVideoDevice else { return }
+        apply(ComposerCaptureFocus.continuous(focusCapabilities(of: device)), to: device)
+    }
+
+    private func focusCapabilities(of device: AVCaptureDevice) -> ComposerCaptureFocus.Capabilities {
+        ComposerCaptureFocus.Capabilities(
+            focusPointOfInterest: device.isFocusPointOfInterestSupported,
+            autoFocus: device.isFocusModeSupported(.autoFocus),
+            continuousAutoFocus: device.isFocusModeSupported(.continuousAutoFocus),
+            exposurePointOfInterest: device.isExposurePointOfInterestSupported,
+            autoExpose: device.isExposureModeSupported(.autoExpose),
+            continuousAutoExposure: device.isExposureModeSupported(.continuousAutoExposure))
+    }
+
+    /// Le POINT se pose AVANT le mode : c'est le changement de mode qui lance
+    /// la mesure — l'inverse viserait l'ancien point.
+    private func apply(_ plan: ComposerCaptureFocus.Plan, to device: AVCaptureDevice) {
+        do {
+            try device.lockForConfiguration()
+            defer { device.unlockForConfiguration() }
+            switch plan.focus {
+            case .continuous?:
+                if device.isFocusPointOfInterestSupported { device.focusPointOfInterest = ComposerCaptureFocus.center }
+                device.focusMode = .continuousAutoFocus
+            case .once(let point)?:
+                device.focusPointOfInterest = point
+                device.focusMode = .autoFocus
+            case nil:
+                break
+            }
+            switch plan.exposure {
+            case .continuous?:
+                if device.isExposurePointOfInterestSupported { device.exposurePointOfInterest = ComposerCaptureFocus.center }
+                device.exposureMode = .continuousAutoExposure
+            case .once(let point)?:
+                device.exposurePointOfInterest = point
+                device.exposureMode = .autoExpose
+            case nil:
+                break
+            }
+            device.isSubjectAreaChangeMonitoringEnabled = plan.watchesSubjectArea
+        } catch {
+            Logger.media.error("Focus configuration failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Un observateur par objectif : changer d'objectif remplace le guet.
+    private func watchSubjectArea(of device: AVCaptureDevice) {
+        stopWatchingSubjectArea()
+        subjectAreaObserver = NotificationCenter.default.addObserver(
+            forName: AVCaptureDevice.subjectAreaDidChangeNotification,
+            object: device,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resumeContinuousFocus() }
+        }
+    }
+
+    private func stopWatchingSubjectArea() {
+        guard let subjectAreaObserver else { return }
+        NotificationCenter.default.removeObserver(subjectAreaObserver)
+        self.subjectAreaObserver = nil
+    }
+
     /// **Peut-on demander un enregistrement à AVFoundation ?** La question est
     /// posée à `CameraRecordingReadiness`, et elle est POSÉE — c'est tout le
     /// lot : `startRecording(to:recordingDelegate:)` lève une exception
@@ -363,6 +483,8 @@ final class CameraModel: NSObject, ObservableObject {
 
     func stop() {
         if isRecordingVideo { stopRecording() }
+        liveFeed.flush()
+        stopWatchingSubjectArea()
         Task.detached { [weak self] in
             self?.session.stopRunning()
         }
@@ -554,11 +676,14 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
             self.capturedPhotoData = data
             self.capturedPhotoId = UUID().uuidString
         }
-        // Persist the processed encoded bytes (HEIC/JPEG, EXIF kept), not a
-        // re-encoded UIImage. `PhotoLibraryManager` is deliberately non-@MainActor
-        // so its `performChanges` block runs on Photos' own queue without the
+        // Persist the processed encoded bytes AS-IS (HEIC/JPEG, EXIF kept):
+        // `saveImage(_ data:)` decodes to a UIImage and loses the EXIF,
+        // `saveImageFile` hands Photos the bytes untouched (#9347).
+        // `PhotoLibraryManager` is deliberately non-@MainActor so its
+        // `performChanges` block runs on Photos' own queue without the
         // executor-isolation SIGTRAP the previous inline save hit.
-        Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImage(data) } }
+        let nom = ComposerPhotoEncoding.fileName(for: data, id: UUID().uuidString)
+        Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImageFile(data, fileName: nom) } }
     }
 }
 

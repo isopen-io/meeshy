@@ -1,15 +1,18 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
 import { MEDIA_TRANSPORT_GLYPHS } from './glyphs-media-transport';
 import { MediaUnavailable } from './media-unavailable';
+import { PlaybackStallIndicator } from './playback-stall-indicator';
 import { ReelPoster } from './reel-poster';
 import { GLYPH_SIZE } from './ui-chrome';
 import { usePublicationParticipation } from '@/lib/view/publication-participation';
 
 import { VIEWER_GLASS, ViewerActionRail, ViewerBottomBar, ViewerIdentity, type ViewerAction } from './viewer-chrome';
 import { carrierMediaIdentity } from '@/lib/canvas/carrier';
+import { watchMediaStall } from '@/lib/media/media-stall';
+import { sceneWaitingImage } from '@/lib/canvas/scene-placeholder';
 import { sceneHasAudibleBackgroundVideo, sceneHasControllableSound } from '@/lib/canvas/background-sound';
 import type { ProtectedMediaDeps, ProtectedMediaUnavailableReason } from '@/lib/api/protected-media';
 import type { FeedCardMedia, FeedCardModel, FeedCardScene } from '@/lib/feed/card-model';
@@ -101,6 +104,17 @@ function ReelPlayable({
   const { status, progress, toggle, bind } = useReelPlayback({ mediaId: media.id, active, soundOn });
   const poster = media.thumbnailSrc ?? media.placeholder;
   const preload = active ? 'auto' : 'metadata';
+  /* L'ATTENTE SE DIT (#9277) : l'élément lié est aussi écouté pour son buffer. */
+  const [element, setElement] = useState<HTMLMediaElement | null>(null);
+  const [stalled, setStalled] = useState(false);
+  const attach = useCallback(
+    (el: HTMLMediaElement | null) => {
+      bind(el);
+      setElement(el);
+    },
+    [bind],
+  );
+  useEffect(() => (element === null ? undefined : watchMediaStall(element, setStalled)), [element]);
 
   return (
     <>
@@ -108,7 +122,7 @@ function ReelPlayable({
         /* `key` — une source qui change REMONTE l'élément (motif `VideoTile`). */
         <video
           key={media.src}
-          ref={bind}
+          ref={attach}
           src={media.src}
           {...(poster !== undefined ? { poster } : {})}
           preload={preload}
@@ -123,7 +137,7 @@ function ReelPlayable({
           <div aria-hidden="true" className="absolute inset-0 grid place-items-center" style={{ background: `radial-gradient(circle at 50% 42%, ${accent}, var(--color-media-backdrop) 72%)` }}>
             <GlyphSvg glyph={FEED_GLYPHS.waveform} size={112} style={{ color: 'var(--color-on-media-3)' }} />
           </div>
-          <audio key={media.src} ref={bind} src={media.src} preload={preload} loop muted={!soundOn} data-reel-media="audio" />
+          <audio key={media.src} ref={attach} src={media.src} preload={preload} loop muted={!soundOn} data-reel-media="audio" />
         </>
       )}
       <button
@@ -140,6 +154,7 @@ function ReelPlayable({
           </span>
         ) : null}
       </button>
+      <PlaybackStallIndicator stalled={stalled && active && status !== 'paused'} language={language} />
       {/* La progression est ÉCRITE, jamais animée : une transition sur la
           transformation amortirait le suivi de la lecture.
 
@@ -177,7 +192,8 @@ function scenePosterOf(scene: FeedCardScene): string | undefined {
   const first = scene.document.scenes[0];
   if (first === undefined) return undefined;
   const identity = carrierMediaIdentity(first);
-  return identity === null ? undefined : scene.carrier.media.find((m) => m.id === identity)?.poster;
+  const poster = identity === null ? undefined : scene.carrier.media.find((m) => m.id === identity)?.poster;
+  return poster ?? sceneWaitingImage(first);
 }
 
 function ReelStage({
@@ -341,7 +357,14 @@ function reelActions({
   ];
 }
 
-export function ReelPage(props: ReelPageProps) {
+/**
+ * MÉMOÏSÉE (#9277) : changer de réel ne change le `mode` que de trois pages au
+ * plus ; les autres gardent leurs props (rappels stables chez l'hôte, modèle
+ * mis en cache par publication) et ne se re-rendent plus pendant le geste —
+ * un coût qui croissait avec chaque page de réels chargée, sur le fil
+ * principal d'un Android lent.
+ */
+export const ReelPage = memo(function ReelPage(props: ReelPageProps) {
   const { model, index, count, mode, language } = props;
   const stage = reelStageOf(model);
   // Une scène JOUE toujours (elle est le fond) ; le bouton son n'existe que
@@ -463,4 +486,4 @@ export function ReelPage(props: ReelPageProps) {
       </div>
     </article>
   );
-}
+});

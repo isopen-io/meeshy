@@ -1,11 +1,16 @@
 import UIKit
 
-// **La caméra de la barre de composition, et ce que la scène rend au message**
-// (#9123, #9124). Règles pures : le meuble les compose, aucune ne lit un état.
+// **Ce que la scène rend au message** (#9123, #9124). Règles pures : le meuble
+// les compose, aucune ne lit un état.
+//
+// **La caméra de la barre ne passe plus par la scène** (#9295, directive porteur
+// 2026-10-04) : elle ouvre le viseur plein écran et verse sa prise au message
+// (`ComposerReturnedMedia(capture:)`). L'origine `.conversationCapture` n'a donc
+// plus de porte qui la monte ; ses règles restent tant que l'origine existe.
 
-/// **Le viseur s'arme à l'ouverture pour UNE porte : la caméra de la barre**
+/// **Le viseur s'arme à l'ouverture pour UNE origine : `.conversationCapture`**
 /// (#9123). C'est une règle d'ORIGINE, distincte de #4851 qui a retiré
-/// l'armement au montage pour toutes les portes de composition : ici l'auteur a
+/// l'armement au montage pour toutes les portes de composition : l'auteur a
 /// touché « caméra » — le viseur EST ce qu'il a demandé, pas un écran imposé.
 nonisolated enum ComposerConversationCapture {
 
@@ -37,6 +42,18 @@ nonisolated enum ComposerConversationCapture {
 enum ComposerReturnedMedia {
     case image(UIImage)
     case video(URL)
+}
+
+extension ComposerReturnedMedia {
+    /// **La prise du viseur plein écran, versée au message** (#9295) : la
+    /// caméra de la barre ne passe plus par la scène, elle rend sa prise par
+    /// le même chemin de pose qu'une scène terminée.
+    init(capture: CameraResult) {
+        switch capture {
+        case .photo(let image, _): self = .image(image)
+        case .video(let url): self = .video(url)
+        }
+    }
 }
 
 nonisolated enum ComposerReturnAction: Equatable {

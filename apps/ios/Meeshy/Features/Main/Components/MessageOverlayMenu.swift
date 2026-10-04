@@ -29,6 +29,9 @@ struct MessageOverlayMenu: View {
     var textTranslations: [MessageTranslation] = []
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
+    /// Ce que le fil sert pour CE message — drapeau et pistes (#9010, #9259).
+    var threadLanguage = ThreadLanguage()
+    private var servedAudioTracks: [String: ServedAudioTrack] { threadLanguage.servedAudioTracks }
     var onReact: ((String) -> Void)?
     /// Composant unifié « Enregistrer » : déclenché par l'action `.saveMedia`
     /// (message à exactement un attachment enregistrable).
@@ -429,26 +432,7 @@ struct MessageOverlayMenu: View {
                     // visible — la position du cluster (action bar / emoji
                     // bar) reste cohérente.
                     Group {
-                        ThemedMessageBubble(
-                            message: message,
-                            contactColor: contactColor,
-                            isDirect: isDirect,
-                            isDark: isDark,
-                            transcription: transcription,
-                            translatedAudios: translatedAudios,
-                            textTranslations: textTranslations,
-                            preferredTranslation: preferredTranslation,
-                            showAvatar: !isDirect,
-                            isLastInGroup: true,
-                            isLastReceivedMessage: true,
-                            isLastSentMessage: true,
-                            mentionDisplayNames: mentionDisplayNames,
-                            currentUserId: currentUserId,
-                            userLanguages: (
-                                regional: userRegionalLanguage,
-                                custom: userCustomDestinationLanguage
-                            )
-                        )
+                        previewBubble
                         // Gate Equatable (H3) : pendant le drag 60 fps
                         // (`clusterDragOffset`) le body du GeometryReader se
                         // ré-évalue ; sans ce gate, `ThemedMessageBubble` se
@@ -754,7 +738,7 @@ struct MessageOverlayMenu: View {
 
             if !audios.isEmpty {
                 ForEach(audios) { audio in
-                    PreviewAudioPlayer(attachment: audio, contactColor: contactColor)
+                    PreviewAudioPlayer(track: Self.previewAudioTrack(for: audio, served: servedAudioTracks), contactColor: contactColor)
                 }
             }
 
@@ -920,8 +904,58 @@ struct MessageOverlayMenu: View {
 
 // MARK: - Preview Audio Player (interactive)
 
+extension MessageOverlayMenu {
+    /// #9010 — l'aperçu joue la piste que la bulle sert ; l'original seulement
+    /// quand l'hôte n'en a élu aucune.
+    static func previewAudioTrack(for attachment: MessageAttachment, served: [String: ServedAudioTrack]) -> ServedAudioTrack {
+        served[attachment.id] ?? .original(of: attachment)
+    }
+
+    /// **Ce que le fil sert pour CE message** (#9259) : la sélection du
+    /// drapeau (`ConversationViewModel.bubbleLanguageSelections`), ses
+    /// écrivains, et les pistes qu'elle élit — lus dans le VM par l'hôte,
+    /// jamais recopiés dans un état de l'overlay.
+    struct ThreadLanguage {
+        var selection: ConversationViewModel.BubbleLanguageSelection? = nil
+        var servedAudioTracks: [String: ServedAudioTrack] = [:]
+        var onSetActiveDisplayLanguage: ((String?) -> Void)? = nil
+        var onSetSecondaryLanguage: ((String?) -> Void)? = nil
+    }
+
+    /// La bulle de l'aperçu, branchée sur le drapeau du fil comme la cellule
+    /// (`MessageListViewController`) : la face affichée ET la piste jouée
+    /// suivent une bascule faite dans le fil, pas le seul Prisme (#9259).
+    var previewBubble: ThemedMessageBubble {
+        ThemedMessageBubble(
+            message: message,
+            contactColor: contactColor,
+            isDirect: isDirect,
+            isDark: isDark,
+            transcription: transcription,
+            translatedAudios: translatedAudios,
+            textTranslations: textTranslations,
+            preferredTranslation: preferredTranslation,
+            showAvatar: !isDirect,
+            activeAudioLanguage: threadLanguage.selection?.activeDisplayLangCode,
+            isLastInGroup: true,
+            isLastReceivedMessage: true,
+            isLastSentMessage: true,
+            mentionDisplayNames: mentionDisplayNames,
+            currentUserId: currentUserId,
+            userLanguages: (
+                regional: userRegionalLanguage,
+                custom: userCustomDestinationLanguage
+            ),
+            activeDisplayLangCode: threadLanguage.selection?.activeDisplayLangCode,
+            secondaryLangCode: threadLanguage.selection?.secondaryLangCode,
+            onSetActiveDisplayLanguage: threadLanguage.onSetActiveDisplayLanguage,
+            onSetSecondaryLanguage: threadLanguage.onSetSecondaryLanguage
+        )
+    }
+}
+
 private struct PreviewAudioPlayer: View {
-    let attachment: MessageAttachment
+    let track: ServedAudioTrack
     let contactColor: String
 
     private var theme: ThemeManager { ThemeManager.shared }
@@ -934,7 +968,7 @@ private struct PreviewAudioPlayer: View {
     var body: some View {
         VStack(spacing: MeeshySpacing.sm) {
             HStack(spacing: MeeshySpacing.smPlus) {
-                Button { player.toggle(url: attachment.fileUrl) } label: {
+                Button { player.toggle(url: track.url) } label: {
                     ZStack {
                         Circle()
                             .fill(accent.opacity(0.2))
@@ -956,15 +990,16 @@ private struct PreviewAudioPlayer: View {
                 .accessibilityLabel(player.isPlaying
                     ? String(localized: "media.pauseAudio", defaultValue: "Mettre en pause", bundle: .main)
                     : String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main))
-                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.spokenTotalDuration(attachmentDurationMs: attachment.duration)))
+                .accessibilityHint(String(format: String(localized: "media.audioHint", defaultValue: "Audio de %@", bundle: .main), player.spokenTotalDuration(attachmentDurationMs: track.durationMs)))
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
+                    // Comme la bulle : aucun nom de fichier, qui trahirait l'original (#9010).
+                    Text(MediaKindLabel.voiceMessage())
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
-                    Text(player.timeLabel(attachmentDurationMs: attachment.duration))
+                    Text(player.timeLabel(attachmentDurationMs: track.durationMs))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                         .monospacedDigit()
@@ -993,6 +1028,14 @@ private struct PreviewAudioPlayer: View {
                         .padding(.vertical, MeeshySpacing.xs)
                         .background(Capsule().fill(accent.opacity(0.12)))
                 }
+            }
+
+            if let transcript = track.transcript, !transcript.isEmpty {
+                Text(transcript)
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             HStack(spacing: MeeshySpacing.sm) {

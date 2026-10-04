@@ -270,3 +270,230 @@ private final class IntensityScreen: ScreenBrightnessControlling {
     var brightness: CGFloat
     init(brightness: CGFloat) { self.brightness = brightness }
 }
+
+/// **#9295 — la mise au point automatique, le double toucher qui vise, le
+/// pincement qui zoome** (directive porteur 2026-10-04).
+///
+/// > « L'appareil doit avoir l'auto mise au point et lorsqu'on double tap à une
+/// > position elle fait la mise au point à cet emplacement. […] Le zoom par
+/// > pinch-in/out doit fonctionner ainsi que longpress swipe down/up. »
+///
+/// Les gestes vivent dans le chrome PARTAGÉ (`ComposerCaptureChrome`) : le
+/// viseur plein écran et le viseur de la scène des posts et des stories en
+/// profitent d'un même câblage.
+final class ComposerCaptureFocusAndPinchTests: XCTestCase {
+
+    private static let objectifComplet = ComposerCaptureFocus.Capabilities(
+        focusPointOfInterest: true, autoFocus: true, continuousAutoFocus: true,
+        exposurePointOfInterest: true, autoExpose: true, continuousAutoExposure: true)
+
+    // MARK: - La mise au point
+
+    func test_continuous_ouverture_suitLaSceneSansGuet() {
+        let plan = ComposerCaptureFocus.continuous(Self.objectifComplet)
+        XCTAssertEqual(plan.focus, .continuous)
+        XCTAssertEqual(plan.exposure, .continuous)
+        XCTAssertFalse(plan.watchesSubjectArea, "en continu, l'objectif suit déjà la scène")
+    }
+
+    func test_focusing_doubleToucher_viseLePointPuisGuetteLaScene() {
+        let point = CGPoint(x: 0.25, y: 0.7)
+        let plan = ComposerCaptureFocus.focusing(at: point, Self.objectifComplet)
+        XCTAssertEqual(plan.focus, .once(at: point))
+        XCTAssertEqual(plan.exposure, .once(at: point))
+        XCTAssertTrue(plan.watchesSubjectArea, "la scène qui change rend l'objectif au continu")
+    }
+
+    func test_focusing_toucherAuRasDuBord_resteDansLeCapteur() {
+        let plan = ComposerCaptureFocus.focusing(at: CGPoint(x: -0.2, y: 1.4), Self.objectifComplet)
+        XCTAssertEqual(plan.focus, .once(at: CGPoint(x: 0, y: 1)))
+    }
+
+    func test_focusing_objectifSansPointDInteret_garderSonContinu() {
+        let fixe = ComposerCaptureFocus.Capabilities(
+            focusPointOfInterest: false, autoFocus: false, continuousAutoFocus: true,
+            exposurePointOfInterest: false, autoExpose: false, continuousAutoExposure: true)
+        let plan = ComposerCaptureFocus.focusing(at: CGPoint(x: 0.3, y: 0.3), fixe)
+        XCTAssertEqual(plan.focus, .continuous)
+        XCTAssertEqual(plan.exposure, .continuous)
+        XCTAssertFalse(plan.watchesSubjectArea, "rien n'a été visé, rien à rendre au continu")
+    }
+
+    func test_focusing_objectifQuiNeSaitRien_neToucheARien() {
+        let plan = ComposerCaptureFocus.focusing(at: CGPoint(x: 0.5, y: 0.5), .none)
+        XCTAssertNil(plan.focus)
+        XCTAssertNil(plan.exposure)
+        XCTAssertEqual(ComposerCaptureFocus.continuous(.none),
+                       ComposerCaptureFocus.Plan(focus: nil, exposure: nil, watchesSubjectArea: false))
+    }
+
+    func test_focusesOnDoubleTap_seulementQuandLImageEstLa() {
+        XCTAssertFalse(ComposerCaptureFocus.focusesOnDoubleTap(stage: .off))
+        XCTAssertTrue(ComposerCaptureFocus.focusesOnDoubleTap(stage: .armed))
+        XCTAssertTrue(ComposerCaptureFocus.focusesOnDoubleTap(stage: .recording))
+    }
+
+    // MARK: - Le pincement
+
+    func test_pinched_ecarterGrandit_rapprocherRetrecit() {
+        let plage: ClosedRange<CGFloat> = 1...10
+        XCTAssertEqual(ComposerCaptureZoom.pinched(from: 2, scale: 2, range: plage), 4, accuracy: 0.0001)
+        XCTAssertEqual(ComposerCaptureZoom.pinched(from: 4, scale: 0.5, range: plage), 2, accuracy: 0.0001)
+        XCTAssertEqual(ComposerCaptureZoom.pinched(from: 3, scale: 1, range: plage), 3, accuracy: 0.0001,
+                       "des doigts posés sans bouger ne recadrent pas")
+    }
+
+    func test_pinched_resteDansLesBornesDeLObjectif() {
+        let plage: ClosedRange<CGFloat> = 1...6
+        XCTAssertEqual(ComposerCaptureZoom.pinched(from: 4, scale: 3, range: plage), 6)
+        XCTAssertEqual(ComposerCaptureZoom.pinched(from: 2, scale: 0.2, range: plage), 1)
+        XCTAssertEqual(ComposerCaptureZoom.pinched(from: 1, scale: 4, range: 1...1), 1,
+                       "un objectif fixe ne zoome pas")
+    }
+
+    func test_pinchSpoilsGestures_pendantEtJusteApresLePincement() {
+        let maintenant = Date()
+        XCTAssertTrue(ComposerCaptureZoom.pinchSpoilsGestures(isPinching: true, pinchEndedAt: nil, now: maintenant))
+        XCTAssertTrue(ComposerCaptureZoom.pinchSpoilsGestures(
+            isPinching: false, pinchEndedAt: maintenant.addingTimeInterval(-0.1), now: maintenant),
+                      "le dernier doigt se lève après le premier")
+        XCTAssertFalse(ComposerCaptureZoom.pinchSpoilsGestures(
+            isPinching: false, pinchEndedAt: maintenant.addingTimeInterval(-1), now: maintenant))
+        XCTAssertFalse(ComposerCaptureZoom.pinchSpoilsGestures(isPinching: false, pinchEndedAt: nil, now: maintenant),
+                       "sans pincement, le glissé vers le bas range le viseur")
+    }
+
+    // MARK: - La machine
+
+    @MainActor
+    func test_pinchZoom_viseurEteint_neFaitRien() {
+        let session = ComposerCaptureSession()
+        session.pinchZoom(scale: 2)
+        XCTAssertFalse(session.isPinching)
+        XCTAssertFalse(session.pinchSpoilsGestures)
+    }
+
+    @MainActor
+    func test_rangement_sansPincement_suitLeDoigtPuisRange() {
+        let session = ComposerCaptureSession(stage: .armed, mode: .photo)
+        session.followDismissDrag(translationY: 80)
+        XCTAssertEqual(session.dismissDrag, 80, "le viseur suit le doigt")
+        XCTAssertTrue(session.releaseDismissDrag(translationY: 400))
+        XCTAssertEqual(session.dismissDrag, 0)
+    }
+
+    @MainActor
+    func test_rangement_unGlisseQuiCroiseUnPincement_resteGateJusquALaLevee() {
+        let session = ComposerCaptureSession(stage: .armed, mode: .photo)
+        session.followDismissDrag(translationY: 80)
+        session.pinchZoom(scale: 1.5)
+        XCTAssertTrue(session.isPinching)
+        XCTAssertEqual(session.dismissDrag, 0, "deux doigts qui descendent dézooment, ils ne rangent pas")
+        session.endPinchZoom()
+        session.followDismissDrag(translationY: 500)
+        XCTAssertEqual(session.dismissDrag, 0, "après le délai, le glissé ne saute pas à sa course entière")
+        XCTAssertFalse(session.releaseDismissDrag(translationY: 500))
+        session.followDismissDrag(translationY: 60)
+        XCTAssertEqual(session.dismissDrag, 0, "le glissé suivant tombe encore dans le délai du dernier doigt")
+        XCTAssertFalse(session.releaseDismissDrag(translationY: 60))
+    }
+
+    @MainActor
+    func test_endPinchZoom_estIdempotente_etDesarmerOublieLePincement() {
+        let session = ComposerCaptureSession(stage: .armed, mode: .photo)
+        session.endPinchZoom()
+        XCTAssertFalse(session.pinchSpoilsGestures, "une fin sans pincement ne gâte rien")
+        session.pinchZoom(scale: 1.4)
+        session.disarm()
+        XCTAssertFalse(session.isPinching, "un pincement annulé par le système ne survit pas au rangement")
+        XCTAssertFalse(session.pinchSpoilsGestures)
+    }
+
+    @MainActor
+    func test_pinchZoom_annuleLAppuiLongQuiAttendaitLaCamera_jusquALaLeveeDuGeste() {
+        let session = ComposerCaptureSession(stage: .armed, mode: .photo)
+        session.beginHold()
+        XCTAssertNotNil(session.holdStartedAt)
+        session.pinchZoom(scale: 1.2)
+        XCTAssertNil(session.holdStartedAt, "deux doigts demandent un cadrage, pas une vidéo")
+        XCTAssertNil(session.holdPhase)
+        session.beginHold()
+        XCTAssertNil(session.holdStartedAt, "pas d'appui long pendant un pincement")
+        session.endPinchZoom()
+        session.beginHold()
+        XCTAssertNil(session.holdStartedAt, "le doigt resté posé ne relance pas la vidéo annulée")
+        session.endHold()
+        session.beginHold()
+        XCTAssertNotNil(session.holdStartedAt, "la levée du geste libère l'appui long suivant")
+        session.endHold()
+    }
+
+    @MainActor
+    func test_focus_sansAperculALEcran_nAnnoncePasDeMiseAuPoint() {
+        let session = ComposerCaptureSession(stage: .armed, mode: .photo)
+        XCTAssertFalse(session.focus(atGlobalPoint: CGPoint(x: 100, y: 100)),
+                       "l'anneau ne paraît pas pour une mise au point qui n'a pas eu lieu")
+        let eteinte = ComposerCaptureSession()
+        XCTAssertFalse(eteinte.focus(atGlobalPoint: CGPoint(x: 100, y: 100)))
+    }
+
+    func test_layerPoint_rameneLeToucherAuRepereDeLApercu() {
+        let cadre = CGRect(x: 0, y: 59, width: 393, height: 700)
+        XCTAssertEqual(CameraPreviewFocusPoints.layerPoint(global: CGPoint(x: 100, y: 159), previewFrame: cadre),
+                       CGPoint(x: 100, y: 100), "le plein écran pose l'aperçu sous la zone sûre")
+        XCTAssertNil(CameraPreviewFocusPoints.layerPoint(global: CGPoint(x: 100, y: 20), previewFrame: cadre),
+                     "un toucher hors de l'image ne vise pas")
+        XCTAssertNil(CameraPreviewFocusPoints.layerPoint(global: CGPoint(x: 10, y: 10), previewFrame: .zero),
+                     "un aperçu pas encore mesuré ne vise pas")
+    }
+
+    // MARK: - Le câblage
+
+    func test_leChromePartage_porteLeDoubleToucherEtLePincement() throws {
+        let chrome = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
+        XCTAssertTrue(chrome.contains("SpatialTapGesture(count: 2, coordinateSpace: .global)"), "deux touchers visent")
+        XCTAssertTrue(chrome.contains("session.focus(atGlobalPoint:"))
+        XCTAssertTrue(chrome.contains("MagnificationGesture()"), "pincer zoome")
+        XCTAssertTrue(chrome.contains("session.pinchZoom(scale:"))
+        XCTAssertTrue(chrome.contains("session.followDismissDrag(") && chrome.contains("session.releaseDismissDrag("),
+                      "un pincement ne range jamais le viseur")
+        XCTAssertTrue(chrome.contains("guard !session.pinchSpoilsGestures"),
+                      "la levée d'un pincement ne photographie pas et ne vise pas")
+        XCTAssertTrue(chrome.contains(".updating($pinchActive)"),
+                      "un pincement annulé par le système finit quand même")
+        XCTAssertTrue(chrome.contains("focusPoints: session.focusPoints"),
+                      "l'aperçu partagé s'accroche au pont toucher → capteur")
+        XCTAssertTrue(chrome.contains("adaptiveOnChange(of: proxy.frame(in: .global), initial: true)"),
+                      "l'aperçu mesure son cadre dans le repère du toucher")
+        XCTAssertTrue(chrome.contains("session.focusPoints.previewFrame = cadre"))
+    }
+
+    func test_lesDeuxMontages_profitentDesGestesSansLesRecabler() throws {
+        for montage in ["Meeshy/Features/Main/Composer/MeeshyComposerHost+Viewfinder.swift",
+                        "Meeshy/Features/Main/Composer/ComposerViewfinder.swift"] {
+            let code = try source(montage)
+            XCTAssertTrue(code.contains("ComposerCaptureChrome("), "\(montage) monte le chrome partagé")
+            XCTAssertFalse(code.contains("MagnificationGesture"), "\(montage) recâble le pincement")
+            XCTAssertFalse(code.contains("SpatialTapGesture"), "\(montage) recâble la mise au point")
+        }
+    }
+
+    func test_laCamera_seRegleEnContinuEtViseAuPoint() throws {
+        let camera = try source("Meeshy/Features/Main/Components/CameraModel.swift")
+        XCTAssertTrue(camera.contains("ComposerCaptureFocus.continuous("), "mise au point automatique à l'ouverture")
+        XCTAssertTrue(camera.contains("ComposerCaptureFocus.focusing(at:"), "le double toucher vise")
+        XCTAssertTrue(camera.contains("subjectAreaDidChangeNotification"), "la scène qui change rend le continu")
+        XCTAssertTrue(camera.contains(".continuousAutoFocus"))
+        XCTAssertTrue(camera.contains(".continuousAutoExposure"))
+    }
+
+    // MARK: - Outils
+
+    private func source(_ chemin: String) throws -> String {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return AppSourceGuard.stripComments(try String(
+            contentsOf: racine.appendingPathComponent(chemin), encoding: .utf8))
+    }
+}

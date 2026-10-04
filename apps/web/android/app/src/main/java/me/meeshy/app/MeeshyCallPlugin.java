@@ -13,6 +13,7 @@ import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
 import android.graphics.drawable.Icon;
 import android.os.Build;
+import android.util.Rational;
 import android.os.PowerManager;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
@@ -47,7 +48,8 @@ import java.util.List;
  * Evenement `pictureInPictureModeChanged { active }` (#8144) : l'appel flotte
  * en image dans l'image, ou l'app revient au plein ecran. La fenetre porte
  * micro et raccrocher : `pictureInPictureAction { action: mic | hangup }`,
- * l'etat du micro venant de `setPictureInPictureControls({ micMuted })`.
+ * l'etat du micro et le format de la video venant de
+ * `setPictureInPictureControls({ micMuted, aspectWidth, aspectHeight })`.
  *
  * Evenement `callAnswer { callId }` : « Repondre » touche sur la notification.
  * RETENU jusqu'a l'abonnement de la page (`retainUntilConsumed`), comme les
@@ -61,6 +63,8 @@ public class MeeshyCallPlugin extends Plugin {
     private volatile boolean video;
     private String route;
     private volatile boolean micMuted;
+    private volatile int aspectWidth;
+    private volatile int aspectHeight;
     private BroadcastReceiver pipButtons;
 
     static final String ACTION_PIP = "me.meeshy.app.CALL_PIP_ACTION";
@@ -184,6 +188,8 @@ public class MeeshyCallPlugin extends Plugin {
     @PluginMethod
     public void setPictureInPictureControls(PluginCall call) {
         micMuted = Boolean.TRUE.equals(call.getBoolean("micMuted", false));
+        aspectWidth = call.getInt("aspectWidth", 0);
+        aspectHeight = call.getInt("aspectHeight", 0);
         refreshPictureInPicture();
         call.resolve();
     }
@@ -201,7 +207,10 @@ public class MeeshyCallPlugin extends Plugin {
     PictureInPictureParams pictureInPictureParams() {
         ArrayList<RemoteAction> actions = new ArrayList<>();
         for (String action : CallShellRules.pictureInPictureActions(micMuted)) actions.add(remoteAction(action));
-        return new PictureInPictureParams.Builder().setActions(actions).build();
+        PictureInPictureParams.Builder params = new PictureInPictureParams.Builder().setActions(actions);
+        int[] aspect = CallShellRules.pictureInPictureAspect(aspectWidth, aspectHeight);
+        if (aspect != null) params.setAspectRatio(new Rational(aspect[0], aspect[1]));
+        return params.build();
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
@@ -251,6 +260,8 @@ public class MeeshyCallPlugin extends Plugin {
         boolean wasActive = callActive;
         callActive = false;
         micMuted = false;
+        aspectWidth = 0;
+        aspectHeight = 0;
         CallForegroundService.stop(getContext());
         keepScreenOn(false);
         showOverLockScreen(false);

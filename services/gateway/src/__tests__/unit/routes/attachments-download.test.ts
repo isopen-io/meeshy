@@ -863,3 +863,93 @@ describe('cycle de vie du message porteur', () => {
     await app.close();
   });
 });
+
+/**
+ * #9315 — un média privé ne part plus en cache PARTAGÉ. `public` autorisait
+ * tout proxy ou CDN intermédiaire à garder les octets d'une conversation et à
+ * les resservir à un autre demandeur ; `private` garde le cache du seul
+ * appareil qui les a reçus, avec la même durée (aucun client ne recharge plus).
+ * Les avatars, publics par nature, gardent leur régime.
+ */
+describe('#9315 — aucun média de conversation en cache partagé', () => {
+  let app: FastifyInstance;
+  const fileStats = { size: 2048, mtimeMs: 1700000003000 };
+
+  beforeAll(async () => {
+    mockGetAttachment.mockResolvedValue(DEFAULT_ATTACHMENT);
+    mockGetFilePath.mockResolvedValue(FILE_PATH);
+    mockGetThumbnailPath.mockResolvedValue(THUMBNAIL_PATH);
+    mockStat.mockResolvedValue(fileStats);
+    app = await buildApp();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it('sert un fichier par chemin en cache privé, de même durée', async () => {
+    const res = await app.inject({ method: 'GET', url: '/attachments/file/2024%2F01%2Fuser%2Fphoto.jpg' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000');
+  });
+
+  it('ne rend pas public un chemin qui ne fait que transiter par avatars/', async () => {
+    const res = await app.inject({ method: 'GET', url: '/attachments/file/avatars%2F..%2F2024%2F01%2Fuser%2Fphoto.jpg' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000');
+  });
+
+  it('garde le cache privé sur la revalidation 304', async () => {
+    const etag = `W/"${fileStats.size}-${Math.floor(fileStats.mtimeMs)}"`;
+    const res = await app.inject({
+      method: 'GET',
+      url: '/attachments/file/2024%2F01%2Fuser%2Fphoto.jpg',
+      headers: { 'if-none-match': etag },
+    });
+    expect(res.statusCode).toBe(304);
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000');
+  });
+
+  it('garde le cache privé sur une plage 206', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/attachments/file/translated%2Fpiste_en.mp3',
+      headers: { range: 'bytes=0-99' },
+    });
+    expect(res.statusCode).toBe(206);
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000');
+  });
+
+  it('sert la pièce jointe et sa miniature par identifiant en cache privé', async () => {
+    const original = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}` });
+    const thumbnail = await app.inject({ method: 'GET', url: `/attachments/${ATTACHMENT_ID}/thumbnail` });
+    expect(original.headers['cache-control']).toBe('private, max-age=31536000, immutable');
+    expect(thumbnail.headers['cache-control']).toBe('private, max-age=31536000, immutable');
+  });
+});
+
+/**
+ * #9315 — les dossiers cachés de la racine des dépôts ne sont pas des médias.
+ * `.tus-resumable/` porte les envois EN COURS (octets d'un fichier pas encore
+ * rattaché à un message, et ses métadonnées) ; la route de fichiers les
+ * servait à qui devinait leur nom. Un segment caché, où qu'il soit, rend 404
+ * sans toucher au disque : sa simple existence n'a pas à se lire de dehors.
+ */
+describe('#9315 — aucun segment caché servi par la route de fichiers', () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    mockStat.mockResolvedValue({ size: 10, mtimeMs: 1700000004000 });
+    app = await buildApp();
+  });
+  afterAll(async () => { await app.close(); });
+
+  it.each([
+    ['un envoi tus en cours', '.tus-resumable%2F0123456789abcdef'],
+    ['ses métadonnées', '.tus-resumable%2F0123456789abcdef.json'],
+    ['un fichier caché dans l’arborescence datée', '2024%2F01%2Fuser%2F.secret.jpg'],
+    ['un dossier caché atteint par remontée', 'translated%2F..%2F.tus-resumable%2Fabc'],
+  ])('rend 404 pour %s', async (_label, key) => {
+    mockStat.mockClear();
+    const res = await app.inject({ method: 'GET', url: `/attachments/file/${key}` });
+    expect(res.statusCode).toBe(404);
+    expect(mockStat).not.toHaveBeenCalled();
+  });
+});

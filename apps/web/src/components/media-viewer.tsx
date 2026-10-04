@@ -13,6 +13,7 @@ import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 import { initialsOf } from '@/lib/view/conversation';
 import { nextFocusIndex } from '@/lib/view/focus-trap';
 import { useLongPress } from '@/lib/view/long-press';
+import { useCarryOnClose } from '@/lib/view/audio-carry-on-close';
 import { electDescription, type MediaCarrier } from '@/lib/view/media';
 import { standaloneSharePage, type MediaViewerPage } from '@/lib/view/viewer-page-offers';
 import {
@@ -69,6 +70,9 @@ const MediaTransport = lazy(() => import('./media-transport').then((module) => (
  * sans action) ne le télécharge jamais, et la visionneuse garde son poids.
  */
 const ViewerMediaActions = lazy(() => import('./viewer-media-actions'));
+
+/** LA PAGE AUDIO (#8333) — chunk à la demande : une visionneuse de photos ne la télécharge jamais (`budgets.json › viewer_audio_page`). */
+const ViewerAudioPage = lazy(() => import('./viewer-audio-page'));
 
 /**
  * `MediaViewer` (#6221, § 5 étape 5) — LA VISIONNEUSE PLEIN ÉCRAN, chunk À LA
@@ -149,6 +153,8 @@ export type MediaViewerProps = {
    * identité, voir `pinned`).
    */
   readonly onNearStart?: () => void;
+  /** LA LANGUE DE CHAQUE PAGE QUAND SA PIÈCE N'A PAS DE TRANSCRIPTION (#8333) — une pellicule de vocaux feuillette des messages d'auteurs différents ; prime sur `fallbackLanguage`. */
+  readonly fallbackLanguageAt?: (index: number) => string | undefined;
   /**
    * CE QUE LA PAGE OFFRE (#6303) — `null` ⇒ aucune action. L'hôte décide page
    * par page (`mediaPageOffers`, sur la pièce ORIGINALE) ; la visionneuse ne
@@ -230,7 +236,7 @@ function carrierFooter(params: {
     <div data-viewer-meta className="flex flex-col gap-1">
       {sceneEntry === undefined ? (
         <div className="viewer-ink-muted flex items-center gap-1.5 text-mini">
-          <Glyph name={kind === 'video' ? 'fillPlay' : 'image'} size={GLYPH_SIZE.xs} />
+          <Glyph name={kind === 'video' ? 'fillPlay' : kind === 'audio' ? 'microphone' : 'image'} size={GLYPH_SIZE.xs} />
           {sizeLabel !== undefined ? <span>{sizeLabel}</span> : null}
           <span>·</span>
           <span>{weightLabel}</span>
@@ -574,6 +580,7 @@ export default function MediaViewer({
   onNearEnd,
   isMineAt,
   onNearStart,
+  fallbackLanguageAt,
   actionsAt,
   shareMedia,
   container,
@@ -613,6 +620,22 @@ export default function MediaViewer({
 
   const current = items[index];
   const currentCarrier = carrierAt?.(index) ?? carrier;
+  /* FERMER N'ARRÊTE PAS LE VOCAL (#9256) — la page audio active remet ce
+     qu'elle jouait, le mini-lecteur de la coquille le reprend. */
+  /* « PARTAGER » D'UN MÉDIA NU (#8884) — l'image d'un commentaire, le média
+     d'une publication, sans message à citer ni à réagir : l'hôte qui SAIT son
+     média public le demande (`shareMedia`). JAMAIS par défaut : les visionneuses
+     de messages protégés reçoivent des pièces RÉVÉLÉES (drapeaux levés,
+     `revealedAttachment`) — un repli implicite les ferait sortir. Un hôte qui
+     répond `actionsAt` → `null` a dit qu'il ne sait pas : on ne lui invente rien. */
+  const page =
+    actionsAt !== undefined ? actionsAt(index) : shareMedia === true && current !== undefined ? standaloneSharePage(current) : null;
+  const registerCarry = useCarryOnClose({
+    currentId: current?.id,
+    title: currentCarrier?.sender?.displayName ?? null,
+    conversationId: page?.conversationId ?? null,
+    messageId: page?.messageId ?? null,
+  });
   const currentSceneEntry = current === undefined ? undefined : scenes?.get(current.id);
   const insets = safeAreaInsets();
   // La hauteur du couloir HAUT — le haut du plateau dans le repère du
@@ -726,8 +749,11 @@ export default function MediaViewer({
     }
   };
 
+  const audioPage = current !== undefined && kindOf(current) === 'audio';
   const longPress = useLongPress({
-    onOpen: () => setPresentation(() => stageAfter(CARDED_STAGE, 'longPress')),
+    onOpen: () => {
+      if (!audioPage) setPresentation(() => stageAfter(CARDED_STAGE, 'longPress'));
+    },
   });
 
   /* LE GESTE COMMUN DES PLEIN ÉCRANS (#8879, `viewer-chrome-gestures.ts`) :
@@ -751,7 +777,7 @@ export default function MediaViewer({
   // eux-mêmes leurs événements (`viewer-chrome.tsx`) : le tap sur une action
   // réelle ne bascule rien. Un toucher qui a glissé n'est pas un tap.
   const onStageClick = (): void => {
-    if (swipe.wasDrag()) return;
+    if (swipe.wasDrag() || audioPage) return;
     setPresentation((p) => stageAfter(p, 'tap'));
   };
 
@@ -760,15 +786,6 @@ export default function MediaViewer({
      double tap est aussi deux taps (la bascule plein cadre s'annule) : c'est
      l'état zoomé de la page COURANTE qui compte. */
   const chromeHidden = presentation.kind === 'full' || (zoomedId !== null && zoomedId === current?.id);
-  /* « PARTAGER » D'UN MÉDIA NU (#8884) — l'image d'un commentaire, le média
-     d'une publication, sans message à citer ni à réagir : l'hôte qui SAIT son
-     média public le demande (`shareMedia`). JAMAIS par défaut : les visionneuses
-     de messages protégés reçoivent des pièces RÉVÉLÉES (drapeaux levés,
-     `revealedAttachment`) — un repli implicite les ferait sortir. Un hôte qui
-     répond `actionsAt` → `null` a dit qu'il ne sait pas : on ne lui invente rien. */
-  const page =
-    actionsAt !== undefined ? actionsAt(index) : shareMedia === true && current !== undefined ? standaloneSharePage(current) : null;
-
   if (current === undefined) return null;
 
   const identity = carrierIdentity(currentCarrier);
@@ -892,6 +909,26 @@ export default function MediaViewer({
                 />
               ) : isMasked ? (
                 <ViewerMaskedPage attachment={attachment} />
+              ) : kindOf(attachment) === 'audio' ? (
+                <Suspense fallback={<ViewerBackdropPage attachment={attachment} />}>
+                  <ViewerAudioPage
+                    attachment={attachment}
+                    isActive={i === index}
+                    languages={languages}
+                    fallbackLanguage={fallbackLanguageAt?.(i) ?? fallbackLanguage}
+                    language={language}
+                    pageIndex={i}
+                    pageCount={items.length}
+                    onToggleRef={(fn) => {
+                      if (i === index) activePlayToggleRef.current = fn;
+                    }}
+                    onCarryRef={(carry) => {
+                      if (i === index) registerCarry(attachment.id, carry);
+                    }}
+                    {...(displayLanguage !== undefined ? { displayLanguage } : {})}
+                    {...(deps !== undefined ? { deps } : {})}
+                  />
+                </Suspense>
               ) : kindOf(attachment) === 'video' ? (
                 <ViewerVideoPage
                   attachment={attachment}
@@ -907,7 +944,7 @@ export default function MediaViewer({
                 <ViewerImagePage
                   attachment={attachment}
                   languages={languages}
-                  fallbackLanguage={fallbackLanguage}
+                  fallbackLanguage={fallbackLanguageAt?.(i) ?? fallbackLanguage}
                   isActive={i === index}
                   isMine={isMineAt?.(i) ?? isMine}
                   language={language}
@@ -946,7 +983,7 @@ export default function MediaViewer({
       >
         <div ref={setTransportSlot} data-viewer-transport-slot />
 
-        {items.length > 1 ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} language={language} /> : null}
+        {items.length > 1 && !audioPage ? <MediaFilmstrip items={items} currentIndex={index} onSelect={goTo} language={language} /> : null}
       </ViewerBottomBar>
     </div>,
     container ?? document.body,

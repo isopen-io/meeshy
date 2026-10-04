@@ -265,8 +265,8 @@ export function starrableOf(
   return !message.isViewOnce && ((message.effectFlags ?? 0) & MESSAGE_EFFECT_FLAGS.VIEW_ONCE) === 0;
 }
 
-/** Le rail — 6 fixes (question 6 de la spécification, tranchée : jamais un
- * classement par usage ce lot). Miroir `MessageOverlayMenu.swift:99-101`. */
+/** Les 6 réactions rapides par DÉFAUT — miroir `MessageOverlayMenu.swift:99-101`.
+ * Le rail et le composeur les classent par usage (`lib/emoji-usage.ts`, #7983). */
 export const QUICK_REACTIONS = ['😂', '❤️', '👍', '😮', '😢', '🔥'] as const;
 
 /** Les 20 emojis étendus — miroir `MessageOverlayMenu.swift:99-104`

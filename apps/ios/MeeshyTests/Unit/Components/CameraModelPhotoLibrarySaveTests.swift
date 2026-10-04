@@ -47,7 +47,7 @@ final class CameraModelPhotoLibrarySaveTests: XCTestCase {
             in: source
         )
         XCTAssertTrue(
-            fn.contains("PhotoLibraryManager.shared.saveImage(data)"),
+            fn.contains("PhotoLibraryManager.shared.saveImageFile(data"),
             "A successfully captured photo must be saved to the photo library via " +
             "the non-@MainActor PhotoLibraryManager (passing the ORIGINAL encoded " +
             "bytes), so it appears in RecentMediaStripModel's grid via the " +

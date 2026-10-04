@@ -22,7 +22,8 @@ import { ConversationDetailsContext } from '@/components/avatar-menu';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
 import { apiConfig } from '@/lib/api/config';
 import { webOriginOf } from '@/lib/links/web-origin';
-import { DayPill, NoticePill, OlderLoadIndicator, ScrollToBottomButton } from '@/components/thread-chrome';
+import { DayPill, NoticePill, OlderLoadIndicator } from '@/components/thread-chrome';
+import { ThreadReturnToBottom } from '@/components/thread-return-to-bottom';
 import { ThreadError, ThreadRefused, ThreadSkeleton } from '@/components/thread-states';
 import { apiDeps } from '@/lib/api/deps';
 import { useConversationsSnapshot, useThreadData } from '@/lib/api/query';
@@ -71,11 +72,13 @@ import { backdropStyleVars } from '@/lib/view/thread-backdrop';
 import { useThreadChromeSignals } from '@/lib/view/use-thread-chrome-signals';
 import { useThreadInsets } from '@/lib/view/use-thread-insets';
 import { THREAD_ROW_ESTIMATE, useOlderMessages } from '@/lib/view/use-older-messages';
+import { useNewerMessages } from '@/lib/view/use-newer-messages';
 import { useReadTracking } from '@/lib/view/use-read-tracking';
 import { AfterReadSeenContext, useAfterReadConsumption } from '@/lib/view/use-after-read-consumption';
 import { useEngagementRevalidation } from '@/lib/view/use-conversation-engagement';
 import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
+import { threadAnchorOf } from '@/lib/view/thread-anchor';
 import { useThreadJump } from '@/lib/view/use-thread-jump';
 import { summaryExits } from '@/lib/view/summary-exits';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
@@ -106,8 +109,8 @@ import { ThreadModes } from './thread-modes';
  * (`ThreadMessageSheets`) vivent désormais chacun dans leur propre fichier —
  * même doctrine qu'iOS (`ConversationView.swift`, découpé en quatorze
  * extensions PAR SURFACE) : cet écran ne fait plus que CÂBLER ce que chacun
- * lui rend. La prochaine surface s'ajoute dans SA pièce (le saut `?around=`
- * de #7420 dans `useThreadJump`), jamais ici : `thread-size-budget.test.ts`
+ * lui rend. La prochaine surface s'ajoute dans SA pièce (la fenêtre `?around=`
+ * de #7420 vit dans `useThreadData` et `useThreadJump`), jamais ici : `thread-size-budget.test.ts`
  * rougit dès que cet hôte ou l'une de ses pièces franchit 1000 lignes.
  *
  * EN APERÇU (#8821, `preview`) — le MÊME fil, posé par la feuille tirée
@@ -413,6 +416,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     group,
     readerLanguages,
     noteProgrammaticScroll: scene.noteProgrammaticScroll,
+    detached: threadData.detached,
+    onReturnToPresent: threadData.returnToPresent,
   });
   /* « EST DANS LA CONVERSATION » (#8892) — le fil ouvert s'annonce aux pairs. */
   useConversationViewing(conversationId);
@@ -452,7 +457,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     virtualizer,
     noteProgrammaticScroll: scene.noteProgrammaticScroll,
     mode: reading.readingDecision.mode,
-    older: { state: threadData.olderState, fetchOlder: threadData.fetchOlder },
+    around: threadData.around,
   });
 
   /**
@@ -474,12 +479,15 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     send,
   });
   const composeSend = compose.onSend;
+  const returnToPresent = threadData.returnToPresent;
   const sendAndReplayFlame = useCallback(
     (input: Parameters<typeof composeSend>[0]) => {
+      /* Un envoi depuis une fenêtre ancrée revient au présent, où il paraît (#7420). */
+      returnToPresent();
       composeSend(input);
       setFlameReplay((count) => count + 1);
     },
-    [composeSend],
+    [composeSend, returnToPresent],
   );
 
   /**
@@ -545,6 +553,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     fetchOlder: threadData.fetchOlder,
     noteProgrammaticScroll: scene.noteProgrammaticScroll,
   });
+  /** … et le PRÉSENT, au pied d'une fenêtre ancrée loin de lui (#7420). */
+  const newer = useNewerMessages({ scroller, state: threadData.newerState, rowCount: placed.length, fetchNewer: threadData.fetchNewer });
 
   /**
    * LE MARQUAGE-LU SANS GESTE (#7201, W1) — ouvrir ce fil, le faire défiler
@@ -589,7 +599,8 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
   const readTracking = useReadTracking({
     scroller,
     conversationId,
-    lastMessageId: lastConfirmedMessageId,
+    /* Une fenêtre détachée du présent n'accuse rien (#7420, `windowIsAtTip` iOS). */
+    lastMessageId: threadData.detached ? undefined : lastConfirmedMessageId,
     enabled: placed.length > 0,
     onMark: onMarkCaughtUp,
   });
@@ -625,6 +636,10 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     ready: threadData.status === 'success',
     virtualizer,
     onProgrammaticScroll: scene.noteProgrammaticScroll,
+    /* #9294 — l'adresse qui nomme un message (`?message=`) ouvre le fil sur lui, par le saut de la citation. */
+    anchorMessageId: preview === undefined ? threadAnchorOf(route?.search) : null,
+    onAnchor: jump.requestJump,
+    followTail: threadData.around.target === null,
   });
 
   /**
@@ -838,6 +853,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
             typistAvatarOf={typistAvatarOf}
             accent={accent}
             older={{ state: older.state, sentinelRef: older.sentinelRef }}
+            newer={newer}
             readTrackingSentinelRef={readTracking.sentinelRef}
             unreadSeparatorMessageId={unreadBoundary?.firstUnreadId ?? null}
             unreadCount={unreadBoundary?.unreadCount ?? 0}
@@ -847,13 +863,7 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
       </main>
       <OlderLoadIndicator state={older.state} onRetry={older.retry} />
 
-      <ScrollToBottomButton
-        visible={chrome.scrollButtonVisible}
-        unreadCount={chrome.scrollButtonUnreadCount}
-        senderName={chrome.scrollButtonSenderName}
-        previewText={chrome.scrollButtonPreviewText}
-        onClick={chrome.onScrollToBottom}
-      />
+      <ThreadReturnToBottom chrome={chrome} windowLoading={threadData.windowLoading} newerState={threadData.newerState} />
 
       <NoticePill text={announcer.text} />
 
@@ -958,7 +968,6 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
           setDetailsOpen(false);
           jump.requestJump(messageId);
         }}
-        canJumpTo={(messageId) => messages.some((message) => message.id === messageId)}
       />
 
       <ThreadMessageSheets

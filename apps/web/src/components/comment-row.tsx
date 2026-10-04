@@ -21,7 +21,7 @@ import type { ReportReason } from '@/lib/api/reports';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { STICKER_SIDE } from '@/lib/reading-mode/metrics';
+import { STICKER_RENDER_SCALE, STICKER_SIDE } from '@/lib/reading-mode/metrics';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { commentMenuEntries, type CommentMenuEntry } from '@/lib/view/comment-menu';
 import { commentStickerOf } from '@/lib/view/comment-sticker';
@@ -595,7 +595,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
               <CommentBody comment={comment} contentLength={lu.text.length}>
                 {sticker !== null ? (
                   <div data-comment-sticker className="py-1">
-                    <StickerArtwork sticker={sticker.sticker} picture={sticker.picture} side={STICKER_SIDE} />
+                    <StickerArtwork sticker={sticker.sticker} picture={sticker.picture} side={STICKER_SIDE * STICKER_RENDER_SCALE} />
                   </div>
                 ) : null}
                 {(sticker === null && media.length === 0) || lu.text.trim() !== '' ? (

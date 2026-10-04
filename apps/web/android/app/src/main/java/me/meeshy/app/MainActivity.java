@@ -1,8 +1,11 @@
 package me.meeshy.app;
 
 import android.annotation.SuppressLint;
+import android.app.PictureInPictureParams;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.view.View;
@@ -78,17 +81,26 @@ public class MainActivity extends BridgeActivity {
      * en image dans l'image, la ou le web ouvre Document PiP. Le service au
      * premier plan gardait deja l'appel vivant ; l'image disparaissait. L'API
      * 26 est verifiee par `CallShellRules.entersPictureInPicture`.
+     *
+     * #9242 — hors appel, une video en plein ecran flotte de meme, comme dans
+     * Chrome Android ; l'API 26 est verifiee par `FullscreenPictureInPicture`.
      */
     @Override
     @SuppressLint("NewApi")
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
         MeeshyCallPlugin call = callPlugin();
-        if (call == null || !call.floatsInPictureInPicture()) return;
         try {
-            enterPictureInPictureMode(call.pictureInPictureParams());
+            if (call != null && call.floatsInPictureInPicture()) {
+                enterPictureInPictureMode(call.pictureInPictureParams());
+                return;
+            }
+            boolean supported = getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
+            if (FullscreenPictureInPicture.floats(Build.VERSION.SDK_INT, fullscreenView != null, supported)) {
+                enterPictureInPictureMode(new PictureInPictureParams.Builder().build());
+            }
         } catch (IllegalStateException refused) {
-            // PiP coupee pour Meeshy dans les reglages : l'appel continue en arriere-plan.
+            // PiP coupee pour Meeshy dans les reglages : l'appel ou la video continue en arriere-plan.
         }
     }
 
@@ -116,6 +128,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MeeshyContactsPlugin.class);
         registerPlugin(MeeshyNotificationSettingsPlugin.class);
         registerPlugin(MeeshyClipboardPlugin.class);
+        registerPlugin(MeeshyRecorderPlugin.class);
+        registerPlugin(MeeshyPlaybackPlugin.class);
         super.onCreate(savedInstanceState);
         suivreTailleDuTexte(getResources().getConfiguration());
         SilentNotificationChannel.ensure(this);

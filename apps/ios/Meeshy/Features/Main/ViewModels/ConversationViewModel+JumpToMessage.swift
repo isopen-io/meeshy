@@ -40,13 +40,99 @@ extension ConversationViewModel {
         let targetDate = response.data.first(where: { $0.id == messageId })?.createdAt
             ?? response.data.last?.createdAt
             ?? Date()
-        await messageStore.loadWindow(around: targetDate)
+        let hasNewer = response.hasNewer ?? false
+        let newestServed = response.data.compactMap(\.createdAt).max()
+        await messageStore.loadWindow(
+            around: targetDate,
+            newerEdge: hasNewer ? newestServed.map { .through($0) } ?? .halfWindow : .halfWindow
+        )
         extractAttachmentTranscriptions(from: response.data)
         extractTextTranslations(from: response.data)
         nextMessageCursor = response.cursorPagination?.nextCursor
         hasOlderMessages = response.cursorPagination?.hasMore ?? !response.data.isEmpty
-        hasNewerMessages = response.hasNewer ?? false
+        hasNewerMessages = hasNewer
         isInJumpedState = true
+        // Une fenêtre courte qui tient à l'écran laisse le bas visible dès
+        // l'arrivée : la liste ne rechange pas d'état, c'est l'atterrissage
+        // qui lance la chaîne (#9360).
+        startNewerPagesChainIfAtBottom()
+    }
+
+    // MARK: - Page plus récente d'une fenêtre sautée (#9304)
+
+    /// Demande la page qui suit le plus récent message SERVI de la fenêtre
+    /// (`after`, ordre croissant), l'écrit dans GRDB et recule le bord de la
+    /// fenêtre jusqu'à elle. `isLoadingNewer` ne vaut `true` que pendant
+    /// l'appel réseau : c'est lui que le bouton « revenir en bas » annonce.
+    /// Une page qui n'avance pas le filigrane clôt la marche — la même
+    /// demande ne repart jamais deux fois (miroir de `newerWindowParam` web).
+    func loadNewerMessages() async {
+        guard isInJumpedState, hasNewerMessages, !isLoadingNewer,
+              case .through(let watermark) = messageStore.jumpedNewerEdge else { return }
+        isLoadingNewer = true
+        defer { isLoadingNewer = false }
+        do {
+            let response = try await messageService.listAfter(
+                conversationId: conversationId, after: watermark.addingTimeInterval(-0.001), limit: limit,
+                includeReplies: true, includeTranslations: true, languages: nil
+            )
+            guard isInJumpedState else { return }
+            try? await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages)
+            extractAttachmentTranscriptions(from: response.data)
+            extractTextTranslations(from: response.data)
+            let newest = response.data.compactMap(\.createdAt).max().map { max($0, watermark) } ?? watermark
+            let reachedPresent = !(response.cursorPagination?.hasMore ?? false)
+            hasNewerMessages = !reachedPresent && newest > watermark
+            await messageStore.extendJumpedWindow(to: reachedPresent ? .present : .through(newest))
+        } catch {
+            Logger.messages.error("[JumpedWindow] newer page failed: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - La chaîne des pages plus récentes (#9339)
+
+    /// Reçoit l'état « en bas du fil » de la liste. Au bas d'une fenêtre
+    /// sautée qui a du plus récent, lance UNE chaîne de pages : une page
+    /// courte laisse le bas visible sans que la liste rechange d'état, et
+    /// c'est la chaîne — pas un nouveau défilement — qui demande la suivante.
+    /// Quitter le bas l'annule.
+    func noteNearBottom(_ nearBottom: Bool) {
+        isCurrentlyNearBottom = nearBottom
+        guard nearBottom else {
+            cancelNewerPagesChain()
+            return
+        }
+        startNewerPagesChainIfAtBottom()
+    }
+
+    /// UNE chaîne au plus : au bas connu d'une fenêtre sautée qui annonce du
+    /// plus récent. Appelée au signal « en bas » de la liste et à
+    /// l'atterrissage d'un saut.
+    private func startNewerPagesChainIfAtBottom() {
+        guard newerPagesChain == nil, isCurrentlyNearBottom, isInJumpedState, hasNewerMessages else { return }
+        // `self` n'est retenu que le temps d'UNE page : la conversation
+        // quittée libère le modèle, dont le `deinit` annule la chaîne.
+        newerPagesChain = Task { [weak self] in
+            while await self?.loadNextNewerPageIfStillAtBottom() == true {}
+            guard !Task.isCancelled else { return }
+            self?.newerPagesChain = nil
+        }
+    }
+
+    func cancelNewerPagesChain() {
+        newerPagesChain?.cancel()
+        newerPagesChain = nil
+    }
+
+    /// Une page à la fois, tant que le bas reste visible et que le serveur
+    /// annonce du plus récent. Rend `false` — la chaîne s'arrête — quand il
+    /// n'y a rien à demander ou qu'une page n'a pas reculé le bord de la
+    /// fenêtre (filigrane stagnant, échec réseau) : jamais la même page deux fois.
+    private func loadNextNewerPageIfStillAtBottom() async -> Bool {
+        guard !Task.isCancelled, isCurrentlyNearBottom, isInJumpedState, hasNewerMessages else { return false }
+        let edgeBefore = messageStore.jumpedNewerEdge
+        await loadNewerMessages()
+        return messageStore.jumpedNewerEdge != edgeBefore
     }
 
     /// Outcome of `jumpToQuotedMessage`.
@@ -111,6 +197,7 @@ extension ConversationViewModel {
     func returnToLatest() async {
         guard isInJumpedState else { return }
 
+        cancelNewerPagesChain()
         isInJumpedState = false
         hasNewerMessages = false
         // Also clear any active in-conversation search state so the results

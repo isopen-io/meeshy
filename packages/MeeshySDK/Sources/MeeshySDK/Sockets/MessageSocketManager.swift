@@ -464,15 +464,6 @@ public struct UserUpdatedEvent: Decodable, Sendable {
         case replaced(String?)
     }
 
-    /// Nom à afficher, recomposé avec la règle du chemin REST
-    /// (`APIConversationUser.name` : `displayName` puis `username`) pour que la
-    /// ligne de liste dise la même chose quel que soit le transport qui l'a
-    /// hydratée. `nil` quand le payload ne porte pas le groupe du nom.
-    public var resolvedDisplayName: String? {
-        guard hasNameGroup else { return nil }
-        return [displayName, username].compactMap { $0 }.first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
-    }
-
     private enum CodingKeys: String, CodingKey {
         case userId, changes
     }

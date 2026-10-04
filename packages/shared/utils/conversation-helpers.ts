@@ -492,17 +492,25 @@ export function resolveParticipantLanguage(participant: LanguageResolvable): str
   // Le fallback (langue déclarée par le call site) est normalisé comme les
   // niveaux de resolveUserLanguagesOrdered : le docstring promet la « même
   // normalisation que resolveUserLanguage » pour TOUS les chemins de retour.
-  // Ces niveaux réduisent la casse ET les sous-tags région/script via
-  // normalizeLanguageCode ('it-IT' → 'it', 'FR' → 'fr') : un fallback laissé
-  // région-taggé ('pt-BR' → 'pt-br') ou en casse haute manquerait les
+  // Ces niveaux réduisent la casse ET les sous-tags région/script : un fallback
+  // laissé région-taggé ('pt-BR' → 'pt-br') ou en casse haute manquerait les
   // traductions indexées en minuscules 2/3-lettres exactement comme une
-  // préférence in-app non normalisée (violation du Prisme). Le repli
-  // `?? .toLowerCase()` préserve le fallback terminal (jamais `undefined`) pour
-  // les codes que normalizeLanguageCode ne sait pas réduire — parité stricte
-  // avec le contrat normalizeLanguageForDedup, zéro régression sur les codes
-  // déjà canoniques.
-  const fallback =
-    normalizeLanguageCode(participant.language) ?? participant.language.toLowerCase()
+  // préférence in-app non normalisée (violation du Prisme).
+  //
+  // Le couple « normalisation avec repli » est une SSOT, `normalizeLanguageForDedup`,
+  // et c'est elle qu'on appelle — pas une troisième réécriture (#9247). Le repli
+  // écrit ici à la main, `normalizeLanguageCode(x) ?? x.toLowerCase()`, se croyait
+  // en « parité stricte » avec elle et ne l'était que sur les codes CATALOGUÉS :
+  // hors catalogue, `normalizeLanguageCode` rend `undefined` et `.toLowerCase()`
+  // GARDE la région — 'yue-HK' → 'yue-hk', 'fil-PH' → 'fil-ph' — quand le chemin
+  // INSCRIT (normalizeInAppLanguage, juste au-dessus) et le pipeline de traduction
+  // strippent tous deux vers 'yue' / 'fil'. Deux formes pour une même langue, donc
+  // un lecteur que la comparaison ne reconnaît plus : la file hors ligne ne
+  // déposait rien pour un invité de lien partagé déclarant un tel code.
+  //
+  // La SSOT préserve la garantie de fallback terminal (jamais `undefined`, jamais
+  // la chaîne vide) et ne change rien aux codes déjà canoniques.
+  const fallback = normalizeLanguageForDedup(participant.language)
   if (participant.type !== 'user' || !participant.user) {
     return fallback
   }

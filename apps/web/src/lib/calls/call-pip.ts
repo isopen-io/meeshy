@@ -80,6 +80,16 @@ export function pipSource(call: PipCall): PipSource | null {
   return { stream: call.localStream, mirrored: cameraMirrored({ facing: call.facing, role: 'preview', screen: call.screenSharing }), fit: call.screenSharing ? 'contain' : 'cover' };
 }
 
+export type PipAspect = { readonly width: number; readonly height: number };
+
+/** Le format de l'image qui flotte (#8144) : la coque Android y cale sa fenêtre. `null` tant que la piste ignore sa taille. */
+export function pipAspect(source: PipSource | null): PipAspect | null {
+  const track = source?.stream.getVideoTracks().find((candidate) => candidate.readyState !== 'ended');
+  const settings = typeof track?.getSettings === 'function' ? track.getSettings() : {};
+  const { width, height } = settings;
+  return width !== undefined && height !== undefined && width > 0 && height > 0 ? { width, height } : null;
+}
+
 export function shouldOfferPip(call: PipCall, support: PipSupport): boolean {
   return support !== 'none' && call.phase.kind !== 'ended' && call.phase.kind !== 'incoming' && pipSource(call) !== null;
 }

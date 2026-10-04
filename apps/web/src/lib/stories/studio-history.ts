@@ -33,6 +33,18 @@ export function recordStudioStep(history: StudioHistory, before: StudioDraft, ke
   return { past: [...history.past, before].slice(-STUDIO_HISTORY_MAX), future: [], lastKey: key };
 }
 
+/** **Un texte retiré VIDE emporte le pas qui l'a fait naître** (#9140,
+ * jumelle de `ComposerTextSceneDoor.returnsToDocument`, #9137) : si le
+ * dernier pas est celui de sa clé et qu'il précède sa naissance, l'historique
+ * redevient celui d'avant « T+ ». Un texte qui existait avant ce pas le garde :
+ * « Annuler » rend ce qu'il disait. */
+export function withoutBirthStep(history: StudioHistory, textId: string): StudioHistory {
+  const before = history.past[history.past.length - 1];
+  if (history.lastKey !== `text:${textId}` || before === undefined) return history;
+  const existed = before.pages.some((page) => page.texts.some((layer) => layer.id === textId));
+  return existed ? history : { past: history.past.slice(0, -1), future: history.future, lastKey: null };
+}
+
 export function undoStudioStep(history: StudioHistory, current: StudioDraft): { readonly history: StudioHistory; readonly draft: StudioDraft } | null {
   const draft = history.past[history.past.length - 1];
   if (draft === undefined) return null;

@@ -131,3 +131,23 @@ export function reelDisplayOf<M extends { readonly kind: string }>(media: readon
 export function shouldLoadMoreReels(params: { readonly activeIndex: number; readonly count: number }): boolean {
   return params.count > 0 && params.activeIndex >= params.count - LOAD_MORE_DISTANCE;
 }
+
+/**
+ * **CE QUE L'ÉCRAN DES RÉELS OFFRE À UN VISITEUR SANS COMPTE** (#9149, #9172)
+ * — l'état que `useVisitorInvitation` attend. La passerelle ne sert à un
+ * visiteur que le réel NOMMÉ (`GET /posts/:id`, s'il est public) ; le fil
+ * (`scope=reels`) exige un compte et ne s'ouvrira pas sans une garde dédiée.
+ * Sans graine, il n'y a donc rien à montrer, et rien n'est refusé : c'est
+ * l'invitation à rejoindre (`invite`), jamais « ce contenu n'est pas
+ * accessible ». Miroir d'iOS, qui garde le lien en attente derrière l'écran de
+ * connexion (`VisitorContentRequest` ne connaît qu'un réel ou un post nommés).
+ */
+export function reelVisitorState(params: {
+  readonly count: number;
+  readonly hasSeed: boolean;
+  readonly seedRefused: boolean;
+}): 'pending' | 'served' | 'refused' | 'invite' {
+  if (params.count > 0) return 'served';
+  if (!params.hasSeed) return 'invite';
+  return params.seedRefused ? 'refused' : 'pending';
+}

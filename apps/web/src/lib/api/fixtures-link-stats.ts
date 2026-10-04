@@ -1,3 +1,4 @@
+import type { ShareLinkArrivalsPage } from './link-arrivals';
 import type { ShareLinkStats } from './link-stats';
 
 /**
@@ -39,4 +40,30 @@ export function fixtureShareLinkStats(linkId: string): ShareLinkStats | null {
     return { visits: 12, arrivals: 0, anonymousArrivals: 0, arrivalsByLanguage: [], arrivalsByCountry: [], recentArrivals: [] };
   }
   return null;
+}
+
+const FIXTURE_NAMES = ['Priya', 'Kwame', 'Amara', 'Yuki', 'Lucía', 'Omar', 'Inès', 'João', 'Min-jun', 'Fatou', 'Lena', 'Malik'] as const;
+const FIXTURE_ORIGINS = [['IN', 'en'], ['GH', 'en'], ['SN', 'fr'], ['JP', 'ja'], ['ES', 'es'], ['MA', 'ar'], ['FR', 'fr'], ['BR', 'pt'], ['KR', 'ko'], ['SN', 'fr'], ['DE', 'de'], [null, null]] as const;
+const FIXTURE_PAGE = 30;
+
+/**
+ * TOUTES LES ARRIVÉES du lien de recette (#7813) — autant que ses statistiques
+ * en annoncent, page par page ; le curseur est le rang de la suivante.
+ */
+export function fixtureShareLinkArrivals(linkId: string, cursor: string | null): ShareLinkArrivalsPage {
+  const total = fixtureShareLinkStats(linkId)?.arrivals ?? 0;
+  const start = cursor === null ? 0 : Number(cursor);
+  const end = Math.min(start + FIXTURE_PAGE, total);
+  const arrivals = Array.from({ length: Math.max(end - start, 0) }, (_, offset) => {
+    const rank = start + offset;
+    const [country, language] = FIXTURE_ORIGINS[rank % FIXTURE_ORIGINS.length] ?? [null, null];
+    return {
+      displayName: `${FIXTURE_NAMES[rank % FIXTURE_NAMES.length] ?? 'Invité'} ${rank + 1}`,
+      isAnonymous: rank % 3 !== 1,
+      country,
+      language,
+      joinedAt: minutesAgo(2 + rank * 47),
+    };
+  });
+  return { arrivals, nextCursor: end < total ? String(end) : null };
 }

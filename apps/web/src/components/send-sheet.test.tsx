@@ -9,6 +9,8 @@ import { loadSendSheetCatalog } from '@/lib/i18n-send-sheet-catalog';
 import type { SendPayload } from '@/lib/send/send-sheet-plan';
 import type { SendSheetPorts } from '@/lib/send/send-sheet-run';
 import type { SendSheetRequest } from '@/lib/send/send-sheet-store';
+import { takeStudioSeed } from '@/lib/stories/studio-seed';
+import { href } from '@/routes/route-table';
 import { buttonNamed, createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -25,7 +27,7 @@ import { SEND_SHEET_EXIT_MS } from './send-sheet-frame';
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
 
 beforeAll(async () => {
-  ensureHappyDomRegistered();
+  ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadSendSheetCatalog('fr');
 });
@@ -219,8 +221,10 @@ describe('SendSheet — choisir à qui', () => {
 });
 
 describe('SendSheet — publier', () => {
-  test('une image publiable offre Ma story / Post / Réel, et une pastille compte comme une cible', async () => {
-    const host = await mount({ request: { payload: imageAttachment(), intent: 'share' } });
+  test('une vidéo publiable offre Ma story / Post / Réel, une image seule pas le réel, et une pastille compte comme une cible', async () => {
+    const image = await mount({ request: { payload: imageAttachment(), intent: 'share' } });
+    expect([...image.querySelectorAll('[data-send-publish]')].map((chip) => chip.textContent)).toEqual(['Ma story', 'Post']);
+    const host = await mount({ request: { payload: imageAttachment({ mime: 'video/mp4' }), intent: 'share' } });
     const chips = [...host.querySelectorAll('[data-send-publish]')].map((chip) => chip.textContent);
     expect(chips).toEqual(['Ma story', 'Post', 'Réel']);
     await mounter.click(host.querySelector('[data-send-publish="STORY"]'));
@@ -371,6 +375,28 @@ describe('SendSheet — plus d’options', () => {
     await mounter.click(buttonNamed(host, 'Copier le lien'));
     expect(copied).toEqual(['https://meeshy.me/p/1']);
     expect(host.querySelector('[role="status"]')?.textContent).toBe('Lien copié');
+  });
+});
+
+describe('SendSheet — « Modifier avant de publier » (#9286)', () => {
+  test('un partage entrant ouvre le studio du post, semé de ses fichiers et de la légende', async () => {
+    const photo = new File(['a'], 'a.jpg', { type: 'image/jpeg' });
+    let closed = 0;
+    const host = await mount({ request: { payload: { kind: 'files', files: [photo] }, intent: 'share' }, onClose: () => (closed += 1) });
+    const caption = host.querySelector<HTMLTextAreaElement>('textarea')!;
+    await act(async () => {
+      caption.value = 'Vu ce matin';
+      caption.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await mounter.click(buttonNamed(host, 'Modifier avant de publier'));
+    expect(takeStudioSeed()).toEqual({ files: [photo], text: 'Vu ce matin' });
+    expect(window.location.pathname).toBe(href('postCompose'));
+    expect(closed).toBe(1);
+  });
+
+  test('ce qui vient de Meeshy ne se recompose pas : aucun bouton', async () => {
+    const host = await mount({ request: { payload: imageAttachment(), intent: 'share' } });
+    expect(buttonNamed(host, 'Modifier avant de publier')).toBe(null);
   });
 });
 

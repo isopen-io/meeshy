@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { watchMediaStall } from '@/lib/media/media-stall';
 import { inMediaWindow, mediaDrift, mediaTimeAt, type MediaTimeAt, type MediaTimeline } from '@/lib/canvas/media-seek';
 
 import type { SceneClockHandle } from './scene-clock';
@@ -53,6 +54,10 @@ export type SceneMediaSyncParams = {
  *
  * Quand l'horloge ne mène pas (scène sans objet temporisé ni durée), le média
  * joue librement (`freePlay`) et ne se recale qu'aux seeks.
+ *
+ * - en BUFFER (#9277), l'élément le DIT à l'horloge (`setStalled`), qui cesse
+ *   de compter ; les autres médias de la scène se mettent en pause avec elle
+ *   et repartent, recalés, quand plus aucun n'attend — le gel en phase d'iOS.
  */
 export function useSceneMediaSync(params: SceneMediaSyncParams): void {
   const { ref, clock, playing, restartKeys } = params;
@@ -99,6 +104,43 @@ export function useSceneMediaSync(params: SceneMediaSyncParams): void {
     return free !== undefined ? (free(el, () => start(el)) ?? undefined) : start(el);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, clock, ...restartKeys]);
+
+  // Le buffer : l'élément tient l'horloge tant qu'il attend ses octets.
+  const stallKey = useRef<object>({});
+  useEffect(() => {
+    const el = ref.current;
+    if (el === null || clock === null) return;
+    const key = stallKey.current;
+    const stop = watchMediaStall(el, (stalled) => clock.setStalled(key, stalled));
+    return () => {
+      stop();
+      clock.setStalled(key, false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clock, ...restartKeys]);
+
+  // Le gel en phase : un média qui A ses octets attend celui qui ne les a pas.
+  const heldByStall = useRef(false);
+  useEffect(() => {
+    if (clock === null) return;
+    return clock.subscribeStall((stalled) => {
+      const el = ref.current;
+      if (el === null || !clock.isDriving()) return;
+      if (stalled) {
+        if (el.paused || el.readyState < 3) return;
+        heldByStall.current = true;
+        el.pause();
+        return;
+      }
+      if (!heldByStall.current) return;
+      heldByStall.current = false;
+      if (!latest.current.playing) return;
+      const at = align(el, clock.now(), true);
+      if (at !== null) follow(el, at);
+      else start(el);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clock]);
 
   // La trame (fenêtre + dérive) et le seek (le doigt).
   useEffect(() => {

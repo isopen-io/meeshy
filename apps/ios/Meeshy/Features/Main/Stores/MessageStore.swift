@@ -63,7 +63,8 @@ private nonisolated func fetchMessageWindow(
     mode: WindowMode,
     anchor: Date?,
     initialWindowSize: Int,
-    anchoredRowCap: Int? = nil
+    anchoredRowCap: Int? = nil,
+    newerEdge: JumpedWindowNewerEdge = .halfWindow
 ) throws -> [MessageRecord] {
     switch mode {
     case .search(let ids):
@@ -99,12 +100,19 @@ private nonisolated func fetchMessageWindow(
                 .order(Column("createdAt").desc)
                 .limit(half)
                 .fetchAll(db)
-            let after = try MessageRecord
+            let newer = MessageRecord
                 .filter(Column("conversationId") == convId)
                 .filter(Column("createdAt") > centerDate)
                 .order(Column("createdAt").asc)
-                .limit(half)
-                .fetchAll(db)
+            let after: [MessageRecord]
+            switch newerEdge {
+            case .halfWindow:
+                after = try newer.limit(half).fetchAll(db)
+            case .through(let edge):
+                after = try newer.filter(Column("createdAt") <= edge).fetchAll(db)
+            case .present:
+                after = try newer.fetchAll(db)
+            }
             return Array(before.reversed()) + after
         }
     case .latest:
@@ -149,6 +157,19 @@ private nonisolated func fetchMessageWindow(
             }
         }
     }
+}
+
+/// Bord RÉCENT d'une fenêtre sautée (#9304). Le serveur sert la fenêtre
+/// `around` puis ses pages `after` d'un seul tenant ; GRDB peut porter, plus
+/// haut, les messages récents d'une session antérieure, séparés d'elle par un
+/// trou. Le bord dit jusqu'où la fenêtre est CONTINUE :
+/// - `halfWindow` — l'ancien comportement : la moitié de la fenêtre initiale ;
+/// - `through(date)` — jusqu'au plus récent message servi, inclus ;
+/// - `present` — la fenêtre a rejoint le présent : tout ce qui suit.
+nonisolated enum JumpedWindowNewerEdge: Equatable, Sendable {
+    case halfWindow
+    case through(Date)
+    case present
 }
 
 /// Holds cancellation tokens that must be accessible from `nonisolated deinit`.
@@ -219,6 +240,9 @@ public final class MessageStore: ObservableObject {
     /// The current display window. `.latest` shows the most recent messages;
     /// `.around(date:)` shows a centered slice used during jump-to-message UX.
     private(set) var windowMode: WindowMode = .latest
+
+    /// Bord récent de la fenêtre `.around` (#9304) — sans effet hors d'elle.
+    private(set) var jumpedNewerEdge: JumpedWindowNewerEdge = .halfWindow
 
     // MARK: - Internal
 
@@ -358,6 +382,7 @@ public final class MessageStore: ObservableObject {
         // temps réel) peut se contenter de la queue de la fenêtre, puisque
         // `publish` y préserve ce qui manque. Cf. `realtimeAnchoredWindowCap`.
         let anchoredRowCap = mergeInMemory ? Self.realtimeAnchoredWindowCap : nil
+        let newerEdge = jumpedNewerEdge
         refreshGeneration &+= 1
         let generation = refreshGeneration
         let fetched: Result<[MessageRecord], any Error> = await Task.detached(priority: .userInitiated) {
@@ -365,7 +390,7 @@ public final class MessageStore: ObservableObject {
                 try fetchMessageWindow(
                     reader: reader, convId: convId, mode: mode,
                     anchor: anchor, initialWindowSize: initialWindowSize,
-                    anchoredRowCap: anchoredRowCap
+                    anchoredRowCap: anchoredRowCap, newerEdge: newerEdge
                 )
             }
         }.value
@@ -671,6 +696,7 @@ public final class MessageStore: ObservableObject {
         let mode = windowMode
         let anchor = windowAnchor
         let initialWindow = Self.initialWindowSize
+        let newerEdge = jumpedNewerEdge
         let reader = persistence.reader
 
         // Même lecture détachée que `refreshFromDB` : l'ouverture d'une
@@ -681,7 +707,8 @@ public final class MessageStore: ObservableObject {
             Result {
                 try fetchMessageWindow(
                     reader: reader, convId: convId, mode: mode,
-                    anchor: anchor, initialWindowSize: initialWindow
+                    anchor: anchor, initialWindowSize: initialWindow,
+                    newerEdge: newerEdge
                 )
             }
         }.value
@@ -763,9 +790,18 @@ public final class MessageStore: ObservableObject {
 
     /// Switches the window to be centered around `date`, then refreshes from DB.
     /// Used by jump-to-message UX. Returns when the new window has been loaded.
-    public func loadWindow(around date: Date) async {
+    func loadWindow(around date: Date, newerEdge: JumpedWindowNewerEdge = .halfWindow) async {
         windowMode = .around(date: date)
         windowAnchor = nil
+        jumpedNewerEdge = newerEdge
+        await refreshFromDB()
+    }
+
+    /// Recule le bord récent d'une fenêtre sautée jusqu'à la page plus
+    /// récente que le serveur vient de servir (#9304). Hors `.around`, rien.
+    func extendJumpedWindow(to edge: JumpedWindowNewerEdge) async {
+        guard case .around = windowMode else { return }
+        jumpedNewerEdge = edge
         await refreshFromDB()
     }
 
@@ -773,6 +809,7 @@ public final class MessageStore: ObservableObject {
     public func restoreLatestWindow() async {
         windowMode = .latest
         windowAnchor = nil
+        jumpedNewerEdge = .halfWindow
         await refreshFromDB()
     }
 
@@ -784,6 +821,7 @@ public final class MessageStore: ObservableObject {
     public func enterSearchMode(ids: [String]) async {
         windowMode = .search(ids: ids)
         windowAnchor = nil
+        jumpedNewerEdge = .halfWindow
         await refreshFromDB()
     }
 

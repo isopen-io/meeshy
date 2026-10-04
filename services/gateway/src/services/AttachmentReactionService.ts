@@ -1,6 +1,8 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji } from '@meeshy/shared/types/reaction';
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
+import { isConversationClosed } from './messaging/conversationWriteAdmission.js';
+import { CLOSED_CONVERSATION_REACTION_ERROR } from './ReactionService.js';
 
 export interface AddAttachmentReactionOptions {
   attachmentId: string;
@@ -32,6 +34,44 @@ export class AttachmentReactionService {
     // branche `throw` était morte.
     const emoji = sanitizeEmoji(o.emoji);
     if (!emoji) throw new Error('Invalid emoji format');
+
+    // L'état TERMINAL du conteneur — la CINQUIÈME porte de réaction, et la
+    // seule qui ne converge pas vers `ReactionService.addReaction`.
+    //
+    // `packages/shared/prisma/schema.prisma` documente `Conversation.closedAt`
+    // par « Conversation closed for all — **no one can write**, messages stay
+    // readable ». Les quatre transports message-level posent la question en un
+    // seul point parce qu'ils convergent chez la jumelle ; celui-ci a son
+    // propre point d'écriture, donc sa propre garde.
+    //
+    // **Ce que ça coûtait.** `GET /conversations` filtre `isActive: true` et les
+    // clients retirent la conversation de leur cache en recevant
+    // `conversation:closed` : la ligne était écrite et `ATTACHMENT_REACTION_ADDED`
+    // diffusé vers une room que plus personne n'écoute — le symptôme exact que
+    // le cycle 31 a corrigé pour l'ENVOI.
+    //
+    // **La garde se relit CHEZ ELLE.** Le service charge lui-même l'état
+    // terminal au lieu de le recevoir de son appelant : un paramètre dont
+    // l'absence désactive une garde est un demi-correctif, et le gestionnaire
+    // socket n'est pas le seul chemin possible vers ce service.
+    //
+    // **Coût : une lecture, et une seule** — contrairement à la jumelle, ce
+    // service n'avait aucun `include` à recycler. Le témoin
+    // `conversationClosedWriteVerbs.test.ts` gèle ce prix.
+    //
+    // Les DEUX colonnes sont lues (`isConversationClosed`) parce que `leave.ts`
+    // a posé pendant trente-sept cycles `isActive: false` SEUL : ces lignes
+    // existent et rien ne les rétro-remplit.
+    //
+    // Le RETRAIT reste ouvert, délibérément — voir `removeAttachmentReaction`,
+    // et le § 3 du témoin.
+    const host = await this.prisma.message.findUnique({
+      where: { id: o.messageId },
+      select: { conversation: { select: { isActive: true, closedAt: true } } },
+    });
+    if (isConversationClosed(host?.conversation)) {
+      throw new Error(CLOSED_CONVERSATION_REACTION_ERROR);
+    }
 
     // Idempotency: the participant already holding exactly this emoji on this
     // attachment (optimistic double-fire, a socket retry after a lost ACK, or a

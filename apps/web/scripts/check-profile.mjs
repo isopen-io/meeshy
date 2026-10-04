@@ -249,16 +249,49 @@ try {
       check((await page.$('text=Cet écran arrive bientôt.')) === null, `${label} : l'écran d'attente a disparu`);
       const sections = await page.$$eval('#contenu section h2', (els) => els.map((el) => (el.textContent ?? '').trim()));
       check(
-        ['IDENTITÉ', 'CONTACT', 'LANGUES', 'STATISTIQUES', 'DEMANDES', 'MEMBRE DEPUIS'].every((title) => sections.includes(title)),
-        `${label} : les six sections d'iOS, dans l'écran (${JSON.stringify(sections)})`,
+        ['STATISTIQUES', 'IDENTITÉ', 'CONTACT', 'LANGUES', 'MEMBRE DEPUIS'].every((title) => sections.includes(title)),
+        `${label} : les compteurs puis l'onglet Détails, ouvert d'abord (${JSON.stringify(sections)})`,
       );
+      /* LES ONGLETS (#6330) — Détails · Publications · Activité, Détails ouvert
+         d'abord, et le compte des demandes se lit SUR l'onglet qui les porte. */
+      const onglets = await page.$$eval('[role="tab"]', (els) => els.map((el) => `${el.getAttribute('data-profile-tab')}:${el.getAttribute('aria-selected')}`));
+      check(
+        JSON.stringify(onglets) === JSON.stringify(['details:true', 'posts:false', 'activity:false']),
+        `${label} : trois onglets, Détails ouvert (${JSON.stringify(onglets)})`,
+      );
+      check((await textOf(page, '[data-profile-tab-badge="activity"]')) === '3', `${label} : l'onglet Activité porte le compte des demandes`);
+      const debordement = await page.evaluate(() => {
+        const main = document.getElementById('contenu');
+        return main === null ? null : main.scrollWidth - main.clientWidth;
+      });
+      check(debordement === 0, `${label} : /me — la barre d'onglets n'élargit pas la colonne (débord ${debordement} px)`);
+
       const contact = await textOf(page, 'section[aria-labelledby="profile-contact"]');
       check(contact !== null && contact.includes('a•••@meeshy.example') && !/@meeshy\.example/.test(contact.replace('a•••@meeshy.example', '')), `${label} : le contact se lit MASQUÉ`);
       check((await page.$$('[data-prism-rank]')).length === 3, `${label} : trois rangs du Prisme`);
       check((await textOf(page, '[data-stat="totalMessages"] strong')) === '1204', `${label} : les statistiques servies`);
+      await capture(page, `profil-${scheme}-${width}x${height}`);
+      const ongletInks = {
+        ongletActif: await contrastOf(page, '[role="tab"][aria-selected="true"] .truncate'),
+        ongletRepos: await contrastOf(page, '[role="tab"][aria-selected="false"] .truncate'),
+        pastille: await contrastOf(page, '[data-profile-tab-badge="activity"]'),
+      };
+      await page.click('[data-profile-tab="activity"]');
+      await page.waitForSelector('[data-profile-progression]');
+      check((await page.$('section[aria-labelledby="profile-identity"]')) === null, `${label} : Activité remplace Détails, rien ne s'empile`);
       check((await page.getAttribute('[data-profile-progression]', 'href')) === '/me/progression', `${label} : la progression mène à /me/progression`);
       check((await textOf(page, '[data-pending-requests]')) === '3', `${label} : les demandes d'amis portent leur compte`);
-      await capture(page, `profil-${scheme}-${width}x${height}`);
+      check(new URL(page.url()).searchParams.get('tab') === 'activity', `${label} : l'onglet ouvert s'inscrit dans l'adresse (${page.url()})`);
+      ongletInks.demandes = await contrastOf(page, '[data-pending-requests]');
+      const ongletsFaibles = Object.entries(ongletInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
+      check(ongletsFaibles.length === 0, `${label} : les onglets et leur pastille tiennent AA — ${JSON.stringify(ongletInks)}`);
+      await capture(page, `profil-activite-${scheme}-${width}x${height}`);
+      await page.click('[data-profile-tab="posts"]');
+      await page.waitForSelector('[data-profile-posts-empty]');
+      check(true, `${label} : Publications se rend — son état vide se dit`);
+      await page.click('[data-profile-tab="details"]');
+      await page.waitForSelector('section[aria-labelledby="profile-identity"]');
+      check(new URL(page.url()).searchParams.get('tab') === null, `${label} : revenir sur Détails nettoie l'adresse`);
 
       // ------------------------------------------------ 2. atteignabilité
       const rest = await reachAtRest(page, REACH);
@@ -289,7 +322,6 @@ try {
         langue: await contrastOf(page, '[data-prism-rank="systemLanguage"] [lang]'),
         statistique: await contrastOf(page, '[data-stat="totalMessages"] strong'),
         libelleStatistique: await contrastOf(page, '[data-stat="totalMessages"] .text-chip'),
-        demandes: await contrastOf(page, '[data-pending-requests]'),
       };
       const faibles = Object.entries(inks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
       check(faibles.length === 0, `${label} : chaque texte du profil tient AA — ${JSON.stringify(inks)}`);
@@ -376,18 +408,63 @@ try {
       await context.setOffline(false);
       await page.goto(`${BASE}/u/kwame-mensah`, { waitUntil: 'load' });
       await page.waitForSelector('[data-user-hero]');
-      await page.waitForSelector('[data-profile-posts] [data-feed-card-id]');
+      await page.waitForSelector('[data-profile-relation]');
 
-      // ------------------------------------------------ 9. l'identité et les trois blocs
+      // ------------------------------------------------ 9. l'identité, puis les onglets de `UserProfileSheet` (#6330)
       check((await textOf(page, '[data-user-hero] p')) === 'Kwame Mensah', `${label} : /u/ porte le nom (« ${await textOf(page, '[data-user-hero] p')} »)`);
       check((await textOf(page, '[data-user-hero] p:nth-of-type(2)')) === '@kwame-mensah', `${label} : /u/ porte l'@identifiant`);
       check((await page.$('[data-user-banner]')) !== null, `${label} : /u/ porte sa bannière`);
+      const publicTabs = await page.$$eval('[role="tab"]', (els) => els.map((el) => `${el.getAttribute('data-profile-tab')}:${el.getAttribute('aria-selected')}`));
+      check(
+        JSON.stringify(publicTabs) === JSON.stringify(['posts:false', 'conversations:false', 'details:true']),
+        `${label} : /u/ — Publications · Conversations · Détails, Détails ouvert d'abord (${JSON.stringify(publicTabs)})`,
+      );
+      const debordementPublic = await page.evaluate(() => {
+        const main = document.getElementById('contenu');
+        return main === null ? null : main.scrollWidth - main.clientWidth;
+      });
+      check(debordementPublic === 0, `${label} : /u/ — la barre d'onglets n'élargit pas la colonne (débord ${debordementPublic} px)`);
+
       const publicSections = await page.$$eval('#contenu section h2', (els) => els.map((el) => (el.textContent ?? '').trim()));
       check(
-        JSON.stringify(publicSections) === JSON.stringify(['CONNEXION', 'PUBLICATIONS', 'CONVERSATIONS', 'STATISTIQUES']),
-        `${label} : les quatre blocs, dans l'ordre (${JSON.stringify(publicSections)})`,
+        JSON.stringify(publicSections) === JSON.stringify(['CONNEXION', 'STATISTIQUES']),
+        `${label} : /u/ — Détails porte la connexion et les compteurs, d'un coup (${JSON.stringify(publicSections)})`,
+      );
+      /* LE DÉFAUT D'iOS QU'ON NE COPIE PAS : `servedUserStats` retire quatre
+         compteurs à un tiers ; iOS les décode en 0 et annonce « 0 Messages ». */
+      const statsText = (await textOf(page, '[data-profile-stats]')) ?? '';
+      check(
+        !statsText.includes('Messages') && !statsText.includes('Traductions'),
+        `${label} : un compteur ABSENT ne peint AUCUNE tuile — « ${statsText.slice(0, 90)} »`,
       );
       await capture(page, `profil-public-${scheme}-${width}x${height}`);
+      const detailsRest = await reachAtRest(page, REACH);
+      const detailsBlocked = detailsRest.controls.filter((c) => !c.ok);
+      check(detailsBlocked.length === 0, `${label} : /u/ Détails — aucun contrôle volé à son centre au repos — ${JSON.stringify(detailsBlocked)}`);
+      const detailsScrolled = await reachScrolled(page);
+      const detailsUnreachable = detailsScrolled.filter((c) => !c.ok || c.hauteur < TAP_FLOOR);
+      check(
+        detailsScrolled.length >= 6 && detailsUnreachable.length === 0,
+        `${label} : /u/ Détails — chaque contrôle s'atteint et fait ${TAP_FLOOR} de haut (${detailsScrolled.length}) — ${JSON.stringify(detailsUnreachable)}`,
+      );
+      const detailsInks = {
+        nom: await contrastOf(page, '[data-user-hero] p'),
+        identifiant: await contrastOf(page, '[data-user-hero] p:nth-of-type(2)'),
+        ongletActif: await contrastOf(page, '[role="tab"][aria-selected="true"] .truncate'),
+        ongletRepos: await contrastOf(page, '[role="tab"][aria-selected="false"] .truncate'),
+        valeurStat: await contrastOf(page, '[data-profile-stat="languagesUsed"] strong'),
+        ajouter: await contrastOf(page, '[data-profile-action="add"]'),
+        /* « ÉCRIRE » entre à la revue de #7083 : 3,84 en clair à l'encre
+           `--color-ios-brand`, le geste que l'audience de cet écran vient
+           chercher. */
+        ecrire: await contrastOf(page, '[data-profile-action="write"]'),
+        bloquer: await contrastOf(page, '[data-profile-action="block"]'),
+        membreDepuis: await contrastOf(page, '[data-profile-member-since]'),
+      };
+      const detailsFaibles = Object.entries(detailsInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
+      check(detailsFaibles.length === 0, `${label} : /u/ Détails — chaque texte tient AA — ${JSON.stringify(detailsInks)}`);
+      await page.click('[data-profile-tab="conversations"]');
+      check(new URL(page.url()).searchParams.get('tab') === 'conversations', `${label} : /u/ — l'onglet ouvert s'inscrit dans l'adresse`);
 
       // ------------------------------------------------ 9 bis. CE QUE VOUS PARTAGEZ DÉJÀ (#7124)
       /* L'onglet Conversations d'iOS (`listSharedWith`), rendu en SECTION.
@@ -412,6 +489,9 @@ try {
         partagees.every((r) => r.hauteur >= TAP_FLOOR),
         `${label} : /u/ — chaque rangée fait ${TAP_FLOOR} de haut — ${JSON.stringify(partagees.map((r) => r.hauteur))}`,
       );
+      const conversationInk = await contrastOf(page, '[data-profile-conversation] span');
+      check(conversationInk !== null && conversationInk >= WCAG_AA, `${label} : /u/ — une conversation partagée tient AA (${conversationInk})`);
+      await capture(page, `profil-public-conversations-${scheme}-${width}x${height}`);
       /* ELLE MÈNE VRAIMENT : le fil s'ouvre. Un `href` juste au-dessus d'une
          route qui refuserait serait le contrôle qui ment sous une autre
          forme. On revient ensuite à la fiche, que la suite du gate mesure. */
@@ -422,8 +502,11 @@ try {
         .then(() => page.waitForSelector('main', { timeout: 5000 }))
         .then(() => true, () => false);
       check(filOuvert, `${label} : /u/ — une conversation partagée OUVRE son fil (${premierPartage})`);
-      await page.goto(`${BASE}/u/kwame-mensah`, { waitUntil: 'load' });
+      /* UNE ADRESSE QUI NOMME L'ONGLET L'OUVRE — un lien partagé, un retour
+         arrière, un rechargement retrouvent le même panneau. */
+      await page.goto(`${BASE}/u/kwame-mensah?tab=posts`, { waitUntil: 'load' });
       await page.waitForSelector('[data-profile-posts] [data-feed-card-id]');
+      await capture(page, `profil-public-publications-${scheme}-${width}x${height}`);
 
       // ------------------------------------------------ 10. le bandeau, et ce qu'il NE dit pas
       const band = await page.$$eval('[data-profile-tile]', (els) =>
@@ -439,13 +522,6 @@ try {
       check(
         band.find((t) => t.cle === 'storiesCount')?.bouton === false && band.filter((t) => t.bouton).length === 2,
         `${label} : « Stories » n'est PAS un bouton, « Postes » et « Réels » le sont`,
-      );
-      /* LE DÉFAUT D'iOS QU'ON NE COPIE PAS : `servedUserStats` retire quatre
-         compteurs à un tiers ; iOS les décode en 0 et annonce « 0 Messages ». */
-      const statsText = (await textOf(page, '[data-profile-stats]')) ?? '';
-      check(
-        !statsText.includes('Messages') && !statsText.includes('Traductions'),
-        `${label} : un compteur ABSENT ne peint AUCUNE tuile — « ${statsText.slice(0, 90)} »`,
       );
 
       /* LA RÈGLE 1 DU PRISME, sur le prisme à UN échelon de ce contexte
@@ -570,25 +646,13 @@ try {
       const publicInks = {
         nom: await contrastOf(page, '[data-user-hero] p'),
         identifiant: await contrastOf(page, '[data-user-hero] p:nth-of-type(2)'),
-        titreSection: await contrastOf(page, '#user-profile-posts'),
         valeurTuile: await contrastOf(page, '[data-profile-tile="postsCount"] strong'),
         libelleTuile: await contrastOf(page, '[data-profile-tile="postsCount"] .text-chip'),
-        valeurStat: await contrastOf(page, '[data-profile-stat="languagesUsed"] strong'),
-        ajouter: await contrastOf(page, '[data-profile-action="add"]'),
-        /* « ÉCRIRE » ET « CHARGER PLUS » entrent à la revue de #7083 : la
-           liste mesurait deux boutons sur quatre, et les DEUX qu'elle sautait
-           étaient précisément ceux à l'encre `--color-ios-brand` — 3,84 en
-           clair pour « Écrire », le geste que l'audience de cet écran vient
-           chercher. Une liste d'encres nommée À LA MAIN ne mesure que ce que
-           son auteur soupçonne : elle se relit quand un bouton s'ajoute. */
-        ecrire: await contrastOf(page, '[data-profile-action="write"]'),
+        /* « CHARGER PLUS » entre à la revue de #7083, à l'encre
+           `--color-ios-brand`. Une liste d'encres nommée À LA MAIN ne mesure
+           que ce que son auteur soupçonne : elle se relit quand un bouton
+           s'ajoute — Détails et Conversations ont la leur, plus haut. */
         chargerPlus: chargerPlusInk,
-        bloquer: await contrastOf(page, '[data-profile-action="block"]'),
-        membreDepuis: await contrastOf(page, '[data-profile-member-since]'),
-        /* LA LISTE SE RELIT QUAND UNE SURFACE S'AJOUTE (#7083, revue) — la
-           section Conversations entre ici le jour où elle entre à l'écran,
-           sans quoi elle serait la prochaine encre jamais regardée. */
-        conversationPartagee: await contrastOf(page, '[data-profile-conversation] span'),
       };
       const publicFaibles = Object.entries(publicInks).filter(([, ratio]) => ratio === null || ratio < WCAG_AA);
       check(publicFaibles.length === 0, `${label} : /u/ — chaque texte tient AA — ${JSON.stringify(publicInks)}`);
@@ -599,6 +663,9 @@ try {
          INVERSE est joué dans la foulée : il prouve l'autre moitié de la loi,
          ET il rend la fixture à son état initial, sans quoi les trois
          combinaisons suivantes ouvriraient la fiche déjà « en attente ». */
+      await page.click('[data-profile-tab="details"]');
+      await page.waitForSelector('[data-profile-action="add"]');
+      check(new URL(page.url()).searchParams.get('tab') === null, `${label} : /u/ — revenir sur Détails nettoie l'adresse`);
       const relationTurned = async (selector) =>
         page.waitForFunction((s) => document.querySelector(s) !== null, selector, { timeout: 1000 }).then(() => true, () => false);
       await page.click('[data-profile-action="add"]');
@@ -685,7 +752,7 @@ try {
   const rangContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light', locale: 'en-US' });
   const rangPage = await rangContext.newPage();
   rangPage.setDefaultTimeout(10_000);
-  await rangPage.goto(`${BASE}/u/kwame-mensah`, { waitUntil: 'load' });
+  await rangPage.goto(`${BASE}/u/kwame-mensah?tab=posts`, { waitUntil: 'load' });
   await rangPage.waitForSelector('[data-profile-posts] [data-feed-card-id]');
   const servi = (await textOf(rangPage, '[data-feed-card-id="ap-1"]')) ?? '';
   check(servi.includes('the report is ready'), `prisme ['fr','en'] : la publication espagnole se lit au RANG 2 — « ${servi.slice(0, 70)} »`);

@@ -931,6 +931,18 @@ const LINKS = [
   'clock-counter-clockwise',
   'hourglass',
   'caret-right',
+  'chart-line',
+  'users-three',
+  'gift',
+  'trash',
+  'globe',
+  'device-mobile',
+  'desktop',
+  'device-tablet',
+  'cursor-click',
+  'browser',
+  'arrow-square-out',
+  'share-network',
 ];
 
 emit({
@@ -938,7 +950,7 @@ emit({
   output: join(HERE, '../src/components/glyphs-links.ts'),
   constant: 'LINKS_GLYPHS',
   type: 'LinksGlyphName',
-  role: "LE JEU D'ECRAN de Mes liens (#6361) : hub, liens de partage, detail et creation, charge avec les routes /links, jamais dans le socle.",
+  role: "LE JEU D'ECRAN de Mes liens (#6361, #6408, #6409, #6410) : hub, liens de partage, de suivi, de parrainage et de communaute, charge avec les routes /links, jamais dans le socle.",
 });
 
 /**
@@ -1027,13 +1039,15 @@ emit({
  * chunk) : seul `trash` (Supprimer) est propre a cet ecran, comme il l'est
  * deja a la cloche (`glyphs-notifications.ts`) — deux jeux qui portent le
  * meme tracé plutot qu'un import croise qui lierait la cloche au listing.
+ * `pencil-simple` (Modifier, #9317) suit la meme regle : le menu de fil le
+ * porte deja, l'ecran ne paie pas ce chunk pour un seul tracé.
  */
 emit({
-  ids: ['trash'],
+  ids: ['trash', 'pencil-simple'],
   output: join(HERE, '../src/components/glyphs-stories-mine.ts'),
   constant: 'STORIES_MINE_GLYPHS',
   type: 'StoriesMineGlyphName',
-  role: 'LE JEU DE « MES STORIES » (#6149) : le bouton Supprimer du listing, charge avec /stories/mine.',
+  role: 'LE JEU DE « MES STORIES » (#6149) : les boutons Supprimer et Modifier (#9317) du listing, charges avec /stories/mine.',
 });
 
 /**

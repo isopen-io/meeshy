@@ -151,6 +151,10 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
         return try listBeforeResult.get()
     }
 
+    /// Appelé PENDANT `listAfter`, avant la réponse — un témoin y lit l'état
+    /// « en vol » du modèle (#9304, `isLoadingNewer`).
+    var onListAfter: (() -> Void)?
+
     nonisolated func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
         try await MainActor.run {
             listAfterCallCount += 1
@@ -158,6 +162,7 @@ final class MockMessageService: MessageServiceProviding, @unchecked Sendable {
             lastListAfterAfter = after
             lastListAfterLimit = limit
             lastListAfterLanguages = languages
+            onListAfter?()
             if !listAfterResults.isEmpty { return listAfterResults.removeFirst() }
             return try listAfterResult.get()
         }

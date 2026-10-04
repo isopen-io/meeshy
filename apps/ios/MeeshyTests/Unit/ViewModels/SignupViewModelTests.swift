@@ -30,6 +30,7 @@ final class SignupViewModelTests: XCTestCase {
     private func fillValidForm(_ sut: SignupViewModel) {
         sut.form.displayName = "Awa N’Diaye"
         sut.form.email = "awa@example.com"
+        sut.form.phoneDigits = "0612345678"
         sut.form.password = "motdepasse"
     }
 
@@ -54,19 +55,19 @@ final class SignupViewModelTests: XCTestCase {
         XCTAssertFalse(sut.canSubmit)
     }
 
-    func test_canSubmit_threeRequiredFieldsValid_isTrue() {
+    func test_canSubmit_requiredFieldsValid_isTrue() {
         let (sut, _) = makeSUT()
         fillValidForm(sut)
         XCTAssertTrue(sut.canSubmit)
     }
 
-    /// Le téléphone n'est pas requis, et il n'est pas non plus annoncé
-    /// facultatif : le bouton ne l'attend simplement pas.
-    func test_canSubmit_withoutPhone_isTrue() {
+    /// #9343 — le numéro est REQUIS par l'écran (la passerelle, elle, accepte
+    /// toujours une adresse seule) : sans lui, le bouton reste éteint.
+    func test_canSubmit_withoutPhone_isFalse() {
         let (sut, _) = makeSUT()
         fillValidForm(sut)
-        XCTAssertTrue(sut.form.phoneDigits.isEmpty)
-        XCTAssertTrue(sut.canSubmit)
+        sut.form.phoneDigits = ""
+        XCTAssertFalse(sut.canSubmit)
     }
 
     // MARK: - Parrainage (#8075)
@@ -462,43 +463,34 @@ final class SignupViewModelTests: XCTestCase {
         XCTAssertEqual(SignupViewModel.field(forCode: "USERNAME_TAKEN"), .username)
     }
 
-    // MARK: - Alerte « sans numéro » (#8040)
+    // MARK: - Le numéro, requis par l'écran (#9343)
 
-    /// La règle pure : une inscription SANS numéro alerte, une inscription
-    /// AVEC numéro ne dit rien.
-    func test_phoneNudge_rule_withoutPhone_nudges() {
-        var form = SignupForm(locale: Locale(identifier: "fr_FR"))
-        form.email = "awa@example.com"
-        XCTAssertTrue(SignupPhoneNudge.shouldNudge(before: form))
-    }
-
-    func test_phoneNudge_rule_withPhone_doesNotNudge() {
-        var form = SignupForm(locale: Locale(identifier: "fr_FR"))
-        form.email = "awa@example.com"
-        form.phoneDigits = "612345678"
-        XCTAssertFalse(SignupPhoneNudge.shouldNudge(before: form))
-    }
-
-    /// Des espaces seuls ne sont pas un numéro : `hasPhone` lit les chiffres.
-    func test_phoneNudge_rule_whitespaceOnly_nudges() {
-        var form = SignupForm(locale: Locale(identifier: "fr_FR"))
-        form.phoneDigits = "   "
-        XCTAssertTrue(SignupPhoneNudge.shouldNudge(before: form))
-    }
-
-    func test_requestSubmit_withoutPhone_presentsTheNudgeAndSendsNothing() async {
+    /// Plus d'alerte « Continuer quand même » : sans numéro, rien ne part et le
+    /// refus se dit sous le champ.
+    func test_requestSubmit_withoutPhone_sendsNothingAndSaysWhyUnderThePhone() async {
         let (sut, registrar) = makeSUT()
         fillValidForm(sut)
+        sut.form.phoneDigits = ""
 
         let outcome = await sut.requestSubmit()
 
-        XCTAssertEqual(outcome, .phoneNudged)
-        XCTAssertTrue(sut.isPhoneNudgePresented)
-        XCTAssertEqual(registrar.registerCallCount, 0,
-                       "l'alerte PRÉCÈDE l'envoi : rien ne part avant la réponse")
+        XCTAssertEqual(outcome, .rejected)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+        XCTAssertEqual(sut.error(for: .phoneNumber), SignupViewModel.phoneRefusalMessage(.missing))
     }
 
-    func test_requestSubmit_withPhone_sendsWithoutNudge() async {
+    func test_submit_withoutPhone_sendsNothing() async {
+        let (sut, registrar) = makeSUT()
+        fillValidForm(sut)
+        sut.form.phoneDigits = "   "
+
+        let created = await sut.submit()
+
+        XCTAssertFalse(created)
+        XCTAssertEqual(registrar.registerCallCount, 0)
+    }
+
+    func test_requestSubmit_withPhone_sendsTheNumberAndItsCountry() async {
         let (sut, registrar) = makeSUT()
         fillValidForm(sut)
         sut.form.phoneDigits = "612345678"
@@ -506,18 +498,17 @@ final class SignupViewModelTests: XCTestCase {
         let outcome = await sut.requestSubmit()
 
         XCTAssertEqual(outcome, .created)
-        XCTAssertFalse(sut.isPhoneNudgePresented)
         XCTAssertEqual(registrar.registerCallCount, 1)
         XCTAssertEqual(registrar.lastRegisterRequest?.phoneNumber, "612345678")
+        XCTAssertEqual(registrar.lastRegisterRequest?.phoneCountryCode, "FR")
     }
 
-    func test_requestSubmit_invalidForm_neitherNudgesNorSends() async {
+    func test_requestSubmit_invalidForm_sendsNothing() async {
         let (sut, registrar) = makeSUT()
 
         let outcome = await sut.requestSubmit()
 
         XCTAssertEqual(outcome, .rejected)
-        XCTAssertFalse(sut.isPhoneNudgePresented)
         XCTAssertEqual(registrar.registerCallCount, 0)
     }
 
@@ -532,54 +523,33 @@ final class SignupViewModelTests: XCTestCase {
         XCTAssertEqual(outcome, .rejected)
     }
 
-    /// « Ajouter mon numéro » : l'alerte se ferme, le champ téléphone est
-    /// désigné pour le focus, et RIEN n'est envoyé.
-    func test_addPhoneInstead_closesTheNudgeFocusesThePhoneAndSendsNothing() async {
-        let (sut, registrar) = makeSUT()
-        fillValidForm(sut)
-        _ = await sut.requestSubmit()
+    /// Pendant la première frappe, rien ne s'affiche ; le champ QUITTÉ avec
+    /// une saisie implausible dit pourquoi.
+    func test_phoneRefusal_saysNothingWhileTyping_thenSpeaksOnceTheFieldIsLeft() {
+        let (sut, _) = makeSUT()
+        sut.form.phoneDigits = "061234"
+        XCTAssertNil(sut.error(for: .phoneNumber))
 
-        let focus = sut.addPhoneInstead()
+        sut.notePhoneFieldLeft()
 
-        XCTAssertEqual(focus, .phoneNumber)
-        XCTAssertFalse(sut.isPhoneNudgePresented)
-        XCTAssertEqual(registrar.registerCallCount, 0)
+        XCTAssertEqual(sut.error(for: .phoneNumber), SignupViewModel.phoneRefusalMessage(.implausible(.tooShort)))
     }
 
-    /// « Continuer quand même » : le compte naît SANS numéro, exactement comme
-    /// avant l'alerte — ni `phoneNumber` ni `phoneCountryCode` ne partent.
-    func test_continueWithoutPhone_createsTheAccountWithoutPhone() async {
-        let (sut, registrar) = makeSUT()
-        fillValidForm(sut)
-        _ = await sut.requestSubmit()
-
-        let created = await sut.continueWithoutPhone()
-
-        XCTAssertTrue(created)
-        XCTAssertFalse(sut.isPhoneNudgePresented)
-        XCTAssertEqual(registrar.registerCallCount, 1)
-        XCTAssertNil(registrar.lastRegisterRequest?.phoneNumber)
-        XCTAssertNil(registrar.lastRegisterRequest?.phoneCountryCode)
-        XCTAssertEqual(registrar.lastRegisterRequest?.email, "awa@example.com")
+    /// Un champ quitté VIDE ne gronde pas : on peut aller choisir son pays.
+    func test_phoneFieldLeftEmpty_saysNothing() {
+        let (sut, _) = makeSUT()
+        sut.notePhoneFieldLeft()
+        XCTAssertNil(sut.error(for: .phoneNumber))
     }
 
-    // MARK: - #8055 — sans numéro, le compte attend son code
-
-    /// « Continuer quand même » crée un compte SANS numéro, qui n'est pas encore
-    /// actif : le ViewModel expose l'adresse à vérifier pour que l'écran
-    /// présente la saisie du code — il ne rentre pas dans l'app.
-    func test_continueWithoutPhone_verificationRequired_exposesThePendingVerification() async {
-        let (sut, registrar) = makeSUT()
-        fillValidForm(sut)
-        let pending = PendingEmailVerification(email: "awa@example.com", accountCreated: true)
-        registrar.registerResult = .success(.verificationRequired(pending))
-        _ = await sut.requestSubmit()
-
-        let created = await sut.continueWithoutPhone()
-
-        XCTAssertTrue(created)
-        XCTAssertEqual(sut.pendingVerification, pending)
-        XCTAssertNil(sut.bannerError)
+    func test_phoneRefusalMessages_areDistinctAndNeverEmpty() {
+        let missing = SignupViewModel.phoneRefusalMessage(.missing)
+        let tooShort = SignupViewModel.phoneRefusalMessage(.implausible(.tooShort))
+        let implausible = SignupViewModel.phoneRefusalMessage(.implausible(.identicalRun))
+        XCTAssertFalse(missing.isEmpty)
+        XCTAssertTrue(tooShort.contains("\(PhonePlausibility.minDigits)"), "la borne vient de PhonePlausibility, jamais d'un littéral")
+        XCTAssertEqual(Set([missing, tooShort, implausible]).count, 3)
+        XCTAssertEqual(SignupViewModel.phoneRefusalMessage(.implausible(.repeatedPattern)), implausible)
     }
 
     /// Avec un numéro, la session est ouverte : rien à vérifier avant d'entrer.
@@ -801,6 +771,20 @@ final class SignupViewModelTests: XCTestCase {
         XCTAssertEqual(registrar.lastRegisterRequest?.email, first?.email)
         XCTAssertEqual(registrar.lastRegisterRequest?.username, first?.username)
         XCTAssertEqual(sut.pendingVerification, pending)
+    }
+
+    /// #9343 — « Ce n'est pas moi » ne consulte pas le bouton principal : il
+    /// hérite pourtant de la règle. Numéro effacé ⇒ rien ne part, et le refus
+    /// se dit sous le champ.
+    func test_claimEmail_withoutPhone_sendsNothingAndSaysWhy() async {
+        let (sut, registrar) = await makeOwnedSUT()
+        sut.form.phoneDigits = ""
+
+        let claimed = await sut.claimEmail()
+
+        XCTAssertFalse(claimed)
+        XCTAssertEqual(registrar.registerCallCount, 1)
+        XCTAssertEqual(sut.error(for: .phoneNumber), SignupViewModel.phoneRefusalMessage(.missing))
     }
 
     func test_claimEmail_withoutEmailTaken_sendsNothing() async {

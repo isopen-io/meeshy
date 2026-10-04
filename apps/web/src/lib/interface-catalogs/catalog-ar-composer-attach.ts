@@ -84,6 +84,8 @@ const arComposerAttach = {
   'composer.sticker.instants.field.time': 'الساعة',
   'composer.quickEmoji.label': 'إرسال مباشرة',
   'composer.quickEmoji.group': 'رموز تعبيرية سريعة',
+  'composer.quickEmoji.more': 'اختيار رمز تعبيري آخر',
+  'composer.quickEmoji.moreHint': 'ضغطة مطولة أو Shift+F10: اختيار رمز تعبيري آخر',
   'composer.effects.panel': 'تأثيرات الرسالة',
   'composer.effects.entrance': 'حركة الدخول',
   'composer.effects.permanent': 'تأثير دائم',

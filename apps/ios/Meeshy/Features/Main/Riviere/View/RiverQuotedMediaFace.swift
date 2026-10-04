@@ -25,13 +25,14 @@ struct RiverQuotedMedia: Equatable {
 /// autres modes (#8230) : la vignette servie, le poster d'une vidéo sans
 /// vignette (`QuotedVideoPoster`), l'aperçu d'un vocal (`QuotedAudioPreview`).
 ///
-/// Le geste n'est pas posé ici : c'est `RiverBubbleView` qui décide d'ouvrir le
-/// plein écran ou de retomber sur le saut au message cité (une zone = un site).
+/// Le geste n'est pas posé ici : c'est `RiverBubbleView` qui le remet à l'hôte
+/// — jouer un vocal sur place (#8320), ouvrir une image ou une vidéo en plein
+/// écran, ou retomber sur le saut au message cité (une zone = un site).
 struct RiverQuotedMediaFace: View, Equatable {
     let media: RiverQuotedMedia
     let tint: Color
     let audioTint: Color
-    /// Vrai quand toucher la zone ouvre vraiment le plein écran : l'aperçu
+    /// Vrai quand toucher la zone joue ou ouvre vraiment le média : l'aperçu
     /// vocal ne promet la lecture que dans ce cas (loi 4).
     let isArmed: Bool
 
@@ -70,7 +71,8 @@ struct RiverQuotedMediaFace: View, Equatable {
                 .overlay { playBadge }
             }
         case .audio:
-            QuotedAudioPreview(seed: reference.messageId, tint: audioTint, showsPlayGlyph: isArmed)
+            QuotedAudioPreview(seed: reference.messageId, tint: audioTint, showsPlayGlyph: isArmed,
+                               playbackMessageId: reference.messageId)
         }
     }
 

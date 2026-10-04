@@ -131,6 +131,9 @@ const arStudioChrome = {
   'story.studio.audioTrim.title': 'تقصير الصوت',
   'story.studio.background.tools.leave': 'العودة إلى المشهد',
   'story.studio.reelSwitch.announcement': 'تم التحويل إلى ريل',
+  'story.studio.edit.save': 'حفظ',
+  'story.studio.edit.saving': 'جارٍ الحفظ…',
+  'story.studio.edit.cancel': 'تجاهل التعديلات',
 } satisfies StudioChromeCatalogSlice;
 
 export default arStudioChrome;

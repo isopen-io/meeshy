@@ -11,7 +11,9 @@ import { safeAreaInsets } from '@/lib/view/safe-area';
 import { isProgrammaticScroll } from '@/lib/view/programmatic-scroll';
 import { useRovingMenu } from '@/lib/view/roving-menu';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
+import { recordEmojiUsage, topEmojis } from '@/lib/emoji-usage';
 import {
+  EXTENDED_REACTIONS,
   QUICK_REACTIONS,
   type MessageActionId,
   type MessageMenuItem,
@@ -173,6 +175,7 @@ export function MessageMenu({
    * spectateur.
    */
   const [placement, setPlacement] = useState(() => computePlacement(listRows));
+  const [railEmojis] = useState(() => topEmojis({ count: QUICK_REACTIONS.length, defaults: EXTENDED_REACTIONS }));
   useEffect(() => {
     setPlacement(computePlacement(listRows));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -357,7 +360,7 @@ export function MessageMenu({
 
   if (typeof document === 'undefined') return null;
 
-  const railTiles = [...QUICK_REACTIONS, '+'] as const;
+  const railTiles = [...railEmojis, '+'];
   const railWidthUsed = railBandWidth(window.innerWidth - 2 * SIDE_PADDING);
   // UNE mesure par rendu — deux `getBoundingClientRect()` en ligne dans le
   // JSX forçaient deux recalculs de layout pour la même ancre.
@@ -474,7 +477,7 @@ export function MessageMenu({
           }}
         >
           {railTiles.map((tile, index) => {
-            const isPlus = tile === '+';
+            const isPlus = index === railEmojis.length;
             return (
               <button
                 key={isPlus ? 'plus' : tile}
@@ -494,6 +497,7 @@ export function MessageMenu({
                     onClose();
                     return;
                   }
+                  recordEmojiUsage(tile);
                   onReact(tile);
                   onClose();
                 }}

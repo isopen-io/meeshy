@@ -27,6 +27,9 @@ export const byKeyMembers = (key: string): string => `/api/v1/links/${encodeURIC
 /** PATCH · DELETE /api/v1/links/:linkId */
 export const byLinkId = (linkId: string): string => `/api/v1/links/${encodeURIComponent(linkId)}`;
 
+/** GET /api/v1/links/:linkId/arrivals */
+export const byLinkIdArrivals = (linkId: string): string => `/api/v1/links/${encodeURIComponent(linkId)}/arrivals`;
+
 /** PATCH /api/v1/links/:linkId/extend */
 export const byLinkIdExtend = (linkId: string): string => `/api/v1/links/${encodeURIComponent(linkId)}/extend`;
 

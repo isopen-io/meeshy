@@ -743,8 +743,11 @@ public actor ConversationStore {
     /// La ligne d'une conversation directe est hydratée par le REST depuis le
     /// participant d'en face : `title` ← `APIConversationUser.name`,
     /// `participantAvatarURL` ← `resolvedAvatar`, etc. Le socket rejoue
-    /// exactement ces champs-là, avec le même résolveur de nom, sinon la ligne
-    /// dirait deux choses différentes selon le transport qui l'a remplie.
+    /// exactement ces champs-là, sinon la ligne dirait deux choses différentes
+    /// selon le transport qui l'a remplie. Le nom est le nom COMPOSÉ
+    /// (`UserUpdatedEvent.composedName`, #9307) : c'est lui que la passerelle
+    /// écrit dans `Participant.displayName` au renommage, donc lui que le REST
+    /// relit.
     public nonisolated static func merging(
         _ conversation: MeeshyConversation,
         withUserUpdate event: UserUpdatedEvent
@@ -755,7 +758,7 @@ public actor ConversationStore {
         var conv = conversation
         var changed = false
 
-        if let name = event.resolvedDisplayName, name != conv.title {
+        if let name = event.composedName, name != conv.title {
             conv.title = name
             changed = true
         }

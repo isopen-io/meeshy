@@ -6,9 +6,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { resetFixtureCommentsForTests } from '@/lib/api/fixtures-comments';
 import type { ApiResult } from '@/lib/api/http';
 import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
+import { commentsQueryKey, flattenCommentPages, type CommentInfiniteData } from '@/lib/api/publication-comments';
 import { appQueryClient } from '@/lib/api/query-client';
+import { resetFixturePacksForTests } from '@/lib/api/sticker-packs';
+import { STICKERS_QUERY_KEY, resetFixtureStickersForTests } from '@/lib/api/stickers';
 import type { CommentMediaUpload } from '@/lib/comments/comment-media';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadStickerPacksCatalog } from '@/lib/i18n-sticker-packs-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { CommentThread } from './comment-thread';
@@ -24,6 +28,7 @@ beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadInterfaceCatalog('fr');
+  await loadStickerPacksCatalog('fr');
 });
 
 afterAll(async () => {
@@ -39,7 +44,12 @@ afterEach(() => {
   container?.remove();
   appQueryClient.clear();
   resetFixtureCommentsForTests();
+  resetFixtureStickersForTests();
+  resetFixturePacksForTests();
+  globalThis.fetch = realFetch;
 });
+
+const realFetch = globalThis.fetch;
 
 async function settle(): Promise<void> {
   await act(async () => {
@@ -101,5 +111,39 @@ describe('le fil envoie un commentaire avec sa photo (#9167)', () => {
     expect(host.querySelectorAll('[data-composer-edit]')).toHaveLength(1);
     expect(host.querySelector('[data-comment-notice]')?.textContent).toBe('La pièce jointe n’a pas pu être envoyée.');
     expect(host.querySelector('[data-comment-list]')?.textContent ?? '').not.toContain('Regarde la mer');
+  });
+});
+
+describe('le fil envoie un commentaire-sticker (#9318)', () => {
+  test('l’image du sticker monte en contexte « comment », puis le descripteur part et revient servi', async () => {
+    appQueryClient.setQueryData(STICKERS_QUERY_KEY, [
+      {
+        id: 'st-1',
+        name: null,
+        origin: 'paste',
+        mimeType: 'image/png',
+        fileUrl: 'stickers/u1/st-1.png',
+        width: 512,
+        height: 512,
+        sizeBytes: 4,
+        animated: false,
+        createdAt: '2026-09-25T10:00:00.000Z',
+        lastUsedAt: '2026-09-25T10:00:00.000Z',
+      },
+    ]);
+    globalThis.fetch = (async () => new Response(new Uint8Array([1, 2, 3, 4]), { status: 200 })) as unknown as typeof fetch;
+    const montés: string[] = [];
+    const upload: CommentMediaUpload = async (file): Promise<ApiResult<PostMediaUploadResult>> => {
+      montés.push(file.type);
+      return { ok: true, status: 201, data: { postMediaId: 'fx-pm-sticker', fileUrl: 'https://cdn.example/st-1.png', mimeType: 'image/png' } };
+    };
+    const host = await mountThread(upload);
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-comment-sticker-open]')?.click());
+    for (let tour = 0; tour < 30 && document.querySelector('[data-sticker="st-1"]') === null; tour += 1) await settle();
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-sticker="st-1"]')?.click());
+    const servis = () => flattenCommentPages(appQueryClient.getQueryData<CommentInfiniteData>(commentsQueryKey('post-text-rank2')));
+    for (let tour = 0; tour < 30 && !servis().some((c) => c.id.startsWith('cm-fx-')); tour += 1) await settle();
+    expect(montés).toEqual(['image/png']);
+    expect(servis().find((c) => c.id.startsWith('cm-fx-'))?.sticker).toEqual({ stickerId: 'st-1' });
   });
 });

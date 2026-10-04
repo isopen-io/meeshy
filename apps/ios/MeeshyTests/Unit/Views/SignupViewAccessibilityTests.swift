@@ -120,12 +120,14 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Le COMPTE, pas la seule présence : c'est ce qui rend « j'ai supprimé
     /// l'haptique au lieu de la faire converger » rouge.
     ///
-    /// **QUINZE depuis les phases vivantes (#8288).** Aux onze d'avant — dont le
-    /// crayon d'identité, retiré par #7897 et remplacé par la ligne dépliable
-    /// « Pourquoi mettre un mot de passe maintenant ? » — s'ajoutent : passer le
-    /// numéro (« Continuer avec l'e-mail seulement »), la réussite et l'échec de
-    /// « Valider mon compte maintenant », et le compte VALIDÉ (code juste ou
-    /// lien ouvert), qui se sent avec son feu d'artifice.
+    /// **QUATORZE depuis #9343.** Les phases vivantes (#8288) en avaient porté
+    /// quinze : aux onze d'avant — dont le crayon d'identité, retiré par #7897
+    /// et remplacé par la ligne dépliable « Pourquoi mettre un mot de passe
+    /// maintenant ? » — s'ajoutaient passer le numéro (« Plus tard »), la
+    /// réussite et l'échec de « Valider mon compte maintenant », et le compte
+    /// VALIDÉ (code juste ou lien ouvert), qui se sent avec son feu d'artifice.
+    /// Le numéro requis par l'écran (#9343), « Plus tard » est parti avec son
+    /// haptique.
     ///
     /// `SignupView` en porte ONZE — fermer, sous une adresse déjà utilisée
     /// « Recevoir un lien de connexion », « Mot de passe oublié ? » et « Ce
@@ -142,9 +144,9 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// une parce que ses deux voisins d'usage en ont une : ouvrir le sélecteur
     /// de pays et ouvrir la feuille de langue. Un contrôle qui RÉVÈLE quelque
     /// chose se sent, sur cet écran, depuis #5555.
-    func test_signupView_keepsItsFifteenHaptics_andTheInfoHintCarriesItsOwn() throws {
+    func test_signupView_keepsItsFourteenHaptics_andTheInfoHintCarriesItsOwn() throws {
         let body = try signupViewCode()
-        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 15)
+        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 14)
         XCTAssertEqual(occurrences(of: "HapticFeedback.", in: try code(Self.infoHint)), 1,
                        "déplier un (i) se sent — et UNE fois, dans le composant partagé")
         XCTAssertTrue(body.contains("HapticFeedback.success()"),
@@ -256,9 +258,9 @@ final class SignupViewAccessibilityTests: XCTestCase {
         return String(end == nil ? rest : rest[..<end!.lowerBound])
     }
 
-    /// Il n'est ni requis, ni présenté comme un choix : le NOMMER facultatif
-    /// fait croire qu'il y a une décision à prendre. Vide, il est simplement
-    /// absent de la charge.
+    /// Il n'est jamais présenté comme un choix : le NOMMER facultatif ferait
+    /// croire qu'il y a une décision à prendre — et depuis #9343 il n'y en a
+    /// plus, l'écran l'exige (la passerelle, elle, ne l'exige pas).
     ///
     /// **La règle ne vaut PAS pour le mot de passe** (#6424), et la différence
     /// est de nature : un numéro absent ne change rien à ce qui suit, un mot de

@@ -44,7 +44,7 @@ export interface GallerySaver {
   save(input: GallerySaveInput): Promise<GallerySaveOutcome>;
 }
 
-/** L'essence d'un type de galerie (image ou vidéo), ou `null` — la SEULE lecture du type que les trois sites partagent. */
+/** L'essence d'un type de galerie (image ou vidéo), ou `null` — la SEULE lecture du type que ses sites partagent (visionneuse, capture d'appel, carte de message, story). */
 export function galleryMediaEssence(mimeType: string): string | null {
   const essence = mimeType.split(';')[0]?.trim().toLowerCase() ?? '';
   return isImageMimeType(essence) || isVideoMimeType(essence) ? essence : null;

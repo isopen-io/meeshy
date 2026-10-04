@@ -16,6 +16,7 @@ final class RequestsViewModel: ObservableObject {
     /// success/failure + terminal outcome) deterministically, mirroring the
     /// pattern used by FeedViewModel / StatusViewModel / EditProfileViewModel.
     private let offlineQueue: OfflineQueueing
+    private var profileRepaintSubscription: AnyCancellable?
     private var receivedOffset = 0
     private let pageSize = 30
 
@@ -32,10 +33,21 @@ final class RequestsViewModel: ObservableObject {
 
     init(
         friendService: FriendServiceProviding = FriendService.shared,
-        offlineQueue: OfflineQueueing = OfflineQueue.shared
+        offlineQueue: OfflineQueueing = OfflineQueue.shared,
+        profileUpdates: AnyPublisher<UserUpdatedEvent, Never> = MessageSocketManager.shared.userUpdated.eraseToAnyPublisher()
     ) {
         self.friendService = friendService
         self.offlineQueue = offlineQueue
+        profileRepaintSubscription = profileUpdates
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in self?.repaint(with: event) }
+    }
+
+    /// #9307 — la partie renommée ou repeinte d'une demande l'est sans
+    /// relecture ; une liste intacte n'est pas republiée.
+    private func repaint(with event: UserUpdatedEvent) {
+        if let received = receivedRequests.repaintedElements(by: event.repainted) { receivedRequests = received }
+        if let sent = sentRequests.repaintedElements(by: event.repainted) { sentRequests = sent }
     }
 
     deinit {

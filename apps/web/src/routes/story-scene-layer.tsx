@@ -94,6 +94,10 @@ export type StorySceneLayerProps = {
    * objet temporisé, l'horloge MÈNE alors la scène et ses vidéos et sons
    * suivent sa timeline (#7879, retour porteur). */
   readonly durationSeconds?: number;
+  /** LE BUFFER (#6925) — relayé du moteur (`ScenePlayer.onPlaybackProgressing`,
+   * la piste de fond comprise : elle écoute la même horloge) : le lecteur y
+   * gèle sa barre. */
+  readonly onPlaybackProgressing?: (progressing: boolean) => void;
 };
 
 const isPlainRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
@@ -124,6 +128,7 @@ export function StorySceneLayer({
   mediaDeps,
   onClock,
   durationSeconds,
+  onPlaybackProgressing,
 }: StorySceneLayerProps) {
   const storyId = story.id;
   const carrier = useMemo(() => storyCarrier(story), [story]);
@@ -297,6 +302,7 @@ export function StorySceneLayer({
           onDurationKnown={(ms) => reportDuration('video', ms)}
           onPlaybackBlocked={onPlaybackBlocked}
           onClock={receiveClock}
+          {...(onPlaybackProgressing !== undefined ? { onPlaybackProgressing } : {})}
           {...(durationSeconds !== undefined ? { fallbackDurationSeconds: durationSeconds } : {})}
         />
       </Suspense>

@@ -74,10 +74,12 @@ nonisolated enum CallFrameRenderer {
 
     // MARK: - API
 
-    static func render(frame: CallFrameDesign, portraits: [CallFramePortrait], texts: CallFrameTexts, size: CGSize) -> CGImage? {
+    static func render(frame: CallFrameDesign, portraits: [CallFramePortrait], texts: CallFrameTexts, size: CGSize,
+                       colorSpace: CGColorSpace = CallMontageRenderer.deviceSpace) -> CGImage? {
         guard size.width >= 1, size.height >= 1 else { return nil }
         let stage = CallFrameStage(frame: frame, people: portraits.map { $0.person }, texts: texts, size: size)
-        guard let cached = layers(for: stage), let context = CallMontageRenderer.makeContext(size: size) else { return nil }
+        guard let cached = layers(for: stage),
+              let context = CallMontageRenderer.makeContext(size: size, colorSpace: colorSpace) else { return nil }
         CallMontageRenderer.drawImage(context, cached.backdrop, aspectFill: stage.bounds)
         zip(stage.boxes, portraits).forEach { box, portrait in
             drawFace(context, portrait: portrait, box: box, stage: stage)

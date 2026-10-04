@@ -18,6 +18,21 @@ const ptMediaViewer = {
   'media.viewer.compose_failed': 'Não foi possível abrir esta mídia no estúdio',
   'media.viewer.open_fullscreen': 'Abrir em tela cheia',
   'media.audio.play': 'Reproduzir áudio',
+  'media.audio.pause': 'Pausar',
+  'media.audio.skip_back': 'Voltar 10 segundos',
+  'media.audio.skip_forward': 'Avançar 10 segundos',
+  'media.audio.transcript_empty': 'Sem transcrição',
+  'media.audio.languages': 'Ouvir em outro idioma',
+  'media.audio.transcribe': 'Transcrever',
+  'media.audio.transcribing': 'Transcrevendo…',
+  'media.audio.transcribe_failed': 'Não foi possível transcrever',
+  'media.audio.translate': 'Traduzir',
+  'media.audio.translate_to': 'Traduzir para {language}',
+  'media.audio.translating': 'Traduzindo…',
+  'media.audio.translate_failed': 'Não foi possível traduzir',
+  'media.audio.mini.label': 'Player de áudio',
+  'media.audio.mini.title': 'Mensagem de voz',
+  'media.audio.mini.close': 'Fechar o player',
 };
 
 export default ptMediaViewer;

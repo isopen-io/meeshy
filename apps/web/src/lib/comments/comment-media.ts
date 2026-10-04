@@ -6,18 +6,29 @@ import { pendingAttachmentOf, type PendingAttachment } from '@/lib/send/attachme
 
 /**
  * **LES MÉDIAS D'UN COMMENTAIRE** (#9167, miroir `CommentMediaUploader` et
- * `CommentComposerStaging` iOS) — la photothèque ne propose que photos et
- * vidéos ; chaque pièce monte en TUS sous `uploadContext: comment` (un
+ * `CommentComposerStaging` iOS) — photos (GIF compris, qui s'animent tels
+ * quels), vidéos et SONS (#9318 : un fichier audio, ou le vocal enregistré au
+ * micro — la passerelle lance alors le pipeline audio du commentaire,
+ * `routes/posts/comments.ts`) ; chaque pièce monte en TUS sous
+ * `uploadContext: comment` (un
  * `PostMedia` en attente), puis ses ids partent dans `attachmentIds` de
  * `POST /posts/:postId/comments`, borné par la passerelle à `MAX_POST_MEDIA`
  * (`CreateCommentSchema`) — la même borne ici, sans quoi le corps entier serait
  * refusé APRÈS le téléversement.
  */
-export const COMMENT_MEDIA_ACCEPT = 'image/*,video/*';
+export const COMMENT_MEDIA_ACCEPT = 'image/*,video/*,audio/*';
+
+const COMMENT_MEDIA_KINDS: ReadonlySet<PendingAttachment['kind']> = new Set(['image', 'video', 'audio']);
 
 export function acceptCommentFiles(list: readonly PendingAttachment[], files: readonly File[]): readonly PendingAttachment[] {
-  const added = files.map((file) => pendingAttachmentOf(file)).filter((piece) => piece.kind === 'image' || piece.kind === 'video');
+  const added = files.map((file) => pendingAttachmentOf(file)).filter((piece) => COMMENT_MEDIA_KINDS.has(piece.kind));
   return [...list, ...added].slice(0, Math.max(MAX_POST_MEDIA, list.length));
+}
+
+/** LE VOCAL ENREGISTRÉ (#9318) rejoint la sélection sous la MÊME borne ; une
+ * sélection déjà pleine reste telle quelle. */
+export function withCommentPiece(list: readonly PendingAttachment[], piece: PendingAttachment): readonly PendingAttachment[] {
+  return list.length >= MAX_POST_MEDIA ? list : [...list, piece];
 }
 
 export type CommentMediaUpload = (file: File) => Promise<ApiResult<PostMediaUploadResult>>;

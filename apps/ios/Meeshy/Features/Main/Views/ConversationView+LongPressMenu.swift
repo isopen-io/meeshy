@@ -106,4 +106,16 @@ extension ConversationView {
         isTyping = saved.isTyping
         composerState.showOptions = saved.showOptions
     }
+
+    /// Ce que le fil sert pour `message` — le drapeau de sa cellule et les
+    /// pistes qu'il élit, mêmes écrivains que la cellule (#9259).
+    func overlayThreadLanguage(for message: Message) -> MessageOverlayMenu.ThreadLanguage {
+        let messageId = message.id
+        return MessageOverlayMenu.ThreadLanguage(
+            selection: viewModel.bubbleLanguageSelections[messageId],
+            servedAudioTracks: viewModel.servedAudioTracks(of: message),
+            onSetActiveDisplayLanguage: { viewModel.setBubbleActiveDisplayLanguage($0, for: messageId) },
+            onSetSecondaryLanguage: { viewModel.setBubbleSecondaryLanguage($0, for: messageId) }
+        )
+    }
 }

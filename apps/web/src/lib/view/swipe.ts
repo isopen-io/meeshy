@@ -64,18 +64,15 @@ export function swipeResistanceOf(attachments: readonly { readonly mimeType: str
     : 'normal';
 }
 
-/**
- * LE SENS DE LA RÉPONSE (`BubbleSwipeResistance.replyDirection`) : une rangée
- * PLATE (Focal, Script) répond toujours vers la droite — tous ses messages
- * sont alignés pareil ; une BULLE répond vers le côté qui « pointe vers
- * l'expéditeur » — à gauche pour un message envoyé. Transférer est l'opposé.
- */
-export function replyDirectionOf({ flat, isMine }: { readonly flat: boolean; readonly isMine: boolean }): 1 | -1 {
-  return flat || !isMine ? 1 : -1;
-}
-
 export type MessageSwipeRules = {
   readonly resistance: SwipeResistance;
+  /**
+   * LE SENS DE LA RÉPONSE, dans le sens de lecture : `1` (vers la droite en
+   * français, vers la gauche en arabe) pour TOUTE rangée d'un message — plate
+   * ou bulle, reçue ou envoyée (porteur 2026-10-04 : « le swipe vers la droite
+   * répond »). La bulle envoyée répondait vers la gauche (`BubbleSwipeResistance`
+   * d'iOS) ; transférer est l'opposé.
+   */
   readonly replyDirection: 1 | -1;
   /** Faux ⇒ glisser dans le sens de la réponse ne déplace rien (vue unique). */
   readonly canReply: boolean;

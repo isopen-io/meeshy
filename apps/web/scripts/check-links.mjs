@@ -29,6 +29,9 @@
  *     GESTE (moins de 500 ms), la liste le relit, « Activer » le rend ; un lien
  *     dont la conversation est fermée n'offre aucune des deux et dit pourquoi ;
  *     « Enregistrer » change la page au geste ; un linkId inconnu rend le refus ;
+ *     « Voir les N arrivées » ouvre la liste COMPLÈTE (#7813), qui sert sa
+ *     première page, dit son total, charge la suite au défilement et rend le
+ *     lien au retour ;
  *  6. la création : pas de slug, bouton désactivé tant qu'aucune conversation
  *     n'est choisie, aucun DM proposé, « compte requis » éteint ses voisins, une
  *     limite hors bornes se refuse SOUS son champ, puis le lien créé REMPLACE
@@ -179,7 +182,7 @@ try {
       check(menus, `${label} : les disques flottants sont posés sur le hub — l'atteignabilité se mesure contre eux`);
       check((await page.$('text=Cet écran arrive bientôt.')) === null, `${label} : l'écran d'attente a disparu`);
       check((await textOf(page, 'header h1')) === 'Mes liens', `${label} : le titre du hub`);
-      check((await page.$$('[data-links-family]')).length === 1, `${label} : le hub ne montre que la famille servie`);
+      check((await page.$$('[data-links-family]')).length === 4, `${label} : le hub montre les quatre familles d'iOS`);
       check((await page.getAttribute('[data-links-family-create]', 'href')) === '/links/share/new', `${label} : « + » mène à la création`);
       await capture(page, `hub-${slug}`);
       assertReach(label, 'le hub', await reachAtRest(page, { controls: 'header a, [data-links-family] a', texts: 'header h1, [data-links-banner] .text-body, [data-links-banner] .text-caption, [data-links-family-title]' }), {
@@ -273,6 +276,30 @@ try {
         'configuration, libellé': '[data-share-link-config="uses"] dt',
         'configuration, valeur': '[data-share-link-config="uses"] dd',
       });
+
+      /* TOUTES LES ARRIVÉES (#7813) : « Voir les 412 arrivées » mène à la liste
+         complète ; la première page (30) remplace les trois récentes peintes
+         d'abord, la suite arrive au défilement, et le retour rend le lien. */
+      check((await textOf(page, '[data-share-link-arrivals-all] span')) === 'Voir les 412 arrivées', `${label} : « Voir les 412 arrivées » sous les derniers arrivés`);
+      await page.click('[data-share-link-arrivals-all]');
+      await page.waitForURL(`**/links/share/${DEPLOIEMENT}/arrivals`);
+      check(await servedCount(page, '[data-link-arrival]', 30), `${label} : la liste complète sert sa première page (${(await page.$$('[data-link-arrival]')).length})`);
+      check((await textOf(page, 'header h1')) === 'Arrivées · 412', `${label} : la liste dit son total (${await textOf(page, 'header h1')})`);
+      check((await page.$$('[data-link-arrival-anonymous]')).length > 0 && (await page.$$('[data-link-arrival-language]')).length > 0, `${label} : badge « sans compte » et langue sur les lignes`);
+      await capture(page, `arrivees-${slug}`);
+      assertReach(label, 'la liste des arrivées', await reachAtRest(page, { controls: 'header a', texts: 'header h1, [data-link-arrivals-link]' }), { controls: 1, texts: 2 });
+      await assertInks(label, 'la liste des arrivées', page, {
+        titre: 'header h1',
+        nom: '[data-link-arrival] .text-body',
+        'sans compte': '[data-link-arrival-anonymous]',
+        langue: '[data-link-arrival-language]',
+        date: '[data-link-arrival] time',
+      });
+      await page.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 1e6 }));
+      check(await servedCount(page, '[data-link-arrival]', 60), `${label} : la suite arrive au défilement (${(await page.$$('[data-link-arrival]')).length})`);
+      await page.click('[data-links-back]');
+      await page.waitForURL(`**/links/share/${DEPLOIEMENT}`);
+      await page.waitForSelector('[data-share-link-hero]');
 
       /* ENREGISTRER EST OPTIMISTE (#7797) : le nom change dans la configuration
          AU GESTE, puis l'enregistrement s'annonce. Le nom est remis ensuite pour

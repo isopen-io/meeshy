@@ -10,7 +10,7 @@
  * même visionneuse). `expect` et `setScheme` sont REMIS par l'hôte, jamais
  * redéfinis. `waitForRowSettled` vient de `check-media.mjs`.
  */
-import { waitForRowSettled } from './check-media.mjs';
+import { requireRowSettled } from './check-media.mjs';
 
 const TRIPLE_VIDEO_ID = 'media-12';
 
@@ -49,10 +49,10 @@ export async function checkViewerVideoTransport({ browser, BASE, expect, setSche
 
   const scroller = page.locator('main#contenu');
   await scrollUntilMounted(page, scroller, TRIPLE_VIDEO_ID);
-  await waitForRowSettled(page, TRIPLE_VIDEO_ID);
+  await requireRowSettled(page, TRIPLE_VIDEO_ID, expect);
   const row = page.locator(`[data-message="${TRIPLE_VIDEO_ID}"]`);
   await row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  await waitForRowSettled(page, TRIPLE_VIDEO_ID);
+  await requireRowSettled(page, TRIPLE_VIDEO_ID, expect);
 
   // La tuile vidéo ouvre la visionneuse sur un tap HORS de son bouton central
   // (`VideoTile.onExpand`) ; le centre, lui, lit la vidéo sur place. Playwright

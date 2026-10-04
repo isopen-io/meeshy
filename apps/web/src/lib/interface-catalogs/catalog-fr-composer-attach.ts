@@ -87,6 +87,8 @@ const frComposerAttach = {
   'composer.sticker.instants.field.time': 'Heure',
   'composer.quickEmoji.label': 'Envoyer directement',
   'composer.quickEmoji.group': 'Emojis rapides',
+  'composer.quickEmoji.more': 'Choisir un autre emoji',
+  'composer.quickEmoji.moreHint': 'Appui long ou Maj+F10 : choisir un autre emoji',
   'composer.effects.panel': 'Effets du message',
   'composer.effects.entrance': "Animation d'entrée",
   'composer.effects.permanent': 'Effet permanent',

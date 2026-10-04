@@ -28,7 +28,7 @@ export default function MeeBubbleSticker({
       data-mee-bubble={mee.id}
       role="img"
       aria-label={mee.title}
-      style={{ display: 'inline-block', width: side, height: side }}
+      style={{ display: 'inline-block', width: side, maxWidth: '100%', aspectRatio: 1 }}
       dangerouslySetInnerHTML={{ __html: renderMeeSticker(mee, { uid: `bubble-${mee.id}`, slots: sticker.slots ?? {} }) }}
     />
   );

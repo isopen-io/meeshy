@@ -227,7 +227,6 @@ async function joinAsGuest(
   prisma: PrismaClient,
   shareLink: ShareLinkWithConversation,
   profile: LinkJoinProfileInput,
-  requestIp: string,
   broadcast: LinkJoinBroadcast | undefined
 ): Promise<LinkJoinOutcome> {
   const firstName = SecuritySanitizer.sanitizeText(profile.firstName || '');
@@ -286,7 +285,8 @@ async function joinAsGuest(
         shareLinkId: shareLink.id,
         session: {
           sessionTokenHash,
-          ipAddress: requestIp,
+          // Aucune IP n'est conservée (#9342) : l'adresse de la requête sert
+          // la seule recherche du pays, puis elle est oubliée.
           // Le pays d'arrivée vit sur `Participant.joinCountry` (#7797),
           // posé après la réponse par la vraie géolocalisation
           // (`services/conversations/arrivalCountry.ts`) — jamais par
@@ -491,11 +491,12 @@ export async function performLinkJoin(params: LinkJoinParams): Promise<LinkJoinO
   }
 
   const outcome = identity.kind === 'guest'
-    ? await joinAsGuest(prisma, shareLink, profile, requestIp, broadcast)
+    ? await joinAsGuest(prisma, shareLink, profile, broadcast)
     : await joinAsRegistered(prisma, shareLink, identity.userId, verdict.entry, broadcast);
 
   // #7797 — une ARRIVÉE (pas « déjà membre ») enregistre son pays, dérivé de
-  // l'IP après la réponse ; l'IP n'est pas écrite sur le participant.
+  // l'IP après la réponse ; l'IP n'est écrite ni sur le participant ni dans
+  // sa session anonyme (#9342).
   if (outcome.kind === 'joined' && outcome.outcome !== 'already-member') {
     const participantId = outcome.participant.id;
     (params.afterResponse ?? deferAfterResponse)(

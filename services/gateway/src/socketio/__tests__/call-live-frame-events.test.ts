@@ -68,6 +68,25 @@ describe('call:frame-select — le cadre en direct part vers l’autre participa
     expect(h.relayed[0]?.payload).toEqual({ callId: CALL, userId: 'alice', frameId: null, at: AT.toISOString() });
   });
 
+  it('une réponse à une proposition (#9287) relaie `reply` avec le cadre qu’elle concerne', async () => {
+    const h = harness();
+
+    expect(await h.send({ callId: CALL, frameId: 'jovial.fete.duo', reply: 'accepted' })).toEqual({ success: true });
+    expect(await h.send({ callId: CALL, frameId: 'jovial.fete.duo', reply: 'declined' })).toEqual({ success: true });
+    expect(h.relayed.map((r) => r.payload)).toEqual([
+      { callId: CALL, userId: 'alice', frameId: 'jovial.fete.duo', reply: 'accepted', at: AT.toISOString() },
+      { callId: CALL, userId: 'alice', frameId: 'jovial.fete.duo', reply: 'declined', at: AT.toISOString() },
+    ]);
+  });
+
+  it('une réponse sans cadre ou d’une autre forme est refusée à la frontière (#9287)', async () => {
+    const h = harness();
+
+    expect(await h.send({ callId: CALL, frameId: null, reply: 'accepted' })).toEqual({ success: false, code: 'VALIDATION_ERROR' });
+    expect(await h.send({ callId: CALL, frameId: 'a.b', reply: 'maybe' })).toEqual({ success: false, code: 'VALIDATION_ERROR' });
+    expect(h.relayed).toEqual([]);
+  });
+
   it('un membre qui n’est pas connecté à CET appel ne relaie rien', async () => {
     const h = harness({ sender: null });
 

@@ -23,6 +23,7 @@ import {
   META_TEXT_OPACITY,
   ROW_PADDING_HORIZONTAL,
   ROW_PADDING_VERTICAL,
+  STICKER_RENDER_SCALE,
   STICKER_SIDE,
   TEXT_INDENT,
 } from '@/lib/reading-mode/metrics';
@@ -551,7 +552,7 @@ export const FocalRow = memo(function FocalRow({
       {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" language={currentInterfaceLanguage()} /> : null}
 
       {body.kind === 'sticker' ? (
-        <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE} />
+        <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE * STICKER_RENDER_SCALE} />
       ) : body.kind === 'emoji-only' ? (
         <EmojiOnly text={body.text} fontSize={body.fontSize} />
       ) : rendered.text ? (

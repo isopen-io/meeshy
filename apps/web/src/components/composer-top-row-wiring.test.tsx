@@ -438,6 +438,41 @@ describe('Composer — les quatre contrôles à effet de la rangée haute (#6175
     }
   });
 
+  test('#9251 — la pastille de langue ferme la bande menante SANS y défiler : même ordre qu’iOS, jamais rognée', () => {
+    const el = mount(() => {});
+    const leading = el.querySelector<HTMLElement>('[data-composer-toolbar-leading]')!;
+    const pill = el.querySelector<HTMLElement>('[data-composer-language]')!;
+    expect(leading.contains(pill)).toBe(false);
+    const order = [...el.querySelectorAll<HTMLElement>('[data-composer-toolbar] :is([data-composer-ephemeral], [data-composer-blur], [data-composer-view-once], [data-composer-effects], [data-composer-sticker], [data-composer-language], [data-composer-library], [data-composer-camera])')].map(
+      (node) => Object.keys(node.dataset).find((key) => key.startsWith('composer')),
+    );
+    expect(order).toEqual(['composerEphemeral', 'composerBlur', 'composerViewOnce', 'composerEffects', 'composerSticker', 'composerLanguage', 'composerLibrary', 'composerCamera']);
+  });
+
+  test('#9251 — la bande menante DIT qu’elle défile tant qu’un outil reste au-delà de son bord', () => {
+    const el = mount(() => {});
+    const leading = el.querySelector<HTMLElement>('[data-composer-toolbar-leading]')!;
+    const geometry = { scrollLeft: 0, scrollWidth: 236, clientWidth: 194 };
+    for (const key of ['scrollLeft', 'scrollWidth', 'clientWidth'] as const) {
+      Object.defineProperty(leading, key, { configurable: true, get: () => geometry[key] });
+    }
+    act(() => {
+      leading.dispatchEvent(new Event('scroll'));
+    });
+    expect(leading.hasAttribute('data-scrolls-further')).toBe(true);
+    geometry.scrollLeft = 42;
+    act(() => {
+      leading.dispatchEvent(new Event('scroll'));
+    });
+    expect(leading.hasAttribute('data-scrolls-further')).toBe(false);
+    geometry.scrollLeft = 0;
+    geometry.scrollWidth = 194;
+    act(() => {
+      leading.dispatchEvent(new Event('scroll'));
+    });
+    expect(leading.hasAttribute('data-scrolls-further')).toBe(false);
+  });
+
   test('la bascule éphémère annonce le sélecteur qu’elle ouvre (aria-expanded)', () => {
     const el = mount(() => {});
     const toggle = el.querySelector<HTMLElement>('[data-composer-ephemeral]')!;

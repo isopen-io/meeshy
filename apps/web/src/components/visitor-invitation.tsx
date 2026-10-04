@@ -25,7 +25,9 @@ import { BUTTON } from './ui-chrome';
  *
  * UN hôte pour les trois lecteurs (réel, publication, story) : chacun dit
  * l'ÉTAT de son contenu — `pending` (en lecture), `served` (là, derrière),
- * `refused` (refusé ou introuvable, rien derrière) — et monte `dialog`. Les
+ * `refused` (refusé ou introuvable, rien derrière), `invite` (l'écran n'a
+ * rien de public à montrer, sans que rien soit refusé — `/reels` sans
+ * identifiant, #9172) — et monte `dialog`. Les
  * gestes qui exigent un compte (aimer, commenter, répondre, partager)
  * appellent `ask` : la même modale revient, jamais un 401 en silence.
  *
@@ -36,11 +38,13 @@ import { BUTTON } from './ui-chrome';
  *   COURANTE, `via` compris : l'inscription comme la connexion y ramènent
  *   (`landingAfterSession`, `landingAfterRegistration`).
  * - Un contenu SERVI laisse le visiteur regarder (« Continuer à regarder ») ;
- *   un contenu REFUSÉ n'a rien derrière la modale, qui ne se ferme donc pas.
+ *   un contenu REFUSÉ n'a rien derrière la modale, qui ne se ferme donc pas ;
+ *   l'invitation SANS contenu (`invite`) non plus, mais elle ne parle pas
+ *   de refus : elle invite à rejoindre.
  */
 
 export type VisitorContentKind = 'reel' | 'post' | 'story' | 'mood';
-export type VisitorContentState = 'pending' | 'served' | 'refused';
+export type VisitorContentState = 'pending' | 'served' | 'refused' | 'invite';
 
 export function visitorReturnPath(pathname: string, search: string): string | null {
   return safeNextPath(`${pathname}${search}`);
@@ -60,7 +64,7 @@ export function isContentRefusal(error: unknown): boolean {
 
 export function invitationOpen(input: { readonly visitor: boolean; readonly state: VisitorContentState; readonly dismissed: boolean }): boolean {
   if (!input.visitor || input.state === 'pending') return false;
-  return input.state === 'refused' || !input.dismissed;
+  return input.state !== 'served' || !input.dismissed;
 }
 
 const SHARED_BY: Readonly<Record<VisitorContentKind, (language: InterfaceLanguage, name: string) => string>> = {
@@ -82,7 +86,7 @@ export function VisitorInvitationDialog({
 }: {
   readonly language: InterfaceLanguage;
   readonly kind: VisitorContentKind;
-  readonly state: 'served' | 'refused';
+  readonly state: Exclude<VisitorContentState, 'pending'>;
   readonly sharer: LinkSharer | null;
   readonly returnTo: string | null;
   readonly onDismiss: () => void;
@@ -91,6 +95,7 @@ export function VisitorInvitationDialog({
   const titleId = useId();
   const bodyId = useId();
   const served = state === 'served';
+  const refused = state === 'refused';
   useBackDismiss(served ? onDismiss : () => {});
 
   useEffect(() => {
@@ -103,11 +108,11 @@ export function VisitorInvitationDialog({
   }, []);
 
   const named = served && sharer !== null ? sharer : null;
-  const title = served
-    ? named === null
+  const title = refused
+    ? translateVisitor(language, 'visitor.refused.title')
+    : named === null
       ? translateVisitor(language, 'visitor.title')
-      : SHARED_BY[kind](language, sharerName(named))
-    : translateVisitor(language, 'visitor.refused.title');
+      : SHARED_BY[kind](language, sharerName(named));
   const next = { next: returnTo ?? undefined };
   const avatar = named === null ? undefined : participantAvatarOf({ avatar: named.avatar });
 
@@ -138,7 +143,7 @@ export function VisitorInvitationDialog({
           {title}
         </h2>
         <p id={bodyId} className="text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-          {translateVisitor(language, served ? 'visitor.body' : 'visitor.refused.body')}
+          {translateVisitor(language, refused ? 'visitor.refused.body' : 'visitor.body')}
         </p>
         <div className="grid w-full gap-2">
           <Link to="signup" search={next} className={`${BUTTON.primary} w-full`}>

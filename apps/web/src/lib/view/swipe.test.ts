@@ -8,7 +8,6 @@ import {
   SWIPE_RUBBER_BAND,
   messageSwipeOffset,
   messageSwipeOutcome,
-  replyDirectionOf,
   swipeDominanceRatio,
   swipeEngages,
   swipeMinimumDistance,
@@ -44,13 +43,6 @@ describe('la loi du glissé latéral — miroir de BubbleSwipeResistance (#7559)
     expect(swipeResistanceOf([{ mimeType: 'image/png' }, { mimeType: 'video/mp4' }])).toBe('resistant');
     expect(swipeResistanceOf([{ mimeType: 'image/jpeg' }])).toBe('normal');
     expect(swipeResistanceOf(undefined)).toBe('normal');
-  });
-
-  test('sens de la réponse : rangée plate toujours vers la droite ; bulle reçue à droite, envoyée à gauche', () => {
-    expect(replyDirectionOf({ flat: true, isMine: true })).toBe(1);
-    expect(replyDirectionOf({ flat: true, isMine: false })).toBe(1);
-    expect(replyDirectionOf({ flat: false, isMine: false })).toBe(1);
-    expect(replyDirectionOf({ flat: false, isMine: true })).toBe(-1);
   });
 
   const both = { resistance: 'normal', replyDirection: 1, canReply: true, canForward: true } as const;

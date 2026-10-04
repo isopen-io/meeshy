@@ -14,12 +14,12 @@ import { feedQuery } from '@/lib/api/feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
 import { postQueryOptions } from '@/lib/api/publication-detail';
 import { reelsQuery } from '@/lib/api/reels';
-import { resolveFeedCardModel } from '@/lib/feed/card-model';
+import { resolveFeedCardModel, type FeedCardModel } from '@/lib/feed/card-model';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
-import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, shouldLoadMoreReels } from '@/lib/reels/thread';
+import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, reelVisitorState, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
 import { chromeYields } from '@/lib/view/chrome-yields';
 import { sceneYieldOf, writingSceneScale, yieldingScene } from '@/lib/view/scene-yields';
@@ -195,6 +195,8 @@ export default function ReelsScreen() {
   const minute = useMinute();
   const { announcement, onGesture, onShare, onRepost, repostConfirm } = usePostGesture();
   const [soundOn, setSoundOn] = useState(hasUserActivation);
+  const toggleSound = useCallback(() => setSoundOn((on) => !on), []);
+  const soundBlocked = useCallback(() => setSoundOn(false), []);
 
   /* UN VISITEUR ANONYME N'A NI L'UN NI L'AUTRE (#6484) — les deux routes
      exigent un `registeredUser`, même garde que `CommentThread.canWrite`.
@@ -234,11 +236,22 @@ export default function ReelsScreen() {
     [feedPosts, seedPost.data],
   );
   const thread = useMemo(() => composeReelThread({ entryIds, known, served: reels.data ?? EMPTY_POSTS }), [entryIds, known, reels.data]);
+  /* UN MODÈLE PAR PUBLICATION, GARDÉ tant que la publication, la langue et la
+     minute ne changent pas (#9277) : une page de réels de plus ne recompose
+     pas les modèles déjà peints — `ReelPage` (mémoïsée) ne se re-rend donc pas.
+     `minute` rafraîchit l'heure relative (motif `feed.tsx`). */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const modelCache = useMemo(() => new WeakMap<FeedPost, FeedCardModel>(), [readerLanguages, minute]);
   const models = useMemo(
-    () => thread.map((post) => resolveFeedCardModel(post, { preferredLanguages: readerLanguages, now: new Date() })),
-    // `minute` rafraîchit l'heure relative (motif `feed.tsx`).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [thread, readerLanguages, minute],
+    () =>
+      thread.map((post) => {
+        const cached = modelCache.get(post);
+        if (cached !== undefined) return cached;
+        const model = resolveFeedCardModel(post, { preferredLanguages: readerLanguages, now: new Date() });
+        modelCache.set(post, model);
+        return model;
+      }),
+    [thread, readerLanguages, modelCache],
   );
   const count = models.length;
 
@@ -332,7 +345,7 @@ export default function ReelsScreen() {
   const loading = seedPending || (!visitor && count === 0 && reels.data === undefined && !reels.isError && !coldOffline);
   const invitation = useVisitorInvitation({
     kind: 'reel',
-    state: count > 0 ? 'served' : seed === undefined || seedRefused ? 'refused' : 'pending',
+    state: reelVisitorState({ count, hasSeed: seed !== undefined, seedRefused }),
   });
   const ask = invitation.ask;
 
@@ -375,10 +388,10 @@ export default function ReelsScreen() {
             soundOn={soundOn}
             language={language}
             preferredLanguages={readerLanguages}
-            onToggleSound={() => setSoundOn((on) => !on)}
+            onToggleSound={toggleSound}
             onGesture={visitor ? ask : onGesture}
             onShare={visitor ? ask : onShare}
-            onSoundBlocked={() => setSoundOn(false)}
+            onSoundBlocked={soundBlocked}
             chromeHidden={chromeYielded}
             {...(canWrite ? { onComment: comments.open, onRepost } : { onComment: ask })}
           />

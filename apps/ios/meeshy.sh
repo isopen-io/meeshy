@@ -138,6 +138,7 @@ detect_physical_device() {
     local devices
     devices=$(xcrun devicectl list devices 2>/dev/null | grep -E "iPhone" | grep -v "Simulator" | grep -v "unavailable" || true)
     if [ -z "$devices" ]; then
+        warn_unpaired_usb_iphones
         err "No physical iPhone found. Connect via USB or WiFi."
         exit 1
     fi
@@ -157,6 +158,48 @@ detect_physical_device() {
     fi
 
     ok "Physical device: ${BOLD}$PHYSICAL_DEVICE_NAME${NC} ($PHYSICAL_DEVICE_ID)"
+}
+
+# ─── iPhones branchés en USB mais inconnus de devicectl ─────────────────────
+# Un iPhone jamais appairé (ou verrouillé avant d'avoir fait confiance au Mac)
+# est visible sur le bus USB mais absent de `devicectl list devices` : sans ce
+# signalement, le picker retombe en silence sur les simulateurs.
+warn_unpaired_usb_iphones() {
+    local known
+    known=$(xcrun devicectl list devices --json-output /dev/stdout 2>/dev/null \
+        | python3 -c 'import json,sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for x in d.get("result", {}).get("devices", []):
+    if x.get("connectionProperties", {}).get("tunnelState") != "unavailable":
+        print((x.get("hardwareProperties", {}).get("udid") or "").replace("-", ""))' 2>/dev/null || true)
+
+    local usb_serials
+    usb_serials=$(system_profiler SPUSBHostDataType -json 2>/dev/null \
+        | python3 -c 'import json,sys
+def walk(nodes):
+    for n in nodes:
+        if isinstance(n, dict):
+            if n.get("_name") in ("iPhone", "iPad") and n.get("USBDeviceKeyVendorID") == "0x05ac":
+                print(n.get("_name") + " " + (n.get("USBDeviceKeySerialNumber") or ""))
+            walk(n.get("_items", []))
+try:
+    walk(json.load(sys.stdin).get("SPUSBHostDataType", []))
+except Exception:
+    pass' 2>/dev/null || true)
+
+    local line kind serial
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        kind=${line%% *}
+        serial=${line#* }
+        echo "$known" | grep -qx "$serial" && continue
+        warn "Un $kind est branché en USB (série $serial) mais n'est pas appairé avec ce Mac."
+        warn "  → Déverrouille-le, touche « Se fier » puis saisis le code ; active le Mode développeur"
+        warn "    (Réglages › Confidentialité et sécurité) s'il est demandé, puis relance la commande."
+    done <<< "$usb_serials"
 }
 
 # ─── Device Picker (physical first, simulators as fallback) ─────────────────
@@ -185,6 +228,7 @@ pick_device() {
     # If physical devices found, only show those (skip simulators)
     if [ "$physical_count" -eq 0 ]; then
         # No physical devices — fallback to simulators
+        warn_unpaired_usb_iphones
         warn "No physical iPhone found. Falling back to simulators..."
         echo ""
 

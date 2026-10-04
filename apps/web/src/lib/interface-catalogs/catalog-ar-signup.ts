@@ -1,14 +1,9 @@
 /**
  * L'INSCRIPTION — tranche du catalogue `catalog-ar.ts`, extraite pour tenir le budget
- * de taille (CLAUDE.md) : le catalogue la RÉPAND. L'alerte d'une inscription
- * SANS numéro de téléphone (#8040) : ce que le numéro protège, et les deux
- * gestes — l'ajouter, ou continuer sans lui.
+ * de taille (CLAUDE.md) : le catalogue la RÉPAND. Le numéro de téléphone,
+ * REQUIS par l'écran (#9343) : ce qui manque, ou ce qui cloche.
  */
 const arSignup = {
-  'signup.phoneNudge.title': 'هل تريد إضافة رقم هاتف؟',
-  'signup.phoneNudge.body': 'يساعد رقمك على تأمين حسابك واستعادته إذا فقدت الوصول إلى بريدك الإلكتروني.',
-  'signup.phoneNudge.add': 'إضافة رقمي',
-  'signup.phoneNudge.continue': 'المتابعة على أي حال',
   'signup.emailTaken.message': 'يوجد حساب بهذا العنوان بالفعل.',
   'signup.emailTaken.sendLink': 'تلقي رابط تسجيل الدخول',
   'signup.emailTaken.forgotPassword': 'نسيت كلمة المرور؟',
@@ -16,8 +11,9 @@ const arSignup = {
   'signup.emailTaken.itsMe': 'هذا أنا — استعادة حسابي',
   'signup.emailTaken.notMe': 'ليس أنا',
   'signup.emailTaken.notMeNote': 'سيُطلب الرمز المرسل إلى هذا العنوان للحصول عليه.',
-  'signup.phone.later': 'لاحقًا',
-  'signup.phone.later.a11y': 'لاحقًا، المتابعة دون رقم',
+  'signup.phone.required': 'أدخل رقم هاتفك للمتابعة.',
+  'signup.phone.tooShort': 'هذا الرقم قصير جدًا: {min} أرقام على الأقل.',
+  'signup.phone.implausible': 'لا يبدو هذا الرقم حقيقيًا، يُرجى التحقق منه.',
   'signup.card.title': 'حسابك',
   'signup.card.validateNow': 'تأكيد حسابي الآن',
   'signup.card.validateNow.busy': 'جارٍ إنشاء الحساب…',

@@ -356,10 +356,10 @@ struct RiverBubbleView: View, Equatable {
     /// pose le curseur sur le message cité et le cadre. Reçu, jamais résolu
     /// ici : cette vue ne connaît ni la géométrie ni le défilement.
     var onOpenReply: ((String) -> Void)? = nil
-    /// #8283 — tap sur l'APERÇU du média cité ⇒ le plein écran de la
-    /// conversation, comme en Script. L'hôte retombe lui-même sur le saut
-    /// quand il n'a rien d'honnête à ouvrir ; le reste de la citation garde
-    /// `onOpenReply`.
+    /// #8283 — tap sur l'APERÇU du média cité ⇒ ce qu'il fait en Script : un
+    /// vocal se joue sur place (#8320), une image ou une vidéo s'ouvre en plein
+    /// écran. L'hôte retombe lui-même sur le saut quand il n'a rien d'honnête à
+    /// jouer ni à ouvrir ; le reste de la citation garde `onOpenReply`.
     var onQuotedMediaTap: ((ReplyReference) -> Void)? = nil
     /// R-5 — le nom (et l'avatar) ouvrent la fiche de la voix ; le cercle de
     /// story non lue ouvre sa story. Reçus de l'hôte, jamais résolus ici.
@@ -479,12 +479,13 @@ struct RiverBubbleView: View, Equatable {
         .contextMenu { bubbleMenu }
     }
 
-    /// #8283 — la bulle se lit d'un seul élément : l'ouverture du média cité y
-    /// devient une action nommée, présente seulement quand elle est armée.
+    /// #8283 — la bulle se lit d'un seul élément : la zone média y devient une
+    /// action nommée, présente seulement quand elle est armée, et nommée comme
+    /// dans les autres modes (« Écouter le message cité » pour un vocal).
     @ViewBuilder
     private var quotedMediaAccessibilityAction: some View {
         if content.storyCitation == nil, let media = content.replyPreview?.media, let onQuotedMediaTap {
-            Button(String(localized: "bubble.reply.open_media", defaultValue: "Ouvrir le média cité", bundle: .main)) {
+            Button(QuotedZoneAccessibility.mediaActionLabel(for: media.reference)) {
                 onQuotedMediaTap(media.reference)
             }
         }
@@ -852,8 +853,8 @@ struct RiverBubbleView: View, Equatable {
     // MARK: - Citation de réponse — une ligne, jamais plus (§7ter A4)
 
     /// La ligne, puis — #8283 — l'aperçu du média cité, que le rail longe
-    /// sans rupture. Deux zones : l'APERÇU ouvre le plein écran, TOUT LE
-    /// RESTE garde le saut au message cité (R-6).
+    /// sans rupture. Deux zones : l'APERÇU joue le vocal sur place ou ouvre le
+    /// plein écran, TOUT LE RESTE garde le saut au message cité (R-6).
     private func quotedReply(_ reply: RiverReplyPreview) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             quotedReplyLine(reply)
@@ -881,8 +882,8 @@ struct RiverBubbleView: View, Equatable {
         .onTapGesture { followQuote() }
     }
 
-    /// Le plein écran quand l'hôte l'offre, le saut à l'original sinon : une
-    /// zone qu'on touche n'est jamais une cible morte (loi 4).
+    /// La lecture ou le plein écran quand l'hôte l'offre, le saut à l'original
+    /// sinon : une zone qu'on touche n'est jamais une cible morte (loi 4).
     private func openQuotedMedia(_ reference: ReplyReference) {
         guard let onQuotedMediaTap else { return followQuote() }
         onQuotedMediaTap(reference)

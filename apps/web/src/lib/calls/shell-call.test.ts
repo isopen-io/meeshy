@@ -122,6 +122,22 @@ describe('shellCallCommands — ce que la coque fait à chaque changement du mag
     expect(shellCallCommands(snap({ kind: 'incoming' }), ringing)).toEqual([]);
   });
 
+  test('la fenêtre flottante prend le format de la vidéo du pair, et le suit quand il change (#8144)', () => {
+    const peer = { userId: 'u-a', name: 'Awa', avatar: null, micMuted: false, cameraOn: true, screenSharing: false, weakNetwork: false, capturing: false, link: 'connected' as const };
+    const sized = (width: number, height: number) =>
+      ({ getVideoTracks: () => [{ readyState: 'live', getSettings: () => ({ width, height }) }] }) as unknown as MediaStream;
+    const live = snap({ kind: 'connected' }, 'video');
+    const portrait = shellCallSnapshot({ ...call({ kind: 'connected' }, 'video'), members: { 'u-a': peer }, remoteStreams: { 'u-a': sized(720, 1280) } });
+    const landscape = shellCallSnapshot({ ...call({ kind: 'connected' }, 'video'), members: { 'u-a': peer }, remoteStreams: { 'u-a': sized(1280, 720) } });
+    expect(shellCallCommands(live, portrait)).toEqual([
+      { method: 'setPictureInPictureControls', options: { micMuted: false, aspectWidth: 720, aspectHeight: 1280 } },
+    ]);
+    expect(shellCallCommands(portrait, landscape)).toEqual([
+      { method: 'setPictureInPictureControls', options: { micMuted: false, aspectWidth: 1280, aspectHeight: 720 } },
+    ]);
+    expect(shellCallCommands(portrait, portrait)).toEqual([]);
+  });
+
   test('aucun changement → aucune commande', () => {
     expect(shellCallCommands(snap({ kind: 'connected' }), snap({ kind: 'connected' }))).toEqual([]);
   });
