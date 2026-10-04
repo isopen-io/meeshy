@@ -11,10 +11,11 @@ public protocol ShareLinkInfoProviding: Sendable {
 }
 
 /// La gestion des liens par leur PROPRIÉTAIRE — la fiche détails + édition
-/// (#7797) n'a besoin que de ces cinq capacités.
+/// (#7797) et la liste complète de ses arrivées (#7813).
 public protocol ShareLinkManaging: Sendable {
     func listMyLinks(offset: Int, limit: Int) async throws -> [MyShareLink]
     func fetchLinkStats(linkId: String) async throws -> ShareLinkArrivalStats
+    func fetchLinkArrivals(linkId: String, cursor: String?, limit: Int) async throws -> ShareLinkArrivalsPage
     func updateLink(linkId: String, settings: ShareLinkSettings) async throws
     func toggleLink(linkId: String, isActive: Bool) async throws
     func deleteLink(linkId: String) async throws
@@ -52,6 +53,19 @@ public final class ShareLinkService: ShareLinkInfoProviding, ShareLinkManaging, 
     public func fetchLinkStats(linkId: String) async throws -> ShareLinkArrivalStats {
         let response: APIResponse<ShareLinkArrivalStats> = try await api.request(
             LinksEndpoint.byLinkIdStats(linkId: linkId)
+        )
+        return response.data
+    }
+
+    /// Une page des arrivées d'UN lien, des plus récentes aux plus anciennes
+    /// (#7813). `cursor` est celui que la page précédente a rendu, jamais
+    /// fabriqué ; `nil` demande la première page.
+    public func fetchLinkArrivals(linkId: String, cursor: String?, limit: Int) async throws -> ShareLinkArrivalsPage {
+        let query = [URLQueryItem(name: "limit", value: String(limit))]
+            + (cursor.map { [URLQueryItem(name: "cursor", value: $0)] } ?? [])
+        let response: APIResponse<ShareLinkArrivalsPage> = try await api.request(
+            LinksEndpoint.byLinkIdArrivals(linkId: linkId),
+            queryItems: query
         )
         return response.data
     }
