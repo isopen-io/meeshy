@@ -12,6 +12,11 @@ import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native
  * pause quand la page est masquée (`use-reel-playback.ts`,
  * `use-story-hidden-tab-pause.ts`), comme dans Chrome Android.
  *
+ * Et seul l'audio qui S'ENTEND (#9324) : un réel ou un audio de scène muet
+ * n'affiche pas « Lecture audio en cours », comme Chrome Android n'ouvre
+ * aucune notification média pour un média muet. Couper le son en cours de
+ * lecture rend la prise, le rendre la reprend.
+ *
  * La notification de la coque porte une « Pause » (#9301), comme la
  * notification média de Chrome Android : la coque la remet à la page
  * (`pauseRequested`), qui met en pause chaque `<audio>` qui joue.
@@ -68,18 +73,31 @@ export function holdWhileAudioPlays(target: MediaEvents, hold: PlaybackHold): ()
   const playing = new Set<HTMLAudioElement>();
   const audioOf = (event: Event): HTMLAudioElement | null =>
     event.target instanceof HTMLAudioElement ? event.target : null;
-  const onPlaying = (event: Event): void => {
-    const audio = audioOf(event);
-    if (audio === null || playing.has(audio)) return;
+  const take = (audio: HTMLAudioElement): void => {
+    if (audio.muted || playing.has(audio)) return;
     playing.add(audio);
     if (playing.size === 1) hold.hold();
   };
-  const onStop = (event: Event): void => {
-    const audio = audioOf(event);
-    if (audio === null || !playing.delete(audio)) return;
+  const drop = (audio: HTMLAudioElement): void => {
+    if (!playing.delete(audio)) return;
     if (playing.size === 0) hold.release();
   };
+  const onPlaying = (event: Event): void => {
+    const audio = audioOf(event);
+    if (audio !== null) take(audio);
+  };
+  const onStop = (event: Event): void => {
+    const audio = audioOf(event);
+    if (audio !== null) drop(audio);
+  };
+  const onVolume = (event: Event): void => {
+    const audio = audioOf(event);
+    if (audio === null) return;
+    if (audio.muted) drop(audio);
+    else if (!audio.paused && !audio.ended) take(audio);
+  };
   target.addEventListener('playing', onPlaying, true);
+  target.addEventListener('volumechange', onVolume, true);
   for (const type of STOPS) target.addEventListener(type, onStop, true);
   const stopPauseRequests = hold.onPauseRequested(() => {
     for (const audio of [...playing]) audio.pause();
@@ -87,6 +105,7 @@ export function holdWhileAudioPlays(target: MediaEvents, hold: PlaybackHold): ()
   return () => {
     stopPauseRequests();
     target.removeEventListener('playing', onPlaying, true);
+    target.removeEventListener('volumechange', onVolume, true);
     for (const type of STOPS) target.removeEventListener(type, onStop, true);
     if (playing.size > 0) hold.release();
     playing.clear();
