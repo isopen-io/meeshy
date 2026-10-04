@@ -48,6 +48,8 @@ S'y ajoutent : les cadres « classiques » (`CallMontageChoice.classic`) existen
 
 Le déclencheur ( o ) est RETIRÉ (changement assumé par le porteur).
 
+**Filtre et cadre se COMBINENT.** Le look est toujours la paire `(filtre, cadre)` (`ComposerPhotoLook`) : choisir un filtre garde le cadre, choisir un cadre garde le filtre. Chaque miniature montre la combinaison qu'elle produirait — la bande Filtres peint chaque filtre AVEC le cadre en cours, la bande Cadres chaque cadre AVEC le filtre en cours — et la miniature choisie montre la paire exacte. Toute prise (galerie directe, édition, envoi) porte cette paire complète.
+
 ### 3.2 Capture, enregistrement en cours
 
 - La bande se réduit à la SEULE miniature choisie, qui continue d'afficher le direct ; les autres disparaissent, le rail se cache (aucun effet n'est choisissable pendant l'enregistrement).
@@ -73,8 +75,8 @@ Le déclencheur ( o ) est RETIRÉ (changement assumé par le porteur).
 | moment | ce qui part |
 |---|---|
 | à la prise (photo ou segment) | le BRUT, comme aujourd'hui (`CameraModel`) |
-| double toucher sur la miniature choisie | + le RENDU de la photo, immédiatement |
-| appui long sur la miniature choisie, à l'arrêt | + le RENDU de la vidéo, immédiatement |
+| double toucher sur la miniature choisie | + le RENDU de la photo (filtre ET cadre choisis), immédiatement |
+| appui long sur la miniature choisie, à l'arrêt | + le RENDU de la vidéo (filtre ET cadre choisis), immédiatement |
 | « Terminé » | + le RENDU final (effet, cadrage, découpe) |
 
 ## 4. Architecture
@@ -147,6 +149,7 @@ iOS 16 → 26. Toute fermeture async nouvelle est annotée (`@MainActor` / `@con
 Lois pures, sans caméra :
 - `ComposerLookPainter` : pour une source donnée, photo et aperçu produisent le même `CIImage` (mêmes dimensions, mêmes pixels sur un échantillon) ; la date est `lookDate` ; sans look, `paint` est l'identité recadrée.
 - Classiques en couches : chaque style produit une scène ; rendu couches ≈ rendu CPU historique à tolérance près (garde de non-régression visuelle).
+- Combinaison : choisir un filtre conserve le cadre et inversement ; la miniature d'un filtre est peinte avec le cadre courant (et inversement) ; le rendu galerie porte la paire.
 - Gestes : table de décision (zone × geste × phase × verrou) → action (mise au point, photo-édition, photo-galerie, segment, arrêt, zoom, fermer).
 - Phases : capture → édition (photo, ✓ segments) ; « Terminé » livre le rendu et déclenche l'enregistrement galerie ; double toucher OU appui long sur la miniature ⇒ deux enregistrements (brut + rendu) sans changer de phase ni retenir de segment.
 - Zoom : facteur affiché ↔ facteur appareil, butées par type d'appareil.
