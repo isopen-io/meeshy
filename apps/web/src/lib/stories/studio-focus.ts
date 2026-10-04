@@ -40,12 +40,12 @@ export type StudioChrome = {
 
 const EVERYTHING: StudioChrome = { header: true, leadingRail: true, trailingRail: true, socleRow: true, socleCard: true };
 const FOCUSED: StudioChrome = { header: false, leadingRail: false, trailingRail: false, socleRow: false, socleCard: false };
-/** Les outils du FOND vivent au rail droit : lui seul reste (#8849). */
-const BACKGROUND_TOOLS: StudioChrome = { ...FOCUSED, trailingRail: true };
+/** Les sous-outils d'un objet comme ceux du FOND vivent au rail droit : lui
+ * seul reste (#8849 ; #9140, jumelle de #9138). */
+const INLINE_TOOLS: StudioChrome = { ...FOCUSED, trailingRail: true };
 
 export function studioChrome({ tool, timelineOpen }: { readonly tool: StudioOpenTool; readonly timelineOpen: boolean }): StudioChrome {
-  if (tool === 'background') return BACKGROUND_TOOLS;
-  if (tool !== null) return FOCUSED;
+  if (tool !== null) return INLINE_TOOLS;
   if (timelineOpen) return { ...EVERYTHING, leadingRail: false, socleCard: false };
   return EVERYTHING;
 }

@@ -85,7 +85,12 @@ export type MediaPlaybackReport = {
   readonly durationMs?: number;
   /** La consommation SERVIE — pour la reprise. Absent/`positionMs: null` :
    * rien à reprendre, `complete: true` : on repart de zéro (rien à rejouer). */
-  readonly resume?: { readonly positionMs: number | null; readonly complete: boolean };
+  readonly resume?: {
+    readonly positionMs: number | null;
+    readonly complete: boolean;
+    /** Une lecture VIVANTE passée d'un lecteur à l'autre (#9279 — plein écran ⇄ mini-lecteur) : reprise à la seconde près, même sous la première seconde. */
+    readonly handedOff?: boolean;
+  };
   /** La langue de la PISTE consommée — une piste traduite est une écoute
    * d'une AUTRE version du contenu, et le serveur la stocke comme telle
    * (`AttachmentStatusBodySchema.language`). Omise si vide : le wire exige
@@ -143,7 +148,8 @@ const MIN_RESUME_MS = 1_000;
 function resumeSeconds(resume: MediaPlaybackReport['resume']): number | null {
   if (resume === undefined || resume.complete) return null;
   const positionMs = resume.positionMs;
-  if (positionMs === null || !Number.isFinite(positionMs) || positionMs < MIN_RESUME_MS) return null;
+  if (positionMs === null || !Number.isFinite(positionMs) || positionMs <= 0) return null;
+  if (positionMs < MIN_RESUME_MS && resume.handedOff !== true) return null;
   return positionMs / 1000;
 }
 

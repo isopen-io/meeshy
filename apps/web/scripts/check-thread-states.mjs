@@ -21,7 +21,7 @@ import { checkThreadMedia, waitForRowSettled } from './lib/check-media.mjs';
 import { waitForValueSettled } from './lib/settle-value.mjs';
 import { checkThreadMediaGrid } from './lib/check-media-grid.mjs';
 import { checkViewerVideoTransport } from './lib/check-media-transport.mjs';
-import { checkAudioFullscreen } from './lib/check-audio-fullscreen.mjs';
+import { checkAudioFullscreen, checkMiniPlayerParity } from './lib/check-audio-fullscreen.mjs';
 import { checkMessageStates } from './lib/check-message-states.mjs';
 import { checkMoreSheet } from './lib/check-more-sheet.mjs';
 import { checkRealtimeEvents } from './lib/check-realtime-events.mjs';
@@ -874,6 +874,7 @@ await checkViewerVideoTransport({ browser, BASE, expect, setScheme, scheme: 'dar
  * pause, vocal suivant et Échap, sur les vraies pistes décodées par Chromium.
  */
 await checkAudioFullscreen({ browser, BASE, expect, setScheme, scheme: 'dark' });
+await checkMiniPlayerParity({ browser, BASE, expect, setScheme, scheme: 'dark' });
 
 /**
  * 9 — LES ÉTATS DU MESSAGE (#5936) — `lib/check-message-states.mjs`, QUATRE

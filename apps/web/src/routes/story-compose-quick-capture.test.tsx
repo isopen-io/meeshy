@@ -92,7 +92,7 @@ describe('la scène vide dit ses gestes', () => {
 
     const writing = mount({ ...harness({}).deps, camera: camera().engine });
     tapInvite(writing);
-    await flush(() => writing.querySelector('[data-story-edit-plaque]') !== null);
+    await flush(() => writing.querySelector('[data-story-option="edit:exit"]') !== null);
     expect(hint(writing)).toBeNull();
   });
 });
