@@ -39,7 +39,7 @@ struct ShareLinkDetailView: View {
             ScrollView {
                 VStack(spacing: MeeshySpacing.lg) {
                     heroCard
-                    ShareLinkArrivalsSection(state: viewModel.stats, isDark: isDark)
+                    ShareLinkArrivalsSection(linkId: link.linkId, state: viewModel.stats, isDark: isDark)
                     ShareLinkConfigurationCard(link: link, isDark: isDark) {
                         withAnimation(.easeInOut(duration: 0.35)) { proxy.scrollTo(Self.formAnchor, anchor: .top) }
                     }

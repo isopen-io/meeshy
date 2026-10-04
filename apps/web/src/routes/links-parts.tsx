@@ -85,25 +85,35 @@ export function LinksHeader({
   createTo = 'shareLinkNew',
 }: {
   readonly language: InterfaceLanguage;
-  readonly back: LinksBackTarget;
+  /** Un écran de la famille, ou la page d'UN lien (`{ shareLink: linkId }`). */
+  readonly back: LinksBackTarget | { readonly shareLink: string };
   readonly backLabel: string;
   readonly title: string;
   readonly createLabel?: string;
   readonly createTo?: LinksCreateTarget;
 }) {
+  const backProps = {
+    'aria-label': backLabel,
+    'data-links-back': true,
+    className: `${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`,
+    style: { color: BRAND, outlineColor: BRAND },
+  } as const;
+  const backDisc = (
+    <ChromeActionDisc>
+      <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
+    </ChromeActionDisc>
+  );
   return (
     <header className="flex shrink-0 items-center gap-1 px-2" style={{ height: LINKS_HEADER_HEIGHT }} lang={language}>
-      <Link
-        to={back}
-        aria-label={backLabel}
-        data-links-back
-        className={`${CHROME_ACTION_HIT_CLASS} focus-visible:outline-2 focus-visible:outline-offset-2`}
-        style={{ color: BRAND, outlineColor: BRAND }}
-      >
-        <ChromeActionDisc>
-          <Glyph name="caretLeft" size={16} className="rtl:-scale-x-100" />
-        </ChromeActionDisc>
-      </Link>
+      {typeof back === 'string' ? (
+        <Link to={back} {...backProps}>
+          {backDisc}
+        </Link>
+      ) : (
+        <Link to="shareLink" params={{ link: back.shareLink }} {...backProps}>
+          {backDisc}
+        </Link>
+      )}
       <h1 className="min-w-0 flex-1 truncate text-center text-body font-semibold" style={{ color: INK }}>
         {title}
       </h1>

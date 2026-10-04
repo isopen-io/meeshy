@@ -19,7 +19,7 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
+import { arrivalLanguage, arrivalLanguageKey as languageKey } from './shareLinkArrivals';
 import {
   SHARE_LINK_RECENT_ARRIVALS_CAP,
   type ShareLinkArrival,
@@ -38,11 +38,6 @@ function mergeTallies(entries: Tally): Tally {
   return [...merged.entries()].filter(([, count]) => count > 0).sort(byCountDesc);
 }
 
-const languageKey = (language: string | null | undefined): string | null => {
-  const canonical = language ? normalizeLanguageForDedup(language) : '';
-  return canonical === '' ? null : canonical;
-};
-
 type RecentArrivalRow = {
   readonly id: string;
   readonly type: string;
@@ -55,14 +50,13 @@ type RecentArrivalRow = {
 };
 
 function toArrival(row: RecentArrivalRow): ShareLinkArrival {
-  const isAnonymous = row.type === 'anonymous';
   return {
     participantId: row.id,
     displayName: row.displayName,
     avatar: row.avatar ?? row.user?.avatar ?? null,
-    isAnonymous,
+    isAnonymous: row.type === 'anonymous',
     country: row.joinCountry,
-    language: languageKey(isAnonymous ? row.language : row.user?.systemLanguage ?? row.language),
+    language: arrivalLanguage(row),
     joinedAt: row.joinedAt.toISOString(),
   };
 }
