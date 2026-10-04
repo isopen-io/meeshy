@@ -26,7 +26,12 @@ import type { Notification, NotificationTypeEnum } from '../types/notification.j
  * | message de groupe | X dans « nom du groupe » | message / média / indicateur |
  * | relation acceptée | X a accepté votre demande | — |
  * | demande de relation | X veut se connecter | — |
- * | réaction à un contenu | X a réagi à votre story / … / commentaire | vignette + réaction |
+ * | réaction à un contenu | X a réagi 🔥 à votre story / … / commentaire | vignette + contenu visé |
+ *
+ * **L'ÉMOJI D'UNE RÉACTION N'EST DIT QU'UNE FOIS, PAR LA PHRASE SERVIE** (#9049).
+ * Le serveur est le seul site qui compose « a réagi ❤️ à votre message : « … » » ;
+ * la bannière la rend telle quelle et n'y ajoute aucun émoji de son cru — la
+ * pastille qu'elle posait devant le corps faisait lire « ❤️  a réagi ❤️ … ».
  *
  * **LA PHRASE D'ACTION VIENT DU SERVEUR** (`buildNotificationDisplay`, i18n
  * serveur à la langue résolue du destinataire) et n'est JAMAIS réécrite ici.
@@ -36,8 +41,8 @@ import type { Notification, NotificationTypeEnum } from '../types/notification.j
  * ─────────────────────────────────────────────────────────────────────────────
  *
  * La loi est le CADRAGE et la COMPOSITION : quel type relève de quelle famille,
- * où va la phrase d'action, quand un corps ferait doublon, quand une pastille
- * de réaction dirait deux fois la même chose, d'où vient la vignette.
+ * où va la phrase d'action, quand un corps ferait doublon, d'où vient la
+ * vignette.
  *
  * Ce qui reste au client est la FORMULATION dans sa propre langue de rendu —
  * comment on nomme un acteur inconnu, comment on résume une pièce jointe, quoi
@@ -56,8 +61,6 @@ export type NotificationBanner = {
   readonly headline: string;
   /** Ligne 2 : la charge. `null` quand la ligne 1 se suffit. */
   readonly body: string | null;
-  /** La réaction, rendue COMME une réaction — `null` si la phrase la porte déjà. */
-  readonly reactionBadge: string | null;
   /** Vignette du contenu visé. `null` ⇒ la bannière pose son icône typée. */
   readonly thumbnailUrl: string | null;
 };
@@ -122,15 +125,6 @@ const TYPES_DE_RELATION = new Set<string>([
   'friend_accepted',
   'contact_joined',
   'contact_recently_active',
-] satisfies readonly TypeDeNotification[]);
-
-const TYPES_DE_REACTION = new Set<string>([
-  'message_reaction',
-  'post_like',
-  'story_reaction',
-  'status_reaction',
-  'comment_like',
-  'comment_reaction',
 ] satisfies readonly TypeDeNotification[]);
 
 export function notificationBannerFraming(notification: Notification): CadrageDeBanniere {
@@ -253,29 +247,6 @@ export function buildNotificationBannerBody(
   return contenu === nonVide(notification.subtitle) ? resumeDuMedia(notification, t) : contenu;
 }
 
-/**
- * L'émoji de réaction, sous ses DEUX noms de fil : les éventails sur contenu
- * l'écrivent en `emoji`, ceux sur message en `reactionEmoji`.
- */
-export function buildNotificationReactionBadge(
-  notification: Notification,
-  headline: string,
-  body: string | null = null,
-): string | null {
-  const type = typeof notification.type === 'string' ? notification.type : '';
-  if (!TYPES_DE_REACTION.has(type)) return null;
-
-  const emoji =
-    lisUneChaine(notification.metadata, 'emoji') ?? lisUneChaine(notification.metadata, 'reactionEmoji');
-  if (!emoji) return null;
-
-  // Le serveur fusionne déjà l'émoji dans la phrase d'action (« a réagi 🔥 à
-  // votre story ») : le rendre une seconde fois en pastille ferait dire deux
-  // fois la même chose à deux endroits de la même carte.
-  // Même règle pour le CORPS (#9049) : « a réagi ❤️ à votre message : « … » ».
-  return headline.includes(emoji) || (body?.includes(emoji) ?? false) ? null : emoji;
-}
-
 export function buildNotificationThumbnail(notification: Notification): string | null {
   const vignetteDuPost = lisUneChaine(notification.metadata, 'postThumbnailUrl');
   if (vignetteDuPost) return vignetteDuPost;
@@ -300,7 +271,6 @@ export function buildNotificationBanner(
   return {
     headline,
     body,
-    reactionBadge: buildNotificationReactionBadge(notification, headline, body),
     thumbnailUrl: buildNotificationThumbnail(notification),
   };
 }
