@@ -277,6 +277,23 @@ const f = {
   'admin.enum.presence.offline': 'Sem conexão',
   'admin.enum.presence.unknown': 'Não informada',
   'admin.enum.presence.unknown.explain': 'A presença só é compartilhada com amigos aceitos e administradores.',
+  'admin.enum.lockReason.FAILED_LOGIN': 'Tentativas de login em excesso',
+  'admin.enum.lockReason.FAILED_LOGIN.explain': 'Bloqueio automático de quinze minutos após cinco senhas erradas; ele se desfaz sozinho.',
+  'admin.enum.lockReason.PASSWORD_RESET_ABUSE': 'Redefinições em série',
+  'admin.enum.lockReason.PASSWORD_RESET_ABUSE.explain': 'Pedidos de redefinição de senha em excesso: a conta fica bloqueada por vinte e quatro horas.',
+  'admin.enum.sessionEnd.logout': 'Saída da conta',
+  'admin.enum.sessionEnd.expired': 'Expirada',
+  'admin.enum.sessionEnd.admin_revoke': 'Revogada pela administração',
+  'admin.enum.sessionEnd.user_revoked': 'Encerrada pelo membro',
+  'admin.enum.sessionEnd.user_revoked_all': 'O membro encerrou todas as sessões',
+  'admin.enum.sessionEnd.email_revoke_all': 'Encerrada pelo link de um e-mail de segurança',
+  'admin.enum.sessionEnd.password_reset': 'Senha redefinida',
+  'admin.enum.sessionEnd.password_changed': 'Senha alterada',
+  'admin.enum.sessionEnd.deactivation': 'Conta desativada',
+  'admin.enum.sessionEnd.deletion': 'Conta excluída',
+  'admin.enum.sessionEnd.security_breach': 'Violação de segurança',
+  'admin.enum.sessionEnd.security_concern': 'Suspeita de segurança',
+  'admin.enum.sessionEnd.session_limit_exceeded': 'Sessões abertas em excesso',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

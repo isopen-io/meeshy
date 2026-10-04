@@ -23,6 +23,7 @@ import { adminDate, adminMomentOf, formatDuration } from '@/lib/admin/interpret/
 import { securityEventLabel } from '@/lib/admin/user-dossier-labels';
 import { userEntityOf } from '@/lib/admin/user-entity';
 import type { AdminDeps } from '@/lib/api/admin';
+import type { AdminMemberCounts } from '@/lib/api/admin-user-detail';
 import {
   adminUserActivityQueryKey,
   adminUserCommunitiesQueryKey,
@@ -36,6 +37,7 @@ import {
   loadAdminUserReportsReceived,
   loadAdminUserSecurityEvents,
   loadAdminUserVoice,
+  type AdminActivity,
   type AdminCommunity,
   type AdminContact,
   type AdminReport,
@@ -103,7 +105,25 @@ const identityColumn = <Row,>(header: string, entityOf: (row: Row) => AdminEntit
   cell: (row) => <AdminEntityIdentity language={language} size="sm" entity={entityOf(row)} />,
 });
 
-export function AdminUserContactsTab({ userId, language, deps = apiDeps, now = () => new Date() }: TabProps) {
+/**
+ * LE COMPTE DES DEMANDES — le total SERVI (`totals`), sinon les compteurs de la fiche
+ * (`_count`), jamais la longueur d'une liste que la passerelle borne à cinquante par
+ * sens : « 50 » laissait croire la liste complète (audit 2026-10-04). `null` quand
+ * aucune source ne le dit.
+ */
+export function contactsTotalOf(totals: AdminActivity['totals'], fallback: AdminMemberCounts | null | undefined): number | null {
+  if (totals !== null) return totals.contactsSent + totals.contactsReceived;
+  if (fallback === null || fallback === undefined) return null;
+  return fallback.sentFriendRequests + fallback.receivedFriendRequests;
+}
+
+export function AdminUserContactsTab({
+  userId,
+  language,
+  deps = apiDeps,
+  now = () => new Date(),
+  fallback = null,
+}: TabProps & { readonly fallback?: AdminMemberCounts | null }) {
   const activite = useQuery({
     queryKey: adminUserActivityQueryKey(userId),
     queryFn: ({ signal }) => servi(loadAdminUserActivity({ ...deps, userId, signal })),
@@ -121,15 +141,22 @@ export function AdminUserContactsTab({ userId, language, deps = apiDeps, now = (
   return (
     <div className="grid gap-3" data-admin-contacts>
       <DossierGate language={language} query={activite} rows={4}>
-        {({ contacts, shareLinks, trackingLinks, affiliateTokens }) => (
+        {({ contacts, shareLinks, trackingLinks, affiliateTokens, totals }) => {
+          const total = contactsTotalOf(totals, fallback);
+          return (
           <>
             <p className="text-caption" style={{ color: INK2 }}>
               {translateAdmin(language, 'admin.contacts.links', {
-                share: String(shareLinks),
-                tracking: String(trackingLinks),
-                affiliate: String(affiliateTokens),
+                share: formatCount(shareLinks, language),
+                tracking: formatCount(trackingLinks, language),
+                affiliate: formatCount(affiliateTokens, language),
               })}
             </p>
+            {total === null || total <= contacts.length ? null : (
+              <p data-admin-contacts-capped className="text-caption" style={{ color: INK2 }}>
+                {translateAdmin(language, 'admin.people.dossier.contactsCapped', { shown: formatCount(contacts.length, language), total: formatCount(total, language) })}
+              </p>
+            )}
             {contacts.length === 0 ? (
               <AdminEmptyState title={translateAdmin(language, 'admin.dossier.empty')} glyph="list" />
             ) : (
@@ -143,7 +170,8 @@ export function AdminUserContactsTab({ userId, language, deps = apiDeps, now = (
               />
             )}
           </>
-        )}
+          );
+        }}
       </DossierGate>
     </div>
   );

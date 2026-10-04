@@ -41,6 +41,19 @@ describe('les contacts d’un membre', () => {
       ['f1', 'sent', 'accepted', 'Bob'],
     ]);
     expect([activite.shareLinks, activite.trackingLinks, activite.affiliateTokens]).toEqual([2, 0, 1]);
+    expect(activite.totals).toBeNull();
+  });
+
+  test('lisent les TOTAUX servis : la longueur d’une liste bornée à cinquante n’est pas le compte (audit 2026-10-04)', () => {
+    const activite = decodeAdminActivity({
+      shareLinks: Array.from({ length: 50 }, () => ({})),
+      trackingLinks: [],
+      affiliateTokens: [],
+      contacts: { sent: [], received: [] },
+      totals: { shareLinks: 212, trackingLinks: 3, affiliateTokens: 0, contactsSent: 140, contactsReceived: 61 },
+    });
+    expect([activite.shareLinks, activite.trackingLinks, activite.affiliateTokens]).toEqual([212, 3, 0]);
+    expect(activite.totals).toEqual({ contactsSent: 140, contactsReceived: 61 });
   });
 });
 

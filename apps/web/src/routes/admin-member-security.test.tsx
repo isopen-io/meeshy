@@ -140,7 +140,10 @@ async function confirm(written?: string) {
 
 describe('déverrouiller le compte', () => {
   test('n’est proposé que tant que le verrou est FUTUR', async () => {
-    const future = await open(member({ lockedUntil: FUTURE }));
+    const future = await open(member({ lockedUntil: FUTURE, lockedReason: 'FAILED_LOGIN' }));
+    /* Le motif est un CODE : il se lit en mots, jamais `FAILED_LOGIN` (audit 2026-10-04). */
+    expect(textOf(future.host)).toContain('Trop d’essais de connexion');
+    expect(textOf(future.host)).not.toContain('FAILED_LOGIN');
     expect(action(future.host, 'unlock')).not.toBeNull();
     expect(textOf(future.host)).toContain('Verrouillé jusqu’au');
     mounter.unmountAll();

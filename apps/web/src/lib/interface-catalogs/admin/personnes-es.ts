@@ -419,6 +419,11 @@ const f = {
   'admin.people.anonymous.perm.canSendLinks.no': 'No puede enviar enlaces',
   'admin.people.anonymous.perm.canViewHistory.yes': 'Ve los mensajes escritos antes de su llegada',
   'admin.people.anonymous.perm.canViewHistory.no': 'No ve los mensajes escritos antes de su llegada',
+  'admin.people.dossier.contactsCapped': '{shown} solicitudes mostradas de {total} — las más recientes de cada sentido',
+  'admin.people.password.motive': 'Motivo (opcional, 10 caracteres como mínimo)',
+  'admin.people.password.motiveShort': 'Al menos diez caracteres, o déjelo vacío.',
+  'admin.people.password.notify': 'Avisar al miembro por correo',
+  'admin.people.password.notifyHint': 'Recibe una alerta de seguridad en su idioma; la nueva contraseña no aparece en ella.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

@@ -81,7 +81,17 @@ export type AdminActivity = {
   readonly shareLinks: number;
   readonly trackingLinks: number;
   readonly affiliateTokens: number;
+  /**
+   * Les TOTAUX servis (`totals`, audit du 2026-10-04) : chaque liste est bornée à
+   * cinquante lignes, et sa longueur n'est pas le compte. `null` quand la passerelle
+   * ne les sert pas (ancien serveur) — l'écran se rabat alors sur les compteurs de
+   * la fiche, jamais sur la longueur d'une liste plafonnée.
+   */
+  readonly totals: { readonly contactsSent: number; readonly contactsReceived: number } | null;
 };
+
+/** Le plafond de chaque liste de `GET …/activity` (`take: 50`). */
+export const ADMIN_ACTIVITY_LIST_CAP = 50;
 
 function decodeContact(brut: unknown, direction: AdminContact['direction']): AdminContact | null {
   const ligne = asRecord(brut);
@@ -107,11 +117,17 @@ export function decodeAdminActivity(raw: unknown): AdminActivity {
   ]
     .filter(garder)
     .sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
+  const totaux = asRecord(charge.totals);
+  const compte = (cle: string, repli: number): number => (totaux !== null && typeof totaux[cle] === 'number' ? asCount(totaux[cle]) : repli);
   return {
     contacts: tous,
-    shareLinks: liste(charge.shareLinks).length,
-    trackingLinks: liste(charge.trackingLinks).length,
-    affiliateTokens: liste(charge.affiliateTokens).length,
+    shareLinks: compte('shareLinks', liste(charge.shareLinks).length),
+    trackingLinks: compte('trackingLinks', liste(charge.trackingLinks).length),
+    affiliateTokens: compte('affiliateTokens', liste(charge.affiliateTokens).length),
+    totals:
+      totaux === null || typeof totaux.contactsSent !== 'number' || typeof totaux.contactsReceived !== 'number'
+        ? null
+        : { contactsSent: asCount(totaux.contactsSent), contactsReceived: asCount(totaux.contactsReceived) },
   };
 }
 

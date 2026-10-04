@@ -277,6 +277,23 @@ const f = {
   'admin.enum.presence.offline': 'Offline',
   'admin.enum.presence.unknown': 'Not shared',
   'admin.enum.presence.unknown.explain': 'Presence is only shared with accepted friends and administrators.',
+  'admin.enum.lockReason.FAILED_LOGIN': 'Too many sign-in attempts',
+  'admin.enum.lockReason.FAILED_LOGIN.explain': 'Automatic fifteen-minute lock after five wrong passwords; it lifts on its own.',
+  'admin.enum.lockReason.PASSWORD_RESET_ABUSE': 'Repeated password resets',
+  'admin.enum.lockReason.PASSWORD_RESET_ABUSE.explain': 'Too many password reset requests: the account is locked for twenty-four hours.',
+  'admin.enum.sessionEnd.logout': 'Signed out',
+  'admin.enum.sessionEnd.expired': 'Expired',
+  'admin.enum.sessionEnd.admin_revoke': 'Revoked by an administrator',
+  'admin.enum.sessionEnd.user_revoked': 'Closed by the member',
+  'admin.enum.sessionEnd.user_revoked_all': 'The member closed all their sessions',
+  'admin.enum.sessionEnd.email_revoke_all': 'Closed from a security email link',
+  'admin.enum.sessionEnd.password_reset': 'Password reset',
+  'admin.enum.sessionEnd.password_changed': 'Password changed',
+  'admin.enum.sessionEnd.deactivation': 'Account deactivated',
+  'admin.enum.sessionEnd.deletion': 'Account deleted',
+  'admin.enum.sessionEnd.security_breach': 'Security breach',
+  'admin.enum.sessionEnd.security_concern': 'Security concern',
+  'admin.enum.sessionEnd.session_limit_exceeded': 'Too many open sessions',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

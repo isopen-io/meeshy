@@ -88,6 +88,35 @@ describe('contacts', () => {
   });
 });
 
+describe('contacts — le compte servi, jamais la longueur d’une liste bornée (audit 2026-10-04)', () => {
+  const sent = Array.from({ length: 3 }, (_, index) => ({ id: `s${index}`, status: 'pending', createdAt: '2026-09-27T12:00:00.000Z', receiver: { id: OTHER, username: 'awa', displayName: 'Awa', avatar: '' } }));
+  const served = (totals: unknown) =>
+    at('/activity', { ok: true, data: { contacts: { sent, received: [] }, shareLinks: [], trackingLinks: [], affiliateTokens: [], ...(totals === undefined ? {} : { totals }) } });
+
+  test('le total servi se dit : « 3 demandes affichées sur 212 »', async () => {
+    const host = await open(
+      (deps) => <AdminUserContactsTab userId={USER} language="fr" deps={deps} now={() => NOW} />,
+      served({ shareLinks: 1204, trackingLinks: 0, affiliateTokens: 0, contactsSent: 150, contactsReceived: 62 }),
+    );
+    expect(textOf(host.querySelector('[data-admin-contacts-capped]'))).toContain('3 demandes affichées sur 212');
+    expect(textOf(host)).toContain('1 204 lien(s) de partage');
+  });
+
+  test('un ancien serveur sans totaux : les compteurs de la fiche prennent le relais', async () => {
+    const counts = { shareLinks: 0, trackingLinks: 0, affiliateTokens: 0, affiliateRelations: 0, referredRelations: 0, sentFriendRequests: 80, receivedFriendRequests: 20, participations: 0 };
+    const host = await open((deps) => <AdminUserContactsTab userId={USER} language="fr" deps={deps} now={() => NOW} fallback={counts} />, served(undefined));
+    expect(textOf(host.querySelector('[data-admin-contacts-capped]'))).toContain('sur 100');
+  });
+
+  test('une liste complète ne se dit pas tronquée', async () => {
+    const host = await open(
+      (deps) => <AdminUserContactsTab userId={USER} language="fr" deps={deps} now={() => NOW} />,
+      served({ shareLinks: 0, trackingLinks: 0, affiliateTokens: 0, contactsSent: 3, contactsReceived: 0 }),
+    );
+    expect(host.querySelector('[data-admin-contacts-capped]')).toBeNull();
+  });
+});
+
 describe('communautés', () => {
   test('nom, identifiant public en secondaire, rôle et état en mots, lien vers la communauté si la section est ouverte', async () => {
     const host = await open(

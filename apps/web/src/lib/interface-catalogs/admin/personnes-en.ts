@@ -419,6 +419,11 @@ const f = {
   'admin.people.anonymous.perm.canSendLinks.no': 'Cannot send links',
   'admin.people.anonymous.perm.canViewHistory.yes': 'Sees messages written before they arrived',
   'admin.people.anonymous.perm.canViewHistory.no': 'Does not see messages written before they arrived',
+  'admin.people.dossier.contactsCapped': '{shown} requests shown out of {total} — the most recent in each direction',
+  'admin.people.password.motive': 'Reason (optional, at least 10 characters)',
+  'admin.people.password.motiveShort': 'At least ten characters, or leave it empty.',
+  'admin.people.password.notify': 'Notify the member by email',
+  'admin.people.password.notifyHint': 'They receive a security alert in their language; the new password is not in it.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

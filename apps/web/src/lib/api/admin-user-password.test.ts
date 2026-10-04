@@ -78,12 +78,25 @@ describe('resetAdminUserPassword — l’adresse et le corps', () => {
     expect(appels[0]?.path).toBe(`/api/v1/admin/users/${encodeURIComponent('u 1/x')}/reset-password`);
   });
 
-  test('n’envoie PAS `sendEmail` — accepté par le schéma, ignoré par le service (#6831)', async () => {
+  test('`sendEmail` est un OPT-IN : absent par défaut, `true` seulement quand l’administrateur le demande (#6831)', async () => {
     const { transport, appels } = transportEspion({ message: 'ok' });
 
     await resetAdminUserPassword({ ...deps(transport), userId: 'u-1', newPassword: 'Abcdef23456789!@#xyz' });
+    await resetAdminUserPassword({ ...deps(transport), userId: 'u-1', newPassword: 'Abcdef23456789!@#xyz', sendEmail: false });
+    await resetAdminUserPassword({ ...deps(transport), userId: 'u-1', newPassword: 'Abcdef23456789!@#xyz', sendEmail: true });
 
     expect(Object.keys((appels[0]?.body ?? {}) as Record<string, unknown>)).not.toContain('sendEmail');
+    expect(Object.keys((appels[1]?.body ?? {}) as Record<string, unknown>)).not.toContain('sendEmail');
+    expect((appels[2]?.body as Record<string, unknown>).sendEmail).toBe(true);
+  });
+
+  test('un motif ÉCRIT de moins de dix caractères est refusé avant l’aller-retour (le plancher de la passerelle)', async () => {
+    const { transport, appels } = transportEspion({ message: 'ok' });
+
+    const resultat = await resetAdminUserPassword({ ...deps(transport), userId: 'u-1', newPassword: 'Abcdef23456789!@#xyz', reason: 'court' });
+
+    expect(resultat.ok).toBe(false);
+    expect(appels).toHaveLength(0);
   });
 
   test('porte le motif sous `reason`, et l’omet quand il est blanc', async () => {

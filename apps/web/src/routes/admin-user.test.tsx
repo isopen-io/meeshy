@@ -201,11 +201,11 @@ describe('le bandeau de chiffres — quinze, dont un que la passerelle retient',
     expect(textOf(host.querySelector('[data-admin-stat="reportsReceived"]'))).toContain('2');
   });
 
-  test('les demandes envoyées mènent aux demandes de contact de ce membre, quand la section est ouverte', async () => {
+  test('les demandes envoyées EN ATTENTE mènent aux demandes en attente de ce membre, quand la section est ouverte', async () => {
     const { host } = await open();
     const link = host.querySelector('[data-admin-stat="pendingFriendRequestsOut"] a');
     const opens = visibleAdminSections(BIGBOSS.permissions, 'BIGBOSS').some((section) => section.id === 'invitations');
-    if (opens) expect(link?.getAttribute('href')).toBe(`/admin/invitations?senderId=${ID}`);
+    if (opens) expect(link?.getAttribute('href')).toBe(`/admin/invitations?senderId=${ID}&status=pending`);
     else expect(link).toBeNull();
   });
 

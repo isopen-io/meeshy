@@ -419,6 +419,11 @@ const f = {
   'admin.people.anonymous.perm.canSendLinks.no': 'Não pode enviar links',
   'admin.people.anonymous.perm.canViewHistory.yes': 'Vê as mensagens escritas antes de chegar',
   'admin.people.anonymous.perm.canViewHistory.no': 'Não vê as mensagens escritas antes de chegar',
+  'admin.people.dossier.contactsCapped': '{shown} pedidos exibidos de {total} — os mais recentes de cada sentido',
+  'admin.people.password.motive': 'Motivo (opcional, no mínimo 10 caracteres)',
+  'admin.people.password.motiveShort': 'Pelo menos dez caracteres, ou deixe vazio.',
+  'admin.people.password.notify': 'Avisar o membro por e-mail',
+  'admin.people.password.notifyHint': 'Recebe um alerta de segurança no seu idioma; a nova senha não aparece nele.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

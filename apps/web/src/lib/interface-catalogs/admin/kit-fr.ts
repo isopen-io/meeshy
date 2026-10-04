@@ -280,6 +280,23 @@ const f = {
   'admin.enum.presence.offline': 'Hors ligne',
   'admin.enum.presence.unknown': 'Non communiquée',
   'admin.enum.presence.unknown.explain': 'La présence n’est partagée qu’avec les amis acceptés et les administrateurs.',
+  'admin.enum.lockReason.FAILED_LOGIN': 'Trop d’essais de connexion',
+  'admin.enum.lockReason.FAILED_LOGIN.explain': 'Verrou automatique de quinze minutes après cinq mots de passe erronés ; il se lève seul.',
+  'admin.enum.lockReason.PASSWORD_RESET_ABUSE': 'Réinitialisations en série',
+  'admin.enum.lockReason.PASSWORD_RESET_ABUSE.explain': 'Trop de demandes de réinitialisation du mot de passe : le compte est verrouillé vingt-quatre heures.',
+  'admin.enum.sessionEnd.logout': 'Déconnexion',
+  'admin.enum.sessionEnd.expired': 'Arrivée à échéance',
+  'admin.enum.sessionEnd.admin_revoke': 'Révoquée par l’administration',
+  'admin.enum.sessionEnd.user_revoked': 'Fermée par le membre',
+  'admin.enum.sessionEnd.user_revoked_all': 'Le membre a fermé toutes ses sessions',
+  'admin.enum.sessionEnd.email_revoke_all': 'Fermée depuis le lien d’un e-mail de sécurité',
+  'admin.enum.sessionEnd.password_reset': 'Mot de passe réinitialisé',
+  'admin.enum.sessionEnd.password_changed': 'Mot de passe changé',
+  'admin.enum.sessionEnd.deactivation': 'Compte désactivé',
+  'admin.enum.sessionEnd.deletion': 'Compte supprimé',
+  'admin.enum.sessionEnd.security_breach': 'Faille de sécurité',
+  'admin.enum.sessionEnd.security_concern': 'Doute de sécurité',
+  'admin.enum.sessionEnd.session_limit_exceeded': 'Trop de sessions ouvertes',
 } as const;
 
 export default f;

@@ -19,7 +19,8 @@ import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
  * communiqué », il ne se tait pas et ne se peint pas « 0 ».
  *
  * Une carte est un lien vers la liste filtrée quand cette liste existe : les
- * demandes envoyées mènent aux demandes de contact de ce membre (`senderId`).
+ * demandes envoyées mènent aux demandes de contact EN ATTENTE de ce membre
+ * (`senderId`, `status=pending`).
  */
 const LABELS = {
   messagesSent: 'admin.stats.messagesSent',
@@ -89,7 +90,8 @@ export function AdminMemberStats({
       label: translateAdmin(language, LABELS[key]),
       value: value === null ? translateAdmin(language, 'admin.people.stats.withheld') : formatCount(value, language),
       ...(key === 'pendingFriendRequestsOut'
-        ? { target: { kind: 'section' as const, section: 'invitations' as const, search: { senderId: userId } } }
+        ? /* Les demandes EN ATTENTE de ce membre — la carte compte celles-là, la liste ouverte aussi (audit 2026-10-04). */
+          { target: { kind: 'section' as const, section: 'invitations' as const, search: { senderId: userId, status: 'pending' } } }
         : {}),
     };
   });

@@ -5,7 +5,7 @@ import { interpretPresence, interpretRole } from '@/lib/admin/interpret/enums';
 import { countryName, languageName, sentenceCase } from '@/lib/admin/interpret/language';
 import { formatCount, formatPercent } from '@/lib/admin/interpret/numbers';
 import { adminDate, adminMomentOf } from '@/lib/admin/interpret/time';
-import { ageOf, deviceLabel, formatDays, formatYears } from '@/lib/admin/member-meta';
+import { ageOf, deviceLabel, formatDays, formatYears, lockReasonText } from '@/lib/admin/member-meta';
 import type { AdminMemberMetadata, AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
@@ -96,7 +96,7 @@ export function AdminMemberMeta({
                 ? translateAdmin(language, 'admin.people.lock.until', { date: adminDate(membre.lockedUntil, language) })
                 : t('admin.people.meta.lockNone')
             }
-            explain={membre.lockedReason}
+            explain={lockReasonText(membre.lockedReason, language)}
           />
           <AdminMetaRow
             anchor="passwordChanged"

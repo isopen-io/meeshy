@@ -422,6 +422,11 @@ const f = {
   'admin.people.anonymous.perm.canSendLinks.no': 'Ne peut pas envoyer de liens',
   'admin.people.anonymous.perm.canViewHistory.yes': 'Voit les messages écrits avant son arrivée',
   'admin.people.anonymous.perm.canViewHistory.no': 'Ne voit pas les messages écrits avant son arrivée',
+  'admin.people.dossier.contactsCapped': '{shown} demandes affichées sur {total} — les plus récentes de chaque sens',
+  'admin.people.password.motive': 'Motif (facultatif, 10 caractères au minimum)',
+  'admin.people.password.motiveShort': 'Au moins dix caractères, ou laissez vide.',
+  'admin.people.password.notify': 'Prévenir le membre par e-mail',
+  'admin.people.password.notifyHint': 'Il reçoit une alerte de sécurité dans sa langue ; le nouveau mot de passe n’y figure pas.',
 } as const;
 
 export default f;
