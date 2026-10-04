@@ -9,6 +9,7 @@ import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { dropCarriedAudio } from '@/lib/view/audio-carry';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -40,8 +41,16 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 afterEach(() => {
+  // Fermer la visionneuse EST une CONFIANCE (#9256, `useCarryOnClose`) : un
+  // test qui démonte sans avoir explicitement refermé la page audio déclenche
+  // la MÊME `carryAudio()` que la production, sur le magasin GLOBAL
+  // (`audio-carry.ts`) — partagé par TOUT le process `bun test` (#9305).
+  // Sans ce nettoyage, la pièce confiée ici survit au fichier et se pose,
+  // au prochain test de la suite complète qui monte un `MiniAudioPlayerHost`
+  // vivant, comme si ELLE l'avait reçue.
   act(() => root.unmount());
   container.remove();
+  dropCarriedAudio();
 });
 
 const settle = () =>

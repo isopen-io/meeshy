@@ -95,8 +95,20 @@ const sitesDangereux = async (): Promise<readonly string[]> => {
  * LE COMPTE DU JOUR (#7176). Il ne DESCEND que par un lot qui remplace un délai
  * par un fait — et alors il se grave plus bas dans le même commit. Il ne monte
  * jamais.
+ *
+ * 121 → 120 au **#9260** : `check-thread-chrome.mjs` § 6 lisait la langue de la
+ * bulle SERVIE derrière un `waitForTimeout(500)`. Le fil est VIRTUALISÉ
+ * (`check-thread-virtualization.mjs`, `MAX_CELLS = 60` sur 500 messages), donc
+ * la rangée envoyée n'est pas montée à cet instant et `rows[rows.length - 1]`
+ * rendait une rangée de FIXTURE — toutes en `fr`
+ * (`src/lib/api/fixtures-catchup.ts`). C'est le mode de panne que ce cliquet
+ * décrit, mesuré une fois de plus : le délai rendait un ROUGE qui accusait le
+ * produit quand c'était la charge de la machine. Le site appelle désormais
+ * `awaitCondition` (`await-fact.mjs`, #7054) et relit la langue réellement
+ * servie à l'expiration, de sorte qu'une vraie dérive du Prisme reste rouge
+ * avec le même libellé.
  */
-const PLAFOND = 121;
+const PLAFOND = 120;
 
 describe('aucun gate n’ajoute de délai fixe suivi d’une lecture', () => {
   test(`le motif ne dépasse pas son plafond de ${PLAFOND} sites`, async () => {
