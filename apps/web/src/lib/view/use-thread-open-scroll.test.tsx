@@ -50,10 +50,12 @@ function Hote({
   ready,
   unreadBoundary,
   jumps,
+  anchor,
 }: {
   readonly ready: boolean;
   readonly unreadBoundary: UnreadBoundarySnapshot;
   readonly jumps: Jump[];
+  readonly anchor?: { readonly messageId: string; readonly anchored: string[] };
 }) {
   const scroller = useRef<HTMLElement | null>(null);
   const virtualizer = useRef<Pick<Virtualizer<HTMLElement, Element>, 'scrollToIndex'>>({
@@ -70,6 +72,7 @@ function Hote({
     ready,
     virtualizer: virtualizer.current,
     onProgrammaticScroll: () => {},
+    ...(anchor !== undefined ? { anchorMessageId: anchor.messageId, onAnchor: (id: string) => anchor.anchored.push(id) } : {}),
   });
 
   if (!ready) return <div data-squelette />;
@@ -102,6 +105,22 @@ describe('useThreadOpenScroll — D-L2 tient quel que soit l’ordre d’arrivé
     const host = await mounter.mount(<Hote ready={false} unreadBoundary={null} jumps={jumps} />);
     await mounter.rerender(host, <Hote ready unreadBoundary={null} jumps={jumps} />);
 
+    expect(jumps).toEqual([]);
+  });
+});
+
+describe('useThreadOpenScroll — une ouverture ancrée remet le message au saut du fil (#9294)', () => {
+  test('ancrée : le saut reçoit le message une fois, sans saut au séparateur', async () => {
+    const jumps: Jump[] = [];
+    const anchored: string[] = [];
+    const anchor = { messageId: 'm-1', anchored };
+    const host = await mounter.mount(<Hote ready={false} unreadBoundary={null} jumps={jumps} anchor={anchor} />);
+    expect(anchored).toEqual([]);
+
+    await mounter.rerender(host, <Hote ready unreadBoundary={BOUNDARY} jumps={jumps} anchor={anchor} />);
+    await mounter.rerender(host, <Hote ready unreadBoundary={BOUNDARY} jumps={jumps} anchor={anchor} />);
+
+    expect(anchored).toEqual(['m-1']);
     expect(jumps).toEqual([]);
   });
 });

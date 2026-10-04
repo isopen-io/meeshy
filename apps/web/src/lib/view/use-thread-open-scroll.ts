@@ -61,8 +61,11 @@ export function useThreadOpenScroll(input: {
   readonly ready: boolean;
   readonly virtualizer: Pick<Virtualizer<HTMLElement, Element>, 'scrollToIndex'>;
   readonly onProgrammaticScroll: () => void;
+  /** Le message que l'adresse nomme (#9294) — remis UNE fois, à l'ouverture, au saut du fil (`onAnchor`), à la place de l'ancrage en bas. */
+  readonly anchorMessageId?: string | null;
+  readonly onAnchor?: (messageId: string) => void;
 }): void {
-  const { scroller, conversationId, placed, unreadBoundary, ready, virtualizer, onProgrammaticScroll } = input;
+  const { scroller, conversationId, placed, unreadBoundary, ready, virtualizer, onProgrammaticScroll, anchorMessageId = null, onAnchor } = input;
   const lastMessageId = placed[placed.length - 1]?.message.id;
   const openedFor = useRef<string | null>(null);
 
@@ -73,7 +76,11 @@ export function useThreadOpenScroll(input: {
     const isInitialOpen = openedFor.current !== conversationId;
     openedFor.current = conversationId;
 
-    const decision = threadOpenScrollDecision({ isInitialOpen, unreadBoundary, placed });
+    const decision = threadOpenScrollDecision({ isInitialOpen, unreadBoundary, placed, anchorMessageId: onAnchor === undefined ? null : anchorMessageId });
+    if (decision.kind === 'jump-to-message') {
+      onAnchor?.(decision.messageId);
+      return;
+    }
     if (decision.kind === 'jump-to-separator') {
       onProgrammaticScroll();
       virtualizer.scrollToIndex(decision.index, { align: 'start' });

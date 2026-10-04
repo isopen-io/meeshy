@@ -76,6 +76,7 @@ import { AfterReadSeenContext, useAfterReadConsumption } from '@/lib/view/use-af
 import { useEngagementRevalidation } from '@/lib/view/use-conversation-engagement';
 import { resumeThreadTarget, useUnreadBoundary } from '@/lib/view/unread-boundary';
 import { useThreadOpenScroll } from '@/lib/view/use-thread-open-scroll';
+import { threadAnchorOf } from '@/lib/view/thread-anchor';
 import { useThreadJump } from '@/lib/view/use-thread-jump';
 import { summaryExits } from '@/lib/view/summary-exits';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
@@ -625,6 +626,9 @@ export default function ThreadScreen({ preview }: { readonly preview?: { readonl
     ready: threadData.status === 'success',
     virtualizer,
     onProgrammaticScroll: scene.noteProgrammaticScroll,
+    /* #9294 — l'adresse qui nomme un message (`?message=`) ouvre le fil sur lui, par le saut de la citation. */
+    anchorMessageId: preview === undefined ? threadAnchorOf(route?.search) : null,
+    onAnchor: jump.requestJump,
   });
 
   /**
