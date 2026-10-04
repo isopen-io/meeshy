@@ -46556,43 +46556,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "هذا الرقم مرتبط بحساب بالفعل. اتركه فارغًا للمتابعة."
+            "value": "هذا الرقم مرتبط بحساب بالفعل. أدخل رقمًا آخر أو سجّل الدخول."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Diese Nummer ist bereits mit einem Konto verknüpft. Lass sie leer, um fortzufahren."
+            "value": "Diese Nummer ist bereits mit einem Konto verknüpft. Gib eine andere ein oder melde dich an."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This number is already linked to an account. Leave it empty to continue."
+            "value": "This number is already linked to an account. Enter another one, or sign in."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este número ya está vinculado a una cuenta. Déjalo vacío para continuar."
+            "value": "Este número ya está vinculado a una cuenta. Introduce otro o inicia sesión."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ce numéro est déjà rattaché à un compte. Laissez-le vide pour continuer."
+            "value": "Ce numéro est déjà rattaché à un compte. Saisissez-en un autre, ou connectez-vous."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Questo numero è già collegato a un account. Lascialo vuoto per continuare."
+            "value": "Questo numero è già collegato a un account. Inseriscine un altro o accedi."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Este número já está vinculado a uma conta. Deixe-o vazio para continuar."
+            "value": "Este número já está vinculado a uma conta. Informe outro ou entre."
           }
         }
       }
@@ -47255,190 +47255,143 @@
         }
       }
     },
-    "auth.signup.phoneNudge.addPhone": {
+    "auth.signup.phone.required": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "إضافة رقمي"
+            "value": "أدخل رقم هاتفك للمتابعة."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Meine Nummer hinzufügen"
+            "value": "Gib deine Telefonnummer ein, um fortzufahren."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Add my number"
+            "value": "Enter your phone number to continue."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Añadir mi número"
+            "value": "Introduce tu número de teléfono para continuar."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ajouter mon numéro"
+            "value": "Saisissez votre numéro de téléphone pour continuer."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Aggiungi il mio numero"
+            "value": "Inserisci il tuo numero di telefono per continuare."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Adicionar meu número"
+            "value": "Informe seu número de telefone para continuar."
           }
         }
       }
     },
-    "auth.signup.phoneNudge.continue": {
+    "auth.signup.phone.tooShort": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المتابعة على أي حال"
+            "value": "هذا الرقم قصير جدًا: %lld أرقام على الأقل."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Trotzdem fortfahren"
+            "value": "Diese Nummer ist zu kurz: mindestens %lld Ziffern."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continue anyway"
+            "value": "This number is too short: at least %lld digits."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continuar de todos modos"
+            "value": "Este número es demasiado corto: al menos %lld dígitos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continuer quand même"
+            "value": "Ce numéro est trop court : %lld chiffres au moins."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continua comunque"
+            "value": "Questo numero è troppo corto: almeno %lld cifre."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Continuar mesmo assim"
+            "value": "Este número é curto demais: pelo menos %lld dígitos."
           }
         }
       }
     },
-    "auth.signup.phoneNudge.message": {
+    "auth.signup.phone.implausible": {
       "extractionState": "manual",
       "localizations": {
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يؤمّن رقم هاتفك حسابك ويتيح لك استعادته إذا فقدت الوصول إلى بريدك الإلكتروني."
+            "value": "لا يبدو هذا الرقم حقيقيًا، يُرجى التحقق منه."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Deine Telefonnummer schützt dein Konto und ermöglicht dir, es wiederherzustellen, falls du den Zugriff auf deine E-Mail verlierst."
+            "value": "Diese Nummer scheint nicht echt zu sein – bitte prüfe sie."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your phone number secures your account and lets you recover it if you lose access to your email."
+            "value": "This number doesn’t look real — please check it."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tu número protege tu cuenta y te permite recuperarla si pierdes el acceso a tu correo electrónico."
+            "value": "Este número no parece real: compruébalo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre numéro sécurise votre compte et permet de le récupérer si vous perdez l’accès à votre e-mail."
+            "value": "Ce numéro ne semble pas réel : vérifiez-le."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo numero protegge il tuo account e ti permette di recuperarlo se perdi l’accesso alla tua email."
+            "value": "Questo numero non sembra reale: controllalo."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seu número protege sua conta e permite recuperá-la se você perder o acesso ao seu e-mail."
-          }
-        }
-      }
-    },
-    "auth.signup.phoneNudge.title": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "هل تريد المتابعة بدون رقم هاتف؟"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ohne Telefonnummer fortfahren?"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Continue without a phone number?"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Continuar sin número de teléfono?"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Continuer sans numéro ?"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Continuare senza numero di telefono?"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Continuar sem número de telefone?"
+            "value": "Este número não parece real: confira-o."
           }
         }
       }
@@ -47627,100 +47580,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Telefone"
-          }
-        }
-      }
-    },
-    "auth.signup.phone.later": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لاحقًا"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Später"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Later"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Más tarde"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus tard"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Più tardi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mais tarde"
-          }
-        }
-      }
-    },
-    "auth.signup.phone.later.a11y": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "لاحقًا، المتابعة بدون رقم"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Später, ohne Nummer fortfahren"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Later, continue without a number"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Más tarde, continuar sin número"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus tard, continuer sans numéro"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Più tardi, continua senza numero"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mais tarde, continuar sem número"
           }
         }
       }

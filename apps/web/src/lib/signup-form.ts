@@ -120,12 +120,16 @@ export function hasPassword(value: string): boolean {
   return value.length > 0;
 }
 
-/** Le bouton s'active dès que l'ADRESSE est valide — et que le nom affiché, le
- * mot de passe et le NUMÉRO, s'ils ont été tapés, tiennent leurs bornes
- * (#6441, #6479).
- * L'adresse est le SEUL champ requis, comme `required: ['email']` du schéma
- * partagé : ni le nom, ni le téléphone, ni le mot de passe ne sont exigés par
- * la passerelle (§ SignupForm.swift, le miroir qui porte la même loi). */
+/** Le bouton s'active quand l'ADRESSE est valide ET le NUMÉRO plausible — et
+ * que le nom affiché et le mot de passe, s'ils ont été tapés, tiennent leurs
+ * bornes (#6441, #6479, #9343).
+ *
+ * Le numéro est requis par l'ÉCRAN, pas par la passerelle (directive porteur
+ * 2026-10-04) : `registerRequestSchema` garde `required: ['email']`, et une
+ * inscription par adresse seule — API, anciennes versions des apps — crée
+ * toujours le compte. Le client est donc VOLONTAIREMENT plus strict que le
+ * serveur sur ce seul champ (§ SignupForm.swift, le miroir qui porte la même
+ * loi). */
 export function canSubmit(form: SignupFormState): boolean {
   return (
     isDisplayNameValid(form.displayName) &&
@@ -137,22 +141,27 @@ export function canSubmit(form: SignupFormState): boolean {
 }
 
 /**
- * Un numéro FOURNI doit être plausible (#6479) ; un champ VIDE reste valide —
- * le numéro n'est pas requis (#6424). Troisième champ à porter cette forme,
- * après le mot de passe et le nom affiché.
+ * Pourquoi le numéro ne permet pas d'avancer : ABSENT (#9343), ou l'un des
+ * trois motifs d'implausibilité de la loi partagée (#6479).
  *
- * La loi vit dans `@meeshy/shared/utils/phone-plausibility`, jamais ici : la
- * passerelle devra la partager pour que le refus soit le MÊME des deux côtés,
- * et une jumelle locale rendrait cette convergence impossible.
+ * `missing` vit ICI et pas dans `@meeshy/shared/utils/phone-plausibility` : la
+ * loi partagée tient le vide pour plausible parce que la PASSERELLE accepte
+ * une inscription sans numéro, et doit continuer de l'accepter. L'exigence est
+ * celle de l'écran seul.
  */
-export function isPhoneValid(phoneDigits: string): boolean {
-  return phoneImplausibility(phoneDigits) === null;
-}
+export type SignupPhoneRefusal = 'missing' | PhoneImplausibility;
 
 /** Le MOTIF du refus, pour que l'écran dise quoi corriger — « numéro
  * invalide » n'apprend rien à qui a tapé le sien de travers. */
-export function phoneRefusal(phoneDigits: string): PhoneImplausibility | null {
+export function phoneRefusal(phoneDigits: string): SignupPhoneRefusal | null {
+  if (normalizedPhoneDigits(phoneDigits).length === 0) return 'missing';
   return phoneImplausibility(phoneDigits);
+}
+
+/** Un numéro est DONNÉ quand il est présent ET plausible — la condition pour
+ * passer la phase du téléphone et pour s'inscrire (#9343). */
+export function isPhoneValid(phoneDigits: string): boolean {
+  return phoneRefusal(phoneDigits) === null;
 }
 
 /**
@@ -211,27 +220,10 @@ export function normalizedPhoneDigits(phoneDigits: string): string {
 }
 
 /**
- * UN NUMÉRO A-T-IL ÉTÉ DONNÉ ? — la MÊME question que la charge se pose
- * (`composeRegisterBody`) et que l'alerte d'une inscription sans numéro pose
- * à l'écran (#8040) : l'alerte ne peut pas paraître pour une saisie que la
- * charge enverrait, ni se taire pour une saisie qu'elle omettrait.
- */
-export function hasPhoneNumber(form: SignupFormState): boolean {
-  return normalizedPhoneDigits(form.phoneDigits).length > 0;
-}
-
-/**
- * La charge EXACTE de `POST /auth/register` (`register.ts:133`) — neuf clés
- * au plus, jamais `username` / `firstName` / `lastName` (la passerelle les
- * dérive de `displayName`, #5218). Le couple téléphone est TOUT ou RIEN : un
- * numéro sans pays ne qualifierait rien.
- */
-/**
- * Le parrainage qui accompagne l'inscription (#8058). Depuis #8055, une
- * inscription sans numéro ne rend AUCUNE session : le rattachement authentifié
- * d'après-inscription (`POST /affiliate/register`) ne pouvait plus partir. Le
- * code voyage donc DANS la création du compte, et la passerelle noue la
- * relation au parrain, activé ou non. Un code mal formé n'est pas envoyé ; un
+ * Le parrainage qui accompagne l'inscription (#8058). Le code voyage DANS la
+ * création du compte, et la passerelle noue la relation au parrain, activé ou
+ * non — c'est ce qui permet à une revendication d'adresse (#8214), créée sans
+ * session, d'être parrainée aussi. Un code mal formé n'est pas envoyé ; un
  * code refusé par la passerelle ne bloque jamais l'inscription.
  */
 export type RegisterReferral = {
@@ -246,6 +238,12 @@ function referralFields(referral: RegisterReferral): Pick<RegisterBody, 'affilia
   return { affiliateToken: code, ...(sessionKey !== '' ? { affiliateSessionKey: sessionKey } : {}) };
 }
 
+/**
+ * La charge EXACTE de `POST /auth/register` (`register.ts`) — jamais
+ * `firstName` / `lastName` (la passerelle les dérive de `displayName`, #5218).
+ * Le couple téléphone part TOUJOURS, numéro et pays ensemble : l'écran ne
+ * compose plus d'inscription sans numéro (#9343) — `canSubmit` l'en empêche.
+ */
 export function composeRegisterBody(form: SignupFormState, referral: RegisterReferral = {}): RegisterBody {
   const digits = normalizedPhoneDigits(form.phoneDigits);
   return {
@@ -258,11 +256,11 @@ export function composeRegisterBody(form: SignupFormState, referral: RegisterRef
     ...(effectiveUsername(form) !== '' ? { username: effectiveUsername(form) } : {}),
     ...(effectiveDisplayName(form) !== '' ? { displayName: effectiveDisplayName(form) } : {}),
     email: form.email.trim().toLowerCase(),
-    // `undefined` par OMISSION, jamais `''` (#6424) — même raison que le couple
-    // téléphone une ligne plus bas : une clé présente à valeur vide décrit
-    // quelque chose qui n'a pas été demandé.
+    // `undefined` par OMISSION, jamais `''` (#6424) : une clé présente à
+    // valeur vide décrit quelque chose qui n'a pas été demandé.
     ...(hasPassword(form.password) ? { password: form.password } : {}),
-    ...(hasPhoneNumber(form) ? { phoneNumber: digits, phoneCountryCode: form.country.id } : {}),
+    phoneNumber: digits,
+    phoneCountryCode: form.country.id,
     systemLanguage: form.systemLanguage,
     regionalLanguage: form.regionalLanguage,
     ...referralFields(referral),

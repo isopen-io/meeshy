@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { AuthColumn, AuthColumnBar } from '@/components/auth-column';
-import { ConfirmDialog } from '@/components/confirm-dialog';
 import { CountrySheet } from '@/components/country-sheet';
 import { DerivedIdentity } from '@/components/derived-identity';
 import { EmailTakenActions } from '@/components/email-taken-actions';
@@ -23,7 +22,7 @@ import {
   type SignupReferralDeps,
 } from '@/components/signup-extras';
 import { SignupIdentityCard, type SignupCodeDeps } from '@/components/signup-identity-card';
-import { SignupPhoneGlass } from '@/components/signup-phone-glass';
+import { SignupPhoneGlass, phoneRefusalMessage } from '@/components/signup-phone-glass';
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
 import { auth, isPhoneConflict, isVerificationRequired, type RegisterBody, type RegisterResponseData } from '@/lib/api/auth';
@@ -41,18 +40,19 @@ import {
   composeRegisterBody,
   emptySignupForm,
   hasPassword,
-  hasPhoneNumber,
   isEmailValid,
   isIdentityDefined,
   isPasswordValid,
+  isPhoneValid,
+  normalizedPhoneDigits,
+  phoneRefusal,
   usernameFieldRefusal,
   type SignupFormState,
 } from '@/lib/signup-form';
 import {
   INITIAL_SIGNUP_PROGRESS,
-  isPhoneGiven,
   nextSignupProgress,
-  shouldNudgePhone,
+  phoneRefusalShown,
   signupPhase,
   signupPrimaryAction,
   type SignupProgress,
@@ -70,9 +70,9 @@ export type { SignupReferralDeps } from '@/components/signup-extras';
  * L'ÉCRAN D'INSCRIPTION (#5555), RÉAGENCÉ EN PHASES VIVANTES (#8288) —
  * anatomie de `SignupView.swift`, dont il suit l'ordre :
  *
- * 1. le téléphone en verre liquide qui ondule à la frappe, son pays, et
- *    « Continuer avec l'e-mail seulement » ;
- * 2. l'adresse ;
+ * 1. le téléphone en verre liquide qui ondule à la frappe, et son pays —
+ *    REQUIS (#9343) : rien ne le passe, son refus se dit sous le champ ;
+ * 2. l'adresse, qui paraît à un numéro plausible ;
  * 3. la carte d'identité en verre : nom affiché et @pseudo pré-dérivés et
  *    modifiables, refus (pseudo pris, « Est-ce vous ? »), « Valider mon
  *    compte maintenant » ;
@@ -176,10 +176,9 @@ export default function SignupScreen({
   const [isShowingLanguageSheet, setShowingLanguageSheet] = useState(false);
   const referral = useSignupReferral(referralDeps);
 
-  /** L'ALERTE D'UNE INSCRIPTION SANS NUMÉRO (#8040) — le drapeau MIROIR
-   * répond une seule fois par ouverture. */
-  const [isShowingPhoneNudge, setShowingPhoneNudge] = useState(false);
-  const phoneNudgeOpen = useRef(false);
+  /** Le champ du numéro a été QUITTÉ avec une saisie, ou un envoi tenté :
+   * son refus se dit désormais sous lui (#9343, `phoneRefusalShown`). */
+  const [isPhoneChecked, setPhoneChecked] = useState(false);
   const phoneInput = useRef<HTMLInputElement>(null);
   const [phoneFocusRequest, setPhoneFocusRequest] = useState(0);
   useEffect(() => {
@@ -192,13 +191,10 @@ export default function SignupScreen({
   const [next] = useState(nextFromLocation);
   const safeNext = safeNextPath(next);
 
-  /** « Continuer avec l'e-mail seulement » a été touché (#8288). */
-  const [phoneSkipped, setPhoneSkipped] = useState(false);
   /** CE QUI EST PARU — dérivé pendant le rendu, monotone (`signup-phases.ts`). */
   const [progress, setProgress] = useState<SignupProgress>(INITIAL_SIGNUP_PROGRESS);
   const nextProgress = nextSignupProgress(progress, {
-    phoneGiven: isPhoneGiven(form.phoneDigits),
-    phoneSkipped,
+    phoneGiven: isPhoneValid(form.phoneDigits),
     emailValid: isEmailValid(form.email),
   });
   if (nextProgress !== progress) setProgress(nextProgress);
@@ -231,21 +227,17 @@ export default function SignupScreen({
     if (primary.kind === 'talk') return enter();
     if (!primary.enabled || isSubmitting || isValidating) return;
     if (verification.kind === 'awaiting-code') return enter();
-    if (shouldNudgePhone({ hasPhone: hasPhoneNumber(form), phoneSkipped })) {
-      phoneNudgeOpen.current = true;
-      setShowingPhoneNudge(true);
-      return;
-    }
     void createAccount({ intent: 'enter' });
   }
 
-  /** Répond UNE fois : le premier geste referme, les suivants se taisent. */
-  function answerPhoneNudge(choice: 'add-phone' | 'continue') {
-    if (!phoneNudgeOpen.current) return;
-    phoneNudgeOpen.current = false;
-    setShowingPhoneNudge(false);
-    if (choice === 'continue') void createAccount({ intent: 'enter' });
-    else setPhoneFocusRequest((n) => n + 1);
+  /** Les trois gestes qui créent un compte passent par ICI : aucun ne part
+   * sans numéro plausible (#9343) — « Ce n'est pas moi » compris, qui ne
+   * consulte pas le bouton principal. Le refus se dit, la main va au champ. */
+  function refuseWithoutPhone(): boolean {
+    if (isPhoneValid(form.phoneDigits)) return false;
+    setPhoneChecked(true);
+    setPhoneFocusRequest((n) => n + 1);
+    return true;
   }
 
   /**
@@ -257,6 +249,7 @@ export default function SignupScreen({
    * carte, jamais sur un autre écran.
    */
   async function createAccount({ intent, claimEmail = false }: { readonly intent: 'enter' | 'validate'; readonly claimEmail?: boolean }) {
+    if (refuseWithoutPhone()) return;
     const setBusy = intent === 'validate' ? setValidating : setSubmitting;
     setBusy(true);
     setFeedback(EMPTY_FEEDBACK);
@@ -303,6 +296,12 @@ export default function SignupScreen({
       : feedback.fieldErrors.email;
   const typedEmail = isEmailValid(form.email) ? form.email.trim() : undefined;
   const loginSearch = { next: safeNext ?? undefined, email: typedEmail };
+  const phoneRefusalNow = phoneRefusal(form.phoneDigits);
+  const phoneError =
+    feedback.fieldErrors.phoneNumber ??
+    (phoneRefusalNow !== null && phoneRefusalShown({ refusal: phoneRefusalNow, checked: isPhoneChecked, progress })
+      ? phoneRefusalMessage(interfaceLanguage, phoneRefusalNow)
+      : undefined);
   const usernameRefusal = usernameFieldRefusal(form);
   const usernameError =
     feedback.fieldErrors.username ?? (usernameRefusal !== null ? usernameRefusalMessage(usernameRefusal) : undefined);
@@ -341,20 +340,20 @@ export default function SignupScreen({
           </div>
 
           <div className="grid gap-5 pb-5">
-            {/* PHASE 1 — LE TÉLÉPHONE D'ABORD (#8288). */}
+            {/* PHASE 1 — LE TÉLÉPHONE D'ABORD (#8288), REQUIS (#9343). */}
             <SignupPhoneGlass
-              language={interfaceLanguage}
               locale={locale}
               country={form.country}
               phoneDigits={form.phoneDigits}
               onPhoneDigits={(phoneDigits) => patch({ phoneDigits })}
               onOpenCountry={() => setShowingCountrySheet(true)}
-              onSkip={() => setPhoneSkipped(true)}
-              showsSkip={!progress.emailShown}
               focused={focused === 'phoneNumber'}
               onFocus={() => setFocused('phoneNumber')}
-              onBlur={() => setFocused(null)}
-              error={feedback.fieldErrors.phoneNumber}
+              onBlur={() => {
+                setFocused(null);
+                if (normalizedPhoneDigits(form.phoneDigits) !== '') setPhoneChecked(true);
+              }}
+              error={phoneError}
               benefit={PHONE_BENEFIT}
               inputRef={phoneInput}
             />
@@ -369,7 +368,6 @@ export default function SignupScreen({
                     autoComplete="email"
                     autoCapitalize="none"
                     autoCorrect="off"
-                    autoFocus={phoneSkipped}
                     value={form.email}
                     onInput={(e) => patch({ email: e.currentTarget.value })}
                     onFocus={() => setFocused('email')}
@@ -541,19 +539,6 @@ export default function SignupScreen({
           </Link>
         </div>
       </div>
-
-      {isShowingPhoneNudge ? (
-        <ConfirmDialog
-          name="signup-phone-nudge"
-          title={translate(interfaceLanguage, 'signup.phoneNudge.title')}
-          body={translate(interfaceLanguage, 'signup.phoneNudge.body')}
-          cancelLabel={translate(interfaceLanguage, 'signup.phoneNudge.add')}
-          confirmLabel={translate(interfaceLanguage, 'signup.phoneNudge.continue')}
-          tone="default"
-          onConfirm={() => answerPhoneNudge('continue')}
-          onCancel={() => answerPhoneNudge('add-phone')}
-        />
-      ) : null}
 
       {isShowingCountrySheet ? (
         <CountrySheet

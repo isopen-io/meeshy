@@ -1,13 +1,15 @@
 import XCTest
 @testable import Meeshy
 
-/// #8842 — à l'inscription, le numéro DIT à quoi il sert, et « Plus tard → »
-/// le laisse de côté depuis la ligne de son libellé.
+/// #8842 puis #9343 — à l'inscription, le numéro DIT à quoi il sert, et plus
+/// rien ne le passe : « Plus tard → » (#8842) a disparu avec la directive
+/// porteur du 2026-10-04 (« obliger le remplissage du numéro du téléphone lors
+/// de la phase d'inscription uniquement dans les frontend »).
 ///
 /// Garde de SOURCE : `SignupView` est un `View` SwiftUI qu'on n'interroge pas
 /// sans hôte, et les propriétés visées sont structurelles — où vit la phrase
-/// d'utilité (sous le champ, jamais derrière un (i)) et où vit le bouton
-/// « Plus tard » (sur la ligne du libellé « Téléphone »).
+/// d'utilité (sous le champ, jamais derrière un (i)), qu'aucun geste ne passe
+/// le numéro, et que son refus se dise sous le champ et s'annonce.
 final class SignupPhoneLaterGuardTests: XCTestCase {
 
     private static let phoneFile = "Meeshy/Features/Auth/Signup/SignupView+Phone.swift"
@@ -23,6 +25,12 @@ final class SignupPhoneLaterGuardTests: XCTestCase {
         let rest = text[start.lowerBound...]
         let stop = rest.range(of: end, range: rest.index(after: rest.startIndex)..<rest.endIndex)?.lowerBound ?? rest.endIndex
         return String(rest[..<stop])
+    }
+
+    private func catalogStrings() throws -> [String: Any] {
+        let url = MyStoriesSourceCorpus.appRoot().appendingPathComponent(Self.catalog)
+        let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+        return try XCTUnwrap(json?["strings"] as? [String: Any])
     }
 
     // MARK: - La phrase d'utilité est AFFICHÉE
@@ -42,53 +50,46 @@ final class SignupPhoneLaterGuardTests: XCTestCase {
                       "VoiceOver l'énonce toujours sur le champ")
     }
 
-    // MARK: - « Plus tard → » sur la ligne du libellé
+    // MARK: - Rien ne passe le numéro (#9343)
 
-    func test_phoneField_placesLaterButtonOnTheLabelRow() throws {
+    func test_phoneField_offersNoWayToSkipTheNumber() throws {
         let source = try phoneSource()
-        let field = try window(from: "var phoneField: some View {", to: "\n    static var ", in: source)
-        let labelRow = try window(from: "HStack(", to: "HStack(spacing: MeeshySpacing.sm) {\n                Button", in: field)
-        XCTAssertTrue(labelRow.contains("auth.signup.phone.label"),
-                      "la première rangée porte le libellé « Téléphone »")
-        XCTAssertTrue(labelRow.contains("Spacer("),
-                      "le bouton s'aligne en fin de ligne")
-        XCTAssertTrue(labelRow.contains("laterButton"),
-                      "« Plus tard → » vit sur la ligne du libellé")
-        XCTAssertTrue(labelRow.contains("!viewModel.progress.emailShown"),
-                      "même condition d'affichage qu'avant : il disparaît quand l'e-mail paraît")
+        XCTAssertFalse(source.contains("laterButton"), "« Plus tard → » a disparu")
+        XCTAssertFalse(source.contains("skipPhone"), "aucune action ne passe le numéro")
+        XCTAssertFalse(source.contains("auth.signup.phone.later"), "le libellé « Plus tard » n'est plus lu")
+        XCTAssertFalse(source.contains("auth.signup.phone.skip"), "l'identifiant du geste de passage n'existe plus")
     }
 
-    func test_laterButton_keepsActionIdentifierArrowAndTarget() throws {
+    func test_phoneField_saysItsRefusalUnderTheFieldAndAnnouncesIt() throws {
         let source = try phoneSource()
-        let button = try window(from: "var laterButton: some View {", to: "\n    }\n", in: source)
-        XCTAssertTrue(button.contains("viewModel.skipPhone()"), "même action qu'avant")
-        XCTAssertTrue(button.contains("focusedField = .email"), "le focus part sur l'e-mail")
-        XCTAssertTrue(button.contains("auth.signup.phone.later"), "libellé « Plus tard »")
-        XCTAssertTrue(button.contains("Image(systemName: \"arrow.forward\")"),
-                      "la flèche est un symbole système, retourné automatiquement en RTL")
-        XCTAssertTrue(button.contains("minHeight: 44"), "cible tactile d'au moins 44 pt")
-        XCTAssertTrue(button.contains(".contentShape("), "toute la cible est tapable")
-        XCTAssertTrue(button.contains("auth.signup.phone.later.a11y"),
-                      "VoiceOver dit « Plus tard, continuer sans numéro »")
-        XCTAssertTrue(button.contains(".accessibilityIdentifier(\"auth.signup.phone.skip\")"),
-                      "l'identifiant d'automatisation reste stable")
-        XCTAssertFalse(source.contains("auth.signup.phone.skip\","),
-                       "l'ancien libellé « Continuer avec l'e-mail seulement » n'est plus lu")
-        XCTAssertFalse(source.contains(".underline()"), "plus de lien souligné centré sous le champ")
+        let field = try window(from: "var phoneField: some View {", to: "\n    static var ", in: source)
+        XCTAssertTrue(field.contains("errorRow(for: .phoneNumber)"), "le refus se pose SOUS le champ")
+        XCTAssertTrue(field.contains("UIAccessibility.post(notification: .announcement"),
+                      "le refus qui paraît s'annonce à VoiceOver")
+        XCTAssertTrue(field.contains("viewModel.notePhoneFieldLeft()"),
+                      "quitter le champ avec une saisie fait dire son refus")
     }
 
     // MARK: - Catalogue
 
-    func test_catalog_laterKeysAreTranslatedInSevenLanguages() throws {
-        let url = MyStoriesSourceCorpus.appRoot().appendingPathComponent(Self.catalog)
-        let json = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
-        let strings = try XCTUnwrap(json?["strings"] as? [String: Any])
-        for key in ["auth.signup.phone.later", "auth.signup.phone.later.a11y"] {
+    func test_catalog_requiredPhoneKeysAreTranslatedInSevenLanguages() throws {
+        let strings = try catalogStrings()
+        for key in ["auth.signup.phone.required", "auth.signup.phone.tooShort", "auth.signup.phone.implausible"] {
             let entry = try XCTUnwrap(strings[key] as? [String: Any], "clé \(key) absente du catalogue")
             let localizations = try XCTUnwrap(entry["localizations"] as? [String: Any])
             XCTAssertEqual(Set(localizations.keys), Self.sevenLanguages, "\(key) : sept langues")
         }
-        XCTAssertNil(strings["auth.signup.phone.skip"], "l'ancienne clé ne sert plus : elle quitte le catalogue")
-        XCTAssertNil(strings["auth.signup.phone.hintLabel"], "le (i) disparu, son libellé aussi")
+    }
+
+    func test_catalog_skipAndNudgeKeysLeftTheCatalog() throws {
+        let strings = try catalogStrings()
+        for key in [
+            "auth.signup.phone.later", "auth.signup.phone.later.a11y", "auth.signup.phone.skip",
+            "auth.signup.phone.hintLabel",
+            "auth.signup.phoneNudge.title", "auth.signup.phoneNudge.message",
+            "auth.signup.phoneNudge.addPhone", "auth.signup.phoneNudge.continue",
+        ] {
+            XCTAssertNil(strings[key], "\(key) ne sert plus : elle quitte le catalogue")
+        }
     }
 }

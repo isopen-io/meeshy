@@ -1119,6 +1119,15 @@ jobs:
           cd apps/web
           node scripts/check-access-column.mjs
 
+      # #9343 — l'inscription ne se termine pas sans numéro plausible : aucun
+      # moyen de passer le numéro, le refus se dit sous le champ, et la charge
+      # envoyée porte le couple numéro + pays (la passerelle reste permissive).
+      - name: Gate inscription (numéro requis par l'écran)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-signup.mjs
+
       # #8418 — sur téléphone (320, 375, 390 px), aucune adresse servie ne
       # défile de côté (document ET colonnes défilantes, hors bandes), aucun
       # champ n'est écrit sous 16 px (zoom de Safari iOS au focus), et la

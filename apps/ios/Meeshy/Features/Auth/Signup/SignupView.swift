@@ -9,8 +9,9 @@ import MeeshyUI
 /// tenant ; la directive porteur du 2026-09-27 la réagence en quatre temps :
 ///
 /// 1. le téléphone, dans un verre liquide qui ondule à la frappe
-///    (`SignupView+Phone.swift`), et « Continuer avec l'e-mail seulement » ;
-/// 2. l'adresse ;
+///    (`SignupView+Phone.swift`) — REQUIS (#9343) : rien ne le passe, son
+///    refus se dit sous le champ ;
+/// 2. l'adresse, qui paraît à un numéro plausible ;
 /// 3. la carte d'identité en verre : nom affiché et @pseudo pré-dérivés et
 ///    modifiables, refus, « Valider mon compte maintenant »
 ///    (`SignupView+Card.swift`) ;
@@ -145,21 +146,6 @@ struct SignupView: View {
                 notification: .announcement,
                 argument: String(localized: "auth.signup.card.verified", defaultValue: "Compte validé !", bundle: .main)
             )
-        }
-        // UNE ALERTE, JAMAIS UN BLOCAGE (#8040) : sans numéro, dire à quoi il
-        // sert ; « Continuer quand même » crée le compte comme avant.
-        .alert(
-            String(localized: "auth.signup.phoneNudge.title", defaultValue: "Continuer sans numéro ?", bundle: .main),
-            isPresented: $viewModel.isPhoneNudgePresented
-        ) {
-            Button(String(localized: "auth.signup.phoneNudge.addPhone", defaultValue: "Ajouter mon numéro", bundle: .main), role: .cancel) {
-                focusedField = viewModel.addPhoneInstead()
-            }
-            Button(String(localized: "auth.signup.phoneNudge.continue", defaultValue: "Continuer quand même", bundle: .main)) {
-                continueWithoutPhone()
-            }
-        } message: {
-            Text(String(localized: "auth.signup.phoneNudge.message", defaultValue: "Votre numéro sécurise votre compte et permet de le récupérer si vous perdez l’accès à votre e-mail.", bundle: .main))
         }
         .sheet(isPresented: $isShowingLanguageSheet) { languageSheet }
         .sheet(isPresented: $isShowingTerms) { TermsOfServiceView() }
@@ -465,15 +451,8 @@ struct SignupView: View {
             switch await viewModel.requestSubmit() {
             case .created: land(created: true)
             case .rejected: land(created: false)
-            // L'alerte EST le retour : aucune haptique d'échec pour une
-            // question posée (#8040).
-            case .phoneNudged: break
             }
         }
-    }
-
-    private func continueWithoutPhone() {
-        Task { land(created: await viewModel.continueWithoutPhone()) }
     }
 
     private func land(created: Bool) {

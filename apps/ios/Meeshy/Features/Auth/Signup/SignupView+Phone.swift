@@ -4,10 +4,10 @@ import MeeshyUI
 
 // MARK: - Phase 1 — le téléphone d'abord, en verre liquide (#8288)
 //
-// Jamais annoncé « facultatif », jamais d'astérisque : « Plus tard → », posé
-// sur la ligne du libellé, le dit par le geste (#8842), et le NOMMER
-// facultatif ferait croire qu'il y a une décision à prendre. Vide ⇒ absent de
-// la charge (`SignupForm`).
+// REQUIS par l'écran (#9343, directive porteur 2026-10-04) — par l'écran
+// seul : la passerelle accepte toujours une adresse sans numéro. Rien ne le
+// passe ; l'adresse ne paraît qu'à un numéro plausible, et le refus se dit
+// SOUS le champ, annoncé à VoiceOver.
 
 extension SignupView {
 
@@ -29,18 +29,9 @@ extension SignupView {
     /// « Réduire les animations », rien ne bouge.
     var phoneField: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            HStack(alignment: .center, spacing: MeeshySpacing.sm) {
-                Text(String(localized: "auth.signup.phone.label", defaultValue: "Téléphone", bundle: .main))
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-
-                Spacer(minLength: MeeshySpacing.sm)
-
-                if !viewModel.progress.emailShown {
-                    laterButton
-                        .transition(.opacity)
-                }
-            }
+            Text(String(localized: "auth.signup.phone.label", defaultValue: "Téléphone", bundle: .main))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
+                .foregroundColor(theme.textMuted)
 
             HStack(spacing: MeeshySpacing.sm) {
                 Button {
@@ -98,6 +89,7 @@ extension SignupView {
             .accessibilityElement(children: .contain)
 
             errorRow(for: .phoneNumber)
+                .accessibilityIdentifier("auth.signup.phone.error")
 
             // Le champ porte déjà la phrase en `accessibilityHint` : la lire une
             // seconde fois au balayage n'apprendrait rien.
@@ -110,32 +102,18 @@ extension SignupView {
         .sheet(isPresented: $isShowingCountryPicker) {
             SignupCountrySheet(selection: $viewModel.form.country)
         }
+        // Le champ QUITTÉ avec une saisie : son refus se dit désormais (#9343).
+        .adaptiveOnChange(of: focusedField) { previous, current in
+            guard previous == .phoneNumber, current != .phoneNumber else { return }
+            viewModel.notePhoneFieldLeft()
+        }
+        // Le refus qui PARAÎT s'annonce : VoiceOver ne le lirait sinon qu'au
+        // balayage, et l'utilisateur ne saurait pas pourquoi rien n'avance.
+        .adaptiveOnChange(of: viewModel.error(for: .phoneNumber)) { _, message in
+            guard let message else { return }
+            UIAccessibility.post(notification: .announcement, argument: message)
+        }
     }
 
     static var phoneGlassShape: RoundedRectangle { RoundedRectangle(cornerRadius: MeeshyRadius.xlPlus, style: .continuous) }
-
-    /// « Plus tard → » — sur la ligne du libellé, aligné en fin (#8842), et il
-    /// disparaît une fois l'adresse parue : il n'y a plus rien à passer
-    /// (décision porteur 2026-09-27). `arrow.forward` se retourne seul en RTL (garde `RightToLeftLayoutGuardTests`).
-    private var laterButton: some View {
-        Button {
-            HapticFeedback.light()
-            viewModel.skipPhone()
-            focusedField = .email
-        } label: {
-            HStack(spacing: MeeshySpacing.xs) {
-                Text(String(localized: "auth.signup.phone.later", defaultValue: "Plus tard", bundle: .main))
-                Image(systemName: "arrow.forward")
-                    .accessibilityHidden(true)
-            }
-            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-            .foregroundColor(theme.textSecondary)
-            .padding(.leading, MeeshySpacing.sm)
-            .frame(minWidth: 44, minHeight: 44, alignment: .trailing)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: "auth.signup.phone.later.a11y", defaultValue: "Plus tard, continuer sans numéro", bundle: .main))
-        .accessibilityIdentifier("auth.signup.phone.skip")
-    }
 }
