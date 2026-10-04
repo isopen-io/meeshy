@@ -638,9 +638,9 @@
       "pattern": "^assets/mini-audio-player-",
       "dynamic_only": true,
       "kb": {
-        "value": 2,
-        "status": "CIBLE -- MESUREE PAR #9256, NON ARBITREE",
-        "source": "Mesure de measure-weight.mjs le 2026-10-04 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,30 Ko gzip -9 pour `assets/mini-audio-player-*.js` (`components/mini-audio-player.tsx`, le mini-lecteur que la coquille monte quand le plein ecran audio se ferme pendant la lecture). Charge a la demande seulement (`shell.tsx`, `lazy`), jamais avant le premier pixel. Plafond ceil(1,30) + 1 = 2."
+        "value": 4,
+        "status": "CIBLE -- REMESUREE PAR #9279, NON ARBITREE",
+        "source": "REMESURE le 2026-10-04 par #9279 (le toucher rouvre le plein ecran, le lecteur s efface dans la conversation du vocal et publie sa lecture a la bulle) : 2,94 Ko gzip -9 (`bun run build` puis `node scripts/measure-weight.mjs`), au-dela du plafond de 2. Ce qui entre : l `import()` de la visionneuse (`lazy(() => import('./media-viewer'))`) et la LISTE DE PRECHARGEMENT que Vite pose devant lui (`__vite__mapDeps`, une quarantaine de noms de fichiers -- mesure SANS cet import : 1,82 Ko), la telecommande publiee a la bulle et le relais de position (`video-handoff`). La visionneuse elle-meme n entre PAS ici : elle reste son propre chunk, deja charge puisque la lecture confiee en vient. Plafond ceil(2,94) + 1 = 4. PRECEDENT : Mesure de measure-weight.mjs le 2026-10-04 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,30 Ko gzip -9 pour `assets/mini-audio-player-*.js` (`components/mini-audio-player.tsx`, le mini-lecteur que la coquille monte quand le plein ecran audio se ferme pendant la lecture). Charge a la demande seulement (`shell.tsx`, `lazy`), jamais avant le premier pixel. Plafond ceil(1,30) + 1 = 2."
       }
     },
     "communities": {

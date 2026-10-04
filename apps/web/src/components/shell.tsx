@@ -14,7 +14,7 @@ import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 import { useRoute } from '@/lib/router';
 
-import { CallLayer } from './call-layer';
+import { CallLayer, CallResumeSlot } from './call-layer';
 import { loadConversationPreviewHost } from './conversation-preview-chunks';
 import { ProfilePeekHost } from './profile-peek-host';
 import { SendSheetHost } from './send-sheet-host';
@@ -248,11 +248,18 @@ export default function Shell({ children }: { children: ReactNode }) {
         </Suspense>
       ) : null}
       <CallLayer />
-      {lectureConfiee ? (
-        <Suspense fallback={null}>
-          <MiniAudioPlayerHost />
-        </Suspense>
-      ) : null}
+      {/* LA PILE DU HAUT (#9279) — « Reprendre l'appel » puis le mini-lecteur,
+          dans UNE colonne fixe : l'appel prime et le vocal se range dessous,
+          comme le `VStack` de `CallPresentationLayer` iOS. Chacun posé en
+          `fixed` au même sommet, ils se chevauchaient. */}
+      <div data-top-bars className="pointer-events-none fixed inset-x-0 z-40 flex flex-col gap-2 px-4" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>
+        <CallResumeSlot />
+        {lectureConfiee ? (
+          <Suspense fallback={null}>
+            <MiniAudioPlayerHost />
+          </Suspense>
+        ) : null}
+      </div>
       {invitationArmee ? (
         <Suspense fallback={null}>
           <ActivationInviteHost />

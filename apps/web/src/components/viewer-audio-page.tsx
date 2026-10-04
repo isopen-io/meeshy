@@ -118,7 +118,7 @@ export default function ViewerAudioPage({
       language: track.language,
       ...(attachment.duration !== undefined ? { durationMs: attachment.duration } : {}),
       ...(handedOffMs !== null
-        ? { resume: { positionMs: handedOffMs, complete: false } }
+        ? { resume: { positionMs: handedOffMs, complete: false, handedOff: true } }
         : consumption != null
           ? { resume: { positionMs: consumption.lastPlayPositionMs, complete: consumption.listenedComplete } }
           : {}),
