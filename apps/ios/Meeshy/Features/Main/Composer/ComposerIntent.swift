@@ -132,6 +132,9 @@ nonisolated enum ComposerOrigin: Equatable {
     /// le composer plein écran, viseur ARMÉ dès l'ouverture — le geste de
     /// l'auteur a déjà dit « prendre ». La prise s'édite dans la scène et
     /// « Terminé » la rend au message en attente ; rien ne se publie.
+    ///
+    /// Porte sans appelant depuis #9295 : la caméra de la barre prend en plein écran, hors scène.
+    /// Son retrait — le cas, `ComposerConversationCapture` et ses lecteurs — est un lot à part.
     case conversationCapture
 }
 
