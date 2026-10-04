@@ -3,6 +3,9 @@ import AVFoundation
 
 struct CameraPreviewLayer: UIViewRepresentable {
     let session: AVCaptureSession
+    /// Le pont qui convertit un toucher en point du capteur (#9295) — `nil`
+    /// pour un aperçu qui ne vise pas.
+    var focusPoints: CameraPreviewFocusPoints? = nil
 
     /// **La couche d'aperçu EST la couche de la vue** (#4080).
     ///
@@ -30,6 +33,7 @@ struct CameraPreviewLayer: UIViewRepresentable {
         view.backgroundColor = .black
         view.previewLayer.session = session
         view.previewLayer.videoGravity = .resizeAspectFill
+        focusPoints?.attach(view)
         return view
     }
 
@@ -39,5 +43,33 @@ struct CameraPreviewLayer: UIViewRepresentable {
         if uiView.previewLayer.session !== session {
             uiView.previewLayer.session = session
         }
+        focusPoints?.attach(uiView)
+    }
+}
+
+/// **Le pont entre un toucher et le capteur** (#9295).
+///
+/// Le toucher se pose sur le chrome du viseur, l'image vit dans la couche
+/// d'aperçu, et les deux ne partagent pas le même repère : le plein écran pose
+/// son aperçu sous la zone sûre, le chrome au-dessus ; la carte de la scène les
+/// déplace ensemble. Le point voyage donc dans le repère de la FENÊTRE, et
+/// seule la couche sait le rendre au capteur — elle connaît le remplissage
+/// (`.resizeAspectFill` rogne), l'orientation et le miroir de l'objectif avant.
+final class CameraPreviewFocusPoints {
+    private weak var host: CameraPreviewLayer.PreviewHost?
+
+    nonisolated deinit {}
+
+    func attach(_ host: CameraPreviewLayer.PreviewHost) {
+        self.host = host
+    }
+
+    /// `nil` quand l'aperçu n'est pas à l'écran, ou que le toucher tombe hors
+    /// de l'image — viser hors champ n'a pas de sens.
+    func devicePoint(fromWindowPoint point: CGPoint) -> CGPoint? {
+        guard let host, host.window != nil else { return nil }
+        let local = host.convert(point, from: nil)
+        guard host.bounds.contains(local) else { return nil }
+        return host.previewLayer.captureDevicePointConverted(fromLayerPoint: local)
     }
 }

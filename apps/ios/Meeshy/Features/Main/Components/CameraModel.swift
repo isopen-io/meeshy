@@ -46,6 +46,8 @@ final class CameraModel: NSObject, ObservableObject {
     /// Publiée : le sol blanc du flash avant (#8653) suit l'objectif actif.
     @Published private(set) var currentPosition: AVCaptureDevice.Position = .back
     private var recordingTimer: Timer?
+    /// Le guet de la scène après un double toucher (#9295) — `nil` hors session.
+    private var subjectAreaObserver: NSObjectProtocol?
 
     // Camera-switch-mid-recording (bug fix 2026-07-09): `AVCaptureMovieFileOutput`'s
     // active recording connection breaks when its video input is removed, even
@@ -152,6 +154,8 @@ final class CameraModel: NSObject, ObservableObject {
         session.addInput(input)
         currentPosition = position
         zoomFactor = device.videoZoomFactor
+        apply(ComposerCaptureFocus.continuous(focusCapabilities(of: device)), to: device)
+        watchSubjectArea(of: device)
     }
 
     /// Switches the active camera. While recording, this cannot reconfigure the
@@ -277,6 +281,82 @@ final class CameraModel: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - La mise au point (#9295)
+
+    /// **Le double toucher vise ce point du capteur** — mise au point et
+    /// exposition, une fois ; la scène qui change rend l'objectif au continu.
+    /// `devicePoint` est en coordonnées capteur (`0...1`), converties par la
+    /// couche d'aperçu (`CameraPreviewFocusPoints`).
+    func focus(at devicePoint: CGPoint) {
+        guard let device = activeVideoDevice else { return }
+        apply(ComposerCaptureFocus.focusing(at: devicePoint, focusCapabilities(of: device)), to: device)
+    }
+
+    private func resumeContinuousFocus() {
+        guard let device = activeVideoDevice else { return }
+        apply(ComposerCaptureFocus.continuous(focusCapabilities(of: device)), to: device)
+    }
+
+    private func focusCapabilities(of device: AVCaptureDevice) -> ComposerCaptureFocus.Capabilities {
+        ComposerCaptureFocus.Capabilities(
+            focusPointOfInterest: device.isFocusPointOfInterestSupported,
+            autoFocus: device.isFocusModeSupported(.autoFocus),
+            continuousAutoFocus: device.isFocusModeSupported(.continuousAutoFocus),
+            exposurePointOfInterest: device.isExposurePointOfInterestSupported,
+            autoExpose: device.isExposureModeSupported(.autoExpose),
+            continuousAutoExposure: device.isExposureModeSupported(.continuousAutoExposure))
+    }
+
+    /// Le POINT se pose AVANT le mode : c'est le changement de mode qui lance
+    /// la mesure — l'inverse viserait l'ancien point.
+    private func apply(_ plan: ComposerCaptureFocus.Plan, to device: AVCaptureDevice) {
+        do {
+            try device.lockForConfiguration()
+            defer { device.unlockForConfiguration() }
+            switch plan.focus {
+            case .continuous?:
+                if device.isFocusPointOfInterestSupported { device.focusPointOfInterest = ComposerCaptureFocus.center }
+                device.focusMode = .continuousAutoFocus
+            case .once(let point)?:
+                device.focusPointOfInterest = point
+                device.focusMode = .autoFocus
+            case nil:
+                break
+            }
+            switch plan.exposure {
+            case .continuous?:
+                if device.isExposurePointOfInterestSupported { device.exposurePointOfInterest = ComposerCaptureFocus.center }
+                device.exposureMode = .continuousAutoExposure
+            case .once(let point)?:
+                device.exposurePointOfInterest = point
+                device.exposureMode = .autoExpose
+            case nil:
+                break
+            }
+            device.isSubjectAreaChangeMonitoringEnabled = plan.watchesSubjectArea
+        } catch {
+            Logger.media.error("Focus configuration failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Un observateur par objectif : changer d'objectif remplace le guet.
+    private func watchSubjectArea(of device: AVCaptureDevice) {
+        stopWatchingSubjectArea()
+        subjectAreaObserver = NotificationCenter.default.addObserver(
+            forName: AVCaptureDevice.subjectAreaDidChangeNotification,
+            object: device,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.resumeContinuousFocus() }
+        }
+    }
+
+    private func stopWatchingSubjectArea() {
+        guard let subjectAreaObserver else { return }
+        NotificationCenter.default.removeObserver(subjectAreaObserver)
+        self.subjectAreaObserver = nil
+    }
+
     /// **Peut-on demander un enregistrement à AVFoundation ?** La question est
     /// posée à `CameraRecordingReadiness`, et elle est POSÉE — c'est tout le
     /// lot : `startRecording(to:recordingDelegate:)` lève une exception
@@ -363,6 +443,7 @@ final class CameraModel: NSObject, ObservableObject {
 
     func stop() {
         if isRecordingVideo { stopRecording() }
+        stopWatchingSubjectArea()
         Task.detached { [weak self] in
             self?.session.stopRunning()
         }

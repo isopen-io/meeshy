@@ -16,7 +16,7 @@ struct ComposerCapturePreview: View {
             case .scene:
                 EmptyView()
             case .viewfinder:
-                CameraPreviewLayer(session: session.camera.session)
+                CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints)
             case .permissionRefused:
                 CameraPermissionPanel()
             }
@@ -37,6 +37,10 @@ struct ComposerCapturePreview: View {
 /// le cadenas et à la verticale le zoom pendant la tenue, vers le bas le
 /// rangement du viseur hors prise, PROGRESSIF et ANNULABLE (directive
 /// 2026-08-30).
+///
+/// **Le double toucher fait la mise au point là où il tombe, le pincement
+/// zoome** (#9295) — la nappe est celle des DEUX montages, la scène des posts
+/// et des stories en profite donc sans câblage de plus.
 struct ComposerCaptureChrome: View {
     @ObservedObject var session: ComposerCaptureSession
     let size: ComposerSceneCameraSize
@@ -47,12 +51,29 @@ struct ComposerCaptureChrome: View {
     let onDisarm: () -> Void
     let onValidateSegments: () -> Void
 
+    /// L'anneau de la dernière mise au point — un état de VUE, pas de la machine.
+    @State private var focusMark: ComposerCaptureFocusMark?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         ZStack {
-            Color.clear
-                .contentShape(Rectangle())
-                .gesture(holdGesture.exclusively(before: TapGesture().onEnded { onTap() }))
-                .simultaneousGesture(dragGesture)
+            GeometryReader { proxy in
+                Color.clear
+                    .contentShape(Rectangle())
+                    .gesture(holdGesture.exclusively(before:
+                        focusGesture(origin: proxy.frame(in: .global).origin)
+                            .exclusively(before: TapGesture().onEnded { onTap() })))
+                    .simultaneousGesture(dragGesture)
+                    .simultaneousGesture(pinchGesture)
+                    .overlay(alignment: .topLeading) {
+                        if let focusMark {
+                            ComposerCaptureFocusRing(reduceMotion: reduceMotion)
+                                .id(focusMark.id)
+                                .position(focusMark.location)
+                                .allowsHitTesting(false)
+                        }
+                    }
+            }
             ComposerSceneCameraBar(
                 stage: session.stage,
                 mode: session.mode ?? .photo,
@@ -105,7 +126,7 @@ struct ComposerCaptureChrome: View {
                 }
                 switch ComposerCaptureHold.verticalDrag(stage: session.stage) {
                 case .zoom: session.dragZoom(translationY: valeur.translation.height)
-                case .dismiss: session.dismissDrag = valeur.translation.height
+                case .dismiss: session.dismissDrag = session.pinchSpoilsDismiss ? 0 : valeur.translation.height
                 }
             }
             .onEnded { valeur in
@@ -114,9 +135,58 @@ struct ComposerCaptureChrome: View {
                 let course = valeur.translation.height
                 session.dismissDrag = 0
                 guard ComposerCaptureHold.verticalDrag(stage: session.stage) == .dismiss,
+                      !session.pinchSpoilsDismiss,
                       ComposerSceneCameraFrame.dismisses(translationY: course) else { return }
                 HapticFeedback.light()
                 onDisarm()
             }
+    }
+
+    /// **Pincer zoome l'objectif** (#9295), dans les deux montages.
+    private var pinchGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { echelle in session.pinchZoom(scale: echelle) }
+            .onEnded { _ in session.endPinchZoom() }
+    }
+
+    /// **Deux touchers visent** (#9295) : le point part dans le repère de la
+    /// fenêtre, que l'aperçu sait rendre au capteur ; l'anneau se pose dans
+    /// celui de la nappe. Le toucher simple attend que le double échoue —
+    /// c'est le prix d'un même vide qui photographie et qui vise.
+    private func focusGesture(origin: CGPoint) -> some Gesture {
+        SpatialTapGesture(count: 2).onEnded { toucher in
+            let fenetre = CGPoint(x: origin.x + toucher.location.x, y: origin.y + toucher.location.y)
+            guard session.focus(atWindowPoint: fenetre) else { return }
+            let marque = ComposerCaptureFocusMark(id: UUID(), location: toucher.location)
+            focusMark = marque
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(ComposerCaptureFocus.markLifetime * 1_000_000_000))
+                if focusMark == marque { focusMark = nil }
+            }
+        }
+    }
+}
+
+/// **L'anneau de mise au point** (#9295) : il se pose où le doigt a visé, se
+/// resserre pendant que l'objectif mesure, puis s'efface. Sans animation quand
+/// l'auteur a réduit les mouvements — il paraît, et s'efface.
+private struct ComposerCaptureFocusRing: View {
+    let reduceMotion: Bool
+
+    static let diameter: CGFloat = 72
+    @State private var settled = false
+
+    var body: some View {
+        Circle()
+            .stroke(Color.white, lineWidth: 2)
+            .frame(width: Self.diameter, height: Self.diameter)
+            .shadow(color: .black.opacity(0.45), radius: 3)
+            .scaleEffect(settled || reduceMotion ? 1 : 1.35)
+            .opacity(settled || reduceMotion ? 1 : 0)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { settled = true }
+            }
+            .accessibilityHidden(true)
     }
 }

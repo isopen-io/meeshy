@@ -125,6 +125,49 @@ nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
     }
 }
 
+// MARK: - Colorimetry (#9295)
+
+/// **La colorimétrie d'un préréglage d'appel, UNE fonction pour le flux et pour
+/// la photo** (#9295). Le flux vidéo de l'appel la passe à chaque trame ; la
+/// photo prise au viseur du composeur la passe une fois, au choix de son filtre
+/// — la même teinte, le même contraste, la même exposition, jamais une jumelle.
+nonisolated enum VideoFilterColorimetry {
+    static func graded(_ image: CIImage, config: VideoFilterConfig) -> CIImage {
+        exposed(colorControlled(temperatureTinted(image, config: config), config: config), config: config)
+    }
+
+    private static func temperatureTinted(_ image: CIImage, config: VideoFilterConfig) -> CIImage {
+        let neutral = CIVector(x: CGFloat(config.temperature), y: CGFloat(config.tint))
+        let target = CIVector(x: 6500, y: 0)
+
+        guard neutral != target else { return image }
+
+        return image.applyingFilter("CITemperatureAndTint", parameters: [
+            "inputNeutral": neutral,
+            "inputTargetNeutral": target
+        ])
+    }
+
+    private static func colorControlled(_ image: CIImage, config: VideoFilterConfig) -> CIImage {
+        let hasChanges = config.brightness != 0 || config.contrast != 1.0 || config.saturation != 1.0
+        guard hasChanges else { return image }
+
+        return image.applyingFilter("CIColorControls", parameters: [
+            "inputBrightness": config.brightness,
+            "inputContrast": config.contrast,
+            "inputSaturation": config.saturation
+        ])
+    }
+
+    private static func exposed(_ image: CIImage, config: VideoFilterConfig) -> CIImage {
+        guard config.exposure != 0 else { return image }
+
+        return image.applyingFilter("CIExposureAdjust", parameters: [
+            "inputEV": config.exposure
+        ])
+    }
+}
+
 // MARK: - Protocol
 
 protocol VideoFilterPipelineProviding {
@@ -300,9 +343,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         image = applyLowLightBoost(to: image, boost: lowLightBoost)
         // 2. Colorimetry
         if hasChosenFilters {
-            image = applyTemperatureAndTint(to: image, config: cfg)
-            image = applyColorControls(to: image, config: cfg)
-            image = applyExposure(to: image, config: cfg)
+            image = VideoFilterColorimetry.graded(image, config: cfg)
         }
         // 3. Background blur, at the tier the ladder and the device allow
         if cfg.backgroundBlurEnabled {
@@ -400,39 +441,6 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         degradation = next
         guard next.tier != previous.tier else { return }
         Logger.calls.info("Video filters tier \(previous.tier.rawValue, privacy: .public) → \(next.tier.rawValue, privacy: .public) at \(elapsedMs, privacy: .public)ms")
-    }
-
-    // MARK: - Colorimetry Filters
-
-    private func applyTemperatureAndTint(to image: CIImage, config: VideoFilterConfig) -> CIImage {
-        let neutral = CIVector(x: CGFloat(config.temperature), y: CGFloat(config.tint))
-        let target = CIVector(x: 6500, y: 0)
-
-        guard neutral != target else { return image }
-
-        return image.applyingFilter("CITemperatureAndTint", parameters: [
-            "inputNeutral": neutral,
-            "inputTargetNeutral": target
-        ])
-    }
-
-    private func applyColorControls(to image: CIImage, config: VideoFilterConfig) -> CIImage {
-        let hasChanges = config.brightness != 0 || config.contrast != 1.0 || config.saturation != 1.0
-        guard hasChanges else { return image }
-
-        return image.applyingFilter("CIColorControls", parameters: [
-            "inputBrightness": config.brightness,
-            "inputContrast": config.contrast,
-            "inputSaturation": config.saturation
-        ])
-    }
-
-    private func applyExposure(to image: CIImage, config: VideoFilterConfig) -> CIImage {
-        guard config.exposure != 0 else { return image }
-
-        return image.applyingFilter("CIExposureAdjust", parameters: [
-            "inputEV": config.exposure
-        ])
     }
 
     // MARK: - Low-Light Boost (§14.2.4)

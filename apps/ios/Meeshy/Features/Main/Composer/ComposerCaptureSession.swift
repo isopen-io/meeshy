@@ -25,6 +25,9 @@ final class ComposerCaptureSession: ObservableObject {
     /// Le modèle est construit MUET : `CameraModel` n'ouvre sa session qu'à la
     /// demande.
     let camera: CameraModel
+    /// Le pont toucher → capteur de l'aperçu partagé (#9295) : l'aperçu s'y
+    /// accroche, le double toucher du chrome le lit.
+    let focusPoints = CameraPreviewFocusPoints()
 
     /// L'étape du viseur — la loi est dans `ComposerSceneCamera`.
     @Published var stage: ComposerSceneCameraStage
@@ -48,6 +51,11 @@ final class ComposerCaptureSession: ObservableObject {
     /// repart à zéro au démarrage suivant, et le fichier n'arrive qu'après.
     private(set) var pendingSegmentDuration: TimeInterval = 0
     private var zoomAnchor: ComposerCaptureZoomAnchor?
+    /// Le facteur au premier écart des doigts, `nil` hors pincement (#9295).
+    private var pinchAnchor: CGFloat?
+    /// Deux doigts sont posés : ni le rangement ni l'appui long ne partent.
+    private(set) var isPinching = false
+    private var pinchEndedAt: Date?
     private var holdTask: Task<Void, Never>?
     private let defaults: UserDefaults
     private var relais: AnyCancellable?
@@ -238,7 +246,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// **L'appui long FILME** dès que la session peut écrire, et dure tant que
     /// le doigt reste — ou au-delà, verrouillé.
     func beginHold() {
-        guard holdStartedAt == nil else { return }
+        guard holdStartedAt == nil, !isPinching else { return }
         HapticFeedback.medium()
         holdStartedAt = Date()
         holdPhase = .holding
@@ -309,7 +317,7 @@ final class ComposerCaptureSession: ObservableObject {
     /// Le premier glissé s'ANCRE sur le facteur courant et la course déjà
     /// faite : l'appui long a pu bouger avant que la caméra filme.
     func dragZoom(translationY: CGFloat) {
-        guard ComposerCaptureHold.verticalDrag(stage: stage) == .zoom else { return }
+        guard ComposerCaptureHold.verticalDrag(stage: stage) == .zoom, !isPinching else { return }
         let ancre = zoomAnchor ?? ComposerCaptureZoomAnchor(factor: camera.zoomFactor, translationY: translationY)
         zoomAnchor = ancre
         camera.setZoom(ComposerCaptureZoom.factor(
@@ -318,6 +326,50 @@ final class ComposerCaptureSession: ObservableObject {
 
     func endZoomDrag() {
         zoomAnchor = nil
+    }
+
+    /// **Le pincement zoome l'objectif** (#9295) — écarter grandit, rapprocher
+    /// rétrécit, ancré sur le facteur du premier écart. Un appui long qui
+    /// attendait la caméra s'annule : deux doigts posés demandent un cadrage,
+    /// pas une vidéo. Une prise DÉJÀ partie continue, et se zoome.
+    func pinchZoom(scale: CGFloat) {
+        guard stage != .off else { return }
+        if !isPinching {
+            isPinching = true
+            dismissDrag = 0
+            if holdStartedAt != nil, stage != .recording {
+                holdStartedAt = nil
+                resetHold()
+            }
+        }
+        let ancre = pinchAnchor ?? camera.zoomFactor
+        pinchAnchor = ancre
+        camera.setZoom(ComposerCaptureZoom.pinched(from: ancre, scale: scale, range: camera.zoomRange))
+    }
+
+    func endPinchZoom() {
+        pinchAnchor = nil
+        isPinching = false
+        pinchEndedAt = Date()
+    }
+
+    /// Le glissé qui accompagne un pincement ne range pas le viseur.
+    var pinchSpoilsDismiss: Bool {
+        ComposerCaptureZoom.pinchSpoilsDismiss(isPinching: isPinching, pinchEndedAt: pinchEndedAt, now: Date())
+    }
+
+    // MARK: - La mise au point (#9295)
+
+    /// **Le double toucher vise ce point de la fenêtre.** `false` ⇒ rien n'a
+    /// été visé (pas d'image, toucher hors de l'aperçu) : l'anneau ne paraît
+    /// pas pour une mise au point qui n'a pas eu lieu.
+    @discardableResult
+    func focus(atWindowPoint point: CGPoint) -> Bool {
+        guard ComposerCaptureFocus.focusesOnDoubleTap(stage: stage),
+              let capteur = focusPoints.devicePoint(fromWindowPoint: point) else { return false }
+        camera.focus(at: capteur)
+        HapticFeedback.light()
+        return true
     }
 
     /// VoiceOver ne glisse pas : il incrémente.
