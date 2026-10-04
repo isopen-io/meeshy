@@ -1190,7 +1190,7 @@ describe('adminPostRoutes', () => {
       const res = await app.inject({ method: 'GET', url: '/posts' });
       expect(res.statusCode).toBe(200);
       const whereArg = mockPrisma.post.findMany.mock.calls[0][0].where;
-      expect(whereArg.deletedAt).toBeNull();
+      expect(whereArg.deletedAt).toEqual({ isSet: false }); // NOT_DELETED — leçon 318
     });
 
     it('filters non-deleted posts when isDeleted=false', async () => {
@@ -1199,7 +1199,7 @@ describe('adminPostRoutes', () => {
       const res = await app.inject({ method: 'GET', url: '/posts?isDeleted=false' });
       expect(res.statusCode).toBe(200);
       const whereArg = mockPrisma.post.findMany.mock.calls[0][0].where;
-      expect(whereArg.deletedAt).toBeNull();
+      expect(whereArg.deletedAt).toEqual({ isSet: false });
     });
 
     it('applies search filter', async () => {

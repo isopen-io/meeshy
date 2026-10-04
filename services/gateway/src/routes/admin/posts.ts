@@ -334,7 +334,8 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         totalByType,
         totalDeleted,
         topAuthors,
-        trending
+        trending,
+        live
       ] = await Promise.all([
         // Total posts (non-deleted)
         fastify.prisma.post.count({
@@ -383,6 +384,18 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
             { commentCount: 'desc' },
           ],
           take: 10
+        }),
+
+        // EN LIGNE : non supprimé ET pas expiré. `total` compte encore les
+        // stories et statuts dont l'échéance est passée, que plus personne ne
+        // voit. Une échéance absente (tout post ordinaire) est « sans
+        // échéance » — d'où les trois branches (leçon 318).
+        fastify.prisma.post.count({
+          where: {
+            deletedAt: NOT_DELETED,
+            ...dateFilter,
+            AND: [{ OR: [{ expiresAt: null }, { expiresAt: { isSet: false } }, { expiresAt: { gt: new Date() } }] }]
+          }
         })
       ]);
 
@@ -404,6 +417,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
       return sendSuccess(reply, {
         total: totalPosts,
+        live,
         deleted: totalDeleted,
         byType,
         topAuthors: topAuthors.map((a) => ({
@@ -516,7 +530,10 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       if (isDeleted === 'true') {
         where.deletedAt = { not: null };
       } else if (isDeleted === 'false' || isDeleted === undefined) {
-        where.deletedAt = null;
+        // NOT_DELETED (`isSet: false`), jamais `null` : un post vivant n'a
+        // PAS de colonne `deletedAt`, et `deletedAt: null` n'en appariait
+        // aucun — la liste par défaut était vide (leçon 318).
+        where.deletedAt = NOT_DELETED;
       }
 
       if (search) {

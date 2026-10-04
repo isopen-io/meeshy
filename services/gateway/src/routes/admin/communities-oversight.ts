@@ -58,6 +58,7 @@ import {
   sendSuccess,
 } from '../../utils/response';
 import { ADMIN_PERSON_SELECT } from './oversight-people';
+import { NOT_DELETED } from '../../services/posts/softDelete';
 import {
   booleen,
   chaine,
@@ -110,7 +111,8 @@ async function loadFiche(prisma: PrismaClient, id: string, options: { readonly w
     prisma.communityMember.count({ where: { communityId: id, isActive: true } }),
     prisma.communityMember.count({ where: { communityId: id, isActive: false } }),
     prisma.conversation.count({ where: { communityId: id } }),
-    prisma.post.count({ where: { communityId: id, deletedAt: null } }),
+    // NOT_DELETED, jamais `deletedAt: null` : un post vivant n'a pas la colonne (leçon 318).
+    prisma.post.count({ where: { communityId: id, deletedAt: NOT_DELETED } }),
     options.withConversations
       ? prisma.conversation.findMany({
           where: { communityId: id },

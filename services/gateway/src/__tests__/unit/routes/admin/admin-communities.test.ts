@@ -223,7 +223,8 @@ describe('GET /admin/communities/:communityId — la fiche', () => {
     expect(convArgs.take).toBe(20);
     expect(convArgs.where).toEqual({ communityId: COMMUNITY });
     expect(convArgs.select._count).toEqual({ select: { participants: { where: { isActive: true } } } });
-    expect(prisma.post.count.mock.calls[0][0].where).toEqual({ communityId: COMMUNITY, deletedAt: null });
+    // NOT_DELETED (leçon 318) : un post vivant n'a pas la colonne `deletedAt`.
+    expect(prisma.post.count.mock.calls[0][0].where).toEqual({ communityId: COMMUNITY, deletedAt: { isSet: false } });
     await app.close();
   });
 
