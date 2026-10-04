@@ -30,7 +30,7 @@ const BADGE_STYLE = { backgroundColor: 'color-mix(in srgb, var(--ios-indigo-500)
 function ArrivalLine({ language, arrival, now }: { readonly language: InterfaceLanguage; readonly arrival: LinkArrival; readonly now: Date }) {
   const flag = arrival.country === null ? null : flagOf(arrival.country);
   return (
-    <li data-link-arrival className="flex min-w-0 items-center gap-3 py-2.5">
+    <li data-link-arrival className="flex min-w-0 items-center gap-3 border-t py-2.5 first:border-t-0" style={{ borderColor: 'var(--color-ios-hairline)' }}>
       <span aria-hidden="true" className="shrink-0">
         <Avatar initials={initialsOf(arrival.displayName)} color={colorForName(arrival.displayName)} size={40} />
       </span>
@@ -67,7 +67,7 @@ function ArrivalLine({ language, arrival, now }: { readonly language: InterfaceL
 
 export function ArrivalsList({ language, arrivals, now }: { readonly language: InterfaceLanguage; readonly arrivals: readonly LinkArrival[]; readonly now: Date }) {
   return (
-    <ul data-link-arrivals className="grid divide-y rounded-hero px-4 py-1" style={{ ...SECTION_CARD_STYLE, borderColor: 'var(--color-ios-separator)' }}>
+    <ul data-link-arrivals className="grid rounded-hero px-4 py-1" style={SECTION_CARD_STYLE}>
       {arrivals.map((arrival, index) => (
         <ArrivalLine key={`${index}:${arrival.joinedAt}`} language={language} arrival={arrival} now={now} />
       ))}
