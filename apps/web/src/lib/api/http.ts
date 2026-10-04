@@ -127,6 +127,9 @@ export type ApiSuccess<T> = {
    * jumelle divergente que ce transport existe pour éviter.
    */
   readonly cursorPagination?: CursorPaginationMeta;
+  /** #7420 — la fenêtre `?around=` de `GET …/messages` dit, à côté de `data`,
+   * s'il existe plus RÉCENT qu'elle (`messages-list.ts`, `hasNewer`). */
+  readonly hasNewer?: boolean;
   /**
    * #6361 — les MÉTA-DONNÉES qu'une route pose à côté de `data`
    * (`GET /links?include=summary` : `meta.summary`, les agrégats réels de ses
@@ -413,6 +416,7 @@ export function createHttpTransport(options: HttpTransportOptions): HttpTranspor
         ...(envelope.cursorPagination !== undefined
           ? { cursorPagination: envelope.cursorPagination as CursorPaginationMeta }
           : {}),
+        ...(typeof envelope.hasNewer === 'boolean' ? { hasNewer: envelope.hasNewer } : {}),
         ...(envelope.meta !== null && typeof envelope.meta === 'object' && !Array.isArray(envelope.meta)
           ? { meta: envelope.meta as Readonly<Record<string, unknown>> }
           : {}),
