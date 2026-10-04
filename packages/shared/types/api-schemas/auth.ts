@@ -419,14 +419,16 @@ export const pendingSessionTokenProperty = {
 
 /**
  * La branche « vérification requise » de `POST /auth/login` (#8033) et de
- * `POST /auth/register` (#8055) — UNE forme, deux routes.
+ * `POST /auth/register` (#8055, réduite à la revendication par #8238) — UNE
+ * forme, deux routes.
  *
  * Login : l'identifiant est une adresse VALIDE sans compte actif (le compte
  * est alors créé, sans mot de passe), celle d'un compte ainsi créé et jamais
  * vérifié, ou le BON mot de passe d'un compte non vérifié et sans numéro (le
  * code est renvoyé, `accountCreated: false`).
- * Register : inscription SANS numéro de téléphone — le compte est créé, mot
- * de passe compris, mais n'est pas actif (`accountCreated: true`).
+ * Register : REVENDICATION d'une adresse détenue par un autre compte (#8214)
+ * — le compte est créé, inactif (`accountCreated: true`). Une inscription
+ * sans numéro, elle, reçoit sa session (délai de grâce #8238).
  * Aucune session, aucun jeton : la session ne s'ouvre qu'à
  * `POST /auth/verify-email`.
  */

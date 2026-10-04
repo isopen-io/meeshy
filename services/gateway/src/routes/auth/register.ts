@@ -125,9 +125,9 @@ function completerLaGeolocalisation(
  * RATTACHE le nouveau compte à son parrain, À LA CRÉATION (#8058).
  *
  * Arbitrage porteur 2026-09-26 : le parrainage est « sauvegardé lors de la
- * création de compte » — actif ou non. Depuis #8055 un compte créé sans
- * numéro n'a pas de session, et l'appel authentifié `POST /affiliate/register`
- * qui suivait l'inscription devenait impossible : le code voyage donc avec
+ * création de compte » — actif ou non. Un compte créé sans session (une
+ * revendication d'adresse, #8214) ne pourrait pas appeler
+ * `POST /affiliate/register` ensuite : le code voyage donc avec
  * l'inscription, et c'est le MÊME service qui le valide et crée la relation.
  *
  * Un code invalide (inconnu, expiré, épuisé) ou une panne n'empêchent JAMAIS
@@ -198,9 +198,11 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
                 sessionToken: { type: 'string', description: 'Session token of the device that created the account — presentable to POST /auth/refresh (absent on a phone-ownership conflict)' },
                 expiresIn: { type: 'number', description: 'Token expiration time in seconds', example: 86400 },
 
-                // Branche « vérification requise » (#8055) — inscription SANS
-                // numéro : le compte existe, mot de passe compris, mais n'est
-                // pas actif ; aucun jeton, aucune session, le code est parti.
+                // Branche « vérification requise » — depuis le délai de grâce
+                // (#8238), la seule REVENDICATION d'adresse (#8214) la sert : le
+                // compte existe, inactif ; aucun jeton, aucune session, le code
+                // est parti. Une inscription SANS numéro reçoit la session comme
+                // les autres — le numéro n'est requis que par les écrans (#9343).
                 ...verificationRequiredProperties,
 
                 // Branche « numéro déjà détenu » — aucun compte n'a été créé
