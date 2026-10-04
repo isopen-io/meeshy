@@ -278,9 +278,9 @@ export function storyFeedQueryOptions(deps: StoriesDeps) {
 /**
  * **LA TROISIÈME MARCHE DE LA CASCADE** (#5817, revue-correction, défaut 4)
  * — miroir de `StoryViewerContainer.swift:297-352` : cache → groupe déjà là
- * → `GET /posts/:id` UNITAIRE → `loadStories(forceNetwork:)` → 2,5 s →
- * `timedOut`. `loadStoryFeed` ne sert que les 50 stories les plus récentes
- * (`limit=50`, plafond serveur) ; une story partagée par LIEN mais plus
+ * → `GET /posts/:id` UNITAIRE → `loadStories(forceNetwork:)` → `timedOut`.
+ * `loadStoryFeed` ne sert que les 50 stories les plus récentes (`limit=50`,
+ * plafond serveur) ; une story partagée par LIEN mais plus
  * ancienne que ces 50-là (ou publiée par un auteur dont aucune autre story
  * ne figure dans la fenêtre) reste pourtant une adresse « partageable
  * publiquement » (`parity.md:310`). Cette marche la retrouve À LA DEMANDE,
@@ -294,14 +294,16 @@ export function storyFeedQueryOptions(deps: StoriesDeps) {
  * une projection plus large que `StoryFeedPost` mais qui la CONTIENT — le
  * même contrat de champs (`content`, `translations`, `storyEffects`,
  * `media`, `author`…) que `storyPostInclude` sert déjà à `loadStoryFeed`.
+ *
+ * **AUCUN DÉLAI PROPRE À CETTE MARCHE** (#9172). Elle a porté 2,5 s, lus dans
+ * `StoryViewerContainer.swift:346` — mais là-bas, les 2,5 s s'écoulent APRÈS
+ * le retour de toutes les requêtes, pour laisser les publications se poser :
+ * aucune requête iOS n'est coupée. Ici, elles coupaient la requête elle-même,
+ * et sur un réseau lent un visiteur sans compte (dont c'est la SEULE lecture,
+ * #9149) voyait « Réessayer » à la place de la story. La requête vit donc sous
+ * le délai du transport (`DEFAULT_TIMEOUT_MS`, 15 s mesurés, `http.ts`) :
+ * « Réessayer » ne dit qu'un échec réel.
  */
-/** `timedOut` (`StoryViewerContainer.swift:297-352`) — le délai de garde de
- * la cascade DE REPLI, jamais celui d'un appel ordinaire (`DEFAULT_TIMEOUT_MS`,
- * 15 s, `http.ts`) : la 3ᵉ marche n'a de raison d'exister que pour dire vite
- * « introuvable », pas pour attendre une passerelle lente aussi longtemps
- * qu'un chargement normal. */
-export const STORY_POST_FALLBACK_TIMEOUT_MS = 2500;
-
 export async function loadStoryPost(
   params: StoriesDeps & { readonly postId: string; readonly signal?: AbortSignal },
 ): Promise<ApiResult<StoryFeedPost>> {
@@ -316,7 +318,6 @@ export async function loadStoryPost(
   return params.transport.request<StoryFeedPost>({
     method: 'GET',
     path: postsEndpoints.byPostId(params.postId),
-    timeoutMs: STORY_POST_FALLBACK_TIMEOUT_MS,
     headers: CANVAS_CAPS_HEADERS,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });

@@ -730,8 +730,9 @@ export default function StoryScreen() {
      principe à la 3ᵉ marche : tant qu'elle est EN VOL (`needsFallbackFetch`,
      déclaré plus haut avec `primaryGroups`), afficher « introuvable » serait
      précisément le faux négatif que la cascade iOS existe pour éviter — le
-     verdict n'est dû qu'après son retour (2,5 s au plus,
-     `STORY_POST_FALLBACK_TIMEOUT_MS`), succès ou échec. */
+     verdict n'est dû qu'après son retour, succès ou échec — jamais sur une
+     requête encore en vol, quelle que soit la lenteur du réseau (#9172 : sous
+     le seul délai du transport, plus aucun de 2,5 s). */
   const resolvingFallback = needsFallbackFetch && fallback.isPending;
   const loading = (!hasCorpus && !feed.isError) || resolvingFallback;
   /* `playablePosition === 'close'` n'est PAS « introuvable » : c'est la
