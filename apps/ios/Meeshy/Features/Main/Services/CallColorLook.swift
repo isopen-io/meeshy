@@ -139,7 +139,7 @@ nonisolated enum CallColorLook {
     }
 
     /// L'espace du flux d'appel : la caméra WebRTC sert du sRGB.
-    static let callColorSpace: CGColorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+    static var callColorSpace: CGColorSpace { CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB() }
 
     /// Applique la teinte à une image ; Naturel la rend telle quelle.
     ///

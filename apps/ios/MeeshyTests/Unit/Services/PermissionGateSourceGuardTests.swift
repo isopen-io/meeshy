@@ -198,14 +198,20 @@ final class PermissionGateSourceGuardTests: XCTestCase {
     /// Le micro était demandé dès l'ouverture de la caméra, y compris pour une
     /// simple photo — un prompt sans motif visible, souvent refusé
     /// définitivement. Il doit désormais arriver au passage en mode Vidéo.
+    /// Un micro DÉJÀ autorisé entre, lui, à l'ouverture (#9328) : aucune
+    /// demande, et plus de reconfiguration qui noircit l'aperçu au déclenchement.
     func test_cameraSession_doesNotAddAudioInputEagerly() throws {
         let src = try source("Meeshy/Features/Main/Components/CameraModel.swift")
         let setup = try body(from: "private func setupSession() {", to: "func enableAudioCaptureIfNeeded", in: src)
 
         XCTAssertFalse(
-            setup.contains("AVCaptureDevice.default(for: .audio)"),
-            "setupSession() ne doit plus brancher le micro : l'entrée audio est " +
-            "ajoutée paresseusement par enableAudioCaptureIfNeeded() au mode Vidéo."
+            setup.contains("AVCaptureDevice.default(for: .audio)") || setup.contains("ensureMicrophone"),
+            "setupSession() ne DEMANDE jamais le micro : la demande reste à " +
+            "enableAudioCaptureIfNeeded(), au mode Vidéo."
+        )
+        XCTAssertTrue(
+            setup.contains("CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio))"),
+            "Seul un micro déjà autorisé entre à l'ouverture (#9328)."
         )
 
         let configure = try body(from: "func configure() {", to: "private func setupSession", in: src)

@@ -281,7 +281,7 @@ nonisolated enum CallMontageRenderer {
 
     /// L'espace des images de l'appel (WebRTC sert du sRGB). Une photo prise en
     /// Display P3 passe le sien (#9327) : peinte ici, elle serait écrêtée.
-    static let deviceSpace = CGColorSpaceCreateDeviceRGB()
+    static var deviceSpace: CGColorSpace { CGColorSpaceCreateDeviceRGB() }
 
     static func makeContext(size: CGSize, colorSpace: CGColorSpace = deviceSpace) -> CGContext? {
         let width = Int(size.width.rounded())

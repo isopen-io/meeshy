@@ -40,6 +40,8 @@ struct ComposerPendingPhoto: Identifiable {
     let id: String
     let image: UIImage
     let data: Data?
+    /// Le look choisi en direct au moment de la prise (#9329).
+    var look = ComposerPhotoLook()
 }
 
 /// **Le viseur du composeur, servi SEUL en plein écran** (#9125).
@@ -110,10 +112,8 @@ struct ComposerViewfinder: View {
             if let pendingPhoto {
                 ComposerPhotoLookReview(
                     photo: pendingPhoto.image,
-                    person: ComposerPhotoLookPerson.author(
-                        id: AuthManager.shared.currentUser?.id,
-                        displayName: AuthManager.shared.currentUser?.displayName,
-                        username: AuthManager.shared.currentUser?.username),
+                    person: capture.lookPerson,
+                    initialLook: pendingPhoto.look,
                     onRetake: { self.pendingPhoto = nil },
                     onUse: { image, look in
                         deliver(.photo(image, data: ComposerViewfinderRules.originalBytes(
@@ -138,12 +138,15 @@ struct ComposerViewfinder: View {
         .onReceive(camera.$capturedPhotoId) { id in
             guard let id, !delivered, pendingPhoto == nil, let image = camera.capturedPhoto else { return }
             guard reviewsPhoto else {
-                deliver(.photo(image, data: camera.capturedPhotoData))
+                // Une porte sans prise verse dans une scène : la photo y part
+                // avec le look choisi en direct (#9329).
+                capture.lookedPhoto(image, data: camera.capturedPhotoData) { deliver($0) }
                 return
             }
             // La session reste ouverte sous la prise : « Reprendre » rend le
             // viseur à l'image suivante, sans rouvrir la caméra.
-            pendingPhoto = ComposerPendingPhoto(id: id, image: image, data: camera.capturedPhotoData)
+            pendingPhoto = ComposerPendingPhoto(id: id, image: image, data: camera.capturedPhotoData,
+                                                look: capture.look)
         }
         // Une vidéo s'ACCUMULE (#4099) : `✓` concatène et rend.
         .onReceive(camera.$capturedVideoId) { id in

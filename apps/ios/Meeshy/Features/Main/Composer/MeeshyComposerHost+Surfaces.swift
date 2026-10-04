@@ -643,8 +643,9 @@ extension MeeshyComposerHost {
             guard id != nil, sceneCameraStage != .off,
                   let image = sceneCamera.capturedPhoto else { return }
             // Les octets D'ORIGINE voyagent avec l'image : c'est eux qui
-            // portent l'EXIF, et une `UIImage` ne le rend pas.
-            poseSceneCapture(.photo(image, data: sceneCamera.capturedPhotoData))
+            // portent l'EXIF, et une `UIImage` ne le rend pas. La photo part
+            // avec le look choisi en direct (#9329) — story, post et réel.
+            sceneCapture.lookedPhoto(image, data: sceneCamera.capturedPhotoData) { poseSceneCapture($0) }
         }
         // **Une vidéo s'ACCUMULE, une photo se POSE** (#4099). C'est la seule
         // divergence avec la feuille, et elle est la vue `4b` tout entière :

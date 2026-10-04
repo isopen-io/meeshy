@@ -86,6 +86,10 @@ struct ComposerSceneCameraBar: View {
     var onZoomStep: (Bool) -> Void = { _ in }
     var onFlashIntensity: (Double) -> Void = { _ in }
     var onShutterTouched: () -> Void = {}
+    /// Le sélecteur de filtres et de cadres en direct (#9329) ; `nil` ⇒ pas de
+    /// bouton. Le glyphe passe au jaune quand un look est choisi, comme le flash.
+    var onToggleLooks: (() -> Void)?
+    var lookActive = false
 
     /// L'instant du poser de doigt. `nil` ⇒ aucun doigt. C'est lui qui fait la
     /// différence entre une photo et une prise, et il ne peut pas vivre
@@ -142,6 +146,12 @@ struct ComposerSceneCameraBar: View {
                              label: ComposerSceneCameraCopy.sizeLabel(size),
                              tint: .white,
                              action: onToggleSize)
+            }
+            if let onToggleLooks {
+                glassControl(symbol: "camera.filters",
+                             label: ComposerLiveLookCopy.toggle,
+                             tint: lookActive ? .yellow : .white,
+                             action: onToggleLooks)
             }
             glassControl(symbol: "arrow.triangle.2.circlepath.camera",
                          label: ComposerSceneCameraCopy.flipLabel,

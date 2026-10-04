@@ -127,10 +127,15 @@ nonisolated struct ComposerPhotoLookSource: @unchecked Sendable {
         ComposerPhotoLookSource(
             photo: photo,
             person: person,
-            texts: CallFrameTexts(groupName: nil, isGroup: false,
-                                  date: CallFrameTextsRule.dateText(date), accentHex: nil),
+            texts: texts(at: date),
             caption: CallMontageCaption(title: CallCaptureController.brand,
                                         subtitle: date.formatted(date: .abbreviated, time: .shortened)))
+    }
+
+    /// Ce que les cadres écrivent d'une prise faite à `date` — partagé par la
+    /// photo et par le look en direct du viseur (#9329).
+    static func texts(at date: Date) -> CallFrameTexts {
+        CallFrameTexts(groupName: nil, isGroup: false, date: CallFrameTextsRule.dateText(date), accentHex: nil)
     }
 }
 

@@ -51,6 +51,10 @@ final class CameraModel: NSObject, ObservableObject {
 
     private let photoOutput = AVCapturePhotoOutput()
     private let videoOutput = AVCaptureMovieFileOutput()
+    /// Les trames de l'objectif pour le look en direct (#9329) — guettées, mais
+    /// gardées seulement quand un look est choisi.
+    private let frameOutput = AVCaptureVideoDataOutput()
+    nonisolated let liveFeed = ComposerCameraFeed()
     /// #8695 — le traitement UNIQUE de toute prise photo de l'app : chaque
     /// consommateur (conversation, fil, composer, story) reçoit la photo déjà
     /// redressée, bornée et améliorée, EXIF compris.
@@ -109,6 +113,9 @@ final class CameraModel: NSObject, ObservableObject {
 
         if session.canAddOutput(photoOutput) { session.addOutput(photoOutput) }
         if session.canAddOutput(videoOutput) { session.addOutput(videoOutput) }
+        frameOutput.alwaysDiscardsLateVideoFrames = true
+        frameOutput.setSampleBufferDelegate(liveFeed, queue: liveFeed.queue)
+        if session.canAddOutput(frameOutput) { session.addOutput(frameOutput) }
         if CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio)) {
             addAudioInput()
         }
@@ -179,6 +186,7 @@ final class CameraModel: NSObject, ObservableObject {
 
         session.addInput(input)
         currentPosition = position
+        liveFeed.setPosition(position)
         zoomFactor = device.videoZoomFactor
         apply(ComposerCaptureFocus.continuous(focusCapabilities(of: device)), to: device)
         watchSubjectArea(of: device)
