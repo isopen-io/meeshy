@@ -17,7 +17,7 @@ nonisolated enum CallColorLook {
     static let dimension = 25
 
     /// Ce qu'une teinte fait à l'image, en réglages lisibles.
-    struct Recipe: Equatable, Sendable {
+    nonisolated struct Recipe: Equatable, Sendable {
         /// Gain par canal, appliqué avant tout (balance des blancs).
         var balance = SIMD3<Float>(1, 1, 1)
         /// Force de la courbe en S (négatif : plus doux, positif : plus de contraste).

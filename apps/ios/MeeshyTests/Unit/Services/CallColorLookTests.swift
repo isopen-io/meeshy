@@ -103,4 +103,47 @@ final class CallColorLookTests: XCTestCase {
         let image = CIImage(color: .gray)
         XCTAssertTrue(CallColorLook.apply(.natural, to: image) === image)
     }
+
+    // MARK: - Dans le pipeline d'appel
+
+    private func grayBuffer() throws -> CVPixelBuffer {
+        var buffer: CVPixelBuffer?
+        let attrs: [String: Any] = [kCVPixelBufferIOSurfacePropertiesKey as String: [:]]
+        XCTAssertEqual(CVPixelBufferCreate(kCFAllocatorDefault, 8, 8, kCVPixelFormatType_32BGRA, attrs as CFDictionary, &buffer), kCVReturnSuccess)
+        let pixel = try XCTUnwrap(buffer)
+        CVPixelBufferLockBaseAddress(pixel, [])
+        let base = try XCTUnwrap(CVPixelBufferGetBaseAddress(pixel))
+        memset(base, 128, CVPixelBufferGetBytesPerRow(pixel) * 8)
+        CVPixelBufferUnlockBaseAddress(pixel, [])
+        return pixel
+    }
+
+    private func firstPixel(_ buffer: CVPixelBuffer) throws -> (b: Int, g: Int, r: Int) {
+        CVPixelBufferLockBaseAddress(buffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
+        let base = try XCTUnwrap(CVPixelBufferGetBaseAddress(buffer)).assumingMemoryBound(to: UInt8.self)
+        return (Int(base[0]), Int(base[1]), Int(base[2]))
+    }
+
+    func test_pipeline_warmLook_warmsTheSentFrame() throws {
+        let sut = VideoFilterPipeline(isPowerConstrained: { false })
+        sut.config = VideoFilterConfig.default.applyingPreset(.warm)
+
+        let out = try firstPixel(sut.process(try grayBuffer(), averageBrightness: 200, rotation: 90))
+
+        XCTAssertGreaterThan(out.r, out.b + 6)
+    }
+
+    func test_pipeline_brightnessOverALook_keepsTheLookAndBrightens() throws {
+        let warm = VideoFilterPipeline(isPowerConstrained: { false })
+        warm.config = VideoFilterConfig.default.applyingPreset(.warm)
+        let brighter = VideoFilterPipeline(isPowerConstrained: { false })
+        brighter.config = VideoFilterConfig.default.applyingPreset(.warm).withBrightness(0.2)
+
+        let base = try firstPixel(warm.process(try grayBuffer(), averageBrightness: 200, rotation: 90))
+        let lifted = try firstPixel(brighter.process(try grayBuffer(), averageBrightness: 200, rotation: 90))
+
+        XCTAssertGreaterThan(lifted.g, base.g + 10)
+        XCTAssertGreaterThan(lifted.r, lifted.b)
+    }
 }

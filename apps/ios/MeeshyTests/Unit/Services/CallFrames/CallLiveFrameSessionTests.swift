@@ -135,7 +135,7 @@ final class CallLiveFrameSessionTests: XCTestCase {
 
         await env.sut.apply("hors-norme.pop-art")
 
-        XCTAssertEqual(env.socket.selections.map(\.reply), [.accepted])
+        XCTAssertEqual(env.socket.selections.map { $0.reply }, [.accepted])
     }
 
     func test_apply_withoutCall_sendsNothing() async {
