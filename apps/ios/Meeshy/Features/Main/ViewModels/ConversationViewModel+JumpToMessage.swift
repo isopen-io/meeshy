@@ -52,6 +52,10 @@ extension ConversationViewModel {
         hasOlderMessages = response.cursorPagination?.hasMore ?? !response.data.isEmpty
         hasNewerMessages = hasNewer
         isInJumpedState = true
+        // Une fenêtre courte qui tient à l'écran laisse le bas visible dès
+        // l'arrivée : la liste ne rechange pas d'état, c'est l'atterrissage
+        // qui lance la chaîne (#9360).
+        startNewerPagesChainIfAtBottom()
     }
 
     // MARK: - Page plus récente d'une fenêtre sautée (#9304)
@@ -98,7 +102,14 @@ extension ConversationViewModel {
             cancelNewerPagesChain()
             return
         }
-        guard newerPagesChain == nil, isInJumpedState, hasNewerMessages else { return }
+        startNewerPagesChainIfAtBottom()
+    }
+
+    /// UNE chaîne au plus : au bas connu d'une fenêtre sautée qui annonce du
+    /// plus récent. Appelée au signal « en bas » de la liste et à
+    /// l'atterrissage d'un saut.
+    private func startNewerPagesChainIfAtBottom() {
+        guard newerPagesChain == nil, isCurrentlyNearBottom, isInJumpedState, hasNewerMessages else { return }
         // `self` n'est retenu que le temps d'UNE page : la conversation
         // quittée libère le modèle, dont le `deinit` annule la chaîne.
         newerPagesChain = Task { [weak self] in
