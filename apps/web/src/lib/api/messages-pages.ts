@@ -71,7 +71,7 @@ export type MessagesInfiniteData = InfiniteData<MessagesPage, MessagesPageParam>
  * `place()` et toute la mémoïsation du fil virtualisé — à 60 images par
  * seconde de défilement.
  */
-export function flattenMessagePages(data: MessagesInfiniteData): readonly Message[] {
+export function flattenMessagePages(data: { readonly pages: readonly MessagesPage[] }): readonly Message[] {
   const seen = new Set<string>();
   const result: Message[] = [];
   for (let i = data.pages.length - 1; i >= 0; i -= 1) {
@@ -160,7 +160,7 @@ export function nextMessagesCursor(
  * (fixtures) ou chaîne ISO (cache brut, D-26) : `new Date()` accepte les
  * deux, et une date ILLISIBLE vaut 0, donc se classe en DERNIER d'un tri
  * décroissant plutôt qu'en tête. Motif `timeOf` (`fixtures-pagination.ts`). */
-const timeOf = (value: Message['createdAt']): number => {
+export const timeOf = (value: Message['createdAt']): number => {
   const ms = new Date(value as unknown as string).getTime();
   return Number.isNaN(ms) ? 0 : ms;
 };

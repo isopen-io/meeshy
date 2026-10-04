@@ -1,9 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
 import { message } from './fixtures-base';
+import { createHttpTransport } from './http';
 import type { Message } from './types';
 import {
   joinThreadWindows,
+  loadMessagesWindow,
   newerWindowParam,
   olderWindowParam,
   windowPageOf,
@@ -120,5 +122,45 @@ describe('joinThreadWindows — la fenêtre ancrée et le présent', () => {
     const joined = joinThreadWindows(present, anchored);
     expect(ids(joined.messages)).toEqual(ids(all.slice(10)));
     expect(joined.detached).toBe(false);
+  });
+});
+
+describe('loadMessagesWindow — la passerelle', () => {
+  const wire = (id: string, minute: number) => ({ id, conversationId: 'c-1', content: id, createdAt: at(minute).toISOString(), translations: [] });
+
+  const serve = (body: unknown) => {
+    const urls: string[] = [];
+    const fetchImpl = (async (input: RequestInfo | URL) => {
+      urls.push(String(input));
+      return new Response(JSON.stringify(body), { status: 200 });
+    }) as typeof fetch;
+    return { transport: createHttpTransport({ base: '', fetchImpl }), urls };
+  };
+
+  test('around : demande la fenêtre, renverse l’ordre servi, lit `hasNewer` à côté de `data`', async () => {
+    const { transport, urls } = serve({
+      success: true,
+      data: [wire('m3', 3), wire('m2', 2), wire('m1', 1)],
+      cursorPagination: { limit: 50, hasMore: true, nextCursor: 'm1' },
+      hasNewer: true,
+    });
+    const result = await loadMessagesWindow({ source: 'gateway', transport, conversationId: 'c-1', param: { around: 'm2' } });
+    expect(urls[0]).toContain('around=m2');
+    expect(urls[0]).toContain('limit=50');
+    expect(result.ok && ids(result.data.messages)).toEqual(['m1', 'm2', 'm3']);
+    expect(result.ok && result.data.hasNewer).toBe(true);
+    expect(result.ok && result.data.nextCursor).toBe('m1');
+  });
+
+  test('after : l’ordre servi est déjà ascendant, `hasMore` dit le plus récent', async () => {
+    const { transport, urls } = serve({
+      success: true,
+      data: [wire('m4', 4), wire('m5', 5)],
+      cursorPagination: { limit: 50, hasMore: false, nextCursor: null },
+    });
+    const result = await loadMessagesWindow({ source: 'gateway', transport, conversationId: 'c-1', param: { after: at(3).toISOString() } });
+    expect(decodeURIComponent(urls[0] ?? '')).toContain(`after=${at(3).toISOString()}`);
+    expect(result.ok && ids(result.data.messages)).toEqual(['m4', 'm5']);
+    expect(result.ok && result.data.hasNewer).toBe(false);
   });
 });

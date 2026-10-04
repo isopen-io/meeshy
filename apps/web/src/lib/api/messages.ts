@@ -79,14 +79,47 @@ export async function loadMessages(
     }
     return { ok: true, data: page };
   }
-  const query = new URLSearchParams({
-    limit: String(MESSAGES_LIMIT),
-    ...(params.before !== undefined ? { before: params.before } : {}),
+  const served = await requestMessageRows({
+    ...params,
+    query: { limit: String(MESSAGES_LIMIT), ...(params.before !== undefined ? { before: params.before } : {}) },
   });
+  if (!served.ok) return served;
+  return {
+    ok: true,
+    data: {
+      messages: [...served.data.rows].reverse(),
+      hasOlder: served.data.hasMore,
+      /* LA MOITIÉ JETÉE (#6972) — `cursorPagination` était lu pour son SEUL
+         `hasMore`, et `nextCursor` — la valeur à renvoyer en `before` —
+         mourait ici. Le fil savait donc qu'un historique existait, sans
+         jamais pouvoir le demander. */
+      nextCursor: served.data.nextCursor,
+    },
+  };
+}
+
+/** Les rangées d'une page du fil, DANS L'ORDRE SERVI, et ce que la passerelle
+ * dit autour d'elles — `cursorPagination` et, en fenêtre `around`, `hasNewer`.
+ * Le SEUL site qui lit la réponse de `GET …/messages` : `loadMessages` et la
+ * fenêtre ancrée (`messages-window.ts`, #7420) n'en font que l'ordre. */
+export type ServedMessageRows = {
+  readonly rows: readonly Message[];
+  readonly hasMore: boolean;
+  readonly nextCursor: string | null;
+  readonly hasNewer: boolean;
+};
+
+export async function requestMessageRows(
+  params: ConversationsDeps & {
+    readonly conversationId: string;
+    readonly query: Readonly<Record<string, string>>;
+    readonly signal?: AbortSignal;
+  },
+): Promise<ApiResult<ServedMessageRows>> {
   const mineBefore = snapshotMine();
   const result = await params.transport.request<readonly Message[]>({
     method: 'GET',
-    path: `${conversationsEndpoints.byIdMessages(params.conversationId)}?${query.toString()}`,
+    path: `${conversationsEndpoints.byIdMessages(params.conversationId)}?${new URLSearchParams(params.query).toString()}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;
@@ -99,13 +132,10 @@ export async function loadMessages(
       /* UNE VUE UNIQUE DÉJÀ OUVERTE PAR MOI ARRIVE PURGÉE (#7580) — même si
          une passerelle antérieure à #7578 sert encore son contenu : rien
          n'en atteint le cache persisté. */
-      messages: [...result.data].reverse().map((message) => sealedIfOpened(withSenderAccount(message))),
-      hasOlder: result.cursorPagination?.hasMore === true,
-      /* LA MOITIÉ JETÉE (#6972) — `cursorPagination` était lu pour son SEUL
-         `hasMore`, et `nextCursor` — la valeur à renvoyer en `before` —
-         mourait ici. Le fil savait donc qu'un historique existait, sans
-         jamais pouvoir le demander. */
+      rows: result.data.map((message) => sealedIfOpened(withSenderAccount(message))),
+      hasMore: result.cursorPagination?.hasMore === true,
       nextCursor: result.cursorPagination?.nextCursor ?? null,
+      hasNewer: result.hasNewer === true,
     },
   };
 }
