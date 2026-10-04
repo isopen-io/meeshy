@@ -71,6 +71,9 @@ nonisolated enum ComposerPhotoLookPerson {
 struct ComposerPhotoLookReview: View {
     let photo: UIImage
     let person: CallFramePerson
+    /// La date de la séance de prise : le cadre écrit celle du viseur, jamais
+    /// celle de l'ouverture de la revue.
+    let date: Date
     let onRetake: () -> Void
     let onUse: (UIImage, ComposerPhotoLook) -> Void
 
@@ -83,11 +86,13 @@ struct ComposerPhotoLookReview: View {
     /// l'auteur voyait est ce qu'il retrouve, et il peut encore l'affiner.
     init(photo: UIImage,
          person: CallFramePerson,
+         date: Date,
          initialLook: ComposerPhotoLook = ComposerPhotoLook(),
          onRetake: @escaping () -> Void,
          onUse: @escaping (UIImage, ComposerPhotoLook) -> Void) {
         self.photo = photo
         self.person = person
+        self.date = date
         self.onRetake = onRetake
         self.onUse = onUse
         _look = State(initialValue: initialLook)
@@ -115,8 +120,8 @@ struct ComposerPhotoLookReview: View {
         }
         .environment(\.colorScheme, .dark)
         .onAppear {
-            guard source == nil, let upright = Self.upright(photo) else { return }
-            source = ComposerPhotoLookSource.taken(upright, by: person, at: Date())
+            guard source == nil, let upright = ComposerPhotoLookSource.upright(photo) else { return }
+            source = ComposerPhotoLookSource.taken(upright, by: person, at: date)
         }
         .task(id: PreviewKey(look: look, ready: source != nil)) {
             guard let source else { return }
@@ -124,7 +129,7 @@ struct ComposerPhotoLookReview: View {
                 preview = nil
                 return
             }
-            let rendu = await Self.paintPreview(look, source: source)
+            let rendu = await Self.paintPreview(look, source: source, date: date)
             guard !Task.isCancelled else { return }
             preview = rendu
         }
@@ -275,7 +280,7 @@ struct ComposerPhotoLookReview: View {
         isFinishing = true
         let choisi = look
         Task {
-            guard let rendu = await Self.paintFinal(choisi, source: source) else {
+            guard let rendu = await Self.paintFinal(choisi, source: source, date: date) else {
                 isFinishing = false
                 HapticFeedback.error()
                 return
@@ -286,17 +291,30 @@ struct ComposerPhotoLookReview: View {
 
     // MARK: - Peindre, hors du fil principal
 
+    /// Le peintre unique sert les cadres du catalogue ; un classique du Montage
+    /// reste peint par `ComposerPhotoLookRenderer` jusqu'à ses couches GPU (#9348).
+
     @concurrent
-    nonisolated static func paintPreview(_ look: ComposerPhotoLook, source: ComposerPhotoLookSource) async -> CGImage? {
-        ComposerPhotoLookRenderer.render(look, source: source,
-                                         maxPixel: ComposerPhotoLookRule.previewMaxPixel,
-                                         frameCanvas: ComposerPhotoLookRule.previewFrameCanvas)
+    nonisolated static func paintPreview(_ look: ComposerPhotoLook, source: ComposerPhotoLookSource,
+                                         date: Date) async -> CGImage? {
+        guard ComposerLiveLookRule.isLive(look.frame) else {
+            return ComposerPhotoLookRenderer.render(look, source: source,
+                                                    maxPixel: ComposerPhotoLookRule.previewMaxPixel,
+                                                    frameCanvas: ComposerPhotoLookRule.previewFrameCanvas)
+        }
+        return await ComposerLookPainter.renderPhoto(source.photo, look: look, framing: .identity, person: source.person,
+                                              date: date, scenes: ComposerLookSceneCache.shared)
     }
 
     @concurrent
-    nonisolated static func paintFinal(_ look: ComposerPhotoLook, source: ComposerPhotoLookSource) async -> CGImage? {
-        ComposerPhotoLookRenderer.render(look, source: source, maxPixel: nil,
-                                         frameCanvas: ComposerPhotoLookRule.frameCanvas)
+    nonisolated static func paintFinal(_ look: ComposerPhotoLook, source: ComposerPhotoLookSource,
+                                       date: Date) async -> CGImage? {
+        guard ComposerLiveLookRule.isLive(look.frame) else {
+            return ComposerPhotoLookRenderer.render(look, source: source, maxPixel: nil,
+                                                    frameCanvas: ComposerPhotoLookRule.frameCanvas)
+        }
+        return await ComposerLookPainter.renderPhoto(source.photo, look: look, framing: .identity, person: source.person,
+                                              date: date, scenes: ComposerLookSceneCache.shared)
     }
 
     @concurrent
@@ -308,18 +326,6 @@ struct ComposerPhotoLookReview: View {
     nonisolated static func paintFrameThumbnails(source: ComposerPhotoLookSource, filter: VideoFilterPreset,
                                                  frames: [ComposerPhotoFrame]) async -> ComposerPhotoLookThumbnails {
         ComposerPhotoLookThumbnails.paintingFrames(source: source, filter: filter, frames: frames)
-    }
-
-    /// Les pixels debout : le traitement de la prise (#8695) les rend déjà
-    /// redressés ; une image venue d'ailleurs l'est ici, une fois.
-    static func upright(_ image: UIImage) -> CGImage? {
-        if image.imageOrientation == .up, let cgImage = image.cgImage { return cgImage }
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-        let size = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
-        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
-            image.draw(in: CGRect(origin: .zero, size: size))
-        }.cgImage
     }
 }
 

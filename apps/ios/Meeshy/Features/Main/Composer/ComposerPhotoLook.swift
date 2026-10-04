@@ -1,6 +1,7 @@
 import CoreGraphics
 import CoreImage
 import Foundation
+import UIKit
 
 // **La photo prise reçoit les FILTRES et les CADRES de l'appel vidéo** (#9295,
 // directive porteur 2026-10-04).
@@ -135,8 +136,25 @@ nonisolated struct ComposerPhotoLookSource: @unchecked Sendable {
             photo: photo,
             person: person,
             texts: texts(at: date),
-            caption: CallMontageCaption(title: CallCaptureController.brand,
-                                        subtitle: date.formatted(date: .abbreviated, time: .shortened)))
+            caption: caption(at: date))
+    }
+
+    /// La légende d'un classique du Montage pour une prise faite à `date`.
+    static func caption(at date: Date) -> CallMontageCaption {
+        CallMontageCaption(title: CallCaptureController.brand,
+                           subtitle: date.formatted(date: .abbreviated, time: .shortened))
+    }
+
+    /// Les pixels debout : le traitement de la prise (#8695) les rend déjà
+    /// redressés ; une image venue d'ailleurs l'est ici, une fois.
+    static func upright(_ image: UIImage) -> CGImage? {
+        if image.imageOrientation == .up, let cgImage = image.cgImage { return cgImage }
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let size = CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }.cgImage
     }
 
     /// Ce que les cadres écrivent d'une prise faite à `date` — partagé par la

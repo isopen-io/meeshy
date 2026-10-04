@@ -1,6 +1,7 @@
 import XCTest
 import AVFoundation
 import CoreImage
+import ImageIO
 @testable import Meeshy
 
 /// **Les filtres et les cadres se choisissent EN DIRECT dans le viseur** (#9329).
@@ -83,22 +84,6 @@ final class ComposerLiveLookTests: XCTestCase {
         XCTAssertLessThanOrEqual(rect.height, 2532)
     }
 
-    func test_laScene_aLesProportionsDeLaToileDuMontage() {
-        let taille = ComposerLiveLookRule.sceneSize(in: CGSize(width: 390, height: 844))
-        let toile = ComposerPhotoLookRule.frameCanvas
-        XCTAssertEqual(taille.width / taille.height, toile.width / toile.height, accuracy: 0.001)
-        XCTAssertEqual(taille.width, 390, accuracy: 0.5)
-    }
-
-    func test_laVideoExportee_aLaToileDuMontageSousUnCadre_saTailleSinon() throws {
-        let debout = CGSize(width: 1080, height: 1920)
-        XCTAssertEqual(ComposerLiveLookRule.exportSize(for: ComposerPhotoLook(filter: .warm), upright: debout), debout)
-        let puce = try XCTUnwrap(ComposerLiveLookRule.chips().first)
-        let cadre = ComposerPhotoLook(frame: ComposerLiveLookRule.entering(puce))
-        XCTAssertEqual(ComposerLiveLookRule.exportSize(for: cadre, upright: CGSize(width: 720, height: 1280)),
-                       ComposerPhotoLookRule.frameCanvas)
-    }
-
     func test_uneTrame_estRameneeALOrigine_etNaturelLaRendTelleQuelle() {
         let trame = CIImage(color: CIColor(red: 0.6, green: 0.3, blue: 0.2))
             .cropped(to: CGRect(x: 40, y: 20, width: 100, height: 60))
@@ -133,38 +118,47 @@ final class ComposerLiveLookTests: XCTestCase {
         XCTAssertTrue(session.lookIsLocked)
     }
 
-    func test_sansLook_laPhotoPartTelleQuelle_avecSesOctets() {
+    func test_sansLook_laPhotoPartAuCanevas_avecSesPropresMetadonnees() async throws {
         let session = ComposerCaptureSession()
         let image = UIImage(cgImage: Self.photo())
-        let octets = Data([0xFF, 0xD8])
-        var rendu: CameraResult?
-        session.lookedPhoto(image, data: octets) { rendu = $0 }
-        guard case .photo(let partie, let data)? = rendu else { return XCTFail("la prise doit partir aussitôt") }
-        XCTAssertTrue(partie === image)
-        XCTAssertEqual(data, octets)
-    }
-
-    func test_avecUnFiltre_laPhotoPartPeinte_sansOctetsDOrigine() async {
-        let session = ComposerCaptureSession()
-        session.look = ComposerPhotoLook(filter: .vivid)
-        let image = UIImage(cgImage: Self.photo())
-        let attendue = expectation(description: "la photo regardée part")
+        let attendue = expectation(description: "la photo part")
         var rendu: CameraResult?
         session.lookedPhoto(image, data: Data([0xFF, 0xD8])) {
             rendu = $0
             attendue.fulfill()
         }
-        await fulfillment(of: [attendue], timeout: 5)
+        await fulfillment(of: [attendue], timeout: 10)
+        guard case .photo(let rendue, let octets) = try XCTUnwrap(rendu) else { return XCTFail("une photo") }
+        XCTAssertNotNil(octets, "la photo qui part porte ses propres métadonnées")
+        XCTAssertEqual(rendue.size.width / rendue.size.height, 9.0 / 16.0, accuracy: 0.01)
+    }
+
+    func test_avecUnFiltre_laPhotoPartPeinte_avecLEXIFDeLaPrise() async throws {
+        let session = ComposerCaptureSession()
+        session.look = ComposerPhotoLook(filter: .vivid)
+        let image = UIImage(cgImage: Self.photo())
+        let attendue = expectation(description: "la photo regardée part")
+        var rendu: CameraResult?
+        session.lookedPhoto(image, data: ComposerPhotoEncodingTests.takeWithExif()) {
+            rendu = $0
+            attendue.fulfill()
+        }
+        await fulfillment(of: [attendue], timeout: 10)
         guard case .photo(let partie, let data)? = rendu else { return XCTFail("aucune photo") }
         XCTAssertFalse(partie === image, "la photo part avec le filtre qu'on voyait")
-        XCTAssertNil(data, "un EXIF qui décrirait une autre image mentirait sur ce qui part")
+        XCTAssertEqual(partie.size.width / partie.size.height, 9.0 / 16.0, accuracy: 0.01)
+        let octets = try XCTUnwrap(data, "la photo qui part porte les métadonnées de la prise")
+        let lu = CGImageSourceCreateWithData(octets as CFData, nil)
+            .flatMap { CGImageSourceCopyPropertiesAtIndex($0, 0, nil) as? [CFString: Any] }
+        XCTAssertEqual(lu?[kCGImagePropertyOrientation] as? Int, 1)
+        XCTAssertNotNil(lu?[kCGImagePropertyExifDictionary])
     }
 
     func test_sansLook_laVideoPartTelleQuelle_sansRendu() async {
         let url = URL(fileURLWithPath: "/tmp/inexistante.mov")
         let rendue = await ComposerLookVideoExporter.export(
             url, look: ComposerPhotoLook(), person: CallFramePerson(id: "u1", name: "Jean", handle: nil, isSelf: true),
-            texts: ComposerPhotoLookSource.texts(at: Date()))
+            date: Date(timeIntervalSince1970: 1_790_000_000))
         XCTAssertEqual(rendue, url)
     }
 
@@ -230,13 +224,16 @@ final class ComposerLiveLookTests: XCTestCase {
 
     func test_laSurface_composeAvecLesPiecesDeLAppel() throws {
         let surface = try Self.code("Meeshy/Features/Main/Composer/ComposerLiveLookSurface.swift")
-        XCTAssertTrue(surface.contains("CallLiveFrameCompositor()"), "le cadre se pose par le compositeur de l'appel")
-        XCTAssertTrue(surface.contains("compositor.compose("))
-        XCTAssertTrue(surface.contains("ComposerLiveLookRule.graded("))
+        XCTAssertTrue(surface.contains("ComposerLookPainter.paint("), "l'aperçu passe par le peintre unique")
+        let peintre = try Self.code("Meeshy/Features/Main/Composer/ComposerLookPainter.swift")
+        XCTAssertTrue(peintre.contains("CallLiveFrameCompositor()"), "le cadre se pose par le compositeur de l'appel")
+        XCTAssertTrue(peintre.contains("compositor.compose("))
+        XCTAssertTrue(peintre.contains("ComposerLiveLookRule.graded("))
         let loi = try Self.code("Meeshy/Features/Main/Composer/ComposerLiveLook.swift")
         XCTAssertTrue(loi.contains("VideoFilterColorimetry.graded("), "la teinte est celle du flux d'appel")
         for jumelle in ["CITemperatureAndTint", "CIColorControls", "CIColorCube"] {
-            XCTAssertFalse(surface.contains(jumelle) || loi.contains(jumelle), "aucune jumelle de la colorimétrie : \(jumelle)")
+            XCTAssertFalse(surface.contains(jumelle) || loi.contains(jumelle) || peintre.contains(jumelle),
+                           "aucune jumelle de la colorimétrie : \(jumelle)")
         }
     }
 

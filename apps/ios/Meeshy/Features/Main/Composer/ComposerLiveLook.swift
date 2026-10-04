@@ -14,9 +14,9 @@ import ImageIO
 //
 // Rien n'est redessiné : la trame de l'objectif passe par la colorimétrie de
 // l'appel (`VideoFilterColorimetry`), puis par le compositeur de son cadre en
-// direct (`CallLiveFrameCompositor`). La photo est peinte par le peintre de la
-// prise (`ComposerPhotoLookRenderer`), la vidéo par la même chaîne image par
-// image (`ComposerLookVideoExporter`) : ce qu'on voyait est ce qui part.
+// direct (`CallLiveFrameCompositor`). L'aperçu, la photo et la vidéo passent
+// par le même peintre (`ComposerLookPainter`, #9347) : ce qu'on voyait est ce
+// qui part.
 
 /// Où le sélecteur d'effets se pose : au-dessus de l'obturateur et de sa
 /// légende, qu'il ne couvre jamais.
@@ -127,19 +127,5 @@ nonisolated enum ComposerLiveLookRule {
         return CGAffineTransform(scaleX: scale, y: scale)
             .concatenating(CGAffineTransform(translationX: (drawable.width - drawn.width) / 2,
                                              y: (drawable.height - drawn.height) / 2))
-    }
-
-    /// La taille, aux proportions de la toile du Montage, qui tient dans `view`.
-    static func sceneSize(in view: CGSize) -> CGSize {
-        let toile = ComposerPhotoLookRule.frameCanvas
-        guard view.width > 0, view.height > 0 else { return .zero }
-        let scale = min(view.width / toile.width, view.height / toile.height)
-        return CGSize(width: toile.width * scale, height: toile.height * scale)
-    }
-
-    /// La toile d'une vidéo exportée : celle du Montage sous un cadre, la
-    /// vidéo redressée sinon.
-    static func exportSize(for look: ComposerPhotoLook, upright: CGSize) -> CGSize {
-        design(for: look.frame) == nil ? upright : ComposerPhotoLookRule.frameCanvas
     }
 }

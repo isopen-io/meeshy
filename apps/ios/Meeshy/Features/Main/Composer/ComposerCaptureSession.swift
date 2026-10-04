@@ -58,7 +58,6 @@ final class ComposerCaptureSession: ObservableObject {
     /// La date de la séance de prise : l'aperçu, la photo et la vidéo écrivent
     /// la MÊME dans leur cadre.
     let lookDate = Date()
-    var lookTexts: CallFrameTexts { ComposerPhotoLookSource.texts(at: lookDate) }
     /// Chaque désarmement ouvre une nouvelle génération : un rendu lancé avant
     /// ne remet plus rien à un viseur que l'auteur a fermé.
     private var renderGeneration = 0
@@ -154,6 +153,7 @@ final class ComposerCaptureSession: ObservableObject {
         resetPinch()
         dismissDrag = 0
         extinguishFlash()
+        ComposerLookSceneCache.shared.purge()
         camera.stop()
     }
 
@@ -249,7 +249,6 @@ final class ComposerCaptureSession: ObservableObject {
         segments = []
         let regard = look
         let auteur = lookPerson
-        let textes = lookTexts
         let espace = camera.liveFeed.declaredSpace?.name as String?
         let generation = renderGeneration
         isRenderingLook = ComposerLiveLookRule.rendersLive(regard)
@@ -263,7 +262,7 @@ final class ComposerCaptureSession: ObservableObject {
             }
             // La vidéo part avec le look qu'on voyait (#9329) ; un rendu qui
             // échoue rend la prise brute plutôt que de la perdre.
-            let regardee = await ComposerLookVideoExporter.export(url, look: regard, person: auteur, texts: textes,
+            let regardee = await ComposerLookVideoExporter.export(url, look: regard, person: auteur, date: lookDate,
                                                                    declaredSpaceName: espace)
             guard generation == renderGeneration else {
                 if let regardee, regardee != url {
@@ -508,22 +507,27 @@ extension ComposerCaptureSession {
         ComposerLiveLookRule.isLocked(stage: stage, pendingSegments: segments.count)
     }
 
-    /// **La photo part avec le look qu'on voyait** : peinte en pleine
-    /// définition par le peintre de la prise, hors du fil principal. Sans look
-    /// — ou si le rendu échoue —, la prise d'origine part avec ses octets.
+    /// **La photo part avec ce qu'on voyait** : le canevas 9:16 du peintre unique,
+    /// à la date de la session, hors du fil principal, encodée avec l'EXIF de la
+    /// prise rendu vrai pour elle. Le BRUT est déjà en galerie (`CameraModel`) ;
+    /// un rendu qui échoue rend la prise d'origine plutôt que rien.
     func lookedPhoto(_ image: UIImage, data: Data?, deliver: @escaping @MainActor (CameraResult) -> Void) {
-        let regard = look
-        guard ComposerLiveLookRule.rendersLive(regard), let debout = ComposerPhotoLookReview.upright(image) else {
+        guard let debout = ComposerPhotoLookSource.upright(image) else {
             deliver(.photo(image, data: data))
             return
         }
-        let source = ComposerPhotoLookSource.taken(debout, by: lookPerson, at: lookDate)
+        let regard = look
+        let auteur = lookPerson
+        let date = lookDate
         Task { @MainActor in
-            guard let rendu = await ComposerPhotoLookReview.paintFinal(regard, source: source) else {
+            guard let rendu = await ComposerLookPainter.renderPhoto(debout, look: regard, framing: .identity,
+                                                                    person: auteur, date: date,
+                                                                    scenes: ComposerLookSceneCache.shared) else {
                 deliver(.photo(image, data: data))
                 return
             }
-            deliver(.photo(UIImage(cgImage: rendu), data: ComposerViewfinderRules.originalBytes(data, look: regard)))
+            let octets = await ComposerPhotoEncoding.encode(rendu, like: data)
+            deliver(.photo(UIImage(cgImage: rendu), data: octets))
         }
     }
 }
