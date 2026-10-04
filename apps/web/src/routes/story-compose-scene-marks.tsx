@@ -1,3 +1,4 @@
+import type { StudioInlineSection } from '@/lib/stories/studio-inline-edit';
 import type { StudioObjectActionId, StudioSceneEffect } from '@/lib/stories/studio-scene-columns';
 import type { StudioBackgroundMenuAction } from '@/lib/stories/studio-scene-menu';
 
@@ -161,6 +162,30 @@ export function CropMark({ size = 20 }: MarkProps) {
     <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
       <path d="M6 2.5V16a2 2 0 002 2h13.5" />
       <path d="M2.5 6H16a2 2 0 012 2v13.5" />
+    </svg>
+  );
+}
+
+/** Les tracés des SOUS-OUTILS d'un objet (#9140) — police, effet, couleur,
+ * alignement, fond du texte, langue, pose ; le calque reprend « Décrire » et
+ * le filtre du fond. Mêmes places que les symboles SF d'iOS
+ * (`TextEditTool.sfSymbol`). */
+const SECTION_PATHS = {
+  style: 'M5 5h14M12 5v14M9 19h6',
+  effect: 'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z',
+  color: 'M12 3.5c3.5 4.2 6 7.4 6 10.5a6 6 0 01-12 0c0-3.1 2.5-6.3 6-10.5z',
+  align: 'M4 6h16M7 10h10M4 14h16M7 18h10',
+  background: 'M6 5h12a3 3 0 013 3v8a3 3 0 01-3 3H6a3 3 0 01-3-3V8a3 3 0 013-3zM9 9.5h6M12 9.5V15',
+  language: 'M12 3a9 9 0 110 18 9 9 0 010-18zM3 12h18M12 3c2.5 2.6 3.6 5.6 3.6 9s-1.1 6.4-3.6 9M12 3c-2.5 2.6-3.6 5.6-3.6 9s1.1 6.4 3.6 9',
+  pose: 'M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3',
+} as const satisfies Record<Exclude<StudioInlineSection, 'describe' | 'filter'>, string>;
+
+export function InlineSectionMark({ section, size = 20 }: { readonly section: StudioInlineSection; readonly size?: number }) {
+  if (section === 'describe') return <DescribeMark size={size} />;
+  if (section === 'filter') return <VisualEffectMark size={size} />;
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d={SECTION_PATHS[section]} />
     </svg>
   );
 }

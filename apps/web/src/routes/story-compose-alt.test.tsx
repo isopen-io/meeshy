@@ -45,14 +45,16 @@ const sentObjects = (post: Record<string, unknown> | undefined): readonly SentOb
   (post?.storyEffects as { scenes: { objects: SentObject[] }[] }).scenes[0]!.objects;
 
 describe('le texte alternatif d’un média part en `mediaAlt`', () => {
-  test('l’alt du calque (sa plaque) et celui du fond (son outil « Décrire ») partent, chacun sur SON média', async () => {
+  test('l’alt du calque et celui du fond (chacun sous son outil « Décrire ») partent, chacun sur SON média', async () => {
     const bench = seeded();
     const el = mount(bench.deps, 'STORY');
     await flush(() => el.querySelector('[data-story-object-edit="overlay"]') !== null);
     click(el.querySelector('[data-story-object-edit="overlay"]'));
+    await flush(() => el.querySelector('[data-story-option="section:describe"]') !== null);
+    click(el.querySelector('[data-story-option="section:describe"]'));
     await flush(() => el.querySelector('#story-studio-alt-overlay') !== null);
     write(el.querySelector<HTMLInputElement>('#story-studio-alt-overlay'), '  Un chat roux sur un muret ');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
 
     click(el.querySelector('[data-story-option="frame"]'));
     await flush(() => el.querySelector('[data-story-option="background:describe"]') !== null);

@@ -32,11 +32,13 @@ describe('studioChrome — ce qui reste à l’écran', () => {
     });
   });
 
-  test('l’édition d’un objet efface l’en-tête, les deux rails (et leurs +), le socle', () => {
+  /** #9140, jumelle de #9138 : les sous-outils d'un objet vivent au rail droit,
+   * comme ceux du fond — il reste ; tout le reste cède. */
+  test('l’édition d’un objet : seul le rail droit reste — en-tête, portes (et leurs +), socle cèdent', () => {
     expect(studioChrome({ tool: 'object', timelineOpen: false })).toEqual({
       header: false,
       leadingRail: false,
-      trailingRail: false,
+      trailingRail: true,
       socleRow: false,
       socleCard: false,
     });

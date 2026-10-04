@@ -267,7 +267,7 @@ describe('le mode Animé (#8415)', () => {
   test('la pastille ouvre la frise : une piste par objet, rails et volets retirés sauf Temps ; la refermer rend tout', async () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Bonjour');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
     const toggle = el.querySelector('[data-story-animated]')!;
     expect(toggle.getAttribute('aria-pressed')).toBe('false');
     click(toggle);
@@ -317,7 +317,7 @@ describe('le mode Animé (#8415)', () => {
   test('éteindre Animé est un geste qu’Annuler défait : la scène redevient animée, et « Temps » rouvre sa frise', async () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Bonjour');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
     click(el.querySelector('[data-story-animated]'));
     await flush(() => el.querySelector('[data-story-timeline]') !== null);
     click(el.querySelector('[data-story-animated]'));
@@ -350,7 +350,7 @@ describe('lot 6 — la scène se touche sans s’entourer', () => {
     act(() => layer.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, button: 0, clientX: 50, clientY: 30 })));
   };
 
-  test('toucher un objet le SÉLECTIONNE sans contour ni poignée ; double-tap ouvre sa plaque d’édition', async () => {
+  test('toucher un objet le SÉLECTIONNE sans contour ni poignée ; double-tap ouvre son édition (sous-outils au rail droit, #9140)', async () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Un');
     click(el.querySelector('[data-story-option="add-text"]'));
@@ -359,39 +359,49 @@ describe('lot 6 — la scène se touche sans s’entourer', () => {
     tapObject(el, 'text-1');
     expect(el.querySelector<HTMLTextAreaElement>('#story-studio-text')?.dataset.storyTextTarget).toBe('text-1');
     expect(el.querySelector('[data-story-object-frame], [data-story-object-move], [data-story-object-grip]')).toBeNull();
-    expect(el.querySelector('[data-story-edit-plaque]')).toBeNull();
+    expect(el.querySelector('[data-story-option="edit:exit"]')).toBeNull();
     tapObject(el, 'text-1');
-    await flush(() => el.querySelector('[data-story-edit-plaque] [data-story-object-editor="text-1"]') !== null);
-    click(el.querySelector('[data-story-edit-done]'));
-    expect(el.querySelector('[data-story-edit-plaque]')).toBeNull();
+    await flush(() => el.querySelector('[data-story-option="section:style"]') !== null);
+    expect(el.querySelector('[data-story-trailing-options]')?.getAttribute('aria-label')).toContain('1');
+    click(el.querySelector('[data-story-option="edit:exit"]'));
+    expect(el.querySelector('[data-story-option="edit:exit"]')).toBeNull();
   });
 
   /** #8681 (jumelle de #8680) — le double-toucher d'un texte ÉCRIT ouvre la
-   * même édition que son AJOUT : scène réduite (chrome effacé), outils du
-   * texte, (X), saisie sur la scène à la pose de l'objet — aucun autre éditeur. */
+   * même édition que son AJOUT : chrome effacé, sous-outils du texte au rail
+   * droit et (x) (#9140), saisie sur la scène à la pose de l'objet — aucun
+   * autre éditeur. */
   test('double-toucher un texte écrit ouvre EXACTEMENT l’édition de son ajout, jamais un autre éditeur', async () => {
     const el = mount(harness({}).deps);
     const field = () => el.querySelector<HTMLTextAreaElement>('#story-studio-text');
     const edition = () => ({
       chrome: ['[data-story-studio-top]', '[data-story-studio-rail="leading"]'].map((selector) => el.querySelector(selector)?.getAttribute('data-studio-chrome')),
-      editors: [...el.querySelectorAll('[data-story-object-editor]')].map((editor) => editor.getAttribute('data-story-object-editor')),
-      plaques: el.querySelectorAll('[data-story-edit-plaque]').length,
-      close: el.querySelector('[data-story-edit-plaque] [data-story-tool-close]') !== null,
+      sections: [...el.querySelectorAll('[data-story-trailing-options] [data-story-option^="section:"]')].map((tile) => tile.getAttribute('data-story-option')),
+      panels: el.querySelectorAll('[data-story-inline-panel]').length,
+      close: el.querySelector('[data-story-trailing-options] [data-story-option="edit:exit"]') !== null,
       target: field()?.dataset.storyTextTarget ?? null,
       focused: document.activeElement !== null && document.activeElement === field(),
       onScene: (field()?.style.transform ?? '').startsWith('translate(-50%, -50%) rotate('),
     });
     click(el.querySelector('[data-story-option="add-text"]'));
-    await flush(() => el.querySelector('[data-story-object-editor]') !== null);
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') !== null);
     const added = edition();
-    expect(added).toEqual({ chrome: ['hidden', 'hidden'], editors: [added.target], plaques: 1, close: true, target: added.target, focused: true, onScene: true });
+    expect(added).toEqual({
+      chrome: ['hidden', 'hidden'],
+      sections: ['section:style', 'section:effect', 'section:color', 'section:align', 'section:background', 'section:language', 'section:pose'],
+      panels: 0,
+      close: true,
+      target: added.target,
+      focused: true,
+      onScene: true,
+    });
     typeText(el, 'Écrit');
-    click(el.querySelector('[data-story-edit-done]'));
-    expect(el.querySelector('[data-story-edit-plaque]')).toBeNull();
+    click(el.querySelector('[data-story-option="edit:exit"]'));
+    expect(el.querySelector('[data-story-option="edit:exit"]')).toBeNull();
     await flush(() => el.querySelector(`[data-scene-object-id="${added.target}"]`) !== null);
     tapObject(el, added.target!);
     tapObject(el, added.target!);
-    await flush(() => el.querySelector('[data-story-object-editor]') !== null);
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') !== null);
     expect(edition()).toEqual(added);
   });
 
@@ -450,11 +460,11 @@ describe('lot 6 — la scène se touche sans s’entourer', () => {
     typeText(el, 'Un');
     await flush(() => el.querySelector('[data-scene-object-id="text-1"]') !== null);
     click(el.querySelector('[data-story-object-edit="text-1"]'));
-    await flush(() => el.querySelector('[data-story-edit-plaque]') !== null);
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') !== null);
     expect(el.querySelector('[data-story-studio-top]')?.getAttribute('data-studio-chrome')).toBe('hidden');
     expect(el.querySelector('[data-story-studio-rail="leading"]')?.getAttribute('data-studio-chrome')).toBe('hidden');
-    click(el.querySelector('[data-story-edit-done]'));
-    await flush(() => el.querySelector('[data-story-edit-plaque]') === null);
+    click(el.querySelector('[data-story-option="edit:exit"]'));
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') === null);
     expect(el.querySelector('[data-story-studio-top]')?.getAttribute('data-studio-chrome')).toBe('shown');
   });
 
@@ -517,6 +527,8 @@ describe('lot 7 — le filtre d’un média posé ne s’applique qu’à lui', 
     const el = mount(bench.deps, 'STORY');
     await flush(() => el.querySelector('[data-story-object-edit="overlay"]') !== null);
     click(el.querySelector('[data-story-object-edit="overlay"]'));
+    await flush(() => el.querySelector('[data-story-option="section:filter"]') !== null);
+    click(el.querySelector('[data-story-option="section:filter"]'));
     await flush(() => el.querySelector('[data-story-option="filter:bw"]') !== null);
     expect(el.querySelector('[data-story-option="filter:none"]')?.getAttribute('aria-pressed')).toBe('true');
     click(el.querySelector('[data-story-option="filter:bw"]'));
@@ -533,8 +545,9 @@ describe('lot 7 — le filtre d’un média posé ne s’applique qu’à lui', 
     const el = mount(seeded().deps, 'STORY');
     await flush(() => el.querySelector('[data-story-object-edit="overlay"]') !== null);
     click(el.querySelector('[data-story-object-edit="overlay"]'));
-    await flush(() => el.querySelector('[data-story-overlay-editor]') !== null);
+    await flush(() => el.querySelector('[data-story-option="edit:exit"]') !== null);
     expect(el.querySelector('[data-story-option^="trim"]')).toBeNull();
+    expect(el.querySelector('[data-story-option="section:trim"]')).toBeNull();
   });
 });
 

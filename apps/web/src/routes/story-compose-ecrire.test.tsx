@@ -83,10 +83,10 @@ describe('toucher le vide désélectionne', () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Sélectionné');
     await flush(() => el.querySelector('[data-scene-object-id="text-1"]') !== null);
-    expect(el.querySelector('[data-story-edit-plaque]')).not.toBeNull();
+    expect(el.querySelector('[data-story-option="edit:exit"]')).not.toBeNull();
     paint(el, 'text-1');
     tapStageAt(el, { clientX: 300, clientY: 500 });
-    expect(el.querySelector('[data-story-edit-plaque]')).toBeNull();
+    expect(el.querySelector('[data-story-option="edit:exit"]')).toBeNull();
     // Rien de sélectionné et la page déjà écrite : aucune invite ne recouvre la scène.
     expect(field(el)).toBeNull();
     // Le texte reste, il n'est que désélectionné.
@@ -115,7 +115,7 @@ describe('deux doigts pincent et tournent un objet (miroir iOS)', () => {
     const bench = harness({});
     const el = mount(bench.deps);
     typeText(el, 'Pincé');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
     await flush(() => el.querySelector('[data-scene-object-id="text-1"]') !== null);
     paint(el, 'text-1', { top: 0, left: 0, width: 200, height: 200 });
     const layer = el.querySelector<HTMLElement>('[data-story-stage-gestures]')!;
