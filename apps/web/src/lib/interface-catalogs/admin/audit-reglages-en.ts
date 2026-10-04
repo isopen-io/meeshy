@@ -281,6 +281,12 @@ const f = {
   'admin.settings.space.foldedHint': 'On large screens, the side menu starts reduced to its icons. This setting is specific to this browser and applies the next time you open the administration.',
   'admin.settings.space.foldedOn': 'The menu will start folded',
   'admin.settings.space.foldedOff': 'The menu will start unfolded',
+  'admin.audit.action.AGENT_GLOBAL_CONFIG_UPDATED': 'Agent global settings changed',
+  'admin.audit.action.AGENT_GLOBAL_CONFIG_UPDATED.explain': 'The settings that apply to every conversation the agent follows were changed.',
+  'admin.audit.action.AGENT_CONVERSATION_RESET': 'Agent reset in a conversation',
+  'admin.audit.action.AGENT_CONVERSATION_RESET.explain': 'The agent’s configuration, roles and summaries in this conversation were erased.',
+  'admin.audit.action.AGENT_USER_RESET': 'Agent reset for a member',
+  'admin.audit.action.AGENT_USER_RESET.explain': 'The roles the agent held for this member were erased.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

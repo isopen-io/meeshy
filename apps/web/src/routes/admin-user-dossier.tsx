@@ -147,32 +147,32 @@ export function AdminUserContactsTab({
         {({ contacts, shareLinks, trackingLinks, affiliateTokens, totals }) => {
           const total = contactsTotalOf(totals, fallback);
           return (
-          <>
-            <p className="text-caption" style={{ color: INK2 }}>
-              {translateAdmin(language, 'admin.contacts.links', {
-                share: formatCount(shareLinks, language),
-                tracking: formatCount(trackingLinks, language),
-                affiliate: formatCount(affiliateTokens, language),
-              })}
-            </p>
-            {total === null || total <= contacts.length ? null : (
-              <p data-admin-contacts-capped className="text-caption" style={{ color: INK2 }}>
-                {translateAdmin(language, 'admin.people.dossier.contactsCapped', { shown: formatCount(contacts.length, language), total: formatCount(total, language) })}
+            <>
+              <p className="text-caption" style={{ color: INK2 }}>
+                {translateAdmin(language, 'admin.contacts.links', {
+                  share: formatCount(shareLinks, language),
+                  tracking: formatCount(trackingLinks, language),
+                  affiliate: formatCount(affiliateTokens, language),
+                })}
               </p>
-            )}
-            {contacts.length === 0 ? (
-              <AdminEmptyState title={translateAdmin(language, 'admin.dossier.empty')} glyph="list" />
-            ) : (
-              <AdminResponsiveRows
-                columns={columns}
-                rows={contacts}
-                rowKey={(contact) => contact.id}
-                rowTarget={(contact) => targetOf(contactEntity(contact))}
-                rowAttributes={(contact) => ({ 'data-admin-contact': contact.id })}
-                caption={translateAdmin(language, 'admin.tab.contacts')}
-              />
-            )}
-          </>
+              {total === null || total <= contacts.length ? null : (
+                <p data-admin-contacts-capped className="text-caption" style={{ color: INK2 }}>
+                  {translateAdmin(language, 'admin.people.dossier.contactsCapped', { shown: formatCount(contacts.length, language), total: formatCount(total, language) })}
+                </p>
+              )}
+              {contacts.length === 0 ? (
+                <AdminEmptyState title={translateAdmin(language, 'admin.dossier.empty')} glyph="list" />
+              ) : (
+                <AdminResponsiveRows
+                  columns={columns}
+                  rows={contacts}
+                  rowKey={(contact) => contact.id}
+                  rowTarget={(contact) => targetOf(contactEntity(contact))}
+                  rowAttributes={(contact) => ({ 'data-admin-contact': contact.id })}
+                  caption={translateAdmin(language, 'admin.tab.contacts')}
+                />
+              )}
+            </>
           );
         }}
       </DossierGate>

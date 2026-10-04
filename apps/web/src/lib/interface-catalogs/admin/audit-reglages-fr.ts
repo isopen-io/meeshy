@@ -286,6 +286,12 @@ const f = {
   'admin.settings.space.foldedHint': 'Sur grand écran, le menu latéral démarre réduit à ses icônes. Ce réglage est propre à ce navigateur et s’applique à la prochaine ouverture.',
   'admin.settings.space.foldedOn': 'Le menu démarrera replié',
   'admin.settings.space.foldedOff': 'Le menu démarrera déployé',
+  'admin.audit.action.AGENT_GLOBAL_CONFIG_UPDATED': 'Réglages globaux de l’agent modifiés',
+  'admin.audit.action.AGENT_GLOBAL_CONFIG_UPDATED.explain': 'Les réglages qui valent pour toutes les conversations suivies par l’agent ont changé.',
+  'admin.audit.action.AGENT_CONVERSATION_RESET': 'Agent remis à zéro dans une conversation',
+  'admin.audit.action.AGENT_CONVERSATION_RESET.explain': 'La configuration, les rôles et les résumés de l’agent dans cette conversation ont été effacés.',
+  'admin.audit.action.AGENT_USER_RESET': 'Agent remis à zéro pour un membre',
+  'admin.audit.action.AGENT_USER_RESET.explain': 'Les rôles que l’agent tenait pour ce membre ont été effacés.',
 } as const;
 
 export default f;

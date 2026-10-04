@@ -283,6 +283,12 @@ const f = {
   'admin.settings.space.foldedHint': 'En pantallas grandes, el menú lateral empieza reducido a sus iconos. Este ajuste es propio de este navegador y se aplica la próxima vez que abras la administración.',
   'admin.settings.space.foldedOn': 'El menú empezará plegado',
   'admin.settings.space.foldedOff': 'El menú empezará desplegado',
+  'admin.audit.action.AGENT_GLOBAL_CONFIG_UPDATED': 'Ajustes globales del agente cambiados',
+  'admin.audit.action.AGENT_GLOBAL_CONFIG_UPDATED.explain': 'Cambiaron los ajustes que valen para todas las conversaciones que sigue el agente.',
+  'admin.audit.action.AGENT_CONVERSATION_RESET': 'Agente reiniciado en una conversación',
+  'admin.audit.action.AGENT_CONVERSATION_RESET.explain': 'Se borraron la configuración, los roles y los resúmenes del agente en esta conversación.',
+  'admin.audit.action.AGENT_USER_RESET': 'Agente reiniciado para un miembro',
+  'admin.audit.action.AGENT_USER_RESET.explain': 'Se borraron los roles que el agente tenía para este miembro.',
 } satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;
