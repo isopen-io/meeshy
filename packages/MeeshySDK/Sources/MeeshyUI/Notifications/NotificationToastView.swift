@@ -74,7 +74,7 @@ public struct NotificationToastView: View {
 
     // MARK: - Présentation
     //
-    // Headline, corps, vignette et réaction viennent d'UNE seule source :
+    // Headline, corps et vignette viennent d'UNE seule source :
     // `NotificationToastManager.resolvedBannerPresentation(for:)`. La vue ne
     // décide de rien — elle place.
 
@@ -116,12 +116,10 @@ public struct NotificationToastView: View {
                             .foregroundColor(theme.textMuted)
                     }
 
-                    if banner.body != nil || banner.showsContentTile || banner.reactionBadge != nil {
+                    if banner.body != nil || banner.showsContentTile {
                         HStack(alignment: .center, spacing: MeeshySpacing.sm) {
                             if banner.showsContentTile {
                                 contentPreview(banner)
-                            } else if let badge = banner.reactionBadge {
-                                Text(badge).font(.system(size: MeeshyFont.bodySize))
                             }
                             if let body = banner.body {
                                 Text(body)
@@ -215,36 +213,26 @@ public struct NotificationToastView: View {
     /// de l'avatar dit déjà le type et le corps servi nomme le média.
     @ViewBuilder
     private func contentPreview(_ banner: NotificationBannerPresentation) -> some View {
-        ZStack(alignment: .bottomTrailing) {
-            Group {
-                if let thumbnail = banner.thumbnailURL {
-                    CachedAsyncImage(
-                        url: thumbnail,
-                        targetSize: CGSize(width: Self.thumbnailSide, height: Self.thumbnailSide),
-                        // Une bannière vit sept secondes : un spinner puis un
-                        // bouton « réessayer » dans une case de 30 points ne
-                        // seraient jamais ni lisibles ni actionnables.
-                        showsStatusOverlays: false,
-                        // La case dit QUEL contenu — la retenir derrière la
-                        // politique d'économie de données la rendrait vide
-                        // dans le cas nominal.
-                        autoLoad: true
-                    ) {
-                        symbolTile(banner.contentSymbol)
-                    }
-                    .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
-                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous))
-                } else {
+        Group {
+            if let thumbnail = banner.thumbnailURL {
+                CachedAsyncImage(
+                    url: thumbnail,
+                    targetSize: CGSize(width: Self.thumbnailSide, height: Self.thumbnailSide),
+                    // Une bannière vit sept secondes : un spinner puis un
+                    // bouton « réessayer » dans une case de 30 points ne
+                    // seraient jamais ni lisibles ni actionnables.
+                    showsStatusOverlays: false,
+                    // La case dit QUEL contenu — la retenir derrière la
+                    // politique d'économie de données la rendrait vide
+                    // dans le cas nominal.
+                    autoLoad: true
+                ) {
                     symbolTile(banner.contentSymbol)
                 }
-            }
-
-            if let badge = banner.reactionBadge {
-                Text(badge)
-                    .font(.system(size: MeeshyFont.footnoteSize))
-                    .padding(MeeshySpacing.xxs)
-                    .background(Circle().fill(Self.backgroundColor(isDark: isDark)))
-                    .offset(x: 5, y: 4)
+                .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
+                .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs, style: .continuous))
+            } else {
+                symbolTile(banner.contentSymbol)
             }
         }
         .frame(width: Self.thumbnailSide, height: Self.thumbnailSide)
@@ -268,7 +256,7 @@ public struct NotificationToastView: View {
     /// Ce qu'un lecteur d'écran entend : la phrase, puis la charge. La vignette
     /// n'est pas décrite — elle ILLUSTRE le corps, elle ne l'augmente pas.
     private func voiceOverLabel(_ banner: NotificationBannerPresentation) -> String {
-        [banner.headline, banner.reactionBadge, banner.body]
+        [banner.headline, banner.body]
             .compactMap { $0 }
             .joined(separator: ", ")
     }

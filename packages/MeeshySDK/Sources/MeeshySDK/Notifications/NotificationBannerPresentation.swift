@@ -2,10 +2,10 @@ import Foundation
 
 // MARK: - Ce qu'une bannière in-app AFFICHE
 
-/// Les cinq pièces d'une bannière in-app — la notification qui descend du haut
+/// Les quatre pièces d'une bannière in-app — la notification qui descend du haut
 /// de l'écran puis s'efface.
 ///
-/// Elle en a besoin de cinq et pas de trois parce qu'une bannière doit dire
+/// Elle en a besoin de quatre et pas de deux parce qu'une bannière doit dire
 /// **CE QUI vient d'arriver**, pas seulement qui l'a fait et ce qu'il a écrit.
 /// Un commentaire sur un réel, une réaction à une story et la publication d'une
 /// humeur se ressemblaient toutes trois — « Alice » / « super ! » — et rien ne
@@ -21,7 +21,13 @@ import Foundation
 /// | message de groupe | X dans « nom local du groupe » | message / média / indicateur de protection |
 /// | relation acceptée | X a accepté votre demande | — |
 /// | demande de relation | X veut se connecter | — |
-/// | réaction à un contenu | X a réagi à votre story / humeur / post / réel / commentaire | vignette + réaction |
+/// | réaction à un contenu | X a réagi 🔥 à votre story / humeur / post / réel / commentaire | vignette + contenu visé |
+///
+/// **L'émoji d'une réaction n'est dit qu'une fois, par la phrase SERVIE** (#9049).
+/// La passerelle est le seul site qui compose « a réagi ❤️ à votre message : « … » » ;
+/// la bannière la rend telle quelle et n'y ajoute aucun émoji de son cru — la
+/// pastille qu'elle posait devant le corps faisait lire « ❤️  a réagi ❤️ … ».
+/// Même règle que le web, dont la bannière n'a jamais eu de pastille.
 public struct NotificationBannerPresentation: Equatable, Sendable {
     /// Ligne 1 : QUI, et QUOI. Jamais vide.
     public let headline: String
@@ -29,10 +35,6 @@ public struct NotificationBannerPresentation: Equatable, Sendable {
     /// visé. `nil` quand la headline se suffit (demande de relation, contenu
     /// sans texte dont le serveur retombe sur la phrase d'action).
     public let body: String?
-    /// La réaction, rendue COMME une réaction et non noyée dans une phrase.
-    /// `nil` quand la headline la porte déjà — le serveur l'y fusionne
-    /// (« a réagi 🔥 à votre story ») et la répéter serait du bruit.
-    public let reactionBadge: String?
     /// Vignette du contenu visé (miniature du post / de la story / du réel, la
     /// photo du message, la vignette d'une vidéo, l'image d'aperçu d'un lien).
     public let thumbnailURL: String?
@@ -50,13 +52,11 @@ public struct NotificationBannerPresentation: Equatable, Sendable {
     public init(
         headline: String,
         body: String?,
-        reactionBadge: String?,
         thumbnailURL: String?,
         contentSymbol: String?
     ) {
         self.headline = headline
         self.body = body
-        self.reactionBadge = reactionBadge
         self.thumbnailURL = thumbnailURL
         self.contentSymbol = contentSymbol
     }
@@ -108,7 +108,6 @@ public extension SocketNotificationEvent {
         NotificationBannerPresentation(
             headline: bannerHeadline(groupName: groupName),
             body: bannerBody,
-            reactionBadge: bannerReactionBadge,
             thumbnailURL: bannerThumbnailURL,
             contentSymbol: bannerContentSymbol
         )
@@ -181,38 +180,6 @@ public extension SocketNotificationEvent {
             if let action = nonBlank(subtitle), raw == action { return bannerMediaSummary }
             return raw
         }
-    }
-
-    // MARK: Réaction
-
-    var bannerReactionBadge: String? {
-        guard isReactionBanner, let emoji = nonBlank(reactionEmoji) else { return nil }
-        // Le serveur fusionne déjà l'émoji dans la phrase d'action
-        // (« a réagi 🔥 à votre story ») : le rendre une seconde fois en pastille
-        // ferait dire deux fois la même chose à deux endroits de la même carte.
-        if let action = nonBlank(subtitle), action.contains(emoji) { return nil }
-        // Même règle pour le CORPS (#9049) : une réaction de message arrive
-        // avec « a réagi ❤️ à votre message : « … » » — la pastille devant
-        // faisait lire « ❤️  a réagi ❤️ … ».
-        if let body = bannerBody, body.contains(emoji) { return nil }
-        return emoji
-    }
-
-    private var isReactionBanner: Bool {
-        switch notificationType {
-        case .messageReaction, .reaction, .legacyMessageReaction,
-             .postLike, .legacyPostLike, .storyReaction, .statusReaction,
-             .commentLike, .commentReaction:
-            return true
-        default:
-            return false
-        }
-    }
-
-    /// L'émoji de réaction, sous ses DEUX noms de fil : les éventails sur
-    /// contenu l'écrivent en `emoji`, ceux sur message en `reactionEmoji`.
-    var reactionEmoji: String? {
-        nonBlank(metadata?.emoji) ?? nonBlank(metadata?.reactionEmoji)
     }
 
     // MARK: Vignette & icône
