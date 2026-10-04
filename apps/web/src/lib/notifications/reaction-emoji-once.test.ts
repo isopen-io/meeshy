@@ -20,10 +20,11 @@ const OPTIONS = { language: 'fr', now: NOW } as const;
 const record = (partial: Partial<NotificationRecord>): NotificationRecord => ({
   id: 'n1',
   type: 'message_reaction',
+  title: null,
   content: 'a réagi ❤️ à votre message : « J’attends! »',
   actor: { id: 'u-sama', username: 'sama', displayName: 'meeshy sama', avatar: null },
   context: { conversationId: 'c1', conversationType: 'direct' },
-  metadata: { reactionEmoji: '❤️' },
+  metadata: {},
   state: { isRead: false, createdAt: '2026-10-04T09:59:00.000Z' },
   ...partial,
 });
@@ -68,7 +69,7 @@ describe('#9049 — chaque réaction dit son émoji une fois, sur la ligne comme
       record({
         content: 'a réagi 🔥 à votre message : « On part à 9 h »',
         context: { conversationId: 'c2', conversationType: 'group', conversationTitle: 'Équipe Tech' },
-        metadata: { reactionEmoji: '🔥' },
+        metadata: {},
       }),
     ],
     [
@@ -79,7 +80,7 @@ describe('#9049 — chaque réaction dit son émoji une fois, sur la ligne comme
         subtitle: 'Votre story',
         content: 'Votre story',
         context: { postId: 'p1' },
-        metadata: { emoji: '🔥', postType: 'STORY' },
+        metadata: { postType: 'STORY' },
       }),
     ],
     [
@@ -90,13 +91,15 @@ describe('#9049 — chaque réaction dit son émoji une fois, sur la ligne comme
         subtitle: '« Superbe »',
         content: '« Superbe »',
         context: { postId: 'p1' },
-        metadata: { reactionEmoji: '🔥', commentPreview: 'Superbe', postType: 'POST' },
+        metadata: { commentPreview: 'Superbe', postType: 'POST' },
       }),
     ],
   ];
 
-  test.each(cases)('%s', (_name, notification) => {
-    expect(occurrences(rowTexts(notification), '🔥')).toBe(1);
-    expect(occurrences(bannerTexts(notification), '🔥')).toBe(1);
-  });
+  for (const [name, notification] of cases) {
+    test(name, () => {
+      expect(occurrences(rowTexts(notification), '🔥')).toBe(1);
+      expect(occurrences(bannerTexts(notification), '🔥')).toBe(1);
+    });
+  }
 });
