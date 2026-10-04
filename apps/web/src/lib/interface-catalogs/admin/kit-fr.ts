@@ -46,6 +46,8 @@ const f = {
   'admin.kit.refused.permission': 'Vous n’avez pas le droit d’effectuer ce geste.',
   'admin.kit.refused.invalid': 'Le geste a été refusé : les informations sont invalides.',
   'admin.kit.close': 'Fermer',
+  'admin.kit.summary.open': 'Ouvrir',
+  'admin.kit.summary.openNamed': 'Ouvrir {title}',
   'admin.kit.sort.label': 'Trier par',
   'admin.kit.sort.ascending': 'Croissant',
   'admin.kit.sort.descending': 'Décroissant',

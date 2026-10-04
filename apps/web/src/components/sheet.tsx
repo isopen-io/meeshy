@@ -46,6 +46,7 @@ export function Sheet({
   presentation = 'fullscreen',
   accessory,
   closeLabel,
+  backEntry = true,
   onClose,
   children,
 }: {
@@ -85,10 +86,23 @@ export function Sheet({
    * bornée à 90 % de l'écran, centré par les marges automatiques du
    * `<dialog>` modal — le même geste sur un téléphone, une tablette et un
    * bureau, et l'écran d'où l'on vient reste visible derrière le voile.
+   *
+   * `'wide'` — la même modale centrée, LARGE (64 rem) : le détail d'une zone
+   * d'administration (graphiques, classements) qu'une carte résumée ouvre
+   * (`AdminDetailSheet`). Sur un téléphone, elle prend la largeur moins la
+   * gouttière, comme la centrée.
    */
-  presentation?: 'fullscreen' | 'centered';
+  presentation?: 'fullscreen' | 'centered' | 'wide';
   /** Les gestes propres à la feuille, au bout de l'en-tête (le composer d'export : « Au hasard », « Format par défaut »). */
   accessory?: ReactNode;
+  /**
+   * La feuille pose-t-elle SA propre entrée d'historique (le retour matériel la
+   * ferme) ? `false` quand son ouverture vit déjà dans l'adresse
+   * (`AdminDetailSheet` sous `useAdminOpen`) : l'adresse a poussé l'entrée, le
+   * retour la consomme et démonte la feuille — une seconde entrée coûterait un
+   * second retour.
+   */
+  backEntry?: boolean;
   onClose: () => void;
   children: ReactNode;
 }) {
@@ -111,7 +125,7 @@ export function Sheet({
    * `<dialog>`) et toute couche future (visionneuse de média…) le partagent,
    * plutôt que de le réécrire une jumelle divergente.
    */
-  useBackDismiss(onClose);
+  useBackDismiss(onClose, { history: backEntry });
 
   /** Le comportement PROPRE au `<dialog>` (le piège de focus/Échap natifs) —
    * distinct du geste de retour ci-dessus, qui ne connaît rien de `<dialog>`. */
@@ -124,7 +138,8 @@ export function Sheet({
     };
   }, []);
 
-  const centree = presentation === 'centered';
+  const centree = presentation !== 'fullscreen';
+  const largeur = presentation === 'wide' ? 'w-[min(64rem,calc(100%-2rem))]' : 'w-[min(36rem,calc(100%-2rem))]';
 
   return (
     <dialog
@@ -132,7 +147,7 @@ export function Sheet({
       onClose={onClose}
       aria-labelledby={titleId}
       data-sheet-presentation={presentation}
-      className={centree ? 'm-auto w-[min(36rem,calc(100%-2rem))] max-h-[min(90dvh,calc(100%-2rem))] overflow-hidden rounded-card p-0 backdrop:bg-veil' : undefined}
+      className={centree ? `m-auto ${largeur} max-h-[min(90dvh,calc(100%-2rem))] overflow-hidden rounded-card p-0 backdrop:bg-veil` : undefined}
       style={
         centree
           ? {

@@ -43,6 +43,8 @@ const f = {
   'admin.kit.refused.permission': 'No tienes derecho a realizar esta acción.',
   'admin.kit.refused.invalid': 'La acción fue rechazada: la información no es válida.',
   'admin.kit.close': 'Cerrar',
+  'admin.kit.summary.open': 'Abrir',
+  'admin.kit.summary.openNamed': 'Abrir {title}',
   'admin.kit.sort.label': 'Ordenar por',
   'admin.kit.sort.ascending': 'Ascendente',
   'admin.kit.sort.descending': 'Descendente',
