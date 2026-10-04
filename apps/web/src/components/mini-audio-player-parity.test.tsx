@@ -8,7 +8,7 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { audioCarryStore, carryAudio, concealsMiniPlayer, dropCarriedAudio, publishCarriedPlayback, type CarriedAudio } from '@/lib/view/audio-carry';
 import type { MediaCarrier } from '@/lib/view/media';
 import { createMediaCoordinator } from '@/lib/view/media-coordinator';
-import { takeVideoHandoff } from '@/lib/view/video-handoff';
+import { NO_MEDIA_OFFERS } from '@/lib/view/viewer-page-offers';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { Attachments } from './attachment-blocks';
@@ -17,8 +17,8 @@ import MiniAudioPlayerHost, { MiniAudioPlayer } from './mini-audio-player';
 
 /**
  * #9279 — LE MINI-LECTEUR REJOINT iOS (`MiniAudioPlayerBar`) : le toucher
- * rouvre le plein écran à la même seconde, il s'efface dans la conversation du
- * vocal où la bulle reprend la main, et il ne double jamais le son.
+ * ouvre la conversation du vocal, où il s’efface et où
+ * la bulle reprend la main, sans jamais doubler le son.
  */
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -43,7 +43,6 @@ afterEach(() => {
   container.remove();
   restore();
   dropCarriedAudio();
-  takeVideoHandoff('a-voice');
 });
 
 function stubMediaPrototype(): void {
@@ -88,9 +87,6 @@ const carried = (partial: Partial<CarriedAudio> = {}): CarriedAudio => ({
   rate: 1,
   title: 'Kwame Mensah',
   conversationId: 'c-medias',
-  languages: ['fr'],
-  fallbackLanguage: 'fr',
-  carrier,
   ...partial,
 });
 
@@ -114,50 +110,33 @@ const until = async (check: () => boolean) => {
 const bar = (): HTMLElement | null => container.querySelector<HTMLElement>('[data-mini-audio-player]');
 const viewerTrack = (): HTMLAudioElement | null => document.body.querySelector<HTMLAudioElement>('[data-media-viewer] [data-viewer-audio="a-voice"] audio');
 
-describe('Le toucher rouvre le plein écran à la même seconde (#9279)', () => {
-  test('toucher le corps du lecteur confie sa seconde à la page audio et demande l’ouverture', async () => {
-    let opened = 0;
-    mount(
-      <MiniAudioPlayer
-        carried={carried()}
-        onClose={() => {}}
-        onOpen={() => {
-          opened += 1;
-        }}
-        coordinator={createMediaCoordinator()}
-      />,
-    );
+describe('Le toucher ouvre la conversation du vocal, comme iOS (#9279)', () => {
+  test('l’hôte ouvre la conversation du vocal ; la lecture continue, et le lecteur s’y efface', async () => {
+    window.history.replaceState(null, '', '/');
+    mount(<MiniAudioPlayerHost />);
+    act(() => carryAudio(carried()));
     await act(async () => {});
 
     const open = container.querySelector<HTMLButtonElement>('[data-mini-audio-open]');
-    expect(open?.getAttribute('aria-label')).toBe('Kwame Mensah — Ouvrir en plein écran');
+    expect(open?.getAttribute('aria-label')).toBe('Kwame Mensah — Ouvrir la conversation');
     act(() => open?.click());
 
-    expect(opened).toBe(1);
-    expect(takeVideoHandoff('a-voice')).toBe(3_500);
+    expect(window.location.pathname).toBe('/c/c-medias');
+    expect(calls.pause).toBe(0);
+    expect(audioCarryStore.getState().carried?.attachment.id).toBe('a-voice');
+    expect(bar()?.getAttribute('data-mini-audio-status')).toBe('playing');
   });
 
-  test('une lecture vivante passe à la seconde près, même sous la première seconde', async () => {
-    mount(<MiniAudioPlayer carried={carried({ positionMs: 600 })} onClose={() => {}} coordinator={createMediaCoordinator()} />);
-    await act(async () => {});
-
-    expect(container.querySelector<HTMLAudioElement>('audio')?.currentTime).toBe(0.6);
-  });
-
-  test('la page audio reprend la seconde confiée, même sous la première seconde', async () => {
+  test('hors conversation, le corps n’est pas un bouton : rien à ouvrir', async () => {
     mount(<MiniAudioPlayerHost />);
-    act(() => carryAudio(carried({ positionMs: 0 })));
+    act(() => carryAudio(carried({ conversationId: null })));
     await act(async () => {});
-    const mini = container.querySelector<HTMLAudioElement>('[data-mini-audio-player] audio');
-    if (mini !== null) mini.currentTime = 0.7;
 
-    act(() => container.querySelector<HTMLButtonElement>('[data-mini-audio-open]')?.click());
-    await until(() => viewerTrack() !== null);
-
-    expect(viewerTrack()?.currentTime).toBe(0.7);
+    expect(bar()).not.toBeNull();
+    expect(container.querySelector('[data-mini-audio-open]')).toBeNull();
   });
 
-  test('lecture/pause et fermer ne rouvrent rien', async () => {
+  test('lecture/pause et fermer n’ouvrent rien', async () => {
     let opened = 0;
     mount(
       <MiniAudioPlayer
@@ -177,31 +156,11 @@ describe('Le toucher rouvre le plein écran à la même seconde (#9279)', () => 
     expect(opened).toBe(0);
   });
 
-  test('l’hôte rouvre la page audio du même vocal, qui reprend à la même seconde et joue ; la refermer en lecture rend le mini-lecteur', async () => {
-    mount(<MiniAudioPlayerHost />);
-    act(() => carryAudio(carried()));
+  test('une lecture vivante passe à la seconde près, même sous la première seconde', async () => {
+    mount(<MiniAudioPlayer carried={carried({ positionMs: 600 })} onClose={() => {}} coordinator={createMediaCoordinator()} />);
     await act(async () => {});
-    const serial = audioCarryStore.getState().serial;
 
-    act(() => container.querySelector<HTMLButtonElement>('[data-mini-audio-open]')?.click());
-    await until(() => viewerTrack() !== null);
-
-    expect(bar()).toBeNull();
-    expect(viewerTrack()?.currentTime).toBe(3.5);
-    expect(document.body.querySelector('[data-media-viewer] [data-viewer-audio="a-voice"]')?.getAttribute('data-viewer-audio-status')).toBe('playing');
-
-    const element = viewerTrack();
-    if (element !== null) element.currentTime = 5.25;
-    act(() => {
-      document.body.querySelector('[data-media-viewer]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    });
-    await until(() => bar() !== null);
-
-    expect(document.body.querySelector('[data-media-viewer]')).toBeNull();
-    expect(audioCarryStore.getState().serial).toBe(serial + 1);
-    expect(audioCarryStore.getState().carried?.positionMs).toBe(5_250);
-    expect(audioCarryStore.getState().carried?.conversationId).toBe('c-medias');
-    expect(bar()?.getAttribute('data-mini-audio-player')).toBe('a-voice');
+    expect(container.querySelector<HTMLAudioElement>('audio')?.currentTime).toBe(0.6);
   });
 });
 
@@ -295,10 +254,18 @@ describe('La bulle du vocal reprend la main (#9279)', () => {
   });
 });
 
-describe('La reprise emporte sa conversation et de quoi rouvrir (#9279)', () => {
-  test('fermer la visionneuse pendant la lecture confie la conversation, le prisme et le porteur', async () => {
+describe('La reprise emporte sa conversation (#9279)', () => {
+  test('fermer la visionneuse pendant la lecture confie la conversation de la page', async () => {
     mount(
-      <MediaViewer items={[voice]} startIndex={0} onClose={() => act(() => root.render(null))} languages={['en', 'fr']} fallbackLanguage="fr" carrier={carrier} conversationId="c-medias" />,
+      <MediaViewer
+        items={[voice]}
+        startIndex={0}
+        onClose={() => act(() => root.render(null))}
+        languages={['fr']}
+        fallbackLanguage="fr"
+        carrier={carrier}
+        actionsAt={() => ({ attachment: voice, messageId: 'm-voice', conversationId: 'c-medias', offers: NO_MEDIA_OFFERS })}
+      />,
     );
     await until(() => viewerTrack() !== null);
     act(() => {
@@ -309,10 +276,7 @@ describe('La reprise emporte sa conversation et de quoi rouvrir (#9279)', () => 
     });
     await until(() => audioCarryStore.getState().carried !== null);
 
-    const confided = audioCarryStore.getState().carried;
-    expect(confided?.conversationId).toBe('c-medias');
-    expect(confided?.languages).toEqual(['en', 'fr']);
-    expect(confided?.fallbackLanguage).toBe('fr');
-    expect(confided?.carrier?.sender?.displayName).toBe('Kwame Mensah');
+    expect(audioCarryStore.getState().carried?.conversationId).toBe('c-medias');
+    expect(audioCarryStore.getState().carried?.title).toBe('Kwame Mensah');
   });
 });
