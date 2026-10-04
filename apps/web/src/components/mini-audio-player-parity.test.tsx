@@ -32,6 +32,7 @@ beforeAll(async () => {
   ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadInterfaceCatalog('fr');
+  dropCarriedAudio();
 });
 afterAll(async () => {
   await act(async () => {});
