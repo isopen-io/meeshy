@@ -53,9 +53,14 @@ type ParticipantPermissions {
 }
 
 /// Session details for an anonymous participant
+///
+/// Aucune adresse IP n'y vit (#9342) : celle de la requête d'admission sert la
+/// seule recherche du pays d'arrivée (`Participant.joinCountry`, #7797), puis
+/// elle est oubliée. Les sessions écrites avant portent encore
+/// `session.ipAddress` jusqu'à la purge
+/// `migrations/2026-10-04-anonymous-session-ip-purge.mongodb.js`.
 type AnonymousSessionDetails {
   sessionTokenHash  String
-  ipAddress         String?
   country           String?
   deviceFingerprint String?
   connectedAt       DateTime
