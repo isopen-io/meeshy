@@ -39,6 +39,10 @@
  *    Depuis que le fil pagine, préfixer cinquante rangées fait glisser toute
  *    la fenêtre — et c'est le défaut qu'aucun témoin unitaire ne voit. Le fil
  *    est donc chargé PAGE PAR PAGE, et la dérive est mesurée à CHAQUE couture.
+ * 6. **LE FIL S'OUVRE SUR UN FAVORI PLUS ANCIEN QUE SES PAGES** (#7420,
+ *    `lib/check-thread-anchor.mjs`) : toucher le favori `arch-12` ouvre son fil
+ *    SUR lui, mis en évidence, par la fenêtre `?around=` ; défiler vers le bas
+ *    rejoint ensuite le présent sans trou ni doublon.
  *
  * COMMENT LA DÉRIVE D'INSERTION EST MESURÉE, ET POURQUOI DANS LA PAGE.
  * L'échantillon de référence doit être pris AVANT que la page ne s'insère,
@@ -64,6 +68,7 @@ import { fileURLToPath } from 'node:url';
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { driftLine, insertionDrift } from './lib/insertion-drift.mjs';
+import { checkThreadAnchor } from './lib/check-thread-anchor.mjs';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
 const BENCH = 500;
@@ -319,6 +324,12 @@ expect(
   `une cellule visible a bougé de ${Math.round(visualJump)} px après sa pose — le contenu saute sous les yeux`,
 );
 
+// --- 6 : le favori plus ancien que les pages du fil (#7420).
+const anchor = await checkThreadAnchor({ browser, BASE, expect: (ok, what) => {
+  console.log(`  ${ok ? 'ok   ' : 'ECHEC'} ${what}`);
+  return expect(ok, what);
+} });
+
 await browser.close();
 served.close();
 
@@ -338,7 +349,8 @@ for (const r of readings) {
 }
 console.log(`  pages anciennes chargées ${olderPages}`);
 console.log(`  saut à l'insertion      ${driftLine(drift)}`);
-console.log(`  saut du contenu visible ${Math.round(visualJump)} px\n`);
+console.log(`  saut du contenu visible ${Math.round(visualJump)} px`);
+console.log(`  favori ancien           ${anchor.newerPages} page(s) jusqu'au présent, ${anchor.sampled} rangées lues sans écart\n`);
 
 if (failures.length > 0) {
   console.error(`  ${failures.length} défaut(s) :\n`);

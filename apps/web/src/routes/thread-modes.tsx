@@ -470,6 +470,7 @@ export function ThreadModes({
       )}
 
       <ol
+        data-thread-rows={placed.length}
         style={{
           position: 'relative',
           width: '100%',
