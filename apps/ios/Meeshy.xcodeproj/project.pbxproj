@@ -1304,6 +1304,7 @@
 		79DDFFB112261DD270D6DF35 /* ComposerInlineEditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B257E1A2C370BC6CFBFB87 /* ComposerInlineEditTests.swift */; };
 		7A072A4F67E73A8198E68674 /* PhonebookViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7636D06AB79B768EA836F07F /* PhonebookViewModel.swift */; };
 		7A0B0C00E56082619FAD7406 /* GallerySceneBackdropUnicityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6D42A25775FD73C1C0DB226 /* GallerySceneBackdropUnicityTests.swift */; };
+		7A2BD2AC48BA20D9B397A0D0 /* CallColorLookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 303F6788F278799451455333 /* CallColorLookTests.swift */; };
 		7A35971F4E5140A446F9C035 /* ComposerPanelHeightLawTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68E4E6E56676E267B5C3D0DB /* ComposerPanelHeightLawTests.swift */; };
 		7A46ACD0F06C1F445F95FFA9 /* MockBlockService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3771B9F3633D6B2DA85EFB2C /* MockBlockService.swift */; };
 		7A4851490D53E1B9799B59B4 /* PastedContentRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 681912A9496D36312328F8CB /* PastedContentRouter.swift */; };
@@ -2702,6 +2703,7 @@
 		FC3A23157D2F24217F160F1D /* CallFrameCatalogue+Futuriste.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6492DFF00C2BCF301714366 /* CallFrameCatalogue+Futuriste.swift */; };
 		FC3D598BFF7A3E05CB7A65D5 /* FeedSceneAutoplay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6404D83CFC526A7C8414B5FD /* FeedSceneAutoplay.swift */; };
 		FC4100228D5D282F0DF63906 /* RouterContentLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99AD0885063F61BFF13C00BD /* RouterContentLinkTests.swift */; };
+		FC6FA2C301EFE0FF5BA00CCA /* CallColorLook.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2297FFC42A737700348862E2 /* CallColorLook.swift */; };
 		FC889DD695CB5744090C744B /* ConversationViewModel+SocketDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10B17FD3128A632A08C396DC /* ConversationViewModel+SocketDelegate.swift */; };
 		FC9A17AA8E40B90E2EBFF729 /* ComposerObjectChipsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BDA6A21631A25633100089A /* ComposerObjectChipsRow.swift */; };
 		FCB11E3AFC3A5B44A2FAA69C /* CallRecordingControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 992BA1CAA5CF4A54AF1A1FF6 /* CallRecordingControllerTests.swift */; };
@@ -3183,6 +3185,7 @@
 		2254A7DC4701F653EEA1EC1B /* AssistTierVectorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssistTierVectorTests.swift; sourceTree = "<group>"; };
 		228CF464541A6253355726FC /* CallZoomIndicator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallZoomIndicator.swift; sourceTree = "<group>"; };
 		228EF515998003034DCAA900 /* StreakActivityMark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreakActivityMark.swift; sourceTree = "<group>"; };
+		2297FFC42A737700348862E2 /* CallColorLook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallColorLook.swift; sourceTree = "<group>"; };
 		22A68341186490728175E546 /* GroupCallMeshContracts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GroupCallMeshContracts.swift; sourceTree = "<group>"; };
 		22A7D1E230045A5C12BE7008 /* BubbleDeliveryStatusWiringSourceGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BubbleDeliveryStatusWiringSourceGuardTests.swift; sourceTree = "<group>"; };
 		22CCC5E04F9D1EA88D9709F8 /* ComposerObjectEditorKeyboardExclusionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerObjectEditorKeyboardExclusionTests.swift; sourceTree = "<group>"; };
@@ -3332,6 +3335,7 @@
 		30160D74851F3D5C204FA59C /* ShareSenderFanoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSenderFanoutTests.swift; sourceTree = "<group>"; };
 		30176D6CD06B77100C42DE83 /* ComposerViewfinder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerViewfinder.swift; sourceTree = "<group>"; };
 		303C8A844B0F98A92CE2CE52 /* IncomingCallViewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallViewTests.swift; sourceTree = "<group>"; };
+		303F6788F278799451455333 /* CallColorLookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallColorLookTests.swift; sourceTree = "<group>"; };
 		3062307B746CFB9F5F7F30BE /* NotificationExpandedContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationExpandedContent.swift; sourceTree = "<group>"; };
 		306276D89CA204981399861F /* MessageEditsDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageEditsDetailView.swift; sourceTree = "<group>"; };
 		308A383D467CE15C68302018 /* MessageCardExportMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageCardExportMenu.swift; sourceTree = "<group>"; };
@@ -6942,6 +6946,7 @@
 				2D66A1DDEED7F3C2016FD603 /* CallCameraZoomQuickStopsTests.swift */,
 				0219AC3A46D2786439035F9C /* CallCaptureControllerFramesTests.swift */,
 				E31107899886A7C1866EAFE5 /* CallCaptureControllerTests.swift */,
+				303F6788F278799451455333 /* CallColorLookTests.swift */,
 				991BFE2E5DB89C89FE6140B2 /* CallConnectionRecoveryTests.swift */,
 				7A3507B19A3C47C7C60EBA94 /* CallControlsControllerTests.swift */,
 				5BC56651F33B517FEBB68937 /* CallDataProfileTests.swift */,
@@ -8393,6 +8398,7 @@
 				6F1F0591E2DB8868AF57727E /* CallBackgroundBlur.swift */,
 				9521AE718A0D571648CDB547 /* CallCaptureController.swift */,
 				0185D90F7D3BB3C2A046E2ED /* CallCaptureController+Frames.swift */,
+				2297FFC42A737700348862E2 /* CallColorLook.swift */,
 				2BEA09348D603BF23CD2A223 /* CallControlsController.swift */,
 				347B0956AD3DEBC38A2EEDFA /* CallDebugIncomingTrigger.swift */,
 				E5AC6060B5D7856FCE238650 /* CallDeclineMessenger.swift */,
@@ -9690,6 +9696,7 @@
 				A5B0E38643A17E3A8109709F /* CallCaptureIdentity.swift in Sources */,
 				DEBBCC1576A3651C0BAF3CDF /* CallChromeInteraction.swift in Sources */,
 				2A6120660B68AE0EE3C9973D /* CallChromeVisibility.swift in Sources */,
+				FC6FA2C301EFE0FF5BA00CCA /* CallColorLook.swift in Sources */,
 				3B08FB01C304466AA28F096C /* CallConnectedCatchUpPolicy.swift in Sources */,
 				DFEA7CDA233AFDC672B95F4D /* CallControlGlass.swift in Sources */,
 				B28010EA315D4B0D85BE7BC5 /* CallControlsController.swift in Sources */,
@@ -11035,6 +11042,7 @@
 				1C5660BECB8E78BA9544F12F /* CallCaptureIdentityTests.swift in Sources */,
 				029ABE042C7380DCF4C9A15D /* CallChromeInteractionTests.swift in Sources */,
 				601CE4D681EBC1ACC7586770 /* CallChromeVisibilityTests.swift in Sources */,
+				7A2BD2AC48BA20D9B397A0D0 /* CallColorLookTests.swift in Sources */,
 				BEAABBCC3597523FC380C183 /* CallConnectionRecoveryTests.swift in Sources */,
 				3F2F7958785621FCA741F8D8 /* CallControlsControllerTests.swift in Sources */,
 				F53B248FCCE2A7D46A810B5D /* CallControlsLayoutTests.swift in Sources */,

@@ -173,7 +173,45 @@ struct CallEffectsModeControls: View {
         )
     }
 
+    private var smoothingBinding: Binding<Double> {
+        Binding(
+            get: { Double(config.skinSmoothingIntensity) },
+            set: { config = config.withSmoothingIntensity(Float($0)) }
+        )
+    }
+
+    /// #9289 — la Peau lissée choisie se règle ici, au même endroit que la luminosité.
+    @ViewBuilder
+    private var smoothingRow: some View {
+        if config.activeFaceEffect == .smoothing {
+            let range = VideoFilterConfig.smoothingIntensityRange
+            HStack(spacing: MeeshySpacing.sm) {
+                Image(systemName: "wand.and.rays.inverse")
+                    .font(.footnote)
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                    .accessibilityHidden(true)
+                Slider(value: smoothingBinding, in: Double(range.lowerBound) ... Double(range.upperBound))
+                    .tint(.white)
+                    .accessibilityLabel(CallEffectsCopy.smoothingStrength)
+                    .accessibilityValue(LocalizedNumber.percent(Int((config.skinSmoothingIntensity * 100).rounded())))
+                Image(systemName: "wand.and.rays")
+                    .font(.footnote)
+                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: 44)
+            .padding(.horizontal, MeeshySpacing.xxl)
+        }
+    }
+
     private var settingsRow: some View {
+        VStack(spacing: MeeshySpacing.sm) {
+            smoothingRow
+            brightnessAndBlurRow
+        }
+    }
+
+    private var brightnessAndBlurRow: some View {
         let limit = Double(VideoFilterConfig.brightnessLimit)
         let percent = LocalizedNumber.percent(Int((Double(config.brightness) / limit * 100).rounded()))
         return HStack(spacing: MeeshySpacing.mdPlus) {

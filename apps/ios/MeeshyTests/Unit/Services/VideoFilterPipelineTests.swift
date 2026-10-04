@@ -82,7 +82,7 @@ final class VideoFilterPresetTests: XCTestCase {
         let config = VideoFilterPreset.warm.config
         XCTAssertEqual(config.temperature, 7500)
         XCTAssertEqual(config.tint, 5)
-        XCTAssertEqual(config.brightness, 0.02, accuracy: 0.001)
+        XCTAssertEqual(config.brightness, 0)
         XCTAssertEqual(config.contrast, 1.05, accuracy: 0.001)
         XCTAssertEqual(config.saturation, 1.1, accuracy: 0.001)
         XCTAssertTrue(config.isEnabled)
@@ -162,8 +162,20 @@ final class VideoFilterPresetTests: XCTestCase {
         // colorimetry that (generically) matches no preset — a legitimate
         // "no preset selected" state, not a bug.
         var config = VideoFilterPreset.warm.config
-        config.brightness = 0.4123
+        config.saturation = 0.4123
         XCTAssertNil(VideoFilterPreset.matching(config))
+    }
+
+    /// #9289 — la luminosité est le décalage de l'utilisateur, pas une part de la teinte :
+    /// la régler après avoir choisi « Chaud » laisse « Chaud » choisi.
+    func test_matching_brightnessOffset_keepsTheLook() {
+        let config = VideoFilterPreset.warm.config.withBrightness(0.2)
+        XCTAssertEqual(VideoFilterPreset.matching(config), .warm)
+        XCTAssertEqual(config.activePreset, .warm)
+    }
+
+    func test_presets_carryNoBrightnessOfTheirOwn() {
+        XCTAssertTrue(VideoFilterPreset.allCases.allSatisfy { $0.config.brightness == 0 })
     }
 
     func test_matching_untouchedDefaultConfig_returnsNatural() {

@@ -5,6 +5,10 @@ enum CallEffectsCopy {
         String(localized: "call.effects.blur", defaultValue: "Flou du fond", bundle: .main)
     }
 
+    static var smoothingStrength: String {
+        String(localized: "call.effects.smoothingStrength", defaultValue: "Force du lissage", bundle: .main)
+    }
+
     static var brightness: String {
         String(localized: "call.effects.brightness", defaultValue: "Luminosité", bundle: .main)
     }
