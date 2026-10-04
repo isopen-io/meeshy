@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { composerAccentOf } from './compose-protection';
 import { SUBSTITUTED_ACCENT_VAR, composerChromeAccentStyle, composerIconTintOf, composerIconTintStyle } from './composer-accent';
 
 describe('composerChromeAccentStyle — le jeton d’ÉTAT de la protection, aucune teinte inventée (#6175, #7667)', () => {
@@ -42,6 +43,15 @@ describe('composerIconTintOf — UNE loi de teinte d’icône (#9121, miroir `Co
 
   test('un effet de message, sans couleur propre ⇒ la couleur de MARQUE', () => {
     expect(composerIconTintOf('effects')).toBe('var(--color-ios-brand)');
+  });
+
+  test('plusieurs effets armés ⇒ la protection la plus forte (éphémère > vue unique > flou), puis l’effet de message — l’ordre iOS', () => {
+    const tintOf = (protection: Parameters<typeof composerAccentOf>[0]) => composerIconTintOf(composerAccentOf(protection));
+    expect(tintOf({ ephemeralSeconds: 15, viewOnce: true, effectFlags: 1 })).toBe('var(--color-error)');
+    expect(tintOf({ viewOnce: true, effectFlags: 1 })).toBe('var(--ios-state-view-once)');
+    expect(tintOf({ blurred: true, effectFlags: 1 })).toBe('var(--ios-state-concealed)');
+    expect(tintOf({ effectFlags: 1 })).toBe('var(--color-ios-brand)');
+    expect(tintOf({})).toBe('var(--color-ios-ink-2)');
   });
 
   test('le style pose `--composer-icon` sur la racine, armée ou non', () => {

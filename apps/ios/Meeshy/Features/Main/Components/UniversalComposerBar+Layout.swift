@@ -490,6 +490,6 @@ extension UniversalComposerBar {
     /// Une protection armée voile le panneau ENTIER de sa teinte (#7667) :
     /// toute la barre dit l'état, pas seulement la pastille qui l'a allumé.
     var panelGlassTint: Color? {
-        dominantProtection.map { $0.tint.opacity(isDark ? 0.30 : 0.22) }
+        dominantProtection.map { $0.panelWash(isDark: isDark) }
     }
 }
