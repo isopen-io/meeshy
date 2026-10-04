@@ -3,7 +3,6 @@ import { describe, expect, test } from 'bun:test';
 import { registerRequestSchema } from '@meeshy/shared/types/api-schemas/auth';
 
 import {
-  hasPhoneNumber,
   PASSWORD_MIN,
   composeRegisterBody,
   defaultLanguages,
@@ -38,7 +37,7 @@ function baseForm(overrides: Partial<SignupFormState> = {}): SignupFormState {
     username: null,
     displayName: 'Ada Lovelace',
     email: 'ada@example.com',
-    phoneDigits: '',
+    phoneDigits: '0612345678',
     password: 'un-mot-de-passe-solide',
     country: FR,
     systemLanguage: 'fr',
@@ -93,58 +92,50 @@ describe('hasDisplayName — TAPÉ, ce qui n’est pas la même question que VAL
   test('saisie refusée par le pattern ⇒ true — elle est tapée', () => expect(hasDisplayName('123')).toBe(true));
 });
 
-describe('canSubmit — l’ADRESSE seule suffit (#6441)', () => {
-  test('nom + e-mail + mot de passe valides ⇒ actif', () => expect(canSubmit(baseForm())).toBe(true));
+describe('canSubmit — l’ADRESSE et le NUMÉRO (#6441, #9343)', () => {
+  test('nom + e-mail + numéro + mot de passe valides ⇒ actif', () => expect(canSubmit(baseForm())).toBe(true));
   /**
-   * LE témoin de ce lot. Il tombait sur `false` avant #6441 : l'écran
-   * promettait l'inscription par adresse seule et gardait le bouton éteint.
-   * Il ne peut pas verdir par un motif étranger — les deux autres champs y
-   * sont VIDES, donc seul le relâchement du nom affiché peut l'activer.
+   * Le témoin de #6441, gardé : nom affiché et mot de passe VIDES n'éteignent
+   * rien. Le numéro, lui, est désormais requis par l'écran (#9343) — il reste
+   * renseigné ici pour que seul le relâchement des deux autres champs juge.
    */
-  test('nom affiché vide, mot de passe vide, téléphone vide ⇒ ACTIF', () =>
-    expect(canSubmit(baseForm({ displayName: '', password: '', phoneDigits: '' }))).toBe(true));
-  test('adresse vide ⇒ inactif — elle est le seul champ requis', () =>
+  test('nom affiché vide, mot de passe vide ⇒ ACTIF', () =>
+    expect(canSubmit(baseForm({ displayName: '', password: '' }))).toBe(true));
+  test('adresse vide ⇒ inactif', () =>
     expect(canSubmit(baseForm({ displayName: '', email: '', password: '' }))).toBe(false));
   test('nom affiché TAPÉ mais sans lettre ⇒ inactif — une saisie fournie tient sa borne', () =>
     expect(canSubmit(baseForm({ displayName: '123 456' }))).toBe(false));
   test('mot de passe trop court ⇒ inactif', () =>
     expect(canSubmit(baseForm({ password: 'a'.repeat(PASSWORD_MIN - 1) }))).toBe(false));
-  test('téléphone vide ⇒ n’empêche rien', () => expect(canSubmit(baseForm({ phoneDigits: '' }))).toBe(true));
-  test('mot de passe vide ⇒ n’empêche rien non plus (#6424)', () =>
+  test('mot de passe vide ⇒ n’empêche rien (#6424)', () =>
     expect(canSubmit(baseForm({ password: '' }))).toBe(true));
 });
 
-describe('le numéro FOURNI doit être plausible (#6479)', () => {
-  // Les trois exemples de la directive porteur, rejoués ICI parce que c'est
-  // `canSubmit` qui décide si l'utilisateur peut envoyer — la loi partagée a
-  // ses propres témoins, ce bloc mesure son BRANCHEMENT.
+describe('le numéro est REQUIS par l’écran, et plausible (#6479, #9343)', () => {
+  // Directive porteur 2026-10-04 : le numéro est obligatoire dans les
+  // FRONTENDS seulement — la passerelle accepte toujours une adresse seule.
+  test('champ VIDE ⇒ bouton éteint', () => expect(canSubmit(baseForm({ phoneDigits: '' }))).toBe(false));
+  test('des espaces ou des tirets seuls ne font pas un numéro ⇒ bouton éteint', () =>
+    expect(canSubmit(baseForm({ phoneDigits: ' - ' }))).toBe(false));
   test('« 1111100000 » ⇒ bouton éteint', () =>
     expect(canSubmit(baseForm({ phoneDigits: '1111100000' }))).toBe(false));
   test('« 42424242 » ⇒ bouton éteint', () =>
     expect(canSubmit(baseForm({ phoneDigits: '42424242' }))).toBe(false));
   test('un vrai numéro ⇒ bouton actif', () =>
     expect(canSubmit(baseForm({ phoneDigits: '0612345678' }))).toBe(true));
-  test('champ VIDE ⇒ bouton actif — le numéro n’est pas requis', () =>
-    expect(canSubmit(baseForm({ phoneDigits: '' }))).toBe(true));
-  test('le motif du refus est NOMMÉ, pas un booléen nu', () =>
-    expect(phoneRefusal('1111100000')).toBe('identical-run'));
-  test('isPhoneValid suit la loi partagée', () => {
-    expect(isPhoneValid('')).toBe(true);
+  test('le motif du refus est NOMMÉ — l’absence comprise', () => {
+    expect(phoneRefusal('')).toBe('missing');
+    expect(phoneRefusal(' - ')).toBe('missing');
+    expect(phoneRefusal('06123456')).toBe('too-short');
+    expect(phoneRefusal('1111100000')).toBe('identical-run');
+    expect(phoneRefusal('424242424242')).toBe('repeated-pattern');
+    expect(phoneRefusal('06 12 34 56 78')).toBeNull();
+  });
+  test('isPhoneValid n’accepte plus le vide', () => {
+    expect(isPhoneValid('')).toBe(false);
     expect(isPhoneValid('06123456')).toBe(false);
+    expect(isPhoneValid('06 12 34 56 78')).toBe(true);
   });
-});
-
-describe('hasPhoneNumber — la question de l’alerte d’inscription (#8040)', () => {
-  test('champ vide ⇒ aucun numéro', () => expect(hasPhoneNumber(baseForm({ phoneDigits: '' }))).toBe(false));
-  test('des espaces ou des tirets seuls ne font pas un numéro', () =>
-    expect(hasPhoneNumber(baseForm({ phoneDigits: ' - ' }))).toBe(false));
-  test('un chiffre tapé ⇒ un numéro — et c’est lui que la charge porte', () => {
-    const form = baseForm({ phoneDigits: '06 12 34 56 78' });
-    expect(hasPhoneNumber(form)).toBe(true);
-    expect(composeRegisterBody(form).phoneNumber).toBe('0612345678');
-  });
-  test('sans numéro, la charge ne porte aucune clé téléphone', () =>
-    expect('phoneNumber' in composeRegisterBody(baseForm({ phoneDigits: ' ' }))).toBe(false));
 });
 
 describe('composeRegisterBody — sans nom affiché TAPÉ (#6441, révisé #6479)', () => {
@@ -250,10 +241,10 @@ describe('composeRegisterBody — la charge EXACTE de POST /auth/register (regis
     expect(body.phoneCountryCode).toBe('FR');
   });
 
-  test('téléphone vide ⇒ les DEUX clés absentes', () => {
-    const body = composeRegisterBody(baseForm({ phoneDigits: '' }));
-    expect('phoneNumber' in body).toBe(false);
-    expect('phoneCountryCode' in body).toBe(false);
+  test('le couple numéro + pays part TOUJOURS — l’écran ne compose plus de charge sans numéro (#9343)', () => {
+    const body = composeRegisterBody(baseForm({ phoneDigits: '06 12 34 56 78', country: countryOf('BE')! }));
+    expect(body.phoneNumber).toBe('0612345678');
+    expect(body.phoneCountryCode).toBe('BE');
   });
 
   test('un code de parrainage BIEN FORMÉ part en `affiliateToken`, normalisé (#8058)', () => {

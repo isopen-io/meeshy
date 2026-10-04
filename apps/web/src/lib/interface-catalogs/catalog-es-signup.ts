@@ -1,14 +1,9 @@
 /**
  * L'INSCRIPTION — tranche du catalogue `catalog-es.ts`, extraite pour tenir le budget
- * de taille (CLAUDE.md) : le catalogue la RÉPAND. L'alerte d'une inscription
- * SANS numéro de téléphone (#8040) : ce que le numéro protège, et les deux
- * gestes — l'ajouter, ou continuer sans lui.
+ * de taille (CLAUDE.md) : le catalogue la RÉPAND. Le numéro de téléphone,
+ * REQUIS par l'écran (#9343) : ce qui manque, ou ce qui cloche.
  */
 const esSignup = {
-  'signup.phoneNudge.title': '¿Añadir un número de teléfono?',
-  'signup.phoneNudge.body': 'Tu número sirve para proteger tu cuenta y recuperarla si pierdes el acceso a tu correo electrónico.',
-  'signup.phoneNudge.add': 'Añadir mi número',
-  'signup.phoneNudge.continue': 'Continuar de todos modos',
   'signup.emailTaken.message': 'Ya existe una cuenta con esta dirección.',
   'signup.emailTaken.sendLink': 'Recibir un enlace de inicio de sesión',
   'signup.emailTaken.forgotPassword': '¿Olvidaste tu contraseña?',
@@ -16,8 +11,9 @@ const esSignup = {
   'signup.emailTaken.itsMe': 'Soy yo — recuperar mi cuenta',
   'signup.emailTaken.notMe': 'No soy yo',
   'signup.emailTaken.notMeNote': 'Se pedirá el código enviado a esta dirección para obtenerla.',
-  'signup.phone.later': 'Más tarde',
-  'signup.phone.later.a11y': 'Más tarde, continuar sin número',
+  'signup.phone.required': 'Introduce tu número de teléfono para continuar.',
+  'signup.phone.tooShort': 'Este número es demasiado corto: al menos {min} dígitos.',
+  'signup.phone.implausible': 'Este número no parece real: compruébalo.',
   'signup.card.title': 'Tu cuenta',
   'signup.card.validateNow': 'Validar mi cuenta ahora',
   'signup.card.validateNow.busy': 'Creando la cuenta…',

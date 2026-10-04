@@ -63,19 +63,16 @@ function mountAt(url: string, validation: ReferralValidation = VALID): HTMLDivEl
 }
 
 /**
- * L'ADRESSE NE PARAÎT QU'APRÈS LE TÉLÉPHONE (#8288) — un numéro donné puis
- * effacé la fait paraître SANS choisir « l'e-mail seulement » : l'alerte
- * « sans numéro » (#8040) reste alors due, comme avant le réagencement.
+ * L'ADRESSE NE PARAÎT QU'APRÈS LE TÉLÉPHONE (#8288), et le numéro est REQUIS
+ * par l'écran (#9343) : un numéro plausible la fait paraître, et reste.
  */
 function revealEmail(el: HTMLElement) {
   if (el.querySelector('#signup-email') !== null) return;
-  for (const value of ['612345678', '']) {
-    const phone = el.querySelector('#signup-phone') as HTMLInputElement;
-    act(() => {
-      phone.value = value;
-      phone.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-  }
+  const phone = el.querySelector('#signup-phone') as HTMLInputElement;
+  act(() => {
+    phone.value = '612345678';
+    phone.dispatchEvent(new Event('input', { bubbles: true }));
+  });
 }
 
 function type(el: HTMLDivElement, selector: string, value: string) {
@@ -240,13 +237,9 @@ function mountRegistering(url: string, reply: ApiResult<RegisterResponseData>): 
   return { el: container, sent };
 }
 
-async function submit(el: HTMLDivElement, { withPhone }: { readonly withPhone: boolean }) {
+async function submit(el: HTMLDivElement) {
   await act(async () => {
     el.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-  });
-  if (withPhone) return;
-  await act(async () => {
-    (el.querySelector('[data-confirm="confirm"]') as HTMLButtonElement).click();
   });
 }
 
@@ -256,10 +249,10 @@ describe('le code de parrainage part AVEC l’inscription (#8058)', () => {
     forgetPendingVerification();
   });
 
-  test('sans numéro (code dans la carte) : `affiliateToken` est dans le corps, et le code mémorisé est oublié', async () => {
+  test('compte qui attend son code dans la carte : `affiliateToken` est dans le corps, et le code mémorisé est oublié', async () => {
     const { el, sent } = mountRegistering('/signup?ref=aff_abc123', AWAITING_CODE);
     openIdentity(el);
-    await submit(el, { withPhone: false });
+    await submit(el);
     expect(sent.length).toBe(1);
     expect(sent[0]?.affiliateToken).toBe('aff_abc123');
     expect(window.localStorage.getItem(REFERRAL_MEMORY_KEY)).toBeNull();
@@ -270,7 +263,7 @@ describe('le code de parrainage part AVEC l’inscription (#8058)', () => {
     const { el, sent } = mountRegistering('/signup?ref=aff_abc123', WITH_SESSION);
     openIdentity(el);
     type(el, '#signup-phone', '612345678');
-    await submit(el, { withPhone: true });
+    await submit(el);
     expect(sent[0]?.affiliateToken).toBe('aff_abc123');
     expect(sent[0]?.phoneNumber).toBe('612345678');
     expect(window.localStorage.getItem(REFERRAL_MEMORY_KEY)).toBeNull();
@@ -280,7 +273,7 @@ describe('le code de parrainage part AVEC l’inscription (#8058)', () => {
     window.localStorage.clear();
     const { el, sent } = mountRegistering('/signup', AWAITING_CODE);
     openIdentity(el);
-    await submit(el, { withPhone: false });
+    await submit(el);
     expect('affiliateToken' in (sent[0] ?? {})).toBe(false);
     expect('affiliateSessionKey' in (sent[0] ?? {})).toBe(false);
   });
@@ -288,7 +281,7 @@ describe('le code de parrainage part AVEC l’inscription (#8058)', () => {
   test('une inscription REFUSÉE garde le code pour la tentative suivante', async () => {
     const { el, sent } = mountRegistering('/signup?ref=aff_abc123', REFUSED);
     openIdentity(el);
-    await submit(el, { withPhone: false });
+    await submit(el);
     expect(sent[0]?.affiliateToken).toBe('aff_abc123');
     expect(window.localStorage.getItem(REFERRAL_MEMORY_KEY) ?? '').toContain('aff_abc123');
   });

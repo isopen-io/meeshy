@@ -72,7 +72,7 @@ const USERNAME_RULE_MESSAGE = `De ${usernameMinLength} à ${usernameMaxLength} c
 const USERNAME_TAKEN_CODE = 'USERNAME_TAKEN';
 const PHONE_INVALID_CODE = 'PHONE_INVALID';
 
-const PHONE_OWNERSHIP_CONFLICT_MESSAGE = 'Ce numéro est déjà rattaché à un compte. Laissez-le vide pour continuer.';
+const PHONE_OWNERSHIP_CONFLICT_MESSAGE = 'Ce numéro est déjà rattaché à un compte. Saisissez-en un autre, ou connectez-vous.';
 const NETWORK_UNAVAILABLE_MESSAGE = 'Pas de connexion. Vérifiez votre réseau et réessayez.';
 const REJECTION_GENERIC_MESSAGE = "L'inscription a été refusée — réessayez dans un instant.";
 /** Le repli générique des trois flux neufs (#5816) — `MagicLinkView.swift`'s

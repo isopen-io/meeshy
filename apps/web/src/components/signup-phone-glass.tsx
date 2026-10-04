@@ -1,32 +1,49 @@
 import { useRef, type Ref } from 'react';
 
+import { PHONE_MIN_DIGITS } from '@meeshy/shared/utils/phone-plausibility';
+
 import { Glyph } from '@/components/glyph';
 import { countryName, type Country } from '@/lib/countries';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { SignupPhoneRefusal } from '@/lib/signup-form';
 import { prefersReducedMotion } from '@/lib/view/effects-runner';
 import { playTypingWave } from '@/lib/view/typing-wave';
+
+/**
+ * CE QUE LE REFUS DU NUMÉRO DIT (#9343) — les mêmes mots qu'iOS
+ * (`auth.signup.phone.required` / `.tooShort` / `.implausible`). Les deux
+ * motifs de remplissage (chiffres identiques, motif répété) se corrigent de la
+ * même façon : vérifier son numéro.
+ */
+export function phoneRefusalMessage(language: InterfaceLanguage, refusal: SignupPhoneRefusal): string {
+  switch (refusal) {
+    case 'missing':
+      return translate(language, 'signup.phone.required');
+    case 'too-short':
+      return translate(language, 'signup.phone.tooShort', { min: String(PHONE_MIN_DIGITS) });
+    case 'identical-run':
+    case 'repeated-pattern':
+      return translate(language, 'signup.phone.implausible');
+  }
+}
 
 /**
  * PHASE 1 DE L'INSCRIPTION — LE TÉLÉPHONE, EN VERRE LIQUIDE (#8288).
  *
  * Le numéro vient d'abord, dans une barre de verre qui ONDULE À LA FRAPPE,
  * comme la barre du composeur universel iOS (`typing-wave.ts`). Le pays se
- * choisit dans la barre même ; un lien discret, « Continuer avec l'e-mail
- * seulement », passe le numéro (décision porteur 2026-09-27) — il disparaît
- * une fois l'adresse parue : il n'y a plus rien à passer.
- *
- * Jamais annoncé « facultatif » (#6582) : le lien le dit par le geste.
+ * choisit dans la barre même. Le numéro est REQUIS par l'écran (#9343,
+ * directive porteur 2026-10-04) : rien ne le passe, et l'adresse ne paraît
+ * qu'à un numéro plausible. Le refus se dit SOUS le champ, lié à la saisie
+ * par `aria-describedby` et annoncé (`role="alert"`).
  */
 export function SignupPhoneGlass({
-  language,
   locale,
   country,
   phoneDigits,
   onPhoneDigits,
   onOpenCountry,
-  onSkip,
-  showsSkip,
   focused,
   onFocus,
   onBlur,
@@ -34,17 +51,15 @@ export function SignupPhoneGlass({
   benefit,
   inputRef,
 }: {
-  readonly language: InterfaceLanguage;
   readonly locale: string;
   readonly country: Country;
   readonly phoneDigits: string;
   readonly onPhoneDigits: (value: string) => void;
   readonly onOpenCountry: () => void;
-  readonly onSkip: () => void;
-  readonly showsSkip: boolean;
   readonly focused: boolean;
   readonly onFocus: () => void;
   readonly onBlur: () => void;
+  /** Le refus à dire sous le champ — celui du serveur, ou celui de la saisie. */
   readonly error: string | undefined;
   /** Ce que le numéro ouvre — lu d'emblée sous le champ, plus derrière un (i) (#8842). */
   readonly benefit: string;
@@ -53,28 +68,9 @@ export function SignupPhoneGlass({
   const glass = useRef<HTMLDivElement>(null);
   return (
     <div className="grid gap-2">
-      {/* « PLUS TARD → » SUR LA LIGNE DU LIBELLÉ (#8842) — le refus reste un
-          vrai bouton, lisible, 44 px, nommé pour un lecteur d'écran. */}
-      <div data-signup-phone-label-row className="flex items-center justify-between gap-3">
-        <label htmlFor="signup-phone" className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
-          Téléphone
-        </label>
-        {showsSkip ? (
-          <button
-            type="button"
-            data-signup-skip-phone
-            onClick={onSkip}
-            aria-label={translate(language, 'signup.phone.later.a11y')}
-            className="inline-flex items-center gap-1 rounded-chip px-2 text-caption font-semibold focus-visible:outline-2"
-            style={{ minHeight: 44, color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
-          >
-            {translate(language, 'signup.phone.later')}
-            <svg aria-hidden="true" viewBox="0 0 256 256" width="14" height="14" fill="currentColor" className="rtl:-scale-x-100">
-              <path d="M221.66,133.66l-72,72a8,8,0,0,1-11.32-11.32L196.69,136H40a8,8,0,0,1,0-16H196.69L138.34,61.66a8,8,0,0,1,11.32-11.32l72,72A8,8,0,0,1,221.66,133.66Z" />
-            </svg>
-          </button>
-        ) : null}
-      </div>
+      <label htmlFor="signup-phone" className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
+        Téléphone
+      </label>
       <div
         ref={glass}
         data-signup-phone-glass
@@ -121,12 +117,13 @@ export function SignupPhoneGlass({
           placeholder="Numéro de téléphone"
           className="w-0 min-w-0 flex-1 bg-transparent py-3 ps-2 text-input outline-none"
           style={{ color: 'var(--color-ios-ink)' }}
-          aria-describedby="signup-phone-hint"
+          aria-describedby={error !== undefined ? 'signup-phone-error signup-phone-hint' : 'signup-phone-hint'}
           aria-invalid={error !== undefined}
+          aria-required="true"
         />
       </div>
       {error !== undefined ? (
-        <p role="alert" className="text-caption" style={{ color: 'var(--ios-error)' }}>
+        <p id="signup-phone-error" data-signup-phone-error role="alert" className="text-caption" style={{ color: 'var(--ios-error)' }}>
           {error}
         </p>
       ) : null}
