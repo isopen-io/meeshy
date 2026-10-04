@@ -1,12 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
+import { useId, type ReactNode } from 'react';
 
 import { AdminBadge, AdminInterpretedBadge, AdminLanguageBadge } from '@/components/admin/badges';
+import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminEntityChip, AdminLink } from '@/components/admin/entity-chip';
 import { AdminFiche, AdminFicheSection, AdminIdentityHeader, AdminStatStrip } from '@/components/admin/fiche';
 import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from '@/components/admin/meta';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminDeniedInline, AdminEmptyState, AdminErrorState, AdminInlineNotice, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminSummaryCard, AdminSummaryGrid } from '@/components/admin/summary-card';
 import { BRAND, INK2 } from '@/components/admin/tone';
 import { adminGroupOf } from '@/lib/admin/admin-routes';
 import { interpretPostState, interpretPostType, interpretPostVisibility } from '@/lib/admin/interpret/enums';
@@ -16,6 +19,8 @@ import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { communityRef, personRef, postRef } from '@/lib/admin/post-entities';
 import { audiencePhrase, translationsPhrase } from '@/lib/admin/post-phrases';
 import { postStateOf } from '@/lib/admin/post-state';
+import { ADMIN_POST_SECTION_GLYPHS, ADMIN_POST_SECTION_TITLES, ADMIN_POST_SECTIONS, postSectionsOf, postSummaryOf, type AdminPostSection } from '@/lib/admin/publication-summaries';
+import { useAdminOpen } from '@/lib/admin/use-admin-open';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminPostQueryKey, loadAdminPost, type AdminPostFiche } from '@/lib/api/admin-posts-detail';
@@ -27,7 +32,7 @@ import { participantAvatarOf } from '@/lib/view/conversation';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
 import { AdminAnnouncement, AdminSkeleton } from './admin-parts';
-import { AdminPostRemoval, PostCommentsSection, PostMediaSection, PostViewersSection } from './admin-post-parts';
+import { AdminPostRemoval, PostAudioTrack, PostCommentsSection, PostEngagementSection, PostMediaSection, PostStorySection, PostViewersSection } from './admin-post-parts';
 
 /**
  * **LA FICHE D'UNE PUBLICATION** (#8876) — `/admin/posts/$post` ·
@@ -38,6 +43,13 @@ import { AdminPostRemoval, PostCommentsSection, PostMediaSection, PostViewersSec
  * six compteurs, la communauté et le repartage, les derniers commentaires et
  * spectateurs ; les métadonnées interprétées — et le geste « Retirer la
  * publication ».
+ *
+ * **Lue par sections** (spec 2026-10-04 § 3) : l'en-tête, le geste, les six
+ * compteurs et les métadonnées restent visibles ; contenu (et piste audio d'un
+ * statut, jouable), médias (et leurs transcriptions), auteur et contexte,
+ * audience et réactions, effets de la story (lien, autocollants, style),
+ * commentaires (leurs j'aime et réponses), spectateurs (quand, combien de
+ * temps) sont des cartes qui ouvrent leur modale (`?open=<id>`).
  *
  * **Ce que la fiche ne montre jamais** : la position (`geoPoint`) et la liste des
  * personnes visées par l'audience — seulement « visible par N personnes ». Le
@@ -75,6 +87,7 @@ function Content({ language, fiche }: { readonly language: AdminLanguage; readon
         )}
         <span>· {translationsPhrase(fiche.translationCount, language)}</span>
       </p>
+      {fiche.audio === null ? null : <PostAudioTrack language={language} audio={fiche.audio} />}
     </AdminFicheSection>
   );
 }
@@ -179,6 +192,8 @@ export function AdminPostPanel({
 }) {
   const reach = useAdminReach();
   const announcer = useLiveAnnouncer();
+  const sections = useAdminOpen(ADMIN_POST_SECTIONS);
+  const cardsTitle = useId();
 
   const query = useQuery({
     queryKey: adminPostQueryKey(postId),
@@ -226,6 +241,27 @@ export function AdminPostPanel({
   const state = interpretPostState(postStateOf(fiche, now), language);
   const photo = participantAvatarOf({ avatar: fiche.author?.avatar ?? null });
   const secondary = created === null ? personSecondary(fiche.author?.username) : translateAdmin(language, 'admin.posts.publishedOn', { date: `${created.absolute} · ${created.relative}` });
+  const shown = postSectionsOf(fiche);
+
+  /** Le contenu de chaque modale : la section d'hier, telle quelle — montée seulement à l'ouverture. */
+  const detail = (section: AdminPostSection): ReactNode => {
+    switch (section) {
+      case 'content':
+        return <Content language={language} fiche={fiche} />;
+      case 'media':
+        return <PostMediaSection language={language} media={fiche.media} />;
+      case 'context':
+        return <Context language={language} fiche={fiche} />;
+      case 'engagement':
+        return <PostEngagementSection language={language} fiche={fiche} />;
+      case 'story':
+        return fiche.story === null ? null : <PostStorySection language={language} story={fiche.story} />;
+      case 'comments':
+        return <PostCommentsSection language={language} fiche={fiche} now={now} />;
+      case 'viewers':
+        return <PostViewersSection language={language} fiche={fiche} now={now} />;
+    }
+  };
 
   return (
     <div className="grid gap-6" data-admin-screen="post">
@@ -284,12 +320,44 @@ export function AdminPostPanel({
         }
         aside={<Metadata language={language} fiche={fiche} now={now} onAnnounce={announcer.announce} />}
       >
-        <Content language={language} fiche={fiche} />
-        <PostMediaSection language={language} media={fiche.media} />
-        <Context language={language} fiche={fiche} />
-        <PostCommentsSection language={language} fiche={fiche} now={now} />
-        <PostViewersSection language={language} fiche={fiche} />
+        <section aria-labelledby={cardsTitle} className="@container grid gap-3" data-admin-post-cards>
+          <h2 id={cardsTitle} className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
+            {translateAdmin(language, 'admin.posts.cards.title')}
+          </h2>
+          <AdminSummaryGrid>
+            {shown.map((section) => {
+              const summary = postSummaryOf(section, fiche, language);
+              return (
+                <AdminSummaryCard
+                  key={section}
+                  language={language}
+                  id={section}
+                  title={translateAdmin(language, ADMIN_POST_SECTION_TITLES[section])}
+                  glyph={ADMIN_POST_SECTION_GLYPHS[section]}
+                  values={summary.values}
+                  sentence={summary.sentence}
+                  onOpen={() => sections.open(section)}
+                />
+              );
+            })}
+          </AdminSummaryGrid>
+        </section>
       </AdminFiche>
+      {shown.map((section) => (
+        <AdminDetailSheet
+          key={section}
+          language={language}
+          id={`post-${section}`}
+          title={translateAdmin(language, ADMIN_POST_SECTION_TITLES[section])}
+          open={sections.active === section}
+          onClose={sections.close}
+          inAddress={sections.inAddress}
+        >
+          <div className="grid gap-6" data-admin-post-panel={section}>
+            {detail(section)}
+          </div>
+        </AdminDetailSheet>
+      ))}
       <AdminAnnouncement text={announcer.text} />
     </div>
   );

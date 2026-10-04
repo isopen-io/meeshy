@@ -4,12 +4,14 @@ import { AdminGlyph, type AdminGlyphName } from '@/components/admin/admin-glyph'
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
 import { AdminEntityChip } from '@/components/admin/entity-chip';
 import { AdminFicheSection } from '@/components/admin/fiche';
-import { AdminMomentText } from '@/components/admin/meta';
+import { AdminMetaRow, AdminMomentText } from '@/components/admin/meta';
 import { BRAND, EDGE, INK2, SURFACE } from '@/components/admin/tone';
 import { formatBytes, formatCount } from '@/lib/admin/interpret/numbers';
+import { languageName, sentenceCase } from '@/lib/admin/interpret/language';
 import { adminMomentOf, formatDuration } from '@/lib/admin/interpret/time';
 import { personRef } from '@/lib/admin/post-entities';
 import { mediaKindOf, type MediaKind } from '@/lib/admin/post-phrases';
+import { storyStyleWords } from '@/lib/admin/publication-summaries';
 import { withPostRemoved } from '@/lib/admin/post-state';
 import { translatedRefusal, useAdminAction } from '@/lib/admin/use-admin-action';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -20,6 +22,7 @@ import {
   removeAdminPost,
   type AdminPostFiche,
   type AdminPostMedia,
+  type AdminPostStory,
   type AdminPostRemoval as RemovalResult,
 } from '@/lib/api/admin-posts-detail';
 import type { ApiResult } from '@/lib/api/http';
@@ -92,6 +95,15 @@ function MediaTile({ language, media, index }: { readonly language: AdminLanguag
           {translateAdmin(language, 'admin.posts.media.alt', { text: media.alt })}
         </span>
       )}
+      {/* La transcription d'un audio ou d'une vidéo (servie, jamais affichée — audit 2026-10-04), avec sa langue NOMMÉE. */}
+      {media.transcription === null ? null : (
+        <span data-admin-media-transcription className="grid gap-1 break-words text-caption" {...(media.transcription.language === null ? {} : { lang: media.transcription.language })}>
+          {translateAdmin(language, 'admin.posts.media.transcription', { text: media.transcription.text })}
+          {media.transcription.language === null ? null : (
+            <span style={{ color: INK2 }}>{sentenceCase(languageName(media.transcription.language, language), language)}</span>
+          )}
+        </span>
+      )}
     </li>
   );
 }
@@ -138,6 +150,13 @@ export function PostCommentsSection({ language, fiche, now }: { readonly languag
                   <p className="break-words text-body" style={comment.content === null ? { color: INK2 } : undefined}>
                     {comment.content ?? translateAdmin(language, 'admin.posts.comments.noText')}
                   </p>
+                  <p data-admin-comment-facts className="text-caption" style={{ color: INK2 }}>
+                    {[
+                      translateAdmin(language, 'admin.posts.comments.likes', { count: formatCount(comment.likeCount, language) }),
+                      translateAdmin(language, 'admin.posts.comments.replies', { count: formatCount(comment.replyCount, language) }),
+                      ...(comment.isEdited ? [translateAdmin(language, 'admin.posts.comments.edited')] : []),
+                    ].join(' · ')}
+                  </p>
                 </li>
               );
             })}
@@ -148,7 +167,7 @@ export function PostCommentsSection({ language, fiche, now }: { readonly languag
   );
 }
 
-export function PostViewersSection({ language, fiche }: { readonly language: AdminLanguage; readonly fiche: AdminPostFiche }) {
+export function PostViewersSection({ language, fiche, now }: { readonly language: AdminLanguage; readonly fiche: AdminPostFiche; readonly now: Date }) {
   return (
     <AdminFicheSection id="viewers" title={translateAdmin(language, 'admin.posts.section.viewers')}>
       {fiche.viewers.length === 0 ? (
@@ -163,12 +182,19 @@ export function PostViewersSection({ language, fiche }: { readonly language: Adm
               total: formatCount(Math.max(fiche.viewerTotal, fiche.viewers.length), language),
             })}
           </p>
-          <ul className="flex flex-wrap gap-x-6 gap-y-1">
+          {/* Chaque vue dit QUAND et COMBIEN DE TEMPS (servis, jamais affichés — audit 2026-10-04). */}
+          <ul className="grid gap-2">
             {fiche.viewers.map((viewer) => {
               const person = personRef(viewer.user, language);
               return person === null ? null : (
-                <li key={viewer.user.id} data-admin-viewer={viewer.user.id}>
+                <li key={viewer.user.id} data-admin-viewer={viewer.user.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
                   <AdminEntityChip language={language} entity={person} size="sm" />
+                  <span className="flex flex-wrap items-center gap-2 text-caption" style={{ color: INK2 }}>
+                    <AdminMomentText moment={adminMomentOf(viewer.viewedAt, now, language)} />
+                    {viewer.durationMs === null ? null : (
+                      <span data-admin-viewer-duration>{translateAdmin(language, 'admin.posts.viewers.viewedFor', { duration: formatDuration(viewer.durationMs, 'ms', language) })}</span>
+                    )}
+                  </span>
                 </li>
               );
             })}
@@ -176,6 +202,110 @@ export function PostViewersSection({ language, fiche }: { readonly language: Adm
         </>
       )}
     </AdminFicheSection>
+  );
+}
+
+/**
+ * L'AUDIENCE ET LES RÉACTIONS (audit 2026-10-04) — ce que la passerelle comptait
+ * sans écran : réactions par emoji (jamais QUI a réagi), impressions, ouvertures,
+ * vues qualifiées, lectures, téléchargements.
+ */
+export function PostEngagementSection({ language, fiche }: { readonly language: AdminLanguage; readonly fiche: AdminPostFiche }) {
+  const metrics: readonly (readonly [string, AdminPlainCatalogKey, number])[] = [
+    ['reactions', 'admin.posts.metric.reactions', fiche.reactionTally.total],
+    ['impressions', 'admin.posts.metric.impressions', fiche.metrics.impressions],
+    ['opens', 'admin.posts.metric.opens', fiche.metrics.opens],
+    ['qualifiedViews', 'admin.posts.metric.qualifiedViews', fiche.metrics.qualifiedViews],
+    ['plays', 'admin.posts.metric.plays', fiche.metrics.plays],
+    ['downloads', 'admin.posts.metric.downloads', fiche.metrics.downloads],
+  ];
+  return (
+    <AdminFicheSection id="engagement" title={translateAdmin(language, 'admin.posts.section.engagement')}>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 @xl:grid-cols-3">
+        {metrics.map(([anchor, label, value]) => (
+          <AdminMetaRow key={anchor} anchor={`metric-${anchor}`} label={translateAdmin(language, label)} value={formatCount(value, language)} />
+        ))}
+      </dl>
+      <h3 className="text-caption font-semibold" style={{ color: INK2 }}>
+        {translateAdmin(language, 'admin.posts.reactions.byEmoji')}
+      </h3>
+      {fiche.reactionTally.byEmoji.length === 0 ? (
+        <p className="text-body" style={{ color: INK2 }}>
+          {translateAdmin(language, 'admin.posts.reactions.empty')}
+        </p>
+      ) : (
+        <ul className="flex flex-wrap gap-2" data-admin-reactions>
+          {fiche.reactionTally.byEmoji.map(({ emoji, count }) => (
+            <li key={emoji} data-admin-reaction={emoji} className="inline-flex items-center gap-2 rounded-chip px-3 py-1 text-body" style={{ border: `1px solid ${EDGE}`, backgroundColor: SURFACE }}>
+              <span>{emoji}</span>
+              <span className="tabular-nums">{formatCount(count, language)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </AdminFicheSection>
+  );
+}
+
+/**
+ * LES EFFETS D'UNE STORY (audit 2026-10-04) — le LIEN qu'elle porte (titre,
+ * domaine, adresse ouvrable dans un nouvel onglet), ses autocollants, son style
+ * en mots. Jamais le blob de scène.
+ */
+export function PostStorySection({ language, story }: { readonly language: AdminLanguage; readonly story: AdminPostStory }) {
+  const style = storyStyleWords(story, language);
+  return (
+    <AdminFicheSection id="story" title={translateAdmin(language, 'admin.posts.section.story')}>
+      <dl className="grid gap-3">
+        <AdminMetaRow
+          anchor="story-link"
+          label={translateAdmin(language, 'admin.posts.story.link')}
+          value={
+            story.linkUrl === null ? (
+              translateAdmin(language, 'admin.posts.story.noLink')
+            ) : !/^https?:\/\//i.test(story.linkUrl) ? (
+              /* Une adresse qui n'est pas du web (`javascript:`, `data:`…) se LIT, elle ne s'ouvre pas. */
+              <span data-admin-story-link-inert className="break-all font-mono text-caption">
+                {story.linkUrl}
+              </span>
+            ) : (
+              <a
+                href={story.linkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center break-all underline"
+                style={{ minHeight: 44, color: BRAND }}
+              >
+                {story.linkTitle ?? story.linkDomain ?? story.linkUrl}
+              </a>
+            )
+          }
+          explain={story.linkUrl === null || story.linkDomain === null ? null : story.linkDomain}
+        />
+        <AdminMetaRow anchor="story-stickers" label={translateAdmin(language, 'admin.posts.story.stickers')} value={formatCount(story.stickerCount, language)} />
+        <AdminMetaRow
+          anchor="story-style"
+          label={translateAdmin(language, 'admin.posts.story.style')}
+          value={style.length === 0 ? translateAdmin(language, 'admin.posts.story.styleNone') : style.join(' · ')}
+        />
+        {story.sceneCount === 0 ? null : (
+          <AdminMetaRow anchor="story-scenes" label={translateAdmin(language, 'admin.posts.story.scenes')} value={formatCount(story.sceneCount, language)} />
+        )}
+      </dl>
+    </AdminFicheSection>
+  );
+}
+
+/** La piste audio d'un statut, JOUABLE : le lecteur natif, avec sa durée dite en mots. */
+export function PostAudioTrack({ language, audio }: { readonly language: AdminLanguage; readonly audio: NonNullable<AdminPostFiche['audio']> }) {
+  return (
+    <div data-admin-post-audio className="grid gap-1">
+      <span className="text-caption" style={{ color: INK2 }}>
+        {translateAdmin(language, 'admin.posts.audio.title')}
+        {audio.durationMs === null ? null : ` · ${formatDuration(audio.durationMs, 'ms', language)}`}
+      </span>
+      <audio controls preload="none" src={attachmentSrc(audio.url)} className="w-full" style={{ minHeight: 44 }} />
+    </div>
   );
 }
 
