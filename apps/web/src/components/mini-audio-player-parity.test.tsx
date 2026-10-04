@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Attachment } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { navigate } from '@/lib/router';
 import { audioCarryStore, carryAudio, concealsMiniPlayer, dropCarriedAudio, publishCarriedPlayback, type CarriedAudio } from '@/lib/view/audio-carry';
 import type { MediaCarrier } from '@/lib/view/media';
 import { createMediaCoordinator } from '@/lib/view/media-coordinator';
@@ -112,7 +113,16 @@ const viewerTrack = (): HTMLAudioElement | null => document.body.querySelector<H
 
 describe('Le toucher ouvre la conversation du vocal, comme iOS (#9279)', () => {
   test('l’hôte ouvre la conversation du vocal ; la lecture continue, et le lecteur s’y efface', async () => {
-    window.history.replaceState(null, '', '/');
+    // `navigate(…, true)` — jamais `window.history.replaceState` à la main :
+    // le routeur garde l'URL courante dans un cache de module
+    // (`currentLocation`, `src/lib/router.tsx`), que seul `navigate()` tient
+    // synchronisé avec le DOM. Un appel brut désynchronise ce cache d'une
+    // exécution de test à l'autre dans le MÊME process `bun test` (#9306) :
+    // le clic suivant appelle `navigate('/c/c-medias')`, dont le `notify()`
+    // compare au cache PÉRIMÉ et, par coïncidence de chemin avec un fichier
+    // de test antérieur, avale la notification sans jamais prévenir les
+    // abonnés.
+    act(() => navigate('/', true));
     mount(<MiniAudioPlayerHost />);
     act(() => carryAudio(carried()));
     await act(async () => {});
