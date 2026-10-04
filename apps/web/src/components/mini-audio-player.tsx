@@ -133,7 +133,7 @@ export function MiniAudioPlayer({ carried, onClose, onOpen, concealed = false, c
         data-mini-audio-player={attachment.id}
         data-mini-audio-status={status}
         className="pointer-events-auto relative flex w-full items-center gap-2 overflow-hidden rounded-chip py-1 pe-1 ps-1 shadow-lg"
-        style={{ maxWidth: 420, backgroundColor: 'var(--ios-indigo-600)', color: 'var(--color-on-brand)' }}
+        style={{ maxWidth: 420, backgroundColor: 'var(--ios-indigo-600)', color: 'var(--ios-on-brand)' }}
       >
         <audio
           ref={bindAudio}
@@ -178,7 +178,7 @@ export function MiniAudioPlayer({ carried, onClose, onOpen, concealed = false, c
         <span
           aria-hidden
           className="absolute bottom-0 start-0"
-          style={{ height: 2, width: `${Math.max(0, Math.min(1, progress)) * 100}%`, backgroundColor: 'var(--color-on-brand)', opacity: 0.8 }}
+          style={{ height: 2, width: `${Math.max(0, Math.min(1, progress)) * 100}%`, backgroundColor: 'var(--ios-on-brand)', opacity: 0.8 }}
         />
       </div>
     </div>

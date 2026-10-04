@@ -186,6 +186,16 @@ describe('Le toucher ouvre la conversation du vocal, comme iOS (#9279)', () => {
   });
 });
 
+describe('L’aplat indigo porte l’encre blanche d’iOS dans les deux schémas (#9294)', () => {
+  test('texte et progression en `--ios-on-brand`, constant — jamais l’encre « sur marque » que le sombre assombrit', async () => {
+    mount(<MiniAudioPlayer carried={carried()} onClose={() => {}} coordinator={createMediaCoordinator()} />);
+    await act(async () => {});
+
+    expect(bar()?.style.color).toBe('var(--ios-on-brand)');
+    expect(bar()?.querySelector<HTMLElement>('span[aria-hidden]')?.style.backgroundColor).toBe('var(--ios-on-brand)');
+  });
+});
+
 describe('Dans la conversation du vocal, le mini-lecteur s’efface (#9279)', () => {
   test('la loi : effacé dans SA conversation, visible ailleurs et hors conversation', () => {
     expect(concealsMiniPlayer({ carried: carried(), openConversationId: 'c-medias' })).toBe(true);

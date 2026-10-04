@@ -874,6 +874,8 @@ await checkViewerVideoTransport({ browser, BASE, expect, setScheme, scheme: 'dar
  * pause, vocal suivant et Échap, sur les vraies pistes décodées par Chromium.
  */
 await checkAudioFullscreen({ browser, BASE, expect, setScheme, scheme: 'dark' });
+/* #9294 — le mini-lecteur dans les DEUX schémas : son aplat et sa place se jugent sur chaque fond. */
+await checkMiniPlayerParity({ browser, BASE, expect, setScheme, scheme: 'light' });
 await checkMiniPlayerParity({ browser, BASE, expect, setScheme, scheme: 'dark' });
 
 /**
