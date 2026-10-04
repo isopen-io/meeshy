@@ -664,8 +664,8 @@ describe('broadcastRoutes', () => {
       const res = await app.inject({ method: 'POST', url: `/${VALID_ID}/preview` });
       expect(res.statusCode).toBe(200);
       const whereArg = mockPrisma.user.count.mock.calls[0][0].where;
-      expect(whereArg.OR).toBeDefined();
-      expect(Array.isArray(whereArg.OR)).toBe(true);
+      expect(whereArg.lastActiveAt?.lt).toBeInstanceOf(Date);
+      expect(whereArg.OR).toBeUndefined();
     });
 
     it('applies activityStatus=new filter (registered in last 7 days)', async () => {

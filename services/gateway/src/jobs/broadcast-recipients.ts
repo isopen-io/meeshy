@@ -37,10 +37,11 @@ export const activityWindow = (targeting: BroadcastTargeting, now: Date): Prisma
   if (targeting.activityStatus === 'inactive') {
     const days = targeting.inactiveDays || DEFAULT_INACTIVE_WINDOW_DAYS;
     const cutoff = new Date(now.getTime() - days * DAY_MS);
-    // Un compte qui n'a JAMAIS été actif (`lastActiveAt` non défini) est
-    // inactif au même titre qu'un compte inactif depuis la fenêtre — sans
-    // ce second membre, `{ lt: cutoff }` seul l'exclut du ciblage.
-    return { OR: [{ lastActiveAt: { lt: cutoff } }, { lastActiveAt: null }] };
+    // `lastActiveAt` est REQUIS (`DateTime @default(now())`) : un compte jamais
+    // actif porte sa date d'inscription, que `lt` apparie. Son filtre généré
+    // ne connaît ni `null` ni `isSet` (leçon 622) : un second membre
+    // `lastActiveAt: null` faisait refuser TOUTE la requête par le client.
+    return { lastActiveAt: { lt: cutoff } };
   }
   if (targeting.activityStatus === 'new') {
     return { createdAt: { gte: new Date(now.getTime() - NEW_REGISTRATION_WINDOW_DAYS * DAY_MS) } };

@@ -221,9 +221,10 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         fastify.prisma.user.count({
           where: { lastActiveAt: { gte: thirtyDaysAgo, lt: sevenDaysAgo } }
         }),
-        fastify.prisma.user.count({
-          where: { OR: [{ lastActiveAt: { lt: thirtyDaysAgo } }, { lastActiveAt: null }] }
-        }),
+        // `lastActiveAt` est REQUIS (`@default(now())`) : un compte jamais actif
+        // porte sa date d'inscription. `lastActiveAt: null` (ou `isSet`) est
+        // refusé par le client généré et faisait échouer toute la route.
+        fastify.prisma.user.count({ where: { lastActiveAt: { lt: thirtyDaysAgo } } }),
       ]);
 
       const responseBody = {

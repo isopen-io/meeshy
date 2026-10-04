@@ -74,14 +74,17 @@ function user(id: string, email: string, overrides: Partial<MongoDoc> = {}): Mon
  *  - u-c : inscrit il y a 200 j, actif il y a 20 j      (actif au régime 30j,
  *          inactif seulement sous une fenêtre personnalisée ≤ 15 j)
  *  - u-d : inscrit il y a 500 j, actif il y a 400 j     (inactif, toute fenêtre)
- *  - u-e : inscrit il y a 500 j, jamais actif (`lastActiveAt: null`)
+ *  - u-e : inscrit il y a 500 j, jamais actif. `lastActiveAt` est REQUIS
+ *          (`@default(now())`) : un compte jamais actif porte sa date
+ *          d'inscription, jamais `null` — un filtre `lastActiveAt: null` est
+ *          refusé par le client généré (leçon 622).
  */
 const BASE: readonly MongoDoc[] = [
   user('u-a', 'a@example.com', { createdAt: daysAgo(2), lastActiveAt: daysAgo(1) }),
   user('u-b', 'b@example.com', { createdAt: daysAgo(200), lastActiveAt: daysAgo(5) }),
   user('u-c', 'c@example.com', { createdAt: daysAgo(200), lastActiveAt: daysAgo(20) }),
   user('u-d', 'd@example.com', { createdAt: daysAgo(500), lastActiveAt: daysAgo(400) }),
-  user('u-e', 'e@example.com', { createdAt: daysAgo(500), lastActiveAt: null }),
+  user('u-e', 'e@example.com', { createdAt: daysAgo(500), lastActiveAt: daysAgo(500) }),
 ];
 
 function makePrisma() {
