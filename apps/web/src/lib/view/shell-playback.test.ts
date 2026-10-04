@@ -221,3 +221,66 @@ describe('la « Pause » de la notification de la coque met les vocaux en pause 
     vocal.remove();
   });
 });
+
+function enLecture(element: HTMLMediaElement): HTMLMediaElement {
+  Object.defineProperty(element, 'paused', { configurable: true, get: () => false });
+  return element;
+}
+
+const couper = (element: HTMLMediaElement, muet: boolean): void => {
+  element.muted = muet;
+  signal(element, 'volumechange');
+};
+
+describe('un audio muet ne tient pas la lecture, comme la notification média de Chrome Android (#9324)', () => {
+  test('un réel qui joue sans le son ne tient rien', () => {
+    const prise = priseComptee();
+    const arreter = holdWhileAudioPlays(document, prise);
+    const reel = media('audio');
+    reel.muted = true;
+    signal(reel, 'playing');
+    signal(reel, 'pause');
+    expect(prise.journal).toEqual([]);
+    arreter();
+    reel.remove();
+  });
+
+  test('rendre le son d’un audio qui joue tient la lecture, le couper la rend', () => {
+    const prise = priseComptee();
+    const arreter = holdWhileAudioPlays(document, prise);
+    const reel = enLecture(media('audio'));
+    reel.muted = true;
+    signal(reel, 'playing');
+    couper(reel, false);
+    expect(prise.journal).toEqual(['hold']);
+    couper(reel, true);
+    expect(prise.journal).toEqual(['hold', 'release']);
+    arreter();
+    reel.remove();
+  });
+
+  test('rendre le son d’un audio à l’arrêt ne tient rien', () => {
+    const prise = priseComptee();
+    const arreter = holdWhileAudioPlays(document, prise);
+    const vocal = media('audio');
+    vocal.muted = true;
+    couper(vocal, false);
+    expect(prise.journal).toEqual([]);
+    arreter();
+    vocal.remove();
+  });
+
+  test('couper le son d’un audio laisse tenue la lecture d’un autre qui s’entend', () => {
+    const prise = priseComptee();
+    const arreter = holdWhileAudioPlays(document, prise);
+    const vocal = enLecture(media('audio'));
+    const reel = enLecture(media('audio'));
+    signal(vocal, 'playing');
+    signal(reel, 'playing');
+    couper(reel, true);
+    expect(prise.journal).toEqual(['hold']);
+    arreter();
+    vocal.remove();
+    reel.remove();
+  });
+});
