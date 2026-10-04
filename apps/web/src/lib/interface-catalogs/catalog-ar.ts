@@ -831,7 +831,6 @@ const ar = {
   'story.studio.failure.refused': 'تم رفض النشر.',
   'story.studio.failure.unavailable': 'الخادم غير متاح.',
   'story.studio.text.add': 'إضافة نص',
-  'story.studio.text.remove': 'إزالة هذا النص',
   'story.studio.object.text': 'نص {index}',
   'story.studio.object.overlay': 'طبقة',
   'story.studio.object.select': 'تحديد {name}',

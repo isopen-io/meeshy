@@ -838,7 +838,6 @@ const pt = {
   'story.studio.failure.refused': 'Publicação recusada.',
   'story.studio.failure.unavailable': 'O servidor está indisponível.',
   'story.studio.text.add': 'Adicionar texto',
-  'story.studio.text.remove': 'Remover este texto',
   'story.studio.object.text': 'Texto {index}',
   'story.studio.object.overlay': 'Camada',
   'story.studio.object.select': 'Selecionar {name}',

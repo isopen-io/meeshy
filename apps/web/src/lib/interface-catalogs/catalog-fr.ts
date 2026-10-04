@@ -845,7 +845,6 @@ const fr = {
   'story.studio.failure.refused': 'Publication refusée.',
   'story.studio.failure.unavailable': 'La passerelle est indisponible.',
   'story.studio.text.add': 'Ajouter un texte',
-  'story.studio.text.remove': 'Retirer ce texte',
   'story.studio.object.text': 'Texte {index}',
   'story.studio.object.overlay': 'Calque',
   'story.studio.object.select': 'Sélectionner {name}',

@@ -273,9 +273,10 @@ export function StudioAnimatedToggle({
 }
 
 /**
- * **LA BORNE D'UNE PLAQUE DU BAS** (#8517) — Cadre, édition, frise et texte du
- * post : toute la largeur sur un téléphone, 36 rem au plus et centrés au
- * bureau. Sans elle, une plaque s'étirait sur 1264 px et, ses choix posés en
+ * **LA BORNE D'UNE PLAQUE DU BAS** (#8517) — frise, carrousel d'effets et
+ * texte du post — le Cadre et l'édition d'un objet s'ouvrent à droite, depuis
+ * le haut, depuis #9140 (`StudioInlinePanel`) : toute la largeur sur un
+ * téléphone, 36 rem au plus et centrés au bureau. Sans elle, une plaque s'étirait sur 1264 px et, ses choix posés en
  * une ligne, la scène retombait à 170 px. `mx-auto` centre dans un parent en
  * bloc comme dans la colonne du socle.
  */
@@ -285,8 +286,8 @@ export const STUDIO_PLATE = 'mx-auto w-full min-w-0 max-w-xl';
  * **LE (X) DE L'OUTIL OUVERT** (#8654, jumelle de #8652) — un outil ouvert
  * prend toute la place : ses réglages et ce (X), rien d'autre. Le toucher
  * referme l'outil et rend la scène complète. `probe` garde l'attribut que les
- * témoins et les gates touchent déjà (`data-story-edit-done`,
- * `data-story-frame-done`).
+ * témoins et les gates touchent (`data-story-section-done` pour les options
+ * d'un objet, `data-story-frame-done` pour celles du fond).
  */
 export function StudioToolClose({
   lang,
@@ -295,7 +296,7 @@ export function StudioToolClose({
   focusOnOpen = false,
 }: {
   readonly lang: InterfaceLanguage;
-  readonly probe: 'edit' | 'frame';
+  readonly probe: 'section' | 'frame';
   readonly onClose: () => void;
   /** Le chrome qui portait le focus (la tuile qui a ouvert l'outil) vient de
    * devenir inerte : le focus entre dans l'outil, par son (X). Jamais pour

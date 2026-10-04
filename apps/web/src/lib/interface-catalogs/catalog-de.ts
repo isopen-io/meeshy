@@ -834,7 +834,6 @@ const de = {
   'story.studio.failure.refused': 'Veröffentlichung abgelehnt.',
   'story.studio.failure.unavailable': 'Der Server ist nicht verfügbar.',
   'story.studio.text.add': 'Text hinzufügen',
-  'story.studio.text.remove': 'Diesen Text entfernen',
   'story.studio.object.text': 'Text {index}',
   'story.studio.object.overlay': 'Ebene',
   'story.studio.object.select': '{name} auswählen',

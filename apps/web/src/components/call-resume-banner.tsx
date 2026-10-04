@@ -90,7 +90,7 @@ export default function CallResumeBanner() {
   if (request === null) return null;
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 z-40 flex justify-center px-4" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 8px)' }}>
+    <div className="pointer-events-none flex w-full justify-center">
       <button
         type="button"
         data-call-resume={request.callId}

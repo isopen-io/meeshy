@@ -29,7 +29,7 @@ describe('éteindre Animé rend la scène STATIQUE', () => {
     const bench = harness({});
     const el = mount(bench.deps);
     typeText(el, 'Bonjour');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
     click(el.querySelector('[data-story-animated]'));
     await flush(() => el.querySelector('[data-story-timeline]') !== null);
     click(el.querySelector('[data-story-animated]'));
@@ -47,7 +47,7 @@ describe('la tuile Temps range la frise d’une scène qui RESTE animée', () =>
   test('absente d’une scène statique ; frise ouverte, elle est la SEULE tuile du rail droit ; la toucher range la frise sans éteindre Animé', async () => {
     const el = mount(harness({}).deps);
     typeText(el, 'Bonjour');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
     expect(el.querySelector('[data-story-option="time"]')).toBeNull();
     click(el.querySelector('[data-story-animated]'));
     await flush(() => el.querySelector('[data-story-timeline]') !== null);
@@ -70,7 +70,7 @@ describe('les rails suivent la géographie d’iOS (#8713)', () => {
     selectFile(el, 'visual', image());
     await flush(() => el.querySelector('[data-story-option="frame"]') !== null);
     typeText(el, 'Bonjour');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
     click(el.querySelector('[data-story-animated]'));
     await flush(() => el.querySelector('[data-story-timeline]') !== null);
     click(el.querySelector('[data-story-option="time"]'));
@@ -91,7 +91,7 @@ describe('l’unité des secondes de la frise se traduit', () => {
     document.documentElement.lang = 'ar';
     const el = mount(harness({}).deps);
     typeText(el, 'مرحبا');
-    click(el.querySelector('[data-story-edit-done]'));
+    click(el.querySelector('[data-story-option="edit:exit"]'));
     click(el.querySelector('[data-story-animated]'));
     await flush(() => el.querySelector('[data-story-timeline-duration]') !== null);
     const counter = el.querySelector('[data-story-timeline-duration]')?.parentElement?.textContent ?? '';

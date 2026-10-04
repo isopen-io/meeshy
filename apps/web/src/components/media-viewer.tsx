@@ -622,7 +622,19 @@ export default function MediaViewer({
   const currentCarrier = carrierAt?.(index) ?? carrier;
   /* FERMER N'ARRÊTE PAS LE VOCAL (#9256) — la page audio active remet ce
      qu'elle jouait, le mini-lecteur de la coquille le reprend. */
-  const registerCarry = useCarryOnClose({ currentId: current?.id, title: currentCarrier?.sender?.displayName ?? null });
+  /* « PARTAGER » D'UN MÉDIA NU (#8884) — l'image d'un commentaire, le média
+     d'une publication, sans message à citer ni à réagir : l'hôte qui SAIT son
+     média public le demande (`shareMedia`). JAMAIS par défaut : les visionneuses
+     de messages protégés reçoivent des pièces RÉVÉLÉES (drapeaux levés,
+     `revealedAttachment`) — un repli implicite les ferait sortir. Un hôte qui
+     répond `actionsAt` → `null` a dit qu'il ne sait pas : on ne lui invente rien. */
+  const page =
+    actionsAt !== undefined ? actionsAt(index) : shareMedia === true && current !== undefined ? standaloneSharePage(current) : null;
+  const registerCarry = useCarryOnClose({
+    currentId: current?.id,
+    title: currentCarrier?.sender?.displayName ?? null,
+    conversationId: page?.conversationId ?? null,
+  });
   const currentSceneEntry = current === undefined ? undefined : scenes?.get(current.id);
   const insets = safeAreaInsets();
   // La hauteur du couloir HAUT — le haut du plateau dans le repère du
@@ -773,15 +785,6 @@ export default function MediaViewer({
      double tap est aussi deux taps (la bascule plein cadre s'annule) : c'est
      l'état zoomé de la page COURANTE qui compte. */
   const chromeHidden = presentation.kind === 'full' || (zoomedId !== null && zoomedId === current?.id);
-  /* « PARTAGER » D'UN MÉDIA NU (#8884) — l'image d'un commentaire, le média
-     d'une publication, sans message à citer ni à réagir : l'hôte qui SAIT son
-     média public le demande (`shareMedia`). JAMAIS par défaut : les visionneuses
-     de messages protégés reçoivent des pièces RÉVÉLÉES (drapeaux levés,
-     `revealedAttachment`) — un repli implicite les ferait sortir. Un hôte qui
-     répond `actionsAt` → `null` a dit qu'il ne sait pas : on ne lui invente rien. */
-  const page =
-    actionsAt !== undefined ? actionsAt(index) : shareMedia === true && current !== undefined ? standaloneSharePage(current) : null;
-
   if (current === undefined) return null;
 
   const identity = carrierIdentity(currentCarrier);

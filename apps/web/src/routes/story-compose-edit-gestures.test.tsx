@@ -14,7 +14,7 @@ import { VIEWER_ID, fakeRect, flush, harness, mount, registerStudioBench, typeTe
 registerStudioBench();
 
 const field = (el: ParentNode) => el.querySelector<HTMLTextAreaElement>('#story-studio-text');
-const plaque = (el: ParentNode) => el.querySelector('[data-story-edit-plaque]');
+const plaque = (el: ParentNode) => el.querySelector('[data-story-option="edit:exit"]');
 
 async function editing(text: string) {
   const drafts = createStudioDraftStore(null);
