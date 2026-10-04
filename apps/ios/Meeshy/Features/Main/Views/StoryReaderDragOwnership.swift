@@ -155,3 +155,34 @@ nonisolated enum StoryReactionStripGesture {
         return dx > dy ? .strip : .story
     }
 }
+
+// MARK: - Cession sur le point de départ ET la direction (barre de réactions, #9062)
+
+/// Cadre `.global` de la barre de réactions ouverte — `nil` quand elle est
+/// fermée. Publié AVANT son `.offset`, pour que le cadre soit celui où le doigt
+/// la voit. Un cadre de LAYOUT (ouverture, rotation), jamais de défilement.
+struct StoryReactionStripFrameKey: PreferenceKey {
+    static var defaultValue: CGRect? { nil }
+    static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) {
+        guard let next = nextValue() else { return }
+        value = value.map { $0.union(next) } ?? next
+    }
+}
+
+extension StoryReactionStripGesture {
+
+    /// **Un glissé NÉ sur la barre ne devient jamais l'axe horizontal du
+    /// lecteur.** `owner(translation:)` dit QUI possède le glissé, mais le
+    /// verdict voyage par un drapeau que la barre écrit dans SON `onChanged` ;
+    /// sur un swipe rapide, celui du lecteur peut passer le premier dans le
+    /// même tick, lire `false` et arrêter l'axe horizontal — la story change
+    /// sous le doigt. Le point de départ, lui, est connu du lecteur dès son
+    /// premier tick : aucune course possible.
+    ///
+    /// Seul l'axe HORIZONTAL est cédé : le glissé vertical né sur la barre
+    /// continue de refermer (cf. `Owner.story`).
+    static func yieldsHorizontalAxis(stripFrame: CGRect?, dragStart: CGPoint) -> Bool {
+        guard let stripFrame else { return false }
+        return stripFrame.contains(dragStart)
+    }
+}
