@@ -1,0 +1,2 @@
+export const DELTA_WATERMARK_LAG_MS = 5_000;
+export const FULL_RECONCILE_INTERVAL_MS = 15 * 60_000;
