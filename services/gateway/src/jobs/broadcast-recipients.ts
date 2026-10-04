@@ -1,3 +1,4 @@
+import { unsetOrNull } from '../utils/prisma-unset';
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { resolvePrismTranslation } from '@meeshy/shared/utils/conversation-helpers';
 import { normalizeLanguageForDedup } from '@meeshy/shared/utils/language-normalize';
@@ -126,7 +127,11 @@ export async function buildBroadcastRecipientFilter(
     : null;
   return {
     isActive: true,
-    deletedAt: null,
+    // Non supprimé = `deletedAt` nul OU ABSENT. Un compte jamais supprimé n'a
+    // PAS la colonne : `deletedAt: null` seul n'en appariait aucun, et la
+    // diffusion n'atteignait personne (leçon 318). En `AND` : `activityWindow`
+    // pose son propre `OR`.
+    AND: [unsetOrNull('deletedAt')],
     ...(languageVariants ? { systemLanguage: { in: languageVariants } } : {}),
     ...(targeting.countries && targeting.countries.length > 0
       ? { registrationCountry: { in: [...targeting.countries] } }

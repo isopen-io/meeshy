@@ -131,7 +131,7 @@ describe('BroadcastInAppSenderJob.execute', () => {
     await new BroadcastInAppSenderJob(prisma as any, notifications as any).execute('bc-1');
 
     const where = prisma.user.count.mock.calls[0][0].where;
-    expect(where).toEqual(expect.objectContaining({ isActive: true, deletedAt: null }));
+    expect(where).toEqual(expect.objectContaining({ isActive: true, AND: [{ OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] }] }));
     expect(where.systemLanguage.in).toEqual(expect.arrayContaining(['fr', 'FR']));
     expect(where).not.toHaveProperty('emailVerifiedAt');
   });
@@ -175,7 +175,18 @@ describe('BroadcastInAppSenderJob.execute', () => {
     await new BroadcastInAppSenderJob(prisma as any, notifications as any).execute('bc-1');
 
     const finalUpdate = prisma.adminBroadcast.update.mock.calls.at(-1)![0];
-    expect(finalUpdate.data).toEqual(expect.objectContaining({ inAppCompletedAt: expect.any(Date), errorMessage: 'db down' }));
+    // Audit 2026-10-04 : l'échec se DIT dans le statut, comme pour l'e-mail.
+    expect(finalUpdate.data).toEqual(expect.objectContaining({ inAppCompletedAt: expect.any(Date), errorMessage: 'db down', status: 'FAILED' }));
     expect(notifications.createSystemNotification).not.toHaveBeenCalled();
+  });
+
+  it('passe la diffusion à FAILED quand AUCUNE livraison n’a réussi', async () => {
+    const prisma = makePrisma({ userCount: 2, users: [USER_FR, USER_EN] });
+    const notifications = makeNotifications(async () => { throw new Error('boom'); });
+
+    await new BroadcastInAppSenderJob(prisma as any, notifications as any).execute('bc-1');
+
+    const finalUpdate = prisma.adminBroadcast.update.mock.calls.at(-1)![0];
+    expect(finalUpdate.data).toEqual(expect.objectContaining({ inAppSentCount: 0, inAppFailedCount: 2, status: 'FAILED' }));
   });
 });
