@@ -2,6 +2,7 @@ import type { InfiniteData } from '@tanstack/react-query';
 
 import { unwrap } from './client';
 import type { ConversationsDeps } from './conversations';
+import { fixtureHold } from './fixture-hold';
 import { messagesOf } from './fixtures';
 import type { ApiResult } from './http';
 import { messagesQueryKey, requestMessageRows } from './messages';
@@ -111,6 +112,8 @@ export async function loadMessagesWindow(
   },
 ): Promise<ApiResult<WindowPage>> {
   if (__FIXTURES__ && params.source === 'fixtures') {
+    const held = fixtureHold('messages-window', Object.keys(params.param)[0] ?? '');
+    if (held !== null) await held;
     return { ok: true, data: windowPageOf(messagesOf(params.conversationId), params.param, WINDOW_LIMIT) };
   }
   const served = await requestMessageRows({ ...params, query: queryOf(params.param) });
