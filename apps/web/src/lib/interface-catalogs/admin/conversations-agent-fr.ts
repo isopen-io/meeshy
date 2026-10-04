@@ -181,6 +181,24 @@ const f = {
   'admin.agentPanel.conversation.usersNone': 'Aucun membre piloté pour le moment',
   'admin.agentPanel.conversation.messages': 'Messages publiés',
   'admin.agentPanel.conversation.lastResponse': 'Dernière réponse',
+  /* ─── Fiche en cartes et données servies (lot Échanges et contenus, 2026-10-05) ─── */
+  'admin.conversation.cards.title': 'Le détail, par section',
+  'admin.conversation.card.settings': 'Réglages et métadonnées',
+  'admin.conversation.card.community': 'Communauté',
+  'admin.conversation.card.lastMessage': 'Dernier message {when}',
+  'admin.conversation.card.reading.sovereign': 'Lecture directe, consignée au journal d’audit.',
+  'admin.conversation.card.reading.motive': 'Un motif écrit est demandé avant la lecture, et consigné.',
+  'admin.conversation.card.agent.users': 'Membres pilotés',
+  'admin.conversation.card.agent.scanning': 'L’agent analyse la conversation en ce moment.',
+  'admin.conversation.card.links.none': 'Aucun lien de partage',
+  'admin.conversation.card.links.hint': 'Cette conversation compte {count} lien(s) de partage. Chacun se lit et se ferme depuis la section des liens de partage.',
+  'admin.conversation.card.links.open': 'Voir les liens de partage',
+  'admin.conversation.members.nickname': 'Surnom : {nickname}',
+  'admin.conversation.members.state.banned': 'Banni',
+  'admin.conversation.members.state.leftOn': 'A quitté',
+  'admin.conversation.members.state.removed': 'Retiré',
+  'admin.conversation.reading.missing': 'Cette conversation n’existe plus : il n’y a rien à lire.',
+  'admin.conversation.reading.ephemeral': 'Éphémère · {duration}',
 } as const;
 
 export default f;

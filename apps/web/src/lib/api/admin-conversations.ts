@@ -8,12 +8,12 @@ import type { Message } from './types';
 
 /**
  * **LA LECTURE SOUVERAINE DES CONVERSATIONS** (#6862) — les décodeurs des deux
- * adresses que seul un BIGBOSS atteint :
+ * adresses que seul le rang d'ADMINISTRATION atteint (BIGBOSS et ADMIN) :
  *
  * | adresse | ce qu'elle sert | motif écrit |
  * |---|---|---|
  * | `GET /admin/conversations` (#6861) | l'INVENTAIRE — métadonnées seules | non |
- * | `GET /admin/conversations/:id/messages` (#4333, #6860) | le CONTENU et ses pièces | **oui, ≥ 10 caractères** |
+ * | `GET /admin/conversations/:id/messages` (#4333, #6860) | le CONTENU et ses pièces | **oui, ≥ 10 caractères** (facultatif pour le rang souverain) |
  *
  * ## CE QUE CE MODULE NE DOIT JAMAIS LAISSER PERSISTER
  *
@@ -269,6 +269,17 @@ export type AdminSovereignThreadPage = {
   readonly messages: readonly Message[];
   /** Les messages dont la passerelle a RETENU le contenu — rien à révéler. */
   readonly protectedIds: ReadonlySet<string>;
+  /**
+   * LA DURÉE DES ÉPHÉMÈRES (secondes, `ec175875e1`) — mise À CÔTÉ du message,
+   * jamais dedans. Un `Message` qui porte `ephemeralDuration` fait poser par le
+   * fil une RÉCEPTION locale (`resolveEphemeralDeadline`) : le décompte
+   * partirait, le message disparaîtrait sous les yeux de l'administrateur, et
+   * le poste garderait la réception d'un lecteur qui n'en est pas un. La
+   * lecture souveraine constate, elle ne reçoit pas : la durée se DIT (une
+   * marque sur la rangée), elle ne se décompte pas. Absente d'un ancien
+   * serveur, la carte est vide.
+   */
+  readonly ephemeralDurations: ReadonlyMap<string, number>;
   readonly total: number;
   readonly offset: number;
   readonly hasMore: boolean;
@@ -288,8 +299,10 @@ function decodeThreadMessage(entree: unknown): Message | null {
   if (typeof ligne.id !== 'string' || ligne.id === '') return null;
   if (typeof ligne.createdAt !== 'string' || ligne.createdAt === '') return null;
 
+  /* La durée d'un éphémère RESTE HORS du message : voir `ephemeralDurations`. */
+  const { ephemeralDuration: _horsDuMessage, ...sansDuree } = ligne;
   const complete = {
-    ...ligne,
+    ...sansDuree,
     content: typeof ligne.content === 'string' ? ligne.content : '',
     translations: Array.isArray(ligne.translations) ? ligne.translations : [],
     deliveredCount: 0,
@@ -314,11 +327,15 @@ function decodeThreadMessage(entree: unknown): Message | null {
  */
 export function decodeAdminSovereignThread(page: PageServie, offset: number): AdminSovereignThreadPage {
   const protectedIds = new Set<string>();
+  const ephemeralDurations = new Map<string, number>();
   const messages = page.lignes
     .map((entree): Message | null => {
       const message = decodeThreadMessage(entree);
       if (message === null) return null;
-      if (asRecord(entree)?.isProtected === true) protectedIds.add(message.id);
+      const ligne = asRecord(entree);
+      if (ligne?.isProtected === true) protectedIds.add(message.id);
+      const duree = ligne?.ephemeralDuration;
+      if (typeof duree === 'number' && Number.isFinite(duree) && duree > 0) ephemeralDurations.set(message.id, duree);
       return message;
     })
     .filter((message): message is Message => message !== null)
@@ -327,7 +344,7 @@ export function decodeAdminSovereignThread(page: PageServie, offset: number): Ad
   const total = asCount(page.meta.total);
   const hasMore = typeof page.meta.hasMore === 'boolean' ? page.meta.hasMore : offset + messages.length < total;
 
-  return { messages, protectedIds, total: total || messages.length, offset, hasMore };
+  return { messages, protectedIds, ephemeralDurations, total: total || messages.length, offset, hasMore };
 }
 
 export async function loadAdminSovereignThread(

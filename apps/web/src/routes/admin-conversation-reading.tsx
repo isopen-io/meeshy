@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 
-import { AdminEmptyState, AdminErrorState } from '@/components/admin/states';
+import { AdminDeniedInline, AdminEmptyState, AdminErrorState } from '@/components/admin/states';
 import {
   ADMIN_MESSAGES_PAGE_SIZE,
   adminConversationMessagesQueryKey,
@@ -10,7 +10,9 @@ import {
   MOTIF_LONGUEUR_MINIMALE,
 } from '@/lib/api/admin-conversations';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
+import { formatDuration } from '@/lib/admin/interpret/time';
 import type { AdminDeps } from '@/lib/api/admin';
+import { ApiError, unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import type { Viewer } from '@/lib/api/viewer';
 import { place } from '@/lib/grouping';
@@ -189,15 +191,17 @@ export function AdminConversationReading({
   const page = useQuery({
     queryKey: adminConversationMessagesQueryKey(conversationId, offset),
     queryFn: async ({ signal }) => {
-      const resultat = await loadAdminSovereignThread({
-        ...deps,
-        conversationId,
-        offset,
-        reason: motif,
-        signal,
-      });
-      if (!resultat.ok) throw new Error(resultat.error);
-      return resultat.data;
+      /* `unwrap` lève une `ApiError` qui GARDE son statut : un refus (403) et une
+         conversation disparue (404) ne se disent pas comme une panne. */
+      return unwrap(
+        await loadAdminSovereignThread({
+          ...deps,
+          conversationId,
+          offset,
+          reason: motif,
+          signal,
+        }),
+      );
     },
     enabled: armee,
     retry: false,
@@ -274,6 +278,26 @@ export function AdminConversationReading({
 
   const contentWithheld = useCallback((messageId: string) => protectedIds.has(messageId), [protectedIds]);
 
+  const ephemeralDurations = page.data?.ephemeralDurations;
+  /**
+   * LA MARQUE D'UN ÉPHÉMÈRE — « éphémère · 30 s » sous la rangée. La durée n'est
+   * jamais confiée au fil (voir `AdminSovereignThreadPage.ephemeralDurations`) :
+   * l'administration constate qu'un message était écrit pour disparaître, elle
+   * ne le reçoit pas, et il ne disparaît pas sous ses yeux.
+   */
+  const ephemeralNote = useCallback(
+    (messageId: string) => {
+      const seconds = ephemeralDurations?.get(messageId);
+      if (seconds === undefined) return null;
+      return (
+        <p data-admin-ephemeral={messageId} className="px-4 pb-1 text-caption" style={{ color: INK2 }}>
+          {translateAdmin(language, 'admin.conversation.reading.ephemeral', { duration: formatDuration(seconds, 's', language) })}
+        </p>
+      );
+    },
+    [ephemeralDurations, language],
+  );
+
   const motifSuffisant = saisie.trim().length >= MOTIF_LONGUEUR_MINIMALE;
 
   if (!armee) {
@@ -318,7 +342,30 @@ export function AdminConversationReading({
 
   if (page.isPending) return <AdminSkeleton rows={6} />;
 
-  if (page.data === undefined) return <AdminErrorState language={language} onRetry={() => void page.refetch()} />;
+  if (page.data === undefined) {
+    /* Trois échecs, trois phrases (audit 2026-10-04) : un refus n'est pas une panne,
+       une conversation disparue non plus — et ni l'un ni l'autre ne se « réessaie ». */
+    const status = page.error instanceof ApiError ? page.error.status : 0;
+    if (status === 403) {
+      return (
+        <div data-admin-reading-failure="denied">
+          <AdminDeniedInline language={language} />
+        </div>
+      );
+    }
+    if (status === 404) {
+      return (
+        <div data-admin-reading-failure="missing">
+          <AdminEmptyState glyph="chats" title={translateAdmin(language, 'admin.conversation.reading.missing')} />
+        </div>
+      );
+    }
+    return (
+      <div data-admin-reading-failure="error">
+        <AdminErrorState language={language} onRetry={() => void page.refetch()} />
+      </div>
+    );
+  }
 
   if (placed.length === 0) {
     return (
@@ -366,6 +413,7 @@ export function AdminConversationReading({
           jumpToMessage={jumpToMessage}
           onEphemeralExpired={onEphemeralExpired}
           contentWithheld={contentWithheld}
+          rowNoteOf={ephemeralNote}
           typists={EMPTY_TYPISTS}
         />
       </section>

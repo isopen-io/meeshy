@@ -181,6 +181,24 @@ const f = {
   'admin.agentPanel.conversation.usersNone': 'Ningún miembro controlado por ahora',
   'admin.agentPanel.conversation.messages': 'Mensajes publicados',
   'admin.agentPanel.conversation.lastResponse': 'Última respuesta',
+  /* ─── Fiche en cartes et données servies (lot Échanges et contenus, 2026-10-05) ─── */
+  'admin.conversation.cards.title': 'El detalle, por sección',
+  'admin.conversation.card.settings': 'Ajustes y metadatos',
+  'admin.conversation.card.community': 'Comunidad',
+  'admin.conversation.card.lastMessage': 'Último mensaje {when}',
+  'admin.conversation.card.reading.sovereign': 'Lectura directa, registrada en el diario de auditoría.',
+  'admin.conversation.card.reading.motive': 'Se pide un motivo escrito antes de leer, y queda registrado.',
+  'admin.conversation.card.agent.users': 'Miembros dirigidos',
+  'admin.conversation.card.agent.scanning': 'El agente está analizando la conversación ahora mismo.',
+  'admin.conversation.card.links.none': 'Ningún enlace para compartir',
+  'admin.conversation.card.links.hint': 'Esta conversación tiene {count} enlace(s) para compartir. Cada uno se consulta y se cierra desde la sección de enlaces para compartir.',
+  'admin.conversation.card.links.open': 'Ver los enlaces para compartir',
+  'admin.conversation.members.nickname': 'Apodo: {nickname}',
+  'admin.conversation.members.state.banned': 'Expulsado',
+  'admin.conversation.members.state.leftOn': 'Salió',
+  'admin.conversation.members.state.removed': 'Retirado',
+  'admin.conversation.reading.missing': 'Esta conversación ya no existe: no hay nada que leer.',
+  'admin.conversation.reading.ephemeral': 'Efímero · {duration}',
 } as const satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

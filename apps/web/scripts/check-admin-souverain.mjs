@@ -551,7 +551,10 @@ async function main() {
     {
       const ctx = await openContext(browser, { base, avecAgent: true });
       const { page } = ctx;
-      await page.goto(`${base}/adm/conversations/${CONVERSATION_ID}`, { waitUntil: 'load' });
+      /* `?open=reading` : la fiche se lit en cartes (lot Échanges et contenus) ; la lecture
+         vit dans la modale de sa carte, que l'adresse ouvre. Sans fiche servie, la
+         lecture reste offerte en ligne sous l'avis d'erreur — l'adresse vaut dans les deux cas. */
+      await page.goto(`${base}/adm/conversations/${CONVERSATION_ID}?open=reading`, { waitUntil: 'load' });
       await attendre(() => present(page, '[data-admin-reading-gate]'));
       await page.fill('[data-admin-reason]', 'Signalement #9142 — lecture de contrôle');
       await page.waitForTimeout(120);
@@ -593,7 +596,7 @@ async function main() {
     for (const schema of ['light', 'dark']) {
       const ctx = await openContext(browser, { base, avecAgent: true, schema });
       const { page } = ctx;
-      await page.goto(`${base}/adm/conversations/${CONVERSATION_ID}`, { waitUntil: 'load' });
+      await page.goto(`${base}/adm/conversations/${CONVERSATION_ID}?open=reading`, { waitUntil: 'load' });
       await attendre(() => present(page, '[data-admin-reading-gate]'));
       await page.fill('[data-admin-reason]', 'Signalement #9142 — contrôle des pièces');
       await page.waitForTimeout(120);

@@ -9,6 +9,7 @@ import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 import { createActMounter } from '@/test-support/act-mount';
 import { adminIdentityFixture } from '@/test-support/admin-assertions';
 import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
+import { receptionOf } from '@/lib/view/ephemeral-reception';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { AdminConversationReading } from './admin-conversation-reading';
@@ -510,5 +511,98 @@ describe('le rang souverain lit sans motif (spec 2026-10-04 § 4)', () => {
     expect(host.querySelector('[data-admin-reason]')).toBe(null);
     expect(calls().length).toBeGreaterThan(0);
     expect(calls()[0]?.path).not.toContain('reason=');
+  });
+});
+
+/** Un transport qui sert UNE réponse donnée à la route souveraine. */
+function transportRendant(reponse: ApiResult<unknown>): HttpTransport {
+  const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+  transport.request = (async () => reponse) as HttpTransport['request'];
+  return transport;
+}
+
+async function lireAvec(reponse: ApiResult<unknown>) {
+  const host = await mounter.mount(
+    <QueryClientProvider client={appQueryClient}>
+      <AdminConversationReading
+        conversationId={CONVERSATION}
+        language="fr"
+        prisme="lecteur"
+        readerLanguages={['fr']}
+        readerLocale="fr"
+        viewer={VIEWER}
+        deps={{ source: 'gateway', transport: transportRendant(reponse) }}
+      />
+    </QueryClientProvider>,
+  );
+  mounter.type(host, '[data-admin-reason]', MOTIF);
+  await mounter.click(host.querySelector('[data-admin-reason-submit]') as HTMLElement | null);
+  await mounter.settle();
+  await mounter.settle();
+  return host;
+}
+
+describe('une lecture en échec dit POURQUOI (audit 2026-10-04)', () => {
+  test('403 : un refus, jamais « une panne » — et rien à réessayer', async () => {
+    const host = await lireAvec({ ok: false, status: 403, error: 'Forbidden' });
+    expect(host.querySelector('[data-admin-reading-failure="denied"]')).not.toBe(null);
+    expect(host.querySelector('[data-admin-denied-inline]')).not.toBe(null);
+    expect(host.querySelector('[data-admin-retry]')).toBe(null);
+  });
+
+  test('404 : la conversation n’existe plus', async () => {
+    const host = await lireAvec({ ok: false, status: 404, error: 'Not found' });
+    expect(host.querySelector('[data-admin-reading-failure="missing"]')?.textContent).toContain('n’existe plus');
+    expect(host.querySelector('[data-admin-retry]')).toBe(null);
+  });
+
+  test('toute autre erreur : la panne, avec « Réessayer »', async () => {
+    const host = await lireAvec({ ok: false, status: 500, error: 'boom' });
+    expect(host.querySelector('[data-admin-reading-failure="error"]')).not.toBe(null);
+    expect(host.querySelector('[data-admin-retry]')).not.toBe(null);
+  });
+});
+
+/**
+ * **UN ÉPHÉMÈRE LU PAR L'ADMINISTRATION RESTE LÀ, ET PORTE SA MARQUE** (audit
+ * 2026-10-04) — la passerelle sert `ephemeralDuration` (`ec175875e1`). Le fil
+ * du produit, voyant une durée sur le message d'un autre, POSE une réception
+ * locale (`resolveEphemeralDeadline`) et lance le décompte : le message
+ * disparaîtrait sous les yeux de l'administrateur — et sa réception, écrite
+ * dans le stockage du poste, serait celle d'un lecteur qui n'en est pas un.
+ * Le témoin lit les deux : la rangée et sa marque, et AUCUNE réception posée.
+ */
+describe('un message éphémère, en lecture souveraine', () => {
+  const EPHEMERE = {
+    id: 'm-ephemere',
+    conversationId: CONVERSATION,
+    senderId: 'u-alice',
+    content: 'Je disparais dans trente secondes',
+    originalLanguage: 'fr',
+    messageType: 'text',
+    messageSource: 'user',
+    isEdited: false,
+    isViewOnce: false,
+    viewOnceCount: 0,
+    isBlurred: false,
+    reactionCount: 0,
+    isEncrypted: false,
+    isProtected: false,
+    expiresAt: null,
+    ephemeralDuration: 30,
+    translations: [],
+    attachmentCount: 0,
+    attachments: [],
+    replyTo: null,
+    createdAt: '2026-06-02T12:00:00.000Z',
+    sender: { id: 'p-alice', userId: 'u-alice', displayName: 'Alice', avatar: null, user: { id: 'u-alice', username: 'alice' } },
+  };
+
+  test('la rangée reste peinte, porte « éphémère · 30 s », et aucune réception n’est posée', async () => {
+    const host = await lireAvec({ ok: true, data: { data: [EPHEMERE], pagination: { total: 1, offset: 0, limit: 30, hasMore: false } } });
+    expect(host.querySelector('[data-row="m-ephemere"]')).not.toBe(null);
+    expect(host.textContent ?? '').toContain('Je disparais dans trente secondes');
+    expect(host.querySelector('[data-admin-ephemeral="m-ephemere"]')?.textContent).toMatch(/éphémère · 30\s?s/i);
+    expect(receptionOf('m-ephemere')).toBe(null);
   });
 });

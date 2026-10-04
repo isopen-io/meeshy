@@ -179,6 +179,24 @@ const f = {
   'admin.agentPanel.conversation.usersNone': 'No controlled member yet',
   'admin.agentPanel.conversation.messages': 'Messages published',
   'admin.agentPanel.conversation.lastResponse': 'Last response',
+  /* ─── Fiche en cartes et données servies (lot Échanges et contenus, 2026-10-05) ─── */
+  'admin.conversation.cards.title': 'Details, by section',
+  'admin.conversation.card.settings': 'Settings and metadata',
+  'admin.conversation.card.community': 'Community',
+  'admin.conversation.card.lastMessage': 'Last message {when}',
+  'admin.conversation.card.reading.sovereign': 'Direct reading, recorded in the audit log.',
+  'admin.conversation.card.reading.motive': 'A written reason is required before reading, and recorded.',
+  'admin.conversation.card.agent.users': 'Driven members',
+  'admin.conversation.card.agent.scanning': 'The agent is analysing the conversation right now.',
+  'admin.conversation.card.links.none': 'No share link',
+  'admin.conversation.card.links.hint': 'This conversation has {count} share link(s). Each one is read and closed from the share links section.',
+  'admin.conversation.card.links.open': 'See share links',
+  'admin.conversation.members.nickname': 'Nickname: {nickname}',
+  'admin.conversation.members.state.banned': 'Banned',
+  'admin.conversation.members.state.leftOn': 'Left',
+  'admin.conversation.members.state.removed': 'Removed',
+  'admin.conversation.reading.missing': 'This conversation no longer exists: there is nothing to read.',
+  'admin.conversation.reading.ephemeral': 'Ephemeral · {duration}',
 } as const satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;

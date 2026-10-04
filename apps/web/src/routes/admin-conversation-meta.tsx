@@ -108,7 +108,19 @@ export function ConversationMeta({
         <AdminMetaRow
           anchor="community"
           label={t('admin.conversation.meta.community')}
-          value={<AdminEntityChip language={language} size="sm" entity={{ kind: 'community', id: fiche.community.id, label: fiche.community.name }} />}
+          value={
+            <AdminEntityChip
+              language={language}
+              size="sm"
+              entity={{
+                kind: 'community',
+                id: fiche.community.id,
+                label: fiche.community.name,
+                /* L'adresse PUBLIQUE de la communauté, jamais son ObjectId. */
+                ...(fiche.community.identifier === null ? {} : { secondary: fiche.community.identifier }),
+              }}
+            />
+          }
         />
       )}
       {description === null ? null : <AdminMetaRow anchor="description" label={t('admin.conversation.meta.description')} value={description} />}

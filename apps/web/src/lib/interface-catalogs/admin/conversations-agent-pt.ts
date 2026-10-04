@@ -179,6 +179,24 @@ const f = {
   'admin.agentPanel.conversation.usersNone': 'Nenhum membro controlado no momento',
   'admin.agentPanel.conversation.messages': 'Mensagens publicadas',
   'admin.agentPanel.conversation.lastResponse': 'Última resposta',
+  /* ─── Fiche en cartes et données servies (lot Échanges et contenus, 2026-10-05) ─── */
+  'admin.conversation.cards.title': 'O detalhe, por seção',
+  'admin.conversation.card.settings': 'Ajustes e metadados',
+  'admin.conversation.card.community': 'Comunidade',
+  'admin.conversation.card.lastMessage': 'Última mensagem {when}',
+  'admin.conversation.card.reading.sovereign': 'Leitura direta, registrada no diário de auditoria.',
+  'admin.conversation.card.reading.motive': 'Um motivo escrito é pedido antes da leitura, e fica registrado.',
+  'admin.conversation.card.agent.users': 'Membros pilotados',
+  'admin.conversation.card.agent.scanning': 'O agente está analisando a conversa neste momento.',
+  'admin.conversation.card.links.none': 'Nenhum link de compartilhamento',
+  'admin.conversation.card.links.hint': 'Esta conversa tem {count} link(s) de compartilhamento. Cada um se consulta e se fecha na seção de links de compartilhamento.',
+  'admin.conversation.card.links.open': 'Ver os links de compartilhamento',
+  'admin.conversation.members.nickname': 'Apelido: {nickname}',
+  'admin.conversation.members.state.banned': 'Banido',
+  'admin.conversation.members.state.leftOn': 'Saiu',
+  'admin.conversation.members.state.removed': 'Removido',
+  'admin.conversation.reading.missing': 'Esta conversa não existe mais: não há nada para ler.',
+  'admin.conversation.reading.ephemeral': 'Efêmera · {duration}',
 } as const satisfies AdminCatalogFragment<typeof fr>;
 
 export default f;
