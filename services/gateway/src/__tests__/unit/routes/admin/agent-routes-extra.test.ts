@@ -707,12 +707,28 @@ describe('Agent Admin Routes — extra coverage', () => {
       expect(prisma.$transaction).not.toHaveBeenCalled();
     });
 
-    it('refuse BIGBOSS sans motif écrit — 400 avant toute suppression (#4157)', async () => {
+    // Spec 2026-10-04 § 4 : le rang souverain n'a rien à justifier.
+    it('admet BIGBOSS sans motif (corps vide) — le reset a lieu et laisse sa trace', async () => {
+      prisma.$transaction.mockImplementation(async (promises: Promise<any>[]) => Promise.all(promises));
+      for (const m of ['agentConfig', 'agentUserRole', 'agentConversationSummary', 'agentAnalytic', 'agentGlobalProfile']) {
+        prisma[m].deleteMany.mockResolvedValue({ count: 0 });
+      }
+      prisma.adminAuditLog.create.mockResolvedValue({});
+      cacheStoreMock.keys.mockResolvedValue([]);
+      cacheStoreMock.publish.mockResolvedValue(1);
       app = buildApp(prisma, bigbossUser);
       await app.ready();
 
-      const sansCorps = await app.inject({ method: 'DELETE', url: '/reset' });
-      expect(sansCorps.statusCode).toBe(400);
+      const sansCorps = await app.inject({ method: 'DELETE', url: '/reset', payload: {} });
+      expect(sansCorps.statusCode).toBe(200);
+      const auditData = prisma.adminAuditLog.create.mock.calls[0][0].data;
+      expect(auditData.action).toBe('AGENT_FULL_RESET');
+      expect(auditData.metadata).toBeUndefined();
+    });
+
+    it('refuse BIGBOSS avec un motif fourni trop court — 400 avant toute suppression', async () => {
+      app = buildApp(prisma, bigbossUser);
+      await app.ready();
 
       const motifCourt = await app.inject({
         method: 'DELETE',

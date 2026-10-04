@@ -346,12 +346,24 @@ describe('Agent Admin Routes', () => {
       expect(mockPrisma.agentLlmConfig.create).not.toHaveBeenCalled();
     });
 
-    it('refuse BIGBOSS sans motif écrit — 400 avant toute écriture (#4157)', async () => {
+    // Spec 2026-10-04 § 4 : le rang souverain n'a rien à justifier.
+    it('admet BIGBOSS sans motif — la config est écrite et le geste tracé', async () => {
+      mockPrisma.agentLlmConfig.findFirst.mockResolvedValue({ id: '1', provider: 'openai' });
+      mockPrisma.agentLlmConfig.update.mockResolvedValue({ id: '1', provider: 'openai', model: 'gpt-4o', apiKeyEncrypted: 'k', fallbackApiKeyEncrypted: null });
+      mockPrisma.adminAuditLog.create.mockResolvedValue({});
       const bigbossApp = buildApp(bigbossUser);
       await bigbossApp.ready();
 
       const sansMotif = await bigbossApp.inject({ method: 'PUT', url: '/llm', payload: { model: 'gpt-4o' } });
-      expect(sansMotif.statusCode).toBe(400);
+      expect(sansMotif.statusCode).toBe(200);
+      expect(mockPrisma.agentLlmConfig.update).toHaveBeenCalledWith({ where: { id: '1' }, data: { model: 'gpt-4o' } });
+      expect(mockPrisma.adminAuditLog.create.mock.calls[0][0].data.action).toBe('AGENT_LLM_CONFIG_UPDATED');
+      await bigbossApp.close();
+    });
+
+    it('refuse BIGBOSS avec un motif fourni trop court — 400 avant toute écriture', async () => {
+      const bigbossApp = buildApp(bigbossUser);
+      await bigbossApp.ready();
 
       const motifCourt = await bigbossApp.inject({
         method: 'PUT',

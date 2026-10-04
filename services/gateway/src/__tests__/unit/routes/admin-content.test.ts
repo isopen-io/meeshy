@@ -346,12 +346,21 @@ describe('Admin content routes — POST /share-links/:id/reveal', () => {
     expect(mockPrisma.conversationShareLink.findUnique).not.toHaveBeenCalled();
   });
 
-  it('refuse un motif absent ou trop court (400, avant tout accès Prisma)', async () => {
+  // Spec 2026-10-04 § 4 : le rang souverain révèle sans motif ; un motif
+  // FOURNI reste validé.
+  it('admet BIGBOSS sans motif — la révélation a lieu et laisse sa trace', async () => {
     app = buildApp('BIGBOSS');
     await app.ready();
 
     const sansMotif = await app.inject({ method: 'POST', url: `/share-links/${LINK_ID}/reveal`, payload: {} });
-    expect(sansMotif.statusCode).toBe(400);
+    expect(sansMotif.statusCode).toBe(200);
+    expect(mockPrisma.adminAuditLog.create).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.adminAuditLog.create.mock.calls[0][0].data.action).toBe('ADMIN_SHARE_LINK_REVEALED');
+  });
+
+  it('refuse un motif fourni trop court (400, avant tout accès Prisma)', async () => {
+    app = buildApp('BIGBOSS');
+    await app.ready();
 
     const motifCourt = await app.inject({
       method: 'POST',

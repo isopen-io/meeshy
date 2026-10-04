@@ -478,8 +478,23 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     await app.close();
   });
 
-  it('refuse BIGBOSS sans motif — 400 au SCHÉMA, avant Prisma', async () => {
-    const app = await buildApp(createMockPrisma({}), 'BIGBOSS');
+  // Spec 2026-10-04 § 4 : le rang souverain n'a rien à justifier — la lecture
+  // a lieu sans motif, et laisse sa ligne d'audit quand même.
+  it('admet BIGBOSS sans motif — la lecture a lieu et reste tracée', async () => {
+    const prisma = createMockPrisma({ messages: [], messagesCount: 0 });
+    const app = await buildApp(prisma, 'BIGBOSS');
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/admin/conversations/conv-1/messages',
+      headers: { authorization: 'Bearer x' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect((prisma as unknown as { adminAuditLog: { create: jest.Mock } }).adminAuditLog.create).toHaveBeenCalledTimes(1);
+    await app.close();
+  });
+
+  it('refuse ADMIN sans motif — 400, avant Prisma', async () => {
+    const app = await buildApp(createMockPrisma({}), 'ADMIN');
     const res = await app.inject({
       method: 'GET',
       url: '/api/v1/admin/conversations/conv-1/messages',
@@ -746,9 +761,10 @@ describe('GET /admin/conversations/:conversationId/messages', () => {
     await app.close();
   });
 
-  it('ne trace RIEN quand le motif est refusé au schéma (400) — l\'audit ne suit qu\'une lecture réussie', async () => {
+  it('ne trace RIEN quand le motif est refusé (400) — l\'audit ne suit qu\'une lecture réussie', async () => {
     const prisma = createMockPrisma({ messages: messagesFixture(), messagesCount: 2 });
-    const app = await buildApp(prisma, 'BIGBOSS');
+    // ADMIN : le motif lui reste obligatoire (le rang souverain en est dispensé).
+    const app = await buildApp(prisma, 'ADMIN');
     await app.inject({
       method: 'GET',
       url: '/api/v1/admin/conversations/conv-1/messages',

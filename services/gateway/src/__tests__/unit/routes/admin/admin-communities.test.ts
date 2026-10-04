@@ -525,6 +525,25 @@ describe('PATCH /admin/communities/:communityId — le geste', () => {
     expect((await patch(app, { isActive: false, reason: REASON })).statusCode).toBe(404);
     await app.close();
   });
+  // Spec 2026-10-04 § 4 : le rang souverain n'a rien à justifier.
+  it('admet BIGBOSS sans motif : le geste a lieu et laisse sa trace, sans motif', async () => {
+    const prisma = withStaff(makePrisma());
+    const app = await buildApp(prisma, 'BIGBOSS');
+    expect((await patch(app, { isActive: false })).statusCode).toBe(200);
+    expect(prisma.community.update).toHaveBeenCalledTimes(1);
+    const audit = prisma.adminAuditLog.create.mock.calls[0][0].data;
+    expect(audit.action).toBe('ADMIN_COMMUNITY_UPDATED');
+    expect(audit.metadata).toBeUndefined();
+    await app.close();
+  });
+
+  it('refuse BIGBOSS avec un motif fourni trop court — un motif écrit est validé', async () => {
+    const prisma = withStaff(makePrisma());
+    const app = await buildApp(prisma, 'BIGBOSS');
+    expect((await patch(app, { isActive: false, reason: 'trop bref' })).statusCode).toBe(400);
+    expect(prisma.community.update).not.toHaveBeenCalled();
+    await app.close();
+  });
 });
 
 describe('GET /admin/communities — la liste étendue', () => {

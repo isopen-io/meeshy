@@ -40,6 +40,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination } from '../../utils/pagination';
 import { withAnonymousParticipantCounts } from '../../utils/share-link-participant-counts';
 import { requirePermission, requireSovereign, withAudit } from '../../middleware/authorize';
+import { requireReasonUnlessSovereign } from '../../middleware/sovereign-reason';
 import { registerShareLinkFicheRoute } from './share-link-fiche';
 
 const requireAdmin = requirePermission('canAccessAdmin');
@@ -227,6 +228,9 @@ export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
    */
   fastify.post('/share-links/:id/reveal', {
     onRequest: [fastify.authenticate, requireSovereign()],
+    // Rang souverain seul : le motif y est donc facultatif (spec 2026-10-04
+    // § 4) — mais validé s'il est écrit.
+    preHandler: [requireReasonUnlessSovereign({ source: 'body', min: 10 })],
     schema: {
       description: 'Révèle le linkId (secret de jointure) d\'un lien de partage. Rang souverain, motif écrit obligatoire, geste tracé — #4157.',
       tags: ['admin'],
@@ -239,9 +243,8 @@ export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
       },
       body: {
         type: 'object',
-        required: ['reason'],
         properties: {
-          reason: { type: 'string', minLength: 10, description: 'Motif écrit de la révélation (10 caractères minimum), consigné dans AdminAuditLog' }
+          reason: { type: 'string', description: 'Motif écrit de la révélation (10 caractères minimum s\'il est fourni), consigné dans AdminAuditLog' }
         }
       },
       response: {
@@ -270,7 +273,7 @@ export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const { id } = request.params as { id: string };
-      const { reason } = request.body as { reason: string };
+      const { reason } = (request.body ?? {}) as { reason?: string };
 
       const shareLink = await fastify.prisma.conversationShareLink.findUnique({
         where: { id },
