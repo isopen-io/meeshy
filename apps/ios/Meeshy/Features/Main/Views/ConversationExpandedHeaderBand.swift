@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 /// **La bande d'en-tête de conversation, en type NOMINAL** (#6194).
@@ -375,4 +376,37 @@ struct ConversationHeaderState {
     /// La flamme du jour touchée par le lecteur (#9031) — elle revient au
     /// prochain dépliement ; retenue par `ConversationHeaderMemory`.
     var flameDismissed = false
+    /// Le pair d'un direct OUVERT renommé ou repeint à `user:updated` (#9359).
+    var peerRepaints = DirectPeerRepaints()
+}
+
+/// **L'en-tête d'un direct ouvert suit son pair** (#9359).
+///
+/// La conversation de l'écran est une valeur FIGÉE à la navigation : la liste
+/// et le cache se repeignent à `user:updated`, pas elle. Cette valeur retient
+/// les annonces qui changent le pair affiché et les rejoue, dans l'ordre, par
+/// la loi de la ligne d'un direct (`ConversationStore.merging(_:withUserUpdate:)`)
+/// — aucune règle parallèle. Une annonce qui ne change rien n'est pas retenue :
+/// l'écran ne se redessine pas pour elle.
+struct DirectPeerRepaints: Equatable {
+    private(set) var events: [UserUpdatedEvent] = []
+
+    func applied(to conversation: Conversation?) -> Conversation? {
+        guard let conversation, !events.isEmpty else { return conversation }
+        return events.reduce(conversation) { ConversationStore.merging($0, withUserUpdate: $1) ?? $0 }
+    }
+
+    /// `nil` quand l'annonce ne vise pas le pair du direct affiché, ou ne lui
+    /// change rien.
+    func admitting(_ event: UserUpdatedEvent, over displayed: Conversation?) -> DirectPeerRepaints? {
+        guard let displayed, displayed.type == .direct,
+              displayed.participantUserId == event.userId,
+              let repainted = ConversationStore.merging(displayed, withUserUpdate: event),
+              repainted.title != displayed.title
+                || repainted.participantUsername != displayed.participantUsername
+                || repainted.participantAvatarURL != displayed.participantAvatarURL
+                || repainted.participantBanner != displayed.participantBanner
+        else { return nil }
+        return DirectPeerRepaints(events: events + [event])
+    }
 }

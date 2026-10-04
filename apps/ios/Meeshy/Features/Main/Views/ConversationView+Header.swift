@@ -21,6 +21,13 @@ extension ConversationView {
                 isDarkMode: isDark
             )
         )
+        // Le fond vit toute la vie de l'écran : c'est là qu'il écoute le pair
+        // d'un direct (#9359). Seule une annonce qui CHANGE le pair affiché
+        // écrit l'état — les autres ne redessinent rien.
+        .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
+            guard let next = headerState.peerRepaints.admitting(event, over: liveConversation) else { return }
+            headerState.peerRepaints = next
+        }
     }
 
     // MARK: - Header Avatar (thin wrapper → extracted struct to avoid PAC crashes)

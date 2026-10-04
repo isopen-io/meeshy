@@ -22,6 +22,11 @@ public struct LastMessageFacet: Sendable {
     public let id: String?
     public let preview: String?
     public let senderName: String?
+    /// Le `User.id` du pair que `senderName` nomme (#9359) : ce sur quoi
+    /// `user:updated` repeint l'auteur de la ligne. Toujours écrit AVEC le nom,
+    /// et `nil` dès que le nom ne désigne pas un pair (« Vous », inconnu) —
+    /// sinon le portrait d'un autre se poserait sur ce message.
+    public let senderUserId: String?
     public let at: Date
     public let attachments: [MeeshyMessageAttachment]
     public let attachmentCount: Int
@@ -42,6 +47,7 @@ public struct LastMessageFacet: Sendable {
         id: String?,
         preview: String?,
         senderName: String?,
+        senderUserId: String? = nil,
         at: Date,
         attachments: [MeeshyMessageAttachment] = [],
         attachmentCount: Int = 0,
@@ -56,6 +62,7 @@ public struct LastMessageFacet: Sendable {
         self.id = id
         self.preview = preview
         self.senderName = senderName
+        self.senderUserId = senderName == nil ? nil : senderUserId
         self.at = at
         self.attachments = attachments
         self.attachmentCount = max(attachmentCount, attachments.count)
@@ -99,6 +106,7 @@ public struct LastMessageFacet: Sendable {
             id: id ?? message.id,
             preview: preview.meeshyPreviewTruncated,
             senderName: message.isMe ? youLabel : (message.senderName ?? message.senderUsername),
+            senderUserId: message.isMe ? nil : message.senderUserId,
             at: at ?? message.createdAt,
             attachments: message.attachments,
             attachmentCount: message.attachments.count,
@@ -162,6 +170,7 @@ public struct LastMessageFacet: Sendable {
             id: conversation.lastMessageId,
             preview: conversation.lastMessagePreview,
             senderName: conversation.lastMessageSenderName,
+            senderUserId: conversation.lastMessageSenderUserId,
             at: conversation.lastMessageAt,
             attachments: conversation.lastMessageAttachments,
             attachmentCount: conversation.lastMessageAttachmentCount,
@@ -202,6 +211,7 @@ public extension MeeshyConversation {
         lastMessageId = facet.id
         lastMessagePreview = facet.preview
         lastMessageSenderName = facet.senderName
+        lastMessageSenderUserId = facet.senderUserId
         lastMessageAt = facet.at
         lastMessageAttachments = facet.attachments
         lastMessageAttachmentCount = facet.attachmentCount
@@ -272,6 +282,7 @@ public extension MeeshyConversation {
         lastMessageAttachments = []
         lastMessageAttachmentCount = 0
         lastMessageSenderName = nil
+        lastMessageSenderUserId = nil
         lastMessageIsBlurred = false
         lastMessageIsViewOnce = false
         lastMessageExpiresAt = nil

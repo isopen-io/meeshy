@@ -183,10 +183,10 @@ struct ConversationView: View {
     @State private var conversationOverride: Conversation?
 
     /// La conversation à AFFICHER : l'override serveur s'il existe, sinon la
-    /// valeur figée. `internal` (pas `private`) : lue par l'extension
-    /// `ConversationView+Header`, qui vit dans un autre fichier — `private` est
-    /// à portée de fichier.
-    var liveConversation: Conversation? { conversationOverride ?? conversation }
+    /// valeur figée — le pair d'un direct repeint par-dessus (#9359). Interne :
+    /// lue par l'extension `ConversationView+Header`, qui vit dans un autre
+    /// fichier — `private` est à portée de fichier.
+    var liveConversation: Conversation? { headerState.peerRepaints.applied(to: conversationOverride ?? conversation) }
 
     // NOTE: Properties below are internal (not private) for cross-file extension access.
     // Extensions in ConversationView+MessageRow, +Header, +ScrollIndicators, +Composer.
@@ -2161,7 +2161,7 @@ struct ConversationView: View {
     private var anonymousHeaderBar: some View {
         HStack {
             ConversationTitleLabel(
-                name: conversation?.displayName ?? "Conversation",
+                name: liveConversation?.displayName ?? "Conversation",
                 favoriteEmoji: conversation?.userState.reaction,
                 font: MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .rounded),
                 color: .white
@@ -2368,10 +2368,10 @@ struct ConversationView: View {
         // F11 (revue adversariale 2026-08-25) : `liveConversation` — visible
         // sur la même surface que `headerTagsRow` juste en dessous (déjà
         // basculée). Le TITRE rendu par ce même bouton
-        // (`expandedHeaderTitleLabel` → `conversation?.displayName`) reste
-        // délibérément sur la valeur figée — hors du périmètre minimal de ce
-        // correctif, suivi nommé séparément — seul le libellé d'accessibilité
-        // change ici.
+        // (`expandedHeaderTitleLabel`) la lit aussi depuis #9359 : un pair
+        // renommé ou un enregistrement des réglages s'y voit sans quitter le
+        // fil, et le libellé d'accessibilité dit le même nom que l'œil lit.
+        // Une seule source pour les deux.
         .accessibilityLabel(liveConversation?.name ?? "Conversation")
         .accessibilityHint(String(localized: "conversation.view.open_info", bundle: .main))
 
@@ -2402,7 +2402,7 @@ struct ConversationView: View {
     private var expandedHeaderTitleLabel: some View {
         HStack(spacing: MeeshySpacing.xs + 2) {
             ConversationTitleLabel(
-                name: conversation?.displayName ?? "Conversation",
+                name: liveConversation?.displayName ?? "Conversation",
                 favoriteEmoji: conversation?.userState.reaction,
                 font: MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .rounded),
                 color: isDark ? .white : MeeshyColors.indigo950, // blanc sur le verre clair était illisible (#8822)
