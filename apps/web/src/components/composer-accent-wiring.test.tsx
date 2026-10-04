@@ -185,4 +185,10 @@ describe('Composer — l’accent substitué de la rangée haute est CÂBLÉ (#6
     expect(root.style.getPropertyValue('--composer-icon')).toBe('var(--color-error)');
     expect(el.querySelector<HTMLElement>('[data-composer-blur]')?.style.color).toBe('var(--composer-icon)');
   });
+
+  test('#9121 — la pastille de langue lit `--composer-icon`, comme sur iOS (`languageSelectorPill` → `iconTint`)', () => {
+    const el = mount(() => {});
+    const capsule = el.querySelector<HTMLElement>('[data-composer-language] > span')!;
+    expect(capsule.className).toContain('text-[var(--composer-icon,var(--color-ios-ink))]');
+  });
 });
