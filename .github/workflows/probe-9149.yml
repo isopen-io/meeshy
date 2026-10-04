@@ -7,9 +7,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm i --no-save playwright@1.48.2 && npx playwright install --with-deps chromium
+      - run: mkdir -p /tmp/pw && cd /tmp/pw && npm init -y >/dev/null && npm i playwright@1.48.2 && npx playwright install --with-deps chromium && cp $GITHUB_WORKSPACE/.github/probe/probe-9149.mjs .
       - run: curl -sS -i https://gate.staging.meeshy.me/api/v1/tracking-links/SBJt6l | head -30 || true
-      - run: TARGET=https://staging.meeshy.me/l/SBJt6l node .github/probe/probe-9149.mjs
+      - run: TARGET=https://staging.meeshy.me/l/SBJt6l node /tmp/pw/probe-9149.mjs
