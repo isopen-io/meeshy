@@ -14,6 +14,7 @@ import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
 
 import type { SceneScrubPainter } from '@/components/scene-scrub-bar';
 import { Glyph } from '@/components/glyph';
+import { PlaybackStallIndicator } from '@/components/playback-stall-indicator';
 import { CommentsSheetPortal } from '@/components/publication-comments-sheet-lazy';
 import { PublicationViewersSheetPortal } from '@/components/publication-viewers-sheet-lazy';
 import { StoryActionRail, type StoryActionRailHandlers } from '@/components/story-action-rail';
@@ -368,6 +369,14 @@ export default function StoryScreen() {
   }, []);
   const elapsedRef = useRef(0);
   const startTsRef = useRef(0);
+  /* LE BUFFER GÈLE LA BARRE EN PHASE (#6925, `setPlaybackStalled` d'iOS), porté par la story. */
+  const [stalledStoryId, setStalledStoryId] = useState<string | null>(null);
+  const stalled = currentStory !== undefined && stalledStoryId === currentStory.id;
+  const stalledRef = useRef(stalled);
+  stalledRef.current = stalled;
+  const noteProgressing = useCallback((storyId: string, progressing: boolean) => {
+    setStalledStoryId((current) => (progressing ? (current === storyId ? null : current) : storyId));
+  }, []);
   const markedRef = useRef<Set<string>>(new Set());
   const painterRef = useRef<SceneScrubPainter | null>(null);
   /** Le segment actif se parcourt au doigt (#7879) — loi d'hôte extraite. */
@@ -418,7 +427,12 @@ export default function StoryScreen() {
   useEffect(() => {
     if (currentStory === undefined || paused || scrub.scrubbing || !contentReady) return;
     let raf = 0;
+    let last = performance.now();
     const tick = () => {
+      // Le temps passé en buffer ne compte pas : le départ recule d'autant.
+      const now = performance.now();
+      if (stalledRef.current) startTsRef.current += now - last;
+      last = now;
       const elapsed = elapsedRef.current + (performance.now() - startTsRef.current);
       const ratio = Math.min(1, elapsed / dureeMs);
       paintProgress(ratio);
@@ -861,6 +875,7 @@ export default function StoryScreen() {
                 onReady={() => setReadyStoryId(currentStory.id)}
                 onDurationKnown={(ms) => reportMediaDuration(currentStory.id, ms)}
                 onPlaybackBlocked={muteBlockedPlayback}
+                onPlaybackProgressing={(progressing) => noteProgressing(currentStory.id, progressing)}
                 onSoundAvailability={(available) =>
                   setSoundAvailability((current) =>
                     current !== null && current.storyId === currentStory.id && current.available === available
@@ -882,12 +897,15 @@ export default function StoryScreen() {
               trackingLinks={trackingLinks}
               onReady={() => setReadyStoryId(currentStory.id)}
               onDurationKnown={(ms) => reportMediaDuration(currentStory.id, ms)}
+              playing={!paused && !scrub.scrubbing}
+              onPlaybackProgressing={(progressing) => noteProgressing(currentStory.id, progressing)}
               onFailed={() => {
                 setMediaFailed(true);
                 setReadyStoryId(currentStory.id);
               }}
             />
           )}
+          <PlaybackStallIndicator stalled={stalled && !paused} language={interfaceLanguage} />
           </div>
 
           <StoryTopBar

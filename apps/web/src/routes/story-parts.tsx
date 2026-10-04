@@ -6,6 +6,7 @@ import { MediaUnavailable } from '@/components/media-unavailable';
 import { SceneScrubBar, type SceneScrubPainter } from '@/components/scene-scrub-bar';
 import { ViewerCaption } from '@/components/viewer-caption';
 import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
+import { watchMediaStall } from '@/lib/media/media-stall';
 import { feedMediaKindOf } from '@/lib/feed/layout';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import type { StoryPlaybackGroup } from '@/lib/stories/playback';
@@ -84,7 +85,41 @@ export type StoryMediaLayerProps = {
    * durée ne peut donc venir que de l'élément lui-même. Sans ce relais, la loi
    * de durée reste juste, testée par 38 témoins, et APPELÉE PAR PERSONNE. */
   readonly onDurationKnown?: ((durationMs: number) => void) | undefined;
+  /** LA LECTURE DEMANDÉE PAR LE LECTEUR (#9277) — `false` pendant l'appui
+   * long, une feuille, un appel : la VIDÉO s'arrête avec la barre. Absente ⇒
+   * elle lit. */
+  readonly playing?: boolean | undefined;
+  /** LE BUFFER, dit à l'hôte (#6925, miroir `onPlaybackProgressing` d'iOS) —
+   * `false` quand la vidéo attend ses octets, `true` quand elle reprend :
+   * l'hôte y gèle SA barre. */
+  readonly onPlaybackProgressing?: ((progressing: boolean) => void) | undefined;
 };
+
+/** La vidéo d'une story suit la lecture DEMANDÉE et annonce son buffer. */
+function useStoryVideoPlayback(params: {
+  readonly ref: { readonly current: HTMLVideoElement | null };
+  readonly playing: boolean;
+  readonly onPlaybackProgressing: ((progressing: boolean) => void) | undefined;
+  readonly source: string;
+}): void {
+  const { ref, playing, source } = params;
+  const progressing = useRef(params.onPlaybackProgressing);
+  progressing.current = params.onPlaybackProgressing;
+  useEffect(() => {
+    const el = ref.current;
+    if (el === null) return;
+    if (!playing) {
+      el.pause();
+      return;
+    }
+    void el.play().catch(() => undefined);
+  }, [ref, playing, source]);
+  useEffect(() => {
+    const el = ref.current;
+    if (el === null) return;
+    return watchMediaStall(el, (stalled) => progressing.current?.(!stalled));
+  }, [ref, source]);
+}
 
 /**
  * LA COUCHE MÉDIA DE LA SCÈNE — l'image, la vidéo, ou le repli dessiné.
@@ -101,7 +136,10 @@ export function StoryMediaLayer({
   onReady,
   onFailed,
   onDurationKnown,
+  playing = true,
+  onPlaybackProgressing,
 }: StoryMediaLayerProps) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   /**
    * LA MÉMOIRE DE L'ÉCHEC, ET NON SEULEMENT SON ÉTAT (#7022). `showsMedia`
    * arrive de `story.tsx`, où il dérive de `mediaFailed` — un état qui se
@@ -150,6 +188,8 @@ export function StoryMediaLayer({
   };
 
   const connueAbsente = showsMedia && isMediaAbsent(mediaSrc);
+  const isVideo = showsMedia && !connueAbsente && feedMediaKindOf(mimeType) === 'video';
+  useStoryVideoPlayback({ ref: videoRef, playing, onPlaybackProgressing, source: isVideo ? `${storyId}:${mediaSrc}` : '' });
 
   /**
    * UNE SOURCE DÉJÀ CONNUE ABSENTE PRÉVIENT L'HÔTE (#7022 suivi — revue
@@ -241,6 +281,7 @@ export function StoryMediaLayer({
              que rien n'est décodé, donc on ne remonte que ce qui est utile ;
              au-dessus, l'évènement ne tire QUE lorsque la donnée existe. */
           ref={(el) => {
+            videoRef.current = el;
             if (el === null || onDurationKnown === undefined) return;
             const seconds = el.duration;
             if (Number.isFinite(seconds) && seconds > 0) onDurationKnown(seconds * 1000);
