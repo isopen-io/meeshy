@@ -293,7 +293,6 @@ struct ComposerPhotoLookReview: View {
 
     /// Le peintre unique sert les cadres du catalogue ; un classique du Montage
     /// reste peint par `ComposerPhotoLookRenderer` jusqu'à ses couches GPU (#9348).
-
     @concurrent
     nonisolated static func paintPreview(_ look: ComposerPhotoLook, source: ComposerPhotoLookSource,
                                          date: Date) async -> CGImage? {
@@ -302,8 +301,9 @@ struct ComposerPhotoLookReview: View {
                                                     maxPixel: ComposerPhotoLookRule.previewMaxPixel,
                                                     frameCanvas: ComposerPhotoLookRule.previewFrameCanvas)
         }
-        return await ComposerLookPainter.renderPhoto(source.photo, look: look, framing: .identity, person: source.person,
-                                              date: date, scenes: ComposerLookSceneCache.shared)
+        return await ComposerLookPainter.renderPreview(source.photo, look: look, framing: .identity,
+                                                       person: source.person, date: date,
+                                                       scenes: ComposerLookSceneCache.shared)
     }
 
     @concurrent

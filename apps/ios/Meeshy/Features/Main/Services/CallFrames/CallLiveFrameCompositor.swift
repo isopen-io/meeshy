@@ -94,9 +94,15 @@ nonisolated final class CallLiveFrameCompositor: CallLiveFrameCompositing, @unch
     // MARK: - Peindre (processeur, une fois)
 
     func paint(design: CallFrameDesign, inputs: CallLiveFrameLayerInputs) -> CallLiveFrameScene? {
+        paint(design: design, inputs: inputs, cachingLayers: true)
+    }
+
+    /// `cachingLayers: false` : les couches de cette toile ne restent pas dans le cache
+    /// du peintre (`CallFrameRenderer.layers(for:caching:)`).
+    func paint(design: CallFrameDesign, inputs: CallLiveFrameLayerInputs, cachingLayers: Bool) -> CallLiveFrameScene? {
         guard inputs.size.width >= 1, inputs.size.height >= 1 else { return nil }
         let stage = CallFrameStage(frame: design, people: inputs.people, texts: inputs.texts, size: inputs.size)
-        guard let layers = CallFrameRenderer.layers(for: stage),
+        guard let layers = CallFrameRenderer.layers(for: stage, caching: cachingLayers),
               let backdrop = Self.baked(layers.backdrop),
               let overlay = Self.baked(layers.overlay) else { return nil }
         let slots = zip(stage.boxes, inputs.people).compactMap { box, person in

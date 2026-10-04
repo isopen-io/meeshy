@@ -77,10 +77,16 @@ nonisolated enum ComposerLookPainter {
             guard let design = CallMontageFrameRule.design(id: id) else { return nil }
             let inputs = CallLiveFrameLayerInputs(frameId: design.id, people: [person],
                                                   texts: ComposerPhotoLookSource.texts(at: date), size: canvas)
-            return compositor.paint(design: design, inputs: inputs)
+            return compositor.paint(design: design, inputs: inputs, cachingLayers: cachesLayers(for: canvas))
         case .montage(.classic):
             return nil
         }
+    }
+
+    /// Seules les toiles de l'écran gardent leurs couches dans le cache du peintre
+    /// d'appel : celle d'une photo pleine définition l'évincerait pour un seul usage.
+    static func cachesLayers(for canvas: CGSize) -> Bool {
+        canvas.width <= designCanvas.width && canvas.height <= designCanvas.height
     }
 
     static func scene(for key: ComposerLookSceneKey) -> CallLiveFrameScene? {
@@ -94,13 +100,14 @@ nonisolated enum ComposerLookPainter {
         guard let scene, let slot = scene.slots.first, slot.photo.height > 0 else {
             return filled(graded, framing: framing, into: CGRect(origin: .zero, size: canvas))
         }
-        let fenetre = framing.window(in: graded.extent, aspect: slot.photo.width / slot.photo.height)
-        let cadre = graded.cropped(to: fenetre)
-            .transformed(by: CGAffineTransform(translationX: -fenetre.minX, y: -fenetre.minY))
+        let cadre = filled(graded, framing: framing,
+                           into: CallLiveFrameGeometry.flipped(slot.photo, canvasHeight: scene.size.height))
         return compositor.compose(scene, videos: [slot.personId: cadre])
     }
 
-    /// La fenêtre du cadrage, posée pour remplir exactement `target`.
+    /// La fenêtre du cadrage, posée pour remplir exactement `target`. La source est
+    /// étendue au-delà de ses bords avant l'échelle : un bord ne se mélange jamais
+    /// au transparent, aucun liseré sombre dans le JPEG ou le HEIC.
     static func filled(_ image: CIImage, framing: ComposerFraming, into target: CGRect) -> CIImage {
         guard target.width > 0, target.height > 0 else { return image }
         let fenetre = framing.window(in: image.extent, aspect: target.width / target.height)
@@ -108,7 +115,7 @@ nonisolated enum ComposerLookPainter {
         let pose = CGAffineTransform(translationX: -fenetre.minX, y: -fenetre.minY)
             .concatenating(CGAffineTransform(scaleX: target.width / fenetre.width, y: target.height / fenetre.height))
             .concatenating(CGAffineTransform(translationX: target.minX, y: target.minY))
-        return image.cropped(to: fenetre).transformed(by: pose).cropped(to: target)
+        return image.clampedToExtent().transformed(by: pose).cropped(to: target)
     }
 
     /// **La photo qui part** : le même graphe, rendu dans l'espace de la photo (#9327),
@@ -140,6 +147,23 @@ nonisolated enum ComposerLookPainter {
         let cle = ComposerLookSceneKey(look: look, canvas: toile, date: date, person: person)
         let scene = scenes.cached(cle) ?? Self.scene(for: cle)
         if look.frame != ComposerPhotoFrame.none, scene == nil { return nil }
+        guard !Task.isCancelled else { return nil }
         return photo(image, look: look, framing: framing, scene: scene, canvas: toile)
+    }
+
+    /// **L'aperçu d'une prise** : le même graphe, à la toile de l'écran
+    /// (`designCanvas`), jamais à la définition de la prise — un changement de look
+    /// coûte une image d'écran, pas une photo de 12 Mpx. Une tâche annulée (un autre
+    /// look a été choisi entre-temps) s'arrête avant de peindre.
+    @concurrent
+    static func renderPreview(_ image: CGImage, look: ComposerPhotoLook, framing: ComposerFraming,
+                              person: CallFramePerson, date: Date,
+                              scenes: any ComposerLookSceneProviding) async -> CGImage? {
+        guard !Task.isCancelled else { return nil }
+        let cle = ComposerLookSceneKey(look: look, canvas: designCanvas, date: date, person: person)
+        let scene = scenes.cached(cle) ?? Self.scene(for: cle)
+        if look.frame != ComposerPhotoFrame.none, scene == nil { return nil }
+        guard !Task.isCancelled else { return nil }
+        return photo(image, look: look, framing: framing, scene: scene, canvas: designCanvas)
     }
 }
