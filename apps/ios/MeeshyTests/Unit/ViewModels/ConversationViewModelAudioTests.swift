@@ -785,4 +785,102 @@ final class ConversationViewModelAudioTests: XCTestCase {
 
         XCTAssertEqual(vm.servedAudioTracks(of: m1)["a1"]?.url, "https://cdn/orig-ko.m4a")
     }
+
+    // MARK: - #9259 — l'aperçu rendu par la bulle suit le drapeau du fil
+
+    /// La langue que joue le widget audio de la bulle d'APERÇU : la bulle que
+    /// l'overlay rend, dont `activeAudioLanguage` alimente `AudioMediaView`
+    /// comme dans le fil (`BubbleStandardLayout` → `activeAudioLanguageOverride`).
+    private func previewAudioLanguage(
+        of vm: ConversationViewModel,
+        message: Message,
+        tracks: [MessageTranslatedAudio],
+        reader: MeeshyUser
+    ) -> String? {
+        let overlay = MessageOverlayMenu(
+            message: message,
+            contactColor: "#6366F1",
+            messageBubbleFrame: CGRect(x: 0, y: 0, width: 240, height: 64),
+            isPresented: .constant(true),
+            translatedAudios: tracks,
+            threadLanguage: MessageOverlayMenu.ThreadLanguage(
+                selection: vm.bubbleLanguageSelections[message.id],
+                servedAudioTracks: vm.servedAudioTracks(of: message),
+                onSetActiveDisplayLanguage: { vm.setBubbleActiveDisplayLanguage($0, for: message.id) },
+                onSetSecondaryLanguage: { vm.setBubbleSecondaryLanguage($0, for: message.id) }
+            )
+        )
+        let widget = AudioMediaView.makeForTest(
+            originalLanguage: message.originalLanguage,
+            translatedAudios: tracks,
+            activeAudioLanguageOverride: overlay.previewBubble.activeAudioLanguage
+        )
+        let previous = AuthManager.shared.currentUser
+        AuthManager.shared.currentUser = reader
+        defer { AuthManager.shared.currentUser = previous }
+        return widget.resolvedPreferredTranscriptionLanguage
+    }
+
+    private func makeKoreanVoice() -> Message {
+        var message = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", fileUrl: "https://cdn/orig-ko.m4a")],
+            createdAt: date(1_000)
+        )
+        message.originalLanguage = "ko"
+        return message
+    }
+
+    private func makeFrenchReader() -> MeeshyUser {
+        MeeshyUser(id: testUserId, username: "bob", displayName: "Bob", systemLanguage: "fr", deviceLocale: "xx")
+    }
+
+    func test_previewBubble_flagToggledToOriginalInThread_playsTheOriginalLikeTheThreadBubble() async {
+        let (vm, _, _) = makeSUT(userSystemLanguage: "fr")
+        let tracks = [makeTranslatedTrack(attachmentId: "a1", lang: "fr", url: "https://cdn/voix-fr.m4a")]
+        let m1 = makeKoreanVoice()
+        vm.messages = [m1]
+        vm.messageTranslatedAudiosByAttachment["a1"] = tracks
+        vm.setBubbleActiveDisplayLanguage("ko", for: "m1")
+        await Task.yield()
+
+        let preview = previewAudioLanguage(of: vm, message: m1, tracks: tracks, reader: makeFrenchReader())
+
+        XCTAssertNil(preview, "drapeau basculé sur la V.O. dans le fil : l'aperçu joue l'original, pas la piste du Prisme")
+        XCTAssertEqual(preview, vm.servedAudioTrack(for: m1.attachments[0], message: m1).language)
+    }
+
+    func test_previewBubble_flagToggledToTranslationThePrismeSkips_playsThatTranslationLikeTheThreadBubble() async {
+        let (vm, _, _) = makeSUT(userSystemLanguage: "fr")
+        let tracks = [
+            makeTranslatedTrack(attachmentId: "a1", lang: "fr", url: "https://cdn/voix-fr.m4a"),
+            makeTranslatedTrack(attachmentId: "a1", lang: "en", url: "https://cdn/voix-en.m4a")
+        ]
+        let m1 = makeKoreanVoice()
+        vm.messages = [m1]
+        vm.messageTranslatedAudiosByAttachment["a1"] = tracks
+        vm.setBubbleActiveDisplayLanguage("en", for: "m1")
+        await Task.yield()
+
+        let preview = previewAudioLanguage(of: vm, message: m1, tracks: tracks, reader: makeFrenchReader())
+
+        XCTAssertEqual(preview, "en", "drapeau basculé sur l'anglais dans le fil : l'aperçu joue la piste anglaise")
+        XCTAssertEqual(preview, vm.servedAudioTrack(for: m1.attachments[0], message: m1).language)
+    }
+
+    func test_previewBubble_noFlagToggled_followsThePrismeLikeTheThreadBubble() async {
+        let (vm, _, _) = makeSUT(userSystemLanguage: "fr")
+        let tracks = [makeTranslatedTrack(attachmentId: "a1", lang: "fr", url: "https://cdn/voix-fr.m4a")]
+        let m1 = makeKoreanVoice()
+        vm.messages = [m1]
+        vm.messageTranslatedAudiosByAttachment["a1"] = tracks
+        await Task.yield()
+
+        let preview = previewAudioLanguage(of: vm, message: m1, tracks: tracks, reader: makeFrenchReader())
+
+        XCTAssertEqual(preview, "fr")
+        XCTAssertEqual(preview, vm.servedAudioTrack(for: m1.attachments[0], message: m1).language)
+    }
 }
