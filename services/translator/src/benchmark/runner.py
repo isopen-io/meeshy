@@ -68,6 +68,13 @@ def _translate(translator: Translator, pair: GoldenPair, clock: Callable[[], flo
     return _Outcome(pair, hypothesis, (clock() - started) * 1000, failed)
 
 
+def _warm_up(translator: Translator, pair: GoldenPair) -> None:
+    try:
+        translator.translate(pair.source, pair.source_lang, pair.target_lang)
+    except Exception as error:
+        logger.warning("[BENCHMARK] échauffement en échec : %s", error)
+
+
 def _latency(outcomes: Sequence[_Outcome], keep: Callable[[int], bool]) -> LatencySummary:
     return summarize_latencies(
         [o.duration_ms for o in outcomes if not o.failed and keep(len(o.pair.source))]
@@ -97,6 +104,8 @@ def run_benchmark(
     comet: Scorer | None = None,
     clock: Callable[[], float] = time.perf_counter,
 ) -> BenchmarkReport:
+    if pairs:
+        _warm_up(translator, pairs[0])
     outcomes = [_translate(translator, pair, clock) for pair in pairs]
     directions = tuple(dict.fromkeys((o.pair.source_lang, o.pair.target_lang) for o in outcomes))
     return BenchmarkReport(
