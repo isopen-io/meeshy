@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 /// Les mots du cadre en direct (#9214). Les noms des cadres sont des noms propres
