@@ -128,9 +128,9 @@ test('wavDataUri : deux tons différents rendent deux URIs différentes', () => 
   expect(wavDataUri({ seconds: 1, tone: 440 })).not.toBe(wavDataUri({ seconds: 1, tone: 523 }));
 });
 
-test('les DIX-NEUF messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique (#6221, +5 ; #7018, +1 ; #8008, +3)', () => {
+test('les VINGT messages du corpus médias sont servis par messagesOf, dans l’ordre chronologique (#6221, +5 ; #7018, +1 ; #8008, +3 ; #9256, +1)', () => {
   const messages = messagesOf(MEDIA_CONVERSATION_ID);
-  expect(messages).toHaveLength(19);
+  expect(messages).toHaveLength(20);
   const times = messages.map((m) => new Date(m.createdAt).getTime());
   expect(times).toEqual([...times].sort((a, b) => a - b));
   expect(messages.some((m) => m.id === MEDIA_BROKEN_IMAGE_WITNESS_ID)).toBe(true);

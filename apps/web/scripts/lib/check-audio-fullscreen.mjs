@@ -7,26 +7,51 @@
  * lecteur), lecture et pause basculent réellement `audio.paused`, la flèche passe
  * au vocal suivant de la conversation, Échap ferme et rend le focus à la bulle.
  *
+ * #9256 — les trois écarts avec iOS, sur le vocal SANS transcription du corpus
+ * (media-17) : « Transcrire » rend la transcription servie au Prisme,
+ * « Traduire » demande une langue dont la piste se joue aussitôt, et fermer
+ * pendant la lecture confie le vocal au mini-lecteur, qui reprend à la même
+ * seconde.
+ *
  * `expect` et `setScheme` sont REMIS par l'hôte, jamais redéfinis.
  */
-import { awaitCondition } from './await-fact.mjs';
 import { waitForRowSettled } from './check-media.mjs';
 
 const VOICE_EN_MESSAGE_ID = 'media-2';
 const VOICE_EN_ATTACHMENT_ID = 'media-2-a1';
 const VOICE_DE_ATTACHMENT_ID = 'media-3-a1';
+const UNTRANSCRIBED_MESSAGE_ID = 'media-17';
+const UNTRANSCRIBED_ATTACHMENT_ID = 'media-17-a1';
+const RESUME_FROM_SECONDS = 1.2;
 
-const scrollUntilMounted = (page, id) =>
-  awaitCondition(
-    page,
-    (mid) => {
-      if (document.querySelector(`[data-message="${mid}"]`) !== null) return true;
-      const scroller = document.querySelector('main#contenu');
-      if (scroller !== null) scroller.scrollTop = 0;
-      return false;
-    },
-    id,
-  );
+const rowMounted = (page, id) => page.evaluate((mid) => document.querySelector(`[data-message="${mid}"]`) !== null, id);
+
+/**
+ * #9265 (suivi) — `awaitCondition` s'ARRÊTE dès le premier montage observé,
+ * sans continuer à corriger `scrollTop` ensuite : le virtualiseur mesure
+ * encore les rangées voisines à cet instant (même course que #6221,
+ * doc-comment de `check-media.mjs:waitForRowSettled`) et peut démonter la
+ * rangée une seconde fois avant que `waitForRowSettled` ne la mesure — qui ne
+ * lève jamais sur une rangée absente, elle rend simplement la main après son
+ * propre budget. Le `row.evaluate(...)` de l'appelant attendait alors une
+ * rangée qui ne remonterait plus, jusqu'à son propre timeout (30 s). On
+ * reboucle donc mount PUIS settle PUIS re-vérifie la présence, en reprenant
+ * la remontée si la rangée a disparu entre les deux.
+ */
+const scrollUntilMounted = async (page, id) => {
+  const scroller = page.locator('main#contenu');
+  for (let attempt = 1; attempt <= 40; attempt += 1) {
+    if (await rowMounted(page, id)) {
+      await waitForRowSettled(page, id);
+      if (await rowMounted(page, id)) return true;
+    }
+    await scroller.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    await page.waitForTimeout(100);
+  }
+  return false;
+};
 
 const pageAudio = (page, id) =>
   page.evaluate((aid) => {
@@ -42,8 +67,8 @@ export async function checkAudioFullscreen({ browser, BASE, expect, setScheme, s
   await page.goto(`${BASE}/c/c-medias`, { waitUntil: 'load' });
   await page.waitForSelector('[data-message]');
 
-  await scrollUntilMounted(page, VOICE_EN_MESSAGE_ID);
-  await waitForRowSettled(page, VOICE_EN_MESSAGE_ID);
+  const mounted = await scrollUntilMounted(page, VOICE_EN_MESSAGE_ID);
+  expect(mounted, `${label} le vocal media-2 est atteint et stable avant l'appui`);
   const row = page.locator(`[data-message="${VOICE_EN_MESSAGE_ID}"]`);
   await row.evaluate((el) => el.scrollIntoView({ block: 'center' }));
   await waitForRowSettled(page, VOICE_EN_MESSAGE_ID);
@@ -102,6 +127,85 @@ export async function checkAudioFullscreen({ browser, BASE, expect, setScheme, s
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => document.querySelector('[data-media-viewer]') === null, null, { timeout: 5000 });
   expect(page.url().endsWith('/c/c-medias'), `${label} Échap ferme le lecteur et laisse le fil ouvert (${page.url()})`);
+  /* Le vocal allemand a pu finir avant Échap, ou partir au mini-lecteur : on
+     repart d'un écran sans lecture confiée, quel que soit le cas. */
+  const leftover = page.locator('[data-mini-audio-player] [data-mini-audio-close]');
+  if ((await leftover.count()) > 0) await leftover.click();
+  await page.waitForFunction(() => document.querySelector('[data-mini-audio-player]') === null, null, { timeout: 5000 });
+
+  await checkOnDemandAndCarry({ page, label, expect });
 
   await context.close();
+}
+
+/** #9256 — transcrire, traduire, puis fermer pendant la lecture : le mini-lecteur reprend. */
+async function checkOnDemandAndCarry({ page, label, expect }) {
+  await scrollUntilMounted(page, UNTRANSCRIBED_MESSAGE_ID);
+  await waitForRowSettled(page, UNTRANSCRIBED_MESSAGE_ID);
+  await page.locator(`[data-message="${UNTRANSCRIBED_MESSAGE_ID}"]`).evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await waitForRowSettled(page, UNTRANSCRIBED_MESSAGE_ID);
+  await page.locator(`[data-attachment="${UNTRANSCRIBED_ATTACHMENT_ID}"] [data-voice-expand]`).click();
+  const audioPage = page.locator(`[data-media-viewer] [data-viewer-audio="${UNTRANSCRIBED_ATTACHMENT_ID}"]`);
+  await audioPage.waitFor({ state: 'visible', timeout: 8000 });
+
+  // ===== A6 — « Transcrire » rend la transcription, servie au Prisme du lecteur =====
+  const transcribe = audioPage.locator('[data-viewer-audio-transcribe]');
+  expect((await transcribe.innerText()).includes('Transcrire'), `${label} sans transcription, le lecteur offre « Transcrire »`);
+  await transcribe.click();
+  await page.waitForFunction(
+    (aid) => document.querySelector(`[data-media-viewer] [data-viewer-audio="${aid}"] [data-viewer-audio-transcript]`) !== null,
+    UNTRANSCRIBED_ATTACHMENT_ID,
+    { timeout: 5000 },
+  );
+  const transcript = audioPage.locator('[data-viewer-audio-transcript]');
+  expect(
+    (await transcript.getAttribute('lang')) === 'fr' && (await transcript.innerText()).startsWith('Point du jour') && (await transcribe.count()) === 0,
+    `${label} « Transcrire » rend la transcription en français, et le bouton se retire`,
+  );
+
+  // ===== A7 — « Traduire » demande une langue ; sa piste ET son texte se servent, d'une seule descente =====
+  await audioPage.locator('[data-viewer-audio-translate]').click();
+  const toEnglish = audioPage.locator('[data-viewer-audio-translate-to="en"]');
+  expect((await toEnglish.getAttribute('aria-label')) === 'Traduire en anglais', `${label} « Traduire » offre l'anglais (« Traduire en anglais »)`);
+  await toEnglish.click();
+  await page.waitForFunction(
+    (aid) => {
+      const root = document.querySelector(`[data-media-viewer] [data-viewer-audio="${aid}"]`);
+      const audio = root?.querySelector('audio');
+      return audio?.getAttribute('data-viewer-audio-track') === 'en' && audio.paused === false && root?.querySelector('[data-viewer-audio-transcript]')?.getAttribute('lang') === 'en';
+    },
+    UNTRANSCRIBED_ATTACHMENT_ID,
+    { timeout: 8000 },
+  );
+  expect(
+    (await audioPage.locator('[data-viewer-audio-language="en"]').getAttribute('aria-pressed')) === 'true' &&
+      (await transcript.innerText()).startsWith('Daily update'),
+    `${label} la version anglaise arrive, se joue, et la transcription la suit`,
+  );
+
+  // ===== A8 — fermer pendant la lecture : le mini-lecteur reprend à la même seconde =====
+  await page.waitForFunction(
+    ({ aid, from }) => (document.querySelector(`[data-media-viewer] [data-viewer-audio="${aid}"] audio`)?.currentTime ?? 0) >= from,
+    { aid: UNTRANSCRIBED_ATTACHMENT_ID, from: RESUME_FROM_SECONDS },
+    { timeout: 8000 },
+  );
+  const closedAt = await page.evaluate((aid) => document.querySelector(`[data-media-viewer] [data-viewer-audio="${aid}"] audio`)?.currentTime ?? 0, UNTRANSCRIBED_ATTACHMENT_ID);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(
+    ({ aid, from }) => {
+      if (document.querySelector('[data-media-viewer]') !== null) return false;
+      const audio = document.querySelector(`[data-mini-audio-player="${aid}"] audio`);
+      return audio !== null && audio.paused === false && audio.currentTime >= from;
+    },
+    { aid: UNTRANSCRIBED_ATTACHMENT_ID, from: closedAt - 0.1 },
+    { timeout: 8000 },
+  );
+  const mini = page.locator(`[data-mini-audio-player="${UNTRANSCRIBED_ATTACHMENT_ID}"]`);
+  expect(
+    (await mini.locator('audio').getAttribute('data-mini-audio-track')) === 'en' && (await mini.getAttribute('data-mini-audio-status')) === 'playing',
+    `${label} fermer pendant la lecture confie le vocal au mini-lecteur : même piste (en), lecture continue depuis ${closedAt.toFixed(2)} s`,
+  );
+  await mini.locator('[data-mini-audio-close]').click();
+  await page.waitForFunction(() => document.querySelector('[data-mini-audio-player]') === null, null, { timeout: 5000 });
+  expect(true, `${label} « Fermer le lecteur » arrête la lecture et retire le mini-lecteur`);
 }

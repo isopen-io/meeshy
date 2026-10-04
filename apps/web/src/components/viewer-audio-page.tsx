@@ -1,25 +1,26 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent, SyntheticEvent } from 'react';
 
-import { transcriptTranslationTracks } from '@meeshy/shared/types/attachment-audio';
-
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { Attachment } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { flag } from '@/lib/languages';
+import type { CarryProvider } from '@/lib/view/audio-carry-on-close';
 import { spokenLanguageName } from '@/lib/view/language-name';
 import { electAudio } from '@/lib/view/media';
 import { formatMediaTime, keyboardSeekTarget, PLAYBACK_SPEEDS, SEEK_STEP_SECONDS, seekFraction, speedLabel } from '@/lib/view/media-transport';
 import { waveformOf } from '@/lib/view/message';
 import { karaokeSegments, karaokeTone, segmentSeekTarget, type KaraokeTone } from '@/lib/view/transcript-karaoke';
 import { useKaraokeIndex } from '@/lib/view/use-karaoke';
+import { useAudioOnDemand } from '@/lib/view/use-audio-on-demand';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
 import { takeVideoHandoff } from '@/lib/view/video-handoff';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
+import { OnDemandNotice, TranscribeAction, TranslateOffers } from './viewer-audio-tools';
 
 /**
  * LA PAGE AUDIO DE LA VISIONNEUSE (#8333) — miroir d'`AudioFullscreenPage`
@@ -47,6 +48,12 @@ export type ViewerAudioPageProps = {
   readonly pageIndex: number;
   readonly pageCount: number;
   readonly onToggleRef: (toggle: (() => void) | null) => void;
+  /**
+   * LA LECTURE SURVIT À LA FERMETURE (#9256) — la page ACTIVE remet de quoi
+   * reprendre son vocal (piste, seconde, vitesse) ; la visionneuse l'appelle
+   * en se fermant et le confie au mini-lecteur. `null` : rien ne joue.
+   */
+  readonly onCarryRef?: (carry: CarryProvider | null) => void;
   readonly deps?: ConversationsDeps;
 };
 
@@ -82,7 +89,7 @@ const pillStyle = (selected: boolean): CSSProperties => ({
 });
 
 export default function ViewerAudioPage({
-  attachment,
+  attachment: received,
   isActive,
   languages,
   displayLanguage,
@@ -91,15 +98,15 @@ export default function ViewerAudioPage({
   pageIndex,
   pageCount,
   onToggleRef,
+  onCarryRef,
   deps,
 }: ViewerAudioPageProps) {
   const [explored, setExplored] = useState<string | undefined>(displayLanguage);
+  const onDemand = useAudioOnDemand({ attachment: received, fallbackLanguage, readerLanguages: languages, ...(deps !== undefined ? { deps } : {}) });
+  const attachment = onDemand.served;
+  const { versions } = onDemand;
+  const [offering, setOffering] = useState(false);
   const { described, track } = electAudio({ attachment, readerLanguages: languages, displayLanguage: explored, fallbackLanguage });
-  const originalLanguage = attachment.transcription?.language ?? fallbackLanguage;
-  const versions = useMemo(
-    () => [...new Set([originalLanguage, ...Object.keys(transcriptTranslationTracks(attachment.translations))])].filter((code) => code !== ''),
-    [originalLanguage, attachment.translations],
-  );
 
   const [handedOffMs] = useState(() => takeVideoHandoff(attachment.id));
   const consumption = attachment.currentUserConsumption;
@@ -139,20 +146,38 @@ export default function ViewerAudioPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive]);
 
+  /* Changer de piste remonte l'élément : l'état « playing » de l'ancienne
+     piste survit un rendu, et `toggle` y mettrait en PAUSE la nouvelle. On
+     attend que la lecture soit retombée pour relancer (#9256). */
   useEffect(() => {
-    if (!playOnSwitchRef.current || !isActive) return;
+    if (!playOnSwitchRef.current || !isActive || status === 'playing') return;
     playOnSwitchRef.current = false;
     toggleRef.current();
-  }, [track.url, isActive]);
+  }, [track.url, isActive, status]);
 
   const [audioElement, setAudioElement] = useState<HTMLAudioElement | null>(null);
+  const lastElementRef = useRef<HTMLAudioElement | null>(null);
   const bindAudio = useCallback(
     (element: HTMLAudioElement | null) => {
       bind(element);
       setAudioElement(element);
+      if (element !== null) lastElementRef.current = element;
     },
     [bind],
   );
+
+  /* La reprise se lit sur ce qui jouait au DERNIER rendu : la fermeture
+     démonte la page sans la re-rendre, et l'élément peut déjà être arrêté. */
+  const carryRef = useRef<CarryProvider>(() => null);
+  carryRef.current = () => {
+    const element = lastElementRef.current;
+    if (statusRef.current !== 'playing' || element === null || track.url === '') return null;
+    return { attachment, trackUrl: track.url, trackLanguage: track.language, positionMs: Math.round(element.currentTime * 1000), rate: element.playbackRate };
+  };
+  useEffect(() => {
+    onCarryRef?.(isActive ? () => carryRef.current() : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
 
   const declaredMs = track.durationMs ?? attachment.duration ?? 0;
   const totalSeconds = duration > 0 ? duration : declaredMs / 1000;
@@ -186,8 +211,31 @@ export default function ViewerAudioPage({
     setExplored(code);
   };
 
+  const listenInRef = useRef(listenIn);
+  listenInRef.current = listenIn;
+  /* Le bouton touché disparaît avec la demande qu'il portait (« Transcrire »,
+     la langue demandée) : le focus tomberait sur le document, hors du
+     dialogue, et Échap ne fermerait plus rien. Il rejoint ce qui le remplace. */
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const regainFocus = (selector: string): void => {
+    if (document.activeElement !== null && document.activeElement !== document.body) return;
+    rootRef.current?.querySelector<HTMLElement>(selector)?.focus();
+  };
+  useEffect(() => {
+    if (onDemand.arrived === null) return;
+    setOffering(false);
+    listenInRef.current(onDemand.arrived);
+    regainFocus(`[data-viewer-audio-language="${onDemand.arrived}"]`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onDemand.arrived]);
+  useEffect(() => {
+    if (hasTranscript) regainFocus('[data-viewer-audio-play]');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasTranscript]);
+
   return (
     <div
+      ref={rootRef}
       data-viewer-audio={attachment.id}
       data-viewer-audio-status={status}
       className="flex size-full flex-col items-center overflow-y-auto bg-media-backdrop text-on-media"
@@ -356,9 +404,12 @@ export default function ViewerAudioPage({
                 ))}
           </p>
         ) : (
-          <p data-viewer-audio-transcript-empty className="text-center text-mini opacity-60">
-            {translate(language, 'media.audio.transcript_empty')}
-          </p>
+          <div className="flex flex-col items-center gap-3">
+            <p data-viewer-audio-transcript-empty className="text-center text-mini opacity-60">
+              {translate(language, 'media.audio.transcript_empty')}
+            </p>
+            <TranscribeAction language={language} busy={onDemand.transcribing} onTranscribe={onDemand.transcribe} />
+          </div>
         )}
 
         {versions.length > 1 ? (
@@ -387,6 +438,16 @@ export default function ViewerAudioPage({
             ))}
           </div>
         ) : null}
+
+        <TranslateOffers
+          language={language}
+          offers={onDemand.offers}
+          pending={onDemand.pendingLanguages}
+          expanded={offering}
+          onToggle={() => setOffering((open) => !open)}
+          onRequest={onDemand.requestTranslation}
+        />
+        <OnDemandNotice language={language} notice={onDemand.notice} />
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ import { thumbHashPlaceholder } from '@/lib/media/thumbhash';
 import { initialsOf } from '@/lib/view/conversation';
 import { nextFocusIndex } from '@/lib/view/focus-trap';
 import { useLongPress } from '@/lib/view/long-press';
+import { useCarryOnClose } from '@/lib/view/audio-carry-on-close';
 import { electDescription, type MediaCarrier } from '@/lib/view/media';
 import { standaloneSharePage, type MediaViewerPage } from '@/lib/view/viewer-page-offers';
 import {
@@ -619,6 +620,9 @@ export default function MediaViewer({
 
   const current = items[index];
   const currentCarrier = carrierAt?.(index) ?? carrier;
+  /* FERMER N'ARRÊTE PAS LE VOCAL (#9256) — la page audio active remet ce
+     qu'elle jouait, le mini-lecteur de la coquille le reprend. */
+  const registerCarry = useCarryOnClose({ currentId: current?.id, title: currentCarrier?.sender?.displayName ?? null });
   const currentSceneEntry = current === undefined ? undefined : scenes?.get(current.id);
   const insets = safeAreaInsets();
   // La hauteur du couloir HAUT — le haut du plateau dans le repère du
@@ -913,6 +917,9 @@ export default function MediaViewer({
                     pageCount={items.length}
                     onToggleRef={(fn) => {
                       if (i === index) activePlayToggleRef.current = fn;
+                    }}
+                    onCarryRef={(carry) => {
+                      if (i === index) registerCarry(attachment.id, carry);
                     }}
                     {...(displayLanguage !== undefined ? { displayLanguage } : {})}
                     {...(deps !== undefined ? { deps } : {})}
