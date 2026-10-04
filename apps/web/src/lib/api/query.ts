@@ -19,7 +19,7 @@ import { forwardMessages, type ForwardResult, type ForwardSource } from './forwa
 import { performPostGesture, type PostGestureResult } from './feed-gestures';
 import type { FeedAuthor } from './feed-pages';
 import { recordPostShare } from './feed-share';
-import { commentsInfiniteOptions, flattenCommentPages, performComment, type CommentInfiniteData, type CommentResult, type PostComment } from './publication-comments';
+import { commentsInfiniteOptions, flattenCommentPages, performComment, type CommentInfiniteData, type CommentResult, type CommentStickerSend, type PostComment } from './publication-comments';
 import type { PostMediaUploadResult } from './post-media-upload';
 import { postQueryOptions } from './publication-detail';
 import { performRepost, type RepostIntent, type RepostResult } from './publication-repost';
@@ -536,6 +536,8 @@ export function commentAction(params: {
   readonly parentId?: string | undefined;
   /** Les photos et vidéos déjà téléversées (#9167). */
   readonly media?: readonly PostMediaUploadResult[] | undefined;
+  /** Le sticker et son image déjà téléversée (#9080, #9318). */
+  readonly sticker?: CommentStickerSend | undefined;
 }): Promise<CommentResult> {
   return performComment({
     postId: params.postId,
@@ -544,6 +546,7 @@ export function commentAction(params: {
     ...(params.originalLanguage === undefined ? {} : { originalLanguage: params.originalLanguage }),
     ...(params.parentId === undefined ? {} : { parentId: params.parentId }),
     ...(params.media === undefined || params.media.length === 0 ? {} : { media: params.media }),
+    ...(params.sticker === undefined ? {} : { sticker: params.sticker }),
     deps: { ...apiDeps, queryClient: appQueryClient },
   }).then((result) => {
     /* Un commentaire RETENU (servi, ou gardé en attente) allume l'anneau de

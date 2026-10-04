@@ -7,6 +7,7 @@ import { ComposerEphemeralRail, ComposerTopRow } from './composer-top-row';
 import { QUICK_EMOJI_FRAME_WIDTH, QuickEmojiFrame } from './composer-quick-emoji';
 import { Glyph } from './glyph';
 import { MentionFieldPanel } from './mention-suggestions';
+import { ComposerEmojiSheet, ComposerStickerSheet } from './composer-sheets-lazy';
 import type { ComposerNotice } from './composer-tray';
 import {
   acceptPendingFiles,
@@ -93,22 +94,6 @@ const LanguageSheet = lazy(() => import('./language-sheet').then((m) => ({ defau
 const ComposerTray = lazy(() => import('./composer-tray'));
 /** La caméra de la barre (#9123) — le studio viseur armé, chargé à la demande. */
 const ComposerCapture = lazy(() => import('./composer-retouch').then((m) => ({ default: m.ComposerCapture })));
-
-/**
- * LA PALETTE D'EMOJIS, CHARGÉE À LA DEMANDE (#7280) — même discipline que
- * `LanguageSheet` et `EffectsSheet` : la grille des vingt (`EmojiGrid`,
- * SEULE liste du dépôt) et la feuille qui la porte n'entrent dans aucun
- * chunk tant qu'on n'a pas touché la tuile « Emoji ».
- */
-const ComposerEmojiSheet = lazy(() =>
-  import('./composer-emoji-sheet').then((m) => ({ default: m.ComposerEmojiSheet })),
-);
-const ComposerStickerSheet = lazy(() =>
-  Promise.all([
-    import('./composer-sticker-sheet'),
-    import('@/lib/i18n-sticker-packs-catalog').then((m) => m.loadStickerPacksCatalog(currentInterfaceLanguage())),
-  ]).then(([m]) => ({ default: m.ComposerStickerSheet })),
-);
 
 /** IDENTITÉ STABLE pour l'appelant qui omet `preferred` (les témoins, surtout)
  * — un `[]` littéral en valeur par défaut serait reconstruit à CHAQUE rendu
