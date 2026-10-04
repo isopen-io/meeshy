@@ -53,6 +53,11 @@ const arUserProfile = {
   'userProfile.presence.yesterdayAt': 'آخر ظهور أمس عند {time}',
   'userProfile.presence.beforeYesterdayAt': 'آخر ظهور أول أمس عند {time}',
   'userProfile.presence.dateAt': 'آخر ظهور في {date} عند {time}',
+  'userProfile.tabs.label': 'أقسام الملف الشخصي',
+  'userProfile.tab.posts': 'المنشورات',
+  'userProfile.tab.conversations': 'المحادثات',
+  'userProfile.tab.details': 'التفاصيل',
+  'userProfile.tab.activity': 'النشاط',
 } satisfies UserProfileCatalogSlice;
 
 export default arUserProfile;

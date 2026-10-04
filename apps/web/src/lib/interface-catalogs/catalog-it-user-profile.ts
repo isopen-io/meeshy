@@ -53,6 +53,11 @@ const itUserProfile = {
   'userProfile.presence.yesterdayAt': 'Visto ieri alle {time}',
   'userProfile.presence.beforeYesterdayAt': 'Visto l’altro ieri alle {time}',
   'userProfile.presence.dateAt': 'Visto il {date} alle {time}',
+  'userProfile.tabs.label': 'Sezioni del profilo',
+  'userProfile.tab.posts': 'Pubblicazioni',
+  'userProfile.tab.conversations': 'Conversazioni',
+  'userProfile.tab.details': 'Dettagli',
+  'userProfile.tab.activity': 'Attività',
 } satisfies UserProfileCatalogSlice;
 
 export default itUserProfile;

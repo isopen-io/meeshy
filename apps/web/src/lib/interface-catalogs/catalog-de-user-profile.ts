@@ -53,6 +53,11 @@ const deUserProfile = {
   'userProfile.presence.yesterdayAt': 'Zuletzt online gestern um {time}',
   'userProfile.presence.beforeYesterdayAt': 'Zuletzt online vorgestern um {time}',
   'userProfile.presence.dateAt': 'Zuletzt online am {date} um {time}',
+  'userProfile.tabs.label': 'Profilbereiche',
+  'userProfile.tab.posts': 'Beiträge',
+  'userProfile.tab.conversations': 'Unterhaltungen',
+  'userProfile.tab.details': 'Details',
+  'userProfile.tab.activity': 'Aktivität',
 } satisfies UserProfileCatalogSlice;
 
 export default deUserProfile;

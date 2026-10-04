@@ -60,6 +60,11 @@ const frUserProfile = {
   'userProfile.presence.yesterdayAt': 'Vu hier à {time}',
   'userProfile.presence.beforeYesterdayAt': 'Vu avant-hier à {time}',
   'userProfile.presence.dateAt': 'Vu le {date} à {time}',
+  'userProfile.tabs.label': 'Sections du profil',
+  'userProfile.tab.posts': 'Publications',
+  'userProfile.tab.conversations': 'Conversations',
+  'userProfile.tab.details': 'Détails',
+  'userProfile.tab.activity': 'Activité',
 } as const;
 
 export type UserProfileCatalogSlice = Readonly<Record<keyof typeof frUserProfile, string>>;
