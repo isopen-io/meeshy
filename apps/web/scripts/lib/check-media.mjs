@@ -1,3 +1,4 @@
+import { awaitCondition, FACT_CEILING_MS } from './await-fact.mjs';
 import { contrastOf } from './contrast.mjs';
 
 /**
@@ -51,17 +52,74 @@ const PAUSE_LABEL = 'Mettre en pause';
  * qui suffit un jour peut ne plus suffire le suivant, la fenêtre de
  * réajustement dépendant du nombre de rangées voisines à mesurer.
  */
+export const ROW_SETTLE_EPSILON = 0.5;
+
+/**
+ * L'écart entre les DEUX lectures comparées. Conservé à 100 ms — le sondage de
+ * `awaitCondition` est à 25 ms (`polling: 25`, et le doc-comment de
+ * `await-fact.mjs` dit pourquoi), ce qui est bien plus court que la fenêtre de
+ * réajustement du virtualiseur : comparer deux lectures séparées de 25 ms
+ * déclarerait stable une rangée qui glisse lentement. Le prédicat n'échantillonne
+ * donc que toutes les `ROW_SETTLE_INTERVAL_MS`, et compare deux échantillons
+ * CONSÉCUTIFS, comme la boucle qu'il remplace.
+ */
+export const ROW_SETTLE_INTERVAL_MS = 100;
+
+/** La clé où le prédicat garde son échantillon précédent, par rangée. */
+const ROW_SETTLE_STORE = '__meeshyRowSettle';
+
+/**
+ * Rend `true` quand la rangée s'est stabilisée, `false` quand le fait n'est pas
+ * arrivé dans `FACT_CEILING_MS` — et **ne lève JAMAIS** (#9264 : elle rendait la
+ * main sans rien dire quand la rangée n'apparaissait pas, et c'est le locator nu
+ * de l'appelant qui levait 30 s plus tard, tuant les témoins déjà verts).
+ *
+ * Le plafond vient de la SSOT `await-fact.mjs` (#7054), « proportionné à la
+ * charge » : les 4 s de l'ancienne boucle étaient un pari sur la vitesse de la
+ * machine, et c'est ce pari qui a rougi sous contention.
+ *
+ * L'échantillon précédent vit sur `window`, remis à zéro à CHAQUE appel : deux
+ * appels successifs sur la même rangée (autour d'un geste) ne doivent pas
+ * conclure sur une mesure d'AVANT le geste.
+ */
 export async function waitForRowSettled(page, id) {
-  let previousTop = null;
-  for (let attempt = 1; attempt <= 40; attempt += 1) {
-    const top = await page.evaluate(
-      (mid) => document.querySelector(`[data-message="${mid}"]`)?.getBoundingClientRect().top ?? null,
-      id,
-    );
-    if (top !== null && previousTop !== null && Math.abs(top - previousTop) < 0.5) return;
-    previousTop = top;
-    await page.waitForTimeout(100);
-  }
+  await page.evaluate(
+    ({ cle, mid }) => {
+      const magasin = (window[cle] ??= {});
+      delete magasin[mid];
+    },
+    { cle: ROW_SETTLE_STORE, mid: id },
+  );
+  return awaitCondition(
+    page,
+    ({ cle, mid, epsilon, intervalle }) => {
+      const top = document.querySelector(`[data-message="${mid}"]`)?.getBoundingClientRect().top ?? null;
+      const magasin = (window[cle] ??= {});
+      const precedent = magasin[mid];
+      const maintenant = performance.now();
+      if (precedent !== undefined && maintenant - precedent.at < intervalle) return false;
+      magasin[mid] = { top, at: maintenant };
+      return precedent !== undefined && precedent.top !== null && top !== null && Math.abs(top - precedent.top) < epsilon;
+    },
+    { cle: ROW_SETTLE_STORE, mid: id, epsilon: ROW_SETTLE_EPSILON, intervalle: ROW_SETTLE_INTERVAL_MS },
+  );
+}
+
+/**
+ * La même attente, mais qui NOMME la rangée — son message est l'ATTENDU, pas
+ * le reproche : l'`expect` de ces gates imprime la phrase dans les deux cas
+ * (`check-thread-states.mjs:54-58`), donc une phrase écrite à la négative se
+ * lirait « ok la rangée ne s'est pas stabilisée » quand tout va bien.
+ * Tout site qui
+ * MESURE la rangée ensuite passe par ici : sinon le verdict est jeté et la
+ * lecture suivante redevient le locator nu de 30 s que #9264 décrit.
+ *
+ * `expect` est REMIS par l'hôte, jamais redéfini — comme partout dans ces gates.
+ */
+export async function requireRowSettled(page, id, expect) {
+  const stable = await waitForRowSettled(page, id);
+  expect(stable, `la rangée \`${id}\` est montée et stabilisée dans les ${FACT_CEILING_MS / 1000} s du fil virtualisé`);
+  return stable;
 }
 
 export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_THRESHOLD, skin, scheme }) {
@@ -121,7 +179,7 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
    * voisines à mesurer. EXTRAITE en `waitForRowSettled` (ci-dessus,
    * export) pour que `check-media-grid.mjs` la réutilise (#6169).
    */
-  await waitForRowSettled(mediaPage, MEDIA_IMAGE_ATTACHMENT_ID.split('-a')[0]);
+  await requireRowSettled(mediaPage, MEDIA_IMAGE_ATTACHMENT_ID.split('-a')[0], expect);
 
   if (skin === 'bulles') {
     await mediaPage.getByRole('button', { name: /Mode de lecture/ }).click();
@@ -129,7 +187,7 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
     await mediaPage.waitForTimeout(300);
     // Changer de peau reconstruit CHAQUE rangée (une hauteur différente par
     // peau) — la même course peut donc rejouer ici.
-    await waitForRowSettled(mediaPage, MEDIA_IMAGE_ATTACHMENT_ID.split('-a')[0]);
+    await requireRowSettled(mediaPage, MEDIA_IMAGE_ATTACHMENT_ID.split('-a')[0], expect);
   }
 
   const attachmentOf = (id) => mediaPage.locator(`[data-attachment="${id}"]`);
@@ -234,7 +292,7 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
    * jamais en baissant le seuil de 100 %.
    */
   await attachmentOf(MEDIA_IMAGE_ATTACHMENT_ID).evaluate((el) => el.scrollIntoView({ block: 'center' }));
-  await waitForRowSettled(mediaPage, MEDIA_IMAGE_ATTACHMENT_ID.split('-a')[0]);
+  await requireRowSettled(mediaPage, MEDIA_IMAGE_ATTACHMENT_ID.split('-a')[0], expect);
   await mediaPage.locator(`img[data-attachment-image="${MEDIA_IMAGE_ATTACHMENT_ID}"]`).evaluate(async (el) => {
     if (typeof el.decode === 'function') await el.decode().catch(() => {});
     await new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)));
@@ -527,12 +585,24 @@ export async function checkThreadMedia({ browser, BASE, expect, setScheme, AA_TH
   //         l'anglais : un lecteur d'écran prononçait « Bonjour l'équipe, le
   //         déploiement s'est terminé à trois heures » avec une voix anglaise,
   //         et ce témoin le certifiait conforme.
-  const enTranscriptLang = await transcriptLangOf('media-2');
+  /**
+   * LA RANGÉE EST ATTENDUE AVANT D'ÊTRE LUE, ET SON ABSENCE SE NOMME (#9264).
+   * C'est ICI que le job mourait : `transcriptLangOf` est un locator NU, dont
+   * le défaut Playwright de 30 s LÈVE, et `lib/browser.mjs` transforme toute
+   * exception non rattrapée en `process.exit(1)` — les témoins déjà verts
+   * partaient avec. Le fil est VIRTUALISÉ (`check-thread-virtualization.mjs`,
+   * `MAX_CELLS = 60` sur 500 messages) : `media-2` peut ne pas être montée au
+   * moment où on la lit. On l'attend donc, et si elle ne vient pas on le DIT
+   * sans lire — le témoin suivant tourne quand même.
+   */
+  const deuxMonte = await requireRowSettled(mediaPage, 'media-2', expect);
+  const enTranscriptLang = deuxMonte ? await transcriptLangOf('media-2') : null;
   expect(
     enTranscriptLang === 'fr',
     `[${skin}/${scheme}] la transcription de media-2, servie en "fr" (rang 1), l'ANNONCE — jamais muette dans un document dont la langue d'interface peut différer (obtenu : ${JSON.stringify(enTranscriptLang)})`,
   );
-  const deTranscriptLang = await transcriptLangOf('media-3');
+  const troisMonte = await requireRowSettled(mediaPage, 'media-3', expect);
+  const deTranscriptLang = troisMonte ? await transcriptLangOf('media-3') : null;
   expect(
     deTranscriptLang === 'en',
     `[${skin}/${scheme}] la transcription de media-3 porte lang="en" (rang 2, obtenu : ${deTranscriptLang})`,
