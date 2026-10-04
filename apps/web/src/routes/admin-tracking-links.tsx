@@ -9,6 +9,7 @@ import { interpretTrackingTarget } from '@/lib/admin/interpret/enums';
 import { personLabel, trackingLinkLabel } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
+import { trackingShareAddress } from '@/lib/admin/tracking-link-model';
 import {
   TRACKING_LINK_LIST_SPEC,
   TRACKING_TARGET_TYPES,
@@ -92,7 +93,7 @@ export function AdminTrackingLinksPanel({ language, deps = apiDeps, now = defaul
       cell: (row) => (
         <AdminEntityIdentity
           language={language}
-          entity={{ kind: 'trackingLink', id: row.id, label: trackingLinkLabel(row, language), secondary: row.shortUrl === '' ? null : row.shortUrl }}
+          entity={{ kind: 'trackingLink', id: row.id, label: trackingLinkLabel(row, language), secondary: trackingShareAddress(row) === '' ? null : trackingShareAddress(row) }}
         />
       ),
     },

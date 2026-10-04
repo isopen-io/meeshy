@@ -72,12 +72,13 @@ function Screen({ deps }: { readonly deps: AdminDeps }) {
   );
 }
 
-async function open(fake: Fake, identity = BIGBOSS) {
+/** `section` : la fiche s'ouvre par un lien `?open=<section>` — le bloc monte dans sa modale (spec 2026-10-04 § 3). */
+async function open(fake: Fake, identity = BIGBOSS, section?: string) {
   const { Router } = createRouter(
     { adminTrackingLink: { pattern: '/admin/tracking-links/$link', screen: async () => ({ default: () => <Screen deps={fake.deps} /> }) } },
     () => <p>absent</p>,
   );
-  navigate(`/admin/tracking-links/${LINK_ID}`, true);
+  navigate(`/admin/tracking-links/${LINK_ID}${section === undefined ? '' : `?open=${section}`}`, true);
   const host = await mount(<Router wrap={(children) => children} skeleton={null} />, identity);
   for (let attempt = 0; attempt < 30 && host.querySelector('[data-admin-tracking-link-fiche], [data-admin-error], [data-admin-empty], [data-admin-denied-inline]') === null; attempt += 1) {
     await mounter.settle();
@@ -92,7 +93,11 @@ const confirm = (host: ParentNode) => host.querySelector<HTMLButtonElement>('[da
 const writes = (fake: Fake) => fake.calls.filter((call) => call.method !== 'GET');
 const reads = (fake: Fake) => fake.calls.filter((call) => call.method === 'GET');
 const badge = (host: ParentNode) => host.querySelector('[data-admin-identity] [data-admin-raw]')?.textContent ?? '';
-const section = (host: ParentNode, id: string) => host.querySelector(`[data-admin-fiche-section="${id}"]`)?.textContent ?? '';
+const section = (_host: ParentNode, id: string) => document.querySelector(`[data-admin-fiche-section="${id}"]`)?.textContent ?? '';
+const card = (host: ParentNode, id: string) => host.querySelector(`[data-admin-summary="${id}"]`)?.textContent ?? '';
+const openCard = async (host: ParentNode, id: string) => {
+  await mounter.click(host.querySelector<HTMLElement>(`[data-admin-summary="${id}"] [data-admin-summary-open]`));
+};
 const announcement = (host: ParentNode) => host.querySelector('[data-admin-announcement]')?.textContent ?? '';
 const chart = (host: ParentNode, id: string) => host.querySelector(`[data-admin-chart="${id}"]`);
 
@@ -106,12 +111,34 @@ const withClipboard = async (writeText: (text: string) => Promise<void>, body: (
 };
 
 describe('la fiche — nommée, métadonnées interprétées', () => {
+  test('le détail est une grille de cinq cartes déjà chiffrées ; aucune modale ni aucun graphique au repos', async () => {
+    const host = await open(fakeServer());
+
+    const cards = [...host.querySelectorAll('[data-admin-tracking-link-cards] [data-admin-summary]')].map((item) => item.getAttribute('data-admin-summary'));
+    expect(cards).toEqual(['destination', 'campaign', 'target', 'stats', 'recent']);
+    expect(document.querySelector('[data-admin-tracking-link-panel]')).toBeNull();
+    expect(document.querySelector('[data-admin-chart]')).toBeNull();
+    expect(card(host, 'destination')).toContain('https://meeshy.me/l/Ab3xYz');
+    expect(card(host, 'campaign')).toContain('rentree-2026');
+    expect(card(host, 'stats')).toContain('Le plus fréquent : France (700)');
+    await openCard(host, 'stats');
+    expect(window.location.search).toBe('?open=stats');
+    expect(document.querySelector('[data-admin-tracking-link-panel="stats"] [data-admin-chart="tracking-days"]')).not.toBeNull();
+  });
+
+  test('un ancien serveur sans adresse absolue : la courte servie, telle quelle', async () => {
+    const { fullUrl: _absent, ...old } = servedTrackingLinkFiche();
+    const host = await open(fakeServer({ link: old }), BIGBOSS, 'destination');
+
+    expect(host.querySelector('[data-admin-address="short"]')?.textContent).toBe('/l/Ab3xYz');
+  });
+
   test('le titre, l’adresse courte, l’état, les quatre chiffres : des mots, jamais un identifiant ni un ISO', async () => {
     const host = await open(fakeServer());
 
     const identity = host.querySelector('[data-admin-identity]')?.textContent ?? '';
     expect(identity).toContain('Lancement de rentrée');
-    expect(identity).toContain('https://m.meeshy.me/l/Ab3xYz');
+    expect(identity).toContain('https://meeshy.me/l/Ab3xYz');
     expect(identity).toContain('Actif');
     const strip = (id: string) => (host.querySelector(`[data-admin-stat="${id}"]`)?.textContent ?? '').replace(/ | /g, ' ');
     expect(strip('clicks')).toContain('1 204');
@@ -132,12 +159,13 @@ describe('la fiche — nommée, métadonnées interprétées', () => {
   });
 
   test('la destination et l’adresse courte sont du TEXTE, jamais un lien à ouvrir', async () => {
-    const host = await open(fakeServer());
+    const host = await open(fakeServer(), BIGBOSS, 'destination');
 
-    expect(host.querySelector('[data-admin-address="original"]')?.textContent).toBe('https://exemple.test/rentree?ref=meeshy');
-    expect(host.querySelector('[data-admin-address="short"]')?.textContent).toBe('https://m.meeshy.me/l/Ab3xYz');
-    expect(host.querySelector('[data-admin-fiche-section="destination"] a')).toBeNull();
+    expect(host.querySelector('[data-admin-address="original"]')?.textContent).toBe('https://exemple.test/rentree');
+    expect(host.querySelector('[data-admin-address="short"]')?.textContent).toBe('https://meeshy.me/l/Ab3xYz');
+    expect(document.querySelector('[data-admin-fiche-section="destination"] a')).toBeNull();
     expect(section(host, 'destination')).toContain('Là où arrivent les visiteurs.');
+    expect(section(host, 'destination')).toContain('sans ses paramètres');
   });
 
   test('« Copier » écrit l’adresse dans le presse-papiers et l’annonce', async () => {
@@ -147,12 +175,12 @@ describe('la fiche — nommée, métadonnées interprétées', () => {
         copied.push(text);
       },
       async () => {
-        const host = await open(fakeServer());
+        const host = await open(fakeServer(), BIGBOSS, 'destination');
 
         await mounter.click(host.querySelector<HTMLElement>('[data-admin-action="copy-short"]'));
         await mounter.click(host.querySelector<HTMLElement>('[data-admin-action="copy-original"]'));
 
-        expect(copied).toEqual(['https://m.meeshy.me/l/Ab3xYz', 'https://exemple.test/rentree?ref=meeshy']);
+        expect(copied).toEqual(['https://meeshy.me/l/Ab3xYz', 'https://exemple.test/rentree']);
         expect(announcement(host)).toBe('Adresse copiée');
       },
     );
@@ -164,7 +192,7 @@ describe('la fiche — nommée, métadonnées interprétées', () => {
         throw new Error('refusé');
       },
       async () => {
-        const host = await open(fakeServer());
+        const host = await open(fakeServer(), BIGBOSS, 'destination');
 
         await mounter.click(host.querySelector<HTMLElement>('[data-admin-action="copy-short"]'));
 
@@ -174,7 +202,7 @@ describe('la fiche — nommée, métadonnées interprétées', () => {
   });
 
   test('la campagne : trois métadonnées ; une valeur absente dit « Non renseigné »', async () => {
-    const host = await open(fakeServer({ link: servedTrackingLinkFiche({ medium: null }) }));
+    const host = await open(fakeServer({ link: servedTrackingLinkFiche({ medium: null }) }), BIGBOSS, 'campaign');
 
     expect(host.querySelector('[data-admin-meta="campaign"]')?.textContent).toContain('rentree-2026');
     expect(host.querySelector('[data-admin-meta="source"]')?.textContent).toContain('newsletter');
@@ -182,17 +210,17 @@ describe('la fiche — nommée, métadonnées interprétées', () => {
   });
 
   test('la cible est NOMMÉE : le genre, la publication visée, la conversation d’où le lien a été posé', async () => {
-    const host = await open(fakeServer({ link: servedTrackingLinkFiche({ conversation: { id: OBJECT_ID(5), title: 'Les voisins' } }) }));
+    const host = await open(fakeServer({ link: servedTrackingLinkFiche({ conversation: { id: OBJECT_ID(5), title: 'Les voisins' } }) }), BIGBOSS, 'target');
 
     const target = section(host, 'target');
     expect(target).toContain('Publication');
     expect(target).toContain('Publication de Awa Diop');
     expect(target).toContain('Les voisins');
-    expect([...host.querySelectorAll('[data-admin-fiche-section="target"] a')].map((link) => link.getAttribute('href'))).toContain(`/admin/conversations/${OBJECT_ID(5)}`);
+    expect([...document.querySelectorAll('[data-admin-fiche-section="target"] a')].map((link) => link.getAttribute('href'))).toContain(`/admin/conversations/${OBJECT_ID(5)}`);
   });
 
   test('un site externe dit qu’aucune entité de Meeshy n’est visée', async () => {
-    const host = await open(fakeServer({ link: servedTrackingLinkFiche({ targetType: 'EXTERNAL', target: null }) }));
+    const host = await open(fakeServer({ link: servedTrackingLinkFiche({ targetType: 'EXTERNAL', target: null }) }), BIGBOSS, 'target');
 
     expect(section(host, 'target')).toContain('Site externe');
     expect(section(host, 'target')).toContain('aucune entité de Meeshy n’est visée');
@@ -222,14 +250,14 @@ describe('la fiche — nommée, métadonnées interprétées', () => {
 
 describe('ce que rapportent les clics', () => {
   test('huit graphiques, chacun avec son titre', async () => {
-    const host = await open(fakeServer());
+    const host = await open(fakeServer(), BIGBOSS, 'stats');
 
-    const titles = [...host.querySelectorAll('[data-admin-fiche-section="stats"] figure')].map((figure) => figure.getAttribute('data-admin-chart'));
+    const titles = [...document.querySelectorAll('[data-admin-fiche-section="stats"] figure')].map((figure) => figure.getAttribute('data-admin-chart'));
     expect(titles).toEqual(['tracking-days', 'tracking-countries', 'tracking-devices', 'tracking-browsers', 'tracking-systems', 'tracking-social', 'tracking-referrers', 'tracking-redirects']);
   });
 
   test('la courbe compte les jours SANS clic pour zéro et dit son pic, en jours UTC réels', async () => {
-    const host = await open(fakeServer());
+    const host = await open(fakeServer(), BIGBOSS, 'stats');
 
     const days = chart(host, 'tracking-days');
     expect(days?.querySelector('[data-admin-chart-summary]')?.textContent).toBe('Jour le plus chargé : mar. 29 sept., avec 40 clics');
@@ -239,7 +267,7 @@ describe('ce que rapportent les clics', () => {
   });
 
   test('les pays sont des NOMS, jamais FR ni SN ; un code inconnu devient « Pays inconnu »', async () => {
-    const host = await open(fakeServer());
+    const host = await open(fakeServer(), BIGBOSS, 'stats');
 
     const countries = chart(host, 'tracking-countries');
     expect(countries?.textContent).toContain('France');
@@ -250,7 +278,7 @@ describe('ce que rapportent les clics', () => {
   });
 
   test('les appareils sont nommés : Mobile, Ordinateur, Tablette', async () => {
-    const host = await open(fakeServer());
+    const host = await open(fakeServer(), BIGBOSS, 'stats');
 
     const devices = chart(host, 'tracking-devices');
     await mounter.click(devices?.querySelector<HTMLElement>('[data-admin-action="chart-table"]') ?? null);
@@ -261,7 +289,7 @@ describe('ce que rapportent les clics', () => {
   });
 
   test('les redirections sont NOMMÉES — réussie, en attente, échouée — jamais confirmed / pending / failed', async () => {
-    const host = await open(fakeServer());
+    const host = await open(fakeServer(), BIGBOSS, 'stats');
 
     const redirects = chart(host, 'tracking-redirects');
     await mounter.click(redirects?.querySelector<HTMLElement>('[data-admin-action="chart-table"]') ?? null);
@@ -271,7 +299,7 @@ describe('ce que rapportent les clics', () => {
   });
 
   test('les sites d’origine et les sources sociales sont lus tels que servis', async () => {
-    const host = await open(fakeServer());
+    const host = await open(fakeServer(), BIGBOSS, 'stats');
 
     expect(chart(host, 'tracking-referrers')?.textContent).toContain('https://newsletter.exemple.test/');
     expect(chart(host, 'tracking-social')?.textContent).toContain('Whatsapp');
@@ -289,16 +317,16 @@ describe('ce que rapportent les clics', () => {
       topReferrers: [],
       byRedirectStatus: [],
     });
-    const host = await open(fakeServer({ link: servedTrackingLinkFiche({ stats: empty, totalClicks: 0, uniqueClicks: 0 }) }));
+    const host = await open(fakeServer({ link: servedTrackingLinkFiche({ stats: empty, totalClicks: 0, uniqueClicks: 0 }) }), BIGBOSS, 'stats');
 
-    const empties = host.querySelectorAll('[data-admin-fiche-section="stats"] [data-admin-chart-empty]');
+    const empties = document.querySelectorAll('[data-admin-fiche-section="stats"] [data-admin-chart-empty]');
     expect(empties).toHaveLength(8);
   });
 });
 
 describe('les derniers clics — sans IP, sans agent utilisateur, sans empreinte', () => {
   test('chaque clic dit l’heure, le lieu, l’appareil, le navigateur, le système, la provenance, la redirection', async () => {
-    const host = await open(fakeServer());
+    const host = await open(fakeServer(), BIGBOSS, 'recent');
 
     const first = host.querySelector(`[data-admin-click="${OBJECT_ID(31)}"]`)?.textContent ?? '';
     for (const expected of ['Lyon, France', 'Mobile', 'Safari', 'iOS', 'https://newsletter.exemple.test/', 'Redirection réussie']) expect(first).toContain(expected);
@@ -309,6 +337,8 @@ describe('les derniers clics — sans IP, sans agent utilisateur, sans empreinte
   test('aucune IP, aucun agent utilisateur, aucune empreinte — même si la charge en portait', async () => {
     const host = await open(
       fakeServer({ link: servedTrackingLinkFiche({ recentClicks: [servedTrackingClick({ ipAddress: '203.0.113.7', userAgent: 'Mozilla/5.0 (iPhone)', deviceFingerprint: 'fp-9c1' })] }) }),
+      BIGBOSS,
+      'recent',
     );
 
     for (const leaked of ['203.0.113.7', 'Mozilla', 'fp-9c1']) {
@@ -319,7 +349,7 @@ describe('les derniers clics — sans IP, sans agent utilisateur, sans empreinte
   });
 
   test('aucun clic : la fiche le dit', async () => {
-    const host = await open(fakeServer({ link: servedTrackingLinkFiche({ recentClicks: [] }) }));
+    const host = await open(fakeServer({ link: servedTrackingLinkFiche({ recentClicks: [] }) }), BIGBOSS, 'recent');
 
     expect(section(host, 'recent')).toContain('Aucun clic enregistré pour ce lien.');
   });
@@ -514,7 +544,7 @@ describe('qui voit la fiche', () => {
       { adminTrackingLink: { pattern: '/admin/tracking-links/$link', screen: async () => ({ default: () => <Screen deps={fake.deps} /> }) } },
       () => <p>absent</p>,
     );
-    navigate(`/admin/tracking-links/${LINK_ID}`, true);
+    navigate(`/admin/tracking-links/${LINK_ID}${section === undefined ? '' : `?open=${section}`}`, true);
     const host = await mount(<Router wrap={(children) => children} skeleton={null} />, adminIdentityFixture({ role: 'ADMIN', permissions: { canViewAnalytics: false } }));
     await mounter.settle();
     await mounter.settle();

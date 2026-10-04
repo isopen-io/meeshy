@@ -185,6 +185,14 @@ describe('les agrégats nommés', () => {
     expect(trackingPlainLabel(' Safari ', 'fr')).toBe('Safari');
   });
 
+  test('les valeurs génériques que la passerelle écrit — Unknown, Other, Direct — se traduisent (audit 2026-10-04)', () => {
+    expect(trackingPlainLabel('Unknown', 'fr')).toBe('Inconnu');
+    expect(trackingPlainLabel('Other', 'fr')).toBe('Autre');
+    expect(trackingPlainLabel('Direct', 'fr')).toBe('Accès direct');
+    expect(trackingDeviceLabel('Unknown', 'fr')).toBe('Inconnu');
+    expect(trackingPlainData([{ key: 'Direct', count: 3 }, { key: 'WhatsApp', count: 1 }], 'fr').map((entry) => entry.label)).toEqual(['Accès direct', 'WhatsApp']);
+  });
+
   test('les redirections sont NOMMÉES, avec le ton de leur état — et un statut inconnu se dit « Non reconnu »', () => {
     const { data, tones } = trackingRedirectData(
       [
