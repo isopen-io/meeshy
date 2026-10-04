@@ -1,5 +1,162 @@
 # @meeshy/translator
 
+## 1.79.0
+
+### Minor Changes
+
+- Changements automatiques détectés :
+
+  - l'aperçu, la photo et la vidéo sortent d'un seul peintre, sur le canevas 9:16 natif, à la date de la session, la photo gardant l'EXIF de la prise — run test (Closes #9347)
+  - la règle du cadrage du fond devient ComposerBackdropFraming — le nom ComposerFraming revient au cadrage final de la capture (#9347)
+  - la page de façade du témoin rend les globales qu'elle emprunte (Refs #9264)
+  - l'attente d'une rangée peut échouer et nomme la rangée (Closes #9264)
+  - un saut qui atterrit au bas d'une fenêtre courte lance lui-même la chaîne des pages plus récentes
+  - /reels sans identifiant invite un visiteur à rejoindre Meeshy, au lieu de lui dire « contenu indisponible » (#9172)
+  - la story d'un lien n'est plus coupée à 2,5 s — sur réseau lent, le visiteur voit la story, « Réessayer » ne dit qu'un échec réel (#9172)
+  - la chaîne des pages plus récentes ne retient le modèle que le temps d'une page — quitter la conversation l'arrête (#9339)
+  - un fil sauté resté en bas enchaîne ses pages plus récentes — une chaîne par le modèle, une page à la fois, arrêtée par une page qui n'avance pas ou par la sortie du bas (#9339)
+  - reporte l'exemption du gate des avatars pour la liste des arrivées d'un lien (#9357)
+  - la liste des arrivées d'un lien entre dans le registre des avatars exemptés
+  - le bouton du casque met en pause un vocal dans la coque Android (#9344)
+  - le numéro de téléphone est requis à l'inscription — plus de « Plus tard » ni d'alerte « Continuer quand même », le refus se dit sous le champ et s'annonce (#9343)
+  - le numéro de téléphone est requis à l'inscription — plus de « Plus tard » ni d'alerte « Continuer quand même », le refus se dit sous le champ (#9343)
+  - la ligne d'un direct prend le nom COMPOSÉ à user:updated, la loi unique du pair (#9307)
+  - un pair renommé se repeint dans la liste des membres, sa fiche, la feuille de transfert, les amis et les demandes (#9307)
+  - user:updated réécrit les copies PERSISTÉES d'un pair — messages, participants, amis, demandes, fiche (#9307)
+  - une loi unique repeint un pair à user:updated — participant, expéditeur, ami, demande, compte (#9307)
+  - la porte « caméra de la barre » entre à l'inventaire des portes sans appelant, sa raison écrite dans ComposerIntent — la garde rougissait depuis #9310 (#9295, #9337)
+  - le look en direct se lit dans l'espace de la caméra, ne coupe pas la musique, n'offre que les cadres que l'appel compose en direct, et son rendu se dit puis s'annule à la fermeture (#9329, #9328)
+  - un réel muet ne tient plus la lecture dans la coque Android (#9324)
+  - le pipeline vidéo orphelin de l'ancien éditeur quitte le SDK — plus de second VideoFilterPreset (#9331)
+  - une vidéo exportée ou compressée garde sa teinte — chaque encodeur déclare primaires, transfert et matrice (#9332)
+  - filtres et cadres se choisissent EN DIRECT dans le viseur, photo comme vidéo — la prise rend ce qu'on voyait (#9329)
+  - les boutons de la capture, de la prise et des rails du composer ont le relief Liquid Glass (#9330)
+  - l'image reste à l'écran au déclenchement d'une vidéo — le micro déjà autorisé entre dans la session à l'ouverture (#9328)
+  - choisir un filtre ou un cadre ne délave plus la photo — l'espace Display P3 de la prise traverse le cube, le rendu et le peintre des cadres (#9327)
+  - le squelette d'une arrivée prend ses rayons dans MeeshyRadius — le cliquet des rayons littéraux remontait à 124 (#7813)
+  - la loi et l'envoi de l'enregistrement d'une publication se chargent au clic
+  - modifier une publication rouvre le studio — scènes modifiées, ajoutées, supprimées
+  - CallLiveFrameCopy ne déclare plus deux fois « none » — 663e65f92b et 10fd29c274 l'avaient remis chacun, dev ne compilait plus — run test (#9287, #9295)
+  - CallLiveFrameCopy rend de nouveau « Aucun cadre », que la revue de la photo lit — dev ne compilait plus — run test (#9287, #9295)
+  - un commentaire porte un son (fichier ou vocal), un sticker, un emoji, une vidéo ou un GIF
+  - CallLiveFrameCopy.none revient — #9287 l'avait retiré pendant que #9310 le lisait pour le cadre « Aucun » de la prise, dev ne compilait plus
+  - les stickers s'affichent deux fois plus grands dans les fils et les commentaires
+  - glisser un message vers la droite y répond, bulle envoyée comprise
+  - « Voir les N arrivées » ouvre la liste complète des arrivées d'un lien, peinte depuis les récentes puis prolongée page par page (#7813)
+  - les arrivées d'un lien se lisent page par page — modèle tolérant ligne à ligne et fetchLinkArrivals sous curseur opaque (#7813)
+  - l'écran de toutes les arrivées d'un lien, atteint par « Voir les N arrivées » — cache d'abord, suite au défilement, refus, vide et erreurs dessinés, sept langues (#7813)
+  - port des arrivées d'un lien — pages sous curseur, décodeur qui ne garde que les cinq champs affichés, première page tirée des arrivées récentes en main (#7813)
+  - « Modifier avant de publier » ouvre le studio semé d'un partage entrant, et le réel n'est plus offert à une image seule
+  - CallLiveFrameProposal importe MeeshySDK — CallLiveFrameReply y vit, la cible app ne compilait pas (#9287)
+  - la page audio de la visionneuse relâche le magasin global confié (#9305)
+  - la pastille de langue du composeur lit la loi de teinte d'icône, et la priorité de plusieurs effets armés a son témoin (#9121)
+  - une icône teintée du composeur tient 3:1 sur son panneau — l'éphémère prend l'encre d'alerte en clair, les bascules armées lisent la loi (#9121)
+  - une fenêtre sautée rejoint le présent par le bas et le dit pendant que sa page plus récente se charge (#9304)
+  - le bouton « revenir en bas » sait dire « Chargement… » pendant la page plus récente d'une fenêtre sautée (#9304)
+  - toucher le mini-lecteur ouvre la conversation SUR la bulle du vocal, comme le web (#9300)
+  - user:updated est écouté — la photo et le nom d'un pair se repeignent partout, et mon nom suit comme ma photo
+  - le témoin #9279 passe par navigate(), jamais history.replaceState brut
+  - un changement de nom réécrit la copie du nom dans chaque conversation
+  - user:updated ne porte à un pair que les six champs publics du profil
+  - un vocal se met en pause depuis la notification de la coque Android (#9301)
+  - l'éclaircissement posé sur une teinte passe par un biais explicite — run tests (#9289)
+  - la boîte du décalage de la bande d'outils est nonisolated, et le doc-comment ne nomme plus l'écran Rivière (#9254)
+  - un gate peut retenir la fenêtre de fixtures jusqu'à ce qu'il ait lu l'état « en vol » — limité aux builds de fixtures (#9302)
+  - le bouton « revenir en bas » pulse « Recherche… » pendant un saut et « Chargement… » pendant la page du présent, comme iOS — extrait hors de thread.tsx (#9302)
+  - la fenêtre ?around= dit quand elle est en vol, jamais sur un cache — et le signal du fil n'apparaît que si l'attente dure (#9302)
+  - la fenêtre ancrée remet son signal d'annulation une seule fois au port du fil
+  - le saut vers un message absent demande sa fenêtre ?around= au lieu de marcher page à page ; le pied d'une fenêtre détachée redescend vers le présent, « revenir en bas » et l'envoi y reviennent (#7420)
+  - le fil s'ancre autour d'un message hors de ses pages et redescend jusqu'au présent sans trou ni doublon (#7420)
+  - toucher un favori ouvre le fil sur ce message (?message=), comme StarredMessagesView.navigate(to:) iOS ; corpus « Archives du chantier » et favori plus ancien que trois pages (#7420)
+  - réactions, traductions et consommations atteignent aussi la fenêtre ancrée ; un message neuf n'y entre jamais (#7420)
+  - la fenêtre ?around= de la passerelle se charge en une requête et s'étend vers le passé et le présent (#7420)
+  - la prise ne part qu'une fois, et un pincement ne photographie, ne vise, ne filme ni ne range (#9295)
+  - les étapes du mini-lecteur tournent en schéma clair et sombre, ouvrent le fil sur la bulle du vocal, et son aplat garde l'encre blanche d'iOS (#9294)
+  - le mini-lecteur s'efface aussi dans l'aperçu tiré de la bannière, et son toucher ouvre la conversation sur la bulle du vocal (#9294)
+  - les quatre familles de « Mes liens », comme iOS
+  - la photo prise reçoit les filtres et les cadres de l'appel vidéo (#9295)
+  - le viseur fait la mise au point seul et au double toucher, et zoome au pincement (#9295)
+  - onglets lisibles à 320 px et AA dans les deux schémas, mesurés au gate du profil (#6330)
+  - la caméra de la barre prend en plein écran, hors scène (#9295)
+  - son profil garde ses compteurs d'un coup d'œil et se range en onglets Détails · Publications · Activité (#6330)
+  - les options d'un objet ne se referment plus au chargement de leur chunk ; quitter l'édition garde la sélection (#9140)
+  - un message annoncé finit toujours dans le fil ouvert (#9291)
+  - texte, calque et fond s'éditent dans la vue de base, options à droite depuis le haut ; une saisie quittée vide ne laisse rien (#9140)
+  - le témoin du lecteur audio plein écran monte media-2 — il remonte au rythme du fil puis redescend, au lieu de reposer scrollTop = 0 toutes les 25 ms
+  - ports des liens de suivi, de parrainage et de communauté (#6408, #6409, #6410)
+  - la fiche d'autrui se lit par onglets Publications · Conversations · Détails, comme UserProfileSheet (#6330)
+  - la langue d'écriture ferme la bande d'outils du composeur sans y défiler, et la bande dit qu'elle défile (#9254)
+  - la loi des onglets du profil — défaut, adresse non fiable, flèches RTL (#6330)
+  - les teintes d'appel étalonnent en une passe sans tirer la peau, et le lissage se règle dans les effets — run tests (#9289)
+  - le chemin « rouvrir le plein écran » quitte le mini-lecteur — la reprise ne garde que sa conversation, la visionneuse perd sa propriété conversationId, et le chunk des lois médias n'a plus à être nommé (#9279)
+  - toucher le mini-lecteur ouvre la conversation du vocal, comme RootView.onMiniPlayerTap iOS — la lecture continue et la bulle y reprend la main (#9279)
+  - le mini-lecteur rouvre le plein écran au toucher, s'efface dans la conversation du vocal et se range sous « Reprendre l'appel » (#9279)
+  - le cadre se choisit dans la capture, se garde pendant l'appel et se propose à l'autre — run tests (#9287)
+  - l'événement du cadre en direct décode la réponse, et la charge l'envoie (#9287)
+  - le @pseudo de la bande des mentions se lit sur la scène comme sur le plateau — l'hôte déclare son fond, la capsule de scène devient opaque
+  - la lecture des stories et des réels attend la vidéo qui bufferise — plus de tempête de seeks sur un Android lent
+  - la référence des entrées de catalogue TS mortes descend à 285, mesurée après le lecteur audio plein écran (#9256)
+  - le cliquet des entrées mortes du catalogue TS suit l'amélioration de #9256
+  - rafraîchir la liste des conversations ne refait plus N requêtes — une page delta fusionnée dans le cache remplace la relecture page par page (#6261)
+  - le lecteur audio plein écran garde la lecture et le focus en changeant de version, et le gate du fil prouve les trois écarts au navigateur (#9256)
+  - la reprise d'un vocal clampée en butée de fin repart de zéro
+  - le lecteur audio plein écran transcrit et traduit à la demande, et fermer confie le vocal au mini-lecteur (#9256)
+  - l'aperçu d'appui long rendu par la bulle respecte la langue audio choisie au drapeau
+  - télécharger une carte de visite illisible ne fait plus quitter l'app Android (#9263)
+  - la pile du composer monte l'encart du bas et les feuilles des portails comme des nœuds — elle repasse sous le budget de pile
+  - le body du composer se découpe en couches nominales — « Créer une story » ne déborde plus la pile
+  - le gate du chrome du fil attend la bulle servie, il ne la parie plus
+  - le titre de l'aperçu d'un vocal passe par MediaKindLabel, la source unique des étiquettes de média (#9010)
+  - l'aperçu d'un vocal à l'appui long joue la piste que le Prisme sert, avec sa durée et son texte — plus l'original ni son nom de fichier
+  - un vocal continue de jouer quand on quitte la coque Android (#9257)
+  - un vocal cité se joue sur place en Rivière comme en Script — le geste de la zone média devient une règle unique du Fil et de la Rivière (#8283)
+  - un vocal s'ouvre en plein écran, comme sur iOS — la visionneuse a sa page audio, servie au Prisme du lecteur, et l'on balaie entre les vocaux de la conversation
+  - mes stories ne tracent que les barres des stories en cours, plus une par archive
+  - l'affiche d'une vidéo de story sans vignette stockée est son empreinte entière, plus sa couleur moyenne
+  - une scène s'ouvre sur son empreinte, jamais sur du vide — le thumbHash se peint sous le média du fil, des réels et de la visionneuse (#5047)
+  - la langue d'écriture se lit entière dans la barre du composeur à 390 et 320 px, et la bande d'outils dit qu'elle défile (#9251)
+  - la traînée de réactions de la visionneuse suit l'usage des emojis du lecteur (#9252)
+  - « Ajouter une réaction » se titre dans la langue d'interface (#9253)
+  - les emojis rapides suivent l'usage du lecteur, et un appui long en choisit un autre (#7983)
+  - la contre-épreuve de la bande du composeur se prend au bas du fil, là où la réserve basse gouverne
+  - le repli de langue d'un participant passe par la SSOT
+  - enregistrer une story dans la coque Android la range dans la galerie (#9246)
+  - une vidéo plein écran flotte quand on quitte la coque Android (#9242)
+  - un vocal ne devient pas muet quand on quitte la coque Android (#9238)
+  - la cote de l'agencement d'une publication lit MosaicLayout.swift à sa nouvelle place, le cœur du SDK (#9235)
+  - les médias se posent au-dessus, en dessous, à gauche ou à droite, en une seule choisie, en mosaïque ou en vague, et disent leur auteur (#9236)
+  - les médias se posent au-dessus, en dessous, à gauche ou à droite, en une seule choisie, en mosaïque ou en vague, et disent leur auteur — run test (#9235)
+  - la fenêtre flottante de l'appel prend le format de la vidéo (#8144)
+  - le grand titre de la liste rétrécit plutôt que de se couper sur un téléphone étroit, comme minimumScaleFactor(0.55) iOS (#9221)
+  - la série 🔥 et ses chiffres se lisent sur téléphone — une encre de série plus profonde en clair, 12 px sous l'avatar, flamme pleine dans la liste comme sur iOS
+  - caméra coupée, ma tuile montre mon portrait et non les initiales de « Vous » (#9220)
+  - rejoindre depuis le fil reprend un appel vidéo en vidéo, même après un rechargement (#9111)
+  - un appel que les derniers quittent en même temps se termine à l'échéance de la grâce (#9218)
+  - micro et raccrocher dans la fenêtre flottante de l'appel (#8144)
+  - un duo vidéo choisit un cadre en direct, composé sur la carte graphique (#9214)
+  - le choix du cadre en direct d'un duo voyage par la signalisation (#9214)
+  - l'appel vidéo flotte en image dans l'image dans la coque Android (#8144)
+  - glisser l'écran d'appel à la souris depuis le portrait le réduit — le glisser-déposer du navigateur n'annule plus le geste (#9096)
+  - la capture 10 de l'App Store montre en français la vraie page d'invitation (lien.mov, /chat/), et la maquette des autres langues dit /chat/ au lieu de /l/
+  - le miroir Swift et le générateur reçoivent les clés étendues
+  - un accusé de lecture ne peint « Lu » que le message qu'il décrit, et le REST guérit les fausses coches — run test (#7433)
+  - le schéma zod accepte les clés des frames en direct et des packs
+  - la caméra du studio retente son ouverture au retour au premier plan (#9193)
+  - l'admission d'un invité par lien ne conserve plus son IP dans la session anonyme (#9342)
+  - une copie supprimée emporte ses pistes propres, et `avatars/` se juge après normalisation
+  - un média supprimé emporte ses dérivés, et aucun média privé ne part en cache partagé
+  - GET /links/:linkId/arrivals rend toutes les arrivées d'un lien, page par page, aux seuls lecteurs de ses statistiques (#7813)
+  - le cadre en direct se propose et l'autre répond — call:frame-select porte un reply facultatif (#9287)
+  - la galerie sert les drapeaux de protection avec l'URL du média
+  - la galerie cesse de lister un média dont le porteur a expiré ou brûlé
+  - la réaction par pièce jointe refuse enfin une conversation close
+  - un lien de suivi n'est réutilisé que dans la portée de son appelant (#9184)
+  - la référence de NLLB-200 600M arme la porte de régression du banc
+  - le banc charge le modèle avant de démarrer le chronomètre, et son rapport JSON se lit dans le journal
+  - banc de mesure de la traduction sur FLORES-200 et un jeu de conversations, porte de régression nocturne (#3662)
+  - migration mongosh qui purge l'IP conservée dans les sessions anonymes (#9342)
+  - contrat de la page des arrivées d'un lien — nom, badge sans compte, pays, langue et date, rien d'autre, sous un curseur opaque (#7813)
+
 ## 1.78.0
 
 ### Minor Changes
