@@ -240,10 +240,24 @@ export function patchThreadMessages(
   conversationId: string,
   updater: ThreadMessagesUpdater,
 ): void {
-  queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId), (data) => {
+  queryClient.setQueriesData<MessagesInfiniteData>({ queryKey: messagesQueryKey(conversationId) }, (data) => {
     if (data === undefined || !Array.isArray(data.pages)) return data;
     return { ...data, pages: data.pages.map((page) => ({ ...page, messages: updater(page.messages) })) };
   });
+}
+
+/**
+ * LES FENÊTRES DU FIL (#7420) — le présent (`messagesQueryKey`) ET les
+ * fenêtres ancrées autour d'un message (`messages-window.ts`), qui vivent sous
+ * le MÊME préfixe : une réaction, une traduction ou une consommation reçue
+ * pendant qu'on lit un message ancien doit atteindre la rangée qu'on lit.
+ * C'est pourquoi `patchThreadMessages` écrit par PRÉFIXE (`setQueriesData`).
+ */
+function threadWindowsOf(queryClient: QueryClient, conversationId: string): readonly MessagesInfiniteData[] {
+  return queryClient
+    .getQueriesData<MessagesInfiniteData>({ queryKey: messagesQueryKey(conversationId) })
+    .map(([, data]) => data)
+    .filter((data): data is MessagesInfiniteData => data !== undefined && Array.isArray(data.pages));
 }
 
 /**
@@ -268,6 +282,17 @@ export function upsertThreadMessage(
   const cid = message.clientMessageId;
   const matches = (m: Message): boolean =>
     m.id === message.id || (cid !== undefined && (m as { readonly clientMessageId?: string }).clientMessageId === cid);
+
+  /* LA FENÊTRE ANCRÉE (#7420) n'accueille que des REMPLACEMENTS : un message
+     neuf est plus récent qu'elle, il appartient au présent — l'y poser
+     ouvrirait un trou entre sa dernière page et lui. */
+  queryClient.setQueriesData<MessagesInfiniteData>(
+    { queryKey: messagesQueryKey(conversationId), predicate: (query) => query.queryKey.length > 3 },
+    (data) => {
+      if (data === undefined || !Array.isArray(data.pages) || !data.pages.some((page) => page.messages.some(matches))) return data;
+      return { ...data, pages: data.pages.map((page) => ({ ...page, messages: page.messages.map((m) => (matches(m) ? message : m)) })) };
+    },
+  );
 
   queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId), (data) => {
     if (data === undefined || !Array.isArray(data.pages)) return data;
@@ -329,11 +354,11 @@ export function findCachedThreadMessage(
   conversationId: string,
   messageId: string,
 ): Message | undefined {
-  const data = queryClient.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
-  if (data === undefined || !Array.isArray(data.pages)) return undefined;
-  for (const page of data.pages) {
-    const found = page.messages.find((m) => m.id === messageId);
-    if (found !== undefined) return found;
+  for (const data of threadWindowsOf(queryClient, conversationId)) {
+    for (const page of data.pages) {
+      const found = page.messages.find((m) => m.id === messageId);
+      if (found !== undefined) return found;
+    }
   }
   return undefined;
 }

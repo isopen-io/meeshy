@@ -1,14 +1,18 @@
+import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, test } from 'bun:test';
 
 import { message } from './fixtures-base';
 import { createHttpTransport } from './http';
+import { findCachedThreadMessage, messagesQueryKey, patchThreadMessages, upsertThreadMessage } from './messages';
 import type { Message } from './types';
 import {
   joinThreadWindows,
   loadMessagesWindow,
   newerWindowParam,
   olderWindowParam,
+  anchoredMessagesQueryKey,
   windowPageOf,
+  type WindowData,
   type WindowPage,
 } from './messages-window';
 
@@ -162,5 +166,41 @@ describe('loadMessagesWindow — la passerelle', () => {
     expect(decodeURIComponent(urls[0] ?? '')).toContain(`after=${at(3).toISOString()}`);
     expect(result.ok && ids(result.data.messages)).toEqual(['m4', 'm5']);
     expect(result.ok && result.data.hasNewer).toBe(false);
+  });
+});
+
+describe('le cache du fil atteint la fenêtre ancrée', () => {
+  const seeded = () => {
+    const queryClient = new QueryClient();
+    const all = corpus(120);
+    queryClient.setQueryData(messagesQueryKey('c-1'), {
+      pages: [{ messages: all.slice(70), hasOlder: true, nextCursor: 'a70' }],
+      pageParams: [undefined],
+    });
+    const window: WindowData = {
+      pages: [{ messages: all.slice(10, 40), hasOlder: true, hasNewer: true, nextCursor: 'a10' }],
+      pageParams: [{ around: 'a25' }],
+    };
+    queryClient.setQueryData(anchoredMessagesQueryKey('c-1', 'a25'), window);
+    const anchored = () => queryClient.getQueryData<WindowData>(anchoredMessagesQueryKey('c-1', 'a25'))!.pages[0]!.messages;
+    return { queryClient, anchored };
+  };
+
+  test('une réaction, une traduction, une consommation patchent AUSSI la fenêtre ancrée', () => {
+    const { queryClient, anchored } = seeded();
+    patchThreadMessages(queryClient, 'c-1', (messages) => messages.map((m) => (m.id === 'a25' ? { ...m, content: 'patché' } : m)));
+    expect(anchored().find((m) => m.id === 'a25')?.content).toBe('patché');
+    expect(findCachedThreadMessage(queryClient, 'c-1', 'a25')?.content).toBe('patché');
+  });
+
+  test('un message déjà servi s’y remplace ; un message NEUF n’y entre jamais — il appartient au présent', () => {
+    const { queryClient, anchored } = seeded();
+    const edited = { ...anchored()[0]!, content: 'édité' };
+    upsertThreadMessage(queryClient, 'c-1', edited);
+    expect(anchored()[0]?.content).toBe('édité');
+    const fresh = message({ id: 'neuf', senderId: 'u-2', content: 'neuf', originalLanguage: 'fr', translations: [], createdAt: at(200) });
+    upsertThreadMessage(queryClient, 'c-1', fresh);
+    expect(ids(anchored())).not.toContain('neuf');
+    expect(findCachedThreadMessage(queryClient, 'c-1', 'neuf')?.id).toBe('neuf');
   });
 });
