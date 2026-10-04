@@ -130,7 +130,7 @@ public struct ConversationScrollControlsView: View {
     
     @State private var searchPulse: Bool = false
     /// `isLoadingNewer` retardé de `loadingNewerSignalDelay` : une page servie
-    /// vite ne fait rien clignoter, deux chargements enchaînés le gardent.
+    /// vite ne fait rien clignoter ; servie, le signal s'éteint sur-le-champ.
     @State private var showsLoadingNewer: Bool = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// Phase d'animation des points "typing" (0 -> 1 -> 2), possedee par la vue.
