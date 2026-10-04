@@ -246,6 +246,64 @@ final class ComposerPhotoLookTests: XCTestCase {
         XCTAssertTrue(viseur.contains(".accessibilityAddTraits(.isModal)"))
     }
 
+    // MARK: - Les couleurs de la prise (#9327)
+
+    func test_espace_unePhotoP3_gardeSonEspace() {
+        XCTAssertEqual(ComposerPhotoLookRule.colorSpace(of: Self.photoP3()).name, CGColorSpace.displayP3)
+    }
+
+    func test_espace_unePhotoSansEspaceRVB_retombeEnSRGB() {
+        XCTAssertEqual(ComposerPhotoLookRule.colorSpace(of: Self.photoGrise()).name, CGColorSpace.sRGB)
+    }
+
+    func test_graded_filtre_rendLaPhotoDansSonEspace() throws {
+        let filtree = try XCTUnwrap(ComposerPhotoLookRenderer.graded(Self.photoP3(), filter: .warm, maxPixel: nil))
+        XCTAssertEqual(filtree.colorSpace?.name, CGColorSpace.displayP3,
+                       "un filtre change la teinte qu'il annonce, jamais l'espace de la photo")
+    }
+
+    func test_graded_unRougeHorsGamutSRGB_survitALaReduction() throws {
+        let reduite = try XCTUnwrap(ComposerPhotoLookRenderer.graded(Self.photoP3(), filter: .natural, maxPixel: 100))
+        let centre = Self.pixelP3(reduite)
+        XCTAssertGreaterThan(centre[0], 245)
+        XCTAssertLessThan(centre[1], 10, "écrêté en sRGB, le rouge P3 ressortirait délavé : \(centre)")
+    }
+
+    func test_render_naturelEtCadre_gardeLeRougeDeLaPhoto() throws {
+        let toile = CGSize(width: 108, height: 192)
+        let rendu = try XCTUnwrap(ComposerPhotoLookRenderer.render(
+            ComposerPhotoLook(frame: .montage(.classic(.screen))), source: Self.source(photo: Self.photoP3()),
+            maxPixel: nil, frameCanvas: toile))
+        XCTAssertEqual(rendu.colorSpace?.name, CGColorSpace.displayP3, "le cadre se peint dans l'espace de la photo")
+        let centre = Self.pixelP3(rendu)
+        XCTAssertGreaterThan(centre[0], 245)
+        XCTAssertLessThan(centre[1], 10, "choisir un cadre ne délave pas la photo : \(centre)")
+    }
+
+    func test_cubeDeLAppel_resteEnSRGBParDefaut() throws {
+        let peintre = try Self.code("Meeshy/Features/Main/Services/CallColorLook.swift")
+        XCTAssertTrue(peintre.contains("colorSpace: CGColorSpace = CallColorLook.callColorSpace"),
+                      "le flux d'appel (sRGB) garde son cube ; seule la photo passe son espace")
+    }
+
+    // MARK: - Le relief Liquid Glass (#9330)
+
+    func test_lesBoutonsDuViseurEtDeLaPrise_ontLeReliefLiquidGlass() throws {
+        for fichier in ["ComposerSceneCameraBar.swift", "ComposerPhotoLookReview.swift", "ComposerViewfinder.swift"] {
+            let code = try Self.code("Meeshy/Features/Main/Composer/\(fichier)")
+            XCTAssertFalse(code.contains(".adaptiveGlass(in:"),
+                           "\(fichier) : un verre plat sous iOS 26 — le relief passe par adaptiveLiquidGlass")
+            XCTAssertTrue(code.contains("adaptiveLiquidGlass(in:"), fichier)
+        }
+        let barre = try Self.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        XCTAssertTrue(barre.contains(".adaptiveLiquidGlass(in: Circle(), interactive: true)"),
+                      "un bouton du viseur réagit au toucher")
+        let prise = try Self.code("Meeshy/Features/Main/Composer/ComposerPhotoLookReview.swift")
+        XCTAssertTrue(prise.contains(".adaptiveGlassProminent(in: Capsule()"),
+                      "« Valider » est l'action terminale, sur verre proéminent")
+        XCTAssertFalse(prise.contains("Capsule().fill(MeeshyColors.indigo500)"))
+    }
+
     // MARK: - Le câblage : les pièces de l'appel, aucune jumelle
 
     func test_leViseur_monteLaPrise_etLaScenePasse() throws {
@@ -286,9 +344,38 @@ final class ComposerPhotoLookTests: XCTestCase {
         return contexte.makeImage()!
     }
 
-    private static func source() -> ComposerPhotoLookSource {
-        ComposerPhotoLookSource.taken(photo(), by: CallFramePerson(id: "u1", name: "Jean", handle: "jcnm", isSelf: true),
+    private static func source(photo: CGImage = photo()) -> ComposerPhotoLookSource {
+        ComposerPhotoLookSource.taken(photo, by: CallFramePerson(id: "u1", name: "Jean", handle: "jcnm", isSelf: true),
                                       at: Date(timeIntervalSince1970: 1_790_000_000))
+    }
+
+    /// Un rouge Display P3 PUR — hors du gamut sRGB : écrêté, il pâlit.
+    private static func photoP3(width: Int = 400, height: Int = 300) -> CGImage {
+        let p3 = CGColorSpace(name: CGColorSpace.displayP3)!
+        let contexte = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                 space: p3, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        contexte.setFillColor(CGColor(colorSpace: p3, components: [1, 0, 0, 1])!)
+        contexte.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        return contexte.makeImage()!
+    }
+
+    private static func photoGrise() -> CGImage {
+        let contexte = CGContext(data: nil, width: 8, height: 8, bitsPerComponent: 8, bytesPerRow: 0,
+                                 space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue)!
+        contexte.setFillColor(gray: 0.5, alpha: 1)
+        contexte.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+        return contexte.makeImage()!
+    }
+
+    /// Le pixel CENTRAL, lu en Display P3.
+    private static func pixelP3(_ image: CGImage) -> [UInt8] {
+        let centre = image.cropping(to: CGRect(x: image.width / 2, y: image.height / 2, width: 1, height: 1))!
+        let contexte = CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                                 space: CGColorSpace(name: CGColorSpace.displayP3)!,
+                                 bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        contexte.draw(centre, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        let octets = contexte.data!.bindMemory(to: UInt8.self, capacity: 4)
+        return (0..<4).map { octets[$0] }
     }
 
     /// La couleur moyenne, lue sur un pixel unique.

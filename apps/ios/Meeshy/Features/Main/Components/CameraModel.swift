@@ -5,6 +5,24 @@ import os
 import MeeshySDK
 import MeeshyUI
 
+/// **Quand le micro entre dans la session** (#9328).
+///
+/// Ajouter une entrée à une session DÉJÀ lancée la reconfigure : l'aperçu gèle
+/// puis noircit le temps qu'elle se refasse — à l'instant précis où l'auteur
+/// commence à filmer. Un micro déjà autorisé entre donc dans la configuration
+/// initiale ; un micro jamais demandé attend que le son serve (aucun prompt à
+/// l'ouverture d'un viseur photo), et un refus n'empêche pas de filmer muet.
+///
+/// **Ouvrir le viseur ne coupe pas la musique.** Brancher le micro bascule la
+/// session audio de l'app en enregistrement, ce qui interrompt une autre app
+/// qui joue : quand une musique tourne, le micro attend donc la prise — comme
+/// l'appareil photo, qui ne la coupe qu'en filmant.
+nonisolated enum CameraAudioArming {
+    static func armsAtSetup(microphone: AVAuthorizationStatus, otherAudioPlaying: Bool) -> Bool {
+        microphone == .authorized && !otherAudioPlaying
+    }
+}
+
 @MainActor
 final class CameraModel: NSObject, ObservableObject {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
@@ -38,6 +56,10 @@ final class CameraModel: NSObject, ObservableObject {
 
     private let photoOutput = AVCapturePhotoOutput()
     private let videoOutput = AVCaptureMovieFileOutput()
+    /// Les trames de l'objectif pour le look en direct (#9329) — guettées, mais
+    /// gardées seulement quand un look est choisi.
+    private let frameOutput = AVCaptureVideoDataOutput()
+    nonisolated let liveFeed = ComposerCameraFeed()
     /// #8695 — le traitement UNIQUE de toute prise photo de l'app : chaque
     /// consommateur (conversation, fil, composer, story) reçoit la photo déjà
     /// redressée, bornée et améliorée, EXIF compris.
@@ -96,6 +118,13 @@ final class CameraModel: NSObject, ObservableObject {
 
         if session.canAddOutput(photoOutput) { session.addOutput(photoOutput) }
         if session.canAddOutput(videoOutput) { session.addOutput(videoOutput) }
+        frameOutput.alwaysDiscardsLateVideoFrames = true
+        frameOutput.setSampleBufferDelegate(liveFeed, queue: liveFeed.queue)
+        if session.canAddOutput(frameOutput) { session.addOutput(frameOutput) }
+        if CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio),
+                                         otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying) {
+            addAudioInput()
+        }
 
         session.commitConfiguration()
 
@@ -127,7 +156,14 @@ final class CameraModel: NSObject, ObservableObject {
             return
         }
 
-        guard let audioDevice = AVCaptureDevice.default(for: .audio) else { return }
+        session.beginConfiguration()
+        addAudioInput()
+        session.commitConfiguration()
+    }
+
+    /// Branche le micro DANS une configuration ouverte par l'appelant.
+    private func addAudioInput() {
+        guard !hasAudioInput, let audioDevice = AVCaptureDevice.default(for: .audio) else { return }
         let audioInput: AVCaptureDeviceInput
         do {
             audioInput = try AVCaptureDeviceInput(device: audioDevice)
@@ -135,12 +171,9 @@ final class CameraModel: NSObject, ObservableObject {
             Logger.media.error("Failed to create audio capture input: \(error.localizedDescription, privacy: .public)")
             return
         }
-        session.beginConfiguration()
-        if session.canAddInput(audioInput) {
-            session.addInput(audioInput)
-            hasAudioInput = true
-        }
-        session.commitConfiguration()
+        guard session.canAddInput(audioInput) else { return }
+        session.addInput(audioInput)
+        hasAudioInput = true
     }
 
     private func addVideoInput(position: AVCaptureDevice.Position) {
@@ -159,6 +192,7 @@ final class CameraModel: NSObject, ObservableObject {
 
         session.addInput(input)
         currentPosition = position
+        liveFeed.setPosition(position)
         zoomFactor = device.videoZoomFactor
         apply(ComposerCaptureFocus.continuous(focusCapabilities(of: device)), to: device)
         watchSubjectArea(of: device)
@@ -449,6 +483,7 @@ final class CameraModel: NSObject, ObservableObject {
 
     func stop() {
         if isRecordingVideo { stopRecording() }
+        liveFeed.flush()
         stopWatchingSubjectArea()
         Task.detached { [weak self] in
             self?.session.stopRunning()

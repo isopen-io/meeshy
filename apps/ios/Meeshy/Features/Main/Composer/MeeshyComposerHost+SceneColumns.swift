@@ -29,7 +29,7 @@ extension MeeshyComposerHost {
                     .frame(width: ComposerControlMetrics.visualDiameter,
                            height: ComposerControlMetrics.visualDiameter)
                     .contentShape(Circle())
-                    .adaptiveGlass(in: Circle(), tint: tint.color.opacity(0.55))
+                    .adaptiveLiquidGlass(in: Circle(), tint: tint.color.opacity(0.55), interactive: true)
                     .frame(minWidth: ComposerRailGeometry.railWidth,
                            minHeight: ComposerRailGeometry.railWidth)
                     .contentShape(Rectangle())

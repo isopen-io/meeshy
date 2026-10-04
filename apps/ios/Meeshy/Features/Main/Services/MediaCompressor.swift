@@ -81,6 +81,30 @@ private nonisolated struct SendableWriterInput: @unchecked Sendable {
 
 // MARK: - MediaCompressor
 
+/// **Une vidéo ré-encodée garde l'étiquette couleur de sa source** (#9332).
+///
+/// Le ré-encodage ne change pas l'espace des pixels — il les recompresse.
+/// Sans étiquette, l'encodeur laisse le lecteur supposer du BT.709 : une prise
+/// Display P3 ressort délavée. L'étiquette se lit donc sur la description de
+/// format de la piste source et se reporte telle quelle ; une source muette
+/// reste muette, rien n'est inventé.
+nonisolated enum VideoColorTagging {
+    static func properties(of description: CMFormatDescription) -> [String: String]? {
+        let tags = [
+            (AVVideoColorPrimariesKey, kCMFormatDescriptionExtension_ColorPrimaries),
+            (AVVideoTransferFunctionKey, kCMFormatDescriptionExtension_TransferFunction),
+            (AVVideoYCbCrMatrixKey, kCMFormatDescriptionExtension_YCbCrMatrix),
+        ].compactMap { paire -> (String, String)? in
+            guard let valeur = CMFormatDescriptionGetExtension(description, extensionKey: paire.1) as? String else {
+                return nil
+            }
+            return (paire.0, valeur)
+        }
+        guard tags.count == 3 else { return nil }
+        return Dictionary(uniqueKeysWithValues: tags)
+    }
+}
+
 actor MediaCompressor {
     static let shared = MediaCompressor()
 
@@ -226,8 +250,9 @@ actor MediaCompressor {
 
         let useHEVC = VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)
         let codecType: AVVideoCodecType = useHEVC ? .hevc : .h264
+        let colorTags = try await videoTrack.load(.formatDescriptions).first.flatMap(VideoColorTagging.properties(of:))
 
-        let videoSettings: [String: Any] = [
+        let encodage: [String: Any] = [
             AVVideoCodecKey: codecType,
             AVVideoWidthKey: Int(targetRawSize.width),
             AVVideoHeightKey: Int(targetRawSize.height),
@@ -240,6 +265,8 @@ actor MediaCompressor {
                 AVVideoMaxKeyFrameIntervalKey: Int(targetFPS) * 2,
             ] as [String: Any]
         ]
+        let etiquette: [String: Any] = colorTags.map { [AVVideoColorPropertiesKey: $0] } ?? [:]
+        let videoSettings = encodage.merging(etiquette) { garde, _ in garde }
 
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
 

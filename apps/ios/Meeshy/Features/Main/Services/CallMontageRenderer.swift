@@ -14,8 +14,9 @@ nonisolated struct CallMontageCaption: Equatable, Sendable {
 }
 
 nonisolated enum CallMontageRenderer {
-    static func render(style: CallMontageStyle, portraits: [CallMontagePortrait], canvas: CGSize, caption: CallMontageCaption) -> CGImage? {
-        guard let context = makeContext(size: canvas) else { return nil }
+    static func render(style: CallMontageStyle, portraits: [CallMontagePortrait], canvas: CGSize, caption: CallMontageCaption,
+                       colorSpace: CGColorSpace = CallMontageRenderer.deviceSpace) -> CGImage? {
+        guard let context = makeContext(size: canvas, colorSpace: colorSpace) else { return nil }
         let bounds = CGRect(origin: .zero, size: canvas)
         let slots = CallMontageLayout.frames(style: style, count: portraits.count, canvas: canvas)
         let placed = Array(zip(slots, portraits))
@@ -278,7 +279,11 @@ nonisolated enum CallMontageRenderer {
 
     // MARK: - Drawing primitives
 
-    static func makeContext(size: CGSize) -> CGContext? {
+    /// L'espace des images de l'appel (WebRTC sert du sRGB). Une photo prise en
+    /// Display P3 passe le sien (#9327) : peinte ici, elle serait écrêtée.
+    static var deviceSpace: CGColorSpace { CGColorSpaceCreateDeviceRGB() }
+
+    static func makeContext(size: CGSize, colorSpace: CGColorSpace = deviceSpace) -> CGContext? {
         let width = Int(size.width.rounded())
         let height = Int(size.height.rounded())
         guard width > 0, height > 0,
@@ -288,7 +293,7 @@ nonisolated enum CallMontageRenderer {
                 height: height,
                 bitsPerComponent: 8,
                 bytesPerRow: 0,
-                space: CGColorSpaceCreateDeviceRGB(),
+                space: colorSpace,
                 bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
               ) else { return nil }
         context.translateBy(x: 0, y: CGFloat(height))

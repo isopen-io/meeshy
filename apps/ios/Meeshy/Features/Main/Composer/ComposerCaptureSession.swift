@@ -46,6 +46,22 @@ final class ComposerCaptureSession: ObservableObject {
     @Published var lockProgress: Double = 0
     /// La course du glissement qui range le viseur, pendant que le doigt est posé.
     @Published var dismissDrag: CGFloat = 0
+    /// **Le look choisi EN DIRECT** (#9329) — un filtre et un cadre de l'appel.
+    /// Le guet des trames ne s'arme qu'avec lui : sans look, aucune trame retenue.
+    @Published var look = ComposerPhotoLook() {
+        didSet { camera.liveFeed.isActive = ComposerLiveLookRule.rendersLive(look) }
+    }
+    /// Le sélecteur d'effets est déplié.
+    @Published var looksOpen = false
+    /// La vidéo se rend avec son look : le `✓` attend, et le dit.
+    @Published private(set) var isRenderingLook = false
+    /// La date de la séance de prise : l'aperçu, la photo et la vidéo écrivent
+    /// la MÊME dans leur cadre.
+    let lookDate = Date()
+    var lookTexts: CallFrameTexts { ComposerPhotoLookSource.texts(at: lookDate) }
+    /// Chaque désarmement ouvre une nouvelle génération : un rendu lancé avant
+    /// ne remet plus rien à un viseur que l'auteur a fermé.
+    private var renderGeneration = 0
 
     /// La durée du segment en cours, saisie À LA CLÔTURE : l'horloge du modèle
     /// repart à zéro au démarrage suivant, et le fichier n'arrive qu'après.
@@ -127,6 +143,8 @@ final class ComposerCaptureSession: ObservableObject {
     /// leurs fichiers : la prise suivante ne repart jamais avec des segments
     /// que l'auteur croyait jetés.
     func disarm() {
+        renderGeneration += 1
+        isRenderingLook = false
         stage = .off
         mode = nil
         discardSegments()
@@ -229,12 +247,37 @@ final class ComposerCaptureSession: ObservableObject {
         let pris = segments
         guard ComposerCaptureSegments.canValidate(pris) else { return }
         segments = []
+        let regard = look
+        let auteur = lookPerson
+        let textes = lookTexts
+        let espace = camera.liveFeed.declaredSpace?.name as String?
+        let generation = renderGeneration
+        isRenderingLook = ComposerLiveLookRule.rendersLive(regard)
         Task { @MainActor in
             let finale = ComposerCaptureSegments.needsMerge(pris)
                 ? await CameraModel.mergeSegments(pris.map(\.url))
                 : pris.first?.url
-            guard let url = finale ?? pris.last?.url else { return }
-            deliver(url)
+            guard let url = finale ?? pris.last?.url else {
+                isRenderingLook = false
+                return
+            }
+            // La vidéo part avec le look qu'on voyait (#9329) ; un rendu qui
+            // échoue rend la prise brute plutôt que de la perdre.
+            let regardee = await ComposerLookVideoExporter.export(url, look: regard, person: auteur, texts: textes,
+                                                                   declaredSpaceName: espace)
+            guard generation == renderGeneration else {
+                if let regardee, regardee != url {
+                    FileManager.default.removeItemLogging(at: regardee, context: "rendu d'un viseur fermé",
+                                                          logger: .media)
+                }
+                return
+            }
+            isRenderingLook = false
+            if let regardee, regardee != url {
+                FileManager.default.removeItemLogging(at: url, context: "prise brute remplacée par son look",
+                                                      logger: .media)
+            }
+            deliver(regardee ?? url)
         }
     }
 
@@ -447,5 +490,40 @@ final class ComposerCaptureSession: ObservableObject {
     func extinguishFlash() {
         camera.setTorch(.off)
         ComposerScreenFlash.shared.restore()
+    }
+}
+
+// MARK: - Le look en direct (#9329)
+
+extension ComposerCaptureSession {
+
+    /// L'auteur, tel que les cadres l'écrivent.
+    var lookPerson: CallFramePerson {
+        let moi = AuthManager.shared.currentUser
+        return ComposerPhotoLookPerson.author(id: moi?.id, displayName: moi?.displayName, username: moi?.username)
+    }
+
+    /// Le look ne change plus une fois la prise commencée.
+    var lookIsLocked: Bool {
+        ComposerLiveLookRule.isLocked(stage: stage, pendingSegments: segments.count)
+    }
+
+    /// **La photo part avec le look qu'on voyait** : peinte en pleine
+    /// définition par le peintre de la prise, hors du fil principal. Sans look
+    /// — ou si le rendu échoue —, la prise d'origine part avec ses octets.
+    func lookedPhoto(_ image: UIImage, data: Data?, deliver: @escaping @MainActor (CameraResult) -> Void) {
+        let regard = look
+        guard ComposerLiveLookRule.rendersLive(regard), let debout = ComposerPhotoLookReview.upright(image) else {
+            deliver(.photo(image, data: data))
+            return
+        }
+        let source = ComposerPhotoLookSource.taken(debout, by: lookPerson, at: lookDate)
+        Task { @MainActor in
+            guard let rendu = await ComposerPhotoLookReview.paintFinal(regard, source: source) else {
+                deliver(.photo(image, data: data))
+                return
+            }
+            deliver(.photo(UIImage(cgImage: rendu), data: ComposerViewfinderRules.originalBytes(data, look: regard)))
+        }
     }
 }

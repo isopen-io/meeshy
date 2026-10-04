@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 @testable import Meeshy
 
 /// **Une seule machine d'état de capture, servie aux deux montages du viseur**
@@ -148,5 +149,34 @@ final class ComposerCaptureSessionTests: XCTestCase {
         session.endHold()
 
         XCTAssertEqual(session.stage, .recording, "une levée sans début ne clôt aucune prise")
+    }
+
+    // MARK: - L'image reste à l'écran au déclenchement (#9328)
+
+    func test_micro_dejaAutorise_entreDansLaSessionALOuverture() {
+        XCTAssertTrue(CameraAudioArming.armsAtSetup(microphone: .authorized, otherAudioPlaying: false),
+                      "brancher le micro sur la session lancée la reconfigure et noircit l'aperçu au déclenchement")
+    }
+
+    func test_micro_jamaisDemande_attendQueLeSonServe() {
+        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .notDetermined, otherAudioPlaying: false),
+                       "aucun prompt micro à l'ouverture d'un viseur photo")
+        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .denied, otherAudioPlaying: false))
+        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .restricted, otherAudioPlaying: false))
+    }
+
+    func test_micro_uneMusiqueJoue_ouvrirLeViseurNeLaCoupePas() {
+        XCTAssertFalse(CameraAudioArming.armsAtSetup(microphone: .authorized, otherAudioPlaying: true),
+                       "le micro bascule la session audio : il attend la prise, comme l'appareil photo")
+    }
+
+    func test_laConfigurationInitiale_brancheLeMicroAvantDeLancerLaSession() throws {
+        let camera = try String(contentsOf: Self.racineApp.appendingPathComponent(
+            "Features/Main/Components/CameraModel.swift"), encoding: .utf8)
+        let debut = try XCTUnwrap(camera.range(of: "private func setupSession()"))
+        let fin = try XCTUnwrap(camera.range(of: "session.commitConfiguration()", range: debut.upperBound..<camera.endIndex))
+        let configuration = String(camera[debut.upperBound..<fin.lowerBound])
+        XCTAssertTrue(configuration.contains("CameraAudioArming.armsAtSetup("),
+                      "le micro autorisé entre dans la MÊME configuration que l'objectif")
     }
 }

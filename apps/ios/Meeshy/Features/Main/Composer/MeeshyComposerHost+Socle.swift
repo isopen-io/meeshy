@@ -85,7 +85,7 @@ extension MeeshyComposerHost {
                 .foregroundColor(MeeshyColors.textPrimary(isDark: true))
                 .frame(width: 44, height: 44)
                 .contentShape(Circle())
-                .adaptiveGlass(in: Circle(), tint: tint.color.opacity(0.55))
+                .adaptiveLiquidGlass(in: Circle(), tint: tint.color.opacity(0.55), interactive: true)
         }
         .accessibilityLabel(Text(ComposerRailCopy.label(ComposerSceneFloatingRail.socleDoor)))
     }
@@ -244,7 +244,7 @@ extension MeeshyComposerHost {
             .padding(.horizontal, socleShowsLabels ? 14 : 0)
             .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
             .contentShape(Capsule())
-            .adaptiveGlass(in: Capsule(), tint: tint.color.opacity(0.55))
+            .adaptiveLiquidGlass(in: Capsule(), tint: tint.color.opacity(0.55), interactive: true)
         }
         // Le LIBELLÉ reste « Audience » et ne s'échange pas contre la valeur —
         // c'est la faute que la flèche évite déjà : un contrôle qui perd son nom

@@ -22,6 +22,12 @@ struct ComposerCapturePreview: View {
                             session.focusPoints.previewFrame = cadre
                         }
                     })
+                // **Le look se voit EN DIRECT** (#9329) : posé sur l'aperçu
+                // système, transparent tant qu'aucune trame n'est peinte.
+                if ComposerLiveLookRule.rendersLive(session.look) {
+                    ComposerLiveLookSurface(look: session.look, person: session.lookPerson,
+                                            texts: session.lookTexts, feed: session.camera.liveFeed)
+                }
             case .permissionRefused:
                 CameraPermissionPanel()
             }
@@ -114,10 +120,37 @@ struct ComposerCaptureChrome: View {
                 onZoomDragEnded: { session.endZoomDrag() },
                 onZoomStep: { session.stepZoom(up: $0) },
                 onFlashIntensity: { session.setFlashIntensity($0) },
-                onShutterTouched: { session.releaseStaleHold() })
+                onShutterTouched: { session.releaseStaleHold() },
+                onToggleLooks: session.lookIsLocked ? nil : { toggleLooks() },
+                lookActive: !session.look.isUntouched)
+            if session.isRenderingLook {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .tint(.white)
+                    .controlSize(.large)
+                    .padding(MeeshySpacing.lg)
+                    .adaptiveLiquidGlass(in: Circle())
+                    .accessibilityLabel(ComposerLiveLookCopy.rendering)
+            }
+            if session.looksOpen, !session.lookIsLocked {
+                VStack {
+                    Spacer(minLength: 0)
+                    ComposerLiveLookPanel(session: session)
+                        .padding(.horizontal, MeeshySpacing.md)
+                        .padding(.bottom, ComposerLiveLookPanelLayout.bottomInset(for: size))
+                }
+                .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
+            }
         }
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85),
+                   value: session.looksOpen && !session.lookIsLocked)
         .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
         .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))
+    }
+
+    private func toggleLooks() {
+        session.looksOpen.toggle()
+        HapticFeedback.light()
     }
 
     /// L'appui long passe avant le toucher, qui ne prend la photo que si le

@@ -16,7 +16,7 @@ struct ComposerRailCard: ViewModifier {
         if separate {
             content
         } else {
-            content.adaptiveGlass(in: RoundedRectangle(cornerRadius: ComposerRailGeometry.railWidth / 2,
+            content.adaptiveLiquidGlass(in: RoundedRectangle(cornerRadius: ComposerRailGeometry.railWidth / 2,
                                                        style: .continuous),
                                   tint: plateauTint.opacity(0.55))
         }
@@ -38,7 +38,7 @@ struct ComposerRailButtonGlass: ViewModifier {
             content
                 .frame(width: ComposerRailGeometry.floatingButtonSize,
                        height: ComposerRailGeometry.floatingButtonSize)
-                .adaptiveGlass(in: Circle(), tint: tint ?? plateauTint.opacity(0.55))
+                .adaptiveLiquidGlass(in: Circle(), tint: tint ?? plateauTint.opacity(0.55), interactive: true)
         } else {
             content
         }

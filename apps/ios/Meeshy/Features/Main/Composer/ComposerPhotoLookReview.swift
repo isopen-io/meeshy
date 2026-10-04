@@ -75,9 +75,25 @@ struct ComposerPhotoLookReview: View {
     let onUse: (UIImage, ComposerPhotoLook) -> Void
 
     @State private var source: ComposerPhotoLookSource?
-    @State private var look = ComposerPhotoLook()
-    @State private var tab: ComposerPhotoLookTab = .filters
-    @State private var chip: CallMontageMoodChip = .classics
+    @State private var look: ComposerPhotoLook
+    @State private var tab: ComposerPhotoLookTab
+    @State private var chip: CallMontageMoodChip
+
+    /// La prise s'ouvre sur le look choisi EN DIRECT au viseur (#9329) : ce que
+    /// l'auteur voyait est ce qu'il retrouve, et il peut encore l'affiner.
+    init(photo: UIImage,
+         person: CallFramePerson,
+         initialLook: ComposerPhotoLook = ComposerPhotoLook(),
+         onRetake: @escaping () -> Void,
+         onUse: @escaping (UIImage, ComposerPhotoLook) -> Void) {
+        self.photo = photo
+        self.person = person
+        self.onRetake = onRetake
+        self.onUse = onUse
+        _look = State(initialValue: initialLook)
+        _tab = State(initialValue: initialLook.frame == ComposerPhotoFrame.none ? .filters : .frames)
+        _chip = State(initialValue: ComposerPhotoLookRule.chip(of: initialLook.frame))
+    }
     @State private var preview: CGImage?
     @State private var thumbnails = ComposerPhotoLookThumbnails.empty
     @State private var isFinishing = false
@@ -155,7 +171,7 @@ struct ComposerPhotoLookReview: View {
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
-                    .adaptiveGlass(in: Circle())
+                    .adaptiveLiquidGlass(in: Circle(), interactive: true)
             }
             .buttonStyle(.plain)
             .disabled(isFinishing)
@@ -232,7 +248,7 @@ struct ComposerPhotoLookReview: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, MeeshySpacing.lg)
                     .frame(minHeight: MeeshyControlSize.tapTarget)
-                    .background(Capsule().fill(MeeshyColors.indigo500))
+                    .adaptiveGlassProminent(in: Capsule(), tint: MeeshyColors.indigo500)
             }
             .buttonStyle(.plain)
             .disabled(isFinishing || (source == nil && !look.isUntouched))

@@ -767,7 +767,7 @@ struct ComposerDocumentSurface: View {
                 .foregroundColor(MeeshyColors.textSecondary(isDark: true))
                 .frame(width: ComposerDocumentToolRowFit.minimumTileWidth,
                        height: ComposerDocumentToolRowFit.minimumTileWidth)
-                .adaptiveGlass(in: Circle(), tint: plateauTint.opacity(0.55))
+                .adaptiveLiquidGlass(in: Circle(), tint: plateauTint.opacity(0.55), interactive: true)
                 .contentShape(Circle())
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.label(tool)))
@@ -794,7 +794,7 @@ struct ComposerDocumentSurface: View {
                     : MeeshyColors.textSecondary(isDark: true))
                 .frame(width: ComposerDocumentToolRowFit.minimumTileWidth,
                        height: ComposerDocumentToolRowFit.minimumTileWidth)
-                .adaptiveGlass(in: Circle(), tint: plateauTint.opacity(0.55))
+                .adaptiveLiquidGlass(in: Circle(), tint: plateauTint.opacity(0.55), interactive: true)
                 .contentShape(Circle())
         }
         .accessibilityLabel(Text(ComposerDocumentCopy.background))

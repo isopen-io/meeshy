@@ -272,7 +272,7 @@ final class ComposerSceneCameraMountingTests: XCTestCase {
             try String(contentsOf: url, encoding: .utf8)))
         XCTAssertTrue(code.contains("collectSceneSegment(url)"),
                       "une vidéo doit rejoindre les segments, pas la scène")
-        XCTAssertTrue(code.contains("poseSceneCapture(.photo(image,data:sceneCamera.capturedPhotoData))"),
+        XCTAssertTrue(code.contains("sceneCapture.lookedPhoto(image,data:sceneCamera.capturedPhotoData){poseSceneCapture($0)}"),
                       "une photo se pose tout de suite — AVEC ses octets d'origine, qui portent l'EXIF")
     }
 
