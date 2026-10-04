@@ -1,8 +1,9 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useStore } from 'zustand/react';
 
 import { LanguageSheet } from '@/components/language-sheet';
+import { ProfileTabPanel, ProfileTabs, useProfileTab } from '@/components/profile-tabs';
 import { apiDeps } from '@/lib/api/deps';
 import { appProfileActionDeps } from '@/lib/api/profile-action-deps';
 import { friendRequestsQueryOptions, pendingRequestsOf } from '@/lib/api/friend-requests';
@@ -25,6 +26,8 @@ import { sessionStore, type SessionUser } from '@/lib/api/session';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import { MY_PROFILE_TABS } from '@/lib/profile/tabs';
+import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { draftOf, draftPatch, type ProfileDraft } from '@/lib/view/profile-draft';
 import {
   ContactSection,
@@ -44,6 +47,7 @@ import {
   type PendingImages,
   type PrismRank,
 } from '@/routes/profile-sections';
+import { ProfilePostsPanel } from '@/routes/user-profile-posts';
 
 /**
  * **LE PROFIL** (#6289, #5562) — miroir `ProfileView.swift`. Remplace l'écran
@@ -65,6 +69,13 @@ import {
  * **Changer une langue change TOUT le produit sans rechargement** : la session
  * est écrite au geste, `useReaderLanguages` la lit en primitives, et la liste
  * des conversations est relue à la confirmation.
+ *
+ * **L'ESSENTIEL D'UN COUP, LE RESTE PAR ONGLETS** (#6330) — sous la bannière,
+ * les quatre compteurs restent visibles quel que soit l'onglet ; puis Détails
+ * (identité, contact, langues, ancienneté), Publications (ses posts, le même
+ * listing que sa fiche publique) et Activité (progression, demandes, dont le
+ * compte se lit déjà sur l'onglet). « Modifier » ramène sur Détails : c'est là
+ * que vivent les champs qu'il ouvre.
  */
 
 
@@ -130,6 +141,10 @@ export default function ProfileScreen() {
   const statsQuery = useQuery({ ...myStatsQueryOptions(apiDeps), enabled }, appQueryClient);
   const receivedRequests = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'received'), enabled }, appQueryClient);
   const profile = profileQuery.data;
+  const [tab, selectTab, tabBase] = useProfileTab({ offered: MY_PROFILE_TABS, fallback: 'details' });
+  const { announcement: gestureAnnouncement, onGesture, onShare, onComment, onRepost, repostConfirm, menu } = usePostGesture();
+  const gestures = useMemo(() => ({ onGesture, onShare, onComment, onRepost, menu }), [onGesture, onShare, onComment, onRepost, menu]);
+  const announcePosts = useCallback((text: string) => setNotice({ text }), []);
 
   const [draft, setDraft] = useState<ProfileDraft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -197,6 +212,19 @@ export default function ProfileScreen() {
   };
 
   const openSheetRank = PRISM_RANKS.find((entry) => entry.rank === openRank);
+  const requests = pendingRequestsOf(receivedRequests.data);
+  const pendingText = requests === null || requests.count === 0 ? null : `${requests.count}${requests.more ? '+' : ''}`;
+  const badges =
+    pendingText === null || requests === null
+      ? {}
+      : {
+          activity: {
+            text: pendingText,
+            label: translate(language, requests.count === 1 && !requests.more ? 'profile.friend_requests.count.one' : 'profile.friend_requests.count.other', {
+              count: pendingText,
+            }),
+          },
+        };
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden pt-safe">
@@ -206,7 +234,11 @@ export default function ProfileScreen() {
         saving={saving}
         online={online}
         ready={profile !== undefined}
-        onEdit={() => profile === undefined || setDraft(draftOf(profile))}
+        onEdit={() => {
+          if (profile === undefined) return;
+          selectTab('details');
+          setDraft(draftOf(profile));
+        }}
         onCancel={() => setDraft(null)}
         onSave={() => void save()}
       />
@@ -225,33 +257,52 @@ export default function ProfileScreen() {
               onCancelUpload={(kind) => controllers.current[kind]?.abort()}
             />
           )}
-          {profile === undefined ? (
-            profileQuery.status === 'error' ? (
-              <ProfileLoadError language={language} onRetry={() => void profileQuery.refetch()} />
-            ) : (
-              <ProfileSectionsSkeleton language={language} />
-            )
-          ) : (
-            <>
-              <IdentitySection language={language} profile={profile} editing={editing} draft={draft} onDraft={setDraft} />
-              <ContactSection language={language} email={profile.email} phone={profile.phone} />
-            </>
-          )}
-          {prism === null ? null : (
-            <LanguagesSection
-              language={language}
-              systemLanguage={prism.systemLanguage}
-              regionalLanguage={prism.regionalLanguage}
-              customDestinationLanguage={prism.customDestinationLanguage}
-              disabled={!online}
-              onOpen={setOpenRank}
-              onClear={(rank) => void editPrism({ [rank]: '' })}
-            />
-          )}
           <StatsSection language={language} stats={statsQuery.data ?? null} />
-          <ProgressionEntry language={language} />
-          <RequestsSection language={language} pending={pendingRequestsOf(receivedRequests.data)} />
-          {profile === undefined ? null : <MemberSinceSection language={language} createdAt={profile.createdAt} />}
+          <ProfileTabs language={language} tabs={MY_PROFILE_TABS} active={tab} onChange={selectTab} idBase={tabBase} badges={badges} />
+          <ProfileTabPanel idBase={tabBase} tab={tab}>
+            {tab === 'posts' ? (
+              <ProfilePostsPanel
+                language={language}
+                authorId={profile?.id ?? sessionUser?.id ?? null}
+                stats={null}
+                online={online}
+                gestures={gestures}
+                announce={announcePosts}
+              />
+            ) : tab === 'activity' ? (
+              <>
+                <ProgressionEntry language={language} />
+                <RequestsSection language={language} pending={requests} />
+              </>
+            ) : (
+              <>
+                {profile === undefined ? (
+                  profileQuery.status === 'error' ? (
+                    <ProfileLoadError language={language} onRetry={() => void profileQuery.refetch()} />
+                  ) : (
+                    <ProfileSectionsSkeleton language={language} />
+                  )
+                ) : (
+                  <>
+                    <IdentitySection language={language} profile={profile} editing={editing} draft={draft} onDraft={setDraft} />
+                    <ContactSection language={language} email={profile.email} phone={profile.phone} />
+                  </>
+                )}
+                {prism === null ? null : (
+                  <LanguagesSection
+                    language={language}
+                    systemLanguage={prism.systemLanguage}
+                    regionalLanguage={prism.regionalLanguage}
+                    customDestinationLanguage={prism.customDestinationLanguage}
+                    disabled={!online}
+                    onOpen={setOpenRank}
+                    onClear={(rank) => void editPrism({ [rank]: '' })}
+                  />
+                )}
+                {profile === undefined ? null : <MemberSinceSection language={language} createdAt={profile.createdAt} />}
+              </>
+            )}
+          </ProfileTabPanel>
         </div>
       </main>
       {(['avatar', 'banner'] as const).map((kind) => (
@@ -285,8 +336,9 @@ export default function ProfileScreen() {
         className="pointer-events-none fixed inset-x-4 bottom-6 mx-auto max-w-sm rounded-chip px-4 py-2.5 text-center text-caption font-semibold empty:hidden"
         style={{ color: 'var(--color-ios-surface)', backgroundColor: 'var(--color-ios-ink)' }}
       >
-        {notice?.text ?? ''}
+        {notice?.text ?? gestureAnnouncement}
       </p>
+      {repostConfirm}
     </div>
   );
 }
