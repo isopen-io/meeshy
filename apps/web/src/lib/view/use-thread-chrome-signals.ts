@@ -60,8 +60,12 @@ export function useThreadChromeSignals(input: {
   readonly group: boolean;
   readonly readerLanguages: readonly string[];
   readonly noteProgrammaticScroll: () => void;
+  /** #7420 — la fenêtre ancrée ne touche pas le présent : son bas n'est pas le bas du fil. */
+  readonly detached?: boolean;
+  /** #7420 — revenir au présent (`returnToLatest` iOS), avant de poser le fil en bas. */
+  readonly onReturnToPresent?: () => void;
 }): ThreadChromeSignals {
-  const { scroller, mode, placed, virtualizer, messages, viewerId, group, readerLanguages, noteProgrammaticScroll } = input;
+  const { scroller, mode, placed, virtualizer, messages, viewerId, group, readerLanguages, noteProgrammaticScroll, detached = false, onReturnToPresent } = input;
   const ready = placed.length > 0;
 
   const host = useRef<HTMLDivElement | null>(null);
@@ -142,11 +146,12 @@ export function useThreadChromeSignals(input: {
    * `scrollToIndex(align: 'end')` laissait sous la fenêtre.
    */
   const onScrollToBottom = useCallback(() => {
+    if (detached) onReturnToPresent?.();
     const element = scroller.current;
     if (element === null) return;
     pinToBottom(element, { frames: SCROLL_TO_BOTTOM_FRAMES, onFirstFrame: noteProgrammaticScroll });
     dispatchUnreadBelow({ type: 'reset' });
-  }, [scroller, noteProgrammaticScroll]);
+  }, [scroller, noteProgrammaticScroll, detached, onReturnToPresent]);
 
   /**
    * LA PILULE DE JOUR COLLANTE — recalculée à chaque rendu déclenché par le
@@ -193,7 +198,7 @@ export function useThreadChromeSignals(input: {
      * CTA rendait le bouton, pas le CTA — chevauchement PHYSIQUE, pas
      * seulement visuel). Même porte que la loi du chrome : UNE SOURCE.
      */
-    scrollButtonVisible: mode !== 'summary' && !nearBottom,
+    scrollButtonVisible: mode !== 'summary' && (!nearBottom || detached),
     scrollButtonUnreadCount: unreadBelow.count,
     scrollButtonSenderName: group ? (lastUnreadMessage?.sender?.displayName ?? null) : null,
     scrollButtonPreviewText: lastUnreadServed?.text ?? null,

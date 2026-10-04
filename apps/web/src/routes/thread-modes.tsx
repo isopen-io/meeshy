@@ -110,13 +110,16 @@ const EMPTY_IDS: ReadonlySet<string> = new Set();
 function OlderHead({
   state,
   sentinelRef,
+  edge = 'older',
 }: {
   readonly state: ListPaginationState;
   readonly sentinelRef: Ref<HTMLDivElement>;
+  /** `newer` (#7420) : la MÊME prise, posée au PIED d'une fenêtre ancrée détachée du présent. */
+  readonly edge?: 'older' | 'newer';
 }) {
   return (
     <div
-      data-thread-older={state}
+      {...(edge === 'older' ? { 'data-thread-older': state } : { 'data-thread-newer': state })}
       aria-hidden
       className="shrink-0"
       style={{ height: 1 }}
@@ -172,6 +175,7 @@ export function ThreadModes({
   typistAvatarOf,
   accent = 'var(--color-ios-brand)',
   older,
+  newer,
   readTrackingSentinelRef,
   unreadSeparatorMessageId = null,
   unreadCount = 0,
@@ -296,6 +300,11 @@ export function ThreadModes({
    * sait pas charger : loi 4).
    */
   readonly older?: {
+    readonly state: ListPaginationState;
+    readonly sentinelRef: Ref<HTMLDivElement>;
+  };
+  /** LA PAGINATION VERS LE PRÉSENT (#7420) — le pied d'une fenêtre ancrée loin du présent ; même capacité qu'`older`. */
+  readonly newer?: {
     readonly state: ListPaginationState;
     readonly sentinelRef: Ref<HTMLDivElement>;
   };
@@ -796,6 +805,10 @@ export function ThreadModes({
           (`aria-hidden`, comme `OlderHead`). Montée dès qu'il y a au moins
           une rangée — même garde que la tête : une sentinelle qui intersecte
           IMMÉDIATEMENT sur un fil vide n'aurait rien à accuser. */}
+      {newer === undefined || placed.length === 0 ? null : (
+        <OlderHead state={newer.state} sentinelRef={newer.sentinelRef} edge="newer" />
+      )}
+
       {readTrackingSentinelRef === undefined || placed.length === 0 ? null : (
         <div aria-hidden className="shrink-0" style={{ height: 1 }} ref={readTrackingSentinelRef} />
       )}

@@ -64,8 +64,16 @@ export function useThreadOpenScroll(input: {
   /** Le message que l'adresse nomme (#9294) — remis UNE fois, à l'ouverture, au saut du fil (`onAnchor`), à la place de l'ancrage en bas. */
   readonly anchorMessageId?: string | null;
   readonly onAnchor?: (messageId: string) => void;
+  /**
+   * `false` tant que le fil est ANCRÉ autour d'un message (#7420) : sa queue
+   * change alors parce que la fenêtre arrive, s'étend ou rejoint le présent —
+   * jamais parce qu'un message arrive — et s'ancrer en bas arracherait le
+   * lecteur au message qu'il est venu lire. Revenu au présent, la queue se
+   * suit de nouveau.
+   */
+  readonly followTail?: boolean;
 }): void {
-  const { scroller, conversationId, placed, unreadBoundary, ready, virtualizer, onProgrammaticScroll, anchorMessageId = null, onAnchor } = input;
+  const { scroller, conversationId, placed, unreadBoundary, ready, virtualizer, onProgrammaticScroll, anchorMessageId = null, onAnchor, followTail = true } = input;
   const lastMessageId = placed[placed.length - 1]?.message.id;
   const openedFor = useRef<string | null>(null);
 
@@ -75,6 +83,7 @@ export function useThreadOpenScroll(input: {
 
     const isInitialOpen = openedFor.current !== conversationId;
     openedFor.current = conversationId;
+    if (!isInitialOpen && !followTail) return;
 
     const decision = threadOpenScrollDecision({ isInitialOpen, unreadBoundary, placed, anchorMessageId: onAnchor === undefined ? null : anchorMessageId });
     if (decision.kind === 'jump-to-message') {
