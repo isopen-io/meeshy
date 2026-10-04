@@ -182,6 +182,126 @@ final class JumpedWindowNewerPageTests: XCTestCase {
         XCTAssertEqual(sut.messageStore.jumpedNewerEdge, .halfWindow)
     }
 
+    // MARK: - La chaîne des pages plus récentes (#9339)
+
+    /// Les pages `after` successives : `m-4` (il en reste), puis `m-5` (le présent).
+    private func twoShortPages() -> [MessagesAPIResponse] {
+        [
+            response([("m-4", "2026-03-01T10:03:00.000Z")], hasMore: true, hasNewer: nil),
+            response([("m-5", "2026-03-01T10:04:00.000Z")], hasMore: false, hasNewer: nil),
+        ]
+    }
+
+    func test_noteNearBottom_atBottomAfterShortPage_chainsNextPageUntilPresent() async {
+        let (sut, service) = makeSUT()
+        await jump(sut, service, hasNewer: true)
+        service.listAfterResults = twoShortPages()
+
+        sut.noteNearBottom(true)
+        await sut.newerPagesChain?.value
+
+        XCTAssertEqual(service.listAfterCallCount, 2,
+                       "Une page courte laissant le bas visible enchaîne la suivante sans redéfiler")
+        XCTAssertFalse(sut.hasNewerMessages)
+        XCTAssertEqual(sut.messageStore.jumpedNewerEdge, .present)
+        XCTAssertNil(sut.newerPagesChain, "La chaîne finie libère sa place")
+    }
+
+    func test_noteNearBottom_pageDoesNotAdvance_stopsTheChain() async {
+        let (sut, service) = makeSUT()
+        await jump(sut, service, hasNewer: true)
+        service.listAfterResult = .success(response([("m-3", "2026-03-01T10:02:00.000Z")], hasMore: true, hasNewer: nil))
+
+        sut.noteNearBottom(true)
+        await sut.newerPagesChain?.value
+
+        XCTAssertEqual(service.listAfterCallCount, 1, "Une page qui n'avance pas le curseur arrête la chaîne")
+    }
+
+    func test_noteNearBottom_failure_stopsTheChain() async {
+        let (sut, service) = makeSUT()
+        await jump(sut, service, hasNewer: true)
+        service.listAfterResult = .failure(URLError(.notConnectedToInternet))
+
+        sut.noteNearBottom(true)
+        await sut.newerPagesChain?.value
+
+        XCTAssertEqual(service.listAfterCallCount, 1, "Un échec ne boucle pas sur la même demande")
+        XCTAssertTrue(sut.hasNewerMessages)
+    }
+
+    func test_noteNearBottom_calledTwice_keepsOneRequestInFlight() async {
+        let (sut, service) = makeSUT()
+        await jump(sut, service, hasNewer: true)
+        service.listAfterResults = twoShortPages()
+        var maxInFlight = 0
+        var inFlight = 0
+        service.onListAfter = {
+            inFlight += 1
+            maxInFlight = max(maxInFlight, inFlight)
+            inFlight -= 1
+        }
+
+        sut.noteNearBottom(true)
+        let first = sut.newerPagesChain
+        sut.noteNearBottom(true)
+
+        XCTAssertNotNil(first)
+        XCTAssertTrue(sut.newerPagesChain == first, "Un second signal « en bas » ne lance pas de seconde chaîne")
+        await first?.value
+        XCTAssertEqual(service.listAfterCallCount, 2)
+        XCTAssertEqual(maxInFlight, 1)
+    }
+
+    func test_noteNearBottom_readerLeavesBottom_cancelsTheChain() async {
+        let (sut, service) = makeSUT()
+        await jump(sut, service, hasNewer: true)
+        service.listAfterResults = twoShortPages()
+        service.onListAfter = { sut.noteNearBottom(false) }
+        sut.noteNearBottom(true)
+        let chain = sut.newerPagesChain
+
+        await chain?.value
+
+        XCTAssertEqual(service.listAfterCallCount, 1, "Quitter le bas arrête la chaîne")
+        XCTAssertNil(sut.newerPagesChain)
+        XCTAssertFalse(sut.isCurrentlyNearBottom)
+    }
+
+    func test_noteNearBottom_awayFromBottom_doesNotFetch() async {
+        let (sut, service) = makeSUT()
+        await jump(sut, service, hasNewer: true)
+        service.listAfterResults = twoShortPages()
+
+        sut.noteNearBottom(false)
+        await sut.newerPagesChain?.value
+
+        XCTAssertEqual(service.listAfterCallCount, 0)
+        XCTAssertNil(sut.newerPagesChain)
+    }
+
+    func test_noteNearBottom_latestWindow_doesNotStartAChain() async {
+        let (sut, service) = makeSUT()
+
+        sut.noteNearBottom(true)
+
+        XCTAssertNil(sut.newerPagesChain, "Hors fenêtre sautée, rien à enchaîner")
+        XCTAssertEqual(service.listAfterCallCount, 0)
+    }
+
+    func test_returnToLatest_cancelsTheChain() async {
+        let (sut, service) = makeSUT()
+        await jump(sut, service, hasNewer: true)
+        service.listAfterResults = twoShortPages()
+        service.onListAfter = { Task { await sut.returnToLatest() } }
+        sut.noteNearBottom(true)
+        let chain = sut.newerPagesChain
+
+        await chain?.value
+
+        XCTAssertLessThanOrEqual(service.listAfterCallCount, 1, "Revenir au présent arrête la chaîne")
+    }
+
     // MARK: - La fenêtre du store
 
     private func seededStore() async throws -> (store: MessageStore, center: Date) {
@@ -240,9 +360,9 @@ final class JumpedWindowNewerPageTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_conversationView_nearingBottom_asksForNewerPage() throws {
-        XCTAssertTrue(try viewSource("ConversationView.swift").contains("await viewModel.loadNewerMessages()"),
-                      "L'approche du bas d'une fenêtre sautée demande la page plus récente")
+    func test_conversationView_nearingBottom_handsTheSignalToTheModel() throws {
+        XCTAssertTrue(try viewSource("ConversationView.swift").contains("viewModel.noteNearBottom(nearBottom)"),
+                      "L'état « en bas » va au modèle, qui enchaîne les pages plus récentes")
     }
 
     func test_scrollToBottomButton_receivesNewerPageLoading() throws {

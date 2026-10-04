@@ -254,6 +254,10 @@ class ConversationViewModel: ObservableObject {
     /// successful load so older messages are ready before the user reaches them.
     var isCurrentlyNearBottom: Bool = true
 
+    /// Stockée ici et non dans l'extension qui la pilote (`ConversationViewModel+JumpToMessage.swift`) :
+    /// une extension Swift ne peut pas déclarer de propriété stockée.
+    var newerPagesChain: Task<Void, Never>?
+
     /// Dernier message dont l'affichage a fait « rattraper » la conversation.
     /// Rendu obsolète tout seul dès qu'un message plus récent arrive — la
     /// comparaison se fait sur le message le plus récent du moment.
@@ -694,6 +698,7 @@ class ConversationViewModel: ObservableObject {
     deinit {
         // socketHandler deinit handles room leave & typing cleanup
         socketHandler = nil
+        newerPagesChain?.cancel()
         // Only undo the singleton mutations `start()` performed. A throwaway VM
         // (eagerly allocated by `ConversationView.init`, never activated because
         // `@StateObject` discarded it before its `.task` ran) MUST NOT clear the

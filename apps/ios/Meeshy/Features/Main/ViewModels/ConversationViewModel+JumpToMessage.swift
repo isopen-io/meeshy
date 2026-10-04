@@ -85,6 +85,45 @@ extension ConversationViewModel {
         }
     }
 
+    // MARK: - La chaîne des pages plus récentes (#9339)
+
+    /// Reçoit l'état « en bas du fil » de la liste. Au bas d'une fenêtre
+    /// sautée qui a du plus récent, lance UNE chaîne de pages : une page
+    /// courte laisse le bas visible sans que la liste rechange d'état, et
+    /// c'est la chaîne — pas un nouveau défilement — qui demande la suivante.
+    /// Quitter le bas l'annule.
+    func noteNearBottom(_ nearBottom: Bool) {
+        isCurrentlyNearBottom = nearBottom
+        guard nearBottom else {
+            cancelNewerPagesChain()
+            return
+        }
+        guard newerPagesChain == nil, isInJumpedState, hasNewerMessages else { return }
+        // `self` n'est retenu que le temps d'UNE page : la conversation
+        // quittée libère le modèle, dont le `deinit` annule la chaîne.
+        newerPagesChain = Task { [weak self] in
+            while await self?.loadNextNewerPageIfStillAtBottom() == true {}
+            guard !Task.isCancelled else { return }
+            self?.newerPagesChain = nil
+        }
+    }
+
+    func cancelNewerPagesChain() {
+        newerPagesChain?.cancel()
+        newerPagesChain = nil
+    }
+
+    /// Une page à la fois, tant que le bas reste visible et que le serveur
+    /// annonce du plus récent. Rend `false` — la chaîne s'arrête — quand il
+    /// n'y a rien à demander ou qu'une page n'a pas reculé le bord de la
+    /// fenêtre (filigrane stagnant, échec réseau) : jamais la même page deux fois.
+    private func loadNextNewerPageIfStillAtBottom() async -> Bool {
+        guard !Task.isCancelled, isCurrentlyNearBottom, isInJumpedState, hasNewerMessages else { return false }
+        let edgeBefore = messageStore.jumpedNewerEdge
+        await loadNewerMessages()
+        return messageStore.jumpedNewerEdge != edgeBefore
+    }
+
     /// Outcome of `jumpToQuotedMessage`.
     enum JumpResult {
         /// The message was already present in the local store — caller should
@@ -147,6 +186,7 @@ extension ConversationViewModel {
     func returnToLatest() async {
         guard isInJumpedState else { return }
 
+        cancelNewerPagesChain()
         isInJumpedState = false
         hasNewerMessages = false
         // Also clear any active in-conversation search state so the results
