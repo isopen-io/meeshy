@@ -137,10 +137,39 @@ final class PhotoCaptureProcessorTests: XCTestCase {
     func test_captureSettings_keepSourceFormatAndBoundTheUpload() {
         XCTAssertNil(PhotoCaptureSettings.capture.format)
         XCTAssertLessThanOrEqual(PhotoCaptureSettings.capture.maxPixelDimension, 2560)
-        XCTAssertEqual(PhotoCaptureSettings.capture.enhancement, .light)
+        XCTAssertEqual(PhotoCaptureSettings.capture.enhancement, .faithful,
+                       "la prise de l'objectif rend ce que le viseur montrait (#9327)")
+    }
+
+    func test_faithful_neTouchePasALaTeinte() throws {
+        let image = try XCTUnwrap(Self.uniform(red: 0.85, green: 0.25, blue: 0.2))
+        let settings = PhotoCaptureSettings(maxPixelDimension: 640, quality: 1, format: .jpeg, enhancement: .faithful)
+        let processed = try XCTUnwrap(PhotoCaptureProcessor().process(image: image, settings: settings))
+        let avant = Self.center(of: image)
+        let apres = Self.center(of: processed.image)
+        zip(avant, apres).forEach { XCTAssertEqual(Int($0), Int($1), accuracy: 3, "ni vibrance ni ombres : \(avant) → \(apres)") }
     }
 
     // MARK: - Fabriques
+
+    private static func uniform(red: CGFloat, green: CGFloat, blue: CGFloat) -> CGImage? {
+        guard let context = CGContext(data: nil, width: 64, height: 64, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.setFillColor(CGColor(srgbRed: red, green: green, blue: blue, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+        return context.makeImage()
+    }
+
+    private static func center(of image: CGImage) -> [UInt8] {
+        let pixel = image.cropping(to: CGRect(x: image.width / 2, y: image.height / 2, width: 1, height: 1))!
+        let context = CGContext(data: nil, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                                space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.draw(pixel, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+        let bytes = context.data!.bindMemory(to: UInt8.self, capacity: 4)
+        return (0..<3).map { bytes[$0] }
+    }
 
     private static func gradient(width: Int, height: Int) -> CGImage? {
         let colorSpace = CGColorSpaceCreateDeviceRGB()

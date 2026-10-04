@@ -138,13 +138,21 @@ nonisolated enum CallColorLook {
         return values.withUnsafeBufferPointer { Data(buffer: $0) }
     }
 
+    /// L'espace du flux d'appel : la caméra WebRTC sert du sRGB.
+    static let callColorSpace: CGColorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+
     /// Applique la teinte à une image ; Naturel la rend telle quelle.
-    static func apply(_ preset: VideoFilterPreset, to image: CIImage, cubes: CallColorLookCubes = .shared) -> CIImage {
+    ///
+    /// Le cube lit ses entrées dans `colorSpace` : une photo Display P3 passe le
+    /// sien (#9327), sinon ses couleurs hors du gamut sRGB seraient bornées à
+    /// l'entrée du cube — l'image pâlirait sous n'importe quelle teinte.
+    static func apply(_ preset: VideoFilterPreset, to image: CIImage, cubes: CallColorLookCubes = .shared,
+                      colorSpace: CGColorSpace = CallColorLook.callColorSpace) -> CIImage {
         guard let data = cubes.cube(for: preset) else { return image }
         return image.applyingFilter("CIColorCubeWithColorSpace", parameters: [
             "inputCubeDimension": dimension,
             "inputCubeData": data,
-            "inputColorSpace": CGColorSpace(name: CGColorSpace.sRGB) as Any,
+            "inputColorSpace": colorSpace,
         ])
     }
 }

@@ -35,6 +35,11 @@ public enum PhotoCaptureFormat: String, Sendable, Equatable {
 
 public enum PhotoCaptureEnhancement: Sendable, Equatable {
     case none
+    /// Bruit adouci et netteté fine — ni ton ni couleur : la photo rend ce que
+    /// le viseur montrait (#9327).
+    case faithful
+    /// `faithful` plus ombres relevées et vibrance : une trame d'appel, que
+    /// personne n'a vue en viseur avant la prise.
     case light
 }
 
@@ -53,7 +58,7 @@ public struct PhotoCaptureSettings: Sendable, Equatable {
     }
 
     /// La prise de l'objectif : ~6,5 Mpx, largement assez pour un post plein écran.
-    public static let capture = PhotoCaptureSettings(maxPixelDimension: 2560, quality: 0.85, format: nil, enhancement: .light)
+    public static let capture = PhotoCaptureSettings(maxPixelDimension: 2560, quality: 0.85, format: nil, enhancement: .faithful)
     /// Une trame d'appel (720p à 1080p) : JPEG, lisible partout.
     public static let callCapture = PhotoCaptureSettings(maxPixelDimension: 1920, quality: 0.85, format: .jpeg, enhancement: .light)
 }
@@ -161,21 +166,31 @@ enum PhotoCaptureMetadata {
     }
 }
 
-/// L'amélioration LÉGÈRE : jamais un filtre qui se voit, toujours une photo
-/// un peu plus propre. Ombres relevées sans toucher aux hautes lumières, bruit
-/// de capteur adouci, netteté de luminance fine (après la réduction, pour ne
-/// pas raviver le bruit). Les bords sont étendus avant filtrage pour qu'aucune
+/// L'amélioration : jamais un filtre qui se voit. `faithful` ne fait que
+/// nettoyer — bruit de capteur adouci, netteté de luminance fine (après la
+/// réduction, pour ne pas raviver le bruit) ; `light` relève en plus les
+/// ombres et la vibrance. Les bords sont étendus avant filtrage pour qu'aucune
 /// convolution ne les assombrisse.
 enum PhotoCaptureEnhancementChain {
     static func apply(_ enhancement: PhotoCaptureEnhancement, to image: CIImage) -> CIImage {
-        guard enhancement == .light else { return image }
-        return image
-            .clampedToExtent()
-            .applyingFilter("CIHighlightShadowAdjust", parameters: ["inputShadowAmount": 0.2, "inputHighlightAmount": 0.95])
-            .applyingFilter("CIVibrance", parameters: ["inputAmount": 0.08])
+        switch enhancement {
+        case .none:
+            return image
+        case .faithful:
+            return cleaned(image.clampedToExtent()).cropped(to: image.extent)
+        case .light:
+            let toned = image
+                .clampedToExtent()
+                .applyingFilter("CIHighlightShadowAdjust", parameters: ["inputShadowAmount": 0.2, "inputHighlightAmount": 0.95])
+                .applyingFilter("CIVibrance", parameters: ["inputAmount": 0.08])
+            return cleaned(toned).cropped(to: image.extent)
+        }
+    }
+
+    private static func cleaned(_ image: CIImage) -> CIImage {
+        image
             .applyingFilter("CINoiseReduction", parameters: ["inputNoiseLevel": 0.012, "inputSharpness": 0.35])
             .applyingFilter("CISharpenLuminance", parameters: [kCIInputSharpnessKey: 0.25])
-            .cropped(to: image.extent)
     }
 }
 

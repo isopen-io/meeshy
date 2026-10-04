@@ -93,6 +93,18 @@ nonisolated enum ComposerPhotoLookRule {
     static let previewFrameCanvas = CallCaptureController.previewCanvas
     static let thumbnailFrameCanvas = CallCaptureController.thumbnailCanvas
 
+    /// **L'espace de la photo traverse tout le rendu** (#9327). L'iPhone prend
+    /// en Display P3 et l'aperçu l'affiche ainsi : repeinte en sRGB, la prise
+    /// pâlirait dès qu'on touche un filtre ou un cadre. Un espace étendu ou HDR
+    /// ne tient pas dans une toile 8 bits : il retombe sur Display P3, qui
+    /// couvre ce que le capteur sert ; une image sans espace RVB, sur sRGB.
+    static func colorSpace(of photo: CGImage) -> CGColorSpace {
+        let srgb = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+        guard let space = photo.colorSpace, space.model == .rgb else { return srgb }
+        guard CGColorSpaceUsesExtendedRange(space) || CGColorSpaceUsesITUR_2100TF(space) else { return space }
+        return CGColorSpace(name: CGColorSpace.displayP3) ?? srgb
+    }
+
     /// L'échelle qui borne la plus grande dimension à `maxPixel` — jamais un
     /// agrandissement.
     static func downscale(for size: CGSize, maxPixel: CGFloat) -> CGFloat {
@@ -136,13 +148,14 @@ nonisolated enum ComposerPhotoLookRenderer {
                        maxPixel: CGFloat?, frameCanvas: CGSize) -> CGImage? {
         guard let filtered = graded(source.photo, filter: look.filter, maxPixel: maxPixel) else { return nil }
         guard let captureLook = ComposerPhotoLookRule.captureLook(for: look.frame) else { return filtered }
+        let space = ComposerPhotoLookRule.colorSpace(of: source.photo)
         let person = source.person
         let faces = CallCaptureFaces(
             montage: [CallMontagePortrait(id: person.id, name: person.name, image: filtered)],
             frame: [CallFramePortrait(id: person.id, name: person.name, handle: person.handle,
                                       isSelf: person.isSelf, image: filtered)])
         return CallCaptureController.render(captureLook, faces: faces, caption: source.caption,
-                                            texts: source.texts, size: frameCanvas)
+                                            texts: source.texts, size: frameCanvas, colorSpace: space)
     }
 
     /// La photo, bornée puis passée au filtre de l'appel. Sans borne ni filtre,
@@ -152,12 +165,13 @@ nonisolated enum ComposerPhotoLookRenderer {
             ComposerPhotoLookRule.downscale(for: CGSize(width: photo.width, height: photo.height), maxPixel: $0)
         } ?? 1
         guard scale < 1 || ComposerPhotoLookRule.grades(filter) else { return photo }
+        let space = ComposerPhotoLookRule.colorSpace(of: photo)
         let source = CIImage(cgImage: photo)
         let scaled = scale < 1 ? source.transformed(by: CGAffineTransform(scaleX: scale, y: scale)) : source
         let image = ComposerPhotoLookRule.grades(filter)
-            ? VideoFilterColorimetry.graded(scaled, config: filter.config)
+            ? VideoFilterColorimetry.graded(scaled, config: filter.config, colorSpace: space)
             : scaled
-        return context.createCGImage(image, from: scaled.extent.integral)
+        return context.createCGImage(image, from: scaled.extent.integral, format: .RGBA8, colorSpace: space)
     }
 }
 

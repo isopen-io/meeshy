@@ -132,11 +132,12 @@ nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
 /// peau, sous l'éclaircissement de l'utilisateur ; un réglage fait à la main
 /// garde la chaîne de filtres.
 nonisolated enum VideoFilterColorimetry {
-    static func graded(_ image: CIImage, config: VideoFilterConfig) -> CIImage {
+    static func graded(_ image: CIImage, config: VideoFilterConfig,
+                       colorSpace: CGColorSpace = CallColorLook.callColorSpace) -> CIImage {
         guard let look = config.activePreset, CallColorLook.recipe(for: look) != nil else {
             return exposed(colorControlled(temperatureTinted(image, config: config), config: config), config: config)
         }
-        return brightened(CallColorLook.apply(look, to: image), brightness: config.brightness)
+        return brightened(CallColorLook.apply(look, to: image, colorSpace: colorSpace), brightness: config.brightness)
     }
 
     private static func brightened(_ image: CIImage, brightness: Float) -> CIImage {
