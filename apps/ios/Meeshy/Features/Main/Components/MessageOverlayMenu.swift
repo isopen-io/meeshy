@@ -970,7 +970,7 @@ private struct PreviewAudioPlayer: View {
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     // Comme la bulle : aucun nom de fichier, qui trahirait l'original (#9010).
-                    Text(String(localized: "attachment.voice", defaultValue: "Message vocal", bundle: .main))
+                    Text(MediaKindLabel.voiceMessage())
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
