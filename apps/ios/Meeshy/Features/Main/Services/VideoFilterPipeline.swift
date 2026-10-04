@@ -122,6 +122,62 @@ nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
     }
 }
 
+// MARK: - Colorimetry (#9295)
+
+/// **La colorimétrie d'un préréglage d'appel, UNE fonction pour le flux et pour
+/// la photo** (#9295). Le flux vidéo de l'appel la passe à chaque trame ; la
+/// photo prise au viseur du composeur la passe une fois, au choix de son filtre
+/// — la même teinte, le même contraste, la même exposition, jamais une jumelle.
+/// #9289 : une teinte du catalogue est UN étalonnage en une passe, qui épargne la
+/// peau, sous l'éclaircissement de l'utilisateur ; un réglage fait à la main
+/// garde la chaîne de filtres.
+nonisolated enum VideoFilterColorimetry {
+    static func graded(_ image: CIImage, config: VideoFilterConfig) -> CIImage {
+        guard let look = config.activePreset, CallColorLook.recipe(for: look) != nil else {
+            return exposed(colorControlled(temperatureTinted(image, config: config), config: config), config: config)
+        }
+        return brightened(CallColorLook.apply(look, to: image), brightness: config.brightness)
+    }
+
+    private static func brightened(_ image: CIImage, brightness: Float) -> CIImage {
+        guard brightness != 0 else { return image }
+        let lift = CGFloat(brightness)
+        return image.applyingFilter("CIColorMatrix", parameters: [
+            "inputBiasVector": CIVector(x: lift, y: lift, z: lift, w: 0)
+        ])
+    }
+
+    /// La neutralité se compare sur les VALEURS du réglage, jamais sur deux
+    /// `CIVector` — un objet, dont l'égalité n'est pas celle qu'on lit.
+    private static func temperatureTinted(_ image: CIImage, config: VideoFilterConfig) -> CIImage {
+        guard config.temperature != 6500 || config.tint != 0 else { return image }
+
+        return image.applyingFilter("CITemperatureAndTint", parameters: [
+            "inputNeutral": CIVector(x: CGFloat(config.temperature), y: CGFloat(config.tint)),
+            "inputTargetNeutral": CIVector(x: 6500, y: 0)
+        ])
+    }
+
+    private static func colorControlled(_ image: CIImage, config: VideoFilterConfig) -> CIImage {
+        let hasChanges = config.brightness != 0 || config.contrast != 1.0 || config.saturation != 1.0
+        guard hasChanges else { return image }
+
+        return image.applyingFilter("CIColorControls", parameters: [
+            "inputBrightness": config.brightness,
+            "inputContrast": config.contrast,
+            "inputSaturation": config.saturation
+        ])
+    }
+
+    private static func exposed(_ image: CIImage, config: VideoFilterConfig) -> CIImage {
+        guard config.exposure != 0 else { return image }
+
+        return image.applyingFilter("CIExposureAdjust", parameters: [
+            "inputEV": config.exposure
+        ])
+    }
+}
+
 // MARK: - Protocol
 
 protocol VideoFilterPipelineProviding {
@@ -298,7 +354,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         // 2. Colorimetry — #9289 : une teinte du catalogue est UN étalonnage en une passe,
         // qui épargne la peau ; un réglage fait à la main garde la chaîne de filtres.
         if hasChosenFilters {
-            image = applyColorimetry(to: image, config: cfg)
+            image = VideoFilterColorimetry.graded(image, config: cfg)
         }
         // 3. Background blur, at the tier the ladder and the device allow
         if cfg.backgroundBlurEnabled {
@@ -396,54 +452,6 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         degradation = next
         guard next.tier != previous.tier else { return }
         Logger.calls.info("Video filters tier \(previous.tier.rawValue, privacy: .public) → \(next.tier.rawValue, privacy: .public) at \(elapsedMs, privacy: .public)ms")
-    }
-
-    // MARK: - Colorimetry Filters
-
-    private func applyColorimetry(to image: CIImage, config: VideoFilterConfig) -> CIImage {
-        guard let look = config.activePreset, CallColorLook.recipe(for: look) != nil else {
-            return applyExposure(to: applyColorControls(to: applyTemperatureAndTint(to: image, config: config), config: config), config: config)
-        }
-        return applyBrightness(to: CallColorLook.apply(look, to: image), brightness: config.brightness)
-    }
-
-    private func applyBrightness(to image: CIImage, brightness: Float) -> CIImage {
-        guard brightness != 0 else { return image }
-        let lift = CGFloat(brightness)
-        return image.applyingFilter("CIColorMatrix", parameters: [
-            "inputBiasVector": CIVector(x: lift, y: lift, z: lift, w: 0)
-        ])
-    }
-
-    private func applyTemperatureAndTint(to image: CIImage, config: VideoFilterConfig) -> CIImage {
-        let neutral = CIVector(x: CGFloat(config.temperature), y: CGFloat(config.tint))
-        let target = CIVector(x: 6500, y: 0)
-
-        guard neutral != target else { return image }
-
-        return image.applyingFilter("CITemperatureAndTint", parameters: [
-            "inputNeutral": neutral,
-            "inputTargetNeutral": target
-        ])
-    }
-
-    private func applyColorControls(to image: CIImage, config: VideoFilterConfig) -> CIImage {
-        let hasChanges = config.brightness != 0 || config.contrast != 1.0 || config.saturation != 1.0
-        guard hasChanges else { return image }
-
-        return image.applyingFilter("CIColorControls", parameters: [
-            "inputBrightness": config.brightness,
-            "inputContrast": config.contrast,
-            "inputSaturation": config.saturation
-        ])
-    }
-
-    private func applyExposure(to image: CIImage, config: VideoFilterConfig) -> CIImage {
-        guard config.exposure != 0 else { return image }
-
-        return image.applyingFilter("CIExposureAdjust", parameters: [
-            "inputEV": config.exposure
-        ])
     }
 
     // MARK: - Low-Light Boost (§14.2.4)

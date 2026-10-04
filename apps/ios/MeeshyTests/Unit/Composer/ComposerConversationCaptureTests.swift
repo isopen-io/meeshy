@@ -119,12 +119,37 @@ final class ComposerConversationCaptureTests: XCTestCase {
                       "Le brouillon de création reste hors de la retouche et de la caméra du fil.")
     }
 
-    func test_conversationCamera_opensTheSceneViewfinder_notTheOldCameraSheet() throws {
+    /// **#9295 (directive porteur 2026-10-04) — la caméra de la barre prend en
+    /// PLEIN ÉCRAN, hors scène.** Elle ouvre le viseur du composeur servi seul,
+    /// jamais l'ancienne `CameraView`, jamais le composer viseur armé (#9123).
+    func test_conversationCamera_opensTheFullScreenViewfinder_notTheScene() throws {
         let code = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
         XCTAssertFalse(code.contains("CameraView {"),
-                       "La caméra de la barre ouvrait l'ancienne CameraView : elle ouvre la scène (#9123).")
-        XCTAssertTrue(code.contains("ConversationCaptureSceneEditor("),
-                      "La caméra de la barre ouvre le composer, viseur armé.")
+                       "La caméra de la barre ouvrait l'ancienne CameraView.")
+        XCTAssertFalse(code.contains("ConversationCaptureSceneEditor("),
+                       "La prise ne passe plus par la scène (#9295).")
+        XCTAssertTrue(code.contains("ComposerViewfinder {"),
+                      "La caméra de la barre ouvre le viseur plein écran.")
+        XCTAssertTrue(code.contains("stageSceneMedia(ComposerReturnedMedia(capture: result))"),
+                      "La prise rejoint le message par le chemin de pose d'une scène terminée.")
+    }
+
+    @MainActor
+    func test_returnedMedia_fromAPhotoCapture_isTheImage() {
+        let image = UIImage()
+        guard case .image(let rendue) = ComposerReturnedMedia(capture: .photo(image, data: Data([0xFF]))) else {
+            return XCTFail("une photo se pose en image")
+        }
+        XCTAssertTrue(rendue === image)
+    }
+
+    @MainActor
+    func test_returnedMedia_fromAVideoCapture_isTheSameFile() {
+        let url = URL(fileURLWithPath: "/tmp/prise.mov")
+        guard case .video(let rendu) = ComposerReturnedMedia(capture: .video(url)) else {
+            return XCTFail("une vidéo se pose en vidéo")
+        }
+        XCTAssertEqual(rendu, url)
     }
 
     /// **Une vidéo prise ou jointe s'édite dans la SCÈNE** (#9124) : plus

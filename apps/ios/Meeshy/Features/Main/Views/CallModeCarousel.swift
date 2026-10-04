@@ -573,6 +573,9 @@ struct CallModeActionBar: View {
 
 /// VoiceOver ne voit pas les deux tapes ni l'appui long d'un carrousel
 /// ajustable : la photo et le film lui sont offerts en actions nommées.
+/// Les prises offertes à la voix — seulement celles que l'hôte sert : un
+/// carrousel qui ne prend rien (la prise d'une photo du composeur, #9295)
+/// n'annonce pas d'action sans effet.
 private struct CallModeShotActions: ViewModifier {
     let isEnabled: Bool
     let onCapturePhoto: (() -> Void)?
@@ -580,13 +583,19 @@ private struct CallModeShotActions: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .accessibilityAction(named: Text(CallModeCopy.takePhoto)) {
-                guard isEnabled else { return }
-                onCapturePhoto?()
-            }
-            .accessibilityAction(named: Text(CallModeCopy.startRecording)) {
-                guard isEnabled else { return }
-                onStartRecording?()
+            .accessibilityActions {
+                if let onCapturePhoto {
+                    Button(CallModeCopy.takePhoto) {
+                        guard isEnabled else { return }
+                        onCapturePhoto()
+                    }
+                }
+                if let onStartRecording {
+                    Button(CallModeCopy.startRecording) {
+                        guard isEnabled else { return }
+                        onStartRecording()
+                    }
+                }
             }
     }
 }

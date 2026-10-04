@@ -2,7 +2,7 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-// **Les portes de la SCÈNE d'une conversation** (#8416, #9123, #9124) — le
+// **Les portes de la SCÈNE d'une conversation** (#8416, #9124, #9126) — le
 // composer plein écran, qui ne publie rien : « Terminé » rend le média composé
 // au brouillon du message (`MeeshyComposerHost.onReturnMedia`). Des portes à
 // part, comme toutes celles qui montent le meuble.
@@ -51,18 +51,6 @@ struct ConversationVideoSceneEditor: View {
                                   graine.handOff(media)
                                   onDone(media)
                               }, onCancel: onCancel)
-    }
-}
-
-/// **La porte de la caméra de la barre** (#9123) : le composer plein écran,
-/// VIDE et viseur armé ; « Terminé » rend la prise — retouchée ou telle
-/// quelle — au message en attente.
-struct ConversationCaptureSceneEditor: View {
-    let onDone: (ComposerReturnedMedia) -> Void
-    let onCancel: () -> Void
-
-    var body: some View {
-        ConversationSceneHost(origin: .conversationCapture, seed: nil, onDone: onDone, onCancel: onCancel)
     }
 }
 

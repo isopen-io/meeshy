@@ -108,6 +108,26 @@ nonisolated enum ComposerCaptureZoom {
     static func showsBadge(_ factor: CGFloat) -> Bool {
         factor > 1.01
     }
+
+    /// **Le pincement** (#9295, directive porteur 2026-10-04) : l'écart des
+    /// doigts MULTIPLIE le facteur du premier contact — doubler l'écart double
+    /// le cadrage, comme l'appareil photo du système —, borné à l'objectif.
+    static func pinched(from start: CGFloat, scale: CGFloat, range: ClosedRange<CGFloat>) -> CGFloat {
+        min(range.upperBound, max(range.lowerBound, start * scale))
+    }
+
+    /// Le dernier doigt d'un pincement se lève rarement en même temps que le
+    /// premier : pendant ce délai, sa levée n'est ni un toucher ni un rangement.
+    static let pinchGrace: TimeInterval = 0.4
+
+    /// **Un pincement ne range jamais le viseur, ne photographie pas et ne
+    /// vise pas** : deux doigts qui descendent ensemble pour dézoomer font
+    /// aussi un glissé vertical, et leurs levées ressemblent à des touchers.
+    static func pinchSpoilsGestures(isPinching: Bool, pinchEndedAt: Date?, now: Date) -> Bool {
+        if isPinching { return true }
+        guard let pinchEndedAt else { return false }
+        return now.timeIntervalSince(pinchEndedAt) < pinchGrace
+    }
 }
 
 /// Le point d'ancrage d'un glissé de zoom : le facteur au premier contact et la
