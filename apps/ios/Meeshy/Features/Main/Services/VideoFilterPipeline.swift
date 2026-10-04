@@ -75,7 +75,6 @@ nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
         case .warm:
             c.temperature = 7500
             c.tint = 5
-            c.brightness = 0.02
             c.contrast = 1.05
             c.saturation = 1.1
         case .cool:
@@ -84,12 +83,10 @@ nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
             c.contrast = 1.05
             c.saturation = 0.95
         case .vivid:
-            c.brightness = 0.03
             c.contrast = 1.15
             c.saturation = 1.3
             c.exposure = 0.1
         case .muted:
-            c.brightness = -0.02
             c.contrast = 0.9
             c.saturation = 0.7
             c.exposure = -0.1
@@ -99,8 +96,9 @@ nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
 
     /// Reverse-lookup: which preset (if any) produced `config`'s colorimetry.
     ///
-    /// Compares colorimetric fields only (`temperature`/`tint`/`brightness`/
-    /// `contrast`/`saturation`/`exposure`) — never `isEnabled` or the two
+    /// Compares colorimetric fields only (`temperature`/`tint`/`contrast`/
+    /// `saturation`/`exposure`) — never `brightness`, which is the user's own
+    /// offset on top of a look (#9289), never `isEnabled` or the two
     /// advanced-filter fields. `isEnabled` is intentionally ignored so the
     /// "Reset" affordance (which sets `.natural`'s colorimetry but flips
     /// `isEnabled` back to `false`) still resolves to `.natural`. The advanced
@@ -117,7 +115,6 @@ nonisolated enum VideoFilterPreset: String, CaseIterable, Sendable {
             let c = preset.config
             return c.temperature == config.temperature
                 && c.tint == config.tint
-                && c.brightness == config.brightness
                 && c.contrast == config.contrast
                 && c.saturation == config.saturation
                 && c.exposure == config.exposure
@@ -298,11 +295,10 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
         // Pipeline order per §14.2.5:
         // 1. Low-light boost (automatic)
         image = applyLowLightBoost(to: image, boost: lowLightBoost)
-        // 2. Colorimetry
+        // 2. Colorimetry — #9289 : une teinte du catalogue est UN étalonnage en une passe,
+        // qui épargne la peau ; un réglage fait à la main garde la chaîne de filtres.
         if hasChosenFilters {
-            image = applyTemperatureAndTint(to: image, config: cfg)
-            image = applyColorControls(to: image, config: cfg)
-            image = applyExposure(to: image, config: cfg)
+            image = applyColorimetry(to: image, config: cfg)
         }
         // 3. Background blur, at the tier the ladder and the device allow
         if cfg.backgroundBlurEnabled {
@@ -403,6 +399,22 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
     }
 
     // MARK: - Colorimetry Filters
+
+    private func applyColorimetry(to image: CIImage, config: VideoFilterConfig) -> CIImage {
+        guard let look = config.activePreset, CallColorLook.recipe(for: look) != nil else {
+            return applyExposure(to: applyColorControls(to: applyTemperatureAndTint(to: image, config: config), config: config), config: config)
+        }
+        return applyBrightness(to: CallColorLook.apply(look, to: image), brightness: config.brightness)
+    }
+
+    private func applyBrightness(to image: CIImage, brightness: Float) -> CIImage {
+        guard brightness != 0 else { return image }
+        return image.applyingFilter("CIColorControls", parameters: [
+            "inputBrightness": brightness,
+            "inputContrast": 1.0,
+            "inputSaturation": 1.0
+        ])
+    }
 
     private func applyTemperatureAndTint(to image: CIImage, config: VideoFilterConfig) -> CIImage {
         let neutral = CIVector(x: CGFloat(config.temperature), y: CGFloat(config.tint))
