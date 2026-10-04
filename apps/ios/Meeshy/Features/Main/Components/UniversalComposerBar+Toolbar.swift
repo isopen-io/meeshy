@@ -305,8 +305,8 @@ struct ComposerToolbarStrip<Leading: View, Pinned: View, Trailing: View>: View {
         }
     }
 
-    /// Le décalage se lit comme dans `RiverStreamHost` : sentinelle de
-    /// préférence jusqu'à iOS 17, `onScrollGeometryChange` à partir d'iOS 18.
+    /// Le décalage se lit par le patron de `ScrollOffsetTracking` : sentinelle
+    /// de préférence jusqu'à iOS 17, `onScrollGeometryChange` à partir d'iOS 18.
     /// Il est gardé hors du rendu (`ComposerToolbarOffsetBox`) : la bande ne se
     /// réévalue qu'au moment où le fondu s'allume ou s'éteint, jamais à chaque
     /// image du défilement.
@@ -353,6 +353,6 @@ struct ComposerToolbarStrip<Leading: View, Pinned: View, Trailing: View>: View {
 
 /// Le dernier décalage lu, tenu HORS du graphe de rendu : le muter ne
 /// réévalue rien.
-final class ComposerToolbarOffsetBox {
+nonisolated final class ComposerToolbarOffsetBox {
     var value: CGFloat = 0
 }
