@@ -142,13 +142,13 @@ struct ShareLinkArrivalsListView: View {
 private struct ShareLinkArrivalSkeletonRow: View {
     var body: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
-            SkeletonShape(width: 36, height: 36, cornerRadius: 18)
+            SkeletonShape(width: 36, height: 36, cornerRadius: MeeshyRadius.lgPlus)
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                SkeletonShape(width: 140, height: 14, cornerRadius: 4)
-                SkeletonShape(width: 80, height: 11, cornerRadius: 4)
+                SkeletonShape(width: 140, height: 14, cornerRadius: MeeshyRadius.xxs)
+                SkeletonShape(width: 80, height: 11, cornerRadius: MeeshyRadius.xxs)
             }
             Spacer(minLength: 0)
-            SkeletonShape(width: 44, height: 11, cornerRadius: 4)
+            SkeletonShape(width: 44, height: 11, cornerRadius: MeeshyRadius.xxs)
         }
         .skeletonShimmer()
         .accessibilityElement(children: .ignore)
