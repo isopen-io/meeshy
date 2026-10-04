@@ -512,6 +512,7 @@ const de = {
   'media.audio.position': 'Wiedergabeposition',
   'media.audio.speed': 'Wiedergabegeschwindigkeit',
   'media.video.position.value': '{elapsed} von {total}',
+  'media.buffering': 'Wird geladen…',
   'media.video.mute': 'Stummschalten',
   'media.video.unmute': 'Ton einschalten',
   'media.video.more_options': 'Weitere Optionen',

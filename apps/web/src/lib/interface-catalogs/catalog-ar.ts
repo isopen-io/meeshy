@@ -510,6 +510,7 @@ const ar = {
   'media.audio.position': 'موضع التشغيل',
   'media.audio.speed': 'سرعة التشغيل',
   'media.video.position.value': '{elapsed} من {total}',
+  'media.buffering': 'جارٍ التحميل…',
   'media.video.mute': 'كتم الصوت',
   'media.video.unmute': 'إلغاء كتم الصوت',
   'media.video.more_options': 'مزيد من الخيارات',
