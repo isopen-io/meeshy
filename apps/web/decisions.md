@@ -4730,3 +4730,14 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 - Quitter l'édition d'un texte VIDE le retire (`useStudioObjects`, `onLeaveEmptyText`) ; si le dernier pas de l'historique l'a fait naître (« T+ » écrit sous la clé `text:<id>`), il est oublié (`withoutBirthStep`).
 
 **Conséquences.** Les témoins et gates passent par `[data-story-option="edit:exit"]` et `[data-story-option="section:<id>"]` ; `check-story-plateau` mesure la place du panneau et que l'édition ne réduit plus la scène. Écarts assumés avec iOS : pas de fenêtre de temps ni de plan 2D parmi les sous-outils (la frise les porte) ; le panneau peut recouvrir l'objet édité (iOS : #9143).
+
+## D-168 — Les icônes du composeur prennent la couleur de l'effet armé, sinon la couleur commune ; la pastille de langue suit la même loi (2026-10-04, #9121)
+
+**Contexte.** La loi de teinte d'icône (`composerIconTintOf`, `lib/send/composer-accent.ts`, miroir `ComposerIconTint` iOS) posait `--composer-icon` sur la racine du composeur et les portes de la rangée haute le lisaient, mais la pastille de langue gardait `--color-ios-ink` — sur iOS, `languageSelectorPill` lit `iconTint` comme toutes les autres icônes de la barre.
+
+**Décision.**
+- **UNE loi, énoncée pareil sur les deux plateformes** : une protection armée donne SA couleur à toutes les icônes de la barre, un effet de message (sans couleur propre) la couleur de marque, sinon la couleur commune (`--color-ios-ink-2`). Plusieurs effets armés : éphémère > vue unique > flou > effet de message (`composerAccentOf`, ordre de `ComposerProtection.dominant`).
+- **La pastille lit `var(--composer-icon, var(--color-ios-ink))`** : dans le composeur elle suit la loi ; hors composeur (`legende-plan.tsx`), aucune racine ne pose le jeton et elle garde l'encre d'avant.
+- **Chaque teinte tient 3:1 sur la barre (dimension 5).** Le web tient déjà : `--color-error` vaut `#c81e1e` en clair. iOS n'y tenait pas en clair (le rouge `F87171` mesurait 2,23:1 sur le panneau voilé de rouge) et prend désormais `MeeshyColors.errorInk` (`C81E1E`, la même valeur).
+
+**Conséquences.** `check-composer-band.mjs` § 3 lit au navigateur, dans les deux schémas, la couleur CALCULÉE de chaque icône de la rangée haute au repos, vue unique armée, puis éphémère par-dessus (l'éphémère gagne), et mesure le contraste de la caméra sur ses pixels — mesuré : clair 4,96 / 4,47 / 5,74:1, sombre 9,91 / 4,42 / 7,14:1. Le bouton d'envoi, rempli, n'est pas une icône de la loi.
