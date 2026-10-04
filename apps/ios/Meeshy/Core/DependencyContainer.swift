@@ -348,6 +348,8 @@ final class DependencyContainer {
                 try await persistence.updateViewOnceCount(localId: messageId, count: viewOnceCount)
             case let .viewOnceOpened(messageId):
                 try await persistence.markViewOnceOpened(localId: messageId)
+            case let .senderRepainted(event):
+                try await persistence.repaintSender(event)
             case .starred, .unstarred:
                 break
             }

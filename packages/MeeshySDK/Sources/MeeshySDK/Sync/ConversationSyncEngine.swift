@@ -49,6 +49,10 @@ public enum RealtimeMessageMutation: Sendable, Equatable {
     /// son magasin de favoris, en composant l'instantané depuis GRDB.
     case starred(messageId: String, conversationId: String, starredAt: Date)
     case unstarred(messageId: String)
+    /// `user:updated` (#9307) — un pair renommé ou repeint : l'expéditeur
+    /// dénormalisé de SES messages suit, toutes conversations confondues
+    /// (`MessagePersistenceActor.repaintSender`).
+    case senderRepainted(UserUpdatedEvent)
 }
 
 // MARK: - Protocol
