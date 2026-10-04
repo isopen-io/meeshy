@@ -663,7 +663,7 @@ const en = {
   'a11y.floating.rung.discover.requests.other': 'Discover, {count} requests received',
 
   'links.hub.banner.title': 'Manage your links',
-  'links.hub.banner.subtitle': 'Invite anyone you like into your conversations',
+  'links.hub.banner.subtitle': 'Share, track and grow your audience',
   'links.hub.share.title': 'Share links',
   'links.hub.share.description': 'Invite contacts to join your conversations',
   'links.hub.share.create': 'Create a share link',

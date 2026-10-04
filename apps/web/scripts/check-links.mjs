@@ -179,7 +179,7 @@ try {
       check(menus, `${label} : les disques flottants sont posés sur le hub — l'atteignabilité se mesure contre eux`);
       check((await page.$('text=Cet écran arrive bientôt.')) === null, `${label} : l'écran d'attente a disparu`);
       check((await textOf(page, 'header h1')) === 'Mes liens', `${label} : le titre du hub`);
-      check((await page.$$('[data-links-family]')).length === 1, `${label} : le hub ne montre que la famille servie`);
+      check((await page.$$('[data-links-family]')).length === 4, `${label} : le hub montre les quatre familles d'iOS`);
       check((await page.getAttribute('[data-links-family-create]', 'href')) === '/links/share/new', `${label} : « + » mène à la création`);
       await capture(page, `hub-${slug}`);
       assertReach(label, 'le hub', await reachAtRest(page, { controls: 'header a, [data-links-family] a', texts: 'header h1, [data-links-banner] .text-body, [data-links-banner] .text-caption, [data-links-family-title]' }), {

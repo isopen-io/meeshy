@@ -931,6 +931,18 @@ const LINKS = [
   'clock-counter-clockwise',
   'hourglass',
   'caret-right',
+  'chart-line',
+  'users-three',
+  'gift',
+  'trash',
+  'globe',
+  'device-mobile',
+  'desktop',
+  'device-tablet',
+  'cursor-click',
+  'browser',
+  'arrow-square-out',
+  'share-network',
 ];
 
 emit({
@@ -938,7 +950,7 @@ emit({
   output: join(HERE, '../src/components/glyphs-links.ts'),
   constant: 'LINKS_GLYPHS',
   type: 'LinksGlyphName',
-  role: "LE JEU D'ECRAN de Mes liens (#6361) : hub, liens de partage, detail et creation, charge avec les routes /links, jamais dans le socle.",
+  role: "LE JEU D'ECRAN de Mes liens (#6361, #6408, #6409, #6410) : hub, liens de partage, de suivi, de parrainage et de communaute, charge avec les routes /links, jamais dans le socle.",
 });
 
 /**

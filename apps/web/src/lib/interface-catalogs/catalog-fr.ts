@@ -668,7 +668,7 @@ const fr = {
   'a11y.floating.rung.discover.requests.other': 'Découvrir, {count} demandes reçues',
 
   'links.hub.banner.title': 'Gérez vos liens',
-  'links.hub.banner.subtitle': 'Invitez qui vous voulez dans vos conversations',
+  'links.hub.banner.subtitle': 'Partagez, suivez et développez votre audience',
   'links.hub.share.title': 'Liens de partage',
   'links.hub.share.description': 'Invitez des contacts à rejoindre vos conversations',
   'links.hub.share.create': 'Créer un lien de partage',

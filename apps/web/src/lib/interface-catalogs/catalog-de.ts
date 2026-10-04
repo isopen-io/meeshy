@@ -663,7 +663,7 @@ const de = {
   'a11y.floating.rung.discover.requests.other': 'Entdecken, {count} Anfragen erhalten',
 
   'links.hub.banner.title': 'Deine Links verwalten',
-  'links.hub.banner.subtitle': 'Lade ein, wen du willst, in deine Unterhaltungen',
+  'links.hub.banner.subtitle': 'Teile, verfolge und vergrößere deine Reichweite',
   'links.hub.share.title': 'Freigabelinks',
   'links.hub.share.description': 'Lade Kontakte in deine Unterhaltungen ein',
   'links.hub.share.create': 'Freigabelink erstellen',
