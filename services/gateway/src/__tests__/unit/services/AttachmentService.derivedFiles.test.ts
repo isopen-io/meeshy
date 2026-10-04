@@ -84,7 +84,9 @@ function makeStore(rows: Array<Record<string, any>>) {
       where.filePath !== undefined ? row.filePath === where.filePath : row.thumbnailPath === where.thumbnailPath
     ).length
   );
-  return { messageAttachment: { findUnique, delete: del, count } } as unknown as PrismaClient;
+  const findMany = jest.fn() as jest.Mock<any>;
+  findMany.mockImplementation(async ({ where }: any) => store.filter((row) => row.filePath === where.filePath));
+  return { messageAttachment: { findUnique, delete: del, count, findMany } } as unknown as PrismaClient;
 }
 
 function unlinkedPaths(): string[] {
@@ -198,13 +200,29 @@ describe('AttachmentService.deleteAttachment — fichiers dérivés', () => {
     expect(unlinkedPaths()).toContain(`${ROOT}/translated/${ATTACH_ID}_es.mp3`);
   });
 
-  it('garde les dérivés quand le comptage des références échoue', async () => {
+  it('garde les dérivés quand la lecture des lignes survivantes échoue', async () => {
     const prisma = makeStore([makeRow({ translations: { en: ttsTrack('en') } })]);
-    ((prisma as any).messageAttachment.count as jest.Mock<any>).mockRejectedValue(new Error('mongo down'));
+    ((prisma as any).messageAttachment.findMany as jest.Mock<any>).mockRejectedValue(new Error('mongo down'));
 
     await new AttachmentService(prisma).deleteAttachment(ATTACH_ID);
 
-    expect(mockFsUnlink).not.toHaveBeenCalled();
+    expect(unlinkedPaths()).toEqual([`${ROOT}/2024/01/user/file.jpg`]);
+  });
+
+  it('efface la piste propre à une copie supprimée, et garde celles que l’original cite encore', async () => {
+    const copyTrack = {
+      type: 'audio',
+      path: `${ROOT}/translated/${COPY_ID}_de.mp3`,
+      url: `/api/v1/attachments/file/translated/${COPY_ID}_de.mp3`,
+    };
+    const prisma = makeStore([
+      makeRow({ translations: { en: ttsTrack('en') } }),
+      makeRow({ id: COPY_ID, translations: { en: ttsTrack('en'), de: copyTrack } }),
+    ]);
+
+    await new AttachmentService(prisma).deleteAttachment(COPY_ID);
+
+    expect(unlinkedPaths()).toEqual([`${ROOT}/translated/${COPY_ID}_de.mp3`]);
   });
 
   it('ignore une carte de traductions ou de variantes malformée', async () => {

@@ -890,6 +890,12 @@ describe('#9315 — aucun média de conversation en cache partagé', () => {
     expect(res.headers['cache-control']).toBe('private, max-age=31536000');
   });
 
+  it('ne rend pas public un chemin qui ne fait que transiter par avatars/', async () => {
+    const res = await app.inject({ method: 'GET', url: '/attachments/file/avatars%2F..%2F2024%2F01%2Fuser%2Fphoto.jpg' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000');
+  });
+
   it('garde le cache privé sur la revalidation 304', async () => {
     const etag = `W/"${fileStats.size}-${Math.floor(fileStats.mtimeMs)}"`;
     const res = await app.inject({

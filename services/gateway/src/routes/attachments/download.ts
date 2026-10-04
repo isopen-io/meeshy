@@ -406,7 +406,7 @@ export function registerFileStreamRoute(fastify: FastifyInstance): void {
         // long-cacheable (their URL changes with every new upload) — in the
         // client's OWN cache only (#9315): `private` keeps a proxy or CDN from
         // holding a conversation's bytes and replaying them to someone else.
-        const isStableProfilePath = decodedPath.startsWith('avatars/');
+        const isStableProfilePath = pathRelative(baseAbs, filePath).split(pathSep)[0] === 'avatars';
         const cacheControl = isStableProfilePath
           ? 'public, no-cache'
           : 'private, max-age=31536000';

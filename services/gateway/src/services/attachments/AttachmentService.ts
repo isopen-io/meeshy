@@ -361,23 +361,22 @@ export class AttachmentService {
       where: { id: attachmentId },
     });
 
-    const originalReleased = await this.unlinkIfUnreferenced('filePath', attachment.filePath);
+    await this.unlinkIfUnreferenced('filePath', attachment.filePath);
 
     if (attachment.thumbnailPath) {
       await this.unlinkIfUnreferenced('thumbnailPath', attachment.thumbnailPath);
     }
 
-    if (originalReleased) {
-      await this.unlinkDerivedFiles(attachment);
-    }
+    await this.unlinkDerivedFiles(attachment);
   }
 
   /**
-   * Les pistes TTS et les variantes WebP suivent l'ORIGINAL (#9315) : une copie
-   * transférée partage ses octets ET sa carte de traductions, donc tant qu'une
-   * ligne référence encore le `filePath`, ses dérivés lui appartiennent aussi.
-   * Ils restaient sinon servis par la route de fichiers, nommés par l'ObjectId
-   * de la pièce jointe, après que la ligne et l'original étaient partis.
+   * Les pistes TTS et les variantes WebP de la ligne supprimée (#9315), MOINS
+   * ce que citent encore les lignes qui partagent ses octets : une copie
+   * transférée reprend le `filePath` et la carte de traductions de l'original,
+   * mais peut porter des pistes à elle (`<idCopie>_<langue>`). Sans ce ménage,
+   * elles restaient servies par la route de fichiers, à une adresse dérivée de
+   * l'ObjectId, après le départ de la ligne. Une lecture qui échoue garde tout.
    */
   private async unlinkDerivedFiles(attachment: {
     filePath: string;
@@ -385,15 +384,41 @@ export class AttachmentService {
     translations?: unknown;
     imageVariants?: unknown;
   }): Promise<void> {
-    const ownPaths = new Set(
-      [attachment.filePath, attachment.thumbnailPath]
+    const candidates = derivedFileCandidates(attachment);
+    if (candidates.length === 0) {
+      return;
+    }
+
+    let survivors: Array<{
+      filePath: string;
+      thumbnailPath: string | null;
+      translations: unknown;
+      imageVariants: unknown;
+    }>;
+    try {
+      survivors = await this.prisma.messageAttachment.findMany({
+        where: { filePath: attachment.filePath },
+        select: { filePath: true, thumbnailPath: true, translations: true, imageVariants: true },
+      });
+    } catch (error) {
+      logger.error('Erreur suppression fichiers', error as Error);
+      return;
+    }
+
+    const kept = new Set(
+      [attachment, ...survivors]
+        .flatMap((row) => [
+          row.filePath,
+          row.thumbnailPath,
+          ...(row === attachment ? [] : derivedFileCandidates(row)),
+        ])
         .filter((value): value is string => typeof value === 'string')
         .map((value) => resolveInsideUploadRoot(this.uploadBasePath, value))
     );
     const derived = new Set(
-      derivedFileCandidates(attachment)
+      candidates
         .map((candidate) => resolveInsideUploadRoot(this.uploadBasePath, candidate))
-        .filter((fullPath): fullPath is string => fullPath !== null && !ownPaths.has(fullPath))
+        .filter((fullPath): fullPath is string => fullPath !== null && !kept.has(fullPath))
     );
 
     await Promise.all([...derived].map((fullPath) => this.unlinkQuietly(fullPath)));
@@ -406,7 +431,7 @@ export class AttachmentService {
   private async unlinkIfUnreferenced(
     column: 'filePath' | 'thumbnailPath',
     relativePath: string
-  ): Promise<boolean> {
+  ): Promise<void> {
     const where: Prisma.MessageAttachmentWhereInput =
       column === 'filePath' ? { filePath: relativePath } : { thumbnailPath: relativePath };
 
@@ -414,15 +439,14 @@ export class AttachmentService {
       const stillReferenced = await this.prisma.messageAttachment.count({ where });
 
       if (stillReferenced > 0) {
-        return false;
+        return;
       }
     } catch (error) {
       logger.error('Erreur suppression fichiers', error as Error);
-      return false;
+      return;
     }
 
     await this.unlinkQuietly(path.join(this.uploadBasePath, relativePath));
-    return true;
   }
 
   private async unlinkQuietly(fullPath: string): Promise<void> {
