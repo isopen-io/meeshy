@@ -38,8 +38,18 @@ type Sondage = { readonly predicate: unknown; readonly arg: unknown; readonly ti
 /**
  * Une page de façade. Playwright n'appelle le prédicat qu'avec `arg` — tout le
  * reste (`document`, `window`, `performance`) vient de la page. La façade les
- * installe donc sur `globalThis` le temps du sondage, et fait avancer son
- * horloge de 25 ms par tour, comme `polling: 25`.
+ * installe donc sur `globalThis`, **et les rend aussitôt** : le prédicat est
+ * synchrone, donc la fenêtre d'emprunt se referme avant tout `await`.
+ *
+ * CE `try/finally` N'EST PAS UNE PRÉCAUTION DE STYLE. La première version de ce
+ * fichier les installait sans jamais les rendre : les fichiers de tests voisins,
+ * qui partagent le processus `bun test`, recevaient un `document` estropié et
+ * rougissaient sur `document.addEventListener is undefined` (`src/lib/router.tsx`,
+ * `src/lib/api/query-client.ts`). C'est exactement le défaut que #9303 décrit —
+ * un témoin qui laisse derrière lui un état de processus —, commis ici par la
+ * main qui venait de l'instruire. Une clé ABSENTE avant l'emprunt est **supprimée**
+ * au retour, jamais posée à `undefined` : remettre la clé changerait la forme de
+ * l'objet global.
  */
 const pageQui = (tops: readonly (number | null)[]) => {
   const sondages: Sondage[] = [];
@@ -47,26 +57,35 @@ const pageQui = (tops: readonly (number | null)[]) => {
   let horloge = 0;
   let index = 0;
   const global = globalThis as unknown as Record<string, unknown>;
-  const installer = (top: number | null) => {
+  const CLES = ['window', 'document', 'performance'] as const;
+
+  const emprunte = <T>(top: number | null, faire: () => T): T => {
+    const avant = CLES.map((cle) => [cle, cle in global, global[cle]] as const);
     global.window = fenetre;
     global.performance = { now: () => horloge };
     global.document = {
       querySelector: (_sel: string) => (top === null ? null : { getBoundingClientRect: () => ({ top }) }),
     };
+    try {
+      return faire();
+    } finally {
+      for (const [cle, existait, valeur] of avant) {
+        if (existait) global[cle] = valeur;
+        else delete global[cle];
+      }
+    }
   };
+
   return {
     sondages,
-    evaluate: async (fn: (arg: unknown) => unknown, arg: unknown) => {
-      installer(null);
-      return fn(arg);
-    },
+    evaluate: async (fn: (arg: unknown) => unknown, arg: unknown) => emprunte(null, () => fn(arg)),
     waitForFunction: async (predicate: (arg: unknown) => boolean, arg: unknown, options?: { timeout?: number }) => {
       sondages.push({ predicate, arg, timeout: options?.timeout });
       const plafond = options?.timeout ?? 0;
       while (horloge <= plafond) {
-        installer(tops[Math.min(index, tops.length - 1)] ?? null);
+        const top = tops[Math.min(index, tops.length - 1)] ?? null;
         index += 1;
-        if (predicate(arg)) return true;
+        if (emprunte(top, () => predicate(arg))) return true;
         horloge += 25;
       }
       throw new Error('Timeout');
