@@ -1,5 +1,7 @@
 import XCTest
 import ImageIO
+import AVFoundation
+import CoreMedia
 @testable import Meeshy
 
 @MainActor
@@ -333,5 +335,43 @@ final class MediaCompressorTests: XCTestCase {
         data[10] = 0x42 // B
         data[11] = 0x50 // P
         return data
+    }
+
+    // MARK: - L'étiquette couleur suit la vidéo (#9332)
+
+    func test_etiquetteCouleur_reporteCelleDeLaSource() throws {
+        let source = try XCTUnwrap(Self.formatDescription(extensions: [
+            kCMFormatDescriptionExtension_ColorPrimaries: kCMFormatDescriptionColorPrimaries_P3_D65,
+            kCMFormatDescriptionExtension_TransferFunction: kCMFormatDescriptionTransferFunction_ITU_R_709_2,
+            kCMFormatDescriptionExtension_YCbCrMatrix: kCMFormatDescriptionYCbCrMatrix_ITU_R_709_2,
+        ]))
+        let etiquette = try XCTUnwrap(VideoColorTagging.properties(of: source),
+                                      "une prise P3 ré-encodée sans étiquette ressort délavée")
+        XCTAssertEqual(etiquette[AVVideoColorPrimariesKey], AVVideoColorPrimaries_P3_D65)
+        XCTAssertEqual(etiquette[AVVideoTransferFunctionKey], AVVideoTransferFunction_ITU_R_709_2)
+        XCTAssertEqual(etiquette[AVVideoYCbCrMatrixKey], AVVideoYCbCrMatrix_ITU_R_709_2)
+    }
+
+    func test_etiquetteCouleur_uneSourceMuetteResteMuette() throws {
+        let source = try XCTUnwrap(Self.formatDescription(extensions: [:]))
+        XCTAssertNil(VideoColorTagging.properties(of: source), "rien n'est inventé")
+    }
+
+    func test_compressVideo_poseLEtiquetteDeLaSource() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let code = try String(contentsOf: racine.appendingPathComponent(
+            "Meeshy/Features/Main/Services/MediaCompressor.swift"), encoding: .utf8)
+        XCTAssertTrue(code.contains("VideoColorTagging.properties(of:)"))
+        XCTAssertTrue(code.contains("[AVVideoColorPropertiesKey: $0]"))
+    }
+
+    private static func formatDescription(extensions: [CFString: Any]) -> CMFormatDescription? {
+        var description: CMFormatDescription?
+        CMVideoFormatDescriptionCreate(allocator: kCFAllocatorDefault, codecType: kCMVideoCodecType_H264,
+                                       width: 1920, height: 1080, extensions: extensions as CFDictionary,
+                                       formatDescriptionOut: &description)
+        return description
     }
 }
