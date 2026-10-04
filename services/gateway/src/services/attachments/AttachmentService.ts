@@ -25,6 +25,7 @@ import {
 import { attachmentServiceRowSelect } from './attachmentIncludes';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { carrierMessageStillServesWhere } from './carrierMessageLifecycle';
+import { derivedFileCandidates, resolveInsideUploadRoot } from './derivedAttachmentFiles';
 
 const logger = enhancedLogger.child({ module: 'AttachmentService' });
 
@@ -360,11 +361,42 @@ export class AttachmentService {
       where: { id: attachmentId },
     });
 
-    await this.unlinkIfUnreferenced('filePath', attachment.filePath);
+    const originalReleased = await this.unlinkIfUnreferenced('filePath', attachment.filePath);
 
     if (attachment.thumbnailPath) {
       await this.unlinkIfUnreferenced('thumbnailPath', attachment.thumbnailPath);
     }
+
+    if (originalReleased) {
+      await this.unlinkDerivedFiles(attachment);
+    }
+  }
+
+  /**
+   * Les pistes TTS et les variantes WebP suivent l'ORIGINAL (#9315) : une copie
+   * transférée partage ses octets ET sa carte de traductions, donc tant qu'une
+   * ligne référence encore le `filePath`, ses dérivés lui appartiennent aussi.
+   * Ils restaient sinon servis par la route de fichiers, nommés par l'ObjectId
+   * de la pièce jointe, après que la ligne et l'original étaient partis.
+   */
+  private async unlinkDerivedFiles(attachment: {
+    filePath: string;
+    thumbnailPath: string | null;
+    translations?: unknown;
+    imageVariants?: unknown;
+  }): Promise<void> {
+    const ownPaths = new Set(
+      [attachment.filePath, attachment.thumbnailPath]
+        .filter((value): value is string => typeof value === 'string')
+        .map((value) => resolveInsideUploadRoot(this.uploadBasePath, value))
+    );
+    const derived = new Set(
+      derivedFileCandidates(attachment)
+        .map((candidate) => resolveInsideUploadRoot(this.uploadBasePath, candidate))
+        .filter((fullPath): fullPath is string => fullPath !== null && !ownPaths.has(fullPath))
+    );
+
+    await Promise.all([...derived].map((fullPath) => this.unlinkQuietly(fullPath)));
   }
 
   /**
@@ -374,7 +406,7 @@ export class AttachmentService {
   private async unlinkIfUnreferenced(
     column: 'filePath' | 'thumbnailPath',
     relativePath: string
-  ): Promise<void> {
+  ): Promise<boolean> {
     const where: Prisma.MessageAttachmentWhereInput =
       column === 'filePath' ? { filePath: relativePath } : { thumbnailPath: relativePath };
 
@@ -382,10 +414,20 @@ export class AttachmentService {
       const stillReferenced = await this.prisma.messageAttachment.count({ where });
 
       if (stillReferenced > 0) {
-        return;
+        return false;
       }
+    } catch (error) {
+      logger.error('Erreur suppression fichiers', error as Error);
+      return false;
+    }
 
-      await fs.unlink(path.join(this.uploadBasePath, relativePath));
+    await this.unlinkQuietly(path.join(this.uploadBasePath, relativePath));
+    return true;
+  }
+
+  private async unlinkQuietly(fullPath: string): Promise<void> {
+    try {
+      await fs.unlink(fullPath);
     } catch (error) {
       logger.error('Erreur suppression fichiers', error as Error);
     }

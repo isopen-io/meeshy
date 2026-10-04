@@ -9,7 +9,7 @@ import { thumbnailContentType } from '../../services/attachments/thumbnail';
 import { resolveAttachmentReadVerdict, denyAttachmentRead } from '../../services/attachments/attachmentReadVerdict';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
-import { resolve as pathResolve, sep as pathSep } from 'path';
+import { relative as pathRelative, resolve as pathResolve, sep as pathSep } from 'path';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendError, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
@@ -147,7 +147,7 @@ export async function registerDownloadRoutes(
           reply.header('Content-Security-Policy', "default-src 'none'; sandbox");
         }
         reply.header('X-Content-Type-Options', 'nosniff');
-        reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+        reply.header('Cache-Control', 'private, max-age=31536000, immutable');
 
         const stream = createReadStream(filePath);
         return reply.send(stream);
@@ -229,7 +229,7 @@ export async function registerDownloadRoutes(
         // (always JPEG bytes whatever their extension) stay image/jpeg.
         reply.header('Content-Type', thumbnailContentType(thumbnailPath));
         reply.header('Content-Disposition', 'inline');
-        reply.header('Cache-Control', 'public, max-age=31536000, immutable');
+        reply.header('Cache-Control', 'private, max-age=31536000, immutable');
 
         const stream = createReadStream(thumbnailPath);
         return reply.send(stream);
@@ -349,6 +349,13 @@ export function registerFileStreamRoute(fastify: FastifyInstance): void {
           return sendForbidden(reply, 'Forbidden');
         }
 
+        // #9315 — un segment caché n'est jamais un média : `.tus-resumable/`
+        // porte les envois EN COURS, pas encore rattachés à un message. 404
+        // avant tout accès disque, pour que leur existence ne se lise pas.
+        if (pathRelative(baseAbs, filePath).split(pathSep).some((segment) => segment.startsWith('.'))) {
+          return sendNotFound(reply, 'File not found');
+        }
+
         // Single stat() — was previously called twice with a race window
         // between the existence probe and the metadata read.
         let fileStats;
@@ -396,11 +403,13 @@ export function registerFileStreamRoute(fastify: FastifyInstance): void {
         // URL when their content changes — a year-long max-age freezes the old
         // image in every client/CDN cache. Serve them with `no-cache` so each
         // use revalidates via ETag (cheap 304), while UUID-named uploads stay
-        // long-cacheable (their URL changes with every new upload).
+        // long-cacheable (their URL changes with every new upload) — in the
+        // client's OWN cache only (#9315): `private` keeps a proxy or CDN from
+        // holding a conversation's bytes and replaying them to someone else.
         const isStableProfilePath = decodedPath.startsWith('avatars/');
         const cacheControl = isStableProfilePath
           ? 'public, no-cache'
-          : 'public, max-age=31536000';
+          : 'private, max-age=31536000';
 
         const ifNoneMatch = request.headers['if-none-match'];
         if (ifNoneMatch && ifNoneMatch === etag) {
