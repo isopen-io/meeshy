@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #9257 — le message vocal écouté tient la lecture au premier plan.
+     Sept langues, les memes cles partout. -->
+<resources>
+    <string name="playback_channel_name">تشغيل الصوت</string>
+    <string name="playback_ongoing">جارٍ تشغيل الصوت</string>
+    <string name="playback_return">المس للعودة إلى Meeshy</string>
+</resources>

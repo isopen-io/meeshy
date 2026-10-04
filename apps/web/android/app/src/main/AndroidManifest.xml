@@ -141,6 +141,13 @@
             android:exported="false"
             android:foregroundServiceType="microphone" />
 
+        <!-- #9257 — le message vocal écouté tient la lecture au premier plan :
+             sans lui, Android gèle l'app mise en cache au milieu du vocal. -->
+        <service
+            android:name=".PlaybackForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <!-- #8049 — « Refuser » de la notification d'appel, app tuée comprise. -->
         <receiver
             android:name=".DeclineCallReceiver"
@@ -192,6 +199,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <!-- #9257 — la lecture d'un vocal tenue écran éteint (PlaybackForegroundService). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
