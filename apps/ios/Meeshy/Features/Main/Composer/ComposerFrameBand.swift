@@ -87,7 +87,7 @@ struct ComposerFrameBand: View {
 
 /// **Le cadrage et le fond, écrits sur le transform du fond** — un site unique
 /// pour le panneau, dont la règle se teste sans monter de vue.
-nonisolated enum ComposerFraming {
+nonisolated enum ComposerBackdropFraming {
 
     /// Ce que le RENDU applique : l'absence se rend REMPLIE (`rendersFilled`).
     static func fitMode(of transform: StoryBackgroundTransform?) -> String {

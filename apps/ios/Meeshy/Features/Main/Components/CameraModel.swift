@@ -676,11 +676,14 @@ extension CameraModel: AVCapturePhotoCaptureDelegate {
             self.capturedPhotoData = data
             self.capturedPhotoId = UUID().uuidString
         }
-        // Persist the processed encoded bytes (HEIC/JPEG, EXIF kept), not a
-        // re-encoded UIImage. `PhotoLibraryManager` is deliberately non-@MainActor
-        // so its `performChanges` block runs on Photos' own queue without the
+        // Persist the processed encoded bytes AS-IS (HEIC/JPEG, EXIF kept):
+        // `saveImage(_ data:)` decodes to a UIImage and loses the EXIF,
+        // `saveImageFile` hands Photos the bytes untouched (#9347).
+        // `PhotoLibraryManager` is deliberately non-@MainActor so its
+        // `performChanges` block runs on Photos' own queue without the
         // executor-isolation SIGTRAP the previous inline save hit.
-        Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImage(data) } }
+        let nom = ComposerPhotoEncoding.fileName(for: data, id: UUID().uuidString)
+        Task { await CameraModel.saveToPhotoLibrary { await PhotoLibraryManager.shared.saveImageFile(data, fileName: nom) } }
     }
 }
 

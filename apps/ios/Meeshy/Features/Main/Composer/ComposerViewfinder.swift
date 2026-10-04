@@ -113,6 +113,7 @@ struct ComposerViewfinder: View {
                 ComposerPhotoLookReview(
                     photo: pendingPhoto.image,
                     person: capture.lookPerson,
+                    date: capture.lookDate,
                     initialLook: pendingPhoto.look,
                     onRetake: { self.pendingPhoto = nil },
                     onUse: { image, look in

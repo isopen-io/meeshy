@@ -25,7 +25,7 @@ final class ComposerFrameBandTests: XCTestCase {
     /// un fond choisi n'aurait aucune bande où se voir, et le geste serait inerte.
     func test_choisirUnFond_ajusteLaScene_etGardeLeReste() {
         let depart = StoryBackgroundTransform(scale: 1.4, videoFitMode: "fill")
-        let apres = ComposerFraming.applying(backdrop: .sand, to: depart)
+        let apres = ComposerBackdropFraming.applying(backdrop: .sand, to: depart)
         XCTAssertEqual(apres?.backdrop, "sand")
         XCTAssertEqual(apres?.videoFitMode, StoryBackgroundFraming.fit)
         XCTAssertEqual(apres?.scale, 1.4, "le cadrage n'emporte pas le zoom")
@@ -33,7 +33,7 @@ final class ComposerFrameBandTests: XCTestCase {
 
     func test_choisirLeCadrage_nePerdPasLeFond() {
         let depart = StoryBackgroundTransform(videoFitMode: "fit", backdrop: "indigo")
-        let apres = ComposerFraming.applying(fitMode: StoryBackgroundFraming.fill, to: depart)
+        let apres = ComposerBackdropFraming.applying(fitMode: StoryBackgroundFraming.fill, to: depart)
         XCTAssertEqual(apres?.videoFitMode, "fill")
         XCTAssertEqual(apres?.backdrop, "indigo", "revenir en Ajuster retrouve le fond choisi")
     }
@@ -42,9 +42,9 @@ final class ComposerFrameBandTests: XCTestCase {
     /// et toute valeur inconnue se rendent REMPLIES (`rendersFilled`), et le
     /// panneau doit dire ce que l'écran montre.
     func test_lePanneau_litLeCadrageRendu() {
-        XCTAssertEqual(ComposerFraming.fitMode(of: nil), StoryBackgroundFraming.fill)
-        XCTAssertEqual(ComposerFraming.fitMode(of: StoryBackgroundTransform(videoFitMode: "fit")), "fit")
-        XCTAssertEqual(ComposerFraming.fitMode(of: StoryBackgroundTransform(videoFitMode: "fill")), "fill")
-        XCTAssertEqual(ComposerFraming.backdrop(of: nil), .blur)
+        XCTAssertEqual(ComposerBackdropFraming.fitMode(of: nil), StoryBackgroundFraming.fill)
+        XCTAssertEqual(ComposerBackdropFraming.fitMode(of: StoryBackgroundTransform(videoFitMode: "fit")), "fit")
+        XCTAssertEqual(ComposerBackdropFraming.fitMode(of: StoryBackgroundTransform(videoFitMode: "fill")), "fill")
+        XCTAssertEqual(ComposerBackdropFraming.backdrop(of: nil), .blur)
     }
 }

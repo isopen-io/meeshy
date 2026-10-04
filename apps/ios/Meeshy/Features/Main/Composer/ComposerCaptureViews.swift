@@ -1,6 +1,20 @@
 import SwiftUI
 import MeeshySDK
 
+/// **La toile à l'écran** (#9347) : le canevas 9:16, ajusté et centré — la
+/// couche système comme la vue Metal s'y posent, donc l'écran montre exactement
+/// ce qui part.
+nonisolated enum ComposerCaptureCanvas {
+    static func fitted(in bounds: CGRect) -> CGRect {
+        let toile = ComposerLookPainter.designCanvas
+        guard bounds.width > 0, bounds.height > 0 else { return bounds }
+        let echelle = min(bounds.width / toile.width, bounds.height / toile.height)
+        let taille = CGSize(width: toile.width * echelle, height: toile.height * echelle)
+        return CGRect(x: bounds.midX - taille.width / 2, y: bounds.midY - taille.height / 2,
+                      width: taille.width, height: taille.height)
+    }
+}
+
 /// **L'aperçu du viseur — un seul montage de `CameraPreviewLayer` pour les deux
 /// présentations** (#9134). La carte en scène et le plein écran le posent à la
 /// taille qu'ils choisissent ; il n'en prend aucun doigt : l'appui long qui a
@@ -16,17 +30,23 @@ struct ComposerCapturePreview: View {
             case .scene:
                 EmptyView()
             case .viewfinder:
-                CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints)
-                    .background(GeometryReader { proxy in
-                        Color.clear.adaptiveOnChange(of: proxy.frame(in: .global), initial: true) { _, cadre in
-                            session.focusPoints.previewFrame = cadre
+                GeometryReader { exterieur in
+                    let toile = ComposerCaptureCanvas.fitted(in: CGRect(origin: .zero, size: exterieur.size))
+                    ZStack {
+                        CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints)
+                            .background(GeometryReader { proxy in
+                                Color.clear.adaptiveOnChange(of: proxy.frame(in: .global), initial: true) { _, cadre in
+                                    session.focusPoints.previewFrame = cadre
+                                }
+                            })
+                        if ComposerLiveLookRule.rendersLive(session.look) {
+                            ComposerLiveLookSurface(look: session.look, person: session.lookPerson,
+                                                    date: session.lookDate, framing: .identity,
+                                                    source: session.camera.liveFeed)
                         }
-                    })
-                // **Le look se voit EN DIRECT** (#9329) : posé sur l'aperçu
-                // système, transparent tant qu'aucune trame n'est peinte.
-                if ComposerLiveLookRule.rendersLive(session.look) {
-                    ComposerLiveLookSurface(look: session.look, person: session.lookPerson,
-                                            texts: session.lookTexts, feed: session.camera.liveFeed)
+                    }
+                    .frame(width: toile.width, height: toile.height)
+                    .position(x: toile.midX, y: toile.midY)
                 }
             case .permissionRefused:
                 CameraPermissionPanel()
