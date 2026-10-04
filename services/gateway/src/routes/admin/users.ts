@@ -201,7 +201,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         userId: authContext.registeredUser.id,
         adminId: authContext.registeredUser.id,
         action: UserAuditAction.VIEW_USER_LIST,
-        entityId: 'users',
+        entityId: authContext.registeredUser.id, // entity 'User' : un id de membre, jamais 'users'
         ipAddress: request.ip,
         userAgent: request.headers['user-agent']
       });

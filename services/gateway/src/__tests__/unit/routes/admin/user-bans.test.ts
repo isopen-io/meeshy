@@ -160,7 +160,8 @@ describe('POST /admin/users/:userId/ban', () => {
         userId: 'user123',
         adminId: 'admin123',
         action: UserAuditAction.BAN_USER,
-        entityId: 'ban1',
+        entityId: 'user123',
+        metadata: expect.objectContaining({ banId: 'ban1' }),
       })
     );
   });
@@ -277,7 +278,7 @@ describe('POST /admin/users/:userId/bans/:banId/lift', () => {
     expect(res.statusCode).toBe(200);
     expect(mockBan.liftBan).toHaveBeenCalledWith({ banId: 'ban1', liftedById: 'admin123', liftReason: 'Erreur' });
     expect(mockAudit.createAuditLog).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'user123', action: UserAuditAction.UNBAN_USER, entityId: 'ban1' })
+      expect.objectContaining({ userId: 'user123', action: UserAuditAction.UNBAN_USER, entityId: 'user123', metadata: expect.objectContaining({ banId: 'ban1' }) })
     );
   });
 

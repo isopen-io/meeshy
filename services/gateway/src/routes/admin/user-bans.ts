@@ -112,7 +112,8 @@ export function registerUserBanRoutes(fastify: FastifyInstance, deps: Deps): voi
           userId,
           adminId: moi.id,
           action: UserAuditAction.BAN_USER,
-          entityId: ban.id,
+          // entity 'User' : l'identifiant est celui du MEMBRE ; le ban est dans metadata.
+          entityId: userId,
           changes: { isActive: { before: cible.isActive, after: false } },
           metadata: { reason: motif, expiresAt: corps.expiresAt ?? null, banId: ban.id },
           ipAddress: request.ip,
@@ -159,7 +160,7 @@ export function registerUserBanRoutes(fastify: FastifyInstance, deps: Deps): voi
           userId,
           adminId: moi.id,
           action: UserAuditAction.UNBAN_USER,
-          entityId: banId,
+          entityId: userId,
           changes: {},
           metadata: { reason: corps.reason ?? null, banId },
           ipAddress: request.ip,

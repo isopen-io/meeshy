@@ -170,3 +170,15 @@ describe('POST /admin/users/:id/reset-password — le motif reçu est consigné'
     await app.close();
   });
 });
+
+describe('GET /admin/users — la ligne de journal désigne un membre', () => {
+  it("entity 'User' porte un id de membre (le lecteur), jamais la chaîne 'users'", async () => {
+    jest.clearAllMocks();
+    service.getUsers.mockResolvedValue({ users: [], total: 0 });
+    const app = await buildApp('ADMIN');
+    const res = await app.inject({ method: 'GET', url: '/admin/users' });
+    expect(res.statusCode).toBe(200);
+    expect(derniereTrace('VIEW_USER_LIST')).toMatchObject({ entityId: ADMIN_ID, userId: ADMIN_ID });
+    await app.close();
+  });
+});
