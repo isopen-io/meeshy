@@ -17,10 +17,6 @@ enum CallLiveFrameCopy {
         String(localized: "call.liveFrame.none", defaultValue: "Aucun cadre", bundle: .main)
     }
 
-    static var none: String {
-        String(localized: "call.liveFrame.none", defaultValue: "Aucun cadre", bundle: .main)
-    }
-
     static var hint: String {
         String(localized: "call.liveFrame.hold.hint", defaultValue: "Garde ce cadre autour des deux vidéos pendant tout l'appel, et le propose à votre correspondant", bundle: .main)
     }
