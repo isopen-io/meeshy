@@ -2486,7 +2486,7 @@ struct ConversationView: View {
                 textTranslations: viewModel.messageTranslations[msg.id] ?? [],
                 transcription: viewModel.messageTranscriptions[msg.id],
                 translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
-                servedAudioTracks: viewModel.servedAudioTracks(of: msg),
+                threadLanguage: overlayThreadLanguage(for: msg),
                 onReact: { emoji in
                     viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
                 },
