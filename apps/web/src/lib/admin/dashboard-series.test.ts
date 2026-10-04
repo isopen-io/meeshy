@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 
 import { loadAdminInterfaceCatalog } from '@/lib/i18n-admin-catalog';
 
-import { engagementView, hourlyView, languagesView, rankedConversationsView, rankedMembersView, typesView, volumeView } from './dashboard-series';
+import { engagementView, hourlyInUtc, hourlyView, languagesView, rankedConversationsView, rankedMembersView, typesView, volumeView } from './dashboard-series';
 
 /**
  * **LES SÉRIES DU TABLEAU DE BORD, EN MOTS** (#8876, § 4) — ce qu'un graphique
@@ -50,9 +50,9 @@ describe('volumeView — messages par jour, libellés de jours PAR POSITION', ()
 
 describe('hourlyView — tranches de trois heures, nommées par leur heure de début', () => {
   const buckets = [
-    { startHour: 18, messages: 4 },
-    { startHour: 21, messages: 9 },
-    { startHour: 0, messages: 1 },
+    { startHour: 18, startsAt: null, messages: 4 },
+    { startHour: 21, startsAt: null, messages: 9 },
+    { startHour: 0, startsAt: null, messages: 1 },
   ];
 
   test('une barre par tranche, dans l’ordre chronologique servi, libellée par l’heure dans la langue d’interface', () => {
@@ -67,8 +67,27 @@ describe('hourlyView — tranches de trois heures, nommées par leur heure de d�
   });
 
   test('sans message, pas de synthèse', () => {
-    expect(hourlyView([{ startHour: 3, messages: 0 }], 'fr').summary).toBe('');
+    expect(hourlyView([{ startHour: 3, startsAt: null, messages: 0 }], 'fr').summary).toBe('');
     expect(hourlyView([], 'fr')).toEqual({ data: [], summary: '' });
+  });
+});
+
+describe('hourlyView — l’heure LOCALE du lecteur quand la tranche porte son instant (`startsAt`)', () => {
+  const local = [
+    { startHour: 18, startsAt: '2026-09-30T18:00:00.000Z', messages: 4 },
+    { startHour: 21, startsAt: '2026-09-30T21:00:00.000Z', messages: 9 },
+  ];
+
+  test('les tranches se nomment dans le fuseau du lecteur (Paris : UTC+2 en septembre)', () => {
+    const view = hourlyView(local, 'fr', 'Europe/Paris');
+    expect(view.data.map((datum) => flat(datum.label))).toEqual(['20 h', '23 h']);
+    expect(flat(view.summary)).toBe('Tranche la plus active : de 23 h à 02 h (9)');
+    expect(hourlyInUtc(local)).toBe(false);
+  });
+
+  test('sans `startsAt` (ancien serveur), les heures restent celles du serveur et se disent « UTC »', () => {
+    expect(hourlyInUtc([{ startHour: 3, startsAt: null, messages: 1 }])).toBe(true);
+    expect(hourlyInUtc([])).toBe(false);
   });
 });
 

@@ -51,14 +51,36 @@ export function volumeView(
   return { points, summary };
 }
 
-/** Les tranches de trois heures, dans l'ordre chronologique du serveur ; chacune porte l'heure où elle COMMENCE. */
+const THREE_HOURS = 3 * 3600_000;
+
+/** Les tranches se disent-elles en heures du SERVEUR (UTC) ? Oui dès qu'une tranche ne porte pas son instant — un ancien serveur. */
+export const hourlyInUtc = (buckets: readonly AdminHourBucket[]): boolean => buckets.some((bucket) => bucket.startsAt === null);
+
+/** L'heure d'un instant dans le fuseau du lecteur (`timeZone` absent) ou dans celui qu'un témoin fixe. */
+const localHourLabel = (at: number, language: AdminLanguage, timeZone: string | undefined): string =>
+  new Intl.DateTimeFormat(language, { hour: 'numeric', ...(timeZone === undefined ? {} : { timeZone }) }).format(new Date(at));
+
+/**
+ * Les tranches de trois heures, dans l'ordre chronologique du serveur ; chacune porte l'heure où elle COMMENCE.
+ *
+ * Quand TOUTES les tranches portent leur instant (`startsAt`), elles se nomment
+ * dans le FUSEAU DU LECTEUR (`timeZone` ne sert qu'aux témoins) ; sinon, l'heure
+ * comptée par le serveur, que le titre du graphique dit « UTC » (`hourlyInUtc`).
+ */
 export function hourlyView(
   buckets: readonly AdminHourBucket[],
   language: AdminLanguage,
+  timeZone?: string,
 ): { readonly data: readonly BarDatum[]; readonly summary: string } {
+  const local = !hourlyInUtc(buckets);
+  const startOf = (bucket: AdminHourBucket): string =>
+    local && bucket.startsAt !== null ? localHourLabel(Date.parse(bucket.startsAt), language, timeZone) : hourLabel(bucket.startHour, language);
+  const endOf = (bucket: AdminHourBucket): string =>
+    local && bucket.startsAt !== null ? localHourLabel(Date.parse(bucket.startsAt) + THREE_HOURS, language, timeZone) : hourLabel((bucket.startHour + 3) % 24, language);
+
   const data = buckets.map((bucket) => ({
     key: `hour-${bucket.startHour}`,
-    label: hourLabel(bucket.startHour, language),
+    label: startOf(bucket),
     value: bucket.messages,
   }));
   const peak = peakOf(data);
@@ -68,8 +90,8 @@ export function hourlyView(
   return {
     data,
     summary: translateAdmin(language, 'admin.dash.hourly.summary', {
-      from: hourLabel(busiest.startHour, language),
-      to: hourLabel((busiest.startHour + 3) % 24, language),
+      from: startOf(busiest),
+      to: endOf(busiest),
       count: formatCount(busiest.messages, language),
     }),
   };

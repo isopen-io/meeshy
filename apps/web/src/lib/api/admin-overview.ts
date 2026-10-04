@@ -132,6 +132,12 @@ export const loadAdminVolumeTimeline = (params: AdminReadParams): Promise<ApiRes
 export type AdminHourBucket = {
   /** L'heure de DÉBUT de la tranche de trois heures, 0–23, telle que le serveur la compte. */
   readonly startHour: number;
+  /**
+   * L'INSTANT où la tranche commence (ISO), servi depuis le 2026-10-04 : il permet
+   * de la nommer dans le fuseau du LECTEUR. `null` : un ancien serveur, qui ne sert
+   * que l'heure qu'il compte (UTC).
+   */
+  readonly startsAt: string | null;
   readonly messages: number;
 };
 
@@ -143,7 +149,8 @@ function decodeHourBucket(raw: unknown): AdminHourBucket | null {
   const messages = servedCount(row?.activity);
   if (match?.[1] === undefined || messages === null) return null;
   const startHour = Number(match[1]);
-  return startHour <= 23 ? { startHour, messages } : null;
+  const startsAt = typeof row?.startsAt === 'string' && Number.isFinite(Date.parse(row.startsAt)) ? row.startsAt : null;
+  return startHour <= 23 ? { startHour, startsAt, messages } : null;
 }
 
 export function decodeAdminHourlyActivity(raw: unknown): readonly AdminHourBucket[] | null {
