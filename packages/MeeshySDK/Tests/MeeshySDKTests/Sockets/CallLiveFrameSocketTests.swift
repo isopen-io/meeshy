@@ -52,4 +52,33 @@ final class CallLiveFrameSocketTests: XCTestCase {
 
         XCTAssertNil(payload["texts"])
     }
+
+    // MARK: - #9287 — proposer, accepter, refuser
+
+    func test_selected_withReply_decodesTheAnswer() throws {
+        let event = try decode(#"{"callId":"c1","userId":"u2","frameId":"jovial.fete.duo","reply":"declined","at":"2026-10-04T10:00:00.000Z"}"#)
+
+        XCTAssertEqual(event.reply, .declined)
+        XCTAssertEqual(event.frameId, "jovial.fete.duo")
+    }
+
+    func test_selected_unknownReply_keepsTheEventWithoutAnswer() throws {
+        let event = try decode(#"{"callId":"c1","userId":"u2","frameId":"jovial.fete.duo","reply":"maybe","at":"2026-10-04T10:00:00.000Z"}"#)
+
+        XCTAssertNil(event.reply)
+        XCTAssertEqual(event.frameId, "jovial.fete.duo")
+    }
+
+    func test_payload_proposal_carriesNoReply() {
+        let payload = MessageSocketManager.callLiveFramePayload(callId: "c1", frameId: "a.b", texts: nil)
+
+        XCTAssertNil(payload["reply"])
+    }
+
+    func test_payload_answer_carriesTheReply() {
+        let payload = MessageSocketManager.callLiveFramePayload(callId: "c1", frameId: "a.b", texts: CallLiveFrameTexts(name: "Léa"), reply: .accepted)
+
+        XCTAssertEqual(payload["reply"] as? String, "accepted")
+        XCTAssertEqual(payload["texts"] as? [String: String], ["name": "Léa"])
+    }
 }
