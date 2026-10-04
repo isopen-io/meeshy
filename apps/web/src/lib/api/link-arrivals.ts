@@ -68,11 +68,11 @@ const countryOf = (value: string | null | undefined): string | null => {
 };
 
 const toArrival = (row: {
-  readonly displayName?: string | null;
-  readonly isAnonymous?: boolean | null;
-  readonly country?: string | null;
-  readonly language?: string | null;
-  readonly joinedAt?: string | null;
+  readonly displayName?: string | null | undefined;
+  readonly isAnonymous?: boolean | null | undefined;
+  readonly country?: string | null | undefined;
+  readonly language?: string | null | undefined;
+  readonly joinedAt?: string | null | undefined;
 }): LinkArrival[] => {
   const displayName = textOrNull(row.displayName);
   const joinedAt = textOrNull(row.joinedAt);

@@ -280,7 +280,7 @@ export function arrivalAge(joinedAt: string, now: Date, language: InterfaceLangu
   }
 }
 
-const countryLabel = (country: string, language: InterfaceLanguage): string => {
+export const countryLabel = (country: string, language: InterfaceLanguage): string => {
   try {
     return new Intl.DisplayNames([language], { type: 'region' }).of(country) ?? country;
   } catch {
@@ -315,8 +315,22 @@ function ArrivalRow({ language, arrival, now }: { readonly language: InterfaceLa
   );
 }
 
-/** Arrivés récemment — nom, drapeau du pays, badge « sans compte », ancienneté. */
-export function RecentArrivals({ language, stats, now }: { readonly language: InterfaceLanguage; readonly stats: ShareLinkStats; readonly now: Date }) {
+/**
+ * Arrivés récemment — nom, drapeau du pays, badge « sans compte », ancienneté.
+ * Quand le lien a produit plus d'arrivées que les récentes, « Voir les N
+ * arrivées » mène à la liste complète (#7813).
+ */
+export function RecentArrivals({
+  language,
+  linkId,
+  stats,
+  now,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly linkId: string;
+  readonly stats: ShareLinkStats;
+  readonly now: Date;
+}) {
   return (
     <section aria-labelledby="link-recent-arrivals" data-share-link-recent className={CARD_CLASS} style={SECTION_CARD_STYLE}>
       <h2 id="link-recent-arrivals" className={`${TITLE_CLASS} ${SECTION_BRAND_INK}`}>
@@ -333,6 +347,19 @@ export function RecentArrivals({ language, stats, now }: { readonly language: In
           ))}
         </ul>
       )}
+      {stats.arrivals > stats.recentArrivals.length ? (
+        <Link
+          to="shareLinkArrivals"
+          params={{ link: linkId }}
+          data-share-link-arrivals-all
+          className={`flex min-h-11 items-center justify-between gap-2 rounded-chip text-body font-bold focus-visible:outline-2 focus-visible:outline-offset-2 ${SECTION_BRAND_INK}`}
+        >
+          <span>{translateInvite(language, 'linkDetail.recent.seeAll', { count: new Intl.NumberFormat(language).format(stats.arrivals) })}</span>
+          <span aria-hidden="true">
+            <LinksGlyph name="caretRight" size={14} />
+          </span>
+        </Link>
+      ) : null}
     </section>
   );
 }

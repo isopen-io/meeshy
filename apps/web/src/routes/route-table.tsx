@@ -126,6 +126,8 @@ const chatJoinScreen = () =>
   Promise.all([import('@/routes/chat-join'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 const shareLinkScreen = () =>
   Promise.all([import('@/routes/share-link'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
+const shareLinkArrivalsScreen = () =>
+  Promise.all([import('@/routes/share-link-arrivals'), loadInviteCatalog(currentInterfaceLanguage())]).then(([screen]) => screen);
 
 /* LA CLOCHE (#8727) — son chunk ET le catalogue de ce qu'une notification dit
    (pied de contexte, palier nommé, gestes), en parallèle : la bannière in-app
@@ -367,6 +369,7 @@ export const ROUTES = {
      correspond, et `new` serait sinon lu comme le linkId d'un lien. */
   shareLinks: { pattern: '/links/share', screen: () => import('@/routes/share-links') },
   shareLinkNew: { pattern: '/links/share/new', screen: () => import('@/routes/share-link-new') },
+  shareLinkArrivals: { pattern: '/links/share/$link/arrivals', screen: shareLinkArrivalsScreen },
   shareLink: { pattern: '/links/share/$link', screen: shareLinkScreen },
   notifications: { pattern: '/notifications', screen: notificationsScreen },
   calls: { pattern: '/calls', screen: () => import('@/routes/calls') },

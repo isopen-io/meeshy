@@ -56,9 +56,9 @@ export function fixtureShareLinkArrivals(linkId: string, cursor: string | null):
   const end = Math.min(start + FIXTURE_PAGE, total);
   const arrivals = Array.from({ length: Math.max(end - start, 0) }, (_, offset) => {
     const rank = start + offset;
-    const [country, language] = FIXTURE_ORIGINS[rank % FIXTURE_ORIGINS.length];
+    const [country, language] = FIXTURE_ORIGINS[rank % FIXTURE_ORIGINS.length] ?? [null, null];
     return {
-      displayName: `${FIXTURE_NAMES[rank % FIXTURE_NAMES.length]} ${rank + 1}`,
+      displayName: `${FIXTURE_NAMES[rank % FIXTURE_NAMES.length] ?? 'Invité'} ${rank + 1}`,
       isAnonymous: rank % 3 !== 1,
       country,
       language,
