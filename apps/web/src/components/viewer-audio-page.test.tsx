@@ -9,6 +9,7 @@ import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { dropCarriedAudio } from '@/lib/view/audio-carry';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -42,6 +43,7 @@ afterAll(async () => {
 afterEach(() => {
   act(() => root.unmount());
   container.remove();
+  dropCarriedAudio();
 });
 
 const settle = () =>
