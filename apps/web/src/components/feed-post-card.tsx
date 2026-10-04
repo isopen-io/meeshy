@@ -300,6 +300,7 @@ function CardMenu({ model, isDetail, tone, hosts }: { readonly model: FeedCardMo
       originalText={model.text?.original}
       originalLanguage={model.text?.originalLanguage}
       bookmarked={model.viewer.bookmarked}
+      studioEditable={model.repostOf === undefined && (model.scene !== undefined || model.media.length > 0)}
       isDetail={isDetail}
       tone={tone}
       menu={hosts.menu}

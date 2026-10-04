@@ -68,6 +68,7 @@ export function FeedPostMenu({
   originalText,
   originalLanguage,
   bookmarked,
+  studioEditable = false,
   isDetail,
   tone,
   menu,
@@ -86,6 +87,10 @@ export function FeedPostMenu({
   /** La langue de `originalText` — le `lang` du champ d'édition. */
   readonly originalLanguage: string | undefined;
   readonly bookmarked: boolean;
+  /** « MODIFIER » ROUVRE LE STUDIO (#9317) — la carte porte une scène ou un
+   * média, et n'est pas une republication : sa modification se fait dans le
+   * studio (`/posts/:id/edit`). Sinon, la feuille de texte (#7534). */
+  readonly studioEditable?: boolean;
   readonly isDetail: boolean;
   /** `card` sur le fond de la carte, `overlay` sur un média (le réel). */
   readonly tone: 'card' | 'overlay';
@@ -176,6 +181,7 @@ export function FeedPostMenu({
             originalText={originalText}
             originalLanguage={originalLanguage}
             bookmarked={bookmarked}
+            studioEditable={studioEditable}
             menu={menu}
             onShare={onShare}
             onGesture={onGesture}

@@ -219,6 +219,9 @@ export const ROUTES = {
      `/conversations/new`, et SANS collision avec le détail, qui est au
      SINGULIER (`/post/$post`). */
   postCompose: { pattern: '/posts/new', screen: () => import('@/routes/publication-compose').then((m) => ({ default: m.PostComposeRoute })) },
+  /* MODIFIER UNE PUBLICATION (#9317) — le studio rouvert sur un post, un réel
+     ou une story de l'auteur : on y modifie, ajoute et supprime des scènes. */
+  postEdit: { pattern: '/posts/$post/edit', screen: () => import('@/routes/publication-edit') },
   /* LE LECTEUR PLEIN ÉCRAN (#5817) — nomenclature legacy `/story/:postId`
      (D-5, `parity.md:310`). Une story NOMMÉE ouvre directement CETTE
      adresse (intention `targetingStory`, `StoryViewerRequestOrigin.swift`) ;

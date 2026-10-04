@@ -135,6 +135,9 @@ const frStudioChrome = {
   'story.studio.audioTrim.title': 'Couper l’audio',
   'story.studio.background.tools.leave': 'Retour à la scène',
   'story.studio.reelSwitch.announcement': 'Publication passée en réel',
+  'story.studio.edit.save': 'Enregistrer',
+  'story.studio.edit.saving': 'Enregistrement…',
+  'story.studio.edit.cancel': 'Abandonner la modification',
 } as const;
 
 export type StudioChromeCatalogSlice = Readonly<Record<keyof typeof frStudioChrome, string>>;

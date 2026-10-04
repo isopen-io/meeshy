@@ -80,6 +80,15 @@ describe('MyStoryCard — la carte rend ce qu’iOS rend', () => {
     expect(html).toMatch(/<button[^>]*data-my-story-delete[^>]*min-height:\s*44px/);
   });
 
+  test('« Modifier » rouvre la story dans le STUDIO (#9317) — un lien vers `/posts/:id/edit`, cible de 44 px', () => {
+    const html = renderToStaticMarkup(
+      <ul>
+        <MyStoryCard story={story({ id: 's1' })} language="fr" now={NOW} onOpenViews={noop} onRequestDelete={noop} deleteDisabled={false} />
+      </ul>,
+    );
+    expect(html).toMatch(/<a aria-label="Modifier"[^>]*data-my-story-edit[^>]*min-height:\s*44px[^>]*href="\/posts\/s1\/edit"/);
+  });
+
   test('un bouton Supprimer désactivé le porte réellement', () => {
     const html = renderToStaticMarkup(
       <ul>

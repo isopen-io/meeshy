@@ -142,6 +142,12 @@ function pageCompositionInput({ page, background, overlay, sound }: ResolvedPage
             ...(page.background.aspectRatio !== undefined ? { aspectRatio: page.background.aspectRatio } : {}),
             ...(page.background.frame !== undefined ? { frame: page.background.frame } : {}),
             ...(page.background.filter !== undefined ? { filter: page.background.filter } : {}),
+            // LES ÉDITIONS DE BASE (#9136) partent comme l'aperçu les montre
+            // (`studio-preview.ts`) — sans elles, rouvrir une publication pour
+            // la modifier (#9317) défaisait sa coupe et son recadrage.
+            ...(page.background.trim !== undefined ? { trim: page.background.trim } : {}),
+            ...(page.background.muted !== undefined ? { muted: page.background.muted } : {}),
+            ...(page.background.crop !== undefined ? { crop: page.background.crop } : {}),
           },
         }
       : {}),

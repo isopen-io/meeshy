@@ -6,6 +6,7 @@ const esStoriesMine = {
   'storiesMine.empty.title': 'No hay historias enviadas',
   'storiesMine.empty.subtitle': 'Tus historias publicadas aparecerán aquí mientras estén activas.',
   'storiesMine.action.open': 'Abrir',
+  'storiesMine.action.edit': 'Editar',
   'storiesMine.action.delete': 'Eliminar',
   'storiesMine.delete.title': '¿Eliminar la historia?',
   'storiesMine.delete.body': 'Esta acción es definitiva. La historia dejará de ser visible para todos.',

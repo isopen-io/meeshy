@@ -131,6 +131,9 @@ const ptStudioChrome = {
   'story.studio.audioTrim.title': 'Aparar o áudio',
   'story.studio.background.tools.leave': 'Voltar à cena',
   'story.studio.reelSwitch.announcement': 'Mudou para reel',
+  'story.studio.edit.save': 'Guardar',
+  'story.studio.edit.saving': 'A guardar…',
+  'story.studio.edit.cancel': 'Descartar as alterações',
 } satisfies StudioChromeCatalogSlice;
 
 export default ptStudioChrome;
