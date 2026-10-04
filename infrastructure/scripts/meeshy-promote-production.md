@@ -40,7 +40,6 @@ rendre l'origine de l'API lisible à l'exécution (une même image pour les deux
    `PRODUCTION_SSH_USER` (`root`) et `PRODUCTION_SSH_KNOWN_HOSTS` (obligatoire, sans repli `accept-new`).
 3. **Variable** `PORTEUR_GITHUB_LOGIN` : le seul compte dont le commentaire vaut feu vert de données.
 4. **Fusion dans `dev`** de ce lot (workflow, script, règle D, commentaires de `docker.yml` et `infrastructure/CLAUDE.md`).
-   de `docker.yml`, l'en-tête du garde et `infrastructure/CLAUDE.md:55` selon la directive du 2026-10-04.
 
 ## Usage
 
