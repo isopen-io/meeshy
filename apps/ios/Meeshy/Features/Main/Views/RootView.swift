@@ -363,9 +363,9 @@ struct RootView: View {
             activeConversationId: { router.currentConversationId ?? notificationPreviewConversation?.id },
             onSyncPillTap: handleSyncPillTap,
             onMiniPlayerTap: {
-                guard let convId = ConversationAudioCoordinator.shared
-                    .activeContext?.conversationId else { return }
-                navigateToConversationById(convId)
+                guard let target = MiniPlayerTapPolicy.target(
+                    context: ConversationAudioCoordinator.shared.activeContext) else { return }
+                navigateToConversationById(target.conversationId, highlightMessageId: target.highlightMessageId)
             },
             showFeed: showFeed,
             showMenu: showMenu

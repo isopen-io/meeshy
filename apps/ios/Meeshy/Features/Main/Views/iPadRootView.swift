@@ -220,9 +220,9 @@ struct iPadRootView: View {
             onSyncPillTap: handleSyncPillTap,
             activeConversationIdForBanner: { activeConversation?.id ?? sheetTargets.notificationPreview?.id },
             onMiniPlayerTap: {
-                guard let convId = ConversationAudioCoordinator.shared
-                    .activeContext?.conversationId else { return }
-                navigateToConversationById(convId)
+                guard let target = MiniPlayerTapPolicy.target(
+                    context: ConversationAudioCoordinator.shared.activeContext) else { return }
+                navigateToConversationById(target.conversationId, highlightMessageId: target.highlightMessageId)
             }
         ))
         // C4b — la rupture, posée PAR-DESSUS les feuilles : elle les recouvre,
