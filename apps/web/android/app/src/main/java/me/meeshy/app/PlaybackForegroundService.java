@@ -32,6 +32,10 @@ import android.util.Log;
  * Le bouton d'un casque ou d'ecouteurs Bluetooth suit la meme voie (#9344) :
  * le service porte une `MediaSession` active, en lecture, qui n'accepte que
  * la pause — celle que Chrome Android ouvre pour un `<audio>` qui joue.
+ *
+ * Et sa notification est un LECTEUR lie a cette session (#9367), comme celle
+ * de Chrome : le systeme la montre sur l'ecran verrouille et dans les
+ * reglages rapides, la Pause visible sans deplier.
  */
 public class PlaybackForegroundService extends Service {
 
@@ -153,6 +157,9 @@ public class PlaybackForegroundService extends Service {
             .setShowWhen(false)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(open)
+            .setStyle(new Notification.MediaStyle()
+                .setMediaSession(session.getSessionToken())
+                .setShowActionsInCompactView(0))
             .addAction(new Notification.Action.Builder(
                 Icon.createWithResource(this, android.R.drawable.ic_media_pause),
                 getString(R.string.playback_pause),
