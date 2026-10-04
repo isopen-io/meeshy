@@ -715,7 +715,10 @@ describe('Admin invitation routes', () => {
       expect(call.where.status).toBe('pending');
     });
 
-    it('returns 200 with communityId filter applied', async () => {
+    // `FriendRequest` n'a pas de colonne `communityId` : la poser au `where`
+    // faisait refuser la requête entière par Prisma. Le paramètre reste
+    // accepté (rétrocompatible) et n'a aucun effet.
+    it('accepte communityId sans le poser au where — la colonne n’existe pas', async () => {
       app = buildInvApp('ADMIN');
       await app.ready();
 
@@ -726,7 +729,7 @@ describe('Admin invitation routes', () => {
       expect(response.statusCode).toBe(200);
 
       const call = mockPrisma.friendRequest.findMany.mock.calls[0][0];
-      expect(call.where.communityId).toBe(VALID_MONGO_ID);
+      expect(call.where).not.toHaveProperty('communityId');
     });
 
     it('returns 400 when communityId is not a valid mongo id', async () => {

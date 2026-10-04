@@ -104,10 +104,10 @@ const mockUser = {
 };
 
 const mockPrisma: Record<string, Record<string, jest.Mock>> = {
-  conversationShareLink: { findMany: jest.fn() },
-  trackingLink: { findMany: jest.fn() },
-  affiliateToken: { findMany: jest.fn() },
-  friendRequest: { findMany: jest.fn() },
+  conversationShareLink: { findMany: jest.fn(), count: jest.fn() },
+  trackingLink: { findMany: jest.fn(), count: jest.fn() },
+  affiliateToken: { findMany: jest.fn(), count: jest.fn() },
+  friendRequest: { findMany: jest.fn(), count: jest.fn() },
   user: { findUnique: jest.fn() },
   conversation: { findMany: jest.fn(), findUnique: jest.fn(), count: jest.fn() },
   postMedia: { findMany: jest.fn(), count: jest.fn() },
@@ -191,6 +191,9 @@ function resetMocks() {
   mockPrisma.trackingLink.findMany.mockResolvedValue([]);
   mockPrisma.affiliateToken.findMany.mockResolvedValue([]);
   mockPrisma.friendRequest.findMany.mockResolvedValue([]);
+  for (const m of ['conversationShareLink', 'trackingLink', 'affiliateToken', 'friendRequest'] as const) {
+    (mockPrisma[m].count as jest.Mock).mockResolvedValue(0);
+  }
   mockPrisma.user.findUnique.mockResolvedValue({ id: 'user123' });
   mockPrisma.conversation.findMany.mockResolvedValue([]);
   mockPrisma.conversation.findUnique.mockResolvedValue({ id: 'conv123' });

@@ -1,3 +1,4 @@
+import { countUserActivity } from './user-activity-totals';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
@@ -664,10 +665,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         shareLinks: await withAnonymousParticipantCounts(fastify.prisma, shareLinks),
         trackingLinks,
         affiliateTokens,
-        contacts: {
-          sent: sentRequests,
-          received: receivedRequests,
-        },
+        contacts: { sent: sentRequests, received: receivedRequests },
+        totals: await countUserActivity(fastify.prisma, userId),
       });
     } catch (error) {
       logError(fastify.log, 'Error fetching user activity', error);
