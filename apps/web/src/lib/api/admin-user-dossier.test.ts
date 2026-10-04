@@ -12,6 +12,7 @@ import {
   loadAdminUserReportsReceived,
   loadAdminUserSessions,
   revokeAdminUserSession,
+  sessionStateOf,
   withoutSession,
 } from './admin-user-dossier';
 import { estClefSouveraine } from './souverain';
@@ -109,9 +110,17 @@ describe('le profil vocal', () => {
       consents: { voiceProfileConsentAt: '2026-05-01T00:00:00Z', voiceDataConsentAt: null },
     });
     expect(voix).toEqual({
-      profile: { audioCount: 3, totalDurationMs: 42000, model: 'openvoice_v2', createdAt: null, updatedAt: null },
+      profile: { audioCount: 3, totalDurationMs: 42000, model: 'openvoice_v2', qualityScore: null, analysisAt: null, publicAt: null, createdAt: null, updatedAt: null },
       consents: { voiceProfile: '2026-05-01T00:00:00Z', voiceData: null, voiceCloning: null },
     });
+  });
+
+  test('lit la qualité, l’analyse et la publication servies (audit 2026-10-04)', () => {
+    const voix = decodeAdminVoiceProfile({
+      voiceProfile: { audioCount: 3, totalDurationMs: 42000, embeddingModel: 'openvoice_v2', qualityScore: 0.72, voiceAnalysisAt: '2026-06-01T00:00:00Z', voicePublicAt: '2026-06-02T00:00:00Z' },
+      consents: {},
+    });
+    expect([voix.profile?.qualityScore, voix.profile?.analysisAt, voix.profile?.publicAt]).toEqual([0.72, '2026-06-01T00:00:00Z', '2026-06-02T00:00:00Z']);
   });
 
   test('un membre sans profil vocal le dit', () => {
@@ -169,6 +178,9 @@ describe('les sessions', () => {
           isTrusted: false,
           createdAt: null,
           lastActivityAt: '2026-09-20T00:00:00Z',
+          expiresAt: null,
+          invalidatedAt: null,
+          invalidatedReason: null,
         },
       ],
       total: 30,
@@ -197,7 +209,46 @@ describe('les signalements reçus', () => {
       status: 'pending',
       createdAt: null,
       excerpt: null,
+      messageState: 'withheld',
+      conversation: null,
+      resolvedAt: null,
+      actionTaken: null,
     });
+  });
+
+  test('un message DISPARU (`message: null`, ou `deletedAt` posé) se distingue d’un texte retenu (audit 2026-10-04)', async () => {
+    const resultat = await loadAdminUserReportsReceived({
+      source: 'gateway',
+      transport: transport({
+        data: [
+          { id: 'r1', reportType: 'spam', status: 'pending', message: null, conversation: null },
+          { id: 'r2', reportType: 'spam', status: 'resolved', resolvedAt: '2026-09-02T00:00:00Z', message: { id: 'm2', content: 'texte', deletedAt: '2026-09-01T00:00:00Z' }, conversation: { id: 'c1', title: ' Famille ' } },
+          { id: 'r3', reportType: 'spam', status: 'pending', message: { id: 'm3', content: 'bonjour', deletedAt: null }, conversation: { id: 'c1', title: null } },
+        ],
+        pagination: { total: 3 },
+      }),
+      userId: 'u1',
+      offset: 0,
+    });
+    const rows = resultat.ok ? resultat.data.rows : [];
+    expect(rows.map((row) => [row.messageState, row.excerpt])).toEqual([
+      ['deleted', null],
+      ['deleted', null],
+      ['shown', 'bonjour'],
+    ]);
+    expect(rows[1]?.conversation).toEqual({ id: 'c1', title: 'Famille' });
+    expect(rows[1]?.resolvedAt).toBe('2026-09-02T00:00:00Z');
+    expect(rows[2]?.conversation).toEqual({ id: 'c1', title: null });
+  });
+});
+
+describe('l’état d’une session', () => {
+  const NOW = new Date('2026-09-30T12:00:00Z');
+  test('une session encore valide dont l’échéance est passée est EXPIRÉE, pas valide (audit 2026-10-04)', () => {
+    expect(sessionStateOf({ isValid: true, expiresAt: '2026-09-01T00:00:00Z' }, NOW)).toBe('expired');
+    expect(sessionStateOf({ isValid: true, expiresAt: '2026-10-30T00:00:00Z' }, NOW)).toBe('valid');
+    expect(sessionStateOf({ isValid: true, expiresAt: null }, NOW)).toBe('valid');
+    expect(sessionStateOf({ isValid: false, expiresAt: '2026-10-30T00:00:00Z' }, NOW)).toBe('closed');
   });
 });
 

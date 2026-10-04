@@ -280,6 +280,28 @@ describe('les métadonnées interprétées (#8005)', () => {
     expect(host.querySelector('[data-admin-technical-id]')?.textContent).toBe(ID);
   });
 
+  test('la fin d’un compte se date et se signe ; le pays du numéro et les conversations rejointes se disent (audit 2026-10-04)', async () => {
+    const ADMIN_ID = '64f1c2a9e8b7d6c5b4a39299';
+    const { host } = await open({
+      replies: base({
+        ...DETAIL,
+        isActive: false,
+        deactivatedAt: '2026-09-20T12:00:00.000Z',
+        deletedAt: '2026-09-20T12:00:00.000Z',
+        deletedBy: ADMIN_ID,
+        phoneNumber: '+221770000000',
+        phoneCountryCode: 'SN',
+        _count: { ...DETAIL._count, participations: 31 },
+      }),
+    });
+    expect(meta(host, 'deactivatedAt')).toContain('2026');
+    expect(meta(host, 'deletedAt')).toContain('20 sept. 2026');
+    expect(host.querySelector('[data-admin-meta="deletedBy"] a')?.getAttribute('href')).toBe(`/admin/users/${ADMIN_ID}`);
+    expect(meta(host, 'deletedBy')).not.toContain(ADMIN_ID);
+    expect(meta(host, 'phoneCountry')).toContain('Sénégal');
+    expect(meta(host, 'participations')).toContain('31');
+  });
+
   test('sans le bloc sensible (rôle qui ne le reçoit pas) : ni métadonnées de compte, ni connexions, ni pays inventé', async () => {
     const masked = {
       ...DETAIL,
