@@ -9,6 +9,7 @@ export type CarryContext = {
   readonly currentId: string | undefined;
   readonly title: string | null;
   readonly conversationId: string | null;
+  readonly messageId: string | null;
 };
 
 /**
@@ -22,7 +23,8 @@ export type CarryContext = {
  * démontée, ne relance jamais un vocal qu'on n'écoutait plus.
  *
  * #9279 — la reprise emporte aussi sa conversation : le toucher du
- * mini-lecteur l'ouvre, et il s'y efface.
+ * mini-lecteur l'ouvre, et il s'y efface. #9294 — et son message : la
+ * conversation s'ouvre sur la bulle du vocal.
  */
 export function useCarryOnClose(context: CarryContext) {
   const registeredRef = useRef<{ readonly id: string; readonly carry: CarryProvider } | null>(null);
@@ -32,9 +34,9 @@ export function useCarryOnClose(context: CarryContext) {
   useEffect(
     () => () => {
       const registered = registeredRef.current;
-      const { currentId, title, conversationId } = currentRef.current;
+      const { currentId, title, conversationId, messageId } = currentRef.current;
       const resumed = registered !== null && registered.id === currentId ? registered.carry() : null;
-      if (resumed !== null) carryAudio({ ...resumed, title, conversationId });
+      if (resumed !== null) carryAudio({ ...resumed, title, conversationId, messageId });
     },
     [],
   );

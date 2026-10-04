@@ -368,11 +368,13 @@ const media3 = mediaMessage({
  * `translations`, la forme d'un vocal que Whisper n'a pas encore traité. Le
  * lecteur plein écran y offre « Transcrire », puis « Traduire » ; sous
  * `fixtures`, les deux demandes répondent par `MEDIA_ON_DEMAND` ci-dessous,
- * ce que la passerelle rend par `message:attachment-updated`. Huit secondes :
- * assez pour fermer le lecteur EN COURS de lecture et retrouver la même
- * position dans le mini-lecteur.
+ * ce que la passerelle rend par `message:attachment-updated`. Trente secondes
+ * (#9294 ; huit jusque-là) : le mini-lecteur y est fermé EN COURS de lecture,
+ * promené sur deux routes et commandé depuis la bulle — huit secondes ne
+ * laissaient que ~3 s de marge avant qu'il se retire au bout du son.
  */
 export const MEDIA_UNTRANSCRIBED_VOICE_WITNESS_ID = 'media-17';
+const MEDIA_UNTRANSCRIBED_VOICE_SECONDS = 30;
 const media17CreatedAt = dayAt(0, 9, 12);
 const media17Attachment: Attachment = {
   ...attachmentDefaults,
@@ -381,9 +383,9 @@ const media17Attachment: Attachment = {
   fileName: 'point-du-jour.wav',
   originalName: 'point-du-jour.wav',
   mimeType: 'audio/wav',
-  fileSize: 64_044,
-  fileUrl: wavDataUri({ seconds: 8, tone: 294 }),
-  duration: 8_000,
+  fileSize: 44 + MEDIA_UNTRANSCRIBED_VOICE_SECONDS * SAMPLE_RATE,
+  fileUrl: wavDataUri({ seconds: MEDIA_UNTRANSCRIBED_VOICE_SECONDS, tone: 294 }),
+  duration: MEDIA_UNTRANSCRIBED_VOICE_SECONDS * 1000,
   uploadedBy: 'u-kwame',
   createdAt: media17CreatedAt.toISOString(),
   currentUserConsumption: null,
@@ -422,16 +424,16 @@ export const MEDIA_ON_DEMAND: Readonly<
       en: {
         type: 'audio',
         transcription: 'Daily update: the release is approved, see you tomorrow at nine.',
-        url: wavDataUri({ seconds: 8, tone: 370 }),
-        durationMs: 8_000,
+        url: wavDataUri({ seconds: MEDIA_UNTRANSCRIBED_VOICE_SECONDS, tone: 370 }),
+        durationMs: MEDIA_UNTRANSCRIBED_VOICE_SECONDS * 1000,
         format: 'wav',
         createdAt: media17CreatedAt.toISOString(),
       },
       es: {
         type: 'audio',
         transcription: 'Resumen del día: la puesta en producción está aprobada, nos vemos mañana a las nueve.',
-        url: wavDataUri({ seconds: 8, tone: 415 }),
-        durationMs: 8_000,
+        url: wavDataUri({ seconds: MEDIA_UNTRANSCRIBED_VOICE_SECONDS, tone: 415 }),
+        durationMs: MEDIA_UNTRANSCRIBED_VOICE_SECONDS * 1000,
         format: 'wav',
         createdAt: media17CreatedAt.toISOString(),
       },
