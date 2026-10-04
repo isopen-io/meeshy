@@ -309,6 +309,36 @@ describe('Admin content routes — GET /share-links', () => {
     // #4692 l'a rendue OPAQUE en la retirant de `SHARE_LINK_JOIN_KEY_COLUMNS`.
     expect(select).toHaveProperty('id', true);
   });
+
+  // La fiche d'une conversation liste SES liens : le filtre est un ObjectId
+  // déclaré au schéma, et restreint le `where` (liste ET total).
+  it('restreint la liste aux liens d’une conversation quand `conversationId` est donné', async () => {
+    app = buildApp('ADMIN');
+    await app.ready();
+
+    const conversationId = '65f1a2b3c4d5e6f7a8b9c0d1';
+    const response = await app.inject({ method: 'GET', url: `/share-links?conversationId=${conversationId}` });
+    expect(response.statusCode).toBe(200);
+    expect(mockPrisma.conversationShareLink.findMany.mock.calls[0][0].where).toMatchObject({ conversationId });
+    expect(mockPrisma.conversationShareLink.count.mock.calls[0][0].where).toMatchObject({ conversationId });
+  });
+
+  it('refuse en 400 un `conversationId` qui n’est pas un ObjectId, sans interroger Prisma', async () => {
+    app = buildApp('ADMIN');
+    await app.ready();
+
+    const response = await app.inject({ method: 'GET', url: '/share-links?conversationId=pas-un-id' });
+    expect(response.statusCode).toBe(400);
+    expect(mockPrisma.conversationShareLink.findMany).not.toHaveBeenCalled();
+  });
+
+  it('ne filtre par aucune conversation quand le paramètre est absent', async () => {
+    app = buildApp('ADMIN');
+    await app.ready();
+
+    await app.inject({ method: 'GET', url: '/share-links' });
+    expect(mockPrisma.conversationShareLink.findMany.mock.calls[0][0].where).not.toHaveProperty('conversationId');
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -65,7 +65,8 @@ export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
           offset: { type: 'string', description: 'Pagination offset', default: '0' },
           limit: { type: 'string', description: 'Pagination limit (max 100)', default: '20' },
           search: { type: 'string', description: 'Search by name — never by a join key (linkId/identifier), cf. #4693' },
-          isActive: { type: 'string', enum: ['true', 'false'], description: 'Filter by active status' }
+          isActive: { type: 'string', enum: ['true', 'false'], description: 'Filter by active status' },
+          conversationId: { type: 'string', pattern: '^[a-fA-F0-9]{24}$', description: 'Restrict to the links of one conversation (ObjectId)' }
         }
       },
       response: {
@@ -104,7 +105,7 @@ export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
       }
 
       /* istanbul ignore next -- Fastify schema applies defaults; destructuring defaults never reached */
-      const { offset = '0', limit = '20', search, isActive } = request.query as ShareLinkListQuery;
+      const { offset = '0', limit = '20', search, isActive, conversationId } = request.query as ShareLinkListQuery;
       const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit);
 
       // Construire les filtres
@@ -133,6 +134,12 @@ export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
 
       if (isActive !== undefined) {
         where.isActive = isActive === 'true';
+      }
+
+      // La fiche d'une conversation liste SES liens. Le schéma a déjà refusé
+      // en 400 ce qui n'est pas un ObjectId.
+      if (conversationId) {
+        where.conversationId = conversationId;
       }
 
       const [shareLinks, totalCount] = await Promise.all([
