@@ -74,6 +74,7 @@ import { fileURLToPath } from 'node:url';
 import { launchChromium } from './lib/browser.mjs';
 import { startDistServer } from './lib/gate-server.mjs';
 import { contrastOf } from './lib/contrast.mjs';
+import { awaitCondition } from './lib/await-fact.mjs';
 
 const APP = fileURLToPath(new URL('..', import.meta.url));
 const DIST = join(APP, 'dist');
@@ -671,12 +672,57 @@ for (const scheme of ['light', 'dark']) {
 
     await page.locator('[data-composer] textarea').fill('Do you confirm the mockup for tomorrow?');
     await page.keyboard.press('Enter');
-    await page.waitForTimeout(500);
-    const lastLang = await page.evaluate(() => {
+    /**
+     * ON ATTEND LE FAIT, JAMAIS UN DÉLAI — et par la SSOT du dépôt (#9260,
+     * qui appelle `awaitCondition` de #7054).
+     *
+     * Ce site lisait la langue servie derrière un `waitForTimeout(500)`. Le fil
+     * est VIRTUALISÉ — `check-thread-virtualization.mjs` le mesure, `MAX_CELLS
+     * = 60` sur un corpus de 500 messages — donc la rangée qu'on vient
+     * d'envoyer n'est PAS dans le document à l'instant de l'envoi : elle y
+     * entre quand la fenêtre se recalcule et que la liste se recolle au bas.
+     * Avant ce moment, `rows[rows.length - 1]` est une rangée de FIXTURE, et
+     * les fixtures de rattrapage sont toutes en français
+     * (`src/lib/api/fixtures-catchup.ts`, `originalLanguage: 'fr'`). Le pari
+     * rendait donc un ROUGE qui accusait le produit quand c'était le runner
+     * qui était lent — le sens qui coûte le plus, puisque personne ne peut le
+     * reproduire.
+     *
+     * POURQUOI `awaitCondition` ET PAS UN `waitForFunction` ÉCRIT ICI. La loi
+     * existe déjà, avec ses trois raisons mesurées : elle ne LÈVE jamais (un
+     * throw dans ce gate devient `uncaughtException` → `process.exit(1)` et
+     * jette les témoins déjà verts, cf. `lib/browser.mjs`), son plafond est
+     * une constante nommée proportionnée à la charge, et elle sonde par
+     * intervalle NUMÉRIQUE plutôt que par `requestAnimationFrame`. Le gate des
+     * ÉTATS du fil l'appelle depuis #7054 et un cliquet l'y tient
+     * (`lib/no-fixed-delays.test.ts`) ; le gate du CHROME est resté hors de ce
+     * périmètre, et c'est tout ce qui lui manquait.
+     *
+     * LA MESURE NE S'AFFAIBLIT PAS. `awaitCondition` rend un booléen : à
+     * l'expiration, on relit la langue RÉELLEMENT servie et on échoue AVEC
+     * elle dans le libellé — une vraie dérive du Prisme reste rouge, avec
+     * exactement le message d'avant. Attendre son fait n'est pas fermer les
+     * yeux ; c'est refuser de trancher avant que le fait ait eu lieu.
+     *
+     * CE SITE N'EST PAS LES VINGT-DEUX AUTRES `waitForTimeout` DE CE FICHIER,
+     * et il faut le dire parce que la plupart sont justes : attendre une
+     * TRANSITION (une opacité de chrome qui se stabilise après un geste) n'a
+     * AUCUN fait à sonder — le délai EST l'instrument. Attendre un FAIT (une
+     * rangée montée, une valeur servie) a une condition. Ne convertir que les
+     * seconds, et seulement après avoir mesuré lequel c'est.
+     */
+    const servedLastLang = () =>
+      page.evaluate(() => {
+        const rows = document.querySelectorAll('[data-message]');
+        const last = rows[rows.length - 1];
+        return last?.querySelector('[lang]')?.getAttribute('lang') ?? null;
+      });
+    const servedInEnglish = await awaitCondition(page, () => {
       const rows = document.querySelectorAll('[data-message]');
       const last = rows[rows.length - 1];
-      return last?.querySelector('[lang]')?.getAttribute('lang') ?? null;
+      return last?.querySelector('[lang]')?.getAttribute('lang') === 'en';
     });
+    const lastLang = servedInEnglish ? 'en' : await servedLastLang();
     expect(lastLang === 'en', `${scheme} · la DERNIÈRE bulle du fil porte lang="en" (« ${lastLang} »)`);
 
     await context.close();
