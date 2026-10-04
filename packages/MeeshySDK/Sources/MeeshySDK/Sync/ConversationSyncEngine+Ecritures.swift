@@ -60,7 +60,24 @@ extension ConversationSyncEngine {
     /// la fermeture de mutation pour ne pas écraser une écriture `userState`
     /// concurrente, et la pré-lecture ne sert qu'à éviter l'écriture — et le
     /// fan-out `_conversationsDidChange` — quand rien ne change.
+    ///
+    /// #9307 — le pair n'est pas que la ligne d'un direct : ses messages, ses
+    /// lignes de participant, l'ami, la demande d'ami et sa fiche gardent
+    /// chacun une copie de son nom et de sa photo. Toutes suivent, par la loi
+    /// unique `UserUpdatedEvent.repainted(_:)`, pour qu'une réouverture serve
+    /// le nouveau nom sans réseau ; la table canonique des messages passe par
+    /// l'hôte (`RealtimeMessageMutation.senderRepainted`).
     /* partagé entre les fichiers du moteur (#4172) */ func handleUserUpdated(_ event: UserUpdatedEvent) async {
+        await repaintConversationList(with: event)
+        await realtimeMessagePersistor?(.senderRepainted(event))
+        await cache.messages.repaintEverywhere { event.repainted($0) }
+        await cache.participants.repaintEverywhere { event.repainted($0) }
+        await cache.friends.repaintEverywhere { event.repainted($0) }
+        await cache.friendRequests.repaintEverywhere { event.repainted($0) }
+        await cache.profiles.repaintEverywhere { event.repainted($0) }
+    }
+
+    private func repaintConversationList(with event: UserUpdatedEvent) async {
         let list = await cache.conversations.load(for: "list").snapshot() ?? []
         guard Self.applyingUserUpdate(event, to: list) != nil else { return }
         await cache.conversations.update(for: "list") { conversations in

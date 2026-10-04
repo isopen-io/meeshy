@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import Meeshy
 import MeeshySDK
 
@@ -398,6 +399,49 @@ final class ContactsListViewModelTests: XCTestCase {
         await sut.loadFriends()
 
         XCTAssertEqual(sut.filteredFriends.first?.username, "bob")
+    }
+
+    // MARK: - user:updated (#9307)
+
+    private func renamed(_ userId: String) throws -> UserUpdatedEvent {
+        let json = #"{"userId":"\#(userId)","changes":{"displayName":"Bobby","firstName":null,"lastName":null,"username":"bobby","avatar":"https://cdn/new.png"}}"#
+        return try JSONDecoder().decode(UserUpdatedEvent.self, from: Data(json.utf8))
+    }
+
+    func test_userUpdated_designatedFriend_isRenamedAndRepaintedWithoutRefetch() async throws {
+        let updates = PassthroughSubject<UserUpdatedEvent, Never>()
+        let mock = MockFriendService()
+        let sut = ContactsListViewModel(friendService: mock, currentUserId: "me", friendshipCache: .shared,
+                                        profileUpdates: updates.eraseToAnyPublisher())
+        sut.friends = [
+            FriendRequestUser(id: "alice", username: "alice", displayName: "Alice"),
+            FriendRequestUser(id: "bob", username: "bob", displayName: "Bob", avatar: "https://cdn/old.png"),
+        ]
+        let repainted = expectation(description: "liste repeinte")
+        let watch = sut.$friends.dropFirst().sink { _ in repainted.fulfill() }
+
+        updates.send(try renamed("bob"))
+
+        await fulfillment(of: [repainted], timeout: 1)
+        watch.cancel()
+        XCTAssertEqual(sut.friends.map(\.name), ["Alice", "Bobby"])
+        XCTAssertEqual(sut.friends.last?.avatar, "https://cdn/new.png")
+        XCTAssertEqual(mock.allFriendRequestsCallCount, 0, "aucune relecture réseau")
+    }
+
+    func test_userUpdated_strangerToTheList_doesNotRepublish() async throws {
+        let updates = PassthroughSubject<UserUpdatedEvent, Never>()
+        let sut = ContactsListViewModel(friendService: MockFriendService(), currentUserId: "me",
+                                        friendshipCache: .shared, profileUpdates: updates.eraseToAnyPublisher())
+        sut.friends = [FriendRequestUser(id: "alice", username: "alice", displayName: "Alice")]
+        let republished = expectation(description: "aucune republication")
+        republished.isInverted = true
+        let watch = sut.$friends.dropFirst().sink { _ in republished.fulfill() }
+
+        updates.send(try renamed("bob"))
+
+        await fulfillment(of: [republished], timeout: 0.3)
+        watch.cancel()
     }
 
     // MARK: - Helper

@@ -21,6 +21,7 @@ final class ContactsListViewModel: ObservableObject {
     private var cacheVersionSubscription: AnyCancellable?
     private var lastObservedFriendIds: Set<String> = []
     private var reconcileTask: Task<Void, Never>?
+    private var profileRepaintSubscription: AnyCancellable?
     private let cacheKey = FriendshipCache.PersistenceKeys.friendsList
     /// Borne de sécurité : au-delà, on cesse de paginer plutôt que de suivre
     /// indéfiniment un `hasMore` qui ne retomberait jamais. Même sémantique
@@ -53,12 +54,26 @@ final class ContactsListViewModel: ObservableObject {
     init(
         friendService: FriendServiceProviding = FriendService.shared,
         currentUserId: String = AuthManager.shared.currentUser?.id ?? "",
-        friendshipCache: FriendshipCache = .shared
+        friendshipCache: FriendshipCache = .shared,
+        profileUpdates: AnyPublisher<UserUpdatedEvent, Never> = MessageSocketManager.shared.userUpdated.eraseToAnyPublisher()
     ) {
         self.friendService = friendService
         self.currentUserId = currentUserId
         self.friendshipCache = friendshipCache
         observeFriendshipCache()
+        observeProfileUpdates(profileUpdates)
+    }
+
+    /// #9307 — un ami renommé ou repeint l'est ici sans relecture. Le cache
+    /// persistant suit par `ConversationSyncEngine` ; seule la liste à l'écran
+    /// se repeint, et seulement quand une ligne change.
+    private func observeProfileUpdates(_ updates: AnyPublisher<UserUpdatedEvent, Never>) {
+        profileRepaintSubscription = updates
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self, let repainted = self.friends.repaintedElements(by: event.repainted) else { return }
+                self.friends = repainted
+            }
     }
 
     deinit {

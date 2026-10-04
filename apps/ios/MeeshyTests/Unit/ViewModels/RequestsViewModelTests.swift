@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import Meeshy
 import MeeshySDK
 
@@ -435,5 +436,27 @@ final class RequestsViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.sentRequests.map(\.id), ["sent-cached"])
         XCTAssertEqual(mock.sentRequestsCallCount, 0)
+    }
+
+    // MARK: - user:updated (#9307)
+
+    func test_userUpdated_repaintsTheDesignatedPartyOfReceivedAndSentRequests() async throws {
+        let updates = PassthroughSubject<UserUpdatedEvent, Never>()
+        let sut = RequestsViewModel(friendService: MockFriendService(), offlineQueue: MockOfflineQueue(),
+                                    profileUpdates: updates.eraseToAnyPublisher())
+        sut.receivedRequests = [FriendRequestFixture.make(id: "in", senderId: "bob", receiverId: "me", senderUsername: "bob")]
+        sut.sentRequests = [FriendRequestFixture.make(id: "out", senderId: "me", receiverId: "bob",
+                                                      senderUsername: "me", receiverUsername: "bob")]
+        let repainted = expectation(description: "demandes repeintes")
+        let watch = sut.$sentRequests.dropFirst().sink { _ in repainted.fulfill() }
+        let json = #"{"userId":"bob","changes":{"displayName":"Bobby","firstName":null,"lastName":null,"username":"bobby"}}"#
+
+        updates.send(try JSONDecoder().decode(UserUpdatedEvent.self, from: Data(json.utf8)))
+
+        await fulfillment(of: [repainted], timeout: 1)
+        watch.cancel()
+        XCTAssertEqual(sut.receivedRequests.first?.sender?.username, "bobby")
+        XCTAssertEqual(sut.sentRequests.first?.receiver?.name, "Bobby")
+        XCTAssertEqual(sut.sentRequests.first?.sender?.username, "me")
     }
 }
