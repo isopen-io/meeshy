@@ -51,4 +51,11 @@ describe('cadre en direct d’un appel à deux (#9214)', () => {
     });
     expect(parsed.texts).toEqual({ name: 'Ana' });
   });
+
+  it('une réponse (#9287) nomme le cadre qu’elle concerne et ne prend que « accepted » ou « declined »', () => {
+    expect(callLiveFrameSelectSchema.safeParse({ callId: CALL_ID, frameId: 'a.b', reply: 'accepted' }).success).toBe(true);
+    expect(callLiveFrameSelectSchema.safeParse({ callId: CALL_ID, frameId: 'a.b', reply: 'declined' }).success).toBe(true);
+    expect(callLiveFrameSelectSchema.safeParse({ callId: CALL_ID, frameId: null, reply: 'accepted' }).success).toBe(false);
+    expect(callLiveFrameSelectSchema.safeParse({ callId: CALL_ID, frameId: 'a.b', reply: 'maybe' }).success).toBe(false);
+  });
 });

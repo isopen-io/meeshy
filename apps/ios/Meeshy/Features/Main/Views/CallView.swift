@@ -104,7 +104,6 @@ struct CallView: View {
     var capture: CallCaptureController { captureHost.controller }
     /// #9214 — le cadre en direct du duo : choix synchronisé et textes du cadre.
     @StateObject var liveFrame = CallLiveFrameSession()
-    @State var showLiveFramePicker = false
 
     /// Encart supérieur du chrome flottant (chevron minimize, bouton
     /// conversation, badge durée vidéo).

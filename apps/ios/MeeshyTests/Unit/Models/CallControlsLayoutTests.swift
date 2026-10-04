@@ -16,8 +16,7 @@ final class CallControlsLayoutTests: XCTestCase {
         isConnected: Bool = true,
         mayRecord: Bool = false,
         canPictureInPicture: Bool = false,
-        showsVideo: Bool? = nil,
-        offersLiveFrame: Bool = false
+        showsVideo: Bool? = nil
     ) -> CallActionContext {
         CallActionContext(
             isOnMac: isOnMac,
@@ -26,8 +25,7 @@ final class CallControlsLayoutTests: XCTestCase {
             isConnected: isConnected,
             mayRecord: mayRecord,
             canPictureInPicture: canPictureInPicture,
-            showsVideo: showsVideo,
-            offersLiveFrame: offersLiveFrame
+            showsVideo: showsVideo
         )
     }
 
@@ -99,15 +97,10 @@ final class CallControlsLayoutTests: XCTestCase {
         XCTAssertTrue(actions.theCall.contains(.capture))
     }
 
-    /// #9214 — le cadre en direct d'un duo vidéo se range juste après la capture.
-    func test_theCall_videoDuo_offersLiveFrameRightAfterCapture() {
-        let actions = CallActionSet.resolve(context(isVideoEnabled: true, mayRecord: true, offersLiveFrame: true))
-        XCTAssertEqual(actions.theCall, [.captions, .journal, .addPeople, .react, .capture, .liveFrame, .recording])
-    }
-
-    func test_theCall_notOffered_hidesLiveFrame() {
-        XCTAssertFalse(CallActionSet.resolve(context(isVideoEnabled: true)).contains(.liveFrame))
-        XCTAssertFalse(CallActionSet.resolve(context(isVideoEnabled: true, isConnected: false, offersLiveFrame: true)).contains(.liveFrame))
+    /// #9287 — le cadre en direct se choisit DANS la capture : aucune entrée à part.
+    func test_theCall_videoDuo_framesLiveThroughCaptureOnly() {
+        let actions = CallActionSet.resolve(context(isVideoEnabled: true, mayRecord: true))
+        XCTAssertEqual(actions.theCall, [.captions, .journal, .addPeople, .react, .capture, .recording])
     }
 
     func test_theCall_videoNotYetConnected_offersNoCapture() {

@@ -22,10 +22,9 @@ enum CallAction: String, CaseIterable, Sendable {
     case addPeople
     /// #8439 — envoyer une réaction à tout l'appel.
     case react
-    /// #8552 — capturer l'appel en une image montée, ou chaque visage.
+    /// #8552 — capturer l'appel en une image montée, ou chaque visage. #9287 — c'est aussi
+    /// là que se choisit le cadre en direct d'un duo : capture et cadre sont une seule fonction.
     case capture
-    /// #9214 — poser un cadre en direct autour des deux vidéos d'un duo.
-    case liveFrame
     case journal
 }
 
@@ -40,8 +39,6 @@ struct CallActionContext: Equatable, Sendable {
     let mayRecord: Bool
     let canPictureInPicture: Bool
     let showsVideo: Bool
-    /// #9214 — un appel VIDÉO à DEUX : le cadre en direct se propose.
-    let offersLiveFrame: Bool
 
     init(
         isOnMac: Bool,
@@ -50,8 +47,7 @@ struct CallActionContext: Equatable, Sendable {
         isConnected: Bool,
         mayRecord: Bool,
         canPictureInPicture: Bool,
-        showsVideo: Bool? = nil,
-        offersLiveFrame: Bool = false
+        showsVideo: Bool? = nil
     ) {
         self.isOnMac = isOnMac
         self.isVideoEnabled = isVideoEnabled
@@ -60,7 +56,6 @@ struct CallActionContext: Equatable, Sendable {
         self.mayRecord = mayRecord
         self.canPictureInPicture = canPictureInPicture
         self.showsVideo = showsVideo ?? isVideoEnabled
-        self.offersLiveFrame = offersLiveFrame
     }
 }
 
@@ -112,9 +107,8 @@ struct CallActionSet: Equatable, Sendable {
     private static func theCallActions(_ context: CallActionContext) -> [CallAction] {
         let together: [CallAction] = context.isConnected ? [.addPeople, .react] : []
         let capture: [CallAction] = context.isConnected && context.showsVideo ? [.capture] : []
-        let frame: [CallAction] = context.isConnected && context.offersLiveFrame ? [.liveFrame] : []
         let recording: [CallAction] = context.mayRecord ? [.recording] : []
         let pip: [CallAction] = context.canPictureInPicture ? [.pictureInPicture] : []
-        return [.captions, .journal] + together + capture + frame + recording + pip
+        return [.captions, .journal] + together + capture + recording + pip
     }
 }

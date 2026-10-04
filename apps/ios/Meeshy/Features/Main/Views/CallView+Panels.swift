@@ -27,7 +27,7 @@ extension CallView {
     func captureActionButton(captioned: Bool, diameter: CGFloat) -> some View {
         CallPillButton(
             symbol: "camera.aperture",
-            kind: .normal,
+            kind: liveFrame.frameId != nil ? .active : .normal,
             label: CallCaptureCopy.control,
             caption: captioned ? CallCaptureCopy.controlCaption : nil,
             hint: CallCaptureCopy.controlHint,
