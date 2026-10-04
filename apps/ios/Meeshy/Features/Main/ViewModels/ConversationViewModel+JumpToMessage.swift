@@ -40,13 +40,49 @@ extension ConversationViewModel {
         let targetDate = response.data.first(where: { $0.id == messageId })?.createdAt
             ?? response.data.last?.createdAt
             ?? Date()
-        await messageStore.loadWindow(around: targetDate)
+        let hasNewer = response.hasNewer ?? false
+        let newestServed = response.data.compactMap(\.createdAt).max()
+        await messageStore.loadWindow(
+            around: targetDate,
+            newerEdge: hasNewer ? newestServed.map { .through($0) } ?? .halfWindow : .halfWindow
+        )
         extractAttachmentTranscriptions(from: response.data)
         extractTextTranslations(from: response.data)
         nextMessageCursor = response.cursorPagination?.nextCursor
         hasOlderMessages = response.cursorPagination?.hasMore ?? !response.data.isEmpty
-        hasNewerMessages = response.hasNewer ?? false
+        hasNewerMessages = hasNewer
         isInJumpedState = true
+    }
+
+    // MARK: - Page plus récente d'une fenêtre sautée (#9304)
+
+    /// Demande la page qui suit le plus récent message SERVI de la fenêtre
+    /// (`after`, ordre croissant), l'écrit dans GRDB et recule le bord de la
+    /// fenêtre jusqu'à elle. `isLoadingNewer` ne vaut `true` que pendant
+    /// l'appel réseau : c'est lui que le bouton « revenir en bas » annonce.
+    /// Une page qui n'avance pas le filigrane clôt la marche — la même
+    /// demande ne repart jamais deux fois (miroir de `newerWindowParam` web).
+    func loadNewerMessages() async {
+        guard isInJumpedState, hasNewerMessages, !isLoadingNewer,
+              case .through(let watermark) = messageStore.jumpedNewerEdge else { return }
+        isLoadingNewer = true
+        defer { isLoadingNewer = false }
+        do {
+            let response = try await messageService.listAfter(
+                conversationId: conversationId, after: watermark.addingTimeInterval(-0.001), limit: limit,
+                includeReplies: true, includeTranslations: true, languages: nil
+            )
+            guard isInJumpedState else { return }
+            try? await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages)
+            extractAttachmentTranscriptions(from: response.data)
+            extractTextTranslations(from: response.data)
+            let newest = response.data.compactMap(\.createdAt).max().map { max($0, watermark) } ?? watermark
+            let reachedPresent = !(response.cursorPagination?.hasMore ?? false)
+            hasNewerMessages = !reachedPresent && newest > watermark
+            await messageStore.extendJumpedWindow(to: reachedPresent ? .present : .through(newest))
+        } catch {
+            Logger.messages.error("[JumpedWindow] newer page failed: \(error.localizedDescription)")
+        }
     }
 
     /// Outcome of `jumpToQuotedMessage`.
