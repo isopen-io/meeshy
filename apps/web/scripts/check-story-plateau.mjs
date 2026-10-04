@@ -229,15 +229,43 @@ check(
 );
 
 /* ── 3. les RÉGLAGES de l'objet — langue, police, effet, couleur, alignement ── */
-/* « T+ » a ouvert l'ÉDITION du texte posé : ses réglages sont déjà là. */
-await page.waitForSelector('[data-story-object-editor="text-2"]', { timeout: 8000 });
+/* « T+ » a ouvert l'ÉDITION du texte posé : ses SOUS-OUTILS sont au rail
+   droit ; chacun ouvre ses options dans un panneau à droite, depuis le haut
+   (#9140, jumelle de #9138). */
+await page.waitForSelector('[data-story-option="section:style"]', { timeout: 8000 });
+const openSection = async (section) => {
+  const tile = `[data-story-option="section:${section}"]`;
+  if ((await page.getAttribute(tile, 'aria-pressed')) !== 'true') await page.click(tile);
+  await page.waitForSelector(`[data-story-inline-panel="${section}"] [data-story-object-editor="text-2"]`, { timeout: 8000 });
+};
 const pick = async (section, value) => {
-  const selector = `[data-story-option="${section}:${value}"]`;
+  await openSection(section === 'textbg' ? 'background' : section);
+  const selector = `[data-story-inline-panel] [data-story-option="${section}:${value}"]`;
   await page.waitForSelector(selector, { timeout: 8000 });
   await page.click(selector);
   await twoFrames();
 };
 await pick('language', 'en');
+/* LE PANNEAU EST À DROITE, DEPUIS LE HAUT : aligné sur le haut de la colonne
+   des sous-outils, finissant une gouttière avant elle, sans déborder ni
+   recouvrir le rail. */
+const panelPlace = await page.evaluate(() => {
+  const panel = document.querySelector('[data-story-inline-panel]')?.getBoundingClientRect();
+  const column = document.querySelector('[data-story-trailing-options]')?.getBoundingClientRect();
+  const plateau = document.querySelector('[data-story-studio-plateau]')?.getBoundingClientRect();
+  if (panel === undefined || column === undefined || plateau === undefined) return null;
+  return {
+    topGap: Math.abs(panel.top - column.top),
+    gutter: column.left - panel.right,
+    start: panel.left - plateau.left,
+    bottomInside: panel.bottom <= plateau.bottom + 0.5,
+    overflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - innerWidth,
+  };
+});
+check(
+  panelPlace !== null && panelPlace.topGap < 4 && panelPlace.gutter >= 4 && panelPlace.start >= 9 && panelPlace.bottomInside && panelPlace.overflow <= 0,
+  `les options du texte ne s’ouvrent pas à droite depuis le haut, à côté du rail — ${JSON.stringify(panelPlace)}`,
+);
 await pick('style', 'typewriter');
 await pick('effect', 'longShadow');
 await pick('color', 'F8B500');
@@ -410,7 +438,7 @@ await pick('style', 'typewriter');
 /* LOT 6 : la sélection est SILENCIEUSE — aucun contour, aucune poignée. On
    referme l'édition, puis on GLISSE l'objet lui-même ; le clavier passe par
    le bouton de l'objet (flèches, `+`, `]`). */
-await page.click('[data-story-edit-done]');
+await page.click('[data-story-option="edit:exit"]');
 check(
   (await page.evaluate(() => document.querySelector('[data-story-object-frame], [data-story-object-move], [data-story-object-grip]') === null)),
   'la sélection ne doit plus entourer l’objet (ni contour, ni poignée)',
@@ -443,8 +471,9 @@ await twoFrames();
    « machine ». Le double-toucher doit rouvrir la MÊME édition que « T+ »
    (outil qui prend toute la place, #8654) et la saisie doit avoir la pose,
    la famille et la taille du texte peint — donc la taille PUBLIÉE rapportée
-   à la scène visible, réduite par l'outil. */
-if ((await page.locator('[data-story-edit-done]').count()) > 0) await page.click('[data-story-edit-done]');
+   à la scène visible. Les options vivent à droite depuis le haut (#9140) :
+   aucune plaque ne monte du bas, la scène n'est plus réduite par l'outil. */
+if ((await page.locator('[data-story-option="edit:exit"]').count()) > 0) await page.click('[data-story-option="edit:exit"]');
 await twoFrames();
 const idleStage = await page.evaluate(() => document.querySelector('[data-scene-stage]')?.getBoundingClientRect().width ?? null);
 const target2 = await page.evaluate(() => {
@@ -454,7 +483,7 @@ const target2 = await page.evaluate(() => {
 check(target2 !== null, 'le texte déplacé n’est plus peint');
 if (target2 !== null) {
   await page.mouse.dblclick(target2.x, target2.y);
-  await page.waitForSelector('[data-story-edit-plaque] [data-story-object-editor="text-2"]', { timeout: 8000 });
+  await page.waitForSelector('[data-story-option="section:style"]', { timeout: 8000 });
   await page.waitForFunction(() => document.activeElement?.id === 'story-studio-text', null, { timeout: 4000 });
   await twoFrames();
   const writing = await page.evaluate(() => {
@@ -489,7 +518,7 @@ if (target2 !== null) {
   if (writing !== null) {
     check(writing.focused && writing.target === 'text-2', `le double-toucher ne rouvre pas la saisie du texte — ${JSON.stringify(writing)}`);
     check(writing.chrome === 'hidden', `le double-toucher n’ouvre pas l’outil qui prend toute la place (#8654) — rail ${writing.chrome}`);
-    check(idleStage !== null && writing.stageWidth < idleStage - 1, `la scène ne s’est pas réduite à l’ouverture de l’outil — ${idleStage} → ${writing.stageWidth}`);
+    check(idleStage !== null && writing.stageWidth >= idleStage - 1, `l’outil a réduit la scène : ses options devraient s’ouvrir à droite, pas sous elle (#9140) — ${idleStage} → ${writing.stageWidth}`);
     check(writing.scale > 1.05, `le texte n’a pas été agrandi avant la mesure — échelle ${writing.scale}`);
     check(Math.abs(writing.fieldFont - writing.paintedFont) < 0.01, `la saisie n’a pas la police du texte peint — ${writing.fieldFont} ≠ ${writing.paintedFont}`);
     check(writing.linear < 1e-3, `la saisie n’a pas l’angle ni l’échelle du texte peint — écart ${writing.linear}`);
@@ -500,7 +529,7 @@ if (target2 !== null) {
     const published = (96 / 1080) * writing.scale;
     check(Math.abs(rendered - published) < 1e-3, `la saisie n’est pas à l’échelle de la scène — ${rendered} ≠ ${published}`);
   }
-  await page.click('[data-story-edit-done]');
+  await page.click('[data-story-option="edit:exit"]');
   await twoFrames();
 }
 

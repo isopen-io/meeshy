@@ -3,6 +3,7 @@ import { createElement, useState } from 'react';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { withTextDuplicated, withTextLayer, withTextMoved, withVisualPose, withoutText, type StudioDraft } from '@/lib/stories/studio';
+import { studioInlineSectionResolved, studioInlineSectionTapped, studioInlineSections, type StudioInlineSection } from '@/lib/stories/studio-inline-edit';
 import type { StudioPage } from '@/lib/stories/studio-page';
 import { clampPose, type StudioPose } from '@/lib/stories/studio-pose';
 import type { StudioObjectActionId } from '@/lib/stories/studio-scene-columns';
@@ -37,6 +38,7 @@ export function useStudioObjects({
   removeOverlay,
   overlayToBackground,
   closeFrame,
+  onLeaveEmptyText,
 }: {
   readonly page: StudioPage;
   readonly lang: InterfaceLanguage;
@@ -47,10 +49,16 @@ export function useStudioObjects({
    * fond ; l'ancien part, et ses montées en vol avec lui. */
   readonly overlayToBackground: () => void;
   readonly closeFrame: () => void;
+  /** **Une saisie fermée VIDE ne laisse rien** (#9140, jumelle de
+   * `ComposerTextSceneDoor.returnsToDocument`, #9137) : le texte qu'on quitte
+   * sans rien y avoir écrit est retiré — « T+ » ne pile pas de textes vides. */
+  readonly onLeaveEmptyText: (id: string) => void;
 }) {
-  /** L'OBJET EN ÉDITION (double-tap ou « Modifier ») — `null` : la scène se
-   * règle à la main. */
-  const [editingId, setEditingId] = useState<string | null>(null);
+  /** L'OBJET EN ÉDITION (double-tap ou « Modifier ») et le sous-outil dont les
+   * options sont ouvertes à droite (#9140) — `null` : la scène se règle à la
+   * main. */
+  const [edited, setEdited] = useState<{ readonly id: string; readonly open: StudioInlineSection | null } | null>(null);
+  const editingId = edited?.id ?? null;
   /** Le menu d'un objet — son objet et le point où il s'ouvre. */
   const [objectMenu, setObjectMenu] = useState<{ readonly id: string; readonly point: { readonly x: number; readonly y: number } } | null>(null);
 
@@ -62,6 +70,18 @@ export function useStudioObjects({
   /** Une édition dont l'objet a disparu (retiré, annulé) se referme seule. */
   const editing =
     editingId !== null && (editingId === 'overlay' ? page.overlay !== null : page.texts.some((layer) => layer.id === editingId)) ? editingId : null;
+  const sections = editing === null ? [] : studioInlineSections({ family: editing === 'overlay' ? 'overlay' : 'text' });
+  const openSection = editing === null ? null : studioInlineSectionResolved(edited?.open ?? null, sections);
+
+  /** LE SITE UNIQUE où une édition se referme ou change d'objet. */
+  const setEditingId = (id: string | null) => {
+    const left = editing === null ? undefined : page.texts.find((layer) => layer.id === editing);
+    if (left !== undefined && left.id !== id && left.text.trim() === '') onLeaveEmptyText(left.id);
+    setEdited((current) => (id === null ? null : current?.id === id ? current : { id, open: null }));
+  };
+  const tapSection = (section: StudioInlineSection) =>
+    setEdited((current) => (current === null ? current : { id: current.id, open: studioInlineSectionTapped(section, openSection) }));
+  const closeSection = () => setEdited((current) => (current === null ? current : { id: current.id, open: null }));
 
   const startEditing = (id: string) => {
     select(id);
@@ -102,5 +122,5 @@ export function useStudioObjects({
     ];
   };
 
-  return { stageObjects, editing, setEditingId, objectMenu, setObjectMenu, startEditing, commitPoseOf, objectActions };
+  return { stageObjects, editing, sections, openSection, tapSection, closeSection, setEditingId, objectMenu, setObjectMenu, startEditing, commitPoseOf, objectActions };
 }

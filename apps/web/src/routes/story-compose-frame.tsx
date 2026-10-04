@@ -14,13 +14,13 @@ import type { StoryFrame } from '@/lib/stories/story-document';
 import type { StudioBackgroundSection } from '@/lib/stories/studio-background-tools';
 import { pageWithVisualFilter, type StudioVisualAsset } from '@/lib/stories/studio-page';
 import type { StudioPageEdit } from '@/lib/stories/studio-page-edit';
-import { useBackDismiss } from '@/lib/view/use-back-dismiss';
-import { STUDIO_PLATE, StudioToolClose } from '@/routes/story-compose-chrome';
+import { StudioInlinePanel } from '@/routes/story-compose-inline-panel';
 import { StudioAltField, StudioFilterSection } from '@/routes/story-compose-media-fields';
 import { StudioCropControls, StudioSoundControls, StudioTrimControls } from '@/routes/story-compose-retouch-edits';
 
 /**
- * **LES CONTRÔLES D'UN OUTIL DU FOND, SOUS LA SCÈNE** (#8849, jumelle de
+ * **LES CONTRÔLES D'UN OUTIL DU FOND, À DROITE DEPUIS LE HAUT** (#8849 puis
+ * #9140 — le panneau du texte et du calque, `StudioInlinePanel`), jumelle de
  * `ComposerBackgroundToolPanel` iOS, #8847) — l'ancien panneau Cadre (#8414)
  * portait tout d'un bloc : Ajuster/Remplir, la légende, l'alt, les fonds, le
  * filtre, le retrait. Il se découpe en OUTILS que le rail droit porte ; chaque
@@ -160,24 +160,17 @@ export function StudioBackgroundToolPanel({
   readonly edits?: { readonly asset: StudioVisualAsset; readonly onPage: StudioPageEdit };
   readonly onClose: () => void;
 }) {
-  useBackDismiss(onClose, { escape: true });
-
   const title = translate(lang, STUDIO_BACKGROUND_SECTION_KEYS[section]);
   return (
-    <section
-      data-story-background-tool={section}
-      {...(section === 'frame' ? { 'data-story-frame-panel': '' } : {})}
-      aria-label={title}
-      className={`${STUDIO_PLATE} glass studio-plaque-rise flex flex-col gap-2 rounded-[22px] p-3`}
-      style={{ color: 'var(--color-ios-ink)' }}
+    <StudioInlinePanel
+      lang={lang}
+      section={`background:${section}`}
+      title={title}
+      probe="frame"
+      onClose={onClose}
+      focusOnOpen
+      marks={{ 'data-story-background-tool': section, ...(section === 'frame' ? { 'data-story-frame-panel': '' } : {}) }}
     >
-      <div className="flex items-center gap-2">
-        <h2 className="flex-1 text-body font-bold">{title}</h2>
-        <StudioToolClose lang={lang} probe="frame" onClose={onClose} focusOnOpen />
-      </div>
-      {/* Le corps DÉFILE sous son titre (#8517) : la plaque ne mange pas la
-          scène qu'elle règle, au téléphone comme au bureau. */}
-      <div data-story-frame-body className="flex max-h-72 flex-col gap-2 overflow-y-auto [&>*]:shrink-0">
         {section === 'frame' ? <FrameControls lang={lang} frame={frame} onFrame={onFrame} /> : null}
         {section === 'filter' && media !== undefined ? (
           <StudioFilterSection lang={lang} heading="plate" filter={media.filter} onFilter={(filter) => media.onPage((page) => pageWithVisualFilter(page, 'visual', filter))} />
@@ -198,7 +191,6 @@ export function StudioBackgroundToolPanel({
         {section === 'trim' && edits !== undefined ? <StudioTrimControls lang={lang} asset={edits.asset} onPage={edits.onPage} /> : null}
         {section === 'sound' && edits !== undefined ? <StudioSoundControls lang={lang} asset={edits.asset} onPage={edits.onPage} /> : null}
         {section === 'crop' && edits !== undefined ? <StudioCropControls lang={lang} asset={edits.asset} onPage={edits.onPage} /> : null}
-      </div>
-    </section>
+    </StudioInlinePanel>
   );
 }
