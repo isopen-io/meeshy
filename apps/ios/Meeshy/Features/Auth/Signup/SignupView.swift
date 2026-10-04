@@ -121,6 +121,15 @@ struct SignupView: View {
                     .padding(.top, MeeshySpacing.xxl)
                     .padding(.bottom, MeeshySpacing.xxxl)
                     .iPadFormWidth()
+                    // Un toucher HORS des champs leur retire la main (#9362) — et
+                    // le numéro quitté dit alors son refus (`notePhoneFieldLeft`).
+                    // En FOND : les champs et les boutons gardent leurs touchers.
+                    .background(
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture { focusedField = nil }
+                            .accessibilityHidden(true)
+                    )
                 }
                 // Le clavier suit le doigt et remonte si on relâche avant la fin —
                 // le mécanisme système, jamais un `DragGesture.onEnded` maison
@@ -342,10 +351,12 @@ struct SignupView: View {
                     }
                 }
             }
-            .disabled(!isPrimaryEnabled)
+            // INACTIF à l'œil, jamais sourd au doigt (#9362) : le toucher dit
+            // pourquoi (`explainInactivePrimary`) au lieu de ne rien faire.
             .opacity(isPrimaryEnabled ? 1 : 0.6)
             .bounceOnTap()
             .accessibilityLabel(primaryTitle)
+            .accessibilityHint(viewModel.inactivePrimaryReason ?? "")
             .accessibilityValue(viewModel.isSubmitting
                                 ? String(localized: "auth.signup.submit.inProgress", defaultValue: "Création en cours", bundle: .main)
                                 : "")
@@ -426,10 +437,22 @@ struct SignupView: View {
         case .talk:
             enterWithCreatedAccount()
         case .signUp(let enabled):
-            guard enabled else { return }
+            guard enabled else { return explainInactivePrimary() }
             if case .awaitingCode = viewModel.card { return enterWithCreatedAccount() }
             attemptSubmit()
         }
+    }
+
+    /// Le motif paraît sous le champ refusé, qui reprend la main. Un motif DÉJÀ
+    /// affiché ne change pas : VoiceOver le relit ici, sinon le toucher
+    /// resterait muet pour lui (l'annonce du champ ne part qu'à l'apparition).
+    private func explainInactivePrimary() {
+        let alreadySaid = viewModel.error(for: .phoneNumber)
+        guard let field = viewModel.explainInactivePrimary() else { return }
+        HapticFeedback.error()
+        focusedField = field
+        guard let alreadySaid else { return }
+        UIAccessibility.post(notification: .announcement, argument: alreadySaid)
     }
 
     /// Le compte existe : sa session TENUE s'ouvre, IMMÉDIATEMENT — sans pause.

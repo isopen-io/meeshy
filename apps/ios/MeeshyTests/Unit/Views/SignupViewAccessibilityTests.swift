@@ -120,6 +120,9 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// Le COMPTE, pas la seule présence : c'est ce qui rend « j'ai supprimé
     /// l'haptique au lieu de la faire converger » rouge.
     ///
+    /// **QUINZE depuis #9362** : « S'inscrire » touché INACTIF se sent comme un
+    /// refus (`HapticFeedback.error()`) en disant le motif du numéro.
+    ///
     /// **QUATORZE depuis #9343.** Les phases vivantes (#8288) en avaient porté
     /// quinze : aux onze d'avant — dont le crayon d'identité, retiré par #7897
     /// et remplacé par la ligne dépliable « Pourquoi mettre un mot de passe
@@ -144,9 +147,9 @@ final class SignupViewAccessibilityTests: XCTestCase {
     /// une parce que ses deux voisins d'usage en ont une : ouvrir le sélecteur
     /// de pays et ouvrir la feuille de langue. Un contrôle qui RÉVÈLE quelque
     /// chose se sent, sur cet écran, depuis #5555.
-    func test_signupView_keepsItsFourteenHaptics_andTheInfoHintCarriesItsOwn() throws {
+    func test_signupView_keepsItsFifteenHaptics_andTheInfoHintCarriesItsOwn() throws {
         let body = try signupViewCode()
-        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 14)
+        XCTAssertEqual(occurrences(of: "HapticFeedback.", in: body), 15)
         XCTAssertEqual(occurrences(of: "HapticFeedback.", in: try code(Self.infoHint)), 1,
                        "déplier un (i) se sent — et UNE fois, dans le composant partagé")
         XCTAssertTrue(body.contains("HapticFeedback.success()"),

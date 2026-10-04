@@ -1,6 +1,7 @@
 import XCTest
 import SwiftUI
 @testable import Meeshy
+import MeeshyUI
 
 /// Verrouille `FeedButtonAnchor` — le mapping pur "x,y" persistée → point écran /
 /// UnitPoint qui place le foyer du liquid reveal Reels au centre EXACT du bouton
@@ -131,5 +132,77 @@ final class FeedButtonAnchorTests: XCTestCase {
             + "topSafeZone doit dégager l'en-tête ENTIER, encoche comprise, puisque "
             + "l'appelant transmet une safe area nulle (FloatingButtons.swift:176)."
         )
+    }
+
+    // MARK: - #9363 — les bulles ne recouvrent plus le « + » de la story
+
+    /// Un appareil pris en charge, avec son encoche RÉELLE : le conteneur, lui,
+    /// reçoit une safe area nulle et majore l'encoche.
+    private struct Device {
+        let name: String
+        let size: CGSize
+        let topInset: CGFloat
+    }
+
+    private let devices = [
+        Device(name: "375 SE", size: CGSize(width: 375, height: 667), topInset: 20),
+        Device(name: "375 mini", size: CGSize(width: 375, height: 812), topInset: 50),
+        Device(name: "402 17 Pro", size: CGSize(width: 402, height: 874), topInset: 62),
+    ]
+
+    /// Le disque d'une bulle à sa position persistée, tel que le conteneur le
+    /// pose — safe area nulle, l'entrée réelle.
+    private func disc(_ raw: String, on device: Device) -> CGRect {
+        let center = FeedButtonAnchor.screenPoint(
+            fromRaw: raw, screenSize: device.size, safeArea: EdgeInsets(), isSearchBarVisible: true
+        )
+        let side = FeedButtonAnchor.buttonSize
+        return CGRect(x: center.x - side / 2, y: center.y - side / 2, width: side, height: side)
+    }
+
+    /// La cible de 44 pt du « + », au coin haut-gauche de l'avatar « moi », sous
+    /// l'en-tête étendu : le tray du flux (`StoryTrayView`, marge `sm`) et le
+    /// rail de la liste (`StoriesVivantsRail`, marge `Rail.paddingVertical`).
+    private func plusTargets(on device: Device) -> [(screen: String, frame: CGRect)] {
+        let bandTop = device.topInset + CollapsibleHeaderMetrics.expandedHeight
+        let side = MeeshyControlSize.tapTarget
+        return [
+            ("flux", CGRect(x: MeeshySpacing.lg, y: bandTop + MeeshySpacing.sm, width: side, height: side)),
+            ("liste", CGRect(x: MeeshySpacing.lg, y: bandTop + LentilleMetrics.Rail.paddingVertical, width: side, height: side)),
+        ]
+    }
+
+    func test_defaultBubbles_neverCoverTheStoryPlusTarget_on375And402() {
+        for device in devices {
+            for raw in ["0.0,0.0", "1.0,0.0"] {
+                let bubble = disc(raw, on: device)
+                for target in plusTargets(on: device) {
+                    XCTAssertFalse(
+                        bubble.intersects(target.frame),
+                        "\(device.name) : la bulle \(raw) \(bubble) recouvre le « + » du \(target.screen) \(target.frame)"
+                    )
+                }
+            }
+        }
+    }
+
+    /// Les cadres RELEVÉS à la recette (iPhone 17 Pro, iOS 26.1, 2026-10-04) : le
+    /// disque Flux 19,125 53×53 recouvrait le « + » de la liste (16,142) et
+    /// celui du flux (15,132). Leur cible de 44 pt, au même coin, est libre.
+    func test_measuredPlusFrames_onTheRecette_areNoLongerCovered() {
+        let bubble = disc("0.0,0.0", on: devices[2])
+        let side = MeeshyControlSize.tapTarget
+        for target in [CGRect(x: 16, y: 142, width: side, height: side), CGRect(x: 15, y: 132, width: side, height: side)] {
+            XCTAssertFalse(bubble.intersects(target), "le disque \(bubble) recouvre encore \(target)")
+        }
+    }
+
+    /// La réserve du SDK est une COTE, pas une lecture : chaque bande de
+    /// stories de l'app doit y tenir, sinon la bulle remord ses anneaux.
+    func test_everyStoryBand_fitsTheReservedClearance() {
+        XCTAssertLessThanOrEqual(StoryTrayView.trayHeight, FloatingButtonSafeZone.storyBand)
+        let caption = UIFont.preferredFont(forTextStyle: .caption1).lineHeight
+        let railBand = LentilleMetrics.Rail.paddingVertical * 2 + LentilleMetrics.Rail.size + MeeshySpacing.xs + caption
+        XCTAssertLessThanOrEqual(railBand, FloatingButtonSafeZone.storyBand)
     }
 }
