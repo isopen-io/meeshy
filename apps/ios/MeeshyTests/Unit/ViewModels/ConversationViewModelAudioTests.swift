@@ -1,5 +1,6 @@
 import XCTest
 import GRDB
+import SwiftUI
 @testable import Meeshy
 import MeeshySDK
 
