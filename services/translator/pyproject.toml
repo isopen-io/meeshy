@@ -119,6 +119,9 @@ dev = [
     "ruff>=0.4.0",
     "mypy>=1.10.0",
     "ipython>=8.0.0",
+    # Banc de mesure de la traduction (#3662) : chrF. COMET s'installe à part
+    # dans le job nocturne, il tire un modèle de 2 Go.
+    "sacrebleu>=2.4.0",
 ]
 
 # Production optimizations
