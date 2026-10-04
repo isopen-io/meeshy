@@ -271,6 +271,122 @@ const remonterJusquAuTexte = async (page) => {
   }
 };
 
+/**
+ * **LES ICÔNES DE LA BARRE PRENNENT LA COULEUR DE L'EFFET ARMÉ** (#9121),
+ * miroir `ComposerIconTint` (iOS). La COULEUR CALCULÉE de chaque icône de la
+ * rangée haute (portes, bascules au repos, pastille de langue) est comparée à
+ * celle du jeton attendu, résolu par le navigateur dans la même racine — au
+ * repos la couleur commune, vue unique armée la sienne, puis éphémère armé
+ * PAR-DESSUS : l'éphémère gagne (ordre iOS `ComposerProtection.dominant`).
+ *
+ * Et chaque teinte se LIT (dimension 5) : le contraste se mesure sur les
+ * PIXELS de la caméra, entre le fond dominant de sa cible et le pixel le plus
+ * contrasté du glyphe — l'encre telle qu'elle est peinte, voile et verre
+ * compris, jamais une valeur déclarée. Seuil 3:1 (WCAG 1.4.11, objet
+ * graphique).
+ */
+const teinteDesIcones = async (page, scheme) => {
+  const lire = (jeton) =>
+    page.evaluate((jeton) => {
+      const racine = document.querySelector('[data-composer]');
+      const barre = document.querySelector('[data-composer-toolbar]');
+      if (racine === null || barre === null) return null;
+      const sonde = document.createElement('span');
+      sonde.style.color = `var(${jeton})`;
+      racine.appendChild(sonde);
+      const attendu = getComputedStyle(sonde).color;
+      sonde.remove();
+      const icones = [
+        ...[...barre.querySelectorAll('button, label')].filter((el) => el.style.color === 'var(--composer-icon)'),
+        ...barre.querySelectorAll('[data-composer-language] > span'),
+      ];
+      const ecarts = icones
+        .filter((el) => getComputedStyle(el).color !== attendu)
+        .map((el) => `${el.getAttribute('aria-label') ?? el.parentElement?.getAttribute('aria-label') ?? el.tagName} ${getComputedStyle(el).color}`);
+      return { attendu, icones: icones.length, ecarts };
+    }, jeton);
+
+  const attendre = (jeton) =>
+    page.waitForFunction(
+      (jeton) => {
+        const racine = document.querySelector('[data-composer]');
+        const camera = document.querySelector('[data-composer-camera]');
+        if (racine === null || camera === null) return false;
+        const sonde = document.createElement('span');
+        sonde.style.color = `var(${jeton})`;
+        racine.appendChild(sonde);
+        const attendu = getComputedStyle(sonde).color;
+        sonde.remove();
+        return getComputedStyle(camera).color === attendu;
+      },
+      jeton,
+      { timeout: 10_000 },
+    );
+
+  const contraste = async () => {
+    const boite = await page.evaluate(() => {
+      const r = document.querySelector('[data-composer-camera]')?.getBoundingClientRect();
+      return r === undefined ? null : { x: r.x, y: r.y, width: r.width, height: r.height };
+    });
+    if (boite === null) return null;
+    const png = await page.screenshot({ clip: boite });
+    return page.evaluate(async (base64) => {
+      const img = await new Promise((resolve) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.src = `data:image/png;base64,${base64}`;
+      });
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, img.width, img.height).data;
+      const lin = (v) => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4);
+      const lum = (i) => 0.2126 * lin(d[i]) + 0.7152 * lin(d[i + 1]) + 0.0722 * lin(d[i + 2]);
+      const compte = new Map();
+      for (let i = 0; i < d.length; i += 4) {
+        const cle = `${d[i]},${d[i + 1]},${d[i + 2]}`;
+        compte.set(cle, (compte.get(cle) ?? 0) + 1);
+      }
+      const [fond] = [...compte.entries()].sort((a, b) => b[1] - a[1])[0];
+      const [r, g, b] = fond.split(',').map(Number);
+      const lf = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+      let meilleur = 1;
+      for (let i = 0; i < d.length; i += 4) {
+        const l = lum(i);
+        meilleur = Math.max(meilleur, (Math.max(l, lf) + 0.05) / (Math.min(l, lf) + 0.05));
+      }
+      return { fond: `rgb(${fond})`, ratio: Math.round(meilleur * 100) / 100 };
+    }, png.toString('base64'));
+  };
+
+  const constater = async (etat, jeton) => {
+    const m = await lire(jeton);
+    expect(
+      m !== null && m.icones >= 5 && m.ecarts.length === 0,
+      `${scheme} · ${etat} : les ${m?.icones ?? 0} icônes de la rangée haute peignent ${jeton} (${m?.attendu}) — écarts : ${m?.ecarts.join(' ; ') || 'aucun'}`,
+    );
+    const c = await contraste();
+    expect(c !== null && c.ratio >= 3, `${scheme} · ${etat} : la caméra tient ${c?.ratio}:1 sur son fond ${c?.fond} (≥ 3:1)`);
+    await page.screenshot({ path: join(CAPTURES, `composeur-teinte-${etat}-${scheme}.png`), clip: await page.evaluate(() => {
+      const r = document.querySelector('[data-composer-toolbar]').getBoundingClientRect();
+      return { x: r.x, y: r.y, width: r.width, height: r.height };
+    }) });
+  };
+
+  await constater('repos', '--color-ios-ink-2');
+
+  await page.locator('[data-composer-view-once]').click();
+  await attendre('--ios-state-view-once');
+  await constater('vue-unique', '--ios-state-view-once');
+
+  await page.locator('[data-composer-ephemeral]').click();
+  await page.locator('[data-composer-ephemeral-picker] button').nth(1).click();
+  await attendre('--color-error');
+  await constater('ephemere-sur-vue-unique', '--color-error');
+};
+
 for (const scheme of ['light', 'dark']) {
   /* ---------------------------------------------- 1. le GESTE remonte le fil */
   const page = await openThread(scheme);
@@ -319,6 +435,9 @@ for (const scheme of ['light', 'dark']) {
     `${scheme} · la rangée JUSTE AU-DESSUS de la bande reçoit son geste — ${JSON.stringify(atteignable)}`,
   );
 
+  /* ------------------------- 3. les icônes prennent la teinte de l'effet armé */
+  await teinteDesIcones(page, scheme);
+
   await close(page);
 }
 
@@ -332,4 +451,4 @@ if (failures.length > 0) {
 }
 
 console.log('\n  check-composer-band : vert — la bande du composeur occulte ce qui passe dessous, dans les deux schémas,');
-console.log('  et le texte qui la borde reste atteignable au doigt.');
+console.log('  le texte qui la borde reste atteignable au doigt, et ses icônes prennent la teinte de l’effet armé à 3:1 au moins (#9121).');
