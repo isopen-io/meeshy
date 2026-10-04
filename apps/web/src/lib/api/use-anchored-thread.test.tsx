@@ -113,6 +113,25 @@ describe('useThreadData — la fenêtre ancrée (#7420)', () => {
     expect(thread().around.target).toBeNull();
   });
 
+  test('#9302 — la fenêtre ?around= est EN VOL tant qu’elle n’est pas servie, plus après', async () => {
+    const thread = await mount();
+    expect(thread().windowLoading).toBe(false);
+    act(() => thread().around.seek(ARCHIVE_STARRED_ID));
+    expect(thread().windowLoading).toBe(true);
+    await settle();
+    expect(thread().windowLoading).toBe(false);
+  });
+
+  test('#9302 — Cache-First : rouvrir une fenêtre déjà servie n’est jamais un chargement', async () => {
+    const thread = await mount();
+    act(() => thread().around.seek(ARCHIVE_STARRED_ID));
+    await settle();
+    act(() => thread().returnToPresent());
+    act(() => thread().around.seek(ARCHIVE_STARRED_ID));
+    expect(thread().windowLoading).toBe(false);
+    expect(thread().detached).toBe(true);
+  });
+
   test('un message que la fenêtre ne porte pas : la demande ABOUTIT quand même, le présent reste servi', async () => {
     const thread = await mount();
     act(() => thread().around.seek('arch-fantome'));

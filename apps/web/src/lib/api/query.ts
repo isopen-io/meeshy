@@ -382,6 +382,8 @@ export function useThreadData(id: string) {
     detached: shown.detached,
     /** `target` non nul : le fil est ancré autour d'un message, son bas n'est plus « le présent qui arrive ». */
     around: { target: anchored.target, settled: anchored.settled, seek: anchored.seek },
+    /** La fenêtre `?around=` est en vol, rien n'en est encore servi (#9302) — jamais sur un cache. */
+    windowLoading: anchored.loading,
     returnToPresent: anchored.clear,
     status,
     error,

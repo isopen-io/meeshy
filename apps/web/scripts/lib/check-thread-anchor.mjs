@@ -18,6 +18,16 @@
  *  A5 aucun trou ni doublon : partout où l'on regarde, la rangée d'index N
  *     porte `arch-N` — 160 rangées pour 160 messages.
  *
+ * #9302 — LE FIL DIT QU'IL CHARGE. Le client de fixtures sert sur-le-champ :
+ * le gate RETIENT la fenêtre `?around=` puis la première page plus récente
+ * (`fixture-hold.ts`, posé par `addInitScript`) et ne la relâche qu'après
+ * avoir lu, sur le bouton « revenir en bas », l'état « en vol » :
+ *  L1 pendant la fenêtre : `data-thread-loading="seeking"`, `aria-busy`,
+ *     insensible (`aria-disabled`), « Recherche… » annoncé par la région
+ *     `role="status"` — puis, relâchée, le bouton revient à l'état ordinaire ;
+ *  L2 pendant la page plus récente : `data-thread-loading="newer"`, puis
+ *     l'état ordinaire dès qu'elle est servie.
+ *
  * Aucune attente à durée fixe : chaque lecture attend le FAIT qu'elle juge
  * (`fixed-delay-ratchet.test.ts`).
  */
@@ -61,8 +71,64 @@ const rowSettled = (page, messageId) =>
     { timeout: 10_000, polling: 'raf' },
   );
 
+/**
+ * LA RETENUE (#9302) — `globalThis.__meeshyFixtureHold` (`src/lib/api/fixture-hold.ts`) :
+ * toute page de fenêtre d'une nature encore RETENUE attend que le gate la
+ * relâche ; relâcher une nature la laisse ensuite passer librement.
+ */
+const HOLD_WINDOW_PAGES = () => {
+  const holding = new Set(['around', 'after']);
+  const held = [];
+  window.__fixtureHeld = held;
+  window.__meeshyFixtureHold = (channel, detail) => {
+    if (channel !== 'messages-window' || !holding.has(detail)) return undefined;
+    return new Promise((resolve) => held.push({ detail, resolve }));
+  };
+  window.__releaseFixture = (detail) => {
+    holding.delete(detail);
+    for (const entry of held.filter((h) => h.detail === detail)) entry.resolve();
+  };
+};
+
+const heldRequest = (page, detail) =>
+  page
+    .waitForFunction((d) => (window.__fixtureHeld ?? []).some((h) => h.detail === d), detail, { timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+
+/** Le bouton « revenir en bas » dans l'état de chargement attendu, lu d'une traite. */
+const loadingButton = (page, kind) =>
+  page
+    .waitForFunction(
+      (k) => {
+        const button = document.querySelector(`button[data-thread-loading="${k}"]`);
+        if (button === null) return null;
+        const status = Array.from(document.querySelectorAll('[role="status"]'), (n) => n.textContent ?? '').find((t) => t !== '') ?? '';
+        return {
+          busy: button.getAttribute('aria-busy'),
+          disabled: button.getAttribute('aria-disabled'),
+          label: button.getAttribute('aria-label'),
+          status,
+        };
+      },
+      kind,
+      { timeout: 10_000 },
+    )
+    .then((handle) => handle.jsonValue())
+    .catch(() => null);
+
+/** Relâche la retenue, puis attend que le bouton quitte l'état de chargement. */
+const releaseAndSettle = async (page, detail) => {
+  await page.evaluate((d) => window.__releaseFixture?.(d), detail);
+  return page
+    .waitForFunction(() => document.querySelector('[data-thread-loading]') === null, null, { timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false);
+};
+
 export async function checkThreadAnchor({ browser, BASE, expect }) {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR' });
+  await context.addInitScript(HOLD_WINDOW_PAGES);
   const page = await context.newPage();
   await page.goto(`${BASE}/me/starred-messages`, { waitUntil: 'load' });
   const open = page.locator(`[data-starred-row="${STARRED}"] a[data-starred-open]`);
@@ -73,6 +139,16 @@ export async function checkThreadAnchor({ browser, BASE, expect }) {
   await open.click();
   await page.waitForURL(`**/c/c-archives?message=${STARRED}`, { timeout: 10_000 });
   expect(true, `[ancre] toucher le favori ouvre ${new URL(page.url()).pathname}${new URL(page.url()).search}`);
+
+  // ===== L1 — la fenêtre ?around= en vol : le bouton « revenir en bas » cherche =====
+  const aroundHeld = await heldRequest(page, 'around');
+  const seeking = aroundHeld ? await loadingButton(page, 'seeking') : null;
+  expect(
+    seeking !== null && seeking.busy === 'true' && seeking.disabled === 'true' && seeking.label === 'Recherche…' && seeking.status === 'Recherche…',
+    `[chargement] pendant la fenêtre ?around= retenue, le bouton « revenir en bas » se monte en « Recherche… », occupé et insensible, annoncé discrètement (lu : ${JSON.stringify(seeking)})`,
+  );
+  const seekingDone = await releaseAndSettle(page, 'around');
+  expect(seekingDone, `[chargement] la fenêtre servie, le bouton quitte l'état de chargement`);
   const highlighted = await page
     .waitForFunction(() => window.__anchorHighlight?.seen === true, null, { timeout: 10_000 })
     .then(() => true)
@@ -103,6 +179,17 @@ export async function checkThreadAnchor({ browser, BASE, expect }) {
       const main = document.querySelector('main#contenu');
       if (main !== null) main.scrollTop = main.scrollHeight;
     });
+    if (turn === 0) {
+      // ===== L2 — la page plus récente en vol : le bouton le dit, puis se tait =====
+      const afterHeld = await heldRequest(page, 'after');
+      const loadingNewer = afterHeld ? await loadingButton(page, 'newer') : null;
+      expect(
+        loadingNewer !== null && loadingNewer.busy === 'true' && loadingNewer.disabled === null && loadingNewer.status === 'Chargement…',
+        `[chargement] pendant la page plus récente retenue, le bouton « revenir en bas » se dit occupé, « Chargement… », et reste actif (lu : ${JSON.stringify(loadingNewer)})`,
+      );
+      const newerDone = await releaseAndSettle(page, 'after');
+      expect(newerDone, `[chargement] la page plus récente servie, le bouton quitte l'état de chargement`);
+    }
     const grew = await page
       .waitForFunction(
         (count) => {
