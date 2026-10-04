@@ -17,6 +17,11 @@ struct ComposerCapturePreview: View {
                 EmptyView()
             case .viewfinder:
                 CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints)
+                    .background(GeometryReader { proxy in
+                        Color.clear.adaptiveOnChange(of: proxy.frame(in: .global), initial: true) { _, cadre in
+                            session.focusPoints.previewFrame = cadre
+                        }
+                    })
             case .permissionRefused:
                 CameraPermissionPanel()
             }
@@ -149,15 +154,15 @@ struct ComposerCaptureChrome: View {
             .onEnded { _ in session.endPinchZoom() }
     }
 
-    /// **Deux touchers visent** (#9295) : le point part dans le repère de la
-    /// fenêtre, que l'aperçu sait rendre au capteur ; l'anneau se pose dans
-    /// celui de la nappe. Le toucher simple attend que le double échoue —
-    /// c'est le prix d'un même vide qui photographie et qui vise.
+    /// **Deux touchers visent** (#9295) : le point part dans le repère global,
+    /// celui où l'aperçu mesure son cadre ; l'anneau se pose dans celui de la
+    /// nappe. Le toucher simple attend que le double échoue — c'est le prix
+    /// d'un même vide qui photographie et qui vise.
     private func focusGesture(origin: CGPoint) -> some Gesture {
-        SpatialTapGesture(count: 2).onEnded { toucher in
-            let fenetre = CGPoint(x: origin.x + toucher.location.x, y: origin.y + toucher.location.y)
-            guard session.focus(atWindowPoint: fenetre) else { return }
-            let marque = ComposerCaptureFocusMark(id: UUID(), location: toucher.location)
+        SpatialTapGesture(count: 2, coordinateSpace: .global).onEnded { toucher in
+            guard session.focus(atGlobalPoint: toucher.location) else { return }
+            let marque = ComposerCaptureFocusMark(
+                id: UUID(), location: CGPoint(x: toucher.location.x - origin.x, y: toucher.location.y - origin.y))
             focusMark = marque
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: UInt64(ComposerCaptureFocus.markLifetime * 1_000_000_000))

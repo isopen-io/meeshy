@@ -360,13 +360,13 @@ final class ComposerCaptureSession: ObservableObject {
 
     // MARK: - La mise au point (#9295)
 
-    /// **Le double toucher vise ce point de la fenêtre.** `false` ⇒ rien n'a
-    /// été visé (pas d'image, toucher hors de l'aperçu) : l'anneau ne paraît
-    /// pas pour une mise au point qui n'a pas eu lieu.
+    /// **Le double toucher vise ce point du repère global.** `false` ⇒ rien
+    /// n'a été visé (pas d'image, toucher hors de l'aperçu) : l'anneau ne
+    /// paraît pas pour une mise au point qui n'a pas eu lieu.
     @discardableResult
-    func focus(atWindowPoint point: CGPoint) -> Bool {
+    func focus(atGlobalPoint point: CGPoint) -> Bool {
         guard ComposerCaptureFocus.focusesOnDoubleTap(stage: stage),
-              let capteur = focusPoints.devicePoint(fromWindowPoint: point) else { return false }
+              let capteur = focusPoints.devicePoint(fromGlobalPoint: point) else { return false }
         camera.focus(at: capteur)
         HapticFeedback.light()
         return true

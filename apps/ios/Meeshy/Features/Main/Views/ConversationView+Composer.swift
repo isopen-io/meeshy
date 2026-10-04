@@ -259,7 +259,6 @@ extension ConversationView {
             ComposerViewfinder { result in
                 stageSceneMedia(ComposerReturnedMedia(capture: result))
             }
-            .ignoresSafeArea()
         }
         .sheet(isPresented: $composerState.showLocationPicker) {
             LocationPickerView(accentColor: accentColor) { place in

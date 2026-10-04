@@ -402,23 +402,36 @@ final class ComposerCaptureFocusAndPinchTests: XCTestCase {
     @MainActor
     func test_focus_sansAperculALEcran_nAnnoncePasDeMiseAuPoint() {
         let session = ComposerCaptureSession(stage: .armed, mode: .photo)
-        XCTAssertFalse(session.focus(atWindowPoint: CGPoint(x: 100, y: 100)),
+        XCTAssertFalse(session.focus(atGlobalPoint: CGPoint(x: 100, y: 100)),
                        "l'anneau ne paraît pas pour une mise au point qui n'a pas eu lieu")
         let eteinte = ComposerCaptureSession()
-        XCTAssertFalse(eteinte.focus(atWindowPoint: CGPoint(x: 100, y: 100)))
+        XCTAssertFalse(eteinte.focus(atGlobalPoint: CGPoint(x: 100, y: 100)))
+    }
+
+    func test_layerPoint_rameneLeToucherAuRepereDeLApercu() {
+        let cadre = CGRect(x: 0, y: 59, width: 393, height: 700)
+        XCTAssertEqual(CameraPreviewFocusPoints.layerPoint(global: CGPoint(x: 100, y: 159), previewFrame: cadre),
+                       CGPoint(x: 100, y: 100), "le plein écran pose l'aperçu sous la zone sûre")
+        XCTAssertNil(CameraPreviewFocusPoints.layerPoint(global: CGPoint(x: 100, y: 20), previewFrame: cadre),
+                     "un toucher hors de l'image ne vise pas")
+        XCTAssertNil(CameraPreviewFocusPoints.layerPoint(global: CGPoint(x: 10, y: 10), previewFrame: .zero),
+                     "un aperçu pas encore mesuré ne vise pas")
     }
 
     // MARK: - Le câblage
 
     func test_leChromePartage_porteLeDoubleToucherEtLePincement() throws {
         let chrome = try source("Meeshy/Features/Main/Composer/ComposerCaptureViews.swift")
-        XCTAssertTrue(chrome.contains("SpatialTapGesture(count: 2)"), "deux touchers visent")
-        XCTAssertTrue(chrome.contains("session.focus(atWindowPoint:"))
+        XCTAssertTrue(chrome.contains("SpatialTapGesture(count: 2, coordinateSpace: .global)"), "deux touchers visent")
+        XCTAssertTrue(chrome.contains("session.focus(atGlobalPoint:"))
         XCTAssertTrue(chrome.contains("MagnificationGesture()"), "pincer zoome")
         XCTAssertTrue(chrome.contains("session.pinchZoom(scale:"))
         XCTAssertTrue(chrome.contains("session.pinchSpoilsDismiss"), "un pincement ne range jamais le viseur")
         XCTAssertTrue(chrome.contains("focusPoints: session.focusPoints"),
                       "l'aperçu partagé s'accroche au pont toucher → capteur")
+        XCTAssertTrue(chrome.contains("adaptiveOnChange(of: proxy.frame(in: .global), initial: true)"),
+                      "l'aperçu mesure son cadre dans le repère du toucher")
+        XCTAssertTrue(chrome.contains("session.focusPoints.previewFrame = cadre"))
     }
 
     func test_lesDeuxMontages_profitentDesGestesSansLesRecabler() throws {
