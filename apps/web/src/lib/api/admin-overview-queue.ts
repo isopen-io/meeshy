@@ -220,7 +220,12 @@ export const loadAdminRankedConversations = (params: AdminReadParams): Promise<A
     decodeAdminRankedConversations,
   );
 
-export type AdminRankedMember = AdminPersonName & { readonly id: string; readonly count: number };
+/**
+ * `guest` : un participant ANONYME classé parmi les membres (servi depuis le
+ * 2026-10-04) — sans compte, son identifiant est celui de sa participation et
+ * son nom affiché est le sien. Absent (ancien serveur) : un compte.
+ */
+export type AdminRankedMember = AdminPersonName & { readonly id: string; readonly guest: boolean; readonly count: number };
 
 /** Le pseudo que la passerelle pose quand le compte a disparu : ce n'est le nom de personne. */
 const SERVED_UNKNOWN_USER = 'Unknown';
@@ -232,7 +237,7 @@ function decodeRankedMember(raw: unknown): AdminRankedMember | null {
   if (row === null || id === null || count === null) return null;
 
   const name = nameOf(row);
-  return { id, ...name, username: name.username === SERVED_UNKNOWN_USER ? null : name.username, count };
+  return { id, ...name, username: name.username === SERVED_UNKNOWN_USER ? null : name.username, guest: row.guest === true, count };
 }
 
 export function decodeAdminRankedMembers(raw: unknown): readonly AdminRankedMember[] | null {

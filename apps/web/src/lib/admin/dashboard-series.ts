@@ -6,7 +6,7 @@ import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AdminTarget } from './admin-routes';
 import { interpretActivityBucket, interpretConversationType, interpretMessageType } from './interpret/enums';
 import { languageName, sentenceCase } from './interpret/language';
-import { conversationLabel, personLabel } from './interpret/labels';
+import { conversationLabel, guestLabel, personLabel } from './interpret/labels';
 import { formatCount, formatPercent } from './interpret/numbers';
 import { dayLabelsEndingToday, hourLabel } from './interpret/time';
 
@@ -164,11 +164,12 @@ export function rankedMembersView(
   rows: readonly AdminRankedMember[],
   language: AdminLanguage,
 ): { readonly data: readonly BarDatum[]; readonly summary: string } {
+  /* Un INVITÉ (`guest`) n'a pas de compte : son nom affiché, et sa fiche d'anonyme — jamais une fiche de compte qui n'existe pas. */
   const data = rows.map((row): BarDatum => ({
     key: row.id,
-    label: personLabel(row, language),
+    label: row.guest ? guestLabel(row.displayName, language) : personLabel(row, language),
     value: row.count,
-    target: { kind: 'entity', entity: 'user', id: row.id },
+    target: { kind: 'entity', entity: row.guest ? 'anonymous' : 'user', id: row.id },
   }));
   return { data, summary: leaderSummary(data, 'admin.dash.rank.members.summary', language) };
 }

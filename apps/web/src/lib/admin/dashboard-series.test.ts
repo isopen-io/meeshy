@@ -182,15 +182,21 @@ describe('les classements — des noms, des liens vers les fiches, JAMAIS d’id
   test('membres : le nom affiché, sinon le prénom et le nom, sinon @pseudo', () => {
     const view = rankedMembersView(
       [
-        { id: ID, displayName: 'Awa Diop', username: 'awa', firstName: null, lastName: null, count: 88 },
-        { id: '64f1c2a9e8b7d6c5b4a39282', displayName: null, username: 'jean', firstName: null, lastName: null, count: 50 },
-        { id: '64f1c2a9e8b7d6c5b4a39283', displayName: null, username: null, firstName: null, lastName: null, count: 2 },
+        { id: ID, displayName: 'Awa Diop', username: 'awa', firstName: null, lastName: null, guest: false, count: 88 },
+        { id: '64f1c2a9e8b7d6c5b4a39282', displayName: null, username: 'jean', firstName: null, lastName: null, guest: false, count: 50 },
+        { id: '64f1c2a9e8b7d6c5b4a39283', displayName: null, username: null, firstName: null, lastName: null, guest: false, count: 2 },
       ],
       'fr',
     );
     expect(view.data.map((datum) => datum.label)).toEqual(['Awa Diop', '@jean', 'Compte sans nom']);
     expect(view.data[0]?.target).toEqual({ kind: 'entity', entity: 'user', id: ID });
     expect(view.summary).toBe('Awa Diop est en tête : 88');
+  });
+
+  test('un invité (`guest: true`) garde son nom et mène à la section Anonymes, jamais à une fiche de compte', () => {
+    const view = rankedMembersView([{ id: ID, displayName: 'Awa (invitée)', username: null, firstName: null, lastName: null, guest: true, count: 7 }], 'fr');
+    expect(view.data[0]?.label).toBe('Awa (invitée)');
+    expect(view.data[0]?.target).toEqual({ kind: 'entity', entity: 'anonymous', id: ID });
   });
 
   test('un classement vide n’a ni données ni phrase', () => {

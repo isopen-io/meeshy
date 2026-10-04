@@ -20,6 +20,23 @@ export const servedUserRank = (n: number, overrides: Served = {}): Served => ({
   ...overrides,
 });
 
+/**
+ * Un INVITÉ classé parmi les membres (servi depuis le 2026-10-04) : un participant
+ * anonyme n'a pas de compte — la passerelle le marque `guest: true`, l'identifie
+ * par sa participation et sert son nom affiché ; le pseudo est le bouche-trou
+ * `Unknown` qu'elle pose quand aucun compte n'est résolu.
+ */
+export const servedGuestRank = (n: number, overrides: Served = {}): Served => ({
+  id: OBJECT_ID(n),
+  username: 'Unknown',
+  displayName: `Invité ${n}`,
+  avatar: null,
+  guest: true,
+  count: 100 - n,
+  lastActivity: '2026-09-30T10:00:00.000Z',
+  ...overrides,
+});
+
 export const servedConversationRank = (n: number, overrides: Served = {}): Served => ({
   id: OBJECT_ID(n),
   identifier: `mshy_conv${n}`,
