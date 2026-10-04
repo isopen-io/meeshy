@@ -96,6 +96,23 @@ describe('l’invitation sur un contenu refusé', () => {
   });
 });
 
+/* #9172 — `/reels` sans identifiant : la passerelle ne sert AUCUN fil de réels
+   à un visiteur (`scope=reels` exige un compte). Rien n'est refusé — il n'y a
+   rien à montrer : l'invitation à rejoindre, jamais « contenu indisponible ». */
+describe('l’invitation sans contenu à montrer', () => {
+  test('invite à rejoindre, sans dire un refus ni offrir de continuer', async () => {
+    const host = await mounter.mount(
+      <VisitorInvitationDialog language="fr" kind="reel" state="invite" sharer={null} returnTo="/reels" onDismiss={() => {}} />,
+    );
+    expect(host.textContent).toContain('Rejoignez Meeshy');
+    expect(host.textContent).toContain('Créez votre compte ou connectez-vous');
+    expect(host.textContent).not.toContain('n’est pas accessible');
+    expect(host.textContent).not.toContain('Continuer à regarder');
+    expect(hrefOf(host, 'Créer un compte')).toBe(`/signup?next=${encodeURIComponent('/reels')}`);
+    expect(hrefOf(host, 'Se connecter')).toBe(`/login?next=${encodeURIComponent('/reels')}`);
+  });
+});
+
 describe('les lois pures de l’invitation', () => {
   test('le retour garde le chemin et la requête, et refuse une autre origine', () => {
     expect(visitorReturnPath('/reel/r1', '?via=abc123')).toBe('/reel/r1?via=abc123');
@@ -115,5 +132,7 @@ describe('les lois pures de l’invitation', () => {
     expect(invitationOpen({ visitor: true, state: 'served', dismissed: false })).toBe(true);
     expect(invitationOpen({ visitor: true, state: 'served', dismissed: true })).toBe(false);
     expect(invitationOpen({ visitor: true, state: 'refused', dismissed: true })).toBe(true);
+    expect(invitationOpen({ visitor: true, state: 'invite', dismissed: true })).toBe(true);
+    expect(invitationOpen({ visitor: false, state: 'invite', dismissed: false })).toBe(false);
   });
 });

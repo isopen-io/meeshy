@@ -19,7 +19,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
-import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, shouldLoadMoreReels } from '@/lib/reels/thread';
+import { activeIndexOf, composeReelThread, entryReelIds, neighborIndex, pageModeOf, reelSeedOf, reelVisitorState, shouldLoadMoreReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
 import { chromeYields } from '@/lib/view/chrome-yields';
 import { sceneYieldOf, writingSceneScale, yieldingScene } from '@/lib/view/scene-yields';
@@ -345,7 +345,7 @@ export default function ReelsScreen() {
   const loading = seedPending || (!visitor && count === 0 && reels.data === undefined && !reels.isError && !coldOffline);
   const invitation = useVisitorInvitation({
     kind: 'reel',
-    state: count > 0 ? 'served' : seed === undefined || seedRefused ? 'refused' : 'pending',
+    state: reelVisitorState({ count, hasSeed: seed !== undefined, seedRefused }),
   });
   const ask = invitation.ask;
 

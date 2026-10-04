@@ -12,6 +12,7 @@ import {
   playbackIntentOf,
   reelSeedOf,
   reelDisplayOf,
+  reelVisitorState,
   shouldLoadMoreReels,
 } from './thread';
 
@@ -185,5 +186,26 @@ describe('reelSeedOf — les deux portes d’un réel nommé', () => {
     expect(reelSeedOf({ params: {}, search: noSearch })).toBeUndefined();
     expect(reelSeedOf({ params: { post: '' }, search: noSearch })).toBeUndefined();
     expect(reelSeedOf({ params: {}, search: new URLSearchParams('seed=') })).toBeUndefined();
+  });
+});
+
+/* #9172 — ce que l'invitation d'un VISITEUR dit des réels. La passerelle ne
+   sert aucun fil de réels sans compte (`scope=reels`) : sans réel NOMMÉ, il n'y
+   a rien à montrer — et rien n'est refusé non plus. */
+describe('reelVisitorState', () => {
+  test('un réel peint est servi, l’invitation se pose par-dessus', () => {
+    expect(reelVisitorState({ count: 1, hasSeed: true, seedRefused: false })).toBe('served');
+  });
+
+  test('un réel nommé en lecture attend, même sur un réseau lent', () => {
+    expect(reelVisitorState({ count: 0, hasSeed: true, seedRefused: false })).toBe('pending');
+  });
+
+  test('un réel nommé que la passerelle refuse est refusé', () => {
+    expect(reelVisitorState({ count: 0, hasSeed: true, seedRefused: true })).toBe('refused');
+  });
+
+  test('`/reels` sans identifiant invite à rejoindre, jamais « contenu indisponible »', () => {
+    expect(reelVisitorState({ count: 0, hasSeed: false, seedRefused: false })).toBe('invite');
   });
 });
