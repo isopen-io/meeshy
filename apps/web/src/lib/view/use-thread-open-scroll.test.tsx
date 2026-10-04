@@ -51,11 +51,17 @@ function Hote({
   unreadBoundary,
   jumps,
   anchor,
+  placed = PLACED,
+  followTail,
+  pins,
 }: {
   readonly ready: boolean;
   readonly unreadBoundary: UnreadBoundarySnapshot;
   readonly jumps: Jump[];
   readonly anchor?: { readonly messageId: string; readonly anchored: string[] };
+  readonly placed?: readonly PlacedLike[];
+  readonly followTail?: boolean;
+  readonly pins?: { count: number };
 }) {
   const scroller = useRef<HTMLElement | null>(null);
   const virtualizer = useRef<Pick<Virtualizer<HTMLElement, Element>, 'scrollToIndex'>>({
@@ -67,11 +73,14 @@ function Hote({
   useThreadOpenScroll({
     scroller,
     conversationId: 'c-non-lus',
-    placed: PLACED,
+    placed,
     unreadBoundary,
     ready,
     virtualizer: virtualizer.current,
-    onProgrammaticScroll: () => {},
+    onProgrammaticScroll: () => {
+      if (pins !== undefined) pins.count += 1;
+    },
+    ...(followTail !== undefined ? { followTail } : {}),
     ...(anchor !== undefined ? { anchorMessageId: anchor.messageId, onAnchor: (id: string) => anchor.anchored.push(id) } : {}),
   });
 
@@ -122,5 +131,34 @@ describe('useThreadOpenScroll — une ouverture ancrée remet le message au saut
 
     expect(anchored).toEqual(['m-1']);
     expect(jumps).toEqual([]);
+  });
+});
+
+/**
+ * #7420 — UN FIL ANCRÉ AUTOUR D'UN MESSAGE NE SUIT PAS SA QUEUE. Sa queue y
+ * change parce que la fenêtre arrive, s'étend vers le présent ou le rejoint —
+ * jamais parce qu'un message vient d'arriver : s'ancrer en bas arracherait le
+ * lecteur au message qu'il est venu lire. Revenu au présent, l'ancrage en bas
+ * reprend la main.
+ */
+describe('useThreadOpenScroll — la queue d’un fil ancré ne se suit pas (#7420)', () => {
+  const nextFrames = () =>
+    new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  const withTail = (id: string): readonly PlacedLike[] => [...PLACED, { message: { id } }];
+
+  test('ancré : la queue qui change ne ramène pas en bas ; revenu au présent, si', async () => {
+    const jumps: Jump[] = [];
+    const pins = { count: 0 };
+    const host = await mounter.mount(<Hote ready unreadBoundary={null} jumps={jumps} pins={pins} />);
+    await nextFrames();
+    expect(pins.count).toBe(1);
+
+    await mounter.rerender(host, <Hote ready unreadBoundary={null} jumps={jumps} pins={pins} placed={withTail('m-4')} followTail={false} />);
+    await nextFrames();
+    expect(pins.count).toBe(1);
+
+    await mounter.rerender(host, <Hote ready unreadBoundary={null} jumps={jumps} pins={pins} placed={withTail('m-5')} followTail />);
+    await nextFrames();
+    expect(pins.count).toBe(2);
   });
 });

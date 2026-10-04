@@ -83,6 +83,7 @@ const HOOK_NAMES = [
   'useEphemeralDestruction',
   'useLivingMessages',
   'useOlderMessages',
+  'useNewerMessages',
   'useReadTracking',
   'useAfterReadConsumption',
   'useEngagementRevalidation',

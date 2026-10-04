@@ -115,6 +115,13 @@ describe('persistence — les données d’administration restent en mémoire', 
     expect(persistableQuery({ state: { status: 'success' }, queryKey: ['conversations'] })).toBe(true);
     expect(persistableQuery({ state: { status: 'error' }, queryKey: ['conversations'] })).toBe(false);
   });
+
+  /* #7420 — la fenêtre autour d'un message est un moment de navigation : elle
+     ne survit pas au rechargement, le présent du fil, si. */
+  test('la fenêtre ancrée d’un fil reste en mémoire ; le présent du fil se persiste', () => {
+    expect(persistableQuery({ state: { status: 'success' }, queryKey: ['conversations', 'c-1', 'messages'] })).toBe(true);
+    expect(persistableQuery({ state: { status: 'success' }, queryKey: ['conversations', 'c-1', 'messages', 'around', 'm-1'] })).toBe(false);
+  });
 });
 
 describe('persistence — round trip', () => {

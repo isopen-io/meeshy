@@ -79,14 +79,47 @@ export async function loadMessages(
     }
     return { ok: true, data: page };
   }
-  const query = new URLSearchParams({
-    limit: String(MESSAGES_LIMIT),
-    ...(params.before !== undefined ? { before: params.before } : {}),
+  const served = await requestMessageRows({
+    ...params,
+    query: { limit: String(MESSAGES_LIMIT), ...(params.before !== undefined ? { before: params.before } : {}) },
   });
+  if (!served.ok) return served;
+  return {
+    ok: true,
+    data: {
+      messages: [...served.data.rows].reverse(),
+      hasOlder: served.data.hasMore,
+      /* LA MOITIÉ JETÉE (#6972) — `cursorPagination` était lu pour son SEUL
+         `hasMore`, et `nextCursor` — la valeur à renvoyer en `before` —
+         mourait ici. Le fil savait donc qu'un historique existait, sans
+         jamais pouvoir le demander. */
+      nextCursor: served.data.nextCursor,
+    },
+  };
+}
+
+/** Les rangées d'une page du fil, DANS L'ORDRE SERVI, et ce que la passerelle
+ * dit autour d'elles — `cursorPagination` et, en fenêtre `around`, `hasNewer`.
+ * Le SEUL site qui lit la réponse de `GET …/messages` : `loadMessages` et la
+ * fenêtre ancrée (`messages-window.ts`, #7420) n'en font que l'ordre. */
+export type ServedMessageRows = {
+  readonly rows: readonly Message[];
+  readonly hasMore: boolean;
+  readonly nextCursor: string | null;
+  readonly hasNewer: boolean;
+};
+
+export async function requestMessageRows(
+  params: ConversationsDeps & {
+    readonly conversationId: string;
+    readonly query: Readonly<Record<string, string>>;
+    readonly signal?: AbortSignal;
+  },
+): Promise<ApiResult<ServedMessageRows>> {
   const mineBefore = snapshotMine();
   const result = await params.transport.request<readonly Message[]>({
     method: 'GET',
-    path: `${conversationsEndpoints.byIdMessages(params.conversationId)}?${query.toString()}`,
+    path: `${conversationsEndpoints.byIdMessages(params.conversationId)}?${new URLSearchParams(params.query).toString()}`,
     ...(params.signal !== undefined ? { signal: params.signal } : {}),
   });
   if (!result.ok) return result;
@@ -99,13 +132,10 @@ export async function loadMessages(
       /* UNE VUE UNIQUE DÉJÀ OUVERTE PAR MOI ARRIVE PURGÉE (#7580) — même si
          une passerelle antérieure à #7578 sert encore son contenu : rien
          n'en atteint le cache persisté. */
-      messages: [...result.data].reverse().map((message) => sealedIfOpened(withSenderAccount(message))),
-      hasOlder: result.cursorPagination?.hasMore === true,
-      /* LA MOITIÉ JETÉE (#6972) — `cursorPagination` était lu pour son SEUL
-         `hasMore`, et `nextCursor` — la valeur à renvoyer en `before` —
-         mourait ici. Le fil savait donc qu'un historique existait, sans
-         jamais pouvoir le demander. */
+      rows: result.data.map((message) => sealedIfOpened(withSenderAccount(message))),
+      hasMore: result.cursorPagination?.hasMore === true,
       nextCursor: result.cursorPagination?.nextCursor ?? null,
+      hasNewer: result.hasNewer === true,
     },
   };
 }
@@ -210,10 +240,24 @@ export function patchThreadMessages(
   conversationId: string,
   updater: ThreadMessagesUpdater,
 ): void {
-  queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId), (data) => {
+  queryClient.setQueriesData<MessagesInfiniteData>({ queryKey: messagesQueryKey(conversationId) }, (data) => {
     if (data === undefined || !Array.isArray(data.pages)) return data;
     return { ...data, pages: data.pages.map((page) => ({ ...page, messages: updater(page.messages) })) };
   });
+}
+
+/**
+ * LES FENÊTRES DU FIL (#7420) — le présent (`messagesQueryKey`) ET les
+ * fenêtres ancrées autour d'un message (`messages-window.ts`), qui vivent sous
+ * le MÊME préfixe : une réaction, une traduction ou une consommation reçue
+ * pendant qu'on lit un message ancien doit atteindre la rangée qu'on lit.
+ * C'est pourquoi `patchThreadMessages` écrit par PRÉFIXE (`setQueriesData`).
+ */
+function threadWindowsOf(queryClient: QueryClient, conversationId: string): readonly MessagesInfiniteData[] {
+  return queryClient
+    .getQueriesData<MessagesInfiniteData>({ queryKey: messagesQueryKey(conversationId) })
+    .map(([, data]) => data)
+    .filter((data): data is MessagesInfiniteData => data !== undefined && Array.isArray(data.pages));
 }
 
 /**
@@ -238,6 +282,17 @@ export function upsertThreadMessage(
   const cid = message.clientMessageId;
   const matches = (m: Message): boolean =>
     m.id === message.id || (cid !== undefined && (m as { readonly clientMessageId?: string }).clientMessageId === cid);
+
+  /* LA FENÊTRE ANCRÉE (#7420) n'accueille que des REMPLACEMENTS : un message
+     neuf est plus récent qu'elle, il appartient au présent — l'y poser
+     ouvrirait un trou entre sa dernière page et lui. */
+  queryClient.setQueriesData<MessagesInfiniteData>(
+    { queryKey: messagesQueryKey(conversationId), predicate: (query) => query.queryKey.length > 3 },
+    (data) => {
+      if (data === undefined || !Array.isArray(data.pages) || !data.pages.some((page) => page.messages.some(matches))) return data;
+      return { ...data, pages: data.pages.map((page) => ({ ...page, messages: page.messages.map((m) => (matches(m) ? message : m)) })) };
+    },
+  );
 
   queryClient.setQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId), (data) => {
     if (data === undefined || !Array.isArray(data.pages)) return data;
@@ -299,11 +354,11 @@ export function findCachedThreadMessage(
   conversationId: string,
   messageId: string,
 ): Message | undefined {
-  const data = queryClient.getQueryData<MessagesInfiniteData>(messagesQueryKey(conversationId));
-  if (data === undefined || !Array.isArray(data.pages)) return undefined;
-  for (const page of data.pages) {
-    const found = page.messages.find((m) => m.id === messageId);
-    if (found !== undefined) return found;
+  for (const data of threadWindowsOf(queryClient, conversationId)) {
+    for (const page of data.pages) {
+      const found = page.messages.find((m) => m.id === messageId);
+      if (found !== undefined) return found;
+    }
   }
   return undefined;
 }

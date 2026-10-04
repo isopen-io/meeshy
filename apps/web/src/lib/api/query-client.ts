@@ -148,8 +148,12 @@ export function persistableQuery(query: {
   readonly state: { readonly status: string };
   readonly queryKey: readonly unknown[];
 }): boolean {
-  return query.state.status === 'success' && !estClefNonPersistable(query.queryKey);
+  return query.state.status === 'success' && !estClefNonPersistable(query.queryKey) && !estFenetreAncree(query.queryKey);
 }
+
+/** La fenêtre autour d'un message (#7420, `messages-window.ts`) — un moment de
+ * navigation, jamais rouvert au rechargement : seul le présent du fil se persiste. */
+const estFenetreAncree = (key: readonly unknown[]): boolean => key[2] === 'messages' && key.length > 3;
 
 export type CreateAppQueryClientOptions = {
   readonly storage?: StorageLike;
