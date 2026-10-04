@@ -20,5 +20,8 @@ console.log('DIALOGS', JSON.stringify(dialogs));
 console.log('VIDEOS', await page.locator('video').count(), 'IMGS', await page.locator('img').count());
 console.log('TEXT', (await page.locator('body').innerText()).replace(/\s+/g, ' ').slice(0, 1500));
 for (const a of api) console.log('API', a);
+await page.getByRole('button',{name:/sign in/i}).or(page.getByRole('link',{name:/sign in/i})).first().click().catch(e=>console.log('CLICK',e.message));
+await page.waitForLoadState('networkidle').catch(()=>{});
+console.log('AFTER_SIGNIN_URL', page.url());
 await page.screenshot({ path: 'probe.png', fullPage: false });
 await browser.close();
