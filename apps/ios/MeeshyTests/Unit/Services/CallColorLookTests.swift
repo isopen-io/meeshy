@@ -113,7 +113,17 @@ final class CallColorLookTests: XCTestCase {
         let pixel = try XCTUnwrap(buffer)
         CVPixelBufferLockBaseAddress(pixel, [])
         let base = try XCTUnwrap(CVPixelBufferGetBaseAddress(pixel))
-        memset(base, 128, CVPixelBufferGetBytesPerRow(pixel) * 8)
+        let row = CVPixelBufferGetBytesPerRow(pixel)
+        let bytes = base.assumingMemoryBound(to: UInt8.self)
+        for y in 0 ..< 8 {
+            for x in 0 ..< 8 {
+                let texel = bytes + y * row + x * 4
+                texel[0] = 128
+                texel[1] = 128
+                texel[2] = 128
+                texel[3] = 255
+            }
+        }
         CVPixelBufferUnlockBaseAddress(pixel, [])
         return pixel
     }
