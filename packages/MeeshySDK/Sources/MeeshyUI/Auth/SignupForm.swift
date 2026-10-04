@@ -207,23 +207,39 @@ public struct SignupForm: Equatable {
             && usernameRefusal == nil
     }
 
-    /// Un numéro FOURNI doit être plausible (#6479) ; un champ VIDE reste
-    /// valide — il n'est pas requis. Troisième champ à porter cette forme,
-    /// après le mot de passe et le nom affiché.
-    public var isPhoneValid: Bool { PhonePlausibility.isPlausible(phoneDigits) }
+    /// Pourquoi le numéro ne permet pas d'avancer : ABSENT (#9343), ou l'un des
+    /// trois motifs d'implausibilité de la loi partagée (#6479). Miroir de
+    /// `SignupPhoneRefusal` (`apps/web/src/lib/signup-form.ts`).
+    ///
+    /// `missing` vit ICI et pas dans `PhonePlausibility` : la loi partagée tient
+    /// le vide pour plausible parce que la PASSERELLE accepte une inscription
+    /// sans numéro, et doit continuer de l'accepter. L'exigence est celle de
+    /// l'écran seul.
+    public enum PhoneRefusal: Equatable, Sendable {
+        case missing
+        case implausible(PhonePlausibility.Refusal)
+    }
 
     /// Le MOTIF du refus, pour que l'écran dise quoi corriger — « numéro
     /// invalide » n'apprend rien à qui a tapé le sien de travers.
-    public var phoneRefusal: PhonePlausibility.Refusal? { PhonePlausibility.refusal(phoneDigits) }
+    public var phoneRefusal: PhoneRefusal? {
+        if normalizedPhoneDigits.isEmpty { return .missing }
+        return PhonePlausibility.refusal(phoneDigits).map(PhoneRefusal.implausible)
+    }
 
-    /// Le bouton s'active dès que l'ADRESSE est valide — et que le nom affiché,
-    /// le mot de passe et le NUMÉRO, s'ils ont été tapés, tiennent leurs bornes
-    /// (#6441, #6479).
+    /// Un numéro est DONNÉ quand il est présent ET plausible — la condition pour
+    /// passer la phase du téléphone et pour s'inscrire (#9343).
+    public var isPhoneValid: Bool { phoneRefusal == nil }
+
+    /// Le bouton s'active quand l'ADRESSE est valide ET le NUMÉRO plausible — et
+    /// que le nom affiché et le mot de passe, s'ils ont été tapés, tiennent
+    /// leurs bornes (#6441, #6479, #9343).
     ///
-    /// L'adresse est le SEUL champ requis, exactement comme le
-    /// `required: ['email']` du schéma partagé : ni le nom, ni le téléphone, ni
-    /// le mot de passe ne sont exigés par la passerelle. Rien ici ne dépend du
-    /// réseau — aucun appel de disponibilité ne précède l'envoi.
+    /// Le numéro est requis par l'ÉCRAN, pas par la passerelle (directive
+    /// porteur 2026-10-04) : le schéma partagé garde `required: ['email']`, et
+    /// une inscription par adresse seule — API, anciennes versions publiées —
+    /// crée toujours le compte. Rien ici ne dépend du réseau — aucun appel de
+    /// disponibilité ne précède l'envoi.
     public var canSubmit: Bool {
         isDisplayNameValid && isEmailValid && isPasswordValid && isPhoneValid && usernameRefusal == nil
     }

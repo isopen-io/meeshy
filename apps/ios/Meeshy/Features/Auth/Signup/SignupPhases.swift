@@ -8,8 +8,8 @@ import Foundation
 ///
 /// | phase | ce qu'elle rend | ce qui l'ouvre |
 /// |---|---|---|
-/// | `phone` | le numéro en verre liquide, le pays, « Continuer avec l'e-mail seulement » | rien — dès l'ouverture |
-/// | `email` | l'adresse | un numéro PLAUSIBLE, ou passé |
+/// | `phone` | le numéro en verre liquide, le pays | rien — dès l'ouverture |
+/// | `email` | l'adresse | un numéro présent et PLAUSIBLE — il ne se passe plus (#9343) |
 /// | `card` | la carte d'identité : nom affiché, @pseudo, refus, « Valider mon compte maintenant » | une adresse cohérente |
 /// | `code` | le code à 6 chiffres, dans la carte | le compte créé par la carte |
 /// | `verified` | le feu d'artifice ; « S'inscrire » devient « Parler aux autres » | le code juste, ou le lien ouvert |
@@ -19,8 +19,8 @@ nonisolated struct SignupProgress: Equatable, Sendable {
 
     static let initial = SignupProgress(emailShown: false, cardShown: false)
 
-    func advanced(phoneGiven: Bool, phoneSkipped: Bool, emailValid: Bool) -> SignupProgress {
-        let email = emailShown || phoneGiven || phoneSkipped
+    func advanced(phoneGiven: Bool, emailValid: Bool) -> SignupProgress {
+        let email = emailShown || phoneGiven
         return SignupProgress(emailShown: email, cardShown: cardShown || (email && emailValid))
     }
 }
@@ -65,9 +65,11 @@ nonisolated enum SignupPhases {
         }
     }
 
-    /// L'alerte « sans numéro » (#8040) se tait quand on a CHOISI l'e-mail
-    /// seul : le lien discret de la phase 1 était déjà la question.
-    static func shouldNudgePhone(hasPhone: Bool, phoneSkipped: Bool) -> Bool {
-        !hasPhone && !phoneSkipped
+    /// Le refus du numéro se dit-il sous le champ ? (#9343) — jamais pendant
+    /// la première frappe, dès que le champ est QUITTÉ avec une saisie, qu'un
+    /// envoi est tenté, ou qu'un numéro donné est effacé (l'adresse, parue, ne
+    /// se referme pas). Miroir web : `phoneRefusalShown` (`signup-phases.ts`).
+    static func phoneRefusalShown(refused: Bool, checked: Bool, progress: SignupProgress) -> Bool {
+        refused && (checked || progress.emailShown)
     }
 }

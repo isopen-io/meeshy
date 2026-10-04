@@ -17,6 +17,7 @@ final class SignupFormUsernameTests: XCTestCase {
             username: username,
             displayName: "Awa",
             email: "awa@example.com",
+            phoneDigits: "0612345678",
             password: "motdepasse",
             country: CountryPicker.countries[0],
             systemLanguage: "fr",

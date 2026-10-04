@@ -14,8 +14,8 @@ import MeeshyUI
 /// bascule la session de tout le processus de test.
 @MainActor
 protocol SignupRegistering: AnyObject {
-    /// Crée le compte et APPLIQUE la session — ou, sans numéro de téléphone,
-    /// rend l'adresse à vérifier : le compte n'est pas encore actif (#8055).
+    /// Crée le compte et APPLIQUE la session — ou rend l'adresse à vérifier
+    /// quand la passerelle ne sert aucune session (revendication #8214).
     /// Lève :
     /// - `MeeshyError.rejected(APIRejection)` — refus typé par champ ;
     /// - `PhoneOwnershipConflict` — numéro déjà rattaché à un compte vérifié ;
@@ -113,23 +113,10 @@ enum SignupField: String, CaseIterable, Hashable {
     case password
 }
 
-// MARK: - L'alerte « sans numéro » (#8040)
-
-/// Faut-il ALERTER avant de créer le compte ? Oui quand aucun numéro n'est
-/// saisi — le numéro sécurise le compte et le récupère quand l'accès à l'adresse
-/// est perdu. Une alerte, jamais un blocage : « Continuer quand même » crée le
-/// compte sans numéro, exactement comme avant. Miroir web : `apps/web`
-/// (`signup.tsx`).
-enum SignupPhoneNudge {
-    static func shouldNudge(before form: SignupForm) -> Bool { !form.hasPhone }
-}
-
-/// Ce qu'une demande d'envoi a produit — l'écran en tire son retour haptique :
-/// une alerte n'est ni un succès ni un échec.
+/// Ce qu'une demande d'envoi a produit — l'écran en tire son retour haptique.
 enum SignupSubmitOutcome: Equatable {
     case created
     case rejected
-    case phoneNudged
 }
 
 // MARK: - ViewModel
@@ -168,12 +155,10 @@ final class SignupViewModel: ObservableObject {
     /// Les pseudos LIBRES à proposer quand celui qu'on envoyait est pris
     /// (#6479). Vide partout ailleurs.
     @Published private(set) var usernameSuggestions: [String] = []
-    /// L'alerte « sans numéro » est-elle à l'écran (#8040) ? Écrite par
-    /// l'`.alert` elle-même quand l'utilisateur répond.
-    @Published var isPhoneNudgePresented = false
-    /// L'adresse à vérifier quand le compte, créé SANS numéro, n'est pas encore
-    /// actif (#8055) : l'écran présente alors la saisie du code au lieu d'entrer
-    /// dans l'app. Le mot de passe est déjà sur le compte — il ne repart pas.
+    /// L'adresse à vérifier quand le compte n'est pas encore actif — une
+    /// revendication d'adresse (#8214) : l'écran présente alors la saisie du
+    /// code au lieu d'entrer dans l'app. Le mot de passe est déjà sur le
+    /// compte — il ne repart pas.
     @Published var pendingVerification: PendingEmailVerification?
     /// Le code et le lien de connexion PARTIS vers l'adresse déjà utilisée
     /// (#8216) : l'écran présente alors l'attente de `MagicLinkView`.
@@ -192,8 +177,9 @@ final class SignupViewModel: ObservableObject {
 
     // MARK: - Les phases (#8288)
 
-    /// « Continuer avec l'e-mail seulement » a été touché.
-    @Published private(set) var phoneSkipped = false
+    /// Le champ du numéro a été QUITTÉ avec une saisie, ou un envoi tenté : son
+    /// refus se dit désormais sous lui (#9343, `SignupPhases.phoneRefusalShown`).
+    @Published private(set) var isPhoneChecked = false
     /// Ce qui est PARU — monotone (`SignupProgress`).
     @Published private(set) var progress: SignupProgress = .initial
     /// Ce que la carte sait du compte qu'elle a créé.
@@ -242,8 +228,9 @@ final class SignupViewModel: ObservableObject {
 
     // MARK: - Dérivés
 
-    /// Le bouton est actif dès que nom, e-mail et mot de passe sont valides.
-    /// Rien de réseau n'entre dans cette décision.
+    /// Le bouton est actif dès que l'adresse ET le numéro sont valides (#9343),
+    /// et que ce qui a été tapé ailleurs tient ses bornes. Rien de réseau
+    /// n'entre dans cette décision.
     var canSubmit: Bool { form.canSubmit && !isSubmitting }
 
     /// Le refus du serveur d'abord ; à défaut, ce que la saisie viole DÉJÀ —
@@ -304,34 +291,47 @@ final class SignupViewModel: ObservableObject {
     }
 
     private func liveError(for field: SignupField) -> String? {
-        guard field == .username, let refusal = form.usernameRefusal else { return nil }
-        return Self.usernameRefusalMessage(refusal)
+        switch field {
+        case .username:
+            return form.usernameRefusal.map(Self.usernameRefusalMessage)
+        case .phoneNumber:
+            guard let refusal = form.phoneRefusal,
+                  SignupPhases.phoneRefusalShown(refused: true, checked: isPhoneChecked, progress: progress)
+            else { return nil }
+            return Self.phoneRefusalMessage(refusal)
+        case .displayName, .email, .password:
+            return nil
+        }
+    }
+
+    // MARK: - Le numéro, requis par l'écran (#9343)
+
+    /// Le champ du numéro est QUITTÉ : une saisie implausible dit désormais son
+    /// refus. Un champ quitté VIDE ne dit rien — on peut aller choisir son pays
+    /// sans se faire gronder.
+    func notePhoneFieldLeft() {
+        guard form.hasPhone else { return }
+        isPhoneChecked = true
+    }
+
+    /// Les trois gestes qui créent un compte passent par ICI : aucun ne part
+    /// sans numéro plausible — « Ce n'est pas moi » compris, qui ne consulte pas
+    /// le bouton principal. Le refus se dit sous le champ.
+    private func refuseWithoutPhone() -> Bool {
+        guard !form.isPhoneValid else { return false }
+        isPhoneChecked = true
+        return true
     }
 
     // MARK: - Envoi
 
-    /// Le geste « Créer mon compte » : alerte d'abord si aucun numéro n'est
-    /// saisi (#8040), sinon crée le compte.
+    /// Le geste « Créer mon compte ».
     func requestSubmit() async -> SignupSubmitOutcome {
-        guard canSubmit else { return .rejected }
-        if SignupPhases.shouldNudgePhone(hasPhone: form.hasPhone, phoneSkipped: phoneSkipped) {
-            isPhoneNudgePresented = true
-            return .phoneNudged
+        guard canSubmit else {
+            _ = refuseWithoutPhone()
+            return .rejected
         }
         return await submit() ? .created : .rejected
-    }
-
-    /// « Ajouter mon numéro » : ferme l'alerte, n'envoie rien, et rend le
-    /// champ à focaliser.
-    func addPhoneInstead() -> SignupField {
-        isPhoneNudgePresented = false
-        return .phoneNumber
-    }
-
-    /// « Continuer quand même » : le compte naît sans numéro.
-    func continueWithoutPhone() async -> Bool {
-        isPhoneNudgePresented = false
-        return await submit()
     }
 
     /// Crée le compte. `true` quand le compte est créé — l'appelant enchaîne
@@ -339,6 +339,7 @@ final class SignupViewModel: ObservableObject {
     /// appliquée, vers la saisie du code si `pendingVerification` est posé.
     @discardableResult
     func submit(claimingEmail: Bool = false) async -> Bool {
+        if refuseWithoutPhone() { return false }
         guard form.canSubmit, !isSubmitting else { return false }
 
         isSubmitting = true
@@ -401,16 +402,9 @@ final class SignupViewModel: ObservableObject {
         )
     }
 
-    /// « Continuer avec l'e-mail seulement » — l'adresse paraît.
-    func skipPhone() {
-        phoneSkipped = true
-        advanceProgress()
-    }
-
     private func advanceProgress() {
         let next = progress.advanced(
-            phoneGiven: form.hasPhone && form.isPhoneValid,
-            phoneSkipped: phoneSkipped,
+            phoneGiven: form.isPhoneValid,
             emailValid: form.isEmailValid
         )
         if next != progress { progress = next }
@@ -420,6 +414,7 @@ final class SignupViewModel: ObservableObject {
     /// et fait paraître le code dans la carte. `true` quand le compte existe.
     @discardableResult
     func validateNow() async -> Bool {
+        if refuseWithoutPhone() { return false }
         guard form.canSubmit, !isSubmitting, !isValidating, case .editing = card else { return false }
         isValidating = true
         clearFeedback()
@@ -654,10 +649,39 @@ final class SignupViewModel: ObservableObject {
         )
     }
 
+    /// CE QUE LE REFUS DU NUMÉRO DIT (#9343) — les mêmes mots que le web
+    /// (`signup.phone.required` / `.tooShort` / `.implausible`). Les deux motifs
+    /// de remplissage se corrigent de la même façon : vérifier son numéro.
+    static func phoneRefusalMessage(_ refusal: SignupForm.PhoneRefusal) -> String {
+        switch refusal {
+        case .missing:
+            return String(
+                localized: "auth.signup.phone.required",
+                defaultValue: "Saisissez votre numéro de téléphone pour continuer.",
+                bundle: .main
+            )
+        case .implausible(.tooShort):
+            return String(
+                format: String(
+                    localized: "auth.signup.phone.tooShort",
+                    defaultValue: "Ce numéro est trop court : %lld chiffres au moins.",
+                    bundle: .main
+                ),
+                PhonePlausibility.minDigits
+            )
+        case .implausible(.identicalRun), .implausible(.repeatedPattern):
+            return String(
+                localized: "auth.signup.phone.implausible",
+                defaultValue: "Ce numéro ne semble pas réel : vérifiez-le.",
+                bundle: .main
+            )
+        }
+    }
+
     /// Le seul refus dont l'écran connaît le REMÈDE, et il le dit.
     static let phoneOwnershipConflictMessage = String(
         localized: "auth.signup.error.phoneOwned",
-        defaultValue: "Ce numéro est déjà rattaché à un compte. Laissez-le vide pour continuer.",
+        defaultValue: "Ce numéro est déjà rattaché à un compte. Saisissez-en un autre, ou connectez-vous.",
         bundle: .main
     )
 

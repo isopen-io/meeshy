@@ -256,9 +256,9 @@ final class SignupViewAccessibilityTests: XCTestCase {
         return String(end == nil ? rest : rest[..<end!.lowerBound])
     }
 
-    /// Il n'est ni requis, ni présenté comme un choix : le NOMMER facultatif
-    /// fait croire qu'il y a une décision à prendre. Vide, il est simplement
-    /// absent de la charge.
+    /// Il n'est jamais présenté comme un choix : le NOMMER facultatif ferait
+    /// croire qu'il y a une décision à prendre — et depuis #9343 il n'y en a
+    /// plus, l'écran l'exige (la passerelle, elle, ne l'exige pas).
     ///
     /// **La règle ne vaut PAS pour le mot de passe** (#6424), et la différence
     /// est de nature : un numéro absent ne change rien à ce qui suit, un mot de
