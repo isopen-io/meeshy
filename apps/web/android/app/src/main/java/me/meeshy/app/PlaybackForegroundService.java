@@ -8,6 +8,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.IBinder;
 import android.util.Log;
@@ -22,13 +23,16 @@ import android.util.Log;
  *
  * Demarre et arrete par `MeeshyPlaybackPlugin`, que
  * `src/lib/view/shell-playback.ts` pilote tant qu'un `<audio>` de la page
- * joue ; sa notification discrete rouvre l'application.
+ * joue ; sa notification discrete rouvre l'application, et sa « Pause »
+ * (#9301) — celle de la notification media de Chrome Android — est remise a
+ * la page, qui met ses `<audio>` en pause et rend ainsi la lecture.
  */
 public class PlaybackForegroundService extends Service {
 
     private static final String CHANNEL_PLAYBACK = "meeshy_playback";
     private static final int NOTIFICATION_ID = 0x4d50; // "MP"
     private static final String TAG = "MeeshyPlayback";
+    static final String ACTION_PAUSE = "me.meeshy.app.playback.PAUSE";
 
     static void start(Context context) {
         Intent intent = new Intent(context, PlaybackForegroundService.class);
@@ -50,6 +54,11 @@ public class PlaybackForegroundService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && ACTION_PAUSE.equals(intent.getAction())) {
+            // Une page sans ecoute (plus ancienne que la Pause) : rendre la main.
+            if (!MeeshyPlaybackPlugin.pauseRequested()) stopSelf();
+            return START_NOT_STICKY;
+        }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(NOTIFICATION_ID, notification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK);
@@ -83,6 +92,12 @@ public class PlaybackForegroundService extends Service {
             new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
+        PendingIntent pause = PendingIntent.getService(
+            this,
+            NOTIFICATION_ID + 1,
+            new Intent(this, PlaybackForegroundService.class).setAction(ACTION_PAUSE),
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
         Notification.Builder builder;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationManager manager = getSystemService(NotificationManager.class);
@@ -104,7 +119,13 @@ public class PlaybackForegroundService extends Service {
             .setCategory(Notification.CATEGORY_SERVICE)
             .setOngoing(true)
             .setShowWhen(false)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(open)
+            .addAction(new Notification.Action.Builder(
+                Icon.createWithResource(this, android.R.drawable.ic_media_pause),
+                getString(R.string.playback_pause),
+                pause
+            ).build())
             .build();
     }
 }

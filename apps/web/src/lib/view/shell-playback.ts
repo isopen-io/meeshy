@@ -12,12 +12,17 @@ import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native
  * pause quand la page est masquée (`use-reel-playback.ts`,
  * `use-story-hidden-tab-pause.ts`), comme dans Chrome Android.
  *
+ * La notification de la coque porte une « Pause » (#9301), comme la
+ * notification média de Chrome Android : la coque la remet à la page
+ * (`pauseRequested`), qui met en pause chaque `<audio>` qui joue.
+ *
  * Un navigateur, ou une coque construite avant le plugin, reçoit une prise
  * sans effet ; un refus de la coque ne remonte jamais à la lecture.
  */
 export type PlaybackHold = {
   readonly hold: () => void;
   readonly release: () => void;
+  readonly onPauseRequested: (listener: () => void) => () => void;
 };
 
 const PLUGIN = 'MeeshyPlayback';
@@ -30,8 +35,24 @@ function geste(coque: CoqueNative | undefined, methode: string): () => void {
   };
 }
 
+function ecoute(coque: CoqueNative | undefined, evenement: string): PlaybackHold['onPauseRequested'] {
+  const declare = coque?.PluginHeaders?.some((header) => header.name === PLUGIN) === true;
+  const addListener = coque?.addListener;
+  if (!declare || typeof addListener !== 'function') return () => () => {};
+  return (listener) => {
+    const handle = addListener(PLUGIN, evenement, () => listener());
+    return () => {
+      void handle.remove().catch(() => {});
+    };
+  };
+}
+
 export function shellPlaybackHold(coque: CoqueNative | undefined = coqueCourante()): PlaybackHold {
-  return { hold: geste(coque, 'holdPlayback'), release: geste(coque, 'releasePlayback') };
+  return {
+    hold: geste(coque, 'holdPlayback'),
+    release: geste(coque, 'releasePlayback'),
+    onPauseRequested: ecoute(coque, 'pauseRequested'),
+  };
 }
 
 type MediaEvents = Pick<Document, 'addEventListener' | 'removeEventListener'>;
@@ -44,8 +65,8 @@ const STOPS = ['pause', 'ended', 'error', 'emptied'] as const;
  * tenue dès qu'un audio joue, rendue quand le DERNIER s'arrête.
  */
 export function holdWhileAudioPlays(target: MediaEvents, hold: PlaybackHold): () => void {
-  const playing = new Set<EventTarget>();
-  const audioOf = (event: Event): EventTarget | null =>
+  const playing = new Set<HTMLAudioElement>();
+  const audioOf = (event: Event): HTMLAudioElement | null =>
     event.target instanceof HTMLAudioElement ? event.target : null;
   const onPlaying = (event: Event): void => {
     const audio = audioOf(event);
@@ -60,7 +81,11 @@ export function holdWhileAudioPlays(target: MediaEvents, hold: PlaybackHold): ()
   };
   target.addEventListener('playing', onPlaying, true);
   for (const type of STOPS) target.addEventListener(type, onStop, true);
+  const stopPauseRequests = hold.onPauseRequested(() => {
+    for (const audio of [...playing]) audio.pause();
+  });
   return () => {
+    stopPauseRequests();
     target.removeEventListener('playing', onPlaying, true);
     for (const type of STOPS) target.removeEventListener(type, onStop, true);
     if (playing.size > 0) hold.release();

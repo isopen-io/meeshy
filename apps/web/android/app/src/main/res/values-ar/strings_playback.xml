@@ -5,4 +5,5 @@
     <string name="playback_channel_name">تشغيل الصوت</string>
     <string name="playback_ongoing">جارٍ تشغيل الصوت</string>
     <string name="playback_return">المس للعودة إلى Meeshy</string>
+    <string name="playback_pause">إيقاف مؤقت</string>
 </resources>

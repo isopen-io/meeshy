@@ -1,5 +1,6 @@
 package me.meeshy.app;
 
+import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
@@ -15,6 +16,24 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "MeeshyPlayback")
 public class MeeshyPlaybackPlugin extends Plugin {
 
+    private static volatile MeeshyPlaybackPlugin live;
+
+    /**
+     * La « Pause » de la notification (#9301) remise a la page. Rend `false`
+     * quand aucune page ne l'ecoute : le service se retire alors de lui-meme.
+     */
+    static boolean pauseRequested() {
+        MeeshyPlaybackPlugin plugin = live;
+        if (plugin == null || !plugin.hasListeners("pauseRequested")) return false;
+        plugin.notifyListeners("pauseRequested", new JSObject());
+        return true;
+    }
+
+    @Override
+    public void load() {
+        live = this;
+    }
+
     @PluginMethod
     public void holdPlayback(PluginCall call) {
         PlaybackForegroundService.start(getContext());
@@ -29,6 +48,7 @@ public class MeeshyPlaybackPlugin extends Plugin {
 
     @Override
     protected void handleOnDestroy() {
+        if (live == this) live = null;
         PlaybackForegroundService.stop(getContext());
         super.handleOnDestroy();
     }
