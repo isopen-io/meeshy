@@ -83,7 +83,10 @@ async function join(params: {
   const countryWrites = participantUpdate.mock.calls
     .map(([arg]) => arg)
     .filter((arg) => 'joinCountry' in arg.data);
-  return { outcome, lookupCountry, countryWrites, labels: executeur.labels };
+  const databaseCalls = Object.values(prisma)
+    .flatMap((delegate) => Object.values(delegate as Record<string, jest.Mock>))
+    .flatMap((method) => method.mock.calls);
+  return { outcome, lookupCountry, countryWrites, databaseCalls, labels: executeur.labels };
 }
 
 describe('pays d’une arrivée par lien d’invitation', () => {
@@ -106,6 +109,17 @@ describe('pays d’une arrivée par lien d’invitation', () => {
     const { countryWrites } = await join({ country: 'FR' });
 
     expect(JSON.stringify(countryWrites)).not.toContain(ARRIVAL_IP);
+  });
+
+  it.each([
+    ['un invité', false],
+    ['un compte', true],
+  ])('%s : aucun appel à la base ne porte son IP, ni sur le participant ni dans sa session (#9342)', async (_label, registered) => {
+    const { outcome, databaseCalls } = await join({ registered, country: 'FR' });
+
+    expect(outcome.kind).toBe('joined');
+    expect(databaseCalls.length).toBeGreaterThan(0);
+    expect(JSON.stringify(databaseCalls)).not.toContain(ARRIVAL_IP);
   });
 
   it('la géolocalisation part APRÈS la réponse — jamais sur le chemin de la jointure', async () => {
