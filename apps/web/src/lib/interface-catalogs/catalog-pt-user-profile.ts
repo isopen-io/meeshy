@@ -54,7 +54,7 @@ const ptUserProfile = {
   'userProfile.presence.beforeYesterdayAt': 'Visto anteontem às {time}',
   'userProfile.presence.dateAt': 'Visto em {date} às {time}',
   'userProfile.tabs.label': 'Secções do perfil',
-  'userProfile.tab.posts': 'Publicações',
+  'userProfile.tab.posts': 'Posts',
   'userProfile.tab.conversations': 'Conversas',
   'userProfile.tab.details': 'Detalhes',
   'userProfile.tab.activity': 'Atividade',

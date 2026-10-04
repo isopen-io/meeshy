@@ -18,6 +18,11 @@ import { navigate, useOptionalRoute } from '@/lib/router';
  * avance avec la flèche gauche —, Début et Fin vont aux extrémités, et un
  * onglet qui prend le focus s'ouvre. La sélection ne repose jamais sur la
  * seule couleur : le filet et la graisse la portent aussi.
+ *
+ * **Le LIBELLÉ actif est à l'encre, pas à l'accent** — écart assumé avec iOS :
+ * mesuré au gate, l'accent tombe à 4,22:1 en sombre et la marque à 4,47:1 en
+ * clair, sous l'AA d'un libellé de 15 px. L'accent garde l'icône et le filet,
+ * qui ne sont pas du texte.
  */
 
 const TAB_COPY = {
@@ -63,7 +68,7 @@ export function ProfileTabs<T extends ProfileTabId>({
       role="tablist"
       aria-label={translate(language, 'userProfile.tabs.label')}
       data-profile-tabs
-      className="sticky top-0 z-10 -mx-4 flex px-4"
+      className="sticky top-0 z-10 -mx-4 flex min-w-0 px-4"
       style={{
         backgroundColor: 'var(--color-ios-surface)',
         borderBottom: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 22%, transparent)',
@@ -87,14 +92,14 @@ export function ProfileTabs<T extends ProfileTabId>({
             data-profile-tab={tab}
             onClick={() => onChange(tab)}
             onKeyDown={onKeyDown}
-            className="relative flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 px-1 pt-2.5 pb-3 text-label focus-visible:outline-2 focus-visible:-outline-offset-2"
+            className="relative flex min-h-11 min-w-0 flex-1 items-center justify-center gap-1.5 px-1 pt-2.5 pb-3 text-secondary focus-visible:outline-2 focus-visible:-outline-offset-2"
             style={{
-              color: selected ? accent : 'var(--color-ios-ink-2)',
+              color: selected ? 'var(--color-ios-ink)' : 'var(--color-ios-ink-2)',
               fontWeight: selected ? 700 : 600,
               outlineColor: accent,
             }}
           >
-            <GlyphSvg glyph={copy.glyph} size={14} />
+            <GlyphSvg glyph={copy.glyph} size={14} className="shrink-0 max-[359px]:hidden" {...(selected ? { style: { color: accent } } : {})} />
             <span className="truncate">{label}</span>
             {badge === undefined ? null : (
               <span
