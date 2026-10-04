@@ -2,11 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 
 import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { AdminInterpretedBadge, AdminLanguageBadge } from '@/components/admin/badges';
+import { AdminDetailSheet } from '@/components/admin/detail-sheet';
 import { AdminEntityChip } from '@/components/admin/entity-chip';
 import { AdminFiche, AdminFicheSection, AdminIdentityHeader, AdminStatStrip } from '@/components/admin/fiche';
 import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from '@/components/admin/meta';
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
+import { AdminSummaryCard } from '@/components/admin/summary-card';
 import { AdminDeniedInline, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
 import { INK, INK2, TONE_COLOR } from '@/components/admin/tone';
 import { shareLinkStateOf } from '@/lib/admin/interpret/enums';
@@ -14,6 +16,7 @@ import { languageName, sentenceCase } from '@/lib/admin/interpret/language';
 import { personInitials, shareLinkLabel } from '@/lib/admin/interpret/labels';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
+import { useAdminOpen } from '@/lib/admin/use-admin-open';
 import {
   anonymousConversationRefOf,
   anonymousEntityOf,
@@ -109,6 +112,8 @@ function EntryLink({ fiche, language, now }: { readonly fiche: AdminAnonymousOne
   );
 }
 
+const ANONYMOUS_BLOCKS = ['permissions'] as const;
+
 export function AdminAnonymousFiche({
   participantId,
   language,
@@ -122,6 +127,9 @@ export function AdminAnonymousFiche({
 }) {
   const announcer = useLiveAnnouncer();
   const query = useQuery(adminAnonymousOneQueryOptions(deps, participantId));
+  /* Le troisième bloc — la liste des permissions — se lit en carte résumée et s'ouvre en modale
+     (spec 2026-10-04 § 3) ; la conversation et le lien d'entrée, une ligne chacun, restent en place. */
+  const blocks = useAdminOpen(ANONYMOUS_BLOCKS);
 
   if (query.isPending) return <AdminSkeleton rows={6} />;
 
@@ -227,11 +235,37 @@ export function AdminAnonymousFiche({
           <EntryLink fiche={fiche} language={language} now={moment} />
         </AdminFicheSection>
         {fiche.permissions.length === 0 ? null : (
-          <AdminFicheSection id="permissions" title={translateAdmin(language, 'admin.people.anonymous.section.permissions')}>
-            <PermissionList fiche={fiche} language={language} />
-          </AdminFicheSection>
+          <AdminSummaryCard
+            language={language}
+            id="permissions"
+            title={translateAdmin(language, 'admin.people.anonymous.section.permissions')}
+            glyph="shieldCheck"
+            values={[
+              {
+                label: translateAdmin(language, 'admin.people.anonymous.stat.permissions'),
+                value: translateAdmin(language, 'admin.people.anonymous.stat.permissionsValue', {
+                  granted: formatCount(granted, language),
+                  total: formatCount(fiche.permissions.length, language),
+                }),
+              },
+            ]}
+            sentence={translateAdmin(language, 'admin.people.anonymous.section.permissions.hint')}
+            onOpen={() => blocks.open('permissions')}
+          />
         )}
       </AdminFiche>
+      <AdminDetailSheet
+        language={language}
+        id="anonymous-permissions"
+        title={translateAdmin(language, 'admin.people.anonymous.section.permissions')}
+        open={blocks.active === 'permissions' && fiche.permissions.length > 0}
+        onClose={blocks.close}
+        inAddress={blocks.inAddress}
+      >
+        <AdminFicheSection id="permissions" title={translateAdmin(language, 'admin.people.anonymous.section.permissions')}>
+          <PermissionList fiche={fiche} language={language} />
+        </AdminFicheSection>
+      </AdminDetailSheet>
       <AdminAnnouncement text={announcer.text} />
     </div>
   );

@@ -326,15 +326,15 @@ async function main() {
     }
 
     // ------------------------------------- 3. les deux sections repliables
-    console.log('\n3. LA FICHE MEMBRE : SES ONGLETS, ET SES DEUX SECTIONS PLIENT ET DÉPLIENT');
+    console.log('\n3. LA FICHE MEMBRE : SES CARTES OUVRENT LEURS MODALES, ET SES DEUX SECTIONS PLIENT ET DÉPLIENT');
     {
       const ctx = await openContext(browser, { base, avecAgent: true });
       const { page } = ctx;
       await page.goto(`${base}/adm/users/${MEMBRE_ID}`, { waitUntil: 'load' });
       await attendre(() => present(page, `[data-admin-user="${MEMBRE_ID}"]`));
-      await attendre(() => present(page, '[data-admin-user-panel="profile"]'));
+      await attendre(() => present(page, '[data-admin-summary="profile"]'));
       await page.waitForTimeout(500);
-      await cliche(page, 'fiche-membre-profil', { fullPage: true });
+      await cliche(page, 'fiche-membre-cartes', { fullPage: true });
 
       /* LA FICHE NE PEINT PAS D'HORODATAGE BRUT — « Inscrit le
          2026-01-12T08:30:00.000Z » est ce qu'un écran affiche quand il rend la
@@ -342,30 +342,42 @@ async function main() {
       const fiche = await texteDe(page, `[data-admin-user="${MEMBRE_ID}"]`);
       check(!ISO_NU.test(fiche), `la fiche ne peint aucun horodatage ISO brut${ISO_NU.test(fiche) ? ` — « ${(fiche.match(ISO_NU) ?? [''])[0]} »` : ''}`);
 
-      /* LES ONGLETS (#7873) — Conversations et Médias sont chacun dans leur
-         onglet, atteignable à la souris ET au clavier (flèches d'un tablist),
-         et l'onglet vit dans l'adresse. */
-      await page.click('[data-admin-user-tab="conversations"]');
+      /* LES CARTES (spec 2026-10-04 § 3) — chaque section du dossier est une carte
+         résumée dont « Ouvrir » monte la section dans une modale ; la modale vit
+         dans l'adresse (`?open=`), se ferme à Échap, et s'atteint à la souris
+         comme au clavier. */
+      const ouvrir = async (section, attendu) => {
+        if (await present(page, 'dialog[open]')) {
+          await page.keyboard.press('Escape');
+          await attendre(async () => !(await present(page, `[data-admin-user-panel]`)));
+        }
+        await page.click(`[data-admin-summary="${section}"] [data-admin-summary-open]`);
+        return attendre(() => present(page, attendu));
+      };
       check(
-        await attendre(() => present(page, `[data-admin-conversation-open="${CONVERSATION_ID}"]`)),
-        'l’onglet Conversations montre les conversations du membre',
+        await ouvrir('conversations', `[data-admin-conversation-open="${CONVERSATION_ID}"]`),
+        'la carte Conversations ouvre la modale des conversations du membre',
       );
-      check(new URL(page.url()).searchParams.get('tab') === 'conversations', 'l’onglet choisi s’écrit dans l’adresse');
-      await page.focus('[data-admin-user-tab="conversations"]');
-      await page.keyboard.press('ArrowRight');
+      check(new URL(page.url()).searchParams.get('open') === 'conversations', 'la modale ouverte s’écrit dans l’adresse');
+      await page.keyboard.press('Escape');
+      check(
+        await attendre(async () => !(await present(page, '[data-admin-user-panel]'))) && new URL(page.url()).searchParams.get('open') === null,
+        'Échap ferme la modale et l’adresse perd `?open=`',
+      );
+      await page.focus('[data-admin-summary="media"] [data-admin-summary-open]');
+      await page.keyboard.press('Enter');
       check(
         await attendre(() => present(page, '[data-collapsible-toggle="admin-media"]')),
-        'la flèche droite passe à l’onglet Médias',
+        'au clavier (Entrée sur « Ouvrir »), la carte Médias ouvre sa modale',
       );
       await page.waitForTimeout(300);
-      await cliche(page, 'fiche-membre-onglet-medias');
+      await cliche(page, 'fiche-membre-modale-medias');
 
       for (const [onglet, id] of [
         ['media', 'admin-media'],
         ['conversations', 'admin-conv'],
       ]) {
-        await page.click(`[data-admin-user-tab="${onglet}"]`);
-        await attendre(() => present(page, `[data-collapsible-toggle="${id}"]`));
+        await ouvrir(onglet, `[data-collapsible-toggle="${id}"]`);
         const etat = () =>
           page.evaluate(
             (s) => ({
