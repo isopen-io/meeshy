@@ -25,17 +25,37 @@ const UNTRANSCRIBED_MESSAGE_ID = 'media-17';
 const UNTRANSCRIBED_ATTACHMENT_ID = 'media-17-a1';
 const RESUME_FROM_SECONDS = 1.2;
 
-const scrollUntilMounted = (page, id) =>
-  awaitCondition(
-    page,
-    (mid) => {
-      if (document.querySelector(`[data-message="${mid}"]`) !== null) return true;
-      const scroller = document.querySelector('main#contenu');
-      if (scroller !== null) scroller.scrollTop = 0;
-      return false;
-    },
-    id,
-  );
+/**
+ * MONTER une rangée du haut du fil (#9281) : la boucle de `check-media.mjs`
+ * (remonter, laisser 150 ms au fil), puis descendre d'un tiers d'écran par pas.
+ *
+ * L'ancienne forme reposait `scrollTop = 0` à CHAQUE sondage d'`awaitCondition`
+ * (25 ms) : le fil, épinglé au bas tant qu'il se mesure, défaisait chaque
+ * remontée avant qu'elle ne charge quoi que ce soit, et `media-2` ne montait
+ * jamais — rouge dès #8333. Et une fois au sommet, la fenêtre du virtualiseur
+ * s'arrête sur `media-8` et ses grilles, plus anciens que les vocaux : il faut
+ * redescendre pour atteindre `media-2` ou `media-17`.
+ */
+async function scrollUntilMounted(page, id) {
+  const scroller = page.locator('main#contenu');
+  const mounted = () => page.evaluate((mid) => document.querySelector(`[data-message="${mid}"]`) !== null, id);
+  for (let attempt = 1; attempt <= 40; attempt += 1) {
+    if (await mounted()) return;
+    const atTop = await scroller.evaluate((el) => el.scrollTop === 0);
+    if (atTop) break;
+    await scroller.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    await page.waitForTimeout(150);
+  }
+  for (let step = 1; step <= 40; step += 1) {
+    if (await mounted()) return;
+    await scroller.evaluate((el) => {
+      el.scrollTop += el.clientHeight / 3;
+    });
+    await page.waitForTimeout(150);
+  }
+}
 
 const pageAudio = (page, id) =>
   page.evaluate((aid) => {
