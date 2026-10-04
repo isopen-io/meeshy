@@ -105,4 +105,12 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
     expect(corpsDe(service, 'public void onPause(')).toContain('MeeshyPlaybackPlugin.pauseRequested(');
     expect(corpsDe(service, 'public void onDestroy(')).toContain('.release()');
   });
+
+  test('sa notification est un lecteur lié à la session, pilotable écran verrouillé, comme dans Chrome (#9367)', () => {
+    const service = sansCommentaires(lire(...JAVA, 'PlaybackForegroundService.java'));
+    const notification = corpsDe(service, 'Notification notification(');
+    expect(notification).toContain('new Notification.MediaStyle()');
+    expect(notification).toContain('.setMediaSession(session.getSessionToken())');
+    expect(notification).toContain('.setShowActionsInCompactView(0)');
+  });
 });
