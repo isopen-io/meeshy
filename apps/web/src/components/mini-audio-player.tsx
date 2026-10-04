@@ -1,11 +1,11 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { attachmentSrc } from '@/lib/api/media-url';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
-import { useOptionalRoute } from '@/lib/router';
+import { navigate, useOptionalRoute } from '@/lib/router';
 import {
   audioCarryStore,
   concealsMiniPlayer,
@@ -18,13 +18,9 @@ import {
 import type { MediaCoordinator } from '@/lib/view/media-coordinator';
 import { formatMediaTime } from '@/lib/view/media-transport';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
-import { handOffVideoPosition } from '@/lib/view/video-handoff';
 
 import { Glyph, GlyphSvg } from './glyph';
 import { MEDIA_GLYPHS } from './glyphs-media';
-
-/** Le plein écran rouvert au toucher (#9279) — son chunk est déjà chargé : la lecture confiée en vient. */
-const MediaViewer = lazy(() => import('./media-viewer'));
 
 /**
  * LE MINI-LECTEUR (#9256) — miroir de `MiniAudioPlayerBar` iOS : l'aplat
@@ -37,8 +33,9 @@ const MediaViewer = lazy(() => import('./media-viewer'));
  * du même vocal la reflète et la commande (`useCarriedPlayback`) au lieu
  * d'ouvrir un second son. Dans la conversation du vocal il s'EFFACE
  * (`concealed`) sans s'arrêter — la bulle y reprend la main, comme iOS. Le
- * toucher (hors lecture/pause et fermer) rouvre le plein écran à la même
- * seconde (`onOpen`).
+ * toucher (hors lecture/pause et fermer) OUVRE LA CONVERSATION du vocal
+ * (`onOpen`), comme `RootView.onMiniPlayerTap` → `navigateToConversationById` :
+ * même geste, même effet ; la lecture continue, et l'effacement prend le relais.
  *
  * Sa clé d'exclusivité n'est PAS l'id de la pièce (`claimKey`) : n'importe
  * quel autre média qui joue le met en pause, comme le coordinateur iOS qui
@@ -47,7 +44,7 @@ const MediaViewer = lazy(() => import('./media-viewer'));
 export type MiniAudioPlayerProps = {
   readonly carried: CarriedAudio;
   readonly onClose: () => void;
-  /** Rouvrir le plein écran — la position est déjà confiée à la page audio (`handOffVideoPosition`). */
+  /** Ouvrir la conversation du vocal — absent hors conversation : le corps n'est alors pas un bouton. */
   readonly onOpen?: () => void;
   /** Dans la conversation du vocal : rien à l'écran, la lecture continue. */
   readonly concealed?: boolean;
@@ -121,13 +118,6 @@ export function MiniAudioPlayer({ carried, onClose, onOpen, concealed = false, c
     onClose();
   };
 
-  const open = (): void => {
-    if (element !== null && element.currentTime > 0) {
-      handOffVideoPosition({ attachmentId: attachment.id, positionMs: Math.round(element.currentTime * 1000) });
-    }
-    onOpen?.();
-  };
-
   return (
     <div className={concealed ? 'hidden' : 'pointer-events-none flex w-full justify-center'} hidden={concealed} {...(concealed ? { 'data-mini-audio-concealed': '' } : {})}>
       <div
@@ -154,20 +144,21 @@ export function MiniAudioPlayer({ carried, onClose, onOpen, concealed = false, c
         >
           {isPlaying ? <GlyphSvg glyph={MEDIA_GLYPHS.pause} size={20} /> : <Glyph name="fillPlay" size={20} />}
         </button>
-        <button
-          type="button"
-          data-mini-audio-open
-          aria-label={`${title} — ${translate(language, 'media.viewer.open_fullscreen')}`}
-          className="grid min-h-11 min-w-0 flex-1 text-start leading-tight"
-          onClick={open}
-        >
-          <span data-mini-audio-title className="truncate text-check font-semibold">
-            {title}
+        {onOpen !== undefined ? (
+          <button
+            type="button"
+            data-mini-audio-open
+            aria-label={`${title} — ${translate(language, 'call.conversation.open')}`}
+            className="grid min-h-11 min-w-0 flex-1 text-start leading-tight"
+            onClick={onOpen}
+          >
+            <NowPlaying title={title} position={position} totalSeconds={totalSeconds} />
+          </button>
+        ) : (
+          <span className="grid min-h-11 min-w-0 flex-1 content-center leading-tight">
+            <NowPlaying title={title} position={position} totalSeconds={totalSeconds} />
           </span>
-          <span data-mini-audio-time className="truncate text-caption tabular-nums" style={{ opacity: 0.72 }}>
-            {formatMediaTime(position)} / {formatMediaTime(totalSeconds)}
-          </span>
-        </button>
+        )}
         <button
           type="button"
           data-mini-audio-close
@@ -187,26 +178,16 @@ export function MiniAudioPlayer({ carried, onClose, onOpen, concealed = false, c
   );
 }
 
-/**
- * LE PLEIN ÉCRAN ROUVERT (#9279) — la page audio du vocal confié, dans la
- * langue qu'on écoutait. Le fermer lâche la reprise : la visionneuse en confie
- * une NEUVE en se démontant si le vocal joue encore (`useCarryOnClose`), sinon
- * le mini-lecteur se retire, comme à la première fermeture.
- */
-function ReopenedViewer({ carried }: { readonly carried: CarriedAudio }) {
+function NowPlaying({ title, position, totalSeconds }: { readonly title: string; readonly position: number; readonly totalSeconds: number }) {
   return (
-    <Suspense fallback={null}>
-      <MediaViewer
-        items={[carried.attachment]}
-        startIndex={0}
-        onClose={dropCarriedAudio}
-        languages={carried.languages ?? [carried.trackLanguage]}
-        displayLanguage={carried.trackLanguage}
-        fallbackLanguage={carried.fallbackLanguage ?? carried.trackLanguage}
-        {...(carried.carrier != null ? { carrier: carried.carrier } : {})}
-        {...(carried.conversationId != null ? { conversationId: carried.conversationId } : {})}
-      />
-    </Suspense>
+    <>
+      <span data-mini-audio-title className="truncate text-check font-semibold">
+        {title}
+      </span>
+      <span data-mini-audio-time className="truncate text-caption tabular-nums" style={{ opacity: 0.72 }}>
+        {formatMediaTime(position)} / {formatMediaTime(totalSeconds)}
+      </span>
+    </>
   );
 }
 
@@ -215,9 +196,8 @@ export default function MiniAudioPlayerHost() {
   const carried = useStore(audioCarryStore, (state) => state.carried);
   const serial = useStore(audioCarryStore, (state) => state.serial);
   const route = useOptionalRoute();
-  const [reopened, setReopened] = useState<number | null>(null);
   if (carried === null) return null;
-  if (reopened === serial) return <ReopenedViewer carried={carried} />;
+  const conversationId = carried.conversationId ?? null;
   const openConversationId = route?.key === 'thread' ? (route.params.conversation ?? null) : null;
   return (
     <MiniAudioPlayer
@@ -225,7 +205,7 @@ export default function MiniAudioPlayerHost() {
       carried={carried}
       concealed={concealsMiniPlayer({ carried, openConversationId })}
       onClose={dropCarriedAudio}
-      onOpen={() => setReopened(serial)}
+      {...(conversationId !== null ? { onOpen: () => navigate(`/c/${encodeURIComponent(conversationId)}`) } : {})}
     />
   );
 }
