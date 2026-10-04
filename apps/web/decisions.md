@@ -4666,3 +4666,16 @@ Au repos, un message flouté qui porte des images montre le voile de son TEXTE e
 **Écarts restants avec iOS** : ni transcription à la demande (« Transcrire »), ni demande de traduction depuis le lecteur, ni AirPlay ; fermer le lecteur arrête la lecture (iOS la poursuit dans le mini-lecteur).
 
 **Conséquences.** Témoins `viewer-audio-page.test.tsx` ; gate `check-thread-states.mjs` § 8quater (`lib/check-audio-fullscreen.mjs`) sur les pistes WAV de `c-medias`.
+
+## D-166 — Le lecteur audio plein écran transcrit et traduit à la demande ; fermer pendant la lecture confie le vocal à un mini-lecteur de la coquille (2026-10-04, #9256)
+
+**Contexte.** D-165 laissait trois écarts avec `AudioFullscreenView` iOS : pas de « Transcrire », pas de traduction demandée depuis le lecteur, et fermer arrêtait la lecture là où iOS la poursuit dans `MiniAudioPlayerBar`. Le web n'avait ni chemin de demande (le menu « Traduire » d'un message n'explore que les traductions déjà servies) ni mini-lecteur.
+
+**Décision.**
+- **Les routes d'iOS** : `POST /attachments/:id/transcribe` et `POST /attachments/:id/translate` (`lib/api/attachment-processing.ts`, miroir d'`AttachmentService`). Une transcription déjà faite revient sur-le-champ ; sinon la demande reste « en cours » jusqu'à ce que la pièce porte le résultat, qu'il arrive par la réponse ou par `message:attachment-updated`. La transcription locale sur l'appareil d'iOS (Apple Speech) n'a pas d'équivalent web : « Transcrire » demande au serveur.
+- **Une descente** : ce que le lecteur obtient se greffe sur la pièce (`withSupplied`, `lib/view/audio-on-demand.ts`) AVANT `electAudio` ; ce que la passerelle sert gagne toujours. « Traduire » déplie les langues du lecteur puis les langues courantes, jamais une version déjà écoutable ; la version demandée se joue dès qu'elle arrive.
+- **La lecture survit à la fermeture** : la page audio active remet piste, seconde et vitesse (`useCarryOnClose`), la visionneuse les confie à `audio-carry.ts` en se démontant, et la coquille monte `MiniAudioPlayerHost` (chunk à la demande) qui reprend la lecture et rapporte l'écoute. Sa clé d'exclusivité n'est pas l'id de la pièce : toucher la bulle du même vocal, ou tout autre média, le met en pause. Arrivé au bout, il se retire.
+
+**Écarts restants avec iOS** : forme d'onde analysée (hors lot), AirPlay ; le mini-lecteur ne rouvre pas le plein écran au toucher et ne se tait pas dans la conversation du vocal (la bulle web ne pilote pas son élément) ; une traduction demandée sur une page atteinte par balayage ne se met à jour que par le temps réel du fil ouvert.
+
+**Conséquences.** Témoins `attachment-processing.test.ts`, `audio-on-demand.test.ts`, `viewer-audio-page-on-demand.test.tsx`, `mini-audio-player.test.tsx` ; gate `lib/check-audio-fullscreen.mjs` A6–A8 sur le vocal sans transcription `media-17` de `c-medias`.

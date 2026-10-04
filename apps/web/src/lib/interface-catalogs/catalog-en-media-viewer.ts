@@ -23,6 +23,16 @@ const enMediaViewer = {
   'media.audio.skip_forward': 'Forward 10 seconds',
   'media.audio.transcript_empty': 'No transcription',
   'media.audio.languages': 'Listen in another language',
+  'media.audio.transcribe': 'Transcribe',
+  'media.audio.transcribing': 'Transcribing…',
+  'media.audio.transcribe_failed': 'Couldn’t transcribe',
+  'media.audio.translate': 'Translate',
+  'media.audio.translate_to': 'Translate to {language}',
+  'media.audio.translating': 'Translating…',
+  'media.audio.translate_failed': 'Couldn’t translate',
+  'media.audio.mini.label': 'Audio player',
+  'media.audio.mini.title': 'Voice message',
+  'media.audio.mini.close': 'Close player',
 };
 
 export default enMediaViewer;
