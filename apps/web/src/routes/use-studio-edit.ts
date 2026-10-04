@@ -3,8 +3,6 @@ import { appQueryClient } from '@/lib/api/query-client';
 import { STORIES_QUERY_PREFIX } from '@/lib/api/stories';
 import type { StudioDraft } from '@/lib/stories/studio';
 import type { StudioEditOrigin } from '@/lib/stories/studio-edit';
-import { saveStudioEdit } from '@/lib/stories/studio-edit-flow';
-import { studioEditSavePlan } from '@/lib/stories/studio-edit-plan';
 import { createStudioDraftStore } from '@/lib/stories/studio-draft-store';
 import type { SettledPage } from '@/lib/stories/studio-publish';
 import { revokePageMedia } from '@/routes/story-compose-place';
@@ -50,6 +48,13 @@ export function studioEditSaver(params: {
 }): (settled: ReadonlyMap<string, SettledPage>) => Promise<void> {
   const { edit, setPublishing, setPublishFailure, setPublishProgress } = params;
   return async (settled) => {
+    /* La loi et l'envoi de l'enregistrement ne servent qu'en édition : chargés
+       au clic sur « Enregistrer », ils restent hors du chunk du studio
+       (`budgets.json`, `story_studio`). */
+    const [{ studioEditSavePlan }, { saveStudioEdit }] = await Promise.all([
+      import('@/lib/stories/studio-edit-plan'),
+      import('@/lib/stories/studio-edit-flow'),
+    ]);
     const current = params.latest.current;
     const plan = studioEditSavePlan({ origin: edit.origin, draft: current, settled, language: params.language });
     if (plan.kind !== 'ready') {
