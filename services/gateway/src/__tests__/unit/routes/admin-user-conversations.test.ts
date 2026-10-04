@@ -194,6 +194,20 @@ describe('GET /admin/users/:userId/conversations', () => {
 });
 
 describe('GET /admin/conversations/:conversationId/participants', () => {
+  it('sert leftAt et bannedAt — un membre parti ou banni se dit, il ne se devine pas', async () => {
+    const prisma = createMockPrisma({
+      participants: [
+        { id: 'pt2', userId: 'u2', type: 'user', displayName: 'Bob', avatar: null, role: 'member', isActive: false, isOnline: false, joinedAt: '2026-01-01T00:00:00.000Z', leftAt: '2026-02-01T00:00:00.000Z', bannedAt: null, nickname: null, user: null },
+      ],
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: '/api/v1/admin/conversations/conv-1/participants', headers: { authorization: 'Bearer x' } });
+    const select = ((prisma as unknown as { participant: { findMany: jest.Mock } }).participant.findMany.mock.calls[0][0] as { select: AnyRecord }).select;
+    expect(select).toMatchObject({ leftAt: true, bannedAt: true });
+    expect(res.json().data[0]).toMatchObject({ leftAt: '2026-02-01T00:00:00.000Z', bannedAt: null });
+    await app.close();
+  });
+
   it('returns 404 when the conversation does not exist', async () => {
     const app = await buildApp(createMockPrisma({ conversationExists: false }), 'ADMIN');
     const res = await app.inject({

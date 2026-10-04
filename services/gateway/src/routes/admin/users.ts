@@ -942,7 +942,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
             role: true,
             isActive: true,
             isOnline: true,
-            joinedAt: true,
+            joinedAt: true, leftAt: true, bannedAt: true,
             nickname: true,
             user: { select: { id: true, username: true, displayName: true, avatar: true } }
           },
