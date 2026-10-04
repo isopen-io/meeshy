@@ -181,7 +181,7 @@ export function registerAgentResetRoutes(fastify: FastifyInstance, deps: AgentRo
     // 2026-10-04 § 4).
     preHandler: [requireReasonUnlessSovereign({ source: 'body', min: 10 })],
     schema: {
-      description: 'Nuclear reset: delete ALL agent configs, roles, summaries, analytics, global profiles and Redis cache. Rang souverain (BIGBOSS) et motif écrit requis — #4157.',
+      description: 'Nuclear reset: delete ALL agent configs, roles, summaries, analytics, global profiles and Redis cache. Rang souverain (BIGBOSS) ; motif écrit facultatif pour lui, validé s\'il est fourni (spec 2026-10-04 § 4) — #4157.',
       tags: ['admin-agent'],
       summary: 'Reset all agent data',
       security: securityBearerAuth,

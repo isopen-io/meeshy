@@ -1374,7 +1374,7 @@ describe('adminPostRoutes', () => {
     // The DELETE route defines a JSON body schema in Fastify, so Fastify 5
     // requires either a JSON body or content-type header for body parsing.
     // Use `headers` + empty payload to satisfy the schema validator.
-    const deleteInject = (app: FastifyInstance, postId: string, payload: Record<string, unknown> = {}) =>
+    const deleteInject = (app: FastifyInstance, postId: string, payload: Record<string, unknown> = { reason: 'Contenu signalé' }) =>
       app.inject({
         method: 'DELETE',
         url: `/posts/${postId}`,

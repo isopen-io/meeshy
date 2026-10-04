@@ -947,11 +947,23 @@ describe('POST /admin/users/:userId/voice-consent', () => {
     expect(mockUMS.toggleVoiceConsent).not.toHaveBeenCalled();
   });
 
-  it('refuse un souverain SANS motif écrit — la trace est une condition, pas un ornement', async () => {
+  // Spec 2026-10-04 § 4 : le rang souverain n'a rien à justifier — le geste
+  // a lieu et reste tracé ; un motif FOURNI trop court est refusé.
+  it('admet un souverain SANS motif écrit — le geste a lieu', async () => {
     const res = await appSouverain.inject({
       method: 'POST',
       url: '/admin/users/user123/voice-consent',
       payload: { consentType: 'voiceProfile', enabled: true }
+    });
+    expect(res.statusCode).toBe(200);
+    expect(mockUMS.toggleVoiceConsent).toHaveBeenCalledWith('user123', 'voiceProfile', true);
+  });
+
+  it('refuse un souverain dont le motif fourni est trop court', async () => {
+    const res = await appSouverain.inject({
+      method: 'POST',
+      url: '/admin/users/user123/voice-consent',
+      payload: { consentType: 'voiceProfile', enabled: true, reason: 'RGPD' }
     });
     expect(res.statusCode).toBe(400);
     expect(mockUMS.toggleVoiceConsent).not.toHaveBeenCalled();

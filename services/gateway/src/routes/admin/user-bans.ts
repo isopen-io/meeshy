@@ -5,7 +5,7 @@ import type { BanService } from '../../services/admin/ban.service';
 import { estEnVigueur } from '../../services/admin/ban.service';
 import type { UserAuditService } from '../../services/admin/user-audit.service';
 import type { UserManagementService } from '../../services/admin/user-management.service';
-import { requireHierarchy } from '../../middleware/authorize';
+import { isSovereign, requireHierarchy } from '../../middleware/authorize';
 import { requireUserModifyAccess, requireUserViewAccess } from '../../middleware/admin-user-auth.middleware';
 import { UnifiedAuthContext, UnifiedAuthRequest, authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
@@ -29,6 +29,17 @@ const creerBanSchema = z.object({
     .refine((v) => v === undefined || v === null || new Date(v).getTime() > Date.now(), {
       message: "L'échéance doit être dans le futur",
     }),
+});
+
+/**
+ * Le rang souverain bannit sans motif (spec 2026-10-04 § 4) ; un motif qu'il
+ * ÉCRIT reste validé. Un blanc est un motif absent. Les autres rangs gardent
+ * `creerBanSchema`, refus compris, à l'identique.
+ */
+const creerBanSchemaSouverain = creerBanSchema.extend({
+  reason: z
+    .union([z.string().trim().length(0), z.string().trim().min(3, 'Le motif doit compter au moins 3 caractères')])
+    .optional(),
 });
 
 const leverBanSchema = z.object({
@@ -83,13 +94,16 @@ export function registerUserBanRoutes(fastify: FastifyInstance, deps: Deps): voi
           return;
         }
 
-        const corps = creerBanSchema.parse(request.body);
+        const corps = (isSovereign(request) ? creerBanSchemaSouverain : creerBanSchema).parse(request.body ?? {});
+        const motif = corps.reason?.trim() ? corps.reason.trim() : null;
         const moi = acteurDe(request);
 
         const ban = await banService.createBan({
           userId,
           bannedById: moi.id,
-          reason: corps.reason,
+          // `Ban.reason` est une colonne REQUISE : sans motif (rang souverain),
+          // elle porte la chaîne vide — l'audit, lui, dit `null`.
+          reason: motif ?? '',
           expiresAt: corps.expiresAt ? new Date(corps.expiresAt) : null,
         });
         await oublierLeCache(userId);
@@ -100,7 +114,7 @@ export function registerUserBanRoutes(fastify: FastifyInstance, deps: Deps): voi
           action: UserAuditAction.BAN_USER,
           entityId: ban.id,
           changes: { isActive: { before: cible.isActive, after: false } },
-          metadata: { reason: corps.reason, expiresAt: corps.expiresAt ?? null, banId: ban.id },
+          metadata: { reason: motif, expiresAt: corps.expiresAt ?? null, banId: ban.id },
           ipAddress: request.ip,
           userAgent: request.headers['user-agent'],
         });

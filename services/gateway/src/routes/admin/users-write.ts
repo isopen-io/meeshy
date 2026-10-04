@@ -163,7 +163,9 @@ const consentSchema = z.object({
   voiceData: z.boolean().optional(),
   dataProcessing: z.boolean().optional(),
   voiceCloning: z.boolean().optional(),
-  reason: z.string().min(10),
+  // Facultatif pour le rang souverain (le seul qui écrit un consentement, spec
+  // 2026-10-04 § 4) ; validé s'il est écrit — un blanc est un motif absent.
+  reason: z.union([z.string().trim().length(0), z.string().min(10)]).optional(),
 });
 const securitySchema = z.object({
   unlock: z.literal(true).optional(),

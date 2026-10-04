@@ -24,9 +24,12 @@ import { isSovereign } from './authorize';
  *    `utils/schema-validation-error.ts`) : un client qui lisait le refus le lit
  *    toujours.
  */
+// Les deux membres portent les deux clés : le gateway compile sans
+// `strictNullChecks`, où une union discriminée par un booléen ne se resserre
+// pas — lire `problem` d'un côté ou `reason` de l'autre doit rester typé.
 export type ReasonVerdict =
-  | { readonly ok: true; readonly reason: string | undefined }
-  | { readonly ok: false; readonly problem: 'missing' | 'short' };
+  | { readonly ok: true; readonly reason: string | undefined; readonly problem?: undefined }
+  | { readonly ok: false; readonly problem: 'missing' | 'short'; readonly reason?: undefined };
 
 export function judgeReason(request: FastifyRequest, raw: unknown, min: number): ReasonVerdict {
   const reason = typeof raw === 'string' && raw.trim() !== '' ? raw : undefined;
@@ -71,6 +74,24 @@ export function reasonRefusalError(problem: 'missing' | 'short', options: Refus)
 }
 
 /**
+ * Le même refus, rendu DEPUIS un handler (qui a ses propres gardes à faire
+ * passer avant celle du motif) : l'enveloppe de `schemaValidationErrorResponse`.
+ */
+export function sendReasonRefusal(reply: FastifyReply, problem: 'missing' | 'short', options: Refus): FastifyReply {
+  const erreur = reasonRefusalError(problem, options) as Error & { validation: { instancePath: string; params: { missingProperty?: string }; message: string }[] };
+  const field = options.field ?? 'reason';
+  const details = erreur.validation.map((v) => ({ field, message: v.message }));
+  return reply.status(400).send({
+    success: false,
+    error: 'Validation Error',
+    message: erreur.message,
+    code: 'VALIDATION_ERROR',
+    details,
+    violations: details.map((d) => ({ path: d.field, message: d.message })),
+  });
+}
+
+/**
  * La garde, en `preHandler` (APRÈS la validation de forme, AVANT le handler).
  * Le handler lit ensuite `reason` tel quel : absent seulement pour le
  * souverain.
@@ -84,7 +105,7 @@ export function requireReasonUnlessSovereign(options: Refus) {
   const field = options.field ?? 'reason';
   return async (request: FastifyRequest, _reply: FastifyReply): Promise<void> => {
     const verdict = judgeReason(request, lire(request, options.source, field), options.min);
-    if (!verdict.ok) throw reasonRefusalError(verdict.problem, options);
+    if (verdict.problem) throw reasonRefusalError(verdict.problem, options);
     // Un motif blanc est un motif absent : on ne consigne pas une chaîne vide.
     const conteneur = options.source === 'body' ? request.body : request.query;
     if (verdict.reason === undefined && conteneur && typeof conteneur === 'object') {

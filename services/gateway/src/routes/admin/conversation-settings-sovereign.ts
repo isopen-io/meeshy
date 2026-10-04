@@ -183,7 +183,7 @@ export function registerConversationSettingsSovereignRoutes(fastify: FastifyInst
     schema: {
       description:
         "Configure une conversation SANS en être membre : métadonnées, réglages, archive, fermeture. Rang d'administration, " +
-        'motif obligatoire, trace AdminAuditLog. #7845.',
+        'motif obligatoire sauf pour le rang souverain, trace AdminAuditLog. #7845.',
       tags: ['admin'],
       summary: 'Configure a conversation (admin)',
       params: params(['conversationId']),

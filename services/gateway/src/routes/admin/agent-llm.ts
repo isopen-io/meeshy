@@ -81,7 +81,7 @@ export function registerAgentLlmRoutes(fastify: FastifyInstance, deps: AgentRout
   fastify.put('/llm', {
     onRequest: [fastify.authenticate, requireAgentSovereign],
     schema: {
-      description: 'Create or update the LLM provider config (provider, model, API key, budget). Rang souverain (BIGBOSS) et motif écrit requis — #4157.',
+      description: 'Create or update the LLM provider config (provider, model, API key, budget). Rang souverain (BIGBOSS) ; motif écrit facultatif pour lui, validé s\'il est fourni (spec 2026-10-04 § 4) — #4157.',
       tags: ['admin-agent'],
       summary: 'Update LLM config',
       security: securityBearerAuth,

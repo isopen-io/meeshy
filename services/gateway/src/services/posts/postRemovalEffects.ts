@@ -47,6 +47,12 @@ export interface PostRemovalActor {
    * promesse était fausse — la raison n'allait que dans une ligne de log.
    */
   reason?: string;
+  /**
+   * Le retrait est décidé depuis la CONSOLE d'administration. Il se trace
+   * alors même quand l'administrateur est l'auteur : c'est un geste
+   * d'administration, pas la suppression ordinaire d'un auteur.
+   */
+  viaAdministration?: boolean;
 }
 
 /** La seule chose dont ce chemin a besoin de `SoundCaptureService`. */
@@ -67,9 +73,10 @@ export async function applyPostRemovalEffects(
   engagement?: PostEngagementRecorder
 ): Promise<void> {
   // Retrait par un tiers habilité : trace d'audit. Un auteur qui retire son
-  // propre contenu n'est pas un acte de modération — c'est ce qui distingue
-  // les deux, pas la route empruntée.
-  if (actor.id !== post.authorId) {
+  // propre contenu depuis l'app n'est pas un acte de modération ; depuis la
+  // console, si (`viaAdministration`) — tout geste d'administration qui écrit
+  // laisse sa ligne.
+  if (actor.id !== post.authorId || actor.viaAdministration === true) {
     try {
       await prisma.adminAuditLog.create({
         data: {

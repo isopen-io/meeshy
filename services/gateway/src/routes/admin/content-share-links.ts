@@ -232,7 +232,7 @@ export function registerContentShareLinkRoutes(fastify: FastifyInstance): void {
     // § 4) — mais validé s'il est écrit.
     preHandler: [requireReasonUnlessSovereign({ source: 'body', min: 10 })],
     schema: {
-      description: 'Révèle le linkId (secret de jointure) d\'un lien de partage. Rang souverain, motif écrit obligatoire, geste tracé — #4157.',
+      description: 'Révèle le linkId (secret de jointure) d\'un lien de partage. Rang souverain, motif écrit facultatif (validé s\'il est fourni), geste tracé — #4157.',
       tags: ['admin'],
       summary: 'Reveal a share link secret',
       security: [{ bearerAuth: [] }],
