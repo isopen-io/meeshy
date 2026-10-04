@@ -268,7 +268,7 @@ describe('Admin dashboard routes', () => {
     (getCacheStore as jest.Mock<any>).mockReturnValue({
       get: jest.fn<any>().mockResolvedValue(null),
       set: jest.fn<any>().mockResolvedValue(undefined),
-      del: jest.fn<any>().mockResolvedValue(undefined),
+      del: jest.fn<any>().mockResolvedValue(undefined), keys: jest.fn<any>().mockResolvedValue([]),
     });
   });
 
@@ -398,7 +398,7 @@ describe('Admin dashboard routes', () => {
       (getCacheStore as jest.Mock<any>).mockReturnValue({
         get: jest.fn<any>().mockResolvedValue(null),
         set: jest.fn<any>().mockResolvedValue(undefined),
-        del: mockDel,
+        del: mockDel, keys: jest.fn<any>().mockResolvedValue([]),
       });
 
       app = buildDashboardApp('ADMIN');
@@ -414,7 +414,7 @@ describe('Admin dashboard routes', () => {
       (getCacheStore as jest.Mock<any>).mockReturnValue({
         get: jest.fn<any>().mockResolvedValue(null),
         set: jest.fn<any>().mockResolvedValue(undefined),
-        del: mockDel,
+        del: mockDel, keys: jest.fn<any>().mockResolvedValue([]),
       });
 
       const bigbossApp = buildDashboardApp('BIGBOSS');

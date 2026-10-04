@@ -47,6 +47,16 @@ function dashboardPermissions(role: string) {
   };
 }
 
+/**
+ * `no-store` : le cache du tableau de bord vit CÔTÉ SERVEUR (Redis, 10 min) et
+ * se purge par « Recalculer maintenant ». Un `max-age=600` côté navigateur
+ * resservait l'ancienne réponse sans même interroger le serveur : la purge ne
+ * se voyait pas (audit 2026-10-04).
+ */
+const DASHBOARD_CACHE_CONTROL = 'no-store';
+/** Les caches des statistiques (`analytics.ts`), purgés avec le tableau de bord. */
+const ANALYTICS_CACHE_PATTERN = 'admin:analytics:*';
+
 export async function dashboardRoutes(fastify: FastifyInstance) {
   /**
    * GET /api/admin/dashboard
@@ -64,7 +74,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
       if (cached) {
         const authContext = (request as UnifiedAuthRequest).authContext;
         const userPermissions = dashboardPermissions(authContext.registeredUser.role);
-        reply.header('Cache-Control', 'private, max-age=600');
+        reply.header('Cache-Control', DASHBOARD_CACHE_CONTROL);
         return sendSuccess(reply, { ...JSON.parse(cached), userPermissions, timestamp: now.toISOString() });
       }
 
@@ -145,7 +155,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
       const authContext = (request as UnifiedAuthRequest).authContext;
       const userPermissions = dashboardPermissions(authContext.registeredUser.role);
 
-      reply.header('Cache-Control', 'private, max-age=600');
+      reply.header('Cache-Control', DASHBOARD_CACHE_CONTROL);
       return sendSuccess(reply, { statistics, recentActivity, userPermissions, timestamp: now.toISOString() });
     } catch (error) {
       logError(fastify.log, 'Error fetching admin dashboard stats:', error);
@@ -168,7 +178,11 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
     if (reply.sent) return reply;
 
     try {
-      await getCacheStore().del(DASHBOARD_CACHE_KEY);
+      const cache = getCacheStore();
+      await cache.del(DASHBOARD_CACHE_KEY);
+      // « Recalculer maintenant » recalcule AUSSI les statistiques : leurs
+      // caches (`admin:analytics:*`, `analytics.ts`) survivaient à la purge.
+      for (const cle of await cache.keys(ANALYTICS_CACHE_PATTERN)) await cache.del(cle);
       return sendSuccess(reply, undefined, { message: 'Cache dashboard invalidé' });
     } catch (error) {
       logError(fastify.log, 'Error invalidating dashboard cache:', error);
