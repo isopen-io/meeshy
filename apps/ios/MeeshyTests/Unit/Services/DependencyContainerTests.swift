@@ -581,4 +581,20 @@ extension DependencyContainerTests {
         let sealed = try XCTUnwrap(blob.map { try JSONDecoder().decode(ReplyReference.self, from: $0) })
         XCTAssertTrue(sealed.isUnavailableStory)
     }
+
+    /// #9307 — un pair renommé : ses bulles, fil OUVERT (le fil observe GRDB)
+    /// comme fil fermé, servent le nouveau nom à la réouverture, sans réseau.
+    func test_persist_senderRepainted_renamesThePeerBubblesInTheCanonicalTable() async throws {
+        let (persistence, queue) = try realtimeStore()
+        try await persistence.insertOptimistic(realtimeRecord(id: "m-bob"))
+        let json = #"{"userId":"participant-bob","changes":{"displayName":"Bobby","firstName":null,"lastName":null,"username":"bobby","avatar":"https://cdn/new.png"}}"#
+        let event = try JSONDecoder().decode(UserUpdatedEvent.self, from: Data(json.utf8))
+
+        await DependencyContainer.persist(.senderRepainted(event), into: persistence)
+
+        let row = try await queue.read { db in try MessageRecord.filter(Column("localId") == "m-bob").fetchOne(db) }
+        XCTAssertEqual(row?.senderName, "Bobby")
+        XCTAssertEqual(row?.senderUsername, "bobby")
+        XCTAssertEqual(row?.senderAvatarURL, "https://cdn/new.png")
+    }
 }

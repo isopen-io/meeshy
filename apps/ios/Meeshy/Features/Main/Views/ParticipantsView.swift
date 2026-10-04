@@ -112,6 +112,7 @@ struct ParticipantsView: View {
                 }
             }
             .task { await loadParticipants() }
+            .repaintingPeers($participants)
             .onReceive(
                 MessageSocketManager.shared.participantRoleUpdated
                     .filter { $0.conversationId == conversationId }
@@ -700,6 +701,24 @@ struct ParticipantsView: View {
         } catch {
             Logger.participants.error("Failed to leave group: \(error.localizedDescription)")
             HapticFeedback.error()
+        }
+    }
+}
+
+// MARK: - Repeinture des pairs (#9307)
+
+extension View {
+    /// Un membre renommé ou repeint (`user:updated`) l'est dans la liste
+    /// ouverte, par la loi du SDK (`UserUpdatedEvent.repainted(_:)`) et sans
+    /// relecture. Une liste où rien ne change n'est pas republiée ; le cache
+    /// persistant suit par `ConversationSyncEngine`.
+    func repaintingPeers(
+        _ participants: Binding<[PaginatedParticipant]>,
+        updates: AnyPublisher<UserUpdatedEvent, Never> = MessageSocketManager.shared.userUpdated.eraseToAnyPublisher()
+    ) -> some View {
+        onReceive(updates.receive(on: DispatchQueue.main)) { event in
+            guard let repainted = participants.wrappedValue.repaintedElements(by: event.repainted) else { return }
+            participants.wrappedValue = repainted
         }
     }
 }
