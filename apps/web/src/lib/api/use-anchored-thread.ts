@@ -20,6 +20,10 @@ import { anchoredMessagesQuery, type AnchoredWindow } from './messages-window';
  * - `engaged` : la pagination du fil appartient à la fenêtre (vers le passé
  *   comme vers le présent). Une fenêtre REFUSÉE sans donnée rend la main au
  *   présent — jamais un fil bloqué sur une erreur qu'il ne montre pas.
+ * - `loading` (#9302) : la fenêtre est EN VOL sans rien de servi — un appel
+ *   réseau, jamais une fenêtre déjà en cache (Cache-First : rouvrir un favori
+ *   déjà sauté ne se signale pas). C'est `isSearchingQuotedMessage` iOS, qui
+ *   ne s'allume que sur le chemin lent de `jumpToQuotedMessage`.
  * - `clear()` revient au présent (`returnToLatest`) : le présent n'a jamais
  *   été touché, il se peint sur-le-champ depuis son cache.
  *
@@ -29,6 +33,7 @@ export type AnchoredThread = {
   readonly target: string | null;
   readonly window: AnchoredWindow | undefined;
   readonly settled: boolean;
+  readonly loading: boolean;
   readonly engaged: boolean;
   readonly olderState: ListPaginationState;
   readonly fetchOlder: () => void;
@@ -54,6 +59,7 @@ export function useAnchoredThread(conversationId: string): AnchoredThread {
     target,
     window: served,
     settled: target !== null && query.status !== 'pending',
+    loading: target !== null && served === undefined && query.fetchStatus === 'fetching',
     engaged: target !== null && !(query.status === 'error' && served === undefined),
     olderState: paginationStateOf({
       hasNextPage: query.hasNextPage,

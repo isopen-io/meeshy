@@ -44,25 +44,29 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 
-let container: HTMLDivElement;
-let root: Root;
+let container: HTMLDivElement | null = null;
+let root: Root | null = null;
 
 afterEach(() => {
-  act(() => root.unmount());
-  container.remove();
+  if (root !== null) act(() => root?.unmount());
+  container?.remove();
+  root = null;
+  container = null;
   jest.useRealTimers();
 });
 
 function mount(initial: ThreadLoadSignal | null) {
-  container = document.createElement('div');
-  document.body.appendChild(container);
-  root = createRoot(container);
+  const host = document.createElement('div');
+  document.body.appendChild(host);
+  const created = createRoot(host);
+  container = host;
+  root = created;
   let shown: ThreadLoadSignal | null = null;
   function Probe({ signal }: { readonly signal: ThreadLoadSignal | null }) {
     shown = useDelayedSignal(signal, THREAD_LOAD_SIGNAL_DELAY_MS);
     return null;
   }
-  const render = (signal: ThreadLoadSignal | null) => act(() => root.render(<Probe signal={signal} />));
+  const render = (signal: ThreadLoadSignal | null) => act(() => created.render(<Probe signal={signal} />));
   render(initial);
   return { render, shown: () => shown };
 }
