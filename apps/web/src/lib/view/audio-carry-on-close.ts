@@ -1,18 +1,14 @@
 import { useCallback, useEffect, useRef } from 'react';
 
 import { carryAudio, type CarriedAudio } from './audio-carry';
-import type { MediaCarrier } from './media';
 
 export type CarryProvider = () => Pick<CarriedAudio, 'attachment' | 'trackUrl' | 'trackLanguage' | 'positionMs' | 'rate'> | null;
 
-/** Ce que la visionneuse sait de la page courante, et que le mini-lecteur garde pour la rouvrir (#9279). */
+/** Ce que la visionneuse sait de la page courante, et que le mini-lecteur garde (#9279). */
 export type CarryContext = {
   readonly currentId: string | undefined;
   readonly title: string | null;
   readonly conversationId: string | null;
-  readonly languages: readonly string[];
-  readonly fallbackLanguage: string;
-  readonly carrier: MediaCarrier | null;
 };
 
 /**
@@ -25,8 +21,8 @@ export type CarryContext = {
  * de fermer est reprise — une page audio quittée pour une vidéo, puis
  * démontée, ne relance jamais un vocal qu'on n'écoutait plus.
  *
- * #9279 — la reprise emporte aussi sa conversation (le mini-lecteur s'y
- * efface) et de quoi rouvrir le plein écran (prisme, langue d'origine, porteur).
+ * #9279 — la reprise emporte aussi sa conversation : le toucher du
+ * mini-lecteur l'ouvre, et il s'y efface.
  */
 export function useCarryOnClose(context: CarryContext) {
   const registeredRef = useRef<{ readonly id: string; readonly carry: CarryProvider } | null>(null);
@@ -36,9 +32,9 @@ export function useCarryOnClose(context: CarryContext) {
   useEffect(
     () => () => {
       const registered = registeredRef.current;
-      const { currentId, title, conversationId, languages, fallbackLanguage, carrier } = currentRef.current;
+      const { currentId, title, conversationId } = currentRef.current;
       const resumed = registered !== null && registered.id === currentId ? registered.carry() : null;
-      if (resumed !== null) carryAudio({ ...resumed, title, conversationId, languages, fallbackLanguage, carrier });
+      if (resumed !== null) carryAudio({ ...resumed, title, conversationId });
     },
     [],
   );

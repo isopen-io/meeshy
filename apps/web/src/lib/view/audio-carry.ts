@@ -3,8 +3,6 @@ import { createStore } from 'zustand/vanilla';
 
 import type { Attachment } from '@/lib/api/types';
 
-import type { MediaCarrier } from './media';
-
 /**
  * LA LECTURE QUI SURVIT AU PLEIN ÉCRAN (#9256) — miroir du moteur iOS que
  * possède `ConversationAudioCoordinator` et non `AudioFullscreenView` (« Pas de
@@ -31,12 +29,8 @@ export type CarriedAudio = {
   readonly rate: number;
   /** L'auteur du vocal, quand le plein écran le connaissait. */
   readonly title: string | null;
-  /** La conversation du vocal (#9279) — le mini-lecteur s'y efface, la bulle y reprend la main. `null` : hors conversation. */
+  /** La conversation du vocal (#9279) — le toucher l'ouvre, le mini-lecteur s'y efface et la bulle y reprend la main. `null` : hors conversation. */
   readonly conversationId?: string | null;
-  /** De quoi ROUVRIR le plein écran au toucher (#9279) : le prisme du lecteur, la langue d'origine et le porteur. */
-  readonly languages?: readonly string[];
-  readonly fallbackLanguage?: string;
-  readonly carrier?: MediaCarrier | null;
 };
 
 export type CarriedPlaybackStatus = 'idle' | 'playing' | 'paused' | 'error';

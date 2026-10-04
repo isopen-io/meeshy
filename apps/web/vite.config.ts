@@ -930,17 +930,6 @@ export default defineConfig({
            * plafond que ce lot ne doit pas toucher (mesuré : 14,56 Ko contre
            * 14 avant ce renommage). */
           if (id.includes('/socketio-events/event-names')) return 'socket-event-names';
-          /* LES LOIS DES MÉDIAS DE LA VISIONNEUSE (#9279) — `lib/view/media.ts`
-           * (porteur, élection de la piste) et `lib/view/media-transport.ts`
-           * (temps, vitesses). Le mini-lecteur, monté HORS du fil, charge la
-           * visionneuse pour la rouvrir : ces lois ne sont donc plus
-           * « déjà chargées par le fil » à chaque `import()` de la visionneuse,
-           * et Rolldown les sort en chunk commun — qu'il nommait
-           * `media-transport-*`, le motif du chunk À LA DEMANDE de la barre de
-           * lecture (`budgets.json › media_transport.dynamic_only`), qui le
-           * comptait alors importé statiquement par sept chunks. Le NOMMER
-           * casse la confusion, sans rien déplacer d'autre. */
-          if (id.includes('/src/lib/view/media.ts') || id.includes('/src/lib/view/media-transport.ts')) return 'media-view-laws';
           return undefined;
         },
       },

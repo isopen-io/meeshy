@@ -175,8 +175,6 @@ export type MediaViewerProps = {
    * hors d'elle, et le rend inerte.
    */
   readonly container?: Element | null;
-  /** LA CONVERSATION DES PIÈCES quand l'hôte la connaît sans offrir d'actions (#9279, le mini-lecteur qui rouvre son vocal) — `actionsAt` prime. */
-  readonly conversationId?: string;
 };
 
 /** À combien de pages du bout l'hôte est prié d'étendre la liste. */
@@ -586,7 +584,6 @@ export default function MediaViewer({
   actionsAt,
   shareMedia,
   container,
-  conversationId,
 }: MediaViewerProps) {
   /* LA PAGE SE SUIT PAR SON IDENTITÉ (#6303), miroir `GalleryPagePinning`
      (`+SourceGrowth.swift`) : la liste peut GRANDIR par le début (pages plus
@@ -636,10 +633,7 @@ export default function MediaViewer({
   const registerCarry = useCarryOnClose({
     currentId: current?.id,
     title: currentCarrier?.sender?.displayName ?? null,
-    conversationId: page?.conversationId ?? conversationId ?? null,
-    languages,
-    fallbackLanguage: fallbackLanguageAt?.(index) ?? fallbackLanguage,
-    carrier: currentCarrier ?? null,
+    conversationId: page?.conversationId ?? null,
   });
   const currentSceneEntry = current === undefined ? undefined : scenes?.get(current.id);
   const insets = safeAreaInsets();
