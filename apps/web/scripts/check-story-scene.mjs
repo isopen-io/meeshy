@@ -680,9 +680,14 @@ async function runAuthorRail(colorScheme) {
   await figer();
 
   const rail = await page.$$eval('[data-story-action-rail] [data-story-action]', (els) => els.map((e) => e.getAttribute('data-story-action')));
+  /* #7114 — `st-mienne` gagne une traduction (Q7 de la spécification) : le
+     bouton « Traductions » rejoint le rail RÉDUIT, sans gate `isOwnStory`
+     (« le Prisme est un outil de lecture, pas une permission »). Un gate qui
+     ASSERTAIT l'absence d'un bouton que le produit sert désormais se met à
+     jour, jamais l'inverse. */
   check(
-    JSON.stringify(rail) === JSON.stringify(['views', 'share', 'save', 'comments']),
-    `${tag} : le rail de MA story doit porter EXACTEMENT Vues, Partager, Enregistrer, Commentaires — reçu ${JSON.stringify(rail)}`,
+    JSON.stringify(rail) === JSON.stringify(['views', 'share', 'save', 'comments', 'translations']),
+    `${tag} : le rail de MA story doit porter EXACTEMENT Vues, Partager, Enregistrer, Commentaires, Traductions — reçu ${JSON.stringify(rail)}`,
   );
   const vuesCompte = await page.$eval('[data-story-action="views"]', (el) => el.textContent?.trim() ?? '');
   check(vuesCompte === '8', `${tag} : « Vues » doit porter le compte SERVI (8) — reçu « ${vuesCompte} »`);

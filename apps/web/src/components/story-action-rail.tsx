@@ -509,32 +509,36 @@ export function StoryActionRail({
            `aria-pressed` y dit « muet », donc le glyphe PLEIN (haut-parleur
            ouvert) correspond à `false`. Les autres suivent la règle usuelle. */
         const showsActive = action === 'sound' ? isPressed !== true : isPressed === true;
-        const button = (
-          <RailButton
-            key={action}
-            action={action}
-            label={translate(language, LABEL_OF[action])}
-            glyph={showsActive && glyphs.active !== undefined ? glyphs.active : glyphs.idle}
-            count={usefulCount(counts?.[action])}
-            pressed={isPressed}
-            badge={badges?.[action]}
-            /* Non-null : `boutons` ne garde que les actions dont le
-               gestionnaire existe — le filtre ci-dessus EST la garde. */
-            onPress={handlers[action] as () => void}
-          />
-        );
-        /* **L'ENVELOPPE ANCRÉE** (#7114, § 5.3) — la surface ANCHORED surgit à
-           GAUCHE du bouton visé, `offset -56` d'iOS ≈ 44 (le bouton) + 12
-           (respiration). Elle ne change ni la taille ni l'ORDRE des boutons :
-           l'enveloppe remplace le `<RailButton>` NU au même index de la
-           liste, jamais un nœud de plus dans `boutons.map`. */
-        if (anchored?.action !== action) return button;
+        /* **L'ENVELOPPE ANCRÉE** (#7114, § 5.3) — TOUJOURS présente, pour
+           TOUS les boutons, même ceux qu'aucune surface n'ancre jamais. Sans
+           cette constance, la forme de l'arbre à l'index d'UN bouton change
+           selon que `anchored` le vise ou non (un `<div>` d'enveloppe qui
+           apparaît/disparaît autour du MÊME `key`) : React démonte alors le
+           `<RailButton>` existant pour en remonter un NEUF, et le bouton
+           perd son IDENTITÉ DOM — mesuré : le focus qu'il tenait à la
+           fermeture de la barre rapide des langues retombait sur `<body>`
+           (`use-story-language.ts` ne pouvait pas rendre le focus à un nœud
+           déjà détruit). L'enveloppe ne change ni la taille ni l'ordre des
+           boutons ; seul son CONTENU (la surface ancrée) apparaît et
+           disparaît. */
         return (
           <div key={action} className="relative" data-story-action-anchor={action}>
-            {button}
-            <div className="absolute end-full top-1/2 me-3" style={{ transform: 'translateY(-50%)', zIndex: 10 }}>
-              {anchored.node}
-            </div>
+            <RailButton
+              action={action}
+              label={translate(language, LABEL_OF[action])}
+              glyph={showsActive && glyphs.active !== undefined ? glyphs.active : glyphs.idle}
+              count={usefulCount(counts?.[action])}
+              pressed={isPressed}
+              badge={badges?.[action]}
+              /* Non-null : `boutons` ne garde que les actions dont le
+                 gestionnaire existe — le filtre ci-dessus EST la garde. */
+              onPress={handlers[action] as () => void}
+            />
+            {anchored?.action === action ? (
+              <div className="absolute end-full top-1/2 me-3" style={{ transform: 'translateY(-50%)', zIndex: 10 }}>
+                {anchored.node}
+              </div>
+            ) : null}
           </div>
         );
       })}

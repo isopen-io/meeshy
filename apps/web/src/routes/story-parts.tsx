@@ -7,6 +7,7 @@ import { isMediaAbsent, noteMediaAbsent } from '@/lib/api/media-absent';
 import { feedMediaKindOf } from '@/lib/feed/layout';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import type { StoryPlaybackGroup } from '@/lib/stories/playback';
+import { Link } from '@/routes/route-table';
 
 /**
  * LES PIÈCES PURES DU LECTEUR DE STORY (#6801) — extraites de `story.tsx`,
@@ -392,3 +393,63 @@ const SEGMENT_RAIL = 'rgba(255,255,255,0.2)';
 
 /** Le dégradé du segment COURANT (`indigo500 → error → indigo400`). */
 const ACTIVE_SEGMENT_FILL = 'linear-gradient(90deg, var(--color-ios-brand), var(--ios-error), var(--color-i400))';
+
+/**
+ * **LES DEUX ÉTATS D'ATTENTE DU LECTEUR** — EXTRAITS de `routes/story.tsx`
+ * (§ 5.0 de la spécification #7114, budget 900 lignes) : « Chargement… » et
+ * « Story introuvable » / « Hors ligne ». EXTRACTION PURE, comportement
+ * INCHANGÉ — jusqu'ici ces deux blocs étaient un ternaire inline dans le
+ * rendu du lecteur.
+ */
+export function StoryWaitingStates({
+  state,
+  online,
+  onRetry,
+}: {
+  readonly state: 'loading' | 'not-found';
+  readonly online: boolean;
+  readonly onRetry: () => void;
+}) {
+  if (state === 'loading') {
+    return (
+      <div className="grid flex-1 place-items-center" role="status">
+        <div className="grid gap-3 justify-items-center">
+          <div
+            aria-hidden="true"
+            className="animate-pulse rounded-full"
+            style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.25)' }}
+          />
+          <p className="text-body">Chargement…</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div role="alert" className="grid flex-1 content-center justify-items-center gap-4 px-8 text-center">
+      <Glyph name="warningCircle" size={38} style={{ color: 'rgba(255,255,255,0.7)' }} />
+      <p className="text-title font-bold">{online ? 'Story introuvable' : 'Hors ligne'}</p>
+      <p className="text-body" style={{ color: 'rgba(255,255,255,0.75)' }}>
+        {online ? 'Impossible de charger cette story. Réessayez ou fermez.' : 'Cette story s’affichera à la reconnexion.'}
+      </p>
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={onRetry}
+          className="rounded-full px-5 py-2 text-body font-semibold"
+          style={{ background: '#fff', color: '#000', minHeight: 44 }}
+        >
+          Réessayer
+        </button>
+        <Link
+          to="list"
+          replace
+          className="grid place-items-center rounded-full px-5 text-body font-semibold"
+          style={{ border: '1px solid rgba(255,255,255,0.4)', minHeight: 44 }}
+        >
+          Fermer
+        </Link>
+      </div>
+    </div>
+  );
+}

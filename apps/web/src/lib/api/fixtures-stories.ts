@@ -441,6 +441,12 @@ export const STORY_FEED: readonly StoryFeedPost[] = [
     author: { id: VIEWER_ID, username: 'vous', displayName: 'Moi' },
     content: 'Ma story à moi.',
     originalLanguage: 'fr',
+    /* LE TÉMOIN AUTEUR DU PRISME (#7114, Q7) — l'auteur explore les langues
+       de SA PROPRE story comme il choisit déjà sa langue d'export (aucune
+       gate `isOwnStory` sur les traductions, `Sidebar.swift:70-74`). Sans
+       cette traduction, `st-mienne` resterait monolingue et le bouton
+       « Traductions » n'aurait jamais de porte à ouvrir sur SA propre story. */
+    translations: { en: { text: 'My very own story.' } },
     /* LE MÊME MÉDIA QUE SA TUILE DU RAIL (#7116, revue) — sans lui, « Enregistrer »
        du plan AUTEUR n'aurait rien à télécharger sur la seule story de fixtures
        dont le lecteur est l'auteur (`storyDownloadableMedia`). */
