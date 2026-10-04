@@ -380,7 +380,10 @@ export const callersIn = (contents, nsNames) => {
 // Boutique et la proposition de pack côté web (leurs cinq voisines ont leur
 // appelant dans `lib/api/sticker-packs.ts`) ; l'écran de modération web qui
 // lira ces deux-là est un suivi à part. Valeur MESURÉE le 2026-10-02.
-const BASELINE_DEAD_ENTRIES = 287;
+// 287 → 285 (2026-10-04) : deux entrées ont trouvé leur appelant hors test
+// sur `dev` ; le cliquet rougissait toute PR ouverte contre `dev`
+// (relevé sur #9293). Valeur MESURÉE le 2026-10-04.
+const BASELINE_DEAD_ENTRIES = 285;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
