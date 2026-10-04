@@ -94,4 +94,15 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
     expect(corpsDe(plugin, 'static boolean pauseRequested(')).toContain('notifyListeners("pauseRequested"');
     for (const dossier of LANGUES) expect(lire('res', dossier, 'strings_playback.xml')).toContain('name="playback_pause"');
   });
+
+  test('le bouton du casque met le vocal en pause, par la même voie que la notification (#9344)', () => {
+    const service = sansCommentaires(lire(...JAVA, 'PlaybackForegroundService.java'));
+    const creation = corpsDe(service, 'public void onCreate(');
+    expect(creation).toContain('new MediaSession(');
+    expect(creation).toContain('setActive(true)');
+    expect(creation).toContain('PlaybackState.STATE_PLAYING');
+    expect(creation).toContain('PlaybackState.ACTION_PAUSE');
+    expect(corpsDe(service, 'public void onPause(')).toContain('MeeshyPlaybackPlugin.pauseRequested(');
+    expect(corpsDe(service, 'public void onDestroy(')).toContain('.release()');
+  });
 });
