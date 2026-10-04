@@ -143,7 +143,7 @@ final class CallColorLookTests: XCTestCase {
         let base = try firstPixel(warm.process(try grayBuffer(), averageBrightness: 200, rotation: 90))
         let lifted = try firstPixel(brighter.process(try grayBuffer(), averageBrightness: 200, rotation: 90))
 
-        XCTAssertGreaterThan(lifted.g, base.g + 10)
-        XCTAssertGreaterThan(lifted.r, lifted.b)
+        XCTAssertGreaterThan(lifted.g, base.g + 10, "teinte \(base), teinte éclaircie \(lifted)")
+        XCTAssertGreaterThan(lifted.r, lifted.b, "teinte éclaircie \(lifted)")
     }
 }

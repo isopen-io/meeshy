@@ -409,10 +409,9 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
 
     private func applyBrightness(to image: CIImage, brightness: Float) -> CIImage {
         guard brightness != 0 else { return image }
-        return image.applyingFilter("CIColorControls", parameters: [
-            "inputBrightness": brightness,
-            "inputContrast": 1.0,
-            "inputSaturation": 1.0
+        let lift = CGFloat(brightness)
+        return image.applyingFilter("CIColorMatrix", parameters: [
+            "inputBiasVector": CIVector(x: lift, y: lift, z: lift, w: 0)
         ])
     }
 
