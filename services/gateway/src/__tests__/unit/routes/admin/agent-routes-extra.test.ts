@@ -418,7 +418,7 @@ describe('Agent Admin Routes — extra coverage', () => {
       cacheStoreMock.get.mockResolvedValue(null);
       prisma.agentAnalytic.findUnique.mockResolvedValue(null);
       prisma.agentConversationSummary.findUnique.mockResolvedValue(null);
-      prisma.agentUserRole.findMany.mockResolvedValue([]);
+      prisma.agentUserRole.findMany.mockResolvedValue([]); prisma.user.findMany.mockResolvedValue([]);
       prisma.agentConfig.findUnique.mockResolvedValue({ scanStartedAt: null, currentNode: null });
 
       const res = await app.inject({ method: 'GET', url: `/configs/${CONV_ID}/live` });

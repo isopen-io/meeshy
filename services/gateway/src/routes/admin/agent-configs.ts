@@ -588,13 +588,14 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
 
       type LiveUser = { id: string; displayName: string | null; username: string | null; systemLanguage: string | null } & RecipientLanguagePrefs;
       const userIds = roles.map((r) => r.userId);
-      const users: LiveUser[] = userIds.length > 0
-        ? await fastify.prisma.user.findMany({
-            where: { id: { in: userIds } },
-            select: { id: true, displayName: true, username: true, ...RECIPIENT_LANG_SELECT },
-          })
-        : [];
+      // Bornée par les rôles de la conversation ; un `in` vide ne lit rien.
+      const users: LiveUser[] = await fastify.prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, displayName: true, username: true, ...RECIPIENT_LANG_SELECT },
+      });
       const userMap = new Map(users.map((u) => [u.id, u]));
+      // La langue RÉSOLUE par le Prisme (rangs 1→4), `null` si aucune.
+      const languageById = new Map(users.map((u) => [u.id, recipientLanguage(u, '') || null]));
 
       return sendSuccess(reply, {
         conversationId,
@@ -629,7 +630,7 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
             // La langue RÉSOLUE par le Prisme (rangs 1→4), `null` si le compte
             // n'en déclare aucune — jamais le « fr » inventé ci-dessus, gardé
             // pour les anciens clients (audit 2026-10-04).
-            language: user ? (recipientLanguage(user, '') || null) : null,
+            language: languageById.get(r.userId) ?? null,
             confidence: r.confidence,
             locked: r.locked,
           };

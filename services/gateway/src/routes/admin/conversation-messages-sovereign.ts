@@ -90,7 +90,8 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
      * tel quel — c'est un seuil ASSUMÉ comme révisable.
      *
      * Ce qui NE change pas, et c'est ce qui compte : le motif écrit reste
-     * obligatoire (refusé au schéma sous dix caractères) et `withAudit` écrit
+     * obligatoire pour l'ADMIN (dix caractères, `requireReasonUnlessSovereign`
+     * — le rang souverain en est dispensé depuis la spec 2026-10-04 § 4) et `withAudit` écrit
      * toujours sa ligne. Un ADMIN lit désormais, et sa lecture laisse la MÊME
      * empreinte qu'un BIGBOSS. Abaisser le rang et effacer la trace auraient
      * été deux décisions distinctes ; une seule est demandée.
@@ -106,8 +107,8 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
     preHandler: [requireReasonUnlessSovereign({ source: 'querystring', min: REASON_MIN_LENGTH })],
     schema: {
       description:
-        'Lit le contenu intégral des messages d\'une conversation privée. Rang souverain (BIGBOSS), motif écrit ' +
-        'obligatoire et geste tracé — #4333 c.3, troisième frère de PUT /admin/agent/llm et DELETE /admin/agent/reset.',
+        'Lit le contenu intégral des messages d\'une conversation privée. Rang d\'administration ; motif écrit ' +
+        'obligatoire sauf pour le rang souverain (spec 2026-10-04 § 4) ; geste tracé — #4333 c.3.',
       tags: ['admin'],
       summary: 'Read a private conversation\'s messages (sovereign)',
       security: [{ bearerAuth: [] }],
