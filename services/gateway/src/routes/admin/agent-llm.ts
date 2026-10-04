@@ -4,6 +4,7 @@
  * fournisseur par défaut, budgets). Point d'entrée : `agent.ts` (#4284).
  */
 
+import { auditAgentGesture } from './agent-audit';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError, logWarn } from '../../utils/logger';
@@ -225,6 +226,7 @@ export function registerAgentLlmRoutes(fastify: FastifyInstance, deps: AgentRout
         );
       }
 
+      await auditAgentGesture(request, { action: 'AGENT_GLOBAL_CONFIG_UPDATED', entity: 'Agent', entityId: 'global', changes: parsed.data });
       return sendSuccess(reply, { ...config, cacheInvalidation: invalidationStatus });
     } catch (error) {
       logError(fastify.log, 'Error upserting global agent config:', error);

@@ -41,6 +41,7 @@ const mockPrisma: any = {
     upsert: jest.fn<any>(),
     update: jest.fn<any>(),
   },
+  agentGlobalConfig: { findFirst: jest.fn<any>().mockResolvedValue(null) },
   agentLlmConfig: {
     findFirst: jest.fn<any>(),
     update: jest.fn<any>(),

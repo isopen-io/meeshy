@@ -419,7 +419,7 @@ describe('Agent Admin Routes — extra coverage', () => {
       prisma.agentAnalytic.findUnique.mockResolvedValue(null);
       prisma.agentConversationSummary.findUnique.mockResolvedValue(null);
       prisma.agentUserRole.findMany.mockResolvedValue([]);
-      prisma.agentConfig.findUnique.mockResolvedValue(null);
+      prisma.agentConfig.findUnique.mockResolvedValue({ scanStartedAt: null, currentNode: null });
 
       const res = await app.inject({ method: 'GET', url: `/configs/${CONV_ID}/live` });
       const body = JSON.parse(res.body);
@@ -438,7 +438,7 @@ describe('Agent Admin Routes — extra coverage', () => {
       prisma.agentUserRole.findMany.mockResolvedValue([
         { userId: USER_ID, confidence: 0.5, locked: true },
       ]);
-      prisma.agentConfig.findUnique.mockResolvedValue(null);
+      prisma.agentConfig.findUnique.mockResolvedValue({ scanStartedAt: null, currentNode: null });
       // user not found in DB
       prisma.user.findMany.mockResolvedValue([]);
 

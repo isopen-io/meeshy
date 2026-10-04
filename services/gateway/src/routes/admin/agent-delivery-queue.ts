@@ -4,6 +4,7 @@
  * message en attente). Point d'entrée : `agent.ts` (#4284).
  */
 
+import { auditAgentGesture } from './agent-audit';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError } from '../../utils/response';
@@ -86,6 +87,7 @@ export function registerAgentDeliveryQueueRoutes(fastify: FastifyInstance, deps:
     try {
       const { id } = request.params as { id: string };
       const data = await client.deleteQueueItem(id);
+      await auditAgentGesture(request, { action: 'AGENT_QUEUE_ITEM_DELETED', entity: 'Agent', entityId: id });
       return sendSuccess(reply, data);
     } catch (error) {
       if (error instanceof AgentUnavailableError) {
@@ -128,6 +130,7 @@ export function registerAgentDeliveryQueueRoutes(fastify: FastifyInstance, deps:
       const { id } = request.params as { id: string };
       const { content } = request.body as { content: string };
       const data = await client.editQueueItem(id, content);
+      await auditAgentGesture(request, { action: 'AGENT_QUEUE_ITEM_EDITED', entity: 'Agent', entityId: id, changes: { content: { after: content } } });
       return sendSuccess(reply, data);
     } catch (error) {
       if (error instanceof AgentUnavailableError) {

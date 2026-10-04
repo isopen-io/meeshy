@@ -4,6 +4,7 @@
  * (souverain, #4157). Point d'entrée : `agent.ts` (#4284).
  */
 
+import { auditAgentGesture } from './agent-audit';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { logError } from '../../utils/logger';
@@ -85,6 +86,10 @@ export function registerAgentResetRoutes(fastify: FastifyInstance, deps: AgentRo
         redisKeysDeleted++;
       }
       const invalidationStatus = await broadcastInvalidation({ conversationId });
+      await auditAgentGesture(request, {
+        action: 'AGENT_CONVERSATION_RESET', entity: 'Conversation', entityId: conversationId,
+        changes: { configs: config.count, roles: roles.count, summaries: summary.count, analytics: analytic.count },
+      });
 
       return sendSuccess(reply, {
         conversationId,
@@ -155,6 +160,7 @@ export function registerAgentResetRoutes(fastify: FastifyInstance, deps: AgentRo
       // anywhere sees the change instead of resurrecting the deleted
       // profile from a stale cached config.
       const invalidationStatus = await broadcastInvalidation({ global: true });
+      await auditAgentGesture(request, { action: 'AGENT_USER_RESET', entity: 'User', entityId: userId, changes: { roles: roles.count, globalProfiles: globalProfile.count } });
 
       return sendSuccess(reply, {
         userId,

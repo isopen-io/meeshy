@@ -6,6 +6,8 @@
  * (#4284).
  */
 
+import { auditAgentGesture } from './agent-audit';
+import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs } from '../../utils/recipient-language';
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { isScanActive } from '@meeshy/shared/types/agent';
@@ -432,6 +434,7 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
         );
       }
 
+      await auditAgentGesture(request, { action: 'AGENT_CONFIG_UPDATED', entity: 'Conversation', entityId: conversationId, changes: parsed.data });
       return sendSuccess(reply, { ...config, cacheInvalidation: invalidationStatus });
     } catch (error) {
       logError(fastify.log, 'Error upserting agent config:', error);
@@ -460,6 +463,7 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
       // the deleted conversation immediately (without it the agent could run
       // up to 5 more minutes on a config that no longer exists in Mongo).
       await broadcastInvalidation({ conversationId });
+      await auditAgentGesture(request, { action: 'AGENT_CONFIG_DELETED', entity: 'Conversation', entityId: conversationId });
       return sendSuccess(reply, null, { message: 'Config supprimée' });
     } catch (error) {
       logError(fastify.log, 'Error deleting agent config:', error);
@@ -550,7 +554,7 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
       summary: 'Get live agent state',
       security: securityBearerAuth,
       params: conversationIdParams,
-      response: { 200: successDataResponse, ...stdErrors },
+      response: { 200: successDataResponse, ...stdErrorsWithNotFound },
     },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
@@ -575,15 +579,19 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
         }),
       ]);
 
+      // Sans configuration, il n'y a pas d'agent à observer : 404, comme
+      // `/schedule` — un état vide se confondait avec un agent au repos.
+      if (!agentConfig) return sendNotFound(reply, 'Config non trouvée');
+
       const toneProfiles = profilesRaw ? JSON.parse(profilesRaw) : {};
       const messages = messagesRaw ? JSON.parse(messagesRaw) : [];
 
-      type LiveUser = { id: string; displayName: string | null; username: string | null; systemLanguage: string | null };
+      type LiveUser = { id: string; displayName: string | null; username: string | null; systemLanguage: string | null } & RecipientLanguagePrefs;
       const userIds = roles.map((r) => r.userId);
       const users: LiveUser[] = userIds.length > 0
         ? await fastify.prisma.user.findMany({
             where: { id: { in: userIds } },
-            select: { id: true, displayName: true, username: true, systemLanguage: true },
+            select: { id: true, displayName: true, username: true, ...RECIPIENT_LANG_SELECT },
           })
         : [];
       const userMap = new Map(users.map((u) => [u.id, u]));
@@ -616,7 +624,12 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
           return {
             userId: r.userId,
             displayName: user?.displayName ?? user?.username ?? r.userId,
+            username: user?.username ?? null,
             systemLanguage: user?.systemLanguage ?? 'fr',
+            // La langue RÉSOLUE par le Prisme (rangs 1→4), `null` si le compte
+            // n'en déclare aucune — jamais le « fr » inventé ci-dessus, gardé
+            // pour les anciens clients (audit 2026-10-04).
+            language: user ? (recipientLanguage(user, '') || null) : null,
             confidence: r.confidence,
             locked: r.locked,
           };
@@ -739,6 +752,7 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
         data: { scanStartedAt: null, currentNode: null },
       });
       notifyAdminDashboards('scan', conversationId);
+      await auditAgentGesture(request, { action: 'AGENT_SCAN_STOPPED', entity: 'Conversation', entityId: conversationId });
 
       if (!agentClient) {
         return sendSuccess(reply, { conversationId, stopped: true, agentUnavailable: true });
@@ -779,10 +793,19 @@ export function registerAgentConfigsRoutes(fastify: FastifyInstance, deps: Agent
       const config = await fastify.prisma.agentConfig.findUnique({ where: { conversationId } });
       if (!config) return sendNotFound(reply, 'Config non trouvée');
 
+      // Un agent DÉSACTIVÉ (ici ou globalement) ne scanne pas : annoncer
+      // `triggered: true` mentait à la console (audit 2026-10-04).
+      const global = await fastify.prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' }, select: { enabled: true } });
+      const refus = config.enabled === false ? 'CONVERSATION_DISABLED' : global?.enabled === false ? 'GLOBAL_DISABLED' : null;
+      if (refus) {
+        return sendSuccess(reply, { conversationId, triggered: false, reason: refus, triggeredAt: null });
+      }
+
       const cache = getCacheStore();
       await cache.set(`agent:last-scan:${conversationId}`, '0', 86400);
       await cache.publish('agent:trigger-scan', JSON.stringify({ conversationId }));
       notifyAdminDashboards('scan', conversationId);
+      await auditAgentGesture(request, { action: 'AGENT_SCAN_TRIGGERED', entity: 'Conversation', entityId: conversationId });
 
       return sendSuccess(reply, {
         conversationId,
