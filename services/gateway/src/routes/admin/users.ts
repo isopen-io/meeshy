@@ -35,6 +35,7 @@ import {
 import { registerConversationMessagesSovereignRoute } from './conversation-messages-sovereign';
 import { registerConversationsSovereignRoute } from './conversations-sovereign';
 import { registerUserReportsRoutes } from './user-reports';
+import { registerConversationParticipantsRoute } from './conversation-participants';
 import { registerUserWriteRoutes } from './users-write';
 import { registerUserBanRoutes } from './user-bans';
 import { registerUserSessionRoutes } from './user-sessions';
@@ -938,74 +939,9 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // de taille.
   registerUserReportsRoutes(fastify);
 
-  /**
-   * GET /admin/conversations/:conversationId/participants - Paginated members of
-   * a conversation (for the group members modal in the admin user fiche).
-   * Requires canViewUsers permission.
-   */
-  fastify.get<{
-    Params: { conversationId: string };
-    Querystring: { offset?: string; limit?: string };
-  }>('/admin/conversations/:conversationId/participants', {
-    preHandler: [fastify.authenticate, requireUserViewAccess]
-  }, async (request, reply) => {
-    try {
-      const authContext = (request as UnifiedAuthRequest).authContext as UnifiedAuthContext;
-      const viewerRole = authContext.registeredUser!.role as UserRoleEnum;
-      // Directive produit 2026-08-25 : `requireUserViewAccess` laisse passer
-      // MODERATOR/AUDIT (canViewUsers), qui n'ont plus le droit de voir la
-      // présence — seuil `canViewPresence` (ADMIN/BIGBOSS uniquement).
-      const canSeePresence = permissionsService.canViewPresence(viewerRole);
-
-      const { conversationId } = request.params;
-      const { offset = '0', limit } = request.query;
-      const { offset: offsetNum, limit: limitNum } = validatePagination(offset, limit, { defaultLimit: 30, maxLimit: 100 });
-
-      const conversation = await fastify.prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: { id: true }
-      });
-      if (!conversation) {
-        return sendNotFound(reply, 'Conversation non trouvée');
-      }
-
-      const where = { conversationId };
-      const [participants, total] = await Promise.all([
-        fastify.prisma.participant.findMany({
-          where,
-          select: {
-            id: true,
-            userId: true,
-            type: true,
-            displayName: true,
-            avatar: true,
-            role: true,
-            isActive: true,
-            isOnline: true,
-            joinedAt: true, leftAt: true, bannedAt: true,
-            nickname: true,
-            user: { select: { id: true, username: true, displayName: true, avatar: true } }
-          },
-          orderBy: { joinedAt: 'asc' },
-          skip: offsetNum,
-          take: limitNum
-        }),
-        fastify.prisma.participant.count({ where })
-      ]);
-
-      const data = canSeePresence ? participants : participants.map((p) => ({ ...p, isOnline: false }));
-
-      return sendPaginatedSuccess(reply, data, {
-        total,
-        offset: offsetNum,
-        limit: limitNum,
-        hasMore: offsetNum + participants.length < total
-      });
-    } catch (error) {
-      logError(fastify.log, 'Error fetching conversation participants', error);
-      return sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch conversation participants' });
-    }
-  });
+  // GET /admin/conversations/:conversationId/participants — extrait vers
+  // `conversation-participants.ts` (budget de taille, `removedByAdmin`).
+  registerConversationParticipantsRoute(fastify);
 
   // GET /admin/conversations/:conversationId/messages — régime SOUVERAIN
   // (#4333 c.3, troisième frère de PUT /admin/agent/llm et DELETE

@@ -51,6 +51,7 @@ type PrismaOpts = {
   messages?: AnyRecord[];
   messagesCount?: number;
   conversationExists?: boolean;
+  memberRemovals?: AnyRecord[];
 };
 
 function createMockPrisma(opts: PrismaOpts) {
@@ -97,6 +98,7 @@ function createMockPrisma(opts: PrismaOpts) {
     },
     adminAuditLog: {
       create: jest.fn(async (args: { data: AnyRecord }) => ({ id: 'audit-1', ...args.data })),
+      groupBy: jest.fn(async () => opts.memberRemovals ?? []),
     },
   } as unknown as PrismaClient;
 }
@@ -194,6 +196,55 @@ describe('GET /admin/users/:userId/conversations', () => {
 });
 
 describe('GET /admin/conversations/:conversationId/participants', () => {
+  // Le modèle Participant ne dit pas QUI a fait sortir un membre : le journal
+  // d'administration le dit. Une seule requête groupée pour la page entière.
+  it('sert removedByAdmin depuis AdminAuditLog, en une requête groupée (pas de N+1)', async () => {
+    const prisma = createMockPrisma({
+      participants: [
+        { id: 'pt1', userId: 'u1', isActive: true, leftAt: null, user: null },
+        { id: 'pt2', userId: 'u2', isActive: false, leftAt: new Date('2026-02-01T00:00:00.000Z'), user: null },
+        { id: 'pt3', userId: 'u3', isActive: false, leftAt: new Date('2026-02-01T00:00:00.000Z'), user: null },
+        // Retiré par l'administration, revenu, puis parti de lui-même : la trace est ANTÉRIEURE au départ.
+        { id: 'pt4', userId: 'u4', isActive: false, leftAt: new Date('2026-03-01T00:00:00.000Z'), user: null },
+      ],
+      memberRemovals: [
+        { userId: 'u2', _max: { createdAt: new Date('2026-02-01T00:00:00.050Z') } },
+        { userId: 'u4', _max: { createdAt: new Date('2026-02-01T00:00:00.050Z') } },
+      ],
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: '/api/v1/admin/conversations/conv-1/participants', headers: { authorization: 'Bearer x' } });
+
+    expect(res.statusCode).toBe(200);
+    const byId = Object.fromEntries((res.json().data as AnyRecord[]).map((p) => [p.id, p.removedByAdmin]));
+    expect(byId).toEqual({ pt1: false, pt2: true, pt3: false, pt4: false });
+
+    const groupBy = (prisma as unknown as { adminAuditLog: { groupBy: jest.Mock } }).adminAuditLog.groupBy;
+    expect(groupBy).toHaveBeenCalledTimes(1);
+    expect(groupBy.mock.calls[0][0]).toMatchObject({
+      by: ['userId'],
+      where: {
+        action: 'ADMIN_CONVERSATION_MEMBER_REMOVED',
+        entity: 'Conversation',
+        entityId: 'conv-1',
+        userId: { in: ['u2', 'u3', 'u4'] },
+      },
+      _max: { createdAt: true },
+    });
+    await app.close();
+  });
+
+  it("n'interroge pas le journal quand aucun membre de la page n'est sorti", async () => {
+    const prisma = createMockPrisma({
+      participants: [{ id: 'pt1', userId: 'u1', isActive: true, leftAt: null, user: null }],
+    });
+    const app = await buildApp(prisma, 'ADMIN');
+    const res = await app.inject({ method: 'GET', url: '/api/v1/admin/conversations/conv-1/participants', headers: { authorization: 'Bearer x' } });
+    expect(res.json().data[0].removedByAdmin).toBe(false);
+    expect((prisma as unknown as { adminAuditLog: { groupBy: jest.Mock } }).adminAuditLog.groupBy).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it('sert leftAt et bannedAt — un membre parti ou banni se dit, il ne se devine pas', async () => {
     const prisma = createMockPrisma({
       participants: [
