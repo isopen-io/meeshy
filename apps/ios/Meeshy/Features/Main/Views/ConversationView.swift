@@ -1376,10 +1376,9 @@ struct ConversationView: View {
                     if scrollState.isNearBottom != nearBottom {
                         scrollState.isNearBottom = nearBottom
                     }
-                    viewModel.isCurrentlyNearBottom = nearBottom
                     // Revenir au bas ne marque rien (`onMessagesSeen` le fait) ;
-                    // au bas d'une fenêtre sautée, la page plus récente (#9304).
-                    if nearBottom { Task { await viewModel.loadNewerMessages() } }
+                    // au bas d'une fenêtre sautée, les pages plus récentes (#9339).
+                    viewModel.noteNearBottom(nearBottom)
                 },
                 onScrollingActiveChanged: { isActive in
                     withAnimation(.easeInOut(duration: 0.22)) {

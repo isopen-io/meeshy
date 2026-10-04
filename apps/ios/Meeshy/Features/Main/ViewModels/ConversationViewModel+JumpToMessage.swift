@@ -85,6 +85,44 @@ extension ConversationViewModel {
         }
     }
 
+    // MARK: - La chaîne des pages plus récentes (#9339)
+
+    /// Reçoit l'état « en bas du fil » de la liste. Au bas d'une fenêtre
+    /// sautée qui a du plus récent, lance UNE chaîne de pages : une page
+    /// courte laisse le bas visible sans que la liste rechange d'état, et
+    /// c'est la chaîne — pas un nouveau défilement — qui demande la suivante.
+    /// Quitter le bas l'annule.
+    func noteNearBottom(_ nearBottom: Bool) {
+        isCurrentlyNearBottom = nearBottom
+        guard nearBottom else {
+            cancelNewerPagesChain()
+            return
+        }
+        guard newerPagesChain == nil, isInJumpedState, hasNewerMessages else { return }
+        newerPagesChain = Task { [weak self] in
+            await self?.chainNewerPages()
+            guard !Task.isCancelled else { return }
+            self?.newerPagesChain = nil
+        }
+    }
+
+    func cancelNewerPagesChain() {
+        newerPagesChain?.cancel()
+        newerPagesChain = nil
+    }
+
+    /// Une page à la fois, tant que le bas reste visible et que le serveur
+    /// annonce du plus récent. Une page qui ne recule pas le bord de la
+    /// fenêtre (filigrane stagnant, échec réseau) arrête la chaîne : elle ne
+    /// redemande jamais la même page.
+    private func chainNewerPages() async {
+        while !Task.isCancelled, isCurrentlyNearBottom, isInJumpedState, hasNewerMessages {
+            let edgeBefore = messageStore.jumpedNewerEdge
+            await loadNewerMessages()
+            guard messageStore.jumpedNewerEdge != edgeBefore else { return }
+        }
+    }
+
     /// Outcome of `jumpToQuotedMessage`.
     enum JumpResult {
         /// The message was already present in the local store — caller should
@@ -147,6 +185,7 @@ extension ConversationViewModel {
     func returnToLatest() async {
         guard isInJumpedState else { return }
 
+        cancelNewerPagesChain()
         isInJumpedState = false
         hasNewerMessages = false
         // Also clear any active in-conversation search state so the results
