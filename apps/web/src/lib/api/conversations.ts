@@ -2,6 +2,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 
 import { unwrap } from './client';
+import { deltaWatermark, FULL_RECONCILE_INTERVAL_MS, loadConversationsDelta, mergeConversationsDelta } from './conversations-delta';
 import type { ConversationsInfiniteData, ConversationsPage, ConversationsPageParam } from './conversations-pages';
 import { flattenConversationPages, nextConversationsCursor } from './conversations-pages';
 import type { DataSource } from './config';
@@ -35,6 +36,8 @@ export const PAGE_SIZE = 30;
 export type ConversationsDeps = {
   readonly source: DataSource;
   readonly transport: HttpTransport;
+  /** L'horloge de l'intervalle de réconciliation (#6261) — `Date.now` par défaut. */
+  readonly now?: () => number;
 };
 
 /**
@@ -116,24 +119,80 @@ export async function loadConversation(
 }
 
 /**
+ * L'ÉTAT D'UN RAFRAÎCHISSEMENT, par `QueryClient` (#6261). TanStack rejoue une
+ * requête infinie page par page, la page 1 d'abord puis chaque curseur que
+ * `getNextPageParam` en tire (`infiniteQueryBehavior`). La page 1 fait le delta
+ * et la fusion ; les pages suivantes de la MÊME relecture sont alors servies
+ * par `mergedPages`, sans réseau. Une relecture qui ne passe pas par le delta
+ * vide cet état, et ses pages suivantes partent au réseau comme avant.
+ */
+const mergedPages = new WeakMap<QueryClient, Map<string, ConversationsPage>>();
+const lastFullReadAt = new WeakMap<QueryClient, number>();
+const fullReadRequested = new WeakSet<QueryClient>();
+
+function deltaBasis(client: QueryClient, deps: ConversationsDeps): { readonly data: ConversationsInfiniteData; readonly since: string } | undefined {
+  if (deps.source !== 'gateway') return undefined;
+  if (fullReadRequested.delete(client)) return undefined;
+  const lastFull = lastFullReadAt.get(client);
+  const now = (deps.now ?? Date.now)();
+  if (lastFull === undefined || now - lastFull > FULL_RECONCILE_INTERVAL_MS) return undefined;
+  const data = client.getQueryData<ConversationsInfiniteData>(CONVERSATIONS_QUERY_KEY);
+  if (data === undefined || !Array.isArray(data.pages) || data.pages.length === 0) return undefined;
+  const since = deltaWatermark(data);
+  return since === undefined ? undefined : { data, since };
+}
+
+async function loadFirstPage(
+  client: QueryClient | undefined,
+  deps: ConversationsDeps,
+  signal: AbortSignal | undefined,
+): Promise<ConversationsPage> {
+  if (client !== undefined) mergedPages.delete(client);
+  const basis = client === undefined ? undefined : deltaBasis(client, deps);
+  if (client !== undefined && basis !== undefined) {
+    const delta = unwrap(await loadConversationsDelta({ transport: deps.transport, since: basis.since, ...(signal !== undefined ? { signal } : {}) }));
+    const merged = delta.complete ? mergeConversationsDelta(basis.data, delta) : null;
+    const [first, ...rest] = merged?.pages ?? [];
+    if (merged !== null && first !== undefined) {
+      mergedPages.set(client, new Map(rest.map((page, index) => [String(merged.pageParams[index + 1]), page] as const)));
+      return first;
+    }
+  }
+  const page = unwrap(await loadConversationsPage({ ...deps, ...(signal !== undefined ? { signal } : {}) }));
+  if (client !== undefined) lastFullReadAt.set(client, (deps.now ?? Date.now)());
+  return page;
+}
+
+function takeMergedPage(client: QueryClient | undefined, pageParam: string): ConversationsPage | undefined {
+  const pages = client === undefined ? undefined : mergedPages.get(client);
+  const page = pages?.get(pageParam);
+  if (page !== undefined) pages?.delete(pageParam);
+  return page;
+}
+
+/**
  * `conversationsInfiniteOptions` — spreadable dans `useInfiniteQuery` OU
  * `QueryClient.fetchInfiniteQuery`, SANS `select` : `conversationsQuery`
  * (ci-dessous) en est la seule qui en ajoute un, pour que
  * `refreshConversations` (qui n'a besoin que des PAGES brutes) n'en paie pas
  * le coût. `initialPageParam: undefined` ⇒ la première page ne porte aucun
  * `before` — la MÊME absence que `nextCursor` d'une page épuisée.
+ *
+ * Une relecture d'un cache déjà chargé passe par le delta (#6261) : UNE
+ * requête, quel que soit le nombre de pages, et la relecture complète reste
+ * le repli (premier chargement, delta tronqué, fusion sans curseur sûr,
+ * intervalle de réconciliation écoulé, tirer-pour-rafraîchir).
  */
 export function conversationsInfiniteOptions(deps: ConversationsDeps) {
   return {
     queryKey: CONVERSATIONS_QUERY_KEY,
-    queryFn: async ({ pageParam, signal }: { readonly pageParam?: ConversationsPageParam; readonly signal?: AbortSignal }) =>
-      unwrap(
-        await loadConversationsPage({
-          ...deps,
-          ...(pageParam !== undefined ? { before: pageParam } : {}),
-          ...(signal !== undefined ? { signal } : {}),
-        }),
-      ),
+    queryFn: async ({ pageParam, signal, client }: { readonly pageParam?: ConversationsPageParam; readonly signal?: AbortSignal; readonly client?: QueryClient }) => {
+      if (pageParam === undefined) return loadFirstPage(client, deps, signal);
+      return (
+        takeMergedPage(client, pageParam) ??
+        unwrap(await loadConversationsPage({ ...deps, before: pageParam, ...(signal !== undefined ? { signal } : {}) }))
+      );
+    },
     initialPageParam: undefined as ConversationsPageParam,
     getNextPageParam: nextConversationsCursor,
   };
@@ -232,6 +291,7 @@ export function patchConversationDetail(
  * `completing failed`.
  */
 export function refreshConversations(queryClient: QueryClient, deps: ConversationsDeps): Promise<void> {
+  fullReadRequested.add(queryClient);
   return queryClient
     .fetchInfiniteQuery({ ...conversationsInfiniteOptions(deps), pages: 1, staleTime: 0 })
     .then(() => undefined);
