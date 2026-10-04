@@ -83,7 +83,11 @@ final class JumpedWindowNewerPageTests: XCTestCase {
     }
 
     /// Fenêtre sautée autour de `m-2`, le plus récent servi étant `m-3`.
-    private func jump(_ sut: ConversationViewModel, _ service: MockMessageService, hasNewer: Bool) async {
+    /// `atBottom` est le dernier état « en bas » connu de la liste à l'arrivée :
+    /// faux par défaut, pour que seuls les témoins de #9360 voient l'atterrissage
+    /// au bas lancer la chaîne.
+    private func jump(_ sut: ConversationViewModel, _ service: MockMessageService, hasNewer: Bool, atBottom: Bool = false) async {
+        sut.noteNearBottom(atBottom)
         service.listAroundResult = .success(response([
             ("m-1", "2026-03-01T10:00:00.000Z"),
             ("m-2", "2026-03-01T10:01:00.000Z"),
@@ -300,6 +304,106 @@ final class JumpedWindowNewerPageTests: XCTestCase {
         await chain?.value
 
         XCTAssertLessThanOrEqual(service.listAfterCallCount, 1, "Revenir au présent arrête la chaîne")
+    }
+
+    // MARK: - L'atterrissage d'un saut au bas d'une fenêtre courte (#9360)
+
+    func test_jumpLanding_atBottomWithNewer_startsTheChainUntilPresent() async {
+        let (sut, service) = makeSUT()
+        service.listAfterResults = twoShortPages()
+
+        await jump(sut, service, hasNewer: true, atBottom: true)
+        await sut.newerPagesChain?.value
+
+        XCTAssertEqual(service.listAfterCallCount, 2,
+                       "Une fenêtre courte qui tient à l'écran rejoint le présent sans attendre un défilement")
+        XCTAssertFalse(sut.hasNewerMessages)
+        XCTAssertEqual(sut.messageStore.jumpedNewerEdge, .present)
+        XCTAssertNil(sut.newerPagesChain, "La chaîne finie libère sa place")
+    }
+
+    func test_jumpToQuotedMessage_landingAtBottomWithNewer_startsTheChain() async {
+        let (sut, service) = makeSUT()
+        sut.noteNearBottom(true)
+        service.listAroundResult = .success(response([
+            ("m-1", "2026-03-01T10:00:00.000Z"),
+            ("m-2", "2026-03-01T10:01:00.000Z"),
+            ("m-3", "2026-03-01T10:02:00.000Z"),
+        ], hasMore: true, hasNewer: true))
+        service.listAfterResults = twoShortPages()
+
+        let result = await sut.jumpToQuotedMessage(messageId: "m-2")
+        await sut.newerPagesChain?.value
+
+        XCTAssertEqual(result, .loadedFromServer)
+        XCTAssertEqual(service.listAfterCallCount, 2, "La citation tapée suit la même règle que le saut")
+        XCTAssertEqual(sut.messageStore.jumpedNewerEdge, .present)
+    }
+
+    func test_jumpLanding_awayFromBottom_doesNotStartTheChain() async {
+        let (sut, service) = makeSUT()
+        service.listAfterResults = twoShortPages()
+
+        await jump(sut, service, hasNewer: true, atBottom: false)
+        await sut.newerPagesChain?.value
+
+        XCTAssertNil(sut.newerPagesChain)
+        XCTAssertEqual(service.listAfterCallCount, 0, "Loin du bas, rien ne part avant que le lecteur y arrive")
+    }
+
+    func test_jumpLanding_atBottomOnPresent_doesNotStartTheChain() async {
+        let (sut, service) = makeSUT()
+        service.listAfterResults = twoShortPages()
+
+        await jump(sut, service, hasNewer: false, atBottom: true)
+        await sut.newerPagesChain?.value
+
+        XCTAssertNil(sut.newerPagesChain)
+        XCTAssertEqual(service.listAfterCallCount, 0, "Le serveur n'annonce rien de plus récent")
+    }
+
+    func test_jumpLanding_atBottom_thenBottomSignal_keepsOneChain() async {
+        let (sut, service) = makeSUT()
+        service.listAfterResults = twoShortPages()
+        var maxInFlight = 0
+        var inFlight = 0
+        service.onListAfter = {
+            inFlight += 1
+            maxInFlight = max(maxInFlight, inFlight)
+            inFlight -= 1
+        }
+
+        await jump(sut, service, hasNewer: true, atBottom: true)
+        let landed = sut.newerPagesChain
+        sut.noteNearBottom(true)
+
+        XCTAssertNotNil(landed, "L'atterrissage au bas lance la chaîne")
+        XCTAssertTrue(sut.newerPagesChain == landed, "Le signal « en bas » qui suit ne double pas la chaîne")
+        await landed?.value
+        XCTAssertEqual(service.listAfterCallCount, 2)
+        XCTAssertEqual(maxInFlight, 1)
+    }
+
+    func test_jumpLanding_atBottom_readerLeavesBottom_cancelsTheChain() async {
+        let (sut, service) = makeSUT()
+        service.listAfterResults = twoShortPages()
+        service.onListAfter = { sut.noteNearBottom(false) }
+
+        await jump(sut, service, hasNewer: true, atBottom: true)
+        await sut.newerPagesChain?.value
+
+        XCTAssertEqual(service.listAfterCallCount, 1, "Quitter le bas arrête la chaîne lancée à l'atterrissage")
+        XCTAssertNil(sut.newerPagesChain)
+    }
+
+    func test_jumpLanding_atBottom_pageDoesNotAdvance_stopsTheChain() async {
+        let (sut, service) = makeSUT()
+        service.listAfterResult = .success(response([("m-3", "2026-03-01T10:02:00.000Z")], hasMore: true, hasNewer: nil))
+
+        await jump(sut, service, hasNewer: true, atBottom: true)
+        await sut.newerPagesChain?.value
+
+        XCTAssertEqual(service.listAfterCallCount, 1, "Une page qui n'avance pas arrête la chaîne")
     }
 
     // MARK: - La fenêtre du store
