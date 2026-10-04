@@ -35,15 +35,18 @@ export function AdminUserTabs({
   language,
   actif,
   onChange,
+  onglets = ADMIN_USER_TABS,
 }: {
   readonly language: AdminLanguage;
   readonly actif: AdminUserTab;
   readonly onChange: (onglet: AdminUserTab) => void;
+  /** Les onglets OFFERTS à cet administrateur (`adminUserTabsFor`, #8003) — tous par défaut. */
+  readonly onglets?: readonly AdminUserTab[];
 }) {
   return (
     <AdminTabs
       label={translateAdmin(language, 'admin.tab.label')}
-      tabs={ADMIN_USER_TABS.map((onglet) => ({ id: onglet, label: translateAdmin(language, LIBELLES_ONGLETS[onglet]) }))}
+      tabs={onglets.map((onglet) => ({ id: onglet, label: translateAdmin(language, LIBELLES_ONGLETS[onglet]) }))}
       active={actif}
       onChange={onChange}
       idBase={ADMIN_USER_TABS_BASE}

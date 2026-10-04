@@ -13,7 +13,7 @@ import { accountStateOf } from '@/lib/admin/interpret/enums';
 import { personInitials } from '@/lib/admin/interpret/labels';
 import type { AdminReach } from '@/lib/admin/use-admin-reach';
 import { userEntityOf } from '@/lib/admin/user-entity';
-import { adminUserTabOf, withAdminUserTab } from '@/lib/admin/user-tabs';
+import { adminUserTabOf, adminUserTabsFor, withAdminUserTab } from '@/lib/admin/user-tabs';
 import type { AdminDeps } from '@/lib/api/admin';
 import { adminUserBansQueryOptions } from '@/lib/api/admin-user-bans';
 import { adminUserDetailQueryOptions, type AdminUserDetail } from '@/lib/api/admin-user-detail';
@@ -90,7 +90,11 @@ export function AdminUserFiche({
   readonly now?: () => Date;
 }) {
   const [search, setSearch] = useSearch();
-  const onglet = adminUserTabOf(search);
+  /* #8003 — les préférences ne se lisent que sous `canViewSensitiveData`, que portent les
+     seuls rangs d'administration (BIGBOSS, ADMIN) : la même marque que la révocation des
+     sessions (`admin-user-sessions.tsx`). Un onglet qui mènerait à un 403 n'est pas offert. */
+  const onglets = adminUserTabsFor({ sensitive: reach.hasAdminRank });
+  const onglet = adminUserTabOf(search, onglets);
   const annonceur = useLiveAnnouncer();
   const [motDePasse, setMotDePasse] = useState(false);
   const [bannissement, setBannissement] = useState(false);
@@ -160,7 +164,7 @@ export function AdminUserFiche({
         aside={<AdminMemberMeta membre={membre} language={language} now={now} onAnnounce={annonceur.announce} />}
       >
         <AdminMemberQuickActions membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
-        <AdminUserTabs language={language} actif={onglet} onChange={(suivant) => setSearch(withAdminUserTab(search, suivant), true)} />
+        <AdminUserTabs language={language} actif={onglet} onglets={onglets} onChange={(suivant) => setSearch(withAdminUserTab(search, suivant), true)} />
         <AdminTabPanel idBase={ADMIN_USER_TABS_BASE} tab={onglet} attributes={{ 'data-admin-user-panel': onglet }}>
           {onglet === 'profile' ? (
             <div className="grid gap-6">

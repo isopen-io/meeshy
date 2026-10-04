@@ -46,7 +46,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { UserAuditService } from '../../services/admin/user-audit.service';
 import { ConsentValidationService } from '../../services/ConsentValidationService';
 import { requireUserViewAccess, requireUserModifyAccess } from '../../middleware/admin-user-auth.middleware';
-import { requireHierarchy } from '../../middleware/authorize';
+import { requireHierarchy, requirePermission } from '../../middleware/authorize';
 import { UnifiedAuthContext, UnifiedAuthRequest } from '../../middleware/auth';
 import { sendNotFound, sendInternalError, sendSuccess, sendBadRequest, sendError, sendForbidden } from '../../utils/response';
 import { zodIssueSchema, issuesServies } from '../../utils/zod-issue-schema';
@@ -101,12 +101,17 @@ export function registerUserMemberPreferencesRoutes(fastify: FastifyInstance, de
 
   /**
    * GET /admin/users/:userId/preferences - Les sept catégories du membre,
-   * complétées par les défauts. Requiert canViewUsers ; lecture tracée.
+   * complétées par les défauts. Lecture tracée.
+   *
+   * Requiert canViewUsers ET canViewSensitiveData (#8003) : confidentialité,
+   * notifications, chiffrement — ce que le membre a choisi de montrer ou de
+   * taire est une donnée SENSIBLE. MODERATOR et AUDIT voient le compte, pas
+   * ses réglages ; le refus tombe avant toute lecture et toute trace.
    */
   fastify.get<{
     Params: { userId: string };
   }>('/admin/users/:userId/preferences', {
-    preHandler: [fastify.authenticate, requireUserViewAccess],
+    preHandler: [fastify.authenticate, requireUserViewAccess, requirePermission('canViewSensitiveData')],
     schema: {
       description:
         "Préférences d'un membre, les sept catégories complétées par leurs défauts (lecture tracée). #7845.",

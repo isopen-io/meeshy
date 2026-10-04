@@ -12,9 +12,19 @@ export const ADMIN_USER_TABS = ['profile', 'conversations', 'media', 'contacts',
 
 export type AdminUserTab = (typeof ADMIN_USER_TABS)[number];
 
-export function adminUserTabOf(search: URLSearchParams): AdminUserTab {
+/**
+ * Les onglets OFFERTS à un administrateur (#8003). Les préférences d'un membre
+ * ne se lisent que sous `canViewSensitiveData` : qui ne la porte pas ne voit pas
+ * l'onglet, plutôt qu'un onglet qui mènerait à un refus. L'ordre des autres ne
+ * bouge pas.
+ */
+export function adminUserTabsFor({ sensitive }: { readonly sensitive: boolean }): readonly AdminUserTab[] {
+  return sensitive ? ADMIN_USER_TABS : ADMIN_USER_TABS.filter((onglet) => onglet !== 'preferences');
+}
+
+export function adminUserTabOf(search: URLSearchParams, offerts: readonly AdminUserTab[] = ADMIN_USER_TABS): AdminUserTab {
   const demande = search.get('tab');
-  return ADMIN_USER_TABS.find((onglet) => onglet === demande) ?? 'profile';
+  return offerts.find((onglet) => onglet === demande) ?? 'profile';
 }
 
 export function withAdminUserTab(search: URLSearchParams, tab: AdminUserTab): URLSearchParams {

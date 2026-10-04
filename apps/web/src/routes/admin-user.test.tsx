@@ -339,6 +339,24 @@ describe('états dessinés et onglets', () => {
     expect(host.querySelector('[data-collapsible-toggle="admin-conv"]')).not.toBeNull();
   });
 
+  /**
+   * #8003 — la passerelle ne sert les préférences d'un membre qu'à `canViewSensitiveData`
+   * (BIGBOSS, ADMIN). Un MODERATOR qui ouvre la fiche ne se voit pas offrir un onglet qui
+   * mènerait à un 403, et une adresse `?tab=preferences` le ramène au profil sans rien
+   * demander à la passerelle.
+   */
+  test('l’onglet Préférences n’est offert qu’au rang d’administration (#8003)', async () => {
+    const admin = await open();
+    expect(admin.host.querySelector('[data-admin-user-tab="preferences"]')).not.toBeNull();
+
+    const moderateur = await open({ url: '/probe?tab=preferences', identity: adminIdentityFixture({ role: 'MODERATOR' }) });
+    expect(moderateur.host.querySelector('[data-admin-fiche]')).not.toBeNull();
+    expect(moderateur.host.querySelector('[data-admin-user-tab="preferences"]')).toBeNull();
+    expect(moderateur.host.querySelector('[data-admin-user-tab="security"]')).not.toBeNull();
+    expect(moderateur.host.querySelector('[data-admin-user-panel="profile"]')).not.toBeNull();
+    expect(moderateur.calls().some((call) => pathOf(call).endsWith('/preferences'))).toBe(false);
+  });
+
   test('les onglets de la fiche sont ceux du gabarit commun : contrat d’identifiants, aria-controls, Début/Fin', async () => {
     const { host } = await open();
     const tabs = [...host.querySelectorAll<HTMLElement>('[role="tab"]')];

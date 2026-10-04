@@ -248,7 +248,7 @@ describe('GET /admin/users/:userId/preferences', () => {
     const prisma = createMockPrisma({
       preferencesRow: { privacy: { showOnlineStatus: false }, notification: { dndEnabled: true } },
     });
-    const res = await call(prisma, 'MODERATOR', 'GET', `/admin/users/${TARGET_ID}/preferences`);
+    const res = await call(prisma, 'ADMIN', 'GET', `/admin/users/${TARGET_ID}/preferences`);
     expect(res.statusCode).toBe(200);
     const data = res.json().data;
     expect(Object.keys(data).sort()).toEqual(
@@ -265,6 +265,21 @@ describe('GET /admin/users/:userId/preferences', () => {
     const [row] = auditRows(prisma);
     expect(row).toEqual(expect.objectContaining({ userId: TARGET_ID, adminId: ADMIN_ID, action: 'VIEW_USER' }));
     expect(JSON.parse(row.metadata as string)).toEqual({ surface: 'preferences' });
+  });
+
+  /**
+   * #8003 — les préférences d'un membre (confidentialité, notifications,
+   * chiffrement…) sont des données SENSIBLES : MODERATOR et AUDIT portent
+   * `canViewUsers` mais pas `canViewSensitiveData`, et ne les lisent pas.
+   * Le refus tombe AVANT toute lecture : ni ligne de préférences relue, ni
+   * consultation tracée.
+   */
+  it.each(['MODERATOR', 'AUDIT'])('refuse %s, qui n\'a pas canViewSensitiveData (403), sans rien lire ni tracer', async (role) => {
+    const prisma = createMockPrisma();
+    const res = await call(prisma, role, 'GET', `/admin/users/${TARGET_ID}/preferences`);
+    expect(res.statusCode).toBe(403);
+    expect(prisma.userPreferences.findUnique).not.toHaveBeenCalled();
+    expect(auditRows(prisma)).toHaveLength(0);
   });
 
   it('refuse sans canViewUsers (403), un id invalide (400), un membre introuvable (404)', async () => {
