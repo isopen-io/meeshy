@@ -77,6 +77,7 @@ import {
   isMessageExpiredEvent,
   noteEphemeralDelivery,
 } from './realtime-ephemeral';
+import { catchUpThreadMessage } from './realtime-thread-catch-up';
 import { STARRED_MESSAGES_QUERY_ROOT, applyStarredEvent } from './starred-messages-cache';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
@@ -98,6 +99,16 @@ import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
  * pour les salles que les écrans tiennent (`publication-rooms.ts`, #7395) — la
  * passerelle ne peut pas deviner ce qu'un écran montre.
  */
+
+/** Les notifications qui annoncent l'ARRIVÉE d'un message — jamais une
+ * réaction ni une édition, qui nomment un message que le fil peut ne pas avoir
+ * chargé sans qu'il manque quoi que ce soit (#9291). */
+const MESSAGE_ARRIVAL_NOTIFICATIONS: ReadonlySet<string> = new Set([
+  'new_message',
+  'message_reply',
+  'user_mentioned',
+  'mention',
+]);
 
 function isTypingEvent(payload: unknown): payload is TypingEvent {
   if (typeof payload !== 'object' || payload === null) return false;
@@ -346,6 +357,13 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onConversationUpdated = (payload: unknown): void => {
     if (!isConversationUpdated(payload)) return;
     applyConversationUpdated(deps.queryClient, payload);
+    /* LE FIL OUVERT RATTRAPE UN `message:new` PERDU (#9291) — cet évènement
+       voyage par la room PERSONNELLE ; `message:new`, par celle de la
+       conversation. Mes propres envois sont exclus : leur écho voyage par ma
+       room personnelle, et l'outbox tient la rangée optimiste. */
+    if (typeof payload.lastMessageId === 'string' && payload.updatedBy.id !== deps.viewerId()) {
+      catchUpThreadMessage(deps.queryClient, { conversationId: payload.conversationId, messageId: payload.lastMessageId });
+    }
   };
 
   /** `message:translation` (revue-correction #5793, défaut 2) — le pipeline
@@ -760,6 +778,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       if (oldest !== undefined) seenNotifications.delete(oldest);
     }
     applyNotificationNew(deps.queryClient, notification);
+    /* LA CLOCHE SONNE, LE FIL SUIT (#9291) — la notification d'un message
+       absent du fil ouvert le relit. */
+    const { conversationId, messageId } = notification.context;
+    if (MESSAGE_ARRIVAL_NOTIFICATIONS.has(notification.type) && conversationId !== undefined && messageId !== undefined) {
+      catchUpThreadMessage(deps.queryClient, { conversationId, messageId });
+    }
     /* LA BANNIÈRE IN-APP (#8727) — seulement devant un onglet VISIBLE : un
        onglet caché reçoit le push système, et une bannière posée pendant
        l'absence surgirait, périmée, au retour. */
@@ -982,6 +1006,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.TYPING_STOP, onTypingStop);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, onUnreadUpdated);
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_UPDATED, onConversationUpdated);
+      socket.off<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
