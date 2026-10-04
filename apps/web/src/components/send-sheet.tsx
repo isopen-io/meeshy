@@ -12,7 +12,10 @@ import {
 } from '@/lib/send/send-sheet-plan';
 import { createSendRun, failedKeysOf, type SendRun, type SendRunState, type SendSheetPorts } from '@/lib/send/send-sheet-run';
 import type { SendSheetRequest } from '@/lib/send/send-sheet-store';
+import { studioSeedOfShare } from '@/lib/share-incoming/compose-from-share';
+import { offerStudioSeedOf } from '@/lib/stories/studio-seed';
 import { portailDuNavigateur } from '@/lib/view/invitation';
+import { href, navigate } from '@/routes/route-table';
 
 import { GlyphSvg } from './glyph';
 import { SEND_SHEET_GLYPHS } from './glyphs-send-sheet';
@@ -245,6 +248,17 @@ export function SendSheet({
     copyLink();
   };
 
+  /* « MODIFIER AVANT DE PUBLIER » (#9286) — le partage entrant part au studio
+     du post au lieu d'être publié tel quel : la feuille se ferme, sa légende
+     suit. */
+  const composeSeed = request.intent === 'share' ? studioSeedOfShare(payload, caption) : null;
+  const compose = (): void => {
+    if (composeSeed === null) return;
+    offerStudioSeedOf(composeSeed);
+    onClose();
+    navigate(href('postCompose'));
+  };
+
   const entries = useMemo((): readonly StatusEntry[] => {
     if (runState === null) return [];
     const byKey = new Map(selected.map((row) => [row.key, row]));
@@ -295,6 +309,11 @@ export function SendSheet({
             </button>
           )}
         </div>
+      )}
+      {composeSeed === null || started ? null : (
+        <button type="button" data-send-sheet-compose="" onClick={compose} className={`${BUTTON.secondary} w-full`}>
+          {say('sendSheet.compose')}
+        </button>
       )}
       <button type="button" data-send-sheet-send="" disabled={primary.disabled} onClick={primary.onPress} className={`${BUTTON.primary} w-full`}>
         {primary.label}

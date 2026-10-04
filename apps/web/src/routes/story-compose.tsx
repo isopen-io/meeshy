@@ -385,8 +385,14 @@ function StoryStudio({
       if (focus !== undefined) setDraft((current) => withCurrentPage(current, focus.pageId));
       return;
     }
-    const seed = retouch !== undefined ? retouch.file : takeStudioSeed();
-    if (seed !== null) place('visual', seed);
+    if (retouch !== undefined) {
+      if (retouch.file !== null) place('visual', retouch.file);
+      return;
+    }
+    const seed = takeStudioSeed();
+    if (seed === null) return;
+    importMedia(seed.files);
+    if (seed.text !== '') setDraft((current) => withPostText(current, seed.text));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

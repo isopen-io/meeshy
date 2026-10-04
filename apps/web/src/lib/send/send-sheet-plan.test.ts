@@ -63,8 +63,9 @@ const stepsOf = (payload: SendPayload, targets: readonly SendTarget[], caption =
 };
 
 describe('publishOffered — quelles pastilles offrir', () => {
-  test('une pièce image non protégée : POST, STORY, RÉEL', () => {
-    expect(publishOffered(attachment())).toEqual(['POST', 'STORY', 'REEL']);
+  test('une pièce VIDÉO non protégée : POST, STORY, RÉEL ; une IMAGE seule n’est pas un réel (#9286)', () => {
+    expect(publishOffered(attachment({ mime: 'video/mp4' }))).toEqual(['POST', 'STORY', 'REEL']);
+    expect(publishOffered(attachment())).toEqual(['POST', 'STORY']);
   });
 
   test('JAMAIS rien pour un contenu protégé', () => {
@@ -82,9 +83,16 @@ describe('publishOffered — quelles pastilles offrir', () => {
     expect(publishOffered(files())).toEqual([]);
   });
 
-  test('un média venu d’une publication ou d’un commentaire : les trois', () => {
+  test('le RÉEL suit la règle serveur (`qualifiesAsReel`) : une vidéo, ou au moins deux images (#9286)', () => {
+    expect(publishOffered(files(file('a.png', 'image/png')))).toEqual(['POST', 'STORY']);
+    expect(publishOffered(files(file('a.png', 'image/png'), file('b.jpg', 'image/jpeg')))).toEqual(['POST', 'STORY', 'REEL']);
+    expect(publishOffered(files(file('b.mp4', 'video/mp4')))).toEqual(['POST', 'STORY', 'REEL']);
+  });
+
+  test('un média venu d’une publication ou d’un commentaire : POST et STORY, le RÉEL s’il est vidéo', () => {
     const media: SendPayload = { kind: 'media', url: 'https://cdn/x.jpg', mime: 'image/jpeg', name: 'x.jpg', preview: preview({ kind: 'image' }) };
-    expect(publishOffered(media)).toEqual(['POST', 'STORY', 'REEL']);
+    expect(publishOffered(media)).toEqual(['POST', 'STORY']);
+    expect(publishOffered({ ...media, mime: 'video/mp4' })).toEqual(['POST', 'STORY', 'REEL']);
   });
 
   test('une publication : STORY, RÉEL, POST (repost)', () => {
@@ -99,6 +107,7 @@ describe('publishOffered — quelles pastilles offrir', () => {
     expect(publishOffered(messages())).toEqual([]);
     const sole = { attachmentId: 'a1', mime: 'video/mp4', protected: false };
     expect(publishOffered(messages({ soleMedia: sole }))).toEqual(['POST', 'STORY', 'REEL']);
+    expect(publishOffered(messages({ soleMedia: { ...sole, mime: 'image/png' } }))).toEqual(['POST', 'STORY']);
     expect(publishOffered(messages({ soleMedia: { ...sole, protected: true } }))).toEqual([]);
     expect(
       publishOffered(
@@ -179,7 +188,7 @@ describe('planSend — une pièce de message', () => {
   });
 
   test('publier : from-attachment avec le format et la légende', () => {
-    const [post, story, reel] = stepsOf(attachment(), [publish('POST'), publish('STORY'), publish('REEL')], 'Beau');
+    const [post, story, reel] = stepsOf(attachment({ mime: 'video/mp4' }), [publish('POST'), publish('STORY'), publish('REEL')], 'Beau');
     expect(post).toEqual([{ kind: 'publish-attachment', attachmentId: 'a7', format: 'POST', content: 'Beau' }]);
     expect(story).toEqual([{ kind: 'publish-attachment', attachmentId: 'a7', format: 'STORY', content: 'Beau' }]);
     expect(reel).toEqual([{ kind: 'publish-attachment', attachmentId: 'a7', format: 'REEL', content: 'Beau' }]);
@@ -294,7 +303,7 @@ describe('planSend — les bornes', () => {
 
   test('les pastilles de publication ne comptent pas dans les dix', () => {
     const ten = Array.from({ length: MAX_CONVERSATION_TARGETS }, (_, i) => conversation(`c${i}`));
-    const payload = attachment();
+    const payload = attachment({ mime: 'video/mp4' });
     expect(plan(payload, [...ten, publish('POST'), publish('STORY'), publish('REEL')]).ok).toBe(true);
     expect(MAX_PUBLISH_TARGETS).toBe(3);
   });

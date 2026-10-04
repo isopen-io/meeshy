@@ -343,7 +343,7 @@ describe('les actions de la visionneuse ouverte depuis l’écran (#8180)', () =
       click($('[data-viewer-action="compose"]'));
       await until(() => $('[data-media-viewer]') === null);
       expect(asked.some((url) => url.endsWith('/uploads/m2.jpg'))).toBe(true);
-      expect(takeStudioSeed()?.name).toBe('m2.jpg');
+      expect(takeStudioSeed()?.files[0]?.name).toBe('m2.jpg');
       expect(window.location.pathname).toBe(href('storyCompose'));
     } finally {
       globalThis.fetch = realFetch;

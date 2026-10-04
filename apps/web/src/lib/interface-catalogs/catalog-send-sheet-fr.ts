@@ -41,6 +41,7 @@ const fr = {
   'sendSheet.error.captionTooLong': 'Ce message est trop long pour une publication ({count} caractères au plus)',
   'sendSheet.error.tooManyFiles': '{count} fichiers au plus par publication',
   'sendSheet.moreOptions': 'Plus d’options…',
+  'sendSheet.compose': 'Modifier avant de publier',
   'sendSheet.copyLink': 'Copier le lien',
   'sendSheet.linkCopied': 'Lien copié',
   'sendSheet.announce.sent': 'Envoyé à {count}',
