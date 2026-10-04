@@ -189,6 +189,50 @@ final class ComposerIconTintTests: XCTestCase {
         XCTAssertEqual(tint.hex, MeeshyColors.brandPrimaryHex)
     }
 
+    func test_resolve_severalEffectsArmed_strongestProtectionWins() {
+        let dominant = ComposerProtection.dominant(ephemeral: true, viewOnce: true, blurred: false)
+        XCTAssertEqual(ComposerIconTint.resolve(protection: dominant, hasMessageEffect: true), .protection(.ephemeral))
+        let veil = ComposerProtection.dominant(ephemeral: false, viewOnce: false, blurred: true)
+        XCTAssertEqual(ComposerIconTint.resolve(protection: veil, hasMessageEffect: true), .protection(.blurred))
+    }
+
+    func test_color_ephemeralOnLight_takesTheAlertInk() {
+        WCAGContrast.assertSameRendering(
+            ComposerIconTint.protection(.ephemeral).color(common: .clear, isDark: false),
+            MeeshyColors.errorInk, "éphémère, clair")
+        WCAGContrast.assertSameRendering(
+            ComposerIconTint.protection(.ephemeral).color(common: .clear, isDark: true),
+            MeeshyColors.error, "éphémère, sombre")
+    }
+
+    func test_color_common_returnsTheThemeColor() {
+        WCAGContrast.assertSameRendering(
+            ComposerIconTint.common.color(common: MeeshyColors.textSecondary(isDark: false), isDark: false),
+            MeeshyColors.textSecondary(isDark: false), "commune, clair")
+    }
+
+    /// Dimension 5 : une icône teintée tient 3:1 sur le panneau qu'elle
+    /// habite — le fond primaire du thème, voilé par la protection armée.
+    func test_color_everyTint_holdsThreeToOneOnTheBarPanel() {
+        let tints: [ComposerIconTint] = ComposerProtection.allCases.map { .protection($0) } + [.brand, .common]
+        var failures: [String] = []
+        for isDark in [false, true] {
+            let base = MeeshyColors.backgroundPrimary(isDark: isDark)
+            for tint in tints {
+                let panel: Color
+                if case .protection(let protection) = tint {
+                    panel = WCAGContrast.composite(protection.panelWash(isDark: isDark), over: base)
+                } else {
+                    panel = base
+                }
+                let ink = tint.color(common: MeeshyColors.textSecondary(isDark: isDark), isDark: isDark)
+                let ratio = WCAGContrast.ratioOfTranslucentForeground(ink, on: panel)
+                if ratio < 3 { failures.append("\(tint) \(isDark ? "sombre" : "clair") : \(WCAGContrast.fmt(ratio)):1") }
+            }
+        }
+        XCTAssertEqual(failures, [], "Sous 3:1 sur le panneau de la barre.")
+    }
+
     func test_bar_everyIconReadsTheLaw() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -203,6 +247,8 @@ final class ComposerIconTintTests: XCTestCase {
         XCTAssertFalse(protections.contains(": mutedColor)"), "Une bascule au repos lit la couleur commune de la loi.")
         XCTAssertTrue(protections.contains("ComposerIconTint.resolve("), "La barre consulte la loi.")
         XCTAssertFalse(attachments.contains("Color.white.opacity(0.85) : accent"), "Le « + » lit la loi.")
+        XCTAssertFalse(protections.contains(".foregroundColor(isActive ? ComposerProtection."), "Une bascule armée lit l'encre de la loi.")
+        XCTAssertTrue(toolbar.contains(".foregroundColor(iconTint)\n        }\n        .accessibilityLabel(String(localized: \"a11y.composer.language\""), "La pastille de langue lit la loi.")
         let recording = try read("UniversalComposerBar+Recording.swift")
         XCTAssertTrue(recording.contains("Image(systemName: \"mic.fill\")\n                        .font(.callout.weight(.medium))\n                        .foregroundColor(iconTint)"), "Le micro du champ lit la loi.")
     }

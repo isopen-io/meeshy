@@ -70,6 +70,11 @@ public nonisolated struct MeeshyColors {
     public static let errorSoft = Color(hex: "FCA5A5")
     /// red-500 — stop appuyé des gradients d'erreur (boutons).
     public static let errorStrong = Color(hex: "EF4444")
+    /// Le rouge d'alerte comme ENCRE sur un fond CLAIR (#9121) : `error`
+    /// (`F87171`) n'y tient que 2,77:1 sur blanc — sous les 3:1 d'une icône.
+    /// Même valeur que `--color-danger` du schéma clair web
+    /// (`packages/design-tokens/light.css`), qui tient la même barre.
+    public static let errorInk = Color(hex: "C81E1E")
     /// emerald-500 — stop appuyé des gradients de succès.
     public static let successDeep = Color(hex: "10B981")
 
@@ -77,6 +82,7 @@ public nonisolated struct MeeshyColors {
 
     public static let successHex = "34D399"
     public static let errorHex = "F87171"
+    public static let errorInkHex = "C81E1E"
     public static let warningHex = "FBBF24"
     public static let infoHex = "60A5FA"
     public static let neutral500Hex = "6B7280"

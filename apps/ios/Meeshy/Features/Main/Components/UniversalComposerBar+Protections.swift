@@ -46,19 +46,19 @@ extension UniversalComposerBar {
         } label: {
             HStack(spacing: MeeshySpacing.xs) {
                 if ephemeralChoice.wrappedValue == .afterRead {
-                    FlameEyeGlyph(size: 15, tint: ComposerProtection.ephemeral.tint)
+                    FlameEyeGlyph(size: 15, tint: armedTint(.ephemeral))
                 } else {
                     Image(systemName: isActive ? MessageProtectionSymbols.ephemeralFilled : MessageProtectionSymbols.ephemeral)
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(isActive ? ComposerProtection.ephemeral.tint : iconTint)
+                        .foregroundColor(isActive ? armedTint(.ephemeral) : iconTint)
                 }
 
                 if case .duration(let duration) = ephemeralChoice.wrappedValue {
                     Text(duration.label)
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(ComposerProtection.ephemeral.tint)
+                        .foregroundColor(armedTint(.ephemeral))
                 }
-                if isImposed { imposedLockGlyph(tint: ComposerProtection.ephemeral.tint) }
+                if isImposed { imposedLockGlyph(tint: armedTint(.ephemeral)) }
             }
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xs)
@@ -193,14 +193,14 @@ extension UniversalComposerBar {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: isActive ? MessageProtectionSymbols.blurredFilled : MessageProtectionSymbols.blurred)
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? ComposerProtection.blurred.tint : iconTint)
+                    .foregroundColor(isActive ? armedTint(.blurred) : iconTint)
 
                 if isActive {
                     Text(String(localized: "composer.blur.label", defaultValue: "Flou", bundle: .main))
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(ComposerProtection.blurred.tint)
+                        .foregroundColor(armedTint(.blurred))
                 }
-                if isImposed { imposedLockGlyph(tint: ComposerProtection.blurred.tint) }
+                if isImposed { imposedLockGlyph(tint: armedTint(.blurred)) }
             }
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xs)
@@ -243,12 +243,12 @@ extension UniversalComposerBar {
             HStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: isActive ? MessageProtectionSymbols.viewOnceFilled : MessageProtectionSymbols.viewOnce)
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(isActive ? ComposerProtection.viewOnce.tint : iconTint)
+                    .foregroundColor(isActive ? armedTint(.viewOnce) : iconTint)
 
                 if isActive {
                     Text(String(localized: "composer.viewonce.label", defaultValue: "Vue unique", bundle: .main))
                         .font(.caption2).fontWeight(.bold)
-                        .foregroundColor(ComposerProtection.viewOnce.tint)
+                        .foregroundColor(armedTint(.viewOnce))
                 }
             }
             .padding(.horizontal, MeeshySpacing.sm)
@@ -314,7 +314,23 @@ extension UniversalComposerBar {
         ComposerIconTint.resolve(
             protection: dominantProtection,
             hasMessageEffect: pendingEffects.wrappedValue.hasAnyEffect
-        ).color(common: style == .dark ? .white.opacity(0.85) : theme.textSecondary)
+        ).color(common: commonIconColor, isDark: iconSurfaceIsDark)
+    }
+
+    /// La couleur d'une bascule ARMÉE : celle de SA protection, à l'encre du
+    /// schéma — l'éphémère armé et les icônes qu'il teinte ont le même rouge.
+    func armedTint(_ protection: ComposerProtection) -> Color {
+        ComposerIconTint.protection(protection).color(common: commonIconColor, isDark: iconSurfaceIsDark)
+    }
+
+    private var commonIconColor: Color {
+        style == .dark ? .white.opacity(0.85) : theme.textSecondary
+    }
+
+    /// Le verre est sombre sous le style sombre (story, média) comme sous le
+    /// thème sombre.
+    private var iconSurfaceIsDark: Bool {
+        style == .dark || isDark
     }
 
     /// Le cadenas d'une protection imposée par le message cité (#8557).
