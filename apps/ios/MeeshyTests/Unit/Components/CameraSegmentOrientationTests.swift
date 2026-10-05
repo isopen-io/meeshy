@@ -85,8 +85,8 @@ final class CameraSegmentOrientationTests: XCTestCase {
         let piste = try XCTUnwrap(try await asset.loadTracks(withMediaType: .video).first)
         let taille = try await piste.load(.naturalSize)
         let transformee = try await piste.load(.preferredTransform)
-        let debout = CGRect(origin: .zero, size: taille).applying(transformee)
-        XCTAssertGreaterThan(abs(debout.height), abs(debout.width), "la prise fusionnée est debout")
+        let affichee = CGRect(origin: .zero, size: taille).applying(transformee)
+        XCTAssertGreaterThan(abs(affichee.height), abs(affichee.width), "la prise fusionnée est debout")
         let duree = try await asset.load(.duration)
         XCTAssertEqual(duree.seconds, 1.0, accuracy: 0.15, "les deux segments sont là, bout à bout")
     }

@@ -741,14 +741,15 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// so the composition/export work (CPU-bound, can take a few seconds for
     /// longer recordings) never blocks the main actor.
     ///
-    /// Covered by `CameraModelSegmentMergeTests` (the real empty-input fast
-    /// path — no AVFoundation asset loading involved) and source-reflection
-    /// guards for the rest (`CameraModelSwitchDuringRecordingTests`):
-    /// synthesizing throwaway H.264 clips with `AVAssetWriter` purely to
-    /// round-trip them back through `AVURLAsset`/`AVAssetExportSession` proved
-    /// too fragile in CI (encoder/container edge cases unrelated to this
-    /// method's own logic caused spurious failures), so the merge/export
-    /// behavior itself is pinned structurally instead of via synthetic media.
+    /// **Chaque segment garde l'orientation de SA caméra** (#9464) : des
+    /// transformations égales se reportent sur la piste composée (passthrough
+    /// intact) ; différentes, chaque segment reçoit son calque debout et la
+    /// fusion ré-encode (`CameraSegmentOrientation`).
+    ///
+    /// Covered by `CameraModelSegmentMergeTests` (empty input), source guards
+    /// (`CameraModelSwitchDuringRecordingTests`) and ONE light round-trip of two
+    /// tiny synthetic segments (`CameraSegmentOrientationTests`) — kept to a
+    /// handful of frames, because heavier synthetic media proved fragile in CI.
     nonisolated static func mergeSegments(_ urls: [URL]) async -> URL? {
         guard !urls.isEmpty else { return nil }
         let composition = AVMutableComposition()
@@ -761,6 +762,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
         // (vue 4b : « concatène des pistes DÉJÀ ENCODÉES »). Voir
         // `CameraSegmentMergePolicy`.
         var videoFormats: [SegmentVideoFormat] = []
+        // L'orientation de chaque segment — celle de SA caméra (#9464).
+        var placements: [CameraSegmentPlacement] = []
         var insertedSegmentCount = 0
         for url in urls {
             let asset = AVURLAsset(url: url)
@@ -780,6 +783,9 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
                     if let description = try await assetVideoTrack.load(.formatDescriptions).first {
                         videoFormats.append(SegmentVideoFormat(formatDescription: description))
                     }
+                    let (natural, transform) = try await assetVideoTrack.load(.naturalSize, .preferredTransform)
+                    placements.append(CameraSegmentPlacement(timeRange: CMTimeRange(start: cursor, duration: duration),
+                                                             natural: natural, transform: transform))
                 }
             } catch {
                 Logger.media.error("Failed to insert the video track of a recording segment: \(error.localizedDescription, privacy: .public)")
@@ -793,8 +799,14 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             }
             cursor = cursor + duration
         }
-        let preset = CameraSegmentMergePolicy.preset(formats: videoFormats,
-                                                     readableSegmentCount: insertedSegmentCount)
+        let orientation = CameraSegmentOrientation.uniform(placements)
+        if let orientation { videoTrack.preferredTransform = orientation }
+        let redressement = orientation == nil
+            ? CameraSegmentOrientation.composition(for: videoTrack, placements: placements)
+            : nil
+        let preset = redressement == nil
+            ? CameraSegmentMergePolicy.preset(formats: videoFormats, readableSegmentCount: insertedSegmentCount)
+            : AVAssetExportPresetHighestQuality
         guard cursor > .zero,
               let exportSession = AVAssetExportSession(asset: composition, presetName: preset)
         else { return nil }
@@ -803,6 +815,7 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             .appendingPathComponent("video_merged_\(UUID().uuidString).mov")
         exportSession.outputURL = outputURL
         exportSession.outputFileType = .mov
+        exportSession.videoComposition = redressement
 
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             exportSession.exportAsynchronously { continuation.resume() }
