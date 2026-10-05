@@ -17,7 +17,7 @@ import { awaitingGesture, openingStep, stepGesture } from './gesture';
  * d'engagement) montre que le geste a eu lieu — ou que le joueur passe.
  */
 
-const empty = resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, axes: [], milestones: [] });
+const empty = resolveEngagementProgress({ ...ENGAGEMENT_PROGRESS_FIXTURE, counters: [], milestones: [] });
 
 const view = (patch: Parameters<typeof gameBlockFixture>[0] = {}, base: EngagementWithGame = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE)): EngagementWithGame => ({
   ...base,

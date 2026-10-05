@@ -9,7 +9,7 @@ import { Flame } from './flame';
 
 const CSS = readFileSync(new URL('../../styles/game.css', import.meta.url), 'utf8');
 
-const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean; IntersectionObserver?: unknown };
+const globals = globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean; IntersectionObserver?: unknown };
 
 type Observation = { readonly target: Element; readonly callback: (entries: readonly { readonly isIntersecting: boolean }[]) => void; disconnected: boolean };
 const observations: Observation[] = [];
