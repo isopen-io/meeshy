@@ -11,6 +11,8 @@ import { DeliveryQueueCleanupJob } from './delivery-queue-cleanup';
 import { MutationLogCleanupJob } from './mutation-log-cleanup';
 import { BanExpirySweepJob } from './ban-expiry-sweep';
 import { sweepExpiredSessions } from './session-expiry-sweep';
+import { GameLeagueJob } from './game-league';
+import { GameNightlyJob } from './game-nightly';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
@@ -30,6 +32,8 @@ export class BackgroundJobsManager {
   private deliveryQueueCleanupJob: DeliveryQueueCleanupJob;
   private mutationLogCleanupJob: MutationLogCleanupJob;
   private banExpirySweepJob: BanExpirySweepJob;
+  private gameLeagueJob: GameLeagueJob;
+  private gameNightlyJob: GameNightlyJob;
   /**
    * Le balayage des sessions expirées n'a pas de classe à lui : c'est UNE
    * requête, sans état ni dépendance. Une classe n'ajouterait qu'un emballage
@@ -63,6 +67,8 @@ export class BackgroundJobsManager {
     const userAuditService = new UserAuditService(prisma);
     const banService = new BanService(prisma, userManagementService);
     this.banExpirySweepJob = new BanExpirySweepJob(banService, userAuditService);
+    this.gameLeagueJob = new GameLeagueJob(prisma);
+    this.gameNightlyJob = new GameNightlyJob(prisma);
   }
 
   /**
@@ -82,6 +88,8 @@ export class BackgroundJobsManager {
     this.deliveryQueueCleanupJob.start();
     this.mutationLogCleanupJob.start();
     this.banExpirySweepJob.start();
+    this.gameLeagueJob.start();
+    this.gameNightlyJob.start();
 
     // Toutes les six heures : une session dont l'échéance est passée cesse de
     // se déclarer valide. Sans ce balayage, `isValid` ment à tout ce qui le lit
@@ -147,6 +155,8 @@ export class BackgroundJobsManager {
     this.deliveryQueueCleanupJob.stop();
     this.mutationLogCleanupJob.stop();
     this.banExpirySweepJob.stop();
+    this.gameLeagueJob.stop();
+    this.gameNightlyJob.stop();
 
     if (this.sessionSweepInterval) {
       clearInterval(this.sessionSweepInterval);
@@ -189,6 +199,8 @@ export class BackgroundJobsManager {
       deliveryQueueCleanup: this.deliveryQueueCleanupJob,
       mutationLogCleanup: this.mutationLogCleanupJob,
       banExpirySweep: this.banExpirySweepJob,
+      gameLeague: this.gameLeagueJob,
+      gameNightly: this.gameNightlyJob,
     };
   }
 

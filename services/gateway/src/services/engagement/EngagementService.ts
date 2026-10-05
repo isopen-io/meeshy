@@ -730,6 +730,7 @@ export class EngagementService {
       if (isP2002(err)) return;
       throw err;
     }
+    await this.game.onAchievement(userId, achievementKey);
 
     try {
       const user = await this.prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });

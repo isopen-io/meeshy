@@ -94,6 +94,11 @@ export class EngagementGameHooks {
     await this.isolated('week points', () => this.weekPoints.record(userId, points));
   }
 
+  /** Un succès vient d'être obtenu : sa Gloire, figée à sa rareté du moment (#9390). */
+  async onAchievement(userId: string, milestoneKey: string): Promise<void> {
+    await this.isolated('achievement glory', () => this.glory.creditAchievement(userId, milestoneKey).then(() => undefined));
+  }
+
   /** Le score vient de changer : la Gloire du premier passage de chaque niveau. */
   async onScore(userId: string, score: number, levelRecord: number | null): Promise<void> {
     if (levelFromScore(score) <= (levelRecord ?? 1)) return;

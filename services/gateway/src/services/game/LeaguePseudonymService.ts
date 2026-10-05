@@ -129,7 +129,7 @@ export class LeaguePseudonymService {
     ].filter((name): name is string => typeof name === 'string' && name.length > 0);
 
     const verdict = checkLeaguePseudonym({ value: params.value, forbidden });
-    if (!verdict.ok) {
+    if ('reason' in verdict) {
       throw new GameRefusal(verdict.reason === 'shape' ? 'LEAGUE_PSEUDONYM_INVALID' : 'LEAGUE_PSEUDONYM_FORBIDDEN', { reason: verdict.reason });
     }
     if (this.isOffensive(params.value)) throw new GameRefusal('LEAGUE_PSEUDONYM_FORBIDDEN', { reason: 'offensive' });

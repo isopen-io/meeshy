@@ -38,8 +38,8 @@ const matchField = (actual: unknown, expected: unknown): boolean => {
     if (op === 'lte') return typeof actual === 'number' ? actual <= (value as number) : actual instanceof Date && actual <= (value as Date);
     if (op === 'notIn') return !(value as unknown[]).includes(actual);
     if (op === 'startsWith') return typeof actual === 'string' && actual.startsWith(value as string);
-    if (op === 'gt') return typeof actual === 'number' && actual > (value as number);
-    if (op === 'not') return !matchField(actual, value);
+    if (op === 'gt') return typeof actual === 'number' ? actual > (value as number) : typeof actual === 'string' && actual > (value as string);
+    if (op === 'not') return value === null ? actual !== null && actual !== undefined : !matchField(actual, value);
     if (op === 'has') return Array.isArray(actual) && actual.includes(value);
     if (op === 'isSet') return (actual !== undefined) === value;
     throw new Error(`opérateur non reproduit par le faux : ${op}`);
@@ -187,17 +187,28 @@ class Model {
     return { _sum: { [field ?? 'x']: found.length === 0 || !field ? null : found.reduce((s, r) => s + (r[field] as number), 0) } };
   }
 
-  async groupBy(args: { by: string[]; where?: Where; _count?: { _all?: boolean } }) {
+  async groupBy(args: {
+    by: string[];
+    where?: Where;
+    _count?: { _all?: boolean };
+    _sum?: Record<string, boolean>;
+    having?: Record<string, { _sum?: { gte?: number } }>;
+  }) {
     const found = this.rows.filter((row) => matches(row, args.where ?? {}));
     const groups = new Map<string, Row[]>();
     for (const row of found) {
       const key = args.by.map((field) => String(row[field])).join('|');
       groups.set(key, [...(groups.get(key) ?? []), row]);
     }
-    return [...groups.values()].map((rows) => ({
-      ...Object.fromEntries(args.by.map((field) => [field, rows[0]![field]])),
-      _count: { _all: rows.length },
-    }));
+    return [...groups.values()]
+      .map((rows) => ({
+        ...Object.fromEntries(args.by.map((field) => [field, rows[0]![field]])),
+        _count: { _all: rows.length },
+        _sum: Object.fromEntries(Object.keys(args._sum ?? {}).map((field) => [field, rows.reduce((s, r) => s + (r[field] as number), 0)])),
+      }))
+      .filter((group) =>
+        Object.entries(args.having ?? {}).every(([field, rule]) => rule._sum?.gte === undefined || (group._sum[field] ?? 0) >= rule._sum.gte),
+      );
   }
 
   snapshot(): Row[] {
