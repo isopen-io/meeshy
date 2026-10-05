@@ -80,8 +80,9 @@ final class ComposerCaptureLockZoomFlashTests: XCTestCase {
     }
 
     func test_zoomRange_plafonneLeCapteur_etTolereUnObjectifFixe() {
-        XCTAssertEqual(ComposerCaptureZoom.range(deviceMin: 1, deviceMax: 123), 1...ComposerCaptureZoom.ceiling)
-        XCTAssertEqual(ComposerCaptureZoom.range(deviceMin: 1, deviceMax: 1), 1...1,
+        let echelle = ComposerCaptureZoomScale(base: 1)
+        XCTAssertEqual(echelle.displayedRange(deviceMin: 1, deviceMax: 123), 1...ComposerCaptureZoom.ceiling)
+        XCTAssertEqual(echelle.displayedRange(deviceMin: 1, deviceMax: 1), 1...1,
                        "sans zoom (simulateur), le geste n'a aucun effet")
     }
 
