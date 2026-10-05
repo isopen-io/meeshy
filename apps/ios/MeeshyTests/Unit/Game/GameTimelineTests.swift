@@ -96,10 +96,12 @@ final class GameTimelineTests: XCTestCase {
         XCTAssertGreaterThan(GamePrismTilt.intensity(active: true), 0)
     }
 
-    /// Le capteur ne tourne que pour une irisation VISIBLE : ni hors écran, ni pour une matière qui n'en a pas.
-    func test_prismTilt_theSensorRunsOnlyWhenActiveAndVisible() {
-        XCTAssertTrue(GamePrismTilt.sensorRuns(active: true, visible: true))
-        XCTAssertFalse(GamePrismTilt.sensorRuns(active: true, visible: false))
-        XCTAssertFalse(GamePrismTilt.sensorRuns(active: false, visible: true))
+    /// Le capteur ne tourne que pour une irisation qui BOUGE à l'écran : ni hors écran, ni pour une
+    /// matière qui n'en a pas, ni sous « réduire les animations » (l'irisation y est figée).
+    func test_prismTilt_theSensorRunsOnlyWhenActiveVisibleAndMoving() {
+        XCTAssertTrue(GamePrismTilt.sensorRuns(active: true, visible: true, reduceMotion: false))
+        XCTAssertFalse(GamePrismTilt.sensorRuns(active: true, visible: false, reduceMotion: false))
+        XCTAssertFalse(GamePrismTilt.sensorRuns(active: false, visible: true, reduceMotion: false))
+        XCTAssertFalse(GamePrismTilt.sensorRuns(active: true, visible: true, reduceMotion: true))
     }
 }
