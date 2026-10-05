@@ -20,7 +20,10 @@ import MeeshySDK
 // irise son émail ; l'hôte lui donne l'inclinaison du téléphone (`gamePrismTilt`).
 
 /// La famille d'un axe : elle fixe la couleur de l'émail.
-public enum GameMedalFamily: Sendable, Equatable, CaseIterable {
+///
+/// `nonisolated` : MeeshyUI isole tout au `MainActor` par défaut, et l'app lit ces deux
+/// énumérations depuis des modèles purs (`GameBadgeItem`), hors de l'acteur principal.
+public nonisolated enum GameMedalFamily: Sendable, Equatable, CaseIterable {
     case content
     case social
     case conversation
@@ -50,7 +53,7 @@ public enum GameMedalFamily: Sendable, Equatable, CaseIterable {
 }
 
 /// Le pictogramme d'axe, dessiné au trait. Neuf glyphes : jamais une bulle.
-public enum GameMedalGlyph: Sendable, Equatable, CaseIterable {
+public nonisolated enum GameMedalGlyph: Sendable, Equatable, CaseIterable {
     case text
     case voice
     case story

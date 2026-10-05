@@ -2843,6 +2843,9 @@
 		4A5D64B20172BE80518BDDD0 /* GameFlamePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0CF20F693A18487288D47A /* GameFlamePanelView.swift */; };
 		E646360592123969E2319B53 /* GameGaugesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3FD284BB380FF797D61C77 /* GameGaugesView.swift */; };
 		36078203EB46E39A974E6723 /* GameBadgeShelf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CA54AB73C494ADEF8E334AC /* GameBadgeShelf.swift */; };
+		A3AB0512BC452DC13A5758D3 /* GameHeroParts.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8C0D3E344E530E218AA44CA /* GameHeroParts.swift */; };
+		B746B7621D1F674DC4162E9D /* GameHeroView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63D1C7886F005162DD333102 /* GameHeroView.swift */; };
+		C2FEEAE43419EABE98627CF7 /* GameHeroModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75AFBB7442A628417FAF2546 /* GameHeroModel.swift */; };
 		07BA970C5E04B4B3FAFA3309 /* GameLevelConfirmation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 911EB384B09D33319F4F2496 /* GameLevelConfirmation.swift */; };
 		EC024EDB234F8B0B7839BA74 /* GameGuideCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6AF8EBF8659EA00879BD5DE /* GameGuideCardView.swift */; };
 		F06689529AD5F16A99738993 /* GameMintPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25191A9CC05D903176797FA0 /* GameMintPreviewView.swift */; };
@@ -2868,6 +2871,7 @@
 		012CB1374BFE2ABE511D77EE /* GameMintBadgeImpact.swift in Sources */ = {isa = PBXBuildFile; fileRef = E99328785440D9F3F241F5D5 /* GameMintBadgeImpact.swift */; };
 		1E9D6B332851A71A22BAF8BC /* GameMintBadgeImpactTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2E308E030697B91DB71732B /* GameMintBadgeImpactTests.swift */; };
 		7782BCB56B380CAC024CD4F4 /* GameProgressionRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF68A574E7D0CD238955D820 /* GameProgressionRenderTests.swift */; };
+		08C1BA36FDB1A75E5A1C1C74 /* GameHeroModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E565345F524B73DE9610AFA0 /* GameHeroModelTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -5761,6 +5765,9 @@
 		1B0CF20F693A18487288D47A /* GameFlamePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameFlamePanelView.swift; sourceTree = "<group>"; };
 		AA3FD284BB380FF797D61C77 /* GameGaugesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameGaugesView.swift; sourceTree = "<group>"; };
 		4CA54AB73C494ADEF8E334AC /* GameBadgeShelf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameBadgeShelf.swift; sourceTree = "<group>"; };
+		D8C0D3E344E530E218AA44CA /* GameHeroParts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameHeroParts.swift; sourceTree = "<group>"; };
+		63D1C7886F005162DD333102 /* GameHeroView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameHeroView.swift; sourceTree = "<group>"; };
+		75AFBB7442A628417FAF2546 /* GameHeroModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameHeroModel.swift; sourceTree = "<group>"; };
 		911EB384B09D33319F4F2496 /* GameLevelConfirmation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameLevelConfirmation.swift; sourceTree = "<group>"; };
 		C6AF8EBF8659EA00879BD5DE /* GameGuideCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameGuideCardView.swift; sourceTree = "<group>"; };
 		25191A9CC05D903176797FA0 /* GameMintPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameMintPreviewView.swift; sourceTree = "<group>"; };
@@ -5786,6 +5793,7 @@
 		E99328785440D9F3F241F5D5 /* GameMintBadgeImpact.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameMintBadgeImpact.swift; sourceTree = "<group>"; };
 		A2E308E030697B91DB71732B /* GameMintBadgeImpactTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameMintBadgeImpactTests.swift; sourceTree = "<group>"; };
 		EF68A574E7D0CD238955D820 /* GameProgressionRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameProgressionRenderTests.swift; sourceTree = "<group>"; };
+		E565345F524B73DE9610AFA0 /* GameHeroModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameHeroModelTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -9490,6 +9498,9 @@
 				1B0CF20F693A18487288D47A /* GameFlamePanelView.swift */,
 				AA3FD284BB380FF797D61C77 /* GameGaugesView.swift */,
 				4CA54AB73C494ADEF8E334AC /* GameBadgeShelf.swift */,
+				D8C0D3E344E530E218AA44CA /* GameHeroParts.swift */,
+				63D1C7886F005162DD333102 /* GameHeroView.swift */,
+				75AFBB7442A628417FAF2546 /* GameHeroModel.swift */,
 				911EB384B09D33319F4F2496 /* GameLevelConfirmation.swift */,
 				C6AF8EBF8659EA00879BD5DE /* GameGuideCardView.swift */,
 				25191A9CC05D903176797FA0 /* GameMintPreviewView.swift */,
@@ -9557,6 +9568,7 @@
 				F1B19DE26D5064F7FB74CB98 /* GameSourceGuardTests.swift */,
 				A2E308E030697B91DB71732B /* GameMintBadgeImpactTests.swift */,
 				EF68A574E7D0CD238955D820 /* GameProgressionRenderTests.swift */,
+				E565345F524B73DE9610AFA0 /* GameHeroModelTests.swift */,
 			);
 			path = Game;
 			sourceTree = "<group>";
@@ -9985,6 +9997,9 @@
 				EC024EDB234F8B0B7839BA74 /* GameGuideCardView.swift in Sources */,
 				E646360592123969E2319B53 /* GameGaugesView.swift in Sources */,
 				36078203EB46E39A974E6723 /* GameBadgeShelf.swift in Sources */,
+				A3AB0512BC452DC13A5758D3 /* GameHeroParts.swift in Sources */,
+				B746B7621D1F674DC4162E9D /* GameHeroView.swift in Sources */,
+				C2FEEAE43419EABE98627CF7 /* GameHeroModel.swift in Sources */,
 				07BA970C5E04B4B3FAFA3309 /* GameLevelConfirmation.swift in Sources */,
 				4A5D64B20172BE80518BDDD0 /* GameFlamePanelView.swift in Sources */,
 				4B5E80C59A633EA0976F9B0D /* RankBlasonStage.swift in Sources */,
@@ -11395,6 +11410,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				7782BCB56B380CAC024CD4F4 /* GameProgressionRenderTests.swift in Sources */,
+				08C1BA36FDB1A75E5A1C1C74 /* GameHeroModelTests.swift in Sources */,
 				1E9D6B332851A71A22BAF8BC /* GameMintBadgeImpactTests.swift in Sources */,
 				12E64317C47B8B68EBF41474 /* GameSourceGuardTests.swift in Sources */,
 				F2FCCBB928A2D400799A873B /* MockGamePhoto.swift in Sources */,
