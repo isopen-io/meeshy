@@ -89,4 +89,94 @@ final class ComposerWritingFocusTests: XCTestCase {
         XCTAssertTrue(hote.contains("varwritesText:Bool{editsSceneDescription||editsPostContent}"),
                       "les deux chemins d'écriture — légende et corps — forment UN terme")
     }
+
+    // MARK: - #9448 · Le CORPS du post n'écrit pas la légende
+
+    /// **Écrire le corps du post retire le volet de légende**, que le panneau du
+    /// corps recouvre. Recouvert, il restait dans l'arbre : VoiceOver atteignait
+    /// « Abc » et « Replier la description » sous le panneau (recette du
+    /// 2026-10-05). Ce qui est caché n'est pas MONTÉ — donc hors de l'arbre.
+    func test_ecrireLeCorps_retireLeVoletDeLegende() {
+        XCTAssertFalse(ComposerToolFocus.isShown(.description, toolIsOpen: false, writing: .postBody),
+                       "le volet de légende est sous le panneau du corps : il sort de l'arbre (#9448)")
+        XCTAssertTrue(ComposerToolFocus.isShown(.description, toolIsOpen: false, writing: .sceneLegend),
+                      "écrire la LÉGENDE garde son volet : c'est le champ (#6126)")
+        XCTAssertTrue(ComposerToolFocus.isShown(.description, toolIsOpen: false, writing: .nothing))
+        XCTAssertFalse(ComposerToolFocus.isShown(.description, toolIsOpen: true, writing: .nothing),
+                       "un outil ouvert retire toujours le volet")
+    }
+
+    /// Sur toute autre pièce de chrome, la réponse est celle de `writesText`.
+    func test_isShownWriting_rendLaReponseDeWritesTextHorsDuVolet() {
+        for chrome in ComposerToolFocus.Chrome.allCases where chrome != .description {
+            for ecriture in [ComposerWriting.nothing, .sceneLegend, .postBody] {
+                for outilOuvert in [false, true] {
+                    XCTAssertEqual(ComposerToolFocus.isShown(chrome, toolIsOpen: outilOuvert, writing: ecriture),
+                                   ComposerToolFocus.isShown(chrome, toolIsOpen: outilOuvert,
+                                                             writesText: ecriture.writesText),
+                                   "\(chrome) / \(ecriture) / outil ouvert = \(outilOuvert)")
+                }
+            }
+        }
+    }
+
+    func test_writing_seResoutDesDeuxDrapeauxDeLHote() {
+        XCTAssertEqual(ComposerWriting.resolve(editsSceneDescription: false, editsPostContent: false), .nothing)
+        XCTAssertEqual(ComposerWriting.resolve(editsSceneDescription: true, editsPostContent: false), .sceneLegend)
+        XCTAssertEqual(ComposerWriting.resolve(editsSceneDescription: false, editsPostContent: true), .postBody)
+        XCTAssertFalse(ComposerWriting.nothing.writesText)
+        XCTAssertTrue(ComposerWriting.sceneLegend.writesText)
+        XCTAssertTrue(ComposerWriting.postBody.writesText)
+    }
+
+    // MARK: - #9448 · La sortie s'efface AVANT que la barre revienne
+
+    /// **Le chrome revient APRÈS le fondu du panneau, jamais pendant.** Le
+    /// panneau du corps glissait ~150 ms par-dessus @ # et Public / Publier,
+    /// qui revenaient au même instant. Le retour attend donc la fin du fondu ;
+    /// l'aller, lui, part tout de suite.
+    func test_leRetourDuChrome_attendLaFinDuFonduDuPanneau() {
+        let fondu = ComposerToolFocus.transition(reduceMotion: false)
+        XCTAssertNotNil(fondu)
+        XCTAssertEqual(ComposerWritingExit.chromeAnimation(reduceMotion: false, writesText: true), fondu,
+                       "l'aller n'attend rien")
+        XCTAssertEqual(ComposerWritingExit.chromeAnimation(reduceMotion: false, writesText: false),
+                       fondu?.delay(ComposerWritingExit.zoneFadeOut),
+                       "le retour attend que le panneau soit parti")
+        XCTAssertGreaterThan(ComposerWritingExit.zoneFadeOut, 0)
+        XCTAssertLessThan(ComposerWritingExit.zoneFadeOut, 0.2,
+                          "un fondu long laisserait le panneau suivre le clavier qui descend")
+    }
+
+    /// **Reduce Motion : aucune animation**, ni délai — l'échange est sec, donc
+    /// aucune image ne montre les deux à la fois.
+    func test_reduceMotion_echangeSansAnimation() {
+        XCTAssertNil(ComposerWritingExit.chromeAnimation(reduceMotion: true, writesText: true))
+        XCTAssertNil(ComposerWritingExit.chromeAnimation(reduceMotion: true, writesText: false))
+    }
+
+    func test_panneauDuCorps_sEffaceEnFonduSansGlisser() throws {
+        let zone = compact(try source("Meeshy/Features/Main/Composer/ComposerSceneDescriptionEditor.swift"))
+        XCTAssertTrue(zone.contains("structComposerSceneDescriptionEditor"), "le fichier lu n'est pas la zone")
+        XCTAssertFalse(zone.contains(".move(edge:"),
+                       "un glissement fait traverser la barre Public / Publier au panneau (#9448)")
+        XCTAssertTrue(zone.contains(".transition(ComposerWritingExit.zoneTransition(reduceMotion:reduceMotion))"),
+                      "la sortie passe par la règle, Reduce Motion compris")
+    }
+
+    func test_branchement_hoteEtSurface_passentParLaRegleDeSortie() throws {
+        let hote = compact(AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource()))
+        XCTAssertTrue(hote.contains(".modifier(ComposerWritingAnimation(writesText:writesText))"),
+                      "le socle revient par la même règle que les rails (#9448)")
+        XCTAssertFalse(hote.contains("value:editsPostContent)"),
+                       "un ressort non différé ramenait le socle sous le panneau qui part")
+        XCTAssertTrue(hote.contains("writesPostBody:editsPostContent,"),
+                      "la surface doit savoir QUEL texte on écrit")
+        let surface = compact(try source("Meeshy/Features/Main/Composer/ComposerSceneSurface.swift"))
+        XCTAssertTrue(surface.contains("ComposerToolFocus.isShown(.description,toolIsOpen:toolIsOpen,writing:writing)"),
+                      "le volet demande à la règle s'il survit à l'écriture du corps")
+        XCTAssertTrue(surface.contains(
+            ".animation(ComposerWritingExit.chromeAnimation(reduceMotion:reduceMotion,writesText:writesText),value:writesText)"),
+                      "les rails reviennent APRÈS le panneau, pas pendant")
+    }
 }
