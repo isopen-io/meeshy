@@ -392,7 +392,11 @@ export const callersIn = (contents, nsNames) => {
 // que `stickerPacks.pending`/`bySlugReview` ci-dessus : les routes sont
 // livrées côté gateway, l'écran web qui les appellera est un suivi à part.
 // Valeur MESURÉE le 2026-10-05.
-const BASELINE_DEAD_ENTRIES = 281;
+// 281 → 260 (#9414, 2026-10-05) : le lot « Progression joue le jeu » câble
+// l'écran web et ses tests contre vingt-et-une entrées qui n'avaient encore
+// aucun appelant — dont les cinq `me.game*` ci-dessus. Valeur MESURÉE le
+// 2026-10-05.
+const BASELINE_DEAD_ENTRIES = 260;
 
 export const readWorld = (root) => {
   const groupFiles = readdirSync(join(root, GROUPS_DIR)).filter((name) => name.endsWith('.ts')).sort();
