@@ -16,9 +16,17 @@ nonisolated enum ComposerAutosaveCodec {
 
     static func write(from state: ComposerAutosaveState, now: Date = Date()) -> ComposerAutosaveWrite {
         var files: [String: URL] = [:]
+        var aliases: [String: String] = [:]
+        let copies = sceneCopies(state)
         func name(_ url: URL) -> String {
             let fichier = ComposerAutosaveFileName.forSource(url)
-            files[fichier] = url
+            guard let source = copies[url.standardizedFileURL] else {
+                files[fichier] = url
+                return fichier
+            }
+            let canon = ComposerAutosaveFileName.forSource(source)
+            files[canon] = source
+            if canon != fichier { aliases[fichier] = canon }
             return fichier
         }
         func names<V>(_ map: [URL: V]) -> [String: V] {
@@ -36,7 +44,7 @@ nonisolated enum ComposerAutosaveCodec {
         }
         let slides = portable(state.slides, adopted: state.adoptedLocalMedia, name: name)
         let table = bitmapTable(images: state.images, slideImages: state.slideImages,
-                                sources: plainImageSources(slides))
+                                sources: plainImageSources(slides).mapValues { aliases[$0] ?? $0 })
         let snapshot = ComposerAutosaveSnapshot(
             savedAt: now,
             format: ComposerAutosaveFormatCode.code(state.format),
@@ -68,7 +76,8 @@ nonisolated enum ComposerAutosaveCodec {
             stickerAnimations: stickers,
             publishChoice: state.publishChoice.map {
                 .init(format: ComposerAutosaveFormatCode.code($0.format), layout: $0.layout?.rawValue)
-            }
+            },
+            fileAliases: aliases.isEmpty ? nil : aliases
         )
         return ComposerAutosaveWrite(snapshot: snapshot, files: files, bitmaps: table.bitmaps, blobs: blobs)
     }
@@ -133,6 +142,46 @@ nonisolated enum ComposerAutosaveCodec {
                 }
             }
         )
+    }
+
+    // MARK: - Une photo, une adresse dans le brouillon (#9420)
+
+    /// **La copie de POSE d'un média, rendue à sa pièce jointe.**
+    ///
+    /// Un média importé a DEUX adresses : la pièce jointe du document garde le
+    /// fichier du sélecteur (`localMedia` et les porteurs), et la pose
+    /// (`applyContentMedia`) le COPIE octet pour octet sous
+    /// `tmp/<objectId>.<ext>` — la convention qui relie le bitmap de la scène à
+    /// son objet. L'objet de scène désigne la copie (`mediaURL`, puis
+    /// `adoptedLocalMedia` une fois pré-monté). Nommés par adresse, les deux
+    /// s'écrivaient : 6 fichiers pour 3 photos (recette #9420).
+    ///
+    /// L'identité vient du pont `objectIdBySource` — la pose est le seul site
+    /// qui connaisse les deux bouts, et elle l'a rendu. La taille, lue par un
+    /// `stat`, écarte une copie que l'objet aurait remplacée depuis ; aucun
+    /// octet n'est relu.
+    ///
+    /// - Returns: copie → pièce jointe, clé normalisée (`standardizedFileURL`).
+    static func sceneCopies(_ state: ComposerAutosaveState) -> [URL: URL] {
+        let sourceParObjet = state.porters.objectIdBySource.reduce(into: [String: URL]()) { carte, entree in
+            carte[entree.value] = entree.key
+        }
+        guard !sourceParObjet.isEmpty else { return [:] }
+        let adopted = state.adoptedLocalMedia
+        return state.slides.flatMap { $0.effects.mediaObjects ?? [] }.reduce(into: [:]) { carte, objet in
+            guard let source = sourceParObjet[objet.id] else { return }
+            let fichier: URL? = objet.mediaURL.flatMap(URL.init(string:)).flatMap { $0.isFileURL ? $0 : nil }
+                ?? (objet.postMediaId.isEmpty ? nil : adopted[objet.postMediaId])
+                ?? objet.mediaURL.flatMap { adopted[$0] }
+            guard let copie = fichier?.standardizedFileURL,
+                  copie != source.standardizedFileURL,
+                  let taille = fileSize(copie), taille == fileSize(source) else { return }
+            carte[copie] = source
+        }
+    }
+
+    private static func fileSize(_ url: URL) -> Int? {
+        (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue
     }
 
     // MARK: - Une copie par image (#9420)
