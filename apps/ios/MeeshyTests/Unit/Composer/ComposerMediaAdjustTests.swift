@@ -18,8 +18,31 @@ final class ComposerMediaAdjustTests: XCTestCase {
                        "On choisit un rendu, puis on le règle.")
     }
 
-    func test_reglages_nonServisAUneVideo_niAuFond() {
-        let familles: [ComposerInlineFamily] = [.video, .background(isVideo: false), .background(isVideo: true),
+    /// #9169 : la vidéo posée peint ses réglages trame par trame — le
+    /// sous-outil lui est servi, en tête puisqu'elle n'a pas de filtre.
+    func test_reglages_servisAUneVideoPosee_avantLeRognage() {
+        let sections = ComposerInlineEditing.sections(for: .video, hasTrimmableSource: true)
+        XCTAssertEqual(sections.first, .media(.adjust))
+        XCTAssertLessThan(sections.firstIndex(of: .media(.adjust)) ?? .max, sections.firstIndex(of: .media(.trim)) ?? .min)
+    }
+
+    /// Une vidéo n'offre que les réglages qu'elle peint : ni netteté ni flou.
+    func test_lePanneauDUneVideo_neMontreNiNetteteNiFlou() {
+        let video = ComposerMediaAdjustPanel.kinds(for: .video)
+        XCTAssertFalse(video.contains(.sharpness))
+        XCTAssertFalse(video.contains(.blur))
+        XCTAssertEqual(ComposerMediaAdjustPanel.kinds(for: .image), AdjustmentKind.allCases)
+        XCTAssertEqual(ComposerMediaAdjustPanel.kinds(for: nil), AdjustmentKind.allCases)
+    }
+
+    /// Ce que VoiceOver annonce pendant la comparaison nomme le bon média.
+    func test_lOriginalAnnonce_nommeLaVideoQuandOnCompareUneVideo() {
+        XCTAssertNotEqual(ComposerAdjustCopy.original(for: .video), ComposerAdjustCopy.original(for: .image))
+        XCTAssertNotEqual(ComposerAdjustCopy.compareHint(for: .video), ComposerAdjustCopy.compareHint(for: .image))
+    }
+
+    func test_reglages_nonServisAuFond_niAuxAutresFamilles() {
+        let familles: [ComposerInlineFamily] = [.background(isVideo: false), .background(isVideo: true),
                                                 .text, .audio, .sticker, .place]
         for famille in familles {
             XCTAssertFalse(ComposerInlineEditing.sections(for: famille, hasTrimmableSource: true)
