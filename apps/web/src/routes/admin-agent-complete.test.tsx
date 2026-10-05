@@ -60,7 +60,18 @@ const AGENT: RoutedReply = (req) => {
   if (path === `${p}/scan-logs/stats`) return ok({ buckets: [{ date: '2026-10-04', scans: 3, messagesSent: 1 }], totalLogs: 3, since: '2026-07-05T00:00:00.000Z' });
   if (path === `${p}/llm`) return ok({ provider: 'openai', model: 'gpt-4o-mini', hasApiKey: true, dailyBudgetUsd: 20, maxCostPerCall: 0.05, maxTokens: 1024, temperature: 0.7 });
   if (path === `${p}/global-config`) return ok({ enabled: true, globalScanEnabled: false, defaultProvider: 'openai', defaultModel: 'gpt-4o-mini', maxConcurrentCalls: 5, systemPrompt: 'Anime', updatedAt: '2026-10-01T00:00:00.000Z' });
-  if (path === `${p}/configs/${C}`) return ok({ enabled: true, scanIntervalMinutes: 3, controlledUserIds: [U], updatedAt: '2026-10-01T00:00:00.000Z' });
+  if (path === `${p}/configs/${C}`)
+    return ok({
+      enabled: true,
+      scanIntervalMinutes: 3,
+      burstEnabled: true,
+      timeoutSeconds: 300,
+      excludedRoles: ['AGENT'],
+      freshTopicCategoryHints: [],
+      minDelayMinutes: null,
+      controlledUserIds: [U],
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    });
   if (path === `${p}/configs/${C}/summary`) return ok({ summary: 'On parle cuisine.', currentTopics: ['recettes'], messageCount: 12, healthScore: 80 });
   if (path === `${p}/configs/${C}/schedule`) return ok({ scanIntervalMinutes: 3, lastScan: 0, nextScan: Date.UTC(2026, 9, 5, 9), upcomingScans: [1], budget: { messagesUsed: 1, messagesMax: 10 }, burst: { enabled: true } });
   if (path === `${p}/configs/${C}/roles`) return ok([{ userId: U, origin: 'observed', confidence: 0.4, locked: true }], { pagination: { total: 1, offset: 0, limit: 50 } });
@@ -216,6 +227,57 @@ describe('la fiche de l’agent sur une conversation suivie', () => {
     await soumettre('[data-agent-form="conversation"]');
     expect(ecritures(calls)).toEqual([{ method: 'PUT', path: `/api/v1/admin/agent/configs/${C}`, body: { scanIntervalMinutes: 15 } }]);
     expect(annonce()).toContain(translateAdmin('fr', 'admin.agentPanel.conv.saved'));
+  });
+
+  test('les réglages sont regroupés en sections titrées, chaque champ avec son libellé humain', async () => {
+    await monter();
+    await ouvrirFiche();
+    const sections = [...document.querySelectorAll('[data-agent-form="conversation"] [data-agent-form-section]')].map((node) => node.getAttribute('data-agent-form-section'));
+    expect(sections).toEqual(['general', 'members', 'rhythm', 'budget', 'style', 'triggers', 'topics']);
+    expect(document.querySelectorAll('[data-agent-form="conversation"] [data-agent-field]').length).toBe(45);
+    expect($('[data-agent-form-section="rhythm"] legend')?.textContent).toBe(translateAdmin('fr', 'admin.agentPanel.cfg.section.rhythm'));
+  });
+
+  test('une bascule pour un booléen : basculée, seul ce champ part', async () => {
+    const { calls } = await monter();
+    await ouvrirFiche();
+    const bascule = $('[data-agent-form="conversation"] [data-agent-field="burstEnabled"]');
+    expect(bascule?.getAttribute('role')).toBe('switch');
+    expect(bascule?.getAttribute('aria-checked')).toBe('true');
+    await mounter.click(bascule);
+    expect(bascule?.getAttribute('aria-checked')).toBe('false');
+    await soumettre('[data-agent-form="conversation"]');
+    expect(ecritures(calls)).toEqual([{ method: 'PUT', path: `/api/v1/admin/agent/configs/${C}`, body: { burstEnabled: false } }]);
+  });
+
+  test('une liste nommée pour une énumération, des cases pour un ensemble, des mots-clés pour un tableau de chaînes', async () => {
+    const { calls } = await monter();
+    await ouvrirFiche();
+    expect($<HTMLSelectElement>('[data-agent-field="agentType"]')?.tagName).toBe('SELECT');
+    expect($('[data-agent-field="excludedRoles"] [data-agent-field-option="AGENT"]')?.closest('label')?.textContent).toBe(
+      translateAdmin('fr', 'admin.agentPanel.cfg.excludedRoles.AGENT'),
+    );
+    await mounter.click($('[data-agent-field="excludedRoles"] [data-agent-field-option="ADMIN"]'));
+    mounter.type(document, '[data-agent-field="freshTopicCategoryHints"]', 'cuisine\nfootball');
+    await soumettre('[data-agent-form="conversation"]');
+    expect(ecritures(calls)).toEqual([
+      { method: 'PUT', path: `/api/v1/admin/agent/configs/${C}`, body: { excludedRoles: ['AGENT', 'ADMIN'], freshTopicCategoryHints: ['cuisine', 'football'] } },
+    ]);
+  });
+
+  test('un entier dit ses bornes ; hors bornes, la raison est NOMMÉE sous le champ et rien ne part', async () => {
+    const { calls } = await monter();
+    await ouvrirFiche();
+    const champ = $<HTMLInputElement>('[data-agent-field="timeoutSeconds"]');
+    expect(champ?.type).toBe('number');
+    expect($('[data-agent-field-hint="timeoutSeconds"]')?.textContent?.replace(/\s/g, ' ')).toBe('Entre 30 et 3 600'.replace(/\s/g, ' '));
+    expect($('[data-agent-field-hint="minDelayMinutes"]')?.textContent).toContain(translateAdmin('fr', 'admin.agentPanel.form.emptyDefault'));
+    mounter.type(document, '[data-agent-field="timeoutSeconds"]', '20');
+    await soumettre('[data-agent-form="conversation"]');
+    expect($('[data-agent-field-problem="timeoutSeconds"]')?.textContent).toContain('Hors bornes');
+    expect(champ?.getAttribute('aria-invalid')).toBe('true');
+    expect($('[data-agent-form="conversation"] [data-agent-form-error]')?.textContent).toContain(translateAdmin('fr', 'admin.agentPanel.cfg.timeoutSeconds'));
+    expect(ecritures(calls)).toEqual([]);
   });
 
   test('supprimer la configuration et remettre la conversation à zéro : confirmés, DELETE sans corps', async () => {

@@ -6,7 +6,7 @@ import { AdminMetaRow, AdminMomentText } from '@/components/admin/meta';
 import { AdminErrorState, AdminInlineNotice } from '@/components/admin/states';
 import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { PasswordInput } from '@/components/password-input';
-import { AGENT_GLOBAL_FIELDS, AGENT_LLM_FIELDS } from '@/lib/admin/agent-settings-form';
+import { AGENT_GLOBAL_FIELDS, AGENT_GLOBAL_SECTIONS, AGENT_LLM_FIELDS } from '@/lib/admin/agent-settings-form';
 import { formatCount } from '@/lib/admin/interpret/numbers';
 import { adminMomentOf } from '@/lib/admin/interpret/time';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
@@ -24,7 +24,7 @@ import { unwrap } from '@/lib/api/client';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { AdminSkeleton } from '@/routes/admin-parts';
 
-import { AgentSettingsForm, providerName, useAgentConfirm, useAgentGesture } from './admin-agent-form';
+import { AgentSettingsForm, agentVocabulary, providerName, useAgentConfirm, useAgentGesture } from './admin-agent-form';
 
 /**
  * **LA MODALE « MODÈLE ET RÉGLAGES GLOBAUX »** (lot Agent complet) — le modèle de
@@ -215,12 +215,6 @@ function AgentLlmBlock({ language, deps, now, gesture, ask }: BlockProps & { rea
   );
 }
 
-const globalLabel = (language: AdminLanguage) => (key: string) =>
-  translateAdmin(
-    language,
-    `admin.agentPanel.global.${key as 'enabled' | 'globalScanEnabled' | 'defaultProvider' | 'defaultModel' | 'globalDailyBudgetUsd' | 'maxConcurrentCalls' | 'messageFreshnessHours' | 'weekdayMaxConversations' | 'weekendMaxConversations' | 'systemPrompt'}`,
-  );
-
 function AgentGlobalBlock({ language, deps, gesture, ask }: BlockProps) {
   const global = useQuery({
     queryKey: agentGlobalConfigQueryKey(),
@@ -247,8 +241,9 @@ function AgentGlobalBlock({ language, deps, gesture, ask }: BlockProps) {
             id="global"
             language={language}
             specs={AGENT_GLOBAL_FIELDS}
+            sections={AGENT_GLOBAL_SECTIONS}
             served={data.fields}
-            labelOf={globalLabel(language)}
+            vocabulary={agentVocabulary(language, 'global')}
             saveLabel={translateAdmin(language, 'admin.agentPanel.global.save')}
             busy={gesture.busy === 'global'}
             error={null}
