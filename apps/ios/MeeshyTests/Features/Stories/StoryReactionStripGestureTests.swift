@@ -232,11 +232,12 @@ final class StoryReactionStripGestureTests: XCTestCase {
         let code = try sidebarSource()
         guard let site = pickerCallSite(in: code) else { return XCTFail("site introuvable") }
         let plat = compact(site)
-        guard let publication = plat.range(of: "key:StoryReactionStripFrameKey.self"),
+        // Sonde non isolée (#9456) : la barre est dans un candidat de `ViewThatFits`.
+        guard let publication = plat.range(of: "FramePreferenceProbe(StoryReactionStripFrameKey.self,"),
               let decalage = plat.range(of: ".offset(x:FullscreenChromeMetrics.reactionStripLeadingOffset)") else {
             return XCTFail("La barre doit publier `StoryReactionStripFrameKey`.")
         }
-        XCTAssertTrue(plat.contains("proxy.frame(in:.global)"),
+        XCTAssertTrue(plat.contains("FramePreferenceProbe(StoryReactionStripFrameKey.self,in:.global)"),
                       "Même espace que `value.startLocation` du drag parent.")
         XCTAssertLessThan(publication.lowerBound, decalage.lowerBound,
                           "Mesuré AVANT `.offset` : posé après, le cadre serait celui de la place "

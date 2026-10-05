@@ -122,7 +122,6 @@
 		0A53710085CDD381D2514692 /* LocationPickerSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D58207D8982D47C821F1E2F /* LocationPickerSourceGuardTests.swift */; };
 		0A65708D1C999316D88C838B /* ConversationLinkCardBody.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E4ED5CCC3780DB5F96C89AC /* ConversationLinkCardBody.swift */; };
 		0A7D1CAC44A66EC7CDB82223 /* ComposerRailGlass.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02087253D9B61C9D1E894E77 /* ComposerRailGlass.swift */; };
-		36F08B7D0D7CE98328F76A08 /* ComposerRailRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 722CFA3FD751D455BB0DD7C4 /* ComposerRailRows.swift */; };
 		0A8624698FF6B4FC265B1166 /* ConversationView+InfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38EB1FC696BEED2565DDCBAD /* ConversationView+InfoSheet.swift */; };
 		0AD8AC943E5807BC77434C33 /* ReelsPlayerView+ActionRail.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2894E4675CD701514F1890B9 /* ReelsPlayerView+ActionRail.swift */; };
 		0ADE4688F352960BA118661B /* GroupCallMeshCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3FA9CACD72EC955D169410C /* GroupCallMeshCoordinator.swift */; };
@@ -2381,7 +2380,7 @@
 		DC212D494CF54B6499BBD3C7 /* LentilleRowDynamicTypeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 108D0EC72C44AA8C3A9F6366 /* LentilleRowDynamicTypeTests.swift */; };
 		DC73DB66FA8EEDAE4C0C5C5C /* BridgeFingerprintTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEE83F2F34E5A01B0BCB5EC0 /* BridgeFingerprintTests.swift */; };
 		DCBB830035636E8EA4A2366E /* ComposerTrailingRailTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7507574DE20626720006CA2 /* ComposerTrailingRailTests.swift */; };
-		157715AAEE819CEB9BFEA5AF /* ComposerRailAsyncRenderGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12E080BE47DDC06A258617A /* ComposerRailAsyncRenderGuardTests.swift */; };
+		157715AAEE819CEB9BFEA5AF /* ViewThatFitsAsyncRenderGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D12E080BE47DDC06A258617A /* ViewThatFitsAsyncRenderGuardTests.swift */; };
 		DCE1CE998B69413BAA04A657 /* RiverLaneResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 726280041957FFB8C4214AB7 /* RiverLaneResolver.swift */; };
 		DCE70C7780EC76C47021F955 /* ComposerDocumentTrayPublishTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4345126EC3ED9B87A6944CCB /* ComposerDocumentTrayPublishTests.swift */; };
 		DCEB03D3F870990E310E9726 /* MessageDayGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CBB0B649819C59112039A17 /* MessageDayGroupingTests.swift */; };
@@ -2940,7 +2939,6 @@
 		01C13354A8FE8BC69BEA6A37 /* CallFrameGrabber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallFrameGrabber.swift; sourceTree = "<group>"; };
 		01C6314BE9E8A2F212DFD604 /* RecentMediaStrip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentMediaStrip.swift; sourceTree = "<group>"; };
 		02087253D9B61C9D1E894E77 /* ComposerRailGlass.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRailGlass.swift; sourceTree = "<group>"; };
-		722CFA3FD751D455BB0DD7C4 /* ComposerRailRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRailRows.swift; sourceTree = "<group>"; };
 		0210DF4D5A09F96A98B68A69 /* CallManagerSurvivalFreezeSourceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManagerSurvivalFreezeSourceTests.swift; sourceTree = "<group>"; };
 		021868A072D22903BE5252F3 /* ComposerObjectChips.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerObjectChips.swift; sourceTree = "<group>"; };
 		0219AC3A46D2786439035F9C /* CallCaptureControllerFramesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallCaptureControllerFramesTests.swift; sourceTree = "<group>"; };
@@ -5592,7 +5590,7 @@
 		F749CED08EDEF89430313842 /* StoryLanguageQuickBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryLanguageQuickBar.swift; sourceTree = "<group>"; };
 		F74A71451A4554ACAB840037 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		F7507574DE20626720006CA2 /* ComposerTrailingRailTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerTrailingRailTests.swift; sourceTree = "<group>"; };
-		D12E080BE47DDC06A258617A /* ComposerRailAsyncRenderGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerRailAsyncRenderGuardTests.swift; sourceTree = "<group>"; };
+		D12E080BE47DDC06A258617A /* ViewThatFitsAsyncRenderGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ViewThatFitsAsyncRenderGuardTests.swift; sourceTree = "<group>"; };
 		F7591FD244D7F915345E03F2 /* WidgetDataManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetDataManagerTests.swift; sourceTree = "<group>"; };
 		F77A1887FEE896D6A60F3197 /* CallChromeInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallChromeInteractionTests.swift; sourceTree = "<group>"; };
 		F7E51D1D9248627A950A8417 /* StorySelectionResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorySelectionResolverTests.swift; sourceTree = "<group>"; };
@@ -6386,7 +6384,6 @@
 				FD39D3AE8A4680EDBC54DB4C /* ComposerRailDoorBadge.swift */,
 				8503894FB8FF59EE1A41808C /* ComposerRailGeometry.swift */,
 				02087253D9B61C9D1E894E77 /* ComposerRailGlass.swift */,
-				722CFA3FD751D455BB0DD7C4 /* ComposerRailRows.swift */,
 				691499A943B7D387CF899D5A /* ComposerRailMode.swift */,
 				E8E77ECE5F3C15C4878EFCC1 /* ComposerRetouchSeries.swift */,
 				68642D9A6B314285DEEA7ADC /* ComposerSceneAssetCarriage.swift */,
@@ -7559,7 +7556,6 @@
 				ED4429C6E8694CE44BA97970 /* ComposerToolRowTrailingAccessoryGuardTests.swift */,
 				4E1553512CC704C72DC9BE9C /* ComposerTourbillonAndQuickEmojiSourceGuardTests.swift */,
 				F7507574DE20626720006CA2 /* ComposerTrailingRailTests.swift */,
-				D12E080BE47DDC06A258617A /* ComposerRailAsyncRenderGuardTests.swift */,
 				D95EC087ADDC5DCB3EB4CCCA /* ComposerTransparentAndConditionalSendSourceGuardTests.swift */,
 				FE0282DCE181FEE47ADA6F13 /* ComposerWritingFocusTests.swift */,
 				88163DB962AF7599D24D8AC9 /* ConversationMediaDoorTests.swift */,
@@ -7750,6 +7746,7 @@
 				FC34FA5A4DA4743CF559AD8A /* PhotoCaptureProcessingGuardTests.swift */,
 				E119CFE923F772150F33D972 /* ProfileActionBarWiringGuardTests.swift */,
 				7BCC36EA7B1BDE1803E3B185 /* RightToLeftLayoutGuardTests.swift */,
+				D12E080BE47DDC06A258617A /* ViewThatFitsAsyncRenderGuardTests.swift */,
 				6A9983B76ECCF0DA4C86DAAE /* RootViewTypeDepthGuardTests.swift */,
 				67ED6D6105D12DB604B7734C /* SingleSourceOfTruthTests.swift */,
 				EAB1FD6A11B0B4725CCB0121 /* StoryOverlayWidthPinGuardTests.swift */,
@@ -10357,7 +10354,6 @@
 				9C3E69B6F0FCB60BF913CAE3 /* ComposerRailDoorBadge.swift in Sources */,
 				EE995946C42C70C6112C02D9 /* ComposerRailGeometry.swift in Sources */,
 				0A7D1CAC44A66EC7CDB82223 /* ComposerRailGlass.swift in Sources */,
-				36F08B7D0D7CE98328F76A08 /* ComposerRailRows.swift in Sources */,
 				1ABF608C9FB0028BEC3B3C2E /* ComposerRailMode.swift in Sources */,
 				908322CC8DC74DAB217D0EA3 /* ComposerRetouchSeries.swift in Sources */,
 				6212235CB174AE36F5DC2E4B /* ComposerReturnKey.swift in Sources */,
@@ -11729,7 +11725,7 @@
 				9D699FDF48BB1AAF36CAB00C /* ComposerToolbarStripWidthTests.swift in Sources */,
 				BC6280F7877D2E741969C45C /* ComposerTourbillonAndQuickEmojiSourceGuardTests.swift in Sources */,
 				DCBB830035636E8EA4A2366E /* ComposerTrailingRailTests.swift in Sources */,
-				157715AAEE819CEB9BFEA5AF /* ComposerRailAsyncRenderGuardTests.swift in Sources */,
+				157715AAEE819CEB9BFEA5AF /* ViewThatFitsAsyncRenderGuardTests.swift in Sources */,
 				9740BC1C753B3AB8F038E832 /* ComposerTransparentAndConditionalSendSourceGuardTests.swift in Sources */,
 				B223EC8BE4864C15EDE2635E /* ComposerWritingFocusTests.swift in Sources */,
 				64E22825CD6A6878EAA141CF /* ConnectionBannerTypingEntriesTests.swift in Sources */,
