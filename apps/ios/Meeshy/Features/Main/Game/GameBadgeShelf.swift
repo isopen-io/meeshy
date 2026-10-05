@@ -4,13 +4,16 @@ import MeeshyUI
 
 // MARK: - Les badges d'accumulation sur Progression (#9380)
 //
-// `GameBadgeView` (l'hexagone, sept matières, l'empreinte) et `BadgeStage` (la
-// matière qui remonte du bas en 0,7 s, avec sa tape légère) n'avaient AUCUN hôte :
-// l'écran n'affichait les badges que sous forme de pastilles. Cette étagère les
-// montre — ceux que l'utilisateur a GAGNÉS, allumés ; ceux qu'une frappe a éteints,
+// `BadgeStage` (la matière qui remonte du bas en 0,7 s, avec sa tape légère) n'avait
+// AUCUN hôte : l'écran n'affichait les badges que sous forme de pastilles. Cette étagère
+// les montre — ceux que l'utilisateur a GAGNÉS, allumés ; ceux qu'une frappe a éteints,
 // en empreinte qui dit ce qu'il manque pour les rallumer (« −37 »). Un badge jamais
 // gagné ne s'y montre pas : les pastilles de la page « Badges » disent déjà ce qui
 // reste à atteindre.
+//
+// Les badges d'accumulation sont des MÉDAILLES (#9466, `GameMedalView`) : lunette de métal,
+// émail à la couleur de la famille, pictogramme d'axe, perles de palier, ruban à partir de
+// l'Or, et l'arc de progression vers le palier suivant. Les hexagones ont disparu d'ici.
 
 /// UN badge d'accumulation tel que l'étagère le dessine.
 nonisolated struct GameBadgeItem: Identifiable, Equatable, Sendable {
@@ -21,8 +24,28 @@ nonisolated struct GameBadgeItem: Identifiable, Equatable, Sendable {
     let lit: Bool
     /// Ce qu'il manque pour le rallumer ; 0 quand il est allumé.
     let missing: Int
+    /// Le compteur courant de l'axe.
+    let value: Int
+    /// Le seuil du palier suivant ; `nil` au sommet de l'échelle.
+    let nextThreshold: Int?
 
     var id: String { "\(axis.rawValue):\(threshold)" }
+
+    var family: GameMedalFamily { GameMedalFamily(axis.family) }
+    var glyph: GameMedalGlyph { GameMedalGlyph(axis: axis) }
+
+    /// La part parcourue vers le palier suivant, de 0 à 1 ; 1 au sommet, 0 pour une empreinte.
+    var progress: Double {
+        guard lit else { return 0 }
+        guard let nextThreshold, nextThreshold > threshold else { return 1 }
+        return min(1, max(0, Double(value - threshold) / Double(nextThreshold - threshold)))
+    }
+
+    /// Un palier à viser encore : le compteur n'a pas atteint le suivant.
+    var aimsAtNext: Bool {
+        guard lit, let nextThreshold else { return false }
+        return value < nextThreshold
+    }
 }
 
 nonisolated enum GameBadges {
@@ -44,13 +67,16 @@ nonisolated enum GameBadges {
     /// dit s'il est ALLUMÉ ou réduit à son empreinte.
     static func items(for progress: EngagementProgress) -> [GameBadgeItem] {
         progress.axes.flatMap { axis in
-            axis.scale.tiers.filter(\.reached).map { tier in
+            let thresholds = axis.scale.tiers.map(\.threshold)
+            return axis.scale.tiers.filter(\.reached).map { tier in
                 GameBadgeItem(
                     axis: axis.axis,
                     threshold: tier.threshold,
                     material: material(forThreshold: tier.threshold),
                     lit: axis.scale.value >= tier.threshold,
-                    missing: max(0, tier.threshold - axis.scale.value)
+                    missing: max(0, tier.threshold - axis.scale.value),
+                    value: axis.scale.value,
+                    nextThreshold: thresholds.filter { $0 > tier.threshold }.min()
                 )
             }
         }
@@ -62,7 +88,7 @@ struct GameBadgeShelfView: View {
     let items: [GameBadgeItem]
     var haptics: GameHapticsProviding = GameHaptics.shared
 
-    private let columns = [GridItem(.adaptive(minimum: 64, maximum: 88), spacing: MeeshySpacing.md)]
+    private let columns = [GridItem(.adaptive(minimum: 72, maximum: 96), spacing: MeeshySpacing.md)]
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
@@ -101,6 +127,7 @@ private struct GameBadgeCell: View {
             : "−" + GameCopy.formatCount(item.missing)
     }
 
+    /// « Messages texte, Or, 100 sur 500 vers Platine » : l'axe, la matière, où l'on en est et ce qu'on vise.
     private var accessibilityText: String {
         let axis = ProgressionCopy.title(for: item.axis)
         guard item.lit else {
@@ -110,17 +137,26 @@ private struct GameBadgeCell: View {
                 bundle: .main
             )
         }
-        return axis + ", " + ProgressionCopy.tierAccessibilityLabel(
-            EngagementTier(threshold: item.threshold, reached: true, reachedAt: nil)
+        let material = GameCopy.materialName(item.material)
+        guard item.aimsAtNext, let next = item.nextThreshold else {
+            return axis + ", " + material + ", " + ProgressionCopy.tierAccessibilityLabel(
+                EngagementTier(threshold: item.threshold, reached: true, reachedAt: nil)
+            )
+        }
+        return String(
+            localized: "game.medal.a11y.toward",
+            defaultValue: "\(axis), \(material), \(GameCopy.formatCount(item.value)) sur \(GameCopy.formatCount(next)) vers \(GameCopy.materialName(GameBadges.material(forThreshold: next)))",
+            bundle: .main
         )
     }
 
     var body: some View {
         BadgeStage(
             shape: .accumulation, material: item.material, label: label,
-            lit: item.lit, play: play, accessibilityLabel: accessibilityText
+            lit: item.lit, play: play, accessibilityLabel: accessibilityText,
+            medal: BadgeMedal(family: item.family, glyph: item.glyph, progress: item.progress)
         )
-        .frame(width: 64, height: 64)
+        .frame(width: 72, height: 80)
         .adaptiveOnChange(of: item.lit) { _, lit in
             play += 1
             if lit { haptics.play(GameHapticPattern.badgeLit) }

@@ -114,4 +114,50 @@ final class GameBadgeShelfTests: XCTestCase {
     func test_nothingEarned_nothingShown() {
         XCTAssertTrue(GameBadges.items(for: progress(counters: [])).isEmpty)
     }
+
+    // MARK: - Les médailles (#9466)
+
+    func test_theMedalArc_isTheShareOfTheWayToTheNextTier_andAFullArcOnceTheNextOneIsHeld() {
+        let items = GameBadges.items(for: progress(counters: [.init(axisKey: "content.text_message", count: 30)]))
+        let bronze = items.first { $0.threshold == 10 }
+        XCTAssertEqual(bronze?.nextThreshold, 50)
+        XCTAssertEqual(bronze?.progress ?? -1, 0.5, accuracy: 0.0001, "(30 − 10) / (50 − 10)")
+        XCTAssertEqual(bronze?.aimsAtNext, true)
+        let copper = items.first { $0.threshold == 1 }
+        XCTAssertEqual(copper?.progress, 1, "le palier suivant (10) est déjà tenu : l'arc est plein")
+        XCTAssertEqual(copper?.aimsAtNext, false)
+    }
+
+    func test_anImprint_hasNoArc_andAimsAtNothing() {
+        let served = APIEngagementProgress.Milestone(
+            milestoneType: .badge, milestoneKey: EngagementCatalog.badgeMilestoneKey(.textMessage, threshold: 50),
+            reachedAt: "2026-09-01T10:00:00.000Z"
+        )
+        let items = GameBadges.items(for: progress(counters: [.init(axisKey: "content.text_message", count: 13)], served: [served]))
+        let silver = items.first { $0.threshold == 50 }
+        XCTAssertEqual(silver?.progress, 0)
+        XCTAssertEqual(silver?.aimsAtNext, false)
+    }
+
+    func test_theMedalCarriesTheFamilyAndTheGlyphOfItsAxis() {
+        let items = GameBadges.items(for: progress(counters: [
+            .init(axisKey: "content.text_message", count: 1),
+            .init(axisKey: "comment.audio", count: 1),
+            .init(axisKey: "social.friendship", count: 1),
+        ]))
+        func item(_ axis: EngagementAxisKey) -> GameBadgeItem? { items.first { $0.axis == axis } }
+        XCTAssertEqual(item(.textMessage)?.family, .content)
+        XCTAssertEqual(item(.textMessage)?.glyph, .text)
+        XCTAssertEqual(item(.audioComment)?.family, .comment)
+        XCTAssertEqual(item(.audioComment)?.glyph, .voice)
+        XCTAssertEqual(item(.friendship)?.family, .social)
+        XCTAssertEqual(item(.friendship)?.glyph, .social)
+    }
+
+    func test_everyAxisOfTheCatalogHasAGlyph_neverABubble() {
+        for axis in EngagementAxisKey.allCases {
+            XCTAssertTrue(GameMedalGlyph.allCases.contains(GameMedalGlyph(axis: axis)), "\(axis)")
+        }
+        XCTAssertEqual(GameMedalGlyph.allCases.count, 9)
+    }
 }

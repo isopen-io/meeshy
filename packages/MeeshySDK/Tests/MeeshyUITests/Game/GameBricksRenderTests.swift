@@ -87,6 +87,64 @@ struct GameBricksRenderTests {
         #expect(hexagon.distance(to: silver) > 3)
     }
 
+    // MARK: - Les médailles (#9466)
+
+    private func medal(_ family: GameMedalFamily = .content, glyph: GameMedalGlyph = .text, material: GameMaterial = .gold,
+                       state: GameMedalView.State = .lit, progress: Double = 0.5, label: String? = "100") throws -> GameRenderProbe {
+        try probe(GameMedalView(family: family, glyph: glyph, material: material, state: state, progress: progress, label: label),
+                  width: 100, height: 112)
+    }
+
+    @Test("la médaille peint sa lunette, ne peint pas son cadre, et la matière la distingue")
+    func medalMaterials() throws {
+        let probes = try [GameMaterial.copper, .bronze, .silver, .gold, .platinum, .obsidian, .prism].map { try medal(material: $0) }
+        #expect(probes.allSatisfy { $0.coverage > 0.3 })
+        #expect(probes.allSatisfy { $0.cornerIsTransparent })
+        for (index, lhs) in probes.enumerated() {
+            for rhs in probes[(index + 1)...] {
+                #expect(lhs.distance(to: rhs) > 1)
+            }
+        }
+    }
+
+    @Test("l'émail prend la couleur de la famille : les cinq familles ne se confondent pas")
+    func medalFamilies() throws {
+        let probes = try GameMedalFamily.allCases.map { try medal($0) }
+        for (index, lhs) in probes.enumerated() {
+            for rhs in probes[(index + 1)...] {
+                #expect(lhs.distance(to: rhs) > 3)
+            }
+        }
+    }
+
+    @Test("les neuf pictogrammes d'axe se distinguent")
+    func medalGlyphs() throws {
+        let probes = try GameMedalGlyph.allCases.map { try medal(glyph: $0, label: nil) }
+        for (index, lhs) in probes.enumerated() {
+            for rhs in probes[(index + 1)...] {
+                #expect(lhs.distance(to: rhs) > 0.05)
+            }
+        }
+    }
+
+    @Test("l'arc de progression se remplit, et un ruban apparaît à partir de l'Or")
+    func medalArcAndRibbon() throws {
+        let low = try medal(progress: 0.2)
+        let high = try medal(progress: 0.8)
+        #expect(low.distance(to: high) > 0.3)
+        let silver = try medal(material: .silver, label: "50")
+        let gold = try medal(material: .gold, label: "100")
+        #expect(gold.coverage > silver.coverage, "le ruban de l'Or ajoute de la matière sous la médaille")
+    }
+
+    @Test("l'empreinte d'une médaille éteinte est en creux : bien moins de matière que la médaille allumée")
+    func medalImprint() throws {
+        let lit = try medal()
+        let imprint = try medal(state: .imprint, label: "−37")
+        #expect(imprint.coverage < lit.coverage / 2)
+        #expect(imprint.distance(to: lit) > 5)
+    }
+
     @Test("le médaillon de collection montre combien de pastilles sont pleines")
     func collectionDots() throws {
         let few = try probe(GameBadgeView(shape: .collection(filled: 1, total: 6), material: .prism))
