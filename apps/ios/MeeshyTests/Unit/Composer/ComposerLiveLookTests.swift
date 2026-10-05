@@ -237,8 +237,13 @@ final class ComposerLiveLookTests: XCTestCase {
 
     func test_laCamera_guetteSesTrames() throws {
         let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
-        XCTAssertTrue(camera.contains("setSampleBufferDelegate(liveFeed, queue: liveFeed.queue)"))
-        XCTAssertTrue(camera.contains("liveFeed.setPosition(position)"), "l'objectif qui change redresse autrement")
+        XCTAssertTrue(camera.contains("setSampleBufferDelegate(self.liveFeed, queue: self.liveFeed.queue)"),
+                      "le guet se branche sur la file de la session (#9464)")
+        XCTAssertTrue(camera.contains("liveFeed.setPosition(installe.position)"),
+                      "l'objectif qui change redresse autrement — publié APRÈS le commit (#9464)")
+        let feed = try Self.code("Meeshy/Features/Main/Composer/ComposerCameraFeed.swift")
+        XCTAssertTrue(feed.contains("connection.inputPorts.first?.input as? AVCaptureDeviceInput"),
+                      "chaque trame se redresse selon l'objectif qui l'a prise")
     }
 
     func test_laPrise_partAvecLeLook_photoCommeVideo_dansLesDeuxMontages() throws {

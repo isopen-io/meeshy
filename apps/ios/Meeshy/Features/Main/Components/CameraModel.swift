@@ -124,9 +124,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
     /// La configuration se fait sur la file de la session ; l'objectif installé
     /// et le micro reviennent au fil principal, dans l'ordre de la file.
     private func setupSession() {
-        let armeLeMicro = CameraAudioArming.armsAtSetup(
-            microphone: AVCaptureDevice.authorizationStatus(for: .audio),
-            otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying)
+        let armeLeMicro = CameraAudioArming.armsAtSetup(microphone: AVCaptureDevice.authorizationStatus(for: .audio),
+                                                        otherAudioPlaying: AVAudioSession.sharedInstance().isOtherAudioPlaying)
         sessionQueue.perform { [weak self] in
             guard let self else { return }
             self.session.beginConfiguration()
@@ -822,6 +821,8 @@ final class CameraModel: NSObject, ObservableObject, ComposerCaptureCameraProvid
             }
             cursor = cursor + duration
         }
+        // Une piste audio restée vide (prise muette) fait échouer l'export.
+        if audioTrack.segments.isEmpty { composition.removeTrack(audioTrack) }
         let orientation = CameraSegmentOrientation.uniform(placements)
         if let orientation { videoTrack.preferredTransform = orientation }
         let redressement = orientation == nil
