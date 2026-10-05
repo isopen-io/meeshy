@@ -448,6 +448,7 @@ const es = {
   'game.league.consent.leave': 'Salir de la liga pública',
   'game.league.pseudonym.label': 'Seudónimo de liga (opcional)',
   'game.league.pseudonym.hint': 'De 3 a 20 caracteres. Ni tu nombre ni tu usuario. Déjalo vacío: te sorteamos un seudónimo.',
+  'game.league.pseudonym.drawn': 'Tu seudónimo se sortea: ni tu nombre ni tu usuario. Cambia cada temporada.',
   'game.league.pseudonym.save': 'Cambiar de seudónimo',
   'game.league.pseudonym.current': 'Juegas con el nombre {name}.',
   'game.league.pseudonym.invalid': 'Este seudónimo no es válido: de 3 a 20 caracteres, letras, números, punto, guion.',

@@ -6,7 +6,7 @@ import type { LeagueKey, LeagueZone } from '@meeshy/shared/utils/game/league';
 import { formatCount, gameText, pointsLabel } from '@/lib/view/game-copy';
 import { leagueName, remainingLabel, weekLabel, zoneLabel } from '@/lib/view/game-copy-v2';
 
-import { GameLeagueConsent, PseudonymField } from './game-league-consent';
+import { CHOSEN_PSEUDONYM_OPEN, GameLeagueConsent, PseudonymField } from './game-league-consent';
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GameCard, GameChip } from './game-surface';
 import { LeagueGem } from './game/league-gem';
 import { Trophy } from './game/trophy';
@@ -123,6 +123,8 @@ export type GameLeagueProps = {
   readonly onConsent: (consent: boolean, pseudonym?: string) => void;
   readonly onPseudonym: (name: string) => void;
   readonly onRetryWeek: () => void;
+  /** Le pseudonyme CHOISI est-il ouvert ? Fermé par défaut tant que la modération ne l'est pas (conformité A-5, #9491). */
+  readonly chosenPseudonym?: boolean;
 };
 
 const MIN_LEVEL = 10;
@@ -179,6 +181,7 @@ function PlacedHeader({ league, now }: { readonly league: GameLeagueBlock; reado
 
 export function GameLeague(props: GameLeagueProps) {
   const { league, levelRecord, week, online, now, consent, pseudonym, onConsent, onPseudonym, onRetryWeek } = props;
+  const chosenPseudonym = props.chosenPseudonym ?? CHOSEN_PSEUDONYM_OPEN;
 
   if (league.access === 'locked') return <LockedCard levelRecord={levelRecord} />;
   if (league.access === 'minor') {
@@ -194,7 +197,7 @@ export function GameLeague(props: GameLeagueProps) {
     );
   }
   if (league.access === 'consent-required') {
-    return <GameLeagueConsent online={online} busy={consent.pending} error={consent.error} onAccept={(name) => onConsent(true, name)} />;
+    return <GameLeagueConsent online={online} busy={consent.pending} error={consent.error} chosenPseudonym={chosenPseudonym} onAccept={(name) => onConsent(true, name)} />;
   }
 
   return (
@@ -241,15 +244,17 @@ export function GameLeague(props: GameLeagueProps) {
             {gameText('game.league.pseudonym.current', { name: league.pseudonym })}
           </p>
         )}
-        <PseudonymField
-          allowEmpty={false}
-          label={gameText('game.league.pseudonym.new')}
-          hint={gameText('game.league.pseudonym.hint_change')}
-          busy={pseudonym.pending || !online}
-          error={pseudonym.error}
-          submitLabel={gameText('game.league.pseudonym.save')}
-          onSubmit={onPseudonym}
-        />
+        {chosenPseudonym ? (
+          <PseudonymField
+            allowEmpty={false}
+            label={gameText('game.league.pseudonym.new')}
+            hint={gameText('game.league.pseudonym.hint_change')}
+            busy={pseudonym.pending || !online}
+            error={pseudonym.error}
+            submitLabel={gameText('game.league.pseudonym.save')}
+            onSubmit={onPseudonym}
+          />
+        ) : null}
         <button
           type="button"
           data-game-league-leave=""

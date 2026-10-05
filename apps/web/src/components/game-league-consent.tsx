@@ -96,16 +96,56 @@ export function PseudonymField({
   );
 }
 
+/**
+ * LE NOM CHOISI EST FERMÉ (conformité A-5, #9491) — la passerelle refuse tout
+ * pseudonyme choisi (`LEAGUE_PSEUDONYM_FORBIDDEN`, `custom-closed`) tant que le
+ * filtre d'injures, le signalement par ligne et la décision motivée ne sont pas
+ * ouverts. Proposer le champ ferait échouer le consentement de qui le remplit,
+ * et le formulaire de changement serait un contrôle sans effet. L'écran n'offre
+ * donc que le pseudonyme tiré au sort ; le jour où le contrat dira que le choix
+ * est ouvert, ce drapeau le lira.
+ */
+export const CHOSEN_PSEUDONYM_OPEN = false;
+
+function DrawnConsent({ online, busy, error, onAccept }: { readonly online: boolean; readonly busy: boolean; readonly error?: string | undefined; readonly onAccept: () => void }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-caption" style={{ color: GAME_INK_2 }}>
+        {gameText('game.league.pseudonym.drawn')}
+      </p>
+      {error === undefined ? null : (
+        <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
+          {error}
+        </p>
+      )}
+      <button
+        type="button"
+        data-game-pseudonym-submit=""
+        disabled={busy || !online}
+        aria-busy={busy}
+        onClick={onAccept}
+        className="rounded-chip px-4 text-body font-bold disabled:opacity-60"
+        style={{ minHeight: 44, backgroundColor: GAME_BRAND, color: 'var(--color-on-state)' }}
+      >
+        {gameText('game.league.consent.accept')}
+      </button>
+    </div>
+  );
+}
+
 export function GameLeagueConsent({
   online,
   busy,
   error,
   onAccept,
+  chosenPseudonym = CHOSEN_PSEUDONYM_OPEN,
 }: {
   readonly online: boolean;
   readonly busy: boolean;
   readonly error?: string | undefined;
   readonly onAccept: (pseudonym: string | undefined) => void;
+  /** Le pseudonyme CHOISI est-il ouvert ? Fermé par défaut (conformité A-5). */
+  readonly chosenPseudonym?: boolean;
 }) {
   return (
     <GameCard id="game-league-consent" labelledBy="game-league-consent-title">
@@ -119,15 +159,19 @@ export function GameLeagueConsent({
         <li>{gameText('game.league.consent.risk')}</li>
         <li>{gameText('game.league.consent.withdraw_info')}</li>
       </ul>
-      <PseudonymField
-        allowEmpty
-        label={gameText('game.league.pseudonym.label')}
-        hint={gameText('game.league.pseudonym.hint')}
-        busy={busy || !online}
-        error={error}
-        submitLabel={gameText('game.league.consent.accept')}
-        onSubmit={(value) => onAccept(value.length === 0 ? undefined : value)}
-      />
+      {chosenPseudonym ? (
+        <PseudonymField
+          allowEmpty
+          label={gameText('game.league.pseudonym.label')}
+          hint={gameText('game.league.pseudonym.hint')}
+          busy={busy || !online}
+          error={error}
+          submitLabel={gameText('game.league.consent.accept')}
+          onSubmit={(value) => onAccept(value.length === 0 ? undefined : value)}
+        />
+      ) : (
+        <DrawnConsent online={online} busy={busy} error={error} onAccept={() => onAccept(undefined)} />
+      )}
       {online ? null : (
         <p className="text-caption" style={{ color: GAME_INK_2 }}>
           {gameText('game.offline.action')}

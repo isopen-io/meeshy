@@ -460,6 +460,7 @@ const ar = {
   'game.league.consent.leave': 'مغادرة الدوري العام',
   'game.league.pseudonym.label': 'الاسم المستعار في الدوري (اختياري)',
   'game.league.pseudonym.hint': 'من 3 إلى 20 حرفًا. لا اسمك ولا معرّفك. اتركه فارغًا ليُسحب لك اسم مستعار.',
+  'game.league.pseudonym.drawn': 'يُسحب اسمك المستعار عشوائيًا: لا اسمك ولا معرّفك. ويتغيّر في كل موسم.',
   'game.league.pseudonym.save': 'تغيير الاسم المستعار',
   'game.league.pseudonym.current': 'تلعب باسم {name}.',
   'game.league.pseudonym.invalid': 'هذا الاسم غير صالح: من 3 إلى 20 حرفًا، حروف وأرقام ونقطة وشرطة.',

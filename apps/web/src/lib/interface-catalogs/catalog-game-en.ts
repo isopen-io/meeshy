@@ -448,6 +448,7 @@ const en = {
   'game.league.consent.leave': 'Leave the public league',
   'game.league.pseudonym.label': 'League pseudonym (optional)',
   'game.league.pseudonym.hint': '3 to 20 characters. Not your name or your username. Leave empty: a pseudonym is drawn for you.',
+  'game.league.pseudonym.drawn': 'Your pseudonym is drawn at random: not your name, not your username. It changes every season.',
   'game.league.pseudonym.save': 'Change pseudonym',
   'game.league.pseudonym.current': 'You play under the name {name}.',
   'game.league.pseudonym.invalid': 'This pseudonym isn’t valid: 3 to 20 characters, letters, digits, dot, dash.',

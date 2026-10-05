@@ -138,8 +138,33 @@ describe('les trois autres accès', () => {
   });
 });
 
-describe('le consentement et le pseudonyme', () => {
+describe('le nom choisi est FERMÉ tant que la modération ne l’est pas (conformité A-5, #9491)', () => {
   const asking = props({ league: league({ access: 'consent-required', current: null }) });
+
+  test('par défaut, le consentement ne propose aucun champ de pseudonyme et le dit : il est tiré au sort', async () => {
+    const calls: Array<readonly [boolean, string | undefined]> = [];
+    const host = await mount(<GameLeague {...asking} onConsent={(consent, name) => calls.push([consent, name])} />);
+    expect(host.querySelector('#game-league-pseudonym') === null).toBe(true);
+    expect(host.textContent).toContain('tiré au sort');
+    await click(host.querySelector('[data-game-pseudonym-submit]'));
+    expect(calls).toEqual([[true, undefined]]);
+  });
+
+  test('par défaut, une ligue ouverte montre le pseudonyme tenu sans formulaire pour en changer (il serait toujours refusé)', async () => {
+    const host = await mount(<GameLeague {...props()} />);
+    expect(host.querySelector('#game-league-pseudonym') === null).toBe(true);
+    expect(host.querySelector('[data-game-pseudonym-submit]') === null).toBe(true);
+    expect(host.querySelector('[data-game-league-leave]') === null).toBe(false);
+  });
+
+  test('hors ligne, rejoindre reste suspendu', async () => {
+    const host = await mount(<GameLeague {...asking} online={false} />);
+    expect(host.querySelector<HTMLButtonElement>('[data-game-pseudonym-submit]')?.disabled).toBe(true);
+  });
+});
+
+describe('le consentement et le pseudonyme (nom choisi ouvert)', () => {
+  const asking = props({ chosenPseudonym: true, league: league({ access: 'consent-required', current: null }) });
 
   test('accepter sans pseudonyme : le serveur en tire un', async () => {
     const calls: Array<readonly [boolean, string | undefined]> = [];
@@ -185,7 +210,7 @@ describe('le consentement et le pseudonyme', () => {
 
   test('changer de pseudonyme : jamais vide', async () => {
     const calls: string[] = [];
-    const host = await mount(<GameLeague {...props({ onPseudonym: (name) => calls.push(name) })} />);
+    const host = await mount(<GameLeague {...props({ chosenPseudonym: true, onPseudonym: (name) => calls.push(name) })} />);
     await submit(host.querySelector('#game-league-pseudonym-title')?.closest('section') ?? host);
     expect(calls).toEqual([]);
     type(host, '#game-league-pseudonym', 'Heron.2');
