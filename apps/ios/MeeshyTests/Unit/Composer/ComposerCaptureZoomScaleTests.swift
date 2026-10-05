@@ -55,4 +55,23 @@ final class ComposerCaptureZoomScaleTests: XCTestCase {
         XCTAssertTrue(ComposerSceneCameraCopy.zoomPresetValue(0.5).hasSuffix("×"))
         XCTAssertTrue(ComposerSceneCameraCopy.zoomPresetValue(1).hasPrefix("1"))
     }
+
+    func test_camera_opensTheVirtualDevice_andTheBarOffersThePresets() throws {
+        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
+        XCTAssertTrue(camera.contains("AVCaptureDevice.DiscoverySession("), "la caméra virtuelle d'abord")
+        XCTAssertTrue(camera.contains("virtualDeviceSwitchOverVideoZoomFactors"))
+        XCTAssertTrue(camera.contains("zoomScale.device("), "le facteur affiché se convertit à l'écriture")
+        XCTAssertFalse(camera.contains("AVCaptureDevice.default(.builtInWideAngleCamera"),
+                       "l'objectif grand-angle seul plafonnait le zoom à ×1")
+        let barre = try Self.code("Meeshy/Features/Main/Composer/ComposerSceneCameraBar.swift")
+        XCTAssertTrue(barre.contains("ComposerCaptureZoomPresets("), "la pastille ×0,5 / ×1 / ×2")
+    }
+
+    private static func code(_ relative: String) throws -> String {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return AppSourceGuard.stripComments(try String(
+            contentsOf: racine.appendingPathComponent(relative), encoding: .utf8))
+    }
 }
