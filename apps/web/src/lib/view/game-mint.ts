@@ -14,8 +14,8 @@ import { computeMeeshMintPlan } from '@meeshy/shared/utils/meesh';
 
 const tiersHeld = (count: number): number => BADGE_THRESHOLDS.filter((threshold) => count >= threshold).length;
 
-export function badgesDroppedByMint(counters: readonly EngagementCounterEntry[], price: number): number {
-  if (!counters.every((counter) => counter.points !== undefined)) return 0;
+export function badgesDroppedByMint(counters: readonly EngagementCounterEntry[], price: number): number | null {
+  if (!counters.every((counter) => counter.points !== undefined)) return null;
   const plan = computeMeeshMintPlan(
     counters.map((counter) => ({
       axisKey: counter.axisKey as EngagementAxisKey,

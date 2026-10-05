@@ -28,6 +28,9 @@ export const formatCount = (count: number): string => NOMBRE.format(count);
 export const pointsLabel = (count: number): string =>
   singulier(count) ? `${formatCount(count)} point` : `${formatCount(count)} points`;
 
+export const convertiblePointsLabel = (count: number): string =>
+  singulier(count) ? `${formatCount(count)} point convertible` : `${formatCount(count)} points convertibles`;
+
 export const meeshCount = (count: number): string =>
   count === 0 ? 'Aucune Meesh' : singulier(count) ? `${formatCount(count)} Meesh` : `${formatCount(count)} Meeshes`;
 

@@ -14,6 +14,7 @@ import {
   divisionLabel,
   editionName,
   gameErrorMessage,
+  convertiblePointsLabel,
   meeshCount,
   missionTitle,
   pointsLabel,
@@ -27,26 +28,36 @@ import {
  * valeurs, pour qu'un nom vide ne passe pas non plus.
  */
 describe('les noms du jeu couvrent tout le catalogue partagé', () => {
-  test.each(LEVEL_TIER_KEYS.map((key) => [key]))('palier %s', (key) => {
-    expect(LEVEL_TIER_NAMES[key].length).toBeGreaterThan(0);
-  });
-  test.each(GLORY_RANKS.map((rank) => [rank.key]))('rang %s', (key) => {
-    expect(RANK_NAMES[key].length).toBeGreaterThan(0);
-  });
+  for (const key of LEVEL_TIER_KEYS) {
+    test(`palier ${key}`, () => {
+      expect(LEVEL_TIER_NAMES[key].length).toBeGreaterThan(0);
+    });
+  }
+  for (const { key } of GLORY_RANKS) {
+    test(`rang ${key}`, () => {
+      expect(RANK_NAMES[key].length).toBeGreaterThan(0);
+    });
+  }
   test('le Mythe a son nom', () => {
     expect(RANK_NAMES.mythe).toBe('Mythe');
   });
-  test.each(TREASURY_TIERS.map((tier) => [tier.key]))('trésor %s', (key) => {
-    expect(TREASURY_NAMES[key].length).toBeGreaterThan(0);
-  });
-  test.each(FLAME_FORMS.map((form) => [form.key]))('Flamme %s', (key) => {
-    expect(FLAME_FORM_NAMES[key].length).toBeGreaterThan(0);
-  });
-  test.each(MISSION_TEMPLATES.map((template) => [template.key, template.baseTarget]))('mission %s se dit en clair', (key, target) => {
-    const title = missionTitle(key, target);
-    expect(title.length).toBeGreaterThan(3);
-    expect(title).not.toContain(key);
-  });
+  for (const { key } of TREASURY_TIERS) {
+    test(`trésor ${key}`, () => {
+      expect(TREASURY_NAMES[key].length).toBeGreaterThan(0);
+    });
+  }
+  for (const { key } of FLAME_FORMS) {
+    test(`Flamme ${key}`, () => {
+      expect(FLAME_FORM_NAMES[key].length).toBeGreaterThan(0);
+    });
+  }
+  for (const { key, baseTarget } of MISSION_TEMPLATES) {
+    test(`mission ${key} se dit en clair`, () => {
+      const title = missionTitle(key, baseTarget);
+      expect(title).not.toBe('Mission du jour');
+      expect(title).not.toContain(key);
+    });
+  }
 });
 
 describe('les nombres s’accordent', () => {
@@ -57,6 +68,10 @@ describe('les nombres s’accordent', () => {
   });
   test('les milliers se lisent avec une espace', () => {
     expect(pointsLabel(1294).replace(/\s/g, ' ')).toBe('1 294 points');
+  });
+  test('points convertibles', () => {
+    expect(convertiblePointsLabel(1)).toBe('1 point convertible');
+    expect(convertiblePointsLabel(621)).toBe('621 points convertibles');
   });
   test('Meeshes', () => {
     expect(meeshCount(0)).toBe('Aucune Meesh');

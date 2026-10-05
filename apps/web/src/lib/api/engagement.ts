@@ -63,7 +63,8 @@ export async function fetchEngagementProgress(
 /**
  * LA PROGRESSION ET, À CÔTÉ, LE JEU (#9383) — `game` est le bloc que la
  * passerelle sert depuis #9378, `mintBadgeLoss` les badges que la frappe
- * éteindrait (calculé sur les compteurs servis, avec le prix de CETTE frappe).
+ * éteindrait (calculé sur les compteurs servis, avec le prix de CETTE frappe ;
+ * absent quand le serveur ne sert pas les points par axe : inconnu n'est pas zéro).
  * Les deux sont ABSENTS (clé omise) devant un ancien serveur ou un bloc partiel :
  * l'écran actuel reste alors intact, il ne reçoit rien à moitié.
  */
@@ -72,8 +73,8 @@ export type EngagementWithGame = EngagementProgress & {
   readonly mintBadgeLoss?: number;
 };
 
-const withGame = (progress: EngagementProgress, game: GameBlock | null, badgeLoss: number): EngagementWithGame =>
-  game === null ? progress : { ...progress, game, mintBadgeLoss: badgeLoss };
+const withGame = (progress: EngagementProgress, game: GameBlock | null, badgeLoss: number | null): EngagementWithGame =>
+  game === null ? progress : { ...progress, game, ...(badgeLoss === null ? {} : { mintBadgeLoss: badgeLoss }) };
 
 export async function loadEngagementProgress(params: {
   readonly source: DataSource;
@@ -99,7 +100,7 @@ export async function loadEngagementProgress(params: {
     data: withGame(
       resolveEngagementProgress(result.data),
       game,
-      game === null ? 0 : badgesDroppedByMint(result.data.counters, game.mint.price),
+      game === null ? null : badgesDroppedByMint(result.data.counters, game.mint.price),
     ),
   };
 }

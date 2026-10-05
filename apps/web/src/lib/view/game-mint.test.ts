@@ -13,8 +13,8 @@ describe('badgesDroppedByMint', () => {
     expect(badgesDroppedByMint(counters, 1221)).toBe(2);
   });
 
-  test('un serveur qui ne sert pas les points : rien d’annoncé plutôt qu’un chiffre inventé', () => {
-    expect(badgesDroppedByMint([{ axisKey: 'content.text_message', count: 100 }], 1221)).toBe(0);
+  test('un serveur qui ne sert pas les points : « inconnu », jamais un zéro qui promettrait qu’aucun badge ne tombe', () => {
+    expect(badgesDroppedByMint([{ axisKey: 'content.text_message', count: 100 }], 1221)).toBeNull();
   });
 
   test('des points insuffisants : aucune frappe, aucun badge perdu', () => {
