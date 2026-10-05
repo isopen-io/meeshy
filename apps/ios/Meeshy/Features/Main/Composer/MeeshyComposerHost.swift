@@ -570,6 +570,8 @@ struct MeeshyComposerHost: View {
     /// `ComposerInlineEditing.resolved` (`activeInlineEdit`), jamais telle
     /// quelle.
     @State var inlineEdit: ComposerInlineEdit?
+    /// L'image dont la scène montre l'ORIGINAL, le temps d'un appui sur « Comparer » (#9175).
+    @State var comparingLookObjectId: String?
     /// Le menu d'appui long d'un OBJET, peint en verre par le meuble (#8717).
     /// Celui du FOND garde son état d'origine, `backgroundMenuObjectId`.
     @State var sceneObjectMenu: ComposerSceneMenuRequest?

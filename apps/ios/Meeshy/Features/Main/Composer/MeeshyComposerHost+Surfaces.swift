@@ -317,8 +317,9 @@ extension MeeshyComposerHost {
                 ? nil : AnyView(overflowMenu),
             onClose: onDismiss,
             slide: Binding(
-                get: { viewModel.currentSlide },
-                set: { viewModel.currentSlide = $0 }
+                get: { ComposerLookComparison.shown(viewModel.currentSlide, comparing: comparingLookObjectId) },
+                set: { viewModel.currentSlide = ComposerLookComparison.written($0, over: viewModel.currentSlide,
+                                                                              comparing: comparingLookObjectId) }
             ),
             aspectRatio: viewModel.currentCanvasRatio,
             plateauTint: tint.color,

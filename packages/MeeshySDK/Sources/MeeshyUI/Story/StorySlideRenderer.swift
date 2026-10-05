@@ -147,8 +147,12 @@ public enum StorySlideRenderer {
             //    manquait au thumbnail/thumbHash. L'audio (pas de frame chargée) est
             //    naturellement ignoré (le `if let img` échoue).
             for obj in slide.effects.resolvedForegroundMediaObjects {
+                // Le filtre et les réglages PROPRES à une IMAGE (#8474, #9175),
+                // cuits par la même fonction que le player — qui ne les peint
+                // pas sur une vidéo.
                 if let img = loadedImages[obj.id] {
-                    drawMediaObject(obj, image: img, in: size, ctx: cgCtx)
+                    let peinte = obj.kind == .image ? StoryMediaLayer.filtered(img, for: obj) ?? img : img
+                    drawMediaObject(obj, image: peinte, in: size, ctx: cgCtx)
                 }
             }
 

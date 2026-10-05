@@ -1,6 +1,7 @@
 import XCTest
 import UIKit
 @testable import MeeshyUI
+import MeeshySDK
 
 /// Behaviour tests for `ImageEditorViewModel` — editing, undo/redo, history
 /// navigation, mode switching and export.
