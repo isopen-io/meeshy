@@ -397,6 +397,13 @@ extension MeeshyComposerHost {
         // La frise ouverte rend ses pistes à la slide AVANT l'envoi (#8415) :
         // sinon un timing réglé à l'instant partirait sans elle.
         if viewModel.timelineIsOpen { viewModel.closeTimelinePanel() }
+        // Le texte du post ARMÉ depuis une scène part avec elle (#8473) :
+        // l'atelier publie le contenu de la slide, pas `documentText`.
+        if let texte = ComposerPublishMenuRule.atelierCarriedPostText(
+            route: ComposerPublishMenuRule.route(surface: mountedSurface, choice: choice),
+            choice: choice, documentText: documentText) {
+            viewModel.applyContentText(texte)
+        }
         switch ComposerPublishMenuRule.route(surface: mountedSurface, choice: choice) {
         case .atelier:
             publishTrigger.requestPublish(

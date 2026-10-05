@@ -38,7 +38,6 @@ final class NotificationBannerPresentationTests: XCTestCase {
         XCTAssertEqual(banner.headline, "Bob Commentateur a commenté votre réel")
         XCTAssertEqual(banner.body, "Superbe montage !")
         XCTAssertEqual(banner.thumbnailURL, "https://cdn/reel.jpg")
-        XCTAssertNil(banner.reactionBadge)
     }
 
     func test_contentComment_withoutThumbnail_stillCarriesATypedSymbol() throws {
@@ -313,12 +312,14 @@ final class NotificationBannerPresentationTests: XCTestCase {
         XCTAssertEqual(banner.headline, "Sam a réagi 🔥 à votre story")
         XCTAssertEqual(banner.body, "Votre story · 📷 Photo")
         XCTAssertEqual(banner.thumbnailURL, "https://cdn/s.jpg")
-        XCTAssertNil(banner.reactionBadge, "l'émoji est DÉJÀ dans la phrase — le répéter est du bruit")
+        XCTAssertEqual(Self.occurrences(of: "🔥", in: banner), 1, "#9049 — l'émoji est dit par la phrase servie, une fois")
     }
 
-    /// Une ligne ancienne, ou un éventail dont la phrase ne porte pas l'émoji :
-    /// la réaction doit alors être rendue COMME une réaction, pas perdue.
-    func test_contentReaction_whenTheActionOmitsTheEmoji_thePastilleCarriesIt() throws {
+    /// #9049 — la passerelle est le SEUL site qui compose la phrase de
+    /// réaction, émoji compris. La bannière la rend telle quelle et n'ajoute
+    /// AUCUN émoji de son cru : c'est ce second émoji, posé devant le corps,
+    /// qui faisait lire « ❤️  a réagi ❤️ à votre message ».
+    func test_reaction_theBannerNeverAddsAnEmojiOfItsOwn() throws {
         let event = try makeEvent("""
         {
             "id": "n15", "userId": "u1", "type": "comment_like",
@@ -329,15 +330,18 @@ final class NotificationBannerPresentationTests: XCTestCase {
         }
         """)
 
-        XCTAssertEqual(event.bannerPresentation().reactionBadge, "👍")
+        let banner = event.bannerPresentation()
+        XCTAssertEqual(banner.headline, "Sam a aimé votre commentaire")
+        XCTAssertEqual(banner.body, "« Bien vu ! »")
+        XCTAssertEqual(Self.occurrences(of: "👍", in: banner), 0)
     }
 
-    func test_messageReaction_readsTheOtherWireNameOfTheEmoji() throws {
+    func test_groupMessageReaction_saysTheEmojiOnce_andTheGroupInTheHeadline() throws {
         let event = try makeEvent("""
         {
             "id": "n16", "userId": "u1", "type": "message_reaction",
             "title": "Grace", "subtitle": "Équipe Tech",
-            "content": "a réagi à votre message",
+            "content": "a réagi 🔥 à votre message : « On part à 9 h »",
             "actor": { "id": "a1", "displayName": "Grace" },
             "context": { "conversationTitle": "Équipe Tech", "conversationType": "group" },
             "metadata": { "reactionEmoji": "🔥" }
@@ -346,7 +350,8 @@ final class NotificationBannerPresentationTests: XCTestCase {
 
         let banner = event.bannerPresentation()
         XCTAssertTrue(banner.headline.contains("Équipe Tech"), "cadrage de conversation")
-        XCTAssertEqual(banner.reactionBadge, "🔥")
+        XCTAssertEqual(banner.body, "a réagi 🔥 à votre message : « On part à 9 h »")
+        XCTAssertEqual(Self.occurrences(of: "🔥", in: banner), 1)
     }
 
     func test_messageReaction_whenTheServedSentenceCarriesTheEmoji_noSecondEmoji() throws {
@@ -362,8 +367,16 @@ final class NotificationBannerPresentationTests: XCTestCase {
         """)
 
         let banner = event.bannerPresentation()
+        XCTAssertEqual(banner.headline, "meeshy sama")
         XCTAssertEqual(banner.body, "a réagi ❤️ à votre message : « J'attends! »")
-        XCTAssertNil(banner.reactionBadge, "#9049 — l'émoji est déjà dans la phrase servie : pas de second ❤️ devant")
+        XCTAssertEqual(Self.occurrences(of: "❤️", in: banner), 1, "#9049 — pas de second ❤️ devant la phrase")
+        XCTAssertEqual(Self.occurrences(of: "meeshy sama", in: banner), 1, "#9049 — l'acteur est dit par la headline seule")
+    }
+
+    /// Ce que la bannière AFFICHE en texte : sa headline puis son corps.
+    private static func occurrences(of needle: String, in banner: NotificationBannerPresentation) -> Int {
+        let text = [banner.headline, banner.body].compactMap { $0 }.joined(separator: "\n")
+        return text.components(separatedBy: needle).count - 1
     }
 
     // MARK: - Replis

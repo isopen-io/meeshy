@@ -1,0 +1,3852 @@
+{
+  "$format": {
+    "input": "{ law, ...paramètres } — `law` nomme la loi du Jeu Meeshy (level, level-record, mint-price, mint-preview, glory-standing, glory-gain, treasury, flame-form, flame-advance, flame-status, flame-relight, tailwind, prism-hour, mission-objective, mission-reward, rng, missions-draw, mission-reroll, chest, guide). Les jours sont des clés AAAA-MM-JJ ; le jour, le fuseau et la graine sont des paramètres.",
+    "expected": "La sortie de la loi TS (packages/shared/utils/game/*) : level → {level, tier, floorScore, nextThreshold, pointsToNext, progress, isMax} ; mint-price → {price, edition} ; glory-standing → {rank, division, …} ; flame-* → la transition ou la décision ; rng → {seed FNV-1a 32 bits de « userId|jour|sel », 5 tirages mulberry32} ; missions-draw → {dayKey, prismDay, missions[]} ; guide → le moment. Les fractions sont arrondies à 1e-6 et comparées à 1e-4.",
+    "provenance": "Contrat cross-plateforme de la loi du Jeu Meeshy (#9373). TS le produit (__tests__/game/game-vectors-law.ts) et le rejoue (__tests__/vectors/game.vectors.test.ts) ; iOS le rejoue (GameLawVectorTests). Sur divergence, c'est le TS qui a raison — le miroir bouge, jamais le vecteur sans lui. Régénérer : UPDATE_GAME_VECTORS=1 npx vitest run __tests__/vectors/game.vectors.test.ts."
+  },
+  "vectors": [
+    {
+      "_label": "niveau pour un score de 0",
+      "input": {
+        "law": "level",
+        "score": 0
+      },
+      "expected": {
+        "level": 1,
+        "tier": "etincelle",
+        "floorScore": 0,
+        "nextThreshold": 40,
+        "pointsToNext": 40,
+        "progress": 0,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 9",
+      "input": {
+        "law": "level",
+        "score": 9
+      },
+      "expected": {
+        "level": 1,
+        "tier": "etincelle",
+        "floorScore": 0,
+        "nextThreshold": 40,
+        "pointsToNext": 31,
+        "progress": 0.225,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 10",
+      "input": {
+        "law": "level",
+        "score": 10
+      },
+      "expected": {
+        "level": 1,
+        "tier": "etincelle",
+        "floorScore": 0,
+        "nextThreshold": 40,
+        "pointsToNext": 30,
+        "progress": 0.25,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 39",
+      "input": {
+        "law": "level",
+        "score": 39
+      },
+      "expected": {
+        "level": 1,
+        "tier": "etincelle",
+        "floorScore": 0,
+        "nextThreshold": 40,
+        "pointsToNext": 1,
+        "progress": 0.975,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 40",
+      "input": {
+        "law": "level",
+        "score": 40
+      },
+      "expected": {
+        "level": 2,
+        "tier": "etincelle",
+        "floorScore": 40,
+        "nextThreshold": 90,
+        "pointsToNext": 50,
+        "progress": 0,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 89",
+      "input": {
+        "law": "level",
+        "score": 89
+      },
+      "expected": {
+        "level": 2,
+        "tier": "etincelle",
+        "floorScore": 40,
+        "nextThreshold": 90,
+        "pointsToNext": 1,
+        "progress": 0.98,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 90",
+      "input": {
+        "law": "level",
+        "score": 90
+      },
+      "expected": {
+        "level": 3,
+        "tier": "etincelle",
+        "floorScore": 90,
+        "nextThreshold": 160,
+        "pointsToNext": 70,
+        "progress": 0,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 249",
+      "input": {
+        "law": "level",
+        "score": 249
+      },
+      "expected": {
+        "level": 4,
+        "tier": "etincelle",
+        "floorScore": 160,
+        "nextThreshold": 250,
+        "pointsToNext": 1,
+        "progress": 0.988889,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 250",
+      "input": {
+        "law": "level",
+        "score": 250
+      },
+      "expected": {
+        "level": 5,
+        "tier": "etincelle",
+        "floorScore": 250,
+        "nextThreshold": 360,
+        "pointsToNext": 110,
+        "progress": 0,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 999",
+      "input": {
+        "law": "level",
+        "score": 999
+      },
+      "expected": {
+        "level": 9,
+        "tier": "etincelle",
+        "floorScore": 810,
+        "nextThreshold": 1000,
+        "pointsToNext": 1,
+        "progress": 0.994737,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 1000",
+      "input": {
+        "law": "level",
+        "score": 1000
+      },
+      "expected": {
+        "level": 10,
+        "tier": "lueur",
+        "floorScore": 1000,
+        "nextThreshold": 1210,
+        "pointsToNext": 210,
+        "progress": 0,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 12180",
+      "input": {
+        "law": "level",
+        "score": 12180
+      },
+      "expected": {
+        "level": 34,
+        "tier": "eclat",
+        "floorScore": 11560,
+        "nextThreshold": 12250,
+        "pointsToNext": 70,
+        "progress": 0.898551,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 24999",
+      "input": {
+        "law": "level",
+        "score": 24999
+      },
+      "expected": {
+        "level": 49,
+        "tier": "rayon",
+        "floorScore": 24010,
+        "nextThreshold": 25000,
+        "pointsToNext": 1,
+        "progress": 0.99899,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 25000",
+      "input": {
+        "law": "level",
+        "score": 25000
+      },
+      "expected": {
+        "level": 50,
+        "tier": "aurore",
+        "floorScore": 25000,
+        "nextThreshold": 26010,
+        "pointsToNext": 1010,
+        "progress": 0,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 56250",
+      "input": {
+        "law": "level",
+        "score": 56250
+      },
+      "expected": {
+        "level": 75,
+        "tier": "etoile",
+        "floorScore": 56250,
+        "nextThreshold": 57760,
+        "pointsToNext": 1510,
+        "progress": 0,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 99999",
+      "input": {
+        "law": "level",
+        "score": 99999
+      },
+      "expected": {
+        "level": 99,
+        "tier": "galaxie",
+        "floorScore": 98010,
+        "nextThreshold": 100000,
+        "pointsToNext": 1,
+        "progress": 0.999497,
+        "isMax": false
+      }
+    },
+    {
+      "_label": "niveau pour un score de 100000",
+      "input": {
+        "law": "level",
+        "score": 100000
+      },
+      "expected": {
+        "level": 100,
+        "tier": "galaxie",
+        "floorScore": 100000,
+        "nextThreshold": null,
+        "pointsToNext": 0,
+        "progress": 1,
+        "isMax": true
+      }
+    },
+    {
+      "_label": "niveau pour un score de 400000",
+      "input": {
+        "law": "level",
+        "score": 400000
+      },
+      "expected": {
+        "level": 100,
+        "tier": "galaxie",
+        "floorScore": 100000,
+        "nextThreshold": null,
+        "pointsToNext": 0,
+        "progress": 1,
+        "isMax": true
+      }
+    },
+    {
+      "_label": "record niveau 34, ancien 30",
+      "input": {
+        "law": "level-record",
+        "level": 34,
+        "previousRecord": 30,
+        "prestige": 0
+      },
+      "expected": {
+        "record": 34,
+        "newLevelsFrom": 31,
+        "newLevelsTo": 34,
+        "newLevelsCount": 4,
+        "canPrestige": false
+      }
+    },
+    {
+      "_label": "record niveau 32, ancien 36",
+      "input": {
+        "law": "level-record",
+        "level": 32,
+        "previousRecord": 36,
+        "prestige": 0
+      },
+      "expected": {
+        "record": 36,
+        "newLevelsFrom": 0,
+        "newLevelsTo": 0,
+        "newLevelsCount": 0,
+        "canPrestige": false
+      }
+    },
+    {
+      "_label": "record niveau 2, ancien null",
+      "input": {
+        "law": "level-record",
+        "level": 2,
+        "previousRecord": null,
+        "prestige": 0
+      },
+      "expected": {
+        "record": 2,
+        "newLevelsFrom": 2,
+        "newLevelsTo": 2,
+        "newLevelsCount": 1,
+        "canPrestige": false
+      }
+    },
+    {
+      "_label": "record niveau 100, ancien 99",
+      "input": {
+        "law": "level-record",
+        "level": 100,
+        "previousRecord": 99,
+        "prestige": 4
+      },
+      "expected": {
+        "record": 100,
+        "newLevelsFrom": 100,
+        "newLevelsTo": 100,
+        "newLevelsCount": 1,
+        "canPrestige": true
+      }
+    },
+    {
+      "_label": "record niveau 100, ancien 100",
+      "input": {
+        "law": "level-record",
+        "level": 100,
+        "previousRecord": 100,
+        "prestige": 5
+      },
+      "expected": {
+        "record": 100,
+        "newLevelsFrom": 0,
+        "newLevelsTo": 0,
+        "newLevelsCount": 0,
+        "canPrestige": false
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 1",
+      "input": {
+        "law": "mint-price",
+        "n": 1
+      },
+      "expected": {
+        "price": 1221,
+        "edition": "silver"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 10",
+      "input": {
+        "law": "mint-price",
+        "n": 10
+      },
+      "expected": {
+        "price": 1221,
+        "edition": "silver"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 11",
+      "input": {
+        "law": "mint-price",
+        "n": 11
+      },
+      "expected": {
+        "price": 1294,
+        "edition": "silver"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 21",
+      "input": {
+        "law": "mint-price",
+        "n": 21
+      },
+      "expected": {
+        "price": 1372,
+        "edition": "silver"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 50",
+      "input": {
+        "law": "mint-price",
+        "n": 50
+      },
+      "expected": {
+        "price": 1541,
+        "edition": "silver"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 51",
+      "input": {
+        "law": "mint-price",
+        "n": 51
+      },
+      "expected": {
+        "price": 1634,
+        "edition": "silver"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 100",
+      "input": {
+        "law": "mint-price",
+        "n": 100
+      },
+      "expected": {
+        "price": 2063,
+        "edition": "gold"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 101",
+      "input": {
+        "law": "mint-price",
+        "n": 101
+      },
+      "expected": {
+        "price": 2187,
+        "edition": "silver"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 150",
+      "input": {
+        "law": "mint-price",
+        "n": 150
+      },
+      "expected": {
+        "price": 2761,
+        "edition": "silver"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 200",
+      "input": {
+        "law": "mint-price",
+        "n": 200
+      },
+      "expected": {
+        "price": 3694,
+        "edition": "gold"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 249",
+      "input": {
+        "law": "mint-price",
+        "n": 249
+      },
+      "expected": {
+        "price": 4884,
+        "edition": "silver"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 250",
+      "input": {
+        "law": "mint-price",
+        "n": 250
+      },
+      "expected": {
+        "price": 4884,
+        "edition": "silver"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 251",
+      "input": {
+        "law": "mint-price",
+        "n": 251
+      },
+      "expected": {
+        "price": 4884,
+        "edition": "silver"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 999",
+      "input": {
+        "law": "mint-price",
+        "n": 999
+      },
+      "expected": {
+        "price": 4884,
+        "edition": "silver"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 1000",
+      "input": {
+        "law": "mint-price",
+        "n": 1000
+      },
+      "expected": {
+        "price": 4884,
+        "edition": "prism"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 2000",
+      "input": {
+        "law": "mint-price",
+        "n": 2000
+      },
+      "expected": {
+        "price": 4884,
+        "edition": "prism"
+      }
+    },
+    {
+      "_label": "prix de la Meesh n° 0",
+      "input": {
+        "law": "mint-price",
+        "n": 0
+      },
+      "expected": {
+        "price": 1221,
+        "edition": "silver"
+      }
+    },
+    {
+      "_label": "aperçu de frappe : score 12180, 12 frappées",
+      "input": {
+        "law": "mint-preview",
+        "score": 12180,
+        "mintedLifetime": 12,
+        "debitablePoints": 12180
+      },
+      "expected": {
+        "number": 13,
+        "price": 1294,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 34,
+        "levelAfter": 32,
+        "levelsLost": 2,
+        "gloryGained": 100
+      }
+    },
+    {
+      "_label": "aperçu de frappe : score 2250, 0 frappées",
+      "input": {
+        "law": "mint-preview",
+        "score": 2250,
+        "mintedLifetime": 0,
+        "debitablePoints": 2250
+      },
+      "expected": {
+        "number": 1,
+        "price": 1221,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 15,
+        "levelAfter": 10,
+        "levelsLost": 5,
+        "gloryGained": 100
+      }
+    },
+    {
+      "_label": "aperçu de frappe : score 100000, 99 frappées",
+      "input": {
+        "law": "mint-preview",
+        "score": 100000,
+        "mintedLifetime": 99,
+        "debitablePoints": 100000
+      },
+      "expected": {
+        "number": 100,
+        "price": 2063,
+        "edition": "gold",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 100,
+        "levelAfter": 98,
+        "levelsLost": 2,
+        "gloryGained": 100
+      }
+    },
+    {
+      "_label": "aperçu de frappe : score 2000, 0 frappées",
+      "input": {
+        "law": "mint-preview",
+        "score": 2000,
+        "mintedLifetime": 0,
+        "debitablePoints": 1000
+      },
+      "expected": {
+        "number": 1,
+        "price": 1221,
+        "edition": "silver",
+        "canMint": false,
+        "missingPoints": 221,
+        "levelBefore": 14,
+        "levelAfter": 14,
+        "levelsLost": 0,
+        "gloryGained": 0
+      }
+    },
+    {
+      "_label": "aperçu de frappe : score 9000, 999 frappées",
+      "input": {
+        "law": "mint-preview",
+        "score": 9000,
+        "mintedLifetime": 999,
+        "debitablePoints": 9000
+      },
+      "expected": {
+        "number": 1000,
+        "price": 4884,
+        "edition": "prism",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 30,
+        "levelAfter": 20,
+        "levelsLost": 10,
+        "gloryGained": 100
+      }
+    },
+    {
+      "_label": "aperçu de frappe : score 1300, 0 frappées",
+      "input": {
+        "law": "mint-preview",
+        "score": 1300,
+        "mintedLifetime": 0,
+        "debitablePoints": 1300
+      },
+      "expected": {
+        "number": 1,
+        "price": 1221,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 11,
+        "levelAfter": 2,
+        "levelsLost": 9,
+        "gloryGained": 100
+      }
+    },
+    {
+      "_label": "rang pour 0 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 0,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "murmure",
+        "division": 3,
+        "divisionMinGlory": 0,
+        "nextRank": "murmure",
+        "nextDivision": 2,
+        "nextMinGlory": 166,
+        "gloryMissing": 166,
+        "progress": 0
+      }
+    },
+    {
+      "_label": "rang pour 499 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 499,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "murmure",
+        "division": 1,
+        "divisionMinGlory": 333,
+        "nextRank": "echo",
+        "nextDivision": 3,
+        "nextMinGlory": 500,
+        "gloryMissing": 1,
+        "progress": 0.994012
+      }
+    },
+    {
+      "_label": "rang pour 500 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 500,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "echo",
+        "division": 3,
+        "divisionMinGlory": 500,
+        "nextRank": "echo",
+        "nextDivision": 2,
+        "nextMinGlory": 833,
+        "gloryMissing": 333,
+        "progress": 0
+      }
+    },
+    {
+      "_label": "rang pour 1499 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 1499,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "echo",
+        "division": 1,
+        "divisionMinGlory": 1166,
+        "nextRank": "voix",
+        "nextDivision": 3,
+        "nextMinGlory": 1500,
+        "gloryMissing": 1,
+        "progress": 0.997006
+      }
+    },
+    {
+      "_label": "rang pour 1500 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 1500,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "voix",
+        "division": 3,
+        "divisionMinGlory": 1500,
+        "nextRank": "voix",
+        "nextDivision": 2,
+        "nextMinGlory": 2166,
+        "gloryMissing": 666,
+        "progress": 0
+      }
+    },
+    {
+      "_label": "rang pour 2165 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 2165,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "voix",
+        "division": 3,
+        "divisionMinGlory": 1500,
+        "nextRank": "voix",
+        "nextDivision": 2,
+        "nextMinGlory": 2166,
+        "gloryMissing": 1,
+        "progress": 0.998498
+      }
+    },
+    {
+      "_label": "rang pour 2166 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 2166,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "voix",
+        "division": 2,
+        "divisionMinGlory": 2166,
+        "nextRank": "voix",
+        "nextDivision": 1,
+        "nextMinGlory": 2833,
+        "gloryMissing": 667,
+        "progress": 0
+      }
+    },
+    {
+      "_label": "rang pour 2832 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 2832,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "voix",
+        "division": 2,
+        "divisionMinGlory": 2166,
+        "nextRank": "voix",
+        "nextDivision": 1,
+        "nextMinGlory": 2833,
+        "gloryMissing": 1,
+        "progress": 0.998501
+      }
+    },
+    {
+      "_label": "rang pour 2833 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 2833,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "voix",
+        "division": 1,
+        "divisionMinGlory": 2833,
+        "nextRank": "conteur",
+        "nextDivision": 3,
+        "nextMinGlory": 3500,
+        "gloryMissing": 667,
+        "progress": 0
+      }
+    },
+    {
+      "_label": "rang pour 3499 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 3499,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "voix",
+        "division": 1,
+        "divisionMinGlory": 2833,
+        "nextRank": "conteur",
+        "nextDivision": 3,
+        "nextMinGlory": 3500,
+        "gloryMissing": 1,
+        "progress": 0.998501
+      }
+    },
+    {
+      "_label": "rang pour 3500 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 3500,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "conteur",
+        "division": 3,
+        "divisionMinGlory": 3500,
+        "nextRank": "conteur",
+        "nextDivision": 2,
+        "nextMinGlory": 4666,
+        "gloryMissing": 1166,
+        "progress": 0
+      }
+    },
+    {
+      "_label": "rang pour 6999 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 6999,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "conteur",
+        "division": 1,
+        "divisionMinGlory": 5833,
+        "nextRank": "passeur",
+        "nextDivision": 3,
+        "nextMinGlory": 7000,
+        "gloryMissing": 1,
+        "progress": 0.999143
+      }
+    },
+    {
+      "_label": "rang pour 12000 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 12000,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "polyglotte",
+        "division": 3,
+        "divisionMinGlory": 12000,
+        "nextRank": "polyglotte",
+        "nextDivision": 2,
+        "nextMinGlory": 14666,
+        "gloryMissing": 2666,
+        "progress": 0
+      }
+    },
+    {
+      "_label": "rang pour 31999 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 31999,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "ambassadeur",
+        "division": 1,
+        "divisionMinGlory": 28000,
+        "nextRank": "orateur",
+        "nextDivision": 3,
+        "nextMinGlory": 32000,
+        "gloryMissing": 1,
+        "progress": 0.99975
+      }
+    },
+    {
+      "_label": "rang pour 79999 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 79999,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "oracle",
+        "division": 1,
+        "divisionMinGlory": 70000,
+        "nextRank": "legende",
+        "nextDivision": 3,
+        "nextMinGlory": 80000,
+        "gloryMissing": 1,
+        "progress": 0.9999
+      }
+    },
+    {
+      "_label": "rang pour 80000 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 80000,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "legende",
+        "division": 3,
+        "divisionMinGlory": 80000,
+        "nextRank": "legende",
+        "nextDivision": 2,
+        "nextMinGlory": 120000,
+        "gloryMissing": 40000,
+        "progress": 0
+      }
+    },
+    {
+      "_label": "rang pour 119999 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 119999,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "legende",
+        "division": 3,
+        "divisionMinGlory": 80000,
+        "nextRank": "legende",
+        "nextDivision": 2,
+        "nextMinGlory": 120000,
+        "gloryMissing": 1,
+        "progress": 0.999975
+      }
+    },
+    {
+      "_label": "rang pour 120000 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 120000,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "legende",
+        "division": 2,
+        "divisionMinGlory": 120000,
+        "nextRank": "legende",
+        "nextDivision": 1,
+        "nextMinGlory": 160000,
+        "gloryMissing": 40000,
+        "progress": 0
+      }
+    },
+    {
+      "_label": "rang pour 159999 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 159999,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "legende",
+        "division": 2,
+        "divisionMinGlory": 120000,
+        "nextRank": "legende",
+        "nextDivision": 1,
+        "nextMinGlory": 160000,
+        "gloryMissing": 1,
+        "progress": 0.999975
+      }
+    },
+    {
+      "_label": "rang pour 160000 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 160000,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "legende",
+        "division": 1,
+        "divisionMinGlory": 160000,
+        "nextRank": null,
+        "nextDivision": null,
+        "nextMinGlory": null,
+        "gloryMissing": null,
+        "progress": 1
+      }
+    },
+    {
+      "_label": "rang pour 900000 de Gloire",
+      "input": {
+        "law": "glory-standing",
+        "glory": 900000,
+        "mythic": false
+      },
+      "expected": {
+        "rank": "legende",
+        "division": 1,
+        "divisionMinGlory": 160000,
+        "nextRank": null,
+        "nextDivision": null,
+        "nextMinGlory": null,
+        "gloryMissing": null,
+        "progress": 1
+      }
+    },
+    {
+      "_label": "Mythe sur le drapeau du serveur",
+      "input": {
+        "law": "glory-standing",
+        "glory": 200000,
+        "mythic": true
+      },
+      "expected": {
+        "rank": "mythe",
+        "division": null,
+        "divisionMinGlory": null,
+        "nextRank": null,
+        "nextDivision": null,
+        "nextMinGlory": null,
+        "gloryMissing": null,
+        "progress": 1
+      }
+    },
+    {
+      "_label": "Mythe refusé sous Légende",
+      "input": {
+        "law": "glory-standing",
+        "glory": 3000,
+        "mythic": true
+      },
+      "expected": {
+        "rank": "voix",
+        "division": 1,
+        "divisionMinGlory": 2833,
+        "nextRank": "conteur",
+        "nextDivision": 3,
+        "nextMinGlory": 3500,
+        "gloryMissing": 500,
+        "progress": 0.250375
+      }
+    },
+    {
+      "_label": "gains de Gloire (common, niveau 34, série 7)",
+      "input": {
+        "law": "glory-gain",
+        "rarity": "common",
+        "level": 34,
+        "previousRecord": 30,
+        "previousLongest": 6,
+        "longest": 7
+      },
+      "expected": {
+        "achievement": 10,
+        "newLevels": 80,
+        "flameRecords": 50
+      }
+    },
+    {
+      "_label": "gains de Gloire (rare, niveau 20, série 31)",
+      "input": {
+        "law": "glory-gain",
+        "rarity": "rare",
+        "level": 20,
+        "previousRecord": 25,
+        "previousLongest": 0,
+        "longest": 31
+      },
+      "expected": {
+        "achievement": 25,
+        "newLevels": 0,
+        "flameRecords": 200
+      }
+    },
+    {
+      "_label": "gains de Gloire (epic, niveau 2, série 365)",
+      "input": {
+        "law": "glory-gain",
+        "rarity": "epic",
+        "level": 2,
+        "previousRecord": null,
+        "previousLongest": 99,
+        "longest": 365
+      },
+      "expected": {
+        "achievement": 60,
+        "newLevels": 20,
+        "flameRecords": 2500
+      }
+    },
+    {
+      "_label": "gains de Gloire (legendary, niveau 50, série 400)",
+      "input": {
+        "law": "glory-gain",
+        "rarity": "legendary",
+        "level": 50,
+        "previousRecord": 49,
+        "previousLongest": 365,
+        "longest": 400
+      },
+      "expected": {
+        "achievement": 150,
+        "newLevels": 20,
+        "flameRecords": 0
+      }
+    },
+    {
+      "_label": "gains de Gloire (mythic, niveau 100, série 0)",
+      "input": {
+        "law": "glory-gain",
+        "rarity": "mythic",
+        "level": 100,
+        "previousRecord": 98,
+        "previousLongest": 0,
+        "longest": 0
+      },
+      "expected": {
+        "achievement": 400,
+        "newLevels": 40,
+        "flameRecords": 0
+      }
+    },
+    {
+      "_label": "trésor de 0 Meeshes",
+      "input": {
+        "law": "treasury",
+        "held": 0
+      },
+      "expected": {
+        "tier": null,
+        "nextKey": "bourse",
+        "missing": 1
+      }
+    },
+    {
+      "_label": "trésor de 1 Meeshes",
+      "input": {
+        "law": "treasury",
+        "held": 1
+      },
+      "expected": {
+        "tier": "bourse",
+        "nextKey": "escarcelle",
+        "missing": 9
+      }
+    },
+    {
+      "_label": "trésor de 9 Meeshes",
+      "input": {
+        "law": "treasury",
+        "held": 9
+      },
+      "expected": {
+        "tier": "bourse",
+        "nextKey": "escarcelle",
+        "missing": 1
+      }
+    },
+    {
+      "_label": "trésor de 10 Meeshes",
+      "input": {
+        "law": "treasury",
+        "held": 10
+      },
+      "expected": {
+        "tier": "escarcelle",
+        "nextKey": "coffret",
+        "missing": 40
+      }
+    },
+    {
+      "_label": "trésor de 49 Meeshes",
+      "input": {
+        "law": "treasury",
+        "held": 49
+      },
+      "expected": {
+        "tier": "escarcelle",
+        "nextKey": "coffret",
+        "missing": 1
+      }
+    },
+    {
+      "_label": "trésor de 50 Meeshes",
+      "input": {
+        "law": "treasury",
+        "held": 50
+      },
+      "expected": {
+        "tier": "coffret",
+        "nextKey": "coffre",
+        "missing": 50
+      }
+    },
+    {
+      "_label": "trésor de 99 Meeshes",
+      "input": {
+        "law": "treasury",
+        "held": 99
+      },
+      "expected": {
+        "tier": "coffret",
+        "nextKey": "coffre",
+        "missing": 1
+      }
+    },
+    {
+      "_label": "trésor de 100 Meeshes",
+      "input": {
+        "law": "treasury",
+        "held": 100
+      },
+      "expected": {
+        "tier": "coffre",
+        "nextKey": "tresor",
+        "missing": 400
+      }
+    },
+    {
+      "_label": "trésor de 499 Meeshes",
+      "input": {
+        "law": "treasury",
+        "held": 499
+      },
+      "expected": {
+        "tier": "coffre",
+        "nextKey": "tresor",
+        "missing": 1
+      }
+    },
+    {
+      "_label": "trésor de 500 Meeshes",
+      "input": {
+        "law": "treasury",
+        "held": 500
+      },
+      "expected": {
+        "tier": "tresor",
+        "nextKey": "reserve",
+        "missing": 500
+      }
+    },
+    {
+      "_label": "trésor de 999 Meeshes",
+      "input": {
+        "law": "treasury",
+        "held": 999
+      },
+      "expected": {
+        "tier": "tresor",
+        "nextKey": "reserve",
+        "missing": 1
+      }
+    },
+    {
+      "_label": "trésor de 1000 Meeshes",
+      "input": {
+        "law": "treasury",
+        "held": 1000
+      },
+      "expected": {
+        "tier": "reserve",
+        "nextKey": null,
+        "missing": null
+      }
+    },
+    {
+      "_label": "trésor de 5000 Meeshes",
+      "input": {
+        "law": "treasury",
+        "held": 5000
+      },
+      "expected": {
+        "tier": "reserve",
+        "nextKey": null,
+        "missing": null
+      }
+    },
+    {
+      "_label": "Flamme de 0 jours",
+      "input": {
+        "law": "flame-form",
+        "days": 0
+      },
+      "expected": {
+        "form": null,
+        "bonusPercent": 0,
+        "bonus": 0
+      }
+    },
+    {
+      "_label": "Flamme de 1 jours",
+      "input": {
+        "law": "flame-form",
+        "days": 1
+      },
+      "expected": {
+        "form": "braise",
+        "bonusPercent": 2,
+        "bonus": 0.02
+      }
+    },
+    {
+      "_label": "Flamme de 6 jours",
+      "input": {
+        "law": "flame-form",
+        "days": 6
+      },
+      "expected": {
+        "form": "braise",
+        "bonusPercent": 12,
+        "bonus": 0.12
+      }
+    },
+    {
+      "_label": "Flamme de 7 jours",
+      "input": {
+        "law": "flame-form",
+        "days": 7
+      },
+      "expected": {
+        "form": "flamme",
+        "bonusPercent": 14,
+        "bonus": 0.14
+      }
+    },
+    {
+      "_label": "Flamme de 29 jours",
+      "input": {
+        "law": "flame-form",
+        "days": 29
+      },
+      "expected": {
+        "form": "flamme",
+        "bonusPercent": 50,
+        "bonus": 0.5
+      }
+    },
+    {
+      "_label": "Flamme de 30 jours",
+      "input": {
+        "law": "flame-form",
+        "days": 30
+      },
+      "expected": {
+        "form": "brasier",
+        "bonusPercent": 50,
+        "bonus": 0.5
+      }
+    },
+    {
+      "_label": "Flamme de 99 jours",
+      "input": {
+        "law": "flame-form",
+        "days": 99
+      },
+      "expected": {
+        "form": "brasier",
+        "bonusPercent": 50,
+        "bonus": 0.5
+      }
+    },
+    {
+      "_label": "Flamme de 100 jours",
+      "input": {
+        "law": "flame-form",
+        "days": 100
+      },
+      "expected": {
+        "form": "astre",
+        "bonusPercent": 50,
+        "bonus": 0.5
+      }
+    },
+    {
+      "_label": "Flamme de 364 jours",
+      "input": {
+        "law": "flame-form",
+        "days": 364
+      },
+      "expected": {
+        "form": "astre",
+        "bonusPercent": 50,
+        "bonus": 0.5
+      }
+    },
+    {
+      "_label": "Flamme de 365 jours",
+      "input": {
+        "law": "flame-form",
+        "days": 365
+      },
+      "expected": {
+        "form": "soleil",
+        "bonusPercent": 50,
+        "bonus": 0.5
+      }
+    },
+    {
+      "_label": "Flamme de 800 jours",
+      "input": {
+        "law": "flame-form",
+        "days": 800
+      },
+      "expected": {
+        "form": "soleil",
+        "bonusPercent": 50,
+        "bonus": 0.5
+      }
+    },
+    {
+      "_label": "transition de Flamme null → 2026-10-05, série 0, 0 gel",
+      "input": {
+        "law": "flame-advance",
+        "lastActiveDay": null,
+        "today": "2026-10-05",
+        "streak": 0,
+        "freezes": 0
+      },
+      "expected": {
+        "outcome": "started",
+        "streak": 1,
+        "freezes": 0,
+        "freezesUsed": 0,
+        "missedDays": 0,
+        "lostStreak": 0
+      }
+    },
+    {
+      "_label": "transition de Flamme 2026-10-05 → 2026-10-05, série 4, 1 gel",
+      "input": {
+        "law": "flame-advance",
+        "lastActiveDay": "2026-10-05",
+        "today": "2026-10-05",
+        "streak": 4,
+        "freezes": 1
+      },
+      "expected": {
+        "outcome": "same-day",
+        "streak": 4,
+        "freezes": 1,
+        "freezesUsed": 0,
+        "missedDays": 0,
+        "lostStreak": 0
+      }
+    },
+    {
+      "_label": "transition de Flamme 2026-10-04 → 2026-10-05, série 4, 1 gel",
+      "input": {
+        "law": "flame-advance",
+        "lastActiveDay": "2026-10-04",
+        "today": "2026-10-05",
+        "streak": 4,
+        "freezes": 1
+      },
+      "expected": {
+        "outcome": "continued",
+        "streak": 5,
+        "freezes": 1,
+        "freezesUsed": 0,
+        "missedDays": 0,
+        "lostStreak": 0
+      }
+    },
+    {
+      "_label": "transition de Flamme 2026-10-03 → 2026-10-05, série 10, 2 gel",
+      "input": {
+        "law": "flame-advance",
+        "lastActiveDay": "2026-10-03",
+        "today": "2026-10-05",
+        "streak": 10,
+        "freezes": 2
+      },
+      "expected": {
+        "outcome": "protected",
+        "streak": 11,
+        "freezes": 1,
+        "freezesUsed": 1,
+        "missedDays": 1,
+        "lostStreak": 0
+      }
+    },
+    {
+      "_label": "transition de Flamme 2026-10-02 → 2026-10-05, série 10, 2 gel",
+      "input": {
+        "law": "flame-advance",
+        "lastActiveDay": "2026-10-02",
+        "today": "2026-10-05",
+        "streak": 10,
+        "freezes": 2
+      },
+      "expected": {
+        "outcome": "protected",
+        "streak": 11,
+        "freezes": 0,
+        "freezesUsed": 2,
+        "missedDays": 2,
+        "lostStreak": 0
+      }
+    },
+    {
+      "_label": "transition de Flamme 2026-10-01 → 2026-10-05, série 10, 2 gel",
+      "input": {
+        "law": "flame-advance",
+        "lastActiveDay": "2026-10-01",
+        "today": "2026-10-05",
+        "streak": 10,
+        "freezes": 2
+      },
+      "expected": {
+        "outcome": "broken",
+        "streak": 1,
+        "freezes": 2,
+        "freezesUsed": 0,
+        "missedDays": 3,
+        "lostStreak": 10
+      }
+    },
+    {
+      "_label": "transition de Flamme 2026-10-03 → 2026-10-05, série 6, 0 gel",
+      "input": {
+        "law": "flame-advance",
+        "lastActiveDay": "2026-10-03",
+        "today": "2026-10-05",
+        "streak": 6,
+        "freezes": 0
+      },
+      "expected": {
+        "outcome": "broken",
+        "streak": 1,
+        "freezes": 0,
+        "freezesUsed": 0,
+        "missedDays": 1,
+        "lostStreak": 6
+      }
+    },
+    {
+      "_label": "transition de Flamme 2026-12-31 → 2027-01-02, série 6, 1 gel",
+      "input": {
+        "law": "flame-advance",
+        "lastActiveDay": "2026-12-31",
+        "today": "2027-01-02",
+        "streak": 6,
+        "freezes": 1
+      },
+      "expected": {
+        "outcome": "protected",
+        "streak": 7,
+        "freezes": 0,
+        "freezesUsed": 1,
+        "missedDays": 1,
+        "lostStreak": 0
+      }
+    },
+    {
+      "_label": "état de Flamme null → 2026-10-05, 0 gel",
+      "input": {
+        "law": "flame-status",
+        "lastActiveDay": null,
+        "today": "2026-10-05",
+        "streak": 0,
+        "freezes": 0
+      },
+      "expected": {
+        "status": "none"
+      }
+    },
+    {
+      "_label": "état de Flamme 2026-10-05 → 2026-10-05, 0 gel",
+      "input": {
+        "law": "flame-status",
+        "lastActiveDay": "2026-10-05",
+        "today": "2026-10-05",
+        "streak": 8,
+        "freezes": 0
+      },
+      "expected": {
+        "status": "lit"
+      }
+    },
+    {
+      "_label": "état de Flamme 2026-10-04 → 2026-10-05, 0 gel",
+      "input": {
+        "law": "flame-status",
+        "lastActiveDay": "2026-10-04",
+        "today": "2026-10-05",
+        "streak": 8,
+        "freezes": 0
+      },
+      "expected": {
+        "status": "at-risk"
+      }
+    },
+    {
+      "_label": "état de Flamme 2026-10-03 → 2026-10-05, 2 gel",
+      "input": {
+        "law": "flame-status",
+        "lastActiveDay": "2026-10-03",
+        "today": "2026-10-05",
+        "streak": 8,
+        "freezes": 2
+      },
+      "expected": {
+        "status": "covered"
+      }
+    },
+    {
+      "_label": "état de Flamme 2026-10-02 → 2026-10-05, 0 gel",
+      "input": {
+        "law": "flame-status",
+        "lastActiveDay": "2026-10-02",
+        "today": "2026-10-05",
+        "streak": 8,
+        "freezes": 0
+      },
+      "expected": {
+        "status": "out"
+      }
+    },
+    {
+      "_label": "rallumage 2026-10-02 → 2026-10-03, mois null, 3 Meeshes",
+      "input": {
+        "law": "flame-relight",
+        "lastActiveDay": "2026-10-02",
+        "today": "2026-10-03",
+        "streakBeforeBreak": 12,
+        "lastRelightDay": null,
+        "balance": 3
+      },
+      "expected": {
+        "allowed": false,
+        "reason": "not-extinguished",
+        "price": 3
+      }
+    },
+    {
+      "_label": "rallumage 2026-10-02 → 2026-10-04, mois null, 3 Meeshes",
+      "input": {
+        "law": "flame-relight",
+        "lastActiveDay": "2026-10-02",
+        "today": "2026-10-04",
+        "streakBeforeBreak": 12,
+        "lastRelightDay": null,
+        "balance": 3
+      },
+      "expected": {
+        "allowed": true,
+        "price": 3
+      }
+    },
+    {
+      "_label": "rallumage 2026-10-02 → 2026-10-05, mois null, 3 Meeshes",
+      "input": {
+        "law": "flame-relight",
+        "lastActiveDay": "2026-10-02",
+        "today": "2026-10-05",
+        "streakBeforeBreak": 12,
+        "lastRelightDay": null,
+        "balance": 3
+      },
+      "expected": {
+        "allowed": true,
+        "price": 3
+      }
+    },
+    {
+      "_label": "rallumage 2026-10-02 → 2026-10-06, mois null, 3 Meeshes",
+      "input": {
+        "law": "flame-relight",
+        "lastActiveDay": "2026-10-02",
+        "today": "2026-10-06",
+        "streakBeforeBreak": 12,
+        "lastRelightDay": null,
+        "balance": 3
+      },
+      "expected": {
+        "allowed": false,
+        "reason": "window-closed",
+        "price": 3
+      }
+    },
+    {
+      "_label": "rallumage 2026-10-02 → 2026-10-04, mois 2026-10-01, 3 Meeshes",
+      "input": {
+        "law": "flame-relight",
+        "lastActiveDay": "2026-10-02",
+        "today": "2026-10-04",
+        "streakBeforeBreak": 12,
+        "lastRelightDay": "2026-10-01",
+        "balance": 3
+      },
+      "expected": {
+        "allowed": false,
+        "reason": "monthly-limit",
+        "price": 3
+      }
+    },
+    {
+      "_label": "rallumage 2026-10-02 → 2026-10-04, mois 2026-09-28, 3 Meeshes",
+      "input": {
+        "law": "flame-relight",
+        "lastActiveDay": "2026-10-02",
+        "today": "2026-10-04",
+        "streakBeforeBreak": 12,
+        "lastRelightDay": "2026-09-28",
+        "balance": 3
+      },
+      "expected": {
+        "allowed": true,
+        "price": 3
+      }
+    },
+    {
+      "_label": "rallumage 2026-10-02 → 2026-10-04, mois null, 2 Meeshes",
+      "input": {
+        "law": "flame-relight",
+        "lastActiveDay": "2026-10-02",
+        "today": "2026-10-04",
+        "streakBeforeBreak": 12,
+        "lastRelightDay": null,
+        "balance": 2
+      },
+      "expected": {
+        "allowed": false,
+        "reason": "insufficient-balance",
+        "price": 3
+      }
+    },
+    {
+      "_label": "rallumage 2026-10-02 → 2026-10-04, mois null, 9 Meeshes",
+      "input": {
+        "law": "flame-relight",
+        "lastActiveDay": "2026-10-02",
+        "today": "2026-10-04",
+        "streakBeforeBreak": 0,
+        "lastRelightDay": null,
+        "balance": 9
+      },
+      "expected": {
+        "allowed": false,
+        "reason": "no-streak",
+        "price": 3
+      }
+    },
+    {
+      "_label": "Vent arrière niveau 32, record 36",
+      "input": {
+        "law": "tailwind",
+        "level": 32,
+        "levelRecord": 36
+      },
+      "expected": {
+        "factor": 1.25
+      }
+    },
+    {
+      "_label": "Vent arrière niveau 36, record 36",
+      "input": {
+        "law": "tailwind",
+        "level": 36,
+        "levelRecord": 36
+      },
+      "expected": {
+        "factor": 1
+      }
+    },
+    {
+      "_label": "Vent arrière niveau 40, record 36",
+      "input": {
+        "law": "tailwind",
+        "level": 40,
+        "levelRecord": 36
+      },
+      "expected": {
+        "factor": 1
+      }
+    },
+    {
+      "_label": "Heure du Prisme de « u1 » le 2026-10-05",
+      "input": {
+        "law": "prism-hour",
+        "userId": "u1",
+        "dayKey": "2026-10-05"
+      },
+      "expected": {
+        "startMinute": 1185,
+        "endMinute": 1245
+      }
+    },
+    {
+      "_label": "Heure du Prisme de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-05",
+      "input": {
+        "law": "prism-hour",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-05"
+      },
+      "expected": {
+        "startMinute": 900,
+        "endMinute": 960
+      }
+    },
+    {
+      "_label": "Heure du Prisme de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-06",
+      "input": {
+        "law": "prism-hour",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-06"
+      },
+      "expected": {
+        "startMinute": 945,
+        "endMinute": 1005
+      }
+    },
+    {
+      "_label": "Heure du Prisme de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-07",
+      "input": {
+        "law": "prism-hour",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-07"
+      },
+      "expected": {
+        "startMinute": 1155,
+        "endMinute": 1215
+      }
+    },
+    {
+      "_label": "Heure du Prisme de « amélie-été » le 2026-02-28",
+      "input": {
+        "law": "prism-hour",
+        "userId": "amélie-été",
+        "dayKey": "2026-02-28"
+      },
+      "expected": {
+        "startMinute": 705,
+        "endMinute": 765
+      }
+    },
+    {
+      "_label": "Heure du Prisme de « user-with-a-rather-long-identifier-0001 » le 2028-02-29",
+      "input": {
+        "law": "prism-hour",
+        "userId": "user-with-a-rather-long-identifier-0001",
+        "dayKey": "2028-02-29"
+      },
+      "expected": {
+        "startMinute": 690,
+        "endMinute": 750
+      }
+    },
+    {
+      "_label": "Heure du Prisme de «  » le 2026-12-31",
+      "input": {
+        "law": "prism-hour",
+        "userId": "",
+        "dayKey": "2026-12-31"
+      },
+      "expected": {
+        "startMinute": 735,
+        "endMinute": 795
+      }
+    },
+    {
+      "_label": "Heure du Prisme de « 7a7a » le 2027-01-01",
+      "input": {
+        "law": "prism-hour",
+        "userId": "7a7a",
+        "dayKey": "2027-01-01"
+      },
+      "expected": {
+        "startMinute": 750,
+        "endMinute": 810
+      }
+    },
+    {
+      "_label": "objectif base 5 niveau 5",
+      "input": {
+        "law": "mission-objective",
+        "baseTarget": 5,
+        "level": 5
+      },
+      "expected": {
+        "target": 5
+      }
+    },
+    {
+      "_label": "objectif base 5 niveau 34",
+      "input": {
+        "law": "mission-objective",
+        "baseTarget": 5,
+        "level": 34
+      },
+      "expected": {
+        "target": 10
+      }
+    },
+    {
+      "_label": "objectif base 5 niveau 50",
+      "input": {
+        "law": "mission-objective",
+        "baseTarget": 5,
+        "level": 50
+      },
+      "expected": {
+        "target": 13
+      }
+    },
+    {
+      "_label": "objectif base 3 niveau 50",
+      "input": {
+        "law": "mission-objective",
+        "baseTarget": 3,
+        "level": 50
+      },
+      "expected": {
+        "target": 8
+      }
+    },
+    {
+      "_label": "objectif base 1 niveau 50",
+      "input": {
+        "law": "mission-objective",
+        "baseTarget": 1,
+        "level": 50
+      },
+      "expected": {
+        "target": 3
+      }
+    },
+    {
+      "_label": "objectif base 4 niveau 50",
+      "input": {
+        "law": "mission-objective",
+        "baseTarget": 4,
+        "level": 50
+      },
+      "expected": {
+        "target": 10
+      }
+    },
+    {
+      "_label": "objectif base 20 niveau 100",
+      "input": {
+        "law": "mission-objective",
+        "baseTarget": 20,
+        "level": 100
+      },
+      "expected": {
+        "target": 80
+      }
+    },
+    {
+      "_label": "objectif base 8 niveau 17",
+      "input": {
+        "law": "mission-objective",
+        "baseTarget": 8,
+        "level": 17
+      },
+      "expected": {
+        "target": 11
+      }
+    },
+    {
+      "_label": "récompense base 30 niveau 5, Flamme 0 j",
+      "input": {
+        "law": "mission-reward",
+        "basePoints": 30,
+        "level": 5,
+        "flameDays": 0
+      },
+      "expected": {
+        "reward": 30
+      }
+    },
+    {
+      "_label": "récompense base 60 niveau 34, Flamme 23 j",
+      "input": {
+        "law": "mission-reward",
+        "basePoints": 60,
+        "level": 34,
+        "flameDays": 23
+      },
+      "expected": {
+        "reward": 127
+      }
+    },
+    {
+      "_label": "récompense base 30 niveau 34, Flamme 23 j",
+      "input": {
+        "law": "mission-reward",
+        "basePoints": 30,
+        "level": 34,
+        "flameDays": 23
+      },
+      "expected": {
+        "reward": 64
+      }
+    },
+    {
+      "_label": "récompense base 250 niveau 50, Flamme 40 j",
+      "input": {
+        "law": "mission-reward",
+        "basePoints": 250,
+        "level": 50,
+        "flameDays": 40
+      },
+      "expected": {
+        "reward": 656
+      }
+    },
+    {
+      "_label": "récompense base 120 niveau 99, Flamme 25 j",
+      "input": {
+        "law": "mission-reward",
+        "basePoints": 120,
+        "level": 99,
+        "flameDays": 25
+      },
+      "expected": {
+        "reward": 423
+      }
+    },
+    {
+      "_label": "récompense base 60 niveau 100, Flamme 365 j",
+      "input": {
+        "law": "mission-reward",
+        "basePoints": 60,
+        "level": 100,
+        "flameDays": 365
+      },
+      "expected": {
+        "reward": 225
+      }
+    },
+    {
+      "_label": "suite de « u1 » le 2026-10-05",
+      "input": {
+        "law": "rng",
+        "userId": "u1",
+        "dayKey": "2026-10-05",
+        "salt": "missions"
+      },
+      "expected": {
+        "seed": 729069716,
+        "draws": [
+          0.2317336369305849,
+          0.34519839845597744,
+          0.0546753890812397,
+          0.5669454305898398,
+          0.4607815172057599
+        ]
+      }
+    },
+    {
+      "_label": "suite de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-05",
+      "input": {
+        "law": "rng",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-05",
+        "salt": "missions"
+      },
+      "expected": {
+        "seed": 1419626883,
+        "draws": [
+          0.7882958180271089,
+          0.24043742986395955,
+          0.7649285986553878,
+          0.3353811332490295,
+          0.9890994508750737
+        ]
+      }
+    },
+    {
+      "_label": "suite de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-06",
+      "input": {
+        "law": "rng",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-06",
+        "salt": "missions"
+      },
+      "expected": {
+        "seed": 1309596180,
+        "draws": [
+          0.3911978171672672,
+          0.4986309790983796,
+          0.5076906403992325,
+          0.5195019487291574,
+          0.008554343366995454
+        ]
+      }
+    },
+    {
+      "_label": "suite de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-07",
+      "input": {
+        "law": "rng",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-07",
+        "salt": "missions"
+      },
+      "expected": {
+        "seed": 2450623545,
+        "draws": [
+          0.10493570915423334,
+          0.26575588481500745,
+          0.7140670386143029,
+          0.3096040873788297,
+          0.2435026338789612
+        ]
+      }
+    },
+    {
+      "_label": "suite de « amélie-été » le 2026-02-28",
+      "input": {
+        "law": "rng",
+        "userId": "amélie-été",
+        "dayKey": "2026-02-28",
+        "salt": "missions"
+      },
+      "expected": {
+        "seed": 126368613,
+        "draws": [
+          0.6366246917750686,
+          0.4488029594067484,
+          0.8374734430108219,
+          0.11512153944931924,
+          0.9152625976130366
+        ]
+      }
+    },
+    {
+      "_label": "suite de « user-with-a-rather-long-identifier-0001 » le 2028-02-29",
+      "input": {
+        "law": "rng",
+        "userId": "user-with-a-rather-long-identifier-0001",
+        "dayKey": "2028-02-29",
+        "salt": "missions"
+      },
+      "expected": {
+        "seed": 2002793085,
+        "draws": [
+          0.4569874396547675,
+          0.030369311338290572,
+          0.9727747207507491,
+          0.5417613442987204,
+          0.9182022160384804
+        ]
+      }
+    },
+    {
+      "_label": "suite de «  » le 2026-12-31",
+      "input": {
+        "law": "rng",
+        "userId": "",
+        "dayKey": "2026-12-31",
+        "salt": "missions"
+      },
+      "expected": {
+        "seed": 854564145,
+        "draws": [
+          0.5561438899021596,
+          0.19716927129775286,
+          0.7592869298532605,
+          0.2915325404610485,
+          0.29515047022141516
+        ]
+      }
+    },
+    {
+      "_label": "suite de « 7a7a » le 2027-01-01",
+      "input": {
+        "law": "rng",
+        "userId": "7a7a",
+        "dayKey": "2027-01-01",
+        "salt": "missions"
+      },
+      "expected": {
+        "seed": 1126183077,
+        "draws": [
+          0.48222528281621635,
+          0.878609376726672,
+          0.9774664952419698,
+          0.6858559199608862,
+          0.8938380426261574
+        ]
+      }
+    },
+    {
+      "_label": "missions de « u1 » le 2026-10-05, niveau 20",
+      "input": {
+        "law": "missions-draw",
+        "userId": "u1",
+        "dayKey": "2026-10-05",
+        "level": 20,
+        "flameDays": 5,
+        "treasury": 0,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2026-10-05",
+        "prismDay": false,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "send-texts",
+            "signal": "axis:content.text_message",
+            "prism": false,
+            "target": 8,
+            "reward": 43,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "reply-conversations",
+            "signal": "reply-distinct-conversations",
+            "prism": false,
+            "target": 5,
+            "reward": 86,
+            "glory": 0
+          },
+          {
+            "difficulty": "hard",
+            "templateKey": "publish-posts",
+            "signal": "axis:content.post",
+            "prism": false,
+            "target": 4,
+            "reward": 172,
+            "glory": 0
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de « u1 » le 2026-10-05, niveau 50 avec trésor 0",
+      "input": {
+        "law": "missions-draw",
+        "userId": "u1",
+        "dayKey": "2026-10-05",
+        "level": 50,
+        "flameDays": 23,
+        "treasury": 0,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2026-10-05",
+        "prismDay": false,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "send-texts",
+            "signal": "axis:content.text_message",
+            "prism": false,
+            "target": 13,
+            "reward": 77,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "reply-conversations",
+            "signal": "reply-distinct-conversations",
+            "prism": false,
+            "target": 8,
+            "reward": 153,
+            "glory": 0
+          },
+          {
+            "difficulty": "gold",
+            "templateKey": "gold-replies-received",
+            "signal": "replies-received-distinct-authors",
+            "prism": false,
+            "target": 10,
+            "reward": 639,
+            "glory": 40
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-05, niveau 20",
+      "input": {
+        "law": "missions-draw",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-05",
+        "level": 20,
+        "flameDays": 5,
+        "treasury": 0,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2026-10-05",
+        "prismDay": true,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "send-voice",
+            "signal": "axis:content.audio_message",
+            "prism": false,
+            "target": 2,
+            "reward": 43,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "publish-post",
+            "signal": "axis:content.post",
+            "prism": false,
+            "target": 2,
+            "reward": 86,
+            "glory": 0
+          },
+          {
+            "difficulty": "hard",
+            "templateKey": "prism-foreign-exchange",
+            "signal": "foreign-language-message",
+            "prism": true,
+            "target": 8,
+            "reward": 172,
+            "glory": 0
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-05, niveau 12 avec trésor 50",
+      "input": {
+        "law": "missions-draw",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-05",
+        "level": 12,
+        "flameDays": 23,
+        "treasury": 50,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2026-10-05",
+        "prismDay": true,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "send-voice",
+            "signal": "axis:content.audio_message",
+            "prism": false,
+            "target": 2,
+            "reward": 50,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "prism-foreign-messages",
+            "signal": "foreign-language-message",
+            "prism": true,
+            "target": 3,
+            "reward": 101,
+            "glory": 0
+          },
+          {
+            "difficulty": "gold",
+            "templateKey": "gold-replies-received",
+            "signal": "replies-received-distinct-authors",
+            "prism": false,
+            "target": 6,
+            "reward": 420,
+            "glory": 40
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-06, niveau 20",
+      "input": {
+        "law": "missions-draw",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-06",
+        "level": 20,
+        "flameDays": 5,
+        "treasury": 0,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2026-10-06",
+        "prismDay": false,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "send-texts",
+            "signal": "axis:content.text_message",
+            "prism": false,
+            "target": 8,
+            "reward": 43,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "publish-story",
+            "signal": "axis:content.story",
+            "prism": false,
+            "target": 2,
+            "reward": 86,
+            "glory": 0
+          },
+          {
+            "difficulty": "hard",
+            "templateKey": "publish-posts",
+            "signal": "axis:content.post",
+            "prism": false,
+            "target": 4,
+            "reward": 172,
+            "glory": 0
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-06, niveau 50 avec trésor 0",
+      "input": {
+        "law": "missions-draw",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-06",
+        "level": 50,
+        "flameDays": 23,
+        "treasury": 0,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2026-10-06",
+        "prismDay": false,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "send-texts",
+            "signal": "axis:content.text_message",
+            "prism": false,
+            "target": 13,
+            "reward": 77,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "publish-post",
+            "signal": "axis:content.post",
+            "prism": false,
+            "target": 3,
+            "reward": 153,
+            "glory": 0
+          },
+          {
+            "difficulty": "gold",
+            "templateKey": "gold-replies-received",
+            "signal": "replies-received-distinct-authors",
+            "prism": false,
+            "target": 10,
+            "reward": 639,
+            "glory": 40
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-07, niveau 20",
+      "input": {
+        "law": "missions-draw",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-07",
+        "level": 20,
+        "flameDays": 5,
+        "treasury": 0,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2026-10-07",
+        "prismDay": false,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "send-voice",
+            "signal": "axis:content.audio_message",
+            "prism": false,
+            "target": 2,
+            "reward": 43,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "share-link",
+            "signal": "axis:social.share",
+            "prism": false,
+            "target": 2,
+            "reward": 86,
+            "glory": 0
+          },
+          {
+            "difficulty": "hard",
+            "templateKey": "reply-conversations-wide",
+            "signal": "reply-distinct-conversations",
+            "prism": false,
+            "target": 10,
+            "reward": 172,
+            "glory": 0
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-07, niveau 12 avec trésor 50",
+      "input": {
+        "law": "missions-draw",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-07",
+        "level": 12,
+        "flameDays": 23,
+        "treasury": 50,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2026-10-07",
+        "prismDay": false,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "send-voice",
+            "signal": "axis:content.audio_message",
+            "prism": false,
+            "target": 2,
+            "reward": 50,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "share-link",
+            "signal": "axis:social.share",
+            "prism": false,
+            "target": 2,
+            "reward": 101,
+            "glory": 0
+          },
+          {
+            "difficulty": "gold",
+            "templateKey": "gold-replies-received",
+            "signal": "replies-received-distinct-authors",
+            "prism": false,
+            "target": 6,
+            "reward": 420,
+            "glory": 40
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de « amélie-été » le 2026-02-28, niveau 20",
+      "input": {
+        "law": "missions-draw",
+        "userId": "amélie-été",
+        "dayKey": "2026-02-28",
+        "level": 20,
+        "flameDays": 5,
+        "treasury": 0,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2026-02-28",
+        "prismDay": true,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "react-messages",
+            "signal": "axis:tool.reaction",
+            "prism": false,
+            "target": 8,
+            "reward": 43,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "share-link",
+            "signal": "axis:social.share",
+            "prism": false,
+            "target": 2,
+            "reward": 86,
+            "glory": 0
+          },
+          {
+            "difficulty": "hard",
+            "templateKey": "prism-foreign-exchange",
+            "signal": "foreign-language-message",
+            "prism": true,
+            "target": 8,
+            "reward": 172,
+            "glory": 0
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de « amélie-été » le 2026-02-28, niveau 50 avec trésor 0",
+      "input": {
+        "law": "missions-draw",
+        "userId": "amélie-été",
+        "dayKey": "2026-02-28",
+        "level": 50,
+        "flameDays": 23,
+        "treasury": 0,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2026-02-28",
+        "prismDay": true,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "react-messages",
+            "signal": "axis:tool.reaction",
+            "prism": false,
+            "target": 13,
+            "reward": 77,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "prism-foreign-messages",
+            "signal": "foreign-language-message",
+            "prism": true,
+            "target": 5,
+            "reward": 153,
+            "glory": 0
+          },
+          {
+            "difficulty": "gold",
+            "templateKey": "gold-replies-received",
+            "signal": "replies-received-distinct-authors",
+            "prism": false,
+            "target": 10,
+            "reward": 639,
+            "glory": 40
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de « user-with-a-rather-long-identifier-0001 » le 2028-02-29, niveau 20",
+      "input": {
+        "law": "missions-draw",
+        "userId": "user-with-a-rather-long-identifier-0001",
+        "dayKey": "2028-02-29",
+        "level": 20,
+        "flameDays": 5,
+        "treasury": 0,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2028-02-29",
+        "prismDay": false,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "send-texts",
+            "signal": "axis:content.text_message",
+            "prism": false,
+            "target": 8,
+            "reward": 43,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "share-link",
+            "signal": "axis:social.share",
+            "prism": false,
+            "target": 2,
+            "reward": 86,
+            "glory": 0
+          },
+          {
+            "difficulty": "hard",
+            "templateKey": "prism-foreign-exchange",
+            "signal": "foreign-language-message",
+            "prism": true,
+            "target": 8,
+            "reward": 172,
+            "glory": 0
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de « user-with-a-rather-long-identifier-0001 » le 2028-02-29, niveau 12 avec trésor 50",
+      "input": {
+        "law": "missions-draw",
+        "userId": "user-with-a-rather-long-identifier-0001",
+        "dayKey": "2028-02-29",
+        "level": 12,
+        "flameDays": 23,
+        "treasury": 50,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2028-02-29",
+        "prismDay": false,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "send-texts",
+            "signal": "axis:content.text_message",
+            "prism": false,
+            "target": 7,
+            "reward": 50,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "prism-foreign-messages",
+            "signal": "foreign-language-message",
+            "prism": true,
+            "target": 3,
+            "reward": 101,
+            "glory": 0
+          },
+          {
+            "difficulty": "gold",
+            "templateKey": "gold-replies-received",
+            "signal": "replies-received-distinct-authors",
+            "prism": false,
+            "target": 6,
+            "reward": 420,
+            "glory": 40
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de «  » le 2026-12-31, niveau 20",
+      "input": {
+        "law": "missions-draw",
+        "userId": "",
+        "dayKey": "2026-12-31",
+        "level": 20,
+        "flameDays": 5,
+        "treasury": 0,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2026-12-31",
+        "prismDay": false,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "send-voice",
+            "signal": "axis:content.audio_message",
+            "prism": false,
+            "target": 2,
+            "reward": 43,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "share-link",
+            "signal": "axis:social.share",
+            "prism": false,
+            "target": 2,
+            "reward": 86,
+            "glory": 0
+          },
+          {
+            "difficulty": "hard",
+            "templateKey": "reply-conversations-wide",
+            "signal": "reply-distinct-conversations",
+            "prism": false,
+            "target": 10,
+            "reward": 172,
+            "glory": 0
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de «  » le 2026-12-31, niveau 50 avec trésor 0",
+      "input": {
+        "law": "missions-draw",
+        "userId": "",
+        "dayKey": "2026-12-31",
+        "level": 50,
+        "flameDays": 23,
+        "treasury": 0,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2026-12-31",
+        "prismDay": false,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "send-voice",
+            "signal": "axis:content.audio_message",
+            "prism": false,
+            "target": 3,
+            "reward": 77,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "share-link",
+            "signal": "axis:social.share",
+            "prism": false,
+            "target": 3,
+            "reward": 153,
+            "glory": 0
+          },
+          {
+            "difficulty": "gold",
+            "templateKey": "gold-replies-received",
+            "signal": "replies-received-distinct-authors",
+            "prism": false,
+            "target": 10,
+            "reward": 639,
+            "glory": 40
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de « 7a7a » le 2027-01-01, niveau 20",
+      "input": {
+        "law": "missions-draw",
+        "userId": "7a7a",
+        "dayKey": "2027-01-01",
+        "level": 20,
+        "flameDays": 5,
+        "treasury": 0,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2027-01-01",
+        "prismDay": false,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "use-stickers",
+            "signal": "axis:tool.sticker",
+            "prism": false,
+            "target": 4,
+            "reward": 43,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "prism-foreign-messages",
+            "signal": "foreign-language-message",
+            "prism": true,
+            "target": 4,
+            "reward": 86,
+            "glory": 0
+          },
+          {
+            "difficulty": "hard",
+            "templateKey": "long-chat",
+            "signal": "axis:content.text_message",
+            "prism": false,
+            "target": 32,
+            "reward": 172,
+            "glory": 0
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions de « 7a7a » le 2027-01-01, niveau 12 avec trésor 50",
+      "input": {
+        "law": "missions-draw",
+        "userId": "7a7a",
+        "dayKey": "2027-01-01",
+        "level": 12,
+        "flameDays": 23,
+        "treasury": 50,
+        "unavailableSignals": []
+      },
+      "expected": {
+        "dayKey": "2027-01-01",
+        "prismDay": false,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "use-stickers",
+            "signal": "axis:tool.sticker",
+            "prism": false,
+            "target": 3,
+            "reward": 50,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "prism-foreign-messages",
+            "signal": "foreign-language-message",
+            "prism": true,
+            "target": 3,
+            "reward": 101,
+            "glory": 0
+          },
+          {
+            "difficulty": "gold",
+            "templateKey": "gold-reply-conversations",
+            "signal": "reply-distinct-conversations",
+            "prism": false,
+            "target": 11,
+            "reward": 420,
+            "glory": 40
+          }
+        ]
+      }
+    },
+    {
+      "_label": "missions sans signal de langue ni réaction",
+      "input": {
+        "law": "missions-draw",
+        "userId": "u1",
+        "dayKey": "2026-10-05",
+        "level": 20,
+        "flameDays": 5,
+        "treasury": 0,
+        "unavailableSignals": [
+          "foreign-language-message",
+          "axis:tool.reaction"
+        ]
+      },
+      "expected": {
+        "dayKey": "2026-10-05",
+        "prismDay": false,
+        "missions": [
+          {
+            "difficulty": "easy",
+            "templateKey": "use-stickers",
+            "signal": "axis:tool.sticker",
+            "prism": false,
+            "target": 4,
+            "reward": 43,
+            "glory": 0
+          },
+          {
+            "difficulty": "medium",
+            "templateKey": "reply-conversations",
+            "signal": "reply-distinct-conversations",
+            "prism": false,
+            "target": 5,
+            "reward": 86,
+            "glory": 0
+          },
+          {
+            "difficulty": "hard",
+            "templateKey": "publish-posts",
+            "signal": "axis:content.post",
+            "prism": false,
+            "target": 4,
+            "reward": 172,
+            "glory": 0
+          }
+        ]
+      }
+    },
+    {
+      "_label": "changer la mission 0 de u1",
+      "input": {
+        "law": "mission-reroll",
+        "userId": "u1",
+        "dayKey": "2026-10-05",
+        "level": 30,
+        "flameDays": 5,
+        "index": 0,
+        "rerollCount": 1
+      },
+      "expected": {
+        "mission": {
+          "difficulty": "easy",
+          "templateKey": "use-stickers",
+          "signal": "axis:tool.sticker",
+          "prism": false,
+          "target": 4,
+          "reward": 48,
+          "glory": 0
+        }
+      }
+    },
+    {
+      "_label": "changer la mission 1 de u1",
+      "input": {
+        "law": "mission-reroll",
+        "userId": "u1",
+        "dayKey": "2026-10-05",
+        "level": 30,
+        "flameDays": 5,
+        "index": 1,
+        "rerollCount": 1
+      },
+      "expected": {
+        "mission": {
+          "difficulty": "medium",
+          "templateKey": "publish-story",
+          "signal": "axis:content.story",
+          "prism": false,
+          "target": 2,
+          "reward": 96,
+          "glory": 0
+        }
+      }
+    },
+    {
+      "_label": "changer la mission 2 de u1",
+      "input": {
+        "law": "mission-reroll",
+        "userId": "u1",
+        "dayKey": "2026-10-05",
+        "level": 30,
+        "flameDays": 5,
+        "index": 2,
+        "rerollCount": 1
+      },
+      "expected": {
+        "mission": {
+          "difficulty": "hard",
+          "templateKey": "prism-foreign-exchange",
+          "signal": "foreign-language-message",
+          "prism": true,
+          "target": 10,
+          "reward": 191,
+          "glory": 0
+        }
+      }
+    },
+    {
+      "_label": "coffre de « u1 » le 2026-10-05",
+      "input": {
+        "law": "chest",
+        "userId": "u1",
+        "dayKey": "2026-10-05"
+      },
+      "expected": {
+        "points": 81,
+        "fragment": false,
+        "freeze": false
+      }
+    },
+    {
+      "_label": "coffre de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-05",
+      "input": {
+        "law": "chest",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-05"
+      },
+      "expected": {
+        "points": 97,
+        "fragment": false,
+        "freeze": false
+      }
+    },
+    {
+      "_label": "coffre de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-06",
+      "input": {
+        "law": "chest",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-06"
+      },
+      "expected": {
+        "points": 149,
+        "fragment": true,
+        "freeze": false
+      }
+    },
+    {
+      "_label": "coffre de « 6502f1a2b3c4d5e6f7a8b9c0 » le 2026-10-07",
+      "input": {
+        "law": "chest",
+        "userId": "6502f1a2b3c4d5e6f7a8b9c0",
+        "dayKey": "2026-10-07"
+      },
+      "expected": {
+        "points": 95,
+        "fragment": true,
+        "freeze": false
+      }
+    },
+    {
+      "_label": "coffre de « amélie-été » le 2026-02-28",
+      "input": {
+        "law": "chest",
+        "userId": "amélie-été",
+        "dayKey": "2026-02-28"
+      },
+      "expected": {
+        "points": 163,
+        "fragment": false,
+        "freeze": false
+      }
+    },
+    {
+      "_label": "coffre de « user-with-a-rather-long-identifier-0001 » le 2028-02-29",
+      "input": {
+        "law": "chest",
+        "userId": "user-with-a-rather-long-identifier-0001",
+        "dayKey": "2028-02-29"
+      },
+      "expected": {
+        "points": 87,
+        "fragment": true,
+        "freeze": false
+      }
+    },
+    {
+      "_label": "coffre de «  » le 2026-12-31",
+      "input": {
+        "law": "chest",
+        "userId": "",
+        "dayKey": "2026-12-31"
+      },
+      "expected": {
+        "points": 197,
+        "fragment": true,
+        "freeze": false
+      }
+    },
+    {
+      "_label": "coffre de « 7a7a » le 2027-01-01",
+      "input": {
+        "law": "chest",
+        "userId": "7a7a",
+        "dayKey": "2027-01-01"
+      },
+      "expected": {
+        "points": 141,
+        "fragment": false,
+        "freeze": false
+      }
+    },
+    {
+      "_label": "guide « first-level » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "first-level",
+          "level": 2,
+          "pointsToNext": 50
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "first-level",
+        "speaker": "mee",
+        "mood": "cheer",
+        "action": "see-progress",
+        "data": {
+          "level": 2,
+          "pointsToNext": 50
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « first-level » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "first-level",
+          "level": 2,
+          "pointsToNext": 50
+        },
+        "seen": [
+          "first-level"
+        ]
+      },
+      "expected": {
+        "key": "first-level",
+        "speaker": "mee",
+        "mood": "cheer",
+        "action": "see-progress",
+        "data": {
+          "level": 2,
+          "pointsToNext": 50
+        },
+        "presentation": "short"
+      }
+    },
+    {
+      "_label": "guide « new-tier » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "new-tier",
+          "tier": "lueur",
+          "nextTierLevel": 20
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "new-tier",
+        "speaker": "duo",
+        "mood": "cheer",
+        "action": "see-next-tier",
+        "data": {
+          "tier": "lueur",
+          "nextTierLevel": 20
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « new-tier » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "new-tier",
+          "tier": "lueur",
+          "nextTierLevel": 20
+        },
+        "seen": [
+          "new-tier"
+        ]
+      },
+      "expected": {
+        "key": "new-tier",
+        "speaker": "duo",
+        "mood": "cheer",
+        "action": "see-next-tier",
+        "data": {
+          "tier": "lueur",
+          "nextTierLevel": 20
+        },
+        "presentation": "short"
+      }
+    },
+    {
+      "_label": "guide « missions-unlocked » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "missions-unlocked"
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "missions-unlocked",
+        "speaker": "mee",
+        "mood": "guide",
+        "action": "open-first-mission",
+        "data": {},
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « missions-unlocked » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "missions-unlocked"
+        },
+        "seen": [
+          "missions-unlocked"
+        ]
+      },
+      "expected": {
+        "key": "missions-unlocked",
+        "speaker": "mee",
+        "mood": "guide",
+        "action": "open-first-mission",
+        "data": {},
+        "presentation": "short"
+      }
+    },
+    {
+      "_label": "guide « first-mint-possible » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "first-mint-possible",
+          "price": 1221,
+          "levelsLost": 5,
+          "gloryGain": 100
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "first-mint-possible",
+        "speaker": "meo",
+        "mood": "ready",
+        "action": "mint-or-climb",
+        "data": {
+          "price": 1221,
+          "levelsLost": 5,
+          "gloryGain": 100
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « first-mint-possible » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "first-mint-possible",
+          "price": 1221,
+          "levelsLost": 5,
+          "gloryGain": 100
+        },
+        "seen": [
+          "first-mint-possible"
+        ]
+      },
+      "expected": {
+        "key": "first-mint-possible",
+        "speaker": "meo",
+        "mood": "ready",
+        "action": "mint-or-climb",
+        "data": {
+          "price": 1221,
+          "levelsLost": 5,
+          "gloryGain": 100
+        },
+        "presentation": "short"
+      }
+    },
+    {
+      "_label": "guide « first-mint » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "first-mint",
+          "levelBefore": 14,
+          "levelAfter": 9,
+          "tailwindUntilLevel": 14
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "first-mint",
+        "speaker": "duo",
+        "mood": "minting",
+        "action": "regain-levels",
+        "data": {
+          "levelBefore": 14,
+          "levelAfter": 9,
+          "tailwindUntilLevel": 14
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « first-mint » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "first-mint",
+          "levelBefore": 14,
+          "levelAfter": 9,
+          "tailwindUntilLevel": 14
+        },
+        "seen": [
+          "first-mint"
+        ]
+      },
+      "expected": {
+        "key": "first-mint",
+        "speaker": "duo",
+        "mood": "minting",
+        "action": "regain-levels",
+        "data": {
+          "levelBefore": 14,
+          "levelAfter": 9,
+          "tailwindUntilLevel": 14
+        },
+        "presentation": "short"
+      }
+    },
+    {
+      "_label": "guide « badge-extinguished » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "badge-extinguished",
+          "missingActions": 37
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "badge-extinguished",
+        "speaker": "meo",
+        "mood": "calm",
+        "action": "relight-badge",
+        "data": {
+          "missingActions": 37
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « badge-extinguished » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "badge-extinguished",
+          "missingActions": 37
+        },
+        "seen": [
+          "badge-extinguished"
+        ]
+      },
+      "expected": {
+        "key": "badge-extinguished",
+        "speaker": "meo",
+        "mood": "calm",
+        "action": "relight-badge",
+        "data": {
+          "missingActions": 37
+        },
+        "presentation": "short"
+      }
+    },
+    {
+      "_label": "guide « price-rises » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "price-rises",
+          "nextPrice": 1294
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "price-rises",
+        "speaker": "meo",
+        "mood": "calm",
+        "action": "see-mint-preview",
+        "data": {
+          "nextPrice": 1294
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « price-rises » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "price-rises",
+          "nextPrice": 1294
+        },
+        "seen": [
+          "price-rises"
+        ]
+      },
+      "expected": {
+        "key": "price-rises",
+        "speaker": "meo",
+        "mood": "calm",
+        "action": "see-mint-preview",
+        "data": {
+          "nextPrice": 1294
+        },
+        "presentation": "short"
+      }
+    },
+    {
+      "_label": "guide « new-rank » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "new-rank",
+          "rank": "voix",
+          "division": 2,
+          "glory": 2200,
+          "gloryMissing": 634
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "new-rank",
+        "speaker": "duo",
+        "mood": "proud",
+        "action": "take-photo",
+        "data": {
+          "rank": "voix",
+          "division": 2,
+          "glory": 2200,
+          "gloryMissing": 634
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « new-rank » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "new-rank",
+          "rank": "voix",
+          "division": 2,
+          "glory": 2200,
+          "gloryMissing": 634
+        },
+        "seen": [
+          "new-rank"
+        ]
+      },
+      "expected": {
+        "key": "new-rank",
+        "speaker": "duo",
+        "mood": "proud",
+        "action": "take-photo",
+        "data": {
+          "rank": "voix",
+          "division": 2,
+          "glory": 2200,
+          "gloryMissing": 634
+        },
+        "presentation": "short"
+      }
+    },
+    {
+      "_label": "guide « new-rank » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "new-rank",
+          "rank": "mythe",
+          "division": null,
+          "glory": 200000,
+          "gloryMissing": null
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "new-rank",
+        "speaker": "duo",
+        "mood": "proud",
+        "action": "take-photo",
+        "data": {
+          "rank": "mythe",
+          "division": null,
+          "glory": 200000,
+          "gloryMissing": null
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « new-rank » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "new-rank",
+          "rank": "mythe",
+          "division": null,
+          "glory": 200000,
+          "gloryMissing": null
+        },
+        "seen": [
+          "new-rank"
+        ]
+      },
+      "expected": {
+        "key": "new-rank",
+        "speaker": "duo",
+        "mood": "proud",
+        "action": "take-photo",
+        "data": {
+          "rank": "mythe",
+          "division": null,
+          "glory": 200000,
+          "gloryMissing": null
+        },
+        "presentation": "short"
+      }
+    },
+    {
+      "_label": "guide « treasury-tier » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "treasury-tier",
+          "tier": "escarcelle",
+          "nextTierMissing": 40
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "treasury-tier",
+        "speaker": "mee",
+        "mood": "cheer",
+        "action": "keep-or-spend",
+        "data": {
+          "tier": "escarcelle",
+          "nextTierMissing": 40
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « treasury-tier » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "treasury-tier",
+          "tier": "escarcelle",
+          "nextTierMissing": 40
+        },
+        "seen": [
+          "treasury-tier"
+        ]
+      },
+      "expected": {
+        "key": "treasury-tier",
+        "speaker": "mee",
+        "mood": "cheer",
+        "action": "keep-or-spend",
+        "data": {
+          "tier": "escarcelle",
+          "nextTierMissing": 40
+        },
+        "presentation": "short"
+      }
+    },
+    {
+      "_label": "guide « flame-at-risk » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "flame-at-risk",
+          "days": 12
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "flame-at-risk",
+        "speaker": "meo",
+        "mood": "calm",
+        "action": "do-easy-mission-or-freeze",
+        "data": {
+          "days": 12
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « flame-at-risk » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "flame-at-risk",
+          "days": 12
+        },
+        "seen": [
+          "flame-at-risk"
+        ]
+      },
+      "expected": {
+        "key": "flame-at-risk",
+        "speaker": "meo",
+        "mood": "calm",
+        "action": "do-easy-mission-or-freeze",
+        "data": {
+          "days": 12
+        },
+        "presentation": "short"
+      }
+    },
+    {
+      "_label": "guide « flame-out » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "flame-out",
+          "lostDays": 12,
+          "relightPrice": 3,
+          "canRelight": true
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "flame-out",
+        "speaker": "meo",
+        "mood": "sad",
+        "action": "relight-flame",
+        "data": {
+          "lostDays": 12,
+          "relightPrice": 3,
+          "canRelight": true
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « flame-out » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "flame-out",
+          "lostDays": 12,
+          "relightPrice": 3,
+          "canRelight": true
+        },
+        "seen": [
+          "flame-out"
+        ]
+      },
+      "expected": {
+        "key": "flame-out",
+        "speaker": "meo",
+        "mood": "sad",
+        "action": "relight-flame",
+        "data": {
+          "lostDays": 12,
+          "relightPrice": 3,
+          "canRelight": true
+        },
+        "presentation": "short"
+      }
+    },
+    {
+      "_label": "guide « return-after-absence » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "return-after-absence",
+          "daysAway": 9
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "return-after-absence",
+        "speaker": "mee",
+        "mood": "guide",
+        "action": "do-easiest-mission",
+        "data": {
+          "daysAway": 9
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « return-after-absence » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "return-after-absence",
+          "daysAway": 9
+        },
+        "seen": [
+          "return-after-absence"
+        ]
+      },
+      "expected": {
+        "key": "return-after-absence",
+        "speaker": "mee",
+        "mood": "guide",
+        "action": "do-easiest-mission",
+        "data": {
+          "daysAway": 9
+        },
+        "presentation": "short"
+      }
+    },
+    {
+      "_label": "guide « level-100 » la première fois",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "level-100",
+          "canPrestige": true
+        },
+        "seen": []
+      },
+      "expected": {
+        "key": "level-100",
+        "speaker": "duo",
+        "mood": "proud",
+        "action": "prestige-or-stay",
+        "data": {
+          "canPrestige": true
+        },
+        "presentation": "full"
+      }
+    },
+    {
+      "_label": "guide « level-100 » déjà vu",
+      "input": {
+        "law": "guide",
+        "event": {
+          "kind": "level-100",
+          "canPrestige": true
+        },
+        "seen": [
+          "level-100"
+        ]
+      },
+      "expected": {
+        "key": "level-100",
+        "speaker": "duo",
+        "mood": "proud",
+        "action": "prestige-or-stay",
+        "data": {
+          "canPrestige": true
+        },
+        "presentation": "short"
+      }
+    }
+  ]
+}

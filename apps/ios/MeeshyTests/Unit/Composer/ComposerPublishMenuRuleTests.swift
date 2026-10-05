@@ -196,6 +196,45 @@ final class ComposerPublishMenuRuleTests: XCTestCase {
         }
     }
 
+    // MARK: - Le texte du post armé depuis une scène part avec elle (#8473)
+
+    /// Une scène ouverte en story et armée « Post » au chevron publie par
+    /// l'ATELIER, qui lit le contenu de la slide — jamais `documentText`, où la
+    /// plaque de verre du socle écrit le texte du post. Sans report, le texte
+    /// tapé ne partait nulle part.
+    func test_unPostArmeSousLAtelier_emporteLeTexteDuPost() {
+        let texte = ComposerPublishMenuRule.atelierCarriedPostText(
+            route: .atelier, choice: .init(format: .post, layout: nil), documentText: "Bonjour à tous")
+        XCTAssertEqual(texte, "Bonjour à tous")
+    }
+
+    func test_uneStorySousLAtelier_nEmporteAucunTexteDePost() {
+        XCTAssertNil(ComposerPublishMenuRule.atelierCarriedPostText(
+            route: .atelier, choice: .init(format: .story, layout: nil), documentText: "Bonjour"))
+    }
+
+    func test_unTexteBlanc_neRemplacePasLeContenuDeLaSlide() {
+        XCTAssertNil(ComposerPublishMenuRule.atelierCarriedPostText(
+            route: .atelier, choice: .init(format: .post, layout: nil), documentText: "  \n "))
+    }
+
+    func test_leCanalDocument_porteDejaLeTexte_rienAReporter() {
+        XCTAssertNil(ComposerPublishMenuRule.atelierCarriedPostText(
+            route: .document, choice: .init(format: .post, layout: .wave), documentText: "Bonjour"))
+    }
+
+    func test_laFlecheDuSocle_reporteLeTexteDuPost_avantDePresserLAtelier() throws {
+        let code = try hostCode()
+        let envoi = try XCTUnwrap(bloc("func performSoclePublish(", dans: code),
+                                  "L'envoi du socle est introuvable — la garde ne mesurerait RIEN.")
+        let compacte = compact(envoi)
+        let report = try XCTUnwrap(compacte.range(of: "ComposerPublishMenuRule.atelierCarriedPostText("),
+                                   "Le texte du post armé depuis une scène doit partir avec elle (#8473).")
+        let presse = try XCTUnwrap(compacte.range(of: "publishTrigger.requestPublish("))
+        XCTAssertLessThan(report.lowerBound, presse.lowerBound,
+                          "Le report précède la pression de l'atelier, sinon la slide part sans le texte.")
+    }
+
     func test_leDocument_portetousLesFichiers_seulementQuandChaqueObjetEstPasseParLeMeuble() {
         let slides = [slide(id: "s1", objets: [("o1", .image)]), slide(id: "s2", objets: [("o2", .video)])]
         XCTAssertTrue(ComposerPublishMenuRule.documentCarriesEveryMedia(

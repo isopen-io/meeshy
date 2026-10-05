@@ -148,6 +148,21 @@ struct ParticipantProfileSheet: View {
                 profile?.historyVisibleFrom = event.historyVisibleFrom
             }
         }
+        // #9359 — un pair qui se renomme ou change de photo pendant que sa
+        // fiche est ouverte : la loi du SDK, sans relecture ; muet (aucune
+        // écriture d'état) quand l'annonce vise quelqu'un d'autre.
+        .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
+            guard let repainted = Self.repaintedProfile(profile, with: event) else { return }
+            profile = repainted
+        }
+    }
+
+    /// `nil` tant que la fiche n'est pas chargée, pour un visiteur sans compte,
+    /// ou quand l'annonce ne change rien à cette personne (#9359).
+    static func repaintedProfile(
+        _ loaded: ConversationParticipantProfile?, with event: UserUpdatedEvent
+    ) -> ConversationParticipantProfile? {
+        loaded.flatMap(event.repainted)
     }
 
     @ViewBuilder

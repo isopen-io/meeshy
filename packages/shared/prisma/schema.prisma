@@ -303,6 +303,26 @@ model User {
   /// précis où il fait le geste le plus généreux du produit.
   meeshMintedLifetime Int     @default(0)
 
+  // Le Jeu Meeshy (#9373, loi : packages/shared/utils/game). Tous ces champs
+  // sont OPTIONNELS et ne s'écrivent que par VALEUR ABSOLUE, jamais par
+  // incrément : un compte antérieur a le champ ABSENT, et `$add` d'un champ
+  // absent rend null (leçon #6428). Absent se lit comme la valeur neutre.
+  /// Le plus haut niveau (1..100) atteint — règle le Vent arrière et la Gloire
+  /// du premier passage de chaque niveau. Absent = 0.
+  levelRecord         Int?
+  /// Passages en Prestige (0..5). Absent = 0.
+  prestige            Int?
+  /// Gels de Flamme en réserve (0..2). Absent = 0.
+  flameFreezes        Int?
+  /// Jour civil (`AAAA-MM-JJ`, fuseau du compte) du dernier rallumage — une fois par mois.
+  lastRelightDay      String?
+  /// La série perdue quand la Flamme s'est éteinte, et son dernier jour actif
+  /// d'AVANT la rupture : ce que le rallumage rend (fenêtre de 48 h).
+  brokenStreakDays    Int?
+  brokenStreakLastDay String?
+  /// Clés de guide déjà vues (étapes d'intégration et moments de Mee et Meo).
+  guideSeen           String[] @default([])
+
   // ============================================
   // E2EE / SIGNAL PROTOCOL ENCRYPTION FIELDS
   // ============================================
@@ -5095,6 +5115,72 @@ model MeeshLedger {
 
   @@unique([userId, requestId])
   @@index([userId, createdAt])
+}
+
+/// Le REGISTRE DE GLOIRE (#9374) — en AJOUT SEUL, comme `MeeshLedger`.
+/// La Gloire ne baisse jamais : toute correction est une ligne inverse. Le
+/// total se LIT ici (`Σ delta`), jamais dans une colonne incrémentée.
+model GloryLedger {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  /// Jamais zéro ; négatif seulement pour une correction.
+  delta     Int
+  /// "mint" | "level" | "flame-record" | "mission-gold" | "achievement" | "league" | "season" | "prestige" | "correction"
+  reason    String
+  actorId   String?  @db.ObjectId
+  /// L'IDEMPOTENCE : `mint:<requestId>`, `level:<n>`, `flame-record:<jours>`…
+  requestId String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, requestId])
+  @@index([userId, createdAt])
+}
+
+/// Une mission du jour (#9375) : trois par jour et par compte, tirées au premier
+/// accès du jour dans le fuseau du compte (graine déterministe).
+model DailyMission {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String    @db.ObjectId
+  /// Jour civil `AAAA-MM-JJ` dans le fuseau du compte.
+  dayKey      String
+  /// 0 facile · 1 moyenne · 2 difficile (ou Or).
+  slot        Int
+  templateKey String
+  difficulty  String
+  signal      String
+  prism       Boolean   @default(false)
+  target      Int
+  progress    Int       @default(0)
+  /// Points de base (bonus de Flamme compris) ; l'Heure du Prisme double le paiement.
+  reward      Int
+  glory       Int       @default(0)
+  /// Clés déjà comptées pour un signal « distinct » (conversations, auteurs).
+  seen        String[]  @default([])
+  completedAt DateTime?
+  /// Points réellement crédités à l'achèvement.
+  paidPoints  Int?
+  rerolledAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, dayKey, slot])
+  @@index([userId, dayKey])
+}
+
+/// L'état du jeu d'UN jour pour un compte (#9375, #9376) : changements de
+/// mission consommés et coffre du jour.
+model GameDay {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String    @db.ObjectId
+  dayKey         String
+  rerollCount    Int       @default(0)
+  chestClaimedAt DateTime?
+  chestPoints    Int?
+  chestFragment  Boolean?
+  chestFreeze    Boolean?
+  createdAt      DateTime  @default(now())
+
+  @@unique([userId, dayKey])
 }
 
 /// « Mes stickers » — un sticker de BIBLIOTHÈQUE qu'un utilisateur possède (#7938).

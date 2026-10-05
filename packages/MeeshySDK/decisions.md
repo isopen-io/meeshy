@@ -29,3 +29,4 @@
 - [2026-08-16 : Le masquage PERSONNEL se purge, il ne se met pas en pierre tombale](decisions/2026-08-16-le-masquage-personnel-se-purge-il-ne-se-met-pas-en-pierre-tombale.md)
 - [2026-08-21 : Le retour en vue PERSONNEL se relit ; il ne s'écrit pas localement](decisions/2026-08-21-le-retour-en-vue-personnel-se-relit-il-ne-s-ecrit-pas-localement.md)
 - [2026-08-22 : Plan 2D — le STOP budget D4 est levé par DÉROGATION du porteur produit, la virtualisation restant le gage](decisions/2026-08-22-plan-2d-le-stop-budget-d4-est-leve-par-derogation-du-porteur-produit.md)
+- [2026-10-05 : Le Jeu Meeshy — la loi dans le CŒUR, les briques dans l'UI, les routes écrites à la main](decisions/2026-10-05-le-jeu-meeshy-la-loi-au-coeur-les-briques-dans-l-ui-les-routes-a-la-main.md)

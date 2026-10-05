@@ -151,6 +151,18 @@ export type MeeshMintPlan = {
 
 const finite = (value: number): number => (Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0);
 
+export type MeeshMintPlanOptions = {
+  /**
+   * Le prix de CETTE frappe — la rareté croissante (#9373, `meeshPrice` dans
+   * `utils/game/mint.ts`) le fournit. Absent ou illisible ⇒ `MEESH_MINT_COST`,
+   * ce qui garde le comportement des appelants d'avant.
+   */
+  readonly mintCost?: number;
+};
+
+const resolveMintCost = (mintCost: number | undefined): number =>
+  mintCost !== undefined && Number.isInteger(mintCost) && mintCost > 0 ? mintCost : MEESH_MINT_COST;
+
 /**
  * Le plan d'une frappe, à partir de l'état des axes.
  *
@@ -164,7 +176,11 @@ const finite = (value: number): number => (Number.isFinite(value) ? Math.max(0, 
  * impossible en écriture, atteignable par une reprise de données) ne rend
  * aucune action — on ne divise jamais par zéro.
  */
-export function computeMeeshMintPlan(axes: readonly MeeshAxisState[]): MeeshMintPlan {
+export function computeMeeshMintPlan(
+  axes: readonly MeeshAxisState[],
+  options: MeeshMintPlanOptions = {},
+): MeeshMintPlan {
+  const mintCost = resolveMintCost(options.mintCost);
   const parAxe = new Map<EngagementAxisKey, MeeshAxisState>();
   for (const axe of axes) {
     if (!(ENGAGEMENT_AXES as readonly string[]).includes(axe.axisKey)) continue;
@@ -184,18 +200,18 @@ export function computeMeeshMintPlan(axes: readonly MeeshAxisState[]): MeeshMint
     if (!debitsActionCount(axe.axisKey)) floorPoints += axe.points;
   }
 
-  if (debitablePoints < MEESH_MINT_COST) {
+  if (debitablePoints < mintCost) {
     return {
       debitablePoints,
       floorPoints,
       canMint: false,
-      missingPoints: MEESH_MINT_COST - debitablePoints,
+      missingPoints: mintCost - debitablePoints,
       debits: [],
     };
   }
 
   const debits: MeeshDebitLine[] = [];
-  let reste = MEESH_MINT_COST;
+  let reste = mintCost;
   for (const rang of MEESH_DEBIT_ORDER) {
     for (const axisKey of rang) {
       if (reste === 0) break;

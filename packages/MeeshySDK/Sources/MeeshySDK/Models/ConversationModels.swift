@@ -429,6 +429,11 @@ extension APIConversation {
             senderName: lastMessage?.sender?.name,
             readerId: currentUserId
         )
+        let lastMsgSenderUserId = ConversationListAuthor.peerUserId(
+            senderUserId: lastMessage?.sender?.resolvedUserId,
+            senderName: lastMsgSenderName,
+            readerId: currentUserId
+        )
 
         let recentPreviews: [RecentMessagePreview] = (recentMessages ?? []).map { msg in
             let sName = msg.sender?.name ?? "?"
@@ -460,6 +465,7 @@ extension APIConversation {
             lastMessageAttachmentCount: lastMsgAttCount,
             lastMessageId: lastMessage?.id,
             lastMessageSenderName: lastMsgSenderName,
+            lastMessageSenderUserId: lastMsgSenderUserId,
             lastMessageIsBlurred: lastMessage?.isBlurred ?? false,
             lastMessageIsViewOnce: lastMessage?.isViewOnce ?? false,
             lastMessageExpiresAt: lastMessage?.expiresAt,

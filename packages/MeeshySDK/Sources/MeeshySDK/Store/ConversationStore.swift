@@ -640,6 +640,10 @@ public actor ConversationStore {
                     rowSenderName: conv.lastMessageSenderName
                 ), auteur != conv.lastMessageSenderName {
                     conv.lastMessageSenderName = auteur
+                    conv.lastMessageSenderUserId = ConversationListAuthor.peerUserId(
+                        senderUserId: event.senderUserId, senderName: auteur,
+                        readerId: event.readerId, youLabel: event.youLabel
+                    )
                     changed = true
                 }
                 // Le Prisme fait partie du MÊME groupe monotone : le résolveur
@@ -722,9 +726,9 @@ public actor ConversationStore {
     }
 
     /// Apply a `user:updated` socket event — un CONTACT a changé son profil
-    /// public (nom, avatar, bannière). Ne touche QUE les conversations
-    /// directes dont ce contact est l'interlocuteur : dans un groupe, la ligne
-    /// porte l'identité du GROUPE, pas celle d'un membre.
+    /// public (nom, avatar, bannière). L'identité d'une ligne ne bouge que dans
+    /// les directs dont il est l'interlocuteur — un groupe porte la sienne ;
+    /// l'auteur du dernier message, lui, suit dans toute ligne (#9359).
     public func applyUserUpdated(_ event: UserUpdatedEvent) {
         // Snapshot AVANT la boucle : `commit` réécrit `conversations`, et itérer
         // la vue `.values` d'un dictionnaire qu'on mute est un comportement
@@ -752,11 +756,17 @@ public actor ConversationStore {
         _ conversation: MeeshyConversation,
         withUserUpdate event: UserUpdatedEvent
     ) -> MeeshyConversation? {
-        guard conversation.type == .direct,
-              conversation.participantUserId == event.userId else { return nil }
-
         var conv = conversation
         var changed = false
+
+        // L'AUTEUR de la dernière ligne (« Bob : … » d'un groupe, #9359) suit
+        // la loi unique de l'expéditeur, quel que soit le type de conversation.
+        if let author = event.repaintedLastMessageAuthor(of: conversation) {
+            conv.lastMessageSenderName = author
+            changed = true
+        }
+        guard conversation.type == .direct,
+              conversation.participantUserId == event.userId else { return changed ? conv : nil }
 
         if let name = event.composedName, name != conv.title {
             conv.title = name

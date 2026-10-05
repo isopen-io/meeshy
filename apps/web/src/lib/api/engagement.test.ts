@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test';
 
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from './engagement-fixture';
-import { ENGAGEMENT_PROGRESS_PATH, fetchEngagementProgress, loadEngagementProgress } from './engagement';
+import { ENGAGEMENT_PROGRESS_PATH, fetchEngagementProgress, loadEngagementProgress, mintMeesh } from './engagement';
+import { gameBlockFixture } from './game-fixture';
 import { createHttpTransport } from './http';
 
 /**
@@ -101,5 +102,63 @@ describe('loadEngagementProgress — la source se lit à la construction', () =>
     const result = await loadEngagementProgress({ source: 'gateway', transport });
     expect(result.ok).toBe(false);
     expect(!result.ok && result.status).toBe(500);
+  });
+});
+
+describe('loadEngagementProgress — le bloc `game` voyage avec la progression (#9383)', () => {
+  test('un serveur qui le sert : le bloc est relu et rendu à côté de la progression', async () => {
+    const game = gameBlockFixture();
+    const transport = transportServing({ success: true, data: { ...ENGAGEMENT_PROGRESS_FIXTURE, game } });
+    const result = await loadEngagementProgress({ source: 'gateway', transport });
+    expect(result.ok && result.data.game).toEqual(game);
+  });
+
+  test('un ancien serveur : aucune clé `game`, l’écran actuel reste intact', async () => {
+    const transport = transportServing({ success: true, data: ENGAGEMENT_PROGRESS_FIXTURE });
+    const result = await loadEngagementProgress({ source: 'gateway', transport });
+    expect(result.ok && 'game' in result.data).toBe(false);
+  });
+
+  test('un bloc partiel est refusé ENTIER, la progression reste servie', async () => {
+    const { flame: _flame, ...partial } = gameBlockFixture();
+    const transport = transportServing({ success: true, data: { ...ENGAGEMENT_PROGRESS_FIXTURE, game: partial } });
+    const result = await loadEngagementProgress({ source: 'gateway', transport });
+    expect(result.ok).toBe(true);
+    expect(result.ok && 'game' in result.data).toBe(false);
+  });
+
+  test('les badges que la frappe éteindrait se calculent sur les compteurs servis', async () => {
+    const counters = [{ axisKey: 'content.text_message', count: 100, points: 2000 }];
+    const transport = transportServing({
+      success: true,
+      data: { ...ENGAGEMENT_PROGRESS_FIXTURE, counters, game: gameBlockFixture() },
+    });
+    const result = await loadEngagementProgress({ source: 'gateway', transport });
+    expect(result.ok && result.data.mintBadgeLoss).toBeGreaterThan(0);
+  });
+
+  test("source 'fixtures' : le bloc de démonstration, sans réseau", async () => {
+    const calls: Call[] = [];
+    const transport = transportServing({ success: true, data: {} }, { calls });
+    const result = await loadEngagementProgress({ source: 'fixtures', transport });
+    expect(calls).toHaveLength(0);
+    expect(result.ok && result.data.game?.missions.items.length).toBe(3);
+  });
+});
+
+describe('mintMeesh — la réponse étendue (#9378)', () => {
+  test('les champs ajoutés par la frappe étendue sont relus, l’ancienne forme reste valide', async () => {
+    const calls: Call[] = [];
+    const transport = transportServing(
+      { success: true, data: { status: 'minted', balance: 5, mintedLifetime: 4, number: 4, edition: 'silver', price: 1221, gloryGained: 100, levelBefore: 14, levelAfter: 9 } },
+      { calls },
+    );
+    const result = await mintMeesh(transport, 'req-mint-0001');
+    expect(result.ok && result.data.number).toBe(4);
+    expect(result.ok && result.data.levelAfter).toBe(9);
+
+    const ancien = transportServing({ success: true, data: { status: 'minted', balance: 5, mintedLifetime: 4 } });
+    const legacy = await mintMeesh(ancien, 'req-mint-0002');
+    expect(legacy.ok && legacy.data.number).toBeUndefined();
   });
 });

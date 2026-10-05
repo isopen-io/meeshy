@@ -314,6 +314,24 @@ final class SignupViewModel: ObservableObject {
         isPhoneChecked = true
     }
 
+    /// « S'inscrire » est touché INACTIF (#9362) : un bouton mort qui ne dit
+    /// rien laisse l'utilisateur sans raison. Si le numéro est refusé, son
+    /// motif paraît sous le champ et l'écran y rend la main (le champ rendu).
+    /// Miroir web : la tentative d'envoi refusée (D-169).
+    func explainInactivePrimary() -> SignupField? {
+        guard inactivePrimaryReason != nil else { return nil }
+        isPhoneChecked = true
+        return .phoneNumber
+    }
+
+    /// Pourquoi « S'inscrire » est inactif, quand c'est le numéro — lu par
+    /// VoiceOver sur le bouton, avant même qu'on le touche.
+    var inactivePrimaryReason: String? {
+        guard primaryAction == .signUp(enabled: false), case .editing = card,
+              let refusal = form.phoneRefusal else { return nil }
+        return Self.phoneRefusalMessage(refusal)
+    }
+
     /// Les trois gestes qui créent un compte passent par ICI : aucun ne part
     /// sans numéro plausible — « Ce n'est pas moi » compris, qui ne consulte pas
     /// le bouton principal. Le refus se dit sous le champ.
