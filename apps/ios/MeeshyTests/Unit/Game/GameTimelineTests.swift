@@ -88,4 +88,18 @@ final class GameTimelineTests: XCTestCase {
         XCTAssertEqual(GameTimeline.window(5, from: 0, to: 1), 1)
         XCTAssertEqual(GameTimeline.window(0.5, from: 0, to: 1), 0.5)
     }
+
+    /// L'irisation est la matière du PRISME (édition millième, rang Mythe) : une pièce
+    /// d'argent ou d'or n'en reçoit aucune, et seule la pièce la porte — pas Mee et Meo.
+    func test_prismTilt_paintsNothingOnACoinThatIsNotPrism() {
+        XCTAssertEqual(GamePrismTilt.intensity(active: false), 0)
+        XCTAssertGreaterThan(GamePrismTilt.intensity(active: true), 0)
+    }
+
+    /// Le capteur ne tourne que pour une irisation VISIBLE : ni hors écran, ni pour une matière qui n'en a pas.
+    func test_prismTilt_theSensorRunsOnlyWhenActiveAndVisible() {
+        XCTAssertTrue(GamePrismTilt.sensorRuns(active: true, visible: true))
+        XCTAssertFalse(GamePrismTilt.sensorRuns(active: true, visible: false))
+        XCTAssertFalse(GamePrismTilt.sensorRuns(active: false, visible: true))
+    }
 }

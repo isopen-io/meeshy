@@ -34,17 +34,51 @@ final class GameTiltSource: ObservableObject {
     }
 }
 
+/// La règle de l'irisation : elle est la matière du PRISME (édition millième, rang
+/// Mythe) et de lui seul — une pièce d'argent ou d'or n'en reçoit aucune. Le capteur
+/// ne tourne que pour une irisation VISIBLE.
+enum GamePrismTilt {
+    static let activeIntensity = 0.6
+
+    static func intensity(active: Bool) -> Double {
+        active ? activeIntensity : 0
+    }
+
+    static func sensorRuns(active: Bool, visible: Bool) -> Bool {
+        active && visible
+    }
+}
+
 /// Pose l'irisation du prisme sur une vue et la fait suivre le téléphone — sans
-/// capteur (simulateur) elle reste au repos, jamais cassée.
+/// capteur (simulateur) elle reste au repos, jamais cassée. Inactive, elle ne peint
+/// RIEN. Elle se pose sur la PIÈCE ou l'écu, jamais sur une scène qui garde un état :
+/// passer d'actif à inactif change la structure du calque habillé, ce qu'une pièce
+/// sans état supporte et une chorégraphie en cours non.
 private struct GamePrismTiltModifier: ViewModifier {
     let active: Bool
     @StateObject private var source = GameTiltSource()
+    @State private var visible = false
 
     func body(content: Content) -> some View {
         content
-            .gamePrismIridescence(tilt: active ? source.tilt : 0)
-            .onAppear { if active { source.start() } }
-            .onDisappear { source.stop() }
+            .gamePrismIridescence(tilt: active ? source.tilt : 0, intensity: GamePrismTilt.intensity(active: active))
+            .onAppear {
+                visible = true
+                syncSensor(active: active, visible: true)
+            }
+            .onDisappear {
+                visible = false
+                syncSensor(active: active, visible: false)
+            }
+            .adaptiveOnChange(of: active) { _, now in syncSensor(active: now, visible: visible) }
+    }
+
+    private func syncSensor(active: Bool, visible: Bool) {
+        if GamePrismTilt.sensorRuns(active: active, visible: visible) {
+            source.start()
+        } else {
+            source.stop()
+        }
     }
 }
 

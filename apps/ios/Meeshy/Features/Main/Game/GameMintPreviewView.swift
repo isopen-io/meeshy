@@ -92,7 +92,6 @@ struct GameMintPreviewView: View {
                 coinSide: 56,
                 restsReversed: celebration != nil
             )
-            .gamePrismTilt(active: (celebration?.edition ?? mint.edition) == .prism)
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(String(
                     localized: "game.mint.next_title",
