@@ -44,6 +44,7 @@ section{padding-top:36px;border-top:1px solid var(--line);margin-top:36px}
 .lede{font-size:19px;color:var(--muted);max-width:62ch;margin-top:16px}
 .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 .muted{color:var(--muted)}
+.note{border-left:3px solid var(--indigo);background:var(--tint);padding:10px 14px;border-radius:0 12px 12px 0;font-size:14.5px}
 .grid{display:grid;gap:16px}
 .g2{grid-template-columns:repeat(auto-fit,minmax(270px,1fr))}
 .g3{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}
@@ -168,6 +169,7 @@ ul.tight li,ol.tight li{margin:3px 0}
   <a class="part" href="#livraison">X. Livraison</a>
   <a class="part" href="#decisions">XI. Décisions</a>
   <a class="part" href="#finitions">XII. Héro et badges, v2</a>
+  <a class="part" href="#vague2">XIII. Bannière du joueur et vague 2</a>
 </nav>
 
 <main>
@@ -239,6 +241,7 @@ ul.tight li,ol.tight li{margin:3px 0}
   <p class="muted" style="font-size:13.5px">* à 500 points par jour, sans frappe.</p>
   <h3>Niveau record et Prestige</h3>
   <p>Le niveau le plus haut atteint reste marqué sur la barre : il règle le Vent arrière et donne de la Gloire la première fois qu'on atteint chaque niveau. Au niveau 100, on peut passer en Prestige : niveau à 1, une étoile sur l'anneau (5 au plus), +1 000 de Gloire, un Trophée de Prestige.</p>
+  <p class="note"><b>Décidé le 5 octobre au soir :</b> le Prestige remet aussi le niveau record à 1. La ligue (dès le niveau 10) et la mission en duo (dès le niveau 20) se referment donc jusqu'à ce qu'on remonte. Avant de valider, l'écran de confirmation le dit en clair, et Meo l'explique.</p>
 </section>
 
 <section id="meeshes">
@@ -327,9 +330,9 @@ ul.tight li,ol.tight li{margin:3px 0}
   <p>Les ligues comptent les points <b>gagnés dans la semaine</b>, jamais le score en poche : frapper ne fait pas perdre de place. Fermeture le dimanche à 20 h, heure locale. Groupes de 30 d'activité comparable ; les 7 premiers montent, les 5 derniers descendent ; les 3 premiers reçoivent une coupe.</p>
   <div class="icon-row" id="ligues-row" aria-label="Les huit ligues"></div>
   <ul class="tight">
-    <li>Ligue publique sur consentement, sous pseudonyme par défaut, total hebdomadaire seul : aucune heure d'activité n'en ressort.</li>
-    <li>Ligue Amis toujours disponible, limitée aux amis acceptés.</li>
-    <li>Mission en duo hebdomadaire avec un ami : objectif commun, récompense double si les deux finissent leur part.</li>
+    <li>Ligue publique sur consentement daté et retirable, majorité vérifiée par le serveur. Le pseudonyme est tiré au sort, gardé, et renouvelé à chaque saison ; un nom choisi reste fermé tant que le filtre d'injures et le bouton « Signaler » n'existent pas. Total hebdomadaire seul, classement servi sur l'instantané de 4 h : aucune heure d'activité n'en ressort.</li>
+    <li>Ligue Amis toujours disponible, limitée aux amis acceptés. Pour un ami qui a coupé sa présence, on ne voit que ses points arrêtés à la fin de sa veille, dans son fuseau.</li>
+    <li>Mission en duo hebdomadaire avec un ami : objectif commun, récompense double si les deux finissent leur part. Un duo par compte et par semaine, dans un sens ou dans l'autre ; une invitation en attente n'occupe pas la semaine de l'invité ; 5 invitations envoyées et 5 reçues au plus. La part du partenaire se lit au quart près, sans jour ni heure, et vaut zéro s'il a masqué sa présence ou son jeu.</li>
     <li>Saison de 8 semaines, un thème (une langue, une région), 40 étapes gratuites, un badge daté et une coupe de saison. La rangée Sceau (10 Meeshes) est cosmétique.</li>
   </ul>
 </section>
@@ -341,14 +344,15 @@ ul.tight li,ol.tight li{margin:3px 0}
   <div class="icon-row" id="formes" aria-label="Formes de badge"></div>
   <div class="icon-row" id="matieres" aria-label="Matières des paliers"></div>
   <h3>L'Atlas des langues</h3>
-  <p>Chaque langue avec laquelle on a vraiment échangé (un message envoyé et un reçu avec quelqu'un qui l'écrit) pose un tampon dans le passeport. Le modèle de traduction couvre 200 langues.</p>
+  <p>Chaque langue avec laquelle on a vraiment échangé (un message envoyé et un reçu avec quelqu'un qui l'écrit) pose un tampon dans le passeport. L'Atlas suit les langues que Meeshy sert réellement (83 aujourd'hui), et aucun tampon ne vient d'une conversation chiffrée.</p>
   <div class="icon-row" id="atlas" aria-label="Tampons de l'Atlas"></div>
 </section>
 
 <section id="trophees">
   <div class="eyebrow">II.9 · ce qui ne s'éteint pas</div>
   <h2>Trophées et succès</h2>
-  <p>Un <b>trophée</b> est un objet reçu à un moment précis ; il va dans la vitrine du profil. Les <b>succès</b> gardent leur grammaire ; leur rareté est mesurée chaque nuit et figée à l'obtention. Ni l'un ni l'autre ne rapporte de points.</p>
+  <p>Un <b>trophée</b> est un objet reçu à un moment précis ; il va dans la vitrine du profil. Les <b>succès</b> gardent leur grammaire ; leur rareté est mesurée chaque nuit et figée à l'obtention (sous 1 000 comptes actifs, tout succès vaut un commun). Ni l'un ni l'autre ne rapporte de points.</p>
+  <p class="note"><b>Décidé le 5 octobre au soir :</b> la vitrine vue par un autre membre ne donne que le <b>mois</b> d'obtention de chaque trophée, coupes de ligue comprises ; seul le membre voit la date exacte.</p>
   <div class="tablebox"><table>
     <thead><tr><th>Trophée</th><th>Quand</th></tr></thead>
     <tbody>
@@ -603,6 +607,9 @@ ul.tight li,ol.tight li{margin:3px 0}
       <tr><td>Hasard dans le coffre ?</td><td>Oui, probabilités affichées, aucune valeur monétaire.</td></tr>
       <tr><td>Visibilité du rang et du trésor ?</td><td>Amis par défaut.</td></tr>
       <tr><td>Photos synchronisées ?</td><td>Non par défaut ; activable, privé.</td></tr>
+      <tr><td>Le Prestige remet-il le niveau record à 1 ?</td><td>Oui, tranché par le porteur le 5 octobre : la ligue et le duo se referment jusqu'à ce qu'on remonte, et la confirmation le dit.</td></tr>
+      <tr><td>Précision des dates dans la vitrine d'un autre ?</td><td>Le mois, jamais le jour ni la semaine (porteur, 5 octobre).</td></tr>
+      <tr><td>Où la progression reste-t-elle visible en grand ?</td><td>Dans le bandeau du haut quand aucun appel ni audio ne joue : la bannière du joueur (#9494, partie XIII).</td></tr>
     </tbody>
   </table></div>
 </section>
@@ -641,6 +648,60 @@ ul.tight li,ol.tight li{margin:3px 0}
   <h2>La carte partagée porte le lien de parrainage</h2>
   <p>Toute image partagée depuis un moment photo ou une révélation de succès porte, en bas de la carte 9:16, le lien de parrainage court de l'utilisateur et sa Flamme. Le partage transmet aussi le lien en texte. Chaque partage crédite l'axe <code>social.share</code>, comme tout partage. Le lien vient du service existant (<code>loadShareableReferralLink</code> sur le web, son miroir sur iOS) ; sans lien disponible, la carte part sans lui.</p>
   <div id="carteV2"></div>
+</section>
+
+<div class="part-head" id="vague2"><div class="n">Partie XIII · ajoutée le 5 octobre, tard</div><h2>Bannière du joueur et vague 2</h2><p class="muted">Demandes porteur : la progression toujours visible en grand (#9494), l'emblème du palier dans l'anneau (#9481), le Prestige gardé tel quel, la vitrine au mois. Puis ce que la conformité et les revues adversariales de la vague 2 ont changé à la conception.</p></div>
+<section>
+  <div class="eyebrow">XIII.1 · #9494</div>
+  <h2>La bannière du joueur</h2>
+  <p>Le bandeau du haut sert à l'appel en cours et à l'audio qui joue. Le reste du temps, il était vide. Il devient la <b>bannière du joueur</b> : sa progression, en grand, toujours sous les yeux. L'appel prime, puis l'audio ; la bannière s'efface quand l'un d'eux arrive et revient quand ils partent, en glissant à la même place.</p>
+  <div id="banniere"></div>
+  <ul class="tight">
+    <li><b>Seulement ce qui existe.</b> Un nouveau joueur ne voit que son anneau et sa jauge. Le trésor apparaît à la première Meesh, le rang à la première Gloire, la ligue au consentement, la Flamme quand elle brûle. Jamais un zéro, un tiret ou une case vide.</li>
+    <li>Ordre fixe, de gauche à droite : anneau de niveau, jauge vers le niveau suivant, Meeshes, blason du rang, gemme de ligue et place, Flamme.</li>
+    <li>Décor à la Signature en filigrane, teinté par la couleur du palier ; aucune bulle.</li>
+    <li>Un toucher ouvre Progression. Un gain de points fait rouler le chiffre et avancer la jauge, avec le reflet Metal ou WebGL au passage d'un niveau.</li>
+    <li>« Jeu masqué » : pas de bannière. Cache d'abord : elle s'affiche depuis le bloc game en cache, jamais de squelette.</li>
+    <li>Accessible : un seul élément lu par VoiceOver et TalkBack (« Niveau 34, Éclat, 78 % vers le 35, 12 Meeshes, Conteur III, ligue Jade 4e, Flamme 23 jours »), cible de 44 pt, Dynamic Type jusqu'à la taille XXL (au-delà, la jauge passe sous l'anneau).</li>
+    <li>Même place et même ordre sur iOS, iPad, web et coque Android.</li>
+  </ul>
+</section>
+<section>
+  <div class="eyebrow">XIII.2 · #9481</div>
+  <h2>L'anneau porte l'emblème du palier</h2>
+  <p>Au centre du cercle blanc, l'emblème du palier est imprimé en transparence (18 %), le niveau en grand par-dessus. Sous le niveau, le palier en chiffres romains (I à X) dans un cartouche détouré, du trait de la couleur du palier. Même anneau partout : héro, bannière, profil, carte de contact.</p>
+  <div class="icon-row" id="anneauxV2" aria-label="Anneaux avec emblème du palier"></div>
+</section>
+<section>
+  <div class="eyebrow">XIII.3</div>
+  <h2>Ce que la vague 2 a changé</h2>
+  <p class="muted">Contraintes de la relecture de conformité et défauts trouvés par les revues adversariales, tous corrigés sur <code>dev</code>.</p>
+  <div class="tablebox"><table>
+    <thead><tr><th>Élément</th><th>Règle livrée</th></tr></thead>
+    <tbody>
+      <tr><td>Ligue publique</td><td>Consentement daté, retirable, version de la notice enregistrée ; majorité calculée par le serveur ; pseudonyme tiré au sort, vérifié avant que le consentement s'écrive.</td></tr>
+      <tr><td>Classement</td><td>Instantané figé à 4 h ; seule ma ligne bouge en direct ; règlement du dimanche rejouable sans double paiement ; groupes gardés 4 semaines.</td></tr>
+      <tr><td>Mission en duo</td><td>Un duo par compte et par semaine ; seul l'invité accepte ; un inconnu reçoit la même réponse qu'un compte inexistant, sans rien apprendre de son niveau ; paiement unique.</td></tr>
+      <tr><td>Saison</td><td>Chaque étape se réclame une fois, même sous requêtes concurrentes ; Sceau en Meeshes, cosmétique.</td></tr>
+      <tr><td>Prestige</td><td>Atomique et idempotent : un double appel ne paie jamais deux fois ; 5 étoiles au plus.</td></tr>
+      <tr><td>Rareté et Mythe</td><td>Mesurés chaque nuit sur les comptes actifs ; comptes supprimés exclus.</td></tr>
+      <tr><td>Médailles</td><td>7 paliers : Cuivre 1, Bronze 10, Argent 50, Or 100, Platine 500, Obsidienne 1 000, Prisme 5 000.</td></tr>
+      <tr><td>Effacement d'un compte</td><td>Toutes les données du jeu partent ; un duo en cours se termine proprement pour le partenaire ; le compte quitte ses groupes de ligue. Un témoin rougit si une table du jeu y échappe.</td></tr>
+      <tr><td>Export</td><td>Une section « jeu » dans l'export de ses données, sans rien d'un autre compte ni de présence.</td></tr>
+      <tr><td>Parrainage</td><td>La validation d'un lien ne donne plus le nom du parrain ; les visites sont gardées 30 jours sans IP ni navigateur ; empreinte de visiteur par HMAC à clé tournante.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+<section>
+  <div class="eyebrow">XIII.4</div>
+  <h2>Avant d'ouvrir la ligue publique</h2>
+  <ul class="tight">
+    <li>La notice de consentement en sept langues.</li>
+    <li>Le filtre d'injures en sept langues, le bouton « Signaler » et son recours ; jusque-là, pseudonymes tirés au sort uniquement.</li>
+    <li>Une analyse d'impact (DPIA), ou une décision motivée de ne pas en faire.</li>
+    <li>Le seuil d'âge (15 ou 16 ans), à confirmer par un juriste.</li>
+    <li>La purge des anciennes visites de parrainage, après sauvegarde vérifiée et feu vert du porteur.</li>
+  </ul>
 </section>
 </main>
 </div>
@@ -874,6 +935,25 @@ const MEE={"meeGuide":"<defs><radialGradient id=\"a1mee1b\" cx=\".38\" cy=\".3\"
       <text x="62" y="522" font-family="JetBrains Mono,monospace" font-size="10.5" fill="#c7d2fe">meeshy.me/r/AMANI7</text>
       <path d="M236 497 c 6 8 11 13 9 21 a9 9 0 0 1 -18 0 c -1 -6 4 -9 5 -14 c 2 3 3 5 4 6 c 1 -4 1 -8 0 -13z" fill="url(#gFlame)"/><text x="236" y="537" text-anchor="middle" font-family="JetBrains Mono,monospace" font-size="9" fill="#fff">23 j</text>
     </svg></div></div>`;
+
+
+  const ROM=['I','II','III','IV','V','VI','VII','VIII','IX','X'];
+  const tierOf=l=>Math.min(9,Math.floor(l/10));
+  const tierColor=i=>i===9?'url(#gPrism)':paliers[i][2];
+  const emblem=(i,cx,cy,r)=>{const c=tierColor(i);const rays=Array.from({length:i+1},(_,k)=>{const a=(k/(i+1))*Math.PI*2-Math.PI/2;return `<circle cx="${(cx+r*Math.cos(a)).toFixed(1)}" cy="${(cy+r*Math.sin(a)).toFixed(1)}" r="${(r*.09).toFixed(1)}" fill="${c}"/>`}).join('');return `<circle cx="${cx}" cy="${cy}" r="${(r*.78).toFixed(1)}" fill="none" stroke="${c}" stroke-width="${(r*.1+i*.25).toFixed(1)}"/>${rays}${sig(cx,cy,r*1.05,c,110)}`};
+  const ringV2=(lvl,pct,size=88)=>{const i=tierOf(lvl),c=tierColor(i),rom=ROM[i],w=8+rom.length*6;return `<svg viewBox="0 0 88 88" width="${size}" height="${size}" aria-hidden="true"><circle cx="44" cy="44" r="39" fill="none" stroke="var(--line)" stroke-width="7"/><circle cx="44" cy="44" r="39" fill="none" stroke="${c}" stroke-width="7" stroke-linecap="round" stroke-dasharray="${(245*pct).toFixed(1)} 245" transform="rotate(-90 44 44)"/><circle cx="44" cy="44" r="33" fill="#fff"/><g opacity=".18">${emblem(i,44,44,27)}</g><text x="44" y="49" text-anchor="middle" font-family="Bricolage Grotesque,system-ui" font-weight="800" font-size="24" fill="#1c1941">${lvl}</text><rect x="${44-w/2}" y="56" width="${w}" height="13" rx="6.5" fill="#fff" stroke="${c}" stroke-width="1.6"/><text x="44" y="66" text-anchor="middle" font-family="Bricolage Grotesque,system-ui" font-weight="800" font-size="9.5" fill="#1c1941">${rom}</text></svg>`};
+  $('anneauxV2').innerHTML=[[3,.4],[16,.55],[34,.78],[57,.3],[74,.9],[96,.62]].map(([l,p])=>cell(ringV2(l,p,84),'Niveau '+l,paliers[tierOf(l)][0]+' · '+ROM[tierOf(l)])).join('');
+  const gem=(c,s=26)=>`<svg viewBox="0 0 72 72" width="${s}" height="${s}" aria-hidden="true"><path d="M36 6l26 20-26 42-26-42z" fill="${c}" stroke="#1c1941" stroke-opacity=".3"/>${sig(36,38,26,'#1c1941',110,'engraved')}</svg>`;
+  const flame=s=>`<svg viewBox="0 0 72 72" width="${s}" height="${s}" aria-hidden="true"><path d="M36 14 c 12 16 22 26 18 42 a18 18 0 0 1 -36 0 c -2 -12 8 -18 10 -28 c 4 6 6 10 8 12 c 2 -8 2 -16 0 -26z" fill="url(#gFlame)"/></svg>`;
+  const strip2=(inner,label,tint)=>`<div style="margin:0 0 14px"><div style="font:500 11px var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">${label}</div><div style="position:relative;overflow:hidden;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-radius:20px;border:1px solid var(--line);background:${tint||'var(--surface)'}">${inner}</div></div>`;
+  const jauge=(a,b,pct,next)=>`<div style="flex:1;min-width:150px"><div style="font-size:13px;font-weight:700">${a}</div><div class="bar" style="margin-top:6px"><i style="width:${pct}%"></i></div><div class="muted" style="font-size:11.5px;margin-top:4px"><span class="num">${b}</span> · ${next}</div></div>`;
+  const chip=(svg,txt)=>`<span style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;white-space:nowrap">${svg}${txt}</span>`;
+  const filig=c=>`<svg viewBox="0 0 120 80" width="140" height="94" style="position:absolute;right:-24px;bottom:-30px;opacity:.05;pointer-events:none" aria-hidden="true">${sig(60,40,110,c,110)}</svg>`;
+  $('banniere').innerHTML=
+    strip2(`<span style="width:10px;height:10px;border-radius:99px;background:var(--ok)"></span><b>Amani</b><span class="num muted">03:12</span><span style="margin-left:auto" class="pill">Appel en cours</span>`,'1 · un appel est en cours : il prime')+
+    strip2(`<span style="font-size:18px">▶︎</span><b>Vocal d'Amani</b><span class="num muted">0:12 / 0:41</span><span style="margin-left:auto" class="pill">Audio</span>`,'2 · un audio joue : il passe ensuite')+
+    strip2(filig('#a3e635')+ringV2(34,.78,64)+jauge('Niveau 34 · Éclat IV','1 240 / 1 590 pts','78','encore 350 pour le 35')+`<span style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">`+chip(coinAvers(24),'<span class="num">12</span>')+chip(`<span style="display:inline-block;width:34px">${blason(3,34,3)}</span>`,'Conteur III')+chip(gem('#10b981'),'Jade · 4e')+chip(flame(22),'<span class="num">23</span> j')+`</span>`,'3 · rien ne joue : la bannière du joueur, complète','linear-gradient(90deg,color-mix(in srgb,#a3e635 12%,var(--surface)),var(--surface))')+
+    strip2(filig('#f87171')+ringV2(3,.4,64)+jauge('Niveau 3 · Étincelle I','100 / 160 pts','40','encore 60 pour le 4'),'4 · un nouveau joueur : seulement ce qui existe','linear-gradient(90deg,color-mix(in srgb,#f87171 12%,var(--surface)),var(--surface))');
 
   const lvl=s=>Math.min(100,Math.floor(Math.sqrt(s/10)));
   const cost=n=>Math.min(Math.round(1221*Math.pow(1.06,Math.floor((n-1)/10))),4884);
