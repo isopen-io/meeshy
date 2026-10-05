@@ -464,7 +464,7 @@ public struct CommunityDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(conversation.title ?? conversation.identifier ?? String(localized: "community.detail.channel.fallbackName", defaultValue: "Channel", bundle: .module))
+                Text(viewModel.conversationTitles[conversation.id] ?? String(localized: "community.detail.channel.fallbackName", defaultValue: "Channel", bundle: .module))
                     .font(.system(size: MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
@@ -501,7 +501,10 @@ final class CommunityDetailViewModel: ObservableObject {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
     @Published var community: MeeshyCommunity?
-    @Published var conversations: [APIConversation] = []
+    @Published var conversations: [APIConversation] = [] {
+        didSet { conversationTitles = conversationListTitles(conversations) }
+    }
+    @Published private(set) var conversationTitles: [String: String] = [:]
     @Published var isMember = false
     @Published var isCreator = false
     @Published var isAdmin = false
@@ -567,6 +570,11 @@ final class CommunityDetailViewModel: ObservableObject {
     }
 }
 
+private func conversationListTitles(_ items: [APIConversation]) -> [String: String] {
+    let readerId = AuthManager.shared.currentUser?.id ?? ""
+    return Dictionary(items.map { ($0.id, $0.listTitle(currentUserId: readerId)) }, uniquingKeysWith: { _, latest in latest })
+}
+
 // MARK: - Add Channel Sheet
 
 struct AddChannelSheet: View {
@@ -576,6 +584,7 @@ struct AddChannelSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var conversations: [APIConversation] = []
+    @State private var titles: [String: String] = [:]
     @State private var isLoading = true
     @State private var isLoadingMore = false
     @State private var hasMore = false
@@ -590,10 +599,11 @@ struct AddChannelSheet: View {
 
     private var filtered: [APIConversation] {
         guard !searchText.isEmpty else { return conversations }
-        return conversations.filter { conv in
-            let title = conv.title ?? conv.identifier ?? ""
-            return title.localizedCaseInsensitiveContains(searchText)
-        }
+        return conversations.filter { title(for: $0).localizedCaseInsensitiveContains(searchText) }
+    }
+
+    private func title(for conversation: APIConversation) -> String {
+        titles[conversation.id] ?? String(localized: "community.addChannel.conversation.fallbackName", defaultValue: "Conversation", bundle: .module)
     }
 
     var body: some View {
@@ -693,7 +703,7 @@ struct AddChannelSheet: View {
                 .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xs))
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(conversation.title ?? conversation.identifier ?? String(localized: "community.addChannel.conversation.fallbackName", defaultValue: "Conversation", bundle: .module))
+                Text(title(for: conversation))
                     .font(.system(size: MeeshyFont.bodySize, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
@@ -747,6 +757,7 @@ struct AddChannelSheet: View {
         do {
             let response = try await ConversationService.shared.list(offset: 0, limit: pageSize)
             conversations = response.data.filter { $0.communityId != communityId }
+            titles = conversationListTitles(conversations)
             currentOffset = conversations.count
             hasMore = response.data.count >= pageSize
         } catch {
@@ -763,6 +774,7 @@ struct AddChannelSheet: View {
             let response = try await ConversationService.shared.list(offset: currentOffset, limit: pageSize)
             let newItems = response.data.filter { $0.communityId != communityId }
             conversations.append(contentsOf: newItems)
+            titles.merge(conversationListTitles(newItems), uniquingKeysWith: { _, latest in latest })
             currentOffset += response.data.count
             hasMore = response.data.count >= pageSize
         } catch {
