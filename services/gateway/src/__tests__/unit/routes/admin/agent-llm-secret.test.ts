@@ -42,8 +42,14 @@ function makePrisma() {
   };
 }
 
-async function buildApp(prisma: ReturnType<typeof makePrisma>, user = bigbossUser): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
+async function buildApp(
+  prisma: ReturnType<typeof makePrisma>,
+  user = bigbossUser,
+  logLines?: string[],
+): Promise<FastifyInstance> {
+  const app = Fastify({
+    logger: logLines ? { level: 'trace', stream: { write: (line: string) => { logLines.push(line); } } } : false,
+  });
   app.decorate('prisma', prisma as any);
   app.decorate('authenticate', async (request: any) => {
     request.authContext = { isAuthenticated: true, registeredUser: user };
@@ -69,7 +75,8 @@ describe('AgentLlmConfig — la clé d\'API est chiffrée au repos', () => {
     app = null;
     if (saved.key === undefined) delete process.env[SECRETS_AT_REST_KEY_ENV];
     else process.env[SECRETS_AT_REST_KEY_ENV] = saved.key;
-    process.env.NODE_ENV = saved.nodeEnv;
+    if (saved.nodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = saved.nodeEnv;
   });
 
   it('PUT (mise à jour) : la colonne reçoit la clé SCELLÉE, jamais le clair, et elle se rouvre', async () => {
@@ -202,5 +209,42 @@ describe('AgentLlmConfig — la clé d\'API est chiffrée au repos', () => {
     expect(body.data.apiKeyLast4).toBeNull();
     expect(body.data.hasFallbackApiKey).toBe(false);
     expect(body.data.fallbackApiKeyLast4).toBeNull();
+  });
+
+  it('PUT : ni le journal d\'audit ni les journaux ne portent la clé, en clair ou scellée', async () => {
+    prisma.agentLlmConfig.findFirst.mockResolvedValue({ id: 'llm1', provider: 'openai', apiKeyEncrypted: '', fallbackApiKeyEncrypted: null });
+    const logLines: string[] = [];
+    app = await buildApp(prisma, bigbossUser, logLines);
+
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/llm',
+      payload: { apiKeyEncrypted: CLE, fallbackApiKeyEncrypted: CLE_SECOURS, reason: 'rotation de la clé du fournisseur' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(prisma.adminAuditLog.create).toHaveBeenCalled();
+    const audit = JSON.stringify(prisma.adminAuditLog.create.mock.calls);
+    const journaux = logLines.join('\n');
+    for (const trace of [audit, journaux]) {
+      expect(trace).not.toContain(CLE);
+      expect(trace).not.toContain(CLE_SECOURS);
+      expect(trace).not.toContain('v1:');
+    }
+  });
+
+  it('PUT met à jour la MÊME ligne que celle que le GET sert (la plus récemment modifiée)', async () => {
+    const recente = { id: 'llm-recente', provider: 'openai', apiKeyEncrypted: '', fallbackApiKeyEncrypted: null };
+    const ancienne = { id: 'llm-ancienne', provider: 'openai', apiKeyEncrypted: '', fallbackApiKeyEncrypted: null };
+    prisma.agentLlmConfig.findFirst.mockImplementation(async (args: any) =>
+      args?.orderBy?.updatedAt === 'desc' ? recente : ancienne,
+    );
+    app = await buildApp(prisma);
+
+    const lu = JSON.parse((await app.inject({ method: 'GET', url: '/llm' })).body);
+    await app.inject({ method: 'PUT', url: '/llm', payload: { model: 'gpt-4o' } });
+
+    expect(lu.data.id).toBe('llm-recente');
+    expect(prisma.agentLlmConfig.update.mock.calls[0][0].where).toEqual({ id: lu.data.id });
   });
 });

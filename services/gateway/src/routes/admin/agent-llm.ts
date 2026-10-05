@@ -151,7 +151,8 @@ export function registerAgentLlmRoutes(fastify: FastifyInstance, deps: AgentRout
       const reason = verdict.reason;
 
       const authContext = (request as UnifiedAuthRequest).authContext;
-      const existing = await fastify.prisma.agentLlmConfig.findFirst();
+      // La MÊME sélection que le GET : l'écriture porte sur la ligne servie.
+      const existing = await fastify.prisma.agentLlmConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
 
       let llmData: typeof plainData;
       try {
