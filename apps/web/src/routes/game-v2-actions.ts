@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 
 import type { GameVisibility } from '@meeshy/shared/types/game';
 import { GAME_ERROR_CODES } from '@meeshy/shared/types/game-routes';
@@ -19,7 +19,7 @@ import {
   setLeaguePseudonym,
   setShowcaseOrder,
 } from '@/lib/api/game-v2';
-import { GAME_V2_QUERY_PREFIX } from '@/lib/api/game-v2-queries';
+import { GAME_V2_QUERY_PREFIX, LEAGUE_WEEK_QUERY_KEY } from '@/lib/api/game-v2-queries';
 import type { ApiResult, HttpTransport } from '@/lib/api/http';
 import { gameErrorMessage } from '@/lib/view/game-copy';
 import {
@@ -76,6 +76,8 @@ type Config<V, R> = {
   readonly send: (transport: HttpTransport, requestId: string, vars: V) => Promise<ApiResult<R>>;
   readonly apply: (view: EngagementWithGame, vars: V) => EngagementWithGame;
   readonly land?: (view: EngagementWithGame, result: R, vars: V) => EngagementWithGame;
+  /** Après l'application locale : ce que le geste retire AUTREMENT du cache (le classement d'une ligue quittée). */
+  readonly afterApply?: (client: QueryClient, vars: V) => void;
 };
 
 function useGesture<V, R>(config: Config<V, R>, transport: HttpTransport): Gesture<V> {
@@ -96,6 +98,7 @@ function useGesture<V, R>(config: Config<V, R>, transport: HttpTransport): Gestu
       await client.cancelQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY });
       const snapshot = client.getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY);
       if (snapshot !== undefined) client.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, config.apply(snapshot, vars));
+      config.afterApply?.(client, vars);
       return { snapshot };
     },
     onError: (error, vars, context) => {
@@ -146,6 +149,11 @@ export function useGameV2Actions(options: { readonly transport?: HttpTransport }
       send: (t, requestId, vars) => setLeagueConsent(t, { requestId, consent: vars.consent, ...(vars.pseudonym === undefined ? {} : { pseudonym: vars.pseudonym }) }),
       apply: afterConsent,
       land: (view, result) => withConsentResult(view, result),
+      /* Quitter la ligue retire le classement du cache, donc du disque : les pseudonymes des autres membres ne restent pas sur
+         l'appareil d'une personne qui n'y joue plus (conformité A-9). */
+      afterApply: (client, vars) => {
+        if (!vars.consent) client.removeQueries({ queryKey: LEAGUE_WEEK_QUERY_KEY });
+      },
     },
     transport,
   );
