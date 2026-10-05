@@ -4,7 +4,6 @@ import MeeshySDK
 
 /// Où mène le bouton de la carte (#9379) : chaque action de la loi a une destination.
 @MainActor
-@MainActor
 final class GameGuideTargetTests: XCTestCase {
 
     func test_everyActionOfTheLaw_hasADestination() {
