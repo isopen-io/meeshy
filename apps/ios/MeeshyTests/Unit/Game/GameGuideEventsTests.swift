@@ -80,4 +80,24 @@ final class GameGuideEventsTests: XCTestCase {
         let after = GameFixture.game(score: 10_886, levelRecord: 34, minted: 13)
         XCTAssertFalse(keys(GameGuideEvents.transitions(from: before, to: after)).contains(.newTier))
     }
+
+    func test_transitions_aMint_announcesTheBadgeThatWentOut_withTheDistanceToRelightIt() {
+        let before = GameFixture.game(score: 12_180, minted: 12)
+        let after = GameFixture.game(score: 10_886, levelRecord: 34, minted: 13)
+        let events = GameGuideEvents.transitions(from: before, to: after, badgeImpactBefore: MintBadgeImpact(lost: 2, regain: 11))
+        XCTAssertTrue(events.contains(.badgeExtinguished(missingActions: 11)))
+    }
+
+    func test_transitions_aMintThatExtinguishesNothing_saysNothingAboutBadges() {
+        let before = GameFixture.game(score: 12_180, minted: 12)
+        let after = GameFixture.game(score: 10_886, levelRecord: 34, minted: 13)
+        XCTAssertFalse(keys(GameGuideEvents.transitions(from: before, to: after, badgeImpactBefore: MintBadgeImpact(lost: 0, regain: 0))).contains(.badgeExtinguished))
+        XCTAssertFalse(keys(GameGuideEvents.transitions(from: before, to: after, badgeImpactBefore: nil)).contains(.badgeExtinguished),
+                       "inconnu ne s'annonce pas")
+    }
+
+    func test_transitions_withoutAMint_noBadgeIsAnnounced() {
+        let game = GameFixture.game()
+        XCTAssertTrue(GameGuideEvents.transitions(from: game, to: game, badgeImpactBefore: MintBadgeImpact(lost: 3, regain: 5)).isEmpty)
+    }
 }

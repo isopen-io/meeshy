@@ -15,10 +15,12 @@ import MeeshyUI
 ///
 /// La scène (`MintStrikeScene`) montre la pièce au repos, face avers ; la frappe
 /// confirmée par la passerelle la joue (1,2 s) et la laisse sur son revers
-/// numéroté. La ligne « Badges qui redescendent » n'apparaît pas encore : le plan
-/// de débit par axe n'est pas porté sur iOS, et « inconnu » ne se dit pas « aucun ».
+/// numéroté. `badgesLost` est ABSENT quand le serveur ne sert pas de quoi le
+/// calculer (`GameMintBadgeImpact`) : « inconnu » ne se dit pas « aucun ».
 struct GameMintPreviewView: View {
     let game: GameBlock
+    /// Les badges que la frappe éteindrait ; `nil` quand le serveur ne sert pas de quoi le calculer.
+    var badgesLost: Int?
     let online: Bool
     let minting: Bool
     let error: String?
@@ -86,7 +88,9 @@ struct GameMintPreviewView: View {
                 edition: celebration?.edition ?? mint.edition,
                 number: celebration?.number ?? mint.number,
                 year: Calendar.current.component(.year, from: Date()),
-                play: celebration?.key ?? 0
+                play: celebration?.key ?? 0,
+                coinSide: 56,
+                restsReversed: celebration != nil
             )
             .gamePrismTilt(active: (celebration?.edition ?? mint.edition) == .prism)
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
@@ -115,6 +119,9 @@ struct GameMintPreviewView: View {
             row(String(localized: "game.mint.row.treasury", defaultValue: "Trésor", bundle: .main),
                 "\(GameCopy.formatCount(game.treasury.held)) → \(GameCopy.meeshes(game.treasury.held + 1))")
             row(String(localized: "game.mint.row.glory", defaultValue: "Gloire", bundle: .main), gloryValue, tone: GameColors.goodText)
+            if let badgesLost {
+                row(String(localized: "game.mint.row.badges", defaultValue: "Badges", bundle: .main), badgesLine(badgesLost))
+            }
             if tailwind {
                 row(String(localized: "game.mint.row.tailwind", defaultValue: "Vent arrière", bundle: .main),
                     String(localized: "game.mint.tailwind_value",
@@ -123,6 +130,16 @@ struct GameMintPreviewView: View {
             }
         }
         .accessibilityElement(children: .contain)
+    }
+
+    private func badgesLine(_ lost: Int) -> String {
+        if lost <= 0 {
+            return String(localized: "game.mint.badges.none", defaultValue: "Aucun badge ne s’éteint", bundle: .main)
+        }
+        let number = GameCopy.formatCount(lost)
+        return GameCopy.isSingular(lost)
+            ? String(localized: "game.mint.badges.one", defaultValue: "\(number) badge redescend", bundle: .main)
+            : String(localized: "game.mint.badges.other", defaultValue: "\(number) badges redescendent", bundle: .main)
     }
 
     private var levelValue: String {
