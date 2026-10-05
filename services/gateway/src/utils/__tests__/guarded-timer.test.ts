@@ -16,7 +16,14 @@ import { describe, it, expect, jest, afterEach } from '@jest/globals';
 
 import { guardedInterval, guardedTimeout } from '../guarded-timer';
 
-const makeLogger = () => ({ error: jest.fn<(message: string, context?: Record<string, unknown>) => void>() });
+const makeLogger = () => ({
+  error: jest.fn<(message: string, error?: unknown, context?: Record<string, unknown>) => void>(),
+});
+
+const reported = (logger: ReturnType<typeof makeLogger>) => {
+  const [message, error, context] = logger.error.mock.calls[0];
+  return { message, error: error instanceof Error ? error.message : error, context };
+};
 
 const flushMicrotasks = async (): Promise<void> => {
   await Promise.resolve();
@@ -45,9 +52,11 @@ describe('guardedInterval', () => {
 
     expect(run).toHaveBeenCalledTimes(2);
     expect(logger.error).toHaveBeenCalledTimes(1);
-    const [message, context] = logger.error.mock.calls[0];
-    expect(message).toContain('cache-purge');
-    expect(context).toEqual(expect.objectContaining({ timer: 'cache-purge', error: 'boom' }));
+    expect(reported(logger)).toEqual({
+      message: '[timer:cache-purge] callback failed: boom',
+      error: 'boom',
+      context: { timer: 'cache-purge' },
+    });
     clearInterval(handle);
   });
 
@@ -68,7 +77,11 @@ describe('guardedInterval', () => {
 
     expect(run).toHaveBeenCalledTimes(2);
     expect(logger.error).toHaveBeenCalledTimes(1);
-    expect(logger.error.mock.calls[0][1]).toEqual(expect.objectContaining({ timer: 'sweep', error: 'async boom' }));
+    expect(reported(logger)).toEqual({
+      message: expect.stringContaining('sweep'),
+      error: 'async boom',
+      context: { timer: 'sweep' },
+    });
     clearInterval(handle);
   });
 
@@ -110,7 +123,11 @@ describe('guardedInterval', () => {
 
     jest.advanceTimersByTime(10);
 
-    expect(logger.error.mock.calls[0][1]).toEqual(expect.objectContaining({ timer: 'odd', error: 'plain string' }));
+    expect(reported(logger)).toEqual({
+      message: expect.stringContaining('odd'),
+      error: 'plain string',
+      context: { timer: 'odd' },
+    });
     clearInterval(handle);
   });
 });
@@ -130,7 +147,11 @@ describe('guardedTimeout', () => {
 
     expect(() => jest.advanceTimersByTime(1_000)).not.toThrow();
     expect(logger.error).toHaveBeenCalledTimes(1);
-    expect(logger.error.mock.calls[0][1]).toEqual(expect.objectContaining({ timer: 'invite-expiry', error: 'late boom' }));
+    expect(reported(logger)).toEqual({
+      message: expect.stringContaining('invite-expiry'),
+      error: 'late boom',
+      context: { timer: 'invite-expiry' },
+    });
   });
 
   it('un rejet asynchrone est attrapé et journalisé', async () => {
@@ -149,7 +170,11 @@ describe('guardedTimeout', () => {
     await flushMicrotasks();
 
     expect(logger.error).toHaveBeenCalledTimes(1);
-    expect(logger.error.mock.calls[0][1]).toEqual(expect.objectContaining({ timer: 'grace', error: 'async late boom' }));
+    expect(reported(logger)).toEqual({
+      message: expect.stringContaining('grace'),
+      error: 'async late boom',
+      context: { timer: 'grace' },
+    });
   });
 
   it('rend une poignée que clearTimeout annule', () => {

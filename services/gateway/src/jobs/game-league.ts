@@ -15,6 +15,7 @@ import { EngagementService } from '../services/engagement/EngagementService.js';
 import { DuoService } from '../services/game/DuoService.js';
 import { LeagueSettlement } from '../services/game/LeagueSettlement.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { guardedInterval } from '../utils/guarded-timer.js';
 
 const logger = enhancedLogger.child({ module: 'GameLeagueJob' });
 
@@ -44,9 +45,9 @@ export class GameLeagueJob {
       return;
     }
     logger.info('Starting game league job (every 15 minutes)');
-    this.intervalId = setInterval(() => {
+    this.intervalId = guardedInterval({ name: 'game-league', everyMs: GAME_LEAGUE_INTERVAL_MS, logger, run: () => {
       this.runNow().catch(/* istanbul ignore next -- runNow() never rejects */ (err) => logger.error('Scheduled league pass failed', err));
-    }, GAME_LEAGUE_INTERVAL_MS);
+    } });
     this.intervalId.unref?.();
   }
 

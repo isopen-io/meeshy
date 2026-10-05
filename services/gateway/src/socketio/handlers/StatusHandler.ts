@@ -24,6 +24,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { getSocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
 import { BoundedTtlCache } from '../../utils/bounded-cache.js';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
+import { guardedInterval } from '../../utils/guarded-timer.js';
 
 const logger = enhancedLogger.child({ module: 'StatusHandler' });
 
@@ -79,7 +80,7 @@ export class StatusHandler {
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
     this.userSockets = deps.userSockets ?? new Map();
-    this.typingThrottleCleanupTimer = setInterval(() => this._evictStale(), 30_000);
+    this.typingThrottleCleanupTimer = guardedInterval({ name: 'typing-throttle-eviction', everyMs: 30_000, logger, run: () => this._evictStale() });
     if (this.typingThrottleCleanupTimer.unref) this.typingThrottleCleanupTimer.unref();
   }
 

@@ -13,6 +13,7 @@ import {
 } from '../validation/call-recording-schemas';
 import { SOCKET_RATE_LIMITS, type SocketRateLimiter } from '../utils/socket-rate-limiter';
 import { logger } from '../utils/logger';
+import { guardedTimeout } from '../utils/guarded-timer';
 
 /**
  * Les trois verbes du consentement à l'enregistrement (#8064) — demander,
@@ -36,7 +37,7 @@ export type CallRecordingEventDeps = {
 type Ack = (response: CallRecordingAck) => void;
 
 const defaultSchedule = (task: () => void, delayMs: number): void => {
-  setTimeout(task, delayMs).unref();
+  guardedTimeout({ name: 'call-recording-task', afterMs: delayMs, logger, run: task }).unref();
 };
 
 export function broadcastRecording(io: MeeshyIOServer, broadcasts: readonly RecordingBroadcast[]): void {

@@ -8,6 +8,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { servableExtension, staticFileUrl } from './soundFormats';
 import { pcm16ToWaveform } from './waveformSamples';
+import { guardedTimeout } from '../../utils/guarded-timer';
 
 const log = enhancedLogger.child({ module: 'SoundCaptureService' });
 
@@ -45,10 +46,10 @@ function spawnFfmpegExtract(inputPath: string, outputPath: string): Promise<void
       outputPath,
     ]);
     let stderr = '';
-    const timer = setTimeout(() => {
+    const timer = guardedTimeout({ name: 'sound-capture-extraction-timeout', afterMs: 5 * 60_000, logger: log, run: () => {
       proc.kill('SIGKILL');
       reject(new Error('ffmpeg extraction timeout'));
-    }, 5 * 60_000);
+    } });
     proc.stderr.on('data', (d) => { stderr += String(d); });
     proc.on('error', (err) => { clearTimeout(timer); reject(err); });
     proc.on('close', (code) => {
@@ -83,10 +84,10 @@ function spawnFfmpegWaveform(inputPath: string): Promise<number[]> {
     ]);
     const chunks: Buffer[] = [];
     let stderr = '';
-    const timer = setTimeout(() => {
+    const timer = guardedTimeout({ name: 'sound-capture-waveform-timeout', afterMs: 60_000, logger: log, run: () => {
       proc.kill('SIGKILL');
       reject(new Error('ffmpeg waveform timeout'));
-    }, 60_000);
+    } });
     proc.stdout.on('data', (d: Buffer) => chunks.push(d));
     proc.stderr.on('data', (d) => { stderr += String(d); });
     proc.on('error', (err) => { clearTimeout(timer); reject(err); });

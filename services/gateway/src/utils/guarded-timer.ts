@@ -15,7 +15,7 @@
  */
 
 export type TimerErrorLogger = {
-  error: (message: string, context?: Record<string, unknown>) => void;
+  error: (message: string, error?: unknown, context?: Record<string, unknown>) => void;
 };
 
 export type GuardedIntervalOptions = {
@@ -32,8 +32,6 @@ export type GuardedTimeoutOptions = {
   readonly logger: TimerErrorLogger;
 };
 
-const describeError = (error: unknown): string => (error instanceof Error ? error.message : String(error));
-
 const isThenable = (value: unknown): value is PromiseLike<unknown> =>
   typeof value === 'object' &&
   value !== null &&
@@ -41,11 +39,8 @@ const isThenable = (value: unknown): value is PromiseLike<unknown> =>
 
 const guard = (name: string, run: () => unknown, logger: TimerErrorLogger) => (): void => {
   const report = (error: unknown): void => {
-    logger.error(`[timer:${name}] callback failed`, {
-      timer: name,
-      error: describeError(error),
-      stack: error instanceof Error ? error.stack : undefined,
-    });
+    const reason = error instanceof Error ? error.message : String(error);
+    logger.error(`[timer:${name}] callback failed: ${reason}`, error, { timer: name });
   };
   try {
     const result = run();

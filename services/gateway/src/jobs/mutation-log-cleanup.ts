@@ -16,6 +16,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { guardedInterval } from '../utils/guarded-timer.js';
 
 const logger = enhancedLogger.child({ module: 'MutationLogCleanup' });
 
@@ -44,11 +45,11 @@ export class MutationLogCleanupJob {
       );
     });
 
-    this.intervalId = setInterval(() => {
+    this.intervalId = guardedInterval({ name: 'mutation-log-cleanup', everyMs: this.intervalMs, logger, run: () => {
       this.cleanup().catch(/* istanbul ignore next -- cleanup() never rejects; its own catch returns 0 */ err =>
         logger.error('Scheduled cleanup failed', err)
       );
-    }, this.intervalMs);
+    } });
     this.intervalId.unref?.();
   }
 

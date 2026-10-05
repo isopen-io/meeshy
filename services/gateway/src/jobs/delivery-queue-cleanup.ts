@@ -1,5 +1,6 @@
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { guardedInterval } from '../utils/guarded-timer';
 
 const logger = enhancedLogger.child({ module: 'DeliveryQueueCleanup' });
 
@@ -19,9 +20,9 @@ export class DeliveryQueueCleanupJob {
 
     this.run();
 
-    this.intervalId = setInterval(() => {
+    this.intervalId = guardedInterval({ name: 'delivery-queue-cleanup', everyMs: this.intervalMinutes * 60 * 1000, logger, run: () => {
       this.run();
-    }, this.intervalMinutes * 60 * 1000);
+    } });
   }
 
   stop(): void {

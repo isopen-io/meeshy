@@ -52,6 +52,7 @@ import { translationTargetId } from './zmq-translation/utils/zmq-helpers';
 import { attachmentTranscriptionFromMobile } from './posts/mobile-transcription';
 import { parseAttachmentTranscription } from '@meeshy/shared/utils/attachment-validators';
 import { detectContentLanguage } from '../utils/content-language';
+import { guardedTimeout } from '../utils/guarded-timer';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -598,12 +599,12 @@ export class PostService {
       }
 
       // 5. Cleanup du listener après timeout (fallback si certaines langues échouent)
-      timeoutHandle = setTimeout(() => {
+      timeoutHandle = guardedTimeout({ name: 'story-translation-timeout', afterMs: 60_000, logger: log, run: () => {
         if (receivedCount < expectedCount) {
           log.warn('StoryTranslation: timeout, removing listener', { postId, receivedCount, expectedCount });
         }
         removeListener();
-      }, 60_000);
+      } });
 
     } catch (error) {
       log.warn('StoryTranslation failed', { err: error, postId });
