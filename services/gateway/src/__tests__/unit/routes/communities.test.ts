@@ -131,7 +131,15 @@ async function buildApp(): Promise<FastifyInstance> {
       // #4165 : `GET /communities/:id/conversations` compte le VRAI total à
       // part de la page (`.count()`), en plus du `.findMany` déjà mocké.
       count: jest.fn().mockResolvedValue(0),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
+    userCommunityPreferences: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    conversationShare: {
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    $transaction: jest.fn((ops: Promise<unknown>[]) => Promise.all(ops)),
     user: {
       findFirst: jest.fn().mockResolvedValue({ id: OTHER_USER_ID, username: 'bob' }),
       findUnique: jest.fn().mockResolvedValue({ id: OTHER_USER_ID, username: 'bob' }),

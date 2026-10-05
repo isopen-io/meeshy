@@ -527,4 +527,14 @@ extension APIConversation {
 
         return conversation
     }
+
+    /// Le titre sous lequel la liste « Meeshy Chats » nomme cette conversation
+    /// pour `currentUserId` (nom personnalisé, sinon interlocuteur d'un direct,
+    /// sinon titre) : une projection de `toConversation(currentUserId:)`, jamais
+    /// une réécriture. Toute surface qui liste des `APIConversation` le lit
+    /// plutôt que `title ?? identifier`, qui sert l'identifiant brut ou le titre
+    /// légataire d'un direct (#9205).
+    public func listTitle(currentUserId: String) -> String {
+        toConversation(currentUserId: currentUserId).displayName
+    }
 }
