@@ -1,6 +1,7 @@
 import AVFoundation
 import UIKit
 import os
+import MeeshySDK
 
 /// Pourquoi la caméra n'a pas pu servir — NOMMÉ dans l'état du déroulé, pour que
 /// l'écran dise quoi faire. Un refus n'est pas une impasse : la galerie comme la
