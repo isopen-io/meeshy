@@ -137,4 +137,19 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
       expect(chaines).toContain('name="playback_paused"');
     }
   });
+
+  test('une vidéo passe en image dans l’image d’un appui : plein écran, puis l’activité flotte (#9410)', () => {
+    const plugin = sansCommentaires(lire(...JAVA, 'MeeshyPlaybackPlugin.java'));
+    const flotter = corpsDe(plugin, 'public void floatVideo(');
+    expect(flotter).toContain('runOnUiThread(');
+    expect(flotter).toContain('.floatVideo()');
+    expect(flotter).toContain('"floated"');
+    const activite = sansCommentaires(lire(...JAVA, 'MainActivity.java'));
+    const demande = corpsDe(activite, 'boolean floatVideo(');
+    expect(demande).toContain('FullscreenPictureInPicture.floats(');
+    expect(demande).toContain('floatOnFullscreen = true');
+    expect(corpsDe(activite, 'public void onShowCustomView(')).toContain('floatOnFullscreen');
+    expect(corpsDe(activite, 'public void onHideCustomView(')).toContain('floatOnFullscreen = false');
+    expect(corpsDe(activite, 'private boolean enterFloat(')).toContain('enterPictureInPictureMode(');
+  });
 });

@@ -5,6 +5,7 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 
 import { mediaCoordinator, type MediaCoordinator } from './media-coordinator';
+import { shellVideoFloat } from './shell-video-float';
 
 /**
  * LA LECTURE D'UN MÉDIA, DERRIÈRE UN `<audio>` OU UN `<video>` RÉEL (#5805,
@@ -233,11 +234,13 @@ function pictureInPictureSupport(element: HTMLMediaElement): PictureInPictureSta
   if (!(element instanceof HTMLVideoElement)) return 'unsupported';
   const video = element as PictureInPictureVideo;
   const doc = document as PictureInPictureDocument;
-  if (doc.pictureInPictureEnabled !== true || typeof video.requestPictureInPicture !== 'function' || video.disablePictureInPicture === true) {
-    return 'unsupported';
-  }
+  if (video.disablePictureInPicture === true) return 'unsupported';
+  if (!browserPictureInPicture(video)) return shellVideoFloat() === null ? 'unsupported' : 'inactive';
   return doc.pictureInPictureElement === element ? 'active' : 'inactive';
 }
+
+const browserPictureInPicture = (video: PictureInPictureVideo): boolean =>
+  (document as PictureInPictureDocument).pictureInPictureEnabled === true && typeof video.requestPictureInPicture === 'function';
 
 const knownDuration = (element: HTMLMediaElement): number =>
   Number.isFinite(element.duration) && element.duration > 0 ? element.duration : 0;
@@ -582,7 +585,12 @@ export function useMediaPlayback(params: {
       void (document as PictureInPictureDocument).exitPictureInPicture?.().catch(() => {});
       return;
     }
-    void (element as PictureInPictureVideo).requestPictureInPicture?.().catch(() => {});
+    const video = element as PictureInPictureVideo;
+    if (!browserPictureInPicture(video)) {
+      shellVideoFloat()?.(video);
+      return;
+    }
+    void video.requestPictureInPicture?.().catch(() => {});
   }, [pictureInPicture]);
 
   return {
