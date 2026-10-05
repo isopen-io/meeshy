@@ -4,9 +4,14 @@ import MeeshySDK
 // MARK: - L'anneau de niveau (#9380)
 //
 // MIROIR de `ring()` de `docs/product/jeu-meeshy-conception.html` (§ II.2) : un
-// anneau dont l'arc se remplit avec la barre du niveau, la Signature à plat au-
-// dessus du chiffre. La couleur de l'arc est celle du PALIER de nom (Étincelle,
-// Lueur… Galaxie), qui change tous les dix niveaux ; Galaxie est en prisme.
+// anneau dont l'arc se remplit avec la barre du niveau. La couleur de l'arc est
+// celle du PALIER de nom (Étincelle, Lueur… Galaxie), qui change tous les dix
+// niveaux ; Galaxie est en prisme.
+//
+// Le DISQUE CENTRAL (#9481), de bas en haut : l'EMBLÈME du palier (`TierEmblemView`,
+// dix dessins bâtis sur la Signature) en filigrane transparent, le niveau en chiffres
+// arabes au premier plan, et le PALIER en chiffres romains (I à X) dans un cartouche
+// au contour détouré, sous le niveau. Miroir de `apps/web/src/components/game/level-ring.tsx`.
 //
 // Ce que la brique montre en plus :
 //  - le REPÈRE DU RECORD : un cran sur l'anneau, que la barre ne dépasse pas
@@ -27,6 +32,7 @@ public struct LevelRingView: View {
     private let trackColor: Color
     private let inkColor: Color
     private let mutedColor: Color
+    private let discColor: Color
     private let accessibilityLabel: String?
 
     @ScaledMetric(relativeTo: .headline) private var typeScale: CGFloat = 1
@@ -40,11 +46,14 @@ public struct LevelRingView: View {
     ///     on a redescendu ; `nil` sans repère.
     ///   - trackColor: le rail de l'anneau — la couleur de ligne de l'hôte.
     ///   - inkColor: le chiffre du niveau.
-    ///   - mutedColor: la Signature.
-    ///   - accessibilityLabel: `nil` ⇒ décoratif ; l'hôte dit « Niveau 34, 90 % ».
+    ///   - mutedColor: conservé pour les hôtes existants ; la Signature vit désormais dans l'emblème.
+    ///   - discColor: le disque central, sur lequel l'emblème s'imprime en filigrane (blanc par
+    ///     défaut ; l'hôte en thème sombre y pose sa couleur de surface).
+    ///   - accessibilityLabel: `nil` ⇒ décoratif ; l'hôte dit « Niveau 34, palier Éclat,
+    ///     quatrième palier ».
     public init(level: Int, progress: Double, tier: LevelTierKey, prestige: Int = 0, recordMarker: Double? = nil,
                 trackColor: Color = Color.gray.opacity(0.25), inkColor: Color = .primary,
-                mutedColor: Color = .secondary, accessibilityLabel: String? = nil) {
+                mutedColor: Color = .secondary, discColor: Color = .white, accessibilityLabel: String? = nil) {
         self.level = level
         self.progress = progress
         self.tier = tier
@@ -53,6 +62,7 @@ public struct LevelRingView: View {
         self.trackColor = trackColor
         self.inkColor = inkColor
         self.mutedColor = mutedColor
+        self.discColor = discColor
         self.accessibilityLabel = accessibilityLabel
     }
 
@@ -93,18 +103,38 @@ public struct LevelRingView: View {
                     .stroke(inkColor, style: StrokeStyle(lineWidth: 2 * k, lineCap: .round))
                     .frame(width: 56 * k, height: 56 * k)
             }
-            SignatureMark(style: .flat, color: mutedColor, strokeWidth: 120)
-                .frame(width: 13 * k, height: 13 * k)
-                .position(x: 28 * k, y: 17 * k)
+            Circle()
+                .fill(discColor)
+                .frame(width: 42 * k, height: 42 * k)
+            TierEmblemView(tier: tier, knockout: discColor, opacity: Self.watermarkOpacity)
+                .frame(width: 34 * k, height: 34 * k)
             Text("\(level)")
-                .font(.system(size: 14 * k * min(max(typeScale, 1), GameTypeScale.maximum), weight: .heavy, design: .rounded))
+                .font(.system(size: (String(level).count >= 3 ? 11 : 14) * k * min(max(typeScale, 1), GameTypeScale.maximum),
+                              weight: .heavy, design: .rounded))
                 .foregroundColor(inkColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
                 .modifier(NumericRoll())
                 .frame(width: 30 * k)
-                .position(x: 28 * k, y: 36 * k)
+                .position(x: 28 * k, y: 26.5 * k)
+            tierCartouche(k: k)
         }
+    }
+
+    /// L'opacité du filigrane de l'emblème : visible sans disputer le chiffre.
+    private static let watermarkOpacity = 0.18
+
+    /// Le palier en chiffres romains, dans un cartouche à la couleur du palier : le chiffre est
+    /// blanc détouré d'encre, lisible sur le jaune de Lumière comme sur le prisme de Galaxie.
+    private func tierCartouche(k: CGFloat) -> some View {
+        let numeral = tier.romanNumeral
+        let width = (6 + CGFloat(numeral.count) * 4.4) * k
+        return ZStack {
+            Capsule().fill(LevelTierPalette.style(for: tier))
+            OutlinedNumeral(text: numeral, size: 6.4 * k, fill: .white, outline: GamePalette.ink, outlineWidth: 0.6 * k)
+        }
+        .frame(width: width, height: 9.4 * k)
+        .position(x: 28 * k, y: 40.7 * k)
     }
 
     private func drawPrestige(in context: inout GraphicsContext) {
@@ -114,6 +144,37 @@ public struct LevelRingView: View {
             context.fill(RankBlasonView.star(center: CGPoint(x: first + CGFloat(step) * spacing, y: 61), radius: 4),
                          with: .color(GamePalette.gold))
         }
+    }
+}
+
+/// Un texte DÉTOURÉ : le chiffre est posé sur huit copies décalées de la couleur du contour.
+/// SwiftUI n'a pas de contour de texte ; ce procédé est exact aux tailles d'un cartouche
+/// (quelques points), où huit directions ferment le trait.
+private struct OutlinedNumeral: View {
+    let text: String
+    let size: CGFloat
+    let fill: Color
+    let outline: Color
+    let outlineWidth: CGFloat
+
+    private static let directions: [CGSize] = [
+        CGSize(width: -1, height: 0), CGSize(width: 1, height: 0), CGSize(width: 0, height: -1), CGSize(width: 0, height: 1),
+        CGSize(width: -0.7, height: -0.7), CGSize(width: 0.7, height: -0.7),
+        CGSize(width: -0.7, height: 0.7), CGSize(width: 0.7, height: 0.7),
+    ]
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(Self.directions.enumerated()), id: \.offset) { _, direction in
+                Text(text)
+                    .foregroundColor(outline)
+                    .offset(x: direction.width * outlineWidth, y: direction.height * outlineWidth)
+            }
+            Text(text).foregroundColor(fill)
+        }
+        .font(.system(size: size, weight: .heavy, design: .rounded))
+        .lineLimit(1)
+        .fixedSize()
     }
 }
 

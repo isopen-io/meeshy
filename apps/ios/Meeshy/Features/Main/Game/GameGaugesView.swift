@@ -109,7 +109,8 @@ private struct GameLevelTile: View {
                     recordMarker: level.record > level.level ? 1 : nil,
                     trackColor: ThemeManager.shared.textMuted.opacity(0.22),
                     inkColor: ThemeManager.shared.textPrimary,
-                    mutedColor: ThemeManager.shared.textMuted
+                    mutedColor: ThemeManager.shared.textMuted,
+                    discColor: ThemeManager.shared.backgroundPrimary
                 )
                 .frame(width: 72, height: 72)
             },

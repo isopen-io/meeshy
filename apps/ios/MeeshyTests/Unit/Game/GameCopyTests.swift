@@ -1,6 +1,7 @@
 import XCTest
 @testable import Meeshy
 import MeeshySDK
+import MeeshyUI
 
 /// Ce que le jeu DIT (#9383, #9379) : aucun nom ne sort comme une clé brute, l'accord
 /// ne passe pas par un `== 1` isolé, et chaque refus a sa phrase.
@@ -44,6 +45,20 @@ final class GameCopyTests: XCTestCase {
         for form in FlameFormKey.allCases { assertNotRaw(GameCopy.flameFormName(form), "flamme \(form)") }
         for edition in MeeshEdition.allCases { assertNotRaw(GameCopy.editionName(edition), "édition \(edition)") }
         for difficulty in MissionDifficulty.allCases { assertNotRaw(GameCopy.difficultyName(difficulty), "difficulté \(difficulty)") }
+    }
+
+    func test_everyMaterialAndEveryTierOrdinal_hasAWord_andTheOrdinalsAreDistinct() {
+        for material in GameMaterial.allCases { assertNotRaw(GameCopy.materialName(material), "matière \(material)") }
+        for tier in LevelTierKey.allCases { assertNotRaw(GameCopy.tierOrdinal(tier), "ordinal \(tier)") }
+        XCTAssertEqual(Set(LevelTierKey.allCases.map(GameCopy.tierOrdinal)).count, LevelTierKey.allCases.count)
+    }
+
+    func test_theLevelRingReads_levelTierAndItsOrdinal() {
+        let text = GameCopy.levelRingAccessibility(level: 34, tier: .eclat)
+        assertNotRaw(text, "anneau")
+        XCTAssertTrue(text.contains(GameCopy.formatCount(34)))
+        XCTAssertTrue(text.contains(GameCopy.tierName(.eclat)))
+        XCTAssertTrue(text.contains(GameCopy.tierOrdinal(.eclat)))
     }
 
     func test_theNamesAreAllDistinct() {

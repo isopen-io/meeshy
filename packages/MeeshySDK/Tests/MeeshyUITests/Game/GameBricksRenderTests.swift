@@ -108,6 +108,39 @@ struct GameBricksRenderTests {
         #expect(low.distance(to: marked) > 0.1)
     }
 
+    @Test("les dix emblèmes de palier peignent, ne peignent pas leur cadre, et se distinguent")
+    func tierEmblemsAreAllDistinct() throws {
+        let probes = try LevelTierKey.allCases.map { try probe(TierEmblemView(tier: $0)) }
+        #expect(probes.allSatisfy { $0.coverage > 0.03 })
+        #expect(probes.allSatisfy { $0.cornerIsTransparent })
+        for (index, lhs) in probes.enumerated() {
+            for rhs in probes[(index + 1)...] {
+                #expect(lhs.distance(to: rhs) > 0.2)
+            }
+        }
+    }
+
+    @Test("le filigrane de l'emblème est transparent : il pèse moins que l'emblème plein")
+    func emblemWatermarkIsTransparent() throws {
+        let full = try probe(TierEmblemView(tier: .etoile))
+        let watermark = try probe(TierEmblemView(tier: .etoile, opacity: 0.18))
+        let empty = try probe(Color.clear)
+        #expect(watermark.distance(to: empty) < full.distance(to: empty))
+        #expect(watermark.distance(to: empty) > 0)
+    }
+
+    @Test("l'anneau porte l'emblème du palier : deux paliers de même niveau ne se confondent pas, et le disque central est peint")
+    func levelRingCarriesTheTierEmblemAndNumeral() throws {
+        func ring(_ tier: LevelTierKey, disc: Color = .white) -> LevelRingView {
+            LevelRingView(level: 34, progress: 0.4, tier: tier, discColor: disc)
+        }
+        let eclat = try probe(ring(.eclat), width: 112, height: 112)
+        let rayon = try probe(ring(.rayon), width: 112, height: 112)
+        let onBlack = try probe(ring(.eclat, disc: .black), width: 112, height: 112)
+        #expect(eclat.distance(to: rayon) > 2)
+        #expect(eclat.distance(to: onBlack) > 10)
+    }
+
     @Test("une barre vide ne peint pas d'arc, une barre pleine boucle l'anneau")
     func levelRingExtremes() throws {
         let empty = try probe(LevelRingView(level: 1, progress: 0, tier: .etincelle), width: 56, height: 56)
