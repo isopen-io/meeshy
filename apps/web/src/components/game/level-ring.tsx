@@ -21,7 +21,7 @@ import { SignatureGlyph } from './signature';
  *     Galaxie 10), pour l'affichage des paliers.
  *
  * DÉCORATIF (`aria-hidden`) : l'hôte dit « Niveau 34, Éclat, record 36 ».
- * `data-game-ring-arc` est la cible de « l'anneau se remplit / se vide ».
+ * `data-game-ring-sweep` (le groupe qui enveloppe l'arc, sans transform propre) est la cible de « l'anneau se remplit / se vide » ; `data-game-level-text`, celle de « le chiffre roule ».
  */
 
 const RADIUS = 24;
@@ -51,18 +51,20 @@ export function LevelRing({ level, tier, progress, size, record, showTier = fals
         <PaintDefs uid={uid} paints={['prism', 'platinum']} />
       </defs>
       <circle cx="28" cy="28" r={RADIUS} fill="none" stroke={tokenVar('track')} strokeWidth={STROKE} />
-      <circle
-        data-game-ring-arc=""
-        cx="28"
-        cy="28"
-        r={RADIUS}
-        fill="none"
-        stroke={stroke}
-        strokeWidth={STROKE}
-        strokeLinecap="round"
-        strokeDasharray={`${arc} ${CIRCUMFERENCE.toFixed(1)}`}
-        transform="rotate(-90 28 28)"
-      />
+      <g data-game-ring-sweep="">
+        <circle
+          data-game-ring-arc=""
+          cx="28"
+          cy="28"
+          r={RADIUS}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={STROKE}
+          strokeLinecap="round"
+          strokeDasharray={`${arc} ${CIRCUMFERENCE.toFixed(1)}`}
+          transform="rotate(-90 28 28)"
+        />
+      </g>
       {showTier
         ? Array.from({ length: tierDots }, (_, k) => {
             const angle = (k / tierDots) * Math.PI * 2 - Math.PI / 2;
@@ -70,7 +72,7 @@ export function LevelRing({ level, tier, progress, size, record, showTier = fals
           })
         : null}
       <SignatureGlyph cx={28} cy={17} size={13} color="var(--ios-ink-2)" mode="flat" strokeWidth={120} />
-      <text x="28" y="36" textAnchor="middle" fontFamily="var(--font-native)" fontWeight="800" fontSize="14" fill="var(--ios-ink)">
+      <text data-game-level-text="" x="28" y="36" textAnchor="middle" fontFamily="var(--font-native)" fontWeight="800" fontSize="14" fill="var(--ios-ink)">
         {level}
       </text>
       {record !== undefined && record > level ? (

@@ -59,6 +59,18 @@ describe('LevelRing — l’anneau', () => {
   });
 });
 
+describe('LevelRing — les cibles de la chorégraphie', () => {
+  const html = render({ level: 34, tier: 'eclat', progress: 0.7, size: 56 });
+
+  test('l’arc est enveloppé : la rotation de départ (-90°) reste intacte quand le geste anime le groupe', () => {
+    expect(html).toMatch(/<g data-game-ring-sweep=""><circle data-game-ring-arc=""[^>]*rotate\(-90 28 28\)/);
+  });
+
+  test('le chiffre est ciblable : « le chiffre roule »', () => {
+    expect(html).toContain('data-game-level-text');
+  });
+});
+
 describe('LevelRing — palier et record', () => {
   test('showTier pose un point par rang de palier : Étincelle 1, Galaxie 10', () => {
     const dots = (tier: (typeof LEVEL_TIER_KEYS)[number]): number => render({ level: 1, tier, progress: 0.5, size: 72, showTier: true }).match(/data-game-tier-dot/g)?.length ?? 0;

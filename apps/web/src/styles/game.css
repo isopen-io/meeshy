@@ -92,15 +92,21 @@
   transform-origin: 50% 100%;
 }
 
-[data-game-ring-arc],
-[data-game-mint-face],
+[data-game-ring-sweep],
+[data-game-level-text],
 [data-game-shield],
-[data-game-badge-body] {
+[data-game-badge-body],
+[data-game-imprint] {
   transform-box: fill-box;
   transform-origin: 50% 50%;
 }
 
 [data-game-badge-body] {
+  transform-origin: 50% 100%;
+}
+
+[data-game-pose] {
+  transform-box: fill-box;
   transform-origin: 50% 100%;
 }
 

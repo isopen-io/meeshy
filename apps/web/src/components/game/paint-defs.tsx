@@ -50,11 +50,13 @@ type PlacedBirdProps = {
   readonly flip?: boolean;
 };
 
-/** Une figure posée dans le SVG d'un objet, avec son contour de sticker. Le filtre est `${uid}-cut`, déclaré par l'hôte via `BirdCutDefs`. */
+/** Une figure posée dans le SVG d'un objet, avec son contour de sticker. Le groupe EXTÉRIEUR porte la position ; `data-game-pose` est la cible des gestes (« les tenants se posent ») : l'animer ne défait pas la position. Le filtre est `${uid}-cut`, déclaré par l'hôte via `BirdCutDefs`. */
 export function PlacedBird({ uid, bird, x, y, scale, flip = false }: PlacedBirdProps) {
   return (
     <g data-game-bird={bird} transform={gameBirdPlacement({ x, y, scale, flip })}>
-      <g filter={`url(#${uid}-cut)`} dangerouslySetInnerHTML={{ __html: gameBirdMarkup(bird, uid) }} />
+      <g data-game-pose="">
+        <g filter={`url(#${uid}-cut)`} dangerouslySetInnerHTML={{ __html: gameBirdMarkup(bird, uid) }} />
+      </g>
     </g>
   );
 }

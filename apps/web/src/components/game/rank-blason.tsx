@@ -103,12 +103,14 @@ export function RankBlason({ rank, division = null, size, label }: Props) {
       ) : null}
       {design.crest === 'star' ? <path d={starPath(100, 13, 11)} fill={paintUrl(uid, 'platinum')} stroke={tokenVar('edge')} strokeOpacity="0.35" /> : null}
       {design.crest === 'crown' ? <path d={CROWN} fill={paintUrl(uid, crownPaint)} stroke={tokenVar('edge')} strokeOpacity="0.35" /> : null}
-      <g transform="translate(50 26)" data-game-shield="">
-        <path d={ECU} fill={paintUrl(uid, design.material)} stroke={tokenVar('edge')} strokeOpacity="0.35" strokeWidth="2" />
-        {design.inner ? <path d={INNER} fill="none" stroke={tokenVar('glint')} strokeOpacity="0.5" strokeWidth="2" /> : null}
-        {design.band ? <path d={BAND} fill={tokenVar('edge')} fillOpacity="0.16" /> : null}
-        {design.pieces !== 'none' ? <Pieces kind={design.pieces} /> : null}
-        <SignatureGlyph cx={50} cy={55} size={60} color={ink} mode="engraved" strokeWidth={96} />
+      <g transform="translate(50 26)">
+        <g data-game-shield="">
+          <path d={ECU} fill={paintUrl(uid, design.material)} stroke={tokenVar('edge')} strokeOpacity="0.35" strokeWidth="2" />
+          {design.inner ? <path d={INNER} fill="none" stroke={tokenVar('glint')} strokeOpacity="0.5" strokeWidth="2" /> : null}
+          {design.band ? <path d={BAND} fill={tokenVar('edge')} fillOpacity="0.16" /> : null}
+          {design.pieces !== 'none' ? <Pieces kind={design.pieces} /> : null}
+          <SignatureGlyph cx={50} cy={55} size={60} color={ink} mode="engraved" strokeWidth={96} />
+        </g>
       </g>
       {design.ribbon ? (
         <g data-game-ribbon="">

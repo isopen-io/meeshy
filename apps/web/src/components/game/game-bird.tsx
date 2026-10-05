@@ -21,7 +21,9 @@ export function GameBird({ bird, size, flip = false }: { readonly bird: GameBird
     <svg viewBox={`0 0 ${box} ${box}`} width={size} height={size} aria-hidden="true" focusable="false" data-game-bird={bird}>
       <defs dangerouslySetInnerHTML={{ __html: birdCutFilter(`${uid}-cut`) }} />
       <g transform={gameBirdPlacement({ x: flip ? box - 5 : 5, y: 5, scale: 1, flip })}>
-        <g filter={`url(#${uid}-cut)`} dangerouslySetInnerHTML={{ __html: gameBirdMarkup(bird, uid) }} />
+        <g data-game-pose="">
+          <g filter={`url(#${uid}-cut)`} dangerouslySetInnerHTML={{ __html: gameBirdMarkup(bird, uid) }} />
+        </g>
       </g>
     </svg>
   );

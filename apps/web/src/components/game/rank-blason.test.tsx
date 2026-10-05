@@ -33,6 +33,13 @@ describe('RankBlason — un écu par rang', () => {
     expect(html).not.toContain('data-game-ribbon');
   });
 
+  test('les cibles du geste ne portent PAS de transform propre : l’animer ne défait pas leur position', () => {
+    const html = render({ rank: 'ambassadeur', division: 1, size: 150, label: 'Ambassadeur' });
+    expect(html).toMatch(/<g transform="translate\(50 26\)"><g data-game-shield="">/);
+    expect(html.match(/<g data-game-pose="">/g)).toHaveLength(2);
+    expect(html).not.toMatch(/data-game-pose="" transform/);
+  });
+
   test('Passeur porte deux étoiles, Polyglotte trois points', () => {
     expect(render({ rank: 'passeur', division: 3, size: 100 })).toContain('data-game-piece="stars"');
     expect(render({ rank: 'polyglotte', division: 3, size: 100 })).toContain('data-game-piece="dots"');
