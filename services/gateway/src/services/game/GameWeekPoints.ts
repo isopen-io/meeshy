@@ -22,6 +22,20 @@ import { dayKeyOf, minuteOfDayInTimezone } from './gameClock';
 export const weekKeyOfInstant = (date: Date, timezone: string | null | undefined): string =>
   leagueWeekOfMoment({ dayKey: dayKeyOf(date, timezone), minuteOfDay: minuteOfDayInTimezone(date, timezone) });
 
+/** Les points d'un compte par jour d'une semaine : `{ '2026-10-13': 40 }`. */
+export type DayPoints = Readonly<Record<string, number>>;
+
+/**
+ * Le total d'un compte pour la semaine. `before` coupe à la FIN DE LA VEILLE de
+ * ce jour (exclu) : c'est la granularité du jour qu'on sert quand le compte a
+ * coupé sa présence — l'activité d'aujourd'hui n'y est pas encore.
+ */
+export function totalOfDays(days: DayPoints | undefined, options: { readonly before?: string } = {}): number {
+  return Object.entries(days ?? {})
+    .filter(([dayKey]) => options.before === undefined || dayKey < options.before)
+    .reduce((sum, [, points]) => sum + points, 0);
+}
+
 export class GameWeekPointsRecorder {
   private readonly zones = new BoundedTtlCache<string, string | null>({ maxSize: 5000, ttlMs: 10 * 60 * 1000 });
 
@@ -36,26 +50,37 @@ export class GameWeekPointsRecorder {
     return zone;
   }
 
-  /** Un gain de `points` points : la semaine du compte monte d'autant. */
+  /** Un gain de `points` points : le jour et la semaine du compte montent d'autant. */
   async record(userId: string, points: number, now: Date = new Date()): Promise<void> {
     if (!Number.isInteger(points) || points <= 0) return;
-    const weekKey = weekKeyOfInstant(now, await this.timezone(userId));
+    const timezone = await this.timezone(userId);
+    const weekKey = weekKeyOfInstant(now, timezone);
+    const dayKey = dayKeyOf(now, timezone);
     await this.prisma.gameWeekPoints.upsert({
-      where: { userId_weekKey: { userId, weekKey } },
-      create: { userId, weekKey, points },
+      where: { userId_weekKey_dayKey: { userId, weekKey, dayKey } },
+      create: { userId, weekKey, dayKey, points },
       update: { points: { increment: points } },
       select: { id: true },
     });
   }
 
-  /** Les points d'une semaine pour plusieurs comptes (absent = 0). */
-  async weekPoints(weekKey: string, userIds: readonly string[]): Promise<Record<string, number>> {
-    if (userIds.length === 0) return {};
+  /** Les points par jour d'une semaine pour plusieurs comptes (absent = aucun jour). */
+  async weekDays(weekKey: string, userIds: readonly string[]): Promise<Map<string, DayPoints>> {
+    const ids = [...new Set(userIds)];
+    const result = new Map<string, Record<string, number>>();
+    if (ids.length === 0) return result;
     const rows = await this.prisma.gameWeekPoints.findMany({
-      where: { weekKey, userId: { in: [...userIds] } },
-      select: { userId: true, points: true },
-      take: userIds.length,
+      where: { weekKey, userId: { in: ids } },
+      select: { userId: true, dayKey: true, points: true },
+      take: ids.length * 8,
     });
-    return Object.fromEntries(rows.map((row) => [row.userId, row.points]));
+    for (const row of rows) result.set(row.userId, { ...(result.get(row.userId) ?? {}), [row.dayKey]: row.points });
+    return result;
+  }
+
+  /** Le total de la semaine, un nombre par compte (absent = 0). */
+  async weekPoints(weekKey: string, userIds: readonly string[]): Promise<Record<string, number>> {
+    const days = await this.weekDays(weekKey, userIds);
+    return Object.fromEntries([...days.entries()].map(([userId, perDay]) => [userId, totalOfDays(perDay)]));
   }
 }

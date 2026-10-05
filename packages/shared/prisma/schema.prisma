@@ -5280,17 +5280,22 @@ model LeagueMembership {
   @@index([weekKey])
 }
 
-/// Les points GAGNÉS dans une semaine locale par un compte (#9384, #9385) : ce
-/// que la ligue publique et la ligue Amis classent. Incrémenté au crédit d'un
-/// gain (`GameWeekPoints`), jamais recalculé. Même rétention que les groupes.
+/// Les points GAGNÉS un jour local, rattachés à leur SEMAINE (#9384, #9385) : ce
+/// que la ligue publique et la ligue Amis classent. Une ligne par
+/// `(compte, semaine, jour)` — incrémentée au crédit d'un gain, jamais
+/// recalculée. Le jour sert la GRANULARITÉ : un compte qui a coupé sa présence
+/// montre son total à la fin de la veille, pas à la minute (conformité B-3). Le
+/// dimanche passé 20 h tombe dans la semaine suivante : deux lignes ce jour-là.
+/// Même rétention que les groupes (conformité A-9).
 model GameWeekPoints {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   userId    String   @db.ObjectId
   weekKey   String
+  dayKey    String
   points    Int      @default(0)
   updatedAt DateTime @updatedAt
 
-  @@unique([userId, weekKey])
+  @@unique([userId, weekKey, dayKey])
   @@index([weekKey])
 }
 

@@ -1,7 +1,7 @@
 /**
  * LES POINTS DE LA SEMAINE AU CRÉDIT (#9384, #9385) — chaque gain admis monte le
  * compteur de la semaine du compte : le geste d'un axe comme les points du jeu
- * (mission, coffre). Un geste refusé par un plafond ne monte rien.
+ * (mission, coffre). Un compteur en panne ne retient jamais le crédit.
  *
  * @jest-environment node
  */
@@ -36,7 +36,7 @@ describe('EngagementService → points de la semaine', () => {
     expect(weekPoints(db)).toBe(credited);
   });
 
-  it('les points du jeu (mission, coffre) comptent aussi, une fois', async () => {
+  it('les points du jeu (mission, coffre) comptent aussi, dans une seule ligne du jour', async () => {
     const db = fakeGameDb();
     seedUser(db, { engagementScore: 0 });
 

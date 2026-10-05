@@ -273,7 +273,7 @@ export function fakeGameDb(): FakeGameDb {
   const leagueMembership = flattenCompound(
     new Model({ uniques: [['userId', 'weekKey']], optional: ['finalRank', 'finalPoints', 'zone', 'cup', 'settledAt'] }),
   );
-  const gameWeekPoints = flattenCompound(new Model({ uniques: [['userId', 'weekKey']], defaults: () => ({ points: 0 }) }));
+  const gameWeekPoints = flattenCompound(new Model({ uniques: [['userId', 'weekKey', 'dayKey']], defaults: () => ({ points: 0 }) }));
   const gameDuo = flattenCompound(
     new Model({
       defaults: () => ({ inviterProgress: 0, inviteeProgress: 0 }),

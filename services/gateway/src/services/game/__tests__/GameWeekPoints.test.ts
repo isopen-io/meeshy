@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
-import { GameWeekPointsRecorder, weekKeyOfInstant } from '../GameWeekPoints';
+import { GameWeekPointsRecorder, totalOfDays, weekKeyOfInstant } from '../GameWeekPoints';
 import { instantOfLocal } from '../gameClock';
 import { fakeGameDb, seedUser, USER, OTHER } from './fakeGameDb';
 
@@ -40,16 +40,34 @@ describe('instantOfLocal', () => {
 });
 
 describe('GameWeekPointsRecorder.record', () => {
-  it('additionne les gains de la semaine dans UN document', async () => {
+  it('additionne les gains d’un jour dans UNE ligne, un jour nouveau en ouvre une autre', async () => {
     const db = fakeGameDb();
     seedUser(db);
     const recorder = new GameWeekPointsRecorder(db.prisma);
 
     await recorder.record(USER, 10, new Date('2026-10-13T10:00:00Z'));
-    await recorder.record(USER, 5, new Date('2026-10-15T10:00:00Z'));
+    await recorder.record(USER, 5, new Date('2026-10-13T18:00:00Z'));
+    await recorder.record(USER, 7, new Date('2026-10-15T10:00:00Z'));
 
-    expect(db.gameWeekPoints.rows).toHaveLength(1);
-    expect(db.gameWeekPoints.rows[0]).toMatchObject({ userId: USER, weekKey: '2026-10-12', points: 15 });
+    expect(db.gameWeekPoints.rows.map((r) => [r.weekKey, r.dayKey, r.points])).toEqual([
+      ['2026-10-12', '2026-10-13', 15],
+      ['2026-10-12', '2026-10-15', 7],
+    ]);
+    expect(await recorder.weekPoints('2026-10-12', [USER])).toEqual({ [USER]: 22 });
+  });
+
+  it('le dimanche passé 20 h tombe dans la semaine suivante : deux lignes ce jour-là', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    const recorder = new GameWeekPointsRecorder(db.prisma);
+
+    await recorder.record(USER, 10, new Date('2026-10-18T19:00:00Z'));
+    await recorder.record(USER, 4, new Date('2026-10-18T21:00:00Z'));
+
+    expect(db.gameWeekPoints.rows.map((r) => [r.weekKey, r.dayKey, r.points])).toEqual([
+      ['2026-10-12', '2026-10-18', 10],
+      ['2026-10-19', '2026-10-18', 4],
+    ]);
   });
 
   it('une semaine nouvelle ouvre un document nouveau', async () => {
@@ -60,10 +78,8 @@ describe('GameWeekPointsRecorder.record', () => {
     await recorder.record(USER, 10, new Date('2026-10-17T10:00:00Z'));
     await recorder.record(USER, 7, new Date('2026-10-19T10:00:00Z'));
 
-    expect(db.gameWeekPoints.rows.map((r) => [r.weekKey, r.points])).toEqual([
-      ['2026-10-12', 10],
-      ['2026-10-19', 7],
-    ]);
+    expect(await recorder.weekPoints('2026-10-12', [USER])).toEqual({ [USER]: 10 });
+    expect(await recorder.weekPoints('2026-10-19', [USER])).toEqual({ [USER]: 7 });
   });
 
   it('un gain nul, négatif ou fractionnaire n’écrit rien', async () => {
@@ -86,5 +102,22 @@ describe('GameWeekPointsRecorder.record', () => {
     await recorder.record(USER, 12, new Date('2026-10-13T10:00:00Z'));
 
     expect(await recorder.weekPoints('2026-10-12', [USER, OTHER])).toEqual({ [USER]: 12 });
+  });
+});
+
+describe('totalOfDays — la granularité du jour', () => {
+  const days = { '2026-10-12': 10, '2026-10-13': 20, '2026-10-14': 5 };
+
+  it('sans coupe, le total vif', () => {
+    expect(totalOfDays(days)).toBe(35);
+  });
+
+  it('avec `before`, la fin de la veille : le jour courant n’y est pas', () => {
+    expect(totalOfDays(days, { before: '2026-10-14' })).toBe(30);
+    expect(totalOfDays(days, { before: '2026-10-12' })).toBe(0);
+  });
+
+  it('un compte sans ligne vaut 0', () => {
+    expect(totalOfDays(undefined)).toBe(0);
   });
 });

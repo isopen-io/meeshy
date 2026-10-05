@@ -33,7 +33,7 @@ const specs = [
   { collection: 'LeagueMembership', name: 'LeagueMembership_userId_weekKey_key', key: { userId: 1, weekKey: 1 }, unique: true },
   { collection: 'LeagueMembership', name: 'LeagueMembership_groupId_idx', key: { groupId: 1 } },
   { collection: 'LeagueMembership', name: 'LeagueMembership_weekKey_idx', key: { weekKey: 1 } },
-  { collection: 'GameWeekPoints', name: 'GameWeekPoints_userId_weekKey_key', key: { userId: 1, weekKey: 1 }, unique: true },
+  { collection: 'GameWeekPoints', name: 'GameWeekPoints_userId_weekKey_dayKey_key', key: { userId: 1, weekKey: 1, dayKey: 1 }, unique: true },
   { collection: 'GameWeekPoints', name: 'GameWeekPoints_weekKey_idx', key: { weekKey: 1 } },
   { collection: 'GameDuo', name: 'GameDuo_inviterId_weekKey_idx', key: { inviterId: 1, weekKey: 1 } },
   { collection: 'GameDuo', name: 'GameDuo_inviteeId_weekKey_idx', key: { inviteeId: 1, weekKey: 1 } },
