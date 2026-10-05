@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES, ENGAGEMENT_AXIS_FAMILIES } from '@meeshy/shared/types/engagement';
+import { BADGE_THRESHOLDS, ENGAGEMENT_ACHIEVEMENT_KEYS, ENGAGEMENT_AXES, ENGAGEMENT_AXIS_FAMILIES } from '@meeshy/shared/types/engagement';
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
@@ -65,7 +65,7 @@ describe('les phrases de palier', () => {
   test('une échelle complète le dit, sans palier inventé', () => {
     const complete = resolveEngagementProgress({
       ...ENGAGEMENT_PROGRESS_FIXTURE,
-      counters: [{ axisKey: 'tool.sticker', count: 500 }],
+      counters: [{ axisKey: 'tool.sticker', count: Math.max(...BADGE_THRESHOLDS) }],
     });
     const stickers = complete.axes.find((a) => a.axisKey === 'tool.sticker');
     expect(stickers && nextStepLabel(stickers, BADGE_UNIT)).toBe('Échelle complète');
