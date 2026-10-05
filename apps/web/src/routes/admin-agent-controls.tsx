@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
+import { BRAND } from '@/components/admin/tone';
 import { AdminGlyph } from '@/components/admin/admin-glyph';
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
 import { AdminEntityChip } from '@/components/admin/entity-chip';
@@ -24,7 +25,7 @@ import { unwrap } from '@/lib/api/client';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
 import { useLiveAnnouncer, type AnnouncementTone } from '@/lib/view/use-live-announcer';
-import { AdminAnnouncement } from '@/routes/admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 
 /**
  * **LE GESTE DE RELANCE, ÉCRIT UNE FOIS** (#6733, #8876) — la section Agent et la
@@ -54,7 +55,6 @@ import { AdminAnnouncement } from '@/routes/admin-parts';
  * d'un état local qui prétendrait savoir ce que le service agent a fait.
  */
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
-const BRAND = 'var(--color-ios-brand)';
 
 /**
  * L'ANCRE D'UN BOUTON N'EST PORTÉE QU'UNE FOIS PAR PAGE, SUR L'EXEMPLAIRE VISIBLE —

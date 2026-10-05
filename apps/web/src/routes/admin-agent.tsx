@@ -1,10 +1,11 @@
+import { AdminDeniedInline, AdminDeniedScreen, AdminSkeleton } from '@/components/admin/states';
 import { agentAccess } from '@/lib/admin/agent-access';
 import { adminListRoute } from '@/lib/admin/admin-routes';
 import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
 import { AdminAgentPanel } from '@/routes/admin-agent-parts';
-import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-parts';
+import { AdminScreenFrame } from '@/routes/admin-shell';
 
 /**
  * **LE PILOTAGE DE L'AGENT** (#6733, #8876) — `/adm/agent` et `/admin/agent`.
@@ -28,7 +29,7 @@ import { AdminDenied, AdminScreenFrame, AdminSkeleton } from '@/routes/admin-par
  *
  * On entre sur cette adresse par un lien profond aussi bien que par le hub.
  * La décision vient de `agentAccess` (`lib/admin/agent-access.ts`), qui distingue
- * les DEUX refus : « rien à faire ici » (`AdminDenied`) et « le droit d'être là
+ * les DEUX refus : « rien à faire ici » (`AdminDeniedScreen`) et « le droit d'être là
  * sans le droit de lire ceci » — le cas d'un MODERATOR ou d'un AUDIT, qui portent
  * `canAccessAdmin` et à qui la matrice centrale refuse `canManageAgent`. Leur
  * servir « espace réservé » leur ferait croire qu'ils se sont trompés de porte.
@@ -73,11 +74,9 @@ export default function AdminAgentScreen() {
     return (
       <AdminScreenFrame {...frame}>
         {access === 'espace-sans-droit' ? (
-          <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }} data-admin-agent-denied>
-            {translateAdmin(language, 'admin.agent.denied')}
-          </p>
+          <AdminDeniedInline language={language} message={translateAdmin(language, 'admin.agent.denied')} data={{ 'data-admin-agent-denied': '' }} />
         ) : (
-          <AdminDenied language={language} />
+          <AdminDeniedScreen language={language} />
         )}
       </AdminScreenFrame>
     );

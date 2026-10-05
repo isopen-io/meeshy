@@ -70,6 +70,25 @@ describe('les préférences d’un membre, modifiables', () => {
     expect([patch?.path, patch?.body]).toEqual(['/api/v1/admin/users/u1/preferences/privacy', { showOnlineStatus: false }]);
   });
 
+  test('un champ libre n’écrit qu’en le quittant, et en NOMBRE quand la valeur servie en est un (#9463)', async () => {
+    const vu: HttpRequest[] = [];
+    const { hote } = await monter({ ok: true, data: { category: 'message', preferences: { draftExpirationDays: 12 } } }, vu);
+    act(() => hote.querySelector<HTMLButtonElement>('[data-collapsible-toggle="admin-prefs-message"]')?.click());
+    const champ = hote.querySelector<HTMLInputElement>('[data-admin-preference-input="message.draftExpirationDays"]');
+    expect(champ?.getAttribute('step')).toBe('any');
+    await act(async () => {
+      if (champ === null) return;
+      champ.value = '12';
+      champ.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(vu.filter((r) => r.method === 'PATCH')).toEqual([]);
+    await act(async () => {
+      champ?.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    });
+    await attendre();
+    expect(vu.find((r) => r.method === 'PATCH')?.body).toEqual({ draftExpirationDays: 12 });
+  });
+
   test('un refus pour consentement manquant revient en arrière et dit pourquoi', async () => {
     const { hote, annonces } = await monter({ ok: false, status: 403, error: 'refus', code: 'CONSENT_REQUIRED' });
     act(() => hote.querySelector<HTMLButtonElement>('[data-collapsible-toggle="admin-prefs-audio"]')?.click());
@@ -175,3 +194,29 @@ describe('chaque clé porte son libellé, chaque valeur se dit en mots (#7920)',
     expectNoRawIdentifiers(hote);
   });
 });
+
+describe('un chargement qui échoue a son issue', () => {
+  test('l’erreur offre « Réessayer », et réessayer relit les préférences', async () => {
+    let lectures = 0;
+    const t = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+    t.request = (async (req: HttpRequest): Promise<ApiResult<unknown>> => {
+      if (!req.path.endsWith('/preferences')) return { ok: false, status: 404, error: req.path };
+      lectures += 1;
+      return lectures === 1 ? { ok: false, status: 503, error: 'indisponible' } : { ok: true, data: PREFS };
+    }) as HttpTransport['request'];
+    const hote = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminUserPreferencesTab userId="u-echec" language="fr" onAnnounce={() => undefined} deps={{ source: 'gateway', transport: t }} />
+      </QueryClientProvider>,
+    );
+    await attendre();
+    expect(hote.querySelector('[data-admin-error]')?.getAttribute('role')).toBe('alert');
+    expect(hote.querySelector('[data-admin-preferences]')).toBeNull();
+
+    act(() => hote.querySelector<HTMLButtonElement>('[data-admin-retry]')?.click());
+    await attendre();
+    expect(lectures).toBe(2);
+    expect(hote.querySelector('[data-admin-preferences]')).not.toBeNull();
+  });
+});
+

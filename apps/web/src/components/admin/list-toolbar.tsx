@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import type { AdminOption } from '@/routes/admin-table';
 
 import { AdminGlyph } from './admin-glyph';
 import { BRAND, EDGE, INK, INK2, SURFACE } from './tone';
@@ -9,6 +8,9 @@ import { BRAND, EDGE, INK, INK2, SURFACE } from './tone';
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
 
 const FIELD = { minHeight: 44, backgroundColor: SURFACE, border: `1px solid ${EDGE}`, color: INK, outlineColor: BRAND } as const;
+
+/** Un choix d'une liste déroulante de filtre : la valeur que la passerelle lit, le mot que le lecteur lit. */
+export type AdminOption = { readonly value: string; readonly label: string };
 
 export type AdminToolbarFilter = {
   readonly id: string;
@@ -22,6 +24,12 @@ export type AdminToolbarFilter = {
   readonly defaultValue?: string;
   readonly options: readonly AdminOption[];
   readonly onChange: (value: string) => void;
+  /**
+   * Une ancre de plus, posée À CÔTÉ de `data-admin-filter` : celle qu'un écran avait déjà publiée à
+   * ses témoins avant de passer sur la barre du kit (`data-admin-user-conv-order`…). La migration
+   * ne la retire pas — le contrat d'un écran ne change pas avec sa plomberie.
+   */
+  readonly anchor?: `data-${string}`;
 };
 
 /**
@@ -80,6 +88,7 @@ export function AdminListToolbar({
           </span>
           <select
             data-admin-filter={filter.id}
+            {...(filter.anchor === undefined ? {} : { [filter.anchor]: '' })}
             value={filter.value}
             onChange={(event) => filter.onChange(event.target.value)}
             className={`rounded-chip px-3 text-body ${FOCUS}`}
@@ -127,11 +136,17 @@ export function AdminFilterChips({
   options,
   value,
   onChange,
+  anchor = 'data-admin-chip',
+  disabled = false,
 }: {
   readonly label: string;
   readonly options: readonly AdminChipOption[];
   readonly value: string;
   readonly onChange: (value: string) => void;
+  /** Le nom de l'attribut qui porte la valeur de chaque puce — l'ancre que l'écran a déjà publiée à ses témoins. */
+  readonly anchor?: `data-${string}`;
+  /** Des puces dont les valeurs ne sont pas encore servies : visibles, mais inertes. */
+  readonly disabled?: boolean;
 }) {
   return (
     <div role="group" aria-label={label} data-admin-chips className="flex flex-wrap gap-2">
@@ -142,9 +157,10 @@ export function AdminFilterChips({
             key={option.value}
             type="button"
             aria-pressed={pressed}
-            data-admin-chip={option.value}
+            {...{ [anchor]: option.value }}
+            disabled={disabled}
             onClick={() => onChange(option.value)}
-            className={`inline-flex items-center gap-2 rounded-chip px-4 text-body font-medium ${FOCUS}`}
+            className={`inline-flex items-center gap-2 rounded-chip px-4 text-body font-medium disabled:opacity-40 ${FOCUS}`}
             style={{
               minHeight: 44,
               outlineColor: BRAND,

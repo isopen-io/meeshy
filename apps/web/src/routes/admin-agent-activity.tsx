@@ -6,7 +6,7 @@ import { AdminTimelineChart } from '@/components/admin/charts/timeline-chart';
 import { AdminEntityIdentity } from '@/components/admin/entity-chip';
 import { AdminFicheSection } from '@/components/admin/fiche';
 import { AdminMomentText } from '@/components/admin/meta';
-import { AdminEmptyState, AdminErrorState } from '@/components/admin/states';
+import { AdminEmptyState, AdminErrorState, AdminSkeleton } from '@/components/admin/states';
 import { BRAND, EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { agentConversationRefOf } from '@/lib/admin/agent-model';
 import { formatCount, formatMoney, formatPercent } from '@/lib/admin/interpret/numbers';
@@ -21,7 +21,6 @@ import {
 } from '@/lib/api/admin-agent-activity';
 import { unwrap } from '@/lib/api/client';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { AdminSkeleton } from '@/routes/admin-parts';
 
 /**
  * **LA MODALE « ACTIVITÉ RÉCENTE »** (lot Agent complet) — les conversations où

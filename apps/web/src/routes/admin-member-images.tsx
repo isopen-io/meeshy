@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
+import { AdminButton } from '@/components/admin/button';
 import { Avatar } from '@/components/avatar';
 import { personInitials, personLabel } from '@/lib/admin/interpret/labels';
 import type { AdminDeps } from '@/lib/api/admin';
@@ -10,7 +11,7 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import type { ProfileImageKind } from '@/lib/api/profile';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
-import { MemberSection, SectionButton, type SectionState } from './admin-member-parts';
+import { MemberSection, type SectionState } from './admin-member-parts';
 import { AdminUserImageSheet } from './admin-user-image-sheet';
 
 /**
@@ -80,12 +81,12 @@ export function AdminMemberImagesSection({
         </div>
       </div>
       <div className="flex flex-wrap justify-end gap-2 pt-10 sm:pt-2">
-        <SectionButton data={{ 'data-admin-image-open': 'avatar' }} onClick={() => setFeuille('avatar')}>
+        <AdminButton data={{ 'data-admin-image-open': 'avatar' }} onClick={() => setFeuille('avatar')}>
           {translateAdmin(language, 'admin.images.avatarOpen')}
-        </SectionButton>
-        <SectionButton data={{ 'data-admin-image-open': 'banner' }} onClick={() => setFeuille('banner')}>
+        </AdminButton>
+        <AdminButton data={{ 'data-admin-image-open': 'banner' }} onClick={() => setFeuille('banner')}>
           {translateAdmin(language, 'admin.images.bannerOpen')}
-        </SectionButton>
+        </AdminButton>
       </div>
 
       {feuille === null ? null : (

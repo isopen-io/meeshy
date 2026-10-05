@@ -2,6 +2,9 @@ import { useMemo, useState } from 'react';
 
 import { SUPPORTED_LANGUAGES } from '@meeshy/shared/utils/languages';
 
+import { AdminButton } from '@/components/admin/button';
+import { AdminSelect, AdminTextArea, AdminTextInput } from '@/components/admin/form';
+import { INK2 } from '@/components/admin/tone';
 import { identityDraftOf, identityEditOf, sectionIsDirty, type IdentityDraft } from '@/lib/admin/member-sections';
 import type { AdminDeps } from '@/lib/api/admin';
 import { updateAdminUser } from '@/lib/api/admin-user-actions';
@@ -9,7 +12,7 @@ import type { AdminUserDetail } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 
-import { BRAND, Choix, INK, INK2, MemberSection, Texte, useFieldFocus, useMemberWrite } from './admin-member-parts';
+import { MemberSection, useMemberWrite } from './admin-member-parts';
 
 /**
  * **L'IDENTITÉ D'UN MEMBRE, ÉDITÉE EN PLACE** (#8289) — pseudo compris.
@@ -44,7 +47,6 @@ export function AdminMemberIdentitySection({
      jamais ici une valeur périmée qui ferait croire à une modification. */
   const [touches, setTouches] = useState<Partial<IdentityDraft>>({});
   const draft: IdentityDraft = { ...identityDraftOf(membre), ...touches };
-  const focus = useFieldFocus();
   const ecriture = useMemberWrite({ userId: membre.id, language, onAnnounce });
   const edit = identityEditOf(membre, draft);
 
@@ -73,13 +75,12 @@ export function AdminMemberIdentitySection({
     >
       <div className="grid gap-4 @xl:grid-cols-2">
         <div className="grid gap-2 @xl:col-span-2">
-          <Texte
+          <AdminTextInput
             id="admin-member-username"
             label={translateAdmin(language, 'admin.create.username')}
-            valeur={draft.username}
+            value={draft.username}
             error={pseudoPris ? translateAdmin(language, 'admin.create.usernameTaken') : undefined}
-            {...focus('username')}
-            onValeur={(username) => poser({ username })}
+            onValue={(username) => poser({ username })}
           />
           {suggestions.length === 0 ? null : (
             <div className="flex flex-wrap items-center gap-2" data-admin-username-suggestions="">
@@ -87,80 +88,65 @@ export function AdminMemberIdentitySection({
                 {translateAdmin(language, 'admin.identity.suggestions')}
               </span>
               {suggestions.map((suggestion) => (
-                <button
-                  key={suggestion}
-                  type="button"
-                  data-admin-username-suggestion={suggestion}
-                  onClick={() => poser({ username: suggestion })}
-                  className="rounded-full px-3 text-caption font-semibold focus-visible:outline-2 focus-visible:outline-offset-2"
-                  style={{ minHeight: 36, color: BRAND, border: `1px solid color-mix(in srgb, ${BRAND} 40%, transparent)`, outlineColor: BRAND }}
-                >
+                <AdminButton key={suggestion} data={{ 'data-admin-username-suggestion': suggestion }} onClick={() => poser({ username: suggestion })}>
                   {suggestion}
-                </button>
+                </AdminButton>
               ))}
             </div>
           )}
         </div>
-        <Texte
+        <AdminTextInput
           id="admin-member-firstName"
           label={translateAdmin(language, 'admin.create.firstName')}
-          valeur={draft.firstName}
-          autoComplete="off"
-          {...focus('firstName')}
-          onValeur={(firstName) => poser({ firstName })}
+          value={draft.firstName}
+          onValue={(firstName) => poser({ firstName })}
         />
-        <Texte
+        <AdminTextInput
           id="admin-member-lastName"
           label={translateAdmin(language, 'admin.create.lastName')}
-          valeur={draft.lastName}
-          {...focus('lastName')}
-          onValeur={(lastName) => poser({ lastName })}
+          value={draft.lastName}
+          onValue={(lastName) => poser({ lastName })}
         />
         <div className="@xl:col-span-2">
-          <Texte
+          <AdminTextInput
             id="admin-member-displayName"
             label={translateAdmin(language, 'admin.edit.displayName')}
-            valeur={draft.displayName}
-            {...focus('displayName')}
-            onValeur={(displayName) => poser({ displayName })}
+            value={draft.displayName}
+            onValue={(displayName) => poser({ displayName })}
           />
         </div>
-        <label className="grid gap-1 @xl:col-span-2" htmlFor="admin-member-bio">
-          <span className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
-            {translateAdmin(language, 'admin.edit.bio')}
-          </span>
-          <textarea
+        <div className="@xl:col-span-2">
+          <AdminTextArea
             id="admin-member-bio"
+            label={translateAdmin(language, 'admin.edit.bio')}
             value={draft.bio}
             rows={3}
             maxLength={500}
-            onInput={(event) => poser({ bio: event.currentTarget.value })}
-            className="rounded-[14px] px-4 py-3 text-body"
-            style={{ backgroundColor: 'var(--color-ios-card)', border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 30%, transparent)', color: INK, resize: 'vertical' }}
+            onValue={(bio) => poser({ bio })}
           />
-        </label>
+        </div>
       </div>
       <div className="grid gap-4 @xl:grid-cols-3">
-        <Choix
+        <AdminSelect
           id="admin-member-systemLanguage"
           label={translateAdmin(language, 'admin.meta.systemLanguage')}
-          valeur={draft.systemLanguage}
+          value={draft.systemLanguage}
           options={LANGUES}
-          onValeur={(systemLanguage) => poser({ systemLanguage })}
+          onValue={(systemLanguage) => poser({ systemLanguage })}
         />
-        <Choix
+        <AdminSelect
           id="admin-member-regionalLanguage"
           label={translateAdmin(language, 'admin.meta.regionalLanguage')}
-          valeur={draft.regionalLanguage}
+          value={draft.regionalLanguage}
           options={aucune}
-          onValeur={(regionalLanguage) => poser({ regionalLanguage })}
+          onValue={(regionalLanguage) => poser({ regionalLanguage })}
         />
-        <Choix
+        <AdminSelect
           id="admin-member-customLanguage"
           label={translateAdmin(language, 'admin.meta.customLanguage')}
-          valeur={draft.customDestinationLanguage}
+          value={draft.customDestinationLanguage}
           options={aucune}
-          onValeur={(customDestinationLanguage) => poser({ customDestinationLanguage })}
+          onValue={(customDestinationLanguage) => poser({ customDestinationLanguage })}
         />
       </div>
     </MemberSection>

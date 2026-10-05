@@ -9,7 +9,7 @@ import { AdminMetaPanel, AdminMetaRow, AdminMomentText, AdminTechnicalId } from 
 import { AdminPageHeader } from '@/components/admin/page-header';
 import { AdminSectionScreen } from '@/components/admin/section-screen';
 import { AdminSummaryCard } from '@/components/admin/summary-card';
-import { AdminDeniedInline, AdminErrorState, AdminOfflineNotice } from '@/components/admin/states';
+import { AdminDeniedInline, AdminErrorState, AdminOfflineNotice, AdminSkeleton } from '@/components/admin/states';
 import { INK, INK2, TONE_COLOR } from '@/components/admin/tone';
 import { shareLinkStateOf } from '@/lib/admin/interpret/enums';
 import { languageName, sentenceCase } from '@/lib/admin/interpret/language';
@@ -32,7 +32,7 @@ import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, 
 import { useParams } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
-import { AdminAnnouncement, AdminSkeleton } from './admin-parts';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 
 /**
  * **LA FICHE D'UN ANONYME** (#7873, #8876) — `/admin/anonymous/$participant` et

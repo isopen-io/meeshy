@@ -1,7 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { act } from 'react';
 import { describe, expect, test } from 'bun:test';
 
-import { SectionButton } from '@/routes/admin-member-parts';
 import { setupAdminKitTests } from '@/test-support/admin-harness';
 
 import { AdminButton } from './button';
@@ -64,11 +66,16 @@ describe('AdminButton — le bouton commun de l’administration', () => {
   });
 });
 
-describe('SectionButton — les gestes des fiches de membre passent par le bouton commun', () => {
-  test('« primary » n’a plus de dégradé : le texte blanc tient son contraste', async () => {
-    const host = await mount(<SectionButton tone="primary" data={{ 'data-admin-create-open': '' }}>Créer un compte</SectionButton>);
+describe('les gestes des fiches de membre passent par le bouton commun', () => {
+  test('« primary » n’a plus de dégradé : le texte blanc tient son contraste, l’ancre de l’écran reste', async () => {
+    const host = await mount(<AdminButton tone="primary" data={{ 'data-admin-create-open': '' }}>Créer un compte</AdminButton>);
     expect(buttonOf(host).style.backgroundColor).toBe('var(--color-ios-brand)');
     expect(buttonOf(host).style.cssText).not.toContain('gradient');
     expect(buttonOf(host).hasAttribute('data-admin-create-open')).toBe(true);
+  });
+
+  test('la fiche d’un membre ne garde aucune copie locale des briques du kit', () => {
+    const parts = readFileSync(fileURLToPath(new URL('../../routes/admin-member-parts.tsx', import.meta.url)), 'utf8');
+    expect(parts).not.toMatch(/export function (SectionButton|Texte|Choix|Bascule|BadgeVerifie|useFieldFocus)\b/);
   });
 });

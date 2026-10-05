@@ -4,7 +4,8 @@ import { ApiError } from '@/lib/api/client';
 import type { AdminSectionId, AdminTarget } from '@/lib/admin/admin-routes';
 import type { AdminListController } from '@/lib/admin/use-admin-list';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
-import { AdminPager, PlainTh, SortableTh } from '@/routes/admin-table';
+import { AdminPager } from './pager';
+import { PlainTh, SortableTh } from './table-cells';
 
 import { AdminResponsiveRows, columnPriority, type AdminColumn } from './responsive-rows';
 import { AdminSortControl, type AdminSortOption } from './sort-control';
