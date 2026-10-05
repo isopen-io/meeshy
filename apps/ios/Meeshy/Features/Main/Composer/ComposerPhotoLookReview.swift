@@ -291,17 +291,12 @@ struct ComposerPhotoLookReview: View {
 
     // MARK: - Peindre, hors du fil principal
 
-    /// Le peintre unique sert les cadres du catalogue ; un classique du Montage
-    /// reste peint par `ComposerPhotoLookRenderer` jusqu'à ses couches GPU (#9348).
+    /// Le peintre unique sert les cadres du catalogue comme les classiques du
+    /// Montage, peints en couches GPU (#9348).
     @concurrent
     nonisolated static func paintPreview(_ look: ComposerPhotoLook, source: ComposerPhotoLookSource,
                                          date: Date) async -> CGImage? {
-        guard ComposerLiveLookRule.isLive(look.frame) else {
-            return ComposerPhotoLookRenderer.render(look, source: source,
-                                                    maxPixel: ComposerPhotoLookRule.previewMaxPixel,
-                                                    frameCanvas: ComposerPhotoLookRule.previewFrameCanvas)
-        }
-        return await ComposerLookPainter.renderPreview(source.photo, look: look, framing: .identity,
+        await ComposerLookPainter.renderPreview(source.photo, look: look, framing: .identity,
                                                        person: source.person, date: date,
                                                        scenes: ComposerLookSceneCache.shared)
     }
@@ -309,11 +304,7 @@ struct ComposerPhotoLookReview: View {
     @concurrent
     nonisolated static func paintFinal(_ look: ComposerPhotoLook, source: ComposerPhotoLookSource,
                                        date: Date) async -> CGImage? {
-        guard ComposerLiveLookRule.isLive(look.frame) else {
-            return ComposerPhotoLookRenderer.render(look, source: source, maxPixel: nil,
-                                                    frameCanvas: ComposerPhotoLookRule.frameCanvas)
-        }
-        return await ComposerLookPainter.renderPhoto(source.photo, look: look, framing: .identity, person: source.person,
+        await ComposerLookPainter.renderPhoto(source.photo, look: look, framing: .identity, person: source.person,
                                               date: date, scenes: ComposerLookSceneCache.shared)
     }
 
