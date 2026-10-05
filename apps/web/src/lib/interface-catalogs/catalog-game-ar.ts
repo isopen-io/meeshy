@@ -373,6 +373,17 @@ const ar = {
   'game.mint.badges.two': 'ينخفض وسامان',
   'game.mint.badges.few': 'تنخفض {count} أوسمة',
   'game.error.request_id_conflict': 'سبق استخدام معرّف هذا الطلب في إجراء آخر: أعد المحاولة وسيُرسَل معرّف جديد.',
+  'game.level.ring_label': 'المستوى {level}، مرحلة {tier}، {ordinal}',
+  'game.tier.ordinal.1': 'المرحلة الأولى',
+  'game.tier.ordinal.2': 'المرحلة الثانية',
+  'game.tier.ordinal.3': 'المرحلة الثالثة',
+  'game.tier.ordinal.4': 'المرحلة الرابعة',
+  'game.tier.ordinal.5': 'المرحلة الخامسة',
+  'game.tier.ordinal.6': 'المرحلة السادسة',
+  'game.tier.ordinal.7': 'المرحلة السابعة',
+  'game.tier.ordinal.8': 'المرحلة الثامنة',
+  'game.tier.ordinal.9': 'المرحلة التاسعة',
+  'game.tier.ordinal.10': 'المرحلة العاشرة',
 } as const satisfies GameCatalog;
 
 export default ar;

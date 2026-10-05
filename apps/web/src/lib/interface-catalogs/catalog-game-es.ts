@@ -361,6 +361,17 @@ const es = {
   'game.fmt.fraction': '{done} / {total}',
   'game.fmt.from_to': '{from} → {to}',
   'game.error.request_id_conflict': 'Ese identificador de solicitud ya se usó en otra acción: inténtalo de nuevo, se enviará uno nuevo.',
+  'game.level.ring_label': 'Nivel {level}, tramo {tier}, {ordinal}',
+  'game.tier.ordinal.1': 'primer tramo',
+  'game.tier.ordinal.2': 'segundo tramo',
+  'game.tier.ordinal.3': 'tercer tramo',
+  'game.tier.ordinal.4': 'cuarto tramo',
+  'game.tier.ordinal.5': 'quinto tramo',
+  'game.tier.ordinal.6': 'sexto tramo',
+  'game.tier.ordinal.7': 'séptimo tramo',
+  'game.tier.ordinal.8': 'octavo tramo',
+  'game.tier.ordinal.9': 'noveno tramo',
+  'game.tier.ordinal.10': 'décimo tramo',
 } as const satisfies GameCatalog;
 
 export default es;

@@ -361,6 +361,17 @@ const de = {
   'game.fmt.fraction': '{done} / {total}',
   'game.fmt.from_to': '{from} → {to}',
   'game.error.request_id_conflict': 'Diese Anfragekennung wurde schon für eine andere Aktion verwendet: Versuche es erneut, es wird eine neue gesendet.',
+  'game.level.ring_label': 'Level {level}, Stufe {tier}, {ordinal}',
+  'game.tier.ordinal.1': 'erste Stufe',
+  'game.tier.ordinal.2': 'zweite Stufe',
+  'game.tier.ordinal.3': 'dritte Stufe',
+  'game.tier.ordinal.4': 'vierte Stufe',
+  'game.tier.ordinal.5': 'fünfte Stufe',
+  'game.tier.ordinal.6': 'sechste Stufe',
+  'game.tier.ordinal.7': 'siebte Stufe',
+  'game.tier.ordinal.8': 'achte Stufe',
+  'game.tier.ordinal.9': 'neunte Stufe',
+  'game.tier.ordinal.10': 'zehnte Stufe',
 } as const satisfies GameCatalog;
 
 export default de;

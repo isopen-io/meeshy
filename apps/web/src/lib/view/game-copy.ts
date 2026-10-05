@@ -14,6 +14,7 @@ import {
   type GamePluralBase,
   type TranslateGameArgs,
 } from '@/lib/i18n-game-catalog';
+import { tierOrdinal } from '@/lib/game/tier-emblem';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
 /**
@@ -68,6 +69,27 @@ export const levelsLabel = (count: number, language: Language = currentInterface
 
 export const levelTierName = (tier: LevelTierKey, language: Language = currentInterfaceLanguage()): string =>
   translateGame(language, `game.tier.${tier}`);
+
+const TIER_ORDINALS = [
+  'game.tier.ordinal.1',
+  'game.tier.ordinal.2',
+  'game.tier.ordinal.3',
+  'game.tier.ordinal.4',
+  'game.tier.ordinal.5',
+  'game.tier.ordinal.6',
+  'game.tier.ordinal.7',
+  'game.tier.ordinal.8',
+  'game.tier.ordinal.9',
+  'game.tier.ordinal.10',
+] as const;
+
+/** Ce que lit un lecteur d'écran sur l'anneau de niveau : « Niveau 34, palier Éclat, quatrième palier » (#9481). */
+export const levelRingLabel = (level: number, tier: LevelTierKey, language: Language = currentInterfaceLanguage()): string =>
+  translateGame(language, 'game.level.ring_label', {
+    level: formatGameNumber(language, level),
+    tier: levelTierName(tier, language),
+    ordinal: translateGame(language, TIER_ORDINALS[tierOrdinal(tier) - 1] ?? TIER_ORDINALS[0]),
+  });
 
 export const rankName = (rank: GloryRankOrMythic, language: Language = currentInterfaceLanguage()): string =>
   translateGame(language, `game.rank.${rank}`);

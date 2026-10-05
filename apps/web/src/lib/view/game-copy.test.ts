@@ -19,6 +19,7 @@ import {
   flameFormName,
   formatCount,
   gameErrorMessage,
+  levelRingLabel,
   levelTierName,
   levelsLabel,
   meeshCount,
@@ -147,6 +148,28 @@ describe('les refus du serveur se disent', () => {
     for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
       expect(NAMED(gameErrorMessage('INSUFFICIENT_POINTS', language))).toBe(true);
       expect(gameErrorMessage('INSUFFICIENT_POINTS', language)).not.toBe(gameErrorMessage('???', language));
+    }
+  });
+});
+
+describe('l’anneau de niveau se dit en toutes lettres (#9481)', () => {
+  test('« Niveau 34, palier Éclat, quatrième palier »', () => {
+    expect(levelRingLabel(34, 'eclat', 'fr')).toBe('Niveau 34, palier Éclat, quatrième palier');
+  });
+
+  test('dans chaque langue, chacun des dix paliers dit son niveau, son nom et son rang', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      for (const [index, tier] of LEVEL_TIER_KEYS.entries()) {
+        const label = levelRingLabel(index * 10 + 5, tier, language);
+        expect({ language, tier, ok: NAMED(label) && label.includes(levelTierName(tier, language)) }).toEqual({ language, tier, ok: true });
+      }
+    }
+  });
+
+  test('les dix rangs ordinaux sont distincts dans une langue', () => {
+    for (const language of SUPPORTED_INTERFACE_LANGUAGES) {
+      const labels = LEVEL_TIER_KEYS.map((tier) => levelRingLabel(1, tier, language));
+      expect(new Set(labels).size).toBe(10);
     }
   });
 });

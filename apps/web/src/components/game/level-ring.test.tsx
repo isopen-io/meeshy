@@ -54,8 +54,77 @@ describe('LevelRing — l’anneau', () => {
     for (const tier of LEVEL_TIER_KEYS) expect(render({ level: 1, tier, progress: 0.5, size: 56 })).toContain(`data-game-tier="${tier}"`);
   });
 
-  test('la Signature en aplat surmonte le chiffre', () => {
+  test('la Signature, au cœur de l’emblème du palier, reste dans le disque', () => {
     expect(render({ level: 34, tier: 'eclat', progress: 0.7, size: 56 })).toContain('data-game-signature="flat"');
+  });
+});
+
+/**
+ * L’ANNEAU PORTE SON PALIER (#9481) — dans le disque central : l’EMBLÈME du
+ * palier en filigrane transparent, le niveau en chiffres arabes au premier
+ * plan, et le palier en CHIFFRES ROMAINS (I à X) dans un cartouche au contour
+ * détouré, sous le niveau.
+ */
+describe('LevelRing — l’emblème, le niveau et le palier en chiffres romains', () => {
+  const html = render({ level: 34, tier: 'eclat', progress: 0.7, size: 72 });
+
+  test('le disque central est un fond posé sous l’emblème', () => {
+    expect(html).toMatch(/data-game-disc=""[^>]*fill="var\(--ios-surface-card\)"/);
+  });
+
+  test('l’emblème du palier est imprimé en filigrane : transparent, dessiné avant le niveau (donc derrière lui)', () => {
+    expect(html).toContain('data-game-emblem="eclat"');
+    const opacity = Number(/data-game-emblem="eclat" opacity="([\d.]+)"/.exec(html)?.[1] ?? Number.NaN);
+    expect(opacity).toBeGreaterThan(0);
+    expect(opacity).toBeLessThanOrEqual(0.3);
+    expect(html.indexOf('data-game-emblem')).toBeLessThan(html.indexOf('data-game-level-text'));
+  });
+
+  test('chaque palier imprime SON emblème', () => {
+    for (const tier of LEVEL_TIER_KEYS) expect(render({ level: 1, tier, progress: 0.2, size: 72 })).toContain(`data-game-emblem="${tier}"`);
+  });
+
+  test('le niveau reste en chiffres arabes, au premier plan', () => {
+    expect(html).toMatch(/data-game-level-text=""[^>]*>34</);
+    expect(html.indexOf('data-game-level-text')).toBeGreaterThan(html.indexOf('data-game-emblem'));
+  });
+
+  test('le palier s’écrit en chiffres romains, de I à X, dans un cartouche', () => {
+    const numeral = (tier: (typeof LEVEL_TIER_KEYS)[number]): string =>
+      />([IVX]+)<\/text>/.exec(render({ level: 1, tier, progress: 0.2, size: 72 }).split('data-game-tier-numeral')[1] ?? '')?.[1] ?? '';
+    expect(LEVEL_TIER_KEYS.map(numeral)).toEqual(['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X']);
+    expect(html).toContain('data-game-tier-cartouche');
+  });
+
+  test('le chiffre romain est DÉTOURÉ : un contour, tracé sous le remplissage', () => {
+    const numeral = /<text[^>]*data-game-tier-numeral[^>]*>/.exec(html)?.[0] ?? '';
+    expect(numeral).toMatch(/stroke="var\(--game-edge\)"/);
+    expect(numeral).toMatch(/paint-order="stroke"/);
+    expect(numeral).toMatch(/stroke-width="[\d.]+"/);
+  });
+
+  test('le cartouche est du palier — son jeton, ou le prisme pour Galaxie', () => {
+    expect(html).toMatch(/data-game-tier-cartouche=""[^>]*fill="var\(--game-tier-eclat\)"/);
+    expect(render({ level: 95, tier: 'galaxie', progress: 0.3, size: 72 })).toMatch(/data-game-tier-cartouche=""[^>]*fill="url\(#[^)]+-p-prism\)"/);
+  });
+
+  test('un niveau à trois chiffres se réduit pour tenir dans le disque', () => {
+    const size = (level: number): number => Number(/data-game-level-text=""[^>]*font-size="([\d.]+)"/.exec(render({ level, tier: 'galaxie', progress: 1, size: 72 }))?.[1] ?? Number.NaN);
+    expect(size(100)).toBeLessThan(size(34));
+    expect(size(7)).toBe(size(34));
+  });
+});
+
+describe('LevelRing — le lecteur d’écran', () => {
+  test('sans libellé, le dessin est décoratif (l’hôte dit le niveau)', () => {
+    expect(render({ level: 34, tier: 'eclat', progress: 0.7, size: 56 })).toContain('aria-hidden="true"');
+  });
+
+  test('avec un libellé, l’anneau est une image nommée — et ne se masque plus', () => {
+    const html = render({ level: 34, tier: 'eclat', progress: 0.7, size: 56, label: 'Niveau 34, palier Éclat, quatrième palier' });
+    expect(html).toContain('role="img"');
+    expect(html).toContain('aria-label="Niveau 34, palier Éclat, quatrième palier"');
+    expect(html).not.toContain('aria-hidden');
   });
 });
 

@@ -375,6 +375,17 @@ const fr = {
   'game.fmt.fraction': '{done} / {total}',
   'game.fmt.from_to': '{from} → {to}',
   'game.error.request_id_conflict': 'Cet identifiant de requête a déjà servi à une autre action : réessaie, un nouvel identifiant sera envoyé.',
+  'game.level.ring_label': 'Niveau {level}, palier {tier}, {ordinal}',
+  'game.tier.ordinal.1': 'premier palier',
+  'game.tier.ordinal.2': 'deuxième palier',
+  'game.tier.ordinal.3': 'troisième palier',
+  'game.tier.ordinal.4': 'quatrième palier',
+  'game.tier.ordinal.5': 'cinquième palier',
+  'game.tier.ordinal.6': 'sixième palier',
+  'game.tier.ordinal.7': 'septième palier',
+  'game.tier.ordinal.8': 'huitième palier',
+  'game.tier.ordinal.9': 'neuvième palier',
+  'game.tier.ordinal.10': 'dixième palier',
 } as const;
 
 export default fr;

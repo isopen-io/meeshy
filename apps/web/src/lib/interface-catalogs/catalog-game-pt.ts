@@ -361,6 +361,17 @@ const pt = {
   'game.fmt.fraction': '{done} / {total}',
   'game.fmt.from_to': '{from} → {to}',
   'game.error.request_id_conflict': 'Esse identificador de pedido já foi usado por outra ação: tente de novo, será enviado um novo.',
+  'game.level.ring_label': 'Nível {level}, faixa {tier}, {ordinal}',
+  'game.tier.ordinal.1': 'primeira faixa',
+  'game.tier.ordinal.2': 'segunda faixa',
+  'game.tier.ordinal.3': 'terceira faixa',
+  'game.tier.ordinal.4': 'quarta faixa',
+  'game.tier.ordinal.5': 'quinta faixa',
+  'game.tier.ordinal.6': 'sexta faixa',
+  'game.tier.ordinal.7': 'sétima faixa',
+  'game.tier.ordinal.8': 'oitava faixa',
+  'game.tier.ordinal.9': 'nona faixa',
+  'game.tier.ordinal.10': 'décima faixa',
 } as const satisfies GameCatalog;
 
 export default pt;

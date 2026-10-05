@@ -361,6 +361,17 @@ const en = {
   'game.fmt.fraction': '{done} / {total}',
   'game.fmt.from_to': '{from} → {to}',
   'game.error.request_id_conflict': 'That request identifier was already used by another action: try again, a new one will be sent.',
+  'game.level.ring_label': 'Level {level}, {tier} tier, {ordinal}',
+  'game.tier.ordinal.1': 'first tier',
+  'game.tier.ordinal.2': 'second tier',
+  'game.tier.ordinal.3': 'third tier',
+  'game.tier.ordinal.4': 'fourth tier',
+  'game.tier.ordinal.5': 'fifth tier',
+  'game.tier.ordinal.6': 'sixth tier',
+  'game.tier.ordinal.7': 'seventh tier',
+  'game.tier.ordinal.8': 'eighth tier',
+  'game.tier.ordinal.9': 'ninth tier',
+  'game.tier.ordinal.10': 'tenth tier',
 } as const satisfies GameCatalog;
 
 export default en;
