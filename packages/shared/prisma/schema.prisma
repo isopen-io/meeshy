@@ -5315,6 +5315,15 @@ model GameDuo {
   commonTarget    Int?
   inviterProgress Int       @default(0)
   inviteeProgress Int       @default(0)
+  /// Les clés déjà comptées par un signal « distinct » (conversations, auteurs).
+  inviterSeen     String[]  @default([])
+  inviteeSeen     String[]  @default([])
+  /// Ce que chacun a fait AUJOURD'HUI (jour local de la clé) : un partenaire qui
+  /// a coupé sa présence se montre à la fin de la veille (conformité B-3).
+  inviterTodayKey String?
+  inviterToday    Int       @default(0)
+  inviteeTodayKey String?
+  inviteeToday    Int       @default(0)
   inviterPaidAt   DateTime?
   inviteePaidAt   DateTime?
   createdAt       DateTime  @default(now())

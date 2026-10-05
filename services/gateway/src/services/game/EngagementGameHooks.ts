@@ -16,9 +16,12 @@ import { levelFromScore } from '@meeshy/shared/utils/game/levels';
 import { MISSION_TEMPLATES } from '@meeshy/shared/utils/game/missions';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { GameAbuseGuard, quarterPoints, type MessageVerdict } from './GameAbuseGuard';
+import { DuoService } from './DuoService';
 import { GloryService } from './GloryService';
+import { SeasonService } from './SeasonService';
+import { TrophyService } from './TrophyService';
 import { MessageGameSignals, type MessageSignalInput } from './MessageGameSignals';
-import { MissionService } from './MissionService';
+import { MissionService, type SignalOptions } from './MissionService';
 import { GameWeekPointsRecorder } from './GameWeekPoints';
 import type { StreakPlan } from './FlameService';
 
@@ -46,6 +49,12 @@ export class EngagementGameHooks {
 
   readonly weekPoints: GameWeekPointsRecorder;
 
+  readonly seasons: SeasonService;
+
+  readonly duo: DuoService;
+
+  readonly trophies: TrophyService;
+
   private readonly signals: MessageGameSignals;
 
   constructor(
@@ -53,10 +62,24 @@ export class EngagementGameHooks {
     creditPoints: (userId: string, points: number, axisKey: EngagementAxisKey) => Promise<void>,
   ) {
     this.glory = new GloryService(prisma);
-    this.missions = new MissionService(prisma, { creditPoints, glory: this.glory });
+    this.trophies = new TrophyService(prisma);
+    this.missions = new MissionService(prisma, {
+      creditPoints,
+      glory: this.glory,
+      onMissionCompleted: (event) => this.seasons.addStars(event.userId, event.difficulty, event.now),
+    });
+    this.seasons = new SeasonService(prisma, { creditPoints, grantFreeze: (userId) => this.missions.grantFreeze(userId), glory: this.glory, trophies: this.trophies });
+    this.duo = new DuoService(prisma, { creditPoints, seasons: this.seasons });
     this.abuse = new GameAbuseGuard(prisma);
     this.weekPoints = new GameWeekPointsRecorder(prisma);
-    this.signals = new MessageGameSignals(prisma, { missions: this.missions, creditPoints });
+    // Un fait de jeu avance la mission du jour ET le duo de la semaine, chacun isolé.
+    this.signals = new MessageGameSignals(prisma, { missions: { onSignal: (userId, signal, options) => this.onSignal(userId, signal, options) }, creditPoints });
+  }
+
+  /** Un signal observé : la mission qui l'attend, puis le duo — l'échec de l'un ne retient pas l'autre. */
+  async onSignal(userId: string, signal: string, options: SignalOptions = {}): Promise<void> {
+    await this.isolated('mission progress', () => this.missions.onSignal(userId, signal, options));
+    await this.isolated('duo progress', () => this.duo.onSignal(userId, signal, { now: options.now, key: options.key, amount: options.amount }));
   }
 
   /** Ce que vaut un message : entier, divisé par 4, ou rien. */
@@ -80,9 +103,7 @@ export class EngagementGameHooks {
   }): Promise<void> {
     const signal = `axis:${params.operationKey}`;
     if (!MISSION_AXIS_SIGNALS.has(signal)) return;
-    await this.isolated('mission progress', () =>
-      this.missions.onSignal(params.userId, signal, { dayKey: params.dayKey, timezone: params.timezone, record: params.record }),
-    );
+    await this.onSignal(params.userId, signal, { dayKey: params.dayKey, timezone: params.timezone, record: params.record });
   }
 
   /**
@@ -111,6 +132,7 @@ export class EngagementGameHooks {
     await this.isolated('flame record glory', () =>
       this.glory.creditFlameRecords({ userId, previousLongest: plan.previousLongest, longest: plan.longest }).then(() => undefined),
     );
+    await this.isolated('flame trophies', () => this.trophies.awardFlameTrophies({ userId, previousLongest: plan.previousLongest, longest: plan.longest }));
   }
 
   /** Un message committé : les signaux de mission et les +3 points de la réponse reçue. */

@@ -19,15 +19,23 @@ const report = { snapshots: 0, settled: 0, placed: 0, purged: 0 };
 describe('GameLeagueJob', () => {
   it('lance runDue une fois par passage et rend son rapport', async () => {
     const runDue = jest.fn<() => Promise<typeof report>>().mockResolvedValue(report);
-    const job = new GameLeagueJob({} as never, { runDue } as never);
+    const job = new GameLeagueJob({} as never, { runDue } as never, { expireOld: jest.fn<() => Promise<number>>().mockResolvedValue(0) } as never);
     expect(await job.runNow()).toEqual(report);
     expect(runDue).toHaveBeenCalledTimes(1);
+  });
+
+  it('clôt aussi les duos des semaines révolues, et son échec ne retient pas le passage', async () => {
+    const runDue = jest.fn<() => Promise<typeof report>>().mockResolvedValue(report);
+    const expireOld = jest.fn<() => Promise<number>>().mockRejectedValue(new Error('down'));
+    const job = new GameLeagueJob({} as never, { runDue } as never, { expireOld } as never);
+    expect(await job.runNow()).toEqual(report);
+    expect(expireOld).toHaveBeenCalledTimes(1);
   });
 
   it('ne se chevauche pas : un passage en cours fait refuser le suivant', async () => {
     let release: (value: typeof report) => void = () => undefined;
     const runDue = jest.fn<() => Promise<typeof report>>().mockImplementation(() => new Promise((resolve) => { release = resolve; }));
-    const job = new GameLeagueJob({} as never, { runDue } as never);
+    const job = new GameLeagueJob({} as never, { runDue } as never, { expireOld: jest.fn<() => Promise<number>>().mockResolvedValue(0) } as never);
 
     const first = job.runNow();
     expect(await job.runNow()).toBeNull();
@@ -38,7 +46,7 @@ describe('GameLeagueJob', () => {
 
   it('un échec est avalé, et le passage suivant a lieu', async () => {
     const runDue = jest.fn<() => Promise<typeof report>>().mockRejectedValueOnce(new Error('down')).mockResolvedValue(report);
-    const job = new GameLeagueJob({} as never, { runDue } as never);
+    const job = new GameLeagueJob({} as never, { runDue } as never, { expireOld: jest.fn<() => Promise<number>>().mockResolvedValue(0) } as never);
     expect(await job.runNow()).toBeNull();
     expect(await job.runNow()).toEqual(report);
   });
@@ -47,7 +55,7 @@ describe('GameLeagueJob', () => {
     jest.useFakeTimers();
     try {
       const runDue = jest.fn<() => Promise<typeof report>>().mockResolvedValue(report);
-      const job = new GameLeagueJob({} as never, { runDue } as never);
+      const job = new GameLeagueJob({} as never, { runDue } as never, { expireOld: jest.fn<() => Promise<number>>().mockResolvedValue(0) } as never);
       job.start();
       jest.advanceTimersByTime(15 * 60 * 1000);
       expect(runDue).toHaveBeenCalledTimes(1);

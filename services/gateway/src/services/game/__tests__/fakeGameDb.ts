@@ -50,6 +50,7 @@ const matches = (row: Row, where: Where): boolean =>
   Object.entries(where).every(([key, expected]) => {
     if (key === 'OR') return (expected as Where[]).some((clause) => matches(row, clause));
     if (key === 'AND') return (expected as Where[]).every((clause) => matches(row, clause));
+    if (key === 'NOT') return !matches(row, expected as Where);
     return matchField(row[key], expected);
   });
 

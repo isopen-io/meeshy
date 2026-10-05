@@ -5,10 +5,14 @@
  * conservation. Chaque étape est idempotente (voir `LeagueSettlement`) : un
  * passage manqué se rattrape au suivant, deux instances qui passent en même
  * temps ne paient rien deux fois. Un passage qui échoue est journalisé et ne
- * retient jamais le suivant.
+ * retient jamais le suivant. Le même passage clôt les duos des semaines révolues
+ * (`DuoService.expireOld`) : la part simple de qui a fini seul, les emplacements
+ * libérés.
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { EngagementService } from '../services/engagement/EngagementService.js';
+import { DuoService } from '../services/game/DuoService.js';
 import { LeagueSettlement } from '../services/game/LeagueSettlement.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
@@ -23,8 +27,15 @@ export class GameLeagueJob {
 
   private readonly settlement: LeagueSettlement;
 
-  constructor(prisma: PrismaClient, settlement?: LeagueSettlement) {
+  private readonly duo: Pick<DuoService, 'expireOld'>;
+
+  constructor(prisma: PrismaClient, settlement?: LeagueSettlement, duo?: Pick<DuoService, 'expireOld'>) {
     this.settlement = settlement ?? new LeagueSettlement(prisma);
+    this.duo =
+      duo ??
+      new DuoService(prisma, {
+        creditPoints: (userId, points, axisKey) => new EngagementService(prisma).creditGamePoints(userId, points, axisKey),
+      });
   }
 
   start(): void {
@@ -53,6 +64,7 @@ export class GameLeagueJob {
     try {
       const report = await this.settlement.runDue(now);
       if (report.settled + report.placed + report.snapshots + report.purged > 0) logger.info('League pass done', report);
+      await this.duo.expireOld(now).catch((error: unknown) => logger.error('Duo expiry failed', error));
       return report;
     } catch (error) {
       logger.error('League pass failed', error);
