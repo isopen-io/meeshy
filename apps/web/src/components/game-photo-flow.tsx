@@ -9,6 +9,7 @@ import type { PhotoFormat } from '@/lib/game-photo/layout';
 import type { PhotoMoment } from '@/lib/game-photo/moments';
 import type { PhotoFiles } from '@/lib/game-photo/render';
 import { dateLabelOf } from '@/lib/game-photo/render';
+import { useObjectUrl } from '@/lib/game-photo/use-object-url';
 
 import { GamePhotoFrame } from './game-photo-frame';
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2 } from './game-surface';
@@ -65,32 +66,6 @@ function Button({ attr, primary = false, onClick, children, label, disabled = fa
       {children}
     </button>
   );
-}
-
-const urlOf = (file: Blob | null): string | null => {
-  if (file === null) return null;
-  try {
-    return URL.createObjectURL(file);
-  } catch {
-    return null;
-  }
-};
-
-function useObjectUrl(file: Blob | null): string | null {
-  const url = useMemo(() => urlOf(file), [file]);
-  useEffect(
-    () => () => {
-      if (url !== null) {
-        try {
-          URL.revokeObjectURL(url);
-        } catch {
-          /* Rien à rendre. */
-        }
-      }
-    },
-    [url],
-  );
-  return url;
 }
 
 export function GamePhotoFlow({ moment, env, onClose }: Props) {

@@ -81,6 +81,13 @@ export function GameSection({ progress, host }: { readonly progress: EngagementW
       >
         Comment ça marche
       </Link>
+      <Link
+        to="progressionCarnet"
+        className="flex items-center justify-center rounded-card px-4 text-body font-semibold"
+        style={{ minHeight: 44, backgroundColor: GAME_CARD, color: GAME_BRAND }}
+      >
+        Carnet de progression
+      </Link>
     </>
   );
 }
