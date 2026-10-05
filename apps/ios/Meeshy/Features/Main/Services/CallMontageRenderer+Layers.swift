@@ -59,9 +59,10 @@ nonisolated extension CallMontageRenderer {
         CGAffineTransform(a: 1, b: 0, c: 0, d: -1, tx: 0, ty: canvasHeight)
     }
 
-    /// La découpe déborde le trou d'un pixel : le bord antialiasé du calque, où le décor
-    /// ne couvre qu'en partie, reçoit la vidéo PLEINE — aucun liseré translucide.
-    static let maskBleed: CGFloat = 1
+    /// La découpe déborde le trou de deux pixels : tout pixel que le bord antialiasé du
+    /// calque laisse en partie transparent — un coin d'arrondi compris — reçoit la vidéo
+    /// PLEINE, sans liseré translucide.
+    static let maskBleed: CGFloat = 2
 
     /// Le chemin relevé, rempli en blanc sur la toile du peintre — le repère même du
     /// calque, quelle que soit la convention du périphérique — dans un fragment borné

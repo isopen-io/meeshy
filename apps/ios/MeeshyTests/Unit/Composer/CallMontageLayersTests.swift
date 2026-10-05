@@ -113,7 +113,11 @@ final class CallMontageLayersTests: XCTestCase {
             style: .noir, portraits: [CallMontagePortrait(id: "a", name: "A", image: photo)],
             canvas: toile, caption: legende))
         let pixels = Self.rgba(CIImage(cgImage: noir), size: toile, context: contexte)
-        XCTAssertEqual(Self.colouredPixels(pixels), 0, "noir désature la photo de l'appel : aucun pixel coloré")
+        let scene = try XCTUnwrap(CallMontageRenderer.layers(style: .noir, person: personne, caption: legende, size: toile))
+        let masque = Self.rgba(try XCTUnwrap(scene.slots.first?.mask), size: toile, context: contexte)
+        let interieur = Self.interior(masque, width: Int(toile.width), erosion: 4)
+        XCTAssertGreaterThan(interieur.count, 100)
+        XCTAssertEqual(Self.colouredPixels(pixels, at: interieur), 0, "noir désature la photo de l'appel : aucun pixel coloré")
     }
 
     func test_tone_noirIsLuminosity_othersInColor() {
@@ -153,13 +157,26 @@ final class CallMontageLayersTests: XCTestCase {
         return pixels.isEmpty ? 1 : somme / Double(pixels.count * 3) / 255
     }
 
-    static func colouredPixels(_ pixels: [UInt8]) -> Int {
-        stride(from: 0, to: pixels.count - 3, by: 4).filter { (i: Int) -> Bool in
+    static func colouredPixels(_ pixels: [UInt8], at indices: [Int]) -> Int {
+        indices.filter { (i: Int) -> Bool in
             let rouge = Int(pixels[i])
             let vert = Int(pixels[i + 1])
             let bleu = Int(pixels[i + 2])
             return abs(rouge - vert) > 3 || abs(vert - bleu) > 3
         }.count
+    }
+
+    /// Les pixels pleins de la case, loin de son bord : ceux dont les voisins à
+    /// `erosion` pixels sont pleins aussi.
+    static func interior(_ mask: [UInt8], width: Int, erosion: Int) -> [Int] {
+        let total: Int = mask.count / 4
+        let plein: (Int) -> Bool = { (p: Int) -> Bool in p >= 0 && p < total && mask[p * 4 + 3] == 255 }
+        return (0 ..< total).filter { (p: Int) -> Bool in
+            let x: Int = p % width
+            guard x >= erosion, x < width - erosion else { return false }
+            let voisins: [Int] = [p, p - erosion, p + erosion, p - erosion * width, p + erosion * width]
+            return voisins.allSatisfy(plein)
+        }.map { (p: Int) -> Int in p * 4 }
     }
 
     static func translucentPixels(_ pixels: [UInt8]) -> Int {
